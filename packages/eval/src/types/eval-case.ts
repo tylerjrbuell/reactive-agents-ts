@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { StructuredExpectationSchema } from "./structured-expectation.js";
 
 export const EvalCaseSchema = Schema.Struct({
   id: Schema.String,
@@ -14,6 +15,14 @@ export const EvalCaseSchema = Schema.Struct({
     }),
   ),
   tags: Schema.optional(Schema.Array(Schema.String)),
+  /**
+   * Deterministic expectations for a typed result. A case with `structured`
+   * is graded field by field with no LLM call: the suite's judge dimensions
+   * are not scored for it, and its score is recorded under the `structured`
+   * dimension. The graded value is the runner's `structuredOutput`, or
+   * `actualOutput` parsed as JSON.
+   */
+  structured: Schema.optional(StructuredExpectationSchema),
 });
 export type EvalCase = typeof EvalCaseSchema.Type;
 

@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { GradeFieldResultSchema } from "./structured-expectation.js";
 
 export const DimensionScoreSchema = Schema.Struct({
   dimension: Schema.String,
@@ -27,6 +28,8 @@ export const EvalResultSchema = Schema.Struct({
   stepsExecuted: Schema.Number,
   passed: Schema.Boolean,
   error: Schema.optional(Schema.String),
+  /** Per-field results of a structured case's deterministic grade. Absent for judged cases. */
+  fieldResults: Schema.optional(Schema.Array(GradeFieldResultSchema)),
 });
 export type EvalResult = typeof EvalResultSchema.Type;
 

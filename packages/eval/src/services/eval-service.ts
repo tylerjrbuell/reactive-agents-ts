@@ -20,6 +20,7 @@ import { scoreRelevance } from "../dimensions/relevance.js";
 import { scoreCompleteness } from "../dimensions/completeness.js";
 import { scoreSafety } from "../dimensions/safety.js";
 import { scoreCostEfficiency } from "../dimensions/cost-efficiency.js";
+import { gradeStructuredCase } from "../graders/case-grading.js";
 
 /**
  * Per-case SUT runner. Invoked by `runSuite` for each `EvalCase` to produce
@@ -36,6 +37,12 @@ import { scoreCostEfficiency } from "../dimensions/cost-efficiency.js";
 export type SuiteAgentRunner = (input: string) => Effect.Effect<
   {
     readonly actualOutput: string;
+    /**
+     * The typed result, when the SUT produced one (for example
+     * `agent.run(..., { outputSchema })`). Structured cases grade this value;
+     * when it is absent they parse `actualOutput` as JSON.
+     */
+    readonly structuredOutput?: unknown;
     readonly metrics?: {
       readonly latencyMs?: number;
       readonly costUsd?: number;
@@ -209,7 +216,6 @@ const scoreDimensionsWithEngine = (
 
 const buildSummary = (
   results: EvalResult[],
-  passThreshold: number,
   perCaseRepeatStats?: Record<string, RepeatStats[]>,
   repeats?: number,
 ): EvalRunSummary => {
@@ -243,8 +249,10 @@ const buildSummary = (
 
   return {
     totalCases: results.length,
-    passed: results.filter((r) => r.overallScore >= passThreshold).length,
-    failed: results.filter((r) => r.overallScore < passThreshold).length,
+    // Each result already decided `passed` (judged: overallScore >=
+    // passThreshold; structured: every check passed), so count that.
+    passed: results.filter((r) => r.passed).length,
+    failed: results.filter((r) => !r.passed).length,
     avgScore: results.length > 0
       ? results.reduce((s, r) => s + r.overallScore, 0) / results.length
       : 0,
@@ -330,6 +338,30 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
               );
 
               const sutCostUsd = sutRun.metrics?.costUsd ?? 0;
+
+              // A case with `structured` expectations is graded field by
+              // field from data, with no judge call (golden rule 5). The
+              // result is deterministic, so repeats would add nothing.
+              if (evalCase.structured !== undefined) {
+                const grade = gradeStructuredCase(evalCase.structured, sutRun.actualOutput, sutRun.structuredOutput);
+                results.push({
+                  caseId: evalCase.id,
+                  timestamp: new Date(),
+                  agentConfig,
+                  scores: grade.scores,
+                  overallScore: grade.overallScore,
+                  actualOutput: sutRun.actualOutput,
+                  latencyMs: sutRun.metrics?.latencyMs ?? Date.now() - start,
+                  costUsd: sutCostUsd,
+                  tokensUsed: sutRun.metrics?.tokensUsed ?? 0,
+                  stepsExecuted: sutRun.metrics?.stepsExecuted ?? 0,
+                  passed: grade.passed,
+                  fieldResults: grade.fieldResults,
+                  ...(grade.error !== undefined ? { error: grade.error } : {}),
+                });
+                continue;
+              }
+
               const repeatCount = Math.max(1, config.repeats ?? DEFAULT_EVAL_CONFIG.repeats);
 
               // Task 6: re-scores the SAME `sutRun.actualOutput` `repeatCount`
@@ -425,7 +457,7 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
               timestamp: new Date(),
               agentConfig,
               results,
-              summary: buildSummary(results, config.passThreshold, perCaseRepeatStats, config.repeats ?? DEFAULT_EVAL_CONFIG.repeats),
+              summary: buildSummary(results, perCaseRepeatStats, config.repeats ?? DEFAULT_EVAL_CONFIG.repeats),
             };
 
             yield* Ref.update(historyRef, (h) => [...h, run]);
@@ -442,6 +474,25 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
         Effect.gen(function* () {
           const start = Date.now();
           const costUsd = metrics?.costUsd ?? 0;
+
+          if (evalCase.structured !== undefined) {
+            const grade = gradeStructuredCase(evalCase.structured, actualOutput);
+            return {
+              caseId: evalCase.id,
+              timestamp: new Date(),
+              agentConfig,
+              scores: grade.scores,
+              overallScore: grade.overallScore,
+              actualOutput,
+              latencyMs: metrics?.latencyMs ?? Date.now() - start,
+              costUsd,
+              tokensUsed: metrics?.tokensUsed ?? 0,
+              stepsExecuted: metrics?.stepsExecuted ?? 0,
+              passed: grade.passed,
+              fieldResults: grade.fieldResults,
+              ...(grade.error !== undefined ? { error: grade.error } : {}),
+            } satisfies EvalResult;
+          }
 
           const { scores } = yield* scoreDimensionsWithEngine(
             llm,

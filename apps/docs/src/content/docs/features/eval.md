@@ -46,11 +46,17 @@ const suite = {
   dimensions: ["accuracy", "relevance", "completeness", "safety"],
 };
 
-// 2. Run the suite via EvalService
+// 2. Run the suite via EvalService. The runner executes the agent under test
+//    for each case input and returns its output.
+const runner = (input: string) =>
+  Effect.promise(() => agent.run(input)).pipe(
+    Effect.map((result) => ({ actualOutput: result.output })),
+  );
+
 const program = Effect.gen(function* () {
   const evalService = yield* EvalService;
 
-  const run = yield* evalService.runSuite(suite, "claude-sonnet-4-6");
+  const run = yield* evalService.runSuite(suite, "claude-sonnet-4-6", runner);
 
   console.log(`Passed: ${run.summary.passed}/${run.summary.totalCases}`);
   console.log(`Avg score: ${run.summary.avgScore.toFixed(3)}`);
@@ -125,9 +131,83 @@ result.scores.forEach(({ dimension, score }) =>
 );
 ```
 
+## Structured Results: Deterministic Grading
+
+When the agent returns a typed result (for example with an `outputSchema`), grade it field by field instead of asking a judge. Structured grading calls no LLM, costs nothing and gives the same grade every run.
+
+Add `structured` to a case. A case with `structured` is graded only by its expectations: the suite's judge dimensions are not scored for it, and its score is recorded under the `structured` dimension.
+
+```json
+{
+  "id": "order-001",
+  "name": "Order extraction",
+  "input": "Extract the order from: 2x widget A, 1x widget B, total $19.99, ship rush",
+  "structured": {
+    "fields": { "currency": "USD", "items": [{ "sku": "A", "qty": 2 }, { "sku": "B", "qty": 1 }] },
+    "checks": [
+      { "kind": "approx", "path": "/total", "value": 20, "tolerance": 0.05 },
+      { "kind": "array-contains", "path": "/tags", "value": "rush" },
+      { "kind": "matches", "path": "/id", "pattern": "^ord-\\d+$" }
+    ],
+    "numericTolerance": 0
+  }
+}
+```
+
+- **`fields`** is a partial expected value. Every leaf in it is checked at its path; keys the result has but `fields` does not are ignored. Arrays compare element by element and must have the same length. Numeric leaves are exact unless `numericTolerance` (absolute) is set.
+- **`checks`** are explicit checks at RFC 6901 JSON Pointer paths (`""` is the root, `/items/0/sku` is the first item's `sku`). These are the same paths as `StructuredFieldError.path` in structured-output reports.
+
+| Check `kind` | Passes when |
+|---|---|
+| `equals` | The value deep-equals `value` (key order does not matter) |
+| `approx` | The number is within `tolerance` (absolute) or `relativeTolerance × |value|` of `value`; bounds are inclusive |
+| `contains` | The string contains `value` (`caseInsensitive` optional) |
+| `matches` | The string matches the regular expression `pattern` (`flags` optional) |
+| `array-contains` | The array has an element matching `value`; object values match partially, so `{ "sku": "B" }` finds the item whose `sku` is `"B"` |
+| `length` | The array or string length satisfies `min`, `max` and/or `equals` |
+| `type` | The value is a `string`, `number`, `integer`, `boolean`, `object`, `array` or `null` |
+
+A missing field fails with reason `missing field`; a field whose value is `null` is not missing.
+
+**What gets graded.** The runner may return the typed value as `structuredOutput`; otherwise `actualOutput` is parsed as JSON. Output that is not JSON fails the case.
+
+**Results.** Each result carries `fieldResults`, one entry per check with its `path`, `check`, `outcome` and `reason`, and these persist in `EvalStore`. The `structured` score is the fraction of checks that passed. The case passes only when every check passed. `checkRegression` and `compare` treat `structured` like any other dimension.
+
+**Inconclusive grades.** A grader that cannot decide abstains instead of guessing. An expectation with nothing to check, an invalid regular expression, a `length` check with no bound, or a malformed pointer makes the grade `inconclusive`. The case then records no score, does not pass, and sets `error` to the reason.
+
+### Grading without a suite
+
+The graders are plain functions, so you can use them directly in tests:
+
+```typescript
+import { gradeFields, gradeSchema, gradeStructured, runFieldCheck } from "@reactive-agents/eval";
+import { Schema } from "effect";
+
+const result = { id: "ord-1", total: 19.99, items: [{ sku: "A", qty: 2 }] };
+
+gradeFields(result, { id: "ord-1", total: 20 }, { numericTolerance: 0.01 }).verdict; // "pass"
+runFieldCheck(result, { kind: "length", path: "/items", min: 1 }).outcome; // "pass"
+
+// Validate against an Effect Schema; each field error becomes a failing field result.
+const Order = Schema.Struct({ id: Schema.String, total: Schema.Number });
+gradeSchema(Order, { id: 7, total: "x" }).fields.map((f) => f.path); // ["/id", "/total"]
+
+// Fields, checks and an optional schema in one grade.
+const grade = gradeStructured(
+  result,
+  { fields: { id: "ord-1" }, checks: [{ kind: "contains", path: "/id", value: "ord" }] },
+  { schema: Order },
+);
+console.log(grade.verdict, grade.score, grade.fields);
+```
+
+Every grader returns a `GradeResult`: `verdict` (`"pass"`, `"fail"` or `"inconclusive"`), `score` (passed ÷ decided checks), the `passed`, `failed` and `invalid` counts, and the per-field `fields`. Schema validation is available as a function only, because an Effect Schema cannot be stored in a suite file. Use `type` checks for shape checks inside a suite.
+
 ## EvalCase Schema
 
 ```typescript
+import type { FieldCheck } from "@reactive-agents/eval";
+
 type EvalCase = {
   id: string;                   // Unique identifier for this case
   name: string;                 // Human-readable name
@@ -140,6 +220,11 @@ type EvalCase = {
     maxCost?: number;           // Maximum cost in USD
   };
   tags?: string[];              // Arbitrary labels for filtering
+  structured?: {                // Deterministic expectations for a typed result (no judge)
+    fields?: unknown;           // Partial expected value
+    checks?: FieldCheck[];      // Explicit checks at JSON Pointer paths
+    numericTolerance?: number;  // Absolute tolerance for numeric leaves in `fields`
+  };
 };
 ```
 
@@ -168,6 +253,8 @@ type EvalSuite = {
 `runSuite` returns an `EvalRun`:
 
 ```typescript
+import type { GradeFieldResult } from "@reactive-agents/eval";
+
 type EvalRun = {
   id: string;           // UUID generated per run
   suiteId: string;
@@ -179,7 +266,7 @@ type EvalRun = {
 
 type EvalRunSummary = {
   totalCases: number;
-  passed: number;                             // overallScore >= passThreshold
+  passed: number;                             // Results with passed: true
   failed: number;
   avgScore: number;                           // Mean overallScore across all cases
   avgLatencyMs: number;
@@ -200,6 +287,7 @@ type EvalResult = {
   stepsExecuted: number;
   passed: boolean;
   error?: string;
+  fieldResults?: GradeFieldResult[]; // Structured cases only: one entry per check
 };
 
 type DimensionScore = {
@@ -224,7 +312,7 @@ const program = Effect.gen(function* () {
   const evalService = yield* EvalService;
 
   // This run is written to eval-history.db
-  const run = yield* evalService.runSuite(suite, "agent-v1.2");
+  const run = yield* evalService.runSuite(suite, "agent-v1.2", runner);
 
   // Load the 10 most recent runs for this suite
   const history = yield* evalService.getHistory("qa-suite-v1", { limit: 10 });
@@ -314,11 +402,11 @@ type EvalConfig = {
 };
 ```
 
-Pass config overrides as the third argument to `runSuite`:
+Pass config overrides as the fourth argument to `runSuite`, after the runner:
 
 <!-- docs-skip-typecheck -->
 ```typescript
-yield* evalService.runSuite(suite, "agent-v2", {
+yield* evalService.runSuite(suite, "agent-v2", runner, {
   passThreshold: 0.8,
   parallelism: 5,
   timeoutMs: 60_000,

@@ -11,6 +11,45 @@ export {
 export type { EvalConfig, JudgeConfig } from "./types/config.js";
 export { EvalConfigSchema, JudgeConfigSchema, DEFAULT_EVAL_CONFIG } from "./types/config.js";
 
+// Structured expectations (deterministic, no-LLM grading of typed results)
+export type {
+  FieldCheck,
+  JsonTypeName,
+  StructuredExpectation,
+  GradeCheckKind,
+  FieldOutcome,
+  GradeFieldResult,
+  GradeVerdict,
+  GradeResult,
+} from "./types/structured-expectation.js";
+export {
+  FieldCheckSchema,
+  JsonTypeNameSchema,
+  StructuredExpectationSchema,
+  GradeCheckKindSchema,
+  FieldOutcomeSchema,
+  GradeFieldResultSchema,
+  GradeVerdictSchema,
+  GradeResultSchema,
+} from "./types/structured-expectation.js";
+
+// Deterministic graders
+export {
+  resolveJsonPointer,
+  toJsonPointer,
+  deepEqual,
+  runFieldCheck,
+  gradeFields,
+  gradeSchema,
+  gradeStructured,
+  gradeOutput,
+  summarizeGrade,
+  parseStructuredOutput,
+  gradeStructuredCase,
+  STRUCTURED_DIMENSION,
+} from "./graders/index.js";
+export type { PointerResolution, ParsedStructuredOutput, StructuredCaseGrade } from "./graders/index.js";
+
 // Errors
 export { EvalError, BenchmarkError, DatasetError } from "./errors/errors.js";
 export type { EvalErrors } from "./errors/errors.js";
