@@ -46,6 +46,19 @@ export interface AgentMemoryEntry {
   readonly updatedAt: Date;
   readonly accessCount: number;
   readonly lastAccessedAt: Date;
+  /**
+   * Task id of the run that wrote this entry (provenance), so a UI can show
+   * which run produced a memory. Absent when the writer has no task context
+   * (e.g. a write outside an agent run) or predates this field. Adapters
+   * persist it when their store has a column for it and ignore it otherwise.
+   */
+  readonly taskId?: string;
+  /**
+   * Run id of the run that wrote this entry (provenance). Absent when the
+   * writer has no run context or predates this field. Same adapter rule as
+   * {@link AgentMemoryEntry.taskId}.
+   */
+  readonly runId?: string;
 }
 
 /** One entry returned by {@link AgentMemory.getRelated} — a neighbor in the

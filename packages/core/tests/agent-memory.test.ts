@@ -75,6 +75,28 @@ describe("AgentMemory port", () => {
     expect(err).toBe("disk full");
   });
 
+  it("carries optional run provenance (taskId, runId) through storeSemantic", async () => {
+    const program = Effect.gen(function* () {
+      const ref = yield* Ref.make<AgentMemoryEntry[]>([]);
+      const layer = Layer.succeed(AgentMemory, {
+        storeSemantic: (entry: AgentMemoryEntry) =>
+          Ref.update(ref, (acc) => [...acc, entry]).pipe(Effect.as(entry.id)),
+      });
+      yield* Effect.gen(function* () {
+        const memory = yield* AgentMemory;
+        yield* memory.storeSemantic(makeEntry({ id: "with", taskId: "task-1", runId: "run-1" }));
+        yield* memory.storeSemantic(makeEntry({ id: "without" }));
+      }).pipe(Effect.provide(layer));
+      return yield* Ref.get(ref);
+    });
+
+    const [withProv, withoutProv] = await Effect.runPromise(program);
+    expect(withProv!.taskId).toBe("task-1");
+    expect(withProv!.runId).toBe("run-1");
+    expect(withoutProv!.taskId).toBeUndefined();
+    expect(withoutProv!.runId).toBeUndefined();
+  });
+
   it("port surface is exactly `storeSemantic` — no other methods leak through", () => {
     // This is a static-type concern; the runtime check is a sanity guard
     // that the Tag's surface hasn't accidentally widened. If a future
