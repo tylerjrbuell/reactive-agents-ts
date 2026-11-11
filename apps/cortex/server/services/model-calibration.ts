@@ -8,8 +8,9 @@
  * or user-cached prior, llm-provider), `resolveModelCalibration` (runtime: the
  * prior merged with local observations, the same call a run with
  * `calibration: "auto"` makes), `loadObservations` (reactive-intelligence),
- * and `CalibrationStore.load` (the conformal entropy thresholds). Cortex never
- * opens those files itself and never writes calibration.
+ * `CalibrationStore.load` (the conformal entropy thresholds) and
+ * `readBanditArmStats` (the strategy-choice bandit's arms, same DB file).
+ * Cortex never opens those files itself and never writes calibration.
  *
  * Provenance: the framework returns the merged calibration without saying
  * which tier set each field, so a field is `learned` when the resolved value
@@ -27,6 +28,8 @@ import {
   loadObservations,
   OBSERVATIONS_WINDOW,
   OVERRIDE_THRESHOLD,
+  readBanditArmStats,
+  type ArmStatsView,
   type RunObservation,
 } from "@reactive-agents/reactive-intelligence";
 
@@ -108,10 +111,63 @@ export interface ModelCalibrationView {
   /** `null` when the sensor has stored nothing for this model. */
   readonly entropy: EntropyCalibration | null;
   /**
-   * Strategy-bandit arm stats. Always `null` today: the framework keeps them
-   * in an in-memory `BanditStore` per agent, so nothing is stored to read.
+   * Strategy-choice (bandit) arm stats the framework persisted for this model
+   * (table `bandit_arms` in the calibration DB, read by `readBanditArmStats`).
+   * `null` when the DB file is missing or holds no arm for the model.
    */
-  readonly bandit: null;
+  readonly bandit: StrategyLearning | null;
+}
+
+/** One strategy (bandit arm) for one task category. */
+export interface BanditArm {
+  /** Strategy name (the arm id). */
+  readonly strategy: string;
+  /** Posterior mean success rate, `alpha / (alpha + beta)`. */
+  readonly meanReward: number;
+  /** Runs the strategy was scored on (`pulls`). */
+  readonly trials: number;
+  readonly alpha: number;
+  readonly beta: number;
+  /** ISO-8601 UTC. */
+  readonly updatedAt: string;
+}
+
+/** The arms learned for one task category, most trials first (the framework's order). */
+export interface BanditCategory {
+  readonly taskCategory: string;
+  readonly arms: readonly BanditArm[];
+  /** Newest `updatedAt` over the arms. */
+  readonly lastUpdated: string;
+}
+
+/** What the strategy-choice bandit learned on this model. */
+export interface StrategyLearning {
+  readonly categories: readonly BanditCategory[];
+}
+
+/** Group the framework's arm stats by task category (categories in the framework's order). Pure. */
+export function strategyLearningOf(arms: readonly ArmStatsView[]): StrategyLearning | null {
+  if (arms.length === 0) return null;
+  const byCategory = new Map<string, BanditArm[]>();
+  for (const a of arms) {
+    const list = byCategory.get(a.taskCategory) ?? [];
+    list.push({
+      strategy: a.armId,
+      meanReward: a.meanReward,
+      trials: a.pulls,
+      alpha: a.alpha,
+      beta: a.beta,
+      updatedAt: a.updatedAt,
+    });
+    byCategory.set(a.taskCategory, list);
+  }
+  return {
+    categories: [...byCategory.entries()].map(([taskCategory, list]) => ({
+      taskCategory,
+      arms: list,
+      lastUpdated: list.reduce((m, a) => (a.updatedAt > m ? a.updatedAt : m), list[0]!.updatedAt),
+    })),
+  };
 }
 
 /** Store locations (tests point them at temp dirs). */
@@ -212,6 +268,14 @@ export function makeModelCalibrationReader(paths: ModelCalibrationPaths = {}) {
     };
   };
 
+  // `readBanditArmStats` opens and closes the file per call (no handle kept).
+  // Only when the file exists: opening it creates the DB.
+  const banditOf = (model: string): StrategyLearning | null => {
+    const dbPath = paths.calibrationDbPath ?? defaultCalibrationDbPath();
+    if (!existsSync(dbPath)) return null;
+    return strategyLearningOf(readBanditArmStats(dbPath, { modelId: model }));
+  };
+
   return {
     /** The calibration view for one model id. */
     read(model: string): ModelCalibrationView {
@@ -223,8 +287,9 @@ export function makeModelCalibrationReader(paths: ModelCalibrationPaths = {}) {
         ? resolveModelCalibration(model, observationsDir ? { observationsBaseDir: observationsDir } : {})
         : undefined;
       const entropy = entropyOf(model);
+      const bandit = banditOf(model);
       if (!prior || !resolved) {
-        return { model, status: "none", settings: [], observations, entropy, bandit: null };
+        return { model, status: "none", settings: [], observations, entropy, bandit };
       }
       return {
         model,
@@ -233,7 +298,7 @@ export function makeModelCalibrationReader(paths: ModelCalibrationPaths = {}) {
         settings: calibrationSettingsOf(prior, resolved),
         observations,
         entropy,
-        bandit: null,
+        bandit,
       };
     },
   };

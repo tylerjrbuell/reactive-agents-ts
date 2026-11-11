@@ -2,7 +2,7 @@ import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendObservation, CalibrationStore, type RunObservation } from "@reactive-agents/reactive-intelligence";
+import { appendObservation, BanditStore, CalibrationStore, type RunObservation } from "@reactive-agents/reactive-intelligence";
 import { openDatabase } from "../db/schema.js";
 import { makeModelCalibrationReader, summarizeObservations } from "../services/model-calibration.js";
 import { modelInsightsRouter } from "../api/model-insights.js";
@@ -97,6 +97,30 @@ describe("model calibration (framework readers)", () => {
       driftDetected: false,
       lastUpdated: 1_700_000_000_000,
     });
+  });
+
+  it("reads strategy-choice (bandit) arm stats for this model from the calibration DB, grouped by task category", () => {
+    const missing = join(dir, "bandit-missing.db");
+    expect(makeModelCalibrationReader({ observationsDir: join(dir, "obs-b"), calibrationDbPath: missing }).read(PRIOR_MODEL).bandit).toBeNull();
+    expect(existsSync(missing)).toBe(false);
+
+    const dbPath = join(dir, "bandit.db");
+    const store = new BanditStore(dbPath);
+    store.save({ contextBucket: `${PRIOR_MODEL}:research`, armId: "reactive", alpha: 4, beta: 2, pulls: 4 });
+    store.save({ contextBucket: `${PRIOR_MODEL}:research`, armId: "plan-execute-reflect", alpha: 2, beta: 3, pulls: 3 });
+    store.save({ contextBucket: `${PRIOR_MODEL}:coding`, armId: "reflexion", alpha: 2, beta: 1, pulls: 1 });
+    store.save({ contextBucket: "other-model:research", armId: "reactive", alpha: 9, beta: 1, pulls: 8 });
+    store.close();
+
+    const bandit = makeModelCalibrationReader({ observationsDir: join(dir, "obs-b"), calibrationDbPath: dbPath }).read(PRIOR_MODEL).bandit;
+    expect(bandit).not.toBeNull();
+    expect(bandit!.categories.map((c) => c.taskCategory)).toEqual(["coding", "research"]);
+    const research = bandit!.categories[1]!;
+    expect(research.arms.map((a) => [a.strategy, a.trials])).toEqual([["reactive", 4], ["plan-execute-reflect", 3]]);
+    expect(research.arms[0]!.meanReward).toBeCloseTo(4 / 6, 6);
+    expect(research.arms[0]!.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+    expect(research.lastUpdated).toBe(research.arms[0]!.updatedAt);
+    expect(makeModelCalibrationReader({ observationsDir: join(dir, "obs-b"), calibrationDbPath: dbPath }).read(NO_PRIOR_MODEL).bandit).toBeNull();
   });
 
   it("sums act-or-answer counts only over runs that recorded them", () => {

@@ -6,6 +6,8 @@ import {
   entropyStats,
   observationLine,
   observationStats,
+  strategyLearningLine,
+  strategyLearningRows,
   type ModelCalibrationView,
   type ModelCost,
   type ObservationSummary,
@@ -105,6 +107,47 @@ describe("observations", () => {
       ["Settled below", "0.18"],
       ["Drift", "none"],
     ]);
+  });
+});
+
+describe("strategy learning (bandit)", () => {
+  const now = Date.parse("2026-11-11T12:00:00Z");
+  const arm = (strategy: string, alpha: number, beta: number, trials: number, updatedAt = "2026-11-11T09:00:00Z") => ({
+    strategy,
+    meanReward: alpha / (alpha + beta),
+    trials,
+    alpha,
+    beta,
+    updatedAt,
+  });
+
+  it("lists each task category with its strategies' success estimate and runs, best marked", () => {
+    const rows = strategyLearningRows(
+      {
+        categories: [
+          {
+            taskCategory: "research",
+            arms: [arm("reactive", 2, 3, 3), arm("plan-execute-reflect", 4, 2, 4)],
+            lastUpdated: "2026-11-11T09:00:00Z",
+          },
+          { taskCategory: "", arms: [arm("reflexion", 1, 1, 0)], lastUpdated: "2026-11-11T09:00:00Z" },
+        ],
+      },
+      now,
+    );
+    expect(rows.map((r) => r.category)).toEqual(["research", "uncategorized"]);
+    expect(rows[0]!.updated).toBe("updated 3 hours ago");
+    expect(rows[0]!.arms.map((a) => [a.strategy, a.rate, a.trials, a.best])).toEqual([
+      ["reactive", "40%", "3 runs", false],
+      ["plan-execute-reflect", "67%", "4 runs", true],
+    ]);
+    expect(rows[0]!.arms[1]!.title).toBe("Success estimate 4.0 / 6.0 after 4 scored runs.");
+  });
+
+  it("nothing stored: no rows, and a line that says so", () => {
+    expect(strategyLearningRows(null)).toEqual([]);
+    expect(strategyLearningLine(null)).toContain("No strategy results stored");
+    expect(strategyLearningLine({ categories: [] })).not.toContain("No strategy results stored");
   });
 });
 

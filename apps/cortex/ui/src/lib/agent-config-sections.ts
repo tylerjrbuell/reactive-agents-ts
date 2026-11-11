@@ -10,6 +10,14 @@ export interface AgentConfigSection {
   readonly label: string;
   readonly icon: string;
   readonly keywords: string;
+  /**
+   * AgentConfig paths this section's controls set (through
+   * `cortexParamsToAgentConfig`, where the curated value wins over `rawConfig`).
+   * A path covers its sub-paths. "All framework options" hides these so no
+   * option has two controls; pinned against the mapping by
+   * `server/tests/curated-config-paths.test.ts`.
+   */
+  readonly configPaths: readonly string[];
 }
 
 /** All sections in panel order. */
@@ -19,35 +27,101 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     label: "Model",
     icon: "memory",
     keywords: "inference llm provider model temperature tokens system prompt task context health anthropic openai gemini ollama litellm test",
+    configPaths: ["name", "provider", "model", "systemPrompt", "temperature", "maxTokens", "numCtx", "thinking", "taskContext", "features.healthCheck"],
   },
-  { id: "persona", label: "Persona", icon: "face", keywords: "role tone traits response style behaviour face" },
+  {
+    id: "persona",
+    label: "Persona",
+    icon: "face",
+    keywords: "role tone traits response style behaviour face",
+    configPaths: ["persona.role", "persona.tone", "persona.instructions"],
+  },
   {
     id: "strategy",
     label: "Reasoning",
     icon: "psychology",
     keywords: "strategy react plan execute tot tree reflexion adaptive iterations min max verification reflect runtime semantic entropy quality approval approve deny gate commands durable",
+    configPaths: [
+      "reasoning.defaultStrategy", "reasoning.enableStrategySwitching", "reasoning.auditRationale", "reasoning.harness",
+      "execution.maxIterations", "execution.minIterations",
+      "verificationStep.mode", "features.verification",
+      "budget.tokenLimit", "budget.costLimit", "grounding.mode", "fabricationGuard", "modelRouting.minTier",
+      "documents", "approvalPolicy", "outputSchemaOptions.onParseFail",
+    ],
   },
   {
     id: "variables",
     label: "Variables",
     icon: "data_object",
     keywords: "template variable parameter parameterized run placeholder token mustache enum default required rescan substitution",
+    configPaths: [],
   },
   {
     id: "tools",
     label: "Tools",
     icon: "construction",
     keywords: "web search file read write code mcp registry spawn dynamic sub agent construction shell terminal host execute risk allowlist",
+    // Shell and workspace (split out as its own Lab entry) are Tools fields in the panel.
+    configPaths: ["tools.allowedTools", "tools.disclosure", "tools.terminal", "tools.workspace", "mcpServers", "dynamicSubAgents.maxIterations"],
   },
-  { id: "subagents", label: "Sub-agents", icon: "hub", keywords: "local remote a2a url hub delegation researcher" },
-  { id: "skills", label: "Skills", icon: "auto_awesome", keywords: "living skill.md activate force path directory agentskills auto awesome" },
-  { id: "memory", label: "Memory", icon: "account_tree", keywords: "working episodic semantic context synthesis ics account tree" },
-  { id: "guardrails", label: "Guardrails", icon: "security", keywords: "injection pii toxicity security threshold" },
-  { id: "execution", label: "Execution", icon: "timer", keywords: "timeout retry cache checkpoint progress ttl timer" },
-  { id: "metatools", label: "Meta tools", icon: "wand_stars", keywords: "conductor brief find pulse recall harness suite wand stars" },
-  { id: "reliability", label: "Reliability", icon: "shield", keywords: "fallback provider errors shield backup" },
-  { id: "observability", label: "Observability", icon: "monitoring", keywords: "metrics dashboard verbosity monitoring logs" },
+  { id: "subagents", label: "Sub-agents", icon: "hub", keywords: "local remote a2a url hub delegation researcher", configPaths: ["agentTools"] },
+  {
+    id: "skills",
+    label: "Skills",
+    icon: "auto_awesome",
+    keywords: "living skill.md activate force path directory agentskills auto awesome",
+    configPaths: ["skills.paths", "skills.activate", "skills.global"],
+  },
+  {
+    id: "memory",
+    label: "Memory",
+    icon: "account_tree",
+    keywords: "working episodic semantic context synthesis ics account tree debrief",
+    configPaths: ["memory.tier", "features.memory", "reasoning.synthesis"],
+  },
+  {
+    id: "guardrails",
+    label: "Guardrails",
+    icon: "security",
+    keywords: "injection pii toxicity security threshold",
+    configPaths: ["guardrails.injection", "guardrails.pii", "guardrails.toxicity", "guardrails.customBlocklist"],
+  },
+  {
+    id: "execution",
+    label: "Execution",
+    icon: "timer",
+    keywords: "timeout retry cache checkpoint progress ttl timer",
+    configPaths: ["execution.timeoutMs", "execution.retryPolicy"],
+  },
+  { id: "metatools", label: "Meta tools", icon: "wand_stars", keywords: "conductor brief find pulse recall harness suite wand stars", configPaths: ["metaTools"] },
+  { id: "reliability", label: "Reliability", icon: "shield", keywords: "fallback provider errors shield backup", configPaths: ["fallbacks"] },
+  {
+    id: "observability",
+    label: "Observability",
+    icon: "monitoring",
+    keywords: "metrics dashboard verbosity monitoring logs",
+    // Verbosity also sets `observability.live` and the agent log (`logging`).
+    configPaths: ["observability.verbosity", "observability.live", "observability.checklist", "observability.tracing", "logging"],
+  },
 ];
+
+/**
+ * AgentConfig paths Cortex sets itself on every build, with no control: the
+ * agent id (chat session / saved agent identity), the reasoning kernel (always
+ * on) and the kill switch (desk pause / resume / stop). A generic control for
+ * them would do nothing.
+ */
+export const CORTEX_FIXED_CONFIG_PATHS: readonly string[] = ["agentId", "features.reasoning", "features.killSwitch"];
+
+/** Every AgentConfig path a curated section (or Cortex itself) sets. */
+export function curatedConfigPaths(): string[] {
+  return [...AGENT_CONFIG_SECTIONS.flatMap((s) => s.configPaths), ...CORTEX_FIXED_CONFIG_PATHS];
+}
+
+/** Whether `path` is set by a curated control: equal to a curated path or under one. */
+export function isCuratedConfigPath(path: string): boolean {
+  return curatedConfigPaths().some((p) => path === p || path.startsWith(`${p}.`));
+}
 
 /** Sections hidden in the compact panel (chat quick config). */
 const COMPACT_HIDDEN = new Set(["variables", "tools", "subagents", "skills"]);

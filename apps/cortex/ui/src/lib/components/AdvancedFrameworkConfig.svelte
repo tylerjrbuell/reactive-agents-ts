@@ -10,8 +10,9 @@
    * appears here automatically, with zero per-field UI code — Cortex config no
    * longer drifts behind the framework as it grows.
    *
-   * Curated paths (fields the hand-built panel already exposes) are excluded so
-   * they aren't shown twice; everything else framework-settable shows up here.
+   * Curated paths (`AGENT_CONFIG_SECTIONS[].configPaths`: fields the hand-built
+   * panel already sets) are excluded so they aren't shown twice; everything else
+   * framework-settable shows up here.
    */
   import { onMount } from "svelte";
   import { tooltip } from "$lib/actions/tooltip.js";
@@ -20,6 +21,14 @@
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import ListField from "$lib/components/ListField.svelte";
   import type { CapabilityManifest, ConfigFieldDescriptor } from "$lib/capabilities.js";
+  import {
+    CHOICE_FIELDS,
+    COLLECTION_FIELDS,
+    choiceFromKey,
+    choiceKey,
+    genericConfigFields,
+    type ChoiceValue,
+  } from "$lib/framework-options.js";
 
   interface Props {
     manifest: CapabilityManifest | null;
@@ -30,29 +39,10 @@
   }
   let { manifest, rawConfig = $bindable(), expanded = false }: Props = $props();
 
-  // Framework paths the curated panel already renders — excluded from the
-  // generic section to avoid duplicate controls. Everything else framework-
-  // settable is surfaced generically.
-  const CURATED = new Set<string>([
-    "name", "agentId", "provider", "model", "systemPrompt", "temperature",
-    "maxTokens", "numCtx", "thinking",
-    "reasoning.defaultStrategy", "reasoning.enableStrategySwitching",
-    "execution.maxIterations", "execution.minIterations", "execution.timeoutMs",
-    "tools.allowedTools", "tools.terminal", "tools.workspace", "tools.disclosure",
-    // Guardrails section owns the detector switches + blocklist (its curated
-    // value would override these anyway — curated wins on conflict).
-    "guardrails.injection", "guardrails.pii", "guardrails.toxicity", "guardrails.customBlocklist",
-    // Approvals editor (ApprovalPolicyFields) owns the whole approval policy.
-    "approvalPolicy.mode", "approvalPolicy.tools", "approvalPolicy.commands",
-  ]);
+  // Which fields render and with which widget: `lib/framework-options.ts`.
+  // Paths a curated section sets come from the section registry
+  // (`AGENT_CONFIG_SECTIONS[].configPaths`), so no option has two controls.
 
-  // Scalar/enum leaves render generically. Collection-shaped fields need to
-  // know their element shape, which the manifest does not report, so they
-  // render through ListField only when listed here (path → shape).
-  const RENDERABLE = new Set(["string", "number", "boolean", "enum"]);
-  type Collection =
-    | { mode: "list"; placeholder: string; suggestions?: readonly string[] }
-    | { mode: "record"; valueKind: "number" | readonly string[]; placeholder: string };
   // Toolset names come from the framework (`GET /api/tools/toolsets`), so a new
   // alias (e.g. `read`) appears without a Cortex edit.
   let builtinAliases = $state<string[]>(["all"]);
@@ -62,14 +52,7 @@
       .then((t: Record<string, readonly string[]>) => (builtinAliases = builtinsSuggestions(t)))
       .catch(() => undefined);
   });
-  const COLLECTIONS: Readonly<Record<string, Collection>> = $derived({
-    "tools.builtins": { mode: "list", placeholder: "Toolset or tool name", suggestions: builtinAliases },
-    "tools.focusedTools": { mode: "list", placeholder: "Tool shown in the prompt" },
-    "tools.maxCallsPerTool": { mode: "record", valueKind: "number", placeholder: "Tool name" },
-    "tools.riskLevels": { mode: "record", valueKind: ["low", "medium", "high", "critical"], placeholder: "Tool name" },
-    "requiredTools.tools": { mode: "list", placeholder: "Tool that must be called" },
-  });
-  const renderable = (f: ConfigFieldDescriptor): boolean => RENDERABLE.has(f.type) || f.path in COLLECTIONS;
+  const suggestionsFor = (path: string): readonly string[] => (path === "tools.builtins" ? builtinAliases : []);
 
   function getPath(obj: Record<string, unknown>, path: string): unknown {
     return path.split(".").reduce<unknown>(
@@ -104,8 +87,7 @@
 
   const groups = $derived.by<{ name: string; rows: Row[] }[]>(() => {
     if (!manifest) return [];
-    const rows: Row[] = manifest.configFields
-      .filter((f) => renderable(f) && !CURATED.has(f.path))
+    const rows: Row[] = genericConfigFields(manifest.configFields)
       .map((field) => {
         const hint = hintFor(field);
         return { field, label: hint.label, help: hint.help, group: hint.group, order: hint.order };
@@ -134,7 +116,8 @@
       <h4 class="afc-group-h">{group.name}</h4>
       {#each group.rows as row (row.field.path)}
         {@const val = getPath(rawConfig, row.field.path)}
-        {@const coll = COLLECTIONS[row.field.path]}
+        {@const coll = COLLECTION_FIELDS[row.field.path]}
+        {@const choices = CHOICE_FIELDS[row.field.path]}
         <div class="acp-field">
           {#if coll}
             <label class="config-label" for={`adv-${row.field.path}`} use:tooltip={row.field.path}>{row.label}</label>
@@ -144,8 +127,21 @@
               value={val}
               onChange={(next) => setPath(row.field.path, next)}
               placeholder={coll.placeholder}
-              {...(coll.mode === "record" ? { valueKind: coll.valueKind } : { suggestions: coll.suggestions ?? [] })}
+              {...(coll.mode === "record" ? { valueKind: coll.valueKind } : { suggestions: suggestionsFor(row.field.path) })}
             />
+          {:else if choices}
+            <label class="config-label" for={`adv-${row.field.path}`} use:tooltip={row.field.path}>{row.label}</label>
+            <select
+              id={`adv-${row.field.path}`}
+              class="config-input"
+              value={val === undefined ? "" : choiceKey(val as ChoiceValue)}
+              onchange={(e) => setPath(row.field.path, choiceFromKey(row.field.path, (e.currentTarget as HTMLSelectElement).value))}
+            >
+              <option value="">Default</option>
+              {#each choices as opt (choiceKey(opt))}
+                <option value={choiceKey(opt)}>{String(opt)}</option>
+              {/each}
+            </select>
           {:else if row.field.type === "boolean"}
             <label class="acp-check" use:tooltip={row.field.path}>
               <input

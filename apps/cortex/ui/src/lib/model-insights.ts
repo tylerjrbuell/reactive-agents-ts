@@ -52,7 +52,33 @@ export interface ModelCalibrationView {
   readonly settings: readonly CalibrationSetting[];
   readonly observations: ObservationSummary;
   readonly entropy: EntropyCalibration | null;
-  readonly bandit: null;
+  /** What the strategy-choice bandit learned on this model; `null` when nothing is stored. */
+  readonly bandit: StrategyLearning | null;
+}
+
+/** One strategy (bandit arm) for one task category (`GET /api/model-calibration`). */
+export interface BanditArm {
+  readonly strategy: string;
+  /** Posterior mean success rate, `alpha / (alpha + beta)`. */
+  readonly meanReward: number;
+  /** Runs the strategy was scored on. */
+  readonly trials: number;
+  readonly alpha: number;
+  readonly beta: number;
+  /** ISO-8601 UTC. */
+  readonly updatedAt: string;
+}
+
+/** The arms learned for one task category, most trials first. */
+export interface BanditCategory {
+  readonly taskCategory: string;
+  readonly arms: readonly BanditArm[];
+  readonly lastUpdated: string;
+}
+
+/** What the strategy-choice bandit learned on a model. */
+export interface StrategyLearning {
+  readonly categories: readonly BanditCategory[];
 }
 
 /** `GET /api/model-cost?provider=&model=`. */
@@ -246,6 +272,54 @@ export function entropyStats(e: EntropyCalibration | null): InsightStat[] {
       title: "Whether recent steps scored differently from the learned baseline.",
     },
   ];
+}
+
+/** One strategy row under a task category. */
+export interface StrategyArmRow {
+  readonly strategy: string;
+  /** `67%` (the success estimate). */
+  readonly rate: string;
+  /** `4 runs`. */
+  readonly trials: string;
+  /** Hover: the estimate's numbers. */
+  readonly title: string;
+  /** Highest success estimate in its category (ties: the first, which has the most runs). */
+  readonly best: boolean;
+}
+
+/** One task category of the strategy-learning list. */
+export interface StrategyCategoryRow {
+  readonly category: string;
+  /** `updated 3 hours ago`. */
+  readonly updated: string;
+  readonly arms: readonly StrategyArmRow[];
+}
+
+/** The bandit's arms as page rows, `[]` when nothing is stored. */
+export function strategyLearningRows(b: StrategyLearning | null, now: number = Date.now()): StrategyCategoryRow[] {
+  if (!b) return [];
+  return b.categories.map((c) => {
+    const best = c.arms.reduce<BanditArm | undefined>((m, a) => (!m || a.meanReward > m.meanReward ? a : m), undefined);
+    return {
+      category: c.taskCategory || "uncategorized",
+      updated: `updated ${formatRelativeTime(Date.parse(c.lastUpdated), now)}`,
+      arms: c.arms.map((a) => ({
+        strategy: a.strategy,
+        rate: `${Math.round(a.meanReward * 100)}%`,
+        trials: plural(a.trials, "run"),
+        title: `Success estimate ${a.alpha.toFixed(1)} / ${(a.alpha + a.beta).toFixed(1)} after ${plural(a.trials, "scored run")}.`,
+        best: a === best,
+      })),
+    };
+  });
+}
+
+/** The line under "Strategy learning". */
+export function strategyLearningLine(b: StrategyLearning | null): string {
+  if (!b) {
+    return "No strategy results stored for this model yet. Runs with reactive intelligence record how each strategy did per kind of task, in the calibration database.";
+  }
+  return "How each strategy did on this model per kind of task, as the framework's strategy chooser learned it from your runs. A run counts as a success when its average uncertainty (entropy) stayed below 0.5; estimates start at 50% and move with each scored run.";
 }
 
 /** The spend stats; `[]` when no model call was recorded. */
