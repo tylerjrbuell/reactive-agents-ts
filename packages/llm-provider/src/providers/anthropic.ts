@@ -32,6 +32,13 @@ import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
 import { emitContentDegradations, resolveContentPolicy } from "../content-parts.js";
 import { ANTHROPIC_INPUT_MODALITIES, toAnthropicMessages } from "./anthropic-messages.js";
 import { anthropicThinkingPreference, anthropicToolChoiceField } from "./tool-choice.js";
+import {
+  ANTHROPIC_STRUCTURED_INSTRUCTION,
+  anthropicStructuredRepair,
+  anthropicStructuredToolFields,
+  structuredToolInputJson,
+  toAnthropicStructuredTool,
+} from "./anthropic-structured.js";
 
 /**
  * The TRUE prompt size for an Anthropic response: base input plus both cache
@@ -500,12 +507,35 @@ export const AnthropicProviderLive = Layer.effect(
         Effect.gen(function* () {
           const jsonSchema = JSONSchema.make(request.outputSchema);
           const schemaStr = JSON.stringify(jsonSchema, null, 2);
+          const structuredModel =
+            typeof request.model === "string"
+              ? request.model
+              : (request.model?.model ?? config.defaultModel);
+          const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
+          const structuredCap = resolveCapability("anthropic", structuredModel);
+          const structuredThinkEnabled = resolveThinkingEnabled(
+            "anthropic",
+            structuredModel,
+            config.thinking,
+            structuredCap.supportsThinkingMode,
+            request.thinking,
+          );
+          // Schema enforcement: a forced call to one tool whose input_schema is
+          // the target schema (SDK 0.30.x has no native structured-output
+          // parameter). Anthropic rejects a forced tool_choice together with
+          // extended thinking, so a thinking call falls back to the
+          // prompt + "{" prefill path below, repaired by the parse-retry loop.
+          const forcedTool = structuredThinkEnabled
+            ? undefined
+            : toAnthropicStructuredTool(jsonSchema);
 
           const messagesWithFormat: LLMMessage[] = [
             ...request.messages,
             {
               role: "user" as const,
-              content: `Respond with ONLY valid JSON matching this schema:\n${schemaStr}\n\nNo markdown, no code fences, just raw JSON.`,
+              content: forcedTool
+                ? ANTHROPIC_STRUCTURED_INSTRUCTION
+                : `Respond with ONLY valid JSON matching this schema:\n${schemaStr}\n\nNo markdown, no code fences, just raw JSON.`,
             },
           ];
 
@@ -526,27 +556,19 @@ export const AnthropicProviderLive = Layer.effect(
                     },
                     {
                       role: "user" as const,
-                      content: `That response did not match the schema. Error: ${String(lastError)}. Please try again with valid JSON only.`,
+                      content: forcedTool
+                        ? anthropicStructuredRepair(lastError)
+                        : `That response did not match the schema. Error: ${String(lastError)}. Please try again with valid JSON only.`,
                     },
                   ];
 
-            // Convert + inject assistant prefill to bias toward JSON output
-            const structuredModel =
-              typeof request.model === "string"
-                ? request.model
-                : (request.model?.model ?? config.defaultModel);
+            // Convert; the prompt path also injects an assistant "{" prefill
+            // to bias toward JSON output.
             const structuredWire = toAnthropicMessages(msgs, anthropicContentPolicy(structuredModel));
             yield* emitContentDegradations("anthropic", structuredModel, structuredWire.degraded);
-            const anthropicMsgs = [...structuredWire.messages, { role: "assistant" as const, content: "{" }];
-            const structuredAnswerBudget = request.maxTokens ?? config.defaultMaxTokens;
-            const structuredCap = resolveCapability("anthropic", structuredModel);
-            const structuredThinkEnabled = resolveThinkingEnabled(
-              "anthropic",
-              structuredModel,
-              config.thinking,
-              structuredCap.supportsThinkingMode,
-              request.thinking,
-            );
+            const anthropicMsgs = forcedTool
+              ? structuredWire.messages
+              : [...structuredWire.messages, { role: "assistant" as const, content: "{" }];
             const structuredReserve = reserveThinkingBudget(
               structuredAnswerBudget,
               structuredCap.supportsThinkingMode,
@@ -573,6 +595,7 @@ export const AnthropicProviderLive = Layer.effect(
                   cache_control: { type: "ephemeral" },
                   system: request.systemPrompt,
                   messages: anthropicMsgs,
+                  ...(forcedTool ? anthropicStructuredToolFields(forcedTool) : {}),
                   ...buildAnthropicThinkingBody(
                     structuredModel,
                     structuredReserve,
@@ -588,18 +611,17 @@ export const AnthropicProviderLive = Layer.effect(
             });
 
             const raw = completeResult as AnthropicRawResponse;
-            const response = mapAnthropicResponse(
-              raw,
-              typeof request.model === 'string'
-                ? request.model
-                : request.model?.model ?? config.defaultModel,
-            );
+            const response = mapAnthropicResponse(raw, structuredModel);
             const stopReason = reportedStopReason(raw.stop_reason, "anthropic");
             const thinkingChars = anthropicThinkingChars(completeResult);
 
-            // Prepend the "{" prefill back to the response content
+            // Forced path: the tool input is the answer (plain text when the
+            // call is missing, so the parse-retry loop surfaces the miss).
+            // Prompt path: prepend the "{" prefill back to the response content.
             return {
-              content: "{" + response.content,
+              content: forcedTool
+                ? (structuredToolInputJson(raw.content, forcedTool.wrapped) ?? response.content)
+                : "{" + response.content,
               usage: response.usage,
               ...(stopReason !== undefined ? { stopReason } : {}),
               ...(thinkingChars !== undefined ? { thinkingChars } : {}),
@@ -680,8 +702,12 @@ export const AnthropicProviderLive = Layer.effect(
 
       getStructuredOutputCapabilities: () =>
         Effect.succeed({
-          nativeJsonMode: false,
-          jsonSchemaEnforcement: false,
+          // completeStructured forces one tool call whose input_schema is the
+          // target schema (./anthropic-structured.ts), so the structured
+          // pipeline's native layer runs for Anthropic. Calls with extended
+          // thinking on use the prompt + "{" prefill path instead.
+          nativeJsonMode: true,
+          jsonSchemaEnforcement: true,
           prefillSupport: true,
           grammarConstraints: false,
         }),

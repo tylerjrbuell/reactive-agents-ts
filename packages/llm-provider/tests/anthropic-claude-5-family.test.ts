@@ -34,6 +34,14 @@ const makeResponse = () => ({
 
 const mockCreate = mock(async (opts: unknown) => {
   capturedCreateOpts = opts as Record<string, unknown>;
+  // completeStructured forces the structured_output tool when thinking is off.
+  if ((opts as { tool_choice?: { type?: string } }).tool_choice?.type === "tool") {
+    return {
+      ...makeResponse(),
+      content: [{ type: "tool_use", id: "toolu_1", name: "structured_output", input: { a: 1 } }],
+      stop_reason: "tool_use",
+    };
+  }
   return makeResponse();
 });
 

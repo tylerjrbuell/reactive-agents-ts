@@ -967,9 +967,9 @@ export type ObservabilityVerbosity =
  * Used by the structured output pipeline to select the optimal extraction strategy.
  */
 export type StructuredOutputCapabilities = {
-  /** Provider supports forcing JSON-only output (OpenAI, Gemini, Ollama) */
+  /** Provider supports forcing JSON-only output (OpenAI, Gemini, Ollama; Anthropic via a forced tool call) */
   readonly nativeJsonMode: boolean;
-  /** Provider can enforce a JSON Schema on the output (OpenAI structured outputs) */
+  /** Provider can enforce a JSON Schema on the output (OpenAI structured outputs, Ollama format, Anthropic forced tool input_schema) */
   readonly jsonSchemaEnforcement: boolean;
   /** Provider supports assistant message prefill to start response with "{" (Anthropic) */
   readonly prefillSupport: boolean;

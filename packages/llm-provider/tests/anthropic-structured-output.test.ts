@@ -33,7 +33,14 @@ type MockMessage = {
   id: string;
   type: string;
   role: string;
-  content: Array<{ type: string; text?: string; thinking?: string }>;
+  content: Array<{
+    type: string;
+    text?: string;
+    thinking?: string;
+    id?: string;
+    name?: string;
+    input?: unknown;
+  }>;
   model: string;
   stop_reason: string;
   usage: { input_tokens: number; output_tokens: number };
@@ -41,15 +48,19 @@ type MockMessage = {
 
 const mockCreate = mock(async (opts: unknown): Promise<MockMessage> => {
   capturedCreateOpts = opts as Record<string, unknown>;
+  const forced = (opts as { tool_choice?: { type?: string } }).tool_choice?.type === "tool";
   return {
     id: "msg_test",
     type: "message",
     role: "assistant",
+    // Forced path: the answer is the structured tool's input. Prompt path:
     // completeStructured() prefills the assistant turn with "{" and prepends
-    // it back onto the response content — see anthropic.ts:578.
-    content: [{ type: "text", text: '"probability": 0.87}' }],
+    // it back onto the response content.
+    content: forced
+      ? [{ type: "tool_use", id: "toolu_1", name: "structured_output", input: { probability: 0.87 } }]
+      : [{ type: "text", text: '"probability": 0.87}' }],
     model: "claude-opus-4-8",
-    stop_reason: "end_turn",
+    stop_reason: forced ? "tool_use" : "end_turn",
     usage: {
       input_tokens: 10,
       output_tokens: 5,
@@ -109,6 +120,7 @@ function makeLayer() {
 }
 
 describe("AnthropicProviderLive completeStructured() — schema build regression", () => {
+  // Thinking on → the prompt + prefill path, which carries the schema as text.
   it("builds a valid JSON schema string and does not throw (JSONSchema.make regression)", async () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -116,6 +128,7 @@ describe("AnthropicProviderLive completeStructured() — schema build regression
         return yield* llm.completeStructured({
           messages: [{ role: "user", content: "Give me a probability." }],
           outputSchema: ProbabilitySchema,
+          thinking: true,
         });
       }).pipe(Effect.provide(makeLayer())),
     );
@@ -169,6 +182,7 @@ describe("AnthropicProviderLive completeStructured() — per-attempt report", ()
         yield* llm.completeStructured({
           messages: [{ role: "user", content: "Give me a probability." }],
           outputSchema: ProbabilitySchema,
+          thinking: true,
         });
         return yield* FiberRef.get(StructuredUsageRef);
       }).pipe(Effect.provide(makeLayer())),
@@ -177,5 +191,132 @@ describe("AnthropicProviderLive completeStructured() — per-attempt report", ()
     expect(ref?.attempts).toEqual([
       { attempt: 0, parsed: true, inputTokens: 11, outputTokens: 90, stopReason: "end_turn", thinkingChars: 250 },
     ]);
+  });
+});
+
+// Schema enforcement (2026-11-11): with thinking off, completeStructured forces
+// one call to a tool whose input_schema is the target schema and returns the
+// tool input. SDK 0.30.x has no native structured-output parameter.
+describe("AnthropicProviderLive completeStructured() — forced-tool schema enforcement", () => {
+  const run = <A>(outputSchema: Schema.Schema<A>, extra: { thinking?: boolean; maxParseRetries?: number } = {}) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm
+          .completeStructured({
+            messages: [{ role: "user", content: "Give me a probability." }],
+            outputSchema,
+            ...extra,
+          })
+          .pipe(Effect.either);
+      }).pipe(Effect.provide(makeLayer())),
+    );
+
+  const toolUse = (input: unknown): MockMessage => ({
+    id: "msg_test",
+    type: "message",
+    role: "assistant",
+    content: [{ type: "tool_use", id: "toolu_1", name: "structured_output", input }],
+    model: "claude-opus-4-8",
+    stop_reason: "tool_use",
+    usage: { input_tokens: 10, output_tokens: 5 },
+  });
+
+  it("sends the target schema as a forced tool, with no prefill and no thinking", async () => {
+    capturedCreateOpts = null;
+    await run(ProbabilitySchema);
+
+    const opts = capturedCreateOpts as Record<string, unknown> | null;
+    const tools = opts?.tools as Array<{ name: string; input_schema: Record<string, unknown> }>;
+    expect(tools).toHaveLength(1);
+    expect(tools[0]!.name).toBe("structured_output");
+    expect(tools[0]!.input_schema.properties).toEqual({ probability: { type: "number" } });
+    expect(tools[0]!.input_schema.required).toEqual(["probability"]);
+    expect(opts?.tool_choice).toEqual({ type: "tool", name: "structured_output" });
+    expect("thinking" in (opts ?? {})).toBe(false);
+    const messages = opts?.messages as Array<{ role: string }>;
+    expect(messages[messages.length - 1]!.role).toBe("user");
+  });
+
+  it("returns the object from the tool input and reports usage", async () => {
+    const out = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        const value = yield* llm.completeStructured({
+          messages: [{ role: "user", content: "Give me a probability." }],
+          outputSchema: ProbabilitySchema,
+        });
+        return { value, usage: yield* FiberRef.get(StructuredUsageRef) };
+      }).pipe(Effect.provide(makeLayer())),
+    );
+    expect(out.value).toEqual({ probability: 0.87 });
+    expect(out.usage?.attempts).toEqual([
+      { attempt: 0, parsed: true, inputTokens: 10, outputTokens: 5, stopReason: "tool_use" },
+    ]);
+  });
+
+  it("unwraps a non-object schema from the value property", async () => {
+    mockCreate.mockResolvedValueOnce(toolUse({ value: ["a", "b"] }));
+    const out = await run(Schema.Array(Schema.String));
+    expect(out._tag).toBe("Right");
+    if (out._tag === "Right") expect(out.right).toEqual(["a", "b"]);
+    // mockResolvedValueOnce bypasses the capturing implementation; read the call.
+    const lastOpts = mockCreate.mock.calls[mockCreate.mock.calls.length - 1]![0] as Record<string, unknown>;
+    const tools = lastOpts.tools as Array<{ input_schema: Record<string, unknown> }>;
+    expect(tools[0]!.input_schema.required).toEqual(["value"]);
+  });
+
+  it("thinking on falls back to the prompt + prefill path (no forced tool)", async () => {
+    capturedCreateOpts = null;
+    const out = await run(ProbabilitySchema, { thinking: true });
+    expect(out._tag).toBe("Right");
+    const opts = capturedCreateOpts as Record<string, unknown> | null;
+    expect(opts?.tools).toBeUndefined();
+    expect(opts?.tool_choice).toBeUndefined();
+    expect(opts?.thinking).toBeDefined();
+    const messages = opts?.messages as Array<{ role: string; content: unknown }>;
+    expect(messages[messages.length - 1]).toEqual({ role: "assistant", content: "{" });
+  });
+
+  it("a schema-violating tool input is repaired on the next attempt", async () => {
+    mockCreate.mockResolvedValueOnce(toolUse({ probability: "high" }));
+    const out = await run(ProbabilitySchema, { maxParseRetries: 1 });
+    expect(out._tag).toBe("Right");
+    if (out._tag === "Right") expect(out.right).toEqual({ probability: 0.87 });
+    const messages = (capturedCreateOpts as Record<string, unknown>).messages as Array<{
+      role: string;
+      content: unknown;
+    }>;
+    expect(JSON.stringify(messages[messages.length - 1])).toContain("did not match the schema");
+  });
+
+  it("schema violations on every attempt surface as LLMParseError", async () => {
+    mockCreate.mockResolvedValueOnce(toolUse({ probability: "high" }));
+    mockCreate.mockResolvedValueOnce(toolUse({ probability: "high" }));
+    const out = await run(ProbabilitySchema, { maxParseRetries: 1 });
+    expect(out._tag).toBe("Left");
+    if (out._tag === "Left") {
+      expect((out.left as { _tag: string })._tag).toBe("LLMParseError");
+      expect((out.left as { attempts?: readonly unknown[] }).attempts).toHaveLength(2);
+    }
+  });
+
+  it("a response without the tool call surfaces through the parse-retry loop", async () => {
+    mockCreate.mockResolvedValueOnce({ ...toolUse({}), content: [], stop_reason: "max_tokens" });
+    mockCreate.mockResolvedValueOnce({ ...toolUse({}), content: [], stop_reason: "max_tokens" });
+    const out = await run(ProbabilitySchema, { maxParseRetries: 1 });
+    expect(out._tag).toBe("Left");
+    if (out._tag === "Left") expect((out.left as { _tag: string })._tag).toBe("LLMParseError");
+  });
+
+  it("reports schema enforcement in the structured-output capabilities", async () => {
+    const caps = await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.getStructuredOutputCapabilities();
+      }).pipe(Effect.provide(makeLayer())),
+    );
+    expect(caps.jsonSchemaEnforcement).toBe(true);
+    expect(caps.nativeJsonMode).toBe(true);
   });
 });
