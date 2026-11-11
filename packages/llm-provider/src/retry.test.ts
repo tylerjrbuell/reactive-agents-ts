@@ -144,10 +144,75 @@ describe("isRetryableLLMError — keys on retryable, tag only as fallback", () =
     expect(isRetryableLLMError(new LLMError({ message: "t", provider: "openai", retryable: true }))).toBe(true);
   });
 
+  it("a retryable flag on a non-transient class does not retry", () => {
+    expect(
+      isRetryableLLMError(new LLMError({ message: "a", provider: "openai", errorClass: "auth", retryable: true })),
+    ).toBe(false);
+    expect(
+      isRetryableLLMError(new LLMError({ message: "t", provider: "openai", errorClass: "timeout", retryable: true })),
+    ).toBe(true);
+  });
+
   it("no flag: rate limit and timeout retry, the rest do not", () => {
     expect(isRetryableLLMError(new LLMRateLimitError({ message: "r", provider: "openai", retryAfterMs: 1 }))).toBe(true);
     expect(isRetryableLLMError(new LLMTimeoutError({ message: "t", provider: "openai", timeoutMs: 1 }))).toBe(true);
     expect(isRetryableLLMError(new LLMError({ message: "e", provider: "openai" }))).toBe(false);
     expect(isRetryableLLMError(new LLMParseError({ message: "p", rawOutput: "", expectedSchema: "" }))).toBe(false);
+  });
+});
+
+// RED-on-cut: drop the transient-status rule from `classifyProviderError`
+// and the 5xx rows below map to auth / model_not_found / content_filter with
+// retryable:false, so a real provider outage fails with no retry.
+describe("transient status wins over body keywords", () => {
+  const retried = (raw: Record<string, unknown>): boolean =>
+    isRetryableLLMError(mapProviderError(raw, "openai", "gpt-x"));
+
+  it("5xx / network faults retry whatever the body says", () => {
+    expect(retried({ status: 503, message: "upstream error: api key pool exhausted, invalid api key" })).toBe(true);
+    expect(retried({ status: 500, message: "model gpt-x not found in shard" })).toBe(true);
+    expect(retried({ status: 502, message: "blocked by the safety filter proxy" })).toBe(true);
+    expect(retried({ message: "fetch failed: ECONNRESET while sending credential" })).toBe(true);
+  });
+
+  it("the matching 4xx stays permanent", () => {
+    expect(retried({ status: 401, message: "invalid api key" })).toBe(false);
+    expect(retried({ status: 404, message: "model gpt-x not found" })).toBe(false);
+  });
+});
+
+// RED-on-cut: remove the zero-delay branch in `retryPolicy` and the two
+// resamples below sleep ~1s + 2s.
+describe("malformed output resamples without backoff", () => {
+  it("retries immediately, attempt cap unchanged", async () => {
+    let attempts = 0;
+    const started = Date.now();
+    const stream = Stream.async<StreamEvent, LLMErrors>((emit) => {
+      attempts += 1;
+      if (attempts < 3) {
+        emit.fail(new LLMMalformedOutputError({ message: "XML syntax error", provider: "ollama" }));
+      } else {
+        emit.single({ type: "text_delta", text: "ok" });
+        emit.end();
+      }
+    });
+
+    await Effect.runPromise(Stream.runCollect(retryStreamBeforeFirstEmission(stream)));
+
+    expect(attempts).toBe(3);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it("still stops after 1 + 3 attempts", async () => {
+    let attempts = 0;
+    const stream = Stream.async<StreamEvent, LLMErrors>((emit) => {
+      attempts += 1;
+      emit.fail(new LLMMalformedOutputError({ message: "XML syntax error", provider: "ollama" }));
+    });
+
+    const result = await Effect.runPromiseExit(Stream.runCollect(retryStreamBeforeFirstEmission(stream)));
+
+    expect(attempts).toBe(4);
+    expect(result._tag).toBe("Failure");
   });
 });

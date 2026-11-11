@@ -1,4 +1,5 @@
 import { Duration, Effect, Schedule, Stream } from "effect";
+import { recoveryFor } from "./error-class.js";
 import type { LLMErrors, LLMTimeoutError } from "./errors.js";
 import type { StreamEvent } from "./types.js";
 
@@ -11,11 +12,27 @@ import type { StreamEvent } from "./types.js";
  * its tag: only `LLMRateLimitError` retries (`LLMTimeoutError` always carries
  * the flag). So a 429 for an exhausted quota (`retryable: false`) is not
  * retried, and a malformed model output (`retryable: true`) is resampled.
+ * A flag that disagrees with a known class loses to the class: an error
+ * whose `errorClass` recovery is not `backoff`/`resample` (auth, not-found,
+ * overflow, ...) is never re-sent as is.
  */
 export function isRetryableLLMError(error: LLMErrors): boolean {
-  if ("retryable" in error && typeof error.retryable === "boolean") return error.retryable;
+  if ("retryable" in error && typeof error.retryable === "boolean") {
+    if (!error.retryable) return false;
+    const cls = "errorClass" in error ? error.errorClass : undefined;
+    if (cls === undefined) return true;
+    const recovery = recoveryFor(cls, true);
+    return recovery === "backoff" || recovery === "resample";
+  }
   return error._tag === "LLMRateLimitError";
 }
+
+/**
+ * Malformed model output is resampled, not waited out: nothing on the
+ * provider side needs time to recover, so a backoff sleep is pure latency.
+ */
+const zeroDelayForResample = (error: LLMErrors, delay: Duration.Duration): Duration.Duration =>
+  error._tag === "LLMMalformedOutputError" ? Duration.zero : delay;
 
 /**
  * Retry policy for LLM calls — exponential backoff, up to 3 retries.
@@ -25,10 +42,14 @@ export function isRetryableLLMError(error: LLMErrors): boolean {
  * `mapProviderError`), timeouts, and malformed model output (a resample).
  * Permanent failures (4xx bad-request/auth, model-not-found, parse,
  * context-overflow) are NOT retried — retrying can't change them.
+ * Malformed output retries with no delay (a resample); the attempt cap holds.
  */
 export const retryPolicy = Schedule.intersect(
   Schedule.recurs(3),
-  Schedule.exponential("1 second", 2.0),
+  Schedule.exponential("1 second", 2.0).pipe(
+    Schedule.passthrough<Duration.Duration, LLMErrors, never>,
+    Schedule.modifyDelay(zeroDelayForResample),
+  ),
 ).pipe(Schedule.whileInput<LLMErrors>(isRetryableLLMError));
 
 /**

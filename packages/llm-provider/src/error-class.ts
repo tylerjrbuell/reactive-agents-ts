@@ -121,7 +121,8 @@ export const MALFORMED_OUTPUT =
  * Order matters: a per-minute-budget "request too large" first (it arrives as
  * 413 OR 429), then billing/quota (it arrives as 400, 402 or 429, so it must
  * precede the 429 and 4xx rules), then 429 (other rate limits that mention
- * tokens stay rate limits), overflow/size, auth, not-found, content filter, malformed model
+ * tokens stay rate limits), overflow/size, then 5xx / status-less network
+ * faults (status beats body keywords), auth, not-found, content filter, malformed model
  * output (before the 4xx branch and before network: its messages carry 400 and
  * "unexpected EOF"), tool schema, other 4xx, timeout, network, 5xx.
  */
@@ -139,6 +140,18 @@ export function classifyProviderError(f: ProviderErrorFacts): ProviderErrorClass
   if (status === 413) return is("request_too_large");
   if (CONTEXT_OVERFLOW.test(hay)) return is("context_overflow");
   if (REQUEST_TOO_LARGE.test(hay)) return is("request_too_large");
+  // Transient transport/server failure: the status (5xx) or a status-less
+  // network fault wins over body keywords below. A 503 whose body mentions an
+  // "api key" or a "model … not found" is still an outage, and retrying it is
+  // right. Malformed model output is excluded: Ollama reports its tool-call
+  // parser failure as a 500.
+  const serverStatus = typeof status === "number" && status >= 500;
+  const statuslessNetwork = status === undefined && NETWORK_FAULT.test(hay);
+  if ((serverStatus || statuslessNetwork) && !MALFORMED_OUTPUT.test(hay)) {
+    if (TIMEOUT.test(hay)) return is("timeout", true);
+    if (NETWORK_FAULT.test(hay)) return is("network", true);
+    return is("provider_5xx", true);
+  }
   if (status === 401 || status === 403 || AUTH.test(hay)) return is("auth");
   if (status === 404 || MODEL_NOT_FOUND.test(hay)) return is("model_not_found");
   if (CONTENT_FILTER.test(hay)) return is("content_filter");
