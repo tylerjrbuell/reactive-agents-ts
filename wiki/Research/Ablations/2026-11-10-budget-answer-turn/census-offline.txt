@@ -1,0 +1,16 @@
+runs=249 budgets=2,3,4,6 (fires@M: reaches think #M with ok evidence before it; upper bound)
+task	n	median-thinks	fires@2	fires@3	fires@4	fires@6	hit-cap-as-recorded
+ab-trap-4	16	0	0	0	0	0	0
+ab-trap-5	16	4	0	0	0	5	1
+h3-continuation	16	2	10	6	0	0	0
+h3-exact-value	16	2	14	0	0	0	0
+h3-plan-only	17	5	12	12	12	1	0
+h3-required-tools	16	4	10	16	16	3	0
+h3-todo-heavy	16	3	10	13	5	1	0
+rw-2	16	4	10	16	9	1	0
+rw-3	12	3	9	9	0	1	0
+rw-6	16	5	12	14	9	7	0
+rw-7	16	10	12	13	14	16	0
+rw-9	16	3	14	15	6	0	0
+umami-explore	30	4	30	22	17	1	0
+wide-metric	30	3	30	18	0	0	0

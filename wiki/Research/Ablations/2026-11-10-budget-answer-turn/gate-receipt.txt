@@ -1,0 +1,29 @@
+LIFT GATE · on vs off
+  tier                 base    cand      lift       tok  verdict
+  grok-4               47.8    53.3    +5.6pp    -22.3%  BELOW
+    · tokens raw -22.3% | billed -22.9% (scored: billed) | cacheHit 0.0%
+    · wide-metric@mi2           +33.3pp ± 28.0pp
+    · umami-explore@mi2          +0.0pp ± 19.1pp
+    · umami-explore@mi3          -5.6pp ± 20.3pp
+    · h3-continuation@mi2        +0.0pp ± 19.1pp
+    · h3-exact-value@mi2         +0.0pp ± 19.1pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  mimo-v2.6@16384      35.6    43.3    +7.8pp    +10.5%  BELOW
+    · tokens raw +10.5% | billed +10.5% (scored: billed) | cacheHit 0.0%
+    · wide-metric@mi2            +5.6pp ± 28.8pp
+    · umami-explore@mi2          +0.0pp ± 19.1pp
+    · umami-explore@mi3          +0.0pp ± 23.4pp
+    · h3-continuation@mi2       +33.3pp ± 27.0pp
+    · h3-exact-value@mi2         +0.0pp ± 19.1pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  cogito:8b            27.8    20.0    -7.8pp     -6.5%  BELOW
+    · tokens raw -6.5% | billed -6.5% (scored: billed) | cacheHit 0.0%
+    · wide-metric@mi2           -27.8pp ± 24.9pp
+    · umami-explore@mi2         -11.1pp ± 21.4pp
+    · umami-explore@mi3          +0.0pp ± 23.4pp
+    · h3-continuation@mi2        +0.0pp ± 25.0pp
+    · h3-exact-value@mi2         +0.0pp ± 19.1pp
+    · passK: underpowered (pass^8 needs n ≥ 8 per cell) — not evaluated, never blocks
+  AGGREGATE  1.9pp · -6.3% billed tok · tiers=3
+  DECISION: OPT-IN — OPT-IN · 3 tier(s) · 1.9pp lift · -6.3% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)
+activations (candidate runs with >=1 forced request): 64

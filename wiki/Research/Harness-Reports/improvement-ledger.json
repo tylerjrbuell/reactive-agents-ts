@@ -1048,6 +1048,28 @@
         "pinnedAt": "2026-11-11T01:00:11.750Z"
       },
       "status": "opt-in"
+    },
+    {
+      "id": "ca1cef47-61ba-4787-8db8-a396395178f9",
+      "createdAt": "2026-11-11T03:39:29.665Z",
+      "weakness": "Runs stop at the iteration cap before the model writes a final answer (Cortex 'stopped (max_iterations) before the model wrote a final answer'; census 533 root runs/7d: reactive cap-with-evidence 6, sub-pass cap 3, direct no-evidence 12)",
+      "hypothesis": "Budget answer turn (kernel/loop/budget-answer-turn.ts, commit 229896252): the last think call the budget allows ships with no tools when validated evidence exists and only the answer is outstanding. on=HEAD 76f5fe1dd, off=budgetAnswerTurnRecord returns undefined. Tasks: live-census firing variants umami-explore@mi2/@mi3, wide-metric@mi2, h3-continuation@mi2, h3-exact-value@mi2; n=6 per cell; tiers grok-4, mimo-v2.6@16384, cogito:8b",
+      "baselineVariantId": "off",
+      "candidateVariantId": "on",
+      "decision": "opt-in",
+      "liftPp": 1.8518518518518514,
+      "tokenOverheadPct": -6.07519694588611,
+      "rationale": "OPT-IN · 3 tier(s) · 1.9pp lift · -6.3% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)",
+      "regressionBaseline": {
+        "metric": "accuracy",
+        "baselineVariantId": "off",
+        "candidateVariantId": "on",
+        "liftPp": 1.8518518518518514,
+        "tokenOverheadPct": -6.07519694588611,
+        "tiersCovered": 3,
+        "pinnedAt": "2026-11-11T03:39:29.665Z"
+      },
+      "status": "opt-in"
     }
   ]
 }

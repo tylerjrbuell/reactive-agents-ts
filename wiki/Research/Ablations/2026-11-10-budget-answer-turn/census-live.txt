@@ -1,0 +1,33 @@
+on	mimo-v2.6_16384	wide-metric@mi4	run0	calls=3	bat=0	lastShipped=40	lastUsedTools=false	term=controller_early_stop:dispatcher_early_stop	status=success/completed	verified=true	failed=	tok=5841
+on	mimo-v2.6_16384	umami-explore@mi4	run0	calls=3	bat=0	lastShipped=20	lastUsedTools=false	term=controller_early_stop:dispatcher_early_stop	status=failure/failed	verified=false	failed=action-success,tier1-nli	tok=5655
+on	mimo-v2.6_16384	wide-metric@mi2	run0	calls=2	bat=1	lastShipped=0	lastUsedTools=false	term=max_iterations	status=success/partial	verified=true	failed=	tok=2278
+on	mimo-v2.6_16384	umami-explore@mi2	run0	calls=2	bat=1	lastShipped=0	lastUsedTools=true	term=max_iterations	status=failure/failed	verified=false	failed=action-success,tier1-nli	tok=1689
+on	mimo-v2.6_16384	wide-metric@mi3	run0	calls=2	bat=0	lastShipped=40	lastUsedTools=false	term=dispatcher-early-stop	status=failure/partial	verified=false	failed=action-success	tok=3869
+on	mimo-v2.6_16384	umami-explore@mi3	run0	calls=3	bat=1	lastShipped=0	lastUsedTools=false	term=max_iterations	status=failure/failed	verified=false	failed=action-success	tok=10822
+on	mimo-v2.6_16384	rw-2@mi3	run0	calls=3	bat=0	lastShipped=2	lastUsedTools=true	term=max_iterations	status=failure/failed	verified=false	failed=action-success	tok=6368
+on	mimo-v2.6_16384	rw-6@mi3	run0	calls=2	bat=0	lastShipped=2	lastUsedTools=true	term=dispatcher-early-stop	status=failure/failed	verified=false	failed=action-success,tier1-nli	tok=1680
+on	mimo-v2.6_16384	ab-trap-5@mi3	run0	calls=2	bat=0	lastShipped=1	lastUsedTools=true	term=controller_early_stop_ungrounded	status=failure/failed	verified=false	failed=action-success	tok=726
+on	mimo-v2.6_16384	h3-continuation@mi3	run0	calls=2	bat=0	lastShipped=2	lastUsedTools=false	term=controller_early_stop:dispatcher_early_stop	status=success/completed	verified=true	failed=	tok=1411
+on	mimo-v2.6_16384	h3-exact-value@mi3	run0	calls=2	bat=0	lastShipped=2	lastUsedTools=false	term=controller_early_stop:dispatcher_early_stop	status=success/completed	verified=true	failed=tier1-nli	tok=1673
+on	mimo-v2.6_16384	rw-6@mi2	run0	calls=2	bat=0	lastShipped=2	lastUsedTools=true	term=max_iterations	status=failure/failed	verified=false	failed=action-success	tok=1752
+on	mimo-v2.6_16384	ab-trap-5@mi2	run0	calls=2	bat=0	lastShipped=1	lastUsedTools=true	term=max_iterations	status=failure/failed	verified=false	failed=action-success	tok=726
+on	mimo-v2.6_16384	h3-todo-heavy@mi2	run0	calls=2	bat=0	lastShipped=2	lastUsedTools=true	term=max_iterations	status=failure/failed	verified=false	failed=action-success	tok=2783
+on	mimo-v2.6_16384	h3-continuation@mi2	run0	calls=2	bat=1	lastShipped=0	lastUsedTools=false	term=max_iterations	status=success/partial	verified=true	failed=tier1-nli	tok=1271
+on	mimo-v2.6_16384	h3-exact-value@mi2	run0	calls=2	bat=1	lastShipped=0	lastUsedTools=false	term=max_iterations	status=success/partial	verified=true	failed=	tok=1499
+arm	tier	task	n	fireRuns	verifiedOnFire	capEnds	lastCallUsedTools	status	meanTok
+on	mimo-v2.6_16384	ab-trap-5@mi2	1	0	0	1	1	{"failure":1}	726
+on	mimo-v2.6_16384	ab-trap-5@mi3	1	0	0	0	1	{"failure":1}	726
+on	mimo-v2.6_16384	h3-continuation@mi2	1	1	1	1	0	{"success":1}	1271
+on	mimo-v2.6_16384	h3-continuation@mi3	1	0	0	0	0	{"success":1}	1411
+on	mimo-v2.6_16384	h3-exact-value@mi2	1	1	1	1	0	{"success":1}	1499
+on	mimo-v2.6_16384	h3-exact-value@mi3	1	0	0	0	0	{"success":1}	1673
+on	mimo-v2.6_16384	h3-todo-heavy@mi2	1	0	0	1	1	{"failure":1}	2783
+on	mimo-v2.6_16384	rw-2@mi3	1	0	0	1	1	{"failure":1}	6368
+on	mimo-v2.6_16384	rw-6@mi2	1	0	0	1	1	{"failure":1}	1752
+on	mimo-v2.6_16384	rw-6@mi3	1	0	0	0	1	{"failure":1}	1680
+on	mimo-v2.6_16384	umami-explore@mi2	1	1	0	1	1	{"failure":1}	1689
+on	mimo-v2.6_16384	umami-explore@mi3	1	1	0	1	0	{"failure":1}	10822
+on	mimo-v2.6_16384	umami-explore@mi4	1	0	0	0	0	{"failure":1}	5655
+on	mimo-v2.6_16384	wide-metric@mi2	1	1	1	1	0	{"success":1}	2278
+on	mimo-v2.6_16384	wide-metric@mi3	1	0	0	0	0	{"failure":1}	3869
+on	mimo-v2.6_16384	wide-metric@mi4	1	0	0	0	0	{"success":1}	5841

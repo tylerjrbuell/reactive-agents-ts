@@ -1,0 +1,31 @@
+tier	task	arm	turn0 toolsShipped (value x runs)	last-turn toolsShipped
+cogito_8b	h3-continuation@mi2	off	3x6	3x6
+cogito_8b	h3-continuation@mi2	on	3x6	0x5 3x1
+cogito_8b	h3-exact-value@mi2	off	3x6	3x6
+cogito_8b	h3-exact-value@mi2	on	3x6	3x6
+cogito_8b	umami-explore@mi2	off	21x6	21x6
+cogito_8b	umami-explore@mi2	on	21x6	21x5 0x1
+cogito_8b	umami-explore@mi3	off	21x6	21x6
+cogito_8b	umami-explore@mi3	on	21x6	21x6
+cogito_8b	wide-metric@mi2	off	41x6	41x6
+cogito_8b	wide-metric@mi2	on	41x6	41x5 0x1
+grok-4	h3-continuation@mi2	off	2x6	2x6
+grok-4	h3-continuation@mi2	on	2x6	0x6
+grok-4	h3-exact-value@mi2	off	2x6	2x6
+grok-4	h3-exact-value@mi2	on	2x6	0x6
+grok-4	umami-explore@mi2	off	2x6	2x6
+grok-4	umami-explore@mi2	on	2x6	0x6
+grok-4	umami-explore@mi3	off	2x6	2x4 0x2
+grok-4	umami-explore@mi3	on	2x6	2x4 0x2
+grok-4	wide-metric@mi2	off	12x6	12x6
+grok-4	wide-metric@mi2	on	12x6	0x6
+mimo-v2.6_16384	h3-continuation@mi2	off	3x6	2x6
+mimo-v2.6_16384	h3-continuation@mi2	on	3x6	2x3 0x3
+mimo-v2.6_16384	h3-exact-value@mi2	off	3x6	2x6
+mimo-v2.6_16384	h3-exact-value@mi2	on	3x6	0x6
+mimo-v2.6_16384	umami-explore@mi2	off	21x6	20x6
+mimo-v2.6_16384	umami-explore@mi2	on	21x6	0x6
+mimo-v2.6_16384	umami-explore@mi3	off	21x6	20x6
+mimo-v2.6_16384	umami-explore@mi3	on	21x6	0x6
+mimo-v2.6_16384	wide-metric@mi2	off	41x6	40x6
+mimo-v2.6_16384	wide-metric@mi2	on	41x6	0x6

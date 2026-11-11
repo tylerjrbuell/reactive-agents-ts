@@ -1,0 +1,7 @@
+tier	arm	n	completed	partial	failed	other	callerSuccess	nonEmptyAnswer	fired	firedVerified	firedAnswerTurnCalledTools
+cogito:8b	off	30	20	0	10	0	20	30	0	0	0
+cogito:8b	on	30	10	7	12	1	17	27	7	7	0
+grok-4	off	30	22	0	8	0	22	22	0	0	0
+grok-4	on	30	6	24	0	0	30	30	24	24	0
+mimo-v2.6@16384	off	30	7	2	21	0	7	21	0	0	0
+mimo-v2.6@16384	on	30	0	15	15	0	15	27	27	13	8
