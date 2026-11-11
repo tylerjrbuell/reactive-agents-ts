@@ -1,10 +1,12 @@
 import { writable, derived } from "svelte/store";
+import type { IconName } from "../icons.js";
 
 export interface Command {
   readonly id: string;
   readonly label: string;
   readonly description?: string;
-  readonly icon?: string;
+  /** A kit icon (`lib/icons.ts`), never a ligature-font name. */
+  readonly icon?: IconName;
   readonly shortcut?: string;
   readonly action: () => void | Promise<void>;
   readonly keywords?: string[];

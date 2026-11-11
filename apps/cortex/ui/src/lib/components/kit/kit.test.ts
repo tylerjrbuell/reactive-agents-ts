@@ -170,6 +170,19 @@ describe("Field family", () => {
 });
 
 describe("EmptyState", () => {
+  test("hero brandWord: only the brand word takes the gradient; body replaces description", async () => {
+    const html = await renderComponent(kit("EmptyState"), {
+      hero: true,
+      title: "Welcome to",
+      brandWord: "Cortex",
+      description: "unused",
+      body: htmlSnippet("<span>Point an app at Cortex.</span>"),
+    });
+    expect(markup(html)).toMatch(/<h2[^>]*>Welcome to <span class="brand-grad[^"]*">Cortex<\/span><\/h2>/);
+    expect(text(html)).toContain("Point an app at Cortex.");
+    expect(text(html)).not.toContain("unused");
+  });
+
   test("plain: icon, h3 and copy, no mark", async () => {
     const html = await renderComponent(kit("EmptyState"), { title: "No events yet", description: "They appear as the run works.", icon: "steps" });
     expect(html).toContain("<h3");

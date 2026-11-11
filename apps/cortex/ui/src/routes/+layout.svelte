@@ -11,8 +11,8 @@
   import { commandPalette } from "$lib/stores/command-palette.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { runEndToast } from "$lib/run-toast.js";
-  import { startApprovalWatcher } from "$lib/stores/approval-watcher.js";
-  import { startInteractionWatcher } from "$lib/stores/interaction-watcher.js";
+  import { pendingApprovals, startApprovalWatcher } from "$lib/stores/approval-watcher.js";
+  import { pendingInteractions, startInteractionWatcher } from "$lib/stores/interaction-watcher.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
   import { createAgentStore, beaconDeskRunLabel } from "$lib/stores/agent-store.js";
@@ -20,7 +20,8 @@
   import type { AgentStore } from "$lib/stores/agent-store.js";
   import type { StageStore } from "$lib/stores/stage-store.js";
   import { applyMotion } from "$lib/motion.js";
-  import NeuralMark from "$lib/components/kit/NeuralMark.svelte";
+  import TopBar from "$lib/components/TopBar.svelte";
+  import { needsYouByRun, runningCount } from "$lib/beacon-board.js";
 
   let { children } = $props();
 
@@ -35,13 +36,6 @@
   let stopApprovalWatcher: (() => void) | null = null;
   let stopInteractionWatcher: (() => void) | null = null;
   const wsClient = createWsClient("/ws/live/cortex-broadcast");
-
-  const navItems = [
-    { label: "Beacon", href: "/", icon: "radar" },
-    { label: "Chat", href: "/chat", icon: "chat" },
-    { label: "Runs", href: "/runs", icon: "alt_route" },
-    { label: "Lab", href: "/lab", icon: "science" },
-  ];
 
   let isDark = $state(true);
 
@@ -179,7 +173,7 @@
         id: "nav:beacon",
         label: "Go to Beacon",
         description: "Agent grid and live status",
-        icon: "radar",
+        icon: "beacon",
         keywords: ["beacon", "home", "agents", "grid"],
         action: () => void goto("/"),
       },
@@ -195,7 +189,7 @@
         id: "nav:runs",
         label: "Runs",
         description: "Browse all agent runs",
-        icon: "alt_route",
+        icon: "runs",
         keywords: ["runs", "trace", "history"],
         action: () => void goto("/runs"),
       },
@@ -203,7 +197,7 @@
         id: "nav:lab",
         label: "Open Lab",
         description: "Build and configure agents",
-        icon: "science",
+        icon: "lab",
         keywords: ["lab", "builder", "configure"],
         action: () => void goto("/lab"),
       },
@@ -211,7 +205,7 @@
         id: "nav:prompts",
         label: "Prompt Library",
         description: "Manage reusable prompts",
-        icon: "menu_book",
+        icon: "book",
         keywords: ["prompts", "library", "templates", "snippets"],
         action: () => {
           void goto("/lab#prompts");
@@ -262,94 +256,15 @@
 </script>
 
 <div class="h-screen w-screen flex flex-col overflow-hidden cortex-shell-bg text-on-surface">
-  <header
-    class="cortex-nav flex justify-between items-center w-full px-4 sm:px-6 h-[3.25rem] border-b border-[var(--cortex-border)] shadow-[0_1px_0_rgba(0,0,0,0.12)] dark:shadow-[0_1px_0_rgba(255,255,255,0.04)] z-nav flex-shrink-0 gap-2"
-  >
-    {#if $page.url.pathname.startsWith("/chat")}
-      <button
-        type="button"
-        id="chat-sidebar-toggle"
-        class="material-symbols-outlined md:hidden flex-shrink-0 -ml-2 p-1.5 rounded-md bg-transparent border-0 cursor-pointer text-outline hover:text-primary"
-        aria-label={$chatSidebarOpen ? "Close sessions" : "Open sessions"}
-        aria-expanded={$chatSidebarOpen}
-        aria-controls="chat-sidebar"
-        onclick={() => chatSidebarOpen.update((v) => !v)}
-      >{$chatSidebarOpen ? "close" : "menu"}</button>
-    {/if}
-    <!-- RA neural network logo + wordmark (matches docs site identity) -->
-    <a
-      href="/"
-      class="flex items-center gap-2.5 no-underline group flex-shrink-0 rounded-md -ml-1 px-1 py-0.5"
-      aria-label="Cortex home"
-    >
-      <NeuralMark size={22} />
-      <!-- Bar wordmark: Geist 600, sentence case, solid (gradient only at 22px+). -->
-      <span class="text-[15px] font-semibold tracking-tight text-on-surface select-none">
-        Cortex
-      </span>
-    </a>
-
-    <nav
-      class="cortex-no-scrollbar flex flex-1 min-w-0 items-center justify-center md:justify-center overflow-x-auto"
-      aria-label="Primary"
-    >
-      <div
-        class="inline-flex items-center gap-0.5 rounded-lg bg-white/80 dark:bg-surface-container-low/45 px-1 py-0.5 backdrop-blur-sm
-               shadow-[0_0_0_1px_rgba(124,58,237,0.2),0_0_0_1px_rgba(255,255,255,0.7)_inset]
-               dark:shadow-[0_0_0_1px_rgba(139,92,246,0.28),0_0_0_1px_rgba(6,182,212,0.08)_inset]"
-      >
-        {#each navItems as item}
-          {@const active =
-            item.href === "/" ? $page.url.pathname === "/" : $page.url.pathname.startsWith(item.href)}
-          <a
-            href={item.href}
-            title={item.label}
-            class="flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 no-underline sm:gap-2 sm:px-3 sm:text-[13px] {active
-              ? 'bg-violet-100/90 dark:bg-primary/15 text-violet-800 dark:text-primary shadow-[inset_0_0_0_1px_rgba(124,58,237,0.22)] dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.25)]'
-              : 'text-on-surface-variant hover:bg-surface-container-high/80 hover:text-on-surface'}"
-            aria-current={active ? "page" : undefined}
-          >
-            <span class="material-symbols-outlined text-[18px] opacity-80" aria-hidden="true">{item.icon}</span>
-            <span class="hidden sm:inline">{item.label}</span>
-          </a>
-        {/each}
-      </div>
-    </nav>
-
-    <div class="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-      <button
-        type="button"
-        class="hidden sm:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer border-0
-               bg-gradient-to-r from-violet-100 to-cyan-100 dark:from-violet-950/40 dark:to-cyan-950/30
-               text-violet-900 dark:text-cyan-100/90
-               shadow-[0_0_0_1px_rgba(124,58,237,0.22),0_2px_10px_rgba(124,58,237,0.08)]
-               dark:shadow-[0_0_0_1px_rgba(139,92,246,0.4),0_0_14px_rgba(6,182,212,0.12)]
-               hover:shadow-[0_0_0_1px_rgba(6,182,212,0.35),0_4px_14px_rgba(6,182,212,0.12)]
-               dark:hover:shadow-[0_0_0_1px_rgba(6,182,212,0.45),0_0_20px_rgba(139,92,246,0.2)]
-               hover:text-violet-950 dark:hover:text-cyan-200 transition-all"
-        onclick={() => commandPalette.open()}
-        title="Command palette (⌘K or Ctrl+K)"
-      >
-        <span
-          class="material-symbols-outlined text-base text-cyan-700 dark:text-secondary/90"
-          aria-hidden="true">terminal</span>
-        <span class="cortex-kbd hidden md:inline">⌘K</span>
-        <span class="cortex-kbd md:hidden">^K</span>
-      </button>
-      <button
-        type="button"
-        onclick={toggleTheme}
-        class="material-symbols-outlined text-outline hover:text-primary transition-colors p-1.5 rounded-md bg-transparent border-0 cursor-pointer"
-        title="Toggle {isDark ? 'light' : 'dark'} mode"
-        aria-label="Toggle theme"
-      >{isDark ? "light_mode" : "dark_mode"}</button>
-      <a
-        href="/settings"
-        class="material-symbols-outlined text-outline hover:text-primary transition-colors p-1.5 rounded-md inline-flex"
-        title="Settings"
-        aria-label="Settings">settings</a>
-    </div>
-  </header>
+  <TopBar
+    pathname={$page.url.pathname}
+    running={runningCount($agentStore, needsYouByRun($agentStore, $pendingApprovals, $pendingInteractions))}
+    {isDark}
+    onToggleTheme={toggleTheme}
+    onOpenPalette={() => commandPalette.open()}
+    chatSidebarOpen={$chatSidebarOpen}
+    onToggleChatSidebar={() => chatSidebarOpen.update((v) => !v)}
+  />
 
   <main class="flex-1 overflow-hidden min-h-0">
     {@render children()}

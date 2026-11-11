@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
+  import Icon from "$lib/components/kit/Icon.svelte";
   import {
     commandPalette,
     commandPaletteOpen,
@@ -74,7 +75,7 @@
       id: "go-beacon",
       label: "Go to Beacon",
       description: "Launch agents from the home input bar",
-      icon: "radar",
+      icon: "beacon",
       shortcut: "R",
       keywords: ["home", "beacon", "launch", "run", "start"],
       action: () => { commandPalette.close(); void goto("/"); },
@@ -91,7 +92,7 @@
       id: "go-trace",
       label: "Go to Runs",
       description: "Run history and execution logs",
-      icon: "alt_route",
+      icon: "runs",
       keywords: ["runs", "history", "trace", "log"],
       action: () => { commandPalette.close(); void goto("/runs"); },
     },
@@ -99,7 +100,7 @@
       id: "go-lab",
       label: "Go to Lab",
       description: "Builder, gateway agents, skills, tools",
-      icon: "science",
+      icon: "lab",
       keywords: ["lab", "builder", "gateway"],
       action: () => { commandPalette.close(); void goto("/lab"); },
     },
@@ -117,7 +118,7 @@
       id: "lab-builder",
       label: "Lab → Builder",
       description: "Configure and run a new agent",
-      icon: "smart_toy",
+      icon: "agents",
       keywords: ["builder", "agent", "create", "configure"],
       action: () => gotoTab("builder"),
     },
@@ -125,7 +126,7 @@
       id: "lab-gateway",
       label: "Lab → Gateway",
       description: "Persistent scheduled agents",
-      icon: "schedule",
+      icon: "clock",
       keywords: ["gateway", "scheduled", "cron", "persistent", "agent"],
       action: () => gotoTab("gateway"),
     },
@@ -133,7 +134,7 @@
       id: "lab-skills",
       label: "Lab → Skills",
       description: "Living skills browser",
-      icon: "psychology",
+      icon: "think",
       keywords: ["skills", "living"],
       action: () => gotoTab("skills"),
     },
@@ -141,7 +142,7 @@
       id: "lab-tools",
       label: "Lab → Tools",
       description: "Tool registry and MCP connections",
-      icon: "construction",
+      icon: "tool",
       keywords: ["tools", "mcp", "registry"],
       action: () => gotoTab("tools"),
     },
@@ -151,7 +152,7 @@
       id: "view-last-run",
       label: "View most recent run",
       description: "Jump to latest execution trace",
-      icon: "analytics",
+      icon: "signal",
       keywords: ["last", "recent", "run", "trace"],
       action: async () => {
         commandPalette.close();
@@ -183,7 +184,7 @@
       id: "toggle-theme",
       label: "Toggle dark / light mode",
       description: "Switch UI colour scheme",
-      icon: "brightness_medium",
+      icon: "sun",
       keywords: ["theme", "dark", "light", "mode"],
       action: () => {
         commandPalette.close();
@@ -196,7 +197,7 @@
       id: "connect-snippet",
       label: "Copy .withCortex() snippet",
       description: "Copy connect call to clipboard",
-      icon: "link",
+      icon: "code",
       keywords: ["connect", "cortex", "url", "snippet", "copy"],
       action: async () => {
         commandPalette.close();
@@ -208,7 +209,7 @@
       id: "copy-env",
       label: "Copy CORTEX_URL env var",
       description: "Copy the server URL as an env variable",
-      icon: "content_copy",
+      icon: "copy",
       keywords: ["env", "url", "copy", "cortex_url"],
       action: async () => {
         commandPalette.close();
@@ -242,7 +243,7 @@
       aria-label="Command palette"
     >
       <div class="flex items-center gap-2 border-b border-outline-variant/15 pb-3 mb-3">
-        <span class="material-symbols-outlined text-secondary/80 text-lg" aria-hidden="true">search</span>
+        <Icon name="search" class="text-secondary/80" />
         <input
           bind:this={inputEl}
           class="flex-1 bg-transparent font-mono text-sm text-on-surface outline-none placeholder:text-on-surface-variant/80"

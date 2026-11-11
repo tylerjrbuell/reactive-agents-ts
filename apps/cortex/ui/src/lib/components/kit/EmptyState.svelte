@@ -20,6 +20,10 @@
     markSize?: number;
     /** Gradient headline (hero only; the text is 30px, above the 22px floor). */
     brand?: boolean;
+    /** Hero only: a word after the title set in the gradient wordmark (`Welcome to` + `Cortex`). */
+    brandWord?: string;
+    /** Rich copy in place of `description` (inline code, links). */
+    body?: Snippet;
     actions?: Snippet;
     class?: string;
   }
@@ -31,6 +35,8 @@
     hero = false,
     markSize = 96,
     brand = false,
+    brandWord,
+    body,
     actions,
     class: className = "",
   }: Props = $props();
@@ -39,12 +45,12 @@
 <div class="cx-empty {className}" class:cx-empty-hero={hero}>
   {#if hero}
     <NeuralMark size={markSize} hero />
-    <h2 class:brand-grad={brand}>{title}</h2>
+    <h2 class:brand-grad={brand}>{title}{#if brandWord}{" "}<span class="brand-grad">{brandWord}</span>{/if}</h2>
   {:else}
     {#if icon}<span class="cx-empty-icon"><Icon name={icon} size="lg" /></span>{/if}
     <h3>{title}</h3>
   {/if}
-  {#if description}<p>{description}</p>{/if}
+  {#if body}<p>{@render body()}</p>{:else if description}<p>{description}</p>{/if}
   {#if actions}<div class="cx-empty-acts">{@render actions()}</div>{/if}
 </div>
 

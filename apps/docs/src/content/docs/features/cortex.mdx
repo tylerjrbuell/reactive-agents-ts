@@ -12,7 +12,7 @@ import { Tabs, TabItem, Aside, Card, CardGrid } from "@astrojs/starlight/compone
 
 **Cortex** is the official local-first companion studio for Reactive Agents. Fire it up alongside any agent run and get an instant GUI — live reasoning traces, entropy signal charts, token/cost vitals, debrief summaries, a full trace panel, and an interactive chat interface — all persisted to SQLite so you can replay any run at any time.
 
-![Cortex Beacon — awaiting connections. Connect an agent with `rax run --cortex` or `.withCortex()` and it appears instantly.](../../../assets/cortex-beacon-landing.png)
+![Cortex Beacon (an earlier version) before any agent connects. Connect an agent with `rax run --cortex` or `.withCortex()` and it appears instantly.](../../../assets/cortex-beacon-landing.png)
 
 ## Quick Start
 
@@ -73,26 +73,23 @@ When running `rax cortex` (npm) Cortex opens your browser at `http://127.0.0.1:4
 
 Cortex has five views accessible from the top navigation bar:
 
-### Beacon — Live Agent Grid
+### Beacon — what your agents are doing right now
 
-The Beacon view is your **agent command center**: a live grid that shows every connected agent's cognitive state in real time, updated via WebSocket as events stream in.
+Beacon is the home page. It updates over WebSocket as events stream in, and it has two views: **Board** (the default) and **Field**. Switch with the Board / Field control in the header; the choice is kept in the URL (`/?view=field`) and remembered in the browser, and the URL wins.
 
-![Cortex Beacon — live canvas with 4 connected agents. One crypto-agent is actively `running` (glowing purple), three others show `settled` status with token totals displayed in the top-right panel.](../../../assets/cortex-beacon.png)
+![Cortex Beacon (an earlier version: the live canvas, now the Field view).](../../../assets/cortex-beacon.png)
 
-**Cognitive state labels** map to entropy scores from the Reactive Intelligence layer:
+**Board.** *Running now* shows one card per agent that is working: its name (the run's label, saved agent, chat or task, never a bare id), where it came from (chat, gateway, desk run, app), how long it has run, its task, what it is doing now (`Calling http-get`, `Thinking after 14 tool calls`), a small entropy line with the latest value (`η 0.62`), a loop meter and `step 3 of 6 · 2.1k tok · $0.310`. Only running cards glow. A page opened mid-run fills the entropy line from the run's stored events. Below, the **Agents** grid lists every other agent with its status, source, last line (the question or approval it waits on, why it failed, or its task), model, tokens and time, filtered by **All**, **Needs you**, **Failed** and **Idle** (finished, stopped or idle).
 
-| State       | Meaning                                            |
-| ----------- | -------------------------------------------------- |
-| `running`   | Agent is actively executing — standard entropy     |
-| `exploring` | Diverging entropy — agent is broadening its search |
-| `stressed`  | High entropy — agent may be stuck or looping       |
-| `completed` | Run finished successfully                          |
-| `error`     | Run ended with an unhandled error                  |
-| `idle`      | Agent is connected but not currently running       |
+Statuses use the same words as Runs and Chat: Running, Needs you (paused on an approval or a `request_user_input` question), Finished, Failed, Stopped, Idle.
 
-Beacon shows delegation: sub-agents nest under their parent run (linked by persisted `parentRunId`, so the hierarchy survives a reload), including runs spawned from Chat. Grid layout is deterministic, and node positions you drag are persisted per browser.
+**Field.** The free canvas: agents as nodes on a dot grid, labelled by name and status (`Calling http-get`, `Running · step 3`, `Finished`). Running nodes glow and carry one sonar ring. Sub-agents link to their parent run (linked by persisted `parentRunId`, so the hierarchy survives a reload), and a link flows only while both ends run. Drag a node by its handle to move it; **Arrange** groups delegation trees, then lanes by state. Positions are kept per browser.
 
-The filter bar (`All`, `Running`, `Exploring`, `Stressed`, …) lets you focus on agents of interest. The **bottom input bar** submits a new prompt via `POST /api/runs` and navigates directly to the new run on success.
+The **prompt bar** at the bottom starts a new agent in both views: the model chip opens the full agent settings for this run, the book opens the prompt library, and **Run** (or Enter) submits via `POST /api/runs` and opens the new run. Press `R` anywhere to focus it.
+
+With no agents yet, Beacon shows a welcome with **Open a chat**, **Build an agent** and **Connect an app** (`.withCortex()`).
+
+Under Settings · Motion, **Reduce motion** (or the system setting) stills the background, the glow, the sonar ring and the flowing links; status text still says what is running.
 
 ---
 

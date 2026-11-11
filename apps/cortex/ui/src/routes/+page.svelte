@@ -1,174 +1,173 @@
 <script lang="ts">
-  import { getContext, onMount, onDestroy, tick } from "svelte";
+  /**
+   * Beacon (Bench spec section 8, `beacon.html`): what your agents are doing
+   * right now. Board (default) or Field, chosen by `?view=field` (wins) or the
+   * stored choice; the first-run hero when Cortex has seen no agent yet. The
+   * layout's `agentStore` / `stageStore` are the data (one instance per app);
+   * the rules are pure in `lib/beacon-board.ts`.
+   */
+  import { getContext, onDestroy, onMount, tick } from "svelte";
+  import { goto } from "$app/navigation";
+  import { page } from "$app/stores";
   import BeaconCanvas from "$lib/components/BeaconCanvas.svelte";
   import BottomInputBar from "$lib/components/BottomInputBar.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
-  import NeuralMark from "$lib/components/kit/NeuralMark.svelte";
-  import type { AgentCognitiveState } from "$lib/stores/agent-store.js";
-  import type { AgentStore } from "$lib/stores/agent-store.js";
+  import BeaconBoard from "$lib/components/beacon/BeaconBoard.svelte";
+  import BeaconViewSwitch from "$lib/components/beacon/BeaconViewSwitch.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import EmptyState from "$lib/components/kit/EmptyState.svelte";
+  import PageHeader from "$lib/components/kit/PageHeader.svelte";
+  import {
+    beaconStatusOf,
+    beaconViewSearch,
+    boardOf,
+    needsYouByRun,
+    readStoredBeaconView,
+    resolveBeaconView,
+    storeBeaconView,
+    type AgentFilter,
+    type BeaconView,
+  } from "$lib/beacon-board.js";
+  import { pendingApprovals } from "$lib/stores/approval-watcher.js";
+  import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
+  import type { AgentNode, AgentStore } from "$lib/stores/agent-store.js";
   import type { StageStore } from "$lib/stores/stage-store.js";
 
   const agentStore = getContext<AgentStore>("agentStore");
   /** Explicit cast — SvelteKit `getContext` typing can widen store methods. */
   const stageStore = getContext("stageStore") as StageStore;
+  const storeState = agentStore.state;
 
   let inputBarRef = $state<{ focus: () => void } | undefined>(undefined);
-  type StatusFilter = "all" | AgentCognitiveState;
-  const STATUS_FILTER_STORAGE_KEY = "cortex.beacon.statusFilter";
-  let statusFilter = $state<StatusFilter>("all");
-  let statusFilterHydrated = $state(false);
-  let organizeToken = $state(0);
+  let storedView = $state<BeaconView | undefined>(undefined);
+  let filter = $state<AgentFilter>("all");
+  let now = $state(Date.now());
+  /** The first REST load finished: before it, an empty list is not "no agents yet". */
+  let loaded = $state(false);
 
-  const statusFilterOptions: ReadonlyArray<{ value: StatusFilter; label: string }> = [
-    { value: "all", label: "All" },
-    { value: "running", label: "Running" },
-    { value: "exploring", label: "Exploring" },
-    { value: "stressed", label: "Stressed" },
-    { value: "completed", label: "Completed" },
-    { value: "error", label: "Error" },
-    { value: "idle", label: "Idle" },
-  ];
-
-  const filteredAgents = $derived(
-    statusFilter === "all" ? $agentStore : $agentStore.filter((agent) => agent.state === statusFilter),
-  );
-
-  function isStatusFilter(value: string): value is StatusFilter {
-    return statusFilterOptions.some((option) => option.value === value);
-  }
+  const view = $derived(resolveBeaconView($page.url.searchParams.get("view"), storedView));
+  const needsYou = $derived(needsYouByRun($agentStore, $pendingApprovals, $pendingInteractions));
+  const board = $derived(boardOf($agentStore, needsYou, filter, now));
+  const empty = $derived(loaded && $agentStore.length === 0);
+  const statusOf = (a: AgentNode) => beaconStatusOf(a, needsYou.has(a.runId));
 
   $effect(() => {
-    if (typeof window === "undefined") return;
-    if (!statusFilterHydrated) return;
-    window.localStorage.setItem(STATUS_FILTER_STORAGE_KEY, statusFilter);
+    if (!$storeState.loading || $agentStore.length > 0) loaded = true;
   });
 
-  // Handle R shortcut from layout (after tick so bind:this / input exist — empty beacon included)
+  // A run that was live before this page loaded: fill its entropy line and loop cap from its stored events (once per run).
+  $effect(() => {
+    for (const card of board.live) void agentStore.hydrateLive(card.runId);
+  });
+
+  function setView(next: BeaconView) {
+    storedView = next;
+    storeBeaconView(typeof localStorage === "undefined" ? null : localStorage, next);
+    const search = beaconViewSearch($page.url.search, next);
+    void goto(`${$page.url.pathname}${search}`, { replaceState: true, keepFocus: true, noScroll: true });
+  }
+
+  // R shortcut from the layout (after a tick so the bar is bound, first run included).
   async function handleFocusInput() {
     await tick();
-    const api = inputBarRef as { focus?: () => void } | undefined;
-    if (typeof api?.focus === "function") {
-      api.focus();
+    if (typeof inputBarRef?.focus === "function") {
+      inputBarRef.focus();
       return;
     }
     document.querySelector<HTMLInputElement>("[data-cortex-beacon-prompt]")?.focus();
   }
+
+  let clock: ReturnType<typeof setInterval> | null = null;
   onMount(() => {
+    storedView = readStoredBeaconView(localStorage);
     window.addEventListener("cortex:focus-input", handleFocusInput);
-
-    const saved = window.localStorage.getItem(STATUS_FILTER_STORAGE_KEY);
-    if (saved && isStatusFilter(saved)) {
-      statusFilter = saved;
-    }
-
-    statusFilterHydrated = true;
+    // Live cards show run time; relative times in the grid tick too.
+    clock = setInterval(() => (now = Date.now()), 1_000);
   });
-  onDestroy(() => window.removeEventListener("cortex:focus-input", handleFocusInput));
+  onDestroy(() => {
+    window.removeEventListener("cortex:focus-input", handleFocusInput);
+    if (clock) clearInterval(clock);
+  });
 
-  function autoOrganizeBeacon() {
-    organizeToken += 1;
+  function submit(prompt: string, cfg: Parameters<StageStore["submitPrompt"]>[1]) {
+    void stageStore.submitPrompt(prompt, cfg);
   }
-
 </script>
 
 <svelte:head>
-  <title>CORTEX — Beacon</title>
+  <title>Beacon · Cortex</title>
 </svelte:head>
 
-<CortexDeskShell ambient>
-  {#if $agentStore.length > 0}
-    <div class="flex-1 relative overflow-hidden z-10 min-h-0">
-      <div class="absolute right-4 md:right-48 top-4 z-20 inline-flex items-center gap-2 rounded-lg px-2 py-1.5 backdrop-blur-sm bg-white/80 dark:bg-surface-container-low/45 shadow-[0_0_0_1px_rgba(124,58,237,0.2),0_0_0_1px_rgba(255,255,255,0.7)_inset] dark:shadow-[0_0_0_1px_rgba(139,92,246,0.28),0_0_0_1px_rgba(6,182,212,0.08)_inset]">
-        <button
-          type="button"
-          class="rounded-md border border-[var(--cortex-border)] bg-surface px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-on-surface transition-colors hover:border-secondary hover:text-secondary"
-          onclick={autoOrganizeBeacon}
-        >
-          Auto-organize
-        </button>
-        <label for="beacon-status-filter" class="font-mono text-[10px] uppercase tracking-[0.14em] text-on-surface-variant/80">
-          Status
-        </label>
-        <select
-          id="beacon-status-filter"
-          aria-label="Filter agents by status"
-          bind:value={statusFilter}
-          class="rounded-md border border-[var(--cortex-border)] bg-surface px-2 py-1 font-mono text-[11px] text-on-surface outline-none transition-colors focus:border-secondary"
-        >
-          {#each statusFilterOptions as option}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </select>
-        <span class="font-mono text-[10px] text-on-surface-variant/70">
-          {filteredAgents.length} / {$agentStore.length}
-        </span>
+<!-- Opaque canvas: the line grid shows only on the header band, the dot grid only in Field (spec 5.2). -->
+<CortexDeskShell ambient class="bg-background">
+  <div class="beacon" data-state={empty ? "empty" : "default"}>
+    {#if empty}
+      <div></div>
+      <div class="hero">
+        <EmptyState hero markSize={132} title="Welcome to" brandWord="Cortex">
+          {#snippet body()}
+            Your agents show up here while they work. Start one below, open a chat, or point an app at Cortex with
+            <code class="code-accent">.withCortex()</code>.
+          {/snippet}
+          {#snippet actions()}
+            <Button variant="primary" icon="chat" href="/chat">Open a chat</Button>
+            <Button icon="lab" href="/lab">Build an agent</Button>
+            <Button variant="ghost" icon="book" href="https://docs.reactiveagents.dev/features/cortex/">Connect an app</Button>
+          {/snippet}
+        </EmptyState>
       </div>
-
-      {#if filteredAgents.length > 0}
-        <BeaconCanvas agents={filteredAgents} autoOrganizeToken={organizeToken} />
-      {:else}
-        <div class="absolute inset-0 flex items-center justify-center px-6">
-          <p class="rounded-lg border border-[var(--cortex-border)] bg-surface/90 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] text-on-surface-variant/80 shadow-sm">
-            No agents match this status filter
-          </p>
-        </div>
-      {/if}
-    </div>
-  {:else}
-    <!-- ── Empty state: pulsing neural core + instructions ──────────── -->
-    <div class="flex-1 flex flex-col items-center justify-center relative z-10 pb-20 min-h-0">
-      <!-- Pulsing neural network icon -->
-      <!-- The neural mark, hero size (twinkle; still under reduced motion). The
-           old sonar rings are gone: the sonar means "running now" (spec 5.2). -->
-      <div class="relative mb-10">
-        <NeuralMark size={108} hero />
+    {:else}
+      <div class="wrap">
+        <PageHeader title="Beacon" description="What your agents are doing right now.">
+          {#snippet actions()}
+            <BeaconViewSwitch {view} onchange={setView} />
+          {/snippet}
+        </PageHeader>
       </div>
-
-      <!-- Status text -->
-      <p class="font-mono text-[11px] text-outline uppercase tracking-[0.18em] mb-2 flex items-center justify-center gap-2">
-        <span
-          class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse shadow-[0_0_6px_rgba(124,58,237,0.45)] dark:bg-violet-400 dark:shadow-[0_0_10px_rgba(167,139,250,0.7)]"
-        ></span>
-        Awaiting connections
-        <span
-          class="w-1.5 h-1.5 rounded-full bg-cyan-600 animate-pulse shadow-[0_0_6px_rgba(6,182,212,0.45)] dark:bg-cyan-400 dark:shadow-[0_0_10px_rgba(34,211,238,0.6)]"
-          style="animation-delay: 0.5s"
-        ></span>
-      </p>
-      <p class="text-center text-[11px] text-on-surface-variant/75 font-medium max-w-md px-6 mb-8 leading-relaxed">
-        Local desk — stream runs with <code class="font-mono text-[10px] text-secondary/90">rax … --cortex</code> or
-        <code class="font-mono text-[10px] text-primary/90">.withCortex()</code>. Press
-        <kbd class="cortex-kbd align-middle mx-0.5">R</kbd> to focus the prompt.
-      </p>
-
-      <!-- Connection methods -->
-      <div class="space-y-3 text-center max-w-sm">
-        <div
-          class="px-5 py-2.5 rounded-lg bg-violet-100/95 dark:bg-violet-950/35 shadow-[0_0_0_1px_rgba(124,58,237,0.28),0_4px_16px_rgba(124,58,237,0.08)] dark:shadow-[0_0_0_1px_rgba(139,92,246,0.45),0_0_20px_rgba(139,92,246,0.15)]"
-        >
-          <code class="font-mono text-[11px] text-violet-900 dark:text-violet-200">
-            rax run "your prompt" --cortex
-          </code>
+      <div class="body" class:field={view === "field"}>
+        <div class="wrap inner">
+          {#if view === "field"}
+            <BeaconCanvas agents={$agentStore} {statusOf} />
+          {:else}
+            <BeaconBoard {board} {filter} {now} onfilter={(f) => (filter = f)} />
+          {/if}
         </div>
-        <div class="text-[9px] font-mono text-secondary/50 uppercase tracking-widest">or</div>
-        <div
-          class="px-5 py-2.5 rounded-lg bg-cyan-100/95 dark:bg-cyan-950/30 shadow-[0_0_0_1px_rgba(6,182,212,0.28),0_4px_14px_rgba(6,182,212,0.08)] dark:shadow-[0_0_0_1px_rgba(6,182,212,0.4),0_0_18px_rgba(6,182,212,0.12)]"
-        >
-          <code class="font-mono text-[10px] text-cyan-900 dark:text-cyan-200/95">
-            .withCortex()
-          </code>
-          <span class="font-mono text-[9px] text-cyan-700/70 dark:text-cyan-400/50 ml-2">— one builder line</span>
-        </div>
-        <div class="text-[9px] font-mono text-outline/40 uppercase tracking-widest">or type below</div>
       </div>
-    </div>
-  {/if}
+    {/if}
 
-  <BottomInputBar
-    bind:this={inputBarRef}
-    loading={$stageStore.submitting}
-    onSubmit={(prompt, cfg) => {
-      void stageStore.submitPrompt(prompt, cfg);
-    }}
-  />
+    <BottomInputBar
+      bind:this={inputBarRef}
+      library={!empty}
+      loading={$stageStore.submitting}
+      onSubmit={submit}
+    />
+  </div>
 </CortexDeskShell>
+
+<style>
+  .beacon {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .wrap { width: 100%; max-width: 1280px; margin: 0 auto; box-sizing: border-box; }
+  .body { min-height: 0; overflow-y: auto; }
+  .inner { padding: 0 32px 32px; }
+  .body.field { overflow: hidden; display: flex; }
+  .body.field .inner { display: flex; padding-bottom: 8px; }
+  .hero { align-self: center; overflow-y: auto; }
+  .code-accent {
+    font-family: var(--cortex-font-data);
+    font-size: 0.92em;
+    padding: 1px 5px;
+    border-radius: var(--cortex-r-chip);
+    color: var(--cortex-accent);
+    background: var(--cortex-accent-tint);
+  }
+  @media (max-width: 640px) {
+    .inner { padding: 0 12px 16px; }
+  }
+</style>

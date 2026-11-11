@@ -1,18 +1,29 @@
 <script lang="ts">
+  /**
+   * Beacon's prompt bar (spec section 8): the model chip (opens the full
+   * agent blueprint, `AgentConfigPanel`, above the bar), the task input, the
+   * prompt library and Run. Runs through `stageStore.submitPrompt` (the page
+   * passes `onSubmit`). `focus()` serves the R shortcut.
+   */
   import { onMount } from "svelte";
   import { settings } from "$lib/stores/settings.js";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Chip from "$lib/components/kit/Chip.svelte";
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
 
   interface Props {
     placeholder?: string;
     loading?: boolean;
+    /** Show the prompt library button (the first-run bar leaves it out). */
+    library?: boolean;
     onSubmit?: (prompt: string, config: AgentConfig) => void;
   }
   let {
-    placeholder = "Ask or describe a task for the agent…",
+    placeholder = "Describe a task to run as a new agent",
     loading = false,
+    library = true,
     onSubmit,
   }: Props = $props();
 
@@ -48,109 +59,83 @@
     if (e.key === "Escape") expanded = false;
   }
 
-  // Summary shown in collapsed pill
-  const configSummary = $derived(
-    [config.provider, config.model?.split("-").slice(-1)[0]].filter(Boolean).join("·")
-  );
+  /** `ollama / qwen3:14b`, or the provider alone while no model is chosen. */
+  const modelLabel = $derived([config.provider, config.model].filter(Boolean).join(" / ") || "Choose a model");
 </script>
 
-<div class="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-40">
-
-  <!-- ── Config accordion (above pill) ──────────────────────────────── -->
-  {#if expanded}
-    <div
-      class="mb-2 rounded-2xl backdrop-blur-xl animate-fade-up overflow-y-auto max-h-[60vh] p-4
-             bg-gradient-to-b from-white/100 via-violet-50/85 to-slate-100/95
-             dark:from-[#1a1c26]/[0.98] dark:via-[#151821]/[0.98] dark:to-[#12141c]/[0.98]
-             shadow-[0_0_0_1px_rgba(124,58,237,0.22),0_1px_3px_rgba(15,23,42,0.06),0_12px_32px_rgba(124,58,237,0.07)]
-             dark:shadow-[0_0_0_1px_rgba(139,92,246,0.45),0_0_0_1px_rgba(6,182,212,0.12)_inset,0_12px_40px_rgba(139,92,246,0.18)]"
-    >
-      <AgentConfigPanel bind:config compact={false} />
+<div class="bar">
+  <div class="anchor">
+    {#if expanded}
+      <div class="config" role="region" aria-label="Agent settings for this run">
+        <AgentConfigPanel bind:config compact={false} />
+      </div>
+    {/if}
+    <div class="prompt">
+      <Chip icon="model" data on={expanded} title="Agent settings for this run" onclick={() => (expanded = !expanded)}>{modelLabel}</Chip>
+      <input
+        bind:this={inputEl}
+        bind:value
+        type="text"
+        data-cortex-beacon-prompt
+        aria-label="Task for a new agent"
+        {placeholder}
+        disabled={loading}
+        onkeydown={handleKeydown}
+      />
+      {#if library}
+        <PromptPickerButton
+          types={["task", "snippet"]}
+          defaultSaveType="task"
+          onSelect={(body) => {
+            value = body;
+            inputEl?.focus();
+          }}
+        />
+      {/if}
+      <Button variant="primary" icon="send" disabled={!value.trim() || loading} onclick={handleSubmit}>
+        {loading ? "Starting…" : "Run"}
+      </Button>
     </div>
-  {/if}
-
-  <!-- ── Main pill ───────────────────────────────────────────────────── -->
-  <div
-    class="backdrop-blur-md p-1.5 flex items-center transition-all duration-300
-           bg-gradient-to-r from-white/100 via-violet-50/75 to-slate-50/95
-           dark:from-[#1e2130]/95 dark:via-[#161822]/[0.98] dark:to-[#1a2330]/95
-           shadow-[0_0_0_1px_rgba(124,58,237,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset,0_4px_22px_rgba(124,58,237,0.1)]
-           dark:shadow-[0_0_0_1px_rgba(139,92,246,0.5),0_0_0_1px_rgba(6,182,212,0.15)_inset,0_4px_28px_rgba(139,92,246,0.2),0_0_48px_rgba(6,182,212,0.08)]
-           focus-within:shadow-[0_0_0_1px_rgba(6,182,212,0.4),0_0_0_1px_rgba(124,58,237,0.2)_inset,0_6px_28px_rgba(124,58,237,0.18)]
-           dark:focus-within:shadow-[0_0_0_1px_rgba(6,182,212,0.55),0_0_0_1px_rgba(139,92,246,0.35)_inset,0_6px_36px_rgba(139,92,246,0.35),0_0_60px_rgba(6,182,212,0.15)]
-           {expanded ? 'rounded-2xl' : 'rounded-full'}"
-  >
-    <!-- Config toggle -->
-    <button
-      type="button"
-      onclick={() => (expanded = !expanded)}
-      class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full border-0 bg-transparent
-             cursor-pointer hover:bg-primary/15 transition-colors flex-shrink-0 group text-primary"
-      title="Configure agent params ({configSummary})"
-    >
-      <span class="material-symbols-outlined text-primary text-base flex-shrink-0 transition-transform
-                   {expanded ? 'rotate-180' : ''}">
-        {expanded ? "keyboard_arrow_down" : "tune"}
-      </span>
-      {#if !expanded}
-        <span class="text-[9px] font-mono text-outline/50 group-hover:text-outline/80 transition-colors
-                     hidden sm:inline max-w-[120px] truncate">
-          {configSummary}
-        </span>
-      {/if}
-    </button>
-
-    <div
-      class="w-px h-6 mx-1 flex-shrink-0 bg-gradient-to-b from-transparent via-primary/60 to-transparent opacity-90"
-    ></div>
-
-    <input
-      bind:this={inputEl}
-      bind:value
-      type="text"
-      data-cortex-beacon-prompt
-      {placeholder}
-      disabled={loading}
-      onkeydown={handleKeydown}
-      class="flex-1 bg-transparent border-none outline-none text-on-surface text-sm py-3 px-2
-             placeholder:text-outline/45 placeholder:font-mono placeholder:text-[13px]"
-    />
-
-    <!-- Prompt library -->
-    <PromptPickerButton
-      types={["task", "snippet"]}
-      defaultSaveType="task"
-      onSelect={(body) => {
-        value = body;
-        inputEl?.focus();
-      }}
-    />
-
-    <!-- Submit: gradient neural pulse button -->
-    <button
-      type="button"
-      onclick={handleSubmit}
-      disabled={!value.trim() || loading}
-      class="relative flex-shrink-0 h-11 w-11 rounded-full border-0 cursor-pointer
-             disabled:opacity-40 disabled:cursor-not-allowed group
-             bg-gradient-to-br from-violet-600 via-violet-500 to-cyan-400
-             shadow-[0_0_0_1px_rgba(124,58,237,0.45),0_6px_16px_rgba(124,58,237,0.35),0_0_12px_rgba(6,182,212,0.22)]
-             dark:shadow-[0_0_0_1px_rgba(196,181,253,0.35),0_0_20px_rgba(139,92,246,0.55),0_0_28px_rgba(6,182,212,0.35)]"
-    >
-      {#if value.trim() && !loading}
-        <span
-          class="absolute inset-0 rounded-full animate-ping bg-violet-500/20 dark:bg-violet-400/25"
-          style="animation-duration: 2s;"
-        ></span>
-      {/if}
-      <span class="relative z-10 flex items-center justify-center h-full w-full">
-        {#if loading}
-          <span class="material-symbols-outlined text-white text-sm animate-spin">progress_activity</span>
-        {:else}
-          <span class="material-symbols-outlined text-white font-bold text-base
-                       group-hover:scale-110 group-active:scale-95 transition-transform">send</span>
-        {/if}
-      </span>
-    </button>
   </div>
 </div>
+
+<style>
+  .bar { position: relative; z-index: 2; padding: 12px 32px 20px; }
+  .anchor { position: relative; max-width: 820px; margin: 0 auto; }
+  .config {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 8px);
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 16px;
+    border-radius: var(--cortex-r-panel);
+    background: var(--cortex-surface-1);
+    border: 1px solid var(--cortex-line-strong);
+    box-shadow: var(--cortex-shadow-pop);
+  }
+  .prompt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 6px 6px 8px;
+    border-radius: var(--cortex-r-panel);
+    background: var(--cortex-surface-1);
+    border: 1px solid var(--cortex-line-strong);
+  }
+  .prompt:focus-within { border-color: var(--cortex-accent); box-shadow: 0 0 0 3px var(--cortex-accent-tint); }
+  .prompt :global(.cx-chip) { max-width: 220px; overflow: hidden; text-overflow: ellipsis; flex: none; }
+  input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--cortex-text);
+    font: 400 var(--cortex-t-md) var(--cortex-font-ui);
+    padding: 6px 4px;
+    outline: none;
+  }
+  input::placeholder { color: var(--cortex-text-3); }
+  @media (max-width: 640px) { .bar { padding: 8px 12px 12px; } }
+</style>

@@ -7,16 +7,15 @@
  * share the server-side registry); a toast also auto-clears when its approval
  * stops being pending.
  */
+import { writable } from "svelte/store";
 import { toast } from "./toast-store.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
+import type { PendingApprovalWire } from "../waiting-on-you.js";
 
-interface Pending {
-  readonly runId: string;
-  readonly agentId: string;
-  readonly gateId: string;
-  readonly toolName: string;
-  readonly args: unknown;
-}
+type Pending = PendingApprovalWire;
+
+/** The approvals pending at the last poll (Beacon's "Needs you"), updated by the watcher. */
+export const pendingApprovals = writable<readonly PendingApprovalWire[]>([]);
 
 const keyFor = (p: Pending) => `approval:${p.runId}|${p.gateId}`;
 
@@ -56,6 +55,7 @@ export function startApprovalWatcher(pollMs = 2500): () => void {
     } catch {
       return;
     }
+    pendingApprovals.set(approvals);
 
     const active = new Set(approvals.map(keyFor));
 
