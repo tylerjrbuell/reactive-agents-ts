@@ -18,15 +18,18 @@
   import { groupToolNames } from "$lib/tool-groups.js";
   import { throughputView } from "$lib/llm-throughput.js";
   import { tooltip } from "$lib/actions/tooltip.js";
-  import { formatClockTime, formatCost, formatTurnDuration } from "@reactive-agents/ui-core";
+  import { formatClockTime, formatCost, formatTurnDuration, type SafetyLoopMark } from "@reactive-agents/ui-core";
+  import { safetyBadgeTone, safetyMarkLabel } from "$lib/run-safety.js";
 
   interface Props {
     frame: CortexTraceFrame;
     expanded: boolean;
     selected?: boolean;
+    /** Safety events in this loop (ui-core `SafetyLoopMark`), shown as a badge on the row. */
+    safety?: SafetyLoopMark;
     onToggle: () => void;
   }
-  let { frame: f, expanded, selected = false, onToggle }: Props = $props();
+  let { frame: f, expanded, selected = false, safety, onToggle }: Props = $props();
 
   const isFinal = $derived(f.kind === "final");
   const toolGroups = $derived(groupToolNames(f.toolsThisStep ?? []));
@@ -76,6 +79,9 @@
       {/if}
     </span>
     <span class="m">
+      {#if safety && safety.count > 0}
+        <span class="safety" use:tooltip={safetyMarkLabel(safety)}><Badge tone={safetyBadgeTone(safety.tone)} data><Icon name="alert-circle" size="sm" />{safety.count}</Badge></span>
+      {/if}
       {#if f.tokensUsed > 0}<span>{f.tokensUsed.toLocaleString()} tok</span>{/if}
       {#if f.durationMs > 0}<span>{ms(f.durationMs)}</span>{/if}
       {#if speed}<span class="rate" use:tooltip={speed.title}>{speed.ttft ? `${speed.text} · ${speed.ttft}` : speed.text}</span>{/if}

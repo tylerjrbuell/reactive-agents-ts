@@ -13,6 +13,7 @@
   import Status from "$lib/components/kit/Status.svelte";
   import RunMenu, { type RunMenuItem } from "./RunMenu.svelte";
   import type { RunStatus } from "$lib/stores/run-store.js";
+  import { safetyCountLabel, type SafetyBadgeTone } from "$lib/run-safety.js";
 
   interface Props {
     runId: string;
@@ -48,6 +49,12 @@
       readonly busy: boolean;
       readonly onApprove: () => void;
       readonly onDeny: () => void;
+    };
+    /** Set when a safety mechanism fired (ui-core `safetySummaryOf`): a count beside the status that opens the Safety tab. */
+    safety?: {
+      readonly count: number;
+      readonly tone: SafetyBadgeTone;
+      readonly onOpen: () => void;
     };
   }
   const p: Props = $props();
@@ -91,6 +98,11 @@
       {/if}
       <Status tone={p.view.tone} label={p.view.label} />
       {#if p.tolerated}<span class="tol" use:tooltip={p.tolerated}>tolerated</span>{/if}
+      {#if p.safety && p.safety.count > 0}
+        <button type="button" class="safety tone-{p.safety.tone}" onclick={p.safety.onOpen} use:tooltip={"Open the Safety tab"}>
+          <Icon name="alert-circle" size="sm" />{safetyCountLabel(p.safety.count)}
+        </button>
+      {/if}
     </div>
   </div>
   <div class="actions">
@@ -143,6 +155,13 @@
   }
   .rename { max-width: 32rem; font-size: var(--cortex-t-lg); font-weight: 600; }
   .tol { font-size: var(--cortex-t-xs); color: var(--cortex-warn); }
+  .safety { display: inline-flex; flex: none; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid transparent; border-radius: 999px; font: inherit; font-size: var(--cortex-t-xs); white-space: nowrap; cursor: pointer; }
+  .safety.tone-accent { background: var(--cortex-accent-tint); color: var(--cortex-accent); }
+  .safety.tone-warn { background: var(--cortex-warn-tint); color: var(--cortex-warn); }
+  .safety.tone-bad { background: var(--cortex-bad-tint); color: var(--cortex-bad); }
+  .safety.tone-ok { background: var(--cortex-ok-tint); color: var(--cortex-ok); }
+  .safety:hover { border-color: currentColor; }
+  .safety:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
   .ask { display: inline-flex; align-items: baseline; gap: 4px; max-width: 28rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
   .ask .data { overflow: hidden; text-overflow: ellipsis; color: var(--cortex-text); }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }

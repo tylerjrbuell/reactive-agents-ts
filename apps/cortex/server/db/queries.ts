@@ -81,7 +81,10 @@ export function updateRunStats(
     /** SET only when not already stored (first-seen wins) */
     provider?: string;
     model?: string;
+    /** The run's started strategy; kept per `strategyRank` (ui-core `strategyClaimsOf`), not first-seen. */
     strategy?: string;
+    /** Rank of `strategy`'s source; a stored strategy is replaced only by a higher rank. */
+    strategyRank?: number;
     errorMessage?: string;
     /** Delegation context from AgentStarted; first-seen wins. */
     parentRunId?: string;
@@ -139,8 +142,14 @@ export function updateRunStats(
     values.push(patch.model);
   }
   if (patch.strategy !== undefined) {
-    sets.push("strategy = COALESCE(strategy, ?)");
-    values.push(patch.strategy);
+    // ui-core `foldRunStrategy`: a claim replaces the stored strategy only when it
+    // outranks it (first-seen within a rank). SET expressions read the old row.
+    const rank = patch.strategyRank ?? 0;
+    sets.push(
+      "strategy = CASE WHEN strategy IS NULL OR COALESCE(strategy_rank, 0) < ? THEN ? ELSE strategy END",
+      "strategy_rank = MAX(COALESCE(strategy_rank, 0), ?)",
+    );
+    values.push(rank, patch.strategy, rank);
   }
   if (patch.errorMessage !== undefined) {
     sets.push("error_message = ?");

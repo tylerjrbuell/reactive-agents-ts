@@ -17,6 +17,7 @@
   import type { TimelineGroup } from "../stores/timeline-store.js";
   import { tabId, tabPanelId } from "$lib/tablist.js";
   import { untrack } from "svelte";
+  import type { SafetyLoopMark } from "@reactive-agents/ui-core";
 
   interface Props {
     frame: CortexTraceFrame | null;
@@ -34,6 +35,8 @@
     embedded?: boolean;
     /** Open and scroll to this loop's row (a new object each request, so the same loop can be focused again). */
     focus?: { readonly loop: number } | null;
+    /** Safety marks by loop (ui-core `safetySummaryOf(...).byLoop`): a badge on each loop row where something stepped in. */
+    safetyMarks?: ReadonlyMap<number, SafetyLoopMark>;
   }
 
   // Default `[]` alone is inferred as `never[]` and breaks element typing in `{#each}`.
@@ -48,6 +51,7 @@
     autoOpenFinal = true,
     embedded = false,
     focus = null,
+    safetyMarks,
   }: Props = $props();
 
   let panelEl = $state<HTMLElement | null>(null);
@@ -165,6 +169,7 @@
           frame={f}
           expanded={expandedRows.includes(idx)}
           selected={frame?.iteration === f.iteration && frame?.kind === f.kind}
+          safety={f.kind === "final" ? undefined : safetyMarks?.get(f.iteration)}
           onToggle={() => toggleRow(idx)}
         />
       {/each}

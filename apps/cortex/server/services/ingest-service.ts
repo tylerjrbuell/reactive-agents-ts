@@ -22,6 +22,7 @@ import type { CortexIngestMessage, CortexLiveMessage } from "../types.js";
 import { CORTEX_DESK_LIVE_AGENT_ID } from "../types.js";
 import { CortexError } from "../errors.js";
 import { runEndingOf } from "./run-ending.js";
+import { strategyClaimsOf } from "@reactive-agents/ui-core";
 
 export class CortexIngestService extends Context.Tag("CortexIngestService")<
   CortexIngestService,
@@ -34,6 +35,16 @@ export class CortexIngestService extends Context.Tag("CortexIngestService")<
     readonly getSubscriberCount: (agentId: string) => Effect.Effect<number, never>;
   }
 >() {}
+
+/**
+ * The run's started strategy from one event, by the same rule the run view
+ * folds (ui-core `strategyClaimsOf`: resolved config > kernel loop > step
+ * event). `updateRunStats` keeps the highest-ranked claim.
+ */
+const strategyPatchOf = (event: AgentEvent): { strategy?: string; strategyRank?: number } => {
+  const started = strategyClaimsOf(event._tag, event as unknown as Record<string, unknown>).started;
+  return started ? { strategy: started.strategy, strategyRank: started.rank } : {};
+};
 
 const deriveRunStats = (
   event: AgentEvent,
@@ -49,6 +60,7 @@ const deriveRunStats = (
   provider: string;
   model: string;
   strategy: string;
+  strategyRank: number;
   parentRunId: string;
   rootRunId: string;
   contextRunId: string;
@@ -64,6 +76,7 @@ const deriveRunStats = (
       ...(typeof e.depth === "number" && Number.isFinite(e.depth) ? { depth: e.depth } : {}),
       ...(typeof e.provider === "string" && e.provider ? { provider: e.provider } : {}),
       ...(typeof e.model    === "string" && e.model    ? { model:    e.model    } : {}),
+      ...strategyPatchOf(event),
     };
   }
   if (event._tag === "LLMRequestCompleted") {
@@ -77,19 +90,20 @@ const deriveRunStats = (
     };
   }
   if (event._tag === "ReasoningStepCompleted") {
-    const e = event as { totalSteps?: number; step?: number; strategy?: string };
+    const e = event as { totalSteps?: number; step?: number };
     return {
       iterationCount: e.totalSteps ?? e.step ?? 0,
-      ...(typeof e.strategy === "string" && e.strategy ? { strategy: e.strategy } : {}),
+      ...strategyPatchOf(event),
     };
   }
   if (event._tag === "ReasoningIterationProgress") {
-    const e = event as { iteration?: number; strategy?: string };
+    const e = event as { iteration?: number };
     return {
       iterationCount: e.iteration ?? 0,
-      ...(typeof e.strategy === "string" && e.strategy ? { strategy: e.strategy } : {}),
+      ...strategyPatchOf(event),
     };
   }
+  if (event._tag === "StrategySwitched") return strategyPatchOf(event);
   if (event._tag === "AgentCompleted") {
     const e = event as { success?: boolean; totalTokens?: number; durationMs?: number; error?: string };
     // Only explicit false is failure — omitted `success` is treated as completed (matches desk UX; some paths omit the flag).
@@ -104,6 +118,17 @@ const deriveRunStats = (
       ...(typeof e.totalTokens === "number" && e.totalTokens > 0
         ? { tokensUsedTotal: e.totalTokens }
         : {}),
+      ...(typeof e.error === "string" && e.error ? { errorMessage: e.error } : {}),
+    };
+  }
+  // The run's effect failed, crashed or was interrupted without AgentCompleted (e.g. an
+  // output guardrail block): failed, or stopped when a user stop / terminate ended it.
+  // Same rule as the UI's `abortStatusOf` (`ui/src/lib/run-live-status.ts`).
+  if (event._tag === "AgentAborted") {
+    const e = event as { reason?: string; error?: string };
+    return {
+      status: e.reason === "user-stop" || e.reason === "terminate" ? "stopped" : "failed",
+      completedAt: Date.now(),
       ...(typeof e.error === "string" && e.error ? { errorMessage: e.error } : {}),
     };
   }

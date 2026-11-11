@@ -43,6 +43,20 @@ describe("updateVitals", () => {
     expect(v.strategy).toBe("reactive");
   });
 
+  // Repro (kernel fix 14b7c3dd5): the server stored a step event's strategy label while this
+  // store kept the loop's; both now fold ui-core `foldRunStrategy` (config > loop > step).
+  it("names the strategy by the shared rule: run config, then the kernel loop, never a step label over them", () => {
+    const fold = (events: [string, Record<string, unknown>][]) => events.reduce((v, [t, p]) => updateVitals(v, msg(t, p), 0), base);
+    expect(fold([["ReasoningStepCompleted", { strategy: "structured-output-native" }], ["ReasoningIterationProgress", { iteration: 1, strategy: "plan-execute-reflect" }]]).strategy).toBe(
+      "plan-execute-reflect",
+    );
+    expect(fold([["AgentStarted", { config: { builder: { strategy: "reflexion" } } }], ["ReasoningIterationProgress", { iteration: 1, strategy: "reactive" }]]).strategy).toBe("reflexion");
+    // A switch back to the starting strategy is no switch to show.
+    const back = fold([["ReasoningIterationProgress", { iteration: 1, strategy: "reactive" }], ["StrategySwitched", { from: "reactive", to: "reflexion" }], ["StrategySwitched", { from: "reflexion", to: "reactive" }]]);
+    expect(back.strategy).toBe("reactive");
+    expect(back.switchedStrategy).toBeUndefined();
+  });
+
   it("surfaces a tolerated success from AgentCompleted.outcome", () => {
     const v = updateVitals(
       base,

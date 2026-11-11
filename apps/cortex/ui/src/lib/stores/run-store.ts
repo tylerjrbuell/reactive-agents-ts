@@ -4,8 +4,9 @@
 import { writable } from "svelte/store";
 import { createWsClient } from "./ws-client.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
-import type { ThroughputSample } from "@reactive-agents/ui-core";
+import { foldRunStrategy, initialRunStrategy, runStrategyOf, type RunStrategyState, type ThroughputSample } from "@reactive-agents/ui-core";
 import { throughputSampleOf } from "../llm-throughput.js";
+import { abortStatusOf } from "../run-live-status.js";
 
 /** `stopped`: ended from outside (desk Stop, or a chat turn stopped or left mid-run). */
 export type RunStatus = "live" | "completed" | "failed" | "paused" | "stopped" | "loading";
@@ -69,8 +70,13 @@ export interface RunVitals {
   readonly provider?: string;
   /** LLM model name (e.g. "claude-sonnet-4-6") — from LLMRequestCompleted */
   readonly model?: string;
-  /** Reasoning strategy (e.g. "reactive", "plan-execute-reflect") — from ReasoningIterationProgress */
+  /**
+   * Reasoning strategy the run started with (e.g. "reactive") — ui-core `foldRunStrategy`,
+   * the rule the server's stored run row uses too (resolved config > kernel loop > step event).
+   */
   readonly strategy?: string;
+  /** The strategy fold behind `strategy` / `switchedStrategy`. */
+  readonly strategyFold?: RunStrategyState;
   /** Provider switched to after fallback — from ProviderFallbackActivated */
   readonly fallbackProvider?: string;
   /**
@@ -172,6 +178,19 @@ function readTokensUsed(p: Record<string, unknown>): number {
 
 /** Fold one live message into the run vitals. Exported for tests. */
 export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): RunVitals {
+  const prior = v.strategyFold ?? initialRunStrategy;
+  const fold = foldRunStrategy(prior, msg.type, msg.payload);
+  return fold === prior ? foldVitals(v, msg, runStartMs) : foldVitals(withStrategy(v, fold), msg, runStartMs);
+}
+
+/** `strategy` / `switchedStrategy` from the shared strategy fold. */
+function withStrategy(v: RunVitals, fold: RunStrategyState): RunVitals {
+  const { strategy, switchedTo } = runStrategyOf(fold);
+  const { strategy: _s, switchedStrategy: _w, ...rest } = v;
+  return { ...rest, strategyFold: fold, ...(strategy ? { strategy } : {}), ...(switchedTo ? { switchedStrategy: switchedTo } : {}) };
+}
+
+function foldVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): RunVitals {
   const p = msg.payload;
   switch (msg.type) {
     case "EntropyScored": {
@@ -243,13 +262,14 @@ export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: numbe
         ...v,
         loopIteration: clampedLoop,
         maxIterations: max,
-        // Strategy is consistent across iterations; capture once
-        strategy: v.strategy ?? (typeof p.strategy === "string" ? p.strategy : undefined),
       };
     }
     // A stopped or cancelled run may never send AgentCompleted (a terminate
     // during a model call): its end is the stop event's time, never the
     // duration of its last finished model call.
+    case "AgentAborted":
+      if (typeof p.durationMs === "number" && p.durationMs > 0) return { ...v, durationMs: p.durationMs };
+      return runStartMs > 0 && msg.ts > runStartMs ? { ...v, durationMs: Math.max(v.durationMs, msg.ts - runStartMs) } : v;
     case "AgentStopped":
     case "AgentTerminated":
     case "ExecutionCancelled":
@@ -268,12 +288,6 @@ export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: numbe
       return {
         ...v,
         fallbackProvider: typeof p.toProvider === "string" ? p.toProvider : v.fallbackProvider,
-      };
-    case "StrategySwitched":
-      return {
-        ...v,
-        strategy: v.strategy ?? (typeof p.from === "string" && p.from ? p.from : undefined),
-        switchedStrategy: typeof p.to === "string" && p.to ? p.to : v.switchedStrategy,
       };
     default:
       return v;
@@ -299,6 +313,8 @@ export function deriveStatus(current: RunStatus, msg: CortexLiveMsg): RunStatus 
   }
   if (msg.type === "AgentCompleted") return pSuccess(msg.payload) ? "completed" : "failed";
   if (msg.type === "TaskFailed") return "failed";
+  // The run's effect failed without AgentCompleted (e.g. an output guardrail block).
+  if (msg.type === "AgentAborted") return isRunSettled(current) ? current : abortStatusOf(msg.payload);
   // Debrief may fire before or after AgentCompleted; never promote a known failure back to completed.
   if (msg.type === "DebriefCompleted") return current === "failed" ? "failed" : "completed";
   if (current === "loading" && msg.type) return "live";
@@ -377,6 +393,8 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
       // Extract error message from failure events
       let errorMessage = s.errorMessage;
       if (msg.type === "AgentCompleted" && msg.payload.success === false && typeof msg.payload.error === "string") {
+        errorMessage = msg.payload.error;
+      } else if (msg.type === "AgentAborted" && typeof msg.payload.error === "string" && msg.payload.error && errorMessage === null) {
         errorMessage = msg.payload.error;
       } else if (msg.type === "TaskFailed") {
         const errStr = typeof msg.payload.error === "string" ? msg.payload.error

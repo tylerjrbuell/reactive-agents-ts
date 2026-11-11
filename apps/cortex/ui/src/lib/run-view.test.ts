@@ -98,6 +98,7 @@ describe("inspectorTabsOf", () => {
   it("lists the inspector tabs in spec order, with no Chat tab", () => {
     expect(inspectorTabsOf({ messages: 0, events: 0 }).map((t) => t.id)).toEqual([
       "summary",
+      "safety",
       "decisions",
       "signal",
       "context",
@@ -111,6 +112,10 @@ describe("inspectorTabsOf", () => {
     expect(tabs.find((t) => t.id === "messages")?.count).toBe(3);
     expect(tabs.find((t) => t.id === "events")?.count).toBe(62);
     expect(inspectorTabsOf({ messages: 0, events: 0 }).find((t) => t.id === "events")?.count).toBeUndefined();
+  });
+  it("counts safety events that fired; none shows no count", () => {
+    expect(inspectorTabsOf({ messages: 0, events: 9, safety: 2 }).find((t) => t.id === "safety")?.count).toBe(2);
+    expect(inspectorTabsOf({ messages: 0, events: 9, safety: 0 }).find((t) => t.id === "safety")?.count).toBeUndefined();
   });
 });
 

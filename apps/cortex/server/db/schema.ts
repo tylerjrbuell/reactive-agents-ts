@@ -237,6 +237,8 @@ export function applySchema(db: Database): void {
   if (!runCols.includes("provider")) db.exec("ALTER TABLE cortex_runs ADD COLUMN provider TEXT");
   if (!runCols.includes("model"))    db.exec("ALTER TABLE cortex_runs ADD COLUMN model    TEXT");
   if (!runCols.includes("strategy")) db.exec("ALTER TABLE cortex_runs ADD COLUMN strategy TEXT");
+  // How far `strategy` can be trusted (ui-core `strategyClaimsOf` rank): a stronger source replaces it.
+  if (!runCols.includes("strategy_rank")) db.exec("ALTER TABLE cortex_runs ADD COLUMN strategy_rank INTEGER");
   if (!runCols.includes("error_message")) db.exec("ALTER TABLE cortex_runs ADD COLUMN error_message TEXT");
   if (!runCols.includes("display_name")) db.exec("ALTER TABLE cortex_runs ADD COLUMN display_name TEXT");
   if (!runCols.includes("parent_run_id")) db.exec("ALTER TABLE cortex_runs ADD COLUMN parent_run_id TEXT");

@@ -49,6 +49,8 @@
     type InspectorTabId,
   } from "$lib/run-view.js";
   import { runToChatSession } from "$lib/run-to-chat-session.js";
+  import { safetyEntriesOf, safetySummaryOf } from "@reactive-agents/ui-core";
+  import { safetyBadgeTone } from "$lib/run-safety.js";
   import { loadCapabilities, strategyOptions } from "$lib/capabilities.js";
 
   interface Props {
@@ -168,6 +170,9 @@
   const entropy = $derived(entropySeriesOf($signalStore.entropy));
   const messageCount = $derived(countReasoningStepDisplayMessagesInRunEvents($runStore.events));
   const panelEvents = $derived($runStore.events.map((m: CortexLiveMsg) => ({ type: m.type, payload: m.payload, ts: m.ts })));
+  // Safety lane: guardrails, verifiers, budgets, context, calibration and controller interventions (ui-core).
+  const safetyEntries = $derived(safetyEntriesOf(panelEvents));
+  const safetySummary = $derived(safetySummaryOf(safetyEntries));
   // Strategy display names from the framework manifest (`reactive` reads `ReAct`).
   let strategyLabels = $state<ReadonlyMap<string, string>>(new Map());
   const strategyLabel = (id: string): string => strategyLabels.get(id) ?? id;
@@ -185,6 +190,11 @@
   // "Why it ended" step links: select the loop and ask the trace to open and show its row.
   let traceFocus = $state<{ loop: number } | null>(null);
   const traceLoops = $derived(new Set($traceStore.filter((f) => f.kind !== "final").map((f) => f.iteration)));
+  /** The header's safety count: open the Safety tab and bring the inspector into view (it stacks under the trace below 1360px). */
+  function openSafety() {
+    tab = "safety";
+    document.querySelector(".run .insp")?.scrollIntoView({ block: "nearest" });
+  }
   function focusLoop(loop: number) {
     selectedIteration = loop;
     signalStore.selectIteration(loop);
@@ -416,6 +426,9 @@
     approval={approval
       ? { toolName: approval.toolName, detail: approval.detail, busy: deciding, onApprove: () => void decideApproval("approve"), onDeny: () => void decideApproval("deny") }
       : undefined}
+    safety={safetySummary.tone
+      ? { count: safetySummary.count, tone: safetyBadgeTone(safetySummary.tone), onOpen: openSafety }
+      : undefined}
   />
 
   <RunVitals vitals={$runStore.vitals} status={$runStore.status} {entropy} {replayLoop} {replayMax} {strategyLabel} />
@@ -456,7 +469,7 @@
         onSelectLoop={focusLoop}
       />
       <!-- The Answer panel above shows the final answer, so the trace does not open it again. -->
-      <TracePanel autoOpenFinal={false} frames={$traceStore} timeline={$timelineStore} status={$runStore.status} streamText={$runStore.streamText} frame={selectedFrame} focus={traceFocus} />
+      <TracePanel autoOpenFinal={false} frames={$traceStore} timeline={$timelineStore} status={$runStore.status} streamText={$runStore.streamText} frame={selectedFrame} focus={traceFocus} safetyMarks={safetySummary.byLoop} />
     </div>
     <RunInspector
       bind:tab
@@ -471,6 +484,10 @@
       events={panelEvents}
       {messageCount}
       {strategyLabel}
+      safety={safetyEntries}
+      safetyCount={safetySummary.count}
+      {traceLoops}
+      onSelectLoop={focusLoop}
       onSelectIteration={(n) => {
         selectedIteration = n;
         signalStore.selectIteration(n);

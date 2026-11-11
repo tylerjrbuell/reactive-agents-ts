@@ -17,6 +17,14 @@ describe("runStatusAfter (B3: stopped runs leave the live list)", () => {
     expect(runStatusAfter("stopped", "AgentCompleted", { success: true })).toBe("completed");
   });
 
+  // Live repro (2026-11-11): an output guardrail block ended the run with AgentAborted only; it read Running forever.
+  test("AgentAborted settles the run: failed, or stopped for a user stop / terminate", () => {
+    expect(runStatusAfter("live", "AgentAborted", { causeClass: "failure" })).toBe("failed");
+    expect(runStatusAfter("live", "AgentAborted", { causeClass: "interrupt", reason: "user-stop" })).toBe("stopped");
+    expect(runStatusAfter("live", "AgentAborted", { causeClass: "interrupt", reason: "terminate" })).toBe("stopped");
+    expect(runStatusAfter("stopped", "AgentAborted", { causeClass: "failure" })).toBeUndefined();
+  });
+
   test("completion and failure behave as before", () => {
     expect(runStatusAfter("live", "AgentCompleted", { success: true })).toBe("completed");
     expect(runStatusAfter("live", "AgentCompleted", { success: false })).toBe("failed");

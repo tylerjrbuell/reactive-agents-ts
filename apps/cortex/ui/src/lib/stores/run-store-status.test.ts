@@ -31,6 +31,12 @@ describe("run view status (B3)", () => {
     expect(deriveStatus("loading", msg("ReasoningIterationProgress"))).toBe("live");
   });
 
+  it("AgentAborted ends a live run (an output guardrail block sends no AgentCompleted)", () => {
+    expect(deriveStatus("live", msg("AgentAborted", { causeClass: "failure" }))).toBe("failed");
+    expect(deriveStatus("live", msg("AgentAborted", { causeClass: "interrupt", reason: "user-stop" }))).toBe("stopped");
+    expect(deriveStatus("completed", msg("AgentAborted", { causeClass: "failure" }))).toBe("completed");
+  });
+
   it("stopped is settled", () => {
     expect(isRunSettled("stopped")).toBe(true);
     expect(isRunSettled("paused")).toBe(false);
