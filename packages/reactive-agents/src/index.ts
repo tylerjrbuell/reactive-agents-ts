@@ -75,6 +75,9 @@ export {
 
   // Structured output
   StructuredOutputError,
+
+  // Memory inspection (`agent.memory()`)
+  MemoryNotEnabledError,
 } from "@reactive-agents/runtime";
 
 export type {
@@ -126,6 +129,17 @@ export type {
   JudgeRankOptions,
   JudgeRankQuestion,
   JudgeRankResult,
+
+  // Memory inspection (`agent.memory()`)
+  AgentMemoryHandle,
+  SemanticMemoryItem,
+  ProceduralMemoryItem,
+  EpisodicMemoryItem,
+  SemanticMemoryPatch,
+  ProceduralMemoryPatch,
+  MemorySearchOptions,
+  MemoryListOptions,
+  MemoryFacadeError,
 } from "@reactive-agents/runtime";
 
 export { DEFAULT_JUDGE_RANK_CHUNK_CAP } from "@reactive-agents/runtime";

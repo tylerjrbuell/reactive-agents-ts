@@ -17,6 +17,7 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { extractTaskText, toRiWireOutcome, type RunOutcomeClass } from "../util.js";
 import { SkillStoreService } from "@reactive-agents/memory";
 import { skillFragmentToSkillRecord } from "@reactive-agents/reactive-intelligence";
+import { withRunProvenance } from "../memory-provenance.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,12 +103,12 @@ export const runLocalLearning = (
 
             // Persist synthesized skill fragment to procedural memory AND skill store
             if (learningResult?.skillSynthesized && learningResult?.skillFragment) {
-              const entry = skillFragmentToProceduralEntry({
+              const entry = yield* withRunProvenance(skillFragmentToProceduralEntry({
                 fragment: learningResult.skillFragment,
                 agentId: config.agentId,
                 taskCategory: learningResult.taskCategory,
                 modelId,
-              });
+              }), { taskId: String(task.id) });
               yield* Effect.serviceOption(ProceduralMemoryService).pipe(
                 Effect.flatMap((svcOpt) => {
                   if (svcOpt._tag !== "Some") return Effect.void;
@@ -179,12 +180,12 @@ export const runLocalLearning = (
                   learningResultRef.skillFragment.meanComposite < appliedSkillMeanEntropy
                 ) {
                   const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
-                  const entry = skillFragmentToProceduralEntry({
+                  const entry = yield* withRunProvenance(skillFragmentToProceduralEntry({
                     fragment: learningResultRef.skillFragment,
                     agentId: config.agentId,
                     taskCategory: learningResultRef.taskCategory,
                     modelId,
-                  });
+                  }), { taskId: String(task.id) });
                   yield* svcOpt.value.store(entry).pipe(
                     Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/local-learning.ts:re-store-improved-fragment", tag: errorTag(err) })),
                   );

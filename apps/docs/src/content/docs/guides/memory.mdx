@@ -336,6 +336,45 @@ const program = Effect.gen(function* () {
 
 `save` is called automatically by the runtime's finalize phase whenever `DebriefStoreService` is provided — you don't call it yourself in normal use.
 
+## Inspecting and Editing Memory
+
+`agent.memory()` lists, searches, edits and deletes what the agent has stored, without opening the SQLite file yourself. It needs `.withMemory()`; without it every call rejects with `MemoryNotEnabledError`.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMemory()
+  .build();
+
+const result = await agent.run("Summarize how we deploy to staging.");
+
+// Full-text search over semantic memory (FTS5; LIKE on Node's sqlite).
+const hits = await agent.memory().search("deploy");
+for (const hit of hits) {
+  console.log(hit.content, "written by task", hit.taskId, "run", hit.runId);
+}
+
+// Only what one run wrote:
+const fromRun = await agent.memory().search("deploy", { taskId: String(result.taskId) });
+
+// Edit or delete an entry:
+await agent.memory().semantic.update(hits[0]!.id, { content: "Deploys use blue-green rollout." });
+await agent.memory().semantic.delete(hits[0]!.id);
+
+// Learned workflows and the event log:
+const workflows = await agent.memory().procedural.list();
+const recent = await agent.memory().episodic.list({ limit: 20 });
+```
+
+**Provenance.** Memory the runtime writes during a run records the `taskId` and `runId` of that run: facts extracted at the end of a run, skill fragments learned from it, and tool-driven memory writes. A root run's `runId` is its task id; a sub-agent's `runId` is its own id in the delegation tree. Rows written before provenance existed, or outside any run, have neither field. Editing an entry keeps its original provenance.
+
+| Call | Store | Notes |
+|------|-------|-------|
+| `search(query, { limit?, taskId?, runId? })` | semantic | Default limit 10 |
+| `semantic.list` / `get` / `update` / `delete` | semantic | `get` returns `undefined` for an unknown id; `update` rejects with `MemoryNotFoundError` |
+| `procedural.list` / `get` / `update` / `delete` | procedural | `update` edits `name`, `description`, `pattern`, `tags` |
+| `episodic.list({ limit? })` | episodic | Read-only, newest first, default limit 50 |
+
 ## Skill Portability — Export and Import as Markdown
 
 A learned `SkillRecord` (from `@reactive-agents/reactive-intelligence`) can be serialized to a portable Markdown file via `exportSkillToMarkdown(skill)` — metadata as a fenced JSON block, instructions as prose — so a skill learned in one process, or one team's deployment, can be shared and re-imported elsewhere without a shared database. `importSkillFromMarkdown` reads it back:

@@ -106,6 +106,17 @@ const writerAgent = await ReactiveAgents.create()
   .build();
 ```
 
+### Inspecting and editing stored memory
+
+```ts
+// Each semantic/procedural entry carries the taskId/runId of the run that wrote it.
+const hits = await agent.memory().search("deploy", { taskId: String(result.taskId) });
+await agent.memory().semantic.update(hits[0]!.id, { content: "corrected fact" });
+await agent.memory().semantic.delete(hits[0]!.id);
+const workflows = await agent.memory().procedural.list();
+const log = await agent.memory().episodic.list({ limit: 20 });
+```
+
 ## Builder API reference
 
 | Method | Key params | Notes |
@@ -113,6 +124,7 @@ const writerAgent = await ReactiveAgents.create()
 | `.withMemory(opts?)` | `"standard"\|"enhanced"\|{ tier, dbPath?, capacity? }` | No args = `"standard"` |
 | `.withDocuments(docs)` | `DocumentSpec[]` | RAG context — pairs with `find` tool |
 | `.withExperienceLearning()` | — | Injects prior-run experience tips from episodic memory |
+| `agent.memory()` | — | `search`, `semantic.*`, `procedural.*`, `episodic.list`; rejects `MemoryNotEnabledError` without `.withMemory()` |
 
 ## Pitfalls
 

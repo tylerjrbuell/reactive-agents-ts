@@ -48,7 +48,7 @@ const agent = await ReactiveAgents.create()
 | [Lifecycle & Hooks](#lifecycle) | `withHook`, `withHealthCheck`, `withErrorHandler`, `withFallbacks`, `withAudit` |
 | [Advanced](#advanced) | `withA2A`, `withGateway`, `withReactiveIntelligence`, `withPrompts`, `withUserInteraction`, `withLazyValidation`, `withDocuments`, `withTaskContext`, `withLayers` |
 | [Building & Running](#build-methods) | `build`, `buildEffect`, `runOnce` |
-| [Agent Methods](#reactiveagent) | `run`, `runStream`, `chat`, `session`, `health`, `cancel`, `pause`, `resume`, `dispose`, `judge`, `listJudgmentModels`, `judgeRank` |
+| [Agent Methods](#reactiveagent) | `run`, `runStream`, `chat`, `session`, `memory`, `health`, `cancel`, `pause`, `resume`, `dispose`, `judge`, `listJudgmentModels`, `judgeRank` |
 | [Result Reference](#agentresult) | `AgentResult`, `AgentDebrief`, stream event types |
 
 ## Method ↔ config correspondence
@@ -814,7 +814,7 @@ try {
 
 Run a task with the given input. Returns the result with output and metadata.
 
-Options: `{ taskId?, history?, onApproval?, workspace? }`. `workspace` sets the
+Options: `{ taskId?, history?, onApproval?, workspace?, skills? }`. `skills: { activate: [...] }` pins skills for this run only (needs `.withSkills()`; see [Agent Skills](/guides/agent-skills/)). `workspace` sets the
 working directory for this run only (overrides `.withTools({ workspace })`; see
 [Working directory](/guides/tools/#working-directory-workspace)); a path that is
 not an existing directory rejects the run before anything executes. On a durable agent with
@@ -828,7 +828,7 @@ returns the final result. See [Durable HITL](/guides/durable-hitl/).
 
 ### `runStream(input, options?): AsyncGenerator<AgentStreamEvent>`
 
-Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: AbortSignal, workspace?: string }`. Default density comes from `.withStreaming()` or `"tokens"`. Ends with `StreamCompleted`, `StreamError`, or `StreamCancelled`. An invalid `workspace` ends the stream with one `StreamError`. A durable run that pauses ends with a `StreamCompleted` carrying `status: "awaiting-approval"` (or `"awaiting-interaction"`), `pendingApproval` / `pendingInteraction`, `success: false` and no `terminatedBy`, the same as `run()`. `StreamCompleted.evidenceDelta` matches `AgentResult.evidenceDelta`.
+Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: AbortSignal, workspace?: string, skills?: { activate?: string[] } }`. `skills` pins skills for this turn, the same as `run()`. Default density comes from `.withStreaming()` or `"tokens"`. Ends with `StreamCompleted`, `StreamError`, or `StreamCancelled`. An invalid `workspace` ends the stream with one `StreamError`. A durable run that pauses ends with a `StreamCompleted` carrying `status: "awaiting-approval"` (or `"awaiting-interaction"`), `pendingApproval` / `pendingInteraction`, `success: false` and no `terminatedBy`, the same as `run()`. `StreamCompleted.evidenceDelta` matches `AgentResult.evidenceDelta`.
 
 Chat turns take a per-turn `workspace` as well: `chat(msg, { useTools: true, workspace })` and `session.runStream(msg, { workspace })` (tool and streaming paths).
 
@@ -869,6 +869,18 @@ Deny a paused run's action and resume to completion — the agent observes the d
 | `registerTool(definition, handler)`         | Register a tool after build; `handler` returns `Effect`   |
 | `unregisterTool(name)`                      | Remove a previously registered custom tool                |
 | `ingest(content, { source, format?, ... })` | Ingest text into this agent's document store (shared store if one was passed to `withDocuments`) when tools / `withDocuments` enabled; visible to the agent's next run |
+
+### `memory(): AgentMemoryHandle`
+
+Inspect and edit what the agent has persisted. Needs `.withMemory()`; without it every call rejects with `MemoryNotEnabledError`. Each semantic and procedural entry carries the `taskId` and `runId` of the run that wrote it (absent on rows written before provenance existed or outside a run). See [Memory: inspecting and editing](/guides/memory/#inspecting-and-editing-memory).
+
+| Method                                            | Description                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `search(query, { limit?, taskId?, runId? })`      | Full-text search over semantic memory, optionally only one run's entries |
+| `semantic.list({ limit? })` / `semantic.get(id)`  | Entries, most important first / one entry or `undefined`                 |
+| `semantic.update(id, patch)` / `semantic.delete(id)` | Edit `content`, `summary`, `importance`, `verified`, `tags` / delete  |
+| `procedural.list()` / `get` / `update` / `delete` | Learned workflows; `update` edits `name`, `description`, `pattern`, `tags` |
+| `episodic.list({ limit? })`                       | The event log, newest first (read-only)                                  |
 
 ### Judgment (runtime)
 

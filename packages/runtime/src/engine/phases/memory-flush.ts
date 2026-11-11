@@ -22,6 +22,7 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { MemoryService, MemoryConsolidatorService, MemoryExtractor } from "@reactive-agents/memory";
 import type { Phase } from "../phase.js";
 import { extractTaskText } from "../util.js";
+import { withRunProvenance } from "../memory-provenance.js";
 
 // Owning-package tags (#286): resolved by the same string keys the layers
 // register under. `.withMemoryConsolidation()`'s consolidator runs
@@ -161,7 +162,9 @@ export const memoryFlush: Phase = {
                 if (memStoreOpt._tag === "Some" && memStoreOpt.value.storeSemantic) {
                   const storeFn = memStoreOpt.value.storeSemantic;
                   for (const entry of entries) {
-                    yield* storeFn(entry).pipe(
+                    // Provenance: the run that extracted this entry.
+                    const stamped = yield* withRunProvenance(entry, { taskId: ctx.taskId });
+                    yield* storeFn(stamped).pipe(
                       Effect.catchAll((err) =>
                         emitErrorSwallowed({
                           site: "runtime/src/engine/phases/memory-flush.ts:store-semantic",

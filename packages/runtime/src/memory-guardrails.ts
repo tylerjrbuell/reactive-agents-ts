@@ -22,6 +22,7 @@ import { Context, Effect, Layer } from "effect";
 import { MemoryService, MemoryError, type SemanticEntry, type DailyLogEntry } from "@reactive-agents/memory";
 import { AgentMemory, type AgentMemoryEntry } from "@reactive-agents/core";
 import { detectInjection, detectPii } from "@reactive-agents/guardrails";
+import { withRunProvenance } from "./engine/memory-provenance.js";
 
 const screenForPoisoning = (content: string): Effect.Effect<void, MemoryError> =>
   Effect.gen(function* () {
@@ -54,18 +55,27 @@ export const withMemoryGuardrails = <E, R>(
     const memory = Context.get(context, MemoryService);
     const agentMemory = Context.get(context, AgentMemory);
 
+    // Semantic writes also get the active run's taskId/runId when the writer
+    // left them unset (engine/memory-provenance.ts), so tool-driven memory
+    // names the run that wrote it.
     return context.pipe(
       Context.add(MemoryService, {
         ...memory,
         storeSemantic: (entry: SemanticEntry) =>
-          screenForPoisoning(entry.content).pipe(Effect.andThen(memory.storeSemantic(entry))),
+          screenForPoisoning(entry.content).pipe(
+            Effect.andThen(withRunProvenance(entry)),
+            Effect.flatMap((stamped) => memory.storeSemantic(stamped)),
+          ),
         logEpisode: (entry: DailyLogEntry) =>
           screenForPoisoning(entry.content).pipe(Effect.andThen(memory.logEpisode(entry))),
       }),
       Context.add(AgentMemory, {
         ...agentMemory,
         storeSemantic: (entry: AgentMemoryEntry) =>
-          screenForPoisoning(entry.content).pipe(Effect.andThen(agentMemory.storeSemantic(entry))),
+          screenForPoisoning(entry.content).pipe(
+            Effect.andThen(withRunProvenance(entry)),
+            Effect.flatMap((stamped) => agentMemory.storeSemantic(stamped)),
+          ),
       }),
     );
   });

@@ -26,6 +26,7 @@ import {
 } from './agent/gateway-runner.js'
 import { makeJudgmentFacade } from './agent/judgment-facade.js'
 import { makeSkillsFacade } from './agent/skills-facade.js'
+import { makeMemoryHandle, type AgentMemoryHandle } from './agent/memory-facade.js'
 import { runFacadeEffect } from './agent/run-facade-effect.js'
 import { makeDurableFacade, type RunDurableParams } from './agent/durable-facade.js'
 import { buildRunTaskEffect, type RunTaskDeps, type RunTaskEffectOptions } from './agent/run-task-effect.js'
@@ -669,6 +670,20 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
+     * List, search, edit and delete this agent's persisted memory. Each entry carries
+     * the `taskId` / `runId` of the run that wrote it. Needs `.withMemory()`; calls
+     * reject with `MemoryNotEnabledError` otherwise. Delegates to `agent/memory-facade.ts`.
+     * @example
+     * ```typescript
+     * const [hit] = await agent.memory().search("deploy steps");
+     * if (hit) await agent.memory().semantic.delete(hit.id);
+     * ```
+     */
+    memory(): AgentMemoryHandle {
+        return makeMemoryHandle(this.runtime, this.agentId)
+    }
+
+    /**
      * Automatic cleanup via the Explicit Resource Management protocol (TypeScript 5.2+).
      *
      * Enables `await using` syntax so the agent is disposed automatically when the
@@ -1198,34 +1213,10 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
-     * Execute a task and return a stream of events.
-     *
-     * Returns an AsyncIterable that yields `AgentStreamEvent` objects as the agent works.
-     * Text tokens arrive as `TextDelta` events. The stream always ends with either
-     * `StreamCompleted` (success), `StreamError` (failure), or `StreamCancelled` (aborted).
-     *
-     * @param input - The task prompt or question
-     * @param options - Optional streaming configuration
-     * @param options.density - `"tokens"` (default) for text deltas only, `"full"` for phase/tool events too
-     * @param options.signal - Optional AbortSignal for cancelling the stream
-     * @returns AsyncGenerator of AgentStreamEvent
-     * @example
-     * ```typescript
-     * const ctrl = new AbortController();
-     * for await (const event of agent.runStream("Write a haiku", { signal: ctrl.signal })) {
-     *   if (event._tag === "TextDelta") process.stdout.write(event.text);
-     *   if (event._tag === "StreamCompleted") console.log("\nDone!");
-     * }
-     * // Cancel from outside: ctrl.abort();
-     * ```
-     */
-    /**
-     * Execute a task and return a RunHandle — an AsyncGenerator extended with
-     * runtime control verbs (pause/resume/stop/terminate/status).
-     *
-     * Fully backward-compatible: `for await (const ev of agent.runStream(...))` and
-     * `handle.next()` both work unchanged. The added verbs give callers control over
-     * the run without a separate AbortController.
+     * Execute a task and return a RunHandle: an AsyncGenerator of `AgentStreamEvent`
+     * extended with control verbs. Text tokens arrive as `TextDelta`; the stream ends
+     * with `StreamCompleted`, `StreamError` or `StreamCancelled`. `for await` and
+     * `handle.next()` both work.
      *
      * terminate() — hard abort (StreamCancelled), same as passing an AbortSignal.
      * stop()      — graceful: runs synthesis, emits StreamCompleted.
@@ -1236,7 +1227,10 @@ export class ReactiveAgent<TOut = unknown> {
      *               pending tool calls/last thought); undefined before the
      *               first iteration boundary.
      *
-     * Note: streamed results do not carry the typed structured `object`; use `streamObject()` for streaming structured output.
+     * Options: `density` (`"tokens"` default; `"full"` adds phase/tool events),
+     * `signal`, `history`, `workspace`, and the per-run carries `run()` takes
+     * (`skills: { activate }`, `posture`, `origin`, `environmentUpdate`, `initialTodo`).
+     * Streamed results do not carry the typed structured `object`; use `streamObject()`.
      *
      * Error contract vs `run()`: when the agent has been halted (`stop()`,
      * `terminate()`, or a triggered kill switch), `run()` REJECTS with
@@ -1244,6 +1238,12 @@ export class ReactiveAgent<TOut = unknown> {
      * terminal `StreamError` (or `StreamCancelled` for an aborted signal) and the
      * generator completes normally. Callers porting `try/catch` kill-switch handling
      * from `run()` must branch on the terminal event tag instead.
+     * @example
+     * ```typescript
+     * for await (const event of agent.runStream("Write a haiku", { skills: { activate: ["haiku-style"] } })) {
+     *   if (event._tag === "TextDelta") process.stdout.write(event.text);
+     * }
+     * ```
      */
     runStream(
         input: string,
