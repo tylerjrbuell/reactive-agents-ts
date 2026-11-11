@@ -1,16 +1,19 @@
 /**
  * "Why it ended" for a finished run: the framework's own trace diagnosis
  * (`analyzeCause` + `attributeFailure` from `@reactive-agents/trace`, the engine
- * behind `rax-diagnose cause`) over the run's recorded JSONL trace. Cortex adds
- * only what the UI needs on top: a plain-words headline per cause, and the
- * kernel loop each evidence event belongs to so the run view can link it to its
- * trace row. Computed lazily and cached per run until the trace file changes.
+ * behind `rax-diagnose cause`) over the run's recorded JSONL trace. The headline
+ * and the next steps are the framework's own words (`causeDescription`,
+ * `causeNextActions`, the same lines `rax-diagnose cause` prints); Cortex adds
+ * only the kernel loop each evidence event belongs to so the run view can link it
+ * to its trace row. Computed lazily and cached per run until the trace file changes.
  */
 import { statSync } from "node:fs";
 import { Effect } from "effect";
 import {
   analyzeCause,
   attributeFailure,
+  causeDescription,
+  causeNextActions,
   loadTrace,
   type AttributionVerdict,
   type CauseConfidence,
@@ -20,39 +23,6 @@ import {
 } from "@reactive-agents/trace";
 import { CortexError } from "../errors.js";
 import { findRunTraceFile, traceDirs } from "./run-trace-file.js";
-
-/**
- * Plain words for each framework failure cause. Typed over the framework's
- * closed `FailureCause` union, so a new cause is a type error here until it has
- * words. The framework ships no descriptions of its own (gap reported to the
- * trace owner); the raw cause id is always sent beside this headline.
- */
-export const CAUSE_HEADLINES: Readonly<Record<FailureCause, string>> = {
-  "direct-chat": "A direct model call, not an agent run",
-  timeout: "The run hit its time limit",
-  "user-stop": "Stopped by the user",
-  aborted: "The run was aborted",
-  "incomplete-trace": "The trace ends without the run finishing (process killed or crashed)",
-  "provider-error": "The model provider returned an error",
-  "satisfiability-abstain": "The agent declined up front: the task could not be done with what it had",
-  "terminal-mislabel": "The final status contradicts how the run actually ended",
-  "plan-posture-veto": "The plan posture limited the tools, and the result did not cover the task",
-  "never-engaged": "The model never called a tool it needed",
-  "tool-protocol": "The model's tool calls could not be resolved",
-  "tool-failure": "Tool calls kept failing",
-  "wrong-tool-arg": "A tool call failed on its arguments before a different call worked",
-  "stall-after-work": "The harness ended the run as stalled after real work was done",
-  "stall-no-progress": "The run stalled without making progress",
-  "loop-after-work": "The harness ended a repeating loop after real work was done",
-  "bookkeeping-loop": "The agent spent its loops on bookkeeping tools instead of the task",
-  "verifier-reject": "The verifier rejected the final answer",
-  "budget-cap": "The run used up its iteration budget",
-  unexplained: "The run did not succeed, and no diagnosis rule explains why",
-  "wrong-answer": "The run finished, but the grader marked the answer wrong",
-  "success-with-warning": "Succeeded, with a warning",
-  none: "Finished normally",
-  undetermined: "The trace is too thin to tell why the run ended",
-};
 
 /** One trace event that supports a verdict, with the kernel loop it belongs to. */
 export interface RunCauseEvidence {
@@ -71,7 +41,10 @@ export type RunCauseReport =
       readonly runId: string;
       readonly cause: FailureCause;
       readonly subCause?: string;
+      /** Framework `causeDescription(cause)`. */
       readonly headline: string;
+      /** Framework `causeNextActions({ cause, subCause })`: what to try, most useful first; empty when nothing points to an action. */
+      readonly nextActions: readonly string[];
       readonly confidence: CauseConfidence;
       readonly outcomeStatus: string;
       readonly authority?: string;
@@ -113,7 +86,8 @@ export function diagnoseTrace(trace: Trace): RunCauseReport {
     runId: c.runId,
     cause: c.cause,
     ...(c.subCause ? { subCause: c.subCause } : {}),
-    headline: CAUSE_HEADLINES[c.cause],
+    headline: causeDescription(c.cause),
+    nextActions: causeNextActions(c),
     confidence: c.confidence,
     outcomeStatus: c.outcomeStatus,
     ...(c.authority ? { authority: c.authority } : {}),

@@ -2,8 +2,8 @@
   /**
    * "Why it ended": the framework's diagnosis of a finished run (the same
    * engine as `rax-diagnose cause`), fetched once the run settles. Shows the
-   * cause in plain words, who the trace says is at fault, and the decisive
-   * steps; a step in a recorded loop selects and opens that trace row. Open by
+   * cause in plain words, who the trace says is at fault, what to try (the
+   * framework's `causeNextActions`), and the decisive steps;a step in a recorded loop selects and opens that trace row. Open by
    * default when the run did not succeed. Rules and client: `lib/run-cause.ts`.
    */
   import Badge from "$lib/components/kit/Badge.svelte";
@@ -15,6 +15,7 @@
     fetchRunCause,
     reasonWords,
     unavailableNote,
+    whatToTry,
     type RunCauseReport,
   } from "$lib/run-cause.js";
 
@@ -62,6 +63,7 @@
   }
 
   const steps = $derived(report ? causeSteps(report, loops) : []);
+  const tryNext = $derived(report ? whatToTry(report) : []);
   const who = $derived(report?.available ? attributionView(report.attribution.verdict) : null);
   const failedRun = $derived(report?.available === true && report.attribution.verdict !== "not-failed");
 </script>
@@ -109,6 +111,13 @@
               {/if}
             {/if}
           </dl>
+
+          {#if tryNext.length > 0}
+            <h3>What to try</h3>
+            <ol class="try">
+              {#each tryNext as t, i (i)}<li>{t}</li>{/each}
+            </ol>
+          {/if}
 
           {#if steps.length > 0}
             <h3>Decisive steps</h3>
@@ -170,6 +179,8 @@
   .where { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-text-3); white-space: nowrap; }
   .detail { min-width: 0; overflow-wrap: anywhere; color: var(--cortex-text-2); }
   .ev { color: var(--cortex-text-3); white-space: nowrap; }
+  .try { display: grid; gap: 4px; margin: 0; padding-left: 20px; list-style: decimal; color: var(--cortex-text); }
+  .try li::marker { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   .missing { padding-left: 18px; list-style: disc; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
   .link { padding: 0; border: 0; background: none; color: var(--cortex-accent); font: inherit; font-size: var(--cortex-t-xs); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
   .link:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }

@@ -7,6 +7,7 @@ import {
   fetchRunCause,
   reasonWords,
   unavailableNote,
+  whatToTry,
   type RunCauseReport,
 } from "./run-cause.js";
 
@@ -37,6 +38,12 @@ const report: RunCauseReport = {
 };
 
 describe("run cause view rules", () => {
+  test("What to try lists the framework's next actions as given; none for no diagnosis or an older server", () => {
+    expect(whatToTry({ ...report, nextActions: ["Check the tool's endpoint.", "Retry."] })).toEqual(["Check the tool's endpoint.", "Retry."]);
+    expect(whatToTry(report)).toEqual([]);
+    expect(whatToTry({ available: false, reason: "no-trace" })).toEqual([]);
+  });
+
   test("opens for failed, abstained, partial and stopped runs; collapsed for a success", () => {
     expect(causeOpenByDefault("failed", undefined)).toBe(true);
     expect(causeOpenByDefault("completed", "abstained")).toBe(true);

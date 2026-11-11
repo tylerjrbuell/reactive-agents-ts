@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer } from "effect";
 import { Elysia } from "elysia";
-import { CAUSE_HEADLINES, makeRunCauseReader, type RunCauseReport } from "../services/run-cause.js";
+import { causeDescription, causeNextActions } from "@reactive-agents/trace";
+import { makeRunCauseReader, type RunCauseReport } from "../services/run-cause.js";
 import { runsRouter } from "../api/runs.js";
 import { CortexStoreServiceLive } from "../services/store-service.js";
 import { CortexRunnerService } from "../services/runner-service.js";
@@ -69,7 +70,10 @@ describe("run cause (framework trace diagnosis)", () => {
     if (!r.available) throw new Error("expected a report");
     expect(r.cause).toBe("tool-failure");
     expect(r.subCause).toBe("all-calls-failed");
-    expect(r.headline).toBe(CAUSE_HEADLINES["tool-failure"]);
+    // The framework's own words, the lines `rax-diagnose cause` prints.
+    expect(r.headline).toBe(causeDescription("tool-failure"));
+    expect(r.nextActions).toEqual(causeNextActions({ cause: "tool-failure", subCause: "all-calls-failed" }));
+    expect(r.nextActions.length).toBeGreaterThan(0);
     expect(r.outcomeStatus).toBe("failure");
     // The first failing call is trace iter 0, the run view's loop 1.
     expect(r.evidence[0]).toMatchObject({ eventKind: "tool-call-end", seq: 1, loop: 1 });
@@ -93,6 +97,7 @@ describe("run cause (framework trace diagnosis)", () => {
     if (!r.available) throw new Error("expected a report");
     expect(r.cause).toBe("none");
     expect(r.headline).toBe("Finished normally");
+    expect(r.nextActions).toEqual([]); // a healthy run has nothing to try
     expect(r.attribution.verdict).toBe("not-failed");
     for (const e of r.evidence) if (e.eventKind === "run-completed") expect(e.loop).toBeNull();
   });

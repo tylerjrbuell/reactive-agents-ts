@@ -27,7 +27,10 @@ export type RunCauseReport =
       readonly runId: string;
       readonly cause: string;
       readonly subCause?: string;
+      /** Framework `causeDescription(cause)`. */
       readonly headline: string;
+      /** Framework `causeNextActions`: what to try, most useful first; empty when nothing points to an action. Absent from older servers. */
+      readonly nextActions?: readonly string[];
       readonly confidence: CauseConfidence;
       readonly outcomeStatus: string;
       readonly authority?: string;
@@ -123,6 +126,15 @@ export function causeSteps(report: RunCauseReport, loops: ReadonlySet<number>): 
     });
   }
   return out;
+}
+
+/**
+ * The "What to try" list: the framework's next actions as given. The framework
+ * decides when there is nothing to try (a healthy run, a user stop: empty);
+ * Cortex never adds or filters a step. Empty for a report without a diagnosis.
+ */
+export function whatToTry(report: RunCauseReport): readonly string[] {
+  return report.available ? (report.nextActions ?? []) : [];
 }
 
 /** The note shown when a run has no diagnosis. */
