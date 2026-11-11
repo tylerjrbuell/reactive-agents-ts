@@ -541,6 +541,12 @@ export function disposeExit(args: {
    * turn (no tools, so no act and no iteration spent after the think call).
    */
   readonly answerOnly?: boolean;
+  /**
+   * `harness.budgetAnswerTurn` (opt-in, ablation 2026-11-10). Only when true
+   * may an answer-only denial take the run's last think call at iteration
+   * `maxIterations - 1`; absent, a soft guard there gets no extra turn.
+   */
+  readonly budgetAnswerTurn?: boolean;
 }): ExitGateDecision {
   if (args.outstanding.length === 0) return "accept";
   // The model's answer is not a stop: deny it while work is outstanding (the cap bounds the run).
@@ -551,8 +557,8 @@ export function disposeExit(args: {
   // of 10, so a plateau went to handoff without its one synthesis turn.
   // An answer turn never acts, so on a run with material to answer from it
   // also fits at iteration `maxIterations - 1` (budget-answer-turn.ts: the
-  // run's last think call is the answer).
-  const answerTurnFits = args.answerOnly === true && args.hasMaterial;
+  // run's last think call is the answer). Opt-in with the budget answer turn.
+  const answerTurnFits = args.budgetAnswerTurn === true && args.answerOnly === true && args.hasMaterial;
   const roomForOneMore =
     args.iteration < args.maxIterations - (answerTurnFits ? 0 : 1) && args.llmCalls < args.maxIterations;
   if (args.kind === "soft" && !args.deniedBefore && roomForOneMore) return "deny-once";
@@ -690,6 +696,7 @@ export function proposeExit(args: {
       llmCalls: state.llmCalls ?? 0,
       maxIterations: args.maxIterations,
       answerOnly,
+      budgetAnswerTurn: args.input.harness?.budgetAnswerTurn === true,
     });
     const progressDenial = decision === "deny-once" && exitDeniedBefore(state.steps);
     const answerTurn = decision === "deny-once" && answerOnly;

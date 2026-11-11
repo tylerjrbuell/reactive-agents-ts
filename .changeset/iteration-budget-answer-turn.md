@@ -9,6 +9,6 @@ With the answer turn on:
 - The answer turn is not taken while the task still asks for an action that has not been done ("file a report using the report tool"), even when the compiled contract lists only the answer.
 - A tool call on the no-tools turn is never run.
 
-A soft guard (stall, early stop) that fires on the second-to-last iteration still gets one answer turn with no tools, whether or not the flag is set.
+With the flag on, a soft guard (stall, early stop) that fires on the second-to-last iteration also gets one answer turn with no tools. With the flag off, that guard gets no extra turn: the run ends as the gate decides (handoff of the draft, or an honest failure).
 
 Reflexion kernel passes now draw on the run's configured `maxIterations` instead of a fixed 3: each pass gets an even share of the budget still left (at least 2 iterations). `reflexion.kernelMaxIterations` still overrides it. Plan-execute step kernels use the same shared helper (`strategies/budget/iteration-budget.ts`) with the same budget as before.

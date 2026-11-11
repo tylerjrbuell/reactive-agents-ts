@@ -22,7 +22,7 @@
 //     reserves it (flag-gated);
 //   - a soft guard (stall, low-delta) proposes an exit at iteration max-1: the
 //     gate's answer-turn deny-once fits there (`disposeExit` `answerOnly`),
-//     because an answer turn never acts.
+//     because an answer turn never acts (flag-gated too, `budgetAnswerTurn`).
 //
 // RED-ON-CUT: drop the `reserveBudgetAnswerTurn` call in turn-operations.ts:
 // (c) distinct-tools goes red. Set `answerOnly` to false in exit-gate.ts
@@ -31,6 +31,8 @@
 // goes red (an RI early stop in the answer-turn pass ended the run as
 // `dispatcher_early_stop` → `guard_stop` instead of the cap's `max_iterations`).
 // Drop the flag check in `budgetAnswerTurnRecord`: the flag-off cases go red.
+// Drop `args.budgetAnswerTurn === true` from `disposeExit` `answerTurnFits`:
+// the soft-guard-at-max-1 flag-off cases go red (pure, proposeExit, end to end).
 // Drop `answerTurnReplyExit` in `proposeCapExit`: the cap mislabel cases go red.
 // Drop the `requestedActionTools` check in `budgetAnswerTurnRecord`: the
 // requested-action case goes red. The 0-tool-turn cases are behavior pins:
@@ -41,7 +43,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { Effect, Layer, Stream } from "effect";
 import { LLMService, TestLLMService, type LLMErrors, type StreamEvent, type TestTurn } from "@reactive-agents/llm-provider";
 import { budgetAnswerTurnRecord, isLastThinkCall, reserveBudgetAnswerTurn } from "../../src/kernel/loop/budget-answer-turn.js";
-import { budgetAnswerTurnTaken, DISPATCHER_EARLY_STOP, proposeCapExit, proposeExit } from "../../src/kernel/loop/exit-gate.js";
+import { budgetAnswerTurnTaken, disposeExit, DISPATCHER_EARLY_STOP, proposeCapExit, proposeExit } from "../../src/kernel/loop/exit-gate.js";
 import { requestedActionTools } from "../../src/kernel/capabilities/verify/claimed-actions.js";
 import { EventBusLive, harnessSynthesisDeliverable } from "@reactive-agents/core";
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
@@ -103,6 +105,37 @@ describe("the budget answer turn is opt-in", () => {
 
   it("no harness on the input at all: no reservation", () => {
     expect(budgetAnswerTurnRecord(stateAt(9), makeKernelInput({ task: TASK }), 10)).toBeUndefined();
+  });
+
+  it("a soft guard at iteration max-1: the answer-turn deny-once fits only with the flag on", () => {
+    const atMaxMinus1 = {
+      proposedBy: "stall_deliverable", kind: "soft", outstanding: ["write the final answer"], hasMaterial: true,
+      deniedBefore: false, iteration: 9, llmCalls: 9, maxIterations: 10, answerOnly: true,
+    } as const;
+    expect(disposeExit(atMaxMinus1)).toBe("handoff");
+    expect(disposeExit({ ...atMaxMinus1, budgetAnswerTurn: false })).toBe("handoff");
+    expect(disposeExit({ ...atMaxMinus1, budgetAnswerTurn: true })).toBe("deny-once");
+    // An earlier soft exit keeps its ordinary deny-once either way.
+    expect(disposeExit({ ...atMaxMinus1, iteration: 8, llmCalls: 8 })).toBe("deny-once");
+  });
+
+  it("proposeExit reads the carried harness: no answer turn at max-1 when budgetAnswerTurn is unset", async () => {
+    const propose = (input: KernelInput) =>
+      Effect.runPromise(
+        proposeExit({
+          state: stateAt(9),
+          proposal: { ...DISPATCHER_EARLY_STOP, deliverable: harnessSynthesisDeliverable([], undefined, "") },
+          input,
+          maxIterations: 10,
+          taskId: "t",
+        }).pipe(Effect.provide(EventBusLive)),
+      );
+    const off = await propose(makeKernelInput({ task: TASK, harness: resolveHarnessConfig({}) }));
+    expect(off.decision).not.toBe("deny-once");
+    expect(off.state.steps.some((s) => s.metadata?.exitGate?.answerTurnAt !== undefined)).toBe(false);
+    const on = await propose(inputOn());
+    expect(on.decision).toBe("deny-once");
+    expect(on.state.steps.at(-1)?.metadata?.exitGate?.answerTurnAt).toBe(9);
   });
 });
 
@@ -329,11 +362,13 @@ describe("end to end: the run's last think call is the model's answer turn", () 
     }, 20000);
   }
 
-  it("flag off: the reservation does not fire, every call keeps its tools", async () => {
-    const { offered } = await run(DISTINCT, evidenceLayer(), { budgetAnswerTurn: false });
-    expect(offered.length).toBe(4);
-    expect(offered.every((n) => n > 0)).toBe(true);
-  }, 20000);
+  for (const [label, names] of [["distinct tools (reservation)", DISTINCT], ["repeated tool (stall guard at max-1)", REPEATED]] as const) {
+    it(`flag off, ${label}: no answer turn, every call keeps its tools`, async () => {
+      const { offered } = await run(names, evidenceLayer(), { budgetAnswerTurn: false });
+      expect(offered.length).toBeGreaterThan(0);
+      expect(offered.every((n) => n > 0)).toBe(true);
+    }, 20000);
+  }
 
   it("(d) without evidence (every tool call failed): tools stay offered and the run fails honestly", async () => {
     const { result, offered } = await run(DISTINCT, failingToolLayer("upstream unavailable"));
