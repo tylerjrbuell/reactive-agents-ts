@@ -42,7 +42,10 @@
     },
     {
       "_tag": "ToolCallStarted",
-      "toolName": "echo-tool"
+      "toolName": "echo-tool",
+      "args": {
+        "input": "hello"
+      }
     },
     {
       "_tag": "ToolCallCompleted",

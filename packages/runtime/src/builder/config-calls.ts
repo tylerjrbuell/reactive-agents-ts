@@ -40,6 +40,7 @@ export type BuilderMethod =
   | "withStallPolicy"
   | "withLongHorizon"
   | "withAdaptiveHarness"
+  | "withOutputSchema"
   | "withMaxIterations"
   | "withMinIterations"
   | "withTimeout"
@@ -116,8 +117,8 @@ const optionsCall = (method: BuilderMethod, opts: Record<string, unknown>): Buil
  * `agentConfigToBuilder()` applies exactly this list, and `agentConfigToSource()`
  * prints exactly this list.
  *
- * `outputSchemaOptions` maps to no call: the schema object is code-only, so it
- * must be re-applied with `.withOutputSchema(schema, options)`.
+ * `outputSchema` maps to `.withOutputSchema(jsonSchema, outputSchemaOptions)`;
+ * `outputSchemaOptions` without a schema maps to no call.
  *
  * @param config - The agent configuration.
  * @returns The builder calls, in the order they must be applied.
@@ -332,6 +333,10 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
   if (config.stallPolicy) push(call("withStallPolicy", config.stallPolicy));
   if (config.horizonProfile === "long") push(call("withLongHorizon"));
   if (config.adaptiveHarness) push(call("withAdaptiveHarness"));
+  if (config.outputSchema) {
+    const opts = defined({ ...config.outputSchemaOptions });
+    push(Object.keys(opts).length > 0 ? call("withOutputSchema", config.outputSchema, opts) : call("withOutputSchema", config.outputSchema));
+  }
 
   // Execution
   const exec = config.execution;

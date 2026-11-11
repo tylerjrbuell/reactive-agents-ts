@@ -77,6 +77,8 @@ export {
 
   // Structured output
   StructuredOutputError,
+  OutputSchemaError,
+  isJsonSchemaObject,
 
   // Memory inspection (`agent.memory()`)
   MemoryNotEnabledError,
@@ -97,6 +99,8 @@ export type {
   // Streaming types
   AgentStreamEvent,
   StreamDensity,
+  JsonSchemaObject,
+  OutputSchemaInput,
   // Agent as Data types
   AgentConfig as RuntimeAgentConfig,
   PersonaConfig,
@@ -216,6 +220,7 @@ export type {
   Agent,
   AgentId,
   AgentDefinition,
+  StructuredOutputReport,
   Task,
   TaskId,
   TaskResult,

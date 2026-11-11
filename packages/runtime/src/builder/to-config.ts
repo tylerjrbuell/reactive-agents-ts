@@ -84,6 +84,7 @@ export interface BuilderStateForSerialization {
   _adaptiveHarness?: boolean;
   _taskContext?: Record<string, string>;
   _outputSchemaConfig?: {
+    contract?: { toJsonSchema: () => Record<string, unknown> | undefined };
     options?: {
       mode?: "auto" | "fast" | "grounded";
       onParseFail?: "degrade" | "throw";
@@ -376,10 +377,12 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // Adaptive harness / policy compiler (opt-in; absent = off, byte-identical)
   if (state._adaptiveHarness) config["adaptiveHarness"] = true;
 
-  // Structured-output behavioural options. The schema object itself is not
-  // JSON-serializable, but the options round-trip OUT so a config snapshot is
-  // lossless; re-applying them requires `.withOutputSchema(schema, options)` in
-  // code (see agent-config.ts roundtrip note).
+  // Structured output: the schema as JSON Schema (when the source schema can be
+  // converted: Effect, Zod, Valibot, ArkType, or a JSON Schema given as-is) plus
+  // the behavioural options. A schema with no JSON Schema form (e.g. a custom
+  // Standard Schema vendor) emits only the options.
+  const outputJsonSchema = state._outputSchemaConfig?.contract?.toJsonSchema();
+  if (outputJsonSchema !== undefined) config["outputSchema"] = structuredClone(outputJsonSchema);
   if (state._outputSchemaConfig?.options) {
     const o = state._outputSchemaConfig.options;
     const oso: Record<string, unknown> = {};

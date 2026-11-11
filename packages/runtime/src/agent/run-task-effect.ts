@@ -7,7 +7,8 @@
  * Function bodies were moved verbatim; class-state writes
  * (`_lastDebrief`, `_lastRunObservations`, `_lastReasoningSteps`) became explicit
  * setter dep closures so the class fields remain the single source of truth.
- * `parseJsonLoose` moved here too (it was only ever called from this method).
+ * `parseJsonLoose` now lives in `engine/finalize/extract-object.ts` (shared with
+ * the per-turn stream schema).
  *
  * D1 bridge family 4 (Quality program Task 11) boundary audit: this module's
  * public seam — `buildRunTaskEffect` — has returned
@@ -67,8 +68,6 @@ import type { SchemaContract, ReasoningStep } from '@reactive-agents/reasoning'
 import {
     groundedExtract,
     buildEvidenceCorpusFromSteps,
-    parsePartial,
-    stripThinking,
     groundFields,
 } from '@reactive-agents/reasoning'
 import { deriveTaskOutcome, deriveMetadataToolCalls, terminalOutcomeFields } from '../engine/finalize/derive-outcome.js'
@@ -76,7 +75,7 @@ import { isPausedResult } from '../engine/finalize/run-finalize.js'
 import { deriveReceiptModelId } from '../builder/helpers.js'
 import { resolveReceiptSigningKey, signReceipt } from '../receipt-signing.js'
 import { projectAbstention } from '../engine/abstention-projection.js'
-import { extractObjectFromAnswer } from '../engine/finalize/extract-object.js'
+import { extractObjectFromAnswer, parseJsonLoose } from '../engine/finalize/extract-object.js'
 import { chooseStructuredEngine } from '../engine/finalize/structured-route.js'
 import { StructuredOutputError } from '../errors/structured-output-error.js'
 import type { RuntimeErrors } from '../errors.js'
@@ -90,48 +89,6 @@ import type { AgentDebrief } from '../debrief.js'
 import { safeParseJson } from './_json.js'
 import { resolveWorkspaceDir, startRun, type RunStateSpec } from '../engine/start-run.js'
 import { settleFromExit, withLiveApprover, type LiveApprovalCallback } from '../engine/human-gate.js'
-
-/**
- * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
- * from `text` after stripping thinking tags, markdown fences, and leading prose.
- *
- * Returns the parsed value (object or array) on success, or `null` if no
- * top-level JSON structure can be found or parsed.
- *
- * (Moved verbatim from `ReactiveAgent.parseJsonLoose` — it was private static
- * and only ever called from `buildRunTaskEffect`.)
- */
-const parseJsonLoose = (text: string): unknown => {
-    const cleaned = stripThinking(text).trim()
-    // Strip markdown code fences: ```json … ``` or ``` … ```
-    const defenced = cleaned
-        .replace(/^```(?:json)?\s*\n?/i, "")
-        .replace(/\n?```\s*$/, "")
-        .trim()
-
-    // Try to find first `{` (object) or `[` (array) and parse from there.
-    const braceIdx = defenced.indexOf("{")
-    const bracketIdx = defenced.indexOf("[")
-    // Pick the earlier of the two (or whichever is present)
-    let startIdx: number
-    if (braceIdx === -1 && bracketIdx === -1) return null
-    if (braceIdx === -1) startIdx = bracketIdx
-    else if (bracketIdx === -1) startIdx = braceIdx
-    else startIdx = Math.min(braceIdx, bracketIdx)
-
-    const candidate = defenced.slice(startIdx)
-    try {
-        return JSON.parse(candidate)
-    } catch {
-        // Try parsePartial for objects — handles truncated/fenced input
-        if (candidate.startsWith("{")) {
-            const partial = parsePartial(candidate)
-            // parsePartial returns {} on failure; treat empty as failure
-            if (Object.keys(partial).length > 0) return partial
-        }
-        return null
-    }
-}
 
 /** Options of `buildRunTaskEffect` — mirrors the class method's inline options type verbatim. */
 export interface RunTaskEffectOptions {
@@ -621,6 +578,7 @@ export const buildRunTaskEffect = (
                             ...agentResult,
                             ...(extracted.object !== undefined ? { object: extracted.object } : {}),
                             ...(extracted.objectError !== undefined ? { objectError: extracted.objectError } : {}),
+                            ...(extracted.objectReport !== undefined ? { objectReport: extracted.objectReport } : {}),
                         } satisfies AgentResult)),
                         // If onParseFail: "throw" let StructuredOutputError propagate as-is.
                         // If "degrade" extractObjectFromAnswer already catches and returns

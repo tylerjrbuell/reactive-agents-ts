@@ -117,7 +117,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withName` | `name` | config | Agent name. |
 | `withObservability` | `observability`, `features.observability` | config | Observability umbrella (verbosity/live/cortex/tracing/logging/costs/…). |
 | `withOpenInference` | _overlay — code-only_ | overlay | Configure open inference. |
-| `withOutputSchema` | `outputSchemaOptions` | config | Typed structured output (schema object is code-only; options serialize). |
+| `withOutputSchema` | `outputSchema`, `outputSchemaOptions` | config | Typed structured output (Effect, Standard or JSON Schema; saved as JSON Schema). |
 | `withOutputValidator` | _overlay — carries a validator function (folds into withVerification)_ | overlay | Custom output validator. |
 | `withPersona` | `persona` | config | Role/tone/instructions persona. |
 | `withProfile` | `profile` | config | Preset baseline capability profile. |

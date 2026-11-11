@@ -153,6 +153,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `observability.telemetry` | `boolean` \| `object` | no |  |
 | `observability.tracing` | `boolean` \| `object` | no |  |
 | `observability.verbosity` | `minimal` \| `normal` \| `verbose` \| `debug` | no |  |
+| `outputSchema` | `object` | no |  |
 | `outputSchemaOptions.abstainBelow` | `number` | no |  |
 | `outputSchemaOptions.mode` | `auto` \| `fast` \| `grounded` | no |  |
 | `outputSchemaOptions.onParseFail` | `degrade` \| `throw` | no |  |

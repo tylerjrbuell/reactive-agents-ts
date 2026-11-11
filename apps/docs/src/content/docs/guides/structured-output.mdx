@@ -299,6 +299,84 @@ if (result.object) {
 }
 ```
 
+`result.objectReport` says how the value was obtained, or why it was not: the
+winning layer, attempts, JSON repairs, coercion and field errors (see
+[Extraction provenance](#extraction-provenance-extractstructuredoutput)). It is
+set whenever the extraction pipeline ran, on success and on failure. It is
+absent when the agent's own answer already matched the schema (no extraction
+call was made) and on the grounded engine. With `onParseFail: "throw"`, the
+same report is on `StructuredOutputError.report`.
+
+## JSON Schema, and saving the schema with the agent
+
+`.withOutputSchema()` also takes a plain JSON Schema object. It is the only form
+that is plain data, so it is what `toConfig()` saves: an agent built with an
+Effect, Zod, Valibot or ArkType schema saves that schema's JSON Schema form as
+`AgentConfig.outputSchema`, and `agentConfigToBuilder()` applies it again.
+
+```typescript
+import { ReactiveAgents, agentConfigToBuilder } from "reactive-agents";
+
+const builder = ReactiveAgents.create()
+  .withName("city-extractor")
+  .withOutputSchema(
+    {
+      type: "object",
+      properties: { city: { type: "string" }, population: { type: "integer", minimum: 0 } },
+      required: ["city"],
+      additionalProperties: false,
+    },
+    { mode: "fast" },
+  );
+
+const config = builder.toConfig(); // config.outputSchema is the JSON Schema above
+const restored = await agentConfigToBuilder(config); // same schema and options
+```
+
+A JSON Schema is validated deterministically, without a model call. Supported
+keywords: `type`, `enum`, `const`, `properties`, `required`,
+`additionalProperties`, `patternProperties`, `propertyNames`, `min/maxProperties`,
+`items` (schema or tuple array), `additionalItems`, `min/maxItems`, `uniqueItems`,
+`minimum`, `maximum`, `exclusiveMinimum`/`exclusiveMaximum` (numbers),
+`multipleOf`, `min/maxLength`, `pattern`, `anyOf`, `oneOf`, `allOf`, `not`, and
+local `$ref`s into `$defs` or `definitions`. Annotations (`title`,
+`description`, `format`, `default`, `examples`, `$schema`, ...) are kept but not
+checked. Any other keyword (for example `if`/`then`) makes `.withOutputSchema()`
+throw `OutputSchemaError`, naming the keyword and where it is, so a schema is
+never validated loosely. `result.object` is typed `unknown` with a JSON Schema;
+use an Effect or Standard Schema when you want a static type.
+
+## A schema for one turn
+
+`runStream(task, { outputSchema })` asks for a typed answer on a single turn
+without changing the agent (for example one message in a chat). It takes the
+same schema forms as `.withOutputSchema()`. The turn is steered to answer as
+JSON, and the final `StreamCompleted` carries `object`, or `objectError`, plus
+`objectReport` when the extraction pipeline ran. `AgentStream.collect()` copies
+them onto the result.
+
+```typescript
+import { ReactiveAgents, AgentStream } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withTestScenario([{ text: '{"city":"Lima"}' }])
+  .build();
+
+const result = await AgentStream.collect(
+  agent.runStream("Name the capital of Peru", {
+    outputSchema: { type: "object", properties: { city: { type: "string" } }, required: ["city"] },
+  }),
+);
+console.log(result.object); // { city: "Lima" }
+await agent.dispose();
+```
+
+A per-turn schema is lenient: a failed extraction sets `objectError` and never
+fails the stream. An unsupported JSON Schema ends the stream with one
+`StreamError` before the run starts. Paused or failed runs are passed through
+without extraction. `runStream()` does not use the agent's own
+`.withOutputSchema()`.
+
 ## Lenient vs strict (`onParseFail`)
 
 Choose between two failure modes via the `onParseFail` option:
@@ -429,9 +507,9 @@ for await (const { object } of agent.streamObject("Extract invoice details")) {
 When `onParseFail: "throw"` is set, it throws `StructuredOutputError` at the
 end if the final buffer fails validation.
 
-Note that `runStream()` and `resumeRun()` return the base stream / result and do
-**not** carry the typed `object`; use `run()` or `streamObject()` for typed
-structured output.
+`runStream()` carries a typed `object` only when you pass a per-turn
+`outputSchema` ([A schema for one turn](#a-schema-for-one-turn)). `resumeRun()`
+does not carry it; use `run()` or `streamObject()` for typed structured output.
 
 ## Using with the Compose API
 
@@ -503,8 +581,10 @@ const program = extractStructuredOutput({ schema: Invoice, prompt }).pipe(
 
 Every field is computed from what the pipeline observed, so the same responses
 always produce the same report. Effect Schema failures list every field error.
-Contract failures list the validator's own issues. `result.object` does not
-carry the report yet. The report is not published on the EventBus yet.
+Contract failures list the validator's own issues. On an agent, the report of
+the run's extraction is `result.objectReport`. At density `"full"`,
+`runStream()` forwards every `StructuredOutputReported` EventBus event as a
+`StructuredOutputReported` stream event (`{ taskId, strategy?, report }`).
 
 ## Limitations
 
@@ -518,8 +598,11 @@ carry the report yet. The report is not published on the EventBus yet.
 - **`abstainBelow` and grounded-default routing are opt-in** pending cross-tier
   ablation (project lift rule). Auto-mode selects `grounded` only when the fast
   path is not applicable.
-- **`runStream()` / `resumeRun()` results do not carry `result.object`** — use
-  `run()` or `streamObject()` for typed output.
+- **`runStream()` carries `object` only with a per-turn `outputSchema`**, and
+  `resumeRun()` results never do. Use `run()` or `streamObject()` with the
+  agent's own schema.
+- **JSON Schema support is a subset** (listed above). Unsupported keywords are
+  refused with `OutputSchemaError`, never ignored.
 - **On slow local models**, the extraction adds latency only when the parse-first
   path misses (the agent is steered to emit JSON, so the common path is a free
   parse of the model's own output).

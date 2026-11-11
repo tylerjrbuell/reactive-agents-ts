@@ -124,7 +124,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withStreaming: { kind: "config", configKeys: ["features.streaming"], description: "Enable event streaming." },
 
   // ── Typed output ──
-  withOutputSchema: { kind: "config", configKeys: ["outputSchemaOptions"], description: "Typed structured output (schema object is code-only; options serialize)." },
+  withOutputSchema: { kind: "config", configKeys: ["outputSchema", "outputSchemaOptions"], description: "Typed structured output (Effect, Standard or JSON Schema; saved as JSON Schema)." },
 
   // ── Overlays: functions / predicates / cadence ──
   withHook: { kind: "overlay", overlayReason: "carries a lifecycle callback function (not JSON)", description: "Lifecycle hook." },

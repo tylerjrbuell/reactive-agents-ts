@@ -120,6 +120,7 @@ import {
     A2AError,
 } from '@reactive-agents/a2a'
 import { streamObjectFrom } from './engine/stream-object.js'
+import { runTurnWithSchema, type OutputSchemaRunOption } from './agent/turn-schema.js'
 import type { DeepPartial } from './builder/types.js'
 import type { ChannelsConfig } from "@reactive-agents/channels";
 import type {
@@ -1226,7 +1227,7 @@ export class ReactiveAgent<TOut = unknown> {
      * Options: `density` (`"tokens"` default; `"full"` adds phase/tool events),
      * `signal`, `history`, `workspace`, and the per-run carries `run()` takes
      * (`skills: { activate }`, `posture`, `origin`, `environmentUpdate`, `initialTodo`).
-     * Streamed results do not carry the typed structured `object`; use `streamObject()`.
+     * `outputSchema` types this turn's answer (`StreamCompleted.object`/`objectReport`; agent/turn-schema.ts).
      *
      * Error contract vs `run()`: when the agent has been halted (`stop()`,
      * `terminate()`, or a triggered kill switch), `run()` REJECTS with
@@ -1258,7 +1259,7 @@ export class ReactiveAgent<TOut = unknown> {
              * per-identity inbox can filter to it. Durable path only.
              */
             identity?: { userId: string; orgId?: string }
-        } & TurnCarryOption & WorkspaceOption
+        } & TurnCarryOption & WorkspaceOption & OutputSchemaRunOption
     ): RunHandle {
         const internalAbort = new AbortController();
         const userSignal = options?.signal;
@@ -1270,8 +1271,7 @@ export class ReactiveAgent<TOut = unknown> {
             }
         }
         const controller = new RunController(internalAbort);
-        const taskInput = withHistoryBlock(input, options?.history);
-        const gen = this._runStreamImpl(taskInput, { ...options, signal: controller.signal }, controller);
+        const gen = runTurnWithSchema(options?.outputSchema, input, this.runtime, (turnInput) => this._runStreamImpl(withHistoryBlock(turnInput, options?.history), { ...options, signal: controller.signal }, controller));
         return Object.assign(gen, {
             pause: () => controller.pause(),
             resume: () => controller.resume(),

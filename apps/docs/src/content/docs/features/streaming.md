@@ -49,8 +49,9 @@ type AgentStreamEvent =
   | { _tag: "PhaseCompleted"; phase: string; durationMs: number }
   | { _tag: "ThoughtEmitted"; content: string; iteration: number }
   | { _tag: "ExitGateDecision"; decision: "repair" | "handoff" | "accept-unfinished"; outstanding: readonly string[]; iteration: number }
-  | { _tag: "ToolCallStarted"; toolName: string; callId: string }
+  | { _tag: "ToolCallStarted"; toolName: string; callId: string; args?: unknown }
   | { _tag: "ToolCallCompleted"; toolName: string; callId: string; durationMs: number; success: boolean }
+  | { _tag: "StructuredOutputReported"; taskId: string; strategy?: string; report: StructuredOutputReport }
   | { _tag: "TokenUsage"; callId: string; tokensTotal: number; tokensIn?: number; tokensOut?: number; estimated: boolean; cacheReadTokensIn?: number; cacheCreationTokensIn?: number; model: string; provider: string; durationMs: number; firstTokenMs?: number; costUsd: number; iteration?: number };
 
 interface ToolSummaryEntry {
@@ -67,7 +68,7 @@ These events are emitted regardless of density mode:
 | Event | Shape | Description |
 |-------|-------|-------------|
 | `TextDelta` | `{ text: string }` | A text token from the LLM. High-frequency during inference. |
-| `StreamCompleted` | `{ output, metadata, taskId?, agentId?, toolSummary? }` | Execution succeeded. Always the last event on a successful stream. `toolSummary` contains per-tool call counts and success rates. |
+| `StreamCompleted` | `{ output, metadata, taskId?, agentId?, toolSummary?, object?, objectError?, objectReport? }` | Execution succeeded. Always the last event on a successful stream. `toolSummary` contains per-tool call counts and success rates. The `object*` fields are set when the turn ran with `runStream(task, { outputSchema })`; see [Typed Structured Output](/guides/structured-output/#a-schema-for-one-turn). |
 | `StreamError` | `{ cause: string }` | Execution failed. Always the last event on a failed stream. |
 | `StreamCancelled` | `{ reason: string }` | Stream was aborted via `AbortSignal`. Always the last event on a cancelled stream. |
 | `IterationProgress` | `{ iteration, maxIterations, tokensUsed }` | Emitted at the start of each reasoning iteration. Useful for progress bars and loop monitoring. |
@@ -84,7 +85,8 @@ These events are only emitted when density is `"full"`:
 | `PhaseCompleted` | `{ phase, durationMs }` | A lifecycle phase completed with its duration. |
 | `ThoughtEmitted` | `{ content, iteration }` | The model's own reasoning for one kernel turn. The same for every strategy: a strategy's control steps (plan generation, reflection verdicts) are not thoughts. Plans arrive as `ChecklistUpdated` plan rows, goal checks as `ExitGateDecision`. |
 | `ExitGateDecision` | `{ decision, outstanding, iteration }` | An exit gate did not simply accept the answer. `"repair"`: the exit was denied once and the run continues on `outstanding`. `"handoff"`: the run stops with items unfinished and returns a labelled partial. `"accept-unfinished"`: the run stops on its honest failure, naming what stayed outstanding. One shape for the kernel and every strategy; a clean accept emits nothing. |
-| `ToolCallStarted` | `{ toolName, callId }` | A tool call began execution. |
+| `ToolCallStarted` | `{ toolName, callId, args? }` | A tool call began execution. `args` holds the arguments it runs with (after repair) when the emitter has them, so a UI can show a long-running call before it finishes. |
+| `StructuredOutputReported` | `{ taskId, strategy?, report }` | A structured-output extraction finished. `report` says how the value was obtained or why extraction failed. See [Extraction provenance](/guides/structured-output/#extraction-provenance-extractstructuredoutput). |
 | `ToolCallCompleted` | `{ toolName, callId, durationMs, success }` | A tool call finished with its duration and success status. |
 | `SubAgentActivity` | `{ run: { runId, parentRunId?, depth, name, key }, event }` | Activity from a delegated sub-agent, wrapping the same event shapes as the parent stream (`PhaseStarted`, `ToolCallStarted`, `StreamCompleted`, …). Key blocks by `run.key` (the child task id), which is stable. |
 | `ChecklistUpdated` | `{ checklist: ChecklistSnapshot, iteration }` | The live checklist changed. See [Live checklist](#live-checklist). |

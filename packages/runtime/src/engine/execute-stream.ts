@@ -300,6 +300,16 @@ export const makeExecuteStream =
           toolName: String(e.toolName ?? "unknown"),
           callId: String(e.callId ?? ""),
           ...(e.rationale ? { rationale: e.rationale as import("@reactive-agents/core").Rationale } : {}),
+          // So a UI can show a long-running call's arguments before it completes.
+          ...(e.args !== undefined ? { args: e.args } : {}),
+        }));
+
+        // How each structured-output extraction got its value (or why not).
+        yield* subscribe("StructuredOutputReported", "StructuredOutputReported", (e) => ({
+          _tag: "StructuredOutputReported",
+          taskId: String(e.taskId ?? ""),
+          ...(typeof e.strategy === "string" ? { strategy: e.strategy } : {}),
+          report: e.report as import("@reactive-agents/core").StructuredOutputReport,
         }));
 
         yield* subscribe("ToolCallCompleted", "ToolCallCompleted", (e) => {

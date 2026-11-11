@@ -321,6 +321,14 @@ export interface AgentResult {
     readonly object?: unknown
     /** Populated (lenient mode) when structured parse failed after retries. */
     readonly objectError?: string
+    /**
+     * How the extraction pipeline got `object` or why it failed: winning layer
+     * (native, prompt, repaired, coerced, retried), attempts, JSON repairs,
+     * coercion and field errors. Present whenever that pipeline ran. Absent
+     * when the answer itself validated against the schema (no extraction call)
+     * and for the grounded engine.
+     */
+    readonly objectReport?: import('@reactive-agents/core').StructuredOutputReport
     /** Grounded engine only: per-field-path evidence source. */
     readonly provenance?: Readonly<Record<string, { readonly source: string; readonly evidence: string }>>
     /** Grounded engine only: per-field-path confidence 0..1. */

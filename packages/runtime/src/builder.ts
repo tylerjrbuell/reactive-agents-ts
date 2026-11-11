@@ -159,9 +159,7 @@ import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
 import { OpenInferenceTracerLayer } from '@reactive-agents/observe'
 import type { DocumentSpec } from './context-ingestion.js'
 import type { ChannelsConfig } from "@reactive-agents/channels";
-import { Schema } from 'effect'
-import type { StandardSchemaV1 } from '@standard-schema/spec'
-import { toSchemaContract } from '@reactive-agents/reasoning'
+import { toOutputSchemaContract, type OutputSchemaInput } from './engine/finalize/json-schema-contract.js'
 import type { SchemaContract } from '@reactive-agents/reasoning'
 import type { OutputSchemaOptions } from './builder/types.js'
 
@@ -1135,11 +1133,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Declare a typed structured output schema (Standard Schema or Effect Schema).
+     * Declare a typed structured output schema (Effect Schema, Standard Schema, or a JSON Schema object).
      * `run()` then populates `result.object`. Default lenient: on parse-fail,
      * `object` is undefined and `objectError` is set (use `{ onParseFail: "throw" }` for strict).
+     * `result.objectReport` says how the value was obtained. `toConfig()` saves the schema as JSON Schema.
      *
-     * @param schema - An Effect Schema or any Standard Schema v1-compliant schema
+     * @param schema - An Effect Schema, a Standard Schema v1 validator, or a plain JSON Schema object
+     *   (validated deterministically; unsupported keywords throw `OutputSchemaError`)
      * @param options - Structured output options
      * @param options.mode - "auto" | "fast" | "grounded". Default: "auto"
      * @param options.onParseFail - "degrade" | "throw". Default: "degrade"
@@ -1147,10 +1147,10 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * @returns `this` for chaining
      */
     withOutputSchema<A>(
-        schema: StandardSchemaV1<unknown, A> | Schema.Schema<A>,
+        schema: OutputSchemaInput<A>,
         options: OutputSchemaOptions = {},
     ): ReactiveAgentBuilder<A> {
-        this._outputSchemaConfig = { contract: toSchemaContract(schema) as SchemaContract<unknown>, options }
+        this._outputSchemaConfig = { contract: toOutputSchemaContract(schema) as SchemaContract<unknown>, options }
         return this as unknown as ReactiveAgentBuilder<A>
     }
 

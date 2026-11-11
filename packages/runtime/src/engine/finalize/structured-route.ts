@@ -17,10 +17,10 @@ export interface RouteInput {
   readonly mode: "auto" | "fast" | "grounded";
   /**
    * Whether the provider supports native JSON-mode output.
-   * True for OpenAI, Gemini, and Ollama; false for Anthropic (uses tool-forcing instead).
+   * True for Anthropic, OpenAI, Gemini, and Ollama; false for LiteLLM.
    *
    * NOTE: reserved / informational only — NOT a routing signal. A provider lacking
-   * a native JSON mode (e.g. Anthropic) still extracts reliably via the schema-aware
+   * a native JSON mode (e.g. LiteLLM) still extracts reliably via the schema-aware
    * prompt path, so it must not be forced onto the heavier grounded path. Grounded
    * value comes from tool-result evidence + weak-model repair, signalled by
    * `toolsRegistered` / `calibrated`, not by the provider's response-format API.

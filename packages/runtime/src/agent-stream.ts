@@ -45,6 +45,9 @@ function resultOfCompleted(event: Extract<AgentStreamEvent, { _tag: "StreamCompl
     ...(event.status !== undefined ? { status: event.status } : {}),
     ...(event.pendingApproval !== undefined ? { pendingApproval: event.pendingApproval } : {}),
     ...(event.pendingInteraction !== undefined ? { pendingInteraction: event.pendingInteraction } : {}),
+    ...(event.object !== undefined ? { object: event.object } : {}),
+    ...(event.objectError !== undefined ? { objectError: event.objectError } : {}),
+    ...(event.objectReport !== undefined ? { objectReport: event.objectReport } : {}),
   };
 }
 

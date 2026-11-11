@@ -58,7 +58,8 @@ export {
   type RuntimeErrors,
   type ErrorContext,
 } from "./errors.js";
-export { StructuredOutputError } from "./errors/structured-output-error.js";
+export { StructuredOutputError, OutputSchemaError } from "./errors/structured-output-error.js";
+export { isJsonSchemaObject, type JsonSchemaObject, type OutputSchemaInput, type AnyOutputSchema } from "./engine/finalize/json-schema-contract.js";
 export type { DeepPartial, OutputSchemaOptions } from "./builder/types.js";
 
 // ─── Services ───

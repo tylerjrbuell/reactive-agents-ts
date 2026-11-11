@@ -1,4 +1,4 @@
-import type { TrustReceipt, TerminatedBy, ChecklistSnapshot } from "@reactive-agents/core";
+import type { TrustReceipt, TerminatedBy, ChecklistSnapshot, StructuredOutputReport } from "@reactive-agents/core";
 import type { AgentResultMetadata } from "./builder.js";
 import type { AgentOutcome } from "./builder/agent-result.js";
 
@@ -78,6 +78,12 @@ export type AgentStreamEvent =
       readonly evidenceDelta?: number;
       /** Same as `AgentResult.goalAchieved`. */
       readonly goalAchieved?: boolean | null;
+      /** Same as `AgentResult.object`: the schema-valid value, when the turn ran with `runStream(task, { outputSchema })`. */
+      readonly object?: unknown;
+      /** Same as `AgentResult.objectError`: why no schema-valid value was produced. */
+      readonly objectError?: string;
+      /** Same as `AgentResult.objectReport`: how the extraction pipeline got (or failed to get) `object`. */
+      readonly objectReport?: StructuredOutputReport;
     }
   | {
       /** Execution failed. Last event on a failed stream. */
@@ -249,6 +255,25 @@ export type AgentStreamEvent =
       readonly callId: string;
       /** Optional rationale (v0.11.x). */
       readonly rationale?: import("@reactive-agents/core").Rationale;
+      /**
+       * Arguments the tool is being called with (post-heal), when the emitter
+       * carries them. Lets a UI show a long-running call before it completes.
+       */
+      readonly args?: unknown;
+    }
+  | {
+      /**
+       * A structured-output extraction finished: how the value was obtained
+       * (native, prompt, repaired, coerced, retried) or why it failed. Only
+       * emitted when density is "full". One per extraction, success or failure.
+       */
+      readonly _tag: "StructuredOutputReported";
+      /** Task the extraction ran under. */
+      readonly taskId: string;
+      /** Strategy that requested the extraction (e.g. `"plan-execute"`). Absent when the caller is not a strategy. */
+      readonly strategy?: string;
+      /** The extraction's provenance report. */
+      readonly report: StructuredOutputReport;
     }
   | {
       /** A tool call completed. Only emitted when density is "full". */

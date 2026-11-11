@@ -30,8 +30,8 @@ const evaluateSource = async (config: AgentConfig): Promise<ReactiveAgentBuilder
 };
 
 /** Leaves that never roundtrip through a builder (see config-serialization-drift.test.ts). */
-const withoutNonBuilderLeaves = (config: AgentConfig): Omit<AgentConfig, "profile" | "outputSchemaOptions"> => {
-  const { profile: _profile, outputSchemaOptions: _oso, ...rest } = config;
+const withoutNonBuilderLeaves = (config: AgentConfig): Omit<AgentConfig, "profile"> => {
+  const { profile: _profile, ...rest } = config;
   return rest;
 };
 

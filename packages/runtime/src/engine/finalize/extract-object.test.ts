@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { Effect, Schema } from "effect";
 import { toSchemaContract } from "@reactive-agents/reasoning";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { extractObjectFromAnswer } from "./extract-object.js";
+import { deriveObjectFromAnswer, extractObjectFromAnswer } from "./extract-object.js";
 
 describe("extractObjectFromAnswer", () => {
   const contract = toSchemaContract(Schema.Struct({ city: Schema.String }));
@@ -55,5 +55,66 @@ describe("extractObjectFromAnswer", () => {
     );
     expect(err._tag).toBe("StructuredOutputError");
     expect(err.rawText).toBe("garbage");
+  });
+});
+
+describe("extractObjectFromAnswer — provenance report is kept", () => {
+  const contract = toSchemaContract(Schema.Struct({ city: Schema.String }));
+
+  it("success carries objectReport (native layer)", async () => {
+    const r = await Effect.runPromise(
+      extractObjectFromAnswer({ contract, finalAnswer: "Paris", onParseFail: "degrade" }).pipe(
+        Effect.provide(TestLLMServiceLayer([{ json: { city: "Paris" } }])),
+      ),
+    );
+    expect(r.objectReport?.outcome).toBe("success");
+    expect(r.objectReport?.layer).toBe("native");
+  });
+
+  it("degrade carries the failure report, not just its text", async () => {
+    const r = await Effect.runPromise(
+      extractObjectFromAnswer({ contract, finalAnswer: "garbage", onParseFail: "degrade" }).pipe(
+        Effect.provide(TestLLMServiceLayer([{ text: "garbage" }])),
+      ),
+    );
+    expect(r.objectError).toBeDefined();
+    expect(r.objectReport?.outcome).toBe("failure");
+    expect(r.objectReport?.layer).toBeNull();
+    expect(r.objectReport?.failure?.kind).toBeDefined();
+    expect(r.objectReport?.attempts).toBeGreaterThan(0);
+  });
+
+  it("throw carries the report on StructuredOutputError", async () => {
+    const err = await Effect.runPromise(
+      extractObjectFromAnswer({ contract, finalAnswer: "garbage", onParseFail: "throw" }).pipe(
+        Effect.flip,
+        Effect.provide(TestLLMServiceLayer([{ text: "garbage" }])),
+      ),
+    );
+    expect(err.report?.outcome).toBe("failure");
+  });
+});
+
+describe("deriveObjectFromAnswer", () => {
+  const contract = toSchemaContract(Schema.Struct({ city: Schema.String }));
+
+  it("parse-first: a schema-valid answer needs no extraction call and has no report", async () => {
+    // An empty scenario would fail any LLM call; parse-first never makes one.
+    const r = await Effect.runPromise(
+      deriveObjectFromAnswer({ contract, finalAnswer: '```json\n{"city":"Oslo"}\n```' }).pipe(
+        Effect.provide(TestLLMServiceLayer([{ text: "unused" }])),
+      ),
+    );
+    expect(r).toEqual({ object: { city: "Oslo" } });
+  });
+
+  it("falls back to extraction and keeps its report", async () => {
+    const r = await Effect.runPromise(
+      deriveObjectFromAnswer({ contract, finalAnswer: "The city is Rome." }).pipe(
+        Effect.provide(TestLLMServiceLayer([{ json: { city: "Rome" } }])),
+      ),
+    );
+    expect(r.object).toEqual({ city: "Rome" });
+    expect(r.objectReport?.layer).toBe("native");
   });
 });

@@ -40,13 +40,8 @@ import { MAXIMAL_CONFIG } from "./fixtures/maximal-agent-config.js";
 //     roundtrip. Every entry MUST carry a documented reason. This set is the
 //     single reviewed seam where "this field can't be pure data" is declared.
 const NON_BUILDER_ROUNDTRIP = new Set<string>([
-  // The schema OBJECT cannot be expressed as JSON; `.withOutputSchema(schema)`
-  // must be called in code. These behavioural options serialize OUT (toConfig
-  // preserves them) but cannot be re-applied to a builder without the schema
-  // object, so they drop on the config->builder leg. Partial-roundtrip by design.
-  "outputSchemaOptions.mode",
-  "outputSchemaOptions.onParseFail",
-  "outputSchemaOptions.abstainBelow",
+  // (2026-11-11) outputSchemaOptions left this set: with `outputSchema` (JSON
+  // Schema) in the config they re-apply via `.withOutputSchema(schema, options)`.
   // `profile` (Q6) is a cross-field baseline patch, not orthogonal data: it
   // mutates memory/RI/verifier/strategy-switching/skill-persistence toggles via
   // `.withProfile()`. `toConfig()` re-emits the fields it changed, never
@@ -63,8 +58,9 @@ const NON_BUILDER_ROUNDTRIP = new Set<string>([
 //     composition, not JSON-expressible — the alias `compose()` is the same
 //     path) and `(config: HarnessConfig)` (plain data — merges into
 //     `reasoning.harness` and IS covered by this drift guard below).
-//   - withOutputSchema: the SCHEMA OBJECT is not JSON (options DO serialize; see
-//     NON_BUILDER_ROUNDTRIP above).
+//   - withOutputSchema: covered as data since 2026-11-11 (`outputSchema` is the
+//     schema's JSON Schema form). A schema with no JSON Schema form (a custom
+//     Standard Schema vendor) still serializes only its options.
 //   - Profile switches with cross-field side effects: withLeanHarness (force-
 //     disables memory + strategy switching), withProfile, withContextProfile —
 //     not orthogonal data; serializing them alongside the fields they mutate
@@ -91,6 +87,8 @@ const PASSTHROUGH_SUBTREES = new Set<string>([
   "pricingRegistry",
   "taskContext",
   "reactiveIntelligence",
+  // A JSON Schema document: opaque data, checked by deep equality.
+  "outputSchema",
   // Observability fan-out (P3/G8/G11): the serializer emits these as opaque
   // objects copied verbatim from the raw ObservabilityOptions, so field drift
   // inside them is impossible by construction — check by deep object equality.

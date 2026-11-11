@@ -136,7 +136,8 @@ const printCall = (c: BuilderCall): { readonly line: string; readonly usesProfil
     const expr = profileExpression(c.args[0]);
     if (expr) return { line: `.withProfile(${expr})`, usesProfile: true };
   }
-  const args = c.args.map((a) => printValue(redact(a, [methodHint(c.method)]), 1));
+  // A JSON Schema holds field names, never secrets: a property named `headers` must print as-is.
+  const args = c.args.map((a) => printValue(c.method === "withOutputSchema" ? a : redact(a, [methodHint(c.method)]), 1));
   return { line: `.${c.method}(${args.join(", ")})`, usesProfile: false };
 };
 
@@ -154,8 +155,9 @@ const printCall = (c: BuilderCall): { readonly line: string; readonly usesProfil
  * sit (a gateway webhook `secret` on `/hook` becomes
  * `process.env.GATEWAY_HOOK_SECRET`). Each reference ends in `?? ""`.
  *
- * `outputSchemaOptions` print as a comment: the schema object is code-only,
- * so add `.withOutputSchema(schema, options)` yourself.
+ * `outputSchema` prints as `.withOutputSchema(<JSON Schema>, options)`.
+ * `outputSchemaOptions` without an `outputSchema` print as a comment, so add
+ * `.withOutputSchema(schema, options)` yourself.
  *
  * @param config - The agent configuration to print.
  * @param options - Output format; see {@link AgentConfigSourceOptions}.
@@ -180,10 +182,10 @@ export function agentConfigToSource(config: AgentConfig, options: AgentConfigSou
 
   const printed = agentConfigToBuilderCalls(config).map(printCall);
   const lines = printed.map((p) => `${INDENT}${p.line}`);
-  if (config.outputSchemaOptions) {
+  if (config.outputSchemaOptions && !config.outputSchema) {
     const opts = printValue(config.outputSchemaOptions, 1);
     const oneLine = opts.includes("\n") ? JSON.stringify(config.outputSchemaOptions) : opts;
-    lines.push(`${INDENT}// .withOutputSchema(schema, ${oneLine}) — the schema object is code-only`);
+    lines.push(`${INDENT}// .withOutputSchema(schema, ${oneLine}) — no outputSchema in this config`);
   }
   if (build) lines.push(`${INDENT}.build()`);
   const chain = ["ReactiveAgents.create()", ...lines].join("\n");

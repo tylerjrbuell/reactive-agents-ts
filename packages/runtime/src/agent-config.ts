@@ -604,13 +604,17 @@ export const GroundingConfigSchema = Schema.Struct({
 });
 
 /**
- * Declarative options for typed structured output.
- *
- * NOTE: The schema object itself is NOT JSON-serializable, so declarative config
- * supports only the behavioural knobs (`mode`, `onParseFail`, `abstainBelow`).
- * The schema must be provided in code via `.withOutputSchema(schema, options)`.
- * This field allows config files to set/round-trip the options without rejecting
- * an otherwise-valid agent definition.
+ * A JSON Schema document as plain data: the declarative form of
+ * `.withOutputSchema()`'s schema. Any JSON object is accepted here; the
+ * keywords are checked when the config is applied to a builder
+ * (`OutputSchemaError` names any the runtime cannot validate).
+ */
+export const OutputJsonSchemaSchema = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+
+/**
+ * Declarative options for typed structured output (`mode`, `onParseFail`,
+ * `abstainBelow`). They apply together with `outputSchema`; without a schema
+ * they map to no builder call.
  */
 export const OutputSchemaOptionsSchema = Schema.Struct({
   mode: Schema.optional(Schema.Literal("auto", "fast", "grounded")),
@@ -754,11 +758,16 @@ export const AgentConfigSchema = Schema.Struct({
   /** Opt-in adaptive harness / policy compiler (G1). Absent = off (byte-identical). */
   adaptiveHarness: Schema.optional(Schema.Boolean),
   /**
-   * Behavioural options for typed structured output (mode, onParseFail, abstainBelow).
+   * Typed structured output schema, as a JSON Schema object
+   * (`.withOutputSchema(jsonSchema, outputSchemaOptions)`). `toConfig()` writes it
+   * for any schema with a JSON Schema form (Effect, Zod, Valibot, ArkType, JSON Schema).
    *
-   * The schema object cannot be expressed in declarative config (not JSON-serializable).
-   * Call `.withOutputSchema(schema, options)` in code to activate extraction; this field
-   * allows config files to carry the options so they round-trip without error.
+   * @example { "type": "object", "properties": { "city": { "type": "string" } }, "required": ["city"] }
+   */
+  outputSchema: Schema.optional(OutputJsonSchemaSchema),
+  /**
+   * Behavioural options for typed structured output (mode, onParseFail, abstainBelow).
+   * Applied with `outputSchema`; on their own they map to no builder call.
    */
   outputSchemaOptions: Schema.optional(OutputSchemaOptionsSchema),
   /** Tools that must be called before the agent may declare success. */
