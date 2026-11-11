@@ -140,6 +140,7 @@ export type {
   MemorySearchOptions,
   MemoryListOptions,
   MemoryProvenanceListOptions,
+  EpisodicListOptions,
   MemoryFacadeError,
 
   // Living skills (`agent.refineSkills()`, `rollbackSkill()`, `setSkillMode()`, `loadSkill()`)

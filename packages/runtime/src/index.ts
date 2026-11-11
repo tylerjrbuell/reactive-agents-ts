@@ -141,6 +141,7 @@ export type {
   MemorySearchOptions,
   MemoryListOptions,
   MemoryProvenanceListOptions,
+  EpisodicListOptions,
   MemoryFacadeError,
 } from "./agent/memory-facade.js";
 export type { ToolDisclosure, ResolvedDisclosure, DisclosureSource } from "./engine/tool-disclosure.js";

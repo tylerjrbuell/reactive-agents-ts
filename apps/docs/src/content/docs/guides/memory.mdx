@@ -376,9 +376,9 @@ const runFacts = await agent.memory().semantic.list({ runId: String(result.taskI
 | `search(query, { limit?, taskId?, runId? })` | semantic | Default limit 10 |
 | `semantic.list({ limit?, taskId?, runId? })` / `get` / `update` / `delete` | semantic | Default limit 100; `get` returns `undefined` for an unknown id; `update` rejects with `MemoryNotFoundError` |
 | `procedural.list({ limit?, taskId?, runId? })` / `get` / `update` / `delete` | procedural | `update` edits `name`, `description`, `pattern`, `tags` |
+| `episodic.list({ limit?, taskId? })` | episodic | Read-only, newest first, default limit 50 |
 
-The `taskId` / `runId` filters on `list` run in the store query, before `limit`, so listing one run's entries does not need a large `limit` and a client-side filter.
-| `episodic.list({ limit? })` | episodic | Read-only, newest first, default limit 50 |
+The `taskId` / `runId` filters on `list` run in the store query, before `limit`, so listing one run's entries does not need a large `limit` and a client-side filter. Episodic entries record only the task they were logged during, so `episodic.list` takes `taskId` and has no `runId` filter.
 
 ## Skill Portability — Export and Import as Markdown
 

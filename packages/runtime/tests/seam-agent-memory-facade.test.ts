@@ -8,7 +8,8 @@
 //   2. memory-flush stamps extracted entries with the run's taskId/runId.
 //   3. local-learning-style procedural writes keep provenance; the facade
 //      lists, updates (provenance kept) and deletes semantic and procedural
-//      entries; episodic is listable.
+//      entries; episodic is listable, and `episodic.list({ taskId })` filters
+//      in the store before the limit.
 //   4. Without `.withMemory()` every call rejects with the RAW
 //      MemoryNotEnabledError (shared runFacadeEffect bridge, no FiberFailure).
 import { afterAll, describe, expect, it } from "bun:test";
@@ -165,6 +166,35 @@ describe("agent.memory() — list, update, delete", () => {
 
     const episodes = await mem.episodic.list();
     expect(episodes.some((e) => e.content === "ran deploy" && e.taskId === "t-learn")).toBe(true);
+    await agent.dispose();
+  }, 30000);
+
+  it("episodic.list({ taskId }) filters in the store, before the limit, newest first", async () => {
+    const agent = await buildAgent("mem-facade-ep-task", true);
+    const base = Date.now() - 100_000;
+    const day = new Date(base).toISOString().slice(0, 10);
+    await agent.runtime.runPromise(
+      Effect.gen(function* () {
+        const e = yield* EpisodicMemoryService;
+        // Two old entries of task "t-old", then 60 newer entries of "t-new":
+        // the default limit (50) of the unfiltered list never reaches "t-old".
+        for (let i = 0; i < 2; i++) {
+          yield* e.log({ id: MemoryIdSchema.make(`ep-old-${i}`), agentId: agent.agentId, date: day, content: `old ${i}`, taskId: "t-old", eventType: "task-completed", createdAt: new Date(base + i) });
+        }
+        for (let i = 0; i < 60; i++) {
+          yield* e.log({ id: MemoryIdSchema.make(`ep-new-${i}`), agentId: agent.agentId, date: day, content: `new ${i}`, taskId: "t-new", eventType: "task-completed", createdAt: new Date(base + 1000 + i) });
+        }
+        // Same task id, other agent: never listed.
+        yield* e.log({ id: MemoryIdSchema.make("ep-foreign"), agentId: "other-agent", date: day, content: "foreign", taskId: "t-old", eventType: "task-completed", createdAt: new Date(base + 5) });
+      }) as Effect.Effect<unknown>,
+    );
+    const mem = agent.memory();
+    expect((await mem.episodic.list()).some((e) => e.taskId === "t-old")).toBe(false);
+    const old = await mem.episodic.list({ taskId: "t-old" });
+    expect(old.map((e) => e.content)).toEqual(["old 1", "old 0"]);
+    const newest = await mem.episodic.list({ taskId: "t-new", limit: 3 });
+    expect(newest.map((e) => e.content)).toEqual(["new 59", "new 58", "new 57"]);
+    expect(await mem.episodic.list({ taskId: "missing" })).toEqual([]);
     await agent.dispose();
   }, 30000);
 

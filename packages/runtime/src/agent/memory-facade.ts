@@ -76,6 +76,16 @@ export interface MemoryProvenanceListOptions extends MemoryListOptions {
     readonly runId?: string
 }
 
+/**
+ * Options for `episodic.list()`: the list options plus a task filter, applied
+ * in the store query (before `limit`). Episodic rows record only the task
+ * they were logged during, so there is no `runId` filter here.
+ */
+export interface EpisodicListOptions extends MemoryListOptions {
+    /** Only entries logged during this task. */
+    readonly taskId?: string
+}
+
 /** The provenance filter of a list call, with unset fields left out. */
 const provenanceOf = (options: MemoryProvenanceListOptions): { taskId?: string; runId?: string } => ({
     ...(options.taskId !== undefined ? { taskId: options.taskId } : {}),
@@ -117,8 +127,8 @@ export interface AgentMemoryHandle {
     }
     /** Episodic memory: the agent's event log (read-only). */
     readonly episodic: {
-        /** Recent log entries, newest first. */
-        list(options?: MemoryListOptions): Promise<EpisodicMemoryItem[]>
+        /** Recent log entries, newest first. `taskId` narrows to what was logged during that task. */
+        list(options?: EpisodicListOptions): Promise<EpisodicMemoryItem[]>
     }
 }
 
@@ -198,8 +208,16 @@ export const makeMemoryFacade = (deps: { readonly agentId: string }) => {
         },
 
         episodic: {
-            list: (options: MemoryListOptions = {}): Effect.Effect<EpisodicMemoryItem[], MemoryFacadeError> =>
-                Effect.flatMap(episodic, (e) => e.getRecent(agentId, options.limit ?? 50)),
+            list: (options: EpisodicListOptions = {}): Effect.Effect<EpisodicMemoryItem[], MemoryFacadeError> => {
+                const limit = options.limit ?? 50
+                const { taskId } = options
+                if (taskId === undefined) return Effect.flatMap(episodic, (e) => e.getRecent(agentId, limit))
+                // getByTask filters by task_id in the query (oldest first, no limit):
+                // keep this agent's rows, then newest first, then the limit.
+                return Effect.flatMap(episodic, (e) => e.getByTask(taskId)).pipe(
+                    Effect.map((rows) => rows.filter((r) => r.agentId === agentId).reverse().slice(0, limit)),
+                )
+            },
         },
     }
 }
