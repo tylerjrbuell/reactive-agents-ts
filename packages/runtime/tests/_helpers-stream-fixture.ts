@@ -3,7 +3,7 @@ import { ReactiveAgents } from "../src/builder.js";
 import type { AgentStreamEvent } from "../src/stream-types.js";
 
 /** Volatile keys stripped so a chunk sequence can be pinned byte-for-byte. */
-const VOLATILE = new Set(["timestamp", "durationMs", "metadata", "taskId", "agentId", "receipt", "toolSummary", "runId", "callId", "tokensIn", "tokensOut", "tokensTotal", "billedTokens", "reasoningTokens", "costUsd"]);
+const VOLATILE = new Set(["timestamp", "durationMs", "firstTokenMs","metadata", "taskId", "agentId", "receipt", "toolSummary", "runId", "callId", "tokensIn", "tokensOut", "tokensTotal", "billedTokens", "reasoningTokens", "costUsd"]);
 
 const normalize = (e: AgentStreamEvent): Record<string, unknown> => {
   const base = Object.fromEntries(Object.entries(e).filter(([k]) => !VOLATILE.has(k)));

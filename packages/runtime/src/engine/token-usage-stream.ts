@@ -26,6 +26,7 @@ export function toTokenUsageStreamEvent(
     model?: unknown;
     provider?: unknown;
     durationMs?: unknown;
+    firstTokenMs?: unknown;
     estimatedCost?: unknown;
     iteration?: unknown;
   };
@@ -54,6 +55,11 @@ export function toTokenUsageStreamEvent(
     model: typeof e.model === "string" ? e.model : "",
     provider: typeof e.provider === "string" ? e.provider : "",
     durationMs: typeof e.durationMs === "number" ? e.durationMs : 0,
+    // Time to first token: forwarded only when numeric, so streamed turns can
+    // report a true generation rate (not the duration-wide lower bound).
+    ...(typeof e.firstTokenMs === "number" && Number.isFinite(e.firstTokenMs)
+      ? { firstTokenMs: e.firstTokenMs }
+      : {}),
     costUsd: typeof e.estimatedCost === "number" ? e.estimatedCost : 0,
     ...(typeof e.iteration === "number" ? { iteration: e.iteration } : {}),
   };

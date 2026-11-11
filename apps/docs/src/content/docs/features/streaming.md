@@ -49,7 +49,7 @@ type AgentStreamEvent =
   | { _tag: "ExitGateDecision"; decision: "repair" | "handoff" | "accept-unfinished"; outstanding: readonly string[]; iteration: number }
   | { _tag: "ToolCallStarted"; toolName: string; callId: string }
   | { _tag: "ToolCallCompleted"; toolName: string; callId: string; durationMs: number; success: boolean }
-  | { _tag: "TokenUsage"; callId: string; tokensTotal: number; tokensIn?: number; tokensOut?: number; estimated: boolean; cacheReadTokensIn?: number; cacheCreationTokensIn?: number; model: string; provider: string; durationMs: number; costUsd: number; iteration?: number };
+  | { _tag: "TokenUsage"; callId: string; tokensTotal: number; tokensIn?: number; tokensOut?: number; estimated: boolean; cacheReadTokensIn?: number; cacheCreationTokensIn?: number; model: string; provider: string; durationMs: number; firstTokenMs?: number; costUsd: number; iteration?: number };
 
 interface ToolSummaryEntry {
   toolName: string;
@@ -348,6 +348,7 @@ A `TokenUsage` event is emitted at the completion of each LLM call (full density
 - `estimated` — `true` when at least one half was derived rather than reported
 - `cacheReadTokensIn` / `cacheCreationTokensIn` — provider-reported cache figures, absent when not reported
 - `model`, `provider`, `durationMs`, `costUsd`, `iteration`
+- `firstTokenMs` — milliseconds to the first streamed output token; absent for non-streamed calls. Output rate is `tokensOut / ((durationMs - firstTokenMs) / 1000)`; without it, `tokensOut / durationMs` is only a lower bound
 
 Cortex folds these into the per-turn strip and the Inspector's Context tab. Estimates are always marked with `~` and corrected as soon as a provider number arrives; the measured context ring still comes from `ContextPressure`.
 

@@ -191,6 +191,14 @@ export type AgentStreamEvent =
       readonly model: string;
       readonly provider: string;
       readonly durationMs: number;
+      /**
+       * Milliseconds from request start to the first streamed output token,
+       * copied from `LLMRequestCompleted.firstTokenMs`. Absent for
+       * non-streamed calls and streams with no output. Output rate is
+       * `tokensOut / ((durationMs - firstTokenMs) / 1000)`; without it,
+       * `tokensOut / durationMs` is only a lower bound.
+       */
+      readonly firstTokenMs?: number;
       readonly costUsd: number;
       readonly iteration?: number;
     }

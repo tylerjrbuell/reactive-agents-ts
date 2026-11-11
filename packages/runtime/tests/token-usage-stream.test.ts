@@ -49,6 +49,17 @@ describe("toTokenUsageStreamEvent", () => {
     expect(out).toMatchObject({ billedTokens: 700, reasoningTokens: 120 });
   });
 
+  test("firstTokenMs rides the projection when numeric", () => {
+    const out = toTokenUsageStreamEvent({ ...bus, firstTokenMs: 240 }, "t1");
+    expect(out).toMatchObject({ firstTokenMs: 240, durationMs: 900 });
+  });
+
+  test("absent or non-numeric firstTokenMs stays absent", () => {
+    expect("firstTokenMs" in (toTokenUsageStreamEvent(bus, "t1") ?? {})).toBe(false);
+    const bad = toTokenUsageStreamEvent({ ...bus, firstTokenMs: "240" }, "t1");
+    expect("firstTokenMs" in (bad ?? {})).toBe(false);
+  });
+
   test("absent billed/reasoning fields stay absent, never fabricated as zero", () => {
     const out = toTokenUsageStreamEvent(bus, "t1");
     expect("billedTokens" in (out ?? {})).toBe(false);
