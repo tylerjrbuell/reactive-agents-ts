@@ -99,6 +99,9 @@ export const AgentMemoryFromMemoryService = (
           updatedAt: entry.updatedAt,
           accessCount: entry.accessCount,
           lastAccessedAt: entry.lastAccessedAt,
+          // Provenance: persisted to semantic_memory.task_id / run_id.
+          ...(entry.taskId !== undefined ? { taskId: entry.taskId } : {}),
+          ...(entry.runId !== undefined ? { runId: entry.runId } : {}),
         };
         return memory.storeSemantic(semanticEntry).pipe(
           Effect.map((id) => id as string),

@@ -2,6 +2,7 @@ import { Effect, Context, Layer } from "effect";
 import { Database } from "@reactive-agents/runtime-shim";
 import { DatabaseError } from "./errors.js";
 import type { MemoryConfig } from "./types.js";
+import { migrateProvenanceColumns } from "./provenance-migration.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -310,6 +311,17 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
         catch: (e) =>
           new DatabaseError({
             message: `Schema migration failed: ${e}`,
+            operation: "migrate",
+            cause: e,
+          }),
+      });
+
+      // Provenance columns (task_id/run_id) — idempotent ALTER for older DBs
+      yield* Effect.try({
+        try: () => migrateProvenanceColumns(db),
+        catch: (e) =>
+          new DatabaseError({
+            message: `Provenance migration failed: ${e}`,
             operation: "migrate",
             cause: e,
           }),

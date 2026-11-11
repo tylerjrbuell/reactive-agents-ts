@@ -83,6 +83,77 @@ describe("AgentMemoryFromMemoryService adapter — storeSemantic", () => {
     expect(s.importance).toBe(0.5);
     expect(s.verified).toBe(true);
     expect(s.tags).toEqual(["chem", "tool-observation"]);
+    // No provenance on the port entry -> none invented on the SemanticEntry.
+    expect("taskId" in s).toBe(false);
+    expect("runId" in s).toBe(false);
+  });
+
+  it("forwards taskId/runId provenance into the stored semantic_memory row", async () => {
+    const dir = fs.mkdtempSync(path.join("/tmp", "adapter-provenance-"));
+    try {
+      const config = { ...defaultMemoryConfig("agent-p"), dbPath: path.join(dir, "memory.db") };
+      const dbLayer = MemoryDatabaseLive(config);
+      // Real layers over one temp DB; only MemoryService is a (fully typed)
+      // double that delegates storeSemantic to the real SemanticMemoryService,
+      // so the assertion reads the persisted row, not an in-memory copy.
+      const realLayers = Layer.mergeAll(
+        SemanticMemoryServiceLive,
+        ZettelkastenServiceLive,
+        MemorySearchServiceLive,
+      ).pipe(Layer.provideMerge(dbLayer));
+      const unused = Effect.dieMessage("not exercised by this test");
+      const memoryLayer = Layer.effect(
+        MemoryService,
+        Effect.map(SemanticMemoryService, (semantic) =>
+          MemoryService.of({
+            bootstrap: () => unused,
+            flush: () => unused,
+            snapshot: () => unused,
+            addToWorking: () => Effect.void,
+            storeSemantic: (e: SemanticEntry) => semantic.store(e),
+            logEpisode: () => unused,
+            getWorking: () => Effect.succeed([]),
+          }),
+        ),
+      );
+      const semanticLayer = Layer.provideMerge(memoryLayer, realLayers);
+      const adapterLayer = AgentMemoryFromMemoryService("agent-p").pipe(
+        Layer.provideMerge(semanticLayer),
+      );
+
+      const now = new Date(2026, 10, 11);
+      const entry: AgentMemoryEntry = {
+        id: "prov-1",
+        agentId: "agent-p",
+        content: "observation with provenance",
+        summary: "prov",
+        importance: 0.4,
+        verified: false,
+        tags: [],
+        createdAt: now,
+        updatedAt: now,
+        accessCount: 0,
+        lastAccessedAt: now,
+        taskId: "task-77",
+        runId: "run-77",
+      };
+
+      const stored = await Effect.runPromise(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const port = yield* AgentMemory;
+            yield* port.storeSemantic(entry);
+            const semantic = yield* SemanticMemoryService;
+            return yield* semantic.get(MemoryId.make("prov-1"));
+          }).pipe(Effect.provide(adapterLayer)),
+        ),
+      );
+
+      expect(stored.taskId).toBe("task-77");
+      expect(stored.runId).toBe("run-77");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

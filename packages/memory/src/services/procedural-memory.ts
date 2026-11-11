@@ -27,6 +27,9 @@ export class ProceduralMemoryService extends Context.Tag(
       success: boolean,
     ) => Effect.Effect<void, DatabaseError>;
 
+    /** Delete a workflow. Deleting an unknown id is a no-op. */
+    readonly delete: (id: MemoryId) => Effect.Effect<void, DatabaseError>;
+
     /** List active workflows for an agent (sorted by success rate). */
     readonly listActive: (
       agentId: string,
@@ -58,6 +61,8 @@ export const ProceduralMemoryServiceLive = Layer.effect(
       tags: safeJsonParse<string[]>(r.tags as string | null, []),
       createdAt: new Date(r.created_at as string),
       updatedAt: new Date(r.updated_at as string),
+      ...(typeof r.task_id === "string" ? { taskId: r.task_id } : {}),
+      ...(typeof r.run_id === "string" ? { runId: r.run_id } : {}),
     });
 
     return {
@@ -65,8 +70,8 @@ export const ProceduralMemoryServiceLive = Layer.effect(
         Effect.gen(function* () {
           yield* db.exec(
             `INSERT OR REPLACE INTO procedural_memory
-             (id, agent_id, name, description, pattern, success_rate, use_count, tags, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, agent_id, name, description, pattern, success_rate, use_count, tags, created_at, updated_at, task_id, run_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               entry.id,
               entry.agentId,
@@ -78,6 +83,8 @@ export const ProceduralMemoryServiceLive = Layer.effect(
               JSON.stringify(entry.tags),
               entry.createdAt.toISOString(),
               entry.updatedAt.toISOString(),
+              entry.taskId ?? null,
+              entry.runId ?? null,
             ],
           );
           return entry.id;
@@ -118,6 +125,11 @@ export const ProceduralMemoryServiceLive = Layer.effect(
             [newRate, newCount, new Date().toISOString(), id],
           );
         }),
+
+      delete: (id) =>
+        db
+          .exec(`DELETE FROM procedural_memory WHERE id = ?`, [id])
+          .pipe(Effect.asVoid),
 
       listActive: (agentId) =>
         db

@@ -5,6 +5,7 @@ import type { MemoryId } from "./types.js";
 import { DatabaseError } from "./errors.js";
 import { safeJsonParse } from "./json-utils.js";
 import { toFts5Query } from "./fts5-query.js";
+import { rowToSemanticEntry, searchSemanticRows } from "./services/semantic-rows.js";
 
 // ─── Service Tag ───
 
@@ -41,57 +42,7 @@ export const MemorySearchServiceLive = Layer.effect(
     const db = yield* MemoryDatabase;
 
     return {
-      searchSemantic: (options) =>
-        Effect.gen(function* () {
-          const limit = options.limit ?? 10;
-          const ftsQuery = toFts5Query(options.query);
-          if (db.hasFTS5 && ftsQuery.length === 0) return [];
-          const rows = yield* db.query<{
-            id: string;
-            agent_id: string;
-            content: string;
-            summary: string;
-            importance: number;
-            verified: number;
-            tags: string;
-            created_at: string;
-            updated_at: string;
-            access_count: number;
-            last_accessed_at: string;
-          }>(
-            db.hasFTS5
-              ? `SELECT sm.*
-                 FROM semantic_memory sm
-                 JOIN semantic_fts ON semantic_fts.id = sm.id
-                 WHERE semantic_fts MATCH ?
-                   AND sm.agent_id = ?
-                 ORDER BY rank
-                 LIMIT ?`
-              : `SELECT *
-                 FROM semantic_memory
-                 WHERE content LIKE ?
-                   AND agent_id = ?
-                 ORDER BY created_at DESC
-                 LIMIT ?`,
-            db.hasFTS5
-              ? [ftsQuery, options.agentId, limit]
-              : [`%${options.query}%`, options.agentId, limit],
-          );
-
-          return rows.map((r) => ({
-            id: r.id as MemoryId,
-            agentId: r.agent_id,
-            content: r.content,
-            summary: r.summary,
-            importance: r.importance,
-            verified: Boolean(r.verified),
-            tags: safeJsonParse<string[]>(r.tags, []),
-            createdAt: new Date(r.created_at),
-            updatedAt: new Date(r.updated_at),
-            accessCount: r.access_count,
-            lastAccessedAt: new Date(r.last_accessed_at),
-          })) satisfies SemanticEntry[];
-        }),
+      searchSemantic: (options) => searchSemanticRows(db, options),
 
       searchEpisodic: (options) =>
         Effect.gen(function* () {
@@ -188,28 +139,7 @@ export const MemorySearchServiceLive = Layer.effect(
           scored.sort((a, b) => b.similarity - a.similarity);
           const topN = scored.slice(0, limit);
 
-          return topN.map(({ row: r }) => ({
-            id: r.id as MemoryId,
-            agentId: r.agent_id,
-            content: r.content,
-            summary: r.summary,
-            importance: r.importance,
-            verified: Boolean(r.verified),
-            tags: safeJsonParse<string[]>(r.tags, []),
-            embedding: r.embedding
-              ? Array.from(
-                  new Float32Array(
-                    r.embedding instanceof ArrayBuffer
-                      ? r.embedding
-                      : ((r.embedding as unknown) as Uint8Array).buffer as ArrayBuffer,
-                  ),
-                )
-              : undefined,
-            createdAt: new Date(r.created_at),
-            updatedAt: new Date(r.updated_at),
-            accessCount: r.access_count,
-            lastAccessedAt: new Date(r.last_accessed_at),
-          })) satisfies SemanticEntry[];
+          return topN.map(({ row }) => rowToSemanticEntry(row));
         }),
     };
   }),

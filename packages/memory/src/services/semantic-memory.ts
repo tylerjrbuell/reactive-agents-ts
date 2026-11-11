@@ -1,8 +1,9 @@
 import { Effect, Context, Layer } from "effect";
-import type { SemanticEntry, MemoryId } from "../types.js";
+import type { SemanticEntry, MemoryId, SearchOptions } from "../types.js";
 import { MemoryNotFoundError, DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
 import { safeJsonParse } from "../json-utils.js";
+import { rowToSemanticEntry, searchSemanticRows } from "./semantic-rows.js";
 
 // ─── Service Tag ───
 
@@ -39,6 +40,15 @@ export class SemanticMemoryService extends Context.Tag("SemanticMemoryService")<
       limit?: number,
     ) => Effect.Effect<SemanticEntry[], DatabaseError>;
 
+    /**
+     * Text search over an agent's entries (FTS5 ranked; LIKE fallback on
+     * Node sqlite). Results carry provenance (`taskId` / `runId`) when the
+     * writer recorded it; `options.taskId` / `options.runId` filter by it.
+     */
+    readonly search: (
+      options: SearchOptions,
+    ) => Effect.Effect<SemanticEntry[], DatabaseError>;
+
     /** Increment access count and update last_accessed_at. */
     readonly recordAccess: (id: MemoryId) => Effect.Effect<void, DatabaseError>;
 
@@ -57,74 +67,34 @@ export const SemanticMemoryServiceLive = Layer.effect(
   Effect.gen(function* () {
     const db = yield* MemoryDatabase;
 
-    const rowToEntry = (r: Record<string, unknown>): SemanticEntry => ({
-      id: r.id as MemoryId,
-      agentId: r.agent_id as string,
-      content: r.content as string,
-      summary: r.summary as string,
-      importance: r.importance as number,
-      verified: Boolean(r.verified),
-      tags: safeJsonParse<string[]>(r.tags as string | null, []),
-      embedding: r.embedding
-        ? Array.from(
-            new Float32Array(
-              r.embedding instanceof ArrayBuffer
-                ? r.embedding
-                : (r.embedding as Uint8Array).buffer as ArrayBuffer,
-            ),
-          )
-        : undefined,
-      createdAt: new Date(r.created_at as string),
-      updatedAt: new Date(r.updated_at as string),
-      accessCount: r.access_count as number,
-      lastAccessedAt: new Date(r.last_accessed_at as string),
-    });
-
     return {
       store: (entry) =>
         Effect.gen(function* () {
-          const hasEmbedding = entry.embedding && entry.embedding.length > 0;
-          if (hasEmbedding) {
-            const embBlob = Buffer.from(new Float32Array(entry.embedding!).buffer);
-            yield* db.exec(
-              `INSERT OR REPLACE INTO semantic_memory
-               (id, agent_id, content, summary, importance, verified, tags, embedding, created_at, updated_at, access_count, last_accessed_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                entry.id,
-                entry.agentId,
-                entry.content,
-                entry.summary,
-                entry.importance,
-                entry.verified ? 1 : 0,
-                JSON.stringify(entry.tags),
-                embBlob,
-                entry.createdAt.toISOString(),
-                entry.updatedAt.toISOString(),
-                entry.accessCount,
-                entry.lastAccessedAt.toISOString(),
-              ],
-            );
-          } else {
-            yield* db.exec(
-              `INSERT OR REPLACE INTO semantic_memory
-               (id, agent_id, content, summary, importance, verified, tags, created_at, updated_at, access_count, last_accessed_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                entry.id,
-                entry.agentId,
-                entry.content,
-                entry.summary,
-                entry.importance,
-                entry.verified ? 1 : 0,
-                JSON.stringify(entry.tags),
-                entry.createdAt.toISOString(),
-                entry.updatedAt.toISOString(),
-                entry.accessCount,
-                entry.lastAccessedAt.toISOString(),
-              ],
-            );
-          }
+          const embBlob =
+            entry.embedding && entry.embedding.length > 0
+              ? Buffer.from(new Float32Array(entry.embedding).buffer)
+              : null;
+          yield* db.exec(
+            `INSERT OR REPLACE INTO semantic_memory
+             (id, agent_id, content, summary, importance, verified, tags, embedding, created_at, updated_at, access_count, last_accessed_at, task_id, run_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              entry.id,
+              entry.agentId,
+              entry.content,
+              entry.summary,
+              entry.importance,
+              entry.verified ? 1 : 0,
+              JSON.stringify(entry.tags),
+              embBlob,
+              entry.createdAt.toISOString(),
+              entry.updatedAt.toISOString(),
+              entry.accessCount,
+              entry.lastAccessedAt.toISOString(),
+              entry.taskId ?? null,
+              entry.runId ?? null,
+            ],
+          );
           return entry.id;
         }),
 
@@ -142,7 +112,7 @@ export const SemanticMemoryServiceLive = Layer.effect(
               }),
             );
           }
-          return rowToEntry(rows[0]!);
+          return rowToSemanticEntry(rows[0]!);
         }),
 
       update: (id, patch) =>
@@ -192,7 +162,9 @@ export const SemanticMemoryServiceLive = Layer.effect(
             `SELECT * FROM semantic_memory WHERE agent_id = ? ORDER BY importance DESC LIMIT ?`,
             [agentId, limit],
           )
-          .pipe(Effect.map((rows) => rows.map(rowToEntry))),
+          .pipe(Effect.map((rows) => rows.map(rowToSemanticEntry))),
+
+      search: (options) => searchSemanticRows(db, options),
 
       recordAccess: (id) =>
         db

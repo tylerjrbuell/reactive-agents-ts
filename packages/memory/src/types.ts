@@ -42,8 +42,31 @@ export const MemorySourceSchema = Schema.Struct({
   id: Schema.String,
   /** Task ID this memory was created during (optional) */
   taskId: Schema.optional(Schema.String),
+  /** Run ID this memory was created during (optional) */
+  runId: Schema.optional(Schema.String),
 });
 export type MemorySource = typeof MemorySourceSchema.Type;
+
+/**
+ * Which task and run wrote a persisted memory row. Both fields are optional:
+ * a writer that does not know them stores NULL, and rows written before the
+ * provenance columns existed read back without them.
+ */
+export const MemoryProvenanceSchema = Schema.Struct({
+  taskId: Schema.optional(Schema.String),
+  runId: Schema.optional(Schema.String),
+});
+export type MemoryProvenance = typeof MemoryProvenanceSchema.Type;
+
+/**
+ * Project a `MemorySource` onto the provenance fields persisted with semantic
+ * and procedural rows. Spread the result into an entry before storing it:
+ * `{ ...entry, ...provenanceFromSource(source) }`.
+ */
+export const provenanceFromSource = (source: MemorySource): MemoryProvenance => ({
+  ...(source.taskId !== undefined ? { taskId: source.taskId } : {}),
+  ...(source.runId !== undefined ? { runId: source.runId } : {}),
+});
 
 // ─── Base Memory Entry ───
 
@@ -114,6 +137,10 @@ export const SemanticEntrySchema = Schema.Struct({
   accessCount: Schema.Number,
   /** When this entry was last retrieved */
   lastAccessedAt: Schema.DateFromSelf,
+  /** Task that wrote this entry (provenance; absent when the writer did not know it) */
+  taskId: Schema.optional(Schema.String),
+  /** Run that wrote this entry (provenance; absent when the writer did not know it) */
+  runId: Schema.optional(Schema.String),
 });
 export type SemanticEntry = typeof SemanticEntrySchema.Type;
 
@@ -231,6 +258,10 @@ export const ProceduralEntrySchema = Schema.Struct({
   createdAt: Schema.DateFromSelf,
   /** When this entry was last updated */
   updatedAt: Schema.DateFromSelf,
+  /** Task that wrote this entry (provenance; absent when the writer did not know it) */
+  taskId: Schema.optional(Schema.String),
+  /** Run that wrote this entry (provenance; absent when the writer did not know it) */
+  runId: Schema.optional(Schema.String),
 });
 export type ProceduralEntry = typeof ProceduralEntrySchema.Type;
 
@@ -357,6 +388,10 @@ export const SearchOptionsSchema = Schema.Struct({
   useVector: Schema.optional(Schema.Boolean),
   /** Agent whose memory to search */
   agentId: Schema.String,
+  /** Only return entries written during this task (semantic search) */
+  taskId: Schema.optional(Schema.String),
+  /** Only return entries written during this run (semantic search) */
+  runId: Schema.optional(Schema.String),
 });
 export type SearchOptions = typeof SearchOptionsSchema.Type;
 
