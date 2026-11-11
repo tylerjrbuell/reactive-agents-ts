@@ -106,7 +106,7 @@ export { subscribeCalibrationUpdates } from "./sensor/calibration-update-subscri
 export { SkillResolverService, makeSkillResolverService, buildSkillCatalog } from "./skills/skill-resolver.js";
 export type { ResolvedSkills, ActivatableSkill, SkillResolverConfig } from "./skills/skill-resolver.js";
 export { SkillDistillerService, makeSkillDistillerService } from "./skills/skill-distiller.js";
-export type { DistillationResult, SkillDistillerConfig, SkillDistillerDeps } from "./skills/skill-distiller.js";
+export type { DistillationFailure, DistillationResult, SkillDistillerConfig, SkillDistillerDeps } from "./skills/skill-distiller.js";
 
 // ── Skill utilities ──
 export { compressSkillContent, getDefaultCompressionStage, estimateTokens } from "./skills/skill-compression.js";

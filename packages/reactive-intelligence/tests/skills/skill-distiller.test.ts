@@ -49,6 +49,25 @@ const makeEpisode = (content: string, provider?: string) => ({
   createdAt: new Date(),
 });
 
+/** A refine that really changed the skill's content. */
+const refinedCopy = (skill: SkillRecord): SkillRecord => ({
+  ...skill,
+  version: skill.version + 1,
+  instructions: `${skill.instructions} (refined)`,
+  contentVariants: { ...skill.contentVariants, full: `${skill.instructions} (refined)` },
+});
+
+const runDistill = (deps: SkillDistillerDeps) =>
+  Effect.runPromise(
+    Effect.provide(
+      Effect.gen(function* () {
+        const d = yield* SkillDistillerService;
+        return yield* d.distill("agent-1");
+      }),
+      makeSkillDistillerService(deps),
+    ),
+  );
+
 describe("SkillDistillerService", () => {
   it("distill() triggers refinement when episodic count >= threshold", async () => {
     let refineCalled = false;
@@ -65,7 +84,7 @@ describe("SkillDistillerService", () => {
         ]),
       refineSkill: (skill, _episodes) => {
         refineCalled = true;
-        return Effect.succeed(skill);
+        return Effect.succeed(refinedCopy(skill));
       },
     };
     const layer = makeSkillDistillerService(deps);
@@ -80,6 +99,59 @@ describe("SkillDistillerService", () => {
     );
     expect(result.refined).toBe(1);
     expect(refineCalled).toBe(true);
+  });
+
+  it("distill() keeps going when one skill's refine fails; counts refined / failed", async () => {
+    const refinedIds: string[] = [];
+    const deps: SkillDistillerDeps = {
+      listSkills: () =>
+        Effect.succeed([
+          makeSkill({ id: "s1", name: "skill-a" }),
+          makeSkill({ id: "s2", name: "skill-b" }),
+          makeSkill({ id: "s3", name: "skill-c" }),
+        ]),
+      getRecentEpisodes: () => Effect.succeed(Array(7).fill(makeEpisode("ok"))),
+      refineSkill: (skill) => {
+        if (skill.id === "s2") return Effect.fail("llm unavailable");
+        refinedIds.push(skill.id);
+        return Effect.succeed(refinedCopy(skill));
+      },
+    };
+    const result = await runDistill(deps);
+    expect(refinedIds).toEqual(["s1", "s3"]);
+    expect(result.refined).toBe(2);
+    expect(result.failed).toBe(1);
+    expect(result.unchanged).toBe(0);
+    expect(result.failures).toEqual([{ skillId: "s2", skillName: "skill-b", cause: "llm unavailable" }]);
+  });
+
+  it("distill() counts a defect in one skill's refine as failed, not a pass abort", async () => {
+    const deps: SkillDistillerDeps = {
+      listSkills: () =>
+        Effect.succeed([makeSkill({ id: "s1", name: "skill-a" }), makeSkill({ id: "s2", name: "skill-b" })]),
+      getRecentEpisodes: () => Effect.succeed(Array(7).fill(makeEpisode("ok"))),
+      refineSkill: (skill) =>
+        skill.id === "s1" ? Effect.die("boom") : Effect.succeed(refinedCopy(skill)),
+    };
+    const result = await runDistill(deps);
+    expect(result.refined).toBe(1);
+    expect(result.failed).toBe(1);
+    expect(result.failures[0]?.skillId).toBe("s1");
+  });
+
+  it("distill() counts a no-op refine (content returned unchanged) as unchanged, not refined", async () => {
+    const deps: SkillDistillerDeps = {
+      listSkills: () =>
+        Effect.succeed([makeSkill({ id: "s1", name: "skill-a" }), makeSkill({ id: "s2", name: "skill-b" })]),
+      getRecentEpisodes: () => Effect.succeed(Array(7).fill(makeEpisode("ok"))),
+      // s1: identical record (no LLM / LLM fallback). s2: version bumped, content identical.
+      refineSkill: (skill) =>
+        Effect.succeed(skill.id === "s1" ? skill : { ...skill, version: skill.version + 1 }),
+    };
+    const result = await runDistill(deps);
+    expect(result.refined).toBe(0);
+    expect(result.unchanged).toBe(2);
+    expect(result.failed).toBe(0);
   });
 
   it("distill() skips when episodic count < threshold", async () => {
@@ -168,9 +240,9 @@ describe("SkillDistillerService", () => {
         // both skills get 7 entries (qualifies)
         return Effect.succeed(Array(7).fill(makeEpisode("ok")));
       },
-      refineSkill: () => {
+      refineSkill: (skill) => {
         refineCount++;
-        return Effect.succeed(makeSkill());
+        return Effect.succeed(refinedCopy(skill));
       },
     };
     const layer = makeSkillDistillerService(deps);
