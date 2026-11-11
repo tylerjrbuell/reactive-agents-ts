@@ -22,7 +22,7 @@ import { declarePlanOutputs } from "../../contract/plan-declared.js";
 import type { RunPosture } from "@reactive-agents/core";
 import { detectDuplicateGathers, dedupSignalEntries } from "../../../assembly/gather-dedup.js";
 import { commitRound, type ChecklistRound } from "./checklist-round.js";
-import { estimateSkillTokens } from "./skill-activation.js";
+import { emitSkillsActivated, estimateSkillTokens } from "./skill-activation.js";
 import { killswitchTerminatedBy, type HookAbort } from "../../loop/phase-hooks.js";
 import type { KernelState, ToolServiceInstance } from "../../state/kernel-state.js";
 import type { ToolCallSpec } from "@reactive-agents/tools";
@@ -120,6 +120,13 @@ export function deriveRoundLedger(
       ? 0
       : roundNewSteps.reduce((sum, s) => sum + estimateSkillTokens(s.content), 0);
     const committed = commitRound(round, seeded, state.iteration + 1, roundStepTokens);
+    // One SkillActivated per committed `skill-activated` fact (this is the
+    // round's single commit, so no activation is published twice).
+    yield* emitSkillsActivated({
+      activations: round.skills,
+      skills: state.skillsContext?.skills,
+      iteration: state.iteration + 1,
+    });
     // Plan-declared files get the same DECLARED lifecycle fact the runner mints
     // for compile-time requirements (idempotent by id).
     const contract = roundContract(snap);

@@ -14,7 +14,8 @@
  *   window is `resolveEffectiveNumCtx(profile)`.
  * - `{ name }` activated: the envelope is returned with
  *   `preserveOnCompaction` and an activation is staged on the round (the round
- *   commits it as a `skill-activated` fact on every exit path).
+ *   commits it as a `skill-activated` fact on every exit path, and publishes
+ *   one core `SkillActivated` event per fact via {@link emitSkillsActivated}).
  * - `{ name, file }`: an ordinary result, through `compressToolResult` (stored
  *   with a recall ref when over budget). Never preserved, no fact.
  *
@@ -35,7 +36,8 @@ import { resolveEffectiveNumCtx } from "../../../context/context-profile.js";
 import { entriesOfKind, type RunLedger } from "../../ledger/run-ledger.js";
 import { compressToolResult } from "../attend/tool-formatting.js";
 import type { ReasoningStep } from "../../../types/index.js";
-import type { ChecklistRound } from "./checklist-round.js";
+import { EventBus, emitErrorSwallowed, errorTag, type SkillActivated } from "@reactive-agents/core";
+import type { ChecklistRound, StagedSkillActivation } from "./checklist-round.js";
 import type { MetaToolResult } from "./meta-tool-handlers.js";
 
 /** Largest skill body one activation may pin, in tokens (Claude Code's rule; not measured here). */
@@ -85,6 +87,68 @@ export function loadedSkills(
 }
 
 const NO_SKILLS: ResolvedSkills = new Map();
+
+/**
+ * The core `SkillActivated.trigger` for a ledger `via`. The model chose it
+ * (`agent`); bootstrap put it in the prompt (`pin`, `relevance`); anything
+ * else came from outside the model (`user`).
+ */
+export function skillActivatedTrigger(via: StagedSkillActivation["via"]): SkillActivated["trigger"] {
+  switch (via) {
+    case "agent":
+      return "model";
+    case "pin":
+    case "relevance":
+      return "bootstrap";
+    case "user":
+      return "harness";
+  }
+}
+
+/**
+ * Publish one `SkillActivated` per activation a round commits. Called only
+ * from the round's ledger commit (round-exit.ts `deriveRoundLedger`), which
+ * runs once per round, so each `skill-activated` fact has exactly one event.
+ * `iteration` is the iteration the fact is stamped with. The kernel has no
+ * confidence tier for a skill, so `confidence` is "unrated".
+ *
+ * Best-effort: no EventBus means no event; a publish failure goes to the
+ * shared swallow channel (telemetry never fails a round).
+ */
+export function emitSkillsActivated(args: {
+  readonly activations: readonly StagedSkillActivation[];
+  readonly skills: ResolvedSkills | undefined;
+  readonly iteration: number;
+}): Effect.Effect<void, never> {
+  if (args.activations.length === 0) return Effect.void;
+  return Effect.gen(function* () {
+    const busOpt = yield* Effect.serviceOption(EventBus);
+    if (busOpt._tag !== "Some") return;
+    const bus = busOpt.value;
+    yield* Effect.forEach(
+      args.activations,
+      (a) =>
+        bus
+          .publish({
+            _tag: "SkillActivated",
+            skillName: a.name,
+            version: args.skills?.get(a.name)?.version ?? 1,
+            trigger: skillActivatedTrigger(a.via),
+            iteration: args.iteration,
+            confidence: "unrated",
+          })
+          .pipe(
+            Effect.catchAll((err) =>
+              emitErrorSwallowed({
+                site: "reasoning/src/kernel/capabilities/act/skill-activation.ts:emitSkillsActivated",
+                tag: errorTag(err),
+              }),
+            ),
+          ),
+      { discard: true },
+    );
+  });
+}
 
 /**
  * `activate-skill` meta-tool handler (registered in meta-tool-handlers.ts).

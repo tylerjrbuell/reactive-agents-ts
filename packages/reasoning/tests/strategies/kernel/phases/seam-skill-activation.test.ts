@@ -18,7 +18,7 @@ import {
   type StreamEvent,
   type StructuredCompletionRequest,
 } from "@reactive-agents/llm-provider";
-import { EventBusLive } from "@reactive-agents/core";
+import { EventBus, EventBusLive, type SkillActivated } from "@reactive-agents/core";
 import { NativeFCDriver, type ResolvedSkill } from "@reactive-agents/tools";
 import { mockToolServiceLayer } from "../../../../src/testing/tool-service-mock.js";
 import { prepareReActPass, reactKernel, type ReActKernelInput } from "../../../../src/kernel/loop/react-kernel.js";
@@ -37,6 +37,7 @@ import { hasActivatableSkills } from "../../../../src/kernel/state/skills-contex
 import {
   estimateSkillTokens,
   loadedSkills,
+  skillActivatedTrigger,
   skillBudget,
 } from "../../../../src/kernel/capabilities/act/skill-activation.js";
 import { commitRound, startRound } from "../../../../src/kernel/capabilities/act/checklist-round.js";
@@ -186,13 +187,16 @@ const opts: KernelRunOptions = {
  */
 async function run(turns: readonly Turn[], inp: ReActKernelInput) {
   const captured: CompletionRequest[] = [];
+  const skillEvents: SkillActivated[] = [];
   const pass = await Effect.runPromise(
-    prepareReActPass(inp).pipe(
-      Effect.flatMap(({ kernelInput }) => runPass(reactKernel, kernelInput, opts)),
-      Effect.provide(Layer.mergeAll(scriptedLLM(turns, captured), toolLayer, EventBusLive)),
-    ),
+    Effect.gen(function* () {
+      const bus = yield* EventBus;
+      yield* bus.on("SkillActivated", (e) => Effect.sync(() => void skillEvents.push(e)));
+      const { kernelInput } = yield* prepareReActPass(inp);
+      return yield* runPass(reactKernel, kernelInput, opts);
+    }).pipe(Effect.provide(Layer.mergeAll(scriptedLLM(turns, captured), toolLayer, EventBusLive))),
   );
-  return { state: pass.state, requests: captured };
+  return { state: pass.state, requests: captured, skillEvents };
 }
 
 const activate = (name: string, file?: string): Turn => ({
@@ -259,14 +263,40 @@ describe("activate-skill on a run with a skill catalog (skills step 4)", () => {
     expect(obs[1]!.metadata?.observationResult?.preserveOnCompaction).toBe(false);
   });
 
+  it("each committed activation publishes exactly one SkillActivated (trigger model, the skill's version, the fact's iteration)", async () => {
+    const { state, skillEvents } = await run(
+      [activate("release-notes"), activate("release-notes"), activate("big"), gather(1), { text: "Done." }],
+      input({
+        skillsContext: skillsContext({
+          "release-notes": { ...skill(BODY_MARKER, 300), version: 3 },
+          big: skill("BIG", 1200),
+        }),
+      }),
+    );
+    const facts = skillFacts(state);
+    expect(facts).toHaveLength(1);
+    // The duplicate (already loaded) and the refused body publish nothing.
+    expect(skillEvents).toEqual([
+      {
+        _tag: "SkillActivated",
+        skillName: "release-notes",
+        version: 3,
+        trigger: "model",
+        iteration: facts[0]!.iteration,
+        confidence: "unrated",
+      },
+    ]);
+  });
+
   it("a pinned skill (already in the system prompt) answers already-loaded", async () => {
-    const { state } = await run(
+    const { state, skillEvents } = await run(
       [activate("release-notes"), gather(1), { text: "Done." }],
       input({
         skillsContext: skillsContext({ "release-notes": skill(BODY_MARKER, 300) }, { pinned: ["release-notes"] }),
       }),
     );
     expect(skillFacts(state)).toHaveLength(0);
+    expect(skillEvents).toHaveLength(0);
     expect(skillObservations(state)[0]!.content).toContain("already loaded");
   });
 
@@ -392,6 +422,13 @@ describe("skill budget and loaded-set derivation", () => {
     const facts = ledger.flatMap((e) => (e.kind === "skill-activated" ? [e] : []));
     expect(facts.map((f) => [f.name, f.tokens, f.iteration])).toEqual([["a", 460, 3], ["b", 40, 3]]);
     expect(commitRound(startRound(), undefined, 3, 500)).toEqual([]);
+  });
+
+  it("SkillActivated trigger: agent is the model, pin/relevance are bootstrap, user is harness", () => {
+    expect(skillActivatedTrigger("agent")).toBe("model");
+    expect(skillActivatedTrigger("pin")).toBe("bootstrap");
+    expect(skillActivatedTrigger("relevance")).toBe("bootstrap");
+    expect(skillActivatedTrigger("user")).toBe("harness");
   });
 
   it("hasActivatableSkills needs a non-empty skills map", () => {

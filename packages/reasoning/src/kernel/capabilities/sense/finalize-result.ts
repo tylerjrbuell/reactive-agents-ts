@@ -598,7 +598,7 @@ export function finalizeStrategyResult(
             ...(params.extraMetadata?.["rawTerminatedBy"] !== undefined
               ? { rawTerminatedBy: "abstained" }
               : {}),
-            abstention: { reason: dropDetail ?? resolvedText.slice(0, 200), missing: [] as string[] },
+            abstention: { reason: dropDetail ?? resolvedText, missing: [] as string[] },
           },
         })
       : resolved;

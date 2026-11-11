@@ -477,6 +477,21 @@ describe("finalizeStrategyResult: abstentions ship empty output with the cause o
     expect(outcomeOf(result)?.status).toBe("abstained");
   });
 
+  it("a give-up longer than 200 chars keeps its whole text as the abstention reason", async () => {
+    const longGiveUp = `${GIVE_UP} ${"No other tool in the list can post to a chat channel either. ".repeat(4)}`.trim();
+    expect(longGiveUp.length).toBeGreaterThan(200);
+    const result = await mint({
+      output: longGiveUp,
+      status: "completed",
+      terminatedBy: "end_turn",
+      steps: [step("thought", "hmm"), obsStep("recall")],
+    });
+    const md = result.metadata as Record<string, unknown>;
+    expect(md.terminatedBy).toBe("abstained");
+    expect((md.abstention as { reason: string }).reason).toBe(longGiveUp);
+    expect(result.output).toBe(longGiveUp);
+  });
+
   it("a genuine model-authored give-up still ships the model's own text", async () => {
     const result = await mint({
       output: GIVE_UP,

@@ -523,7 +523,7 @@ export function applyTermination(
       // the reclassification path has no upstream site, so derive here.
       const abstentionMeta =
         verdict.terminatedBy === "abstained" && !extraMeta?.["abstention"]
-          ? { abstention: { reason: verdict.output.slice(0, 200), missing: [] as string[] } }
+          ? { abstention: { reason: verdict.output, missing: [] as string[] } }
           : {};
       const done = transitionState(state, {
         status: "done" as const,

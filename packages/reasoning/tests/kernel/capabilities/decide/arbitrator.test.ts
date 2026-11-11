@@ -638,6 +638,15 @@ describe("applyTermination", () => {
     expect(out.meta.escalationReason).toContain("tactical");
   });
 
+  it("an abstained exit keeps the whole reason (no mid-word cut at 200 chars)", () => {
+    const reason = `I cannot complete this task. ${"The required data source is unavailable. ".repeat(8)}End.`;
+    expect(reason.length).toBeGreaterThan(200);
+    const v: Verdict = { action: "exit-success", output: reason, terminatedBy: "abstained" };
+    const out = applyTermination(baseState, v);
+    const abstention = (out.meta as Record<string, unknown>).abstention as { reason: string };
+    expect(abstention.reason).toBe(reason);
+  });
+
   it("merges extraMeta into the resulting meta", () => {
     const v: Verdict = {
       action: "exit-success",
