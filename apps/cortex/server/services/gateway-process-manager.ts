@@ -387,16 +387,8 @@ export class GatewayProcessManager {
             cortexLog("info", "gateway", `Agent "${name}" paused — awaiting approval`, { agentId, runId, durableRunId: r.pendingApproval.runId });
             durableApprovals.register({ agentId: agentId_, durableRunId: r.pendingApproval.runId, agent, startedAt: Date.now() });
           }
-          // Emit debrief if available
-          const debrief = result.debrief;
-          if (debrief) {
-            Effect.runFork(
-              ingest.handleEvent(agentId_, runId, {
-                v: 1, agentId: agentId_, runId,
-                event: { _tag: "DebriefCompleted" as const, taskId: runId, agentId: agentId_, debrief },
-              }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/gateway-process-manager.ts:316", tag: errorTag(err) }))),
-            );
-          }
+          // No DebriefCompleted from `result.debrief`: the framework publishes
+          // it on the bus and the subscription above already stores it.
           // Typed structured output (.withOutputSchema) — same synthetic event as the runner.
           if (r.object !== undefined || r.objectError !== undefined) {
             Effect.runFork(

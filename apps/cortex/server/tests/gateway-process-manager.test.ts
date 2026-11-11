@@ -1,6 +1,9 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { Effect, Layer } from "effect";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { applySchema } from "../db/schema.js";
 import { createGatewayAgent, upsertRun } from "../db/queries.js";
 import { GatewayProcessManager } from "../services/gateway-process-manager.js";
@@ -209,6 +212,45 @@ describe("GatewayProcessManager — triggerNow", () => {
 
     gpm.destroy();
   });
+
+  // The framework publishes DebriefCompleted on the bus, which the gateway's
+  // subscription stores; a second copy from `result.debrief` doubled it.
+  it("a gateway run with memory on stores exactly one DebriefCompleted", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cortex-gw-debrief-"));
+    const db = new Database(":memory:");
+    applySchema(db);
+    const gpm = makeGateway(db);
+    try {
+      createGatewayAgent(
+        db,
+        "gw-debrief",
+        "Debrief Gateway Agent",
+        JSON.stringify({
+          prompt: "What is six times seven?",
+          provider: "test",
+          strategy: "reactive",
+          maxIterations: 3,
+          memory: { working: true, episodic: false, semantic: false },
+          rawConfig: { memory: { dbPath: join(dir, "memory.db") } },
+        }),
+        null,
+      );
+      const result = await gpm.triggerNow("gw-debrief");
+      expect("error" in result).toBe(false);
+      if ("error" in result) return;
+      const count = () =>
+        (db
+          .prepare("SELECT COUNT(*) AS c FROM cortex_events WHERE run_id = ? AND type = 'DebriefCompleted'")
+          .get(result.runId) as { c: number }).c;
+      for (let i = 0; i < 160 && count() === 0; i++) await new Promise((r) => setTimeout(r, 50));
+      // Leave room for a late second copy.
+      await new Promise((r) => setTimeout(r, 1500));
+      expect(count()).toBe(1);
+    } finally {
+      gpm.destroy();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 20_000);
 
   it("triggerNow with NO values fails a required templated var that has no default", async () => {
     const db = new Database(":memory:");

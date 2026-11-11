@@ -608,30 +608,10 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
                 cortexLog("info", "runner", "durable run paused — awaiting interaction", { agentId, runId, durableRunId });
                 durableApprovals.register({ agentId, durableRunId, agent, startedAt });
               }
-              // The framework's DebriefCompleted event is not yet wired in the
-              // execution engine. Emit it here from AgentResult.debrief so the
-              // Debrief tab shows for agents launched from Cortex.
-              const debrief = result.debrief;
-              if (debrief && typeof debrief === "object") {
-                cortexLog("info", "runner", "emitting DebriefCompleted from agent result", {
-                  agentId, runId,
-                });
-                Effect.runFork(
-                  ingest
-                    .handleEvent(agentId, runId, {
-                      v: 1,
-                      agentId,
-                      runId,
-                      event: {
-                        _tag: "DebriefCompleted" as const,
-                        taskId: runId,
-                        agentId,
-                        debrief,
-                      },
-                    })
-                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:248", tag: errorTag(err) }))),
-                );
-              }
+              // No DebriefCompleted from `result.debrief` here: the framework
+              // publishes it on the agent's bus (runtime `debrief-synthesis.ts`)
+              // and `forwardToIngest` already stores it; a second copy doubled
+              // every desk run's debrief (pinned in runner-service.test.ts).
               // Typed structured output (v0.12): surface result.object / objectError
               // so the desk can render the extracted typed value. Emitted as a
               // synthetic event (the framework has no StructuredOutput event yet);

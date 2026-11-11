@@ -1,6 +1,9 @@
 import { describe, it, expect } from "bun:test";
 import { Database } from "bun:sqlite";
 import { Effect, Layer } from "effect";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { applySchema } from "../db/schema.js";
 import { CortexStoreServiceLive } from "../services/store-service.js";
 import { CortexIngestService } from "../services/ingest-service.js";
@@ -148,6 +151,47 @@ describe("CortexRunnerService — desk Stop and Terminate end the run as stopped
     });
     await Effect.runPromise(program.pipe(Effect.provide(layer)));
   }, 15_000);
+});
+
+// The framework publishes DebriefCompleted on the agent's bus (runtime
+// `debrief-synthesis.ts`), which the runner forwards to ingest. The runner
+// used to also ingest a synthetic copy from `result.debrief`, so every desk
+// run with memory on stored two debriefs.
+describe("CortexRunnerService — one debrief per desk run", () => {
+  it("a run with memory on ingests exactly one DebriefCompleted", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cortex-runner-debrief-"));
+    const db = new Database(":memory:");
+    applySchema(db);
+    const tags: { runId: string; tag: string }[] = [];
+    const ingestLayer = Layer.succeed(CortexIngestService, {
+      handleEvent: (_agentId, runId, msg) => Effect.sync(() => void tags.push({ runId, tag: msg.event._tag })),
+      getSubscriberCount: () => Effect.succeed(0),
+    });
+    const layer = CortexRunnerServiceLive.pipe(Layer.provide(Layer.merge(CortexStoreServiceLive(db), ingestLayer)));
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexRunnerService;
+      const { runId } = yield* svc.start({
+        provider: "test",
+        prompt: "What is six times seven?",
+        strategy: "reactive",
+        maxIterations: 3,
+        memory: { working: true, episodic: false, semantic: false },
+        rawConfig: { memory: { dbPath: join(dir, "memory.db") } },
+        testScenario: [{ text: "The answer is 42." }],
+      });
+      const debriefs = () => tags.filter((t) => t.runId === runId && t.tag === "DebriefCompleted").length;
+      const end = Date.now() + 8_000;
+      while (debriefs() === 0 && Date.now() < end) yield* Effect.sleep("50 millis");
+      // Leave room for a late second copy (the daemon publish or the result re-emit).
+      yield* Effect.sleep("1500 millis");
+      expect(debriefs()).toBe(1);
+    });
+    try {
+      await Effect.runPromise(program.pipe(Effect.provide(layer)));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 20_000);
 });
 
 describe("buildCortexAgent — agentId passthrough", () => {
