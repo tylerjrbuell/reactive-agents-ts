@@ -49,7 +49,7 @@ import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
 import { compactionContextEstimate, compactionPrompt, structureCompactionSummary } from "./compaction-summary.js";
-import { attachChatIngest, type ChatIngestSink } from "./chat-ingest.js";
+import { attachChatIngest, type ChatIngestHandle, type ChatIngestSink } from "./chat-ingest.js";
 import { recordTurnAssessments, type TurnAssessmentRecorder } from "./turn-assessments.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
@@ -60,7 +60,10 @@ import { DEFAULT_CHAT_NAME, cleanChatTitle, fallbackChatTitle } from "./chat-tit
 import { turnCostOf, type TurnCost } from "./chat-turn-cost.js";
 import {
   TurnTraceRecorder,
+  failedCompletion,
+  failedOutcome,
   historyContentOf,
+  interruptedOutcome,
   turnDeliverablesOf,
   turnOutcomeOf,
   withRunError,
@@ -68,6 +71,7 @@ import {
   type StoredTurnOutcome,
   type StoredTurnTrace,
 } from "./chat-turn-trace.js";
+import { ChatTurnStops } from "./chat-turn-stop.js";
 import { recordRunErrors, type RunErrorLog } from "./chat-run-errors.js";
 import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-control-tool.js";
 import type { SessionControlPort } from "./chat-proposal-service.js";
@@ -165,6 +169,8 @@ export interface CachedChatSession {
   readonly agent: { dispose: () => Promise<void> };
   /** Detaches the in-process ingest subscription (see `chat-ingest.ts`). */
   readonly unsubscribe?: () => void;
+  /** The ingest subscription: closes the runs an aborted or broken turn left `live`. */
+  readonly ingest?: ChatIngestHandle;
   /** Root-run assessments per turn (see `turn-assessments.ts`). */
   readonly assessments?: TurnAssessmentRecorder;
   /** Failed runs' causes, for the failed turn (see `chat-run-errors.ts`). */
@@ -230,6 +236,8 @@ export class ChatSessionService {
   private readonly inFlight = new Set<string>();
   /** Sessions whose config changed mid-turn: evict the cached agent when the turn ends. */
   private readonly evictAfterTurn = new Set<string>();
+  /** In-flight streamed turns, so a Stop and a client disconnect are told apart (`chat-turn-stop.ts`). */
+  private readonly turnStops = new ChatTurnStops();
   /** Per-session `/docs` URL cache + ingest-failure record (D-2026-10-28-DOC-FETCH). */
   private readonly documents: SessionDocumentCache;
 
@@ -672,8 +680,26 @@ export class ChatSessionService {
     if (this.approvals.hasPending(sessionId)) throw new ChatApprovalPendingError(sessionId);
 
     const release = this.acquireTurn(sessionId);
+    // Stop (stopTurn) and the client's signal both abort the run; the handle says which.
+    const stop = this.turnStops.begin(sessionId, signal);
+    // A turn that fails before its run reports (the agent cannot be built, or the run throws
+    // before any answer) keeps the user's message as a failed turn and ends with a failed
+    // completion, the same shape the runtime sends for a failed run (B1).
+    const failTurn = (e: unknown, entry?: CachedChatSession): AgentStreamEvent => {
+      const outcome = failedOutcome(e);
+      this.persistTurn(sessionId, message, "", 0, [], withTurnOutcome(undefined, outcome), producedBy(cfg));
+      if (outcome.error) entry?.ingest?.closeOpenRuns({ kind: "failed", error: outcome.error });
+      return failedCompletion(outcome);
+    };
     try {
-      const entry = await this.getOrBuildSession(sessionId, cfg, row.stableAgentId);
+      let entry: CachedChatSession;
+      try {
+        entry = await this.getOrBuildSession(sessionId, cfg, row.stableAgentId);
+      } catch (e) {
+        yield failTurn(e);
+        return;
+      }
+      entry.ingest?.beginTurn();
 
       // Direct conversational path: full session history + run grounding even when tools are off,
       // wrapped in the SSE event shape so Run Chat and the main Chat panel behave consistently.
@@ -706,7 +732,7 @@ export class ChatSessionService {
               : {}),
           };
         } catch (e) {
-          yield { _tag: "StreamError", cause: e instanceof Error ? e.message : String(e) };
+          yield failTurn(e, entry);
         }
         return;
       }
@@ -740,7 +766,7 @@ let tokensUsed = 0;
       try {
         for await (const event of entry.session.runStream(message, {
           density: "full",
-          ...(signal ? { signal } : {}),
+          signal: stop.signal,
           ...(posture !== undefined ? { posture } : {}),
         })) {
           recorder.record(event);
@@ -784,10 +810,15 @@ let tokensUsed = 0;
           yield withRunError(event, outcome);
         }
       } catch (e) {
-        if (signal?.aborted) {
-          yield { _tag: "StreamCancelled", reason: "user", iterationsCompleted };
+        if (stop.signal.aborted) {
+          // B2/B3: the turn is stored as interrupted and its runs close as stopped.
+          outcome = interruptedOutcome(stop.stoppedBy());
+          entry.ingest?.closeOpenRuns({ kind: "stopped" });
+          yield { _tag: "StreamCancelled", reason: stop.stoppedBy(), iterationsCompleted };
         } else {
-          yield { _tag: "StreamError", cause: e instanceof Error ? e.message : String(e) };
+          outcome = failedOutcome(e);
+          entry.ingest?.closeOpenRuns({ kind: "failed", error: outcome.error ?? "The run broke before it finished" });
+          yield { _tag: "StreamError", cause: outcome.error ?? "The run broke before it finished" };
         }
       } finally {
         // A turn paused on an approval gate or a question has no reply yet: hold it (chat-approvals.ts).
@@ -806,7 +837,15 @@ let tokensUsed = 0;
           // Cancelled or errored: the engine recorded nothing, but the calls that
           // already reported did spend tokens. Keep the user message, whatever
           // partial reply streamed, and that spend, marked incomplete so no
-          // reader mistakes it for a finished answer.
+          // reader mistakes it for a finished answer. The outcome says how it
+          // ended (interrupted by whom, or failed with the cause).
+          if (outcome === undefined) {
+            // The consumer left while this generator waited on a yield, so nothing threw here:
+            // stop the run and record the interruption.
+            stop.abort();
+            outcome = interruptedOutcome(stop.stoppedBy());
+            entry.ingest?.closeOpenRuns({ kind: "stopped" });
+          }
           const trace = withTurnOutcome(recorder.finish(), outcome);
           this.persistTurn(
             sessionId,
@@ -828,8 +867,14 @@ let tokensUsed = 0;
         }
       }
     } finally {
+      stop.end();
       release();
     }
+  }
+
+  /** Stop the session's streamed turn as the user. `false` when no turn is in flight. */
+  stopTurn(sessionId: string): boolean {
+    return this.turnStops.stop(sessionId);
   }
 
   /** Persist one completed user/assistant exchange and bump the session's last-used stamp. */
@@ -953,17 +998,17 @@ let tokensUsed = 0;
       ...(initialTodo.length > 0 ? { initialTodo } : {}),
     });
     const sink = await this.resolveIngestSink();
-    const unIngest = sink
+    const ingest = sink
       ? await attachChatIngest(agent, sink, { sessionId, ...(stableAgentId ? { stableAgentId } : {}) })
       : undefined;
     const { recorder: assessments, unsubscribe: unAssess } = await recordTurnAssessments(agent);
     const { log: runErrors, unsubscribe: unErrors } = await recordRunErrors(agent);
     const unsubscribe = () => {
-      unIngest?.();
+      ingest?.detach();
       unAssess();
       unErrors();
     };
-    return { session, agent, unsubscribe, assessments, runErrors, approvable: agent };
+    return { session, agent, unsubscribe, ...(ingest ? { ingest } : {}), assessments, runErrors, approvable: agent };
   }
 
   private resolveIngestSink(): Promise<ChatIngestSink | undefined> {

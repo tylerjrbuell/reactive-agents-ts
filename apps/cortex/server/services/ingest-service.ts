@@ -112,6 +112,11 @@ const deriveRunStats = (
       ...(typeof errorMessage === "string" && errorMessage ? { errorMessage } : {}),
     };
   }
+  // Stopped from outside: the desk Stop (`agent.stop()`), or Cortex closing a chat
+  // run whose turn was aborted (`chat-ingest.ts` closeOpenRuns).
+  if (event._tag === "ExecutionCancelled") {
+    return { status: "stopped", completedAt: Date.now() };
+  }
   if (event._tag === "DebriefCompleted") {
     const e = event as { debrief: unknown };
     return { debrief: JSON.stringify(e.debrief ?? null) };

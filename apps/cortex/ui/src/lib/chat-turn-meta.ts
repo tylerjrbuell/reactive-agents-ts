@@ -1,4 +1,4 @@
-import { formatTurnDuration, turnStrategiesOf } from "@reactive-agents/ui-core";
+import { formatRelativeTime, formatTurnDuration, turnStrategiesOf } from "@reactive-agents/ui-core";
 
 /**
  * Quiet per-message metadata for the chat: when a message was sent (relative,
@@ -7,27 +7,12 @@ import { formatTurnDuration, turnStrategiesOf } from "@reactive-agents/ui-core";
  * the turn and each sub-agent), never from config. Pure.
  */
 
-const MIN = 60_000;
-const HOUR = 60 * MIN;
-const DAY = 24 * HOUR;
-
-const unit = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"} ago`;
-
 /**
  * `just now`, `1 minute ago`, `3 hours ago`, `yesterday`, `4 days ago`; older than a
- * week (or in the future by more than a minute) reads as the short date.
+ * week (or in the future by more than a minute) reads as the short date. ui-core's
+ * shared `formatRelativeTime`.
  */
-export function relativeTime(ts: number, now: number, opts: { readonly locale?: string; readonly timeZone?: string } = {}): string {
-  const d = now - ts;
-  if (d < -MIN || d >= 7 * DAY) {
-    return new Date(ts).toLocaleDateString(opts.locale, { month: "short", day: "numeric", ...(opts.timeZone ? { timeZone: opts.timeZone } : {}) });
-  }
-  if (d < 45_000) return "just now";
-  if (d < HOUR) return unit(Math.max(1, Math.round(d / MIN)), "minute");
-  if (d < DAY) return unit(Math.floor(d / HOUR), "hour");
-  if (d < 2 * DAY) return "yesterday";
-  return unit(Math.floor(d / DAY), "day");
-}
+export const relativeTime = formatRelativeTime;
 
 /** `Nov 10, 2026, 7:21 PM` (in the viewer's locale and zone unless given). */
 export function absoluteTime(ts: number, opts: { readonly locale?: string; readonly timeZone?: string } = {}): string {

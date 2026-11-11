@@ -1,9 +1,11 @@
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
 import {
+  causeLineOf,
   finishTurnTrace,
   foldTurnTrace,
   initialTurnTrace,
   turnOutcomeOf as readTurnOutcome,
+  type InterruptedBy,
   type RunCompletionLike,
   type TurnDeliverable,
   type TurnTrace,
@@ -14,8 +16,12 @@ import { storedRunError } from "./chat-run-errors.js";
 /** Max chars of one tool result/error kept in a persisted turn trace. */
 const STORED_RESULT_CAP = 4_000;
 
-/** How a stored turn's run ended when it did not succeed (ui-core `TurnEnding`, minus the live-only kinds). */
-export type StoredTurnEnding = "failed" | "partial" | "abstained";
+/**
+ * How a stored turn's run ended when it did not succeed (ui-core `TurnEnding`,
+ * minus the live-only kinds). `interrupted`: the turn was stopped before its run
+ * completed (Stop, or the client went away).
+ */
+export type StoredTurnEnding = "failed" | "partial" | "abstained" | "interrupted";
 
 /**
  * A turn whose run did not succeed. Its content is then empty, a partial draft,
@@ -33,6 +39,35 @@ export interface StoredTurnOutcome {
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
   /** Partial runs: the items left unfinished. */
   readonly unfinished?: readonly string[];
+  /** Interrupted turns: who stopped it. */
+  readonly interruptedBy?: InterruptedBy;
+}
+
+/** Outcome of a turn that failed before the run could report (the agent threw, or could not be built). */
+export function failedOutcome(raw: unknown): StoredTurnOutcome {
+  const error = storedRunError(causeLineOf(raw));
+  return { success: false, ending: "failed", ...(error ? { error } : {}) };
+}
+
+/** Outcome of a turn stopped before its run completed; the cause line is ui-core's `interruptionCause`. */
+export function interruptedOutcome(by: InterruptedBy): StoredTurnOutcome {
+  const o = readTurnOutcome({ interrupted: by });
+  return { success: false, ending: "interrupted", interruptedBy: by, ...(o.error ? { error: o.error } : {}) };
+}
+
+/**
+ * The `StreamCompleted` a chat client gets for a turn that failed before the run
+ * reported one (same shape as the runtime's failed completion: `output: ""`,
+ * `success: false`, the cause on `error`), so the UI takes its one failure path.
+ */
+export function failedCompletion(outcome: StoredTurnOutcome): AgentStreamEvent {
+  return {
+    _tag: "StreamCompleted",
+    output: "",
+    success: false,
+    ...(outcome.error ? { error: outcome.error } : {}),
+    metadata: { duration: 0, cost: 0, tokensUsed: 0, stepsCount: 0 },
+  };
 }
 
 /**
@@ -82,7 +117,9 @@ export function readStoredOutcome(raw: unknown): StoredTurnOutcome | undefined {
   if (raw === null || typeof raw !== "object") return undefined;
   const o = raw as Readonly<Record<string, unknown>>;
   if (o["success"] !== false) return undefined;
-  const ending = o["ending"] === "partial" || o["ending"] === "abstained" ? o["ending"] : "failed";
+  const ending =
+    o["ending"] === "partial" || o["ending"] === "abstained" || o["ending"] === "interrupted" ? o["ending"] : "failed";
+  const by = o["interruptedBy"] === "user" || o["interruptedBy"] === "disconnect" ? o["interruptedBy"] : undefined;
   const ab = o["abstention"] as Readonly<Record<string, unknown>> | undefined;
   const missing = Array.isArray(ab?.["missing"]) ? ab["missing"].filter(str) : [];
   const unfinished = Array.isArray(o["unfinished"]) ? o["unfinished"].filter(str) : [];
@@ -93,6 +130,7 @@ export function readStoredOutcome(raw: unknown): StoredTurnOutcome | undefined {
     ...(str(o["error"]) ? { error: o["error"] } : {}),
     ...(ab && str(ab["reason"]) ? { abstention: { reason: ab["reason"], ...(missing.length > 0 ? { missing } : {}) } } : {}),
     ...(unfinished.length > 0 ? { unfinished } : {}),
+    ...(ending === "interrupted" && by !== undefined ? { interruptedBy: by } : {}),
   };
 }
 
@@ -136,6 +174,12 @@ export function historyContentOf(turn: { readonly content: string; readonly trac
   if (outcome.ending === "abstained") {
     const reason = outcome.abstention?.reason ?? outcome.error;
     return `[The previous run abstained${reason ? `: ${reason}` : ""}. No answer was given.]`;
+  }
+  if (outcome.ending === "interrupted") {
+    // Partial streamed text may be narration, not an answer: the model is told the reply was cut off.
+    const by =
+      outcome.interruptedBy === "user" ? " (stopped by the user)" : outcome.interruptedBy === "disconnect" ? " (the user's connection closed)" : "";
+    return `[The previous reply was interrupted${by} before it finished. No answer was given.]`;
   }
   const cause = outcome.error ? `: ${outcome.error}` : "";
   return `[The previous run failed${how}${cause}. No answer was given.]`;

@@ -74,7 +74,8 @@ export interface RunSummary {
   readonly agentRecordName?: string;
   readonly startedAt: number;
   readonly completedAt?: number;
-  readonly status: "live" | "completed" | "failed";
+  /** `stopped`: ended from outside (desk Stop, or a chat turn stopped or left mid-run). */
+  readonly status: "live" | "completed" | "failed" | "stopped";
   readonly iterationCount: number;
   readonly tokensUsed: number;
   readonly cost: number;

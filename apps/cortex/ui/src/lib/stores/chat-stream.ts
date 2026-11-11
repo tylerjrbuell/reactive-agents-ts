@@ -10,14 +10,18 @@ import {
   estimateTokens,
   contextLevel,
   splitTokens,
+  foldModelWait,
+  initialModelWait,
   type ChecklistSnapshotWire,
+  type ModelWaitState,
   type RunState,
   type TurnTraceState,
   type UiStreamEvent,
 } from "@reactive-agents/ui-core";
 import type { ChatContext, ChatTurn, LiveTokenSplit, ReasoningStep } from "./chat-store.js";
 import { projectSubAgents } from "../sub-agent-view.js";
-import { completionEnding } from "../turn-ending.js";
+import { CORTEX_SERVER_URL } from "../constants.js";
+import { cancelledEnding, completionEnding, failedBeforeStream } from "../turn-ending.js";
 
 /**
  * Single SSE → ChatTurn reduction shared by the desk Chat store and the run-view
@@ -77,6 +81,42 @@ const patchTurn = (turns: ChatTurn[], id: number, fn: (t: ChatTurn) => ChatTurn)
   turns.map((t) => (t.id === id ? fn(t) : t));
 
 /**
+ * End the streaming assistant turn `id` as failed before any content arrived
+ * (request refused, network down): the user's message above it stays, the turn
+ * shows the cause and offers Retry (B1).
+ */
+export function failTurn(turns: ChatTurn[], id: number, cause: unknown): ChatTurn[] {
+  return patchTurn(turns, id, (t) => ({
+    ...t,
+    streaming: false,
+    streamProgress: undefined,
+    awaitingModelSince: undefined,
+    liveText: undefined,
+    runFailed: failedBeforeStream(cause),
+  }));
+}
+
+/** How long a Stop waits for the server before the client drops the stream anyway. */
+const STOP_TIMEOUT_MS = 2_000;
+
+/**
+ * Ask the server to stop the session's streamed turn, so it is stored as stopped
+ * by the user. Never throws; `false` when the server had no turn or did not answer.
+ */
+export async function requestTurnStop(sessionId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/chat/stop`, {
+      method: "POST",
+      signal: AbortSignal.timeout(STOP_TIMEOUT_MS),
+    });
+    const body = (await res.json()) as { stopped?: boolean };
+    return res.ok && body.stopped === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Consume one chat SSE stream, folding every event into the assistant turn via
  * `apply`, then finalize the turn. Never throws for stream-level failures — they
  * come back on the outcome; only unexpected exceptions propagate.
@@ -112,9 +152,12 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   let receivedContent = false;
   let preStreamFailure: string | undefined;
   let streamError: string | undefined;
+  // B11: whether the turn waits on the model (request out, no token back), from the send.
+  let modelWait: ModelWaitState = initialModelWait(Date.now());
 
   for await (const event of connectRunStream({ endpoint: opts.endpoint, body: opts.body, signal: opts.signal })) {
     if (opts.structuredOutput) rs = reduceRunState(rs, event, { objectMode: true });
+    trackModelWait(event);
     reduceEvent(event);
   }
   // Flush any coalesced text deltas before persistence / return.
@@ -129,6 +172,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       ...t,
       streaming: false,
       streamProgress: undefined,
+      awaitingModelSince: undefined,
       // reasoningSteps intentionally kept for post-stream inspection
       // Safety net: stream ended without StreamCompleted output
       content: t.content || (t.liveText ?? ""),
@@ -146,6 +190,21 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
     })),
   );
   return { tokensUsed, costUsd, steps, toolsUsed, ...(streamError !== undefined ? { streamError } : {}) };
+
+  /**
+   * Fold an event into the model-wait state (ui-core `foldModelWait`); when it
+   * starts or ends a wait, stamp the turn so it can show "Waiting for the model"
+   * with the elapsed time instead of "Thinking".
+   */
+  function trackModelWait(event: UiStreamEvent): void {
+    const next = foldModelWait(modelWait, event, Date.now());
+    const changed = next.waiting !== modelWait.waiting || next.since !== modelWait.since;
+    modelWait = next;
+    if (!changed) return;
+    flushPending();
+    const since = next.waiting ? next.since : undefined;
+    apply((turns) => patchTurn(turns, id, (t) => ({ ...t, awaitingModelSince: since })));
+  }
 
   /**
    * Fold an event into the shared turn trace (ui-core — the same fold the server
@@ -403,7 +462,18 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       }
       case "StreamCancelled": {
         flushPending();
-        apply((turns) => patchTurn(turns, id, (t) => ({ ...t, cancelled: true, incomplete: true, streaming: false })));
+        // The ending (who stopped it, and the cause) matches what the server stores, so the
+        // turn reads the same live and after a reload (B2). Only a user Stop reads as stopped.
+        const runFailed = cancelledEnding(event.reason);
+        apply((turns) =>
+          patchTurn(turns, id, (t) => ({
+            ...t,
+            ...(runFailed.interruptedBy === "user" ? { cancelled: true } : {}),
+            runFailed,
+            incomplete: true,
+            streaming: false,
+          })),
+        );
         return;
       }
       default:

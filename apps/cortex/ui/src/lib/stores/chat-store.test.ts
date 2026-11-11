@@ -354,7 +354,7 @@ describe("chatStore stream completion handling", () => {
     expect(assistant?.content).toBe('{"a":1,"b":2}');
   });
 
-  it("cleans up the optimistic user turn + assistant placeholder on a pre-stream HTTP failure (no stale empty bubble)", async () => {
+  it("keeps the user's message on a pre-stream HTTP failure and ends the reply as a failed turn with the cause (B1)", async () => {
     const fetchImpl: FetchFn = (async (url: string) => {
       if (url.endsWith("/api/chat/sessions")) {
         return new Response(
@@ -400,15 +400,19 @@ describe("chatStore stream completion handling", () => {
     await chatStore.sendMessageStream("this will fail before any content streams");
 
     const state = get(chatStore);
-    // Old (pre-bd8f7949) clean outcome: BOTH the optimistic user turn and the
-    // empty assistant placeholder are removed — no stale empty bubble left
-    // behind alongside the error banner.
-    expect(state.activeTurns).toEqual([]);
+    // B1 (2026-11-10 audit): the message stays, and the reply is a failed turn with
+    // the cause and Retry, never an empty bubble or a banner that loses the text.
+    expect(state.activeTurns.map((t) => t.role)).toEqual(["user", "assistant"]);
+    expect(state.activeTurns[0]!.content).toBe("this will fail before any content streams");
+    const reply = state.activeTurns[1]!;
+    expect(reply.streaming).toBe(false);
+    expect(reply.runFailed?.ending).toBe("failed");
+    expect(reply.runFailed?.error).toBeTruthy();
     expect(state.sending).toBe(false);
-    expect(state.error).toBeTruthy();
+    expect(state.error).toBeNull();
   });
 
-  it("cleans up optimistic turns the same way when fetch itself throws (network failure) before any content", async () => {
+  it("keeps the message the same way when fetch itself throws (network failure), without the error class tag", async () => {
     const fetchImpl: FetchFn = (async (url: string) => {
       if (url.endsWith("/api/chat/sessions")) {
         return new Response(
@@ -450,9 +454,60 @@ describe("chatStore stream completion handling", () => {
     await chatStore.sendMessageStream("this will throw before any content streams");
 
     const state = get(chatStore);
-    expect(state.activeTurns).toEqual([]);
+    expect(state.activeTurns.map((t) => t.content)).toEqual(["this will throw before any content streams", ""]);
+    const reply = state.activeTurns[1]!;
+    expect(reply.runFailed?.ending).toBe("failed");
+    expect(reply.runFailed?.error).toBeTruthy();
+    expect(reply.runFailed?.error).not.toMatch(/^[A-Za-z]*Error:/);
     expect(state.sending).toBe(false);
-    expect(state.error).toBeTruthy();
+    expect(state.error).toBeNull();
+  });
+
+  it("Stop asks the server to stop the turn (so it is stored as stopped by the user), then drops the stream", async () => {
+    const calls: string[] = [];
+    let release: (() => void) | undefined;
+    const fetchImpl: FetchFn = (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url.endsWith("/api/chat/sessions")) {
+        return new Response(JSON.stringify([{ sessionId: "s1", name: "S1", agentConfig: {}, createdAt: 1, lastUsedAt: 1 }]), { status: 200 });
+      }
+      if (url.endsWith("/api/chat/sessions/s1")) {
+        return new Response(JSON.stringify({ sessionId: "s1", name: "S1", agentConfig: {}, createdAt: 1, lastUsedAt: 1, turns: [] }), { status: 200 });
+      }
+      if (url.endsWith("/chat/stop")) {
+        release?.();
+        return new Response(JSON.stringify({ stopped: true }), { status: 200 });
+      }
+      if (url.endsWith("/chat/stream")) {
+        const enc = new TextEncoder();
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(c) {
+              c.enqueue(enc.encode(`data: ${JSON.stringify({ _tag: "TextDelta", text: "working" })}\n\n`));
+              release = () => {
+                c.enqueue(enc.encode(`data: ${JSON.stringify({ _tag: "StreamCancelled", reason: "user", iterationsCompleted: 0 })}\n\n`));
+                c.close();
+              };
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        );
+      }
+      return new Response("{}", { status: 404 });
+    }) as FetchFn;
+    globalThis.fetch = fetchImpl;
+
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s1");
+    const sending = chatStore.sendMessageStream("long task");
+    await new Promise((r) => setTimeout(r, 20));
+    await chatStore.stop();
+    await sending;
+
+    expect(calls.some((c) => c.startsWith("POST ") && c.endsWith("/api/chat/sessions/s1/chat/stop"))).toBe(true);
+    const reply = get(chatStore).activeTurns.at(-1)!;
+    expect(reply.cancelled).toBe(true);
+    expect(reply.runFailed).toMatchObject({ ending: "interrupted", interruptedBy: "user" });
   });
 
   it("keeps partial content and surfaces the error when a stream fails mid-stream (after content already arrived)", async () => {

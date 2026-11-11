@@ -109,7 +109,9 @@ export function updateRunStats(
     values.push(patch.cost);
   }
   if (patch.status !== undefined) {
-    sets.push("status = ?");
+    // A stopped run that then reports a failure failed because it was stopped: it stays
+    // `stopped`. A run that reports success after all is `completed`.
+    sets.push(patch.status === "failed" ? "status = CASE WHEN status = 'stopped' THEN 'stopped' ELSE ? END" : "status = ?");
     values.push(patch.status);
   }
   if (patch.debrief !== undefined) {
@@ -407,6 +409,37 @@ export function pruneRuns(
   return deleted;
 }
 
+/**
+ * Close chat runs a restart left `live`. A chat run runs inside this process, so
+ * after a restart nothing can end it: its root (the run whose events carry a
+ * chat `session_id`) and the sub-agent runs under it become `stopped`. Runs of a
+ * session holding a paused turn (approval or question, resumable after restart)
+ * and runs from other agents (which may still be alive) are left alone. Call once
+ * at boot. A closed run ends at its last event (`now` when it has none). Returns
+ * the number of runs closed.
+ */
+export function closeOrphanedChatRuns(db: Database, now: number): number {
+  const result = db
+    .prepare(
+      `
+      WITH chat_roots AS (
+        SELECT DISTINCT e.run_id FROM cortex_events e
+        WHERE e.session_id IN (SELECT session_id FROM cortex_chat_sessions)
+          AND e.session_id NOT IN (SELECT session_id FROM chat_pending_approvals)
+          AND e.session_id NOT IN (SELECT session_id FROM chat_pending_interactions)
+      )
+      UPDATE cortex_runs
+      -- Ended when it last reported, not at this boot (else its duration spans the downtime).
+      SET status = 'stopped',
+          completed_at = COALESCE((SELECT MAX(ts) FROM cortex_events WHERE cortex_events.run_id = cortex_runs.run_id), ?)
+      WHERE status = 'live'
+        AND (run_id IN (SELECT run_id FROM chat_roots) OR root_run_id IN (SELECT run_id FROM chat_roots))
+    `,
+    )
+    .run(now);
+  return result.changes as number;
+}
+
 type EventRow = { ts: number; type: string; payload: string };
 
 function toObjectPayload(payload: string): Record<string, unknown> {
@@ -439,7 +472,7 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
   let iterationCount = 0;
   let tokensUsed = 0;
   let cost = 0;
-  let status: "live" | "completed" | "failed" = "live";
+  let status: "live" | "completed" | "failed" | "stopped" = "live";
   let completedAt: number | null = null;
   let debrief: string | null = null;
 
@@ -467,11 +500,15 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
         );
         break;
       case "AgentCompleted":
-        status = p.success === false ? "failed" : "completed";
+        status = p.success === false ? (status === "stopped" ? "stopped" : "failed") : "completed";
         completedAt = row.ts;
         break;
       case "TaskFailed":
-        status = "failed";
+        status = status === "stopped" ? "stopped" : "failed";
+        completedAt = row.ts;
+        break;
+      case "ExecutionCancelled":
+        status = "stopped";
         completedAt = row.ts;
         break;
       case "DebriefCompleted":

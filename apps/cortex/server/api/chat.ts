@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { ChatSessionBusyError, type ChatSessionService } from "../services/chat-session-service.js";
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import { causeLineOf } from "@reactive-agents/ui-core";
 import { readRunTreeTraces } from "../services/run-trace-file.js";
 import type { ChatScheduleService } from "../services/chat-schedule-service.js";
 import type { ChatGoalService, GoalFailure } from "../services/chat-goal-service.js";
@@ -615,6 +616,10 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         body: t.Object({ message: t.String(), posture: t.Optional(t.String()) }),
       },
     )
+    // Stop the session's streamed turn. The run is aborted server-side and the turn is
+    // stored as interrupted by the user; a client that only drops the stream reads as a
+    // disconnect (chat-turn-stop.ts).
+    .post("/sessions/:sessionId/chat/stop", ({ params }) => ({ stopped: svc.stopTurn(params.sessionId) }))
     .post(
       "/sessions/:sessionId/chat/stream",
       async ({ params, body, set, request }) => {
@@ -642,16 +647,17 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
                   // Stream the event as SSE
                   controller.enqueue(enc.encode(`data: ${JSON.stringify(event)}\n\n`));
 
-                  if (event._tag === "StreamCompleted" || event._tag === "StreamError") {
+                  if (event._tag === "StreamCompleted" || event._tag === "StreamError" || event._tag === "StreamCancelled") {
                     controller.close();
                     return;
                   }
                 }
+                controller.close();
               } catch (e) {
                 try {
                   const errorEvent = {
                     _tag: "StreamError" as const,
-                    cause: String(e),
+                    cause: causeLineOf(e) ?? "Chat stream failed",
                   };
                   controller.enqueue(enc.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
                   controller.close();

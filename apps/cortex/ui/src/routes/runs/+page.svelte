@@ -7,6 +7,8 @@
   import InteractPanel from "$lib/components/InteractPanel.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
+  import { runStatusAfter } from "$lib/run-live-status.js";
+  import { statusOfRun, type StatusTone } from "@reactive-agents/ui-core";
 
   type RunRow = {
     runId: string;
@@ -169,23 +171,20 @@
         }
         break;
       }
-      case "AgentCompleted": {
-        if (run.status !== "completed") {
-          run.status = payload.success === true ? "completed" : "failed";
-          run.completedAt = typeof payload.durationMs === "number"
+      case "AgentCompleted":
+      case "TaskFailed":
+      case "ExecutionCancelled": {
+        // Same rules as the server (run-live-status.ts): a stopped run leaves the live list.
+        const next = runStatusAfter(run.status, type, payload);
+        if (next !== undefined) {
+          run.status = next;
+          run.completedAt = type === "AgentCompleted" && typeof payload.durationMs === "number"
             ? run.startedAt + payload.durationMs
             : Date.now();
-          if (typeof payload.totalTokens === "number") {
-            run.tokensUsed = Math.max(run.tokensUsed, payload.totalTokens);
-          }
           updated = true;
         }
-        break;
-      }
-      case "TaskFailed": {
-        if (run.status !== "failed") {
-          run.status = "failed";
-          run.completedAt = Date.now();
+        if (type === "AgentCompleted" && typeof payload.totalTokens === "number" && payload.totalTokens > run.tokensUsed) {
+          run.tokensUsed = payload.totalTokens;
           updated = true;
         }
         break;
@@ -258,22 +257,30 @@
       }),
   );
 
+  // Icon and colour per tone of ui-core's one status vocabulary (`statusOfRun`).
+  const TONE_ICON: Record<StatusTone, string> = {
+    running: "radio_button_checked",
+    attention: "pause_circle",
+    done: "check_circle",
+    failed: "error",
+    stopped: "stop_circle",
+    idle: "schedule",
+  };
+  const TONE_CLASS: Record<StatusTone, string> = {
+    running: "text-primary",
+    attention: "text-amber-700 dark:text-amber-500",
+    done: "text-emerald-600 dark:text-emerald-400",
+    failed: "text-error",
+    stopped: "text-slate-500 dark:text-on-surface-variant",
+    idle: "text-outline dark:text-on-surface-variant",
+  };
+
   function statusIcon(s: string): string {
-    if (s === "completed") return "check_circle";
-    if (s === "failed") return "error";
-    if (s === "live") return "radio_button_checked";
-    if (s === "paused") return "pause_circle";
-    if (s === "loading") return "hourglass_empty";
-    return "schedule";
+    return s === "loading" ? "hourglass_empty" : TONE_ICON[statusOfRun(s).tone];
   }
 
   function statusClass(s: string): string {
-    if (s === "completed") return "text-emerald-600 dark:text-emerald-400";
-    if (s === "failed") return "text-error";
-    if (s === "live") return "text-primary";
-    if (s === "paused") return "text-amber-700 dark:text-amber-500";
-    if (s === "loading") return "text-slate-600 dark:text-slate-400";
-    return "text-outline dark:text-on-surface-variant";
+    return s === "loading" ? "text-slate-600 dark:text-slate-400" : TONE_CLASS[statusOfRun(s).tone];
   }
 
   function durationStr(row: RunRow): string {
@@ -631,7 +638,7 @@
                   run.status,
                 )}"
                 style="font-variation-settings: 'FILL' {run.status === 'live' ? '0' : '1'};"
-                title={run.status}
+                title={statusOfRun(run.status).label}
               >
                 {statusIcon(run.status)}
               </span>

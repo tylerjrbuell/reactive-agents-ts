@@ -32,6 +32,7 @@ import { CortexEventBridge } from "./services/event-bridge.js";
 import type { CortexConfig } from "./types.js";
 import { defaultCortexConfig } from "./types.js";
 import { cortexLog } from "./cortex-log.js";
+import { closeOrphanedChatRuns } from "./db/queries.js";
 import { isLoopbackHost, resolveCortexHostname } from "./listen-host.js";
 
 /** Base URL for startup log and “open browser” (aligns with CORTEX_URL when set). */
@@ -76,6 +77,10 @@ export async function startCortexServer(
 
   // Hydrate gateway agents — starts persistent processes for all active agents
   void runtime.gateway.hydrate();
+
+  // Chat runs run in this process: any still `live` from before a restart can never end (B3).
+  const orphaned = closeOrphanedChatRuns(runtime.rawDb, Date.now());
+  if (orphaned > 0) cortexLog("info", "server", "closed chat runs left live by a restart", { count: orphaned });
 
   const chatSessionService = new ChatSessionService(runtime.rawDb, { ingestLayer: runtime.ingestLayer });
   // Chat turns paused on a durable approval gate before a restart: list them again (desk + chat).

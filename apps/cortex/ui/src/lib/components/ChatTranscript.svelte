@@ -3,6 +3,7 @@
   import { turnSteps, turnSummary, turnTranscript } from "$lib/stores/chat-timeline.js";
   import { groupToolNames } from "$lib/tool-groups.js";
   import { toolBadgesOf, type TranscriptTools } from "@reactive-agents/ui-core";
+  import ChatModelWait from "$lib/components/ChatModelWait.svelte";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import ChatSubAgentCards from "$lib/components/ChatSubAgentCards.svelte";
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
@@ -116,7 +117,9 @@
     <ChatSubAgentCards agents={turn.subAgents ?? []} checklist={turn.checklist} />
   {/if}
 
-  {#if showIdle}
+  {#if showIdle && turn.awaitingModelSince !== undefined}
+    <ChatModelWait since={turn.awaitingModelSince} provider={turn.provider} />
+  {:else if showIdle}
     <p class="my-1 font-mono text-[11px] italic text-[var(--cortex-text-muted)]">
       {idleStatus}<span class="chat-dots ml-1 inline-flex items-center gap-0.5 align-middle" aria-hidden="true"><i></i><i></i><i></i></span>
     </p>

@@ -255,7 +255,7 @@
   function onSendButton() {
     if (sendAction === "stop") {
       stopRequested = true;
-      chatStore.stop();
+      void chatStore.stop();
       return;
     }
     void submit();
@@ -936,7 +936,7 @@
                   </span>
                 {/if}
               {/if}
-              {#if turn.cancelled}
+              {#if turn.cancelled && !turn.runFailed}
                 <span class="font-mono text-[9px] text-[var(--cortex-text-muted)] italic">stopped</span>
               {/if}
               {#if turn.runFailed && !turn.streaming}

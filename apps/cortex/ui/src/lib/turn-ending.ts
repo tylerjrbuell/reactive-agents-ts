@@ -7,18 +7,46 @@
  * `turnOutcomeOf` classifies those fields; this module adapts its result to
  * Cortex's turn shape and to the labels the views render.
  */
-import { splitUnfinished, turnOutcomeOf, type TurnDeliverable, type TurnOutcome } from "@reactive-agents/ui-core";
+import {
+  causeLineOf,
+  splitUnfinished,
+  turnOutcomeOf,
+  type InterruptedBy,
+  type TurnDeliverable,
+  type TurnOutcome,
+} from "@reactive-agents/ui-core";
 import { runErrorLine } from "./run-error.js";
 
-/** A turn whose run did not succeed: failed, partial (a draft with unfinished items) or abstained. */
+/**
+ * A turn whose run did not succeed: failed, partial (a draft with unfinished
+ * items), abstained, or interrupted (stopped by the user or a dropped connection
+ * before the run completed).
+ */
 export interface TurnRunEnding {
   /** Absent on turns stored before 2026-11-10: read as `failed`. */
-  readonly ending?: "failed" | "partial" | "abstained";
+  readonly ending?: "failed" | "partial" | "abstained" | "interrupted";
   readonly terminatedBy?: string;
   /** The run's cause (`StreamCompleted.error`, or the server's stored outcome). */
   readonly error?: string;
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
   readonly unfinished?: readonly string[];
+  /** Interrupted turns: who stopped it. */
+  readonly interruptedBy?: InterruptedBy;
+}
+
+/**
+ * The ending of a turn that failed before any stream content (the request was
+ * refused or the network failed): failed, with the cause line minus its error
+ * class tag (`TypeError: Failed to fetch` → `Failed to fetch`).
+ */
+export function failedBeforeStream(cause: unknown): TurnRunEnding {
+  const error = causeLineOf(cause);
+  return { ending: "failed", ...(error ? { error } : {}) };
+}
+
+/** Ending of a `StreamCancelled` (its `reason` is who stopped it: `user` or `disconnect`). */
+export function cancelledEnding(reason: string): TurnRunEnding {
+  return runEndingOf(turnOutcomeOf({ interrupted: reason === "user" || reason === "disconnect" ? reason : true }));
 }
 
 /** What a finished `StreamCompleted` tells a chat turn: how it ended (when not success) and the files it produced. */
@@ -27,7 +55,7 @@ export interface CompletionEnding {
   readonly deliverables?: readonly TurnDeliverable[];
 }
 
-const NOT_SUCCESS = new Set(["failed", "partial", "abstained"]);
+const NOT_SUCCESS = new Set(["failed", "partial", "abstained", "interrupted"]);
 
 /** Ending of a `StreamCompleted` event (or any result-shaped object). Paused and successful runs set no `runFailed`. */
 export function completionEnding(event: object): CompletionEnding {
@@ -44,6 +72,7 @@ const runEndingOf = (o: TurnOutcome): TurnRunEnding => ({
   ...(o.error ? { error: o.error } : {}),
   ...(o.abstention ? { abstention: o.abstention } : {}),
   ...(o.unfinished && o.unfinished.length > 0 ? { unfinished: o.unfinished } : {}),
+  ...(o.interruptedBy ? { interruptedBy: o.interruptedBy } : {}),
 });
 
 /** A server-stored outcome (`trace.outcome`) as a turn ending; fields absent on older rows stay absent. */
@@ -54,6 +83,9 @@ export function storedRunEnding(o: TurnRunEnding): TurnRunEnding {
     ...(o.error ? { error: o.error } : {}),
     ...(o.abstention ? { abstention: o.abstention } : {}),
     ...(o.unfinished && o.unfinished.length > 0 ? { unfinished: o.unfinished } : {}),
+    ...(o.ending === "interrupted" && (o.interruptedBy === "user" || o.interruptedBy === "disconnect")
+      ? { interruptedBy: o.interruptedBy }
+      : {}),
   };
 }
 
@@ -76,6 +108,7 @@ export function chatTurnOutcome(turn: {
     ...(r.abstention ? { abstention: r.abstention } : {}),
     ...(split ? { draft: split.draft } : {}),
     ...(unfinished && unfinished.length > 0 ? { unfinished } : {}),
+    ...(r.interruptedBy ? { interruptedBy: r.interruptedBy } : {}),
     ...deliverables,
   };
 }
@@ -91,6 +124,10 @@ export function endingBadge(r: TurnRunEnding): { readonly label: string; readonl
       return { label: "abstained", tone: "quiet", title: "The agent declined to answer; the reason is below. Open the trace for detail." };
     case "partial":
       return { label: "partial", tone: "warn", title: `The run stopped${how} with a draft and unfinished items, listed below.` };
+    case "interrupted":
+      return r.interruptedBy === "user"
+        ? { label: "stopped", tone: "quiet", title: "You stopped this reply before it finished. Retry runs it again." }
+        : { label: "interrupted", tone: "warn", title: "The reply was cut off before it finished; the cause is below. Retry runs it again." };
     default:
       return { label: "did not finish", tone: "error", title: `The run did not finish${how}; no answer was given. The cause is below; open the trace for detail.` };
   }
@@ -98,7 +135,7 @@ export function endingBadge(r: TurnRunEnding): { readonly label: string; readonl
 
 /** The closing note of a turn or run: heading, one cause line and a list. `undefined` for a plain success. */
 export interface EndingNote {
-  readonly kind: "failed" | "partial" | "abstained" | "files";
+  readonly kind: "failed" | "partial" | "abstained" | "interrupted" | "files";
   readonly tone: EndingTone;
   readonly icon: string;
   readonly heading: string;
@@ -130,6 +167,17 @@ export function endingNote(o: TurnOutcome): EndingNote | undefined {
     case "failed": {
       const line = runErrorLine(o.error);
       return { kind: "failed", tone: "error", icon: "error", heading: "Run error", ...(line ? { line } : {}), items: [] };
+    }
+    case "interrupted": {
+      const line = runErrorLine(o.error);
+      return {
+        kind: "interrupted",
+        tone: o.interruptedBy === "user" ? "quiet" : "warn",
+        icon: o.interruptedBy === "user" ? "stop_circle" : "link_off",
+        heading: o.interruptedBy === "user" ? "Stopped" : "Interrupted",
+        ...(line ? { line } : {}),
+        items: [],
+      };
     }
     case "succeeded":
       return files.length > 0 ? { kind: "files", tone: "quiet", icon: "description", heading: "Produced", items: files } : undefined;

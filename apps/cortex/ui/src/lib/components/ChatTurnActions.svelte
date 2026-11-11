@@ -8,6 +8,8 @@
 
 <script lang="ts">
   import type { ChatTurn } from "$lib/stores/chat-store.js";
+  import { turnEnding } from "$lib/stores/chat-timeline.js";
+  import { statusOfTurn, type StatusTone } from "@reactive-agents/ui-core";
   import { clock } from "$lib/stores/clock.js";
   import { absoluteTime, relativeTime, strategyChip, turnTiming } from "$lib/chat-turn-meta.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
@@ -27,16 +29,21 @@
   const { turn, actions = [], showActions = true, copyText, onCopy, strategyLabel }: Props = $props();
 
   const assistant = $derived(turn.role === "assistant");
-  // Status tick: done, failed, or stopped. Nothing while the reply streams.
-  const status = $derived(
-    !assistant || turn.streaming
-      ? undefined
-      : turn.runFailed || turn.incomplete
-        ? turn.cancelled
-          ? { icon: "stop_circle", tone: "muted", label: "Stopped" }
-          : { icon: "error", tone: "error", label: "Did not finish" }
-        : { icon: "check", tone: "ok", label: "Finished" },
-  );
+  // Status tick from ui-core's one status vocabulary (done, attention, failed, stopped).
+  // Nothing while the reply streams.
+  const ICON: Record<StatusTone, string> = {
+    running: "progress_activity",
+    attention: "info",
+    done: "check",
+    failed: "error",
+    stopped: "stop_circle",
+    idle: "radio_button_unchecked",
+  };
+  const status = $derived.by(() => {
+    if (!assistant || turn.streaming) return undefined;
+    const view = statusOfTurn(turnEnding(turn));
+    return { icon: ICON[view.tone], tone: view.tone, label: view.label };
+  });
   const strategy = $derived(assistant && !turn.streaming ? strategyChip(turn, strategyLabel) : undefined);
   const hasTime = $derived(turn.ts > 0);
   const timing = $derived(turnTiming(turn, $clock));
@@ -88,8 +95,9 @@
     color: var(--cortex-text-muted);
   }
   .tick { font-size: 12px; line-height: 1; }
-  .tick[data-tone="ok"] { color: var(--color-secondary, #7ee3c3); }
-  .tick[data-tone="error"] { color: var(--color-error, #ff6b6b); }
+  .tick[data-tone="done"] { color: var(--color-secondary, #7ee3c3); }
+  .tick[data-tone="failed"] { color: var(--color-error, #ff6b6b); }
+  .tick[data-tone="attention"] { color: var(--color-tertiary, #f7be1d); }
   .when { font-variant-numeric: tabular-nums; cursor: default; }
   .strategy {
     padding: 0 0.3125rem;

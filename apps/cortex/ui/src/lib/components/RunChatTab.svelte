@@ -14,7 +14,7 @@
   import { CHAT_TOOL_PRESETS } from "$lib/inference-presets.js";
   import ChatShellToolDisclaimer from "$lib/components/ChatShellToolDisclaimer.svelte";
   import type { ChatTurn } from "$lib/stores/chat-store.js";
-  import { streamAssistantTurn } from "$lib/stores/chat-stream.js";
+  import { failTurn, streamAssistantTurn } from "$lib/stores/chat-stream.js";
   import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
 import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import {
@@ -201,14 +201,13 @@ import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
         },
       });
       if (outcome.preStreamFailure !== undefined) {
-        error = outcome.preStreamFailure;
-        turns = turns.filter((t) => t.id !== userTurnId && t.id !== assistantTurnId);
+        // The message stays; the reply ends as a failed turn with the cause (B1).
+        turns = failTurn(turns, assistantTurnId, outcome.preStreamFailure);
       } else if (outcome.streamError !== undefined) {
         error = outcome.streamError;
       }
     } catch (e) {
-      error = String(e);
-      turns = turns.filter((t) => t.id !== userTurnId && t.id !== assistantTurnId);
+      turns = failTurn(turns, assistantTurnId, e);
     }
 
     sending = false;

@@ -2,7 +2,7 @@ import { get, writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
 import { carryContext } from "../chat-context.js";
-import { streamAssistantTurn } from "./chat-stream.js";
+import { failTurn, requestTurnStop, streamAssistantTurn } from "./chat-stream.js";
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import { turnModelOf } from "../chat-live-config.js";
@@ -147,6 +147,11 @@ export type ChatTurn = {
   deliverables?: readonly TurnDeliverable[];
   /** Turn was cancelled or errored before completion; its spend is still counted. */
   incomplete?: boolean;
+  /**
+   * While streaming: epoch ms since which the turn waits on the model (a call is
+   * out, no token back yet; ui-core `foldModelWait`). Absent when not waiting.
+   */
+  awaitingModelSince?: number;
 };
 
 /** Server-persisted thinking + tool-call detail for a finished assistant turn. */
@@ -192,6 +197,8 @@ export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTur
     ...(trace.subAgents && trace.subAgents.length > 0 ? { subAgents: restoreSubAgents(trace.subAgents) } : {}),
     ...(trace.checklist ? { checklist: trace.checklist } : {}),
     ...(trace.outcome?.success === false ? { runFailed: storedRunEnding(trace.outcome) } : {}),
+    // A turn the user stopped reads as stopped after a reload, as it did live.
+    ...(trace.outcome?.ending === "interrupted" && trace.outcome.interruptedBy === "user" ? { cancelled: true } : {}),
     ...(trace.deliverables && trace.deliverables.length > 0 ? { deliverables: trace.deliverables } : {}),
     ...(trace.usage ? { usage: trace.usage } : {}),
     ...(trace.strategy ? { strategy: trace.strategy } : {}),
@@ -581,6 +588,8 @@ function createChatStore() {
       tokensUsed: 0,
       ts: Date.now(),
       streaming: true,
+      // The request is out and no token is back yet (B11).
+      awaitingModelSince: Date.now(),
       // Pinned at send: a config change during the run applies to the NEXT turn, so this header must not follow it.
       ...runModel,
     };
@@ -608,13 +617,10 @@ function createChatStore() {
       activeController = null;
 
       if (outcome.preStreamFailure !== undefined) {
-        // Nothing ever rendered: drop the optimistic user+assistant turns, show the banner.
-        update((s) => ({
-          ...s,
-          sending: false,
-          error: outcome.preStreamFailure!,
-          activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
-        }));
+        // Nothing streamed: the message stays and the reply ends as a failed turn with the
+        // cause and Retry (B1), never an empty bubble or a banner that loses the text.
+        const failed = outcome.preStreamFailure;
+        update((s) => ({ ...s, sending: false, activeTurns: failTurn(s.activeTurns, assistantTurnId, failed) }));
         return;
       }
       update((s) => ({ ...s, sending: false, ...(outcome.streamError !== undefined ? { error: outcome.streamError } : {}) }));
@@ -630,12 +636,7 @@ function createChatStore() {
       const errorMsg = String(e);
       console.error("[Chat Stream] Exception:", errorMsg, e);
       activeController = null;
-      update((s) => ({
-        ...s,
-        sending: false,
-        error: errorMsg,
-        activeTurns: s.activeTurns.filter((t) => t.id !== optimisticUserTurn.id && t.id !== assistantTurnId),
-      }));
+      update((s) => ({ ...s, sending: false, activeTurns: failTurn(s.activeTurns, assistantTurnId, e) }));
     }
   }
 
@@ -661,11 +662,18 @@ function createChatStore() {
 
   let activeController: AbortController | null = null;
 
-  function stop() {
-    if (activeController) {
-      activeController.abort();
-      activeController = null;
-    }
+  /**
+   * Stop the running turn. The server is asked first, so it stops the run itself
+   * and stores the turn as stopped by the user (a dropped stream alone reads as a
+   * disconnect); the stream is then dropped whatever the answer.
+   */
+  async function stop(): Promise<void> {
+    const controller = activeController;
+    if (!controller) return;
+    activeController = null;
+    const sid = activeId();
+    if (sid) await requestTurnStop(sid);
+    controller.abort();
   }
 
   return {
