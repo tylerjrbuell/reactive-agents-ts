@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Runs — Cortex Bench mockup</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  main { overflow-y: auto; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding-bottom: var(--s-12); }
+  .needs { margin: 0 var(--s-8) var(--s-4); display: grid; gap: 1px; border-radius: var(--r-panel); overflow: hidden; border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); }
+  .need { display: flex; align-items: center; gap: var(--s-3); padding: 10px var(--s-4); background: var(--surface-1); }
+  .need .what { font-weight: 500; } .need .ctx { color: var(--text-2); font-size: var(--t-xs); }
+  .need .btns { margin-left: auto; display: flex; gap: 6px; }
+  .toolbar { display: flex; gap: var(--s-2); align-items: center; padding: 0 var(--s-8) var(--s-3); }
+  .toolbar .search { position: relative; flex: 1; max-width: 420px; }
+  .toolbar .search .i { position: absolute; left: 10px; top: 9px; color: var(--text-3); }
+  .toolbar .search .input { padding-left: 32px; background: var(--surface-1); }
+  .seg { display: inline-flex; padding: 2px; border-radius: var(--r-ctl); background: var(--surface-2); }
+  .seg button { border: 0; background: none; padding: 5px 10px; border-radius: 6px; font-size: var(--t-xs); color: var(--text-2); cursor: pointer; display: inline-flex; gap: 6px; }
+  .seg button[aria-pressed="true"] { background: var(--surface-1); color: var(--text); box-shadow: 0 0 0 1px var(--line-strong); }
+  .seg .n { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--text-3); }
+  .totals { margin-left: auto; display: flex; gap: var(--s-4); font-size: var(--t-xs); color: var(--text-3); }
+  .totals b { font-family: var(--font-data); font-weight: 500; color: var(--text-2); font-size: var(--t-2xs); }
+  table { width: calc(100% - 2 * var(--s-8)); margin: 0 var(--s-8); border-collapse: separate; border-spacing: 0; background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--r-panel); overflow: hidden; }
+  th { text-align: left; font-size: var(--t-xs); font-weight: 500; color: var(--text-3); padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--surface-1); position: sticky; top: 0; }
+  th.num, td.num { text-align: right; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr { cursor: pointer; } tbody tr:hover td { background: var(--surface-2); }
+  tr.live td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+  .runname { display: grid; gap: 2px; }
+  .runname .t { font-weight: 500; }
+  .runname .s { font-size: var(--t-xs); color: var(--text-3); display: flex; gap: 8px; }
+  td .data { color: var(--text-2); }
+  .group-row td { background: var(--canvas); font-size: var(--t-xs); color: var(--text-3); padding: 6px 12px; cursor: default; }
+  .sel { width: 36px; }
+</style>
+</head>
+<body data-page="runs" data-ambient-empty-only>
+<div class="app">
+  <div data-topbar></div>
+  <main>
+    <div class="band"><div class="wrap" style="padding-bottom:0">
+      <div class="page-h"><div><h1>Runs</h1><p>Every agent run Cortex has seen: chat turns, desk runs and gateway agents.</p></div>
+        <div class="actions"><button class="btn ghost">Select</button><button class="btn"><svg class="i sm"><use href="#i-plus"/></svg>New run</button></div></div>
+    </div></div>
+
+    <div class="wrap" data-state="empty" hidden>
+      <div class="hero">
+        <span data-mark="96" data-hero></span>
+        <h2>No runs yet</h2>
+        <p>Runs appear here as soon as an agent starts: a chat turn, a run from Beacon or the Lab, or any app built with <span class="code-accent">.withCortex()</span>.</p>
+        <div class="acts"><button class="btn primary"><svg class="i sm"><use href="#i-chat"/></svg>Open a chat</button><button class="btn"><svg class="i sm"><use href="#i-lab"/></svg>Build an agent</button></div>
+      </div>
+    </div>
+
+    <div class="wrap" data-state="default">
+      <section class="needs" aria-label="Waiting on you">
+        <div class="need"><span class="status tone-attention"><span class="dot"></span>Approval</span><span class="what">shell-execute <span class="data">rm -rf build/</span></span><span class="ctx">release-bot · gateway · 2m ago</span>
+          <div class="btns"><button class="btn sm primary">Approve</button><button class="btn sm danger">Deny</button><button class="btn sm ghost">Open run</button></div></div>
+        <div class="need"><span class="status tone-attention"><span class="dot"></span>Question</span><span class="what">“Which branch should I open the PR against?”</span><span class="ctx">Release notes draft · chat · 9m ago</span>
+          <div class="btns"><button class="btn sm">Answer in chat</button></div></div>
+      </section>
+
+      <div class="toolbar">
+        <div class="search"><svg class="i sm"><use href="#i-search"/></svg><input class="input" placeholder="Search runs, agents, models" aria-label="Search runs"></div>
+        <div class="seg" role="group" aria-label="Status"><button aria-pressed="true">All <span class="n">148</span></button><button>Running <span class="n">2</span></button><button>Finished <span class="n">139</span></button><button>Failed <span class="n">7</span></button></div>
+        <select class="select" style="width:auto" aria-label="Sort"><option>Newest first</option><option>Most tokens</option><option>Highest cost</option></select>
+        <div class="totals"><span>tokens <b>1.42M</b></span><span>cost <b>$3.87</b></span></div>
+      </div>
+
+      <table>
+        <thead><tr><th class="sel"><input type="checkbox" aria-label="Select all"></th><th>Status</th><th>Run</th><th>Model</th><th>Strategy</th><th class="num">Steps</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">Time</th><th>Started</th></tr></thead>
+        <tbody>
+          <tr class="group-row"><td colspan="10">Pinned</td></tr>
+          <tr><td><input type="checkbox" aria-label="Select run"></td><td><span class="status tone-done"><span class="dot"></span>Finished</span></td><td><div class="runname"><span class="t">Hash function explainer</span><span class="s"><span>chat</span><span class="data">01M740X6</span></span></div></td><td><span class="data">mimo-v2.6</span></td><td>Reflexion</td><td class="num data">4</td><td class="num data">2,535</td><td class="num data">&lt;$0.0001</td><td class="num data">18.4s</td><td class="faint">2h ago</td></tr>
+          <tr class="group-row"><td colspan="10">Recent</td></tr>
+          <tr class="live"><td><input type="checkbox" aria-label="Select run"></td><td><span class="status tone-running"><span class="dot"></span>Running</span></td><td><div class="runname"><span class="t">Crypto market report</span><span class="s"><span>chat</span><span class="data">01M746B1</span></span></div></td><td><span class="data">qwen3:14b</span></td><td>ReAct</td><td class="num data">3 / 6</td><td class="num data">2,110</td><td class="num data">$0.0004</td><td class="num data">42s</td><td class="faint">just now</td></tr>
+          <tr class="live"><td><input type="checkbox" aria-label="Select run"></td><td><span class="status tone-running"><span class="dot"></span>Running</span></td><td><div class="runname"><span class="t">release-bot nightly</span><span class="s"><span>gateway</span><span class="data">01M745ZZ</span></span></div></td><td><span class="data">claude-sonnet-4-6</span></td><td>Plan-Execute</td><td class="num data">7 / 20</td><td class="num data">48,920</td><td class="num data">$0.3120</td><td class="num data">4m 10s</td><td class="faint">4m ago</td></tr>
+          <tr><td><input type="checkbox" aria-label="Select run"></td><td><span class="status tone-attention"><span class="dot"></span>Waiting</span></td><td><div class="runname"><span class="t">Release notes draft</span><span class="s"><span>chat</span><span class="data">01M745QA</span></span></div></td><td><span class="data">claude-sonnet-4-6</span></td><td>ReAct</td><td class="num data">5</td><td class="num data">12,004</td><td class="num data">$0.0412</td><td class="num data">1m 02s</td><td class="faint">9m ago</td></tr>
+          <tr><td><input type="checkbox" aria-label="Select run"></td><td><span class="status tone-failed"><span class="dot"></span>Failed</span></td><td><div class="runname"><span class="t">Save market.md</span><span class="s"><span>chat</span><span class="data">01M745P2</span></span></div></td><td><span class="data">qwen3:14b</span></td><td>ReAct</td><td class="num data">2</td><td class="num data">1,201</td><td class="num data">$0.0002</td><td class="num data">9s</td><td class="faint">58m ago</td></tr>
+          <tr><td><input type="checkbox" aria-label="Select run"></td><td><span class="status tone-stopped"><span class="dot"></span>Stopped</span></td><td><div class="runname"><span class="t">Long multiplication</span><span class="s"><span>chat</span><span class="data">01M7466T</span></span></div></td><td><span class="data">qwen3:4b</span></td><td>ReAct</td><td class="num data">0</td><td class="num data">0</td><td class="num data">$0.0000</td><td class="num data">1m 39s</td><td class="faint">1h ago</td></tr>
+          <tr><td><input type="checkbox" aria-label="Select run"></td><td><span class="status tone-done"><span class="dot"></span>Finished</span></td><td><div class="runname"><span class="t">Bitcoin mining summary</span><span class="s"><span>chat</span><span class="data">01M740TJ</span></span></div></td><td><span class="data">mimo-v2.6</span></td><td>ReAct</td><td class="num data">1</td><td class="num data">777</td><td class="num data">&lt;$0.0001</td><td class="num data">20.6s</td><td class="faint">2h ago</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+<script src="kit.js"></script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings — Cortex Bench mockup</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  main { overflow-y: auto; }
+  .wrap { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: 200px 1fr; gap: var(--s-8); padding: 0 var(--s-8) var(--s-12); }
+  .side { position: sticky; top: var(--s-4); align-self: start; display: grid; gap: 2px; }
+  .side a { padding: 6px 10px; border-radius: var(--r-ctl); color: var(--text-2); text-decoration: none; }
+  .side a[aria-current="true"] { background: var(--surface-2); color: var(--text); font-weight: 500; }
+  .col { display: grid; gap: var(--s-6); }
+  .grp h2 { margin: 0 0 4px; font-size: var(--t-lg); font-weight: 600; } .grp > p { margin: 0 0 var(--s-3); color: var(--text-2); }
+  .rows { border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--surface-1); }
+  .r { display: grid; grid-template-columns: 1fr 280px; gap: var(--s-4); align-items: center; padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--line); }
+  .r:last-child { border-bottom: 0; }
+  .r .t { font-weight: 500; } .r .d { font-size: var(--t-xs); color: var(--text-2); margin-top: 2px; }
+  .r .d code, .note code { font-family: var(--font-data); font-size: var(--t-2xs); padding: 1px 5px; border-radius: 4px; background: var(--surface-2); color: var(--text); }
+  .keys { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .model { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--s-4); }
+  .caps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-radius: var(--r-ctl); overflow: hidden; }
+  .cap { background: var(--surface-1); padding: 10px 12px; } .cap .k { font-size: var(--t-xs); color: var(--text-3); } .cap .v { font-family: var(--font-data); font-size: var(--t-sm); }
+  .ab-mark { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4); border-bottom: 1px solid var(--line); }
+  .ab-mark .d { font-size: var(--t-xs); color: var(--text-2); }
+  .ab-word { font-size: var(--t-xl); font-weight: 600; letter-spacing: -.015em; line-height: var(--lh-tight); }
+  .note { font-size: var(--t-xs); color: var(--text-2); padding: 8px 12px; border-radius: var(--r-ctl); background: var(--warn-tint); }
+</style>
+</head>
+<body data-page="settings">
+<div class="app">
+  <div data-topbar></div>
+  <main>
+    <div class="band"><div class="page-h" style="max-width:980px;margin:0 auto;box-sizing:border-box"><div><h1>Settings</h1><p>Defaults for new chats and runs, provider access, and notifications.</p></div></div></div>
+    <div class="wrap">
+      <nav class="side" aria-label="Settings sections"><a href="#" aria-current="true">Defaults</a><a href="#">Providers</a><a href="#">Notifications</a><a href="#">Appearance</a><a href="#">Storage</a><a href="#">About</a></nav>
+      <div class="col">
+        <section class="grp"><h2>Defaults</h2><p>Used by Beacon, new chats and the Lab builder until you pick something else.</p>
+          <div class="rows">
+            <div class="r"><div><div class="t">Provider</div><div class="d">Anthropic needs <code>ANTHROPIC_API_KEY</code> in the server's environment.</div></div><select class="select"><option>Ollama (local)</option><option>Anthropic (key missing)</option></select></div>
+            <div class="r"><div><div class="t">Model</div><div class="d">Installed Ollama models are listed first.</div></div><select class="select"><option>qwen3:14b</option></select></div>
+            <div class="r"><div><div class="t">Strategy</div><div class="d">How the agent plans. ReAct is the framework default.</div></div><select class="select"><option>Framework default (ReAct)</option></select></div>
+          </div></section>
+        <section class="grp"><h2>Providers</h2><p>Cortex reads keys from the server's environment; it never stores them.</p>
+          <div class="rows">
+            <div class="r"><div><div class="t">API keys found</div><div class="d">Restart Cortex after adding a key to <code>.env</code>.</div></div><div class="keys"><span class="badge ok">OpenAI</span><span class="badge bad">Anthropic missing</span><span class="badge bad">Gemini missing</span></div></div>
+            <div class="r"><div><div class="t">Ollama endpoint</div><div class="d">Leave blank to use <code>OLLAMA_HOST</code> or http://localhost:11434.</div></div><input class="input" placeholder="http://localhost:11434"></div>
+            <div class="r"><div><div class="t">Cortex server</div><div class="d">To use another server, start with <code>CORTEX_URL=http://host:port bun cortex</code>.</div></div><span class="status tone-done" style="justify-self:end"><span class="dot"></span>Connected · v0.1.0</span></div>
+          </div></section>
+        <section class="grp"><h2>Model detail</h2><p>The model page (/models/ollama/qwen3:14b) uses the same row and stat components.</p>
+          <div class="rows" style="padding:var(--s-4);display:grid;gap:var(--s-3)">
+            <div class="model"><strong style="font-size:var(--t-md)">qwen3:14b</strong><button class="btn sm primary">Start a chat with this model</button><span class="data faint">ollama/qwen3:14b</span></div>
+            <div class="caps"><div class="cap"><div class="k">Context window</div><div class="v">32,768</div></div><div class="cap"><div class="k">Max output</div><div class="v">8,192</div></div><div class="cap"><div class="k">Tool calls</div><div class="v">native</div></div><div class="cap"><div class="k">Thinking</div><div class="v">yes</div></div></div>
+            <div class="note">Not in the shipped capability table: these are conservative defaults, not measured values. Runs on this model have used up to 32.8k context.</div>
+          </div></section>
+        <section class="grp"><h2>Appearance</h2>
+          <div class="rows">
+            <div class="r"><div><div class="t">Theme</div><div class="d">Dark is the graphite bench; light is cool lab paper.</div></div><select class="select"><option>Follow the system setting</option><option>Dark</option><option>Light</option></select></div>
+            <div class="r"><div><div class="t">Motion</div><div class="d">Reduce stops the orb drift, the mark twinkle, the sonar ring and the flowing rail. Running work still shows by its status, the static rail and the glow.</div></div><select class="select"><option>Follow the system setting</option><option>Reduce motion</option></select></div>
+          </div></section>
+        <section class="grp"><h2>About</h2>
+          <div class="rows">
+            <div class="ab-mark" style="border-bottom:0"><span data-mark="64" data-hero></span><div><div class="ab-word"><span class="brand-grad">Cortex</span></div><div class="d">The local desk for Reactive Agents · v0.1.0 · framework 0.16.0</div></div></div>
+          </div></section>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="kit.js"></script>
+</body>
+</html>

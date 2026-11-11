@@ -1,0 +1,298 @@
+/* =====================================================================
+   Cortex "Bench" tokens — proposal (2026-11-10)
+   One semantic layer, two themes. Components read only these variables;
+   no component carries a hex value or a light-mode override.
+   ===================================================================== */
+
+@font-face { font-family: "Geist"; src: url("fonts/geist-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); font-weight: 500 700; font-display: swap; }
+
+:root {
+  /* ── Type ─────────────────────────────────────────────── */
+  --font-ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-data: "JetBrains Mono", ui-monospace, monospace;
+  /* 7-step scale, ratio ~1.15 at the small end. Nothing below 11px. */
+  --t-2xs: 11px;  /* data meta: tokens, durations, ids             */
+  --t-xs: 12px;   /* labels, chips, secondary meta                 */
+  --t-sm: 13px;   /* controls, table rows, nav                     */
+  --t-md: 15px;   /* reading text: chat prose, answers, docs       */
+  --t-lg: 17px;   /* panel titles                                  */
+  --t-xl: 22px;   /* page titles                                   */
+  --t-2xl: 30px;  /* empty-state headlines only                    */
+  --lh-tight: 1.25; --lh-ui: 1.45; --lh-read: 1.65;
+  --measure: 68ch; /* max reading width for prose                   */
+
+  /* ── Space (4pt) ───────────────────────────────────────── */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-12: 48px;
+
+  /* ── Radius: three, by hierarchy ───────────────────────── */
+  --r-chip: 6px;   /* chips, badges, kbd                        */
+  --r-ctl: 8px;    /* buttons, inputs, rows                     */
+  --r-panel: 12px; /* panels, drawers, modals, composer         */
+
+  /* ── Layers ───────────────────────────────────────────── */
+  --z-sticky: 10; --z-nav: 20; --z-drawer: 30; --z-modal: 40; --z-toast: 50; --z-tooltip: 60;
+
+  /* ── Motion ───────────────────────────────────────────── */
+  --ease-out: cubic-bezier(.22,1,.36,1); --d-fast: 120ms; --d-med: 220ms;
+
+  /* ── Brand constants (theme-independent) ──────────────── */
+  --violet: #8b5cf6; --cyan: #06b6d4;
+  /* The signal: reserved for things that are running right now. */
+  --signal: linear-gradient(90deg, #8b5cf6 0%, #22d3ee 100%);
+}
+
+/* ── Dark: graphite bench (default) ───────────────────────── */
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #17181c;   /* docs --sl-color-black, kept for brand continuity */
+  --surface-1: #1c1e24;/* panels                                           */
+  --surface-2: #23262e;/* raised: composer, user message, hover rows       */
+  --surface-3: #2c2f38;/* selected, pressed, chip fill                     */
+  --line: #2b2e37;     /* hairlines inside panels                          */
+  --line-strong: #3b3f4a; /* panel edges, inputs                           */
+  --text: #eceef2;     /* 15.3:1 on canvas                                 */
+  --text-2: #b6b9c2;   /* 9.0:1  secondary                                 */
+  --text-3: #9599a5;   /* 6.2:1 canvas, 4.7:1 surface-3: lowest allowed    */
+  --accent: #a78bfa;   /* agent / thinking / primary action text, 6.5:1    */
+  --accent-fill: #7c3aed; /* primary button fill, white text 5.7:1         */
+  --io: #22d3ee;       /* tools, I/O, links to data                        */
+  --ok: #34d399; --warn: #fbbf24; --bad: #f87171;
+  --accent-tint: rgb(139 92 246 / .14); --io-tint: rgb(34 211 238 / .12);
+  --ok-tint: rgb(52 211 153 / .12); --warn-tint: rgb(251 191 36 / .12); --bad-tint: rgb(248 113 113 / .12);
+  --focus: #67e8f9;
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / .45), 0 0 0 1px var(--line-strong);
+}
+
+/* ── Light: lab paper (cool, not cream) ───────────────────── */
+[data-theme="light"] {
+  color-scheme: light;
+  --canvas: #f6f7f9;
+  --surface-1: #ffffff;
+  --surface-2: #f0f1f4;
+  --surface-3: #e6e8ed;
+  --line: #e4e6eb;
+  --line-strong: #cfd3dc;
+  --text: #14161b;     /* 16.9:1 */
+  --text-2: #434853;   /* 8.6:1  */
+  --text-3: #5f6571;   /* 5.5:1 canvas, 4.8:1 surface-3 */
+  --accent: #6d28d9;   /* 6.6:1 */
+  --accent-fill: #6d28d9;
+  --io: #0b6479;       /* 6.3:1 */
+  --ok: #036148; --warn: #92400e; --bad: #b91c1c;
+  --accent-tint: rgb(109 40 217 / .09); --io-tint: rgb(11 100 121 / .08);
+  --ok-tint: rgb(3 97 72 / .08); --warn-tint: rgb(146 64 14 / .08); --bad-tint: rgb(185 28 28 / .07);
+  --focus: #0891b2;
+  --shadow-pop: 0 12px 32px rgb(20 22 27 / .14), 0 0 0 1px var(--line-strong);
+}
+
+/* ── Base ─────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--canvas); color: var(--text); font: 400 var(--t-sm)/var(--lh-ui) var(--font-ui); -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+button { font: inherit; color: inherit; }
+.data { font-family: var(--font-data); font-size: var(--t-2xs); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.muted { color: var(--text-2); } .faint { color: var(--text-3); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ── Icon (inline SVG via sprite; aria-hidden always) ─────── */
+.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.i.sm { width: 14px; height: 14px; }
+
+/* ── App frame ────────────────────────────────────────────── */
+.app { display: grid; grid-template-rows: 52px 1fr; height: 100vh; }
+.topbar { display: flex; align-items: center; gap: var(--s-4); padding: 0 var(--s-5); border-bottom: 1px solid var(--line); background: var(--canvas); position: relative; z-index: var(--z-nav); }
+.brand { display: flex; align-items: center; gap: var(--s-2); font-weight: 600; font-size: var(--t-md); letter-spacing: -.01em; color: var(--text); text-decoration: none; }
+.brand svg { width: 22px; height: 22px; }
+.nav { display: flex; gap: 2px; margin-left: var(--s-6); }
+.nav a { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: var(--r-ctl); color: var(--text-2); text-decoration: none; font-size: var(--t-sm); font-weight: 500; }
+.nav a:hover { background: var(--surface-2); color: var(--text); }
+.nav a[aria-current="page"] { color: var(--text); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--accent); border-radius: var(--r-ctl) var(--r-ctl) 2px 2px; }
+.nav .count { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--text-3); }
+.topbar .right { margin-left: auto; display: flex; align-items: center; gap: var(--s-1); }
+.live-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 7px; border-radius: 999px; background: var(--surface-2); font-size: var(--t-xs); color: var(--text-2); }
+
+/* ── Primitives ───────────────────────────────────────────── */
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--surface-1); color: var(--text); font-size: var(--t-sm); font-weight: 500; cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent-fill); border-color: transparent; color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--text-2); }
+.btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+.btn.danger { color: var(--bad); }
+.btn.sm { height: 26px; padding: 0 8px; font-size: var(--t-xs); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.iconbtn { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-ctl); border: 0; background: transparent; color: var(--text-2); cursor: pointer; }
+.iconbtn:hover { background: var(--surface-2); color: var(--text); }
+.kbd { font-family: var(--font-data); font-size: var(--t-2xs); padding: 1px 6px; border-radius: var(--r-chip); border: 1px solid var(--line-strong); color: var(--text-2); background: var(--surface-1); }
+
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: var(--r-chip); background: var(--surface-2); color: var(--text-2); font-size: var(--t-xs); white-space: nowrap; border: 1px solid transparent; }
+button.chip { cursor: pointer; } button.chip:hover { color: var(--text); border-color: var(--line-strong); }
+.chip.data { font-family: var(--font-data); font-size: var(--t-2xs); }
+.chip.on { color: var(--text); background: var(--surface-3); }
+
+/* Status: one vocabulary everywhere (run, turn, sub-agent, beacon node) */
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-xs); font-weight: 500; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); flex: none; }
+.tone-running { color: var(--accent); } .tone-running .dot { background: var(--signal); box-shadow: 0 0 0 3px var(--accent-tint); animation: pulse 1.6s var(--ease-out) infinite; }
+.tone-done { color: var(--ok); } .tone-done .dot { background: var(--ok); }
+.tone-failed { color: var(--bad); } .tone-failed .dot { background: var(--bad); }
+.tone-attention { color: var(--warn); } .tone-attention .dot { background: var(--warn); }
+.tone-stopped, .tone-idle { color: var(--text-2); } .tone-stopped .dot { background: var(--text-3); }
+@keyframes pulse { 50% { box-shadow: 0 0 0 5px transparent; } }
+.badge { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: var(--r-chip); font-size: var(--t-2xs); font-weight: 500; }
+.badge.ok { color: var(--ok); background: var(--ok-tint); } .badge.bad { color: var(--bad); background: var(--bad-tint); }
+.badge.warn { color: var(--warn); background: var(--warn-tint); } .badge.accent { color: var(--accent); background: var(--accent-tint); }
+.badge.io { color: var(--io); background: var(--io-tint); } .badge.neutral { color: var(--text-2); background: var(--surface-2); }
+
+.panel { background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--r-panel); }
+.panel-h { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--line); }
+.panel-h h2, .panel-h h3 { margin: 0; font-size: var(--t-sm); font-weight: 600; }
+.panel-b { padding: var(--s-4); }
+
+.input, .select, .textarea { width: 100%; height: 34px; padding: 0 10px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--canvas); color: var(--text); font: inherit; }
+.textarea { height: auto; padding: 10px; resize: vertical; line-height: var(--lh-ui); }
+.input::placeholder, .textarea::placeholder { color: var(--text-3); }
+.field { display: grid; gap: 6px; } .field > label { font-size: var(--t-xs); font-weight: 500; color: var(--text-2); }
+.hint { font-size: var(--t-xs); color: var(--text-3); }
+
+.tabs { display: flex; gap: var(--s-4); border-bottom: 1px solid var(--line); }
+.tabs [role="tab"] { appearance: none; border: 0; background: none; padding: 10px 2px; color: var(--text-2); font-size: var(--t-sm); font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center; }
+.tabs [role="tab"][aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.tabs .n { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--text-3); }
+
+.page-h { display: flex; align-items: flex-end; gap: var(--s-4); padding: var(--s-6) var(--s-8) var(--s-4); }
+.page-h h1 { margin: 0; font-size: var(--t-xl); font-weight: 600; letter-spacing: -.015em; }
+.page-h p { margin: 4px 0 0; color: var(--text-2); font-size: var(--t-sm); }
+.page-h .actions { margin-left: auto; display: flex; gap: var(--s-2); }
+
+.empty { display: grid; justify-items: center; gap: var(--s-2); padding: var(--s-12) var(--s-6); text-align: center; color: var(--text-2); }
+.empty h3 { margin: 0; color: var(--text); font-size: var(--t-lg); font-weight: 600; }
+.empty p { margin: 0; max-width: 46ch; }
+
+/* The signal rail: the one decorative element, and it means "live". */
+.rail { position: relative; }
+.rail::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: var(--line-strong); }
+.rail.live::before { background: linear-gradient(180deg, #8b5cf6, #22d3ee, #8b5cf6); background-size: 100% 200%; animation: flow 2.4s linear infinite; }
+.rail.failed::before { background: var(--bad); } .rail.attention::before { background: var(--warn); }
+@keyframes flow { to { background-position: 0 -200%; } }
+
+.meter { position: relative; height: 4px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.meter > i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--text-2); }
+.meter.live > i { background: var(--signal); }
+
+.toast { display: flex; gap: var(--s-3); align-items: flex-start; width: 340px; padding: var(--s-3) var(--s-4); border-radius: var(--r-panel); background: var(--surface-1); box-shadow: var(--shadow-pop); }
+
+.theme-switch { position: fixed; right: 12px; bottom: 12px; z-index: 99; font: 500 12px var(--font-ui); }
+.state-switch { position: fixed; right: 12px; bottom: 48px; z-index: 99; font: 500 12px var(--font-ui); }
+
+/* =====================================================================
+   Identity layer (revision 2, 2026-11-10)
+   Cortex's own elements, kept and quieted: the neural mark, the ambient
+   orbs, the engineering grid, the violet-to-cyan glow, the sonar ring and
+   the entropy line. Each one has a fixed place, a fixed strength and a
+   reduced-motion fallback. Worst-case contrast of text-3 over any of them
+   is 4.8:1 dark and 4.65:1 light, on a Field grid dot (spec section 5.2).
+   ===================================================================== */
+:root, [data-theme="dark"] {
+  --orb-violet: rgb(139 92 246 / .08);  /* peak, at the orb centre       */
+  --orb-cyan: rgb(6 182 212 / .06);
+  --grid-line: rgb(255 255 255 / .035); /* 32px engineering grid        */
+  --grid-dot: rgb(167 139 250 / .16);   /* 24px Field dot grid          */
+  --glow-live: rgb(139 92 246 / .34);   /* live cards only              */
+  --brand-a: #a78bfa; --brand-b: #22d3ee; /* gradient text, >=22px only  */
+  --mk-violet: #8b5cf6; --mk-cyan: #22d3ee; --mk-lilac: #a78bfa; --mk-pale: #c4b5fd;
+}
+[data-theme="light"] {
+  --orb-violet: rgb(124 58 237 / .06);
+  --orb-cyan: rgb(6 182 212 / .045);
+  --grid-line: rgb(15 23 42 / .04);
+  --grid-dot: rgb(109 40 217 / .10);
+  --glow-live: rgb(109 40 217 / .20);
+  --brand-a: #6d28d9; --brand-b: #0b6479;
+  --mk-violet: #7c3aed; --mk-cyan: #0891b2; --mk-lilac: #8b5cf6; --mk-pale: #a78bfa;
+}
+
+/* Ambient orbs (was CortexDeskShell): two soft fields behind the shell.
+   Radial gradients, not blur filters (cheap to paint). They drift over
+   48-64s; reduced motion keeps them still. Only on Beacon and empty states. */
+.ambient { position: fixed; inset: 52px 0 0 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.ambient::before, .ambient::after { content: ""; position: absolute; border-radius: 50%; }
+.ambient::before { width: min(820px, 70vw); aspect-ratio: 1; left: 8%; top: -14%; background: radial-gradient(closest-side, var(--orb-violet), transparent); animation: orb-a 48s ease-in-out infinite alternate; }
+.ambient::after { width: min(620px, 55vw); aspect-ratio: 1; right: -6%; bottom: -18%; background: radial-gradient(closest-side, var(--orb-cyan), transparent); animation: orb-b 64s ease-in-out infinite alternate; }
+@keyframes orb-a { to { transform: translate3d(6%, 4%, 0) scale(1.06); } }
+@keyframes orb-b { to { transform: translate3d(-5%, -3%, 0) scale(1.04); } }
+.app > :not(.ambient):not(.topbar) { position: relative; z-index: 1; }
+
+/* Header band (was the 32px .cortex-shell-bg grid): the grid survives as a
+   texture behind page headers only, fading out over the band's height,
+   with one small violet field at the top left. Still; nothing moves. */
+.band { position: relative; isolation: isolate; }
+.band::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 50% 90% at 12% -20%, var(--orb-violet), transparent 70%),
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+  -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent);
+          mask-image: linear-gradient(180deg, #000 30%, transparent); }
+
+/* Field dot grid (was .beacon-dot-grid): Beacon Field view and the Field
+   preview only. */
+.dotgrid { background-image: radial-gradient(circle, var(--grid-dot) 1px, transparent 1.4px); background-size: 24px 24px; }
+
+/* Live glow (was gradient-border-glow, hover-lift and node glow shadows):
+   the violet-to-cyan edge and a soft halo, only on a card that is running
+   now. It breathes on a 6s cycle, slower than the rail; reduced motion
+   keeps the halo and drops the breathing. */
+.glow-live { border-color: transparent !important;
+  background: linear-gradient(var(--surface-1), var(--surface-1)) padding-box,
+              linear-gradient(135deg, rgb(139 92 246 / .75), rgb(34 211 238 / .45) 55%, rgb(139 92 246 / .6)) border-box !important;
+  box-shadow: 0 12px 36px -16px var(--glow-live); animation: breathe 6s ease-in-out infinite; }
+@keyframes breathe { 50% { box-shadow: 0 14px 44px -12px var(--glow-live); } }
+
+/* Live hairline under the top bar while any agent runs. Static. */
+.topbar[data-live]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent 4%, #8b5cf6 30%, #22d3ee 70%, transparent 96%); opacity: .7; }
+
+/* Sonar (was three .sonar-ring per node): one ring, on a running Field node
+   only. 2.8s. Reduced motion: no ring (the status text still says Running). */
+.sonar { position: absolute; inset: -6px; border-radius: 14px; border: 1.5px solid var(--mk-violet); opacity: 0; animation: sonar 2.8s cubic-bezier(0, .2, .8, 1) infinite; pointer-events: none; }
+@keyframes sonar { 0% { transform: scale(.92); opacity: .55; } 100% { transform: scale(1.45); opacity: 0; } }
+
+/* Neural mark (logo, favicon, empty-state hero). Built by kit.js mark(). */
+.mark { display: inline-block; flex: none; }
+.mark .tw { animation: twinkle 7s ease-in-out infinite; }
+@keyframes twinkle { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+
+/* Gradient wordmark: large brand moments only (>=22px), never in the bar. */
+.brand-grad { background: linear-gradient(120deg, var(--brand-a), var(--brand-b)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Hero: empty and first-run states. Mark above a headline, ambient behind. */
+.hero { display: grid; justify-items: center; gap: var(--s-3); padding: var(--s-12) var(--s-6); text-align: center; color: var(--text-2); }
+.hero h2 { margin: var(--s-2) 0 0; font-size: var(--t-2xl); font-weight: 600; letter-spacing: -.02em; color: var(--text); line-height: var(--lh-tight); }
+.hero p { margin: 0; max-width: 52ch; font-size: var(--t-md); line-height: var(--lh-read); }
+.hero .acts { display: flex; gap: var(--s-2); margin-top: var(--s-3); flex-wrap: wrap; justify-content: center; }
+
+/* Entropy line (was the SignalMonitor entropy gradient stroke). The signal
+   gradient on data: the one chart that keeps it. */
+.spark-e { display: block; overflow: visible; }
+
+/* Inline code in prose: the docs treatment (accent on accent tint).
+   5.6:1 dark, 5.7:1 light. */
+.prose :not(pre) > code, .code-accent { font-family: var(--font-data); font-size: .88em; padding: 1px 5px; border-radius: 4px; background: var(--accent-tint); color: var(--accent); }
+
+/* Scrollbar: neutral at rest, signal while dragged or hovered. */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover, ::-webkit-scrollbar-thumb:active { background: linear-gradient(180deg, #8b5cf6, #22d3ee); background-clip: padding-box; }
+::selection { background: rgb(139 92 246 / .3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sonar { display: none; }
+  .glow-live { box-shadow: 0 12px 36px -16px var(--glow-live); }
+}

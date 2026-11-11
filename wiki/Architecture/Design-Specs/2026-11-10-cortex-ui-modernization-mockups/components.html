@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Components — Cortex Bench mockup</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  main { overflow-y: auto; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 var(--s-8) var(--s-12); display: grid; gap: var(--s-6); }
+  .blk { display: grid; grid-template-columns: 200px 1fr; gap: var(--s-6); padding-top: var(--s-5); border-top: 1px solid var(--line); }
+  .blk h2 { margin: 0; font-size: var(--t-sm); font-weight: 600; } .blk .why { font-size: var(--t-xs); color: var(--text-3); margin-top: 4px; }
+  .line { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s-2); }
+  .sw { border-radius: var(--r-ctl); border: 1px solid var(--line); overflow: hidden; background: var(--surface-1); }
+  .sw i { display: block; height: 40px; } .sw div { padding: 6px 8px; font-size: var(--t-xs); } .sw .data { color: var(--text-3); display: block; }
+  .scale div { display: flex; align-items: baseline; gap: var(--s-4); padding: 4px 0; } .scale .data { width: 120px; color: var(--text-3); }
+  .stack { display: grid; gap: var(--s-3); max-width: 420px; }
+</style>
+</head>
+<body data-page="">
+<div class="app">
+  <div data-topbar></div>
+  <main><div class="wrap">
+    <div class="page-h" style="padding-left:0;padding-right:0"><div><h1>Cortex Bench components</h1><p>Every page is built from this sheet. Toggle the theme to check both. The identity layer (old element to modernized form) is in <a href="identity.html" style="color:var(--accent)">identity.html</a>.</p></div></div>
+
+    <section class="blk"><div><h2>Surfaces and text</h2><div class="why">Five steps of depth, three of text. Contrast measured on every pairing.</div></div>
+      <div class="swatches">
+        <div class="sw"><i style="background:var(--canvas)"></i><div>canvas<span class="data">page</span></div></div>
+        <div class="sw"><i style="background:var(--surface-1)"></i><div>surface-1<span class="data">panels</span></div></div>
+        <div class="sw"><i style="background:var(--surface-2)"></i><div>surface-2<span class="data">raised, hover</span></div></div>
+        <div class="sw"><i style="background:var(--surface-3)"></i><div>surface-3<span class="data">selected</span></div></div>
+        <div class="sw"><i style="background:var(--text)"></i><div>text<span class="data">15.3 : 1</span></div></div>
+        <div class="sw"><i style="background:var(--text-2)"></i><div>text-2<span class="data">9.0 : 1</span></div></div>
+        <div class="sw"><i style="background:var(--text-3)"></i><div>text-3<span class="data">6.2 : 1, floor</span></div></div>
+        <div class="sw"><i style="background:var(--signal)"></i><div>signal<span class="data">live only</span></div></div>
+      </div></section>
+
+    <section class="blk"><div><h2>Meaning colors</h2><div class="why">Color is never decoration. Violet is the agent, cyan is tools and data.</div></div>
+      <div class="line"><span class="badge accent">agent · thinking</span><span class="badge io">tool · I/O</span><span class="badge ok">finished</span><span class="badge warn">needs you</span><span class="badge bad">failed</span><span class="badge neutral">stopped · idle</span></div></section>
+
+    <section class="blk"><div><h2>Type scale</h2><div class="why">Geist for words, JetBrains Mono only for machine values. Nothing under 11px; no all-caps labels.</div></div>
+      <div class="scale">
+        <div><span class="data">2xl 30 / empty</span><span style="font-size:var(--t-2xl);font-weight:600;letter-spacing:-.02em">No runs yet</span></div>
+        <div><span class="data">xl 22 / page</span><span style="font-size:var(--t-xl);font-weight:600">Runs</span></div>
+        <div><span class="data">lg 17 / panel</span><span style="font-size:var(--t-lg);font-weight:600">Model</span></div>
+        <div><span class="data">md 15 / reading</span><span style="font-size:var(--t-md)">The agent's answer reads like prose, at 1.65 line height.</span></div>
+        <div><span class="data">sm 13 / controls</span><span>Buttons, rows, navigation</span></div>
+        <div><span class="data">xs 12 / labels</span><span style="font-size:var(--t-xs);color:var(--text-2)">Field labels and secondary meta</span></div>
+        <div><span class="data">2xs 11 / data</span><span class="data" style="color:var(--text)">2,535 tok · 18.4s · $0.0004</span></div>
+      </div></section>
+
+    <section class="blk"><div><h2>Buttons</h2><div class="why">Four kinds, two sizes. One primary per view. Icon buttons always carry a label.</div></div>
+      <div class="line"><button class="btn primary"><svg class="i sm"><use href="#i-send"/></svg>Save and run</button><button class="btn">Export</button><button class="btn ghost">Cancel</button><button class="btn danger">Delete run</button><button class="btn sm">Small</button><button class="btn" disabled>Disabled</button><button class="iconbtn" aria-label="Copy"><svg class="i"><use href="#i-copy"/></svg></button><span class="kbd">Ctrl K</span></div></section>
+
+    <section class="blk"><div><h2>Status</h2><div class="why">One vocabulary for runs, turns, sub-agents and Beacon (ui-core gap G2).</div></div>
+      <div class="line"><span class="status tone-running"><span class="dot"></span>Running</span><span class="status tone-attention"><span class="dot"></span>Waiting on you</span><span class="status tone-done"><span class="dot"></span>Finished</span><span class="status tone-failed"><span class="dot"></span>Failed</span><span class="status tone-stopped"><span class="dot"></span>Stopped</span><span class="status tone-idle"><span class="dot"></span>Idle</span></div></section>
+
+    <section class="blk"><div><h2>Chips</h2><div class="why">Chips are settings you can change (quick bar) or values (tool names, in mono).</div></div>
+      <div class="line"><button class="chip"><svg class="i sm"><use href="#i-model"/></svg>ollama / qwen3:14b</button><button class="chip on"><svg class="i sm"><use href="#i-tool"/></svg>4 tools</button><span class="chip data" style="color:var(--io)">web-search ×2</span><span class="chip">ReAct + Reflexion</span></div></section>
+
+    <section class="blk"><div><h2>Neural mark</h2><div class="why">The Cortex mark at every size. 22px in the bar (no filters), 64 to 132px on empty and landing states with a slow twinkle. Full mapping: identity.html.</div></div>
+      <div class="line"><span data-mark="22"></span><span data-mark="32"></span><span data-mark="64" data-hero></span><span data-mark="96" data-hero></span><span style="font-size:var(--t-2xl);font-weight:600;letter-spacing:-.02em" class="brand-grad">Cortex</span></div></section>
+
+    <section class="blk"><div><h2>Signal rail</h2><div class="why">Moves only while something runs. Live cards add the violet-to-cyan edge and glow.</div></div>
+      <div class="stack"><div class="rail live" style="padding:8px 16px">Running: violet to cyan, flowing</div><div class="rail" style="padding:8px 16px">Finished: neutral hairline</div><div class="rail failed" style="padding:8px 16px">Failed: red</div><div class="rail attention" style="padding:8px 16px">Waiting on you: amber</div>
+      <div class="meter live"><i style="width:55%"></i></div><div class="meter"><i style="width:34%"></i></div>
+      <div class="panel glow-live rail live" style="padding:12px 16px 12px 20px">Live card: gradient edge + breathing glow</div>
+      <div style="display:flex;align-items:center;gap:10px"><span data-spark=".2,.35,.3,.55,.48,.62,.4,.3" data-w="140" data-h="28"></span><span class="data faint">η entropy line</span></div></div></section>
+
+    <section class="blk"><div><h2>Fields</h2><div class="why">Label above, hint below, one height. Focus ring is the only cyan outline.</div></div>
+      <div class="stack"><div class="field"><label for="a">Agent name</label><input id="a" class="input" placeholder="research-assistant"><span class="hint">Shown in Runs and Beacon instead of the agent id.</span></div>
+      <div class="field"><label for="b">Provider</label><select id="b" class="select"><option>Ollama (local)</option></select></div></div></section>
+
+    <section class="blk"><div><h2>Tabs</h2><div class="why">role=tablist everywhere (run inspector, Lab, trace).</div></div>
+      <div class="tabs" role="tablist"><button role="tab" aria-selected="true">Summary</button><button role="tab" aria-selected="false">Events <span class="n">62</span></button><button role="tab" aria-selected="false">Messages <span class="n">3</span></button></div></section>
+
+    <section class="blk"><div><h2>Panel</h2><div class="why">Header, body. At rest: hairline edge, no glow. The gradient edge is for live cards only.</div></div>
+      <div class="panel" style="max-width:520px"><div class="panel-h"><h2>Answer</h2><button class="btn sm ghost" style="margin-left:auto">Copy</button></div><div class="panel-b">Body text sits on surface-1 with a hairline edge.</div></div></section>
+
+    <section class="blk"><div><h2>Empty state</h2><div class="why">Says what to do next, offers the action. Panel-level empty states stay plain; page-level ones (Beacon, Chat, Runs) use the hero with the mark.</div></div>
+      <div class="stack" style="max-width:none">
+      <div class="panel"><div class="empty"><h3>No saved agents</h3><p>Build one in the Builder and choose Save, or import an agent JSON file.</p><div class="line"><button class="btn primary">Open Builder</button><button class="btn ghost">Import</button></div></div></div>
+      <div class="panel band" style="overflow:hidden"><div class="hero"><span data-mark="88" data-hero></span><h2>No runs yet</h2><p>Runs appear here as soon as an agent starts.</p><div class="acts"><button class="btn primary">Open a chat</button></div></div></div>
+      </div></section>
+
+    <section class="blk"><div><h2>Toast</h2><div class="why">One per run, keyed. Names the action that happened.</div></div>
+      <div class="toast"><span class="status tone-failed"><span class="dot"></span></span><div><div style="font-weight:600">Run failed: Save market.md</div><div class="hint" style="color:var(--text-2)">file-write was refused: no workspace is set.</div><div style="margin-top:6px"><button class="btn sm">Open run</button></div></div></div></section>
+  </div></main>
+</div>
+<script src="kit.js"></script>
+</body>
+</html>

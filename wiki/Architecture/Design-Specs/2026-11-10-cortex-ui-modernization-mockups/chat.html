@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat — Cortex Bench mockup</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .chat { display: grid; grid-template-columns: 264px 1fr; min-height: 0; }
+  .chat.with-drawer { grid-template-columns: 264px 1fr 400px; }
+
+  /* Sessions rail */
+  .sessions { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .sessions-h { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-3) var(--s-2) var(--s-4); }
+  .sessions-h h2 { margin: 0; font-size: var(--t-sm); font-weight: 600; }
+  .sessions-h .btn { margin-left: auto; }
+  .search { margin: 0 var(--s-3) var(--s-2); position: relative; }
+  .search .i { position: absolute; left: 9px; top: 9px; color: var(--text-3); }
+  .search .input { padding-left: 30px; height: 32px; background: var(--surface-1); }
+  .group-label { padding: var(--s-3) var(--s-4) var(--s-1); font-size: var(--t-xs); color: var(--text-3); }
+  .session { display: grid; grid-template-columns: 1fr auto; gap: 2px var(--s-2); margin: 0 var(--s-2); padding: 8px 10px; border-radius: var(--r-ctl); text-decoration: none; color: inherit; }
+  .session:hover { background: var(--surface-2); }
+  .session[aria-current="page"] { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+  .session .name { font-size: var(--t-sm); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session .meta { grid-column: 1 / -1; display: flex; gap: var(--s-2); font-size: var(--t-xs); color: var(--text-3); }
+  .session .more { opacity: 0; width: 22px; height: 20px; } .session:hover .more, .session:focus-within .more { opacity: 1; }
+
+  /* Conversation column */
+  .convo { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+  .convo-h { display: flex; align-items: center; gap: var(--s-3); padding: 10px var(--s-6); border-bottom: 1px solid var(--line); }
+  .convo-h h1 { margin: 0; font-size: var(--t-md); font-weight: 600; }
+  .convo-h .ctx { margin-left: auto; display: flex; align-items: center; gap: var(--s-3); }
+  .ctx-meter { display: grid; gap: 3px; width: 170px; }
+  .ctx-meter .data { display: flex; justify-content: space-between; color: var(--text-3); white-space: nowrap; }
+  .scroll { overflow-y: auto; padding: var(--s-6) var(--s-6) var(--s-10); }
+  .thread { max-width: 760px; margin: 0 auto; display: grid; gap: var(--s-8); }
+
+  .msg-user { justify-self: end; max-width: 78%; display: grid; gap: 6px; justify-items: end; }
+  .bubble { background: var(--surface-2); border-radius: var(--r-panel) var(--r-panel) 4px var(--r-panel); padding: 10px 14px; font-size: var(--t-md); line-height: var(--lh-read); }
+  .actions { display: flex; align-items: center; gap: 2px; color: var(--text-3); font-size: var(--t-xs); }
+  .actions .iconbtn { width: 26px; height: 26px; }
+  .msg-user .actions .iconbtn, .turn .actions .tools { opacity: 0; transition: opacity var(--d-fast); }
+  .msg-user:hover .actions .iconbtn, .msg-user:focus-within .actions .iconbtn, .turn:hover .actions .tools, .turn:focus-within .actions .tools, .turn.last .actions .tools { opacity: 1; }
+
+  .turn { padding-left: var(--s-5); display: grid; gap: var(--s-3); }
+  .turn-h { display: flex; align-items: center; gap: var(--s-2); font-size: var(--t-xs); color: var(--text-2); }
+  .turn-h .who { font-weight: 600; color: var(--text); font-size: var(--t-sm); }
+  .turn-h .usage { margin-left: auto; color: var(--text-3); }
+  .prose { font-size: var(--t-md); line-height: var(--lh-read); max-width: var(--measure); }
+  .prose p { margin: 0 0 .7em; } .prose p:last-child { margin: 0; }
+  /* inline code: identity layer `.prose :not(pre) > code` (accent on accent tint) */
+  .prose table { border-collapse: collapse; font-size: var(--t-sm); margin: .3em 0 .8em; }
+  .prose th { text-align: left; font-weight: 600; color: var(--text-2); padding: 6px 18px 6px 0; border-bottom: 1px solid var(--line-strong); }
+  .prose td { padding: 6px 18px 6px 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+
+  /* Tool group: one quiet row */
+  .toolrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: fit-content; max-width: 100%; padding: 5px 10px 5px 8px; border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--surface-1); cursor: pointer; font-size: var(--t-xs); color: var(--text-2); }
+  .toolrow:hover { border-color: var(--line-strong); color: var(--text); }
+  .toolrow .lead { font-weight: 600; color: var(--text); }
+  .toolrow .t { font-family: var(--font-data); font-size: var(--t-2xs); padding: 1px 6px; border-radius: var(--r-chip); background: var(--surface-2); color: var(--io); }
+  .toolrow .t.bad { color: var(--bad); background: var(--bad-tint); }
+  .toolrow .t.fixed { color: var(--ok); background: var(--ok-tint); }
+  .toolrow .dur { color: var(--text-3); font-family: var(--font-data); font-size: var(--t-2xs); }
+
+  /* Sub-agent cards */
+  .subagents { display: grid; gap: var(--s-2); }
+  .subagents-h { display: flex; gap: var(--s-2); align-items: center; font-size: var(--t-xs); color: var(--text-2); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--s-2); }
+  .card { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--surface-1); text-align: left; cursor: pointer; }
+  .card:hover { border-color: var(--line-strong); }
+  .card .top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .card .nm { font-weight: 600; font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 6ch; }
+  .card .st { margin-left: auto; }
+  .card .line { font-size: var(--t-xs); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .data { color: var(--text-3); }
+
+  .turn-foot { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+  .goals { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* Ending notes */
+  .ending { display: grid; gap: 6px; padding: 12px 14px; border-radius: var(--r-ctl); background: var(--bad-tint); color: var(--text); max-width: var(--measure); }
+  .ending .h { display: flex; align-items: center; gap: 6px; color: var(--bad); font-weight: 600; font-size: var(--t-sm); }
+  .ending p { margin: 0; font-size: var(--t-sm); color: var(--text-2); }
+  .ending code { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--text); }
+
+  /* Live turn */
+  .thinking { display: flex; align-items: center; gap: var(--s-2); font-size: var(--t-sm); color: var(--text-2); }
+  .thinking .wait { font-size: var(--t-xs); color: var(--text-3); }
+  .draft { color: var(--text-2); }
+  .step-live { display: flex; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--text-2); }
+  .step-live .t { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--io); }
+
+  /* Composer */
+  .composer-wrap { padding: 0 var(--s-6) var(--s-5); }
+  .composer { max-width: 808px; margin: 0 auto; border: 1px solid var(--line-strong); border-radius: var(--r-panel); background: var(--surface-1); }
+  .composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+  .quick { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 8px 0; }
+  .composer textarea { display: block; width: 100%; min-height: 64px; border: 0; background: transparent; padding: 10px 14px; color: var(--text); font: 400 var(--t-md)/var(--lh-read) var(--font-ui); resize: none; outline: none; }
+  .composer textarea::placeholder { color: var(--text-3); }
+  .composer-f { display: flex; align-items: center; gap: var(--s-2); padding: 0 8px 8px 8px; }
+  .composer-f .hint { margin-right: auto; }
+  .send { width: 32px; height: 32px; border-radius: var(--r-ctl); border: 0; display: grid; place-items: center; background: var(--accent-fill); color: #fff; cursor: pointer; }
+  .send.stop { background: var(--surface-3); color: var(--text); }
+  .queued { max-width: 808px; margin: 0 auto 8px; display: flex; align-items: center; gap: var(--s-2); font-size: var(--t-xs); color: var(--text-2); padding: 6px 10px; border-radius: var(--r-ctl); background: var(--surface-2); }
+
+  /* Drawer */
+  .drawer { border-left: 1px solid var(--line); background: var(--surface-1); display: grid; grid-template-rows: auto auto 1fr; min-height: 0; }
+  .drawer-h { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--line); }
+  .drawer-h h2 { margin: 0; font-size: var(--t-md); font-weight: 600; }
+  .drawer .meta { padding: var(--s-3) var(--s-4); display: flex; gap: var(--s-2); flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+  .drawer .body { overflow-y: auto; padding: var(--s-4); display: grid; gap: var(--s-4); align-content: start; }
+  .steps { display: grid; gap: 2px; }
+  .step { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; padding: 8px; border-radius: var(--r-ctl); align-items: start; }
+  .step:hover { background: var(--surface-2); }
+  .step .n { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--text-3); padding-top: 2px; }
+  .step .ttl { font-size: var(--t-sm); font-weight: 500; }
+  .step .sub { font-size: var(--t-xs); color: var(--text-2); }
+
+  .chat.with-drawer:has(> .drawer[hidden]) { grid-template-columns: 264px 1fr; }
+  .suggest { display: grid; gap: 6px; width: min(520px, 100%); margin-top: var(--s-2); }
+  .suggest button { text-align: left; padding: 10px 14px; border-radius: var(--r-ctl); border: 1px solid var(--line); background: var(--surface-1); color: var(--text); font-size: var(--t-sm); cursor: pointer; display: flex; gap: 8px; align-items: center; }
+  .suggest button:hover { border-color: var(--line-strong); background: var(--surface-2); }
+  .suggest .i { color: var(--text-3); }
+  @media (max-width: 1360px) { .chat.with-drawer { grid-template-columns: 264px 1fr; } .drawer { position: fixed; right: 0; top: 52px; bottom: 0; width: 400px; z-index: var(--z-drawer); box-shadow: var(--shadow-pop); } }
+</style>
+</head>
+<body data-page="chat" data-ambient-empty-only>
+<div class="app">
+  <div data-topbar></div>
+  <div class="chat with-drawer">
+    <!-- ── Sessions ── -->
+    <aside class="sessions" aria-label="Sessions">
+      <div class="sessions-h"><h2>Chats</h2><button class="btn sm primary"><svg class="i sm"><use href="#i-plus"/></svg>New chat</button></div>
+      <div class="search"><svg class="i sm"><use href="#i-search"/></svg><input class="input" placeholder="Search chats" aria-label="Search chats"></div>
+      <div class="group-label">Today</div>
+      <a class="session" href="#" aria-current="page">
+        <span class="name">Crypto market report</span>
+        <span class="status tone-running"><span class="dot"></span></span>
+        <span class="meta"><span>qwen3:14b</span><span>Running 42s</span></span>
+      </a>
+      <a class="session" href="#">
+        <span class="name">Hash function explainer</span>
+        <button class="iconbtn more" aria-label="More actions for Hash function explainer"><svg class="i sm"><use href="#i-dots"/></svg></button>
+        <span class="meta"><span>mimo-v2.6</span><span>1 hour ago</span></span>
+      </a>
+      <a class="session" href="#">
+        <span class="name">Release notes draft</span>
+        <span class="status tone-failed" title="Last run did not finish"><span class="dot"></span></span>
+        <span class="meta"><span>claude-sonnet-4-6</span><span>3 hours ago</span></span>
+      </a>
+      <div class="group-label">Earlier</div>
+      <a class="session" href="#"><span class="name">Refactor plan for runner-service</span><button class="iconbtn more" aria-label="More actions"><svg class="i sm"><use href="#i-dots"/></svg></button><span class="meta"><span>gpt-5</span><span>Nov 8</span></span></a>
+      <a class="session" href="#"><span class="name">Shell sandbox smoke test</span><button class="iconbtn more" aria-label="More actions"><svg class="i sm"><use href="#i-dots"/></svg></button><span class="meta"><span>llama3.2:3b</span><span>Nov 6</span></span></a>
+    </aside>
+
+    <!-- ── Conversation ── -->
+    <!-- ── Empty session: neural mark + ambient orbs (no dense text behind them) ── -->
+    <main class="convo" aria-label="Conversation" data-state="empty" hidden>
+      <div class="convo-h"><h1>New chat</h1><span class="chip data">ollama / qwen3:14b</span></div>
+      <div class="scroll" style="display:grid;align-content:center">
+        <div class="hero" style="padding-top:0">
+          <span data-mark="88" data-hero></span>
+          <h2 style="font-size:var(--t-xl)">Ask the agent anything</h2>
+          <p>It can use the 4 tools picked below. Type <span class="kbd">/</span> for commands like compact, fork and rewind.</p>
+          <div class="suggest">
+            <button><svg class="i sm"><use href="#i-chevron"/></svg>Summarise what you can do here</button>
+            <button><svg class="i sm"><use href="#i-chevron"/></svg>What tools do you have available?</button>
+            <button><svg class="i sm"><use href="#i-chevron"/></svg>Plan how you would research a topic step by step</button>
+          </div>
+        </div>
+      </div>
+      <div class="composer-wrap">
+        <div class="composer" data-slash-menu-keep>
+          <div class="quick" role="toolbar" aria-label="Chat settings">
+            <button class="chip"><svg class="i sm"><use href="#i-model"/></svg>ollama / qwen3:14b</button>
+            <button class="chip"><svg class="i sm"><use href="#i-think"/></svg>Thinking auto</button>
+            <button class="chip"><svg class="i sm"><use href="#i-strategy"/></svg>ReAct</button>
+            <button class="chip on"><svg class="i sm"><use href="#i-tool"/></svg>4 tools</button>
+            <button class="chip"><svg class="i sm"><use href="#i-shell"/></svg>Shell off</button>
+            <button class="chip"><svg class="i sm"><use href="#i-folder"/></svg>No workspace</button>
+          </div>
+          <textarea aria-label="Message" placeholder="Message the agent"></textarea>
+          <div class="composer-f"><span class="hint"><span class="kbd">/</span> commands <span class="kbd">Enter</span> send</span>
+            <button class="send" aria-label="Send"><svg class="i"><use href="#i-send"/></svg></button></div>
+        </div>
+      </div>
+    </main>
+
+    <main class="convo" aria-label="Conversation" data-state="default">
+      <div class="convo-h">
+        <h1>Crypto market report</h1>
+        <span class="chip data">ollama / qwen3:14b</span>
+        <div class="ctx">
+          <div class="ctx-meter" title="Context in use: 11.2k of 32.8k tokens">
+            <div class="meter"><i style="width:34%"></i></div>
+            <div class="data"><span>context 34%</span><span>11.2k / 32.8k</span></div>
+          </div>
+          <span class="data faint">$0.0124</span>
+          <button class="btn sm ghost"><svg class="i sm"><use href="#i-download"/></svg>Export</button>
+          <button class="btn sm"><svg class="i sm"><use href="#i-trace"/></svg>Trace</button>
+        </div>
+      </div>
+
+      <div class="scroll">
+        <div class="thread">
+          <!-- user -->
+          <div class="msg-user">
+            <div class="bubble">Give me a market report on BTC, ETH, SOL and DOGE.</div>
+            <div class="actions"><time title="Nov 10, 2026, 7:41 PM">1 hour ago</time>
+              <button class="iconbtn" aria-label="Copy message"><svg class="i sm"><use href="#i-copy"/></svg></button>
+              <button class="iconbtn" aria-label="Edit message"><svg class="i sm"><use href="#i-retry"/></svg></button></div>
+          </div>
+
+          <!-- finished assistant turn -->
+          <article class="turn rail" aria-label="Assistant reply">
+            <div class="turn-h"><span class="who">Agent</span><span class="chip data">qwen3:14b</span><span class="chip">ReAct + Reflexion</span><span class="usage data">2.8k in · 560 out</span></div>
+            <div class="prose"><p>I'll split this across four agents, one per coin.</p></div>
+            <button class="toolrow" aria-expanded="false" aria-label="7 tool calls, 1 failed. Show steps">
+              <svg class="i sm" style="color:var(--bad)"><use href="#i-alert"/></svg><span class="lead">Ran 7</span>
+              <span class="t">spawn-agents</span><span class="t fixed">web-search ×2</span><span class="t bad">file-write</span><span class="t">http-get</span><span class="t">+2</span>
+              <span style="color:var(--bad)">1 failed</span><span class="dur">5.6s</span><svg class="i sm"><use href="#i-chevron"/></svg>
+            </button>
+            <section class="subagents" aria-label="Sub-agents">
+              <div class="subagents-h"><svg class="i sm"><use href="#i-agents"/></svg>4 agents <span class="faint">1 failed, 1 declined</span></div>
+              <div class="cards">
+                <button class="card"><span class="top"><span class="status tone-done"><span class="dot"></span></span><span class="nm">btc-analyst</span><span class="st badge ok">done</span></span><span class="line">BTC trades at $91,200, up 1.2% on the day</span><span class="data">2 tools · 20s · $0.003</span></button>
+                <button class="card"><span class="top"><span class="status tone-done"><span class="dot"></span></span><span class="nm">eth-analyst</span><span class="st badge ok">done</span></span><span class="line">ETH trades at $3,140, up 2.1%</span><span class="data">2 tools · 20s · $0.003</span></button>
+                <button class="card" aria-pressed="true" style="border-color:var(--line-strong);background:var(--surface-2)"><span class="top"><span class="status tone-failed"><span class="dot"></span></span><span class="nm">sol-analyst</span><span class="st badge bad">failed</span></span><span class="line">http-get: 429 Too Many Requests</span><span class="data">2 tools · 20s · $0.003</span></button>
+                <button class="card"><span class="top"><span class="status tone-stopped"><span class="dot"></span></span><span class="nm">doge-analyst</span><span class="st badge neutral">declined</span></span><span class="line">No reliable price source answered</span><span class="data">2 tools · 20s · $0.003</span></button>
+              </div>
+            </section>
+            <div class="prose">
+              <table><thead><tr><th>Coin</th><th>Price</th><th>24h</th></tr></thead>
+                <tbody><tr><td>BTC</td><td>$91,200</td><td>+1.2%</td></tr><tr><td>ETH</td><td>$3,140</td><td>+2.1%</td></tr></tbody></table>
+              <p>SOL data was rate-limited (<code>429</code> from <code>api.coingecko.com</code>) and the DOGE agent declined, so this covers two of the four coins.</p>
+            </div>
+            <div class="turn-foot">
+              <span class="badge warn goals"><svg class="i sm"><use href="#i-goal"/></svg>Goals 3/4</span>
+              <span class="data faint">3 steps · 7 calls · 2 failed, 1 fixed</span>
+            </div>
+            <div class="actions"><span class="status tone-done"><svg class="i sm"><use href="#i-check"/></svg></span><span>Ran 2m 05s, finished 1 hour ago</span>
+              <span class="tools"><button class="iconbtn" aria-label="Copy answer"><svg class="i sm"><use href="#i-copy"/></svg></button><button class="iconbtn" aria-label="Open trace"><svg class="i sm"><use href="#i-trace"/></svg></button><button class="iconbtn" aria-label="Fork from here"><svg class="i sm"><use href="#i-fork"/></svg></button></span></div>
+          </article>
+
+          <!-- failed turn -->
+          <div class="msg-user"><div class="bubble">Save that as <code style="font-family:var(--font-data);font-size:.88em">market.md</code> in the workspace.</div><div class="actions"><time>58 minutes ago</time></div></div>
+          <article class="turn rail failed" aria-label="Assistant reply, did not finish">
+            <div class="turn-h"><span class="who">Agent</span><span class="chip data">qwen3:14b</span><span class="badge bad">did not finish</span></div>
+            <div class="ending" role="note">
+              <div class="h"><svg class="i sm"><use href="#i-alert"/></svg>The run stopped before it could answer</div>
+              <p>file-write was refused: no workspace is set for this chat. What was attempted: file-write <code>market.md</code>.</p>
+              <div style="display:flex;gap:6px;margin-top:4px"><button class="btn sm"><svg class="i sm"><use href="#i-folder"/></svg>Set workspace</button><button class="btn sm ghost"><svg class="i sm"><use href="#i-retry"/></svg>Retry</button></div>
+            </div>
+            <div class="actions"><span>Ran 9s, ended 57 minutes ago</span><span class="tools"><button class="iconbtn" aria-label="Open trace"><svg class="i sm"><use href="#i-trace"/></svg></button></span></div>
+          </article>
+
+          <!-- live turn -->
+          <div class="msg-user"><div class="bubble">Retry SOL with a different source, then update the table.</div><div class="actions"><time>just now</time></div></div>
+          <article class="turn rail live last" aria-label="Assistant reply, running" aria-busy="true">
+            <div class="turn-h"><span class="who">Agent</span><span class="chip data">qwen3:14b</span><span class="status tone-running"><span class="dot"></span>Running 42s</span><span class="usage data">1.9k in · 210 out</span></div>
+            <div class="prose draft"><p>CoinGecko rate-limited us earlier, so I'll try the exchange API next…</p></div>
+            <div class="step-live"><span class="status tone-running"><span class="dot"></span></span>Calling <span class="t">http-get</span><span class="faint">api.kraken.com/0/public/Ticker?pair=SOLUSD</span><span class="data faint">3s</span></div>
+            <div class="thinking"><svg class="i sm"><use href="#i-think"/></svg>Thinking <span class="wait">step 3 of 6 · waiting on the model</span></div>
+          </article>
+        </div>
+      </div>
+
+      <div class="composer-wrap">
+        <div class="queued"><svg class="i sm"><use href="#i-steps"/></svg>Queued: <span style="color:var(--text)">“Also add a one-line outlook per coin.”</span><span style="margin-left:auto" class="faint">sends when this run ends</span><button class="btn sm ghost">Edit</button></div>
+        <div class="composer" data-slash-menu-keep>
+          <div class="quick" role="toolbar" aria-label="Chat settings">
+            <button class="chip"><svg class="i sm"><use href="#i-model"/></svg>ollama / qwen3:14b</button>
+            <button class="chip"><svg class="i sm"><use href="#i-think"/></svg>Thinking auto</button>
+            <button class="chip"><svg class="i sm"><use href="#i-strategy"/></svg>ReAct</button>
+            <button class="chip on"><svg class="i sm"><use href="#i-tool"/></svg>4 tools</button>
+            <button class="chip"><svg class="i sm"><use href="#i-shell"/></svg>Shell off</button>
+            <button class="chip"><svg class="i sm"><use href="#i-folder"/></svg>No workspace</button>
+            <button class="chip"><svg class="i sm"><use href="#i-steps"/></svg>6 steps</button>
+          </div>
+          <textarea aria-label="Message" placeholder="Reply in progress. Type to queue your next message"></textarea>
+          <div class="composer-f"><span class="hint"><span class="kbd">/</span> commands <span class="kbd">Enter</span> queue <span class="kbd">Esc</span> clear</span>
+            <button class="iconbtn" aria-label="Prompt library"><svg class="i"><use href="#i-book"/></svg></button>
+            <button class="send stop" aria-label="Stop reply"><svg class="i"><use href="#i-stop"/></svg></button></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ── Sub-agent drawer ── -->
+    <aside class="drawer" aria-label="Sub-agent sol-analyst" data-state="default">
+      <div class="drawer-h"><span class="status tone-failed"><span class="dot"></span></span><h2>sol-analyst</h2><button class="iconbtn" style="margin-left:auto" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button></div>
+      <div class="meta"><span class="badge bad">failed</span><span class="chip">Reactive</span><span class="chip data">2 tools · 20s · $0.003</span></div>
+      <div class="body">
+        <div class="prose" style="font-size:var(--t-sm)"><p>Searching for the SOL price.</p></div>
+        <div class="steps">
+          <div class="step"><span class="n">1</span><div><div class="ttl">web-search</div><div class="sub">“solana price usd” · 5 results</div></div><span class="data faint">0.9s</span></div>
+          <div class="step"><span class="n">2</span><div><div class="ttl" style="color:var(--bad)">http-get · failed</div><div class="sub">429 Too Many Requests from api.coingecko.com</div></div><span class="data faint">0.7s</span></div>
+        </div>
+        <div class="ending" role="note"><div class="h"><svg class="i sm"><use href="#i-alert"/></svg>Did not finish</div><p>The price source rate-limited every request. No answer was given.</p></div>
+      </div>
+    </aside>
+  </div>
+</div>
+<script src="kit.js"></script>
+</body>
+</html>

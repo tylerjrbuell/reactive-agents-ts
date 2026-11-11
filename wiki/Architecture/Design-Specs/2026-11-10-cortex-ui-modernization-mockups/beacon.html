@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon — Cortex Bench mockup</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  main { overflow-y: auto; display: grid; grid-template-rows: auto 1fr auto; }
+  .wrap { max-width: 1280px; width: 100%; margin: 0 auto; padding: 0 var(--s-8) var(--s-8); display: grid; gap: var(--s-6); align-content: start; }
+  .sec-h { display: flex; align-items: baseline; gap: var(--s-2); margin-bottom: var(--s-3); }
+  .sec-h h2 { margin: 0; font-size: var(--t-sm); font-weight: 600; }
+  .sec-h .n { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--text-3); }
+  .live { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--s-3); }
+  .livecard { min-width: 0; display: grid; gap: var(--s-3); padding: var(--s-4) var(--s-4) var(--s-4) var(--s-5); border-radius: var(--r-panel); background: var(--surface-1); border: 1px solid var(--line); }
+  .livecard .top { display: flex; align-items: center; gap: var(--s-2); }
+  .livecard .nm { font-size: var(--t-md); font-weight: 600; }
+  .livecard .top .data { margin-left: auto; color: var(--text-3); }
+  .livecard .goal { color: var(--text-2); font-size: var(--t-sm); margin: 0; max-width: 60ch; }
+  .livecard .now { display: flex; gap: 8px; align-items: center; font-size: var(--t-xs); color: var(--text-2); }
+  .livecard .now .t { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--io); }
+  .livecard .mid { display: flex; align-items: flex-end; gap: var(--s-4); }
+  .livecard .mid .now { flex: 1; min-width: 0; }
+  .livecard .eta { display: grid; justify-items: end; gap: 2px; }
+  .livecard .eta .data { color: var(--text-3); }
+  .livecard .foot { display: flex; align-items: center; gap: var(--s-4); }
+  .livecard .foot .meter { flex: 1; min-width: 60px; }
+  .livecard .foot .btn { margin-left: auto; }
+  .livecard .foot .data { color: var(--text-3); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s-3); }
+  .agent { display: grid; gap: 6px; padding: var(--s-3) var(--s-4); border-radius: var(--r-panel); background: var(--surface-1); border: 1px solid var(--line); cursor: pointer; }
+  .agent:hover { border-color: var(--line-strong); }
+  .agent .top { display: flex; align-items: center; gap: var(--s-2); }
+  .agent .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agent .src { margin-left: auto; }
+  .agent .last { font-size: var(--t-xs); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agent .data { color: var(--text-3); display: flex; gap: var(--s-3); }
+  .bar { padding: var(--s-3) var(--s-8) var(--s-5); }
+  .prompt { max-width: 820px; margin: 0 auto; display: flex; align-items: center; gap: var(--s-2); padding: 6px 6px 6px 8px; border-radius: var(--r-panel); background: var(--surface-1); border: 1px solid var(--line-strong); }
+  .prompt:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+  .prompt input { flex: 1; border: 0; background: transparent; color: var(--text); font: 400 var(--t-md) var(--font-ui); padding: 6px 4px; outline: none; }
+  .prompt input::placeholder { color: var(--text-3); }
+  .vseg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--surface-2); }
+  .vseg button { border: 0; background: none; padding: 5px 10px; border-radius: 6px; font-size: var(--t-xs); color: var(--text-2); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .vseg button[aria-pressed="true"] { background: var(--surface-1); color: var(--text); box-shadow: 0 0 0 1px var(--line-strong); }
+
+  /* Field view: the current free canvas, kept as an option. */
+  .field-wrap { max-width: 1280px; width: 100%; margin: 0 auto; padding: 0 var(--s-8) var(--s-6); }
+  .fieldv { position: relative; height: 520px; border-radius: var(--r-panel); border: 1px solid var(--line); overflow: hidden; }
+  .fieldv svg.links { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .fieldv .ln { stroke: var(--line-strong); stroke-width: 1; }
+  .fieldv .ln.on { stroke: var(--mk-violet); stroke-opacity: .7; stroke-dasharray: 5 7; animation: dash 1.6s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -24; } }
+  .node { position: absolute; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 6px; width: 168px; text-align: center; cursor: grab; }
+  .node .tile { position: relative; width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-1); border: 1px solid var(--line-strong); }
+  .node .tile .i { width: 20px; height: 20px; }
+  .node.running .tile { color: var(--accent); }
+  .node.done .tile { color: var(--ok); } .node.failed .tile { color: var(--bad); } .node.idle .tile { color: var(--text-3); }
+  .node .lbl { padding: 3px 8px; border-radius: var(--r-chip); background: var(--surface-1); border: 1px solid var(--line); display: grid; gap: 1px; max-width: 168px; }
+  .node .nm { font-size: var(--t-xs); font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node .st { font-size: var(--t-2xs); }
+  .field-legend { position: absolute; left: 12px; bottom: 12px; display: flex; gap: var(--s-2); align-items: center; font-size: var(--t-xs); color: var(--text-3); }
+  .field-tools { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; }
+</style>
+</head>
+<body data-page="beacon" data-ambient>
+<div class="app">
+  <div data-topbar></div>
+
+  <!-- ── Default: Board (owner decision: Board is the default view) ── -->
+  <main data-state="default">
+    <div class="band"><div class="page-h" style="max-width:1280px;width:100%;margin:0 auto;box-sizing:border-box"><div><h1>Beacon</h1><p>What your agents are doing right now.</p></div>
+      <div class="actions"><div class="vseg" role="group" aria-label="View"><button data-view-btn="board" aria-pressed="true">Board</button><button data-view-btn="field" aria-pressed="false">Field</button></div></div></div></div>
+
+    <div>
+      <div class="wrap" data-view="board">
+        <section aria-label="Running now">
+          <div class="sec-h"><h2>Running now</h2><span class="n">2</span></div>
+          <div class="live">
+            <article class="livecard rail live glow-live">
+              <div class="top"><span class="status tone-running"><span class="dot"></span></span><span class="nm">Crypto market report</span><span class="badge neutral">chat</span><span class="data">42s</span></div>
+              <p class="goal">Retry SOL with a different source, then update the table.</p>
+              <div class="mid"><div class="now">Calling <span class="t">http-get</span><span class="faint" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">api.kraken.com/0/public/Ticker</span></div>
+                <div class="eta"><span data-spark=".2,.35,.3,.55,.48,.62" data-w="96" data-h="24" data-label="Entropy per step, rising"></span><span class="data">η 0.62</span></div></div>
+              <div class="foot"><div class="meter live"><i style="width:50%"></i></div><span class="data">step 3 of 6 · 2.1k tok</span><button class="btn sm">Open</button></div>
+            </article>
+            <article class="livecard rail live glow-live">
+              <div class="top"><span class="status tone-running"><span class="dot"></span></span><span class="nm">release-bot</span><span class="badge neutral">gateway</span><span class="data">4m 10s</span></div>
+              <p class="goal">Nightly: draft release notes from merged PRs since v0.16.0.</p>
+              <div class="mid"><div class="now">Thinking <span class="faint">after 14 tool calls</span></div>
+                <div class="eta"><span data-spark=".7,.55,.5,.38,.3,.26,.22" data-w="96" data-h="24" data-label="Entropy per step, settling"></span><span class="data">η 0.22</span></div></div>
+              <div class="foot"><div class="meter live"><i style="width:35%"></i></div><span class="data">step 7 of 20 · 48.9k tok · $0.31</span><button class="btn sm">Open</button></div>
+            </article>
+          </div>
+        </section>
+        <section aria-label="Agents">
+          <div class="sec-h"><h2>Agents</h2><span class="n">6</span>
+            <div style="margin-left:auto;display:inline-flex;gap:2px"><button class="chip on">All</button><button class="chip">Needs you</button><button class="chip">Failed</button><button class="chip">Idle</button></div></div>
+          <div class="grid">
+            <div class="agent"><div class="top"><span class="status tone-attention"><span class="dot"></span></span><span class="nm">Release notes draft</span><span class="badge warn src">needs you</span></div><div class="last">Asked: which branch should I open the PR against?</div><div class="data"><span>claude-sonnet-4-6</span><span>9m ago</span></div></div>
+            <div class="agent"><div class="top"><span class="status tone-done"><span class="dot"></span></span><span class="nm">Hash function explainer</span><span class="badge neutral src">chat</span></div><div class="last">A hash function is a one-way mathematical function…</div><div class="data"><span>mimo-v2.6</span><span>2.5k tok</span><span>2h ago</span></div></div>
+            <div class="agent"><div class="top"><span class="status tone-failed"><span class="dot"></span></span><span class="nm">Save market.md</span><span class="badge neutral src">chat</span></div><div class="last">file-write refused: no workspace is set</div><div class="data"><span>qwen3:14b</span><span>58m ago</span></div></div>
+            <div class="agent"><div class="top"><span class="status tone-idle"><span class="dot"></span></span><span class="nm">docs-watcher</span><span class="badge neutral src">gateway</span></div><div class="last">Next run in 2h 14m (cron 0 */4 * * *)</div><div class="data"><span>gpt-5-mini</span><span>14 runs</span></div></div>
+            <div class="agent"><div class="top"><span class="status tone-stopped"><span class="dot"></span></span><span class="nm">Long multiplication</span><span class="badge neutral src">chat</span></div><div class="last">Stopped by you before the first step</div><div class="data"><span>qwen3:4b</span><span>1h ago</span></div></div>
+            <div class="agent"><div class="top"><span class="status tone-done"><span class="dot"></span></span><span class="nm">Bitcoin mining summary</span><span class="badge neutral src">desk</span></div><div class="last">Bitcoin mining is the process by which new bitcoins…</div><div class="data"><span>mimo-v2.6</span><span>777 tok</span><span>2h ago</span></div></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ── Field: the existing canvas, restyled. Same agents, names not ids. ── -->
+      <div class="field-wrap" data-view="field" hidden>
+        <div class="fieldv dotgrid" aria-label="Agents as a field">
+          <svg class="links" aria-hidden="true">
+            <line class="ln on" x1="30%" y1="34%" x2="14%" y2="70%"/><line class="ln on" x1="30%" y1="34%" x2="34%" y2="74%"/>
+            <line class="ln" x1="30%" y1="34%" x2="52%" y2="64%"/><line class="ln" x1="30%" y1="34%" x2="18%" y2="16%"/>
+          </svg>
+          <div class="node running" style="left:30%;top:34%"><div class="tile glow-live"><span class="sonar"></span><svg class="i"><use href="#i-think"/></svg></div><div class="lbl"><span class="nm">Crypto market report</span><span class="st status tone-running"><span class="dot"></span>Running · step 3</span></div></div>
+          <div class="node running" style="left:14%;top:70%"><div class="tile glow-live"><span class="sonar"></span><svg class="i"><use href="#i-tool"/></svg></div><div class="lbl"><span class="nm">sol-analyst (retry)</span><span class="st status tone-running"><span class="dot"></span>Calling http-get</span></div></div>
+          <div class="node done" style="left:34%;top:74%"><div class="tile"><svg class="i"><use href="#i-check"/></svg></div><div class="lbl"><span class="nm">btc-analyst</span><span class="st status tone-done"><span class="dot"></span>Finished</span></div></div>
+          <div class="node failed" style="left:52%;top:64%"><div class="tile"><svg class="i"><use href="#i-alert"/></svg></div><div class="lbl"><span class="nm">sol-analyst</span><span class="st status tone-failed"><span class="dot"></span>Failed</span></div></div>
+          <div class="node done" style="left:18%;top:16%"><div class="tile"><svg class="i"><use href="#i-check"/></svg></div><div class="lbl"><span class="nm">eth-analyst</span><span class="st status tone-done"><span class="dot"></span>Finished</span></div></div>
+          <div class="node running" style="left:74%;top:30%"><div class="tile glow-live"><span class="sonar"></span><svg class="i"><use href="#i-think"/></svg></div><div class="lbl"><span class="nm">release-bot</span><span class="st status tone-running"><span class="dot"></span>Thinking · step 7</span></div></div>
+          <div class="node idle" style="left:84%;top:72%"><div class="tile"><svg class="i"><use href="#i-steps"/></svg></div><div class="lbl"><span class="nm">docs-watcher</span><span class="st status tone-idle"><span class="dot"></span>Idle · next in 2h</span></div></div>
+          <div class="field-tools"><button class="btn sm">Arrange</button></div>
+          <div class="field-legend">Drag a node to move it. Dashed lines flow while a parent and its sub-agent both run.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar"><div class="prompt">
+      <button class="chip"><svg class="i sm"><use href="#i-model"/></svg>ollama / qwen3:14b</button>
+      <input placeholder="Describe a task to run as a new agent" aria-label="Task for a new agent">
+      <button class="iconbtn" aria-label="Prompt library"><svg class="i"><use href="#i-book"/></svg></button>
+      <button class="btn primary"><svg class="i sm"><use href="#i-send"/></svg>Run</button>
+    </div></div>
+  </main>
+
+  <!-- ── Empty / first run: the landing state keeps the neural core ── -->
+  <main data-state="empty" hidden>
+    <div></div>
+    <div class="hero" style="align-self:center">
+      <span data-mark="132" data-hero></span>
+      <h2>Welcome to <span class="brand-grad">Cortex</span></h2>
+      <p>Your agents show up here while they work. Start one below, open a chat, or point an app at Cortex with <span class="code-accent">.withCortex()</span>.</p>
+      <div class="acts"><button class="btn primary"><svg class="i sm"><use href="#i-chat"/></svg>Open a chat</button><button class="btn"><svg class="i sm"><use href="#i-lab"/></svg>Build an agent</button><button class="btn ghost"><svg class="i sm"><use href="#i-book"/></svg>Connect an app</button></div>
+    </div>
+    <div class="bar"><div class="prompt">
+      <button class="chip"><svg class="i sm"><use href="#i-model"/></svg>ollama / qwen3:14b</button>
+      <input placeholder="Describe a task to run as a new agent" aria-label="Task for a new agent">
+      <button class="btn primary"><svg class="i sm"><use href="#i-send"/></svg>Run</button>
+    </div></div>
+  </main>
+</div>
+<script src="kit.js"></script>
+</body>
+</html>

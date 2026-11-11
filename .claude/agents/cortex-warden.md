@@ -63,7 +63,7 @@ The Lab builder panel (`AgentConfigPanel.svelte`, `AdvancedFrameworkConfig.svelt
 4. **`POST /api/runs` 501 is by design** in the desk bar path; UI handles it (`stage-store.ts`).
 5. **One store instance per context**: `+layout.svelte` creates `agentStore`/`stageStore`; pages `getContext` them.
 6. **Svelte 5 runes** (`$props`, `$state`, `$derived`, `$effect`); `RunDetail` remounts per `runId` via `{#key}`.
-7. **Visual language is fixed**: `--cortex-*` / `--ra-*` tokens in `ui/src/app.css`, Geist + JetBrains Mono, `CortexDeskShell` on every full-height route. Load `frontend-design:frontend-design` for UI work and stay inside this language.
+7. **Visual language is fixed (Bench, `wiki/Architecture/Design-Specs/2026-11-10-cortex-ui-modernization.md`)**: semantic `--cortex-*` tokens with the `--ra-*` brand constants in `ui/src/app.css`; Geist for words, JetBrains Mono for machine values, nothing under 11px, no uppercase labels. `CortexDeskShell` wraps every full-height route and keeps a modernized ambient layer (two radial orbs at the spec's fixed strengths, slow drift, still under reduced motion) that is on only for Beacon and page-level empty states, never behind dense content. The neural mark (`NeuralMark`) is the only logo and the only illustration. The signal gradient's motion, the live glow and gradient edge, and the sonar ring mean "running now" and appear nowhere else. Every motion has a reduced-motion fallback, and text keeps WCAG AA over every layer. Load `frontend-design:frontend-design` for UI work and stay inside this language.
 8. **Server code follows repo law**: Effect-TS patterns, no `any`, no raw `throw` in services ([[effect-ts-patterns]]).
 
 ### Known failure modes

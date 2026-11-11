@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Identity — Cortex Bench mockup</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  main { overflow-y: auto; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 var(--s-8) var(--s-12); }
+  .row { display: grid; grid-template-columns: 170px 1fr 1fr 300px; gap: var(--s-4); padding: var(--s-5) 0; border-top: 1px solid var(--line); align-items: start; }
+  .row.head { border-top: 0; padding-bottom: var(--s-2); font-size: var(--t-xs); color: var(--text-3); font-weight: 500; }
+  .row h2 { margin: 0; font-size: var(--t-sm); font-weight: 600; }
+  .row .src { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--text-3); margin-top: 4px; word-break: break-word; }
+  .rule { font-size: var(--t-xs); color: var(--text-2); display: grid; gap: 6px; }
+  .rule b { color: var(--text); font-weight: 600; }
+  .rule .k { color: var(--text-3); }
+  /* "Old" cells reproduce the shipped look on its dark base, so both columns compare like for like. */
+  .old, .new { position: relative; min-height: 120px; border-radius: var(--r-panel); overflow: hidden; display: grid; place-items: center; padding: var(--s-4); gap: var(--s-3); }
+  .old { background: #17181c; border: 1px dashed #3b3f4a; color: #e2e2e8; font-family: "JetBrains Mono", monospace; font-size: 11px; }
+  .new { background: var(--canvas); border: 1px solid var(--line); }
+  .cap { position: absolute; top: 8px; left: 10px; font: 500 var(--t-2xs) var(--font-ui); color: var(--text-3); }
+  .old .cap { color: #9599a5; }
+  .dropped { display: inline-flex; gap: 6px; align-items: center; }
+
+  /* old replicas (values copied from app.css / components) */
+  .o-word { font: 600 17px/1 "Outfit", "Geist", sans-serif; letter-spacing: -.01em; text-transform: uppercase; background: linear-gradient(135deg, #8b5cf6, #06b6d4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .o-orbs::before, .o-orbs::after { content: ""; position: absolute; border-radius: 50%; filter: blur(40px); }
+  .o-orbs::before { width: 200px; height: 200px; left: 20%; top: 10%; background: rgb(139 92 246 / .09); }
+  .o-orbs::after { width: 140px; height: 140px; right: 10%; bottom: 0; background: rgb(6 182 212 / .08); }
+  .o-grid { background-image: linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px), radial-gradient(ellipse 90% 55% at 50% -30%, rgba(139,92,246,.09), transparent 55%); background-size: 32px 32px, 32px 32px, 100% 100%; }
+  .o-dots { background-image: radial-gradient(circle, rgba(139,92,246,.22) 1px, transparent 1px); background-size: 20px 20px; }
+  .o-gb { position: relative; padding: 12px 16px; border-radius: 10px; background: #1a1d24; }
+  .o-gb::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; background: linear-gradient(135deg, #8b5cf6, #06b6d4); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: o-breathe 8s ease-in-out infinite; }
+  @keyframes o-breathe { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+  .o-lift { box-shadow: 0 4px 20px rgba(139,92,246,.15); transform: translateY(-2px); }
+  .o-sonar { position: relative; width: 44px; height: 44px; border-radius: 10px; background: #1e2028; border: 1px solid #8b5cf6; box-shadow: 0 0 16px rgba(139,92,246,.5); display: grid; place-items: center; color: #a78bfa; }
+  .o-sonar i { position: absolute; inset: 0; border: 1.5px solid #8b5cf6; border-radius: 50%; animation: o-sonar 3s cubic-bezier(0,.2,.8,1) infinite; }
+  .o-sonar i:nth-child(2) { animation-delay: -1s; } .o-sonar i:nth-child(3) { animation-delay: -2s; }
+  @keyframes o-sonar { 0% { transform: scale(.8); opacity: .8; } 100% { transform: scale(3.5); opacity: 0; } }
+  .o-gel { width: 220px; height: 10px; border-radius: 6px; background: linear-gradient(180deg, rgba(255,255,255,.06), transparent 45%), linear-gradient(180deg, rgba(6,8,12,.98), rgba(18,20,28,.94)); box-shadow: inset 0 1px 3px rgba(0,0,0,.6); overflow: hidden; }
+  .o-gel i { display: block; height: 100%; width: 60%; border-radius: 6px; background: linear-gradient(90deg, #7c3aed, #8b5cf6 40%, #06b6d4); box-shadow: inset 0 1px 0 rgba(255,255,255,.42); }
+  .o-kbd { font: 600 .65rem "JetBrains Mono", monospace; letter-spacing: .06em; padding: .2rem .5rem; border-radius: .3rem; border: 1px solid color-mix(in srgb, #8b5cf6 55%, rgba(6,182,212,.35)); background: linear-gradient(165deg, rgb(139 92 246 / .22), rgb(6 182 212 / .12)); color: #c4b5fd; box-shadow: 0 0 10px rgb(6 182 212 / .18); }
+  .o-send { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #8b5cf6, #06b6d4); color: #fff; display: grid; place-items: center; box-shadow: 0 0 18px rgba(139,92,246,.45); }
+  .o-label { font: 500 9px "JetBrains Mono", monospace; letter-spacing: .14em; text-transform: uppercase; color: rgb(149 153 165 / .6); }
+  .o-code { background: rgba(139,92,246,.10); color: #8b5cf6; border-radius: 3px; padding: .12em .3em; }
+  .o-nav { display: flex; gap: 4px; padding: 4px; border-radius: 10px; border: 1px solid rgb(139 92 246 / .25); font-family: "Geist", sans-serif; font-size: 13px; }
+  .o-nav span { padding: 4px 10px; border-radius: 8px; color: #b6b9c2; } .o-nav span.on { background: rgb(139 92 246 / .18); color: #a78bfa; border: 1px solid rgb(139 92 246 / .4); }
+  .o-lines line { stroke: rgba(139,92,246,.5); stroke-dasharray: 5 7; }
+
+  /* new: local (non-fixed) ambient preview */
+  .amb-local::before, .amb-local::after { content: ""; position: absolute; border-radius: 50%; pointer-events: none; }
+  .amb-local::before { width: 300px; aspect-ratio: 1; left: -10%; top: -40%; background: radial-gradient(closest-side, var(--orb-violet), transparent); animation: orb-a 48s ease-in-out infinite alternate; }
+  .amb-local::after { width: 240px; aspect-ratio: 1; right: -12%; bottom: -50%; background: radial-gradient(closest-side, var(--orb-cyan), transparent); animation: orb-b 64s ease-in-out infinite alternate; }
+  .mini-bar { position: relative; width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: var(--t-md); }
+  .mini-bar .nv { display: flex; gap: 2px; margin-left: 16px; font-weight: 500; font-size: var(--t-sm); }
+  .mini-bar .nv span { padding: 5px 9px; border-radius: 8px 8px 2px 2px; color: var(--text-2); }
+  .mini-bar .nv span.on { color: var(--text); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--accent); }
+  .mini-bar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: linear-gradient(90deg, transparent 4%, #8b5cf6 30%, #22d3ee 70%, transparent 96%); opacity: .7; }
+  .fnode { position: relative; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-1); border: 1px solid var(--line-strong); color: var(--accent); }
+  .fnode .i { width: 20px; height: 20px; }
+  .lines-new line { stroke: var(--mk-violet); stroke-opacity: .7; stroke-dasharray: 5 7; animation: dash 1.6s linear infinite; }
+  .lines-new line.rest { stroke: var(--line-strong); stroke-dasharray: none; animation: none; }
+  @keyframes dash { to { stroke-dashoffset: -24; } }
+  @media (max-width: 1100px) { .row { grid-template-columns: 1fr 1fr; } .row > :first-child, .row > .rule { grid-column: 1 / -1; } .row.head { display: none; } }
+</style>
+</head>
+<body data-page="">
+<div class="app">
+  <div data-topbar></div>
+  <main>
+    <div class="band"><div class="wrap" style="padding-bottom:0"><div class="page-h" style="padding-left:0;padding-right:0"><div><h1>Identity: what stays Cortex</h1>
+      <p>Each of Cortex's own visual elements, as shipped today and in its modernized Bench form, with where it may appear, its contrast and its reduced-motion fallback. Left cells reproduce the shipped CSS on its dark base. Toggle the theme to check the right column in both.</p></div></div></div></div>
+    <div class="wrap">
+      <div class="row head"><span>Element</span><span>Today</span><span>Bench</span><span>Rule</span></div>
+
+      <section class="row"><div><h2>Neural mark</h2><div class="src">static/favicon.svg, +layout.svelte:280, +page.svelte:128</div></div>
+        <div class="old"><span class="cap">blur-filter glow, fixed hex colors</span>
+          <div style="display:flex;gap:24px;align-items:center">
+            <svg viewBox="0 0 48 48" width="22" height="22" aria-hidden="true"><defs><linearGradient id="oe" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#8b5cf6" stop-opacity=".7"/><stop offset="100%" stop-color="#06b6d4" stop-opacity=".3"/></linearGradient><filter id="og" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="1.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="M14 6H34L42 20V34L30 44H18L6 34V20Z" fill="none" stroke="url(#oe)" stroke-width="1.1"/><path d="M24 24 14 6M24 24 34 6M24 24 6 20M24 24 42 20M24 24 6 34M24 24 42 34M24 24 18 44M24 24 30 44" stroke="url(#oe)" stroke-width="1.3"/><g filter="url(#og)"><circle cx="14" cy="6" r="2.8" fill="#8b5cf6"/><circle cx="34" cy="6" r="2.8" fill="#06b6d4"/><circle cx="6" cy="20" r="2.4" fill="#a78bfa"/><circle cx="42" cy="20" r="2.4" fill="#c4b5fd"/><circle cx="6" cy="34" r="2.4" fill="#06b6d4"/><circle cx="42" cy="34" r="2.4" fill="#8b5cf6"/><circle cx="18" cy="44" r="2.8" fill="#a78bfa"/><circle cx="30" cy="44" r="2.8" fill="#06b6d4"/><circle cx="24" cy="24" r="5.5" fill="#8b5cf6"/></g></svg>
+            <svg viewBox="0 0 48 48" width="80" height="80" aria-hidden="true"><path d="M14 6H34L42 20V34L30 44H18L6 34V20Z" fill="none" stroke="url(#oe)" stroke-width="1.2"/><path d="M24 24 14 6M24 24 34 6M24 24 6 20M24 24 42 20M24 24 6 34M24 24 42 34M24 24 18 44M24 24 30 44" stroke="url(#oe)" stroke-width="1.4"/><g filter="url(#og)"><circle cx="14" cy="6" r="3" fill="#8b5cf6"/><circle cx="34" cy="6" r="3" fill="#06b6d4"/><circle cx="6" cy="20" r="2.5" fill="#a78bfa"/><circle cx="42" cy="20" r="2.5" fill="#c4b5fd"/><circle cx="6" cy="34" r="2.5" fill="#06b6d4"/><circle cx="42" cy="34" r="2.5" fill="#8b5cf6"/><circle cx="18" cy="44" r="3" fill="#a78bfa"/><circle cx="30" cy="44" r="3" fill="#06b6d4"/><circle cx="24" cy="24" r="5.5" fill="#8b5cf6"/></g></svg>
+          </div></div>
+        <div class="new"><span class="cap">same geometry, theme-aware, no filters</span><div style="display:flex;gap:24px;align-items:center"><span data-mark="22"></span><span data-mark="96" data-hero></span></div></div>
+        <div class="rule"><span><b>Where:</b> top bar (22px), favicon, page-level empty and first-run states (64 to 132px), Settings · About.</span><span><b>Change:</b> blur filters replaced by a flat halo (blur turns to mush at 22px); light theme uses deeper node colors (#7c3aed, #0891b2) so the mark holds on white.</span><span><b>Contrast:</b> decorative, always next to the word "Cortex" or a headline, so <code class="code-accent">aria-hidden</code>.</span><span><b>Motion:</b> hero nodes twinkle, 7s, staggered. Reduced: still. The 22px mark never moves.</span></div></section>
+
+      <section class="row"><div><h2>Wordmark</h2><div class="src">+layout.svelte:321 (.ra-gradient-text, Outfit, uppercase)</div></div>
+        <div class="old"><span class="cap">17px, uppercase, gradient</span><span class="o-word">Cortex</span></div>
+        <div class="new"><span class="cap">bar: solid · hero: gradient at 22px and up</span><div style="display:grid;gap:12px;justify-items:center"><span style="display:flex;gap:8px;align-items:center;font-weight:600;font-size:var(--t-md)"><span data-mark="22"></span>Cortex</span><span class="brand-grad" style="font-size:var(--t-2xl);font-weight:600;letter-spacing:-.02em">Cortex</span></div></div>
+        <div class="rule"><span><b>Where:</b> the bar uses solid text in sentence case; gradient text only at 22px or more (Beacon first run, Settings · About).</span><span><b>Contrast:</b> both gradient ends pass AA for normal text: dark #a78bfa 6.5:1 and #22d3ee 9.8:1 on canvas; light #6d28d9 6.6:1 and #0b6479 6.3:1. Over the ambient field: 6.0 / 5.9:1 worst case.</span><span><b>Font:</b> Geist 600 (owner decision 2 still open; Outfit is one variable away).</span></div></section>
+
+      <section class="row"><div><h2>Ambient orbs</h2><div class="src">CortexDeskShell.svelte:18-25, BeaconCanvas.svelte:250</div></div>
+        <div class="old o-orbs"><span class="cap">blur(85-100px), behind every page</span><span class="o-label">behind all content</span></div>
+        <div class="new amb-local"><span class="cap">radial fields, slow drift</span><span class="faint" style="position:relative">Beacon and page empty states only</span></div>
+        <div class="rule"><span><b>Where:</b> Beacon (Board and Field) and page-level empty states (Chat, Runs, first run). Never behind a transcript, table, form or trace.</span><span><b>Strength:</b> violet 8% and cyan 6% at the centre (dark), 6% and 4.5% (light). Radial gradients, not blur filters.</span><span><b>Contrast:</b> text-3 over the orb peak: 5.8:1 dark, 5.1:1 light (canvas alone: 6.2 / 5.5).</span><span><b>Motion:</b> 48s and 64s drift, a few percent. Reduced: still.</span></div></section>
+
+      <section class="row"><div><h2>Engineering grid</h2><div class="src">app.css:113-131 (.cortex-shell-bg), BeaconCanvas.svelte:370 (.beacon-dot-grid)</div></div>
+        <div class="old o-grid"><span class="cap">32px lines over the whole shell</span><span class="o-label">every route</span></div>
+        <div class="new" style="padding:0;place-items:stretch;grid-template-rows:1fr 1fr"><div class="band" style="display:grid;place-items:center;border-bottom:1px solid var(--line)"><span class="faint" style="font-size:var(--t-xs)">Header band: lines fade out</span></div><div class="dotgrid" style="display:grid;place-items:center"><span class="faint" style="font-size:var(--t-xs);background:var(--canvas);padding:2px 6px;border-radius:4px">Field: dot grid</span></div></div>
+        <div class="rule"><span><b>Where:</b> the 32px line grid only behind page headers (Runs, Run view, Lab, Settings), masked to fade out; the 24px dot grid only in Beacon Field.</span><span><b>Strength:</b> lines white 3.5% / slate 4%; dots violet 16% / 10%.</span><span><b>Contrast:</b> text-3 on a grid pixel over an orb: 5.2:1 dark, 4.7:1 light. On a dot: 4.8 / 4.65:1. Field labels sit on a surface chip anyway.</span><span><b>Motion:</b> none.</span></div></section>
+
+      <section class="row"><div><h2>Glow and gradient edge</h2><div class="src">app.css:525-580 (.gradient-border, -glow), :716 (.hover-lift), AgentCard / BeaconNode glow</div></div>
+        <div class="old" style="grid-template-columns:1fr 1fr"><span class="cap">15 panels, breathing; lift on hover</span><div class="o-gb">Any panel</div><div class="o-gb o-lift">Hovered card</div></div>
+        <div class="new" style="grid-template-columns:1fr 1fr"><span class="cap">live cards only</span><div class="panel rail live glow-live" style="padding:10px 14px 10px 18px;font-size:var(--t-sm)"><span class="status tone-running"><span class="dot"></span>Running</span></div><div class="panel" style="padding:10px 14px;font-size:var(--t-sm)"><span class="status tone-done"><span class="dot"></span>Finished</span></div></div>
+        <div class="rule"><span><b>Where:</b> a Beacon live card, a running Field node, the composer while focused (focus ring, no gradient). Nothing at rest glows.</span><span><b>Contrast:</b> text sits on the card's opaque surface-1, so the halo does not touch it. The edge is not the only cue: status text and dot say Running (WCAG 1.4.1).</span><span><b>Motion:</b> halo breathes on 6s. Reduced: static halo and edge. Hover-lift is gone (it moved things that were not live).</span></div></section>
+
+      <section class="row"><div><h2>Sonar ring</h2><div class="src">app.css:583-595, AgentCard.svelte:138, +page.svelte:123</div></div>
+        <div class="old"><span class="cap">3 rings, running nodes and the empty state</span><div class="o-sonar"><i></i><i></i><i></i>◎</div></div>
+        <div class="new"><span class="cap">1 ring, running Field nodes only</span><div class="fnode glow-live"><span class="sonar"></span><svg class="i"><use href="#i-think"/></svg></div></div>
+        <div class="rule"><span><b>Where:</b> a running node in Beacon Field. Not on empty states (nothing is live there; the mark twinkle replaces it).</span><span><b>Contrast:</b> decorative; the node label says Running.</span><span><b>Motion:</b> 2.8s, scale 0.92 to 1.45. Reduced: hidden.</span></div></section>
+
+      <section class="row"><div><h2>Entropy line</h2><div class="src">SignalMonitor.svelte:27,142-169 (entropy gradient stroke, η)</div></div>
+        <div class="old"><span class="cap">run view Signal tab only</span><svg width="220" height="60" aria-hidden="true"><defs><linearGradient id="oeg" x1="0" x2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs><rect width="220" height="60" fill="#0c0e12"/><path d="M0 50 L40 30 L80 38 L120 18 L160 26 L220 12 L220 60 L0 60Z" fill="rgba(139,92,246,.15)"/><path d="M0 50 L40 30 L80 38 L120 18 L160 26 L220 12" fill="none" stroke="url(#oeg)" stroke-width="2"/><text x="6" y="12" fill="rgb(167 139 250 / .6)" font-size="9" font-family="JetBrains Mono">η 6</text></svg></div>
+        <div class="new"><span class="cap">vitals, live cards, Signal tab</span><div style="display:grid;gap:8px;justify-items:center"><span data-spark=".2,.35,.3,.55,.48,.62,.4,.3" data-w="200" data-h="44"></span><span class="data faint">η 0.30 · 8 steps</span></div></div>
+        <div class="rule"><span><b>Where:</b> the one chart that keeps the signal gradient, because it is the agent's own signal. Beacon live cards (96px), run vitals (64px), run view Signal tab (full).</span><span><b>Contrast:</b> graphical object, needs 3:1: #8b5cf6 on surface-1 3.9:1 dark; #6d28d9 7.1:1 light. Each line has a text value beside it (η 0.30) and an <code class="code-accent">aria-label</code>.</span><span><b>Motion:</b> none; it redraws as data arrives.</span></div></section>
+
+      <section class="row"><div><h2>Field links</h2><div class="src">BeaconCanvas.svelte:254-275 (.beacon-line-signal)</div></div>
+        <div class="old"><span class="cap">dashed, always</span><svg class="o-lines" width="220" height="60" aria-hidden="true"><line x1="10" y1="30" x2="210" y2="10"/><line x1="10" y1="30" x2="210" y2="50"/></svg></div>
+        <div class="new"><span class="cap">flows only while both ends run</span><svg class="lines-new" width="220" height="60" aria-hidden="true"><line x1="10" y1="30" x2="210" y2="10"/><line class="rest" x1="10" y1="30" x2="210" y2="50"/></svg></div>
+        <div class="rule"><span><b>Where:</b> Beacon Field, parent to sub-agent.</span><span><b>Contrast:</b> decorative; the parent link is also in the run tree and the sub-agent cards.</span><span><b>Motion:</b> dash flow 1.6s while active. Reduced: static dashes.</span></div></section>
+
+      <section class="row"><div><h2>Progress meter</h2><div class="src">app.css:173-350 (.cortex-progress-*, gel fill, shimmer)</div></div>
+        <div class="old"><span class="cap">inset groove, gloss, shimmer</span><div class="o-gel"><i></i></div></div>
+        <div class="new"><span class="cap">flat 4px, signal only while live</span><div style="display:grid;gap:10px;width:220px"><div class="meter live"><i style="width:60%"></i></div><div class="meter"><i style="width:60%"></i></div></div></div>
+        <div class="rule"><span><b>Where:</b> loop progress, context meter, Beacon live cards.</span><span><b>Contrast:</b> fill vs track 3:1 or more (text-2 on surface-3 at rest); the value is also printed.</span><span><b>Motion:</b> width transition only. The replay variant maps to the warn fill.</span></div></section>
+
+      <section class="row"><div><h2>Top bar</h2><div class="src">+layout.svelte:274-330</div></div>
+        <div class="old"><span class="cap">boxed pill nav, gradient wordmark</span><div class="o-nav"><span class="on">Beacon</span><span>Chat</span><span>Trace</span><span>Lab</span></div></div>
+        <div class="new" style="padding:0;place-items:start stretch"><div class="mini-bar"><span data-mark="22"></span>Cortex<div class="nv"><span class="on">Beacon</span><span>Chat</span><span>Runs</span><span>Lab</span></div></div></div>
+        <div class="rule"><span><b>Change:</b> underline for the current page; a 1px violet-to-cyan hairline under the bar while any agent runs (ties to the "2 agents running" pill).</span><span><b>Motion:</b> none; the hairline appears and disappears.</span></div></section>
+
+      <section class="row"><div><h2>Inline code, selection, scrollbar</h2><div class="src">app.css:725-746</div></div>
+        <div class="old" style="justify-items:start"><span class="cap">docs treatment</span><span style="font-family:Geist,sans-serif;font-size:14px">Call <span class="o-code">agent.run()</span> first</span></div>
+        <div class="new" style="justify-items:start"><span class="cap">kept, tokenized</span><span class="prose" style="font-size:var(--t-md)">Call <code>agent.run()</code> first</span></div>
+        <div class="rule"><span><b>Inline code:</b> accent on accent tint, 5.6:1 dark, 5.7:1 light.</span><span><b>Selection:</b> violet 30%; text stays 10:1 or more.</span><span><b>Scrollbar:</b> neutral thumb at rest, signal gradient while hovered or dragged.</span></div></section>
+
+      <section class="row"><div><h2>Dropped</h2><div class="src">with the reason</div></div>
+        <div class="old" style="grid-template-columns:repeat(3,auto);gap:18px"><span class="cap">today</span><div class="o-send">➤</div><span class="o-kbd">⌘K</span><span class="o-label">Status: settled</span></div>
+        <div class="new" style="grid-template-columns:repeat(3,auto);gap:18px"><span class="cap">Bench</span><button class="btn primary"><svg class="i sm"><use href="#i-send"/></svg>Send</button><span class="kbd">Ctrl K</span><span class="status tone-done"><span class="dot"></span>Finished</span></div>
+        <div class="rule"><span><b>Gradient buttons:</b> white text on #8b5cf6 is 4.2:1 and fails AA at 13px; the solid fill is 5.7:1.</span><span><b>Neon kbd:</b> a glow on a control that is not live.</span><span><b>Uppercase letter-spaced labels:</b> 9px caps at 1.6 to 3.2:1 (audit A5, A6).</span></div></section>
+    </div>
+  </main>
+</div>
+<script src="kit.js"></script>
+</body>
+</html>

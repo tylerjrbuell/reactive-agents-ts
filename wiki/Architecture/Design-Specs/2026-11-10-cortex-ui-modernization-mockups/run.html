@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run — Cortex Bench mockup</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .run { display: grid; grid-template-rows: auto auto 1fr; min-height: 0; }
+  .run-h { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-4) var(--s-6) var(--s-3); }
+  .crumb { font-size: var(--t-xs); color: var(--text-3); display: flex; gap: 6px; align-items: center; }
+  .crumb a { color: var(--text-2); text-decoration: none; } .crumb a:hover { color: var(--text); }
+  .run-h h1 { margin: 2px 0 0; font-size: var(--t-xl); font-weight: 600; letter-spacing: -.015em; display: flex; align-items: center; gap: var(--s-3); }
+  .run-h .actions { margin-left: auto; display: flex; gap: 6px; }
+  .vitals { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-6); align-items: center; padding: var(--s-3) var(--s-6); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface-1); }
+  .vital { display: grid; gap: 1px; }
+  .vital .k { font-size: var(--t-xs); color: var(--text-3); }
+  .vital .v { font-family: var(--font-data); font-size: var(--t-sm); font-variant-numeric: tabular-nums; }
+  .vital.loop { min-width: 180px; } .vital.loop .meter { margin-top: 6px; }
+  .vitals .chips { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .body { display: grid; grid-template-columns: minmax(0, 1fr) 420px; min-height: 0; }
+  .left { overflow-y: auto; padding: var(--s-5) var(--s-6) var(--s-10); display: grid; gap: var(--s-5); align-content: start; }
+  .answer .panel-b { font-size: var(--t-md); line-height: var(--lh-read); max-width: var(--measure); }
+  .answer .panel-b p { margin: 0; }
+  .frames { display: grid; gap: 0; }
+  .frame { display: grid; grid-template-columns: 52px 1fr auto; gap: var(--s-3); padding: 10px var(--s-4); border-bottom: 1px solid var(--line); align-items: start; cursor: pointer; }
+  .frame:last-child { border-bottom: 0; } .frame:hover { background: var(--surface-2); }
+  .frame .lbl { font-family: var(--font-data); font-size: var(--t-2xs); color: var(--text-3); padding-top: 2px; }
+  .frame .ttl { font-weight: 500; } .frame .sub { font-size: var(--t-xs); color: var(--text-2); margin-top: 2px; }
+  .frame .m { display: flex; gap: var(--s-3); font-family: var(--font-data); font-size: var(--t-2xs); color: var(--text-3); }
+  .frame .tools { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+  .frame .tools .chip { height: 20px; color: var(--io); }
+  .insp { border-left: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--surface-1); }
+  .insp .tabs { padding: 0 var(--s-4); overflow-x: auto; gap: var(--s-3); }
+  .insp .content { overflow-y: auto; padding: var(--s-4); display: grid; gap: var(--s-4); align-content: start; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px var(--s-4); font-size: var(--t-sm); }
+  dt { color: var(--text-3); font-size: var(--t-xs); align-self: center; } dd { margin: 0; text-align: right; }
+  .sec h3 { margin: 0 0 var(--s-2); font-size: var(--t-xs); font-weight: 600; color: var(--text-2); }
+  .spark { height: 64px; width: 100%; }
+  .decision { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--r-ctl); background: var(--surface-2); }
+  .decision .t { font-size: var(--t-sm); font-weight: 500; } .decision .s { font-size: var(--t-xs); color: var(--text-2); }
+  @media (max-width: 1360px) {
+    .body { grid-template-columns: 1fr; overflow-y: auto; align-content: start; }
+    .left { overflow: visible; padding-bottom: var(--s-5); }
+    .insp { border-left: 0; border-top: 1px solid var(--line); min-height: 0; }
+    .insp .content { overflow: visible; }
+  }
+</style>
+</head>
+<body data-page="runs">
+<div class="app">
+  <div data-topbar></div>
+  <main class="run">
+    <div class="run-h band">
+      <div>
+        <div class="crumb"><a href="runs.html">Runs</a><svg class="i sm"><use href="#i-chevron"/></svg><span class="data">01M740X6MZ7A</span><span>from chat <a href="chat.html">Hash function explainer</a></span></div>
+        <h1>Hash function explainer <span class="status tone-done"><span class="dot"></span>Finished</span></h1>
+      </div>
+      <div class="actions">
+        <button class="btn"><svg class="i sm"><use href="#i-chat"/></svg>Continue in chat</button>
+        <button class="btn"><svg class="i sm"><use href="#i-retry"/></svg>Edit and rerun</button>
+        <button class="btn ghost"><svg class="i sm"><use href="#i-download"/></svg>Export</button>
+        <button class="iconbtn" aria-label="More actions"><svg class="i"><use href="#i-dots"/></svg></button>
+      </div>
+    </div>
+    <div class="vitals" aria-label="Run vitals">
+      <div class="vital"><span class="k">Duration</span><span class="v">18.4s</span></div>
+      <div class="vital"><span class="k">Tokens</span><span class="v">2,535</span></div>
+      <div class="vital"><span class="k">Cost</span><span class="v">&lt;$0.0001</span></div>
+      <div class="vital"><span class="k">Steps</span><span class="v">4</span></div>
+      <div class="vital loop"><span class="k">Loops 2 of 3</span><div class="meter"><i style="width:66%"></i></div></div>
+      <div class="vital"><span class="k">Entropy η</span><span class="v" style="display:flex;align-items:center;gap:8px"><span data-spark=".55,.25" data-w="64" data-h="22" data-label="Entropy per loop: 0.55 then 0.25"></span>0.25 <span class="badge neutral">settled</span></span></div>
+      <div class="chips"><span class="chip data">ollama / mimo-v2.6</span><span class="chip">Reflexion</span><span class="chip">Tools: index, profile</span></div>
+    </div>
+    <div class="body">
+      <div class="left">
+        <section class="panel answer" aria-label="Final answer">
+          <div class="panel-h"><h2>Answer</h2><span class="data faint">472 chars</span><button class="btn sm ghost" style="margin-left:auto"><svg class="i sm"><use href="#i-copy"/></svg>Copy</button></div>
+          <div class="panel-b"><p>A hash function is a one-way mathematical function that maps data of any size to a fixed-size output, called a hash or digest, while making it computationally infeasible to reverse the process or find two different inputs that produce the same output. This property makes hashes ideal for integrity checks: changing one bit of the input changes the digest completely.</p></div>
+        </section>
+        <section class="panel" aria-label="Trace">
+          <div class="panel-h"><h2>Trace</h2><span class="faint" style="font-size:var(--t-xs)">one row per kernel loop</span>
+            <div class="tabs" role="tablist" style="margin-left:auto;border:0;gap:var(--s-3)"><button role="tab" aria-selected="true">Loops <span class="n">2</span></button><button role="tab" aria-selected="false">Timeline <span class="n">62</span></button></div></div>
+          <div class="frames">
+            <div class="frame"><span class="lbl">Loop 1</span><div><div class="ttl">Drafted an answer</div><div class="sub">A hash function is a one-way mathematical function that maps data of any size…</div></div><div class="m"><span>1,647 tok</span><span>6.5s</span></div></div>
+            <div class="frame"><span class="lbl">Loop 2</span><div><div class="ttl">Reflected and finalized <span class="badge ok">final</span></div><div class="sub">Tightened the second sentence; verifier passed.</div></div><div class="m"><span>888 tok</span><span>11.8s</span></div></div>
+          </div>
+        </section>
+      </div>
+      <aside class="insp" aria-label="Run inspector">
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true">Summary</button><button role="tab" aria-selected="false">Decisions</button><button role="tab" aria-selected="false">Signal</button><button role="tab" aria-selected="false">Context</button><button role="tab" aria-selected="false">Memory</button><button role="tab" aria-selected="false">Messages <span class="n">3</span></button><button role="tab" aria-selected="false">Events <span class="n">62</span></button>
+        </div>
+        <div class="content">
+          <div class="sec"><h3>Configuration</h3><dl><dt>Provider</dt><dd>Ollama</dd><dt>Model</dt><dd class="data">mimo-v2.6:latest</dd><dt>Strategy</dt><dd>Reflexion</dd><dt>Max loops</dt><dd class="data">3</dd><dt>Context window</dt><dd class="data">773 / 32,768</dd></dl></div>
+          <div class="sec"><h3>Signal</h3>
+            <svg class="spark" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label="Per loop: tokens 1,647 and 888; entropy 0.55 and 0.25; latency 6.5s and 11.8s">
+              <defs><linearGradient id="ent" x1="0" x2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+              <rect x="20" y="10" width="40" height="54" rx="3" fill="var(--surface-3)"/><rect x="90" y="36" width="40" height="28" rx="3" fill="var(--surface-3)"/>
+              <polygon points="40,64 40,24 110,44 110,64" fill="var(--accent-tint)"/>
+              <polyline points="40,24 110,44" fill="none" stroke="url(#ent)" stroke-width="2.2" stroke-linecap="round"/>
+              <circle cx="40" cy="24" r="3" fill="#8b5cf6"/><circle cx="110" cy="44" r="3" fill="#22d3ee"/>
+              <polyline points="40,46 110,12" fill="none" stroke="var(--io)" stroke-width="1.4" stroke-dasharray="3 3"/></svg>
+            <div class="hint">Bars: tokens per loop. Gradient line: entropy η (lower is more settled). Dashed: model latency.</div></div>
+          <div class="sec"><h3>Decisions</h3><div class="decision"><span class="t">No interventions</span><span class="s">The controller did not need to adapt this run.</span></div></div>
+          <div class="sec"><h3>Debrief</h3><p class="hint" style="margin:0">No debrief was recorded. Turn on debriefs in the agent's Observability settings.</p></div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+<script src="kit.js"></script>
+</body>
+</html>
