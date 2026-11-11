@@ -258,6 +258,52 @@ describe("memory provenance (task_id / run_id)", () => {
     expect(result[0]!.runId).toBe("rY");
   });
 
+  it("semantic search finds short words ('bun', 'db')", async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const sem = yield* SemanticMemoryService;
+        yield* sem.store(semantic("b1", "the project runs on bun"));
+        yield* sem.store(semantic("b2", "sqlite db file lives in tmp"));
+        const bun = yield* sem.search({ query: "bun", agentId: "test-agent" });
+        const db = yield* sem.search({ query: "db", agentId: "test-agent" });
+        return { bun: bun.map((e) => e.id), db: db.map((e) => e.id) };
+      }),
+    );
+    expect(result.bun).toEqual(["b1" as MemoryId]);
+    expect(result.db).toEqual(["b2" as MemoryId]);
+  });
+
+  it("listByAgent and listActive filter by taskId / runId", async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const sem = yield* SemanticMemoryService;
+        const proc = yield* ProceduralMemoryService;
+        yield* sem.store(semantic("f1", "one", { taskId: "tA", runId: "rA" }));
+        yield* sem.store(semantic("f2", "two", { taskId: "tA", runId: "rB" }));
+        yield* sem.store(semantic("f3", "three"));
+        yield* proc.store(procedural("p1", { taskId: "tA", runId: "rA" }));
+        yield* proc.store(procedural("p2", { taskId: "tB", runId: "rB" }));
+        const ids = (xs: ReadonlyArray<{ id: MemoryId }>) => xs.map((x) => x.id).sort();
+        return {
+          semAll: ids(yield* sem.listByAgent("test-agent")),
+          semTask: ids(yield* sem.listByAgent("test-agent", 100, { taskId: "tA" })),
+          semRun: ids(yield* sem.listByAgent("test-agent", 100, { runId: "rB" })),
+          semBoth: ids(yield* sem.listByAgent("test-agent", 100, { taskId: "tA", runId: "rA" })),
+          procAll: ids(yield* proc.listActive("test-agent")),
+          procRun: ids(yield* proc.listActive("test-agent", { runId: "rB" })),
+          procTask: ids(yield* proc.listActive("test-agent", { taskId: "tA" })),
+        };
+      }),
+    );
+    expect(result.semAll).toEqual(["f1", "f2", "f3"] as MemoryId[]);
+    expect(result.semTask).toEqual(["f1", "f2"] as MemoryId[]);
+    expect(result.semRun).toEqual(["f2"] as MemoryId[]);
+    expect(result.semBoth).toEqual(["f1"] as MemoryId[]);
+    expect(result.procAll).toEqual(["p1", "p2"] as MemoryId[]);
+    expect(result.procRun).toEqual(["p2"] as MemoryId[]);
+    expect(result.procTask).toEqual(["p1"] as MemoryId[]);
+  });
+
   it("semantic search returns provenance and filters by task/run", async () => {
     const result = await run(
       Effect.gen(function* () {

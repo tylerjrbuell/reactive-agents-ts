@@ -10,8 +10,26 @@ describe("toFts5Query", () => {
     expect(toFts5Query("Effect-TS.")).toBe('"Effect-TS"');
   });
 
-  it("drops terms shorter than minTermLength (default 4)", () => {
+  it("drops stop words and single characters, keeps the real terms", () => {
     expect(toFts5Query("a to the food")).toBe('"food"');
+  });
+
+  it("keeps short real terms (bun, ai, db)", () => {
+    expect(toFts5Query("bun")).toBe('"bun"');
+    expect(toFts5Query("ai db")).toBe('"ai" OR "db"');
+    expect(toFts5Query("how is the bun db")).toBe('"bun" OR "db"');
+  });
+
+  it("keeps stop words when the query has nothing else", () => {
+    expect(toFts5Query("the")).toBe('"the"');
+  });
+
+  it("stop words do not use up maxTerms slots", () => {
+    expect(toFts5Query("the a of to bun", 1)).toBe('"bun"');
+  });
+
+  it("honors an explicit minTermLength (auto-linking uses 4)", () => {
+    expect(toFts5Query("bun runtime db", 10, 4)).toBe('"runtime"');
   });
 
   it("caps at maxTerms (default 10)", () => {

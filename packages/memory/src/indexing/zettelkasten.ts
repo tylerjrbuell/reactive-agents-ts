@@ -146,7 +146,9 @@ export const ZettelkastenServiceLive = Layer.effect(
       // catchAll, so auto-linking quietly never ran on realistic content.
       autoLinkText: (memoryId, content, agentId, threshold = 0.85) =>
         Effect.gen(function* () {
-          const searchTerms = toFts5Query(content);
+          // Linking matches whole content, not a typed query: keep the
+          // 4-character floor so short words do not create weak links.
+          const searchTerms = toFts5Query(content, 10, 4);
 
           if (searchTerms.length === 0) return [];
 

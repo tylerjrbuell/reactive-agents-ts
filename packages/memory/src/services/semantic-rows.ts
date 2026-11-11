@@ -11,6 +11,7 @@ import type { DatabaseError } from "../errors.js";
 import type { MemoryId, SearchOptions, SemanticEntry } from "../types.js";
 import { safeJsonParse } from "../json-utils.js";
 import { toFts5Query } from "../fts5-query.js";
+import { provenanceClause } from "../provenance-filter.js";
 
 const decodeEmbedding = (raw: unknown): number[] | undefined => {
   if (!raw) return undefined;
@@ -56,17 +57,7 @@ export const searchSemanticRows = (
     const ftsQuery = toFts5Query(options.query);
     if (db.hasFTS5 && ftsQuery.length === 0) return [];
 
-    const filters: string[] = [];
-    const filterParams: string[] = [];
-    if (options.taskId !== undefined) {
-      filters.push("AND sm.task_id = ?");
-      filterParams.push(options.taskId);
-    }
-    if (options.runId !== undefined) {
-      filters.push("AND sm.run_id = ?");
-      filterParams.push(options.runId);
-    }
-    const extra = filters.join(" ");
+    const { sql: extra, params: filterParams } = provenanceClause(options, "sm.");
 
     const rows = db.hasFTS5
       ? yield* db.query(

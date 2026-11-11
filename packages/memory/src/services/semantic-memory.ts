@@ -1,5 +1,6 @@
 import { Effect, Context, Layer } from "effect";
-import type { SemanticEntry, MemoryId, SearchOptions } from "../types.js";
+import type { SemanticEntry, MemoryId, MemoryProvenance, SearchOptions } from "../types.js";
+import { provenanceClause } from "../provenance-filter.js";
 import { MemoryNotFoundError, DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
 import { safeJsonParse } from "../json-utils.js";
@@ -34,10 +35,14 @@ export class SemanticMemoryService extends Context.Tag("SemanticMemoryService")<
     /** Delete an entry. */
     readonly delete: (id: MemoryId) => Effect.Effect<void, DatabaseError>;
 
-    /** Get all entries for an agent, sorted by importance desc. */
+    /**
+     * Get all entries for an agent, sorted by importance desc. `filter`
+     * narrows to entries a given task and/or run wrote (provenance).
+     */
     readonly listByAgent: (
       agentId: string,
       limit?: number,
+      filter?: MemoryProvenance,
     ) => Effect.Effect<SemanticEntry[], DatabaseError>;
 
     /**
@@ -156,13 +161,15 @@ export const SemanticMemoryServiceLive = Layer.effect(
           .exec(`DELETE FROM semantic_memory WHERE id = ?`, [id])
           .pipe(Effect.asVoid),
 
-      listByAgent: (agentId, limit = 100) =>
-        db
+      listByAgent: (agentId, limit = 100, filter) => {
+        const prov = provenanceClause(filter);
+        return db
           .query(
-            `SELECT * FROM semantic_memory WHERE agent_id = ? ORDER BY importance DESC LIMIT ?`,
-            [agentId, limit],
+            `SELECT * FROM semantic_memory WHERE agent_id = ? ${prov.sql} ORDER BY importance DESC LIMIT ?`,
+            [agentId, ...prov.params, limit],
           )
-          .pipe(Effect.map((rows) => rows.map(rowToSemanticEntry))),
+          .pipe(Effect.map((rows) => rows.map(rowToSemanticEntry)));
+      },
 
       search: (options) => searchSemanticRows(db, options),
 

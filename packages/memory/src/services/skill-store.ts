@@ -46,13 +46,17 @@ export class SkillStoreService extends Context.Tag("SkillStoreService")<
     /** Find skills matching task categories for an agent, ranked by successRate * useCount. */
     readonly findByTask: (agentId: string, taskCategories: readonly string[], modelId?: string) => Effect.Effect<SkillRecord[], DatabaseError>;
 
-    /** Update partial fields on a skill. */
+    /**
+     * Update partial fields on a skill. An in-place UPDATE: version history is
+     * never touched, so this is how to lock/unlock a skill (`evolutionMode`).
+     */
     readonly update: (
       id: string,
       partial: Partial<
         Pick<
           SkillRecord,
           | "instructions"
+          | "evolutionMode"
           | "version"
           | "config"
           | "confidence"
@@ -175,16 +179,44 @@ export const SkillStoreServiceLive = Layer.effect(
     });
 
     return {
+      // A real upsert, not INSERT OR REPLACE: REPLACE deletes the old row
+      // first, and the ON DELETE CASCADE on skill_versions then wiped the
+      // skill's whole version history on every re-store. The original
+      // created_at is kept on update.
       store: (record: SkillRecord) =>
         Effect.gen(function* () {
           yield* db.exec(
-            `INSERT OR REPLACE INTO skills (
+            `INSERT INTO skills (
               id, name, description, agent_id, source, instructions, version, config,
               evolution_mode, confidence, success_rate, use_count, refinement_count,
               task_categories, model_affinities, base, avg_post_activation_entropy_delta,
               avg_convergence_iteration, convergence_speed_trend, conflicts_with,
               content_variants, last_activated_at, last_refined_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              name = excluded.name,
+              description = excluded.description,
+              agent_id = excluded.agent_id,
+              source = excluded.source,
+              instructions = excluded.instructions,
+              version = excluded.version,
+              config = excluded.config,
+              evolution_mode = excluded.evolution_mode,
+              confidence = excluded.confidence,
+              success_rate = excluded.success_rate,
+              use_count = excluded.use_count,
+              refinement_count = excluded.refinement_count,
+              task_categories = excluded.task_categories,
+              model_affinities = excluded.model_affinities,
+              base = excluded.base,
+              avg_post_activation_entropy_delta = excluded.avg_post_activation_entropy_delta,
+              avg_convergence_iteration = excluded.avg_convergence_iteration,
+              convergence_speed_trend = excluded.convergence_speed_trend,
+              conflicts_with = excluded.conflicts_with,
+              content_variants = excluded.content_variants,
+              last_activated_at = excluded.last_activated_at,
+              last_refined_at = excluded.last_refined_at,
+              updated_at = excluded.updated_at`,
             [
               record.id,
               record.name,
@@ -280,7 +312,7 @@ export const SkillStoreServiceLive = Layer.effect(
         }),
 
       update: (id: string, partial: Partial<Pick<SkillRecord,
-        | "instructions" | "version" | "config" | "confidence" | "successRate" | "useCount"
+        | "instructions" | "evolutionMode" | "version" | "config" | "confidence" | "successRate" | "useCount"
         | "refinementCount" | "lastActivatedAt" | "lastRefinedAt" | "contentVariants"
         | "avgPostActivationEntropyDelta" | "avgConvergenceIteration"
         | "convergenceSpeedTrend" | "conflictsWith"
@@ -292,6 +324,10 @@ export const SkillStoreServiceLive = Layer.effect(
           if (partial.instructions !== undefined) {
             setClauses.push("instructions = ?");
             params.push(partial.instructions);
+          }
+          if (partial.evolutionMode !== undefined) {
+            setClauses.push("evolution_mode = ?");
+            params.push(partial.evolutionMode);
           }
           if (partial.version !== undefined) {
             setClauses.push("version = ?");

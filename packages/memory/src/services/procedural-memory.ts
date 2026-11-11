@@ -1,5 +1,6 @@
 import { Effect, Context, Layer } from "effect";
-import type { ProceduralEntry, MemoryId } from "../types.js";
+import type { ProceduralEntry, MemoryId, MemoryProvenance } from "../types.js";
+import { provenanceClause } from "../provenance-filter.js";
 import { DatabaseError, MemoryNotFoundError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
 import { safeJsonParse } from "../json-utils.js";
@@ -30,9 +31,13 @@ export class ProceduralMemoryService extends Context.Tag(
     /** Delete a workflow. Deleting an unknown id is a no-op. */
     readonly delete: (id: MemoryId) => Effect.Effect<void, DatabaseError>;
 
-    /** List active workflows for an agent (sorted by success rate). */
+    /**
+     * List active workflows for an agent (sorted by success rate). `filter`
+     * narrows to workflows a given task and/or run wrote (provenance).
+     */
     readonly listActive: (
       agentId: string,
+      filter?: MemoryProvenance,
     ) => Effect.Effect<ProceduralEntry[], DatabaseError>;
 
     /** Find workflows matching tags. */
@@ -131,13 +136,15 @@ export const ProceduralMemoryServiceLive = Layer.effect(
           .exec(`DELETE FROM procedural_memory WHERE id = ?`, [id])
           .pipe(Effect.asVoid),
 
-      listActive: (agentId) =>
-        db
+      listActive: (agentId, filter) => {
+        const prov = provenanceClause(filter);
+        return db
           .query(
-            `SELECT * FROM procedural_memory WHERE agent_id = ? ORDER BY success_rate DESC, use_count DESC`,
-            [agentId],
+            `SELECT * FROM procedural_memory WHERE agent_id = ? ${prov.sql} ORDER BY success_rate DESC, use_count DESC`,
+            [agentId, ...prov.params],
           )
-          .pipe(Effect.map((rows) => rows.map(rowToEntry))),
+          .pipe(Effect.map((rows) => rows.map(rowToEntry)));
+      },
 
       findByTags: (agentId, tags) =>
         Effect.gen(function* () {

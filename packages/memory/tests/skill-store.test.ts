@@ -178,6 +178,48 @@ describe("SkillStoreService", () => {
     }));
   });
 
+  it("store() twice keeps every skill_versions row (upsert, not delete+insert)", async () => {
+    const v = (version: number): SkillVersion => ({
+      version,
+      instructions: `v${version}`,
+      config: defaultConfig,
+      refinedAt: new Date(),
+      successRateAtRefinement: 0.5,
+      status: "active",
+    });
+    const createdAt = new Date("2026-01-01T00:00:00.000Z");
+    await run(Effect.gen(function* () {
+      const store = yield* SkillStoreService;
+      yield* store.store(makeSkill({ id: "s1", version: 2, instructions: "v2" }));
+      yield* store.addVersion("s1", v(1));
+      yield* store.addVersion("s1", v(2));
+      const first = yield* store.get("s1");
+      // Re-store with a new description: the row updates, history survives.
+      yield* store.store({ ...first!, description: "edited", createdAt: new Date() });
+      const after = yield* store.get("s1");
+      expect(after!.description).toBe("edited");
+      expect(after!.versionHistory.map((x) => x.version)).toEqual([1, 2]);
+      expect(after!.createdAt.toISOString()).toBe(first!.createdAt.toISOString());
+      // A fresh insert still takes the caller's created_at.
+      yield* store.store({ ...makeSkill({ id: "s2" }), createdAt });
+      expect((yield* store.get("s2"))!.createdAt.toISOString()).toBe(createdAt.toISOString());
+    }));
+  });
+
+  it("update() changes evolutionMode (lock/unlock) without touching history", async () => {
+    await run(Effect.gen(function* () {
+      const store = yield* SkillStoreService;
+      yield* store.store(makeSkill({ id: "s1", evolutionMode: "auto" }));
+      yield* store.addVersion("s1", { version: 1, instructions: "v1", config: defaultConfig, refinedAt: new Date(), successRateAtRefinement: 0, status: "active" });
+      yield* store.update("s1", { evolutionMode: "locked" });
+      const locked = yield* store.get("s1");
+      expect(locked!.evolutionMode).toBe("locked");
+      expect(locked!.versionHistory).toHaveLength(1);
+      yield* store.update("s1", { evolutionMode: "auto" });
+      expect((yield* store.get("s1"))!.evolutionMode).toBe("auto");
+    }));
+  });
+
   it("getByName() finds skill by agent and name", async () => {
     await run(Effect.gen(function* () {
       const store = yield* SkillStoreService;
