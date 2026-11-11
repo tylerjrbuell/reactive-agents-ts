@@ -84,29 +84,35 @@ describe("Export as code", () => {
     expect(exported.toConfig()).toEqual((await agentConfigToBuilder(live)).toConfig());
   }, 15000);
 
-  it("lists the overlay settings FULL_CONFIG_BODY sets that the code leaves out", async () => {
+  it("FULL_CONFIG_BODY: only the true overlays are listed; every data setting is in the code", async () => {
     const { json } = await postSource(makeApp(), FULL_CONFIG_BODY);
-    const calls = json.notInCode.map((s) => s.call);
+    // FULL_CONFIG_BODY sets durable runs (user-question rail) and no host tools,
+    // scenario, trace dir, output schema or saved key.
+    expect(json.notInCode.map((s) => s.call)).toEqual(["withUserInteraction"]);
     for (const call of [
-      "withAgentTool / withRemoteAgent",
-      "withDynamicSubAgents",
-      "withTools",
-      "withTaskContext",
-      "withSkills",
-      "withMinIterations",
-      "withVerificationStep",
-      "withVerification",
-      "withMetaTools",
-      "withFabricationGuard",
-      "withModelRouting",
-      "withDurableRuns / withUserInteraction",
-      "withKillSwitch",
+      ".withAgentTool(", ".withDynamicSubAgents(", ".withTaskContext(", ".withSkills(",
+      ".withMinIterations(", ".withVerificationStep(", ".withVerification(", ".withMetaTools(",
+      ".withFabricationGuard(", ".withModelRouting(", ".withDurableRuns(", ".withKillSwitch(",
+      ".withMemory(",
     ]) {
-      expect(calls).toContain(call);
+      expect(json.source).toContain(call);
     }
-    expect(json.notInCode.find((s) => s.setting === "Extra tool names")?.detail).toBe("http-get, my-lab-tool");
-    // FULL_CONFIG_BODY makes a memory choice? No: no tier, so Cortex's default memory is noted.
-    expect(calls).toContain("withMemory");
+    expect(json.source).toContain('"http-get"'); // extra tool names ride the allow-list
+    expect(json.source).toMatch(/sandbox"?: "docker"/); // shell options object
+  });
+
+  it("lists each true overlay when set", () => {
+    const extra = { definition: { name: "session-control" } } as unknown as NonNullable<Parameters<typeof cortexOnlySettings>[0]["extraTools"]>[number];
+    const notes = cortexOnlySettings({
+      provider: "test",
+      testScenario: [{ text: "hi" }],
+      extraTools: [extra],
+      tracing: { dir: "/tmp/traces" },
+      outputSchema: { type: "object" },
+      approvalPolicy: { mode: "detach", tools: ["file-write"] },
+    });
+    expect(notes.map((n) => n.call)).toEqual(["withTestScenario", "withTools", "withTracing", "withOutputSchema", "withUserInteraction"]);
+    expect(notes.find((n) => n.call === "withTools")?.detail).toBe("session-control");
   });
 
   it("a saved provider key and MCP secrets never reach the exported code", async () => {
@@ -142,17 +148,17 @@ describe("Export as code", () => {
     expect(status).toBe(400);
   });
 
-  it("a bare config notes only Cortex's defaults (memory, meta tools, desk stop)", () => {
-    const notes = cortexOnlySettings({ provider: "test" });
-    expect(notes.map((n) => n.call)).toEqual(["withMemory", "withMetaTools", "withKillSwitch"]);
-    expect(cortexAgentSource({ provider: "test" }, "bare").source).toContain('.withName("bare")');
+  it("a bare config notes nothing: Cortex's defaults (memory, meta tools, desk stop) are in the code", () => {
+    expect(cortexOnlySettings({ provider: "test" })).toEqual([]);
+    const source = cortexAgentSource({ provider: "test" }, "bare").source;
+    expect(source).toContain('.withName("bare")');
+    for (const call of [".withMemory()", ".withMetaTools(", ".withKillSwitch()"]) expect(source).toContain(call);
   });
 
-  it("every builder call buildCortexAgent applies is a known overlay call", () => {
+  it("the overlay calls buildCortexAgent applies are exactly CORTEX_OVERLAY_CALLS", () => {
     const text = readFileSync(join(import.meta.dir, "../services/build-cortex-agent.ts"), "utf8");
     const overlay = text.slice(text.indexOf("let b = await agentConfigToBuilder"));
     const used = new Set([...overlay.matchAll(/\bb\s*\.\s*(with[A-Za-z]+)\(/g)].map((m) => m[1]!));
-    expect(used.size).toBeGreaterThan(10);
-    for (const call of used) expect(CORTEX_OVERLAY_CALLS).toContain(call);
+    expect([...used].sort()).toEqual([...CORTEX_OVERLAY_CALLS].sort());
   });
 });

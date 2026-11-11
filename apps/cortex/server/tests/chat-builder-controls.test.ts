@@ -132,7 +132,7 @@ describe("Cortex params → AgentConfig", () => {
   it("maps workspace to tools.workspace, with or without a tool pick", () => {
     expect(cortexParamsToAgentConfig({ provider: "test", workspace: dir }).tools).toEqual({ workspace: dir });
     expect(cortexParamsToAgentConfig({ provider: "test", tools: ["file-read"], workspace: dir }).tools).toEqual({
-      allowedTools: ["file-read"],
+      allowedTools: ["file-read", "final-answer", "task-complete", "context-status"],
       workspace: dir,
     });
   });
@@ -152,7 +152,7 @@ describe("Cortex params → AgentConfig", () => {
       rawConfig: { profile: "lean", tools: { builtins: ["research"], maxCallsPerTool: { "web-search": 3 } }, requiredTools: { tools: ["web-search"] } },
     });
     expect(cfg.profile).toBe("lean");
-    expect(cfg.tools).toEqual({ builtins: ["research"], maxCallsPerTool: { "web-search": 3 }, allowedTools: ["web-search"] });
+    expect(cfg.tools).toEqual({ builtins: ["research"], maxCallsPerTool: { "web-search": 3 }, allowedTools: ["web-search", "final-answer", "task-complete", "context-status"] });
     expect(cfg.requiredTools).toEqual({ tools: ["web-search"] });
   });
 });

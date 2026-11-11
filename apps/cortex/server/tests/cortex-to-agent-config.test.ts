@@ -97,12 +97,12 @@ describe("cortexParamsToAgentConfig", () => {
     expect(config.execution?.retryPolicy).toBeUndefined();
   });
 
-  it("maps tools allowlist", () => {
+  it("maps tools allowlist (the pick plus the kernel tools the agent runs with)", () => {
     const config = cortexParamsToAgentConfig({
       provider: "anthropic",
       tools: ["web-search", "file-write"],
     });
-    expect(config.tools?.allowedTools).toEqual(["web-search", "file-write"]);
+    expect(config.tools?.allowedTools).toEqual(["web-search", "file-write", "final-answer", "task-complete", "context-status"]);
   });
 
   it("maps memory tier: episodic/semantic → enhanced", () => {

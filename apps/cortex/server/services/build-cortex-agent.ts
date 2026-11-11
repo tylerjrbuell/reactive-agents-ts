@@ -5,26 +5,22 @@
  * (scheduled/gateway runs) go through this single function so the builder chain
  * is never duplicated.
  *
- * Architecture: cortexParamsToAgentConfig() maps Cortex UI fields → AgentConfig,
- * then agentConfigToBuilder() handles all schema-covered fields. A thin overlay
- * applies Cortex-specific fields that have no AgentConfig representation.
+ * Architecture: cortexParamsToAgentConfig() maps every Cortex setting with an
+ * AgentConfig path, then agentConfigToBuilder() applies it. A thin overlay applies
+ * only what has no AgentConfig form (see cortexAgentBuilder).
  */
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import type { DefinedTool, ShellExecuteConfig } from "@reactive-agents/tools";
+import type { DefinedTool } from "@reactive-agents/tools";
 import {
   agentConfigToBuilder,
-  ReactiveAgents,
   type MCPServerConfig,
+  type ReactiveAgentBuilder,
 } from "@reactive-agents/runtime";
 
 export type { MCPServerConfig } from "@reactive-agents/runtime";
-import type { ReasoningOptions } from "@reactive-agents/runtime";
 import type { DocumentSpec } from "@reactive-agents/runtime";
 import { ensureParentDirForFile } from "./ensure-log-path.js";
 import {
-  mergeCortexAllowedTools,
-  mergeCortexUiToolNames,
-  splitCortexListInput,
   type CortexAgentToolEntry,
   type CortexShellOptions,
   type CortexDynamicSubAgentsConfig,
@@ -204,72 +200,40 @@ export interface BuildCortexAgentParams {
   readonly approvalPolicy?: CortexApprovalPolicy;
 }
 
+export {
+  shellExecuteRequested,
+  shellTerminalOption,
+  todoGuidanceOption,
+} from "./cortex-to-agent-config.js";
+
 /**
  * Build a configured ReactiveAgent from Cortex params.
  *
- * Step 1: cortexParamsToAgentConfig() → AgentConfig (schema-shaped)
- * Step 2: agentConfigToBuilder() → ReactiveAgentBuilder (framework handles AgentConfig fields)
- * Step 3: Cortex overlay → fields not covered by AgentConfig
+ * Step 1: cortexParamsToAgentConfig() → AgentConfig (every data-like setting)
+ * Step 2: agentConfigToBuilder() → ReactiveAgentBuilder
+ * Step 3: the true overlays (see {@link cortexAgentBuilder})
  */
-/**
- * `.withMetaTools` `todoGuidance` option: passed only when the to-do tool is on AND at least one
- * guidance flag is true (opt-in, default off; ablation ruling V5). Otherwise nothing is passed.
- */
-export function todoGuidanceOption(
-  metaTools: BuildCortexAgentParams["metaTools"],
-): { todoGuidance?: { reminder?: boolean; systemLine?: boolean } } {
-  const g = metaTools?.todoGuidance;
-  if (!metaTools?.todo || !g || (g.reminder !== true && g.systemLine !== true)) return {};
-  return { todoGuidance: { reminder: g.reminder === true, systemLine: g.systemLine === true } };
-}
-
-/**
- * The `.withTools({ terminal })` value for a shell-enabled build: `true` (framework defaults)
- * when nothing is customised, else one `ShellExecuteConfig` carrying the command lists and
- * {@link CortexShellOptions}. Pure — exported for the pin.
- */
-export function shellTerminalOption(
-  params: Pick<BuildCortexAgentParams, "terminalShellAdditionalCommands" | "terminalShellAllowedCommands" | "terminalShellOptions">,
-): true | ShellExecuteConfig {
-  const addl = splitCortexListInput(params.terminalShellAdditionalCommands);
-  const allowOnly = splitCortexListInput(params.terminalShellAllowedCommands);
-  const o = params.terminalShellOptions;
-  const cfg: ShellExecuteConfig = {
-    ...(allowOnly.length > 0 ? { allowedCommands: allowOnly } : {}),
-    ...(addl.length > 0 ? { additionalCommands: addl } : {}),
-    ...(o?.cwd ? { cwd: o.cwd } : {}),
-    ...(o?.allowUnsafeCwd === true ? { allowUnsafeCwd: true } : {}),
-    ...(o?.timeoutMs ? { timeoutMs: o.timeoutMs } : {}),
-    ...(o?.maxOutputChars ? { maxOutputChars: o.maxOutputChars } : {}),
-    ...(o?.commandAccess && o.commandAccess.length > 0 ? { commandAccess: { capabilities: [...o.commandAccess] } } : {}),
-    ...(o?.sandbox ? { sandbox: o.sandbox } : {}),
-  };
-  return Object.keys(cfg).length > 0 ? cfg : true;
-}
-
-/**
- * Whether a build registers host `shell-execute`: `terminalTools`, `shell-execute` in the tool
- * pick, or shell command lists (stale client JSON may carry those without the pick). Pure,
- * exported for the pin that a tools-off chat never gets the shell.
- */
-export function shellExecuteRequested(
-  params: Pick<
-    BuildCortexAgentParams,
-    "terminalTools" | "tools" | "additionalToolNames" | "terminalShellAdditionalCommands" | "terminalShellAllowedCommands"
-  >,
-): boolean {
-  return (
-    params.terminalTools === true ||
-    mergeCortexUiToolNames(params.tools, params.additionalToolNames).includes("shell-execute") ||
-    splitCortexListInput(params.terminalShellAdditionalCommands).length > 0 ||
-    splitCortexListInput(params.terminalShellAllowedCommands).length > 0
-  );
-}
-
 export async function buildCortexAgent(
   params: BuildCortexAgentParams,
   agentNameFallback?: string,
-): ReturnType<ReturnType<typeof ReactiveAgents.create>["build"]> {
+): ReturnType<ReactiveAgentBuilder["build"]> {
+  return (await cortexAgentBuilder(params, agentNameFallback)).build();
+}
+
+/**
+ * The configured builder `buildCortexAgent` builds: `agentConfigToBuilder` over
+ * `cortexParamsToAgentConfig(params)`, then the overlay calls. Exported so tests
+ * can read `toConfig()` of exactly what Cortex runs.
+ *
+ * Only true overlays remain here, each with no AgentConfig form: a saved provider
+ * key (a secret, never in config), the scripted test scenario, host tool code
+ * (`extraTools`), Cortex's trace dir, the output schema object and the
+ * user-interaction rail. `CORTEX_OVERLAY_CALLS` (cortex-agent-source.ts) lists them.
+ */
+export async function cortexAgentBuilder(
+  params: BuildCortexAgentParams,
+  agentNameFallback?: string,
+): Promise<ReactiveAgentBuilder> {
   const agentConfig = cortexParamsToAgentConfig(params, agentNameFallback);
 
   let b = await agentConfigToBuilder(agentConfig);
@@ -280,16 +244,8 @@ export async function buildCortexAgent(
   const storedKey = providerKeyForAgent(agentConfig.provider);
   if (storedKey) b = b.withProvider(agentConfig.provider, { apiKey: storedKey });
 
-  if (params.agentId) b = b.withAgentId(params.agentId);
-
   if (params.testScenario && params.testScenario.length > 0) {
     b = b.withTestScenario([...params.testScenario]);
-  }
-
-  // Legacy parity: enable the memory layer when the caller expressed no memory choice.
-  // An explicit all-off `memory` is a choice: no layer.
-  if (!agentConfig.memory && !params.memory) {
-    b = b.withMemory();
   }
 
   if (params.observabilityVerbosity && params.observabilityVerbosity !== "off") {
@@ -297,177 +253,15 @@ export async function buildCortexAgent(
     ensureParentDirForFile(agentLogFile);
   }
 
-  // Builder replaces `_reasoningOptions` on each `withReasoning` call — merge schema-derived
-  // reasoning with ICS synthesis so we do not drop defaultStrategy / strategy switching.
-  // `auditRationale` is read from `params` directly (not schema) so the opt-in survives even
-  // when AgentConfigSchema is resolved from a build that predates the field.
-  const synthesisActive = !!params.contextSynthesis && params.contextSynthesis !== "none";
-  if (synthesisActive || params.auditRationale === true) {
-    const synthesisMap: Record<string, ReasoningOptions["synthesis"]> = {
-      auto: "auto",
-      template: "fast",
-      llm: "deep",
-    };
-    const r = agentConfig.reasoning;
-    b = b.withReasoning({
-      ...(r?.defaultStrategy ? { defaultStrategy: r.defaultStrategy } : {}),
-      ...(r?.enableStrategySwitching !== undefined
-        ? { enableStrategySwitching: r.enableStrategySwitching }
-        : {}),
-      ...(r?.maxStrategySwitches !== undefined ? { maxStrategySwitches: r.maxStrategySwitches } : {}),
-      ...(r?.fallbackStrategy ? { fallbackStrategy: r.fallbackStrategy } : {}),
-      ...(params.auditRationale === true ? { auditRationale: true } : {}),
-      ...(synthesisActive ? { synthesis: synthesisMap[params.contextSynthesis!] ?? "auto" } : {}),
-    } as ReasoningOptions);
-  }
-
-  for (const at of params.agentTools ?? []) {
-    if (at.kind === "remote") {
-      b = b.withRemoteAgent(at.toolName, at.remoteUrl);
-    } else {
-      b = b.withAgentTool(at.toolName, {
-        name: at.agent.name,
-        ...(at.agent.description ? { description: at.agent.description } : {}),
-        ...(at.agent.provider ? { provider: at.agent.provider } : {}),
-        ...(at.agent.model ? { model: at.agent.model } : {}),
-        ...(at.agent.tools && at.agent.tools.length > 0 ? { tools: [...at.agent.tools] } : {}),
-        ...(at.agent.maxIterations ? { maxIterations: at.agent.maxIterations } : {}),
-        ...(at.agent.systemPrompt ? { systemPrompt: at.agent.systemPrompt } : {}),
-      });
-    }
-  }
-
-  if (params.dynamicSubAgents?.enabled) {
-    b = b.withDynamicSubAgents(
-      params.dynamicSubAgents.maxIterations
-        ? { maxIterations: params.dynamicSubAgents.maxIterations }
-        : undefined,
-    );
-  }
-
-  const allowExtras = {
-    spawnAgent: params.dynamicSubAgents?.enabled === true,
-    agentToolNames: params.agentTools?.map((t) => t.toolName) ?? [],
-  };
-  const shellRequested = shellExecuteRequested(params);
-  let userTools = mergeCortexUiToolNames(params.tools, params.additionalToolNames);
-  if (shellRequested && !userTools.includes("shell-execute")) {
-    userTools.push("shell-execute");
-  }
+  // Host tool code (e.g. the chat `session-control` tool). Their names are already in
+  // the AgentConfig allow-list (cortexParamsToAgentConfig); the functions are code-only.
   const extraTools = params.extraTools ?? [];
-  const mergedAllowed = mergeCortexAllowedTools(userTools, params.metaTools, {
-    ...allowExtras,
-    agentToolNames: [...allowExtras.agentToolNames, ...extraTools.map((t) => t.definition.name)],
-  });
-  const needsToolLayer =
-    (params.mcpConfigs?.length ?? 0) > 0 ||
-    (params.agentTools && params.agentTools.length > 0) ||
-    params.dynamicSubAgents?.enabled === true ||
-    userTools.length > 0 ||
-    extraTools.length > 0 ||
-    params.metaTools?.enabled === true ||
-    shellRequested;
-  if (needsToolLayer) {
-    // Register allowedTools first; apply shell **only** via `withTools({ terminal })` so
-    // `ShellExecuteConfig` is set on `_toolsOptions.terminal` in one call.
-    b = b.withTools({ allowedTools: mergedAllowed });
-    if (extraTools.length > 0) b = b.withTools({ tools: extraTools });
-  }
-  if (shellRequested) b = b.withTools({ terminal: shellTerminalOption(params) });
+  if (extraTools.length > 0) b = b.withTools({ tools: extraTools });
 
-  const tc = params.taskContext;
-  if (tc && Object.keys(tc).length > 0) b = b.withTaskContext(tc);
-
-  // Any skills config turns skills on: `withSkills()` with no paths still discovers the
-  // run's workspace skills (`.agents/skills`, `.claude/skills`, `.<agentId>/skills`).
-  // Chat sessions always pass one (chat-session-service); desk runs and saved agents
-  // only when they set paths, pins or `global` (parseCortexSkillsConfig).
-  if (params.skills) {
-    b = b.withSkills({
-      ...(params.skills.paths.length > 0 ? { paths: [...params.skills.paths] } : {}),
-      ...(params.skills.activate?.length ? { activate: [...params.skills.activate] } : {}),
-      ...(params.skills.global === true ? { global: true } : {}),
-    });
-  }
-
-  if (params.minIterations && params.minIterations > 0) b = b.withMinIterations(params.minIterations);
-  if (params.verificationStep === "reflect") b = b.withVerificationStep({ mode: "reflect" });
-
-  if (params.runtimeVerification === true) {
-    b = b.withVerification();
-  }
-
-  // Enable meta-tools by default in Cortex (dev environment); allow explicit disable via enabled: false
-  const metaToolsEnabled = params.metaTools?.enabled ?? true;
-  if (metaToolsEnabled) {
-    b = b.withMetaTools({
-      brief: params.metaTools?.brief ?? true,
-      find: params.metaTools?.find ?? true,
-      pulse: params.metaTools?.pulse ?? false,
-      recall: params.metaTools?.recall ?? true,
-      harnessSkill: params.metaTools?.harnessSkill ?? false,
-      todo: params.metaTools?.todo ?? false,
-      ...todoGuidanceOption(params.metaTools),
-    });
-  }
-
-  // `withObservability` REPLACES its options each call, so the display-only `checklist`
-  // toggle rides with the tracing-off call here; otherwise it flows via the AgentConfig
-  // draft (`observability.checklist`, see cortex-to-agent-config.ts).
-  if (params.tracing === false) {
-    b = b.withObservability({
-      tracing: false,
-      ...(params.observability?.checklist !== undefined ? { checklist: params.observability.checklist } : {}),
-    });
-  }
-  else if (params.tracing) b = b.withTracing({ dir: params.tracing.dir });
-
-  if (params.streaming === true) {
-    b = b.withStreaming();
-  }
-
-  // Cost/token budget caps (v0.12) — Arbitrator terminates when crossed. A limit
-  // of 0 (the UI's "unset" default) means NO cap — never pass it as a real limit,
-  // or the guard fires on the first token (tokens ≥ 0 → budget_exceeded).
-  {
-    const tokenLimit = typeof params.budget?.tokenLimit === "number" && params.budget.tokenLimit > 0 ? params.budget.tokenLimit : undefined;
-    const costLimit = typeof params.budget?.costLimit === "number" && params.budget.costLimit > 0 ? params.budget.costLimit : undefined;
-    if (tokenLimit !== undefined || costLimit !== undefined) {
-      b = b.withBudget({
-        ...(tokenLimit !== undefined ? { tokenLimit } : {}),
-        ...(costLimit !== undefined ? { costLimit } : {}),
-      });
-    }
-  }
-
-  // Numeric evidence-grounding (v0.12) — opt-in; never hard-fails.
-  if (params.grounding?.mode) {
-    b = b.withGrounding({
-      mode: params.grounding.mode,
-      ...(params.grounding.tolerance != null ? { tolerance: params.grounding.tolerance } : {}),
-    });
-  }
-
-  // Fabrication guard — always-on at "block" already; only call to override.
-  if (params.fabricationGuard) {
-    b = b.withFabricationGuard(params.fabricationGuard);
-  }
-
-  if (params.harness && Object.keys(params.harness).length > 0) {
-    b = b.withHarness(params.harness as never);
-  }
-
-  if (params.documents && params.documents.length > 0) {
-    b = b.withDocuments([...params.documents]);
-  }
-
-  // Cost-aware model routing (v0.13) — opt-in; degrades to the configured model.
-  if (params.modelRouting?.enabled) {
-    b = b.withModelRouting({
-      ...(params.modelRouting.minTier ? { minTier: params.modelRouting.minTier } : {}),
-      ...(params.modelRouting.tierModels ? { tierModels: params.modelRouting.tierModels } : {}),
-    });
-  }
+  // Cortex's trace dir. Kept out of the AgentConfig: its only config form,
+  // `observability.tracing: { dir }`, also turns the observability layer on, which a
+  // bare `.withTracing()` does not (framework gap, reported).
+  if (params.tracing) b = b.withTracing({ dir: params.tracing.dir });
 
   // Typed structured output (v0.12) — extract the answer into the user's JSON
   // Schema. Lenient by default (objectError on parse-fail, never throws).
@@ -478,25 +272,9 @@ export async function buildCortexAgent(
     ) as typeof b;
   }
 
-  // Durable execution (v0.12) — opt-in crash-resume + durable HITL. The approval
-  // policy itself rides the AgentConfig (`approvalPolicy`, applied above by
-  // agentConfigToBuilder). A `detach` policy pauses the run, and `build()` refuses
-  // a detach policy without a durable store, so the policy turns durable runs on:
-  // the user chose "pause until I approve", and that pause has to persist.
-  if (isDurableBuild(params)) {
-    const opts: { dir?: string; checkpointEvery?: number } = {};
-    if (params.durableRuns?.dir) opts.dir = params.durableRuns.dir;
-    if (params.durableRuns?.checkpointEvery !== undefined) {
-      opts.checkpointEvery = params.durableRuns.checkpointEvery;
-    }
-    b = b.withDurableRuns(opts);
-    // Agentic-UI interaction rail: enables request_user_input pauses. Build-guarded
-    // on durable runs (persists the pause + response to the durable store).
-    b = b.withUserInteraction();
-  }
+  // Agentic-UI interaction rail: enables request_user_input pauses. Build-guarded on
+  // durable runs (the AgentConfig carries `durableRuns` when isDurableBuild).
+  if (isDurableBuild(params)) b = b.withUserInteraction();
 
-  // Desk / runner pause, resume, and stop call ReactiveAgent.pause|resume|stop (KillSwitchService).
-  b = b.withKillSwitch();
-
-  return b.build();
+  return b;
 }
