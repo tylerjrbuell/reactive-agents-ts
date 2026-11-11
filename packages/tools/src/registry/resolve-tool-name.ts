@@ -23,6 +23,14 @@
 /**
  * Lowercase word tokens of a tool name. Any non-alphanumeric run is a
  * separator and camelCase humps split (`fileRead` → `file`,`read`).
+ *
+ * This is the framework's ONE tool-name word splitter. Any package that needs
+ * the words of a tool name (name matching, claimed-action detection) imports
+ * it from `@reactive-agents/tools` instead of re-implementing it, so the
+ * tokenizers cannot drift apart.
+ *
+ * @param name - Tool name in any spelling (`web-search`, `umami/get_stats`, `fileRead`).
+ * @returns Lowercase alphanumeric tokens in order; empty when the name has none.
  */
 export function tokenizeToolName(name: string): readonly string[] {
   return name

@@ -191,7 +191,7 @@ export {
 } from "./exchange-projection.js";
 export { estimateTokenCount, calculateCost } from "./token-counter.js";
 export type { CacheUsage } from "./token-counter.js";
-export { retryPolicy } from "./retry.js";
+export { retryPolicy, isRetryableLLMError } from "./retry.js";
 export type { PricingProvider, ModelPricing } from "./pricing.js";
 export { openRouterPricingProvider, urlPricingProvider } from "./pricing.js";
 

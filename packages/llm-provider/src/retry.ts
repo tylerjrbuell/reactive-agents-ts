@@ -6,6 +6,11 @@ import type { StreamEvent } from "./types.js";
 /**
  * Whether the provider retry schedule may re-send this failed request.
  *
+ * This is the single answer to "would the provider retry this error". Both
+ * {@link retryPolicy} and {@link retryStreamBeforeFirstEmission} gate on it,
+ * so a caller that needs to know whether the provider already spent its
+ * retries on a failure should import this predicate, never copy it.
+ *
  * Keys on the error's structural `retryable` flag (set from its class by
  * `mapProviderError`; always true on `LLMTimeoutError` and
  * `LLMMalformedOutputError`). An error built without the flag falls back to

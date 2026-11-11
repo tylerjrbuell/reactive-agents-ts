@@ -46,8 +46,14 @@ export type { RegisteredTool } from "./registry/tool-registry.js";
  * Separator/case-variant tool-name resolution (`umami_get_website_stats` →
  * `umami/get_website_stats`, `web_search` → `web-search`; ambiguous →
  * `undefined`). ToolService.execute uses it; the kernel can reuse it.
+ * `tokenizeToolName` is the one tool-name word splitter; import it rather
+ * than re-implementing it.
  */
-export { resolveToolName, toolNameCorrectionNote } from "./registry/resolve-tool-name.js";
+export {
+  resolveToolName,
+  tokenizeToolName,
+  toolNameCorrectionNote,
+} from "./registry/resolve-tool-name.js";
 
 // ─── MCP Client ───
 export {
