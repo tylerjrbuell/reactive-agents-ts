@@ -45,12 +45,62 @@
     agentTools[index] = next;
     config = { ...config, agentTools };
   }
+
+  // ── Dynamic sub-agents (`.withDynamicSubAgents`) ───────────────────────
+  const dynamic = $derived(config.dynamicSubAgents ?? { enabled: false, maxIterations: 8 });
+
+  function patchDynamic(next: Partial<PanelAgentConfig["dynamicSubAgents"]>) {
+    config = { ...config, dynamicSubAgents: { ...dynamic, maxIterations: dynamic.maxIterations ?? 8, ...next } };
+  }
+
+  /** Empty or 0 = unset: spawned agents get no spawn tool of their own (the framework default). */
+  function setRecursionDepth(raw: string) {
+    const n = parseInt(raw, 10);
+    patchDynamic({ maxRecursionDepth: Number.isFinite(n) && n > 0 ? n : undefined });
+  }
 </script>
 
 <ConfigSection id="subagents" icon="agents" title="Sub-agents" {open} {onToggle}>
   {#snippet head()}
-      <span>{(config.agentTools ?? []).length} registered</span>
+      <span>{(config.agentTools ?? []).length} registered{dynamic.enabled ? " · spawn on" : ""}</span>
   {/snippet}
+        <div class="acp-group">
+          <label class="acp-check">
+            <input type="checkbox"
+              checked={dynamic.enabled}
+              onchange={() => patchDynamic({ enabled: !dynamic.enabled })} />
+            <span>
+              <span class="acp-check-t">Dynamic sub-agents</span>
+              <span class="acp-hint">Gives the agent <code>spawn-agent</code> to hand work to a new agent while it runs.</span>
+            </span>
+          </label>
+          {#if dynamic.enabled}
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label for="dyn-sub-max" class="config-label">Spawn max iterations</label>
+                <input id="dyn-sub-max" type="number" min="1" max="50" step="1"
+                  value={dynamic.maxIterations ?? 8}
+                  oninput={(e) => patchDynamic({
+                    enabled: true,
+                    maxIterations: Math.max(1, parseInt((e.target as HTMLInputElement).value || "8", 10)),
+                  })}
+                  class="config-input" />
+              </div>
+              <div>
+                <label for="dyn-sub-depth" class="config-label">Nested spawning depth</label>
+                <input id="dyn-sub-depth" type="number" min="1" max="10" step="1"
+                  placeholder="off"
+                  value={dynamic.maxRecursionDepth ?? ""}
+                  oninput={(e) => setRecursionDepth((e.target as HTMLInputElement).value)}
+                  class="config-input acp-mono" />
+              </div>
+            </div>
+            <p class="acp-hint">
+              Empty: spawned agents cannot spawn their own. A number lets them hand work on, up to that many levels deep (<code>maxRecursionDepth</code>).
+            </p>
+          {/if}
+        </div>
+        <span class="config-label mb-0">Named sub-agents</span>
         <div class="flex flex-wrap gap-2">
           <Button size="sm" icon="plus" onclick={addLocalAgentTool}>Local sub-agent</Button>
           <Button size="sm" icon="plus" onclick={addRemoteAgentTool}>Remote agent (A2A URL)</Button>

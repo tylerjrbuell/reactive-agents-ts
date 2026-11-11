@@ -63,7 +63,7 @@ const maximal = (): Record<string, unknown> => ({
     { kind: "local", toolName: "researcher", agent: { name: "Research", tools: ["web-search"], maxIterations: 4 } },
     { kind: "remote", toolName: "far", remoteUrl: "http://far.example" },
   ],
-  dynamicSubAgents: { enabled: true, maxIterations: 3 },
+  dynamicSubAgents: { enabled: true, maxIterations: 3, maxRecursionDepth: 2 },
   strategy: "plan-execute-reflect",
   minIterations: 2,
   verificationStep: "reflect",
@@ -144,7 +144,7 @@ describe("each former overlay maps onto its AgentConfig path", () => {
       { name: "researcher", agent: { name: "Research", tools: ["web-search"], maxIterations: 4 } },
       { name: "far", remoteUrl: "http://far.example" },
     ]);
-    expect(cfg().dynamicSubAgents).toEqual({ maxIterations: 3 });
+    expect(cfg().dynamicSubAgents).toEqual({ maxIterations: 3, maxRecursionDepth: 2 });
     expect(cortexParamsToAgentConfig({ provider: "test", dynamicSubAgents: { enabled: true } }).dynamicSubAgents).toEqual({});
     expect(cortexParamsToAgentConfig({ provider: "test", dynamicSubAgents: { enabled: false } }).dynamicSubAgents).toBeUndefined();
   });

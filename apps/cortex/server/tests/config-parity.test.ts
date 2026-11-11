@@ -121,6 +121,7 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.agentTools![0]?.toolName).toBe("researcher");
     expect(p.dynamicSubAgents?.enabled).toBe(true);
     expect(p.dynamicSubAgents?.maxIterations).toBe(6);
+    expect(p.dynamicSubAgents?.maxRecursionDepth).toBe(2);
 
     expect(p.taskContext).toEqual({ project: "acme", environment: "staging" });
     expect(p.healthCheck).toBe(true);

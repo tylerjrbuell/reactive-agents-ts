@@ -81,11 +81,13 @@ describe("normalizeCortexAgentConfig", () => {
         { kind: "local", toolName: "a", agent: { name: "A", maxIterations: 4, tools: ["web-search"] } },
         { kind: "remote", toolName: "r", remoteUrl: "http://x" },
       ],
-      dynamicSubAgents: { enabled: true, maxIterations: 3 },
+      dynamicSubAgents: { enabled: true, maxIterations: 3, maxRecursionDepth: 2 },
     });
     expect(out.agentTools).toHaveLength(2);
     expect((out.agentTools as Array<{ kind: string }>)[0]!.kind).toBe("local");
-    expect(out.dynamicSubAgents).toEqual({ enabled: true, maxIterations: 3 });
+    expect(out.dynamicSubAgents).toEqual({ enabled: true, maxIterations: 3, maxRecursionDepth: 2 });
+    // No depth set = children cannot spawn their own (framework default): nothing sent.
+    expect(normalizeCortexAgentConfig({ dynamicSubAgents: { enabled: true, maxRecursionDepth: 0 } }).dynamicSubAgents).toEqual({ enabled: true });
   });
 
   test("preserves strategySwitching only when explicitly provided", () => {

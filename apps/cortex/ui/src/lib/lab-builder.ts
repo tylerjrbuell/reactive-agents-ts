@@ -16,7 +16,7 @@ export type BuilderAgentConfig = AgentConfig & {
   observabilityVerbosity: "off" | "minimal" | "normal" | "verbose";
   mcpServerIds: string[];
   agentTools: CortexAgentToolConfig[];
-  dynamicSubAgents: { enabled: boolean; maxIterations: number };
+  dynamicSubAgents: { enabled: boolean; maxIterations: number; maxRecursionDepth?: number };
 };
 
 /** Base config for Builder / forms: static defaults + Cortex Settings default provider/model. */

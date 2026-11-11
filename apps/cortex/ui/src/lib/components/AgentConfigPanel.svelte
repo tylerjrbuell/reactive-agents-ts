@@ -21,7 +21,7 @@
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { loadCapabilities, type CapabilityManifest } from "$lib/capabilities.js";
   import { builderToolPicks, shellPresetPicks, type CatalogToolRow, type ToolPick } from "$lib/builder-tool-picks.js";
-  import { activeSectionIds, builderNavEntry, sectionCopy, sectionVisible } from "$lib/agent-config-sections.js";
+  import { activeSectionIds, builderNavEntry, navEntryOfSection, sectionCopy, sectionVisible } from "$lib/agent-config-sections.js";
   import type { McpCatalogRow, PanelAgentConfig } from "$lib/components/agent-config/types.js";
   import AgentConfigHeader from "$lib/components/agent-config/AgentConfigHeader.svelte";
   import InferenceSection from "$lib/components/agent-config/sections/InferenceSection.svelte";
@@ -55,8 +55,10 @@
      * import / export and its own nav). Omit for the collapsible panel.
      */
     navSection?: string;
+    /** Lab builder: open another section-nav entry (a cross-section link, e.g. approvals → Execution). */
+    onNavigate?: (navEntryId: string) => void;
   }
-  let { config = $bindable(defaultConfig() as PanelAgentConfig), compact = false, toolsToggle, navSection }: Props = $props();
+  let { config = $bindable(defaultConfig() as PanelAgentConfig), compact = false, toolsToggle, navSection, onNavigate }: Props = $props();
 
   // Flat sections inside the Lab builder (read once by ConfigSection; the prop never changes for a mounted panel).
   const navMembers = $derived(navSection !== undefined ? builderNavEntry(navSection).sections : null);
@@ -107,6 +109,12 @@
     requestAnimationFrame(() => {
       document.getElementById(`acp-section-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
+  }
+
+  /** Show a panel section from a link in another one: its nav entry in the Lab builder, else open and scroll. */
+  function showSection(id: string) {
+    const entry = navEntryOfSection(id);
+    if (navMembers !== null) { if (entry) onNavigate?.(entry); } else acpScrollTo(id);
   }
 
   /** Model dropdown: `/api/models/:provider` + live Ollama tags when applicable. */
@@ -339,7 +347,7 @@
 
   {#if !compact && shows("tools")}
     <ToolsSection bind:config open={isOpen("tools")} onToggle={() => toggle("tools")}
-      {toolsToggle} tools={AVAILABLE_TOOLS} {shellPresets} {mcpCatalog} {loadMcpCatalog} splitShell={navMembers !== null} />
+      {toolsToggle} tools={AVAILABLE_TOOLS} {shellPresets} {mcpCatalog} {loadMcpCatalog} splitShell={navMembers !== null} onShowSection={showSection} />
   {/if}
 
   {#if navMembers?.includes("shell")}

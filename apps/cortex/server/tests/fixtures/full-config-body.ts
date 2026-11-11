@@ -33,7 +33,7 @@ export const FULL_CONFIG_BODY = {
   agentTools:         [
     { kind: "local", toolName: "researcher", agent: { name: "Research", tools: ["web-search"], maxIterations: 5 } },
   ],
-  dynamicSubAgents:   { enabled: true, maxIterations: 6 },
+  dynamicSubAgents:   { enabled: true, maxIterations: 6, maxRecursionDepth: 2 },
   /** Phase 1 — background context for reasoning (`withTaskContext`) */
   taskContext:        { project: "acme", environment: "staging" },
   /** Phase 1 — enables `agent.health()` on built agents */

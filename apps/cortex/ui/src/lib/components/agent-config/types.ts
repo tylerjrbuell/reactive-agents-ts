@@ -12,7 +12,7 @@ export type PanelAgentConfig = AgentConfig & {
   observabilityVerbosity: "off" | "minimal" | "normal" | "verbose";
   mcpServerIds: string[];
   agentTools: CortexAgentToolConfig[];
-  dynamicSubAgents: { enabled: boolean; maxIterations: number };
+  dynamicSubAgents: { enabled: boolean; maxIterations: number; maxRecursionDepth?: number };
   skills: { paths: string[]; activate?: string[]; global?: boolean };
 };
 

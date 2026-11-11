@@ -295,7 +295,7 @@ type ChatSessionConfigInput = {
   terminalShellAllowedCommands?: string;
   mcpServerIds?: string[];
   agentTools?: CortexAgentToolConfig[];
-  dynamicSubAgents?: { enabled: boolean; maxIterations?: number };
+  dynamicSubAgents?: { enabled: boolean; maxIterations?: number; maxRecursionDepth?: number };
   additionalToolNames?: string;
   terminalTools?: boolean;
   skills?: { paths: string[] };

@@ -285,6 +285,7 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
       out.dynamicSubAgents = {
         enabled: true,
         ...(typeof o.maxIterations === "number" && o.maxIterations > 0 ? { maxIterations: o.maxIterations } : {}),
+        ...(typeof o.maxRecursionDepth === "number" && o.maxRecursionDepth > 0 ? { maxRecursionDepth: o.maxRecursionDepth } : {}),
       };
     }
   }
@@ -617,6 +618,12 @@ export type CortexAgentToolEntry =
 export type CortexDynamicSubAgentsConfig = {
   readonly enabled: boolean;
   readonly maxIterations?: number;
+  /**
+   * `.withDynamicSubAgents({ maxRecursionDepth })`. Unset = spawned agents get no
+   * spawn tool of their own (the framework default); set = they may delegate
+   * further, up to this depth.
+   */
+  readonly maxRecursionDepth?: number;
 };
 
 export type CortexAllowedToolsExtras = {

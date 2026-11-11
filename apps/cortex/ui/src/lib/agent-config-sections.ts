@@ -26,8 +26,8 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     id: "inference",
     label: "Model",
     icon: "memory",
-    keywords: "inference llm provider model temperature tokens system prompt task context health anthropic openai gemini ollama litellm test",
-    configPaths: ["name", "provider", "model", "systemPrompt", "temperature", "maxTokens", "numCtx", "thinking", "taskContext", "features.healthCheck"],
+    keywords: "inference llm provider model temperature tokens system prompt task context health anthropic openai gemini ollama litellm test routing tier cheapest",
+    configPaths: ["name", "provider", "model", "systemPrompt", "temperature", "maxTokens", "numCtx", "thinking", "taskContext", "features.healthCheck", "modelRouting.minTier"],
   },
   {
     id: "persona",
@@ -40,13 +40,12 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     id: "strategy",
     label: "Reasoning",
     icon: "psychology",
-    keywords: "strategy react plan execute tot tree reflexion adaptive iterations min max verification reflect runtime semantic entropy quality approval approve deny gate commands durable",
+    keywords: "strategy react plan execute tot tree reflexion adaptive iterations min max verification reflect runtime semantic entropy quality switching harness grounding fabrication rationale",
     configPaths: [
       "reasoning.defaultStrategy", "reasoning.enableStrategySwitching", "reasoning.auditRationale", "reasoning.harness",
       "execution.maxIterations", "execution.minIterations",
       "verificationStep.mode", "features.verification",
-      "budget.tokenLimit", "budget.costLimit", "grounding.mode", "fabricationGuard", "modelRouting.minTier",
-      "documents", "approvalPolicy", "outputSchemaOptions.onParseFail",
+      "grounding.mode", "fabricationGuard",
     ],
   },
   {
@@ -60,11 +59,18 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     id: "tools",
     label: "Tools",
     icon: "construction",
-    keywords: "web search file read write code mcp registry spawn dynamic sub agent construction shell terminal host execute risk allowlist",
+    keywords: "web search file read write code mcp registry construction shell terminal host execute risk allowlist approval approve deny gate pause",
     // Shell and workspace (split out as its own Lab entry) are Tools fields in the panel.
-    configPaths: ["tools.allowedTools", "tools.disclosure", "tools.terminal", "tools.workspace", "mcpServers", "dynamicSubAgents.maxIterations"],
+    // Approvals gate tool calls, so they live here.
+    configPaths: ["tools.allowedTools", "tools.disclosure", "tools.terminal", "tools.workspace", "mcpServers", "approvalPolicy"],
   },
-  { id: "subagents", label: "Sub-agents", icon: "hub", keywords: "local remote a2a url hub delegation researcher", configPaths: ["agentTools"] },
+  {
+    id: "subagents",
+    label: "Sub-agents",
+    icon: "hub",
+    keywords: "local remote a2a url hub delegation delegate researcher spawn dynamic nested recursion depth",
+    configPaths: ["agentTools", "dynamicSubAgents"],
+  },
   {
     id: "skills",
     label: "Skills",
@@ -76,8 +82,8 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     id: "memory",
     label: "Memory",
     icon: "account_tree",
-    keywords: "working episodic semantic context synthesis ics account tree debrief",
-    configPaths: ["memory.tier", "features.memory", "reasoning.synthesis"],
+    keywords: "working episodic semantic context synthesis ics account tree debrief documents rag retrieval ingest",
+    configPaths: ["memory.tier", "features.memory", "reasoning.synthesis", "documents"],
   },
   {
     id: "guardrails",
@@ -90,8 +96,8 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     id: "execution",
     label: "Execution",
     icon: "timer",
-    keywords: "timeout retry cache checkpoint progress ttl timer",
-    configPaths: ["execution.timeoutMs", "execution.retryPolicy"],
+    keywords: "timeout retry cache checkpoint progress ttl timer durable resume crash budget token cost cap output schema structured json webhooks lifecycle",
+    configPaths: ["execution.timeoutMs", "execution.retryPolicy", "budget.tokenLimit", "budget.costLimit", "outputSchemaOptions.onParseFail"],
   },
   { id: "metatools", label: "Meta tools", icon: "wand_stars", keywords: "conductor brief find pulse recall harness suite wand stars", configPaths: ["metaTools"] },
   { id: "reliability", label: "Reliability", icon: "shield", keywords: "fallback provider errors shield backup", configPaths: ["fallbacks"] },
@@ -152,7 +158,7 @@ export interface BuilderNavEntry {
   readonly id: string;
   readonly label: string;
   /** Kit icon name (`lib/icons.ts`). */
-  readonly icon: "model" | "chat" | "strategy" | "tool" | "shell" | "agents" | "book" | "folder" | "alert" | "steps" | "goal" | "trace" | "settings";
+  readonly icon: "model" | "chat" | "code" | "strategy" | "tool" | "shell" | "agents" | "book" | "folder" | "alert" | "steps" | "goal" | "trace" | "settings";
   /** One line under the section title. */
   readonly description: string;
   /** Panel section ids (`AGENT_CONFIG_SECTIONS`) and builder parts it renders, in order. */
@@ -163,22 +169,23 @@ export interface BuilderNavEntry {
 
 /**
  * The Lab builder's section nav: the 13 panel sections grouped into entries
- * (Inference is Model, Strategy is Reasoning, Variables sit under Persona,
- * Meta tools under Tools), plus Shell and workspace and All framework options
+ * (Inference is Model, Strategy is Reasoning, Meta tools under Tools), plus
+ * Shell and workspace and All framework options
  * as entries of their own. Data, not markup: the nav, the form and "Find a
  * setting" all read this list.
  */
 export const BUILDER_NAV: readonly BuilderNavEntry[] = [
-  { id: "model", label: "Model", icon: "model", description: "Which model the agent thinks with, and how much it may say.", sections: ["inference"], keywords: "inference" },
-  { id: "persona", label: "Persona", icon: "chat", description: "Who the agent is, how it sounds, and the variables its prompts take.", sections: ["persona", "variables"], keywords: "" },
-  { id: "reasoning", label: "Reasoning", icon: "strategy", description: "How the agent plans, how many loops it may take, and how it checks its work.", sections: ["strategy"], keywords: "output schema webhooks durable runs" },
-  { id: "tools", label: "Tools", icon: "tool", description: "What the agent can call: built-in tools, MCP servers and the meta tools.", sections: ["tools", "metatools"], keywords: "disclosure" },
+  { id: "model", label: "Model", icon: "model", description: "Which model the agent thinks with, how much it may say, and when a cheaper one may answer.", sections: ["inference"], keywords: "inference" },
+  { id: "persona", label: "Persona", icon: "chat", description: "Who the agent is and how it sounds.", sections: ["persona"], keywords: "" },
+  { id: "variables", label: "Variables", icon: "code", description: "Named values the agent's prompts fill in at run time.", sections: ["variables"], keywords: "variables template placeholders params inputs {{ }}" },
+  { id: "reasoning", label: "Reasoning", icon: "strategy", description: "How the agent plans, how many loops it may take, and how it checks its work.", sections: ["strategy"], keywords: "" },
+  { id: "tools", label: "Tools", icon: "tool", description: "What the agent can call (built-in tools, MCP servers, meta tools) and which calls wait for your approval.", sections: ["tools", "metatools"], keywords: "disclosure" },
   { id: "shell", label: "Shell and workspace", icon: "shell", description: "Where the agent works and which programs it may run.", sections: ["shell"], keywords: "shell terminal workspace folder directory cwd sandbox allowlist commands git gh host execute" },
-  { id: "subagents", label: "Sub-agents", icon: "agents", description: "Agents this one can hand work to, local or remote.", sections: ["subagents"], keywords: "" },
+  { id: "subagents", label: "Sub-agents", icon: "agents", description: "Agents this one can hand work to: named ones, local or remote, and ones it spawns while it runs.", sections: ["subagents"], keywords: "" },
   { id: "skills", label: "Skills", icon: "book", description: "SKILL.md folders the agent can load while it works.", sections: ["skills"], keywords: "" },
-  { id: "memory", label: "Memory", icon: "folder", description: "What the agent remembers within a run and across runs.", sections: ["memory"], keywords: "" },
+  { id: "memory", label: "Memory", icon: "folder", description: "What the agent remembers within a run and across runs, and the documents it can search.", sections: ["memory"], keywords: "" },
   { id: "guardrails", label: "Guardrails", icon: "alert", description: "Checks on what goes in and comes out: injection, PII and toxicity.", sections: ["guardrails"], keywords: "" },
-  { id: "execution", label: "Execution", icon: "steps", description: "Timeouts, retries, caching and checkpoints.", sections: ["execution"], keywords: "" },
+  { id: "execution", label: "Execution", icon: "steps", description: "How a run is carried out: limits, retries, durable runs, structured output and webhooks.", sections: ["execution"], keywords: "durable runs" },
   { id: "reliability", label: "Reliability", icon: "goal", description: "Fallback providers for when a call fails.", sections: ["reliability"], keywords: "" },
   { id: "observability", label: "Observability", icon: "trace", description: "How much the run reports while it works.", sections: ["observability"], keywords: "" },
   { id: "framework", label: "All framework options", icon: "settings", description: "Every builder option the framework exposes, read from its capability manifest.", sections: ["framework"], keywords: "advanced raw config manifest builder options" },
@@ -187,6 +194,11 @@ export const BUILDER_NAV: readonly BuilderNavEntry[] = [
 /** The nav entry with this id, or the first (Model). */
 export function builderNavEntry(id: string): BuilderNavEntry {
   return BUILDER_NAV.find((e) => e.id === id) ?? BUILDER_NAV[0]!;
+}
+
+/** The nav entry that shows a panel section (`execution` → `execution`, `metatools` → `tools`), else undefined. */
+export function navEntryOfSection(sectionId: string): string | undefined {
+  return BUILDER_NAV.find((e) => e.sections.includes(sectionId))?.id;
 }
 
 /** Whether a nav entry matches "Find a setting": its title, its words, or a member section's title, keywords or id. */

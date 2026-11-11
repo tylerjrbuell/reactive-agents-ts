@@ -94,7 +94,7 @@ const fixture = (): Record<string, unknown> => ({
   additionalToolNames: "http-get",
   mcpServerIds: ["mcp-parity"],
   agentTools: [{ kind: "local", toolName: "researcher", agent: { name: "Research", tools: ["web-search"], maxIterations: 4 } }],
-  dynamicSubAgents: { enabled: true, maxIterations: 3 },
+  dynamicSubAgents: { enabled: true, maxIterations: 3, maxRecursionDepth: 2 },
   strategy: "plan-execute-reflect",
   maxIterations: 7,
   minIterations: 2,

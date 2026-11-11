@@ -7,6 +7,8 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
   import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
+  import ApprovalPolicyFields from "../ApprovalPolicyFields.svelte";
+  import { hasApprovalGate } from "$lib/approval-policy.js";
   import { toggleServerTools } from "$lib/tool-selection.js";
   import { unlistedTools } from "$lib/chat-quickbar.js";
   import type { ToolPick } from "$lib/builder-tool-picks.js";
@@ -28,8 +30,10 @@
     loadMcpCatalog: () => void | Promise<void>;
     /** The shell and workspace fields render as their own section (Lab builder nav): leave them out here. */
     splitShell?: boolean;
+    /** Show another panel section (the approvals note links to Execution's durable-runs switch). */
+    onShowSection?: (sectionId: string) => void;
   }
-  let { config = $bindable(), open, onToggle, toolsToggle, tools: AVAILABLE_TOOLS, shellPresets, mcpCatalog, loadMcpCatalog, splitShell = false }: Props = $props();
+  let { config = $bindable(), open, onToggle, toolsToggle, tools: AVAILABLE_TOOLS, shellPresets, mcpCatalog, loadMcpCatalog, splitShell = false, onShowSection }: Props = $props();
 
   function toggleTool(id: string) {
     const tools = config.tools.includes(id)
@@ -202,37 +206,11 @@
             {/each}
           {/if}
         </div>
-        <div class="acp-group">
-          <label class="acp-check">
-            <input type="checkbox"
-              checked={config.dynamicSubAgents?.enabled ?? false}
-              onchange={() => (config = {
-                ...config,
-                dynamicSubAgents: {
-                  enabled: !(config.dynamicSubAgents?.enabled ?? false),
-                  maxIterations: config.dynamicSubAgents?.maxIterations ?? 8,
-                },
-              })} />
-            <span>
-              <span class="acp-check-t">Dynamic sub-agents</span>
-              <span class="acp-hint">Gives the agent <code>spawn-agent</code> to hand work to a new agent while it runs.</span>
-            </span>
-          </label>
-          {#if config.dynamicSubAgents?.enabled}
-            <div>
-              <label for="dyn-sub-max" class="config-label">Spawn max iterations</label>
-              <input id="dyn-sub-max" type="number" min="1" max="50" step="1"
-                value={config.dynamicSubAgents?.maxIterations ?? 8}
-                oninput={(e) => (config = {
-                  ...config,
-                  dynamicSubAgents: {
-                    enabled: true,
-                    maxIterations: Math.max(1, parseInt((e.target as HTMLInputElement).value || "8", 10)),
-                  },
-                })}
-                class="config-input" />
-            </div>
-          {/if}
-        </div>
+        <!-- Approvals gate tool calls, so they sit with the tools they gate. -->
+        <ApprovalPolicyFields bind:config />
+        <p class="acp-hint" data-testid="approval-durable-note">
+          {#if !config.durableRuns.enabled && config.approvalPolicy.mode === "detach" && hasApprovalGate(config.approvalPolicy)}Pausing for approval needs durable execution, so runs of this agent use it.{" "}{/if}Durable execution is set under
+          {#if onShowSection}<button type="button" class="acp-linkbtn" onclick={() => onShowSection("execution")}>Execution</button>{:else}Execution{/if}.
+        </p>
         </div>
 </ConfigSection>

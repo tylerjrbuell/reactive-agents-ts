@@ -264,9 +264,11 @@ export function cortexParamsToAgentConfig(
     );
   }
   if (params.dynamicSubAgents?.enabled) {
-    draft.dynamicSubAgents = params.dynamicSubAgents.maxIterations
-      ? { maxIterations: params.dynamicSubAgents.maxIterations }
-      : {};
+    const { maxIterations, maxRecursionDepth } = params.dynamicSubAgents;
+    draft.dynamicSubAgents = {
+      ...(maxIterations ? { maxIterations } : {}),
+      ...(maxRecursionDepth && maxRecursionDepth > 0 ? { maxRecursionDepth } : {}),
+    };
   }
 
   if (params.verificationStep === "reflect") draft.verificationStep = { mode: "reflect" };

@@ -50,4 +50,11 @@
             <option value="none">None — raw context</option>
           </select>
         </div>
+        <div>
+          <div class="config-label">Documents (JSON array, RAG)</div>
+          <textarea bind:value={config.documents} rows="6" spellcheck="false"
+            placeholder={'[\n  { "source": "./docs/README.md", "format": "markdown" }\n]'}
+            class="config-input acp-mono"></textarea>
+          <p class="mt-1 acp-hint">Optional — ingest documents for retrieval (.withDocuments). Each entry needs source (path) or content.</p>
+        </div>
 </ConfigSection>

@@ -75,7 +75,7 @@ export const AgentConfigBodyFields = {
   additionalToolNames: t.Optional(t.String()),
   mcpServerIds: t.Optional(t.Array(t.String())),
   agentTools: t.Optional(t.Array(t.Unknown())),
-  dynamicSubAgents: t.Optional(t.Object({ enabled: t.Boolean(), maxIterations: t.Optional(t.Number()) })),
+  dynamicSubAgents: t.Optional(t.Object({ enabled: t.Boolean(), maxIterations: t.Optional(t.Number()), maxRecursionDepth: t.Optional(t.Number()) })),
   strategy: t.Optional(t.String()),
   maxIterations: t.Optional(t.Number()),
   minIterations: t.Optional(t.Number()),

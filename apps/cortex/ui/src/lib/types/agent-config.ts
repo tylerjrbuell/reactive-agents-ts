@@ -139,7 +139,8 @@ export interface AgentConfig {
   /** MCP servers (Cortex Tools tab) to connect at run time — tool names use `name/tool` form in `tools`. */
   mcpServerIds: string[];
   agentTools: CortexAgentToolConfig[];
-  dynamicSubAgents: { enabled: boolean; maxIterations: number };
+  /** `.withDynamicSubAgents`: `maxRecursionDepth` unset = spawned agents cannot spawn their own (framework default). */
+  dynamicSubAgents: { enabled: boolean; maxIterations: number; maxRecursionDepth?: number };
   memory: { working: boolean; episodic: boolean; semantic: boolean };
   contextSynthesis: "auto" | "template" | "llm" | "none";
   guardrails: {

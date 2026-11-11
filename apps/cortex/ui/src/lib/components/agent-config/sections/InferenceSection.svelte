@@ -170,6 +170,23 @@
             </p>
           </div>
         </div>
+        <!-- Model routing -->
+        <div>
+          <label class="config-label flex items-center gap-2">
+            <input type="checkbox" bind:checked={config.modelRouting.enabled} />
+            Cost-aware model routing
+          </label>
+          {#if config.modelRouting.enabled}
+            <label for="routing-min-tier" class="config-label mt-1">Minimum tier</label>
+            <select id="routing-min-tier" bind:value={config.modelRouting.minTier} class="config-input">
+              <option value={undefined}>Auto — cheapest capable</option>
+              <option value="haiku">Haiku</option>
+              <option value="sonnet">Sonnet</option>
+              <option value="opus">Opus</option>
+            </select>
+          {/if}
+          <p class="mt-1 acp-hint">Routes each turn to the cheapest capable model for the provider (<code>.withModelRouting</code>); degrades to the configured model on any routing error.</p>
+        </div>
         <!-- Agent name (optional) -->
         <div class="acp-field">
           <label for="agent-name" class="config-label">Agent name</label>

@@ -48,7 +48,7 @@
       <h2 id="lab-section-title">{entry.label}</h2>
       <p>{entry.description}</p>
     </div>
-    <AgentConfigPanel bind:config navSection={entry.id} />
+    <AgentConfigPanel bind:config navSection={entry.id} onNavigate={(id) => (section = id)} />
   </div>
 
   <LaunchPanel
