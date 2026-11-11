@@ -56,14 +56,13 @@ export const KEYED_PROVIDER_ENV: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
- * Providers whose framework adapter reads `.withProvider(p, { apiKey })` today (the
- * OpenAI-compatible family, `LLMConfig.providerConfig`). The anthropic and gemini adapters
- * ignore it and read only their env-derived key (`@reactive-agents/llm-provider`
- * `providers/anthropic.ts` `config.anthropicApiKey`, `providers/gemini.ts`
- * `config.googleApiKey`), so a stored key for them reaches Test and the model list but not
- * agents. Cortex still passes it at build; add the provider here once the adapter honours it.
+ * Providers whose framework adapter reads `.withProvider(p, { apiKey })`. Since
+ * llm-provider d1955526c every adapter honours a passed key (anthropic and gemini
+ * included), so this is every provider Settings can store a key for. Ollama takes no
+ * key and is not stored. A provider added to {@link KEYED_PROVIDER_ENV} whose adapter
+ * ignores a passed key must be left out here.
  */
-const AGENT_APPLIES: ReadonlySet<string> = new Set(["openai", "groq", "xai", "litellm"]);
+const AGENT_APPLIES: ReadonlySet<string> = new Set(["anthropic", "openai", "gemini", "groq", "xai", "litellm"]);
 
 /** True when a stored key for `provider` reaches the agent's provider adapter. */
 export const storedKeyAppliesToAgents = (provider: string): boolean => AGENT_APPLIES.has(provider);

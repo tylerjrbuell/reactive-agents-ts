@@ -3,7 +3,7 @@
  * the capability stat grid, the remaining capability rows, and the note on
  * what runs on this model actually used. Rendering lives in the route.
  */
-import { formatTokens } from "@reactive-agents/ui-core";
+import { formatFirstToken, formatTokens, formatTokensPerSecond } from "@reactive-agents/ui-core";
 import type { RunRow } from "./runs-table.js";
 
 /** `GET /api/models/capability` for one provider/model. */
@@ -75,4 +75,47 @@ export function capabilityNote(cap: ModelCapability, runs: readonly RunRow[]): s
     parts.push(`${n} recorded ${n === 1 ? "run" : "runs"} on this model; the largest used ${formatTokens(used)} tokens in total.`);
   }
   return parts.length > 0 ? parts.join(" ") : null;
+}
+
+/** `GET /api/model-throughput` (server `services/model-throughput.ts`). */
+export interface ModelThroughput {
+  readonly runs: number;
+  readonly tokensPerSecond?: { readonly median: number; readonly lowerBound: boolean; readonly calls: number };
+  readonly firstTokenMs?: { readonly median: number; readonly calls: number };
+}
+
+/** One speed stat with its hover explanation. */
+export interface SpeedItem extends CapabilityItem {
+  readonly title: string;
+}
+
+/**
+ * The Model page speed stats: median output tokens/sec and median time to
+ * first token over recent runs. A median over lower-bound rates (no call
+ * reported its first token) reads `~` and says so; exact and lower-bound rates
+ * are never mixed (the server keeps them apart). Empty when nothing was measured.
+ */
+export function speedStats(t: ModelThroughput | null): SpeedItem[] {
+  if (!t) return [];
+  const items: SpeedItem[] = [];
+  const runs = `${t.runs} recent ${t.runs === 1 ? "run" : "runs"}`;
+  if (t.tokensPerSecond) {
+    const { median, lowerBound, calls } = t.tokensPerSecond;
+    items.push({
+      label: "Median speed",
+      value: formatTokensPerSecond(median, lowerBound),
+      title: `Median output speed over ${calls} model ${calls === 1 ? "call" : "calls"} in ${runs}${
+        lowerBound ? ". At least this fast: no call reported when its first token came, so the time includes the wait before output" : ""
+      }`,
+    });
+  }
+  if (t.firstTokenMs) {
+    const { median, calls } = t.firstTokenMs;
+    items.push({
+      label: "Median first token",
+      value: formatFirstToken(median),
+      title: `Median time to first token over ${calls} streamed ${calls === 1 ? "call" : "calls"} in ${runs}`,
+    });
+  }
+  return items;
 }

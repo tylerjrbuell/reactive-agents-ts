@@ -12,6 +12,7 @@ import {
   splitTokens,
   foldModelWait,
   initialModelWait,
+  liveTokensPerSecond,
   type ChecklistSnapshotWire,
   type ModelWaitState,
   type RunState,
@@ -64,6 +65,8 @@ export interface StreamTurnOptions {
   readonly apply: TurnsUpdater;
   /** Called with each NEW live checklist snapshot (stale ones are dropped by the fold), so the host can keep conversation-level state such as the to-do list. */
   readonly onChecklist?: (snapshot: ChecklistSnapshotWire) => void;
+  /** Clock for the live output-speed estimate; `Date.now` by default (tests pass a fake). */
+  readonly now?: () => number;
 }
 
 export interface StreamTurnOutcome {
@@ -142,6 +145,9 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   // context growth estimate) and characters streamed since that call reported.
   let contextPromptTokens = 0;
   let inFlightText = "";
+  // When the in-flight call's first text delta arrived (live tokens/sec estimate); reset when it reports.
+  let inFlightStartedAt: number | undefined;
+  const clock = opts.now ?? Date.now;
   let liveCostUsd = 0;
   // rAF-coalesced apply state (TU-9).
   let hasPendingApply = false;
@@ -181,6 +187,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       liveTokens: completed ? undefined : t.liveTokens,
       liveUsage: completed ? undefined : t.liveUsage,
       liveCost: completed ? undefined : t.liveCost,
+      liveRate: undefined,
       ...(streamInputTokens !== undefined ? { tokensIn: streamInputTokens } : {}),
       ...(streamOutputTokens !== undefined ? { tokensOut: streamOutputTokens } : {}),
       ...(trace.usage ? { usage: trace.usage } : {}),
@@ -336,11 +343,15 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         // buffer so per-delta rounding never compounds (three 1-char deltas are
         // 1 token, not 3). Script-aware estimator keeps the pre-report number honest.
         inFlightText += event.text;
+        const at = clock();
+        inFlightStartedAt ??= at;
         trace = foldTurnTrace(trace, event);
         const liveUsage = computeLiveUsage();
+        const liveRate = liveTokensPerSecond(estimateTokens(inFlightText), at - inFlightStartedAt);
         // Coalesce the store write into one per animation frame (TU-9).
         scheduleApply({
           ...livePatch(liveUsage),
+          ...(liveRate !== undefined ? { liveRate } : {}),
           ...(hasContext && windowTokens > 0 ? { context: contextFor(contextPromptTokens + estimateTokens(inFlightText)) } : {}),
           ...(partial !== undefined ? { liveObject: partial } : {}),
         });
@@ -383,6 +394,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         // The call that just reported consumed every delta streamed so far;
         // the next delta belongs to the next call.
         inFlightText = "";
+        inFlightStartedAt = undefined;
         contextPromptTokens = typeof event.tokensIn === "number" ? event.tokensIn : contextPromptTokens;
         const liveUsage = computeLiveUsage();
         const newUsed = (typeof event.tokensIn === "number" ? event.tokensIn : basePromptTokens) + (event.tokensOut ?? 0);
@@ -390,6 +402,8 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
           patchTurn(turns, id, (t) => ({
             ...t,
             usage,
+            // The call reported: its measured speed is in `usage` now, not the estimate.
+            liveRate: undefined,
             ...livePatch(liveUsage),
             ...(liveCostUsd > 0 ? { liveCost: liveCostUsd } : {}),
             ...(hasContext && windowTokens > 0 ? { context: contextFor(newUsed) } : {}),

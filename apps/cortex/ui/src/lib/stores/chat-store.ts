@@ -125,6 +125,13 @@ export type ChatTurn = {
    * Absent once the turn finishes (the final split lives on `tokensIn`/`tokensOut`).
    */
   liveUsage?: LiveTokenSplit;
+  /**
+   * Live output-speed estimate (tokens/sec) for the model call streaming now:
+   * estimated tokens of its streamed text over the time since its first delta
+   * (ui-core `liveTokensPerSecond`). Cleared when the call reports (`usage` then
+   * carries the measured speed) and when the turn ends.
+   */
+  liveRate?: number;
   /** Provider-reported input/output split on the final reply, when the provider reported it. */
   tokensIn?: number;
   tokensOut?: number;

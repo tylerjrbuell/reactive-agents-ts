@@ -10,6 +10,39 @@ afterEach(() => {
 
 const top = (e: object) => `data: ${JSON.stringify(e)}\n\n`;
 
+/** Every state the assistant turn went through, with a fake clock that advances 1s per read. */
+async function runHistory(lines: string[]): Promise<ChatTurn[]> {
+  const enc = new TextEncoder();
+  globalThis.fetch = Object.assign(
+    async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            for (const l of lines) c.enqueue(enc.encode(l));
+            c.close();
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      ),
+    { preconnect: (): void => {} },
+  );
+  let clock = 0;
+  let turns: ChatTurn[] = [{ id: 1, role: "assistant", content: "", tokensUsed: 0, ts: 0, streaming: true }];
+  const history: ChatTurn[] = [];
+  await streamAssistantTurn({
+    endpoint: "http://x/stream",
+    body: {},
+    signal: new AbortController().signal,
+    assistantTurnId: 1,
+    now: () => (clock += 1000),
+    apply: (f) => {
+      turns = f(turns);
+      history.push(turns[0]!);
+    },
+  });
+  return history;
+}
+
 async function run(lines: string[]): Promise<ChatTurn> {
   const enc = new TextEncoder();
   globalThis.fetch = Object.assign(
@@ -37,6 +70,21 @@ async function run(lines: string[]): Promise<ChatTurn> {
   });
   return turns[0]!;
 }
+
+describe("chat-stream output speed", () => {
+  it("shows a live estimate while text streams, then clears it when the call reports its measured speed", async () => {
+    const history = await runHistory([
+      top({ _tag: "TextDelta", text: "abcdefgh" }), // t=1s: first delta, no window yet
+      top({ _tag: "TextDelta", text: "abcdefgh" }), // t=2s: 16 chars = 4 tokens over 1s
+      top({ _tag: "TokenUsage", callId: "a", tokensTotal: 120, tokensIn: 100, tokensOut: 20, estimated: false, model: "m", provider: "p", durationMs: 1500, firstTokenMs: 500, costUsd: 0 }),
+    ]);
+    const live = history.map((t) => t.liveRate).filter((r) => r !== undefined);
+    expect(live).toEqual([4]);
+    const last = history.at(-1)!;
+    expect(last.liveRate).toBeUndefined();
+    expect(last.usage?.calls[0]?.firstTokenMs).toBe(500);
+  });
+});
 
 describe("chat-stream token usage", () => {
   it("two TokenUsage events fold to two calls and set liveTokens to the total", async () => {

@@ -4,6 +4,8 @@
 import { writable } from "svelte/store";
 import { createWsClient } from "./ws-client.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
+import type { ThroughputSample } from "@reactive-agents/ui-core";
+import { throughputSampleOf } from "../llm-throughput.js";
 
 /** `stopped`: ended from outside (desk Stop, or a chat turn stopped or left mid-run). */
 export type RunStatus = "live" | "completed" | "failed" | "paused" | "stopped" | "loading";
@@ -47,6 +49,11 @@ export interface RunVitals {
   readonly reasoningTokens?: number;
   readonly cost: number;
   readonly durationMs: number;
+  /**
+   * Every LLM call's throughput fields (`LLMRequestCompleted` durationMs / tokensOut /
+   * firstTokenMs), in order; the run's average speed is ui-core `throughputOfCalls` over them.
+   */
+  readonly llmCalls?: readonly ThroughputSample[];
   /**
    * Outer kernel-loop count (`ReasoningIterationProgress.iteration`, `AgentCompleted.totalIterations`).
    * Compare to `maxIterations`; aligns with trace rows (one step row per loop tick).
@@ -196,8 +203,10 @@ export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: numbe
       const outHalf = typeof p.tokensOut === "number" ? p.tokensOut : undefined;
       const billed = typeof p.billedTokens === "number" ? p.billedTokens : undefined;
       const reasoning = typeof p.reasoningTokens === "number" ? p.reasoningTokens : undefined;
+      const sample = throughputSampleOf(p);
       return {
         ...v,
+        ...(sample ? { llmCalls: [...(v.llmCalls ?? []), sample] } : {}),
         tokensUsed: v.tokensUsed + readTokensUsed(p),
         ...(inHalf !== undefined ? { tokensIn: (v.tokensIn ?? 0) + inHalf } : {}),
         ...(outHalf !== undefined ? { tokensOut: (v.tokensOut ?? 0) + outHalf } : {}),

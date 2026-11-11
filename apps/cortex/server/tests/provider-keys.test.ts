@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { ReactiveAgentBuilder } from "@reactive-agents/runtime";
 import {
   installProviderKeyStore,
+  KEYED_PROVIDER_ENV,
   maskKey,
   ProviderKeyStore,
   PROVIDER_KEYS_FILE,
@@ -115,12 +116,12 @@ describe("ProviderKeyStore", () => {
     expect(unwrap(store.status("openai")).stored?.preferStored).toBe(true);
   });
 
-  it("flags providers whose framework adapter ignores a passed key", () => {
-    // anthropic/gemini adapters read only their env key today (llm-provider gap); the
-    // OpenAI-compatible family honours `.withProvider(p, { apiKey })`.
-    expect(unwrap(store.status("openai")).appliesToAgents).toBe(true);
-    expect(unwrap(store.status("anthropic")).appliesToAgents).toBe(false);
-    expect(unwrap(store.status("gemini")).appliesToAgents).toBe(false);
+  it("a stored key reaches agents for every keyed provider", () => {
+    // Every llm-provider adapter honours `.withProvider(p, { apiKey })` (d1955526c),
+    // anthropic and gemini included.
+    for (const p of Object.keys(KEYED_PROVIDER_ENV)) {
+      expect(unwrap(store.status(p)).appliesToAgents).toBe(true);
+    }
   });
 
   it("masks and redacts", () => {

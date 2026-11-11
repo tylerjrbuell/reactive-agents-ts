@@ -2,9 +2,12 @@
   /**
    * A row of labelled machine values (the Model page capability grid): a
    * text-3 label over a JetBrains Mono value, hairline-separated, as a `<dl>`.
+   * An item's optional `title` becomes its hover help.
    */
+  import { tooltip } from "$lib/actions/tooltip.js";
+
   interface Props {
-    items: readonly { readonly label: string; readonly value: string }[];
+    items: readonly { readonly label: string; readonly value: string; readonly title?: string }[];
   }
 
   let { items }: Props = $props();
@@ -12,7 +15,7 @@
 
 <dl class="sg-stats">
   {#each items as item (item.label)}
-    <div class="sg-stat">
+    <div class="sg-stat" use:tooltip={item.title ?? ""}>
       <dt>{item.label}</dt>
       <dd>{item.value}</dd>
     </div>

@@ -16,6 +16,8 @@
   import { formatSize } from "$lib/text-budget.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { groupToolNames } from "$lib/tool-groups.js";
+  import { throughputView } from "$lib/llm-throughput.js";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import { formatClockTime, formatCost, formatTurnDuration } from "@reactive-agents/ui-core";
 
   interface Props {
@@ -30,6 +32,8 @@
   const toolGroups = $derived(groupToolNames(f.toolsThisStep ?? []));
   const summary = $derived((f.llmThought || f.thought || "").replace(/\s+/g, " ").trim());
   const ms = (n: number): string => (n >= 1000 ? formatTurnDuration(n) : `${n} ms`);
+  // This loop's output speed and time to first token; the stats wrap in the narrow Inspector.
+  const speed = $derived(throughputView(f.throughput));
 
   /** Messages-sent-to-LLM thread is secondary: collapsed until asked for. */
   let showThread = $state(false);
@@ -74,6 +78,7 @@
     <span class="m">
       {#if f.tokensUsed > 0}<span>{f.tokensUsed.toLocaleString()} tok</span>{/if}
       {#if f.durationMs > 0}<span>{ms(f.durationMs)}</span>{/if}
+      {#if speed}<span class="rate" use:tooltip={speed.title}>{speed.ttft ? `${speed.text} · ${speed.ttft}` : speed.text}</span>{/if}
       {#if f.entropy !== undefined}<span>η {f.entropy.toFixed(2)}</span>{/if}
       <span class="chev" class:open={expanded}><Icon name="down" size="sm" /></span>
     </span>
@@ -119,6 +124,7 @@
         {#if f.provider}<span>{f.provider}</span>{/if}
         {#if f.tokensUsed > 0}<span>{f.tokensUsed.toLocaleString()} tokens</span>{/if}
         {#if f.estimatedCost}<span>{formatCost(f.estimatedCost)}</span>{/if}
+        {#if speed}<span use:tooltip={speed.title}>{speed.text}</span>{#if speed.ttft}<span>{speed.ttft}</span>{/if}{/if}
         {#if f.entropy !== undefined}<span>η {f.entropy.toFixed(3)}</span>{/if}
         <span>{formatClockTime(f.ts)}</span>
       </footer>
@@ -185,7 +191,9 @@
       padding: 10px 12px;
     }
     .lbl { padding-top: 0; }
-    .m { gap: 10px; }
+    /* The stats share the label's line here; wrap rather than overflow when the Inspector is very narrow. */
+    .m { gap: 4px 10px; flex-wrap: wrap; white-space: normal; }
+    .m > span { white-space: nowrap; }
     .detail { padding: 4px 12px 14px; }
   }
 </style>

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { MAX_BARS, barTitle, callThroughput, contextMeterOf, formatTokenCount, splitOfTurn, tokenBars, tokenHalfTitle, tokenRangeLabel, turnUsageLabel } from "./chat-token-usage.js";
+import { MAX_BARS, barTitle, contextMeterOf, formatTokenCount, splitOfTurn, tokenBars, tokenHalfTitle, tokenRangeLabel, turnSpeedOf, turnUsageLabel } from "./chat-token-usage.js";
 import type { ChatTurn } from "$lib/stores/chat-store.js";
+import type { CallUsage, TurnUsage } from "@reactive-agents/ui-core";
 
 describe("tokenBars", () => {
   test("two calls: widths proportional, segments split by in/out", () => {
@@ -81,25 +82,50 @@ describe("splitOfTurn", () => {
   });
 });
 
-describe("callThroughput", () => {
-  test("returns tokens per second when the call took long enough", () => {
-    expect(callThroughput({ tokensTotal: 500, durationMs: 2000 })).toBe(250);
+describe("turnSpeedOf", () => {
+  const call = (over: Partial<CallUsage>): CallUsage => ({
+    callId: "c",
+    tokensTotal: 300,
+    tokensIn: 100,
+    tokensOut: 200,
+    estimated: false,
+    model: "m",
+    provider: "p",
+    durationMs: 2500,
+    costUsd: 0,
+    ...over,
+  });
+  const usageOf = (calls: CallUsage[]): TurnUsage => ({
+    calls,
+    tokensIn: 0,
+    tokensOut: 0,
+    tokensTotal: 0,
+    estimated: false,
+    costUsd: 0,
+    cacheReadTokensIn: 0,
+    cacheCreationTokensIn: 0,
+    billedTokens: 0,
+    reasoningTokens: 0,
   });
 
-  test("returns undefined for a zero-duration call", () => {
-    expect(callThroughput({ tokensTotal: 500, durationMs: 0 })).toBeUndefined();
+  test("shows the live estimate, marked ~, while a call streams", () => {
+    const s = turnSpeedOf({ streaming: true, liveRate: 41.6, usage: usageOf([call({ firstTokenMs: 500 })]) });
+    expect(s?.text).toBe("~42 tok/s");
+    expect(s?.title).toContain("Live estimate");
   });
 
-  test("returns undefined for a too-short call", () => {
-    expect(callThroughput({ tokensTotal: 500, durationMs: 10 })).toBeUndefined();
+  test("settles to the measured speed and TTFT from the completed calls", () => {
+    // 200 out over (2500 - 500) ms = 100 tok/s
+    expect(turnSpeedOf({ streaming: false, usage: usageOf([call({ firstTokenMs: 500 })]) })?.text).toBe("100 tok/s · TTFT 500ms");
   });
 
-  test("returns undefined when tokens are missing", () => {
-    expect(callThroughput({ tokensTotal: 0, durationMs: 2000 })).toBeUndefined();
+  test("a call without a first-token time gives a ~ lower bound and no TTFT", () => {
+    expect(turnSpeedOf({ streaming: false, usage: usageOf([call({})]) })?.text).toBe("~80 tok/s");
   });
 
-  test("returns undefined for undefined inputs", () => {
-    expect(callThroughput({ tokensTotal: undefined as unknown as number, durationMs: 2000 })).toBeUndefined();
+  test("nothing to show without a rate", () => {
+    expect(turnSpeedOf({ streaming: false })).toBeUndefined();
+    expect(turnSpeedOf({ streaming: true })).toBeUndefined();
   });
 });
 
@@ -125,18 +151,20 @@ describe("barTitle", () => {
   const bars = tokenBars([{ tokensTotal: 500, tokensIn: 300, tokensOut: 200 }]).bars;
   const bar = bars[0]!;
 
-  test("names the call, its split and the throughput", () => {
-    expect(barTitle(bar, { tokensTotal: 500, durationMs: 2000 }, 1)).toBe("call 1: 500 tok (300 in / 200 out) · 250 tok/s");
-  });
-
-  test("adds billed and reasoning figures when reported", () => {
-    expect(barTitle(bar, { tokensTotal: 500, durationMs: 2000, billedTokens: 400, reasoningTokens: 50 }, 2)).toBe(
-      "call 2: 500 tok (300 in / 200 out) · 400 billed · 50 reasoning · 250 tok/s",
+  test("names the call, its split and the output speed (output tokens, not the total)", () => {
+    expect(barTitle(bar, { tokensTotal: 500, tokensOut: 200, durationMs: 2000, firstTokenMs: 1000 }, 1)).toBe(
+      "call 1: 500 tok (300 in / 200 out) · 200 tok/s · TTFT 1s",
     );
   });
 
-  test("omits throughput for a call too short to measure", () => {
-    expect(barTitle(bar, { tokensTotal: 500, durationMs: 10 }, 3)).toBe("call 3: 500 tok (300 in / 200 out)");
+  test("adds billed and reasoning figures; a call without TTFT reads as a ~ lower bound", () => {
+    expect(barTitle(bar, { tokensTotal: 500, tokensOut: 200, durationMs: 2000, billedTokens: 400, reasoningTokens: 50 }, 2)).toBe(
+      "call 2: 500 tok (300 in / 200 out) · 400 billed · 50 reasoning · ~100 tok/s",
+    );
+  });
+
+  test("omits speed when the call reported no output tokens", () => {
+    expect(barTitle(bar, { tokensTotal: 500, durationMs: 2000 }, 3)).toBe("call 3: 500 tok (300 in / 200 out)");
   });
 
   test("a zero-total call reads as zero tokens with no split", () => {

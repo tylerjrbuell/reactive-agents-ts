@@ -1,5 +1,6 @@
 import type { CallUsage, TurnUsage } from "@reactive-agents/ui-core";
-import { formatTokens, splitTokens } from "@reactive-agents/ui-core";
+import { formatFirstToken, formatTokens, formatTokensPerSecond, splitTokens, throughputOf, throughputOfCalls } from "@reactive-agents/ui-core";
+import { liveRateText, throughputView } from "$lib/llm-throughput.js";
 import type { ChatContext, ChatTurn, LiveTokenSplit } from "$lib/stores/chat-store.js";
 import { sessionCostSummary, type ChatTotals } from "$lib/stores/chat-cost.js";
 import { latestContext } from "$lib/chat-context.js";
@@ -27,20 +28,23 @@ export interface TokenBarsResult {
 
 const safe = (n: number): number => (Number.isFinite(n) && n > 0 ? n : 0);
 
-/** Minimum call duration before a throughput figure is meaningful (ms). */
-export const MIN_THROUGHPUT_MS = 50;
-
 /**
- * Tokens per second for one completed call, or `undefined` when the call is
- * too short, reported no tokens, or reported no duration. Stays honest: no
- * figure is fabricated from a zero-duration call.
+ * The turn's output speed readout. While the reply streams it is the live
+ * estimate (`~42 tok/s`, from streamed text over time since the first token);
+ * otherwise the measured speed over the turn's completed calls (ui-core
+ * `throughputOfCalls` over `usage.calls`) with time to first token, `~` when a
+ * call did not report its first token. `undefined` when there is nothing to show.
  */
-export function callThroughput(call: { tokensTotal?: number; durationMs?: number }): number | undefined {
-  const total = call?.tokensTotal;
-  const dur = call?.durationMs;
-  if (typeof total !== "number" || !Number.isFinite(total) || total <= 0) return undefined;
-  if (typeof dur !== "number" || !Number.isFinite(dur) || dur < MIN_THROUGHPUT_MS) return undefined;
-  return Math.round((total / dur) * 1000);
+export function turnSpeedOf(turn: Pick<ChatTurn, "streaming" | "liveRate" | "usage">): { text: string; title: string } | undefined {
+  if (turn.streaming === true && turn.liveRate !== undefined) {
+    const text = liveRateText(turn.liveRate);
+    if (text !== undefined) {
+      return { text, title: "Live estimate from the streamed text; the measured speed shows when the model call completes" };
+    }
+  }
+  const view = throughputView(throughputOfCalls(turn.usage?.calls ?? []));
+  if (!view) return undefined;
+  return { text: view.ttft ? `${view.text} · ${view.ttft}` : view.text, title: view.title };
 }
 
 /**
@@ -107,22 +111,33 @@ export function turnUsageLabel(split: LiveTokenSplit, streaming: boolean): { tex
 /** The per-call fields the bar tooltip reads. */
 export interface BarCall {
   readonly tokensTotal?: number;
+  readonly tokensOut?: number;
   readonly durationMs?: number;
+  readonly firstTokenMs?: number;
   readonly billedTokens?: number;
   readonly reasoningTokens?: number;
 }
 
 /**
  * Hover title for one per-call bar: the call's ordinal (1-based), its split, and
- * the billed / reasoning / throughput figures that were reported. Throughput is
- * computed once here, and omitted when the call is too short to measure.
+ * the billed / reasoning / output-speed figures that were reported. Speed is
+ * output tokens over generation time (ui-core `throughputOf`), `~` when the call
+ * reported no first-token time, and omitted when no rate can be measured.
  */
 export function barTitle(bar: TokenBar, call: BarCall | undefined, ordinal: number): string {
-  const throughput = callThroughput(call ?? {});
+  const speed =
+    call && typeof call.durationMs === "number"
+      ? throughputOf({
+          durationMs: call.durationMs,
+          ...(call.tokensOut !== undefined ? { tokensOut: call.tokensOut } : {}),
+          ...(call.firstTokenMs !== undefined ? { firstTokenMs: call.firstTokenMs } : {}),
+        })
+      : undefined;
   const parts = [`call ${ordinal}: ${bar.total} tok${bar.total === 0 ? "" : ` (${bar.in} in / ${bar.out} out)`}`];
   if ((call?.billedTokens ?? 0) > 0) parts.push(`${call?.billedTokens} billed`);
   if ((call?.reasoningTokens ?? 0) > 0) parts.push(`${call?.reasoningTokens} reasoning`);
-  if (throughput !== undefined) parts.push(`${throughput} tok/s`);
+  if (speed !== undefined) parts.push(formatTokensPerSecond(speed.tokensPerSecond, speed.lowerBound));
+  if (speed?.firstTokenMs !== undefined) parts.push(`TTFT ${formatFirstToken(speed.firstTokenMs)}`);
   return parts.join(" · ");
 }
 

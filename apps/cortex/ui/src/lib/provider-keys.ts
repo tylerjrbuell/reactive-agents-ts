@@ -16,7 +16,10 @@ export interface ProviderKeyStatus {
   readonly stored: { readonly masked: string; readonly updatedAt: number; readonly preferStored: boolean } | null;
   readonly unreadable: boolean;
   readonly source: ProviderKeySource;
-  /** False while the framework adapter ignores a key Cortex passes (anthropic, gemini today). */
+  /**
+   * False when the provider's framework adapter would ignore a key Cortex passes.
+   * Every keyed provider takes one today (llm-provider d1955526c), so rows no longer warn on it.
+   */
   readonly appliesToAgents: boolean;
 }
 
@@ -90,13 +93,11 @@ export function keyRowOf(s: ProviderKeyStatus): KeyRowView {
   let note: string | null = null;
   if (s.unreadable) {
     note = "A saved key could not be decrypted (the key file was replaced). Save the key again.";
-  } else if (s.stored && !s.appliesToAgents) {
-    note = `Test and model lists use the saved key. Agents still read ${envName}: this provider's framework adapter does not take a passed key yet.`;
   }
   if (s.source === "stored" && s.stored) {
     return {
       envName,
-      badge: { tone: s.appliesToAgents ? "ok" : "warn", text: "Saved key" },
+      badge: { tone: "ok", text: "Saved key" },
       summary: s.envSet
         ? `Agents use the saved key ${s.stored.masked}, not ${envName}.`
         : `Agents use the saved key ${s.stored.masked}.`,

@@ -32,7 +32,9 @@
     capabilityRows,
     capabilityStats,
     runsOnModel,
+    speedStats,
     type ModelCapability,
+    type ModelThroughput,
   } from "$lib/model-page.js";
 
   const provider = $derived(page.params.provider ?? "");
@@ -43,6 +45,9 @@
   let capError = $state<string | null>(null);
   let models = $state<UiModelOption[]>([]);
   let modelRuns = $state<RunRow[]>([]);
+  /** Median speed and TTFT over recent runs (`GET /api/model-throughput`). */
+  let speed = $state<ModelThroughput | null>(null);
+  const speedItems = $derived(speedStats(speed));
   let starting = $state(false);
   const now = Date.now();
 
@@ -53,6 +58,7 @@
     capError = null;
     models = [];
     modelRuns = [];
+    speed = null;
     let cancelled = false;
     void loadProviders().then((list) => {
       if (!cancelled) providerLabel = list.find((x) => x.id === p)?.label ?? p;
@@ -65,6 +71,10 @@
         })
         .then((c) => { if (!cancelled) cap = c; })
         .catch((e) => { if (!cancelled) capError = e instanceof Error ? e.message : String(e); });
+      void fetch(`${CORTEX_SERVER_URL}/api/model-throughput?provider=${encodeURIComponent(p)}&model=${encodeURIComponent(m)}`)
+        .then((r) => (r.ok ? (r.json() as Promise<ModelThroughput>) : null))
+        .then((t) => { if (!cancelled) speed = t; })
+        .catch(() => {});
       void fetch(`${CORTEX_SERVER_URL}/api/runs?limit=200`)
         .then((r) => (r.ok ? (r.json() as Promise<RunRow[]>) : []))
         .then((rows) => { if (!cancelled) modelRuns = runsOnModel(rows, p, m); })
@@ -151,11 +161,11 @@
               <SettingsRow label="API key">
                 {#snippet help()}
                   {#if cap?.keyConfigured === false && keyEnv}
-                    Set <code>{keyEnv}</code> in the server's environment, then restart Cortex.
+                    Save a key in <a href="/settings#providers">Settings · Providers</a>, or set <code>{keyEnv}</code> in the server's environment and restart Cortex.
                   {:else if cap?.keyConfigured === null}
                     This provider needs no key.
                   {:else}
-                    Read from the server's environment.
+                    A saved key or the server's environment. <a href="/settings#providers">Manage keys</a>
                   {/if}
                 {/snippet}
                 {#snippet control()}
@@ -169,6 +179,14 @@
                 {/snippet}
               </SettingsRow>
             </div>
+          {/if}
+        </SettingsGroup>
+
+        <SettingsGroup id="speed" title="Speed" description="Measured on this model's recent runs in Cortex.">
+          {#if speedItems.length === 0}
+            <p class="mp-empty">No timed model calls recorded yet.</p>
+          {:else}
+            <div class="mp-speed"><StatGrid items={speedItems} /></div>
           {/if}
         </SettingsGroup>
 
@@ -235,6 +253,7 @@
     line-height: var(--cortex-lh-ui);
     color: var(--cortex-text-2);
   }
+  .mp-speed { padding: 16px; }
   .mp-warn { margin: 0; font-size: var(--cortex-t-sm); color: var(--cortex-warn); }
   .mp-muted, .mp-empty { margin: 0; font-size: var(--cortex-t-sm); color: var(--cortex-text-3); }
   .mp-empty { padding: 16px; }

@@ -8,6 +8,7 @@ import { toolsRouter } from "./api/tools.js";
 import { mcpServersRouter } from "./api/mcp-servers.js";
 import { skillsRouter } from "./api/skills.js";
 import { modelsRouter } from "./api/models.js";
+import { modelThroughputRouter } from "./api/model-throughput.js";
 import { chatRouter } from "./api/chat.js";
 import { memoryRouter } from "./api/memory.js";
 import { promptRouter } from "./api/prompts.js";
@@ -135,6 +136,7 @@ export async function startCortexServer(
     .use(mcpServersRouter(runtime.rawDb))
     .use(skillsRouter(runtime.storeLayer, runtime.rawDb))
     .use(modelsRouter)
+    .use(modelThroughputRouter(runtime.rawDb))
     .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService))
     .use(memoryRouter())
     .use(promptRouter(runtime.rawDb))

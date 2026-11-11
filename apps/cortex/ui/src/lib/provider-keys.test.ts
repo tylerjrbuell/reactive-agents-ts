@@ -40,10 +40,11 @@ describe("provider key rows", () => {
     expect(row.showPrefer).toBe(true);
   });
 
-  test("a provider whose adapter ignores the key warns", () => {
-    const row = keyRowOf({ ...base, provider: "anthropic", env: ["ANTHROPIC_API_KEY"], stored: saved, source: "stored", appliesToAgents: false });
-    expect(row.badge.tone).toBe("warn");
-    expect(row.note).toContain("ANTHROPIC_API_KEY");
+  test("a saved Anthropic key reaches agents: no Test-only warning", () => {
+    const row = keyRowOf({ ...base, provider: "anthropic", env: ["ANTHROPIC_API_KEY"], stored: saved, source: "stored" });
+    expect(row.badge).toEqual({ tone: "ok", text: "Saved key" });
+    expect(row.note).toBeNull();
+    expect(row.summary).toBe("Agents use the saved key ••••WXYZ.");
   });
 
   test("unreadable entry says to save again", () => {

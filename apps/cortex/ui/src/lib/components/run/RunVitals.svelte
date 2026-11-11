@@ -6,7 +6,8 @@
    * disclosure chips. The line wraps; nothing is clipped. In replay the loop
    * meter follows the scrub. Numbers go through the ui-core formatters.
    */
-  import { formatCost, formatTurnDuration } from "@reactive-agents/ui-core";
+  import { formatCost, formatTurnDuration, throughputOfCalls } from "@reactive-agents/ui-core";
+  import { throughputView } from "$lib/llm-throughput.js";
   import { tooltip } from "$lib/actions/tooltip.js";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Chip from "$lib/components/kit/Chip.svelte";
@@ -44,12 +45,19 @@
       : "Tokens used this run",
   );
   const trend = $derived(trajectoryView(vitals.trajectory));
+  // Run average over every LLM call (ui-core throughputOfCalls); `~` when a call had no first-token time.
+  const speed = $derived(throughputView(throughputOfCalls(vitals.llmCalls ?? [])));
 </script>
 
 <div class="vitals" aria-label="Run vitals" role="group">
   <div class="vital"><span class="k">Duration</span><span class="v">{vitals.durationMs > 0 ? formatTurnDuration(vitals.durationMs) : "—"}</span></div>
   <div class="vital" use:tooltip={tokensTitle}><span class="k">Tokens</span><span class="v">{vitals.tokensUsed.toLocaleString()}</span></div>
   <div class="vital"><span class="k">Cost</span><span class="v">{formatCost(vitals.cost)}</span></div>
+  {#if speed}
+    <div class="vital" use:tooltip={speed.title}>
+      <span class="k">Speed</span><span class="v">{speed.text}{#if speed.ttft}<span class="sub">{` · ${speed.ttft}`}</span>{/if}</span>
+    </div>
+  {/if}
   {#if vitals.reasoningSteps > 0}
     <div class="vital" use:tooltip={"Reasoning steps (ReasoningStepCompleted); can exceed loops when a strategy runs several steps per loop"}>
       <span class="k">Steps</span><span class="v">{vitals.reasoningSteps}</span>
@@ -104,6 +112,7 @@
   .vital { display: grid; gap: 1px; }
   .k { font-size: var(--cortex-t-xs); color: var(--cortex-text-3); white-space: nowrap; }
   .v { font-family: var(--cortex-font-data); font-size: var(--cortex-t-sm); font-variant-numeric: tabular-nums; color: var(--cortex-text); }
+  .sub { color: var(--cortex-text-2); }
   .ent { display: flex; align-items: center; gap: 8px; }
   .loop { min-width: 180px; }
   .loop :global(.cx-meter) { margin-top: 6px; }
