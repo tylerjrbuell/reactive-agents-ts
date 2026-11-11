@@ -135,6 +135,90 @@ export function pathCandidateTokens(command: string): string[] {
   return command.split(/[\s<>&|;]+/).filter((token) => token !== "");
 }
 
+/** Characters that end an unquoted shell word. */
+const WORD_END = /[\s<>&|;()]/;
+
+/**
+ * `command` with every redirect whose target word is exactly `/dev/null`
+ * blanked out: `2>/dev/null`, `>/dev/null`, `1>/dev/null`, `&>/dev/null`,
+ * `>>/dev/null`, `2>>/dev/null`, `>&/dev/null`, `</dev/null`, with or
+ * without a space before the target and with the target quoted or not. Each
+ * blanked character becomes a space, so nothing else shifts or joins.
+ *
+ * The target is read as sh reads a word: it ends at unquoted whitespace or at
+ * `< > & | ; ( )`, and its quotes are removed before the comparison. So
+ * `2>/dev/null>/etc/x` blanks only `2>/dev/null` and leaves `>/etc/x` for the
+ * checks, and `>/dev/null2`, `>/dev/null/x` and `>/dev/./sda` stay as written.
+ * Here-documents (`<<`) are left alone.
+ *
+ * shell-execute runs its default block-list and its sandbox path check on
+ * this text, so discarding output is allowed while every other `/dev/` path
+ * is still refused. The command that runs is the original one.
+ *
+ * @example
+ * withoutNullRedirects("make 2>/dev/null"); // "make            "
+ * withoutNullRedirects("cat x >/dev/sda"); // unchanged
+ */
+export function withoutNullRedirects(command: string): string {
+  const chars = command.split("");
+  let quote: "'" | '"' | null = null;
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i]!;
+    if (quote !== null) {
+      if (ch === quote) quote = null;
+      else if (quote === '"' && ch === "\\") i++;
+      continue;
+    }
+    if (ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      continue;
+    }
+    if (ch !== "<" && ch !== ">") continue;
+    if (ch === "<" && command[i + 1] === "<") {
+      i++; // here-document operator: its word is a delimiter, not a file
+      continue;
+    }
+    // Operator start: a leading `&` (`&>`), or fd digits that begin a word (`2>`).
+    let start = i;
+    if (ch === ">" && command[i - 1] === "&") start = i - 1;
+    else {
+      let d = i;
+      while (d > 0 && /\d/.test(command[d - 1]!)) d--;
+      if (d < i && (d === 0 || WORD_END.test(command[d - 1]!))) start = d;
+    }
+    // Operator end: `>>`, `>|`, `>&`, `<>`, `<&` take one more character.
+    let end = i + 1;
+    if ((ch === ">" && /[>|&]/.test(command[end] ?? "")) || (ch === "<" && /[>&]/.test(command[end] ?? ""))) end++;
+    // Target word: optional blanks, then characters up to an unquoted word end.
+    let w = end;
+    while (w < command.length && (command[w] === " " || command[w] === "\t")) w++;
+    let wordEnd = w;
+    let q: "'" | '"' | null = null;
+    while (wordEnd < command.length) {
+      const c = command[wordEnd]!;
+      if (q !== null) {
+        if (c === q) q = null;
+        else if (q === '"' && c === "\\") wordEnd++;
+      } else if (c === "\\") wordEnd++;
+      else if (c === "'" || c === '"') q = c;
+      else if (WORD_END.test(c)) break;
+      wordEnd++;
+    }
+    const target = shellWords(command.slice(w, Math.min(wordEnd, command.length)));
+    if (target.length === 1 && target[0] === "/dev/null") {
+      for (let k = start; k < wordEnd && k < chars.length; k++) chars[k] = " ";
+      i = wordEnd - 1;
+    } else {
+      i = end - 1;
+    }
+  }
+  return chars.join("");
+}
+
 /**
  * True when `command` has an output redirect (`>`, `>>`, `>|`, `&>`, `2>`,
  * `>&file`) outside quotes. An escaped `\>` is a literal character, not a

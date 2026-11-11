@@ -9,6 +9,7 @@ import {
   pathCandidateTokens,
   shellWords,
   splitCommandSegments,
+  withoutNullRedirects,
 } from "../../src/skills/shell-command-segments.js";
 import { minimalGitConfig, readGitIdentity, readOnlyGitEnv } from "../../src/skills/shell-git-env.js";
 import { buildHostShellEnv } from "../../src/skills/shell-host-process.js";
@@ -142,6 +143,23 @@ describe("shell-command-segments", () => {
       "git x",
       "y",
     ]);
+  });
+
+  test("withoutNullRedirects blanks only redirects whose target is exactly /dev/null", () => {
+    const blank = (s: string) => withoutNullRedirects(s).trim().replace(/\s+/g, " ");
+    expect(blank("make 2>/dev/null")).toBe("make");
+    expect(blank("a &>/dev/null b")).toBe("a b");
+    expect(blank("a >> '/dev/null'")).toBe("a");
+    expect(blank("a >&/dev/null")).toBe("a");
+    expect(blank("cat </dev/null")).toBe("cat");
+    expect(blank("a2>/dev/null")).toBe("a2"); // `2` is part of the word, not an fd
+    expect(withoutNullRedirects("make 2>/dev/null")).toHaveLength("make 2>/dev/null".length);
+    // The target word ends at the next operator, so a glued redirect survives.
+    expect(blank("a 2>/dev/null>/etc/x")).toBe("a >/etc/x");
+    expect(blank("a 2>/dev/null&b")).toBe("a &b");
+    for (const kept of ["a >/dev/null2", "a >/dev/null/x", "a >/dev/./sda", "a >/dev/null'x'", "a 2>&1", "a <</dev/null", "echo '>/dev/null'", "a \\>/dev/null"]) {
+      expect(withoutNullRedirects(kept)).toBe(kept);
+    }
   });
 });
 

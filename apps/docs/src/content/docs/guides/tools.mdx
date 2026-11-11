@@ -476,6 +476,8 @@ A relative path resolves against `process.cwd()` and is stored as an absolute pa
 
 The working directory is not a sandbox for shell commands. The command allowlist and blocklist are what limit the shell. `cwd` only decides where relative paths in a command land. The shell never sees your real home directory. With a workspace, each command gets a fresh, private `HOME` and `TMPDIR` outside the workspace, deleted when the command ends, so `~`, dotfiles and tool caches never land in your project (caches do not persist between commands). Without a workspace, the shell's own throwaway sandbox directory is `HOME`.
 
+Every path in a command, including a redirect target, must stay inside the working directory, and writes to system paths such as `/etc/` and `/dev/` are refused. One exception: a redirect whose target is exactly `/dev/null` is allowed, so `cmd 2>/dev/null`, `cmd >/dev/null 2>&1`, `cmd &>/dev/null` and `cmd </dev/null` run. Any other `/dev/` target (`>/dev/sda`, `>/dev/null2`, `>/dev/./sda`) is still refused, and so is anything glued after the null redirect (`2>/dev/null>/etc/x`). The read-only `git` toolset shell still refuses output redirects to a file, `/dev/null` included.
+
 ## Parallel and Chain Tool Execution
 
 Agents can issue multiple tool calls from a single thought step via native function calling.
