@@ -37,6 +37,12 @@ import { EventBus, EventBusLive, EntropySensorService } from "@reactive-agents/c
 import type { ModelCalibrationLike } from "@reactive-agents/core";
 import { createReactiveIntelligenceLayer } from "../../src/runtime.js";
 import { subscribeCalibrationUpdates } from "../../src/sensor/calibration-update-subscriber.js";
+import {
+  CALIBRATION_DRIFT_MIN_SAMPLES,
+  CALIBRATION_DRIFT_MIN_SIGMA,
+  isMeaningfulDrift,
+  measureRunDrift,
+} from "../../src/calibration/conformal.js";
 
 describe("calibration-update-subscriber wiring", () => {
   test("createReactiveIntelligenceLayer registers EntropyScored + TaskCompleted handlers at layer build time", async () => {
@@ -308,6 +314,63 @@ describe("calibration-update-subscriber — recalibration + drift emission", () 
 
     const driftReceived = await Effect.runPromise(program.pipe(Effect.provide(testLayer)));
     expect(driftReceived).toBe(false);
+  });
+
+  /**
+   * The sensor's drift flag reads the model's whole stored history and stays
+   * set across runs. A run whose own scores show no deviation (short run, or
+   * flat scores) measured 0σ with expected == observed and still published —
+   * the Cortex Safety lane saw one such CalibrationDrift on every run.
+   */
+  const driftEventsFor = async (scores: readonly number[]) => {
+    const flagged: ModelCalibrationLike = {
+      modelId: "gpt-sticky",
+      calibrated: true,
+      sampleCount: 40,
+      highEntropyThreshold: 0.8,
+      convergenceThreshold: 0.4,
+      driftDetected: true,
+    };
+    const { layer: sensorLayer } = makeFakeSensor(flagged);
+    const testLayer = Layer.merge(
+      EventBusLive,
+      Layer.scopedDiscard(subscribeCalibrationUpdates()).pipe(
+        Layer.provide(sensorLayer),
+        Layer.provide(EventBusLive),
+      ),
+    );
+    const program = Effect.gen(function* () {
+      const bus = yield* EventBus;
+      let count = 0;
+      yield* bus.on("CalibrationDrift", () => Effect.sync(() => { count += 1; }));
+      for (let i = 0; i < scores.length; i++) {
+        yield* bus.publish(scoredEvent("task-sticky", i + 1, scores[i]!, "gpt-sticky"));
+      }
+      yield* bus.publish({ _tag: "TaskCompleted", taskId: "task-sticky", success: true, modelId: "gpt-sticky" });
+      yield* Effect.sleep("10 millis");
+      return count;
+    });
+    return Effect.runPromise(program.pipe(Effect.provide(testLayer)));
+  };
+
+  test("sticky drift flag + short run (0σ, expected == observed) publishes NO CalibrationDrift", async () => {
+    expect(await driftEventsFor([0.4, 0.5, 0.45])).toBe(0);
+  });
+
+  test("sticky drift flag + long flat run (0σ) publishes NO CalibrationDrift", async () => {
+    expect(await driftEventsFor(Array.from({ length: 20 }, () => 0.3))).toBe(0);
+  });
+
+  test("measureRunDrift / isMeaningfulDrift: gate on sample count and sigma", () => {
+    const short = measureRunDrift([0.4, 0.5, 0.45]);
+    expect(short.deviationSigma).toBe(0);
+    expect(short.observedMean).toBeCloseTo(short.expectedMean, 12);
+    expect(isMeaningfulDrift(short)).toBe(false);
+
+    const spiking = measureRunDrift([...Array.from({ length: 17 }, () => 0.2), 0.9, 0.92, 0.95]);
+    expect(spiking.sampleCount).toBeGreaterThanOrEqual(CALIBRATION_DRIFT_MIN_SAMPLES);
+    expect(spiking.deviationSigma).toBeGreaterThanOrEqual(CALIBRATION_DRIFT_MIN_SIGMA);
+    expect(isMeaningfulDrift(spiking)).toBe(true);
   });
 
   test("TaskCompleted with no modelId (undefined) does not crash and does not call updateCalibration", async () => {

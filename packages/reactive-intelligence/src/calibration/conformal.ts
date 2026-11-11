@@ -68,3 +68,56 @@ export function computeCalibration(
     driftDetected,
   };
 }
+
+/**
+ * Fewest scores a run needs before its own drift measurement means anything.
+ * The recent window is at most 5 scores; with fewer than 10 the window is half
+ * the run or more, so the recent mean is mostly the run mean and the deviation
+ * collapses toward 0σ (with n ≤ 5 the two are identical and it is exactly 0σ).
+ */
+export const CALIBRATION_DRIFT_MIN_SAMPLES = 10;
+
+/**
+ * Smallest recent-window deviation, in run standard deviations, that counts as
+ * drift worth publishing. The detector flags a single recent score above
+ * mean + 2σ; for the mean of a 5-score window the equivalent bar is
+ * 2/√5 ≈ 0.9σ, rounded up to 1σ.
+ */
+export const CALIBRATION_DRIFT_MIN_SIGMA = 1;
+
+/** One run's drift measurement: recent-window mean against the run mean. */
+export type RunDriftMeasurement = {
+  readonly sampleCount: number;
+  readonly expectedMean: number;
+  readonly observedMean: number;
+  readonly deviationSigma: number;
+};
+
+/**
+ * Measure drift over one run's entropy scores with {@link computeCalibration}'s
+ * formula: mean and stddev over all scores, observed mean over the trailing
+ * min(5, max(3, n)) scores. Pure.
+ */
+export function measureRunDrift(scores: readonly number[]): RunDriftMeasurement {
+  const n = scores.length;
+  if (n === 0) return { sampleCount: 0, expectedMean: 0, observedMean: 0, deviationSigma: 0 };
+  const mean = scores.reduce((s, v) => s + v, 0) / n;
+  const variance = scores.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+  const stddev = Math.sqrt(variance);
+  const recentScores = scores.slice(-Math.min(5, Math.max(3, n)));
+  const observedMean = recentScores.reduce((s, v) => s + v, 0) / recentScores.length;
+  // Flat scores leave float residue (stddev ~1e-17), which would turn rounding
+  // error into a huge sigma; treat it as no spread at all.
+  const deviationSigma = stddev > 1e-9 ? (observedMean - mean) / stddev : 0;
+  return { sampleCount: n, expectedMean: mean, observedMean, deviationSigma };
+}
+
+/**
+ * True when a run's drift measurement is real drift: enough scores
+ * ({@link CALIBRATION_DRIFT_MIN_SAMPLES}) and a recent mean at least
+ * {@link CALIBRATION_DRIFT_MIN_SIGMA} above the run mean. A short or flat run
+ * (0σ, expected == observed) never qualifies.
+ */
+export function isMeaningfulDrift(m: RunDriftMeasurement): boolean {
+  return m.sampleCount >= CALIBRATION_DRIFT_MIN_SAMPLES && m.deviationSigma >= CALIBRATION_DRIFT_MIN_SIGMA;
+}

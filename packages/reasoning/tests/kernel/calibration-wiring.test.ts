@@ -215,7 +215,11 @@ describe("Calibration wiring: reactive-observer → controller", () => {
 });
 
 describe("CalibrationDrift event emission", () => {
-  it("should emit CalibrationDrift event when sensor reports driftDetected", async () => {
+  // The stored drift flag is sticky across runs and the core calibration type
+  // carries no measurement, so this site published 0σ (expected == observed)
+  // every iteration of every run. RI's calibration-update-subscriber is the one
+  // publisher, gated on the run's own measured drift.
+  it("does NOT publish CalibrationDrift per iteration even when the sensor's stored flag is set", async () => {
     const publishedEvents: unknown[] = [];
 
     const mockEntropySensor = {
@@ -292,10 +296,10 @@ describe("CalibrationDrift event emission", () => {
 
     const driftEvent = publishedEvents.find(
       (e: any) => e._tag === "CalibrationDrift",
-    ) as any;
-    expect(driftEvent).toBeDefined();
-    expect(driftEvent.modelId).toBe("test-model-42");
-    expect(driftEvent.taskId).toBe("test-task-1");
+    );
+    expect(driftEvent).toBeUndefined();
+    // The observer still ran and published its entropy score.
+    expect(publishedEvents.some((e: any) => e._tag === "EntropyScored")).toBe(true);
   }, 15000);
 
   it("should NOT emit CalibrationDrift when no drift detected", async () => {

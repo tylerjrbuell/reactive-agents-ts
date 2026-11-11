@@ -206,19 +206,11 @@ export function runReactiveObserver(
             calibrated: cal.calibrated,
             sampleCount: cal.sampleCount,
           };
-
-          // ── Emit CalibrationDrift event when drift is detected ──
-          const calWithDrift = cal as typeof cal & { driftDetected?: boolean; expectedMean?: number; observedMean?: number; deviationSigma?: number };
-          if (calWithDrift.driftDetected && Option.isSome(eventBus)) {
-            yield* eventBus.value.publish({
-              _tag: "CalibrationDrift",
-              taskId: s.taskId,
-              modelId,
-              expectedMean: calWithDrift.expectedMean ?? 0,
-              observedMean: calWithDrift.observedMean ?? 0,
-              deviationSigma: calWithDrift.deviationSigma ?? 0,
-            }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "reasoning/src/kernel/capabilities/reflect/reactive-observer.ts:215", tag: errorTag(err) })));
-          }
+          // CalibrationDrift is NOT published here. The stored drift flag is
+          // sticky across runs and carries no measurement, so publishing it
+          // each iteration sent 0σ (expected == observed) on every run. RI's
+          // calibration-update-subscriber publishes it once per task, only
+          // when that run's own scores show the drift.
         }
 
         // Extract decision types already fired this run for evaluators that

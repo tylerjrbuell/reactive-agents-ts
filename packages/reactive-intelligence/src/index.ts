@@ -45,7 +45,15 @@ export { cosineSimilarity } from "./sensor/math-utils.js";
 
 // ── Calibration ──
 export { lookupModel, MODEL_REGISTRY } from "./calibration/model-registry.js";
-export { computeConformalThreshold, computeCalibration } from "./calibration/conformal.js";
+export {
+  computeConformalThreshold,
+  computeCalibration,
+  measureRunDrift,
+  isMeaningfulDrift,
+  CALIBRATION_DRIFT_MIN_SAMPLES,
+  CALIBRATION_DRIFT_MIN_SIGMA,
+  type RunDriftMeasurement,
+} from "./calibration/conformal.js";
 export { CalibrationStore } from "./calibration/calibration-store.js";
 
 // ── Service ──

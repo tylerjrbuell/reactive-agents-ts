@@ -11,6 +11,7 @@
  */
 import { Effect, Scope } from "effect";
 import { EventBus, EntropySensorService } from "@reactive-agents/core";
+import { isMeaningfulDrift, measureRunDrift } from "../calibration/conformal.js";
 
 /**
  * Subscribe to TaskCompleted events and update calibration.
@@ -56,27 +57,19 @@ export function subscribeCalibrationUpdates(): Effect.Effect<
         if (modelId && task && task.scores.length > 0) {
           const calibration = yield* entropySensor.updateCalibration(modelId, task.scores);
 
-          if (calibration.driftDetected) {
-            // Mirror computeCalibration()'s drift formula (conformal.ts:48-58):
-            // mean/stddev over the full score array, drift measured against
-            // the trailing min(5, max(3, n)) most recent scores.
-            const scores = task.scores;
-            const n = scores.length;
-            const mean = scores.reduce((s, v) => s + v, 0) / n;
-            const variance = scores.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
-            const stddev = Math.sqrt(variance);
-            const recentCount = Math.min(5, Math.max(3, n));
-            const recentScores = scores.slice(-recentCount);
-            const observedMean = recentScores.reduce((s, v) => s + v, 0) / recentScores.length;
-            const deviationSigma = stddev > 0 ? (observedMean - mean) / stddev : 0;
-
+          // The sensor's flag reads the model's whole stored history, so it can
+          // stay set run after run. Publish only when this run's own scores
+          // show the drift too; a short or flat run measures 0σ with
+          // expected == observed, which is noise to every observer.
+          const drift = measureRunDrift(task.scores);
+          if (calibration.driftDetected && isMeaningfulDrift(drift)) {
             yield* eventBus.publish({
               _tag: "CalibrationDrift",
               taskId: event.taskId,
               modelId,
-              expectedMean: mean,
-              observedMean,
-              deviationSigma,
+              expectedMean: drift.expectedMean,
+              observedMean: drift.observedMean,
+              deviationSigma: drift.deviationSigma,
             });
           }
         }
