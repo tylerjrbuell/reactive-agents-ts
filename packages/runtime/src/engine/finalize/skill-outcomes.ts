@@ -13,13 +13,22 @@
  * `failure` counts against the skill, `success` and `partial` count for it,
  * and `abstained` adds no evidence (only `lastActivatedAt` moves).
  *
+ * After the stats update, each skill is re-read from the store and run through
+ * the memory package's SkillEvolutionService: `checkRegression` first (a
+ * refined candidate whose success rate fell below its rate at refinement rolls
+ * back to the prior version, publishing `SkillRolledBack`), then, only when
+ * nothing rolled back, `checkPromotion` (tentative to trusted at 5+ uses and
+ * 0.8+, trusted to expert at 20+ uses and 0.9+, never for locked skills,
+ * publishing `SkillPromoted`).
+ *
  * Runs only when `SkillStoreService` is provided (memory on and
  * `skillPersistence` not `false`). Store failures are swallowed to the shared
  * channel: bookkeeping never fails a finished run.
  */
-import { Effect } from "effect";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { SkillStoreService } from "@reactive-agents/memory";
+import { Context, Effect, Layer } from "effect";
+import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import type { AgentEvent } from "@reactive-agents/core";
+import { SkillEvolutionService, SkillStoreService, makeSkillEvolutionService } from "@reactive-agents/memory";
 import type { RunOutcomeClass } from "../util.js";
 import { readRunLedger } from "../run-ledger-scope.js";
 
@@ -55,7 +64,51 @@ export const usedSkillNames = (
   return Array.from(new Set([...bootstrap, ...agent]));
 };
 
-/** Update the stored stats of each used skill from the run outcome. */
+/**
+ * Publish one skill lifecycle event when an EventBus is present. Shared by the
+ * run-end evolution step here and `agent.refineSkills()`.
+ */
+export const publishSkillEvent = (event: AgentEvent): Effect.Effect<void, never> =>
+  Effect.serviceOption(EventBus).pipe(
+    Effect.flatMap((bus) => (bus._tag === "Some" ? bus.value.publish(event) : Effect.void)),
+  );
+
+/**
+ * Regression check, then promotion check, on the skill's CURRENT store record
+ * (re-read after the stats update, so the thresholds see this run's evidence).
+ */
+const evolveSkill = (
+  store: Context.Tag.Service<typeof SkillStoreService>,
+  skillId: string,
+): Effect.Effect<void, unknown> =>
+  Effect.gen(function* () {
+    const evolution = yield* SkillEvolutionService;
+    const current = yield* store.get(skillId);
+    if (current === null) return;
+    const regression = yield* evolution.checkRegression(current);
+    if (regression.rolledBack) {
+      const restored = yield* store.get(skillId);
+      yield* publishSkillEvent({
+        _tag: "SkillRolledBack",
+        skillName: current.name,
+        fromVersion: current.version,
+        toVersion: restored?.version ?? current.version - 1,
+        reason: "regression",
+      });
+      return;
+    }
+    const promotion = yield* evolution.checkPromotion(current);
+    if (promotion.promoted && promotion.newConfidence !== undefined) {
+      yield* publishSkillEvent({
+        _tag: "SkillPromoted",
+        skillName: current.name,
+        fromConfidence: current.confidence,
+        toConfidence: promotion.newConfidence,
+      });
+    }
+  }).pipe(Effect.provide(makeSkillEvolutionService().pipe(Layer.provide(Layer.succeed(SkillStoreService, store)))));
+
+/** Update the stored stats of each used skill from the run outcome, then promote or roll back. */
 export const recordSkillOutcomes = (args: {
   readonly agentId: string;
   readonly skillNames: readonly string[];
@@ -76,6 +129,7 @@ export const recordSkillOutcomes = (args: {
           if (skill === null) return;
           const stats = nextSkillStats(skill, args.runOutcome);
           yield* store.update(skill.id, { ...stats, lastActivatedAt: at });
+          yield* evolveSkill(store, skill.id);
         }).pipe(
           Effect.catchAll((err) =>
             emitErrorSwallowed({ site: "runtime/src/engine/finalize/skill-outcomes.ts:record-skill-outcome", tag: errorTag(err) }),

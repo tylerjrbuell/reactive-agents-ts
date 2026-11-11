@@ -207,14 +207,15 @@ metadata:
 ### Skill Lifecycle
 
 ```
-Bootstrap → Catalog → Activation → Post-Run Learning → Background Refinement
+Bootstrap → Catalog → Activation → Post-Run Learning → Promotion / Rollback → Refinement (manual)
 ```
 
 1. **Bootstrap**: `SkillResolver` combines SQLite + filesystem skills, ranks by confidence
 2. **Catalog**: Skills appear in `<available_skills>` XML in the system prompt
 3. **Activation**: Model calls `activate_skill` or controller pre-activates on entropy match
 4. **Post-Run**: every stored skill the run used (pinned, relevance-activated, or loaded by the model with `activate_skill`) gets `useCount`, `successRate` and `lastActivatedAt` updated from the run outcome. A failed run counts against the skill; an abstained run adds no evidence. Needs memory on (the skill store lives in the memory database).
-5. **Refinement**: planned. Automatic confidence promotion and LLM refinement of instructions are not wired yet, so `agent.refineSkills()` currently returns `{ refined: 0 }`.
+5. **Promotion and rollback**: right after the stats update, each used stored skill is checked again. A `tentative` skill with 5+ uses at 80%+ success becomes `trusted`, and a `trusted` skill with 20+ uses at 90%+ becomes `expert` (`SkillPromoted` event). Skills with `evolutionMode: "locked"` (for example ones added with `loadSkill`) never promote. If a refined version's success rate falls below its rate when it was refined, the skill rolls back to the previous version (`SkillRolledBack` event).
+6. **Refinement**: `agent.refineSkills()` runs one refinement pass. Refinement is manual, never automatic. For each stored skill that is not locked and has at least 5 episodic memory entries since its last refinement, the agent's own LLM rewrites the instructions. The result is saved as a new candidate version (`SkillRefined` event), and the previous version is kept for rollback. Like the stats update, it needs memory on.
 
 ### Confidence Tiers
 
@@ -249,8 +250,15 @@ await agent.exportSkill("data-analysis", "./exported-skills/");
 // Load a skill at runtime
 await agent.loadSkill("./new-skill/");
 
-// Trigger manual refinement pass
-await agent.refineSkills();
+// Trigger a manual refinement pass. Every eligible skill lands in one bucket:
+// refined (new version), unchanged (same content), skipped (fewer than 5
+// episodic entries since its last refinement) or failed.
+const { refined, unchanged, skipped, failed } = await agent.refineSkills();
+
+// Watch skills evolve
+await agent.subscribe("SkillPromoted", (e) => console.log(e.skillName, e.fromConfidence, "->", e.toConfidence));
+await agent.subscribe("SkillRefined", (e) => console.log(e.skillName, "v" + e.newVersion));
+await agent.subscribe("SkillRolledBack", (e) => console.log(e.skillName, "back to v" + e.toVersion));
 ```
 
 ### Meta-Tools

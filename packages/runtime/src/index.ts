@@ -127,6 +127,7 @@ export type {
 export { toolBuilderToEntry } from "./builder/withers/tools.js";
 export type { AgentOutcome, StrategySwitchRecord } from "./builder/agent-result.js";
 export type { SkillsOptions, SkillsRunOption } from "./runtime-skills-layer.js";
+export type { SkillRefinementResult } from "./agent/skill-refine.js";
 export { MemoryNotEnabledError } from "./agent/memory-facade.js";
 export type {
   AgentMemoryHandle,

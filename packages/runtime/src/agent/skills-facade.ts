@@ -40,7 +40,16 @@
 import { Effect } from 'effect'
 import { ManagedRuntime } from 'effect'
 import { SkillStoreService } from '@reactive-agents/memory'
-import { SkillDistillerService } from '@reactive-agents/reactive-intelligence'
+import {
+    SkillDistillerService,
+    makeSkillDistillerService,
+} from '@reactive-agents/reactive-intelligence'
+import {
+    NO_SKILL_REFINEMENT,
+    buildSkillDistillerDeps,
+    toSkillRefinementResult,
+    type SkillRefinementResult,
+} from './skill-refine.js'
 
 /** Explicit dependency surface — exactly the `ReactiveAgent` fields the moved methods read. */
 export interface SkillsFacadeDeps {
@@ -242,32 +251,37 @@ export const makeSkillsFacade = (deps: SkillsFacadeDeps) => {
         },
 
         /**
-         * Manually trigger a skill refinement pass (moved verbatim from
-         * `ReactiveAgent.refineSkills`).
+         * Run one skill refinement pass and report per-skill outcomes.
          *
-         * Effect-typed: `E = never` — mirrors the pre-bridge outer
-         * `try/catch` that swallowed typed failures AND defects into the
-         * `{ refined: 0 }` fallback; `SkillDistillerService` absent still
-         * yields `{ refined: 0 }`.
+         * Distiller source: a `SkillDistillerService` the runtime already
+         * provides wins; otherwise one is built from the agent's own
+         * SkillStore, episodic memory and LLM (`agent/skill-refine.ts`),
+         * which publishes `SkillRefined` per refined skill. Neither present
+         * (memory off or `skillPersistence: false`): zero counts.
+         *
+         * Effect-typed: `E = never` — a pass that cannot run at all (typed
+         * failure or defect) yields zero counts, as before the bridge.
+         * Per-skill failures are counted in `failed` by the distiller.
          */
-        refineSkills(): Effect.Effect<
-            { refined: number },
-            never,
-            SkillDistillerService
-        > {
+        refineSkills(): Effect.Effect<SkillRefinementResult, never> {
             const agentId = deps.agentId
             return Effect.gen(function* () {
-                const distiller = yield* Effect.serviceOption(
+                const provided = yield* Effect.serviceOption(
                     SkillDistillerService,
                 )
-                if (distiller._tag !== 'Some') return { refined: 0 }
-                return yield* distiller.value.distill(agentId)
+                if (provided._tag === 'Some')
+                    return toSkillRefinementResult(
+                        yield* provided.value.distill(agentId),
+                    )
+                const distillerDeps = yield* buildSkillDistillerDeps()
+                if (distillerDeps === null) return NO_SKILL_REFINEMENT
+                const distiller = yield* SkillDistillerService.pipe(
+                    Effect.provide(makeSkillDistillerService(distillerDeps)),
+                )
+                return toSkillRefinementResult(yield* distiller.distill(agentId))
             }).pipe(
-                // Pre-bridge `catch { return { refined: 0 } }` around the
-                // awaited inner runPromise caught rejections from BOTH
-                // channels.
-                Effect.catchAll(() => Effect.succeed({ refined: 0 })),
-                Effect.catchAllDefect(() => Effect.succeed({ refined: 0 })),
+                Effect.catchAll(() => Effect.succeed(NO_SKILL_REFINEMENT)),
+                Effect.catchAllDefect(() => Effect.succeed(NO_SKILL_REFINEMENT)),
             )
         },
     }

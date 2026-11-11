@@ -661,11 +661,11 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
-     * Manually trigger a skill refinement pass.
+     * Run one skill refinement pass; resolves `{ refined, unchanged, skipped, failed }`.
      *
      * Delegates to `agent/skills-facade.ts` (moved from this file for #217).
      */
-    async refineSkills(): Promise<{ refined: number }> {
+    async refineSkills(): Promise<import('./agent/skill-refine.js').SkillRefinementResult> {
         return runFacadeEffect(this.runtime, this._skillsFacade().refineSkills())
     }
 

@@ -19,6 +19,7 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Context, Layer, ManagedRuntime } from "effect";
 import type { SkillRecord } from "@reactive-agents/core";
+import { SkillDistillerService } from "@reactive-agents/reactive-intelligence";
 import { makeSkillsFacade } from "../src/agent/skills-facade.js";
 import { runFacadeEffect } from "../src/agent/run-facade-effect.js";
 
@@ -131,5 +132,46 @@ describe("agent-family seam — makeSkillsFacade (direct, no ReactiveAgent)", ()
         expect(rejection).not.toBeNull();
         if (typeof rejection !== "object" || rejection === null) return;
         expect(Reflect.get(rejection, "code")).toBe("ENOENT");
+    });
+
+    // ── Living skills: refineSkills() result shape (2026-11-11) ──────────────
+    // A provided SkillDistillerService wins and its pass is projected onto
+    // { refined, unchanged, skipped, failed } (failures detail dropped); no
+    // distiller and no SkillStore => zero counts; a pass that cannot run at
+    // all => zero counts (E = never).
+
+    it("refineSkills() returns zero counts when neither a distiller nor a SkillStore is present", async () => {
+        const { facade, runtime } = facadeWithoutStore("seam-agent");
+        expect(await runtime.runPromise(facade.refineSkills())).toEqual({ refined: 0, unchanged: 0, skipped: 0, failed: 0 });
+    });
+
+    it("refineSkills() projects a provided distiller's pass for the facade's agentId", async () => {
+        const calls: string[] = [];
+        const runtime = ManagedRuntime.make(
+            Layer.succeed(SkillDistillerService, {
+                distill: (agentId: string) =>
+                    Effect.sync(() => {
+                        calls.push(agentId);
+                        return {
+                            refined: 2,
+                            unchanged: 1,
+                            skipped: 3,
+                            failed: 1,
+                            failures: [{ skillId: "a", skillName: "a", cause: "boom" }],
+                        };
+                    }),
+            }),
+        );
+        const facade = makeSkillsFacade({ agentId: "seam-agent", runtime });
+        expect(await runtime.runPromise(facade.refineSkills())).toEqual({ refined: 2, unchanged: 1, skipped: 3, failed: 1 });
+        expect(calls).toEqual(["seam-agent"]);
+    });
+
+    it("refineSkills() folds a distiller that cannot run into zero counts", async () => {
+        const runtime = ManagedRuntime.make(
+            Layer.succeed(SkillDistillerService, { distill: () => Effect.fail(new Error("store down")) }),
+        );
+        const facade = makeSkillsFacade({ agentId: "seam-agent", runtime });
+        expect(await runtime.runPromise(facade.refineSkills())).toEqual({ refined: 0, unchanged: 0, skipped: 0, failed: 0 });
     });
 });
