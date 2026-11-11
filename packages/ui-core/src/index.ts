@@ -92,6 +92,35 @@ export {
 export { turnStrategiesOf, type StrategySource, type TurnStrategies } from "./state/turn-strategy.js";
 export { formatTurnDuration } from "./state/turn-duration.js";
 export {
+  STRATEGY_RANK_CONFIG,
+  STRATEGY_RANK_LOOP,
+  STRATEGY_RANK_STEP,
+  initialRunStrategy,
+  strategyClaimsOf,
+  foldRunStrategy,
+  runStrategyOf,
+  runStrategyOfEvents,
+  type StrategyRank,
+  type StrategyClaim,
+  type StrategyClaims,
+  type RunStrategyState,
+  type RunStrategy,
+} from "./state/run-strategy.js";
+export {
+  SAFETY_EVENT_TAGS,
+  safetyBodyOf,
+  safetyEntriesOf,
+  safetySummaryOf,
+  safetyPlaceLabel,
+  type SafetyKind,
+  type SafetyTone,
+  type SafetyPhase,
+  type SafetyEntry,
+  type SafetyEventLike,
+  type SafetyLoopMark,
+  type SafetySummary,
+} from "./state/safety-entries.js";
+export {
   splitTokens,
   charsToTokens,
   estimateTokens,
