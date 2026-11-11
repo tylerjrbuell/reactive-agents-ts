@@ -3,6 +3,7 @@ import type {
 } from "../llm-purpose.js";
 import type { ContentPartSummary } from "../content.js";
 import type { StructuredAttemptReport } from "../structured-attempt.js";
+import type { PromptFragmentId, PromptFragmentSlot, PromptFragmentStatus } from "../prompt-fragment.js";
 
 /** A requirement/deliverable ref on `ContractCompiledEmitted`, with typed provenance. */
 export interface ContractRefEvent {
@@ -530,7 +531,8 @@ export type HarnessAgentEvent =
   | SignalEffectEmittedEvent
   | LedgerEntryAppendedEvent
   | ChecklistInferredEvent
-  | EnvironmentChangedEvent;
+  | EnvironmentChangedEvent
+  | PromptAssembledEvent;
 
 
 /**
@@ -604,6 +606,58 @@ export interface EnvironmentChangedEvent {
     readonly kind: EnvironmentChangeKind;
     readonly summary: string;
   }>;
+  readonly timestamp: number;
+}
+
+/**
+ * One harness-authored fragment as sent on a turn. Hashes, not text: they
+ * survive the trace recorder's message caps and cost almost nothing.
+ */
+export interface PromptAssembledFragment {
+  /** Fragment id (`PromptFragmentDefinition.id`). */
+  readonly id: PromptFragmentId;
+  /** Where the fragment landed. */
+  readonly slot: PromptFragmentSlot;
+  /** Whether the default, an override, or nothing was sent. */
+  readonly status: PromptFragmentStatus;
+  /** `promptFragmentHash` of the sent content. Absent when `status` is `"disabled"`. */
+  readonly hash?: string;
+  /** `promptFragmentHash` of the default content, so an override is attributable to the default it replaced. */
+  readonly defaultHash: string;
+  /** Characters sent (0 when disabled). */
+  readonly chars: number;
+}
+
+/** One tool's wire description as sent on a turn. */
+export interface PromptAssembledToolDescription {
+  /** Tool name as it appears on the wire. */
+  readonly name: string;
+  /** `promptFragmentHash` of the sent description (the empty-string hash when disabled). */
+  readonly hash: string;
+  /** Characters sent (0 when disabled). */
+  readonly chars: number;
+  /**
+   * Resolution of the `tool.<name>.description` fragment. `"disabled"` means
+   * the tool was still offered, with an empty description.
+   */
+  readonly status: PromptFragmentStatus;
+}
+
+/**
+ * What harness-authored text one model request carried: every prompt fragment
+ * id with its hash and override status. Emitted once per think (one LLM
+ * request) by the kernel. Lets attribution tie a misread to the fragment on
+ * the decisive turn without regex over recorded messages.
+ */
+export interface PromptAssembledEvent {
+  readonly _tag: "PromptAssembled";
+  readonly taskId: string;
+  /** Kernel iteration of the request. */
+  readonly iteration: number;
+  /** Fragments sent this request, in request order (disabled ones included with `status: "disabled"`). */
+  readonly fragments: ReadonlyArray<PromptAssembledFragment>;
+  /** Wire tool descriptions of this request. Absent when the producer does not record them or the request had no tools. */
+  readonly toolDescriptions?: ReadonlyArray<PromptAssembledToolDescription>;
   readonly timestamp: number;
 }
 

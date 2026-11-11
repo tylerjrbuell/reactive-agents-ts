@@ -215,7 +215,32 @@ export type {
   ChecklistInferredEvent,
   EnvironmentChangedEvent,
   EnvironmentChangeKind,
+  PromptAssembledEvent,
+  PromptAssembledFragment,
+  PromptAssembledToolDescription,
 } from "./services/event-bus.js";
+// Prompt-fragment contract (2026-11-10 prompt audit §7): ids, overrides, resolution.
+export {
+  resolvePromptFragment,
+  promptFragmentText,
+  promptFragmentHash,
+} from "./types/prompt-fragment.js";
+export type {
+  PromptFragmentId,
+  ToolDescriptionFragmentId,
+  PromptFragmentSlot,
+  PromptFragmentVar,
+  PromptFragmentVars,
+  PromptFragmentDefinition,
+  PromptFragmentCtx,
+  PromptFragmentTransform,
+  PromptFragmentOverrideValue,
+  PromptFragmentOverride,
+  PromptOverrides,
+  SerializablePromptOverrides,
+  PromptFragmentStatus,
+  ResolvedPromptFragment,
+} from "./types/prompt-fragment.js";
 // ErrorSwallowed instrumentation (Phase 0 S0.2) — replaces silent
 // `catchAll(() => Effect.void)` sites with an observable event.
 export {

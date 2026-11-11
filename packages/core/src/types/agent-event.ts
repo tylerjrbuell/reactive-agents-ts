@@ -11,6 +11,9 @@ export type {
   EnvironmentChangeKind,
   SignalRenderedEmittedEvent,
   SignalEffectEmittedEvent,
+  PromptAssembledEvent,
+  PromptAssembledFragment,
+  PromptAssembledToolDescription,
 } from "./events/harness-events.js";
 
 
