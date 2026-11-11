@@ -16,18 +16,76 @@ export {
   foldTurnTrace,
   finishTurnTrace,
   visibleThoughts,
+  visibleIterations,
   mergeThoughtText,
   type TurnTraceState,
   type TurnTrace,
   type TraceToolCall,
   type PersistedSubAgent,
+  type PersistedReasoningStep,
+  type VisibleIteration,
+  type TurnContext,
 } from "./state/turn-trace.js";
+export {
+  turnOutcomeOf,
+  splitUnfinished,
+  type TurnEnding,
+  type TurnOutcome,
+  type TurnDeliverable,
+  type RunCompletionLike,
+} from "./state/turn-outcome.js";
+export {
+  buildTurnSteps,
+  turnStepsOf,
+  persistedTurnStepsOf,
+  summarizeTurn,
+  failureReason,
+  shortToolName,
+  type TurnStep,
+  type StepAction,
+  type StepFailure,
+  type StepCall,
+  type StepIterationText,
+  type TurnSummary,
+} from "./state/turn-steps.js";
+export {
+  buildTurnTranscript,
+  turnTranscriptOf,
+  persistedTurnTranscriptOf,
+  type TranscriptSegment,
+  type TranscriptProse,
+  type TranscriptTools,
+  type TranscriptAnswer,
+  type TranscriptEnding,
+} from "./state/turn-transcript.js";
 export { foldSubAgentActivity, type SubAgentTrace, type SubAgentBlock, type SubAgentFolder } from "./state/sub-agent-fold.js";
+export { toolBadgesOf, type ToolBadge, type ToolBadges, type ToolBadgeTone } from "./state/tool-badges.js";
+export {
+  FLOOR_REQUIREMENT_ID,
+  isImplicitRequirement,
+  goalSummaryOf,
+  findSubAgentGroup,
+  type GoalStatus,
+  type GoalSummary,
+} from "./state/goal-checks.js";
+export {
+  subAgentCardOf,
+  subAgentRollup,
+  argHint,
+  type SubAgentCard,
+  type SubAgentCardInput,
+  type SubAgentCardState,
+  type SubAgentRollup,
+} from "./state/sub-agent-card.js";
+export { turnStrategiesOf, type StrategySource, type TurnStrategies } from "./state/turn-strategy.js";
+export { formatTurnDuration } from "./state/turn-duration.js";
 export {
   splitTokens,
   charsToTokens,
   estimateTokens,
+  contextLevel,
   summarizeUsage,
+  type ContextLevel,
   type TokenSplit,
   type CallUsage,
   type TurnUsage,

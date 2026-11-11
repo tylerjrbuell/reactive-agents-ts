@@ -102,6 +102,21 @@ export function charsToTokens(chars: number): number {
   return Math.max(1, Math.ceil(chars / LATIN_CHARS_PER_TOKEN));
 }
 
+/** Context-pressure band for a window utilisation percentage. */
+export type ContextLevel = "low" | "medium" | "high" | "critical";
+
+/**
+ * The single context-pressure ladder: critical at 90%+, high at 75%+, medium at
+ * 45%+, otherwise low. Every UI reading of a context window goes through this so
+ * the bands cannot drift between the live stream and the gauges.
+ */
+export function contextLevel(pct: number): ContextLevel {
+  if (pct >= 90) return "critical";
+  if (pct >= 75) return "high";
+  if (pct >= 45) return "medium";
+  return "low";
+}
+
 /** One completed LLM call inside a turn. */
 export interface CallUsage {
   readonly callId: string;

@@ -1,6 +1,9 @@
 import type { ChecklistSnapshotWire, ExitGateDecision, SubAgentRunInfoWire, UiStreamEvent } from "../protocol/events.js";
 import { foldSubAgentActivity, type SubAgentFolder, type SubAgentTrace } from "./sub-agent-fold.js";
 import { summarizeUsage, type TurnUsage } from "./token-usage.js";
+import { turnOutcomeOf, type TurnEnding, type TurnOutcome } from "./turn-outcome.js";
+
+export type { TurnEnding, TurnOutcome } from "./turn-outcome.js";
 
 /**
  * Per-turn transcript fold: the ONE place that decides what counts as the
@@ -10,6 +13,14 @@ import { summarizeUsage, type TurnUsage } from "./token-usage.js";
  * Rules: text streamed before a tool call — or left over when the next
  * iteration starts — is that iteration's thinking. Text of the last iteration
  * stays `pending` (it is the answer, never a thought).
+ *
+ * Iteration attribution: the fold keeps its own cursor from `IterationProgress`
+ * and files narration (`ThoughtEmitted`), provider thinking (`ThinkingEmitted`)
+ * and tool calls under it. The events' own `iteration` field is not trusted:
+ * the runtime fills `ThoughtEmitted.iteration` with the kernel's step index
+ * (2, 6, 10, ...), not the iteration, which rendered phantom steps that repeated
+ * earlier ones word for word. Before the first `IterationProgress` the cursor is
+ * provisional; the first progress event re-keys what was filed under it.
  */
 
 /** One tool invocation within a turn. */
@@ -47,6 +58,39 @@ export interface TurnTraceState {
   readonly subAgents: Readonly<Record<string, SubAgentTrace>>;
   /** Per-LLM-call token usage evidence for this turn, absent until a call reports. */
   readonly usage?: TurnUsage;
+  /** Context window in use: the latest `ContextPressure` reading plus the turn's peak. Absent until one arrives. */
+  readonly context?: TurnContext;
+  /** How the turn ended; absent while it is still running. */
+  readonly ended?: TurnEnding;
+  /** The detail behind `ended` (cause, abstention, unfinished items, deliverables), once `StreamCompleted` arrives. */
+  readonly outcome?: TurnOutcome;
+  /** The strategy the run reported (`StreamCompleted.metadata.strategyUsed`: the last one, after any switch). */
+  readonly strategy?: string;
+  /** How long the run took, as it reported (`StreamCompleted.metadata.duration`, ms). */
+  readonly durationMs?: number;
+  /** True once an `IterationProgress` fixed the cursor (before that, `iteration` is provisional). */
+  readonly progressSeen?: true;
+}
+
+/** The context window the turn's model calls ran in. */
+export interface TurnContext {
+  /** Prompt tokens on the latest call. */
+  readonly tokensUsed: number;
+  /** Largest prompt seen this turn. */
+  readonly peakTokens: number;
+  /** Total window (used + remaining) on the latest call: the `num_ctx` / context size actually in use. */
+  readonly windowTokens: number;
+}
+
+/** One iteration of a persisted trace. `thought` is the legacy combined text; new traces also split it. */
+export interface PersistedReasoningStep {
+  readonly iteration: number;
+  /** Thinking followed by narration, as one block (kept for readers of older traces). */
+  readonly thought: string;
+  /** The model's visible prose this iteration (pre-tool narration). */
+  readonly narration?: string;
+  /** The provider's own reasoning this iteration (thinking models). */
+  readonly thinking?: string;
 }
 
 /** The persistable shape of a finished sub-agent block (recursive). */
@@ -63,7 +107,7 @@ export interface PersistedSubAgent {
 
 /** The persistable shape of a finished turn's trace. */
 export interface TurnTrace {
-  readonly reasoningSteps: readonly { readonly iteration: number; readonly thought: string }[];
+  readonly reasoningSteps: readonly PersistedReasoningStep[];
   readonly toolCalls: readonly TraceToolCall[];
   /** Final checklist snapshot, present only when the turn produced one. */
   readonly checklist?: ChecklistSnapshotWire;
@@ -71,8 +115,17 @@ export interface TurnTrace {
   readonly subAgents?: readonly PersistedSubAgent[];
   /** Per-call token usage evidence, present only when at least one call reported. */
   readonly usage?: TurnUsage;
+  /** Context window in use, present only when the run reported one. */
+  readonly context?: TurnContext;
+  /** How the run ended, present only when it did not simply succeed or it listed deliverables. */
+  readonly outcome?: TurnOutcome;
+  /** The strategy the run reported, when it reported one. */
+  readonly strategy?: string;
+  /** How long the run took (ms), when it reported. */
+  readonly durationMs?: number;
 }
 
+/** An empty trace, before any event of the turn. */
 export const initialTurnTrace = (): TurnTraceState => ({
   iteration: 1,
   maxIterations: 0,
@@ -123,23 +176,55 @@ const subAgentFolder: SubAgentFolder<TurnTraceState> = {
   withNested: (s, subAgents) => ({ ...s, subAgents }),
 };
 
+/** Move every entry filed under `from` to `to` (merging text), for the first progress event. */
+const rekeyIteration = (s: TurnTraceState, from: number, to: number): TurnTraceState => {
+  if (from === to) return s;
+  const move = (rec: Readonly<Record<number, string>>, join: (a: string | undefined, b: string) => string) => {
+    const text = rec[from];
+    if (text === undefined) return rec;
+    const { [from]: _moved, ...rest } = rec;
+    return { ...rest, [to]: join(rest[to], text) };
+  };
+  return {
+    ...s,
+    thoughts: move(s.thoughts, mergeThoughtText),
+    thinking: move(s.thinking, (a, b) => (a ? `${a}\n${b}` : b)),
+    calls: s.calls.map((c) => (c.iteration === from ? { ...c, iteration: to } : c)),
+  };
+};
+
 /** Fold one stream event into the trace. Events that don't affect the transcript return `s` unchanged. */
 export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTraceState {
   switch (event._tag) {
     case "TextDelta":
       return { ...s, pending: s.pending + event.text };
     case "IterationProgress": {
+      if (s.progressSeen !== true) {
+        const anchored = rekeyIteration(s, s.iteration, event.iteration);
+        return { ...anchored, iteration: event.iteration, maxIterations: event.maxIterations, progressSeen: true };
+      }
       const next = event.iteration > s.iteration ? foldPending(s) : s;
       return { ...next, iteration: event.iteration, maxIterations: event.maxIterations };
     }
     case "ThoughtEmitted":
-      return { ...withThought(s, event.iteration, event.content), pending: consumePending(s.pending, event.content) };
+      // Filed under the fold's cursor: the event's `iteration` is the kernel step index (see header).
+      return { ...withThought(s, s.iteration, event.content), pending: consumePending(s.pending, event.content) };
     case "ThinkingEmitted": {
       const text = event.content.trim();
       if (text.length === 0) return s;
-      const prev = s.thinking[event.iteration];
-      return { ...s, thinking: { ...s.thinking, [event.iteration]: prev ? `${prev}\n${text}` : text } };
+      const prev = s.thinking[s.iteration];
+      return { ...s, thinking: { ...s.thinking, [s.iteration]: prev ? `${prev}\n${text}` : text } };
     }
+    case "ContextPressure": {
+      const windowTokens = event.tokensUsed + event.tokensAvailable;
+      if (!(windowTokens > 0)) return s;
+      const peakTokens = Math.max(s.context?.peakTokens ?? 0, event.tokensUsed);
+      return { ...s, context: { tokensUsed: event.tokensUsed, peakTokens, windowTokens } };
+    }
+    case "StreamError":
+      return { ...s, ended: "errored" };
+    case "StreamCancelled":
+      return { ...s, ended: "cancelled" };
     case "ToolCallStarted": {
       const folded = foldPending(s);
       if (folded.calls.some((c) => c.id === event.callId)) return folded;
@@ -173,8 +258,19 @@ export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTrac
       return { ...s, subAgents: foldSubAgentActivity(subAgentFolder, s.subAgents, event) };
     case "TokenUsage":
       return { ...s, usage: summarizeUsage(s.usage, event) };
-    case "StreamCompleted":
-      return { ...s, answer: event.output };
+    case "StreamCompleted": {
+      const outcome = turnOutcomeOf(event);
+      const strategy = event.metadata?.strategyUsed;
+      const duration = event.metadata?.duration;
+      return {
+        ...s,
+        answer: event.output,
+        ended: outcome.ending,
+        outcome,
+        ...(typeof strategy === "string" && strategy.length > 0 ? { strategy } : {}),
+        ...(typeof duration === "number" && Number.isFinite(duration) && duration >= 0 ? { durationMs: duration } : {}),
+      };
+    }
     default:
       return s;
   }
@@ -189,6 +285,26 @@ const normalize = (text: string): string => text.replace(/\s+/g, " ").trim();
  * an earlier iteration's thought — otherwise the same block renders 2-3 times.
  */
 export function visibleThoughts(s: TurnTraceState): Readonly<Record<number, string>> {
+  const out: Record<number, string> = {};
+  for (const step of visibleIterations(s)) {
+    out[step.iteration] = [step.thinking, step.narration].filter((t): t is string => !!t).join("\n\n");
+  }
+  return out;
+}
+
+/** One iteration's visible text, split: provider thinking and the model's narration. */
+export interface VisibleIteration {
+  readonly iteration: number;
+  readonly narration?: string;
+  readonly thinking?: string;
+}
+
+/**
+ * {@link visibleThoughts} with narration and thinking kept apart, in iteration
+ * order. Narration restating the answer (or an earlier iteration) is dropped;
+ * provider thinking is always kept.
+ */
+export function visibleIterations(s: TurnTraceState): readonly VisibleIteration[] {
   const answers = [s.answer, s.pending].map((a) => normalize(a ?? "")).filter((a) => a.length > 0);
   const seen = new Set<string>();
   const prose: Record<number, string> = {};
@@ -200,17 +316,19 @@ export function visibleThoughts(s: TurnTraceState): Readonly<Record<number, stri
     seen.add(n);
     prose[iteration] = thought;
   }
-  // Provider reasoning is genuine thinking: always shown, ahead of any pre-tool prose.
-  const out: Record<number, string> = {};
-  for (const iteration of new Set([...Object.keys(s.thinking), ...Object.keys(prose)].map(Number))) {
-    out[iteration] = [s.thinking[iteration], prose[iteration]].filter((t): t is string => !!t).join("\n\n");
-  }
-  return out;
+  return [...new Set([...Object.keys(s.thinking), ...Object.keys(prose)].map(Number))]
+    .sort((a, b) => a - b)
+    .map((iteration) => ({
+      iteration,
+      ...(prose[iteration] ? { narration: prose[iteration] } : {}),
+      ...(s.thinking[iteration] ? { thinking: s.thinking[iteration] } : {}),
+    }));
 }
 
 /**
- * The trace to persist, or `undefined` when the turn had neither thinking nor
- * tool calls. `resultCap` bounds each stored result/error (flagging
+ * The trace to persist, or `undefined` when the turn recorded nothing (no
+ * thinking, calls, checklist, sub-agents, usage, non-plain outcome, reported
+ * strategy or duration). `resultCap` bounds each stored result/error (flagging
  * `resultTruncated`), keeping a long chat's rows small.
  */
 export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: number } = {}): TurnTrace | undefined {
@@ -228,9 +346,12 @@ export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: 
       ...(r.cut || e.cut ? { resultTruncated: true } : {}),
     };
   });
-  const reasoningSteps = Object.entries(visibleThoughts(s))
-    .map(([iteration, thought]) => ({ iteration: Number(iteration), thought }))
-    .sort((a, b) => a.iteration - b.iteration);
+  const reasoningSteps = visibleIterations(s).map((v): PersistedReasoningStep => ({
+    iteration: v.iteration,
+    thought: [v.thinking, v.narration].filter((t): t is string => !!t).join("\n\n"),
+    ...(v.narration ? { narration: v.narration } : {}),
+    ...(v.thinking ? { thinking: v.thinking } : {}),
+  }));
   const subAgents = Object.values(s.subAgents).map((b): PersistedSubAgent => {
     const output = clip(b.output);
     return {
@@ -245,12 +366,17 @@ export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: 
       ...(b.endedAt !== undefined ? { endedAt: b.endedAt } : {}),
     };
   });
+  const outcome =
+    s.outcome !== undefined && (s.outcome.ending !== "succeeded" || s.outcome.deliverables !== undefined) ? s.outcome : undefined;
   if (
     toolCalls.length === 0 &&
     reasoningSteps.length === 0 &&
     s.checklist === undefined &&
     subAgents.length === 0 &&
-    s.usage === undefined
+    s.usage === undefined &&
+    outcome === undefined &&
+    s.strategy === undefined &&
+    s.durationMs === undefined
   ) return undefined;
   return {
     reasoningSteps,
@@ -258,5 +384,9 @@ export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: 
     ...(s.checklist !== undefined ? { checklist: s.checklist } : {}),
     ...(subAgents.length > 0 ? { subAgents } : {}),
     ...(s.usage !== undefined ? { usage: s.usage } : {}),
+    ...(s.context !== undefined ? { context: s.context } : {}),
+    ...(outcome !== undefined ? { outcome } : {}),
+    ...(s.strategy !== undefined ? { strategy: s.strategy } : {}),
+    ...(s.durationMs !== undefined ? { durationMs: s.durationMs } : {}),
   };
 }

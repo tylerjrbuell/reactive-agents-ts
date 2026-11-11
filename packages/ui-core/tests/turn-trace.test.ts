@@ -25,25 +25,38 @@ describe("turn trace fold", () => {
     ]);
     expect(s.pending).toBe("Final answer");
     expect(finishTurnTrace(s)).toEqual({
-      reasoningSteps: [{ iteration: 1, thought: "I should search." }],
+      reasoningSteps: [{ iteration: 1, thought: "I should search.", narration: "I should search." }],
       toolCalls: [{ id: "c1", name: "web-search", status: "done", iteration: 1, durationMs: 12, args: { q: "x" }, result: "hit" }],
     });
   });
 
   // Repro (Cortex chat, cogito:8b, posture plan): the kernel streams TextDelta, then
-  // ThoughtEmitted(n), then IterationProgress(n). The text landed under n (thought) AND
+  // ThoughtEmitted, then IterationProgress(n). The text landed under n (thought) AND
   // under n-1 (pending fold), so each thinking block repeated the next one.
+  // Real kernel order (trace 01M73GND): IterationProgress(n) (end of n-1), text, thought,
+  // IterationProgress(n) again; ThoughtEmitted.iteration is the kernel STEP index.
   test("text already classified by ThoughtEmitted is not folded again as pending", () => {
     const s = run([
       { _tag: "TextDelta", text: "Plan A." },
-      { _tag: "ThoughtEmitted", iteration: 1, content: "Plan A." },
+      { _tag: "ThoughtEmitted", iteration: 2, content: "Plan A." },
       { _tag: "IterationProgress", iteration: 1, maxIterations: 5, status: "r" },
+      { _tag: "IterationProgress", iteration: 2, maxIterations: 5, status: "r" },
       { _tag: "TextDelta", text: "Plan B." },
-      { _tag: "ThoughtEmitted", iteration: 2, content: "Plan B." },
+      { _tag: "ThoughtEmitted", iteration: 6, content: "Plan B." },
       { _tag: "IterationProgress", iteration: 2, maxIterations: 5, status: "r" },
     ]);
     expect(s.thoughts).toEqual({ 1: "Plan A.", 2: "Plan B." });
     expect(s.pending).toBe("");
+  });
+
+  test("ThoughtEmitted's step-index iteration never creates its own step", () => {
+    const s = run([
+      { _tag: "IterationProgress", iteration: 3, maxIterations: 5, status: "r" },
+      { _tag: "ThoughtEmitted", iteration: 16, content: "Pulling traffic." },
+      { _tag: "ThinkingEmitted", iteration: 0, content: "summarizer aside" },
+    ]);
+    expect(s.thoughts).toEqual({ 3: "Pulling traffic." });
+    expect(s.thinking).toEqual({ 3: "summarizer aside" });
   });
 
   test("a thought that does not match pending text leaves pending alone", () => {
@@ -90,7 +103,8 @@ describe("visibleThoughts (duplicate thinking)", () => {
       { _tag: "ThoughtEmitted", iteration: 3, content: table },
       { _tag: "StreamCompleted", output: table, metadata: { duration: 1, cost: 0, tokensUsed: 1, stepsCount: 1 } } as UiStreamEvent,
     ]);
-    expect(finishTurnTrace(s)).toBeUndefined();
+    // No thought survives; only the reported duration is kept.
+    expect(finishTurnTrace(s)).toEqual({ reasoningSteps: [], toolCalls: [], durationMs: 1 });
   });
 
   test("real thinking before a tool call survives; identical repeats collapse to one", () => {
@@ -100,7 +114,8 @@ describe("visibleThoughts (duplicate thinking)", () => {
       { _tag: "ThoughtEmitted", iteration: 2, content: "I need prices, so I will call the tool." },
       { _tag: "StreamCompleted", output: "done", metadata: { duration: 1, cost: 0, tokensUsed: 1, stepsCount: 1 } } as UiStreamEvent,
     ]);
-    expect(finishTurnTrace(s)!.reasoningSteps).toEqual([{ iteration: 1, thought: "I need prices, so I will call the tool." }]);
+    const text = "I need prices, so I will call the tool.";
+    expect(finishTurnTrace(s)!.reasoningSteps).toEqual([{ iteration: 1, thought: text, narration: text }]);
   });
 
   test("a thought equal to the live answer preview is hidden while streaming", () => {
@@ -121,7 +136,12 @@ describe("provider thinking (ThinkingEmitted)", () => {
       { _tag: "StreamCompleted", output: "The user wants prices; I should call crypto-price.", metadata: { duration: 1, cost: 0, tokensUsed: 1, stepsCount: 1 } } as UiStreamEvent,
     ]);
     expect(finishTurnTrace(s)!.reasoningSteps).toEqual([
-      { iteration: 1, thought: "The user wants prices; I should call crypto-price.\n\nFetching prices now." },
+      {
+        iteration: 1,
+        thought: "The user wants prices; I should call crypto-price.\n\nFetching prices now.",
+        thinking: "The user wants prices; I should call crypto-price.",
+        narration: "Fetching prices now.",
+      },
     ]);
   });
 });

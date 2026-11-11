@@ -1,6 +1,7 @@
 import { parsePartialObject } from "../parse-partial.js";
 import { foldSubAgentActivity, type SubAgentTrace } from "./sub-agent-fold.js";
 import { foldTurnTrace, initialTurnTrace, type TurnTraceState } from "./turn-trace.js";
+import { turnOutcomeOf, type TurnOutcome } from "./turn-outcome.js";
 import type {
   ChecklistSnapshotWire,
   PendingInteractionWire,
@@ -24,7 +25,14 @@ export interface RunState {
     readonly args: unknown;
   };
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
+  /**
+   * How the completed run ended (succeeded, partial, failed, abstained) with its
+   * cause, unfinished items and deliverables. Set on `StreamCompleted`; a
+   * `completed` status alone does not mean the run succeeded.
+   */
+  readonly outcome?: TurnOutcome;
   readonly cost?: { readonly tokens: number; readonly usd: number };
+  /** `StreamError.cause`, or a completed run's failure cause (`StreamCompleted.error`). */
   readonly error?: string;
   /** Latest checklist snapshot (highest `lastSeq` wins; stale events ignored). */
   readonly checklist?: ChecklistSnapshotWire;
@@ -118,12 +126,15 @@ export const reduceRunState = (
           cost,
         };
       }
+      // A failed or abstained run completes with `output: ""`; its cause rides `error`.
       return {
         ...base,
         status: "completed",
         runId: event.runId ?? base.runId,
         output: event.output,
         abstention: event.abstention ?? base.abstention,
+        outcome: turnOutcomeOf({ ...event, abstention: event.abstention ?? base.abstention }),
+        ...(event.error ? { error: event.error } : {}),
         cost,
       };
     }

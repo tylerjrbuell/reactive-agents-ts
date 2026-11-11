@@ -70,6 +70,16 @@ export interface StreamCompleted {
   readonly runId?: string;
   /** False when the run (e.g. a sub-agent) finished unsuccessfully. Absent means success. */
   readonly success?: boolean;
+  /** How the run's loop ended (mirrors runtime `StreamCompleted.terminatedBy`); `"abstained"` when the agent declined. */
+  readonly terminatedBy?: string;
+  /**
+   * The failure cause when `success` is `false` (provider error, runtime veto,
+   * termination reason), never the output text. A failed or abstained run's
+   * `output` is `""`; show this instead.
+   */
+  readonly error?: string;
+  /** Set when a durable run paused (`pendingApproval` / `pendingInteraction` say for what). */
+  readonly status?: "awaiting-approval" | "awaiting-interaction";
   /** Per-tool call/duration rollup (mirrors runtime `AgentStreamEvent.StreamCompleted.toolSummary`). */
   readonly toolSummary?: ReadonlyArray<{
     readonly name: string;

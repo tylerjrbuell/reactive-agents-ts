@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { charsToTokens, estimateTokens, splitTokens, summarizeUsage } from "../src/index.js";
 import type { TokenUsage } from "../src/index.js";
+import { contextLevel } from "../src/state/token-usage.js";
 
 describe("splitTokens", () => {
   test("both halves reported stay unchanged and measured", () => {
@@ -113,5 +114,25 @@ describe("estimateTokens", () => {
   test("charsToTokens stays the latin baseline for backward compatibility", () => {
     expect(charsToTokens(40)).toBe(10);
     expect(charsToTokens(0)).toBe(0);
+  });
+});
+
+describe("contextLevel", () => {
+  // Pins the runtime context-pressure thresholds (45 / 75 / 90) in one place.
+  // Every copy of the ladder (chat-stream, context gauges) must agree with this.
+  test("boundaries: 44 low, 45 medium, 74 medium, 75 high, 89 high, 90 critical", () => {
+    expect(contextLevel(0)).toBe("low");
+    expect(contextLevel(44)).toBe("low");
+    expect(contextLevel(45)).toBe("medium");
+    expect(contextLevel(74)).toBe("medium");
+    expect(contextLevel(75)).toBe("high");
+    expect(contextLevel(89)).toBe("high");
+    expect(contextLevel(90)).toBe("critical");
+    expect(contextLevel(100)).toBe("critical");
+  });
+
+  test("values above 100 stay critical; negatives stay low", () => {
+    expect(contextLevel(140)).toBe("critical");
+    expect(contextLevel(-5)).toBe("low");
   });
 });
