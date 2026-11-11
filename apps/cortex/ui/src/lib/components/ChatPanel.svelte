@@ -30,16 +30,18 @@
   import { fetchExport, transcriptText, type ExportFormat } from "$lib/chat-export.js";
   import { saveTextFile } from "$lib/chat-download.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
-  import { documentsOf, pinnedSkills, type DiscoveredSkill } from "$lib/chat-config-patch.js";
+  import { documentsOf, pinnedSkills, toggleSkillPatch, type DiscoveredSkill } from "$lib/chat-config-patch.js";
   import { fetchSessionSkills } from "$lib/chat-skills.js";
-  import { untrack } from "svelte";
+  import { inlineActivations, inlineTrigger, parseInlineCommands, promptWithoutCommands, removeSkillTokens, triggerIsComplete } from "$lib/chat-inline-commands.js";
+  import { pickSkill, routeComposerInput } from "$lib/chat-composer-input.js";
+  import { tick, untrack } from "svelte";
   import { selectedTools, terminalChoice } from "$lib/chat-quickbar.js";
   import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
   import { quickBarChips } from "$lib/chat-quickbar-chips.js";
   import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
   import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
   import { closeMenu as closedMenu, createToggleQueue, keepsMenuOpen, NO_CHIP_MENU, pickChip as chipPicked, syncChipMenu, type ChipMenu, type MenuUi } from "$lib/chat-menu.js";
-  import { commandMenuItems, pickerItems } from "$lib/chat-menu-items.js";
+  import { commandMenuItems, inlineMenuItems, pickerItems } from "$lib/chat-menu-items.js";
   import WorkspacePickerDialog from "$lib/components/WorkspacePickerDialog.svelte";
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
   $effect(() => {
@@ -68,6 +70,8 @@
   const { sessionId, turns, totals, todo = [], documentFailures = [], sending, error }: Props = $props();
 
   let message = $state("");
+  // Caret in the composer (ChatComposer keeps it current): the inline `/` menu opens at it.
+  let caret = $state(0);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
   let thread = $state<ChatThread | null>(null);
   let lastSent = $state("");
@@ -121,7 +125,6 @@
   $effect(() => {
     void activeSession;
     traceTurnId = null;
-    queuedSkills = [];
     editingSummaryId = null;
     message = "";
     entering = true;
@@ -161,31 +164,47 @@
   async function submit() {
     const text = message.trim();
     if (!text) return;
-    const typed = parseSlash(text);
-    if (submitRoute({ sending, command: typed ? resolveCommand(typed)?.name : undefined }) === "queue") {
+    const route = routeComposerInput(text, skillNames);
+    if (submitRoute({ sending, command: route.kind === "command" ? route.command?.name : undefined }) === "queue") {
       queued = queueMessage(queued, text);
       message = "";
       return;
     }
-    if (!typed) message = "";
+    if (route.kind === "message") message = "";
     await dispatch(text);
     inputEl?.focus();
   }
 
-  /** Run one piece of input: a slash command or a chat message. */
+  /**
+   * Run one piece of input: a slash command, or a chat message whose recognized skill
+   * tokens (anywhere in it) are activated and stripped (chat-composer-input.ts).
+   */
   async function dispatch(text: string) {
-    const typed = parseSlash(text);
-    if (typed) {
-      const cmd = resolveCommand(typed);
-      if (!cmd) {
-        toast.error(`Unknown command /${typed.query}`, "Type / to see what's available");
-        return;
-      }
-      await runSlash(cmd, typed.arg);
+    const route = routeComposerInput(text, skillNames);
+    if (route.kind === "skills-only") {
+      toast.info("Add your message", `${route.skills.map((s) => `/${s}`).join(" ")} is used with the message it is in`);
       return;
     }
-    lastSent = text;
-    await sendWithQueuedSkills(text);
+    if (route.kind === "command") {
+      if (!route.command) {
+        toast.error(`Unknown command /${route.parsed.query}`, "Type / to see what's available");
+        return;
+      }
+      await runSlash(route.command, route.parsed.arg);
+      return;
+    }
+    lastSent = route.prompt;
+    await pinSessionSkills(route.sessionSkills);
+    await sendWith(route.prompt, route.turnSkills);
+  }
+
+  /** `/skills <name>` in a message pins the skill for every turn before the message goes. */
+  async function pinSessionSkills(names: readonly string[]) {
+    const add = names.filter((n) => !pinned.includes(n));
+    if (add.length === 0) return;
+    let next: Record<string, unknown> = cfg;
+    for (const name of add) next = { ...next, ...toggleSkillPatch(next, { name }) };
+    await patchConfig(`Pinned ${add.join(", ")} for every turn`, { skills: next.skills });
   }
 
   function sendQueuedNow() {
@@ -244,11 +263,18 @@
     });
   }
 
-  /** Send one message with the skills queued by `/skill` pinned for it only (the session config is untouched). */
-  async function sendWithQueuedSkills(text: string, posture?: "execute" | "plan") {
-    const skills = queuedSkills;
-    queuedSkills = [];
-    await chatStore.sendMessageStream(text, { ...(posture ? { posture } : {}), skills });
+  /** Send one message with `skills` (its `/skill` tokens) pinned for it only; the session config is untouched. */
+  async function sendWith(text: string, skills: readonly string[], posture?: "execute" | "plan") {
+    await chatStore.sendMessageStream(text, { ...(posture ? { posture } : {}), skills: [...skills] });
+  }
+
+  /** Put text in the composer with the caret at `at` (after a pick that inserted at the caret). */
+  async function setComposer(text: string, at: number) {
+    message = text;
+    caret = at;
+    await tick();
+    inputEl?.focus();
+    inputEl?.setSelectionRange(at, at);
   }
 
   async function retry() {
@@ -261,7 +287,11 @@
   const slash = $derived(parseSlash(message));
   const slashCmd = $derived(slash ? resolveCommand(slash) : undefined);
   // Send / stop / queue; a config command during a run applies now (chat-live-config.ts).
-  const sendAction = $derived(composerAction({ sending, hasText, configCommand: isLiveConfigCommand(slashCmd?.name) }));
+  const routeCmd = $derived.by(() => {
+    const r = routeComposerInput(message.trim(), skillNames);
+    return r.kind === "command" ? r.command?.name : undefined;
+  });
+  const sendAction = $derived(composerAction({ sending, hasText, configCommand: isLiveConfigCommand(routeCmd) }));
 
   // Session config the pickers read from and patch.
   const session = $derived($chatStore.sessions.find((s) => s.sessionId === sessionId));
@@ -304,13 +334,6 @@
     });
   });
 
-  // Skills queued from the `/` menu for the NEXT message only (pinned for that run, then restored).
-  let queuedSkills = $state<string[]>([]);
-  const toggleQueued = (name: string) => {
-    queuedSkills = queuedSkills.includes(name) ? queuedSkills.filter((n) => n !== name) : [...queuedSkills, name];
-    message = "";
-    inputEl?.focus();
-  };
 
   /**
    * Apply a config patch; takes effect on the next turn because the server rebuilds the agent.
@@ -340,7 +363,31 @@
   let workspaceDialog = $state(false);
   const menuUi = (): MenuUi => ({ chip: chipMenu, message, dismissed: menuDismissed });
   const setMenu = (u: MenuUi) => { chipMenu = u.chip; message = u.message; menuDismissed = u.dismissed; };
+
+  // A skill for one message is its `/name` token in the text (chat-inline-commands.ts): picks
+  // insert the token at the caret and never replace the draft; send activates and strips it.
+  const skillNames = $derived((skillList ?? []).map((s) => s.name));
+  // The draft the user is writing: the chip's stash while a quick-bar picker holds the composer.
+  const draftText = $derived(chipMenu.chipCmd !== null ? (chipMenu.stash ?? "") : message);
+  const draftSkillList = $derived(inlineActivations(parseInlineCommands(draftText, skillNames)).turn);
+  // Caret in the draft when a quick-bar chip took the composer over.
+  let chipCaret = $state<number | null>(null);
+  // The `/partial` at the caret mid-message (a leading command keeps the classic menu).
+  const inline = $derived(slash ? null : inlineTrigger(message, caret));
+  function pickSkillFromMenu(name: string) {
+    const chipActive = chipMenu.chipCmd !== null && message.startsWith(chipMenu.chipCmd.trimEnd());
+    const r = pickSkill({ message, trigger: inline, chipStash: chipMenu.stash, chipCaret, chipActive }, skillNames, name);
+    chipMenu = NO_CHIP_MENU;
+    chipCaret = null;
+    void setComposer(r.text, r.caret);
+  }
+  /** The quick bar's skill chip: drop that skill's tokens from the draft. */
+  function removeDraftSkill(name: string) {
+    if (chipMenu.chipCmd !== null) chipMenu = { ...chipMenu, stash: removeSkillTokens(chipMenu.stash ?? "", skillNames, name) };
+    else void setComposer(removeSkillTokens(message, skillNames, name), Math.min(caret, message.length));
+  }
   function pickChip(cmd: string) {
+    if (chipMenu.chipCmd === null) chipCaret = inputEl?.selectionStart ?? message.length;
     setMenu(chipPicked(menuUi(), cmd, menuOpen));
     menuRaw = 0;
     inputEl?.focus();
@@ -374,8 +421,8 @@
       provider, model, models, thinkingChoice, modelThinking, strategy, workspace, shell, toolNames, catalog, pinned, docs,
       providers: providerList.map((x) => x.id),
       skills: skillList,
-      queuedSkills,
-      toggleQueuedSkill: toggleQueued,
+      queuedSkills: draftSkillList,
+      toggleQueuedSkill: pickSkillFromMenu,
       apply: applyConfig,
       setProvider,
       toggle: toggleInPlace,
@@ -391,25 +438,29 @@
     commandMenuItems({
       slash,
       skills: skillList,
-      queuedSkills,
+      queuedSkills: draftSkillList,
       pinned,
       runCommand: (cmd) => runSlash(cmd, ""),
       completeCommand,
-      toggleQueuedSkill: toggleQueued,
+      toggleQueuedSkill: pickSkillFromMenu,
     }),
   );
-  const menuItems = $derived(slash?.hasArg ? pickItems : commandItems);
+  const inlineItems = $derived(inlineMenuItems({ trigger: inline, skills: skillList, pinned, pick: pickSkillFromMenu }));
+  const menuItems = $derived(slash ? (slash.hasArg ? pickItems : commandItems) : inlineItems);
   let menuRaw = $state(0);
   const menuIndex = $derived(Math.min(menuRaw, Math.max(0, menuItems.length - 1)));
   let menuDismissed = $state(false);
+  // The inline menu only edits text, so it may open during a run too.
   const menuOpen = $derived(
-    menuItems.length > 0 && !menuDismissed && slashMenuAllowed({ sending, command: slashCmd?.name, hasArg: slash?.hasArg === true }),
+    menuItems.length > 0 && !menuDismissed && (slash === null || slashMenuAllowed({ sending, command: slashCmd?.name, hasArg: slash.hasArg })),
   );
   // Only what the user typed resets the menu; async list loads (skills, models) must not
   // re-open a menu they dismissed or move their highlight.
   $effect(() => {
     void slash?.query;
     void slash?.arg;
+    void inline?.start;
+    void inline?.query;
     untrack(() => {
       menuRaw = 0;
       menuDismissed = false;
@@ -487,12 +538,17 @@
           await chatStore.patchSessionConfig(sessionId, { metaTools: { ...mt, todo: true } });
         }
         message = "";
-        lastSent = plan.task;
-        return void (await sendWithQueuedSkills(plan.task, "plan"));
+        // Skill tokens in the task (`/plan audit auth /review`) apply as in any message.
+        const segs = parseInlineCommands(plan.task, skillNames);
+        const acts = inlineActivations(segs);
+        const task = promptWithoutCommands(segs) || plan.task;
+        await pinSessionSkills(acts.session);
+        lastSent = task;
+        return void (await sendWith(task, acts.turn, "plan"));
       }
       case "go":
         lastSent = GO_MESSAGE;
-        return void (await sendWithQueuedSkills(GO_MESSAGE, "execute"));
+        return void (await sendWith(GO_MESSAGE, [], "execute"));
       case "rename":
         return void (await runAction("Rename", () => chatStore.renameSession(sessionId, arg), `Renamed to "${arg}"`));
       case "rewind": {
@@ -513,7 +569,9 @@
         menuRaw = (menuIndex + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
         return;
       }
-      if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+      // A mid-message `/name` already typed in full: Enter sends rather than completing it again.
+      const sendsNow = e.key === "Enter" && !e.shiftKey && triggerIsComplete(inline, skillNames);
+      if (!sendsNow && (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey))) {
         e.preventDefault();
         const item = menuItems[menuIndex];
         if (!item) return;
@@ -688,6 +746,8 @@
   </div>
   <ChatComposer
     bind:message
+    bind:caret
+    skills={skillNames}
     bind:inputEl
     {sending}
     planning={$chatStore.planning}
@@ -700,11 +760,11 @@
     onClearQueued={clearQueued}
   >
     {#snippet quickBar()}
-      {#if provider || queuedSkills.length > 0}
+      {#if provider || draftSkillList.length > 0}
         <ChatQuickBar
-          {queuedSkills}
+          queuedSkills={draftSkillList}
           chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, availableSkillCount: skillList?.length ?? 0, documentCount: docs.length, shellPresets: catalog.shellPresets })}
-          onRemoveSkill={(name) => (queuedSkills = queuedSkills.filter((n) => n !== name))}
+          onRemoveSkill={removeDraftSkill}
           onPick={pickChip}
         />
       {/if}

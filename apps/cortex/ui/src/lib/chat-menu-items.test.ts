@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { commandMenuItems, pickerItems, type CommandMenuContext, type PickerContext } from "./chat-menu-items.js";
+import { commandMenuItems, inlineMenuItems, pickerItems, type CommandMenuContext, type InlineMenuContext, type PickerContext } from "./chat-menu-items.js";
 import { parseSlash, resolveCommand } from "./chat-commands.js";
 import { EMPTY_CATALOG } from "./chat-quickbar-data.js";
 
@@ -206,5 +206,41 @@ describe("commandMenuItems", () => {
   test("empty once the user typed past the command", () => {
     expect(commandMenuItems(base("/model "))).toEqual([]);
     expect(commandMenuItems(base("plain"))).toEqual([]);
+  });
+});
+
+describe("inlineMenuItems", () => {
+  const skills = [
+    { name: "code-review", description: "Review code", source: "workspace" as const, root: "/ws/.agents/skills" },
+    { name: "review", description: "Review a diff", source: "workspace" as const, root: "/ws/.agents/skills" },
+    { name: "codebase-health-sweep", description: "Find drift", source: "workspace" as const, root: "/ws/.agents/skills" },
+  ];
+  const ctx = (query: string | null, over: Partial<InlineMenuContext> = {}): InlineMenuContext => ({
+    trigger: query === null ? null : { start: 4, end: 5 + query.length, query },
+    skills,
+    pinned: [],
+    pick: () => {},
+    ...over,
+  });
+
+  test("empty without a trigger", () => {
+    expect(inlineMenuItems(ctx(null))).toEqual([]);
+  });
+
+  test("lists skills whose name starts with the partial first, then other matches", () => {
+    expect(inlineMenuItems(ctx("rev")).map((r) => r.label)).toEqual(["/review", "/code-review"]);
+    expect(inlineMenuItems(ctx("")).map((r) => r.label)).toEqual(["/code-review", "/review", "/codebase-health-sweep"]);
+  });
+
+  test("a row picks its skill from both Enter and Tab", () => {
+    const picked: string[] = [];
+    const [row] = inlineMenuItems(ctx("cod", { pick: (n) => void picked.push(n) }));
+    void row?.run();
+    row?.complete?.();
+    expect(picked).toEqual(["code-review", "code-review"]);
+  });
+
+  test("a pinned skill reads every turn", () => {
+    expect(inlineMenuItems(ctx("review", { pinned: ["review"] }))[0]).toMatchObject({ label: "/review", hint: "every turn", active: true });
   });
 });

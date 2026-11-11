@@ -9,6 +9,7 @@
 import type { ChatCommand, ParsedSlash } from "./chat-commands.js";
 import { matchCommands } from "./chat-commands.js";
 import type { MenuItem } from "./chat-menu.js";
+import type { InlineTrigger } from "./chat-inline-commands.js";
 import type { IconName } from "./icons.js";
 import {
   DISCLOSURE_CHOICES,
@@ -329,6 +330,38 @@ export function skillMenuItems(ctx: CommandMenuContext): MenuItem[] {
       run: () => ctx.toggleQueuedSkill(sk.name),
       complete: () => ctx.toggleQueuedSkill(sk.name),
     }));
+}
+
+/** Inputs for the inline menu: a `/partial` typed mid-message (`chat-inline-commands.ts`). */
+export interface InlineMenuContext {
+  readonly trigger: InlineTrigger | null;
+  readonly skills: readonly DiscoveredSkill[] | null;
+  /** Skills pinned for every turn (shown as active). */
+  readonly pinned: readonly string[];
+  /** Replace the partial with the skill's token. */
+  readonly pick: (name: string) => void;
+}
+
+/**
+ * Inline menu: skills matching the partial at the caret, names that start with it
+ * first. Mid-message only skills are offered: they are the commands that act on the
+ * message they sit in.
+ */
+export function inlineMenuItems(ctx: InlineMenuContext): MenuItem[] {
+  if (ctx.trigger === null) return [];
+  const q = ctx.trigger.query;
+  const matches = (ctx.skills ?? []).filter((sk) => q === "" || sk.name.toLowerCase().includes(q) || sk.description.toLowerCase().includes(q));
+  const ranked = [...matches.filter((sk) => sk.name.toLowerCase().startsWith(q)), ...matches.filter((sk) => !sk.name.toLowerCase().startsWith(q))];
+  return ranked.map((sk): MenuItem => ({
+    key: `inline:${sk.name}`,
+    icon: "bolt",
+    label: `/${sk.name}`,
+    hint: ctx.pinned.includes(sk.name) ? "every turn" : "skill for this message",
+    detail: skillDetail(sk),
+    active: ctx.pinned.includes(sk.name),
+    run: () => ctx.pick(sk.name),
+    complete: () => ctx.pick(sk.name),
+  }));
 }
 
 /** The plain `/` menu: commands matching the query, then skill rows. */

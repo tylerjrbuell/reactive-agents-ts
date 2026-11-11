@@ -10,10 +10,17 @@
   import ChatQueuedRow from "$lib/components/ChatQueuedRow.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import type { composerAction, QueuedMessage } from "$lib/chat-queue.js";
+  import { highlightPieces, insertAtCaret, parseInlineCommands } from "$lib/chat-inline-commands.js";
+  import { draftSkills } from "$lib/chat-composer-input.js";
+  import { tick } from "svelte";
 
   interface Props {
     /** Composer text. */
     message?: string;
+    /** Caret offset in `message`, kept in sync on input, click and key moves. */
+    caret?: number;
+    /** Skill names the session's agent can load: their `/name` tokens are highlighted. */
+    skills?: readonly string[];
     /** The textarea, for focus management by the panel. */
     inputEl?: HTMLTextAreaElement | null;
     sending: boolean;
@@ -30,11 +37,41 @@
     onClearQueued: () => void;
   }
   let {
-    message = $bindable(""), inputEl = $bindable(null), sending, quickBar, planning, queued, sendAction, hasText,
+    message = $bindable(""), caret = $bindable(0), skills = [], inputEl = $bindable(null), sending, quickBar, planning, queued, sendAction, hasText,
     onKeydown, onSendButton, onSendQueuedNow, onClearQueued,
   }: Props = $props();
 
   const sendLabel = $derived(sendAction === "stop" ? "Stop reply" : sendAction === "queue" ? "Queue message" : "Send message");
+
+  // Highlight layer: a mirror of the text behind the transparent textarea, same box and
+  // wrapping, where recognized command tokens get a tinted background. The textarea
+  // stays the only input (screen readers and selection are untouched).
+  const pieces = $derived(highlightPieces(parseInlineCommands(message, skills)));
+  const hasMarks = $derived(pieces.some((p) => p.mark));
+  const usedSkills = $derived(hasMarks ? draftSkills(message, skills) : []);
+  let mirrorEl = $state<HTMLDivElement | null>(null);
+  const syncScroll = () => {
+    if (mirrorEl && inputEl) mirrorEl.scrollTop = inputEl.scrollTop;
+  };
+  // A mirror that appears (first recognized token) starts at the textarea's scroll offset.
+  $effect(() => {
+    if (mirrorEl) syncScroll();
+  });
+  const syncCaret = () => {
+    if (inputEl) caret = inputEl.selectionStart ?? message.length;
+  };
+
+  /** A prompt from the library goes in at the caret (or over the selection); the draft stays. */
+  async function insertPrompt(body: string) {
+    const start = inputEl?.selectionStart ?? message.length;
+    const end = inputEl?.selectionEnd ?? start;
+    const r = insertAtCaret(message, start, end, body, { sep: body.includes("\n") ? "\n" : " " });
+    message = r.text;
+    caret = r.caret;
+    await tick();
+    inputEl?.focus();
+    inputEl?.setSelectionRange(r.caret, r.caret);
+  }
 </script>
 
 <div class="composer-wrap">
@@ -48,15 +85,30 @@
         <Icon name="checklist" size="sm" />Planning mode. Send /go to carry the plan out.
       </p>
     {/if}
-    <textarea
-      bind:this={inputEl}
-      aria-label="Message"
-      placeholder={sending ? "Reply in progress. Type to queue your next message" : "Message the agent"}
-      rows="3"
-      bind:value={message}
-      onkeydown={onKeydown}
-      data-slash-menu-keep
-    ></textarea>
+    <div class="field">
+      {#if hasMarks}
+        <div class="mirror" bind:this={mirrorEl} aria-hidden="true" data-testid="composer-highlights">{#each pieces as p, i (i)}{#if p.mark}<mark>{p.text}</mark>{:else}{p.text}{/if}{/each}{" "}</div>
+      {/if}
+      <textarea
+        bind:this={inputEl}
+        aria-label="Message"
+        aria-describedby={usedSkills.length > 0 ? "composer-skills-note" : undefined}
+        placeholder={sending ? "Reply in progress. Type to queue your next message" : "Message the agent"}
+        rows="3"
+        bind:value={message}
+        onkeydown={onKeydown}
+        oninput={() => { syncCaret(); syncScroll(); }}
+        onkeyup={syncCaret}
+        onclick={syncCaret}
+        onselect={syncCaret}
+        onfocus={syncCaret}
+        onscroll={syncScroll}
+        data-slash-menu-keep
+      ></textarea>
+    </div>
+    {#if usedSkills.length > 0}
+      <p id="composer-skills-note" class="sr-only" aria-live="polite">Skills used with this message: {usedSkills.join(", ")}</p>
+    {/if}
     <div class="composer-f">
       <span class="hint">
         <kbd>/</kbd> commands
@@ -65,10 +117,7 @@
       <PromptPickerButton
         types={["task", "snippet"]}
         defaultSaveType="task"
-        onSelect={(body) => {
-          message = message ? `${message}\n${body}` : body;
-          inputEl?.focus();
-        }}
+        onSelect={(body) => void insertPrompt(body)}
       />
       <button
         type="button"
@@ -102,19 +151,43 @@
   }
   .composer:focus-within { border-color: var(--cortex-accent); box-shadow: 0 0 0 3px var(--cortex-accent-tint); }
   .planning { display: flex; align-items: center; gap: 6px; margin: 8px 14px 0; font-size: var(--cortex-t-xs); color: var(--cortex-accent); }
-  textarea {
+  .field { position: relative; }
+  /* The mirror and the textarea share every metric that affects wrapping. */
+  textarea, .mirror {
     display: block;
     width: 100%;
     min-height: 64px;
     max-height: 40vh;
     padding: 10px 14px;
     border: 0;
+    font: 400 var(--cortex-t-md) / var(--cortex-lh-read) var(--cortex-font-ui);
+    letter-spacing: normal;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    scrollbar-gutter: stable;
+  }
+  textarea {
+    position: relative;
     background: transparent;
     color: var(--cortex-text);
-    font: 400 var(--cortex-t-md) / var(--cortex-lh-read) var(--cortex-font-ui);
     resize: none;
     outline: none;
   }
+  .mirror {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    color: transparent;
+    pointer-events: none;
+  }
+  /* Background only: no padding, border or weight change, so the mirror never shifts a glyph. */
+  .mirror mark {
+    color: transparent;
+    background: var(--cortex-accent-tint);
+    border-radius: 3px;
+    box-shadow: inset 0 -1px 0 var(--cortex-accent);
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .composer-f { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; }
   .hint { margin-right: auto; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   kbd {
