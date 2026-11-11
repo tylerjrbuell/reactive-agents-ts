@@ -12,6 +12,7 @@
  */
 import { Context, Layer } from "effect";
 import type { EventBus } from "@reactive-agents/core";
+import type { SkillStoreService } from "@reactive-agents/memory";
 import {
   createReactiveIntelligenceLayer,
   makeSkillResolverService,
@@ -114,10 +115,18 @@ export const agentSkillsSettings = (options: RuntimeOptions): AgentSkillsSetting
  * Reactive Intelligence (entropy sensing) + optional skill resolver, plus the
  * {@link AgentSkills} settings when skills are configured. RI off and skills
  * off: `Layer.empty`.
+ *
+ * `skillStoreLayer` is the runtime's SkillStore layer (`Layer.empty` when
+ * memory or skill persistence is off). It is provided INTO the resolver and
+ * RI layers: they read `SkillStoreService` with `serviceOption` at layer
+ * construction, and a `Layer.mergeAll` sibling is not visible there. Without
+ * it the resolver never saw stored (learned or loaded) skills, so they were
+ * missing from every run's catalog and could not be pinned or activated.
  */
-export function buildReactiveIntelSkillsLayer(
+export function buildReactiveIntelSkillsLayer<E = never, R = never>(
   options: RuntimeOptions,
   eventBusLayer: Layer.Layer<EventBus>,
+  skillStoreLayer: Layer.Layer<SkillStoreService, E, R> | Layer.Layer<never> = Layer.empty,
 ) {
   const settings = agentSkillsSettings(options);
   const skillLayerForRi: SkillLayerConfig | undefined = settings
@@ -144,9 +153,9 @@ export function buildReactiveIntelSkillsLayer(
         options.reactiveIntelligenceOptions,
         undefined,
         skillLayerForRi,
-      ).pipe(Layer.provide(eventBusLayer))
+      ).pipe(Layer.provide(Layer.merge(eventBusLayer, skillStoreLayer)))
     : skillLayerForRi?.resolver
-      ? makeSkillResolverService(skillLayerForRi.resolver)
+      ? makeSkillResolverService(skillLayerForRi.resolver).pipe(Layer.provide(skillStoreLayer))
       : Layer.empty;
 
   return settings ? Layer.merge(reactiveIntelOptLayer, Layer.succeed(AgentSkills, settings)) : reactiveIntelOptLayer;

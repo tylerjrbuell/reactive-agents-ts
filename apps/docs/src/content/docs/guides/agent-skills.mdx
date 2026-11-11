@@ -213,8 +213,8 @@ Bootstrap → Catalog → Activation → Post-Run Learning → Background Refine
 1. **Bootstrap**: `SkillResolver` combines SQLite + filesystem skills, ranks by confidence
 2. **Catalog**: Skills appear in `<available_skills>` XML in the system prompt
 3. **Activation**: Model calls `activate_skill` or controller pre-activates on entropy match
-4. **Post-Run**: `LearningEngine` updates skill config (strategy, temperature, success rate)
-5. **Refinement**: `MemoryConsolidator` CONNECT phase triggers LLM refinement of instructions
+4. **Post-Run**: every stored skill the run used (pinned, relevance-activated, or loaded by the model with `activate_skill`) gets `useCount`, `successRate` and `lastActivatedAt` updated from the run outcome. A failed run counts against the skill; an abstained run adds no evidence. Needs memory on (the skill store lives in the memory database).
+5. **Refinement**: planned. Automatic confidence promotion and LLM refinement of instructions are not wired yet, so `agent.refineSkills()` currently returns `{ refined: 0 }`.
 
 ### Confidence Tiers
 

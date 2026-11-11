@@ -3,7 +3,9 @@
  *
  * Owns: LearningEngineService.onRunCompleted() call (calibration/bandit/skill
  * synthesis), procedural memory store of synthesized skill fragments, and the
- * applied-skill outcome record + entropy-improved re-store path.
+ * applied-skill outcome record + entropy-improved re-store path, and the
+ * SkillStore usage-stats update for every skill the run used
+ * (skill-outcomes.ts).
  *
  * Lifted from execution-engine.ts post-W23-6a-8 (2358-LOC checkpoint).
  */
@@ -18,6 +20,7 @@ import { extractTaskText, toRiWireOutcome, type RunOutcomeClass } from "../util.
 import { SkillStoreService } from "@reactive-agents/memory";
 import { skillFragmentToSkillRecord } from "@reactive-agents/reactive-intelligence";
 import { withRunProvenance } from "../memory-provenance.js";
+import { recordSkillOutcomes, usedSkillNames } from "./skill-outcomes.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -197,5 +200,12 @@ export const runLocalLearning = (
         );
       }
     }
+
+    // ── Living skills: usage stats for every SkillStore skill this run used ──
+    yield* recordSkillOutcomes({
+      agentId: config.agentId,
+      skillNames: usedSkillNames(ctx.metadata),
+      runOutcome,
+    });
   });
 };

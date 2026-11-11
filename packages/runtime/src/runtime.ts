@@ -728,7 +728,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     : Layer.empty;
 
   // ── Reactive Intelligence (entropy sensing) + skill resolver + AgentSkills (runtime-skills-layer.ts) ──
-  const reactiveIntelOptLayer = buildReactiveIntelSkillsLayer(options, eventBusLayer);
+  const reactiveIntelOptLayer = buildReactiveIntelSkillsLayer(options, eventBusLayer, skillStoreOptLayer);
 
   // ── Prompts (already constructed above; included only if enabled) ──
   const promptOptLayer = promptLayer ?? Layer.empty;
