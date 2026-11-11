@@ -12,6 +12,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 import { createRuntime } from "@reactive-agents/runtime";
 import type { RuntimeOptions } from "@reactive-agents/runtime";
 import { mkdtempSync, rmSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs"
+import { benchRunDirPrefix, cleanupStaleBenchDirs } from "./bench-dirs.js"
 import { join } from "node:path"
 import { execSync } from "node:child_process"
 import { serve } from "@reactive-agents/runtime-shim"
@@ -599,28 +600,7 @@ function getGitSha(): string {
 }
 
 
-/**
- * Remove leftover `.bench-run-*` temp dirs from prior killed/crashed runs.
- * Best-effort — swallows all errors so cleanup never aborts a benchmark.
- */
-export function cleanupStaleBenchDirs(baseDir: string = process.cwd()): number {
-  let removed = 0
-  try {
-    for (const entry of readdirSync(baseDir, { withFileTypes: true })) {
-      if (entry.isDirectory() && entry.name.startsWith(".bench-run-")) {
-        try {
-          rmSync(join(baseDir, entry.name), { recursive: true, force: true })
-          removed++
-        } catch {
-          /* ignore a single dir we can't remove (in-use by a live run, perms) */
-        }
-      }
-    }
-  } catch {
-    /* readdir failed (cwd gone?) — nothing to sweep */
-  }
-  return removed
-}
+export { benchRunDirPrefix, cleanupStaleBenchDirs } from "./bench-dirs.js"
 
 export async function runSession(
   session: BenchmarkSession,
@@ -837,7 +817,7 @@ export async function runSession(
         const runScores: RunScore[] = []
 
         for (let i = 0; i < runCount; i++) {
-          const tmpDir = mkdtempSync(join(process.cwd(), ".bench-run-"))
+          const tmpDir = mkdtempSync(join(process.cwd(), benchRunDirPrefix()))
           try {
             writeFixtures(task, tmpDir)
             // Suppress agent output in silent and progress modes
