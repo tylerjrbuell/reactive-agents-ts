@@ -48,6 +48,10 @@ describe("prefillFromSnapshot", () => {
     expect(out.systemPrompt).toBe(defaults().systemPrompt);
     expect(out.durableRuns).toEqual(defaults().durableRuns);
   });
+  test("carries the snapshot's approval gate (command rules included) into the builder shape", () => {
+    const out = prefillFromSnapshot(defaults(), { approvalPolicy: { mode: "detach", commands: ["git commit"] } });
+    expect(out.approvalPolicy).toEqual({ mode: "detach", tools: [], commands: ["git commit"] });
+  });
 });
 
 describe("builderConfigFromAgent", () => {

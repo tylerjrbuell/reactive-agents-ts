@@ -35,6 +35,21 @@ import { addDocumentPatch, removeDocumentPatch, toggleSkillPatch, type Discovere
 import { shellOffDetail, shellOffLabel } from "./shell-from-picks.js";
 import { workspaceLabel, workspaceSourceLabel, workspaceSuggestions } from "./workspace-api.js";
 import type { UiModelOption } from "./framework-models.js";
+import {
+  APPROVAL_MODE_LABEL,
+  addRule,
+  approvalPatch,
+  approvalPolicyFrom,
+  approvalSummary,
+  autoGatedTools,
+  gateableTools,
+  hasApprovalGate,
+  hasFullShell,
+  normalizeRule,
+  removeRule,
+  ruleMatchesNothing,
+  toggleGatedTool,
+} from "./approval-policy.js";
 
 type Patch = Record<string, unknown>;
 
@@ -187,6 +202,8 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
       }
       return rows;
     }
+    case "approvals":
+      return approvalRows(ctx, q, multiRow);
     case "skill":
       return (ctx.skills ?? []).filter((s) => has(s.name, s.description)).map((s) =>
         multiRow(s.name, "bolt", s.name, `Pin ${s.name}`, () => toggleSkillPatch(ctx.cfg, s), {
@@ -212,6 +229,56 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
       return rows;
     }
   }
+}
+
+/**
+ * `/approvals` rows: the mode, the tools (auto-gated ones locked on), the command
+ * rules (select to remove), `add <command>`, and off. Every row PATCHes the
+ * session's top-level `approvalPolicy` (`approvalPatch`).
+ */
+function approvalRows(
+  ctx: PickerContext,
+  q: string,
+  multiRow: (key: string, icon: IconName, label: string, what: string, patch: () => Patch, extra?: Partial<MenuItem>) => MenuItem,
+): MenuItem[] {
+  const has = (...parts: string[]) => q === "" || parts.some((p) => p.toLowerCase().includes(q));
+  const policy = approvalPolicyFrom(ctx.cfg);
+  if (q.startsWith("add ")) {
+    const rule = normalizeRule(ctx.slash?.arg.slice(4) ?? "");
+    if (rule === "") return [];
+    if (ruleMatchesNothing(rule)) return [configRow("add:none", "alert", `"${rule}" matches nothing`, () => ctx.info("A rule needs at least one word", "A bare * matches nothing"), { detail: "type a command, e.g. git push" })];
+    return [configRow(`add:${rule}`, "plus", `Ask before ${rule}`, () => ctx.apply(`Approval needed for ${rule}`, approvalPatch(ctx.cfg, (p) => ({ ...p, commands: addRule(p.commands, rule) }))), {
+      detail: `matches commands that start with these words, e.g. ${rule} …`,
+    })];
+  }
+  const rows: MenuItem[] = [];
+  for (const m of ["detach", "block"] as const) {
+    if (!has("mode", m, APPROVAL_MODE_LABEL[m].label)) continue;
+    rows.push(configRow(`mode:${m}`, m === "detach" ? "pause" : "ban", APPROVAL_MODE_LABEL[m].label, () => ctx.apply(`When approval is needed: ${APPROVAL_MODE_LABEL[m].label.toLowerCase()}`, approvalPatch(ctx.cfg, (p) => ({ ...p, mode: m }))), {
+      active: policy.mode === m, hint: "mode", detail: APPROVAL_MODE_LABEL[m].detail,
+    }));
+  }
+  const terminal = ctx.cfg.terminalTools === true;
+  const locked = autoGatedTools(policy, ctx.toolNames, hasFullShell(ctx.toolNames, terminal), ctx.catalog.approvalRequired);
+  for (const t of gateableTools(ctx.toolNames, terminal, ctx.catalog.shellPresets).filter((t) => has(t))) {
+    if (locked.includes(t)) {
+      rows.push(configRow(`tool:${t}`, "tool", t, () => ctx.info(`${t} always asks`, "The framework marks it as needing approval once any approval is set"), { active: true, hint: "always asks", multi: true }));
+      continue;
+    }
+    rows.push(multiRow(`tool:${t}`, "tool", t, `Approval for ${t}`, () => approvalPatch(ctx.cfg, (p) => ({ ...p, tools: toggleGatedTool(p.tools, t) })), {
+      active: policy.tools.includes(t), hint: "tool", ...(t === "shell-execute" ? { detail: "asks before every shell command" } : {}),
+    }));
+  }
+  for (const rule of policy.commands.filter((c) => has(c))) {
+    rows.push(multiRow(`rule:${rule}`, "shell", rule, `Remove rule ${rule}`, () => approvalPatch(ctx.cfg, (p) => ({ ...p, commands: removeRule(p.commands, rule) })), { active: true, hint: "select to remove" }));
+  }
+  if (q === "" || "add".startsWith(q)) {
+    rows.push(configRow("add", "plus", "add <command>", () => ctx.swapDraft("/approvals add "), { detail: "e.g. git push: ask before any command that starts with it", complete: () => ctx.swapDraft("/approvals add ") }));
+  }
+  if (hasApprovalGate(policy) && (q === "" || "off".startsWith(q) || "clear".startsWith(q))) {
+    rows.push(configRow("off", "x", "Turn approvals off", () => ctx.apply("Approvals off", approvalPatch(ctx.cfg, (p) => ({ ...p, tools: [], commands: [] }))), { detail: approvalSummary(policy) }));
+  }
+  return rows;
 }
 
 /** Inputs for the plain `/` menu: matching commands, then skills to queue for the next message. */

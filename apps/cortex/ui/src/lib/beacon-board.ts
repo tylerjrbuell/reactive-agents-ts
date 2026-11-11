@@ -6,11 +6,11 @@
  * (`statusOfRun`); Beacon adds only "Waiting on you" for a run paused on an
  * approval or a question.
  */
-import { formatCost, formatTokens, statusOfRun, type PendingInteractionWire, type StatusTone, type StatusView } from "@reactive-agents/ui-core";
+import { formatCost, formatTokens, type PendingInteractionWire, type StatusTone, type StatusView } from "@reactive-agents/ui-core";
 import type { IconName } from "./icons.js";
 import type { AgentNode } from "./stores/agent-store.js";
 import { runErrorLine } from "./run-error.js";
-import { RUN_SOURCE_LABEL, type RunSource } from "./runs-table.js";
+import { RUN_SOURCE_LABEL, runRowStatus, type RunSource } from "./runs-table.js";
 import { approvalDetail, waitingRunsOf, type PendingApprovalWire } from "./waiting-on-you.js";
 
 // ── View (Board / Field) ──────────────────────────────────────────────
@@ -81,7 +81,8 @@ function runStatusOf(node: AgentNode): string {
 export function beaconStatusOf(node: AgentNode, needsYou: boolean): StatusView {
   if (needsYou) return { tone: "attention", label: "Waiting on you" };
   if (isLiveNode(node)) return { tone: "running", label: "Running" };
-  const view = statusOfRun(runStatusOf(node));
+  // An abstained or partial run reads so (attention), not a red Failed: the Runs table's rule.
+  const view = runRowStatus({ status: runStatusOf(node), ...(node.runEnding ? { ending: node.runEnding } : {}) });
   return view.tone === "idle" ? { tone: "idle", label: "Idle" } : view;
 }
 

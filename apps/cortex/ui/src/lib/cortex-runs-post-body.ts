@@ -3,6 +3,7 @@
  * so desk runs match server expectations (including `taskContext` → `withTaskContext`).
  */
 import { shellOptionsBody, type AgentConfig } from "./types/agent-config.js";
+import { approvalPolicyBody } from "./approval-policy.js";
 
 function shellExecuteActive(cfg: AgentConfig): boolean {
   return cfg.terminalTools === true || cfg.tools.includes("shell-execute");
@@ -156,17 +157,13 @@ export function cortexRunsPostBody(
     ...(cfg.rawConfig && typeof cfg.rawConfig === "object" && Object.keys(cfg.rawConfig).length > 0
       ? { rawConfig: cfg.rawConfig }
       : {}),
-    // Durable execution (crash-resume + HITL). approvalTools → approvalPolicy gate.
-    ...(cfg.durableRuns?.enabled
-      ? {
-          durableRuns: {
-            enabled: true as const,
-            ...(cfg.durableRuns.approvalTools.length
-              ? { approvalPolicy: { tools: cfg.durableRuns.approvalTools, mode: cfg.durableRuns.approvalMode ?? "detach" } }
-              : {}),
-          },
-        }
-      : {}),
+    // Durable execution (crash-resume).
+    ...(cfg.durableRuns?.enabled ? { durableRuns: { enabled: true as const } } : {}),
+    // Approval gate: the framework's top-level approvalPolicy (tools + shell command rules + mode).
+    ...(() => {
+      const approvalPolicy = approvalPolicyBody(cfg.approvalPolicy);
+      return approvalPolicy ? { approvalPolicy } : {};
+    })(),
     ...(cfg.memory ? { memory: cfg.memory } : {}),
     ...(cfg.contextSynthesis ? { contextSynthesis: cfg.contextSynthesis } : {}),
     ...(cfg.guardrails?.enabled ? { guardrails: cfg.guardrails } : {}),

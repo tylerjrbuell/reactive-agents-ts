@@ -28,7 +28,13 @@ export const TerminalShellOptionsBody = t.Object({
   sandbox: t.Optional(t.Union([t.Literal("host"), t.Literal("docker")])),
 });
 
-/** Durable execution + durable HITL approval gate. */
+const ApprovalModeBody = t.Union([t.Literal("detach"), t.Literal("block")]);
+
+/**
+ * Durable execution (crash-resume). `approvalPolicy` here is the legacy home of
+ * the approval gate, still accepted from older clients; `approvalPolicyOf` moves
+ * it to the top-level {@link ApprovalPolicyBody}.
+ */
 export const DurableRunsBody = t.Object({
   enabled: t.Optional(t.Boolean()),
   checkpointEvery: t.Optional(t.Number()),
@@ -36,9 +42,17 @@ export const DurableRunsBody = t.Object({
   approvalPolicy: t.Optional(
     t.Object({
       tools: t.Optional(t.Array(t.String())),
-      mode: t.Optional(t.Union([t.Literal("detach"), t.Literal("block")])),
+      mode: t.Optional(ApprovalModeBody),
     }),
   ),
+});
+
+/** The framework approval policy's data half (`AgentConfig.approvalPolicy`). */
+export const ApprovalPolicyBody = t.Object({
+  mode: t.Optional(ApprovalModeBody),
+  tools: t.Optional(t.Array(t.String())),
+  /** Shell command rules: `"git push"` gates `git push origin main`. */
+  commands: t.Optional(t.Array(t.String())),
 });
 
 /**
@@ -151,4 +165,5 @@ export const AgentConfigBodyFields = {
   /** Generic framework-config overrides (nested partial AgentConfig), deep-merged under curated fields. */
   rawConfig: t.Optional(t.Record(t.String(), t.Unknown())),
   durableRuns: t.Optional(DurableRunsBody),
+  approvalPolicy: t.Optional(ApprovalPolicyBody),
 };

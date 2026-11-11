@@ -4,7 +4,6 @@
  * inspector tab list and the entropy series the Summary draws.
  */
 import { statusOfRun, statusOfTurn, type StatusView, type TurnEnding } from "@reactive-agents/ui-core";
-
 /** A run event as the run view holds it (`CortexLiveMsg`). */
 export interface RunViewEvent {
   readonly type: string;

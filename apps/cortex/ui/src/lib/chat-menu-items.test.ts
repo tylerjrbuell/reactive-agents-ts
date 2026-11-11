@@ -37,6 +37,37 @@ function picker(input: string, over: Partial<PickerContext> = {}): { ctx: Picker
   return { ctx, calls };
 }
 
+describe("/approvals rows", () => {
+  const catalog = { ...EMPTY_CATALOG, shellPresets: { git: ["git", "gh"] }, approvalRequired: ["file-write", "shell-execute"] };
+  const withApply = (input: string, cfg: Patch, toolNames: string[]) => {
+    const patches: Patch[] = [];
+    const p = picker(input, { cfg, toolNames, catalog, apply: (_w, patch) => void patches.push(patch) });
+    return { rows: pickerItems(p.ctx), calls: p.calls, patches };
+  };
+
+  test("add <command> writes a normalized rule to the top-level approvalPolicy (replacing a legacy gate)", () => {
+    const { rows, patches } = withApply("/approvals add git   commit", { durableRuns: { enabled: true, approvalTools: ["web-search"] } }, ["git"]);
+    expect(rows.map((r) => r.label)).toEqual(["Ask before git commit"]);
+    void rows[0]!.run();
+    expect(patches).toEqual([{ approvalPolicy: { mode: "detach", tools: ["web-search"], commands: ["git commit"] } }]);
+  });
+
+  test("a bare * is refused as a rule", () => {
+    const { rows } = withApply("/approvals add *", {}, ["git"]);
+    expect(rows[0]!.label).toBe('"*" matches nothing');
+  });
+
+  test("lists mode, tools (git pick as shell-execute), rules, add and off; locks auto-gated tools", () => {
+    const cfg = { approvalPolicy: { mode: "detach", tools: [], commands: ["git push"] } };
+    const { rows, calls } = withApply("/approvals ", cfg, ["file-write", "git"]);
+    expect(rows.map((r) => r.key)).toEqual(["mode:detach", "mode:block", "tool:file-write", "tool:shell-execute", "rule:git push", "add", "off"]);
+    expect(rows.find((r) => r.key === "tool:file-write")).toMatchObject({ active: true, hint: "always asks" });
+    expect(rows.find((r) => r.key === "tool:shell-execute")).toMatchObject({ active: false, hint: "tool" });
+    void rows.find((r) => r.key === "rule:git push")!.run();
+    expect(calls.at(-1)).toBe(`toggle:Remove rule git push:${JSON.stringify({ approvalPolicy: { mode: "detach", tools: [], commands: [] } })}`);
+  });
+});
+
 describe("pickerItems", () => {
   test("no rows until a picker command has an argument", () => {
     expect(pickerItems(picker("/model").ctx)).toEqual([]);

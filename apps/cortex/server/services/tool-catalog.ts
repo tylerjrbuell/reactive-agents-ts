@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { ToolDefinition, ToolParameter } from "@reactive-agents/tools";
-import { builtinTools, metaToolDefinitions } from "@reactive-agents/tools";
+import { builtinTools, metaToolDefinitions, shellExecuteTool } from "@reactive-agents/tools";
 import { listMcpServers, listCachedToolsForServers } from "../db/mcp-queries.js";
 import { listLabCustomTools, type LabCustomToolRow } from "../db/lab-custom-tools-queries.js";
 import { rollupToolUsageFromEvents } from "../db/tool-stats-queries.js";
@@ -116,6 +116,17 @@ function labCustomToDefinition(row: LabCustomToolRow): ToolDefinition | null {
     requiresApproval: false,
     source: "function",
   };
+}
+
+/**
+ * Names of the framework tools whose definition sets `requiresApproval`: the
+ * built-ins plus the full host shell (`shell-execute`, registered only with
+ * `terminal`). Once an agent has any approval policy, the framework folds these
+ * into the gated tools (runtime `configureApprovalPolicy`), so they always ask.
+ */
+export function approvalRequiredToolNames(): string[] {
+  const defs: readonly ToolDefinition[] = [...builtinTools.map((t) => t.definition), shellExecuteTool];
+  return defs.filter((d) => d.requiresApproval === true).map((d) => d.name);
 }
 
 export function buildToolCatalog(db: Database): CortexToolCatalogEntry[] {

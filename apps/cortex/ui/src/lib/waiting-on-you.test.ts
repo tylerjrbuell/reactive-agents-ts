@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { statusOfRun } from "@reactive-agents/ui-core";
-import { approvalDetail, choiceOptions, formFields, waitingItemsOf, waitingRunsOf, waitingStatusOf, withWaitingStatus } from "./waiting-on-you.js";
+import { approvalDetail, choiceOptions, formFields, runApprovalOf, waitingItemsOf, waitingRunsOf, waitingStatusOf, withWaitingStatus } from "./waiting-on-you.js";
 import { filterRuns, type RunRow } from "./runs-table.js";
 
 const run = (over: Partial<RunRow> & { runId: string }): RunRow => ({
@@ -108,5 +108,17 @@ describe("waitingRunsOf / waitingStatusOf: a paused run reads Waiting on you, no
     expect(waitingStatusOf("live", undefined)).toBe("live");
     const rows = [run({ runId: "a", status: "live" })];
     expect(withWaitingStatus(rows, new Map())).toBe(rows);
+  });
+});
+
+describe("runApprovalOf", () => {
+  it("names the approve/deny target by the approval's durable run id, with the call in short", () => {
+    const approval = { runId: "durable-1", agentId: "a", gateId: "g", toolName: "shell-execute", args: { command: "git commit -m wip" } };
+    expect(runApprovalOf({ kind: "approval", approval })).toEqual({ approvalRunId: "durable-1", toolName: "shell-execute", detail: "git commit -m wip" });
+  });
+  it("is undefined for no wait or a question", () => {
+    expect(runApprovalOf(undefined)).toBeUndefined();
+    const interaction = { runId: "r", interactionId: "i", kind: "confirmation", prompt: "ok?" } as unknown as Parameters<typeof waitingRunsOf>[2][number];
+    expect(runApprovalOf({ kind: "question", interaction })).toBeUndefined();
   });
 });

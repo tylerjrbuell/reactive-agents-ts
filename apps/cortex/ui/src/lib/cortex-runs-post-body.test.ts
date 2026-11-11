@@ -109,12 +109,20 @@ describe("cortexRunsPostBody — durable execution", () => {
     const body = cortexRunsPostBody("x", defaultConfig()) as { durableRuns?: unknown };
     expect(body.durableRuns).toBeUndefined();
   });
-  it("sends durableRuns + approvalPolicy when enabled with gated tools", () => {
-    const cfg = { ...defaultConfig(), tools: ["file-read", "shell-execute"], durableRuns: { enabled: true, approvalTools: ["shell-execute"] } };
-    const body = cortexRunsPostBody("x", cfg) as { durableRuns?: { enabled: boolean; approvalPolicy?: { tools: string[]; mode: string } } };
-    expect(body.durableRuns?.enabled).toBe(true);
-    expect(body.durableRuns?.approvalPolicy?.tools).toEqual(["shell-execute"]);
-    expect(body.durableRuns?.approvalPolicy?.mode).toBe("detach");
+  it("sends the approval gate as the framework's top-level approvalPolicy (tools + command rules)", () => {
+    const cfg = {
+      ...defaultConfig(),
+      tools: ["file-read", "shell-execute"],
+      durableRuns: { enabled: true },
+      approvalPolicy: { mode: "detach" as const, tools: ["shell-execute"], commands: ["git push", "*"] },
+    };
+    const body = cortexRunsPostBody("x", cfg) as Record<string, unknown>;
+    expect(body.durableRuns).toEqual({ enabled: true });
+    // A rule that can match nothing (`*`) is not sent.
+    expect(body.approvalPolicy).toEqual({ mode: "detach", tools: ["shell-execute"], commands: ["git push"] });
+  });
+  it("omits approvalPolicy when nothing is gated", () => {
+    expect((cortexRunsPostBody("x", defaultConfig()) as Record<string, unknown>).approvalPolicy).toBeUndefined();
   });
 });
 
@@ -232,7 +240,8 @@ describe("builder controls round-trip (panel → body → stored config → pane
     workspace: "/home/me/project",
     terminalShellOptions: { cwd: "src", allowUnsafeCwd: true, timeoutMs: 9000, maxOutputChars: 800, commandAccess: ["github"], sandbox: "docker" as const },
     guardrails: { ...defaultConfig().guardrails, enabled: true, pii: false, customBlocklist: ["secret"] },
-    durableRuns: { enabled: true, approvalTools: ["file-write"], approvalMode: "block" as const },
+    durableRuns: { enabled: true },
+    approvalPolicy: { mode: "block" as const, tools: ["file-write"], commands: ["git commit"] },
     rawConfig: { profile: "lean", tools: { builtins: ["research"], maxCallsPerTool: { "web-search": 3 }, riskLevels: { "file-read": "low" } }, requiredTools: { tools: ["web-search"] } },
   };
 
@@ -242,7 +251,8 @@ describe("builder controls round-trip (panel → body → stored config → pane
     expect(b.terminalShellOptions).toEqual({ cwd: "src", allowUnsafeCwd: true, timeoutMs: 9000, maxOutputChars: 800, commandAccess: ["github"], sandbox: "docker" });
     expect((b.guardrails as Record<string, unknown>).pii).toBe(false);
     expect((b.guardrails as Record<string, unknown>).customBlocklist).toEqual(["secret"]);
-    expect(b.durableRuns).toEqual({ enabled: true, approvalPolicy: { tools: ["file-write"], mode: "block" } });
+    expect(b.durableRuns).toEqual({ enabled: true });
+    expect(b.approvalPolicy).toEqual({ mode: "block", tools: ["file-write"], commands: ["git commit"] });
     expect(b.rawConfig).toEqual(panel.rawConfig);
   });
 
@@ -258,6 +268,7 @@ describe("builder controls round-trip (panel → body → stored config → pane
     expect(back.workspace).toBe(panel.workspace);
     expect(back.terminalShellOptions).toEqual(panel.terminalShellOptions);
     expect(back.durableRuns).toEqual(panel.durableRuns);
+    expect(back.approvalPolicy).toEqual(panel.approvalPolicy);
     expect(back.guardrails.pii).toBe(false);
     expect(back.guardrails.customBlocklist).toEqual(["secret"]);
     expect(back.rawConfig).toEqual(panel.rawConfig);

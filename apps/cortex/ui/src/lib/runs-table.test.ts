@@ -5,6 +5,7 @@ import {
   groupRuns,
   runDurationMs,
   runNameOf,
+  runRowStatus,
   runSourceOf,
   runTotals,
   sortRuns,
@@ -107,6 +108,17 @@ describe("applyRunLiveMessage", () => {
     expect(stopped[0]).toMatchObject({ status: "stopped", completedAt: 7000 });
     const after = applyRunLiveMessage(stopped, { agentId: "a", runId: "r1", type: "TaskFailed", payload: {} }, 8000);
     expect(after).toBe(stopped);
+  });
+  it("an abstained AgentCompleted records the ending; the row reads Abstained, segmented as attention", () => {
+    const out = applyRunLiveMessage([rows[0]!], {
+      agentId: "a", runId: "r1", type: "AgentCompleted",
+      payload: { success: false, terminatedBy: "abstained", abstention: { reason: "no statement" } },
+    }, 7000);
+    expect(out[0]).toMatchObject({ status: "failed", ending: "abstained" });
+    expect(runRowStatus(out[0]!)).toEqual({ tone: "attention", label: "Abstained" });
+    expect(filterRuns(out, "", "failed")).toHaveLength(0);
+    expect(statusCounts(out)).toMatchObject({ attention: 1, failed: 0 });
+    expect(runRowStatus(row({ runId: "x", status: "failed", ending: "failed" })).label).toBe("Failed");
   });
   it("returns the same rows when nothing changed", () => {
     const same = [rows[0]!];

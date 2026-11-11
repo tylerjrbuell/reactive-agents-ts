@@ -16,6 +16,7 @@ export const LIVE_CONFIG_COMMANDS: ReadonlySet<string> = new Set([
   "terminal",
   "workspace",
   "iterations",
+  "approvals",
   "skills",
   "docs",
   "agent",

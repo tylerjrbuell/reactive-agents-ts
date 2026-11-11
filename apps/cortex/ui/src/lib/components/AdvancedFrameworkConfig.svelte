@@ -41,6 +41,8 @@
     // Guardrails section owns the detector switches + blocklist (its curated
     // value would override these anyway — curated wins on conflict).
     "guardrails.injection", "guardrails.pii", "guardrails.toxicity", "guardrails.customBlocklist",
+    // Approvals editor (ApprovalPolicyFields) owns the whole approval policy.
+    "approvalPolicy.mode", "approvalPolicy.tools", "approvalPolicy.commands",
   ]);
 
   // Scalar/enum leaves render generically. Collection-shaped fields need to

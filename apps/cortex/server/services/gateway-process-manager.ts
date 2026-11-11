@@ -33,6 +33,7 @@ import type { Layer } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
 import { durableApprovals } from "./durable-approvals.js";
+import { approvalPolicyOf } from "./approval-policy.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
@@ -70,6 +71,7 @@ export function gatewayConfigToBuildParams(input: {
   const durableRuns = obj(config.durableRuns)?.enabled
     ? (config.durableRuns as NonNullable<BuildCortexAgentParams["durableRuns"]>)
     : undefined;
+  const approvalPolicy = approvalPolicyOf(config);
   const rawConfig = obj(config.rawConfig);
   const taskContext = coerceTaskContextRecord(config.taskContext);
   const skills = parseCortexSkillsConfig(config.skills);
@@ -146,6 +148,7 @@ export function gatewayConfigToBuildParams(input: {
     ...(modelRouting ? { modelRouting } : {}),
     ...(rawConfig && Object.keys(rawConfig).length > 0 ? { rawConfig } : {}),
     ...(durableRuns ? { durableRuns } : {}),
+    ...(approvalPolicy ? { approvalPolicy } : {}),
     ...(workspace ? { workspace } : {}),
     ...(terminalShellOptions ? { terminalShellOptions } : {}),
   };

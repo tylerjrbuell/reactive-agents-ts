@@ -21,6 +21,7 @@ import {
 import type { CortexIngestMessage, CortexLiveMessage } from "../types.js";
 import { CORTEX_DESK_LIVE_AGENT_ID } from "../types.js";
 import { CortexError } from "../errors.js";
+import { runEndingOf } from "./run-ending.js";
 
 export class CortexIngestService extends Context.Tag("CortexIngestService")<
   CortexIngestService,
@@ -42,6 +43,7 @@ const deriveRunStats = (
   tokensUsedTotal: number;
   cost: number;
   status: string;
+  ending: string;
   completedAt: number;
   debrief: string;
   provider: string;
@@ -94,6 +96,8 @@ const deriveRunStats = (
     const status = e.success === false ? "failed" : "completed";
     return {
       status,
+      // How it ended (abstained / partial / failed): an abstention is `failed` by status.
+      ending: runEndingOf(event as unknown as Record<string, unknown>),
       completedAt: Date.now(),
       // totalTokens is the authoritative count — persisted via MAX so it doesn't
       // overcount when added to per-call accumulated values.

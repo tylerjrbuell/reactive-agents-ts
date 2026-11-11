@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import type { Database } from "bun:sqlite";
 import { Effect, Layer } from "effect";
 import { CortexStoreService } from "../services/store-service.js";
-import { buildToolCatalog, type CortexToolCatalogEntry } from "../services/tool-catalog.js";
+import { approvalRequiredToolNames, buildToolCatalog, type CortexToolCatalogEntry } from "../services/tool-catalog.js";
 import { invokeCatalogTool } from "../services/tool-playground-invoke.js";
 import {
   insertLabCustomTool,
@@ -43,6 +43,9 @@ export const toolsRouter = (storeLayer: Layer.Layer<CortexStoreService>, db: Dat
     .get("/shell-presets", (): Record<string, readonly string[]> => ({ ...BUILTIN_SHELL_PRESETS }))
     // The shell allowlist the builder edits as one list: framework defaults, the opt-in
     // commands, and the commands behind each legacy `commandAccess` group (to fold old saves).
+    // Tools the framework always gates once any approval policy is set (`requiresApproval`
+    // definitions it folds into the policy), so the approval editor can show them locked.
+    .get("/approval-required", (): { tools: string[] } => ({ tools: approvalRequiredToolNames() }))
     .get("/shell-commands", () => ({
       defaults: [...DEFAULT_ALLOWED_COMMANDS],
       optIn: [...OPT_IN_COMMANDS],

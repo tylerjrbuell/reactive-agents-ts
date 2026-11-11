@@ -176,6 +176,16 @@ export function cortexParamsToAgentConfig(
     draft.features = { ...prev, healthCheck: true };
   }
 
+  // Approval gate: the framework key as is (mode, tools, shell command rules).
+  if (params.approvalPolicy) {
+    const ap = params.approvalPolicy;
+    draft.approvalPolicy = {
+      mode: ap.mode,
+      ...(ap.tools && ap.tools.length > 0 ? { tools: [...ap.tools] } : {}),
+      ...(ap.commands && ap.commands.length > 0 ? { commands: [...ap.commands] } : {}),
+    };
+  }
+
   // Generic framework-config overrides (type-introspected renderer): layer the
   // curated `draft` OVER rawConfig so curated cortex controls win, while
   // advanced framework-only fields the UI doesn't curate still flow through.

@@ -101,7 +101,8 @@ Under Settings · Motion, **Reduce motion** (or the system setting) stills the b
 - **Toolbar** — search (name, chat, agent, model, strategy), a status segment with counts (All, Running, Waiting, Finished, Failed, Stopped), sort, and the token and cost totals of the runs in view.
 - **Pins and bulk delete** — pinned runs sit in their own group at the top; select rows to delete them together.
 - A run stopped from the run view, or a chat turn stopped or left mid-reply, reads **Stopped**, never live or failed. **Stop** asks the agent to stop at its next step; if it is still working a few seconds later (inside a long model call), Cortex ends it the way **Terminate** does. **Terminate** aborts the run at once.
-- A run paused at an approval gate or on a question reads **Waiting on you** (in Runs, the run view and Beacon), not Running.
+- A run paused at an approval gate or on a question reads **Waiting on you** (in Runs, the run view and Beacon), not Running. The run view header then shows the call (`Approve git commit -m "…"?`) with **Approve** and **Deny**.
+- A run whose agent abstained (it declined, for example because an input was missing) reads **Abstained**, and a run that ended with part of the work done reads **Partial**, in Runs and on Beacon, not a red **Failed**. Runs recorded before this was stored are filled in from their last `AgentCompleted` event when Cortex starts.
 
 ### Run View — Deep Inspection
 
@@ -290,7 +291,14 @@ Desk runs, chat sessions and saved gateway agents build their agents from the sa
 
 **Guardrails** has a master switch, one switch per framework detector (prompt injection, personal data, toxicity) and a **Blocked phrases** list (`customBlocklist`). The detectors are on/off; there is no sensitivity threshold.
 
-**Durable execution** (in **Reasoning**) can gate chosen tools behind approval. **When a gated tool is called** picks the mode: pause the run and resume it after approval (`detach`), or wait in place until approved (`block`). In chat, a gated tool pauses the turn and an approval card appears in the thread showing the tool and its arguments. **Approve** runs the tool and the agent's reply lands in the thread. **Deny** (with an optional reason) resumes the run without the tool, and its reply lands the same way. **Dismiss** drops the paused turn. New messages wait until you decide. Paused chat turns also appear in the Runs page's **Waiting on you** strip, and they survive a Cortex restart as long as the session's settings are unchanged.
+**Approvals** (in **Reasoning**, and `/approvals` in chat) choose which tool calls and which shell commands wait for you. It is the framework's `approvalPolicy` (`.withApprovalPolicy({ tools, commands, mode })`), stored as is with the agent or chat:
+
+- **Tools**: tick the tools whose every call needs approval. A shell toolset such as `git` shows as `shell-execute`; gating it asks before every shell command.
+- **Shell commands**: rules such as `git push` or `gh pr create`. A rule matches by leading words: `git push` matches `git push origin main`, not `git pull`. Each part of a command joined with `&&`, `;` or `|` is checked, so `git add a && git commit -m x` matches a `git commit` rule. A bare `*` matches nothing. With the read-only `git` toolset, a rule is also what lets that git write run at all once you approve it: approving `git add … && git commit …` with only a `git commit` rule still refuses the `git add`. In chat, `/approvals add git push` adds a rule; `/approvals` lists the mode, tools and rules to toggle.
+- Once anything is gated, the framework also gates every tool it marks as needing approval (`file-write`, `file-edit`, `code-execute`, and the full host shell). The editor shows those locked on.
+- **When one is called**: **Pause and ask me** (`detach`) pauses the run until you approve or deny it, and turns on durable execution (a pause has to persist). **Refuse** (`block`) decides in place; Cortex has no in-place approver, so the call does not run and the agent is told it was refused.
+
+Configs saved before this kept the gate under **Durable execution** (`durableRuns.approvalTools`); they are read as the same policy. In chat, a gated call pauses the turn and an approval card appears in the thread showing the tool and its arguments. **Approve** runs the tool and the agent's reply lands in the thread. **Deny** (with an optional reason) resumes the run without the tool, and its reply lands the same way. **Dismiss** drops the paused turn. New messages wait until you decide. Paused chat turns also appear in the Runs page's **Waiting on you** strip, and they survive a Cortex restart as long as the session's settings are unchanged.
 
 With durable execution on, the agent can also stop and ask you something (`request_user_input`). In chat, the question appears in the thread with a reply box: **Yes** / **No** for a confirmation, one button per option for a choice, fields for a form, or a text box. Your answer resumes the run, and the question, your answer and the agent's reply land in the thread. **Dismiss** drops the paused turn. New messages wait until you answer.
 

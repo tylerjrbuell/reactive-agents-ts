@@ -37,6 +37,17 @@
     onResume: () => void;
     onStop: () => void;
     onTerminate: () => void;
+    /**
+     * Set while the run waits on an approval: the header offers Approve / Deny in
+     * place of the live controls (the run is paused at the gate, not working).
+     */
+    approval?: {
+      readonly toolName: string;
+      readonly detail: string;
+      readonly busy: boolean;
+      readonly onApprove: () => void;
+      readonly onDeny: () => void;
+    };
   }
   const p: Props = $props();
 
@@ -82,7 +93,13 @@
     </div>
   </div>
   <div class="actions">
-    {#if p.status === "live"}
+    {#if p.approval}
+      <span class="ask" title={`${p.approval.toolName}: ${p.approval.detail}`}>
+        Approve <span class="data">{p.approval.detail || p.approval.toolName}</span>?
+      </span>
+      <Button size="sm" variant="primary" icon="check" disabled={p.approval.busy} onclick={p.approval.onApprove}>Approve</Button>
+      <Button size="sm" variant="danger" icon="x" disabled={p.approval.busy} onclick={p.approval.onDeny}>Deny</Button>
+    {:else if p.status === "live"}
       <Button size="sm" icon="pause" onclick={p.onPause}>Pause</Button>
       <Button size="sm" icon="stop" onclick={p.onStop}>Stop</Button>
       <Button size="sm" variant="danger" onclick={p.onTerminate}>Terminate</Button>
@@ -125,5 +142,7 @@
   }
   .rename { max-width: 32rem; font-size: var(--cortex-t-lg); font-weight: 600; }
   .tol { font-size: var(--cortex-t-xs); color: var(--cortex-warn); }
+  .ask { display: inline-flex; align-items: baseline; gap: 4px; max-width: 28rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
+  .ask .data { overflow: hidden; text-overflow: ellipsis; color: var(--cortex-text); }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
 </style>

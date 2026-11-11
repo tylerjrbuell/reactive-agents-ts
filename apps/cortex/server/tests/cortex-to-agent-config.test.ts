@@ -17,6 +17,15 @@ describe("cortexParamsToAgentConfig", () => {
     expect(config.model).toBe("claude-sonnet-4-6");
   });
 
+  it("sends the approval policy as the framework's AgentConfig.approvalPolicy (tools + command rules + mode)", () => {
+    const config = cortexParamsToAgentConfig({
+      provider: "anthropic",
+      approvalPolicy: { mode: "detach", tools: ["file-write"], commands: ["git commit"] },
+    });
+    expect(config.approvalPolicy).toEqual({ mode: "detach", tools: ["file-write"], commands: ["git commit"] });
+    expect(cortexParamsToAgentConfig({ provider: "anthropic" }).approvalPolicy).toBeUndefined();
+  });
+
   it("leaves numCtx unset on local providers so the framework sizes the window per model", () => {
     expect(cortexParamsToAgentConfig({ provider: "ollama" }).numCtx).toBeUndefined();
     expect(cortexParamsToAgentConfig({ provider: "litellm" }).numCtx).toBeUndefined();

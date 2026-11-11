@@ -95,7 +95,8 @@ const FULL_CONFIG_BODY = {
   workspace:          tmpdir(),
   terminalShellOptions: { cwd: "sub", allowUnsafeCwd: true, timeoutMs: 9000, maxOutputChars: 800, commandAccess: ["github"], sandbox: "docker" } satisfies CortexShellOptions,
   guardrails:         { enabled: true, injection: true, pii: false, toxicity: true, customBlocklist: ["secret"] },
-  durableRuns:        { enabled: true, approvalPolicy: { tools: ["file-write"], mode: "block" as const } },
+  durableRuns:        { enabled: true },
+  approvalPolicy:     { mode: "block" as const, tools: ["file-write"], commands: ["git push", "gh pr create"] },
   rawConfig:          { profile: "lean", tools: { maxCallsPerTool: { "web-search": 3 } } },
 };
 
@@ -188,6 +189,7 @@ describe("AgentConfig → LaunchParams parity", () => {
     expect(p.terminalShellOptions).toEqual(FULL_CONFIG_BODY.terminalShellOptions);
     expect(p.guardrails).toEqual(FULL_CONFIG_BODY.guardrails);
     expect(p.durableRuns).toEqual(FULL_CONFIG_BODY.durableRuns);
+    expect(p.approvalPolicy).toEqual(FULL_CONFIG_BODY.approvalPolicy);
     expect(p.rawConfig).toEqual(FULL_CONFIG_BODY.rawConfig);
   });
 

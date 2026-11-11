@@ -81,3 +81,29 @@ Live QA of the Cortex Bench redesign (spec `wiki/Architecture/Design-Specs/2026-
 - UI `src/lib`: 810 before, 827 after, 0 fail. Server suite: 705 before, 705 after, 0 fail. ui-core is unchanged.
 - `svelte-check`: 0 errors, 0 warnings. `bun run --cwd apps/cortex typecheck` is clean. The UI build passes.
 - `bun run repo verify apps/cortex`: green. `bun run repo check --changed`: 17 pass, 0 fail.
+
+## Addendum: approval rules editor (2026-11-11, cortex-warden)
+
+Two follow-ups above are closed:
+
+- **Abstained runs read Failed.** Runs now store their ending (`cortex_runs.ending`, ui-core `turnOutcomeOf` over `AgentCompleted`, backfilled once from each run's last `AgentCompleted`). Runs and Beacon read it through `runRowStatus`. Checked live: a `qwen3:14b` chat turn that abstained reads **Abstained** in Runs and on Beacon; the credit-failure run beside it still reads **Failed**.
+- **No Approve / Deny in the run view.** The header shows `Approve <call>?` with **Approve** and **Deny** while a run waits on an approval (the endpoints take the approval's durable run id). Checked live: approving from the header resumed the paused chat run.
+
+New: the Lab builder (Reasoning, **Approvals**) and chat (`/approvals`) edit the framework's `approvalPolicy`: tools, shell command rules and the mode.
+
+Live check (stack on 4417/5217, scratch DB, scratch git repo, `ollama` `qwen3:14b`, `tools: ["git"]`, rule `git commit`, mode `detach`):
+
+1. The Lab editor normalized `git   commit` to `git commit` and switched durable execution on.
+2. The chat turn paused on `git commit -m "Add second line"`. Approved from the run view header, it ran (nothing staged, so git committed nothing).
+3. The agent then asked for `git add notes.txt && git commit …`, which paused (segment match). Approved from the chat card, the read-only `git` preset still refused `git add`: only rule-matched writes run after approval. That is the framework's documented rule, and the docs now say it.
+4. `/approvals add git add` added the rule from the chat menu. The next turn paused on the same command; nothing was committed until **Approve**. After Approve, commit `0288fa2 Add second line` landed.
+
+Findings for other owners:
+
+| Finding | Owner |
+|---|---|
+| A run approved with a command that holds an unmatched write segment (`git add` with only a `git commit` rule) is refused after the user approved it. The approval card does not say that part will be refused. Showing which segments the read-only shell will refuse, before the user decides, needs the matcher exposed from `@reactive-agents/tools`. | tools / ui-core |
+| A gated `shell-execute` that the framework auto-gates (full shell) and the read-only preset both report as `shell-execute`, so the approval card cannot tell the user which shell asked. | tools |
+| The Runs status segment groups Abstained and Partial with **Waiting** (all are the ui-core `attention` tone). The label reads as "waiting on you". | cortex follow-up: rename the segment, or split it |
+
+Verification: server suite 705 before, 720 after, 0 fail. UI `src/lib` 827 before, 847 after, 0 fail. `bun run --cwd apps/cortex typecheck`, `svelte-check` and the UI build are clean. Pins proven by reverting the ingest ending write and the AgentConfig `approvalPolicy` mapping (2 tests failed, then passed when restored).

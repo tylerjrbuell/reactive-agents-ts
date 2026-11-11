@@ -4,6 +4,7 @@
  */
 import { type AgentConfig, type CortexAgentToolConfig, defaultConfig } from "./types/agent-config.js";
 import { formatRelativeTime } from "@reactive-agents/ui-core";
+import { approvalPolicyFrom } from "./approval-policy.js";
 
 /** The Builder's config: AgentConfig plus the builder-only blocks it always carries. */
 export type BuilderAgentConfig = AgentConfig & {
@@ -153,6 +154,10 @@ export function prefillFromSnapshot(current: BuilderAgentConfig, snapshot: Recor
   for (const key of SNAPSHOT_PREFILL_KEYS) {
     if (snapshot[key] !== undefined && snapshot[key] !== null) patch[key] = snapshot[key];
   }
+  // The approval gate: the snapshot's server shape (or an old durableRuns one) → the builder shape.
+  if (snapshot.approvalPolicy !== undefined || snapshot.durableRuns !== undefined) {
+    patch.approvalPolicy = approvalPolicyFrom(snapshot);
+  }
   // Merge OVER current config so omitted / newly-added fields keep defaults.
   return { ...current, ...patch } as BuilderAgentConfig;
 }
@@ -180,6 +185,9 @@ export function builderConfigFromAgent(defaults: BuilderAgentConfig, sourceConfi
     },
     taskContext: { ...defaults.taskContext, ...(sourceConfig.taskContext ?? {}) },
     healthCheck: sourceConfig.healthCheck ?? defaults.healthCheck,
+    // Stored configs carry the approval gate in the server shape (or the old durableRuns one).
+    durableRuns: { enabled: sourceConfig.durableRuns?.enabled === true },
+    approvalPolicy: approvalPolicyFrom(sourceConfig as unknown as Record<string, unknown>),
     skills: {
       paths: [...(sourceConfig.skills?.paths ?? defaults.skills.paths)],
       ...(sourceConfig.skills?.activate?.length

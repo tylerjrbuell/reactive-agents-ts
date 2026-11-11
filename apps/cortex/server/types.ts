@@ -84,6 +84,12 @@ export interface RunSummary {
   readonly model?: string;
   readonly strategy?: string;
   readonly errorMessage?: string;
+  /**
+   * How the run ended, from its AgentCompleted (ui-core `TurnEnding`): `abstained`
+   * and `partial` runs have status `failed` but are not failures. Unset while live
+   * and on runs that never completed.
+   */
+  readonly ending?: string;
   /** Delegation context from AgentStarted (sub-agent runs only for parentRunId). */
   readonly parentRunId?: string;
   readonly rootRunId?: string;

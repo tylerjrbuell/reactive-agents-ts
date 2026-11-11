@@ -1,4 +1,5 @@
 /** Shared AgentConfig type and defaults used across Cortex UI */
+import { approvalPolicyFrom, defaultApprovalPolicy, type ApprovalPolicyConfig } from "../approval-policy.js";
 
 /** Matches server `CortexAgentToolEntry` for POST /api/runs and saved gateway config. */
 export type CortexAgentToolConfig =
@@ -177,18 +178,16 @@ export interface AgentConfig {
   taskContext: Record<string, string>;
   /** Enables framework health probes (`agent.health()`). */
   healthCheck: boolean;
-  /**
-   * Durable execution (v0.12): crash-resume via SQLite RunStore + durable HITL.
-   * `approvalTools` are tool names that pause the run for human approval
-   * (surfaced in the Approval panel on the runs page). Forces the reasoning
-   * kernel on. Framework: `.withDurableRuns()` / `.withApprovalPolicy()`.
-   */
+  /** Durable execution (v0.12): crash-resume via SQLite RunStore. Framework: `.withDurableRuns()`. */
   durableRuns: {
     enabled: boolean;
-    approvalTools: string[];
-    /** `detach`: the run pauses and resumes after approval. `block`: the run waits in place. */
-    approvalMode?: "detach" | "block";
   };
+  /**
+   * Which tool calls and shell commands need approval, and what happens then:
+   * the framework's `AgentConfig.approvalPolicy` (`.withApprovalPolicy()`).
+   * Empty lists = no gate. Rules in `lib/approval-policy.ts`.
+   */
+  approvalPolicy: ApprovalPolicyConfig;
   /**
    * Typed structured output (v0.12): a JSON Schema (as text) the run's answer is
    * extracted into. Empty = off. Sent as `outputSchema` → `.withOutputSchema()`;
@@ -256,17 +255,13 @@ export function hydrateAgentConfig(raw: Record<string, unknown>): AgentConfig {
   const cfg = { ...base, ...(raw as Partial<AgentConfig>) };
   const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
   const dr = obj(raw.durableRuns);
-  const policy = obj(dr.approvalPolicy);
-  const tools = Array.isArray(dr.approvalTools) ? dr.approvalTools : Array.isArray(policy.tools) ? policy.tools : [];
   return {
     ...cfg,
     terminalShellOptions: { ...defaultShellOptions(), ...obj(raw.terminalShellOptions) } as ShellOptions,
     guardrails: { ...base.guardrails, ...obj(raw.guardrails) } as AgentConfig["guardrails"],
-    durableRuns: {
-      enabled: dr.enabled === true,
-      approvalTools: tools.filter((t): t is string => typeof t === "string"),
-      approvalMode: dr.approvalMode === "block" || policy.mode === "block" ? "block" : "detach",
-    },
+    durableRuns: { enabled: dr.enabled === true },
+    // Old saves kept the gate under durableRuns; approvalPolicyFrom reads both shapes.
+    approvalPolicy: approvalPolicyFrom(raw),
     rawConfig: Object.keys(obj(raw.rawConfig)).length > 0 ? obj(raw.rawConfig) : {},
     outputSchemaOnParseFail: raw.outputSchemaOnParseFail === "throw" ? "throw" : "degrade",
     // The panel edits these as JSON text; the server stores them parsed.
@@ -292,7 +287,8 @@ export function defaultConfig(): AgentConfig {
     maxIterations: 10,
     minIterations: 0,
     strategySwitching: false,
-    durableRuns: { enabled: false, approvalTools: [], approvalMode: "detach" },
+    durableRuns: { enabled: false },
+    approvalPolicy: defaultApprovalPolicy(),
     outputSchema: "",
     outputSchemaOnParseFail: "degrade",
     budget: { tokenLimit: 0, costLimit: 0 },

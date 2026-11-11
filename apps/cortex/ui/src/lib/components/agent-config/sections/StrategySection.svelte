@@ -2,10 +2,11 @@
   import ConfigSection from "../ConfigSection.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
-  import Icon from "$lib/components/kit/Icon.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
   import OutputSchemaParseFailField from "$lib/components/OutputSchemaParseFailField.svelte";
   import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
+  import ApprovalPolicyFields from "../ApprovalPolicyFields.svelte";
+  import { hasApprovalGate } from "$lib/approval-policy.js";
   import type { AgentConfig } from "$lib/types/agent-config.js";
   import type { CapabilityManifest } from "$lib/capabilities.js";
   import type { PanelAgentConfig, StrategyOption } from "../types.js";
@@ -99,32 +100,12 @@
           </div>
         </div>
         <Switch id="acp-durable-runs" label="Durable execution"
-          hint="Resumes after a crash and can pause for your approval (survives a restart). Turns reasoning on."
+          hint="Resumes after a crash, and keeps a run that waits for your approval across a restart. Turns reasoning on."
           checked={config.durableRuns.enabled}
           onchange={(on) => (config = { ...config, durableRuns: { ...config.durableRuns, enabled: on } })} />
-        {#if config.durableRuns.enabled}
-          <div class="acp-card">
-            <span class="config-label mb-0">Approval-gated tools</span>
-            {#if config.tools.length === 0}
-              <p class="acp-hint">Add tools first; a gated tool pauses the run until you approve it.</p>
-            {:else}
-              <div class="acp-chips" role="group" aria-label="Approval-gated tools">
-                {#each config.tools as toolName (toolName)}
-                  {@const gated = config.durableRuns.approvalTools.includes(toolName)}
-                  <button type="button" class="acp-toolchip" aria-pressed={gated}
-                    onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, approvalTools: gated ? config.durableRuns.approvalTools.filter((t) => t !== toolName) : [...config.durableRuns.approvalTools, toolName] } })}>
-                    {#if gated}<Icon name="check" size="sm" />{/if}{toolName}
-                  </button>
-                {/each}
-              </div>
-              <label for="acp-approval-mode" class="config-label mt-2">When a gated tool is called</label>
-              <select id="acp-approval-mode" class="config-input" value={config.durableRuns.approvalMode ?? "detach"}
-                onchange={(e) => (config = { ...config, durableRuns: { ...config.durableRuns, approvalMode: (e.currentTarget as HTMLSelectElement).value === "block" ? "block" : "detach" } })}>
-                <option value="detach">Pause the run; it resumes after approval</option>
-                <option value="block">Wait in place until approved</option>
-              </select>
-            {/if}
-          </div>
+        <ApprovalPolicyFields bind:config />
+        {#if !config.durableRuns.enabled && config.approvalPolicy.mode === "detach" && hasApprovalGate(config.approvalPolicy)}
+          <p class="acp-hint">Pausing for approval needs durable execution, so runs of this agent use it.</p>
         {/if}
         <Switch id="acp-strategy-switching" label="Switch strategy when stuck"
           hint="The framework may move to another strategy when the agent stops making progress."

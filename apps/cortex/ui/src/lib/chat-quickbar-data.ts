@@ -19,9 +19,11 @@ export interface QuickbarCatalog {
   readonly presets: readonly { name: string; config: Record<string, unknown> }[];
   /** Ranked workspace suggestions (launch project first, then recent). */
   readonly workspaces: readonly WorkspaceCandidate[];
+  /** Tools the framework gates by itself once any approval is set (`GET /api/tools/approval-required`). */
+  readonly approvalRequired: readonly string[];
 }
 
-export const EMPTY_CATALOG: QuickbarCatalog = { strategies: [], toolsets: {}, shellPresets: {}, builtinTools: [], mcpServers: [], presets: [], workspaces: [] };
+export const EMPTY_CATALOG: QuickbarCatalog = { strategies: [], toolsets: {}, shellPresets: {}, builtinTools: [], mcpServers: [], presets: [], workspaces: [], approvalRequired: [] };
 
 async function getJson<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -33,7 +35,7 @@ async function getJson<T>(path: string, fallback: T): Promise<T> {
 }
 
 export async function loadQuickbarCatalog(): Promise<QuickbarCatalog> {
-  const [manifest, toolsets, shellPresets, catalog, mcp, agents, workspaces] = await Promise.all([
+  const [manifest, toolsets, shellPresets, catalog, mcp, agents, workspaces, approvalRequired] = await Promise.all([
     loadCapabilities().catch(() => null),
     getJson<Record<string, string[]>>("/api/tools/toolsets", {}),
     getJson<Record<string, string[]>>("/api/tools/shell-presets", {}),
@@ -41,6 +43,7 @@ export async function loadQuickbarCatalog(): Promise<QuickbarCatalog> {
     getJson<{ serverId: string; name: string; tools?: { toolName: string }[] }[]>("/api/mcp-servers", []),
     getJson<{ name: string; config?: Record<string, unknown> }[]>("/api/agents", []),
     workspaceCandidates().then((r) => r.candidates),
+    getJson<{ tools: string[] }>("/api/tools/approval-required", { tools: [] }).then((r) => r.tools),
   ]);
   return {
     strategies: manifest?.strategies.map((s) => ({ value: s.name, label: s.label, description: s.description })) ?? [],
@@ -55,5 +58,6 @@ export async function loadQuickbarCatalog(): Promise<QuickbarCatalog> {
       .filter((a) => a.config && (Array.isArray(a.config.tools) || Array.isArray(a.config.mcpServerIds)))
       .map((a) => ({ name: a.name, config: a.config! })),
     workspaces,
+    approvalRequired,
   };
 }

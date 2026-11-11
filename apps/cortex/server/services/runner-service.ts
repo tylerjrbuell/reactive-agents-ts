@@ -21,6 +21,7 @@ import type {
 } from "./cortex-agent-config.js";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
 import { resolveLaunchPayload } from "./resolve-template.js";
+import type { CortexApprovalPolicy } from "./approval-policy.js";
 import type { VariableDef } from "./resolve-template.js";
 import type { ReactiveAgent } from "@reactive-agents/runtime";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -108,18 +109,18 @@ export interface LaunchParams {
    * partial nested AgentConfig (manifest configField paths). Deep-merged under
    * the curated config; see cortex-to-agent-config.ts. */
   readonly rawConfig?: Record<string, unknown>;
-  /**
-   * Durable execution (v0.12) — opt-in crash-resume + durable HITL.
-   * `enabled` wires `.withDurableRuns(...)`; `approvalPolicy.tools` additionally
-   * wires `.withApprovalPolicy(...)` so the run pauses (`awaiting-approval`) on
-   * those tools and can be approved/denied from the desk.
-   */
+  /** Durable execution (v0.12) — opt-in crash-resume: `enabled` wires `.withDurableRuns(...)`. */
   readonly durableRuns?: {
     readonly enabled?: boolean;
     readonly checkpointEvery?: number;
     readonly dir?: string;
-    readonly approvalPolicy?: { tools?: string[]; mode?: "detach" | "block" };
   };
+  /**
+   * Approval gate (`AgentConfig.approvalPolicy`): tools and shell command rules
+   * that need approval. A `detach` run pauses (`awaiting-approval`) and is
+   * approved or denied from the desk.
+   */
+  readonly approvalPolicy?: CortexApprovalPolicy;
   /**
    * Test-only: scripted `test`-provider turns (`.withTestScenario`). Not exposed
    * on any HTTP route schema — for driving the real `start()` path deterministically
@@ -191,6 +192,7 @@ export function launchParamsToBuildParams(
     ...(params.documents && params.documents.length > 0 ? { documents: [...params.documents] } : {}),
     ...(params.rawConfig && Object.keys(params.rawConfig).length > 0 ? { rawConfig: params.rawConfig } : {}),
     ...(params.durableRuns?.enabled ? { durableRuns: params.durableRuns } : {}),
+    ...(params.approvalPolicy ? { approvalPolicy: params.approvalPolicy } : {}),
     ...(params.workspace ? { workspace: params.workspace } : {}),
     ...(params.terminalShellOptions ? { terminalShellOptions: params.terminalShellOptions } : {}),
     ...(params.testScenario && params.testScenario.length > 0

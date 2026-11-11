@@ -177,22 +177,45 @@ describe("mergeCortexAllowedTools", () => {
 });
 
 describe("normalizeCortexAgentConfig — v0.12 fields (saved-agent durable/structured)", () => {
-  test("converts UI durableRuns.approvalTools → approvalPolicy.tools (build shape)", () => {
+  type Normalized = { durableRuns?: Record<string, unknown>; approvalPolicy?: unknown };
+  test("migrates the old Lab shape durableRuns.approvalTools → top-level approvalPolicy", () => {
     const out = normalizeCortexAgentConfig({
       provider: "ollama",
       durableRuns: { enabled: true, approvalTools: ["file-read", "shell-execute"] },
-    }) as { durableRuns?: { enabled?: boolean; approvalPolicy?: { tools?: string[]; mode?: string } } };
-    expect(out.durableRuns?.enabled).toBe(true);
-    expect(out.durableRuns?.approvalPolicy?.tools).toEqual(["file-read", "shell-execute"]);
-    expect(out.durableRuns?.approvalPolicy?.mode).toBe("detach");
+    }) as Normalized;
+    expect(out.durableRuns).toEqual({ enabled: true });
+    expect(out.approvalPolicy).toEqual({ mode: "detach", tools: ["file-read", "shell-execute"] });
   });
-  test("accepts the build shape durableRuns.approvalPolicy.tools too", () => {
+  test("migrates the old build shape durableRuns.approvalPolicy too", () => {
     const out = normalizeCortexAgentConfig({
       provider: "ollama",
       durableRuns: { enabled: true, approvalPolicy: { tools: ["x"], mode: "block" } },
-    }) as { durableRuns?: { approvalPolicy?: { tools?: string[]; mode?: string } } };
-    expect(out.durableRuns?.approvalPolicy?.tools).toEqual(["x"]);
-    expect(out.durableRuns?.approvalPolicy?.mode).toBe("block");
+    }) as Normalized;
+    expect(out.durableRuns).toEqual({ enabled: true });
+    expect(out.approvalPolicy).toEqual({ mode: "block", tools: ["x"] });
+  });
+  test("an old gate under disabled durableRuns stays off (it never applied)", () => {
+    const out = normalizeCortexAgentConfig({
+      provider: "ollama",
+      durableRuns: { enabled: false, approvalTools: ["file-write"] },
+    }) as Normalized;
+    expect(out.approvalPolicy).toBeUndefined();
+  });
+  test("round-trips approvalPolicy with command rules; the top level wins over a legacy gate", () => {
+    const saved = {
+      provider: "ollama",
+      approvalPolicy: { mode: "detach", tools: ["file-write"], commands: ["git commit", "gh pr create"] },
+      durableRuns: { enabled: true, approvalTools: ["web-search"] },
+    };
+    const once = normalizeCortexAgentConfig(saved) as Normalized;
+    expect(once.approvalPolicy).toEqual({ mode: "detach", tools: ["file-write"], commands: ["git commit", "gh pr create"] });
+    // Stored then read back: unchanged.
+    expect((normalizeCortexAgentConfig(JSON.parse(JSON.stringify(once)) as Record<string, unknown>) as Normalized).approvalPolicy)
+      .toEqual(once.approvalPolicy);
+  });
+  test("an approvalPolicy with no tools and no rules is dropped (any policy also gates requiresApproval tools)", () => {
+    const out = normalizeCortexAgentConfig({ provider: "ollama", approvalPolicy: { mode: "block", tools: [], commands: ["  "] } }) as Normalized;
+    expect(out.approvalPolicy).toBeUndefined();
   });
   test("drops durableRuns when disabled", () => {
     const out = normalizeCortexAgentConfig({ provider: "ollama", durableRuns: { enabled: false } }) as { durableRuns?: unknown };

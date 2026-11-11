@@ -151,6 +151,8 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ...(body.workspace ? { workspace: body.workspace } : {}),
               ...(body.rawConfig && Object.keys(body.rawConfig).length > 0 ? { rawConfig: body.rawConfig } : {}),
               ...(body.durableRuns?.enabled ? { durableRuns: body.durableRuns } : {}),
+              // normalizeCortexAgentConfig moves a legacy durableRuns gate here.
+              ...(body.approvalPolicy ? { approvalPolicy: body.approvalPolicy } : {}),
             },
           });
           return { sessionId };

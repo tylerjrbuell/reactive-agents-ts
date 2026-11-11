@@ -9,8 +9,8 @@
   import { goto } from "$app/navigation";
   import Status from "$lib/components/kit/Status.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
-  import { formatCost, formatRelativeTime, formatTurnDuration, statusOfRun } from "@reactive-agents/ui-core";
-  import { RUN_SOURCE_LABEL, runDurationMs, runNameOf, runSourceOf, type RunRow } from "$lib/runs-table.js";
+  import { formatCost, formatRelativeTime, formatTurnDuration } from "@reactive-agents/ui-core";
+  import { RUN_SOURCE_LABEL, runDurationMs, runNameOf, runRowStatus, runSourceOf, type RunRow } from "$lib/runs-table.js";
 
   interface Props {
     pinned: readonly RunRow[];
@@ -44,7 +44,7 @@
 </script>
 
 {#snippet row(run: RunRow)}
-  {@const status = statusOfRun(run.status)}
+  {@const status = runRowStatus(run)}
   {@const isPinned = pinnedIds.has(run.runId)}
   {@const ms = runDurationMs(run, now)}
   <!-- The row is a large click target for the name link inside it; keyboard users reach the link. -->

@@ -29,15 +29,23 @@ describe("buildCortexAgent — durable runs enabler (Phase E1)", () => {
     const agent = await buildCortexAgent({
       provider: "test",
       agentId: "cortex-durable-2",
-      durableRuns: {
-        enabled: true,
-        dir: freshDir(),
-        approvalPolicy: { tools: ["shell-execute"], mode: "detach" },
-      },
+      durableRuns: { enabled: true, dir: freshDir() },
+      approvalPolicy: { tools: ["shell-execute"], mode: "detach" },
     });
     expect(agent.agentId).toBe("cortex-durable-2");
     expect(typeof agent.resumeRun).toBe("function");
     expect(typeof agent.approveRun).toBe("function");
+  }, 15000);
+
+  it("a detach approval policy turns durable runs on (no durableRuns: build would throw without it)", async () => {
+    const agent = await buildCortexAgent({
+      provider: "test",
+      agentId: "cortex-durable-3",
+      approvalPolicy: { mode: "detach", commands: ["git commit"] },
+    });
+    expect(agent.agentId).toBe("cortex-durable-3");
+    const pending = await agent.listPendingApprovals();
+    expect(Array.isArray(pending)).toBe(true);
   }, 15000);
 
   it("no durableRuns → durable methods still exist but no store wired (control)", async () => {

@@ -46,7 +46,7 @@ const PARAM_KEYS: Record<keyof BuildCortexAgentParams, true> = {
   auditRationale: true, memory: true, contextSynthesis: true, guardrails: true, persona: true,
   testScenario: true, streaming: true, outputSchema: true, outputSchemaOnParseFail: true,
   documents: true, budget: true, grounding: true, fabricationGuard: true, modelRouting: true,
-  rawConfig: true, durableRuns: true,
+  rawConfig: true, durableRuns: true, approvalPolicy: true,
 };
 
 /**
@@ -128,7 +128,8 @@ const fixture = (): Record<string, unknown> => ({
   fabricationGuard: "warn",
   modelRouting: { enabled: true, minTier: "haiku" },
   rawConfig: { profile: "lean" },
-  durableRuns: { enabled: true, approvalPolicy: { tools: ["file-write"], mode: "block" } },
+  durableRuns: { enabled: true },
+  approvalPolicy: { mode: "block", tools: ["file-write"], commands: ["git push"] },
 });
 
 function captureRunnerLayer(captured: { params: LaunchParams | null }) {

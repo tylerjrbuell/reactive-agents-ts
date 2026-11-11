@@ -33,6 +33,7 @@ import {
   type CortexSkillsConfig,
 } from "./cortex-agent-config.js";
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
+import type { CortexApprovalPolicy } from "./approval-policy.js";
 import { jsonSchemaToStandardSchema } from "./json-schema-output.js";
 
 export interface BuildCortexAgentParams {
@@ -184,19 +185,21 @@ export interface BuildCortexAgentParams {
   /**
    * Durable execution (v0.12) — opt-in crash-resume via SQLite RunStore.
    * When `enabled`, wires `.withDurableRuns(...)` so the run checkpoints and can
-   * be resumed by id (`agent.resumeRun`) after a process death. `approvalPolicy`
-   * additionally wires durable HITL (`.withApprovalPolicy`) — pauses on the
-   * listed tools and survives restart until `approveRun`/`denyRun`.
+   * be resumed by id (`agent.resumeRun`) after a process death.
    */
   readonly durableRuns?: {
     readonly enabled?: boolean;
     readonly checkpointEvery?: number;
     readonly dir?: string;
-    readonly approvalPolicy?: {
-      readonly tools?: string[];
-      readonly mode?: "detach" | "block";
-    };
   };
+  /**
+   * The framework approval policy's data half (`AgentConfig.approvalPolicy`):
+   * which tools and which shell commands need approval, and the mode. Sent
+   * through the AgentConfig (`cortexParamsToAgentConfig`). `detach` pauses the
+   * run durably, so it turns durable runs on (a pause needs a store to persist
+   * it). Read from any stored shape by `approvalPolicyOf`.
+   */
+  readonly approvalPolicy?: CortexApprovalPolicy;
 }
 
 /**
@@ -462,24 +465,22 @@ export async function buildCortexAgent(
     ) as typeof b;
   }
 
-  // Durable execution (v0.12) — opt-in crash-resume + durable HITL. Must be
-  // wired before `.withApprovalPolicy({ mode: "detach" })`, which build-guards
-  // on a durable store being present.
-  if (params.durableRuns?.enabled) {
+  // Durable execution (v0.12) — opt-in crash-resume + durable HITL. The approval
+  // policy itself rides the AgentConfig (`approvalPolicy`, applied above by
+  // agentConfigToBuilder). A `detach` policy pauses the run, and `build()` refuses
+  // a detach policy without a durable store, so the policy turns durable runs on:
+  // the user chose "pause until I approve", and that pause has to persist.
+  const durable = params.durableRuns?.enabled === true || params.approvalPolicy?.mode === "detach";
+  if (durable) {
     const opts: { dir?: string; checkpointEvery?: number } = {};
-    if (params.durableRuns.dir) opts.dir = params.durableRuns.dir;
-    if (params.durableRuns.checkpointEvery !== undefined) {
+    if (params.durableRuns?.dir) opts.dir = params.durableRuns.dir;
+    if (params.durableRuns?.checkpointEvery !== undefined) {
       opts.checkpointEvery = params.durableRuns.checkpointEvery;
     }
     b = b.withDurableRuns(opts);
     // Agentic-UI interaction rail: enables request_user_input pauses. Build-guarded
     // on durable runs (persists the pause + response to the durable store).
     b = b.withUserInteraction();
-
-    const ap = params.durableRuns.approvalPolicy;
-    if (ap && ap.tools && ap.tools.length > 0) {
-      b = b.withApprovalPolicy({ tools: ap.tools, mode: ap.mode ?? "detach" });
-    }
   }
 
   // Desk / runner pause, resume, and stop call ReactiveAgent.pause|resume|stop (KillSwitchService).

@@ -86,6 +86,12 @@ describe("beaconStatusOf", () => {
     expect(beaconStatusOf(node({ runId: "a", state: "completed", runStatus: "stopped" }), false).tone).toBe("stopped");
   });
 
+  it("an abstained or partial run reads so (attention), not a red Failed", () => {
+    expect(beaconStatusOf(node({ runId: "a", state: "error", runStatus: "failed", runEnding: "abstained" }), false)).toEqual({ tone: "attention", label: "Abstained" });
+    expect(beaconStatusOf(node({ runId: "a", state: "error", runStatus: "failed", runEnding: "partial" }), false).label).toBe("Partial");
+    expect(beaconStatusOf(node({ runId: "a", state: "error", runStatus: "failed", runEnding: "failed" }), false).label).toBe("Failed");
+  });
+
   it("an agent waiting on you needs you, even while its run is live", () => {
     expect(beaconStatusOf(node({ runId: "a", state: "running" }), true)).toEqual({ tone: "attention", label: "Waiting on you" });
   });

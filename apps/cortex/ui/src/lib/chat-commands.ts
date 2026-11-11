@@ -7,11 +7,11 @@ import type { IconName } from "./icons.js";
 export type ChatCommandName =
   | "clear" | "compact" | "fork" | "rerun" | "rewind" | "copy" | "export" | "rename" | "help"
   | "model" | "provider" | "thinking" | "skills" | "docs"
-  | "strategy" | "tools" | "terminal" | "workspace" | "iterations"
+  | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals"
   | "goal" | "plan" | "go" | "loop" | "schedule" | "agent";
 
 /** What `/cmd <partial>` offers as second-level choices. */
-export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations";
+export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals";
 
 export interface ChatCommand {
   readonly name: ChatCommandName;
@@ -44,6 +44,7 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "terminal", icon: "shell", summary: "Turn the shell off, on this machine, or in a Docker sandbox", arg: "[off|host|docker]", needsTurns: false, picker: "terminal" },
   { name: "workspace", icon: "folder", summary: "Set the directory file tools and the shell work in", arg: "[/absolute/path]", needsTurns: false, picker: "workspace" },
   { name: "iterations", icon: "steps", summary: "Cap the steps one turn may take", arg: "[number]", needsTurns: false, picker: "iterations" },
+  { name: "approvals", icon: "pause", summary: "Choose which tools and shell commands wait for your approval", arg: "[add <command>]", needsTurns: false, picker: "approvals" },
   { name: "goal", icon: "goal", summary: "Pursue an objective across several turns (propose, then accept)", arg: "<objective|pause|resume|cancel|status>", needsTurns: false },
   { name: "plan", icon: "checklist", summary: "Plan a task as a to-do list first (or show / hide the plan)", arg: "[task | show | hide]", needsTurns: false },
   { name: "go", icon: "play", summary: "Carry out the plan you just asked for (ends planning mode)", needsTurns: true },

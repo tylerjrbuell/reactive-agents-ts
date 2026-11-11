@@ -32,7 +32,7 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { pendingApprovals } from "$lib/stores/approval-watcher.js";
   import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
-  import { waitingRunsOf, waitingStatusOf } from "$lib/waiting-on-you.js";
+  import { runApprovalOf, waitingRunsOf, waitingStatusOf } from "$lib/waiting-on-you.js";
   import { countReasoningStepDisplayMessagesInRunEvents } from "@cortex/messages-extract";
   import {
     entropySeriesOf,
@@ -138,6 +138,29 @@
     ).get(runId),
   );
   const headerView = $derived(runHeaderStatus(waitingStatusOf($runStore.status, waiting), ending?.ending));
+  // Approve / Deny in the header while the run waits at an approval gate. The
+  // endpoints take the durable run id the approval carries (runApprovalOf).
+  const approval = $derived(runApprovalOf(waiting));
+  let deciding = $state(false);
+  async function decideApproval(action: "approve" | "deny") {
+    const target = approval;
+    if (!target) return;
+    deciding = true;
+    try {
+      const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(target.approvalRunId)}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(action === "deny" ? { reason: "Denied from Cortex" } : {}),
+      });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      pendingApprovals.update((list) => list.filter((a) => a.runId !== target.approvalRunId));
+      toast.success(action === "approve" ? "Approved" : "Denied", `${target.toolName}: ${target.detail}`);
+    } catch (e) {
+      toast.error(action === "approve" ? "Approve failed" : "Deny failed", e instanceof Error ? e.message : String(e));
+    } finally {
+      deciding = false;
+    }
+  }
   const entropy = $derived(entropySeriesOf($signalStore.entropy));
   const messageCount = $derived(countReasoningStepDisplayMessagesInRunEvents($runStore.events));
   const panelEvents = $derived($runStore.events.map((m: CortexLiveMsg) => ({ type: m.type, payload: m.payload, ts: m.ts })));
@@ -375,6 +398,9 @@
     onResume={() => void runStore.resume()}
     onStop={() => void runStore.stop()}
     onTerminate={() => void confirmTerminate()}
+    approval={approval
+      ? { toolName: approval.toolName, detail: approval.detail, busy: deciding, onApprove: () => void decideApproval("approve"), onDeny: () => void decideApproval("deny") }
+      : undefined}
   />
 
   <RunVitals vitals={$runStore.vitals} status={$runStore.status} {entropy} {replayLoop} {replayMax} {strategyLabel} />

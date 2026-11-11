@@ -13,6 +13,7 @@ import type { RunId } from "../types.js";
 import { readRunTraceFile } from "../services/run-trace-file.js";
 import { checkWorkspaceDir } from "../services/workspace-dir.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
+import { approvalPolicyOf } from "../services/approval-policy.js";
 
 /**
  * Body schema for `POST /api/runs`: the run-launch inputs plus the shared
@@ -63,6 +64,7 @@ export const runsRouter = (
         const agentTools = parseAgentToolEntries(b.agentTools);
         const variables = parseVariableDefs(b.variables);
         const tierModels = pickTierModels(b.modelRouting?.tierModels);
+        const approvalPolicy = approvalPolicyOf(b);
         const program = Effect.gen(function* () {
           const runner = yield* CortexRunnerService;
           return yield* runner.start({
@@ -130,7 +132,16 @@ export const runsRouter = (
                 }
               : {}),
             ...(b.rawConfig && typeof b.rawConfig === "object" && Object.keys(b.rawConfig).length > 0 ? { rawConfig: b.rawConfig } : {}),
-            ...(b.durableRuns?.enabled ? { durableRuns: b.durableRuns } : {}),
+            ...(b.durableRuns?.enabled
+              ? {
+                  durableRuns: {
+                    enabled: true,
+                    ...(b.durableRuns.dir ? { dir: b.durableRuns.dir } : {}),
+                    ...(b.durableRuns.checkpointEvery !== undefined ? { checkpointEvery: b.durableRuns.checkpointEvery } : {}),
+                  },
+                }
+              : {}),
+            ...(approvalPolicy ? { approvalPolicy } : {}),
             ...(ws?.ok ? { workspace: ws.path } : {}),
             ...(shellOptions ? { terminalShellOptions: shellOptions } : {}),
           });

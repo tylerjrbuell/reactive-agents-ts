@@ -6,6 +6,7 @@
 
 import type { DocumentSpec } from "@reactive-agents/runtime";
 import { migrateLegacyCliToolNames } from "./legacy-cli-tools.js";
+import { approvalPolicyOf } from "./approval-policy.js";
 
 function asFiniteNumber(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -349,26 +350,21 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
     delete out.grounding;
   }
 
+  // The approval gate is the framework's top-level `approvalPolicy` (mode, tools,
+  // commands). Older configs kept it under `durableRuns` (`approvalTools` /
+  // `approvalMode`, or `approvalPolicy`); approvalPolicyOf reads those too, so
+  // the first save after an upgrade moves them here.
+  const policy = approvalPolicyOf(raw);
+  if (policy) out.approvalPolicy = policy;
+  else delete out.approvalPolicy;
+
   const dr = raw.durableRuns;
   if (dr && typeof dr === "object" && !Array.isArray(dr) && (dr as { enabled?: boolean }).enabled) {
     const d = dr as Record<string, unknown>;
-    // Accept BOTH shapes: the UI config (`approvalTools: string[]`) and the
-    // build/runner shape (`approvalPolicy: { tools, mode }`). Normalize to the
-    // build shape (`approvalPolicy.tools`) that buildCortexAgent consumes.
-    const ap = d.approvalPolicy as { tools?: unknown; mode?: unknown } | undefined;
-    const policyTools = Array.isArray(ap?.tools)
-      ? (ap?.tools as unknown[])
-      : Array.isArray(d.approvalTools)
-        ? (d.approvalTools as unknown[])
-        : undefined;
-    const mode = ap?.mode === "block" || d.approvalMode === "block" ? "block" : "detach";
     out.durableRuns = {
       enabled: true,
       ...(typeof d.checkpointEvery === "number" ? { checkpointEvery: d.checkpointEvery } : {}),
       ...(typeof d.dir === "string" && d.dir.trim() !== "" ? { dir: d.dir.trim() } : {}),
-      ...(policyTools && policyTools.length > 0
-        ? { approvalPolicy: { tools: policyTools, mode } }
-        : {}),
     };
   } else {
     delete out.durableRuns;

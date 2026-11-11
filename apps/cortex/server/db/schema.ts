@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { deleteRun } from "./queries.js";
+import { backfillRunEndings, deleteRun } from "./queries.js";
 
 export function openDatabase(dbPath: string): Database {
   mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -245,6 +245,12 @@ export function applySchema(db: Database): void {
   if (!runCols.includes("context_run_id")) db.exec("ALTER TABLE cortex_runs ADD COLUMN context_run_id TEXT");
   if (!runCols.includes("depth")) db.exec("ALTER TABLE cortex_runs ADD COLUMN depth INTEGER");
   if (!runCols.includes("launch_params_json")) db.exec("ALTER TABLE cortex_runs ADD COLUMN launch_params_json TEXT");
+  // How a finished run ended (abstained / partial / failed / succeeded): an abstention
+  // shares the `failed` status. Filled from each stored run's last AgentCompleted once.
+  if (!runCols.includes("ending")) {
+    db.exec("ALTER TABLE cortex_runs ADD COLUMN ending TEXT");
+    backfillRunEndings(db);
+  }
 
   const agentCols = (db.prepare("PRAGMA table_info(cortex_agents)").all() as Array<{ name: string }>)
     .map((c) => c.name);

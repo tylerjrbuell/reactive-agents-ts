@@ -25,7 +25,7 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     id: "strategy",
     label: "Reasoning",
     icon: "psychology",
-    keywords: "strategy react plan execute tot tree reflexion adaptive iterations min max verification reflect runtime semantic entropy quality",
+    keywords: "strategy react plan execute tot tree reflexion adaptive iterations min max verification reflect runtime semantic entropy quality approval approve deny gate commands durable",
   },
   {
     id: "variables",

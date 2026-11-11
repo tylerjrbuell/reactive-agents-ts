@@ -9,7 +9,7 @@ import { CORTEX_SERVER_URL } from "../constants.js";
 import { buildRunHierarchy } from "../run-hierarchy.js";
 import { runStatusAfter } from "../run-live-status.js";
 import { isIdLike, taskHeadline } from "../run-view.js";
-import { formatCost } from "@reactive-agents/ui-core";
+import { formatCost, turnOutcomeOf } from "@reactive-agents/ui-core";
 
 export type AgentCognitiveState =
   | "idle"
@@ -70,6 +70,12 @@ export interface AgentNode {
    * `statusOfRun`, so a stopped run reads Stopped, not settled.
    */
   readonly runStatus?: string;
+  /**
+   * How the run ended (REST `ending`, else the live `AgentCompleted` through ui-core
+   * `turnOutcomeOf`): an `abstained` or `partial` run is `failed` by status but
+   * reads Abstained / Partial on Beacon (`runRowStatus`).
+   */
+  readonly runEnding?: string;
   /** Run start (ms epoch): REST `startedAt`, else the first live event. */
   readonly startedAt?: number;
   /** The task the run was given: `AgentStarted.task`, else the desk launch prompt. */
@@ -116,6 +122,8 @@ export interface RunSummaryDto {
   readonly depth?: number;
   readonly startedAt?: number;
   readonly errorMessage?: string;
+  /** How the run ended (server `cortex_runs.ending`). */
+  readonly ending?: string;
   readonly chatSessionId?: string;
   readonly chatSessionName?: string;
   /** Desk launch snapshot; its `prompt` is the run's task. */
@@ -253,6 +261,7 @@ function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
       model: run.model,
     }),
     runStatus: run.status,
+    ...(run.ending ? { runEnding: run.ending } : {}),
     ...(run.startedAt != null ? { startedAt: run.startedAt } : {}),
     ...(task ? { task } : {}),
     ...(run.errorMessage ? { errorMessage: run.errorMessage } : {}),
@@ -417,6 +426,9 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
                           ? existing.state
                           : seeded.state,
                     runStatus: socketEnded ? existing.runStatus : seeded.runStatus,
+                    ...((socketEnded ? existing.runEnding : seeded.runEnding ?? existing.runEnding)
+                      ? { runEnding: socketEnded ? existing.runEnding : seeded.runEnding ?? existing.runEnding }
+                      : {}),
                     ...(task ? { task } : {}),
                     ...(chatSessionName ? { chatSessionName } : {}),
                     ...(seeded.startedAt === undefined && existing.startedAt !== undefined
@@ -582,6 +594,8 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
           if (typeof msg.payload.totalTokens === "number") {
             patch.tokensUsed = Math.max(existing?.tokensUsed ?? 0, msg.payload.totalTokens);
           }
+          // Same classifier the server stores on `cortex_runs.ending`.
+          patch.runEnding = turnOutcomeOf(msg.payload).ending;
           break;
       }
 
@@ -662,6 +676,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         currentTool: existing?.currentTool,
         toolCalls: existing?.toolCalls,
         runStatus: existing?.runStatus,
+        runEnding: existing?.runEnding,
         startedAt: existing?.startedAt ?? (existing && existing.connectedAt > 0 ? existing.connectedAt : nowFn()),
         task: existing?.task,
         errorMessage: existing?.errorMessage,

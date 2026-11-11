@@ -4,9 +4,9 @@
  * the source of a run and how a live event updates a row. Status goes through
  * ui-core's one vocabulary (`statusOfRun`).
  */
-import { statusOfRun, type StatusTone } from "@reactive-agents/ui-core";
+import { statusOfRun, turnOutcomeOf, type StatusTone, type StatusView } from "@reactive-agents/ui-core";
 import { runStatusAfter } from "./run-live-status.js";
-import { isIdLike } from "./run-view.js";
+import { isIdLike, runHeaderStatus } from "./run-view.js";
 
 /** One row of `GET /api/runs` as the table holds it. */
 export interface RunRow {
@@ -15,6 +15,8 @@ export interface RunRow {
   readonly startedAt: number;
   readonly completedAt?: number;
   readonly status: string;
+  /** How the run ended (server `cortex_runs.ending`, ui-core `TurnEnding`): `abstained` and `partial` runs are `failed` by status. */
+  readonly ending?: string;
   readonly iterationCount: number;
   readonly tokensUsed: number;
   readonly cost: number;
@@ -31,6 +33,20 @@ export interface RunRow {
   /** Desk-run launch snapshot. */
   readonly launchParams?: Readonly<Record<string, unknown>>;
   readonly parentRunId?: string;
+}
+
+/** The two endings that end `failed` by status but are not failures. */
+function quietEnding(ending: string | undefined): "abstained" | "partial" | undefined {
+  return ending === "abstained" || ending === "partial" ? ending : undefined;
+}
+
+/**
+ * The status a run row shows: the shared run vocabulary, except that a run that
+ * abstained or ended partial reads so (attention, not a red Failed), the same
+ * rule as the run view header (`runHeaderStatus`). Beacon uses it too.
+ */
+export function runRowStatus(row: { readonly status: string; readonly ending?: string }): StatusView {
+  return runHeaderStatus(row.status, quietEnding(row.ending));
 }
 
 /** The status segment: every run, or one tone of the shared vocabulary. */
@@ -88,7 +104,7 @@ const lc = (s: string | undefined): string => (s ?? "").toLowerCase();
 export function filterRuns(rows: readonly RunRow[], search: string, status: RunStatusFilter): RunRow[] {
   const q = search.trim().toLowerCase();
   return rows.filter((r) => {
-    if (status !== "all" && statusOfRun(r.status).tone !== status) return false;
+    if (status !== "all" && runRowStatus(r).tone !== status) return false;
     if (!q) return true;
     return [r.runId, r.agentId, r.displayName, r.chatSessionName, r.agentRecordName, r.provider, r.model, r.strategy].some((f) =>
       lc(f).includes(q),
@@ -121,7 +137,7 @@ export function groupRuns(rows: readonly RunRow[], pinned: ReadonlySet<string>):
 export function statusCounts(rows: readonly RunRow[]): Record<RunStatusFilter, number> {
   const counts: Record<RunStatusFilter, number> = { all: rows.length, running: 0, attention: 0, done: 0, failed: 0, stopped: 0 };
   for (const r of rows) {
-    const tone = statusOfRun(r.status).tone;
+    const tone = runRowStatus(r).tone;
     if (tone !== "idle") counts[tone]++;
   }
   return counts;
@@ -215,6 +231,8 @@ export function applyRunLiveMessage(rows: readonly RunRow[], msg: RunLiveMessage
       const duration = msg.type === "AgentCompleted" ? num(p.durationMs) : undefined;
       patch = {
         ...(status !== undefined ? { status, completedAt: duration !== undefined ? base.startedAt + duration : now } : {}),
+        // The same classifier the server stores on `cortex_runs.ending`.
+        ...(msg.type === "AgentCompleted" ? { ending: turnOutcomeOf(p).ending } : {}),
         ...(total !== undefined && total > base.tokensUsed ? { tokensUsed: total } : {}),
       };
       break;

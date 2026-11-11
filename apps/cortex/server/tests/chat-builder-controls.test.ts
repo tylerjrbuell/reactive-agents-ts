@@ -52,13 +52,27 @@ describe("chat session → agent params", () => {
     const id = await svc.createSession({
       agentConfig: {
         provider: "test",
+        tools: ["file-write"],
         rawConfig: { profile: "lean", tools: { maxCallsPerTool: { "web-search": 2 } } },
         durableRuns: { enabled: true, approvalTools: ["file-write"], approvalMode: "block" },
       },
     });
     const p = paramsOf(id);
     expect(p.rawConfig).toEqual({ profile: "lean", tools: { maxCallsPerTool: { "web-search": 2 } } });
-    expect(p.durableRuns).toEqual({ enabled: true, approvalPolicy: { tools: ["file-write"], mode: "block" } });
+    // The Lab's legacy durableRuns gate becomes the framework's top-level approvalPolicy.
+    expect(p.durableRuns).toEqual({ enabled: true });
+    expect(p.approvalPolicy).toEqual({ mode: "block", tools: ["file-write"] });
+  });
+
+  it("forwards approvalPolicy command rules, and drops the gate for a tools-off chat", async () => {
+    const on = await svc.createSession({
+      agentConfig: { provider: "test", tools: ["git"], approvalPolicy: { mode: "detach", tools: ["file-write"], commands: ["git commit"] } },
+    });
+    expect(paramsOf(on).approvalPolicy).toEqual({ mode: "detach", tools: ["file-write"], commands: ["git commit"] });
+    const off = await svc.createSession({
+      agentConfig: { provider: "test", enableTools: false, approvalPolicy: { mode: "detach", commands: ["git commit"] } },
+    });
+    expect(paramsOf(off).approvalPolicy).toBeUndefined();
   });
 
   it("forwards workspace + shell options when tools are on", async () => {

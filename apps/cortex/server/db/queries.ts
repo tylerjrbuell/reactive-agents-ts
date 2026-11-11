@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { CortexIngestMessage, RunSummary } from "../types.js";
 import { deleteChatSessionsForRun } from "./chat-queries.js";
+import { runEndingOf } from "../services/run-ending.js";
 
 export function insertEvent(
   db: Database,
@@ -73,6 +74,8 @@ export function updateRunStats(
     tokensUsedTotal?: number;
     cost?: number;
     status?: string;
+    /** How the run ended (`runEndingOf` over AgentCompleted): `abstained`, `partial`, `failed`, `succeeded`. */
+    ending?: string;
     debrief?: string;
     completedAt?: number;
     /** SET only when not already stored (first-seen wins) */
@@ -113,6 +116,10 @@ export function updateRunStats(
     // `stopped`. A run that reports success after all is `completed`.
     sets.push(patch.status === "failed" ? "status = CASE WHEN status = 'stopped' THEN 'stopped' ELSE ? END" : "status = ?");
     values.push(patch.status);
+  }
+  if (patch.ending !== undefined) {
+    sets.push("ending = ?");
+    values.push(patch.ending);
   }
   if (patch.debrief !== undefined) {
     sets.push("debrief = ?");
@@ -183,6 +190,7 @@ type RunRow = {
   model: string | null;
   strategy: string | null;
   error_message: string | null;
+  ending: string | null;
   display_name: string | null;
   launch_params_json: string | null;
   parent_run_id: string | null;
@@ -246,6 +254,7 @@ function rowToRunSummary(row: RunRow): RunSummary {
     ...(row.model    ? { model:    row.model    } : {}),
     ...(row.strategy ? { strategy: row.strategy } : {}),
     ...(row.error_message ? { errorMessage: row.error_message } : {}),
+    ...(row.ending ? { ending: row.ending } : {}),
     ...(row.completed_at != null ? { completedAt: row.completed_at } : {}),
     ...(row.parent_run_id ? { parentRunId: row.parent_run_id } : {}),
     ...(row.root_run_id ? { rootRunId: row.root_run_id } : {}),
@@ -265,7 +274,7 @@ const runSelectBase = `
     r.run_id, r.agent_id, r.started_at, r.completed_at, r.status,
     r.iteration_count, r.tokens_used, r.cost_usd,
     (r.debrief IS NOT NULL) AS has_debrief,
-    r.provider, r.model, r.strategy, r.error_message,
+    r.provider, r.model, r.strategy, r.error_message, r.ending,
     r.display_name, r.launch_params_json,
     r.parent_run_id, r.root_run_id, r.context_run_id, r.depth,
     a.name AS agent_table_name, a.config AS agent_table_config,
@@ -492,6 +501,7 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
   let status: "live" | "completed" | "failed" | "stopped" = "live";
   let completedAt: number | null = null;
   let debrief: string | null = null;
+  let ending: string | null = null;
 
   for (const row of events) {
     const p = toObjectPayload(row.payload);
@@ -518,6 +528,7 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
         break;
       case "AgentCompleted":
         status = p.success === false ? (status === "stopped" ? "stopped" : "failed") : "completed";
+        ending = runEndingOf(p);
         completedAt = row.ts;
         break;
       case "TaskFailed":
@@ -544,12 +555,35 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
           cost_usd = ?,
           status = ?,
           completed_at = ?,
-          debrief = ?
+          debrief = ?,
+          ending = ?
       WHERE run_id = ?
     `,
-  ).run(iterationCount, tokensUsed, cost, status, completedAt, debrief, runId);
+  ).run(iterationCount, tokensUsed, cost, status, completedAt, debrief, ending, runId);
 
   return true;
+}
+
+/**
+ * Fill `cortex_runs.ending` for finished runs stored before the column existed,
+ * from each run's last `AgentCompleted` event. Runs with no such event stay NULL.
+ * Returns how many rows it set. Called once, when the migration adds the column.
+ */
+export function backfillRunEndings(db: Database): number {
+  const rows = db
+    .prepare(
+      `
+      SELECT e.run_id AS run_id, e.payload AS payload
+      FROM cortex_events e
+      JOIN cortex_runs r ON r.run_id = e.run_id
+      WHERE r.ending IS NULL AND e.type = 'AgentCompleted'
+        AND e.id = (SELECT MAX(e2.id) FROM cortex_events e2 WHERE e2.run_id = e.run_id AND e2.type = 'AgentCompleted')
+    `,
+    )
+    .all() as Array<{ run_id: string; payload: string }>;
+  const set = db.prepare("UPDATE cortex_runs SET ending = ? WHERE run_id = ?");
+  for (const row of rows) set.run(runEndingOf(toObjectPayload(row.payload)), row.run_id);
+  return rows.length;
 }
 
 // ─── Gateway Agent CRUD ──────────────────────────────────────────────────────

@@ -169,6 +169,22 @@ export function waitingRunsOf<R extends WaitingRunRef>(
   return out;
 }
 
+/** The approval a run waits on, as the run view header shows it. */
+export interface RunApproval {
+  /** The id the approve / deny endpoints take: the durable run id the approval carries (not the Cortex run id). */
+  readonly approvalRunId: string;
+  readonly toolName: string;
+  /** The call in short (`git commit -m "…"`). */
+  readonly detail: string;
+}
+
+/** The approval a run waits on (from {@link waitingRunsOf}); `undefined` when it waits on nothing or on a question. */
+export function runApprovalOf(waiting: WaitingFor | undefined): RunApproval | undefined {
+  if (waiting?.kind !== "approval") return undefined;
+  const a = waiting.approval;
+  return { approvalRunId: a.runId, toolName: a.toolName, detail: approvalDetail(a.args) };
+}
+
 /** Run statuses that mean the run is still going (the paused run publishes no terminal event). */
 const STILL_GOING = new Set(["live", "streaming", "running"]);
 

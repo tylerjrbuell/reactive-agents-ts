@@ -76,6 +76,7 @@ import { recordRunErrors, type RunErrorLog } from "./chat-run-errors.js";
 import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-control-tool.js";
 import type { SessionControlPort } from "./chat-proposal-service.js";
 import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval, type ChatPendingInteraction } from "./chat-approvals.js";
+import { approvalPolicyOf } from "./approval-policy.js";
 
 /**
  * Strategy names + aliases the framework registers (capability manifest), so a new strategy
@@ -1288,6 +1289,8 @@ let tokensUsed = 0;
       agentConfig.durableRuns && typeof agentConfig.durableRuns === "object" && (agentConfig.durableRuns as { enabled?: unknown }).enabled === true
         ? (agentConfig.durableRuns as NonNullable<BuildCortexAgentParams["durableRuns"]>)
         : undefined;
+    // The approval gate guards tool calls: a tools-off chat calls none, so it gets none.
+    const approvalPolicy = enableTools ? approvalPolicyOf(agentConfig) : undefined;
     // Workspace + shell options are tool-layer settings: a tools-off chat must not get a tool layer.
     const workspace = enableTools && typeof agentConfig.workspace === "string" && agentConfig.workspace.trim() !== ""
       ? agentConfig.workspace.trim()
@@ -1357,6 +1360,7 @@ let tokensUsed = 0;
       ...(auditRationale ? { auditRationale: true } : {}),
       ...(rawConfig && Object.keys(rawConfig).length > 0 ? { rawConfig } : {}),
       ...(durableRuns ? { durableRuns } : {}),
+      ...(approvalPolicy ? { approvalPolicy } : {}),
       ...(workspace ? { workspace } : {}),
       ...(terminalShellOptions ? { terminalShellOptions } : {}),
       ...(typeof agentConfig.minIterations === "number" && agentConfig.minIterations > 0

@@ -474,6 +474,7 @@
       case "terminal":
       case "workspace":
       case "iterations":
+      case "approvals":
         return; // second-level picks are executed from the menu rows
       case "goal":
       case "loop":
