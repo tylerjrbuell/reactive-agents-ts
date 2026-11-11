@@ -74,6 +74,8 @@ export interface TurnPassLocals {
   runCtl: RunControllerLike | null;
   /** `state.tokens` at pass start (token-delta guard baseline). */
   prevTokens: number;
+  /** `state.iteration` at pass start: progress fires only when the pass advanced it. */
+  iterationAtPassStart: number;
   /** W4.1 (e) — evidence-staleness iterations at pass start (ledger-derived). */
   evidenceStaleIterations: number;
   /** F3 marker: step count before the kernel step (failures appended THIS pass). */
@@ -100,6 +102,7 @@ export function openTurnScope(carrier: IterationCarrier): TurnScope {
     pass: {
       runCtl: null,
       prevTokens: 0,
+      iterationAtPassStart: 0,
       evidenceStaleIterations: 0,
       stepsAtPassStart: 0,
       groundingRedirectsAtPassStart: 0,
@@ -128,7 +131,7 @@ export interface TurnOperationSpec {
 /** The ordered turn — the pass's public shape (pinned). Order is behavior. */
 export const KERNEL_TURN_OPERATIONS = [
   { name: "run-control-checkpoint", reads: ["state"], writes: ["state", "pass.runCtl"], proposesExit: true },
-  { name: "iteration-start", reads: ["state.tokens", "state.iteration"], writes: ["pass.prevTokens"], proposesExit: false },
+  { name: "iteration-start", reads: ["state.tokens", "state.iteration"], writes: ["pass.prevTokens", "pass.iterationAtPassStart"], proposesExit: false },
   {
     name: "assess-pass-start",
     reads: ["state.meta.runContract", "state.meta.harnessPlan", "state.iteration"],
@@ -175,7 +178,7 @@ export const KERNEL_TURN_OPERATIONS = [
   },
   {
     name: "iteration-progress",
-    reads: ["state.steps", "carry.prevActionCount"],
+    reads: ["state.steps", "state.iteration", "carry.prevActionCount", "pass.iterationAtPassStart"],
     writes: ["carry.prevActionCount", "pass.toolsThisStep"],
     proposesExit: false,
   },
@@ -282,6 +285,7 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
   "iteration-start": (t, cfg) =>
     Effect.gen(function* () {
       t.pass.prevTokens = t.state.tokens;
+      t.pass.iterationAtPassStart = t.state.iteration;
 
       yield* cfg.emitLog({
         _tag: "iteration",
@@ -474,7 +478,13 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
         }
       }
       t.pass.toolsThisStep = toolsThisStep;
-      yield* cfg.hooks.onIterationProgress(t.state, toolsThisStep);
+      // One event per iteration, 1-based (core-events.ts contract). A tool turn
+      // spans two passes: think (status → acting, iteration unchanged) then act
+      // (iteration + 1). Firing every pass reported each iteration twice, the
+      // first at the previous number (0 on turn one; Cortex QA 2026-11-11).
+      if (t.state.iteration > t.pass.iterationAtPassStart) {
+        yield* cfg.hooks.onIterationProgress(t.state, toolsThisStep);
+      }
       t.prevActionCount = t.state.steps.length;
       return NEXT;
     }),

@@ -92,6 +92,16 @@ export type TemplatedTerminateReason =
  */
 export type RawTerminatedBy = TerminateReason | TemplatedTerminateReason;
 
+/**
+ * True when a raw `terminatedBy` names a durable pause (`awaiting-approval` /
+ * `awaiting-interaction`). A paused run ends `status:"done"` with a pause
+ * sentinel as its output, but it has produced no answer: observers must not
+ * be told it did (no `FinalAnswerProduced`).
+ */
+export function isDurablePauseReason(terminatedBy: unknown): boolean {
+  return terminatedBy === "awaiting-approval" || terminatedBy === "awaiting-interaction";
+}
+
 
 /**
  * Structural stand-in for `KernelState["status"]`. Declared locally so this

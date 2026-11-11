@@ -139,6 +139,17 @@ type PartialCompletion = {
   readonly attempts?: readonly StructuredAttemptReport[];
 };
 
+/**
+ * The provider label for both halves of the LLM bookend. The kernel sends
+ * `model` as a bare string, so the request itself rarely names the provider;
+ * the wrapped service does (`getModelConfig`, resolved once at layer build).
+ * One helper so START and COMPLETED never disagree (START read "unknown" for
+ * every string-model call while COMPLETED named the provider; QA 2026-11-11).
+ */
+function resolveProviderLabel(request: CompletionRequest, providerId: string | undefined): string {
+  return (typeof request.model === "object" ? request.model?.provider : undefined) ?? providerId ?? "unknown";
+}
+
 function emitForRequest(
   request: CompletionRequest,
   responseContent: string,
@@ -198,7 +209,7 @@ function emitForRequestWith(
     // The kernel sends `model` as a bare string, so the request itself never
     // names the provider. The wrapped service does (`getModelConfig`, resolved
     // once at layer build) — before this every real exchange read "unknown".
-    provider: (typeof request.model === "object" ? request.model?.provider : undefined) ?? providerId ?? "unknown",
+    provider: resolveProviderLabel(request, providerId),
     model: typeof request.model === "string" ? request.model : (request.model?.model ?? fullResponse?.model ?? "unknown"),
     requestKind: kind,
     systemPrompt: request.systemPrompt,
@@ -285,6 +296,7 @@ function emitLLMRequestStartedWith(
   request: CompletionRequest,
   requestKind: "complete" | "stream" | "completeStructured",
   ambientTaskId: string | undefined,
+  providerId: string | undefined,
 ): Effect.Effect<void, never> {
   return Effect.gen(function* () {
     const ebOpt = yield* Effect.serviceOption(EventBus);
@@ -316,10 +328,7 @@ function emitLLMRequestStartedWith(
         typeof request.model === "string"
           ? request.model
           : (request.model?.model ?? "unknown"),
-      provider:
-        typeof request.model === "string"
-          ? "unknown"
-          : (request.model?.provider ?? "unknown"),
+      provider: resolveProviderLabel(request, providerId),
       // contextSize is intentionally omitted here — there is no FREE way to
       // measure it before the provider call runs (a token count exists but
       // costs its own round-trip; a char/4 heuristic would be a fabricated
@@ -340,6 +349,7 @@ function emitLLMRequestStartedWith(
 const emitLLMRequestStarted = (
   request: CompletionRequest,
   requestKind: "complete" | "stream" | "completeStructured",
+  providerId: string | undefined,
 ): Effect.Effect<void, never> =>
   // Adaptive-harness wave 1 pattern (same as `emitForRequest`): read the
   // ambient FiberRef fresh here. Safe for `complete`/`completeStructured`
@@ -347,7 +357,7 @@ const emitLLMRequestStarted = (
   // needs the capture-once-at-open pattern (see `makeObservableLLM`).
   currentRunContext.pipe(
     Effect.flatMap((ambient) =>
-      emitLLMRequestStartedWith(request, requestKind, ambient ? runTaskId(ambient) : undefined),
+      emitLLMRequestStartedWith(request, requestKind, ambient ? runTaskId(ambient) : undefined, providerId),
     ),
   );
 
@@ -372,7 +382,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
         complete: (request) =>
           Effect.gen(function* () {
             const start = Date.now();
-            yield* emitLLMRequestStarted(request, "complete");
+            yield* emitLLMRequestStarted(request, "complete", providerId);
             const response = yield* inner.complete(request).pipe(
               Effect.tapError((err) =>
                 emitForRequest(request, "", Date.now() - start, "complete", undefined, providerId, describeLlmFailure(err)),
@@ -396,7 +406,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
         completeStructured: <A>(request: StructuredCompletionRequest<A>) =>
           Effect.gen(function* () {
             const start = Date.now();
-            yield* emitLLMRequestStarted(request, "completeStructured");
+            yield* emitLLMRequestStarted(request, "completeStructured", providerId);
             // Issue #232 Gap 1 + H3 instrument gap 1 — `completeStructured`
             // returns only the parsed value; the provider reports the summed
             // usage and per-attempt detail on the per-call StructuredUsageRef.
@@ -459,7 +469,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             // re-reading `CurrentRunBudget` could silently return null. The
             // captured reference is mutated in place at finalization.
             const ambientMeter = yield* FiberRef.get(CurrentRunBudget);
-            yield* emitLLMRequestStartedWith(request, "stream", ambientTaskId);
+            yield* emitLLMRequestStartedWith(request, "stream", ambientTaskId, providerId);
             const accum = yield* Ref.make<{
               content: string;
               toolCalls: { name: string; id: string; argsJson: string }[];

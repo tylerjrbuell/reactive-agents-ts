@@ -16,6 +16,7 @@ import type { KernelHooks, KernelState, EventBusInstance } from "./kernel-state.
 import type { SynthesizedContext } from "../../context/synthesis-types.js";
 import { ledgerEntriesForEvent, type LedgerEntry } from "../ledger/run-ledger.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
+import { isDurablePauseReason } from "../loop/terminate-reason.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /**
@@ -206,8 +207,13 @@ export function buildKernelHooks(eventBus: Option.Option<EventBusInstance>, agen
       return Effect.all(effects).pipe(Effect.asVoid);
     },
 
+    // A durable pause (approval / interaction) ends `status:"done"` with the
+    // pause sentinel as output. That is not an answer: publishing it as
+    // FinalAnswerProduced showed observers a "final answer" reading "Run
+    // paused — awaiting human approval." (Cortex QA 2026-11-11). The pause is
+    // reported by its own signal (`awaitingApprovalFor` / `RunPaused`).
     onDone: (state: KernelState): Effect.Effect<void, never> =>
-      publishReasoningStep(eventBus, {
+      isDurablePauseReason(state.meta.terminatedBy) ? Effect.void : publishReasoningStep(eventBus, {
         _tag: "FinalAnswerProduced",
         taskId: state.taskId,
         strategy: state.strategy,

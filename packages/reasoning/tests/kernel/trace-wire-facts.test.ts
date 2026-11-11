@@ -104,7 +104,8 @@ describe("wire facts through the normalized trace", () => {
     const trace = await runTraced();
     const ex = trace.flatMap((e) => (e.kind === "llm-exchange" ? [e] : []));
     expect(ex.length).toBeGreaterThan(0);
-    for (const e of ex) expect(e.provider).toBe("anthropic"); // TestLLMService.getModelConfig().provider
+    // TestLLMService.getModelConfig().provider ("test" since the 2026-11-11 provider-identity fix)
+    for (const e of ex) expect(e.provider).toBe("test");
   });
 
   it("wire-request records numCtx+source, output clamp, tool provenance and the per-turn surface diff", async () => {
