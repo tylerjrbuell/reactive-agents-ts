@@ -181,6 +181,7 @@ const MAXIMAL_CONFIG: AgentConfig = {
       writeCoverage: true,
       stableToolList: true,
       compactCallConstraints: true,
+      budgetAnswerTurn: true,
       llmRecoveryBudget: 3,
     },
   },
@@ -477,6 +478,7 @@ describe("HarnessConfigSchema <-> HarnessConfig bidirectional drift guard", () =
       writeCoverage: true,
       stableToolList: true,
       compactCallConstraints: true,
+      budgetAnswerTurn: true,
       llmRecoveryBudget: true,
       // disclosureMode is set only by `.withTools({ disclosure })`, never by
       // `.withHarness`, so it has no HarnessConfigSchema leaf.

@@ -162,6 +162,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.actOrAnswer` | `boolean` \| `"proactive"` \| `"auto"` | no |  |
 | `reasoning.harness.assemblyDebug` | `boolean` | no |  |
 | `reasoning.harness.auditRationale` | `boolean` | no |  |
+| `reasoning.harness.budgetAnswerTurn` | `boolean` | no |  |
 | `reasoning.harness.compactCallConstraints` | `boolean` | no |  |
 | `reasoning.harness.inputCoverage` | `boolean` | no |  |
 | `reasoning.harness.lazyDisclosure` | `boolean` | no |  |

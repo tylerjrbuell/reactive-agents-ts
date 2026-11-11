@@ -59,6 +59,16 @@ export const HarnessConfigSchema = Schema.Struct({
    */
   compactCallConstraints: Schema.optional(Schema.Boolean),
   /**
+   * Budget answer turn. Opt-in: when the run holds validated tool evidence, no
+   * tool work is outstanding and only the answer is missing, the last think
+   * call the iteration budget allows ships with no tools, so the model writes
+   * the answer instead of a tool call nobody answers. A verified reply ends
+   * the run as the model's own final answer; the harness never writes it. Off
+   * by default: the ablation verdict was OPT-IN (+1.9pp over 3 tiers, within
+   * noise). (`RA_BUDGET_ANSWER_TURN=1`)
+   */
+  budgetAnswerTurn: Schema.optional(Schema.Boolean),
+  /**
    * LLM recovery budget: how many recoverable provider failures on think
    * turns one run may retry instead of ending with `llm_error`. Malformed
    * model output is resampled; a request over the context window or the

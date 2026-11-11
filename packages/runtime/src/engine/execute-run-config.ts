@@ -148,6 +148,7 @@ export function buildRunConfigSnapshot(args: {
     inputCoverage: harness.inputCoverage === true,
     stableToolList: harness.stableToolList === true,
     compactCallConstraints: harness.compactCallConstraints === true,
+    budgetAnswerTurn: harness.budgetAnswerTurn === true,
     llmRecoveryBudget: llmRecoveryBudgetOf(harness),
   });
   const contract = config.taskContract;

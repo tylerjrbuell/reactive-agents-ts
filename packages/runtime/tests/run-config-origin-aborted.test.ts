@@ -230,6 +230,36 @@ describe("run-started config + origin", () => {
     }
   });
 
+  test(".withHarness({ budgetAnswerTurn: true }) is recorded as a mechanism (default off)", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const prior = process.env.RA_BUDGET_ANSWER_TURN;
+    delete process.env.RA_BUDGET_ANSWER_TURN;
+    try {
+      const on = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .withHarness({ budgetAnswerTurn: true })
+        .build();
+      const onMech = await mechanismsOf(on.run("budget-answer-turn pin"));
+      await on.dispose();
+      expect(onMech?.budgetAnswerTurn).toBe(true);
+
+      const off = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .build();
+      const offMech = await mechanismsOf(off.run("budget-answer-turn default pin"));
+      await off.dispose();
+      expect(offMech?.budgetAnswerTurn).toBe(false);
+    } finally {
+      if (prior !== undefined) process.env.RA_BUDGET_ANSWER_TURN = prior;
+    }
+  });
+
   test("llmRecoveryBudget is recorded as a mechanism (default 2; .withHarness({ llmRecoveryBudget: 0 }) gives 0)", async () => {
     const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
       const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
