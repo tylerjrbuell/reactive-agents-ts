@@ -107,3 +107,6 @@ note.md
 # wardens runtime state: the outcome ledger (per machine; summarize with `warden stats`).
 # The team itself is committed in .claude/wardens.yaml.
 .wardens/
+
+# Raw ablation traces stay local (multi-MB); receipts and scripts are committed.
+wiki/Research/Ablations/*/results/traces-*/
