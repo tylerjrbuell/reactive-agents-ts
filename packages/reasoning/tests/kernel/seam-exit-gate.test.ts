@@ -172,12 +172,11 @@ describe("seam-exit-gate (c): the iteration cap hands the evidence back, never a
     const kernel = scripted([(s) => read(`row ${++n}: value=${n * 10}`)(s)]);
     const { state, llm } = await run(kernel, [{ text: "Rows 1-4 report values 10, 20, 30 and 40." }], 4);
     expect(state.iteration).toBe(4); // the cap is a hard bound: never extended
-    // The last call was reserved as the answer turn (budget-answer-turn.ts);
-    // this scripted kernel reads anyway, so the cap then hands off.
-    expect(gateRecords(state)).toHaveLength(2);
-    // (answerTurnAt is the LLM-call count; this scripted kernel makes no LLM calls.)
-    expect(gateRecords(state)[0]).toMatchObject({ proposedBy: "max_iterations", gateDecision: "deny-once", answerTurnAt: 0 });
-    expect(gateRecords(state)[1]).toMatchObject({ proposedBy: "max_iterations", gateDecision: "handoff" });
+    // The budget answer turn is opt-in (budget-answer-turn.ts; on, it reserves
+    // the last call first, pinned in seam-budget-answer-turn.test.ts). Off by
+    // default, so the cap's handoff is the run's only gate record.
+    expect(gateRecords(state)).toHaveLength(1);
+    expect(gateRecords(state)[0]).toMatchObject({ proposedBy: "max_iterations", gateDecision: "handoff" });
     expect(state.status).toBe("failed");
     expect(state.output ?? null).toBeNull();
     expect(state.error).toContain("Outstanding: ");

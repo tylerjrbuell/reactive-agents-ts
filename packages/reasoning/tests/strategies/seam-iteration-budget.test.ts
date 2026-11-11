@@ -20,7 +20,7 @@ import { passIterationShare, passIterationsUsed } from "../../src/strategies/bud
 import { executeReflexion } from "../../src/strategies/reflexion.js";
 import { defaultReasoningConfig, type ReasoningConfig } from "../../src/types/config.js";
 import { succeedingToolLayer } from "../../src/testing/tool-service-mock.js";
-import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { buildRunEnvelope, provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 describe("passIterationShare: a pass's share of the run's iteration budget", () => {
   it("splits what is left evenly over the passes that may still run", () => {
@@ -104,6 +104,8 @@ const configWith = (maxIterations: number, kernelMaxIterations?: number): Reason
   },
 });
 
+// The budget answer turn (opt-in, `harness.budgetAnswerTurn`) marks where a
+// pass's share ends: its last call ships no tools. Both cases run with it on.
 const runReflexion = (config: ReasoningConfig, opts: { readonly silentAnswerTurn?: boolean } = {}) => {
   const model = reflexionModel(opts);
   return Effect.runPromise(
@@ -116,6 +118,7 @@ const runReflexion = (config: ReasoningConfig, opts: { readonly silentAnswerTurn
         availableToolSchemas: SCHEMAS,
         config,
       } as never).pipe(Effect.provide(Layer.merge(model.layer, succeedingToolLayer({ finding: EVIDENCE }, PARAMS)))),
+      buildRunEnvelope({ harness: { budgetAnswerTurn: true } }),
     ),
   ).then((result) => ({ result, offered: model.offered }));
 };

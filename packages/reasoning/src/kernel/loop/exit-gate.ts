@@ -829,6 +829,34 @@ export function proposeGuardExit(
 }
 
 /**
+ * The model's reply to the budget's answer turn as a final-answer deliverable,
+ * or undefined. Applies only once that turn was made and the cap is reached
+ * ({@link budgetAnswerTurnTaken}), to a thought written AFTER the reservation
+ * (the turn's own reply, not an earlier thought) that calls no tool, and only
+ * when nothing is outstanding with it as the answer. No draft-length bar: the
+ * harness asked for the answer, so a short one ("873 ms") is still the answer;
+ * {@link outstandingItems} and the terminal verify gate judge it. Pure.
+ */
+function answerTurnReplyExit(state: KernelState, input: KernelInput, maxIterations: number): Deliverable | undefined {
+  if (!budgetAnswerTurnTaken(state, maxIterations)) return undefined;
+  let reservedAt = -1;
+  for (let i = state.steps.length - 1; i >= 0 && reservedAt < 0; i--) {
+    if (state.steps[i]!.metadata?.exitGate !== undefined) reservedAt = i;
+  }
+  const shaped = unresolvedThoughtSet(state.steps);
+  for (let i = state.steps.length - 1; i > reservedAt; i--) {
+    const step = state.steps[i]!;
+    if (step.type !== "thought" || shaped.has(step) || (step.metadata?.assistantTurn?.callIds.length ?? 0) > 0) continue;
+    const text = deliverableTextOf(step).trim();
+    if (text.length === 0) continue;
+    if (evidenceAfter(state, i).length > 0) return undefined;
+    const d = modelSynthesisDeliverable({ type: "thought", content: text, iteration: state.iteration });
+    return outstandingItems(state, input, d).length === 0 ? d : undefined;
+  }
+  return undefined;
+}
+
+/**
  * The iteration cap as a proposal. Called once after the loop: when the loop
  * exited on the iteration / LLM-call cap with a non-terminal status, the cap
  * proposes `max_iterations`. Nothing outstanding → the existing cap outcome is
@@ -857,6 +885,21 @@ export function proposeCapExit(args: {
       extraMeta: { terminalSite: "iteration-cap" },
     };
     const taskId = currentOptions.taskId ?? state.taskId;
+    const reply = answerTurnReplyExit(state, currentInput, max);
+    if (reply !== undefined) {
+      // The budget's answer turn was the model's final answer and nothing is
+      // outstanding: it ends as one, not as the cap's partial handoff
+      // (ablation 2026-11-10 defect 1: 26/26 verified answers read partial).
+      // Proposed as the model's own exit, so the gate records and accepts it.
+      const answered = yield* proposeExit({
+        state,
+        proposal: { proposedBy: "model", kind: "soft", reason: "final_answer", deliverable: reply },
+        input: currentInput,
+        maxIterations: max,
+        taskId,
+      });
+      return answered.state;
+    }
     if (outstandingItems(state, currentInput, deliverable).length === 0 || !hasHandoffMaterial(state)) {
       yield* emitDisposition(taskId, state, {
         proposedBy: "max_iterations",

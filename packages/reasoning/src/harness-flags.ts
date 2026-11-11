@@ -239,6 +239,17 @@ export function stableToolListEnabled(): boolean {
 }
 
 /**
+ * Budget answer turn: when the run holds validated tool evidence and only the
+ * answer is outstanding, the last think call the iteration budget allows ships
+ * with no tools (`kernel/loop/budget-answer-turn.ts`). Default OFF: ablation
+ * 2026-11-10 measured +1.9pp over 3 tiers (within noise).
+ * `RA_BUDGET_ANSWER_TURN=1` enables it.
+ */
+export function budgetAnswerTurnEnabled(): boolean {
+  return readFlag("RA_BUDGET_ANSWER_TURN") === "1";
+}
+
+/**
  * Compact call constraints: compact tool profiles (`names-only`,
  * `names-and-types`) keep the description sentences that limit a parameter's
  * values, and the compact reference lists enum values as `a|b|c`

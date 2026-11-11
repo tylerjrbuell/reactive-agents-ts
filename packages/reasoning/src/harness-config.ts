@@ -38,6 +38,7 @@ import {
   writeCoverageEnabled,
   stableToolListEnabled,
   compactCallConstraintsEnabled,
+  budgetAnswerTurnEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -151,6 +152,16 @@ export interface HarnessConfig {
    */
   readonly compactCallConstraints?: boolean;
   /**
+   * Budget answer turn. When the run holds validated tool evidence, no tool
+   * work is outstanding and only the answer is missing, the last think call
+   * the iteration budget allows ships with no tools, so the model writes the
+   * answer instead of making a tool call nobody answers. A verified reply ends
+   * the run as the model's own final answer. The harness never writes it.
+   * Default OFF: ablation 2026-11-10 measured +1.9pp over 3 tiers (within
+   * noise). (`RA_BUDGET_ANSWER_TURN=1`)
+   */
+  readonly budgetAnswerTurn?: boolean;
+  /**
    * LLM recovery budget: how many recoverable provider failures on think turns
    * one run may retry. A think call that fails with a recoverable error class
    * is retried in the same turn instead of ending the run: malformed model
@@ -263,6 +274,8 @@ export interface ResolvedHarness {
   readonly stableToolList?: true;
   /** Compact call constraints (see `HarnessConfig.compactCallConstraints`). Present only when on. */
   readonly compactCallConstraints?: true;
+  /** Budget answer turn (see `HarnessConfig.budgetAnswerTurn`). Present only when on. */
+  readonly budgetAnswerTurn?: true;
   /**
    * LLM recovery budget (see `HarnessConfig.llmRecoveryBudget`), a whole number
    * in 0..10. Present only when configured; absent = {@link DEFAULT_LLM_RECOVERY_BUDGET}.
@@ -364,6 +377,7 @@ export function resolveHarnessConfig(
     ...(pick(config.compactCallConstraints, compactCallConstraintsEnabled())
       ? { compactCallConstraints: true as const }
       : {}),
+    ...(pick(config.budgetAnswerTurn, budgetAnswerTurnEnabled()) ? { budgetAnswerTurn: true as const } : {}),
     ...(llmRecoveryBudget !== undefined ? { llmRecoveryBudget } : {}),
   });
 }

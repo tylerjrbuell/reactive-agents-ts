@@ -61,7 +61,9 @@ const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly to
   // grounding-redirect turn.
   // 2026-11-10: +9, answer-turn hint on the generate pass's reserved last call;
   // llmCalls unchanged at 5 (owner approved).
-  reflexion: { llmCalls: 5, tokensUsed: 1838 },
+  // 2026-11-10: 1838 -> 1829: the budget answer turn is opt-in (ablation
+  // 2026-11-10, +1.9pp within noise), so that +9 hint is gone by default.
+  reflexion: { llmCalls: 5, tokensUsed: 1829 },
 };
 
 /** Aliases resolve to the same implementation; measure each implementation once. */

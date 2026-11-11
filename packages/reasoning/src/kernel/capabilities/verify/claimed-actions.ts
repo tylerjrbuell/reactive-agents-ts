@@ -154,6 +154,40 @@ export function unbackedClaimedActions(
   return out;
 }
 
+/** Action stems a task can request ("file a report", "send the email"). */
+const REQUEST_STEM = new RegExp(`\\b(${[...new Set(Object.values(ACTION_VERBS))].join("|")})\\b`, "gi");
+/** A sentence prefix that makes the stem not a request ("do not file", "without posting"). */
+const NOT_A_REQUEST = /\b(?:not|never|no|without)\b|n't\b/i;
+
+/**
+ * Tools the TASK asks the run to use for an action that none of them has done
+ * yet: an action stem in a task sentence ("then file a report ... using the
+ * report tool") matched to tool names the same way an answer's claim is
+ * ({@link unbackedClaimedActions}). Negated requests never count.
+ *
+ * Wide on purpose: a reader that withholds tools on this signal (the budget
+ * answer turn) only keeps the tools when it is wrong. Ablation 2026-11-10
+ * `wide-metric`: the compiled contract held only the answer requirement, the
+ * answer turn took the tools away, and `report_file` was never called (6/6).
+ */
+export function requestedActionTools(
+  task: string,
+  tools: readonly string[],
+  succeeded: ReadonlySet<string>,
+): readonly string[] {
+  const candidates = tools.filter((t) => !META_TOOLS.has(t) && !HARNESS_PSEUDO_TOOLS.has(t));
+  if (candidates.length === 0 || task.trim().length === 0) return [];
+  const out: string[] = [];
+  for (const m of task.matchAll(REQUEST_STEM)) {
+    const { sentence, before } = sentenceAt(task, m.index ?? 0);
+    if (NOT_A_REQUEST.test(before)) continue;
+    const matched = matchingTools((m[1] ?? "").toLowerCase(), sentence, candidates);
+    if (matched.length === 0 || matched.some((t) => succeeded.has(t))) continue;
+    for (const t of matched) if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
 /** The outstanding item an unbacked claim becomes (exit gate list, verifier reason). */
 export function describeUnbackedClaim(c: UnbackedClaim): string {
   const names = c.tools.map((t) => `\`${t}\``).join(" or ");

@@ -14,9 +14,16 @@
  * and the gate's own "write the answer now" guidance.
  *
  * The harness never writes the answer. The model's text then goes through the
- * normal model exit proposal and terminal verify gate, and ends the run as
- * success or (via the cap's draft handoff) partial. No evidence, required tool
- * work left, or nothing outstanding: no reservation, the run ends as before.
+ * normal model exit proposal and terminal verify gate. When the turn ends at
+ * the cap with nothing outstanding, the cap ends it as the model's final
+ * answer (`proposeCapExit`), not as a partial handoff. No evidence, required
+ * tool work left, an action the task asks for not yet done
+ * (`requestedActionTools`), or nothing outstanding: no reservation, the run
+ * ends as before.
+ *
+ * OPT-IN (`harness.budgetAnswerTurn`, `RA_BUDGET_ANSWER_TURN=1`): ablation
+ * wiki/Research/Ablations/2026-11-10-budget-answer-turn-ablation.md measured
+ * +1.9pp over 3 tiers, within noise.
  *
  * Recorded like every gate decision: a `deny-once` exit-gate record (with
  * `answerTurnAt`) on the step record, an `exit_gate` guard-fired event, and a
@@ -37,6 +44,7 @@ import {
   type ExitGateRecord,
 } from "./exit-gate.js";
 import { assembleDeliverable, collectValidatedObservations } from "./runner-helpers/deliverable.js";
+import { requestedActionTools, succeededToolNames } from "../capabilities/verify/claimed-actions.js";
 
 /** The guard name the reservation's trace event carries. */
 export const BUDGET_ANSWER_TURN_GUARD = "budget_answer_turn";
@@ -58,6 +66,7 @@ export function budgetAnswerTurnRecord(
   input: KernelInput,
   maxIterations: number,
 ): ExitGateRecord | undefined {
+  if (input.harness?.budgetAnswerTurn !== true) return undefined; // opt-in (ablation 2026-11-10)
   if (state.status !== "thinking" || !isLastThinkCall(state, maxIterations)) return undefined;
   const llmCalls = state.llmCalls ?? 0;
   if (lastExitGateRecord(state.steps)?.answerTurnAt === llmCalls) return undefined; // already reserved
@@ -65,6 +74,10 @@ export function budgetAnswerTurnRecord(
   const judged = assembleDeliverable(state);
   // Tool work left (a required tool, a write target): the last call keeps its tools.
   if (contractOutstanding(state, input, deliverableToContent(judged)).length > 0) return undefined;
+  // An answer-only contract can miss an action the task asks for ("file a
+  // report using the report tool"): while one is undone, the call keeps its tools.
+  const tools = (input.availableToolSchemas ?? []).map((t) => t.name);
+  if (requestedActionTools(input.task, tools, succeededToolNames(state.steps)).length > 0) return undefined;
   const outstanding = outstandingItems(state, input, judged);
   if (outstanding.length === 0) return undefined;
   return { proposedBy: "max_iterations", gateDecision: "deny-once", reason: "max_iterations", outstanding, answerTurnAt: llmCalls };
