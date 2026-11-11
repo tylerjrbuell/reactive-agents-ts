@@ -65,6 +65,27 @@ describe("seam-claimed-actions: a claimed action needs a successful matching too
     expect(unbackedClaimedActions("I've emailed the team.", ["email"], none).length).toBe(1);
   });
 
+  it("a passive sentence that names a third party as the doer is a fact, not the agent's claim", () => {
+    const none = new Set<string>();
+    const tools = ["github/createIssue", "report_file"];
+    for (const text of [
+      "Issue #12 was created by alice on Monday.",
+      "Issue #12 was created by @alice.",
+      "The incident report was filed by the on-call engineer.",
+    ]) {
+      expect({ text, n: unbackedClaimedActions(text, tools, none).length }).toEqual({ text, n: 0 });
+    }
+    // Still the agent's claim: no doer named, the agent named, or the agent's means.
+    for (const text of [
+      "Issue #12 was created.",
+      "The issue was created by me.",
+      "The issue has been created by us on GitHub.",
+      "The issue was created by calling the GitHub API.",
+    ]) {
+      expect({ text, n: unbackedClaimedActions(text, tools, none).length }).toEqual({ text, n: 1 });
+    }
+  });
+
   it("does not fire on non-claims or on verbs no tool name carries", () => {
     const none = new Set<string>();
     for (const text of [

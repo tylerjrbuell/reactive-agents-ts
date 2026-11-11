@@ -77,7 +77,8 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
     );
 
     if (Either.isLeft(streamInit)) {
-      return { _tag: "failed" as const, cause: streamInit.left.cause, discarded: NOTHING_STREAMED, state: transitionState(state, {
+      // An init failure never reached the stream, so no provider stream retry ran.
+      return { _tag: "failed" as const, cause: streamInit.left.cause, discarded: NOTHING_STREAMED, failedBeforeFirstEvent: false, state: transitionState(state, {
         status: "failed" as const,
         error: streamInit.left.message,
         output: null,
@@ -121,8 +122,13 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
     // The raw failure value (typed provider error), for the recoverable-failure
     // seam (think-call-recovery.ts), which keys its retry on the error class.
     let streamConsumeCause: unknown;
+    // Events of every kind this attempt received. A built-in provider re-sends a
+    // retryable stream failure only before its first event, so zero events on a
+    // failed stream means its retry schedule already ran (think-call-recovery.ts).
+    let eventsSeen = 0;
     yield* Stream.runForEach(llmStream, (event) =>
       Effect.gen(function* () {
+        eventsSeen++;
         if (event.type === "text_delta") {
           accumulatedContent += event.text;
           if (textDeltaCb) {
@@ -202,7 +208,7 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
         thinkingChars: accumulatedThinking.length,
         toolCalls: accumulatedToolCalls.length,
       };
-      return { _tag: "failed" as const, cause: streamConsumeCause, discarded, state: transitionState(state, {
+      return { _tag: "failed" as const, cause: streamConsumeCause, discarded, failedBeforeFirstEvent: eventsSeen === 0, state: transitionState(state, {
         status: "failed" as const,
         error: `LLM stream failed at iteration ${state.iteration}: ${explained}`,
         output: null,

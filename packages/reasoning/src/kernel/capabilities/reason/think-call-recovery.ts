@@ -21,11 +21,20 @@
  *                  most 10s) and re-send.
  *   - `fatal`    — no retry; the failure returns as-is (honest `llm_error`).
  *
+ * ONE RETRY LAYER PER FAILURE: the provider's stream retry (`retryPolicy`, 3
+ * retries) re-sends a retryable failure raised before the stream's first
+ * event. The kernel does not run `backoff`/`resample` again on such a failure
+ * (`providerSpentRetries`, stop reason `provider-retried`); it recovers what
+ * the provider cannot: failures after the stream emitted, init failures, and
+ * `shrink` (a different request).
+ *
  * BUDGET (per run, on a run slot; a sub-agent gets its own): at most
- * `llmRecoveryBudget` recoveries (default 2, `harness-config.ts`), and never the
- * same class retried three times in a row. A spent budget returns the failure
- * as-is. Outside a run scope there is no run to budget, so each call gets a
- * fresh budget.
+ * `llmRecoveryBudget` kernel recoveries (default 2, `harness-config.ts`), and
+ * never the same class retried three times in a row. Each recovery is one more
+ * think request; provider-level re-sends are not counted against it. A spent
+ * budget returns the failure as-is. Outside a run scope there is no run to
+ * budget, so each call gets a fresh budget. Within a turn, a lowered output
+ * budget (`maxOutputTokensOverride`) carries into every later attempt.
  *
  * ACCOUNTING: the retry happens inside the one think call, so the turn is one
  * iteration, one thought step and one entropy score. A failed attempt adds no
@@ -149,6 +158,30 @@ export function shrunkOutputBudget(sent: number | undefined): number {
   return Math.max(MIN_SHRUNK_OUTPUT_BUDGET, Math.floor(base * OUTPUT_SHRINK_FRACTION));
 }
 
+/**
+ * Whether the provider's own retry schedule already re-sent this failure.
+ * Built-in providers wrap every stream in `retryStreamBeforeFirstEmission`
+ * (llm-provider `retry.ts`): a retryable error raised on the stream before its
+ * first event is re-sent up to 3 times with backoff (malformed output with no
+ * delay) before it reaches the kernel. Re-running `backoff`/`resample` on top
+ * of that multiplies the calls (one turn could make ~12 and wait ~40s).
+ * Mirrors the provider's retry predicate structurally: the `retryable` flag
+ * when present, else the rate-limit tag. An init failure, or a failure after
+ * the stream emitted, was never re-sent. `shrink` sends a different request,
+ * so the provider never retries it and it is never "already spent".
+ */
+export function providerSpentRetries(
+  failure: FailureRecovery,
+  cause: unknown,
+  failedBeforeFirstEvent: boolean,
+): boolean {
+  if (!failedBeforeFirstEvent) return false;
+  if (failure.recovery !== "backoff" && failure.recovery !== "resample") return false;
+  const rec = asRecord(cause);
+  const retryable = rec?.["retryable"];
+  return retryable === true || (retryable === undefined && stringField(rec, "_tag") === "LLMRateLimitError");
+}
+
 /** The run's recovery ledger. A sub-agent gets its own. */
 export interface LlmRecoveryLedger {
   /** Recoveries this run has spent (every class). */
@@ -175,7 +208,7 @@ const runLedger: Effect.Effect<LlmRecoveryLedger> = Effect.flatMap(currentRunCon
 );
 
 /** Why a recoverable failure is not retried. */
-export type RecoveryStop = "fatal" | "budget" | "streak" | "shrink-spent";
+export type RecoveryStop = "fatal" | "budget" | "streak" | "shrink-spent" | "provider-retried";
 
 /** Decide whether a failure is retried. Pure. */
 export function recoveryStop(
@@ -227,6 +260,9 @@ export function callThinkWithRecovery(params: ThinkCallParams) {
     let call = first;
     // The request's thread: compacted by a prompt-side shrink, kept by every other retry.
     let messagesForRequest = prepare.messagesForRequest;
+    // The request's state: an output-side shrink lowers `max_tokens` on it, and
+    // every later retry in this turn keeps that (a prompt-side shrink too).
+    let attemptState = first.state;
     let attempt = 0;
     let streak = { errorClass: "", count: 0 };
     // Set once this call compacted (the shrink outcome facts below).
@@ -235,7 +271,9 @@ export function callThinkWithRecovery(params: ThinkCallParams) {
     while (stream._tag === "failed") {
       const failure = recoveryOfFailure(stream.cause);
       const outputSide = failure.recovery === "shrink" && isOutputSideShrink(failure, stream.cause);
-      const stop = recoveryStop(failure, ledger, budget, streak, outputSide);
+      const stop = providerSpentRetries(failure, stream.cause, stream.failedBeforeFirstEvent)
+        ? "provider-retried"
+        : recoveryStop(failure, ledger, budget, streak, outputSide);
       if (stop !== undefined) {
         const overflow = contextOverflowOf(stream.cause);
         if (compaction !== undefined) {
@@ -294,11 +332,8 @@ export function callThinkWithRecovery(params: ThinkCallParams) {
         // `max_tokens` is not. Lower it for this turn (normalize clears the
         // override after the turn); the prompt is re-sent unchanged.
         const budgetTokens = shrunkOutputBudget(call.outputBudgetSent);
-        call = yield* prepareThinkGatewayCall({
-          ...prepare,
-          state: transitionState(first.state, { maxOutputTokensOverride: budgetTokens }),
-          messagesForRequest,
-        });
+        attemptState = transitionState(first.state, { maxOutputTokensOverride: budgetTokens });
+        call = yield* prepareThinkGatewayCall({ ...prepare, state: attemptState, messagesForRequest });
       } else if (failure.recovery === "shrink") {
         ledger.shrinkSpent = true;
         const overflow = contextOverflowOf(stream.cause) ?? UNSTATED_OVERFLOW;
@@ -310,7 +345,7 @@ export function callThinkWithRecovery(params: ThinkCallParams) {
           messagesBefore: prepare.messagesForRequest.length,
           messagesAfter: messagesForRequest.length,
         };
-        call = yield* prepareThinkGatewayCall({ ...prepare, state: first.state, messagesForRequest });
+        call = yield* prepareThinkGatewayCall({ ...prepare, state: attemptState, messagesForRequest });
       } else if (waitMs > 0) {
         yield* Effect.sleep(Duration.millis(waitMs));
       }

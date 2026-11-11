@@ -31,6 +31,7 @@ import {
   backoffMs,
   isOutputSideShrink,
   MAX_BACKOFF_MS,
+  providerSpentRetries,
   recoveryOfFailure,
   recoveryStop,
   shrunkOutputBudget,
@@ -44,15 +45,36 @@ const PARTIAL = "GARBAGE-PARTIAL-SAMPLE";
 const malformed = () =>
   new LLMError({ message: "XML syntax error on line 1: unexpected EOF", provider: "ollama", errorClass: "malformed_output" });
 
-type Failure = "malformed-mid" | "malformed-init" | "rate-limit" | "auth" | "credit" | "quota" | "otpm";
+type Failure =
+  | "malformed-mid"
+  | "malformed-init"
+  | "malformed-mid-stated-wait"
+  | "rate-limit"
+  | "rate-limit-pre-emission"
+  | "rate-limit-mid"
+  | "auth"
+  | "credit"
+  | "quota"
+  | "otpm"
+  | "overflow";
 
-const failureOf = (f: Failure): LLMError | LLMRateLimitError => {
+/** Failures the stream raises after one text chunk (the provider retry schedule never re-sends those). */
+const MID_STREAM: ReadonlySet<Failure> = new Set(["malformed-mid", "malformed-mid-stated-wait", "rate-limit-mid"]);
+
+const failureOf = (f: Failure): LLMError | LLMRateLimitError | LLMContextOverflowError => {
   switch (f) {
     case "malformed-mid":
     case "malformed-init":
       return malformed();
+    case "malformed-mid-stated-wait":
+      // A resample class whose error also states a wait: a resample never waits.
+      return new LLMRateLimitError({ message: "bad output", provider: "groq", retryAfterMs: 5_000, errorClass: "malformed_output", retryable: true });
     case "rate-limit":
+    case "rate-limit-pre-emission":
+    case "rate-limit-mid":
       return new LLMRateLimitError({ message: "429", provider: "groq", retryAfterMs: 0, errorClass: "rate_limit", retryable: true });
+    case "overflow":
+      return new LLMContextOverflowError({ message: "prompt is too long: 9000 tokens > 8000 maximum", tokenCount: 9000, maxTokens: 8000, errorClass: "context_overflow" });
     case "quota":
       return new LLMRateLimitError({ message: "insufficient_quota", provider: "openai", retryAfterMs: 0, errorClass: "rate_limit", retryable: false });
     case "auth":
@@ -86,7 +108,10 @@ async function run(failures: readonly Failure[], harness = resolveHarnessConfig(
         requests.push(req);
         if (failure === undefined) return base.stream(req);
         const err = failureOf(failure);
-        if (failure !== "malformed-mid") return Effect.fail(err);
+        // Before any event, on the stream: what a built-in provider surfaces
+        // after `retryStreamBeforeFirstEmission` spent its schedule.
+        if (failure === "rate-limit-pre-emission") return Effect.succeed(Stream.fail(err));
+        if (!MID_STREAM.has(failure)) return Effect.fail(err);
         const partial: StreamEvent[] = [{ type: "text_delta", text: PARTIAL }];
         return Effect.succeed(Stream.concat(Stream.fromIterable(partial), Stream.fail(err)));
       },
@@ -187,6 +212,38 @@ describe("recoverable LLM failure on a think turn", () => {
     expect(requests[1]!.maxTokens!).toBeLessThan(requests[0]!.maxTokens ?? Number.POSITIVE_INFINITY);
   });
 
+  it("a failure the provider's own retry schedule already spent is not retried again by the kernel", async () => {
+    // A retryable error on the stream before any event: built-in providers
+    // already re-sent it 3 times with backoff (`retryStreamBeforeFirstEmission`).
+    const { result, signals, requests } = await run(["rate-limit-pre-emission"]);
+    expect(requests).toHaveLength(1);
+    expect(result.terminatedBy).toBe("llm_error");
+    expect(signals.map((s) => [s.signalKind, s.metadata?.reason])).toEqual([["block", "provider-retried"]]);
+    // CONTROL: after the stream emitted, the provider cannot re-send, so the kernel does.
+    const mid = await run(["rate-limit-mid"]);
+    expect(mid.requests).toHaveLength(2);
+    expect(mid.result.terminatedBy).not.toBe("llm_error");
+  });
+
+  it("a resample never sleeps, even when the error states a wait", async () => {
+    const t0 = Date.now();
+    const { result, signals } = await run(["malformed-mid-stated-wait"]);
+    expect(Date.now() - t0).toBeLessThan(2_000);
+    expect(result.terminatedBy).not.toBe("llm_error");
+    expect(signals[0]!.metadata).toMatchObject({ recovery: "resample" });
+    expect(signals[0]!.metadata?.waitMs).toBeUndefined();
+  });
+
+  it("a prompt-side shrink after an output-side shrink keeps the lowered max_tokens", async () => {
+    const { result, signals, requests } = await run(["otpm", "overflow"]);
+    expect(signals.map((s) => s.metadata?.shrinkTarget)).toEqual(["output", "prompt"]);
+    expect(result.terminatedBy).not.toBe("llm_error");
+    expect(requests).toHaveLength(3);
+    const lowered = requests[1]!.maxTokens!;
+    expect(lowered).toBeLessThan(requests[0]!.maxTokens ?? Number.POSITIVE_INFINITY);
+    expect(requests[2]!.maxTokens).toBe(lowered);
+  });
+
   it("a recovered turn is one iteration, one thought: no loop or no-progress step for the failed attempt", async () => {
     const clean = await run([]);
     const recovered = await run(["malformed-mid"]);
@@ -227,6 +284,19 @@ describe("think-call-recovery (seam pin)", () => {
     expect(recoveryStop(resample, fresh, 5, { errorClass: "network", count: 2 })).toBeUndefined();
     expect(recoveryStop(shrink, { used: 1, shrinkSpent: true }, 5, none)).toBe("shrink-spent");
     expect(recoveryStop(resample, fresh, 2, none)).toBeUndefined();
+  });
+
+  it("providerSpentRetries: only a provider-retryable backoff/resample failure before the stream's first event", () => {
+    const rl = failureOf("rate-limit");
+    expect(providerSpentRetries(recoveryOfFailure(rl), rl, true)).toBe(true);
+    expect(providerSpentRetries(recoveryOfFailure(rl), rl, false)).toBe(false);
+    // No `retryable` flag and not a rate-limit tag: the provider schedule skips it.
+    expect(providerSpentRetries(recoveryOfFailure(malformed()), malformed(), true)).toBe(false);
+    // shrink is a different request: never provider-retried.
+    const ovf = failureOf("overflow");
+    expect(providerSpentRetries(recoveryOfFailure(ovf), ovf, true)).toBe(false);
+    const quota = failureOf("quota");
+    expect(providerSpentRetries(recoveryOfFailure(quota), quota, true)).toBe(false);
   });
 
   it("backoffMs takes the stated retry-after, else doubles from 1s, capped at 10s", () => {

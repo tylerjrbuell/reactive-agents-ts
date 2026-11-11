@@ -16,7 +16,9 @@
  *
  * Precision first: only first-person or passive completed forms count, a
  * sentence with a negation, condition or future marker before the verb never
- * counts, and questions never count. Readers: the exit gate (a model exit is
+ * counts, and questions never count. A passive form counts only when it is
+ * the agent's: no doer named, "by me/us", or the agent's means ("by calling
+ * ..."). "Issue #12 was created by alice" is a third-party fact, not a claim. Readers: the exit gate (a model exit is
  * denied with the unmet action named) and the terminal verifier (reject).
  *
  * Pure, deterministic, no LLM.
@@ -63,6 +65,21 @@ const PASSIVE_CLAIM = new RegExp(
   `\\b(?:has|have|was|were|is|are)\\s+(?:now\\s+)?(?:been\\s+)?(?:successfully\\s+)?(${VERB_ALT})\\b`,
   "gi",
 );
+/** "by <doer>" right after a passive verb ("was created by alice"). */
+const PASSIVE_DOER = /^\s+by\s+@?([a-z0-9][\w'’-]*)/i;
+/** Doers that are the agent itself ("by me") or the agent's means ("by calling ..."). */
+const AGENT_DOER = /^(?:me|us|myself|ourselves|[a-z]+ing)$/i;
+
+/**
+ * True when the passive verb ending at `after` names a doer other than the
+ * agent: "Issue #12 was created by alice" reports a fact about someone else,
+ * not an action this run performed.
+ */
+const thirdPartyDoer = (after: string): boolean => {
+  const doer = PASSIVE_DOER.exec(after)?.[1];
+  return doer !== undefined && !AGENT_DOER.test(doer);
+};
+
 /** A sentence prefix that makes the verb not a completed claim. */
 const NOT_A_CLAIM =
   /\b(?:not|never|no|unable|cannot|can't|couldn't|didn't|wasn't|weren't|haven't|hasn't|isn't|failed to|if|once|when|would|should|could|will|won't|might|may|unless|before|until|whether)\b|n't\b/i;
@@ -145,6 +162,7 @@ export function unbackedClaimedActions(
       if (stem === undefined) continue;
       const { sentence, before } = sentenceAt(answer, idx);
       if (NOT_A_CLAIM.test(before) || answer[idx + sentence.length - before.length] === "?") continue;
+      if (pattern === PASSIVE_CLAIM && thirdPartyDoer(answer.slice(idx + m[0].length))) continue;
       const matched = matchingTools(stem, sentence, candidates);
       if (matched.length === 0 || matched.some((t) => succeeded.has(t))) continue;
       const phrase = sentence.trim().slice(0, 120);
