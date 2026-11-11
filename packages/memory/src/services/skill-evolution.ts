@@ -11,7 +11,8 @@ export class SkillEvolutionService extends Context.Tag("SkillEvolutionService")<
   {
     /**
      * Refine a skill's instructions using LLM based on recent episodic evidence.
-     * Skips locked skills. Creates a "candidate" version.
+     * Skips locked skills. Records the current version as "active" history
+     * (if absent) so a later rollback has a target, then creates a "candidate" version.
      * Also generates contentVariants (summary/condensed) via LLM, falling back to heuristic.
      */
     readonly refine: (
@@ -31,6 +32,7 @@ export class SkillEvolutionService extends Context.Tag("SkillEvolutionService")<
      * Check confidence promotion thresholds and promote if eligible.
      * tentative→trusted: 5+ uses, successRate >= 0.8
      * trusted→expert: 20+ uses, successRate >= 0.9
+     * Never promotes skills with evolutionMode "locked".
      */
     readonly checkPromotion: (
       skill: SkillRecord,
@@ -188,6 +190,23 @@ export const makeSkillEvolutionService = (llm?: MemoryLLM) =>
 
             const newInstructions = newInstructionsResult.value.content.trim();
 
+            // Record the current version as "active" history before adding the
+            // candidate. store.rollback restores version N-1 from skill_versions,
+            // so without this row a first refine could never be rolled back.
+            // Idempotent: skipped when the store already holds this version.
+            const stored = yield* store.get(skill.id);
+            const history = stored?.versionHistory ?? skill.versionHistory;
+            if (!history.some((v) => v.version === skill.version)) {
+              yield* store.addVersion(skill.id, {
+                version: skill.version,
+                instructions: skill.instructions,
+                config: skill.config,
+                refinedAt: skill.lastRefinedAt ?? skill.createdAt,
+                successRateAtRefinement: skill.successRate,
+                status: "active",
+              });
+            }
+
             // Create candidate version
             const newVersion: SkillVersion = {
               version: skill.version + 1,
@@ -254,6 +273,11 @@ export const makeSkillEvolutionService = (llm?: MemoryLLM) =>
 
         checkPromotion: (skill: SkillRecord) =>
           Effect.gen(function* () {
+            // Locked skills (e.g. installed/imported) never change confidence.
+            if (skill.evolutionMode === "locked") {
+              return { promoted: false };
+            }
+
             if (
               skill.confidence === "tentative" &&
               skill.useCount >= 5 &&

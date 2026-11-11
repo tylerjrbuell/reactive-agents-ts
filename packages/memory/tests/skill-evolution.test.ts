@@ -205,6 +205,63 @@ describe("SkillEvolutionService", () => {
     }), layer));
   });
 
+  it("root entry exports SkillEvolutionService and makeSkillEvolutionService", async () => {
+    const root = await import("../src/index.js");
+    expect(root.SkillEvolutionService).toBe(SkillEvolutionService);
+    expect(root.makeSkillEvolutionService).toBe(makeSkillEvolutionService);
+  });
+
+  it("refine() then a failing outcome lets checkRegression() roll back to v1", async () => {
+    const layer = makeLayer(mockLLM);
+    const skill = makeSkill({ successRate: 0.8 });
+    await Effect.runPromise(Effect.provide(Effect.gen(function* () {
+      const store = yield* SkillStoreService;
+      yield* store.store(skill);
+      const evo = yield* SkillEvolutionService;
+      const refined = yield* evo.refine(skill, [makeEpisode("Episode")]);
+      expect(refined.versionHistory.map((v) => [v.version, v.status])).toEqual([
+        [1, "active"],
+        [2, "candidate"],
+      ]);
+      const result = yield* evo.checkRegression({ ...refined, successRate: 0.4 });
+      expect(result.rolledBack).toBe(true);
+      const after = yield* store.get(skill.id);
+      expect(after!.version).toBe(1);
+      expect(after!.instructions).toBe(skill.instructions);
+    }), layer));
+  });
+
+  it("refine() does not duplicate the active history entry on a second refine", async () => {
+    const layer = makeLayer(mockLLM);
+    const skill = makeSkill();
+    await Effect.runPromise(Effect.provide(Effect.gen(function* () {
+      const store = yield* SkillStoreService;
+      yield* store.store(skill);
+      const evo = yield* SkillEvolutionService;
+      const first = yield* evo.refine(skill, [makeEpisode("Episode")]);
+      const second = yield* evo.refine(first, [makeEpisode("Episode")]);
+      expect(second.versionHistory.map((v) => v.version)).toEqual([1, 2, 3]);
+      // v2 keeps its candidate row; refine does not overwrite existing history
+      expect(second.versionHistory[1]!.status).toBe("candidate");
+    }), layer));
+  });
+
+  it("checkPromotion() never promotes a locked skill", async () => {
+    const layer = makeLayer(mockLLM);
+    for (const confidence of ["tentative", "trusted"] as const) {
+      const skill = makeSkill({ id: `locked-${confidence}`, evolutionMode: "locked", confidence, useCount: 50, successRate: 1 });
+      await Effect.runPromise(Effect.provide(Effect.gen(function* () {
+        const store = yield* SkillStoreService;
+        yield* store.store(skill);
+        const evo = yield* SkillEvolutionService;
+        const result = yield* evo.checkPromotion(skill);
+        expect(result.promoted).toBe(false);
+        const after = yield* store.get(skill.id);
+        expect(after!.confidence).toBe(confidence);
+      }), layer));
+    }
+  });
+
   it("checkPromotion() does not promote when below threshold", async () => {
     const layer = makeLayer(mockLLM);
     const skill = makeSkill({ confidence: "tentative", useCount: 3, successRate: 0.5 });

@@ -155,6 +155,12 @@ export {
 } from "./services/session-store.js";
 
 export { SkillStoreService, SkillStoreServiceLive } from "./services/skill-store.js";
+/**
+ * Skill lifecycle service: LLM refinement into candidate versions, regression
+ * rollback, and confidence promotion (tentative → trusted → expert).
+ * `makeSkillEvolutionService(llm?)` builds the Layer; it requires SkillStoreService.
+ */
+export { SkillEvolutionService, makeSkillEvolutionService } from "./services/skill-evolution.js";
 export {
   exportSkillToMarkdown,
   importSkillFromMarkdown,
