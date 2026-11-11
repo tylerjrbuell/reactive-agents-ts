@@ -7,7 +7,8 @@
  *      AgentStarted) — populates
  *      ctx.metadata.resolvedSkills, autoActivateSkills, skillCatalogXml,
  *      activatedSkillsXml and the activate-skill inputs (skill-activatable.ts)
- *      for reasoning-think's skillsContext and telemetry.
+ *      for reasoning-think's skillsContext and telemetry, and publishes one
+ *      SkillActivated (trigger "bootstrap") per skill injected in full.
  *   3. Log bootstrap summary (semantic line count + episodic count + duration).
  *   4. Inject experience tips into ctx.metadata when enableExperienceLearning.
  *   5. Publish MemorySnapshot event for the Cortex UI.
@@ -23,7 +24,7 @@ import { ExperienceStore } from "@reactive-agents/memory";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { EbLike, ObsLike } from "../runtime-context.js";
 import { extractTaskText } from "../util.js";
-import type { RunSkills } from "./skill-resolve.js";
+import { bootstrapSkillActivations, type RunSkills } from "./skill-resolve.js";
 import { ACTIVATABLE_SKILLS_KEY, PINNED_SKILLS_KEY } from "./skill-activatable.js";
 
 export interface SkillPostprocessArgs {
@@ -145,6 +146,14 @@ export const runBootstrapSkillPostprocess = (
             yield* obs.info(
               `◉ [skills]     ${resolved.all.length} available, ${resolved.autoActivate.length} auto-activated${autoPart}`,
             ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/bootstrap/skill-postprocess.ts:log-skills-resolved", tag: errorTag(err) })));
+          }
+
+          // One SkillActivated per bootstrap-injected skill (pins + relevance),
+          // so `onSkillActivated` and Cortex see what this run loaded.
+          if (eb) {
+            for (const event of bootstrapSkillActivations(args.runSkills, String(task.id))) {
+              yield* eb.publish(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/bootstrap/skill-postprocess.ts:publish-skill-activated", tag: errorTag(err) })));
+            }
           }
         }
       }

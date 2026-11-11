@@ -16,6 +16,7 @@
 import type { ChecklistItemStatus, ChecklistSnapshot, RunOrigin, RunPosture, Task } from "@reactive-agents/core";
 import type { AgentStreamEvent } from "../stream-types.js";
 import { ENVIRONMENT_UPDATE_CONTEXT_KEY, type EnvironmentUpdateOption } from "./environment-snapshot.js";
+import { skillsCarry, type SkillsRunOption } from "../runtime-skills-layer.js";
 
 /**
  * One to-do row persisted between turns. Structurally identical to the
@@ -64,12 +65,17 @@ export function readPosture(task: Pick<Task, "metadata">): RunPosture | undefine
   return task.metadata?.context?.[POSTURE_CONTEXT_KEY] === "plan" ? "plan" : undefined;
 }
 
-/** Everything a chat turn hands its run besides history: the to-do seed, the environment notice and the posture. */
-export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption;
+/**
+ * Everything a chat turn or `runStream()` hands its run besides history: the
+ * to-do seed, the environment notice, the posture, the origin and the per-run
+ * skill pins (`skills: { activate }`, same as `run()`).
+ */
+export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption & SkillsRunOption;
 
 /**
  * Spread into `task.metadata`: {@link todoSeedMetadata} plus the environment notice
- * (`context.environmentUpdate`) when present. Both absent ⇒ nothing (bytes identical).
+ * (`context.environmentUpdate`), posture, origin and skill pins when present.
+ * All absent ⇒ nothing (bytes identical).
  */
 export function turnCarryMetadata(opts: TurnCarryOption): { context?: Record<string, unknown> } {
   const context = {
@@ -77,6 +83,7 @@ export function turnCarryMetadata(opts: TurnCarryOption): { context?: Record<str
     ...(opts.environmentUpdate ? { [ENVIRONMENT_UPDATE_CONTEXT_KEY]: opts.environmentUpdate } : {}),
     ...(opts.posture === "plan" ? { [POSTURE_CONTEXT_KEY]: opts.posture } : {}),
     ...(opts.origin !== undefined ? { [ORIGIN_CONTEXT_KEY]: opts.origin } : {}),
+    ...skillsCarry(opts.skills),
   };
   return Object.keys(context).length > 0 ? { context } : {};
 }

@@ -150,9 +150,24 @@ await agent.run("Write the release notes", {
   workspace: "/path/to/repo",
   skills: { activate: ["release-notes"] },
 });
+
+// runStream() takes the same per-run pin:
+for await (const ev of agent.runStream("Write the release notes", {
+  skills: { activate: ["release-notes"] },
+})) {
+  if (ev._tag === "TextDelta") process.stdout.write(ev.text);
+}
 ```
 
 Skills are discovered **per run**, rooted at the run's file root: the run's `workspace` option, else `.withTools({ workspace })`, else an ambient `withFileRoot()`, else `process.cwd()`. Each run's `run-started` trace event records what it saw under `config.skills`: `{ roots, catalog: [{ name, sha256 }], pinned }`. Runs without `.withSkills()` carry no `skills` key.
+
+Every skill injected in full at bootstrap (builder pins, run pins and task-relevant picks) publishes one `SkillActivated` event per run with `trigger: "bootstrap"`, `iteration: 0`, the run's `taskId` and the same `sha256` as the run's catalog record. A skill the model loads mid-run with `activate-skill` publishes `trigger: "model"`. The `onSkillActivated` hook of `.withReactiveIntelligence({ onSkillActivated })` receives both:
+
+```typescript
+await agent.subscribe("SkillActivated", (e) => {
+  console.log(e.skillName, e.trigger, e.taskId, e.sha256);
+});
+```
 
 ### Skill Sources
 

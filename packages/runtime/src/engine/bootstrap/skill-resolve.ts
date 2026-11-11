@@ -18,7 +18,7 @@
  */
 import { Effect, Option } from "effect";
 import { createHash } from "node:crypto";
-import type { SkillRecord, Task } from "@reactive-agents/core";
+import type { SkillActivated, SkillRecord, Task } from "@reactive-agents/core";
 import { getRunSlot } from "@reactive-agents/core/internal/run-scope";
 import {
   SkillResolverService,
@@ -78,6 +78,34 @@ export const withRunPins = (resolved: ResolvedSkills, pins: readonly string[]): 
 };
 
 const sha256 = (text: string): string => createHash("sha256").update(text).digest("hex");
+
+/**
+ * One `SkillActivated` (trigger `"bootstrap"`, iteration 0) per skill this run
+ * injected in full at bootstrap: builder and run pins plus the resolver's
+ * task-relevant picks (`resolved.autoActivate`). `sha256` is the body hash the
+ * run's `run-started.config.skills` catalog records, so the event and the
+ * record name the same skill version. Pure.
+ *
+ * The kernel publishes `SkillActivated` only for skills the model loads with
+ * `activate-skill` (trigger `"model"`), so bootstrap activations are never
+ * published twice.
+ */
+export const bootstrapSkillActivations = (
+  runSkills: RunSkills,
+  taskId: string,
+): readonly SkillActivated[] => {
+  const recorded = new Map((runSkills.record?.catalog ?? []).map((c) => [c.name, c.sha256]));
+  return runSkills.resolved.autoActivate.map((s) => ({
+    _tag: "SkillActivated" as const,
+    skillName: s.name,
+    version: s.version ?? 1,
+    trigger: "bootstrap" as const,
+    iteration: 0,
+    confidence: String(s.confidence ?? "unrated"),
+    taskId,
+    sha256: recorded.get(s.name) ?? sha256(s.instructions ?? ""),
+  }));
+};
 
 /** Build the record from what the run resolved. Pure. */
 export const buildRunSkillsRecord = (args: {
