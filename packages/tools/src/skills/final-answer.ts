@@ -55,11 +55,17 @@ export const finalAnswerTool: ToolDefinition = {
 // ─── Dynamic description composition ──────────────────────────────────────
 //
 // The static `finalAnswerTool.description` includes guidance clauses for
-// every task shape (prose, code, JSON, etc.). Most clauses are noise for
-// any individual task. `buildFinalAnswerDescription()` composes a
-// task-aware description that includes only the clauses relevant to the
-// detected output format / required tools, reducing prompt size and
-// preventing models from latching onto irrelevant guidance.
+// every task shape (prose, code, JSON, etc.). `buildFinalAnswerDescription()`
+// keeps that full text by default and only SHORTENS it when the model's
+// calibrated `systemPromptAttention` is "moderate" or "weak" (see the
+// function body). `buildFinalAnswerOutputDescription()` routes the `output`
+// parameter text on the detected output format.
+//
+// Wire reach (2026-11-10 internal prompt audit, W3): final-answer is a
+// META tool, so the kernel drops it from the native-FC tool array
+// (packages/reasoning/src/kernel/capabilities/reason/think.ts, the
+// control-plane filter). This text reaches text-parse / `none` dialect
+// models only.
 //
 // Empirical motivation (2026-05-06): cogito:14b on T5 ("write a markdown
 // report") parroted the file-path-as-deliverable example before the
@@ -68,45 +74,44 @@ export const finalAnswerTool: ToolDefinition = {
 // composition shrinks the description and keeps guidance pointed.
 
 /**
- * Hints driving dynamic final-answer description composition. Source layer
- * is responsible for inferring task signals (output format, required-tools
- * state) and threading model-trait signals from `ModelCalibration`.
+ * Hints for final-answer description composition. The caller infers task
+ * signals (output format, required-tools state) and threads model-trait
+ * signals from `ModelCalibration`.
  *
- * Multi-signal composition: each field is independent and additive —
- * present signals append targeted guidance; absent signals fall through
- * to the static base description with no narrowing.
+ * Only two fields change the output today: `outputFormat` and
+ * `systemPromptAttention`. `hasRequiredTools`, `observationHandling` and
+ * `toolCallDialect` are accepted for caller compatibility but are not read
+ * by either builder. Absent signals return the full static description.
  */
 export interface FinalAnswerDescriptionContext {
   /**
    * Detected output format from the task text. `null` when the task
-   * doesn't explicitly specify a shape — falls back to a generic
-   * description with no shape-specific clauses.
+   * doesn't explicitly specify a shape. Drives the `output` parameter text
+   * (`buildFinalAnswerOutputDescription`) and, under "moderate" attention
+   * only, which single shape clause the tool description keeps.
    */
   readonly outputFormat?: "markdown" | "json" | "csv" | "html" | "code" | "list" | "prose" | null;
   /**
-   * Whether the agent has user-required data tools wired. When false
-   * (pure-synthesis tasks), drops the "ALL required steps complete"
-   * preamble — the agent's job is just to answer.
+   * Whether the agent has user-required data tools wired. Not read by
+   * either builder: the "ALL required steps are complete" preamble is
+   * always emitted.
    */
   readonly hasRequiredTools?: boolean;
   /**
-   * From `ModelCalibration.systemPromptAttention`. When `"weak"`, the
-   * model is known to drop system-prompt rules after a few turns; the
-   * builder restates the most critical clause near the END of the
-   * description (recency-bias counter). When `"strong"`, no restate.
+   * From `ModelCalibration.systemPromptAttention`. Prunes the description
+   * length: `"weak"` keeps preamble + fixed clause only; `"moderate"` adds
+   * one format-relevant clause; `"strong"` or unset returns the full
+   * static description. Nothing is restated or appended.
    */
   readonly systemPromptAttention?: "strong" | "moderate" | "weak";
   /**
-   * From `ModelCalibration.observationHandling`. When
-   * `"needs-inline-facts"`, append guidance emphasizing that the output
-   * must contain actual values from prior tool results, not references.
-   * When `"hallucinate-risk"`, even stronger anti-fabrication hint.
+   * From `ModelCalibration.observationHandling`. Not read by either
+   * builder: no anti-fabrication or inline-facts text is added.
    */
   readonly observationHandling?: "uses-recall" | "needs-inline-facts" | "hallucinate-risk";
   /**
-   * From `ModelCalibration.toolCallDialect`. When `"text-parse"`, show
-   * a text-call example since the model emits text-syntax tool calls,
-   * not native FC. When `"native-fc"`, no example needed.
+   * From `ModelCalibration.toolCallDialect`. Not read by either builder:
+   * no text-call example is added.
    */
   readonly toolCallDialect?: "native-fc" | "text-parse" | "none";
 }
@@ -120,7 +125,7 @@ const CODE_CLAUSE =
 /**
  * Compose a task-aware description for the final-answer tool.
  *
- * **Additive, not replacement.** Empirical evidence from cogito:14b probes
+ * **History.** Empirical evidence from cogito:14b probes
  * (2026-05-06, two runs) showed that selecting a single shape-specific
  * clause based on intent classification REGRESSED quality vs the full
  * static description (94% → 87% average; T3 100% → 78%; T4 100% → 92%).
@@ -128,10 +133,10 @@ const CODE_CLAUSE =
  * list as a checklist; removing clauses removes structural guidance the
  * model relied on.
  *
- * Revised approach: always emit the full static description as the base,
- * then APPEND targeted format-specific guidance when intent is detected.
- * This preserves the pre-Path-C empirical baseline and only adds value
- * (never removes) when the classifier has a confident signal.
+ * Shipped behavior: the full static description (preamble, fixed clause,
+ * code clause, prose clause) for "strong" or unset `systemPromptAttention`.
+ * "moderate" and "weak" attention SHORTEN it (Experiment 2, body comment).
+ * No format-specific or calibration-specific text is ever appended.
  *
  * Returns the static base description when no signals are available so
  * callers can invoke this unconditionally.
