@@ -15,7 +15,6 @@ import { EventBusLive, modelSynthesisDeliverable } from "@reactive-agents/core";
 import {
   unbackedClaimedActions,
   succeededToolNames,
-  toolNameWords,
 } from "../../src/kernel/capabilities/verify/claimed-actions.js";
 import { defaultVerifier } from "../../src/kernel/capabilities/verify/verifier.js";
 import { proposeExit } from "../../src/kernel/loop/exit-gate.js";
@@ -58,7 +57,7 @@ describe("seam-claimed-actions: a claimed action needs a successful matching too
   });
 
   it("general matching from name words: other tools, passive voice, camelCase, MCP names", () => {
-    expect(toolNameWords("github/createIssue")).toEqual(["github", "create", "issue"]);
+    // camelCase + "/" split comes from `tokenizeToolName` (@reactive-agents/tools); this line pins it reaches matching.
     const none = new Set<string>();
     expect(unbackedClaimedActions("The issue has been created on GitHub.", ["github/createIssue"], none).length).toBe(1);
     expect(unbackedClaimedActions("I wrote the results to the file out.md.", ["file-write"], none).length).toBe(1);

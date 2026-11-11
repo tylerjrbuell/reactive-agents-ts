@@ -23,6 +23,7 @@
  *
  * Pure, deterministic, no LLM.
  */
+import { tokenizeToolName } from "@reactive-agents/tools";
 import type { ReasoningStep } from "../../../types/index.js";
 import { GUARD_OBSERVATION_TAG, HARNESS_PSEUDO_TOOLS, META_TOOLS } from "../../state/kernel-constants.js";
 
@@ -87,15 +88,6 @@ const NOT_A_CLAIM =
 /** Name words that say nothing about the action. */
 const GENERIC_NAME_WORDS = new Set(["tool", "tools", "api", "mcp", "the", "a", "an", "to", "of", "and", "for", "get", "new"]);
 
-/** Lower-case words of a tool name: split on separators and camelCase. */
-export function toolNameWords(name: string): readonly string[] {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((w) => w.length > 0);
-}
-
 /** One asserted action no successful tool call backs. */
 export interface UnbackedClaim {
   /** The claim as written, e.g. `I've filed a report`. */
@@ -123,7 +115,7 @@ const mentions = (sentence: string, word: string): boolean =>
 /** Tools whose name matches the claimed verb in `sentence`. */
 function matchingTools(stem: string, sentence: string, tools: readonly string[]): readonly string[] {
   return tools.filter((name) => {
-    const words = toolNameWords(name);
+    const words = tokenizeToolName(name);
     if (!words.includes(stem)) return false;
     const others = words.filter((w) => w !== stem && !GENERIC_NAME_WORDS.has(w) && w.length >= 3);
     return others.length === 0 || others.some((w) => mentions(sentence, w));

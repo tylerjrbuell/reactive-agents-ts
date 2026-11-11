@@ -54,7 +54,15 @@
  * before.
  */
 import { Duration, Effect } from "effect";
-import { isLLMErrorClass, recoveryFor, type LLMErrorClass, type LLMMessage, type LLMRecovery } from "@reactive-agents/llm-provider";
+import {
+  isLLMErrorClass,
+  isRetryableLLMError,
+  recoveryFor,
+  type LLMErrorClass,
+  type LLMErrors,
+  type LLMMessage,
+  type LLMRecovery,
+} from "@reactive-agents/llm-provider";
 import { currentRunContext, getRunSlot, runSlot, type RunSlot } from "@reactive-agents/core/internal/run-scope";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 import { describeLlmFailure } from "../../utils/llm-failure.js";
@@ -165,10 +173,10 @@ export function shrunkOutputBudget(sent: number | undefined): number {
  * first event is re-sent up to 3 times with backoff (malformed output with no
  * delay) before it reaches the kernel. Re-running `backoff`/`resample` on top
  * of that multiplies the calls (one turn could make ~12 and wait ~40s).
- * Mirrors the provider's retry predicate structurally: the `retryable` flag
- * when present, else the rate-limit tag. An init failure, or a failure after
- * the stream emitted, was never re-sent. `shrink` sends a different request,
- * so the provider never retries it and it is never "already spent".
+ * Asks the provider's own retry predicate (`isRetryableLLMError`), so the two
+ * cannot drift. An init failure, or a failure after the stream emitted, was
+ * never re-sent. `shrink` sends a different request, so the provider never
+ * retries it and it is never "already spent".
  */
 export function providerSpentRetries(
   failure: FailureRecovery,
@@ -177,10 +185,15 @@ export function providerSpentRetries(
 ): boolean {
   if (!failedBeforeFirstEvent) return false;
   if (failure.recovery !== "backoff" && failure.recovery !== "resample") return false;
-  const rec = asRecord(cause);
-  const retryable = rec?.["retryable"];
-  return retryable === true || (retryable === undefined && stringField(rec, "_tag") === "LLMRateLimitError");
+  return isTaggedFailure(cause) && isRetryableLLMError(cause);
 }
+
+/**
+ * A failure carrying a string `_tag`. `isRetryableLLMError` reads only
+ * `_tag`, `retryable` and `errorClass` off its argument, so any tagged object
+ * is safe to hand it; the kernel never checks a provider class identity.
+ */
+const isTaggedFailure = (cause: unknown): cause is LLMErrors => stringField(asRecord(cause), "_tag") !== undefined;
 
 /** The run's recovery ledger. A sub-agent gets its own. */
 export interface LlmRecoveryLedger {
