@@ -173,60 +173,7 @@
       }
     });
 
-    commandPalette.register([
-      {
-        id: "nav:beacon",
-        label: "Go to Beacon",
-        description: "Agent grid and live status",
-        icon: "beacon",
-        keywords: ["beacon", "home", "agents", "grid"],
-        action: () => void goto("/"),
-      },
-      {
-        id: "nav:chat",
-        label: "New Chat",
-        description: "Start a new agent conversation",
-        icon: "chat",
-        keywords: ["chat", "conversation", "new"],
-        action: () => void goto("/chat"),
-      },
-      {
-        id: "nav:runs",
-        label: "Runs",
-        description: "Browse all agent runs",
-        icon: "runs",
-        keywords: ["runs", "trace", "history"],
-        action: () => void goto("/runs"),
-      },
-      {
-        id: "nav:lab",
-        label: "Open Lab",
-        description: "Build and configure agents",
-        icon: "lab",
-        keywords: ["lab", "builder", "configure"],
-        action: () => void goto("/lab"),
-      },
-      {
-        id: "nav:prompts",
-        label: "Prompt Library",
-        description: "Manage reusable prompts",
-        icon: "book",
-        keywords: ["prompts", "library", "templates", "snippets"],
-        action: () => {
-          void goto("/lab#prompts");
-          // Covers the already-on-/lab case where goto() won't remount the page
-          window.dispatchEvent(new CustomEvent("cortex:lab-tab", { detail: "prompts" }));
-        },
-      },
-      {
-        id: "nav:settings",
-        label: "Settings",
-        description: "Configure Cortex",
-        icon: "settings",
-        keywords: ["settings", "config", "preferences"],
-        action: () => void goto("/settings"),
-      },
-    ]);
+    // Palette commands are registered once, by CommandPalette (lib/palette-commands.ts).
 
     // Safety-net reconciliation so deletes/new runs reflect without manual reload
     // even if a WS message is missed during navigation transitions.
