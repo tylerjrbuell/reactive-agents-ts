@@ -3,46 +3,39 @@
    * AgentConfigPanel — comprehensive agent configuration form.
    *
    * Used by: BottomInputBar accordion, Lab Builder, Gateway creation form.
-   * Binds bidirectionally to `config` prop.
+   * Binds bidirectionally to `config` prop. Owns the config, the section open/filter
+   * state and the catalogs; each section renders from `agent-config/sections/`.
    */
-  import Tooltip from "$lib/components/Tooltip.svelte";
-  import { toggleServerTools } from "$lib/tool-selection.js";
-  import { todoGuidanceOn, setTodoGuidance } from "$lib/todo-guidance.js";
-  import { onMount, untrack } from "svelte";
+  import { onMount } from "svelte";
+  import { untrack } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { settings } from "$lib/stores/settings.js";
-  import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
-  import type { AgentConfig, CortexAgentToolConfig, VariableDef } from "$lib/types/agent-config.js";
+  import type { AgentConfig } from "$lib/types/agent-config.js";
   import { defaultConfig } from "$lib/types/agent-config.js";
   import { syncVariables, sameVariableNames } from "$lib/template/sync-variables.js";
-  import HighlightedField from "$lib/components/HighlightedField.svelte";
-  import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { loadCapabilities, type CapabilityManifest } from "$lib/capabilities.js";
-  import OutputSchemaParseFailField from "./OutputSchemaParseFailField.svelte";
-  import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
-  import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
-  import GuardrailsFields from "$lib/components/GuardrailsFields.svelte";
-  import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
   import { builderToolPicks, shellPresetPicks, type CatalogToolRow, type ToolPick } from "$lib/builder-tool-picks.js";
+  import { activeSectionIds, sectionCopy, sectionVisible } from "$lib/agent-config-sections.js";
+  import type { McpCatalogRow, PanelAgentConfig } from "$lib/components/agent-config/types.js";
+  import AgentConfigHeader from "$lib/components/agent-config/AgentConfigHeader.svelte";
+  import InferenceSection from "$lib/components/agent-config/sections/InferenceSection.svelte";
+  import PersonaSection from "$lib/components/agent-config/sections/PersonaSection.svelte";
+  import StrategySection from "$lib/components/agent-config/sections/StrategySection.svelte";
+  import VariablesSection from "$lib/components/agent-config/sections/VariablesSection.svelte";
+  import ToolsSection from "$lib/components/agent-config/sections/ToolsSection.svelte";
+  import SubAgentsSection from "$lib/components/agent-config/sections/SubAgentsSection.svelte";
+  import SkillsSection from "$lib/components/agent-config/sections/SkillsSection.svelte";
+  import MemorySection from "$lib/components/agent-config/sections/MemorySection.svelte";
+  import GuardrailsSection from "$lib/components/agent-config/sections/GuardrailsSection.svelte";
+  import ExecutionSection from "$lib/components/agent-config/sections/ExecutionSection.svelte";
+  import MetaToolsSection from "$lib/components/agent-config/sections/MetaToolsSection.svelte";
+  import ReliabilitySection from "$lib/components/agent-config/sections/ReliabilitySection.svelte";
+  import ObservabilitySection from "$lib/components/agent-config/sections/ObservabilitySection.svelte";
 
   export { type AgentConfig, defaultConfig };
-  type PanelAgentConfig = AgentConfig & {
-    maxTokens: number;
-    timeout: number;
-    retryPolicy: { enabled: boolean; maxRetries: number; backoffMs: number };
-    metaTools: { enabled: boolean; brief: boolean; find: boolean; pulse: boolean; recall: boolean; harnessSkill: boolean; todo?: boolean; todoGuidance?: { reminder?: boolean; systemLine?: boolean } };
-    /** Display-only live checklist toggle; absent = framework default (on). */
-    observability?: { checklist?: boolean };
-    fallbacks: { enabled: boolean; providers: string[]; errorThreshold: number };
-    observabilityVerbosity: "off" | "minimal" | "normal" | "verbose";
-    mcpServerIds: string[];
-    agentTools: CortexAgentToolConfig[];
-    dynamicSubAgents: { enabled: boolean; maxIterations: number };
-    skills: { paths: string[]; activate?: string[] };
-  };
 
   interface Props {
     config?: PanelAgentConfig;
@@ -56,18 +49,6 @@
   }
   let { config = $bindable(defaultConfig() as PanelAgentConfig), compact = false, toolsToggle }: Props = $props();
 
-  // Structured-output schema validity (for the editor hint).
-  const outputSchemaText = $derived((config.outputSchema ?? "").trim());
-  const outputSchemaValid = $derived.by(() => {
-    if (outputSchemaText === "") return false;
-    try {
-      const p = JSON.parse(outputSchemaText) as unknown;
-      return p != null && typeof p === "object" && !Array.isArray(p);
-    } catch {
-      return false;
-    }
-  });
-
   // Section expand state
   let openSections = $state(new Set(["inference", "tools"]));
   function toggle(s: string) {
@@ -76,69 +57,15 @@
     openSections = n;
   }
 
-  /** Filter + nav: reduce scroll-hunt in long builder forms */
+  /** Filter + nav: reduce scroll-hunt in long builder forms (registry: agent-config-sections.ts). */
   let sectionFilter = $state("");
 
-  const ACP_IDS_FULL = [
-    "inference",
-    "persona",
-    "strategy",
-    "variables",
-    "tools",
-    "subagents",
-    "skills",
-    "memory",
-    "guardrails",
-    "execution",
-    "metatools",
-    "reliability",
-    "observability",
-  ] as const;
-
   function acpActiveSectionIds(): string[] {
-    if (compact) {
-      return ACP_IDS_FULL.filter((id) => id !== "variables" && id !== "tools" && id !== "subagents" && id !== "skills");
-    }
-    return [...ACP_IDS_FULL];
-  }
-
-  function acpSectionCopy(id: string): { label: string; keywords: string } {
-    const m: Record<string, { label: string; keywords: string }> = {
-      inference: {
-        label: "Inference",
-        keywords: "llm provider model temperature tokens system prompt task context health anthropic openai gemini ollama litellm test",
-      },
-      persona: { label: "Persona", keywords: "role tone traits response style behaviour face" },
-      strategy: {
-        label: "Reasoning",
-        keywords: "strategy react plan execute tot tree reflexion adaptive iterations min max verification reflect runtime semantic entropy quality",
-      },
-      variables: {
-        label: "Variables",
-        keywords: "template variable parameter parameterized run placeholder token mustache enum default required rescan substitution",
-      },
-      tools: {
-        label: "Tools",
-        keywords: "web search file read write code mcp registry spawn dynamic sub agent construction shell terminal host execute risk allowlist",
-      },
-      subagents: { label: "Sub-agents", keywords: "local remote a2a url hub delegation researcher" },
-      skills: { label: "Skills", keywords: "living skill.md activate force path directory agentskills auto awesome" },
-      memory: { label: "Memory", keywords: "working episodic semantic context synthesis ics account tree" },
-      guardrails: { label: "Guardrails", keywords: "injection pii toxicity security threshold" },
-      execution: { label: "Execution", keywords: "timeout retry cache checkpoint progress ttl timer" },
-      metatools: { label: "Meta tools", keywords: "conductor brief find pulse recall harness suite wand stars" },
-      reliability: { label: "Reliability", keywords: "fallback provider errors shield backup" },
-      observability: { label: "Observability", keywords: "metrics dashboard verbosity monitoring logs" },
-    };
-    return m[id] ?? { label: id, keywords: id };
+    return activeSectionIds(compact);
   }
 
   function acpSectionVisible(id: string): boolean {
-    if (!acpActiveSectionIds().includes(id)) return false;
-    const q = sectionFilter.trim().toLowerCase();
-    if (!q) return true;
-    const { label, keywords } = acpSectionCopy(id);
-    return label.toLowerCase().includes(q) || keywords.includes(q) || id.includes(q);
+    return sectionVisible(id, sectionFilter, compact);
   }
 
   function acpExpandAll() {
@@ -157,92 +84,6 @@
     requestAnimationFrame(() => {
       document.getElementById(`acp-section-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
-  }
-
-  let taskContextLinesDraft = $state("");
-  let lastTaskContextSig = $state("");
-  $effect(() => {
-    const sig = JSON.stringify(config.taskContext ?? {});
-    if (sig !== lastTaskContextSig) {
-      lastTaskContextSig = sig;
-      taskContextLinesDraft = formatTaskContextLines(config.taskContext ?? {});
-    }
-  });
-
-  function commitTaskContextDraft() {
-    const next = parseTaskContextLines(taskContextLinesDraft);
-    lastTaskContextSig = JSON.stringify(next);
-    config = { ...config, taskContext: next };
-  }
-
-  // ── Lifecycle webhooks ────────────────────────────────────────────────
-  const LIFECYCLE_EVENTS = ["AgentStarted", "AgentCompleted", "TaskFailed", "DebriefCompleted"] as const;
-
-  function addWebhook() {
-    config = { ...config, lifecycleWebhooks: [...(config.lifecycleWebhooks ?? []), { url: "", events: [] }] };
-  }
-  function removeWebhook(i: number) {
-    config = { ...config, lifecycleWebhooks: (config.lifecycleWebhooks ?? []).filter((_, j) => j !== i) };
-  }
-  function updateWebhookUrl(i: number, url: string) {
-    config = {
-      ...config,
-      lifecycleWebhooks: (config.lifecycleWebhooks ?? []).map((w, j) => (j === i ? { ...w, url } : w)),
-    };
-  }
-  function webhookHasEvent(wh: { events: string[] }, ev: string): boolean {
-    return wh.events.length === 0 || wh.events.includes(ev);
-  }
-  function toggleWebhookEvent(i: number, ev: string) {
-    config = {
-      ...config,
-      lifecycleWebhooks: (config.lifecycleWebhooks ?? []).map((w, j) => {
-        if (j !== i) return w;
-        // Empty = all; first click narrows to the full set minus the toggled one.
-        const base = w.events.length === 0 ? [...LIFECYCLE_EVENTS] : w.events;
-        const next = base.includes(ev) ? base.filter((e) => e !== ev) : [...base, ev];
-        return { ...w, events: next };
-      }),
-    };
-  }
-
-  function parseSkillPathsLines(s: string): string[] {
-    return s.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-  }
-  function formatSkillPathsLines(paths: string[]): string {
-    return paths.join("\n");
-  }
-
-  let skillsPathsDraft = $state("");
-  let lastSkillsPathsSig = $state("");
-  $effect(() => {
-    const sig = JSON.stringify(config.skills?.paths ?? []);
-    if (sig !== lastSkillsPathsSig) {
-      lastSkillsPathsSig = sig;
-      skillsPathsDraft = formatSkillPathsLines(config.skills?.paths ?? []);
-    }
-  });
-
-  function commitSkillsPathsDraft() {
-    const paths = parseSkillPathsLines(skillsPathsDraft);
-    lastSkillsPathsSig = JSON.stringify(paths);
-    config = { ...config, skills: { ...config.skills, paths } };
-  }
-
-  let skillsActivateDraft = $state("");
-  let lastSkillsActivateSig = $state("");
-  $effect(() => {
-    const sig = JSON.stringify(config.skills?.activate ?? []);
-    if (sig !== lastSkillsActivateSig) {
-      lastSkillsActivateSig = sig;
-      skillsActivateDraft = formatSkillPathsLines(config.skills?.activate ?? []);
-    }
-  });
-
-  function commitSkillsActivateDraft() {
-    const activate = parseSkillPathsLines(skillsActivateDraft);
-    lastSkillsActivateSig = JSON.stringify(activate);
-    config = { ...config, skills: { ...config.skills, activate: activate.length > 0 ? activate : undefined } };
   }
 
   /** Model dropdown: `/api/models/:provider` + live Ollama tags when applicable. */
@@ -281,42 +122,6 @@
     const p = config.provider;
     void loadModelsForProvider(p);
   });
-
-  const modelOptionsForSelect = $derived.by(() => {
-    const cur = config.model.trim();
-    const base = providerModels;
-    if (cur && !base.some((m) => m.value === cur)) {
-      return [{ value: cur, label: `${cur} (custom)` }, ...base];
-    }
-    return base;
-  });
-
-  /** Does the selected model have a thinking mode? true / false / null = not known. */
-  const modelThinking = $derived.by((): boolean | null => {
-    const cur = config.model.trim();
-    const hit = providerModels.find((m) => m.value === cur);
-    return hit?.thinking ?? null;
-  });
-  const thinkingChoice = $derived(config.thinking === true ? "on" : config.thinking === false ? "off" : "auto");
-  const thinkingNote = $derived(
-    modelThinking === false
-      ? "This model has no thinking mode, so this setting has no effect."
-      : modelThinking === null
-        ? "Not known for this model. The setting applies if the model supports it."
-        : thinkingChoice === "auto"
-          ? "Supported. Auto uses the model's own default."
-          : thinkingChoice === "on"
-            ? "Supported. The model reasons before it answers, which is slower and uses more tokens."
-            : "Supported but switched off. The model answers directly.",
-  );
-  function setThinking(choice: "auto" | "on" | "off") {
-    if (choice === "auto") {
-      const { thinking: _drop, ...rest } = config;
-      config = rest as typeof config;
-    } else {
-      config = { ...config, thinking: choice === "on" };
-    }
-  }
 
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
   $effect(() => {
@@ -443,30 +248,6 @@
     if (fileInput) fileInput.value = "";
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────
-  function setProvider(p: string) {
-    config = { ...config, provider: p, model: "" };
-  }
-
-  function toggleTool(id: string) {
-    const tools = config.tools.includes(id)
-      ? config.tools.filter((t) => t !== id)
-      : [...config.tools, id];
-    config = { ...config, tools };
-  }
-
-  /** Host shell opt-in adds `shell-execute` at run time even if not in `config.tools`. */
-  const toolCountForBadges = $derived.by(() => {
-    const names = new Set(config.tools);
-    if (config.terminalTools) names.add("shell-execute");
-    return names.size;
-  });
-
-  type McpCatalogRow = {
-    serverId: string;
-    name: string;
-    tools: { toolName: string; description?: string }[];
-  };
   let mcpCatalog = $state<McpCatalogRow[]>([]);
 
   async function loadMcpCatalog() {
@@ -488,78 +269,6 @@
     }
   });
 
-  /**
-   * Derive the set of MCP server IDs required by the given tool selection.
-   * Returns ALL server IDs that have at least one tool in `tools` — does not
-   * filter against the existing `config.mcpServerIds` so adding a tool from a
-   * new server always wires that server into the run.
-   */
-  function deriveMcpServerIds(tools: string[], catalog: McpCatalogRow[]): string[] {
-    const ids = new Set<string>();
-    for (const s of catalog) {
-      if (s.tools.some((t) => tools.includes(t.toolName))) ids.add(s.serverId);
-    }
-    return [...ids];
-  }
-
-  function toggleMcpRegistryTool(serverId: string, fullToolName: string) {
-    let tools = [...config.tools];
-    if (tools.includes(fullToolName)) {
-      tools = tools.filter((t) => t !== fullToolName);
-    } else {
-      tools.push(fullToolName);
-    }
-    const mcpServerIds = deriveMcpServerIds(tools, mcpCatalog);
-    // Safety: if catalog hasn't loaded yet, keep the server that owns this tool
-    if (mcpServerIds.length === 0 && tools.includes(fullToolName) && !mcpServerIds.includes(serverId)) {
-      mcpServerIds.push(serverId);
-    }
-    config = { ...config, tools, mcpServerIds };
-  }
-
-  const selectedIn = (srv: McpCatalogRow) => srv.tools.filter((t) => config.tools.includes(t.toolName)).length;
-
-  /** One click on a server name selects (or clears) all of its tools. */
-  function toggleMcpServer(srv: McpCatalogRow) {
-    const tools = toggleServerTools(config.tools, srv.tools.map((t) => t.toolName));
-    config = { ...config, tools, mcpServerIds: deriveMcpServerIds(tools, mcpCatalog) };
-  }
-
-  function addLocalAgentTool() {
-    const base = defaultConfig();
-    const n = (config.agentTools ?? base.agentTools).length + 1;
-    const entry: CortexAgentToolConfig = {
-      kind: "local",
-      toolName: `researcher_${n}`,
-      agent: { name: `Researcher ${n}`, maxIterations: 8, tools: ["web-search"] },
-    };
-    config = { ...config, agentTools: [...(config.agentTools ?? base.agentTools), entry] };
-  }
-
-  function addRemoteAgentTool() {
-    const base = defaultConfig();
-    const entry: CortexAgentToolConfig = {
-      kind: "remote",
-      toolName: `remote_agent_${(config.agentTools ?? base.agentTools).length + 1}`,
-      remoteUrl: "http://127.0.0.1:8000",
-    };
-    config = { ...config, agentTools: [...(config.agentTools ?? base.agentTools), entry] };
-  }
-
-  function removeAgentToolAt(index: number) {
-    const base = defaultConfig();
-    const agentTools = [...(config.agentTools ?? base.agentTools)];
-    agentTools.splice(index, 1);
-    config = { ...config, agentTools };
-  }
-
-  function patchAgentTool(index: number, next: CortexAgentToolConfig) {
-    const base = defaultConfig();
-    const agentTools = [...(config.agentTools ?? base.agentTools)];
-    agentTools[index] = next;
-    config = { ...config, agentTools };
-  }
-
   // ── Template variables ───────────────────────────────────────────────────
   // Keep `config.variables` in sync with the `{{tokens}}` present across the
   // config automatically — no manual "Rescan". New tokens are added, removed
@@ -571,12 +280,6 @@
       config = { ...config, variables: next };
     }
   });
-
-  function patchVariable(index: number, next: VariableDef) {
-    const variables = [...(config.variables ?? [])];
-    variables[index] = next;
-    config = { ...config, variables };
-  }
 </script>
 
 <!-- Hidden file input for JSON import -->
@@ -591,1227 +294,79 @@
 <div class="agent-config-panel text-[11px] font-sans">
 
   <!-- ── Header: blueprint summary + IO ───────────────────────────────── -->
-  <header class="acp-header rounded-xl border border-[var(--cortex-border)] bg-[color-mix(in_srgb,var(--cortex-surface)_92%,transparent)] px-3 py-2.5 shadow-[0_1px_0_color-mix(in_srgb,var(--ra-violet)_12%,transparent)]">
-    <div class="flex flex-wrap items-start gap-2 gap-y-2">
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
-          <span class="acp-header-mark h-6 w-1 shrink-0 rounded-full bg-gradient-to-b from-primary to-secondary opacity-90" aria-hidden="true"></span>
-          <div>
-            <h2 class="font-display text-sm font-semibold tracking-tight text-[var(--cortex-text)]">Agent blueprint</h2>
-            <p class="text-[11px] text-[var(--cortex-text-muted)] leading-snug max-w-[28rem]">
-              Compose how this agent thinks, what it can call, and how it fails safe. Changes bind live to the parent form.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div class="flex flex-wrap items-center justify-end gap-1 shrink-0">
-        <button type="button" onclick={() => fileInput?.click()}
-          class="acp-toolbar-btn"
-         >
-          <span class="material-symbols-outlined text-[14px] opacity-80" aria-hidden="true">upload_file</span>
-          <span>Import</span>
-        </button>
-        <button type="button" onclick={exportConfig}
-          class="acp-toolbar-btn"
-         >
-          <span class="material-symbols-outlined text-[14px] opacity-80" aria-hidden="true">download</span>
-          <span>Export</span>
-        </button>
-        <button type="button" onclick={downloadExample}
-          class="acp-toolbar-btn acp-toolbar-btn--muted"
-         >
-          <span class="material-symbols-outlined text-[14px] opacity-70" aria-hidden="true">help_outline</span>
-          <span>Example</span>
-        </button>
-        <span class="w-px h-5 bg-[var(--cortex-border)] mx-0.5 hidden sm:block" aria-hidden="true"></span>
-        <button type="button" onclick={() => (openSections.size >= acpActiveSectionIds().length ? acpCollapseAll() : acpExpandAll())}
-          class="acp-toolbar-btn acp-toolbar-btn--ghost">
-          {openSections.size >= acpActiveSectionIds().length ? "Collapse all" : "Expand all"}
-        </button>
-      </div>
-    </div>
-    {#if !compact}
-      <div class="mt-3 pt-2 border-t border-[var(--cortex-border)]">
-        <label class="sr-only" for="acp-section-filter">Filter configuration sections</label>
-        <div class="relative">
-          <span class="material-symbols-outlined pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-[var(--cortex-text-muted)] opacity-60" aria-hidden="true">filter_alt</span>
-          <input
-            id="acp-section-filter"
-            type="search"
-            bind:value={sectionFilter}
-            placeholder="  Filter sections (e.g. guardrails, mcp, timeout)…"
-            autocomplete="off"
-            class="config-input acp-filter-input pl-9" />
-        </div>
-        <nav class="mt-3 flex flex-wrap gap-1.5" aria-label="Jump to section">
-          {#each acpActiveSectionIds() as sid (sid)}
-            {#if acpSectionVisible(sid)}
-              <button
-                type="button"
-                onclick={() => acpScrollTo(sid)}
-                class="acp-nav-pill"
-                class:acp-nav-pill--active={openSections.has(sid)}>
-                {acpSectionCopy(sid).label}
-              </button>
-            {/if}
-          {/each}
-        </nav>
-        {#if acpFilterEmpty}
-          <p class="mt-2 text-center font-mono text-[11px] text-[var(--cortex-text-muted)]" role="status">
-            No sections match “{sectionFilter.trim()}”. Clear the filter or try another keyword.
-          </p>
-        {/if}
-      </div>
-    {/if}
-  </header>
+  <AgentConfigHeader
+    {fileInput}
+    {compact}
+    bind:sectionFilter
+    {openSections}
+    {acpFilterEmpty}
+    {acpActiveSectionIds}
+    {acpSectionVisible}
+    acpSectionCopy={sectionCopy}
+    {acpScrollTo}
+    {acpExpandAll}
+    {acpCollapseAll}
+    {exportConfig}
+    {downloadExample}
+  />
 
-  <!-- ── Section: Inference ────────────────────────────────────────────── -->
   {#if acpSectionVisible("inference")}
-  <div id="acp-section-inference" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-inference"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("inference")}
-      aria-controls="acp-panel-inference"
-      onclick={() => toggle("inference")}>
-      <span class="material-symbols-outlined text-[15px] text-primary/80 shrink-0" aria-hidden="true">memory</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Inference</span>
-      <span class="ml-2 truncate font-mono text-[11px] text-[var(--cortex-text-muted)]">{config.provider} · {config.model?.trim() || "default model"}</span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('inference') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("inference")}
-      <div id="acp-panel-inference" class="acp-section-body" role="region" aria-labelledby="acp-head-inference">
-        <!-- Agent name (optional) -->
-        <div>
-          <label for="agent-name" class="config-label">Agent Name <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
-          <HighlightedField id="agent-name" bind:value={config.agentName} placeholder="e.g. research-assistant"
-            frameClass="ci-frame" textClass="ci-text" />
-        </div>
-        <!-- Provider + Model -->
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label for="provider-select" class="config-label">Provider</label>
-            <select id="provider-select" value={config.provider} onchange={(e) => setProvider((e.target as HTMLSelectElement).value)}
-              class="config-input">
-              {#each providerList as p}<option value={p.id}>{p.id}</option>{/each}
-            </select>
-          </div>
-          <div>
-            <label class="config-label">Model
-              <button type="button" onclick={() => loadModelsForProvider(config.provider)}
-                class="ml-1 text-secondary/60 hover:text-secondary bg-transparent border-0 cursor-pointer p-0 text-[11px]">
-                {modelsLoading ? "…" : "↻"}
-              </button>
-            </label>
-            {#if modelsError}
-              <div class="text-[11px] font-mono text-error/60 mb-1">{modelsError}</div>
-              <input bind:value={config.model} placeholder="Type model name…" class="config-input" />
-            {:else if modelsLoading}
-              <div class="config-input text-outline/70">Loading…</div>
-            {:else if modelOptionsForSelect.length > 0}
-              {#if modelsNote}<div class="text-[11px] font-mono text-outline/70 mb-1">{modelsNote}</div>{/if}
-              <select bind:value={config.model} class="config-input">
-                {#each modelOptionsForSelect as m}<option value={m.value}>{m.thinking ? "🧠 " : ""}{m.label}</option>{/each}
-              </select>
-            {:else}
-              {#if modelsNote}<div class="text-[11px] font-mono text-outline/70 mb-1">{modelsNote}</div>{/if}
-              <input bind:value={config.model} placeholder="Model name…" class="config-input" />
-            {/if}
-          </div>
-        </div>
-        <!-- Custom model override -->
-        {#if modelOptionsForSelect.length > 0}
-          <div>
-            <label for="custom-model-override" class="config-label">Custom model override <span class="text-outline/70 normal-case font-normal">(optional — overrides dropdown)</span></label>
-            <input id="custom-model-override" bind:value={config.model} placeholder="e.g. claude-opus-4-6"
-              class="config-input" />
-          </div>
-        {/if}
-        <!-- Thinking -->
-        <div class="acp-field">
-          <span class="config-label" id="thinking-label">Thinking
-            {#if modelThinking === true}<span class="ml-1 rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] font-normal text-primary">model supports it</span>
-            {:else if modelThinking === false}<span class="ml-1 rounded-md bg-[var(--cortex-surface-mid)] px-1.5 py-0.5 text-[11px] font-normal text-[var(--cortex-text-muted)]">not supported</span>{/if}
-          </span>
-          <div class="inline-flex w-fit overflow-hidden rounded-lg border border-[var(--cortex-border)]" role="radiogroup" aria-labelledby="thinking-label">
-            {#each [["auto", "Auto"], ["on", "On"], ["off", "Off"]] as [value, label] (value)}
-              <button type="button" role="radio" aria-checked={thinkingChoice === value}
-                onclick={() => setThinking(value as "auto" | "on" | "off")}
-                class="cursor-pointer border-0 px-4 py-1.5 text-[12px] transition-colors
-                       {thinkingChoice === value ? 'bg-primary/15 text-primary' : 'bg-transparent text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]'}">{label}</button>
-            {/each}
-          </div>
-          <p class="font-mono text-[11px] leading-relaxed text-outline/70">{thinkingNote}</p>
-        </div>
-        <!-- Temperature + Max Tokens -->
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label for="temperature-range" class="config-label flex items-center justify-between">
-              Temperature
-              <span class="font-mono text-primary tabular-nums">{config.temperature.toFixed(2)}</span>
-            </label>
-            <input id="temperature-range" type="range" min="0" max="1" step="0.05"
-              bind:value={config.temperature}
-              class="w-full accent-primary mt-1" />
-            <div class="flex justify-between text-[10px] font-mono text-outline/70 mt-0.5">
-              <span>0 — deterministic</span><span>1 — creative</span>
-            </div>
-          </div>
-          <div>
-            <label for="max-tokens" class="config-label">Max Tokens <span class="text-outline/70 normal-case font-normal">(0 = default)</span></label>
-            <input id="max-tokens" type="number" min="0" max="200000" step="256"
-              bind:value={config.maxTokens}
-              class="config-input" />
-          </div>
-          <div class="col-span-2">
-            <label for="num-ctx" class="config-label">Context length (numCtx) <span class="text-outline/70 normal-case font-normal">(0 = provider default)</span></label>
-            <input id="num-ctx" type="number" min="0" max="1048576" step="1024"
-              bind:value={config.numCtx}
-              class="config-input" />
-            <div class="text-[10px] font-mono text-outline/70 mt-0.5">
-              Overrides the provider context window. Honored by local providers (Ollama num_ctx); cloud providers that don't expose a context knob ignore it.
-            </div>
-          </div>
-        </div>
-        <!-- System prompt -->
-        <div>
-          <div class="flex items-end justify-between gap-2 mb-1">
-            <label for="system-prompt" class="config-label !mb-0">System Prompt <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
-            <PromptPickerButton
-              types={["system", "persona"]}
-              defaultSaveType="system"
-              placement="down"
-              title="Insert from prompt library"
-              onSelect={(body) => {
-                config = { ...config, systemPrompt: config.systemPrompt ? `${config.systemPrompt}\n${body}` : body };
-              }}
-            />
-          </div>
-          <HighlightedField multiline id="system-prompt" bind:value={config.systemPrompt}
-            placeholder="Custom instructions prepended to every run…"
-            rows={3}
-            frameClass="ci-frame" textClass="ci-text resize-none" />
-        </div>
-        <div>
-          <label for="task-context-lines" class="config-label">Task context <span class="text-outline/70 normal-case font-normal">(`withTaskContext` — one key=value per line)</span></label>
-          <HighlightedField multiline id="task-context-lines"
-            bind:value={taskContextLinesDraft}
-            oninput={commitTaskContextDraft}
-            onblur={commitTaskContextDraft}
-            placeholder={"project=my-app\nenvironment=staging"}
-            rows={3}
-            frameClass="ci-frame" textClass="ci-text resize-none text-[11px]" />
-        </div>
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" checked={config.healthCheck}
-            onchange={() => (config = { ...config, healthCheck: !config.healthCheck })}
-            class="accent-primary w-3.5 h-3.5" />
-          <div>
-            <div class="font-mono text-[11px] text-on-surface/80">Enable health check</div>
-            <div class="font-mono text-[11px] text-outline/70">Calls `withHealthCheck()` so `agent.health()` is available after build</div>
-          </div>
-        </label>
-      </div>
-    {/if}
-  </div>
+    <InferenceSection bind:config open={openSections.has("inference")} onToggle={() => toggle("inference")}
+      {providerList} {providerModels} {modelsLoading} {modelsError} {modelsNote} {loadModelsForProvider} />
   {/if}
 
-  <!-- ── Section: Persona ────────────────────────────────────────────── -->
   {#if acpSectionVisible("persona")}
-  <div id="acp-section-persona" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-persona"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("persona")}
-      aria-controls="acp-panel-persona"
-      onclick={() => toggle("persona")}>
-      <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">face</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Persona</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-cyan)_14%,transparent)] px-1.5 py-0.5 text-[11px] font-mono text-secondary">
-        {config.persona?.enabled ? (config.persona.role?.trim() || "custom") : "off"}
-      </span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('persona') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("persona")}
-      <div id="acp-panel-persona" class="acp-section-body" role="region" aria-labelledby="acp-head-persona">
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox"
-            checked={config.persona?.enabled ?? false}
-            onchange={() => (config = { ...config, persona: { ...(config.persona ?? { role: "", tone: "concise", traits: "", responseStyle: "prose" }), enabled: !(config.persona?.enabled ?? false) } })}
-            class="accent-primary w-3.5 h-3.5" />
-          <div>
-            <div class="font-mono text-[11px] text-on-surface/80">Enable persona</div>
-            <div class="font-mono text-[11px] text-outline/70">Shape agent behaviour with a named role and communication style</div>
-          </div>
-        </label>
-        {#if config.persona?.enabled}
-          <div>
-            <label for="persona-role" class="config-label">Role <span class="text-outline/70 normal-case font-normal">(e.g. research assistant, code reviewer)</span></label>
-            <HighlightedField
-              id="persona-role"
-              value={config.persona.role}
-              oninput={(e) => (config = { ...config, persona: { ...config.persona, role: (e.target as HTMLInputElement).value } })}
-              placeholder="e.g. senior research analyst"
-              frameClass="ci-frame" textClass="ci-text" />
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label for="persona-tone" class="config-label">Tone</label>
-              <select
-                id="persona-tone"
-                value={config.persona.tone}
-                onchange={(e) => (config = { ...config, persona: { ...config.persona, tone: (e.target as HTMLSelectElement).value as AgentConfig["persona"]["tone"] } })}
-                class="config-input">
-                <option value="concise">Concise — brief, direct</option>
-                <option value="formal">Formal — professional</option>
-                <option value="casual">Casual — conversational</option>
-                <option value="technical">Technical — precise, expert</option>
-              </select>
-            </div>
-            <div>
-              <label for="persona-response-style" class="config-label">Response Style</label>
-              <select
-                id="persona-response-style"
-                value={config.persona.responseStyle}
-                onchange={(e) => (config = { ...config, persona: { ...config.persona, responseStyle: (e.target as HTMLSelectElement).value as AgentConfig["persona"]["responseStyle"] } })}
-                class="config-input">
-                <option value="prose">Prose — narrative paragraphs</option>
-                <option value="bullet-points">Bullets — scannable lists</option>
-                <option value="structured">Structured — headers + sections</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label for="persona-traits" class="config-label">Traits <span class="text-outline/70 normal-case font-normal">(comma-separated, e.g. analytical, thorough, skeptical)</span></label>
-            <HighlightedField
-              multiline
-              id="persona-traits"
-              value={config.persona.traits}
-              oninput={(e) => (config = { ...config, persona: { ...config.persona, traits: (e.target as HTMLTextAreaElement).value } })}
-              placeholder="e.g. analytical, methodical, skeptical of unverified claims"
-              rows={2}
-              frameClass="ci-frame" textClass="ci-text resize-none" />
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </div>
+    <PersonaSection bind:config open={openSections.has("persona")} onToggle={() => toggle("persona")} />
   {/if}
 
-  <!-- ── Section: Strategy ────────────────────────────────────────────── -->
   {#if acpSectionVisible("strategy")}
-  <div id="acp-section-strategy" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-strategy"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("strategy")}
-      aria-controls="acp-panel-strategy"
-      onclick={() => toggle("strategy")}>
-      <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">psychology</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Reasoning</span>
-      <span class="ml-2 truncate font-mono text-[11px] text-[var(--cortex-text-muted)]">{acpStrategyLabel}</span>
-      <span class="ml-2 font-mono text-[11px] text-primary/80">{config.strategy}</span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('strategy') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("strategy")}
-      <div id="acp-panel-strategy" class="acp-section-body" role="region" aria-labelledby="acp-head-strategy">
-        <div class="space-y-1.5">
-          {#each STRATEGIES as s}
-            <label class="flex items-start gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-container-low/40 transition-colors
-                          {config.strategy === s.value ? 'bg-primary/10 border border-primary/20' : 'border border-transparent'}">
-              <input type="radio" name="strategy" value={s.value}
-                checked={config.strategy === s.value}
-                onchange={() => (config = { ...config, strategy: s.value as AgentConfig["strategy"] })}
-                class="mt-0.5 accent-primary flex-shrink-0" />
-              <div>
-                <div class="font-mono text-[11px] font-semibold text-on-surface/80">{s.label}</div>
-                <div class="font-mono text-[11px] text-outline/70 mt-0.5">{s.desc}</div>
-              </div>
-            </label>
-          {/each}
-        </div>
-        <div class="grid grid-cols-2 gap-3 pt-1">
-          <div>
-            <label for="max-iterations" class="config-label">Max Iterations</label>
-            <input id="max-iterations" type="number" min="1" max="100" bind:value={config.maxIterations}
-              class="config-input" />
-          </div>
-          <div>
-            <label for="min-iterations" class="config-label">Min Iterations</label>
-            <input id="min-iterations" type="number" min="0" max="20" bind:value={config.minIterations}
-              class="config-input" />
-          </div>
-        </div>
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="font-mono text-[11px] text-on-surface/70">Durable execution</div>
-            <div class="font-mono text-[11px] text-outline/70">Crash-resume + human approval gate (survives restart). Forces reasoning on.</div>
-          </div>
-          <button type="button" onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, enabled: !config.durableRuns.enabled } })}
-            aria-label="Toggle durable execution"
-            aria-pressed={config.durableRuns.enabled}
-            class="flex-shrink-0 w-10 h-5 rounded-full border-0 cursor-pointer relative transition-colors duration-200
-                   {config.durableRuns.enabled ? 'bg-primary' : 'bg-surface-container-highest'}">
-            <span class="pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ease-out
-                         {config.durableRuns.enabled ? 'translate-x-5' : 'translate-x-0'}"></span>
-          </button>
-        </div>
-        {#if config.durableRuns.enabled}
-          <div class="rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/30 p-2.5">
-            <div class="font-mono text-[11px] uppercase tracking-wide text-outline/75 mb-1.5">Approval-gated tools</div>
-            {#if config.tools.length === 0}
-              <div class="font-mono text-[11px] text-outline/70">Add tools above; gated tools pause the run for approval.</div>
-            {:else}
-              <div class="flex flex-wrap gap-1.5">
-                {#each config.tools as toolName (toolName)}
-                  {@const gated = config.durableRuns.approvalTools.includes(toolName)}
-                  <button type="button"
-                    onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, approvalTools: gated ? config.durableRuns.approvalTools.filter((t) => t !== toolName) : [...config.durableRuns.approvalTools, toolName] } })}
-                    class="rounded-md border px-2 py-1 font-mono text-[11px] transition-colors
-                           {gated ? 'border-primary bg-primary/15 text-primary' : 'border-[var(--cortex-border)] text-on-surface/60 hover:text-on-surface'}">
-                    {gated ? '✓ ' : ''}{toolName}
-                  </button>
-                {/each}
-              </div>
-              <label for="acp-approval-mode" class="config-label mt-2.5">When a gated tool is called</label>
-              <select id="acp-approval-mode" class="config-input text-[11px]" value={config.durableRuns.approvalMode ?? "detach"}
-                onchange={(e) => (config = { ...config, durableRuns: { ...config.durableRuns, approvalMode: (e.currentTarget as HTMLSelectElement).value === "block" ? "block" : "detach" } })}>
-                <option value="detach">Pause the run; it resumes after approval</option>
-                <option value="block">Wait in place until approved</option>
-              </select>
-            {/if}
-          </div>
-        {/if}
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="font-mono text-[11px] text-on-surface/70">Auto-switch strategy</div>
-            <div class="font-mono text-[11px] text-outline/70">Switch strategy if agent gets stuck</div>
-          </div>
-          <button type="button" onclick={() => (config = { ...config, strategySwitching: !config.strategySwitching })}
-            aria-label="Toggle auto-switch strategy"
-            aria-pressed={config.strategySwitching}
-            class="flex-shrink-0 w-10 h-5 rounded-full border-0 cursor-pointer relative transition-colors duration-200
-                   {config.strategySwitching ? 'bg-primary' : 'bg-surface-container-highest'}">
-            <span class="pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ease-out
-                         {config.strategySwitching ? 'translate-x-5' : 'translate-x-0'}"></span>
-          </button>
-        </div>
-        <div>
-          <div class="config-label">Structured output (JSON Schema)</div>
-          <textarea bind:value={config.outputSchema} rows="6" spellcheck="false"
-            placeholder={'{\n  "type": "object",\n  "properties": { "name": { "type": "string" } },\n  "required": ["name"]\n}'}
-            class="config-input font-mono text-[11px] leading-snug"></textarea>
-          {#if outputSchemaText !== ''}
-            <p class="mt-1 font-mono text-[10px] {outputSchemaValid ? 'text-tertiary' : 'text-[var(--ra-red,#f87171)]'}">
-              {outputSchemaValid ? '✓ Valid — answer extracted into result.object' : '✗ Invalid JSON — schema ignored until fixed'}
-            </p>
-            <OutputSchemaParseFailField bind:value={config.outputSchemaOnParseFail} />
-          {:else}
-            <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — extract the agent's answer into a typed object (<code class="text-[10px]">.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
-          {/if}
-        </div>
-        <div>
-          <div class="config-label">Harness config (JSON)</div>
-          <textarea bind:value={config.harness} rows="6" spellcheck="false"
-            placeholder={'{\n  "lazyDisclosure": false,\n  "verboseRules": true,\n  "toolIndex": true\n}'}
-            class="config-input font-mono text-[11px] leading-snug"></textarea>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — typed harness control surface (<code class="text-[10px]">.withHarness</code>): tool disclosure, discovery, index, verbose rules, context budgets.</p>
-        </div>
-        <div>
-          <div class="config-label">Documents (JSON array, RAG)</div>
-          <textarea bind:value={config.documents} rows="6" spellcheck="false"
-            placeholder={'[\n  { "source": "./docs/README.md", "format": "markdown" }\n]'}
-            class="config-input font-mono text-[11px] leading-snug"></textarea>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — ingest documents for retrieval (.withDocuments). Each entry needs source (path) or content.</p>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label for="budget-tokens" class="config-label">Token budget</label>
-            <input id="budget-tokens" type="number" min="0" step="1000" bind:value={config.budget.tokenLimit}
-              placeholder="0 = none" class="config-input" />
-          </div>
-          <div>
-            <label for="budget-cost" class="config-label">Cost cap (USD)</label>
-            <input id="budget-cost" type="number" min="0" step="0.01" bind:value={config.budget.costLimit}
-              placeholder="0 = none" class="config-input" />
-          </div>
-        </div>
-        <p class="-mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Run terminates when a cap is crossed (<code class="text-[10px]">.withBudget</code>).</p>
-        <div>
-          <label for="grounding-mode" class="config-label">Evidence grounding</label>
-          <select id="grounding-mode" bind:value={config.grounding.mode} class="config-input">
-            <option value="off">Off</option>
-            <option value="warn">Warn — flag ungrounded figures</option>
-            <option value="block">Block — one corrective retry, then degrade</option>
-          </select>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Checks numbers in the answer against tool data (<code class="text-[10px]">.withGrounding</code>); never hard-fails.</p>
-        </div>
-        <div>
-          <label for="fabrication-guard-mode" class="config-label">Fabrication guard</label>
-          <select id="fabrication-guard-mode" bind:value={config.fabricationGuard.mode} class="config-input">
-            <option value="default">Default — always on, block</option>
-            <option value="off">Off</option>
-            <option value="warn">Warn — flag invented entities/measurements</option>
-            <option value="block">Block — one corrective retry, then degrade</option>
-          </select>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Distinct from evidence grounding above — catches invented named entities and measurements not backed by tool evidence. Always-on at Block even if left at Default (<code class="text-[10px]">.withFabricationGuard</code>).</p>
-        </div>
-        <div>
-          <label class="config-label flex items-center gap-2">
-            <input type="checkbox" bind:checked={config.modelRouting.enabled} />
-            Cost-aware model routing
-          </label>
-          {#if config.modelRouting.enabled}
-            <label for="routing-min-tier" class="config-label mt-1">Minimum tier</label>
-            <select id="routing-min-tier" bind:value={config.modelRouting.minTier} class="config-input">
-              <option value={undefined}>Auto — cheapest capable</option>
-              <option value="haiku">Haiku</option>
-              <option value="sonnet">Sonnet</option>
-              <option value="opus">Opus</option>
-            </select>
-          {/if}
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Routes each turn to the cheapest capable model for the provider (<code class="text-[10px]">.withModelRouting</code>); degrades to the configured model on any routing error.</p>
-        </div>
-        <div>
-          <label for="verification-step" class="config-label">Verification Step</label>
-          <select id="verification-step" bind:value={config.verificationStep} class="config-input">
-            <option value="none">None — trust first answer</option>
-            <option value="reflect">Reflect — LLM self-review pass</option>
-          </select>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
-            Reflect runs one extra LLM pass on the draft answer. It is not the same as the framework verification layer below.
-          </p>
-        </div>
-        <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_35%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_8%,transparent)] p-2.5">
-          <input type="checkbox" bind:checked={config.runtimeVerification} class="accent-primary mt-0.5 shrink-0" />
-          <span class="font-mono text-[11px] text-[var(--cortex-text)] leading-snug">
-            <span class="font-semibold text-tertiary">Runtime verification layer</span>
-            — enables the <code class="text-[10px]">@reactive-agents/verification</code> package (semantic entropy and related checks). Adds latency and provider calls; use when you want automated confidence signals, not only a reflect pass.
-          </span>
-        </label>
-        <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_35%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_8%,transparent)] p-2.5">
-          <input type="checkbox" bind:checked={config.auditRationale} class="accent-primary mt-0.5 shrink-0" />
-          <span class="font-mono text-[11px] text-[var(--cortex-text)] leading-snug">
-            <span class="font-semibold text-tertiary">Decision rationale in debrief</span>
-            — records the model's per-tool-call “why” for audit. <span class="font-semibold text-[var(--ra-amber-strong,inherit)]">Heads-up:</span> a cross-tier ablation found this adds latency and output tokens with no measured quality gain, and it can <em>degrade</em> answer quality on smaller / less-capable local models. Leave off unless you need the audit trail.
-          </span>
-        </label>
-
-        <!-- Generic framework-config renderer — auto-synced from the manifest -->
-        <AdvancedFrameworkConfig manifest={capManifest} bind:rawConfig={config.rawConfig} />
-
-        <!-- Lifecycle webhooks -->
-        <div class="acp-card">
-          <div class="flex items-center justify-between gap-2">
-            <span class="font-mono text-[11px] uppercase tracking-widest text-[var(--cortex-text-muted)]">Lifecycle webhooks</span>
-            <button type="button" onclick={addWebhook}
-              class="flex items-center gap-1 rounded border border-[var(--cortex-border)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--cortex-text-muted)] hover:text-primary hover:border-primary/40 transition-colors">
-              <span class="material-symbols-outlined text-[12px] leading-none">add</span> Add URL
-            </button>
-          </div>
-          <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed m-0">
-            Server POSTs a JSON payload to each URL on run start / completion / failure. Fire-and-forget; applies to saved agents.
-          </p>
-          {#each config.lifecycleWebhooks ?? [] as wh, i (i)}
-            <div class="space-y-1 rounded border border-[var(--cortex-border)] p-1.5">
-              <div class="flex items-center gap-1">
-                <input
-                  type="url"
-                  placeholder="https://example.com/hook"
-                  value={wh.url}
-                  oninput={(e) => updateWebhookUrl(i, (e.target as HTMLInputElement).value)}
-                  class="flex-1 min-w-0 rounded border border-[var(--cortex-border)] bg-[var(--cortex-surface-low)] px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                <button type="button" onclick={() => removeWebhook(i)}
-                  class="material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] hover:text-error transition-colors p-0.5"
-                  aria-label="Remove webhook">delete</button>
-              </div>
-              <div class="flex flex-wrap gap-1">
-                {#each LIFECYCLE_EVENTS as ev (ev)}
-                  <button type="button" onclick={() => toggleWebhookEvent(i, ev)}
-                    class="rounded-full px-1.5 py-0.5 font-mono text-[10px] border transition-colors
-                           {webhookHasEvent(wh, ev) ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-[var(--cortex-text-muted)] hover:border-primary/30'}">
-                    {ev}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/each}
-        </div>
-      </div>
-    {/if}
-  </div>
+    <StrategySection bind:config open={openSections.has("strategy")} onToggle={() => toggle("strategy")}
+      strategies={STRATEGIES} strategyLabel={acpStrategyLabel} manifest={capManifest} />
   {/if}
 
-  <!-- ── Section: Variables ───────────────────────────────────────────── -->
   {#if acpSectionVisible("variables")}
-  <div id="acp-section-variables" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-variables"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("variables")}
-      aria-controls="acp-panel-variables"
-      onclick={() => toggle("variables")}>
-      <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">data_object</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Variables</span>
-      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">{(config.variables ?? []).length} detected</span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('variables') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("variables")}
-      <div id="acp-panel-variables" class="acp-section-body" role="region" aria-labelledby="acp-head-variables">
-        <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
-          Use <code class="text-[10px]">{'{{name}}'}</code> in any field — variables are detected automatically. Values are filled per run.
-        </p>
-        {#if (config.variables ?? []).length === 0}
-          <p class="font-mono text-[11px] text-outline/70">No variables yet. Add a <code class="text-[10px]">{'{{name}}'}</code> token to any field above and it appears here automatically.</p>
-        {:else}
-          {#each config.variables ?? [] as v, i (v.name)}
-            <div class="acp-card">
-              <div class="flex items-center justify-between gap-2">
-                <span class="font-mono text-[11px] font-semibold text-tertiary">{v.name}</span>
-                <label class="flex items-center gap-1.5 cursor-pointer font-mono text-[11px] text-on-surface/70">
-                  <input type="checkbox" checked={v.required}
-                    onchange={(e) => patchVariable(i, { ...v, required: (e.currentTarget as HTMLInputElement).checked })}
-                    class="accent-tertiary w-3 h-3" />
-                  required
-                </label>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="config-label" for={`var-${i}-type`}>Type</label>
-                  <select id={`var-${i}-type`} class="config-input"
-                    value={v.type}
-                    onchange={(e) => patchVariable(i, { ...v, type: (e.currentTarget as HTMLSelectElement).value as VariableDef["type"] })}>
-                    <option value="string">string</option>
-                    <option value="number">number</option>
-                    <option value="enum">enum</option>
-                    <option value="multiline">multiline</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="config-label" for={`var-${i}-default`}>Default <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
-                  <input id={`var-${i}-default`} class="config-input"
-                    placeholder="default value"
-                    value={v.default ?? ""}
-                    oninput={(e) => patchVariable(i, { ...v, default: (e.currentTarget as HTMLInputElement).value })} />
-                </div>
-                {#if v.type === "enum"}
-                  <div class="col-span-2">
-                    <label class="config-label" for={`var-${i}-enum`}>Allowed values <span class="text-outline/70 normal-case font-normal">(comma-separated)</span></label>
-                    <input id={`var-${i}-enum`} class="config-input font-mono text-[11px]"
-                      placeholder="comma,separated,values"
-                      value={(v.enumValues ?? []).join(",")}
-                      oninput={(e) => patchVariable(i, { ...v, enumValues: (e.currentTarget as HTMLInputElement).value.split(",").map((s) => s.trim()).filter(Boolean) })} />
-                  </div>
-                {/if}
-                <div class="col-span-2">
-                  <label class="config-label" for={`var-${i}-desc`}>Description <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
-                  <input id={`var-${i}-desc`} class="config-input"
-                    placeholder="What this variable controls…"
-                    value={v.description ?? ""}
-                    oninput={(e) => patchVariable(i, { ...v, description: (e.currentTarget as HTMLInputElement).value })} />
-                </div>
-              </div>
-            </div>
-          {/each}
-        {/if}
-      </div>
-    {/if}
-  </div>
+    <VariablesSection bind:config open={openSections.has("variables")} onToggle={() => toggle("variables")} />
   {/if}
 
-  <!-- ── Section: Tools ───────────────────────────────────────────────── -->
   {#if !compact && acpSectionVisible("tools")}
-  <div id="acp-section-tools" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-tools"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("tools")}
-      aria-controls="acp-panel-tools"
-      onclick={() => toggle("tools")}>
-      <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">construction</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Tools</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-amber)_16%,transparent)] px-1.5 py-0.5 text-[11px] font-mono text-tertiary">{toolsToggle && !toolsToggle.enabled ? "off" : `${toolCountForBadges} active`}</span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('tools') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("tools")}
-      <div id="acp-panel-tools" class="acp-section-body" role="region" aria-labelledby="acp-head-tools">
-        {#if toolsToggle}
-          <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 p-3">
-            <input
-              type="checkbox"
-              role="switch"
-              checked={toolsToggle.enabled}
-              onchange={(e) => toolsToggle.onChange((e.currentTarget as HTMLInputElement).checked)}
-              class="mt-0.5 accent-primary shrink-0"
-            />
-            <span class="min-w-0">
-              <span class="block font-mono text-[11px] text-[var(--cortex-text)]">Tools {toolsToggle.enabled ? "on" : "off"}</span>
-              <span class="block font-mono text-[10px] leading-relaxed text-[var(--cortex-text-muted)]">
-                {#if toolsToggle.enabled}
-                  {toolsToggle.auto ? "On because tools are selected below. " : ""}Switch off to chat without any tools — your selection is kept.
-                {:else}
-                  The agent answers without tools. Switch on to use the selection below.
-                {/if}
-              </span>
-            </span>
-          </label>
-        {/if}
-        <div class="acp-stack transition-opacity {toolsToggle && !toolsToggle.enabled ? 'pointer-events-none opacity-45' : ''}" aria-disabled={toolsToggle ? !toolsToggle.enabled : undefined}>
-        <ShellWorkspaceFields bind:config {shellPresets} />
-        <ToolDisclosureField bind:rawConfig={config.rawConfig} />
-        <div class="acp-field">
-        <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
-          Quick picks toggle framework tool IDs in <code class="text-[10px]">allowedTools</code>. Conductor meta-tools (brief, find, …) are configured separately below in <strong>Meta tools</strong>.
-        </p>
-        <div class="grid grid-cols-2 gap-1.5">
-          {#each AVAILABLE_TOOLS as tool}
-            {@const active = config.tools.includes(tool.id)}
-            <button type="button" onclick={() => toggleTool(tool.id)}
-              class="flex items-center gap-2 px-2.5 py-2 rounded-lg border text-[11px] font-mono text-left cursor-pointer transition-all
-                     {active ? 'bg-tertiary/10 border-tertiary/30 text-tertiary/90' : 'border-outline-variant/15 text-outline/75 hover:border-outline-variant/30'}">
-              <span class="material-symbols-outlined text-[12px]">{tool.icon}</span>
-              {tool.label}
-            </button>
-          {/each}
-        </div>
-        </div>
-        <div class="acp-field">
-          <label for="acp-additional-tool-names" class="config-label mb-0">Additional allowed tools</label>
-          <textarea
-            id="acp-additional-tool-names"
-            rows={2}
-            bind:value={config.additionalToolNames}
-            placeholder="e.g. my-lab-tool, server/http_get (comma or newline)"
-            class="config-input font-mono text-[11px] min-h-[2.5rem] resize-y"
-          ></textarea>
-          <p class="font-mono text-[10px] text-outline/70 leading-relaxed">
-            Merged with the toggles above at run time. Use exact tool registration names (see Lab → Tools for MCP and custom tools).
-          </p>
-        </div>
-        <div class="acp-group">
-          <div class="flex items-center justify-between gap-2">
-            <span class="config-label mb-0">MCP tools <span class="text-outline/70 normal-case font-normal">(from Tools tab)</span></span>
-            <button type="button" onclick={() => loadMcpCatalog()}
-              class="text-[11px] font-mono text-secondary hover:text-primary bg-transparent border-0 cursor-pointer">↻ Refresh list</button>
-          </div>
-          {#if mcpCatalog.length === 0}
-            <p class="font-mono text-[11px] text-outline/70">No MCP servers saved. Add one under Lab → Tools.</p>
-          {:else}
-            {#each mcpCatalog as srv}
-              <div class="acp-card">
-                {#if srv.tools.length > 0}
-                  <div class="flex items-center justify-between gap-2">
-                    <Tooltip text={selectedIn(srv) === srv.tools.length ? "Click to deselect every tool from this server" : "Click to select every tool from this server"}><button type="button" onclick={() => toggleMcpServer(srv)}
-                     
-                      class="rounded px-1.5 py-0.5 font-mono text-[11px] cursor-pointer border-0 bg-transparent transition-colors hover:bg-primary/10
-                             {selectedIn(srv) === srv.tools.length ? 'text-primary' : 'text-on-surface/80'}">{srv.name}</button></Tooltip>
-                    <span class="font-mono text-[11px] text-outline/70">{selectedIn(srv)}/{srv.tools.length} selected</span>
-                  </div>
-                {:else}
-                  <div class="font-mono text-[11px] text-on-surface/80">{srv.name}</div>
-                {/if}
-                {#if srv.tools.length === 0}
-                  <p class="font-mono text-[11px] text-outline/70">No tools cached — run “Refresh tools” in Tools tab.</p>
-                {:else}
-                  <div class="flex flex-wrap gap-1">
-                    {#each srv.tools as mt}
-                      {@const active = config.tools.includes(mt.toolName)}
-                      <Tooltip text={mt.description ?? ""}><button type="button" onclick={() => toggleMcpRegistryTool(srv.serverId, mt.toolName)}
-                       
-                        class="px-2 py-1 rounded border text-[11px] font-mono cursor-pointer transition-colors
-                               {active ? 'bg-primary/10 border-primary/35 text-primary' : 'border-outline-variant/20 text-outline/75 hover:border-primary/25'}">
-                        {mt.toolName.startsWith(`${srv.name}/`) ? mt.toolName.slice(srv.name.length + 1) : mt.toolName}
-                      </button></Tooltip>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            {/each}
-          {/if}
-        </div>
-        <div class="acp-group">
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox"
-              checked={config.dynamicSubAgents?.enabled ?? false}
-              onchange={() => (config = {
-                ...config,
-                dynamicSubAgents: {
-                  enabled: !(config.dynamicSubAgents?.enabled ?? false),
-                  maxIterations: config.dynamicSubAgents?.maxIterations ?? 8,
-                },
-              })}
-              class="accent-primary w-3.5 h-3.5" />
-            <div>
-              <div class="font-mono text-[11px] text-on-surface/80">Dynamic sub-agents</div>
-              <div class="font-mono text-[11px] text-outline/70">Expose <code class="text-[10px]">spawn-agent</code> for runtime delegation</div>
-            </div>
-          </label>
-          {#if config.dynamicSubAgents?.enabled}
-            <div>
-              <label for="dyn-sub-max" class="config-label">Spawn max iterations</label>
-              <input id="dyn-sub-max" type="number" min="1" max="50" step="1"
-                value={config.dynamicSubAgents?.maxIterations ?? 8}
-                oninput={(e) => (config = {
-                  ...config,
-                  dynamicSubAgents: {
-                    enabled: true,
-                    maxIterations: Math.max(1, parseInt((e.target as HTMLInputElement).value || "8", 10)),
-                  },
-                })}
-                class="config-input" />
-            </div>
-          {/if}
-        </div>
-        </div>
-      </div>
-    {/if}
-  </div>
+    <ToolsSection bind:config open={openSections.has("tools")} onToggle={() => toggle("tools")}
+      {toolsToggle} tools={AVAILABLE_TOOLS} {shellPresets} {mcpCatalog} {loadMcpCatalog} />
   {/if}
 
   {#if !compact && (["subagents","skills","memory","guardrails","execution","metatools","reliability","observability"].some(acpSectionVisible))}
     <div class="acp-divider" role="separator"><span>More options</span></div>
   {/if}
 
-  <!-- ── Section: Sub-agents (static / remote) ─────────────────────────── -->
   {#if !compact && acpSectionVisible("subagents")}
-  <div id="acp-section-subagents" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-subagents"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("subagents")}
-      aria-controls="acp-panel-subagents"
-      onclick={() => toggle("subagents")}>
-      <span class="material-symbols-outlined text-[15px] text-primary/80 shrink-0" aria-hidden="true">hub</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Sub-agents</span>
-      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">{(config.agentTools ?? []).length} registered</span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('subagents') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("subagents")}
-      <div id="acp-panel-subagents" class="acp-section-body" role="region" aria-labelledby="acp-head-subagents">
-        <div class="flex flex-wrap gap-2">
-          <button type="button" onclick={addLocalAgentTool}
-            class="text-[11px] font-mono px-2 py-1 rounded border border-primary/30 text-primary hover:bg-primary/10 cursor-pointer bg-transparent">+ Local sub-agent</button>
-          <button type="button" onclick={addRemoteAgentTool}
-            class="text-[11px] font-mono px-2 py-1 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent">+ Remote (A2A URL)</button>
-        </div>
-        {#each config.agentTools ?? [] as at, i (i)}
-          <div class="acp-card">
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-mono text-[11px] text-outline/70 uppercase">#{i + 1}</span>
-              <button type="button" onclick={() => removeAgentToolAt(i)}
-                class="text-[11px] font-mono text-error/70 hover:text-error bg-transparent border-0 cursor-pointer">Remove</button>
-            </div>
-            {#if at.kind === "remote"}
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="config-label" for={`subagent-r-${i}-tool`}>Tool name</label>
-                  <input id={`subagent-r-${i}-tool`} class="config-input" value={at.toolName}
-                    oninput={(e) => patchAgentTool(i, { ...at, toolName: (e.target as HTMLInputElement).value })} />
-                </div>
-                <div class="col-span-2">
-                  <label class="config-label" for={`subagent-r-${i}-url`}>Remote URL</label>
-                  <input id={`subagent-r-${i}-url`} class="config-input font-mono text-[11px]" value={at.remoteUrl}
-                    oninput={(e) => patchAgentTool(i, { ...at, remoteUrl: (e.target as HTMLInputElement).value })} />
-                </div>
-              </div>
-            {:else}
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="config-label" for={`subagent-l-${i}-tool`}>Tool name</label>
-                  <input id={`subagent-l-${i}-tool`} class="config-input" value={at.toolName}
-                    oninput={(e) => patchAgentTool(i, { ...at, toolName: (e.target as HTMLInputElement).value })} />
-                </div>
-                <div>
-                  <label class="config-label" for={`subagent-l-${i}-display`}>Display name</label>
-                  <input id={`subagent-l-${i}-display`} class="config-input" value={at.agent.name}
-                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, name: (e.target as HTMLInputElement).value } })} />
-                </div>
-                <div class="col-span-2">
-                  <label class="config-label" for={`subagent-l-${i}-desc`}>Description</label>
-                  <input id={`subagent-l-${i}-desc`} class="config-input" value={at.agent.description ?? ""}
-                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, description: (e.target as HTMLInputElement).value } })} />
-                </div>
-                <div>
-                  <label class="config-label" for={`subagent-l-${i}-provider`}>Provider <span class="normal-case text-outline/70">(optional)</span></label>
-                  <input id={`subagent-l-${i}-provider`} class="config-input" value={at.agent.provider ?? ""} placeholder="inherit"
-                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, provider: (e.target as HTMLInputElement).value || undefined } })} />
-                </div>
-                <div>
-                  <label class="config-label" for={`subagent-l-${i}-model`}>Model <span class="normal-case text-outline/70">(optional)</span></label>
-                  <input id={`subagent-l-${i}-model`} class="config-input" value={at.agent.model ?? ""} placeholder="inherit"
-                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, model: (e.target as HTMLInputElement).value || undefined } })} />
-                </div>
-                <div>
-                  <label class="config-label" for={`subagent-l-${i}-maxiter`}>Max iterations</label>
-                  <input id={`subagent-l-${i}-maxiter`} type="number" min="1" max="50" class="config-input" value={at.agent.maxIterations ?? 8}
-                    oninput={(e) => patchAgentTool(i, {
-                      ...at,
-                      agent: { ...at.agent, maxIterations: Math.max(1, parseInt((e.target as HTMLInputElement).value || "8", 10)) },
-                    })} />
-                </div>
-                <div class="col-span-2">
-                  <label class="config-label" for={`subagent-l-${i}-tools`}>Sub-agent tools <span class="normal-case text-outline/70">(comma-separated)</span></label>
-                  <input id={`subagent-l-${i}-tools`} class="config-input font-mono text-[11px]"
-                    value={(at.agent.tools ?? []).join(", ")}
-                    oninput={(e) => {
-                      const raw = (e.target as HTMLInputElement).value;
-                      const tools = raw.split(",").map((s) => s.trim()).filter(Boolean);
-                      patchAgentTool(i, { ...at, agent: { ...at.agent, tools: tools.length ? tools : undefined } });
-                    }} />
-                </div>
-                <div class="col-span-2">
-                  <label class="config-label" for={`subagent-l-${i}-sysprompt`}>System prompt</label>
-                  <textarea id={`subagent-l-${i}-sysprompt`} rows="2" class="config-input resize-none" value={at.agent.systemPrompt ?? ""}
-                    oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, systemPrompt: (e.target as HTMLInputElement).value || undefined } })}></textarea>
-                </div>
-              </div>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    {/if}
-  </div>
+    <SubAgentsSection bind:config open={openSections.has("subagents")} onToggle={() => toggle("subagents")} />
   {/if}
 
-  <!-- ── Section: Living skills ─────────────────────────────────────── -->
   {#if !compact && acpSectionVisible("skills")}
-  <div id="acp-section-skills" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-skills"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("skills")}
-      aria-controls="acp-panel-skills"
-      onclick={() => toggle("skills")}>
-      <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">auto_awesome</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Living skills</span>
-      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">{(config.skills?.paths ?? []).length} path{(config.skills?.paths ?? []).length !== 1 ? "s" : ""}</span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('skills') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("skills")}
-      <div id="acp-panel-skills" class="acp-section-body" role="region" aria-labelledby="acp-head-skills">
-        <div>
-          <label for="skills-paths-lines" class="config-label">Skill directories <span class="text-outline/70 normal-case font-normal">(`withSkills` paths — one per line)</span></label>
-          <textarea id="skills-paths-lines"
-            bind:value={skillsPathsDraft}
-            onblur={commitSkillsPathsDraft}
-            placeholder={".claude/skills\n./my-skills"}
-            rows="3"
-            class="config-input resize-none leading-relaxed font-mono text-[11px]"></textarea>
-        </div>
-        <div>
-          <label for="skills-activate-lines" class="config-label">Force-activate <span class="text-outline/70 normal-case font-normal">(skill names — one per line; always loaded in full, bypassing task-relevance auto-activation)</span></label>
-          <textarea id="skills-activate-lines"
-            bind:value={skillsActivateDraft}
-            onblur={commitSkillsActivateDraft}
-            placeholder={"my-skill-name"}
-            rows="2"
-            class="config-input resize-none leading-relaxed font-mono text-[11px]"></textarea>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Task-relevant skills still auto-activate; this is a deterministic override (<code class="text-[10px]">withSkills({'{'} activate {'}'}</code>).</p>
-        </div>
-      </div>
-    {/if}
-  </div>
+    <SkillsSection bind:config open={openSections.has("skills")} onToggle={() => toggle("skills")} />
   {/if}
 
-  <!-- ── Section: Memory ──────────────────────────────────────────────── -->
   {#if acpSectionVisible("memory")}
-  <div id="acp-section-memory" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-memory"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("memory")}
-      aria-controls="acp-panel-memory"
-      onclick={() => toggle("memory")}>
-      <span class="material-symbols-outlined text-[15px] text-primary/80 shrink-0" aria-hidden="true">account_tree</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Memory</span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('memory') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("memory")}
-      <div id="acp-panel-memory" class="acp-section-body" role="region" aria-labelledby="acp-head-memory">
-        <p class="font-mono text-[11px] text-outline/70">All off = no memory: nothing is stored or recalled across runs.</p>
-        {#each [
-          { key: "working",  label: "Working Memory",  desc: "Short-term context within the run" },
-          { key: "episodic", label: "Episodic Memory",  desc: "Stores run history for future recall" },
-          { key: "semantic", label: "Semantic Memory",  desc: "Vector store for similarity search" },
-        ] as tier}
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox"
-              checked={config.memory[tier.key as keyof typeof config.memory]}
-              onchange={() => (config = { ...config, memory: { ...config.memory, [tier.key]: !config.memory[tier.key as keyof typeof config.memory] } })}
-              class="accent-primary w-3.5 h-3.5" />
-            <div>
-              <div class="font-mono text-[11px] text-on-surface/80">{tier.label}</div>
-              <div class="font-mono text-[11px] text-outline/70">{tier.desc}</div>
-            </div>
-          </label>
-        {/each}
-        <div class="pt-1">
-          <label for="context-synthesis" class="config-label">Context Synthesis</label>
-          <select id="context-synthesis" bind:value={config.contextSynthesis} class="config-input">
-            <option value="auto">Auto — framework decides</option>
-            <option value="template">Template — fast, rule-based</option>
-            <option value="llm">LLM — deep synthesis call</option>
-            <option value="none">None — raw context</option>
-          </select>
-        </div>
-      </div>
-    {/if}
-  </div>
+    <MemorySection bind:config open={openSections.has("memory")} onToggle={() => toggle("memory")} />
   {/if}
 
-  <!-- ── Section: Guardrails ──────────────────────────────────────────── -->
   {#if acpSectionVisible("guardrails")}
-  <div id="acp-section-guardrails" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-guardrails"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("guardrails")}
-      aria-controls="acp-panel-guardrails"
-      onclick={() => toggle("guardrails")}>
-      <span class="material-symbols-outlined text-[15px] text-error/75 shrink-0" aria-hidden="true">security</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Guardrails</span>
-      <span class="ml-2 rounded-md px-1.5 py-0.5 text-[11px] font-mono {config.guardrails.enabled ? 'bg-[color-mix(in_srgb,var(--ra-green)_20%,transparent)] text-[var(--ra-green)]' : 'bg-[var(--cortex-surface-mid)] text-[var(--cortex-text-muted)]'}">
-        {config.guardrails.enabled ? "on" : "off"}
-      </span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('guardrails') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("guardrails")}
-      <div id="acp-panel-guardrails" class="acp-section-body" role="region" aria-labelledby="acp-head-guardrails">
-        <GuardrailsFields bind:config />
-      </div>
-    {/if}
-  </div>
+    <GuardrailsSection bind:config open={openSections.has("guardrails")} onToggle={() => toggle("guardrails")} />
   {/if}
-  <!-- ── Section: Execution Controls ──────────────────────────────────── -->
+
   {#if acpSectionVisible("execution")}
-  <div id="acp-section-execution" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-execution"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("execution")}
-      aria-controls="acp-panel-execution"
-      onclick={() => toggle("execution")}>
-      <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">timer</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Execution</span>
-      <span class="ml-2 max-w-[min(12rem,45%)] truncate text-[11px] font-mono text-[var(--cortex-text-muted)]">
-        {[
-          config.timeout > 0 ? `${Math.round(config.timeout/1000)}s timeout` : null,
-          config.retryPolicy.enabled ? `${config.retryPolicy.maxRetries} retries` : null,
-        ].filter(Boolean).join(" · ") || "defaults"}
-      </span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('execution') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("execution")}
-      <div id="acp-panel-execution" class="acp-section-body" role="region" aria-labelledby="acp-head-execution">
-        <!-- Timeout -->
-        <div>
-          <label for="execution-timeout" class="config-label">Timeout <span class="text-outline/70 normal-case font-normal">(seconds, 0 = none)</span></label>
-          <input id="execution-timeout" type="number" min="0" max="3600" step="5"
-            value={Math.round(config.timeout / 1000)}
-            oninput={(e) => (config = { ...config, timeout: parseInt((e.target as HTMLInputElement).value || "0") * 1000 })}
-            class="config-input" />
-        </div>
-        <!-- Retry policy -->
-        <div class="space-y-2">
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" bind:checked={config.retryPolicy.enabled} class="accent-primary w-3.5 h-3.5" />
-            <span class="font-mono text-[11px] text-on-surface/80">Enable retry policy</span>
-          </label>
-          {#if config.retryPolicy.enabled}
-            <div class="grid grid-cols-2 gap-3 pl-5">
-              <div>
-                <label for="retry-max-retries" class="config-label">Max Retries</label>
-                <input id="retry-max-retries" type="number" min="1" max="10"
-                  bind:value={config.retryPolicy.maxRetries}
-                  class="config-input" />
-              </div>
-              <div>
-                <label for="retry-backoff-ms" class="config-label">Backoff <span class="text-outline/70 normal-case font-normal">(ms)</span></label>
-                <input id="retry-backoff-ms" type="number" min="100" max="30000" step="100"
-                  bind:value={config.retryPolicy.backoffMs}
-                  class="config-input" />
-              </div>
-            </div>
-          {/if}
-        </div>
-      </div>
-    {/if}
-  </div>
+    <ExecutionSection bind:config open={openSections.has("execution")} onToggle={() => toggle("execution")} />
   {/if}
 
-  <!-- ── Section: Meta Tools (Conductor's Suite) ───────────────────────── -->
   {#if acpSectionVisible("metatools")}
-  <div id="acp-section-metatools" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-metatools"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("metatools")}
-      aria-controls="acp-panel-metatools"
-      onclick={() => toggle("metatools")}>
-      <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">wand_stars</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Meta tools</span>
-      <span class="ml-2 max-w-[min(11rem,40%)] truncate text-[11px] font-mono text-[var(--cortex-text-muted)]">
-        {config.metaTools.enabled
-          ? [config.metaTools.brief && 'brief', config.metaTools.find && 'find', config.metaTools.pulse && 'pulse', config.metaTools.recall && 'recall', config.metaTools.todo && 'to-do'].filter(Boolean).join(', ') || 'none active'
-          : 'off'}
-      </span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('metatools') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("metatools")}
-      <div id="acp-panel-metatools" class="acp-section-body" role="region" aria-labelledby="acp-head-metatools">
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" bind:checked={config.metaTools.enabled} class="accent-primary w-3.5 h-3.5" />
-          <div>
-            <div class="font-mono text-[11px] text-on-surface/80">Enable Conductor's Suite</div>
-            <div class="font-mono text-[11px] text-outline/70">Give the agent self-awareness and intelligence tools</div>
-          </div>
-        </label>
-        {#if config.metaTools.enabled}
-          <div class="grid grid-cols-2 gap-1.5 pl-1 pt-1">
-            {#each [
-              { key: "brief",       label: "Brief",        desc: "Situational overview" },
-              { key: "find",        label: "Find",         desc: "RAG→memory→web routing" },
-              { key: "pulse",       label: "Pulse",        desc: "Entropy introspection" },
-              { key: "recall",      label: "Recall",       desc: "Selective working memory" },
-              { key: "harnessSkill",label: "Harness Skill",desc: "Built-in conductor workflow" },
-              { key: "todo",        label: "To-do list",   desc: "Agent keeps its own to-do list (shown in the plan card). On by default for chat" },
-            ] as mt}
-              <label class="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-surface-container-low/40 transition-colors
-                            {config.metaTools[mt.key as keyof typeof config.metaTools] ? 'bg-secondary/10 border border-secondary/20' : 'border border-transparent'}">
-                <input type="checkbox"
-                  checked={config.metaTools[mt.key as keyof typeof config.metaTools] as boolean}
-                  onchange={() => (config = { ...config, metaTools: { ...config.metaTools, [mt.key]: !config.metaTools[mt.key as keyof typeof config.metaTools] } })}
-                  class="accent-secondary w-3 h-3 flex-shrink-0" />
-                <div>
-                  <div class="font-mono text-[11px] text-on-surface/80">{mt.label}</div>
-                  <div class="font-mono text-[10px] text-outline/70">{mt.desc}</div>
-                </div>
-              </label>
-            {/each}
-            <label class="col-span-2 flex items-center gap-2 p-2 ml-5 rounded-lg border border-transparent transition-colors
-                          {config.metaTools.todo ? 'cursor-pointer hover:bg-surface-container-low/40' : 'opacity-40 cursor-not-allowed'}">
-              <input type="checkbox" id="acp-todo-guidance"
-                disabled={!config.metaTools.todo}
-                checked={todoGuidanceOn(config.metaTools)}
-                onchange={() => (config = { ...config, metaTools: setTodoGuidance(config.metaTools, !todoGuidanceOn(config.metaTools)) })}
-                class="accent-secondary w-3 h-3 flex-shrink-0" />
-              <div>
-                <div class="font-mono text-[11px] text-on-surface/80">Keep to-do list current</div>
-                <div class="font-mono text-[10px] text-outline/70">Nudges the agent to update its to-do list as it works. Experimental — adds a short system line and an occasional reminder.</div>
-              </div>
-            </label>
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </div>
+    <MetaToolsSection bind:config open={openSections.has("metatools")} onToggle={() => toggle("metatools")} />
   {/if}
 
-  <!-- ── Section: Reliability (Fallbacks) ─────────────────────────────── -->
   {#if acpSectionVisible("reliability")}
-  <div id="acp-section-reliability" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-reliability"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("reliability")}
-      aria-controls="acp-panel-reliability"
-      onclick={() => toggle("reliability")}>
-      <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">shield</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Reliability</span>
-      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">
-        {config.fallbacks.enabled ? `${config.fallbacks.providers.length} fallback${config.fallbacks.providers.length !== 1 ? 's' : ''}` : 'off'}
-      </span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('reliability') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("reliability")}
-      <div id="acp-panel-reliability" class="acp-section-body" role="region" aria-labelledby="acp-head-reliability">
-        <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" bind:checked={config.fallbacks.enabled} class="accent-primary w-3.5 h-3.5" />
-          <div>
-            <div class="font-mono text-[11px] text-on-surface/80">Enable provider fallbacks</div>
-            <div class="font-mono text-[11px] text-outline/70">Automatically switch to a backup provider on errors</div>
-          </div>
-        </label>
-        {#if config.fallbacks.enabled}
-          <div>
-            <label for="fallback-providers" class="config-label">Fallback Providers <span class="text-outline/70 normal-case font-normal">(comma-separated, e.g. openai, gemini)</span></label>
-            <input
-              id="fallback-providers"
-              value={config.fallbacks.providers.join(", ")}
-              oninput={(e) => (config = { ...config, fallbacks: { ...config.fallbacks, providers: (e.target as HTMLInputElement).value.split(",").map(s => s.trim()).filter(Boolean) } })}
-              placeholder="openai, gemini, ollama"
-              class="config-input" />
-          </div>
-          <div>
-            <label for="fallback-error-threshold" class="config-label flex items-center justify-between">
-              Error Threshold
-              <span class="font-mono text-primary tabular-nums">{config.fallbacks.errorThreshold}</span>
-            </label>
-            <input id="fallback-error-threshold" type="range" min="1" max="10"
-              bind:value={config.fallbacks.errorThreshold}
-              class="w-full accent-primary" />
-            <div class="flex justify-between text-[10px] font-mono text-outline/70 mt-0.5">
-              <span>1 — switch on first error</span><span>10 — very tolerant</span>
-            </div>
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </div>
+    <ReliabilitySection bind:config open={openSections.has("reliability")} onToggle={() => toggle("reliability")} />
   {/if}
 
-  <!-- ── Section: Observability ─────────────────────────────────────────── -->
   {#if acpSectionVisible("observability")}
-  <div id="acp-section-observability" class="acp-section acp-section-shell border border-[var(--cortex-border)] rounded-xl overflow-hidden">
-    <button type="button"
-      id="acp-head-observability"
-      class="acp-section-trigger"
-      aria-expanded={openSections.has("observability")}
-      aria-controls="acp-panel-observability"
-      onclick={() => toggle("observability")}>
-      <span class="material-symbols-outlined text-[15px] text-[var(--cortex-text-muted)] shrink-0" aria-hidden="true">monitoring</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Observability</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-cyan)_14%,transparent)] px-1.5 py-0.5 text-[11px] font-mono text-secondary">
-        {config.observabilityVerbosity}
-      </span>
-      <span class="ml-auto material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] transition-transform duration-200 {openSections.has('observability') ? '' : '-rotate-90'}" aria-hidden="true">expand_more</span>
-    </button>
-    {#if openSections.has("observability")}
-      <div id="acp-panel-observability" class="acp-section-body" role="region" aria-labelledby="acp-head-observability">
-        <label for="observability-off" class="config-label">Metrics Dashboard Verbosity</label>
-        <div class="acp-field">
-          {#each [
-            { value: "off",     label: "Off",     desc: "No dashboard output" },
-            { value: "minimal", label: "Minimal", desc: "Header card only" },
-            { value: "normal",  label: "Normal",  desc: "Dashboard + timeline + tools" },
-            { value: "verbose", label: "Verbose", desc: "Dashboard + detailed phase logs" },
-          ] as opt}
-            <label class="flex items-start gap-2.5 cursor-pointer p-1.5 rounded-lg hover:bg-surface-container-low/40 transition-colors
-                          {config.observabilityVerbosity === opt.value ? 'bg-primary/10 border border-primary/20' : 'border border-transparent'}">
-              <input type="radio" name="observability" value={opt.value}
-                checked={config.observabilityVerbosity === opt.value}
-                onchange={() => (config = { ...config, observabilityVerbosity: opt.value as PanelAgentConfig["observabilityVerbosity"] })}
-                class="mt-0.5 accent-primary flex-shrink-0" />
-              <div>
-                <div class="font-mono text-[11px] font-semibold text-on-surface/80">{opt.label}</div>
-                <div class="font-mono text-[11px] text-outline/70">{opt.desc}</div>
-              </div>
-            </label>
-          {/each}
-        </div>
-        <label class="mt-2 flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" class="accent-primary w-3.5 h-3.5"
-            checked={config.observability?.checklist !== false}
-            onchange={(e) => (config = { ...config, observability: { ...config.observability, checklist: e.currentTarget.checked } })} />
-          <div>
-            <div class="font-mono text-[11px] text-on-surface/80">Show task checklist</div>
-            <div class="font-mono text-[11px] text-outline/70">Live plan card in chat: goal checks and the agent's to-do</div>
-          </div>
-        </label>
-      </div>
-    {/if}
-  </div>
+    <ObservabilitySection bind:config open={openSections.has("observability")} onToggle={() => toggle("observability")} />
   {/if}
 
 </div>
@@ -1829,7 +384,7 @@
     gap: 12px;
   }
 
-  .acp-section-trigger {
+  :global(.agent-config-panel .acp-section-trigger) {
     display: flex;
     width: 100%;
     align-items: center;
@@ -1840,7 +395,7 @@
     cursor: pointer;
   }
 
-  .acp-section-body {
+  :global(.agent-config-panel .acp-section-body) {
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -1864,7 +419,7 @@
     gap: 6px;
   }
 
-  .acp-card {
+  :global(.agent-config-panel .acp-card) {
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -1908,11 +463,11 @@
     background: var(--cortex-border);
   }
 
-  .acp-header-mark {
+  :global(.agent-config-panel .acp-header-mark) {
     box-shadow: 0 0 14px color-mix(in srgb, var(--ra-violet) 35%, transparent);
   }
 
-  .acp-toolbar-btn {
+  :global(.agent-config-panel .acp-toolbar-btn) {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
@@ -1931,30 +486,30 @@
       color 0.15s ease;
   }
 
-  .acp-toolbar-btn:hover {
+  :global(.agent-config-panel .acp-toolbar-btn:hover) {
     border-color: color-mix(in srgb, var(--ra-violet) 45%, var(--cortex-border));
     color: var(--ra-violet);
     background: color-mix(in srgb, var(--ra-violet) 10%, var(--cortex-surface-low));
   }
 
-  .acp-toolbar-btn--muted {
+  :global(.agent-config-panel .acp-toolbar-btn--muted) {
     opacity: 0.72;
     border-color: var(--cortex-border);
   }
 
-  .acp-toolbar-btn--muted:hover {
+  :global(.agent-config-panel .acp-toolbar-btn--muted:hover) {
     opacity: 1;
     color: var(--ra-cyan);
   }
 
-  .acp-toolbar-btn--ghost {
+  :global(.agent-config-panel .acp-toolbar-btn--ghost) {
     border-color: transparent;
     background: transparent;
     font-weight: 500;
     color: var(--cortex-text-muted);
   }
 
-  .acp-toolbar-btn--ghost:hover {
+  :global(.agent-config-panel .acp-toolbar-btn--ghost:hover) {
     color: var(--cortex-text);
     background: color-mix(in srgb, var(--cortex-surface-mid) 55%, transparent);
   }
@@ -1976,7 +531,7 @@
     background: color-mix(in srgb, var(--ra-cyan) 8%, var(--cortex-surface-low));
   }
 
-  .acp-nav-pill {
+  :global(.agent-config-panel .acp-nav-pill) {
     padding: 0.25rem 0.6rem;
     border-radius: 9999px;
     border: 1px solid var(--cortex-border);
@@ -1993,27 +548,27 @@
       box-shadow 0.2s ease;
   }
 
-  .acp-nav-pill:hover {
+  :global(.agent-config-panel .acp-nav-pill:hover) {
     border-color: color-mix(in srgb, var(--ra-violet) 40%, var(--cortex-border));
     color: var(--cortex-text);
   }
 
-  .acp-nav-pill--active {
+  :global(.agent-config-panel .acp-nav-pill--active) {
     border-color: color-mix(in srgb, var(--ra-violet) 55%, transparent);
     color: var(--ra-violet);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--ra-cyan) 25%, transparent);
     background: color-mix(in srgb, var(--ra-violet) 9%, var(--cortex-surface));
   }
 
-  .acp-section {
+  :global(.agent-config-panel .acp-section) {
     scroll-margin-top: 0.75rem;
   }
 
-  .acp-section-shell {
+  :global(.agent-config-panel .acp-section-shell) {
     background: color-mix(in srgb, var(--cortex-surface-low) 55%, transparent);
   }
 
-  :global(html.dark) .acp-section-shell {
+  :global(html.dark .agent-config-panel .acp-section-shell) {
     background: color-mix(in srgb, var(--cortex-surface-low) 82%, var(--cortex-surface) 18%);
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--ra-violet) 22%, transparent),
@@ -2021,7 +576,7 @@
       0 0 40px -24px color-mix(in srgb, var(--ra-cyan) 18%, transparent);
   }
 
-  .acp-section-trigger {
+  :global(.agent-config-panel .acp-section-trigger) {
     background: linear-gradient(
       180deg,
       color-mix(in srgb, var(--cortex-surface) 40%, transparent) 0%,
@@ -2030,19 +585,19 @@
     transition: background 0.15s ease;
   }
 
-  .acp-section-trigger:hover {
+  :global(.agent-config-panel .acp-section-trigger:hover) {
     background: color-mix(in srgb, var(--ra-violet) 6%, var(--cortex-surface-low));
   }
 
-  .acp-section-body {
+  :global(.agent-config-panel .acp-section-body) {
     background: color-mix(in srgb, var(--cortex-surface) 35%, transparent);
   }
 
-  :global(html.dark) .acp-section-body {
+  :global(html.dark .agent-config-panel .acp-section-body) {
     background: color-mix(in srgb, var(--cortex-surface-low) 55%, var(--cortex-surface) 45%);
   }
 
-  :global(html.dark) .acp-section-trigger {
+  :global(html.dark .agent-config-panel .acp-section-trigger) {
     background: linear-gradient(
       180deg,
       color-mix(in srgb, var(--cortex-surface-high) 42%, var(--cortex-surface)) 0%,
@@ -2050,11 +605,11 @@
     );
   }
 
-  :global(html.dark) .acp-section-trigger:hover {
+  :global(html.dark .agent-config-panel .acp-section-trigger:hover) {
     background: color-mix(in srgb, var(--ra-violet) 12%, var(--cortex-surface-low));
   }
 
-  .acp-filter-input {
+  :global(.agent-config-panel .acp-filter-input) {
     font-family: "Geist Variable", "Geist", ui-sans-serif, sans-serif;
     font-size: 11px;
   }
