@@ -34,6 +34,18 @@ describe("Intelligence event types", () => {
     expect(event._tag).toBe("SkillRefined");
   });
 
+  test("SkillPromoted, SkillRolledBack and SkillRefined accept optional taskId", () => {
+    const events: SkillEvent[] = [
+      { _tag: "SkillPromoted", skillName: "s", fromConfidence: "tentative", toConfidence: "trusted", taskId: "task-1" },
+      { _tag: "SkillRolledBack", skillName: "s", fromVersion: 2, toVersion: 1, reason: "regression", taskId: "task-2" },
+      { _tag: "SkillRefined", skillName: "s", previousVersion: 1, newVersion: 2, taskCategory: "coding", taskId: "task-3" },
+    ];
+    const ids = events.map((e) =>
+      e._tag === "SkillPromoted" || e._tag === "SkillRolledBack" || e._tag === "SkillRefined" ? e.taskId : undefined,
+    );
+    expect(ids).toEqual(["task-1", "task-2", "task-3"]);
+  });
+
   test("AgentNeedsHuman event can be constructed", () => {
     const event: AgentNeedsHuman = { _tag: "AgentNeedsHuman", agentId: "agent-1", taskId: "task-1", reason: "stuck", decisionsExhausted: ["early-stop", "switch-strategy"], context: "tried everything" };
     expect(event._tag).toBe("AgentNeedsHuman");

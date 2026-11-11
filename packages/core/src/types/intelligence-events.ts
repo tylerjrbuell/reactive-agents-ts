@@ -31,6 +31,11 @@ export type SkillRefined = {
   readonly previousVersion: number;
   readonly newVersion: number;
   readonly taskCategory: string;
+  /**
+   * Task id of the run whose outcome triggered the refinement. Absent for
+   * manual `refineSkills` passes and producers without run context.
+   */
+  readonly taskId?: string;
 };
 
 export type SkillRefinementSuggested = {
@@ -46,6 +51,11 @@ export type SkillRolledBack = {
   readonly fromVersion: number;
   readonly toVersion: number;
   readonly reason: "regression" | "manual";
+  /**
+   * Task id of the run whose outcome triggered the rollback. Absent for
+   * manual rollbacks and producers without run context.
+   */
+  readonly taskId?: string;
 };
 
 export type SkillConflictDetected = {
@@ -60,6 +70,11 @@ export type SkillPromoted = {
   readonly skillName: string;
   readonly fromConfidence: string;
   readonly toConfidence: string;
+  /**
+   * Task id of the run whose outcome triggered the promotion. Absent for
+   * producers without run context.
+   */
+  readonly taskId?: string;
 };
 
 export type SkillSkippedContextFull = {
