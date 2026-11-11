@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ChatTurn } from "$lib/stores/chat-store.js";
   import { tooltip } from "$lib/actions/tooltip.js";
-  import { previewArgs, turnSteps, turnSummary } from "$lib/stores/chat-timeline.js";
+  import { prettyArgs, previewArgs, turnSteps, turnSummary } from "$lib/stores/chat-timeline.js";
   import type { ChatToolCall } from "$lib/stores/chat-store.js";
   import { groupToolNames } from "$lib/tool-groups.js";
   import ChatSubAgentCards from "$lib/components/ChatSubAgentCards.svelte";
@@ -40,14 +40,6 @@
     overrides = { ...overrides, [key]: !isOpen(key, fallback) };
   };
 
-  const pretty = (value: unknown): string => {
-    if (typeof value === "string") return value;
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch {
-      return String(value);
-    }
-  };
 
   // Nothing under 11px (spec principle 6).
   const text = $derived(compact ? "text-[11px]" : "text-[12px]");
@@ -83,7 +75,7 @@
               <div>
                 <div class="mb-0.5 text-[11px] text-[var(--cortex-text-3)]">Parameters</div>
                 {#if call.args !== undefined}
-                  <pre class="m-0 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono leading-snug text-[var(--cortex-text)] {text}">{pretty(call.args)}</pre>
+                  <pre class="m-0 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono leading-snug text-[var(--cortex-text)] {text}">{prettyArgs(call.args)}</pre>
                 {:else}
                   <span class="font-mono italic text-[var(--cortex-text-2)] {text}">not reported</span>
                 {/if}

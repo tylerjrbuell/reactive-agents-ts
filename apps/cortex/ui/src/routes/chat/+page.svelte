@@ -10,8 +10,12 @@
   import { settings } from "$lib/stores/settings.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { chatSidebarOpen } from "$lib/stores/chat-sidebar.js";
+  import { setApprovalView } from "$lib/stores/approval-watcher.js";
 
   const chat = $derived($chatStore);
+  // The open chat shows its own approvals inline, so the app-wide toast skips them (approval-surface.ts).
+  const openSessionId = $derived(chat.activeSessionId);
+  $effect(() => (openSessionId ? setApprovalView({ kind: "chat", sessionId: openSessionId }) : undefined));
   // An open chat with nothing in it yet (the hero state): the only chat state with the ambient orbs.
   const emptyChat = $derived(
     chat.activeSessionId !== null &&

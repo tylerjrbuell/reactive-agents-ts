@@ -17,8 +17,17 @@
  *   - owner-managed (chat): the registry never touches an agent. Listing reads the
  *     gate snapshot and approve/deny delegate to `owner.decide`, so a desk approval
  *     of a chat turn still lands its reply in the chat thread.
+ *
+ * Live waits (no durable runs): a `detach` approval policy without durable runs
+ * makes the run wait IN PROCESS for a person (runtime `engine/human-gate.ts`): the
+ * run stays alive and `approveRun`/`denyRun` answer the waiter. Every path that
+ * runs such an agent registers it as a live source ({@link durableApprovals.watchLive})
+ * while it runs. Listing asks each source's `listPendingApprovals()` (live waits
+ * only: the agent has no store); approve/deny of a run not registered above go to
+ * the source that holds the wait. The run's own caller still owns its result.
  */
 import type { ReactiveAgent } from "@reactive-agents/runtime";
+import { cortexLog } from "../cortex-log.js";
 
 /** The paused gate as the framework reports it (`AgentResult.pendingApproval`). */
 export interface PendingGate {
@@ -64,7 +73,42 @@ export interface PendingApprovalRow {
   readonly chatSessionId?: string;
 }
 
+/** The agent surface a live wait is read and answered through. */
+export type LiveApprovableAgent = Pick<ReactiveAgent, "listPendingApprovals" | "approveRun" | "denyRun">;
+
+/** A running agent whose `detach` approvals wait live (no durable store). */
+export interface LiveApprovalSource {
+  /** The agent id rows report (the Cortex agent's, or the chat session's stable id). */
+  readonly agentId: string;
+  readonly agent: LiveApprovableAgent;
+  /** Set when the agent backs a chat session, so the row links back to it. */
+  readonly chatSessionId?: string;
+}
+
+/**
+ * True when a build's `detach` approvals wait live: a gate in `detach` mode and
+ * no durable runs (with durable runs the run pauses durably instead).
+ */
+export function approvalsWaitLive(p: {
+  readonly durableRuns?: { readonly enabled?: boolean };
+  readonly approvalPolicy?: { readonly mode: string };
+}): boolean {
+  return p.approvalPolicy?.mode === "detach" && p.durableRuns?.enabled !== true;
+}
+
 const pending = new Map<string, PendingApprovalEntry>();
+const liveSources = new Set<LiveApprovalSource>();
+
+/** A source's live waits; an agent that cannot list them lists none. */
+const liveRowsOf = async (
+  source: LiveApprovalSource,
+): Promise<readonly { runId: string; gateId: string; toolName: string; args: unknown }[]> => {
+  try {
+    return await source.agent.listPendingApprovals();
+  } catch {
+    return [];
+  }
+};
 
 export const durableApprovals = {
   /** Retain a paused run keyed by its durable runId (re-registering replaces). */
@@ -116,7 +160,54 @@ export const durableApprovals = {
         });
       }
     }
+    for (const source of liveSources) {
+      for (const p of await liveRowsOf(source)) {
+        if (out.has(p.runId)) continue;
+        out.set(p.runId, {
+          runId: p.runId,
+          agentId: source.agentId,
+          gateId: p.gateId,
+          toolName: p.toolName,
+          args: p.args ?? null,
+          ...(source.chatSessionId !== undefined ? { chatSessionId: source.chatSessionId } : {}),
+        });
+      }
+    }
     return [...out.values()];
+  },
+  /**
+   * Register a running agent whose approvals wait live. Returns the unregister;
+   * call it when the run (or the chat session's agent) ends.
+   */
+  watchLive(source: LiveApprovalSource): () => void {
+    liveSources.add(source);
+    return () => {
+      liveSources.delete(source);
+    };
+  },
+  /**
+   * Answer a run waiting live in this process. `not-found` when no live source
+   * holds a wait for `runId`. The decision is delivered, not awaited to the
+   * run's end: the run continues on its own caller, which reports how it ends.
+   */
+  async decideLive(runId: string, decision: ApprovalDecision, reason?: string): Promise<DecideResult> {
+    for (const source of liveSources) {
+      const rows = await liveRowsOf(source);
+      if (!rows.some((r) => r.runId === runId)) continue;
+      const answered =
+        decision === "approved"
+          ? source.agent.approveRun(runId, reason ? { reason } : undefined)
+          : source.agent.denyRun(runId, reason?.trim() ? reason : "Denied in Cortex");
+      // Resolves (or rejects) when the run ends; its own caller handles that.
+      void answered.catch((e: unknown) => {
+        cortexLog("debug", "approvals", "live run ended with an error after a decision", {
+          runId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      });
+      return { ok: true };
+    }
+    return { ok: false, code: "not-found", message: `Run ${runId} is not waiting for approval in this process` };
   },
   /**
    * Approve or deny a registered run. Agent-owned: resume via the agent, keep it
@@ -124,7 +215,7 @@ export const durableApprovals = {
    */
   async decide(durableRunId: string, decision: ApprovalDecision, reason?: string): Promise<DecideResult> {
     const entry = pending.get(durableRunId);
-    if (!entry) return { ok: false, code: "not-found", message: `Run ${durableRunId} is not pending approval` };
+    if (!entry) return durableApprovals.decideLive(durableRunId, decision, reason);
     if (entry.owner) return entry.owner.decide(decision, reason);
     const agent = entry.agent;
     try {

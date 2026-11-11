@@ -10,7 +10,7 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
 import { CortexIngestService } from "./ingest-service.js";
-import { durableApprovals, type ApprovalDecision, type PendingApprovalRow } from "./durable-approvals.js";
+import { approvalsWaitLive, durableApprovals, type ApprovalDecision, type PendingApprovalRow } from "./durable-approvals.js";
 import { CortexStoreService } from "./store-service.js";
 import { cortexLog, cortexLogRunnerExecution, formatErrorDetails } from "../cortex-log.js";
 import type {
@@ -118,7 +118,8 @@ export interface LaunchParams {
   };
   /**
    * Approval gate (`AgentConfig.approvalPolicy`): tools and shell command rules
-   * that need approval. A `detach` run pauses (`awaiting-approval`) and is
+   * that need approval. Without durable runs a `detach` run waits live and is
+   * listed through its running agent; with them it pauses (`awaiting-approval`) and is
    * approved or denied from the desk.
    */
   readonly approvalPolicy?: CortexApprovalPolicy;
@@ -505,8 +506,9 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
               ? yield* store.getMcpServerConfigsByIds(params.mcpServerIds)
               : [];
 
+          const buildParams = launchParamsToBuildParams(params, providerRaw, mcpConfigs);
           const agent = yield* Effect.tryPromise({
-            try: () => buildCortexAgent(launchParamsToBuildParams(params, providerRaw, mcpConfigs)),
+            try: () => buildCortexAgent(buildParams),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
           });
 
@@ -575,6 +577,9 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
           // with status "awaiting-approval". Retain the agent so approveRun/denyRun
           // can drive it later; the `.finally` dispose is skipped while paused.
           let paused = false;
+          // A `detach` gate without durable runs waits live while this run runs:
+          // list and answer its waits through the shared registry until it ends.
+          const unwatchLive = approvalsWaitLive(buildParams) ? durableApprovals.watchLive({ agentId, agent }) : undefined;
 
           void agent
             .run(params.prompt, { taskId: runId })
@@ -647,6 +652,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
               Effect.runFork(endAsStopped().pipe(Effect.zipRight(ingestFailure(agentId, runId, startedAt, err))));
             })
             .finally(() => {
+              unwatchLive?.();
               markSettled();
               // Paused (awaiting-approval) durable runs keep their agent + event
               // subscription alive so approveRun/denyRun can resume the SAME

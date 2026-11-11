@@ -22,12 +22,13 @@ import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import type { LaunchParams } from "./runner-service.js";
 
 /**
- * True when a build checkpoints durably: durable runs on, or a `detach`
- * approval policy (a detached pause has to persist, so `buildCortexAgent` turns
- * durable runs on for it). The one rule, shared with `buildCortexAgent`.
+ * True when a build checkpoints durably: durable runs on. A `detach` approval
+ * policy alone does not: without durable runs its run waits live, in process,
+ * for Approve / Deny (runtime 078365780, `durable-approvals.ts` live sources).
+ * The one rule, shared with `buildCortexAgent`.
  */
 export function isDurableBuild(p: Pick<BuildCortexAgentParams, "durableRuns" | "approvalPolicy">): boolean {
-  return p.durableRuns?.enabled === true || p.approvalPolicy?.mode === "detach";
+  return p.durableRuns?.enabled === true;
 }
 
 /**

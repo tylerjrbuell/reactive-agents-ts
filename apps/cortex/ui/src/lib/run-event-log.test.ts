@@ -39,6 +39,8 @@ describe("eventPreview", () => {
   it("summarizes common types without raw JSON", () => {
     expect(eventPreview(ev("LLMRequestCompleted", { tokensUsed: { total: 120 }, durationMs: 800, model: "m" }))).toBe("120 tok · 800 ms · m");
     expect(eventPreview(ev("ToolCallCompleted", { toolName: "web-search", success: false }))).toBe("web-search failed");
+    expect(eventPreview(ev("ToolCallStarted", { toolName: "shell-execute", args: { command: "sleep 30" } }))).toBe('shell-execute · {"command":"sleep 30"}');
+    expect(eventPreview(ev("ToolCallStarted", { toolName: "web-search" }))).toBe("web-search");
     expect(eventPreview(ev("ReasoningIterationProgress", { iteration: 2, maxIterations: 6, toolsThisStep: ["a"] }))).toBe("Loop 2 of 6 · a");
     expect(eventPreview(ev("EntropyScored", { composite: 0.25, trajectory: { shape: "converging" } }))).toBe("η 0.250 · converging");
   });

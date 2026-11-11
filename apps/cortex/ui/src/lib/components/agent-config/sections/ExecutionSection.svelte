@@ -8,7 +8,6 @@
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
   import OutputSchemaParseFailField from "$lib/components/OutputSchemaParseFailField.svelte";
-  import { hasApprovalGate } from "$lib/approval-policy.js";
   import type { PanelAgentConfig } from "../types.js";
 
   interface Props {
@@ -30,10 +29,6 @@
     }
   });
 
-  /** A pause-for-approval gate (Tools) keeps durable runs on whatever this switch says. */
-  const durableForcedByApprovals = $derived(
-    !config.durableRuns.enabled && config.approvalPolicy.mode === "detach" && hasApprovalGate(config.approvalPolicy),
-  );
 
   // ── Lifecycle webhooks ────────────────────────────────────────────────
   const LIFECYCLE_EVENTS = ["AgentStarted", "AgentCompleted", "TaskFailed", "DebriefCompleted"] as const;
@@ -127,9 +122,6 @@
           hint="Resumes after a crash, and keeps a run that waits for your approval across a restart. Turns reasoning on."
           checked={config.durableRuns.enabled}
           onchange={(on) => (config = { ...config, durableRuns: { ...config.durableRuns, enabled: on } })} />
-        {#if durableForcedByApprovals}
-          <p class="acp-hint">Approvals (under Tools) pause runs for your answer, so runs of this agent use durable execution anyway.</p>
-        {/if}
         <!-- Structured output -->
         <div>
           <div class="config-label">Structured output (JSON Schema)</div>

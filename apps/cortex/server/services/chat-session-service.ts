@@ -50,9 +50,10 @@ import { traceDirs } from "./run-trace-file.js";
 import { cortexLog } from "../cortex-log.js";
 import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
+import { approvalsWaitLive, durableApprovals } from "./durable-approvals.js";
 import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
 import { compactionContextEstimate, compactionPrompt, structureCompactionSummary } from "./compaction-summary.js";
-import { attachChatIngest, type ChatIngestHandle, type ChatIngestSink } from "./chat-ingest.js";
+import { attachChatIngest, withStartedArgs, type ChatIngestHandle, type ChatIngestSink } from "./chat-ingest.js";
 import { recordTurnAssessments, type TurnAssessmentRecorder } from "./turn-assessments.js";
 import { CortexIngestService } from "./ingest-service.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
@@ -782,12 +783,14 @@ let tokensUsed = 0;
       const recorder = new TurnTraceRecorder();
 
       try {
-        for await (const event of entry.session.runStream(message, {
+        for await (const streamed of entry.session.runStream(message, {
           density: "full",
           signal: stop.signal,
           ...(posture !== undefined ? { posture } : {}),
           ...turnSkillsOption(turnPins),
         })) {
+          // A started call shows its arguments while it runs (bus args when the stream has none).
+          const event = withStartedArgs(streamed, entry.ingest?.startedArgsOf);
           recorder.record(event);
           if (event._tag === "ContextPressure") {
             const { tokensUsed: used, tokensAvailable, utilizationPct, level } = event;
@@ -1023,7 +1026,12 @@ let tokensUsed = 0;
     const { recorder: assessments, unsubscribe: unAssess } = await recordTurnAssessments(agent);
     const { log: runErrors, unsubscribe: unErrors } = await recordRunErrors(agent);
     const { log: skillActivity, unsubscribe: unSkills } = await recordSkillActivity(agent);
+    // A `detach` gate without durable runs waits live mid-turn: list and answer it (durable-approvals.ts).
+    const unLive = approvalsWaitLive(params)
+      ? durableApprovals.watchLive({ agentId: stableAgentId ?? sessionId, agent, chatSessionId: sessionId })
+      : undefined;
     const unsubscribe = () => {
+      unLive?.();
       ingest?.detach();
       unAssess();
       unErrors();

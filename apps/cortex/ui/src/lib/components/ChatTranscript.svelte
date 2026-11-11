@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { ChatToolCall, ChatTurn } from "$lib/stores/chat-store.js";
   import { tooltip } from "$lib/actions/tooltip.js";
-  import { turnSteps, turnSummary, turnTranscript } from "$lib/stores/chat-timeline.js";
+  import { previewArgs, turnSteps, turnSummary, turnTranscript } from "$lib/stores/chat-timeline.js";
+  import ChatLiveApproval from "$lib/components/ChatLiveApproval.svelte";
   import { groupToolNames } from "$lib/tool-groups.js";
   import { toolBadgesOf, type TranscriptTools } from "@reactive-agents/ui-core";
   import ChatModelWait from "$lib/components/ChatModelWait.svelte";
@@ -53,12 +54,16 @@
       ? `step ${turn.streamProgress.iteration} of ${turn.streamProgress.maxIterations}`
       : undefined,
   );
-  const showIdle = $derived(turn.streaming === true && answer === undefined && !lastIsRunningGroup);
+  // A run waiting on the user's approval is not thinking: the approval card says what it waits for.
+  const waitingOnYou = $derived(turn.streaming === true && turn.liveApproval !== undefined);
+  const showIdle = $derived(turn.streaming === true && answer === undefined && !lastIsRunningGroup && !waitingOnYou);
 </script>
 
 {#snippet toolGroup(g: TranscriptTools<ChatToolCall>)}
   {@const isOpen = open[g.key] ?? false}
   {@const b = toolBadgesOf(g.steps)}
+  <!-- What the running call was called with, before it completes. -->
+  {@const runningArgs = g.running ? previewArgs(g.calls.findLast((c) => c.status === "running")?.args) : ""}
   <div class="tool-group" data-testid="tool-group">
     <!-- One quiet row (spec section 8); expands into the step rows. -->
     <button
@@ -83,6 +88,7 @@
         </span>
       {/each}
       {#if b.overflow > 0}<span class="t" use:tooltip={b.overflowNames.join(", ")}>+{b.overflow}</span>{/if}
+      {#if runningArgs !== ""}<span class="args" data-testid="running-tool-args">{runningArgs}</span>{/if}
       {#if b.unfixed > 0}<span class="bad">{b.unfixed} failed</span>{/if}
       {#if !g.running && g.durationMs !== undefined}<span class="dur">{fmtMs(g.durationMs)}</span>{/if}
       <span class="chev" class:open={isOpen}><Icon name="chevron" size="sm" /></span>
@@ -115,6 +121,10 @@
 
   {#if (turn.subAgents?.length ?? 0) > 0}
     <ChatSubAgentCards agents={turn.subAgents ?? []} checklist={turn.checklist} />
+  {/if}
+
+  {#if waitingOnYou && turn.liveApproval}
+    <ChatLiveApproval approval={turn.liveApproval} />
   {/if}
 
   {#if showIdle && turn.awaitingModelSince !== undefined}
@@ -223,6 +233,15 @@
   .t[data-tone="running"] { color: var(--cortex-accent); background: var(--cortex-accent-tint); }
   .bad { display: inline-flex; color: var(--cortex-bad); }
   .dur { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .args {
+    max-width: 28rem;
+    font-family: var(--cortex-font-data);
+    font-size: var(--cortex-t-2xs);
+    color: var(--cortex-text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .chev { display: inline-flex; color: var(--cortex-text-3); transition: transform var(--cortex-d-fast); }
   .chev.open { transform: rotate(90deg); }
   .tool-steps { padding-left: 12px; border-left: 1px solid var(--cortex-line); }

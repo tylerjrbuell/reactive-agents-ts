@@ -17,7 +17,6 @@
     addRule,
     autoGatedTools,
     gateableTools,
-    hasApprovalGate,
     hasFullShell,
     removeRule,
     ruleMatchesNothing,
@@ -45,10 +44,9 @@
   const hasShell = $derived(tools.includes("shell-execute"));
 
   function set(next: Partial<ApprovalPolicyConfig>) {
-    const merged = { ...policy, ...next };
-    // A pause needs a durable store: picking "pause" with something gated turns durable runs on, visibly.
-    const durable = merged.mode === "detach" && hasApprovalGate(merged) ? { enabled: true } : config.durableRuns;
-    config = { ...config, approvalPolicy: merged, durableRuns: durable };
+    // Approvals never touch durable execution: a run waits live for the answer,
+    // and durable execution (Execution) only makes that wait survive a restart.
+    config = { ...config, approvalPolicy: { ...policy, ...next } };
   }
 
   function addDraft() {

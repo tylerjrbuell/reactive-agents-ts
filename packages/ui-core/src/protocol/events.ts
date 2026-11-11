@@ -121,6 +121,11 @@ export interface ToolCallStarted {
   readonly _tag: "ToolCallStarted";
   readonly toolName: string;
   readonly callId: string;
+  /**
+   * Arguments the tool is being called with (post-heal), when the emitter
+   * carries them. Lets a UI show a long-running call before it completes.
+   */
+  readonly args?: unknown;
 }
 export interface ToolCallCompleted {
   readonly _tag: "ToolCallCompleted";

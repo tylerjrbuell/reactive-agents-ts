@@ -11,6 +11,7 @@ import type { RunSkillsView, TurnDeliverable, TurnUsage } from "@reactive-agents
 import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
 import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
 import type { ChatPendingApprovalWire } from "../chat-approvals.js";
+import type { LiveApproval } from "../chat-live-approval.js";
 import type { ChatPendingInteractionWire } from "../chat-interactions.js";
 
 /**
@@ -90,6 +91,11 @@ export type ChatTurn = {
   exitGate?: { decision: "repair" | "handoff" | "accept-unfinished"; outstanding: readonly string[]; iteration: number };
   cancelled?: boolean;
   awaitingApproval?: boolean;
+  /**
+   * The approval this streaming turn's run is waiting on live (no durable runs,
+   * `ApprovalRequested`); cleared once the run moves on. See `chat-live-approval.ts`.
+   */
+  liveApproval?: LiveApproval;
   /** Latest context-window reading from this turn's run (the prompt last sent to the model). */
   context?: ChatContext;
   /** Provider / model that produced this answer (persisted per turn, so it survives a mid-chat switch). */

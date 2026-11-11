@@ -48,6 +48,28 @@ export interface ChatIngestHandle {
    * approval) are left alone.
    */
   readonly closeOpenRuns: (end: OpenRunEnd) => void;
+  /**
+   * The arguments a tool call started with, from the bus `ToolCallStarted`
+   * (core carries them post-heal), for this turn's calls. `undefined` when the
+   * bus event had none or the call is unknown.
+   */
+  readonly startedArgsOf: (callId: string) => unknown;
+}
+
+/**
+ * A stream `ToolCallStarted` with its arguments filled from the bus when the
+ * stream event has none, so a chat can show a long-running call's arguments
+ * before it completes. Every other event passes through unchanged.
+ */
+export function withStartedArgs<E extends { readonly _tag: string }>(
+  event: E,
+  argsOf: ((callId: string) => unknown) | undefined,
+): E {
+  if (event._tag !== "ToolCallStarted" || argsOf === undefined) return event;
+  const e = event as E & { readonly callId?: unknown; readonly args?: unknown };
+  if (e.args !== undefined || typeof e.callId !== "string") return event;
+  const args = argsOf(e.callId);
+  return args === undefined ? event : { ...event, args };
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
@@ -66,6 +88,8 @@ export async function attachChatIngest(
   const agentIdOf = (taskId: string, own: string | undefined): string =>
     own ?? (chatRoots.has(taskId) ? opts.stableAgentId : undefined) ?? taskId;
   const agentIds = new Map<string, string>();
+  // This turn's started-call arguments by call id (cleared each turn).
+  let startedArgs = new Map<string, unknown>();
 
   const send = (taskId: string, agentId: string, event: AgentEvent): void => {
     const msg: CortexIngestMessage = {
@@ -86,6 +110,10 @@ export async function attachChatIngest(
 
   const detach = await agent.subscribe((event) => {
     const e = event as { readonly _tag: string } & Readonly<Record<string, unknown>>;
+    if (e._tag === "ToolCallStarted" && e.args !== undefined) {
+      const callId = str(e.callId);
+      if (callId !== undefined) startedArgs.set(callId, e.args);
+    }
     const taskId = str(e.taskId);
     if (taskId === undefined) return;
     if (e._tag === "AgentStarted") {
@@ -104,7 +132,9 @@ export async function attachChatIngest(
     detach,
     beginTurn: () => {
       open = new Set();
+      startedArgs = new Map();
     },
+    startedArgsOf: (callId) => startedArgs.get(callId),
     closeOpenRuns: (end) => {
       for (const taskId of [...open]) {
         open.delete(taskId);

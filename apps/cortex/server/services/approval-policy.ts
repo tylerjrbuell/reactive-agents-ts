@@ -16,8 +16,9 @@ export type CortexApprovalMode = "detach" | "block";
 /** The data half of the framework approval policy, as Cortex stores it. */
 export interface CortexApprovalPolicy {
   /**
-   * `detach`: the run pauses durably and resumes after Approve (needs durable
-   * runs; the build turns them on). `block`: decided in process; Cortex supplies
+   * `detach`: a person decides. Without durable runs the run waits live in
+   * process until Approve / Deny; with durable runs it pauses durably and
+   * resumes after the decision, even across a restart. `block`: decided in process; Cortex supplies
    * no `onApprove`, so a gated call is refused and the agent is told so.
    */
   readonly mode: CortexApprovalMode;

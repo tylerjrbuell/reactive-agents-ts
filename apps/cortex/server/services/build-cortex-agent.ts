@@ -192,9 +192,9 @@ export interface BuildCortexAgentParams {
   /**
    * The framework approval policy's data half (`AgentConfig.approvalPolicy`):
    * which tools and which shell commands need approval, and the mode. Sent
-   * through the AgentConfig (`cortexParamsToAgentConfig`). `detach` pauses the
-   * run durably, so it turns durable runs on (a pause needs a store to persist
-   * it). Read from any stored shape by `approvalPolicyOf`.
+   * through the AgentConfig (`cortexParamsToAgentConfig`). `detach` hands the
+   * call to a person: without durable runs the run waits live in process, with
+   * them it pauses durably. Read from any stored shape by `approvalPolicyOf`.
    */
   readonly approvalPolicy?: CortexApprovalPolicy;
 }

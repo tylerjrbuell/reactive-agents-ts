@@ -1,4 +1,5 @@
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
+import { redactSecrets } from "./run-error.js";
 
 /**
  * A chat turn paused on a durable approval gate (server `chat-approvals.ts`). Its user
@@ -30,11 +31,11 @@ const MAX_ARG_CHARS = 160;
 export function approvalArgRows(args: unknown): { key: string; value: string }[] {
   const clip = (s: string) => (s.length > MAX_ARG_CHARS ? `${s.slice(0, MAX_ARG_CHARS)}…` : s);
   const show = (v: unknown): string => {
-    if (typeof v === "string") return clip(v.replace(/\s+/g, " "));
+    if (typeof v === "string") return clip(redactSecrets(v.replace(/\s+/g, " ")));
     try {
-      return clip(JSON.stringify(v) ?? String(v));
+      return clip(redactSecrets(JSON.stringify(v) ?? String(v)));
     } catch {
-      return clip(String(v));
+      return clip(redactSecrets(String(v)));
     }
   };
   if (args !== null && typeof args === "object" && !Array.isArray(args)) {

@@ -1,12 +1,15 @@
 <script lang="ts">
   // A chat turn paused on a durable approval gate: the user's message, the gated tool call,
   // and Approve / Deny / Dismiss. Approve and Deny resume the run on the server; its reply
-  // then lands in the thread as an ordinary exchange and this card goes away.
+  // then lands in the thread as an ordinary exchange and this card goes away. Dismiss hides
+  // the card only (the turn stays paused and pending).
   import { chatStore } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
   import Button from "$lib/components/kit/Button.svelte";
   import Status from "$lib/components/kit/Status.svelte";
   import { approvalArgRows, decideChatApproval, type ApprovalVerb, type ChatPendingApprovalWire } from "$lib/chat-approvals.js";
+  import { approvalCardKey, hiddenApprovalCards, hideApprovalCard } from "$lib/chat-live-approval.js";
+  import { clearApproval } from "$lib/stores/approval-watcher.js";
 
   interface Props {
     sessionId: string;
@@ -36,6 +39,8 @@
       errors = { ...errors, [p.runId]: out.error };
       return;
     }
+    // Answered: clear it everywhere (toast, Runs strip, run header) now.
+    clearApproval(p.runId);
     // A re-pause keeps the same runId: start its new gate from a clean card.
     denying = { ...denying, [p.runId]: false };
     reasons = { ...reasons, [p.runId]: "" };
@@ -51,7 +56,9 @@
   {@const inFlight = busy[p.runId]}
   <div class="pause" data-testid="chat-approval" data-run-id={p.runId}>
     <div class="ask-user"><div class="bubble">{p.userMessage}</div></div>
-    <!-- Waiting on you: the amber rail (spec: one status vocabulary). -->
+    <!-- Waiting on you: the amber rail (spec: one status vocabulary). Dismiss hides the card
+         only: the paused turn stays pending (run header, Runs "Waiting on you"). -->
+    {#if !$hiddenApprovalCards.has(approvalCardKey(p))}
     <div class="card rail rail-attention">
       <p class="h"><Status tone="attention" label="Waiting on you" /></p>
       <p class="what">The agent wants to run <span class="tool">{p.toolName}</span>.</p>
@@ -76,11 +83,12 @@
         <div class="acts">
           <Button size="sm" variant="primary" icon="check" onclick={() => void decide(p, "approve")}>Approve</Button>
           <Button size="sm" variant="danger" onclick={() => (denying = { ...denying, [p.runId]: true })}>Deny</Button>
-          <Button size="sm" variant="ghost" onclick={() => void decide(p, "dismiss")}>Dismiss</Button>
+          <Button size="sm" variant="ghost" onclick={() => hideApprovalCard(p)}>Dismiss</Button>
           <span class="note">Nothing runs until you approve. New messages wait until you decide.</span>
         </div>
       {/if}
     </div>
+    {/if}
   </div>
 {/each}
 

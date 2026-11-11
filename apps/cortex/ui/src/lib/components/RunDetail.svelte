@@ -19,6 +19,7 @@
   import { runSkillsFromLive } from "$lib/skill-row.js";
   import RunEndingBanner from "$lib/components/RunEndingBanner.svelte";
   import RunCauseCard from "$lib/components/run/RunCauseCard.svelte";
+  import RunLiveToolCalls from "$lib/components/run/RunLiveToolCalls.svelte";
   import CompareWithPicker from "$lib/components/run/CompareWithPicker.svelte";
   import { causeOpenByDefault } from "$lib/run-cause.js";
   import TracePanel from "$lib/components/TracePanel.svelte";
@@ -34,7 +35,7 @@
   import { settings } from "$lib/stores/settings.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
-  import { pendingApprovals } from "$lib/stores/approval-watcher.js";
+  import { clearApproval, pendingApprovals, setApprovalView } from "$lib/stores/approval-watcher.js";
   import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
   import { runApprovalOf, waitingRunsOf, waitingStatusOf } from "$lib/waiting-on-you.js";
   import { countReasoningStepDisplayMessagesInRunEvents } from "@cortex/messages-extract";
@@ -150,6 +151,12 @@
   // Approve / Deny in the header while the run waits at an approval gate. The
   // endpoints take the durable run id the approval carries (runApprovalOf).
   const approval = $derived(runApprovalOf(waiting));
+  // This run's approval shows in the header, so the app-wide toast skips it (approval-surface.ts).
+  const viewAgentId = $derived($runStore.agentId);
+  const viewChatSessionId = $derived($runStore.chatSessionId);
+  $effect(() =>
+    setApprovalView({ kind: "run", runId, agentId: viewAgentId, ...(viewChatSessionId ? { chatSessionId: viewChatSessionId } : {}) }),
+  );
   let deciding = $state(false);
   async function decideApproval(action: "approve" | "deny") {
     const target = approval;
@@ -162,7 +169,7 @@
         body: JSON.stringify(action === "deny" ? { reason: "Denied from Cortex" } : {}),
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      pendingApprovals.update((list) => list.filter((a) => a.runId !== target.approvalRunId));
+      clearApproval(target.approvalRunId);
       toast.success(action === "approve" ? "Approved" : "Denied", `${target.toolName}: ${target.detail}`);
     } catch (e) {
       toast.error(action === "approve" ? "Approve failed" : "Deny failed", e instanceof Error ? e.message : String(e));
@@ -471,6 +478,7 @@
         loops={traceLoops}
         onSelectLoop={focusLoop}
       />
+      <RunLiveToolCalls events={$runStore.events} live={!isRunSettled($runStore.status)} />
       <!-- The Answer panel above shows the final answer, so the trace does not open it again. -->
       <TracePanel autoOpenFinal={false} frames={$traceStore} timeline={$timelineStore} status={$runStore.status} streamText={$runStore.streamText} frame={selectedFrame} focus={traceFocus} safetyMarks={safetySummary.byLoop} />
     </div>

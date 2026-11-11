@@ -4,6 +4,19 @@ import { finishTurnTrace, foldTurnTrace, initialTurnTrace, visibleThoughts, type
 const run = (events: UiStreamEvent[]) => events.reduce(foldTurnTrace, initialTurnTrace());
 
 describe("turn trace fold", () => {
+  // A long-running call shows what it was called with before it completes.
+  test("a started call carries its arguments while it runs; completion keeps them", () => {
+    const started = run([{ _tag: "ToolCallStarted", toolName: "shell-execute", callId: "c1", args: { command: "sleep 30" } }]);
+    expect(started.calls).toEqual([{ id: "c1", name: "shell-execute", status: "running", iteration: 1, args: { command: "sleep 30" } }]);
+    const done = foldTurnTrace(started, { _tag: "ToolCallCompleted", toolName: "shell-execute", callId: "c1", durationMs: 30000, success: true, result: "ok" });
+    expect(done.calls[0]).toMatchObject({ status: "done", args: { command: "sleep 30" }, result: "ok" });
+  });
+
+  test("a started call without arguments has no args field", () => {
+    const s = run([{ _tag: "ToolCallStarted", toolName: "t", callId: "c" }]);
+    expect("args" in (s.calls[0] ?? {})).toBe(false);
+  });
+
   // The shared exit gate's decision is one event for every strategy; the latest wins.
   test("exit-gate decisions fold to the latest one", () => {
     const s = run([

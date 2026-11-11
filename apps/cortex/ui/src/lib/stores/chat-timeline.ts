@@ -10,6 +10,7 @@ import {
 } from "@reactive-agents/ui-core";
 import type { ChatToolCall, ChatTurn } from "./chat-store.js";
 import { chatTurnOutcome } from "../turn-ending.js";
+import { redactSecrets } from "../run-error.js";
 
 /** One row of an assistant turn's transcript, in the order it happened. */
 export type TimelineItem =
@@ -110,9 +111,19 @@ export function turnSummary(
   });
 }
 
-/** Compact one-line preview of tool arguments for the collapsed card header. */
+/** Compact one-line preview of tool arguments for the collapsed card header (secrets redacted). */
 export function previewArgs(args: unknown, max = 80): string {
   if (args === undefined || args === null) return "";
-  const text = typeof args === "string" ? args : JSON.stringify(args);
+  const text = redactSecrets(typeof args === "string" ? args : JSON.stringify(args));
   return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/** Tool arguments in full for an expanded call: indented JSON, secrets redacted. */
+export function prettyArgs(args: unknown): string {
+  if (typeof args === "string") return redactSecrets(args);
+  try {
+    return redactSecrets(JSON.stringify(args, null, 2) ?? String(args));
+  } catch {
+    return redactSecrets(String(args));
+  }
 }

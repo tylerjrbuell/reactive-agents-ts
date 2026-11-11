@@ -23,6 +23,7 @@ import type { ChatContext, ChatTurn, LiveTokenSplit, ReasoningStep } from "./cha
 import { projectSubAgents } from "../sub-agent-view.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
 import { cancelledEnding, completionEnding, failedBeforeStream } from "../turn-ending.js";
+import { liveApprovalAfter, type LiveApproval } from "../chat-live-approval.js";
 
 /**
  * Single SSE → ChatTurn reduction shared by the desk Chat store and the run-view
@@ -160,10 +161,13 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   let streamError: string | undefined;
   // B11: whether the turn waits on the model (request out, no token back), from the send.
   let modelWait: ModelWaitState = initialModelWait(Date.now());
+  // A live approval wait (no durable runs): the turn shows Approve / Deny until the run moves on.
+  let liveApproval: LiveApproval | undefined;
 
   for await (const event of connectRunStream({ endpoint: opts.endpoint, body: opts.body, signal: opts.signal })) {
     if (opts.structuredOutput) rs = reduceRunState(rs, event, { objectMode: true });
     trackModelWait(event);
+    trackLiveApproval(event);
     reduceEvent(event);
   }
   // Flush any coalesced text deltas before persistence / return.
@@ -211,6 +215,15 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
     flushPending();
     const since = next.waiting ? next.since : undefined;
     apply((turns) => patchTurn(turns, id, (t) => ({ ...t, awaitingModelSince: since })));
+  }
+
+  /** Set or clear the turn's live approval wait (chat-live-approval.ts). */
+  function trackLiveApproval(event: UiStreamEvent): void {
+    const next = liveApprovalAfter(liveApproval, event);
+    if (next === liveApproval) return;
+    liveApproval = next;
+    flushPending();
+    apply((turns) => patchTurn(turns, id, (t) => ({ ...t, liveApproval: next })));
   }
 
   /**

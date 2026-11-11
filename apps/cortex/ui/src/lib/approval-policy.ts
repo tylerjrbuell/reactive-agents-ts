@@ -7,7 +7,8 @@
  * - `commands`: shell command rules. A rule is a word prefix: `git push` matches
  *   `git push origin main`, not `git pull`; a trailing `*` changes nothing and a
  *   rule with no words (a bare `*`) matches nothing.
- * - `mode`: `detach` pauses the run until you approve (it turns durable runs on);
+ * - `mode`: `detach` makes the run wait live until you approve or deny (durable
+ *   runs are separate: with them on, the wait also survives a restart);
  *   `block` decides in place, and Cortex has no in-process approver, so a gated
  *   call is refused and the agent is told so.
  *
@@ -168,6 +169,6 @@ export function approvalSummary(p: ApprovalPolicyConfig): string {
 
 /** Labels for the two modes, shared by the builder and the chat menu. */
 export const APPROVAL_MODE_LABEL: Readonly<Record<ApprovalMode, { label: string; detail: string }>> = {
-  detach: { label: "Pause and ask me", detail: "The run waits until you approve or deny it (turns on durable execution)" },
+  detach: { label: "Pause and ask me", detail: "The run waits until you approve or deny it" },
   block: { label: "Refuse", detail: "Cortex has no in-place approver: the call does not run and the agent is told it was refused" },
 };

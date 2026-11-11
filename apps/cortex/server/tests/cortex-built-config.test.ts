@@ -196,9 +196,9 @@ describe("each former overlay maps onto its AgentConfig path", () => {
     expect(cortexParamsToAgentConfig({ provider: "test", modelRouting: { enabled: false, minTier: "opus" } }).modelRouting).toBeUndefined();
   });
 
-  it("durable runs: opted in, or forced by a detach approval policy", () => {
+  it("durable runs: opted in only (a detach approval policy waits live without them)", () => {
     expect(cfg().durableRuns).toEqual({ checkpointEvery: 3 });
-    expect(cortexParamsToAgentConfig({ provider: "test", approvalPolicy: { mode: "detach", tools: ["file-write"] } }).durableRuns).toEqual({});
+    expect(cortexParamsToAgentConfig({ provider: "test", approvalPolicy: { mode: "detach", tools: ["file-write"] } }).durableRuns).toBeUndefined();
     expect(cortexParamsToAgentConfig({ provider: "test" }).durableRuns).toBeUndefined();
   });
 

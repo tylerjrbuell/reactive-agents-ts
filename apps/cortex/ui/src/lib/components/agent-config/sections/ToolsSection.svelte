@@ -8,7 +8,6 @@
   import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
   import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
   import ApprovalPolicyFields from "../ApprovalPolicyFields.svelte";
-  import { hasApprovalGate } from "$lib/approval-policy.js";
   import { toggleServerTools } from "$lib/tool-selection.js";
   import { unlistedTools } from "$lib/chat-quickbar.js";
   import type { ToolPick } from "$lib/builder-tool-picks.js";
@@ -209,7 +208,7 @@
         <!-- Approvals gate tool calls, so they sit with the tools they gate. -->
         <ApprovalPolicyFields bind:config />
         <p class="acp-hint" data-testid="approval-durable-note">
-          {#if !config.durableRuns.enabled && config.approvalPolicy.mode === "detach" && hasApprovalGate(config.approvalPolicy)}Pausing for approval needs durable execution, so runs of this agent use it.{" "}{/if}Durable execution is set under
+          A run that waits for your approval stays live until you answer. To keep that wait across a restart, turn on durable execution under
           {#if onShowSection}<button type="button" class="acp-linkbtn" onclick={() => onShowSection("execution")}>Execution</button>{:else}Execution{/if}.
         </p>
         </div>

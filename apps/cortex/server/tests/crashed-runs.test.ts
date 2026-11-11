@@ -24,9 +24,9 @@ const rec = (over: Partial<RunRecord>): RunRecord => ({
 });
 
 describe("crashed-run helpers", () => {
-  it("a build is durable with durable runs on or a detach approval policy", () => {
+  it("a build is durable only with durable runs on (a detach approval policy waits live)", () => {
     expect(isDurableBuild({ durableRuns: { enabled: true } })).toBe(true);
-    expect(isDurableBuild({ approvalPolicy: { mode: "detach", tools: ["x"] } })).toBe(true);
+    expect(isDurableBuild({ approvalPolicy: { mode: "detach", tools: ["x"] } })).toBe(false);
     expect(isDurableBuild({ durableRuns: { enabled: false } })).toBe(false);
     expect(isDurableBuild({})).toBe(false);
   });

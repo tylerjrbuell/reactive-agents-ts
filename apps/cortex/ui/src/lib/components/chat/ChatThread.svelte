@@ -2,6 +2,9 @@
   import { chatStore, type ChatTurn } from "$lib/stores/chat-store.js";
   import ChatApprovalCards from "$lib/components/ChatApprovalCards.svelte";
   import ChatInteractionCards from "$lib/components/ChatInteractionCards.svelte";
+  import ChatLiveApproval from "$lib/components/ChatLiveApproval.svelte";
+  import { hiddenApprovalCards, orphanChatApprovals } from "$lib/chat-live-approval.js";
+  import { pendingApprovals } from "$lib/stores/approval-watcher.js";
   import ChatProposals from "$lib/components/ChatProposals.svelte";
   import CompactionSummary from "$lib/components/CompactionSummary.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
@@ -50,6 +53,18 @@
     atBottom = $bindable(true), editingSummaryId = $bindable(null), summaryDraft = $bindable(""),
     onStarter, onSaveSummary, onCopy, strategyLabel, onEdit, onRewind, onRerun, onTrace, onFork,
   }: Props = $props();
+
+  // Live approvals of this chat that no streaming turn shows (e.g. after a reload): the
+  // open chat is their surface, so the app-wide toast skips them (approval-surface.ts).
+  const liveOrphans = $derived(
+    orphanChatApprovals(
+      sessionId,
+      $pendingApprovals,
+      new Set($chatStore.activePendingApprovals.map((p) => p.runId)),
+      new Set(turns.flatMap((t) => (t.streaming && t.liveApproval ? [t.liveApproval.runId] : []))),
+      $hiddenApprovalCards,
+    ),
+  );
 
   let scrollEl = $state<HTMLDivElement | null>(null);
   let contentEl = $state<HTMLDivElement | null>(null);
@@ -138,6 +153,9 @@
       {/each}
     {/if}
     <ChatApprovalCards {sessionId} />
+    {#each liveOrphans as approval (approval.runId)}
+      <ChatLiveApproval {approval} />
+    {/each}
     <ChatInteractionCards {sessionId} />
     <ChatProposals {sessionId} streaming={sending} />
   </div>

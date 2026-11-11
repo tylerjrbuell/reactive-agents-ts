@@ -84,6 +84,18 @@ describe("buildTimeline", () => {
     expect(previewArgs("x".repeat(100), 10)).toBe("xxxxxxxxxx…");
     expect(previewArgs(undefined)).toBe("");
   });
+
+  test("previewArgs and prettyArgs redact credential-shaped values in tool arguments", async () => {
+    const { prettyArgs } = await import("./chat-timeline.js");
+    const args = { url: "https://api.x.dev/v1?api_key=abc123secret", headers: { Authorization: "Bearer abcdefghijkl" } };
+    const preview = previewArgs(args, 500);
+    expect(preview).not.toContain("abc123secret");
+    expect(preview).not.toContain("abcdefghijkl");
+    expect(preview).toContain("?api_key=[redacted]");
+    const pretty = prettyArgs(args);
+    expect(pretty).toContain('"Authorization": "Bearer [redacted]"');
+    expect(prettyArgs("curl -H 'x: sk-live1234567890'")).toBe("curl -H 'x: [redacted]'");
+  });
 });
 
 describe("hydrateTurn", () => {

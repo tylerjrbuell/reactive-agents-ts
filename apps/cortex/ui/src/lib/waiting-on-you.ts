@@ -6,6 +6,7 @@
  */
 import type { PendingInteractionWire } from "@reactive-agents/ui-core";
 import { RUN_SOURCE_LABEL, runNameOf, runSourceOf, type RunRow } from "./runs-table.js";
+import { redactSecrets } from "./run-error.js";
 
 /** One row of `GET /api/runs/pending-approvals`. `chatSessionId` is set for chat turns. */
 export interface PendingApprovalWire {
@@ -43,7 +44,11 @@ export type WaitingItem =
 
 const MAX_DETAIL = 120;
 
-const clip = (s: string): string => (s.length > MAX_DETAIL ? `${s.slice(0, MAX_DETAIL - 1)}…` : s);
+/** Redacted (credential-shaped tokens) and clipped to {@link MAX_DETAIL}. */
+const clip = (raw: string): string => {
+  const s = redactSecrets(raw);
+  return s.length > MAX_DETAIL ? `${s.slice(0, MAX_DETAIL - 1)}…` : s;
+};
 
 /** Argument keys whose value names the call on its own (a command, a path, a URL). */
 const HEADLINE_KEYS = ["command", "cmd", "path", "url", "query", "file", "name"] as const;

@@ -32,7 +32,7 @@ import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
-import { durableApprovals } from "./durable-approvals.js";
+import { approvalsWaitLive, durableApprovals } from "./durable-approvals.js";
 import { approvalPolicyOf } from "./approval-policy.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -355,7 +355,8 @@ export class GatewayProcessManager {
         config,
       });
 
-      const agent = await buildCortexAgent(gatewayConfigToBuildParams({ agentId, name, config, mcpConfigs }));
+      const buildParams = gatewayConfigToBuildParams({ agentId, name, config, mcpConfigs });
+      const agent = await buildCortexAgent(buildParams);
       const agentId_ = agent.agentId;
 
       // Pre-create the run row so the UI can find it immediately on navigation.
@@ -378,6 +379,8 @@ export class GatewayProcessManager {
       // Durable HITL: retain a paused agent so approve/deny work from the shared
       // /api/runs/pending-approvals endpoints (same as the runner path).
       let paused = false;
+      // A `detach` gate without durable runs waits live: listed and answered via the registry while it runs.
+      const unwatchLive = approvalsWaitLive(buildParams) ? durableApprovals.watchLive({ agentId: agentId_, agent }) : undefined;
 
       void agent.run(prompt, { taskId: runId })
         .then((result) => {
@@ -411,6 +414,7 @@ export class GatewayProcessManager {
           });
         })
         .finally(() => {
+          unwatchLive?.();
           // Paused (awaiting-approval) runs keep their agent + subscription alive
           // for approve/deny via the shared registry; cleanup happens on resolve.
           if (paused) {

@@ -7,6 +7,7 @@
  * two `*Emitted` types both read "Emitted 4". A chip now carries the whole
  * type in sentence case, so every label is unique.
  */
+import { previewArgs } from "./stores/chat-timeline.js";
 
 /** A run event as the log holds it. */
 export interface LogEvent {
@@ -79,8 +80,11 @@ export function eventPreview(e: LogEvent): string {
       return [tokensOf(p) !== undefined ? `${tokensOf(p)} tok` : undefined, num(p.durationMs) !== undefined ? `${num(p.durationMs)} ms` : undefined, str(p.model)]
         .filter(Boolean)
         .join(" · ");
-    case "ToolCallStarted":
-      return str(p.toolName) ?? "";
+    case "ToolCallStarted": {
+      // The arguments the call started with (core carries them), secrets redacted.
+      const args = p.args !== undefined ? previewArgs(p.args, 70) : "";
+      return [str(p.toolName), args || undefined].filter(Boolean).join(" · ");
+    }
     case "ToolCallCompleted":
       return `${str(p.toolName) ?? "tool"} ${p.success === false ? "failed" : "ok"}${num(p.durationMs) !== undefined ? ` · ${num(p.durationMs)} ms` : ""}`;
     case "EntropyScored": {

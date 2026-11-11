@@ -314,8 +314,8 @@ export function cortexParamsToAgentConfig(
   // Always-on at "block" in the framework; set only to override.
   if (params.fabricationGuard) draft.fabricationGuard = params.fabricationGuard;
 
-  // Durable runs: opted in, or forced by a `detach` approval policy (build refuses
-  // detach without a store: the pause has to persist).
+  // Durable runs: opted in only. A `detach` approval policy without them waits
+  // live in process (runtime HumanGate); with them the pause survives a restart.
   if (isDurableBuild(params)) {
     draft.durableRuns = {
       ...(params.durableRuns?.dir ? { dir: params.durableRuns.dir } : {}),

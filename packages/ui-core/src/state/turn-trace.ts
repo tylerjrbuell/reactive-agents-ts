@@ -228,7 +228,14 @@ export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTrac
     case "ToolCallStarted": {
       const folded = foldPending(s);
       if (folded.calls.some((c) => c.id === event.callId)) return folded;
-      const call: TraceToolCall = { id: event.callId, name: event.toolName, status: "running", iteration: folded.iteration };
+      const call: TraceToolCall = {
+        id: event.callId,
+        name: event.toolName,
+        status: "running",
+        iteration: folded.iteration,
+        // Shown while the call runs; a completion that carries args replaces them.
+        ...(event.args !== undefined ? { args: event.args } : {}),
+      };
       return { ...folded, calls: [...folded.calls, call] };
     }
     case "ToolCallCompleted": {
