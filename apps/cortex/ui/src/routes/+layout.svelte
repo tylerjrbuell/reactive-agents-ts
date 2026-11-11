@@ -19,6 +19,8 @@
   import { createStageStore } from "$lib/stores/stage-store.js";
   import type { AgentStore } from "$lib/stores/agent-store.js";
   import type { StageStore } from "$lib/stores/stage-store.js";
+  import { applyMotion } from "$lib/motion.js";
+  import NeuralMark from "$lib/components/kit/NeuralMark.svelte";
 
   let { children } = $props();
 
@@ -97,6 +99,8 @@
     // Apply saved theme immediately
     const s: CortexSettings = settings.get();
     applyTheme(s.theme);
+    // Settings · Motion: keep html[data-motion] in step with the saved choice.
+    const stopMotion = settings.subscribe((v) => applyMotion(document.documentElement, v.motion));
 
     stageStore.setNavigate((path) => goto(path));
     // Durable-HITL: app-wide interactive approval toasts (Approve/Deny).
@@ -232,6 +236,7 @@
     }, 5000);
 
     return () => {
+      stopMotion();
       window.removeEventListener("keydown", handleGlobalKeydown);
       window.removeEventListener("cortex:toggle-theme", toggleTheme as EventListener);
       window.removeEventListener("focus", refreshAgentsSoon);
@@ -258,7 +263,7 @@
 
 <div class="h-screen w-screen flex flex-col overflow-hidden cortex-shell-bg text-on-surface">
   <header
-    class="cortex-nav flex justify-between items-center w-full px-4 sm:px-6 h-[3.25rem] border-b border-[var(--cortex-border)] shadow-[0_1px_0_rgba(0,0,0,0.12)] dark:shadow-[0_1px_0_rgba(255,255,255,0.04)] z-50 flex-shrink-0 gap-2"
+    class="cortex-nav flex justify-between items-center w-full px-4 sm:px-6 h-[3.25rem] border-b border-[var(--cortex-border)] shadow-[0_1px_0_rgba(0,0,0,0.12)] dark:shadow-[0_1px_0_rgba(255,255,255,0.04)] z-nav flex-shrink-0 gap-2"
   >
     {#if $page.url.pathname.startsWith("/chat")}
       <button
@@ -277,48 +282,9 @@
       class="flex items-center gap-2.5 no-underline group flex-shrink-0 rounded-md -ml-1 px-1 py-0.5"
       aria-label="Cortex home"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="22" height="22" class="flex-shrink-0" aria-hidden="true">
-        <defs>
-          <linearGradient id="lh-ed" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.8"/><stop offset="100%" stop-color="#06b6d4" stop-opacity="0.35"/>
-          </linearGradient>
-          <linearGradient id="lh-ed2" x1="100%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.6"/><stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.25"/>
-          </linearGradient>
-          <filter id="lh-gN" x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="1.2" result="b"/>
-            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-        </defs>
-        <circle cx="24" cy="24" r="18" fill="#8b5cf6" opacity="0.05"/>
-        <line x1="14" y1="6" x2="34" y2="6" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
-        <line x1="14" y1="6" x2="6" y2="20" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
-        <line x1="34" y1="6" x2="42" y2="20" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
-        <line x1="6" y1="20" x2="6" y2="34" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
-        <line x1="42" y1="20" x2="42" y2="34" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
-        <line x1="6" y1="34" x2="18" y2="44" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
-        <line x1="42" y1="34" x2="30" y2="44" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
-        <line x1="18" y1="44" x2="30" y2="44" stroke="url(#lh-ed)" stroke-width="1.1" stroke-linecap="round"/>
-        <line x1="14" y1="6" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
-        <line x1="34" y1="6" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
-        <line x1="6" y1="20" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
-        <line x1="42" y1="20" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
-        <line x1="6" y1="34" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
-        <line x1="42" y1="34" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
-        <line x1="18" y1="44" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
-        <line x1="30" y1="44" x2="24" y2="24" stroke="url(#lh-ed2)" stroke-width="1.3" stroke-linecap="round"/>
-        <circle cx="14" cy="6" r="2.5" fill="#8b5cf6" filter="url(#lh-gN)"/>
-        <circle cx="34" cy="6" r="2.5" fill="#06b6d4" filter="url(#lh-gN)"/>
-        <circle cx="6" cy="20" r="2" fill="#a78bfa" filter="url(#lh-gN)"/>
-        <circle cx="42" cy="20" r="2" fill="#c4b5fd" filter="url(#lh-gN)"/>
-        <circle cx="6" cy="34" r="2" fill="#06b6d4" filter="url(#lh-gN)"/>
-        <circle cx="42" cy="34" r="2" fill="#8b5cf6" filter="url(#lh-gN)"/>
-        <circle cx="18" cy="44" r="2.5" fill="#a78bfa" filter="url(#lh-gN)"/>
-        <circle cx="30" cy="44" r="2.5" fill="#06b6d4" filter="url(#lh-gN)"/>
-        <circle cx="24" cy="24" r="4.8" fill="#8b5cf6" opacity="0.9"/>
-        <circle cx="24" cy="24" r="7.5" fill="none" stroke="#06b6d4" stroke-width="0.5" opacity="0.2"/>
-      </svg>
-      <span class="text-[1.05rem] font-display font-semibold tracking-tight ra-gradient-text uppercase select-none">
+      <NeuralMark size={22} />
+      <!-- Bar wordmark: Geist 600, sentence case, solid (gradient only at 22px+). -->
+      <span class="text-[15px] font-semibold tracking-tight text-on-surface select-none">
         Cortex
       </span>
     </a>

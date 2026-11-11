@@ -1,7 +1,7 @@
 <script lang="ts">
   import Tooltip from "$lib/components/Tooltip.svelte";
   import type { ChatContext } from "$lib/stores/chat-store.js";
-  import { formatCost } from "$lib/stores/chat-cost.js";
+  import { formatSessionCost as formatCost } from "$lib/stores/chat-cost.js";
   import { formatTokenCount } from "$lib/chat-token-usage.js";
   import { splitTokens } from "@reactive-agents/ui-core";
   import TokenCounter from "$lib/components/TokenCounter.svelte";
@@ -46,9 +46,9 @@
   // Without a known window (a compaction estimate on a fresh session) there is no percentage: tokens only.
   const pct = $derived(context?.utilizationPct === undefined ? 0 : Math.min(100, Math.max(0, Math.round(context.utilizationPct))));
   const stroke = $derived(
-    context?.level === "critical" ? "var(--color-error, #f87171)"
-    : context?.level === "high" ? "#f59e0b"
-    : "var(--ra-cyan, #22d3ee)",
+    context?.level === "critical" ? "var(--cortex-bad)"
+    : context?.level === "high" ? "var(--cortex-warn)"
+    : "var(--cortex-io)",
   );
   const filling = $derived(context?.level === "high" || context?.level === "critical");
 

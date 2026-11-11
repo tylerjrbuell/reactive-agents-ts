@@ -14,7 +14,7 @@
 </script>
 
 <div
-  class="fixed bottom-10 right-6 z-[60] animate-slide-right bg-surface-container-high border border-primary/30 p-4 rounded-lg shadow-neural-strong flex flex-col gap-1 min-w-[280px] max-w-[320px] relative overflow-hidden"
+  class="fixed bottom-10 right-6 z-toastanimate-slide-right bg-surface-container-high border border-primary/30 p-4 rounded-lg shadow-neural-strong flex flex-col gap-1 min-w-[280px] max-w-[320px] relative overflow-hidden"
 >
   <div class="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-lg"></div>
 

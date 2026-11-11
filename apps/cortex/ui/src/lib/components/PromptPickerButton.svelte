@@ -113,7 +113,7 @@
   <div
     bind:this={panelEl}
     use:portal
-    class="fixed z-[200] rounded-lg border border-[var(--cortex-border)] bg-surface-container-lowest shadow-2xl"
+    class="fixed z-modal rounded-lg border border-[var(--cortex-border)] bg-surface-container-lowest shadow-2xl"
     style="{pos.vertical}: {pos.offset}px; left: {pos.left}px; max-height: {pos.maxH}px; max-width: calc(100vw - 16px); overflow-y: auto;"
   >
     <PromptLibrary onSelect={choose} {types} {defaultSaveType} />

@@ -357,7 +357,7 @@
   <!-- Portaled to <body>: an ancestor's backdrop-filter would otherwise confine this fixed overlay to the narrow session list. -->
   <div
     use:portal={typeof document !== "undefined" ? document.body : undefined}
-    class="fixed inset-0 z-[200] flex items-center justify-center bg-background/70 backdrop-blur-sm"
+    class="fixed inset-0 z-modalflex items-center justify-center bg-background/70 backdrop-blur-sm"
     role="dialog"
     aria-modal="true"
     aria-label={configMode === "create" ? "New chat session config" : "Edit chat session config"}

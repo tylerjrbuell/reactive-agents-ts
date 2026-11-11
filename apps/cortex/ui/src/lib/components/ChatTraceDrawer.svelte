@@ -1,11 +1,11 @@
 <script lang="ts">
   import Tooltip from "$lib/components/Tooltip.svelte";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import type { ChatTurn } from "$lib/stores/chat-store.js";
   import type { ChatSession } from "$lib/stores/chat-store.js";
   import type { ChatTotals } from "$lib/stores/chat-cost.js";
   import { buildSessionContext } from "$lib/chat-session-context.js";
-  import { formatCost } from "$lib/stores/chat-cost.js";
+  import { formatSessionCost as formatCost } from "$lib/stores/chat-cost.js";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import { buildRunTrees, runViewHref, traceUrl, type RunTraceView } from "$lib/chat-export.js";
@@ -44,7 +44,8 @@
     { id: "steps", label: "Steps" },
     { id: "trace", label: "Run trace" },
   ];
-  let tab = $state<Tab>(initialTab);
+  // Initial tab only: the user's tab choice wins after the drawer opens.
+  let tab = $state<Tab>(untrack(() => initialTab));
 
   // ── Width: wide enough to read tool args, user-resizable, remembered ────────
   const WIDTH_KEY = "cortex.chat.traceWidth";

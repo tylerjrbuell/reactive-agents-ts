@@ -148,7 +148,7 @@
     font: inherit; color: inherit; text-align: left;
   }
   .pill:focus-visible, .tick:focus-visible, .btn:focus-visible, .add-input:focus-visible {
-    outline: 2px solid var(--color-secondary, #7ee3c3); outline-offset: 2px; border-radius: 4px;
+    outline: 2px solid var(--cortex-focus); outline-offset: 2px; border-radius: 4px;
   }
   .count { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .chev { font-size: 14px; line-height: 1; color: var(--cortex-text-muted); transition: transform 150ms; }
@@ -160,18 +160,18 @@
   }
   .now-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .done-note { color: var(--cortex-text-muted); }
-  .ok { font-size: 14px; color: var(--color-secondary, #7ee3c3); }
+  .ok { font-size: 14px; color: var(--cortex-ok); }
   .spin {
     width: 8px; height: 8px; flex: none; border-radius: 9999px; box-sizing: border-box;
-    border: 1.5px solid var(--cortex-border); border-top-color: var(--color-secondary, #7ee3c3);
+    border: 1.5px solid var(--cortex-border); border-top-color: var(--cortex-accent);
   }
   .bar { width: 4.5rem; flex: none; height: 3px; border-radius: 2px; background: var(--cortex-border); overflow: hidden; }
-  .fill { display: block; height: 100%; background: var(--color-secondary, #7ee3c3); transition: width 200ms ease-out; }
+  .fill { display: block; height: 100%; background: var(--cortex-ok); transition: width 200ms ease-out; }
 
   .panel { border-top: 1px solid var(--cortex-border); padding: 0.375rem 0.625rem 0.5rem; }
   .rows { margin: 0; padding: 0; list-style: none; max-height: 11rem; overflow-y: auto; }
   .row { display: flex; align-items: flex-start; gap: 0.25rem; padding: 0.0625rem 0.25rem; border-radius: 4px; line-height: 1.5; }
-  .row.current { background: color-mix(in srgb, var(--color-secondary, #7ee3c3) 12%, transparent); }
+  .row.current { background: var(--cortex-accent-tint); }
   .row .title { padding-top: 0.0625rem; min-width: 0; overflow-wrap: anywhere; }
   .row[data-status="pending"] .title { color: var(--cortex-text-muted); }
   .row[data-status="completed"] .title { color: var(--cortex-text-muted); text-decoration: line-through; opacity: 0.7; }
@@ -179,14 +179,14 @@
   .tick { flex: none; display: inline-flex; padding: 0; background: none; border: 0; cursor: pointer; color: var(--cortex-text-muted); }
   .tick:disabled { cursor: default; opacity: 0.6; }
   .ico { font-size: 15px; line-height: 1.4; }
-  .row[data-status="completed"] .ico, .row[data-status="in_progress"] .ico { color: var(--color-secondary, #7ee3c3); }
+  .row[data-status="completed"] .ico, .row[data-status="in_progress"] .ico { color: var(--cortex-ok); }
 
   .unmarked { color: var(--cortex-text-muted); font-style: italic; opacity: 0.8; }
   /* Inferred = done by deterministic evidence, not marked: dashed ring instead of the solid check. */
   .ico-inferred {
     display: inline-flex; align-items: center; justify-content: center;
     width: 13px; height: 13px; margin: 1px; box-sizing: border-box; border-radius: 9999px;
-    border: 1.5px dashed var(--color-secondary, #7ee3c3); color: var(--color-secondary, #7ee3c3); cursor: help;
+    border: 1.5px dashed var(--cortex-ok); color: var(--cortex-ok); cursor: help;
   }
   .ico-inferred .material-symbols-outlined { font-size: 10px; line-height: 1; }
 
@@ -202,7 +202,7 @@
     padding: 0.1875rem 0.5rem; font: inherit; color: var(--cortex-text-muted); cursor: pointer;
     background: none; border: 1px solid var(--cortex-border); border-radius: 6px;
   }
-  .btn:hover:not(:disabled) { color: var(--cortex-text); border-color: var(--color-secondary, #7ee3c3); }
+  .btn:hover:not(:disabled) { color: var(--cortex-text); border-color: var(--cortex-line-strong); }
   .btn:disabled { cursor: default; opacity: 0.45; }
 
   @media (max-width: 700px) {

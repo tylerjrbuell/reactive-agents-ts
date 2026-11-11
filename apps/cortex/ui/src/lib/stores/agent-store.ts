@@ -7,6 +7,7 @@
 import { writable, derived } from "svelte/store";
 import { CORTEX_SERVER_URL } from "../constants.js";
 import { buildRunHierarchy } from "../run-hierarchy.js";
+import { formatCost } from "@reactive-agents/ui-core";
 
 export type AgentCognitiveState =
   | "idle"
@@ -139,7 +140,7 @@ export function agentRunDeskTooltipText(agent: AgentNode): string {
     if (agent.reasoningSteps > 0) lines.push(`Reasoning steps: ${agent.reasoningSteps}`);
   }
   if (agent.tokensUsed > 0) lines.push(`Tokens: ${agent.tokensUsed.toLocaleString()}`);
-  if (agent.cost > 0) lines.push(`Cost (USD): $${agent.cost.toFixed(4)}`);
+  if (agent.cost > 0) lines.push(`Cost (USD): ${formatCost(agent.cost)}`);
   if (agent.entropy > 0) lines.push(`Entropy: ${agent.entropy.toFixed(3)}`);
   if (agent.connectedAt > 0) {
     lines.push(`Connected: ${new Date(agent.connectedAt).toLocaleString()}`);

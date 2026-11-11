@@ -167,41 +167,41 @@
     color: var(--cortex-text);
     min-width: 0;
   }
-  .goal[data-tone="live"] { border-left-color: var(--color-secondary, #7ee3c3); }
-  .goal[data-tone="good"] { border-left-color: var(--color-secondary, #7ee3c3); }
-  .goal[data-tone="warn"] { border-left-color: var(--color-warning, #f5b84b); }
-  .goal[data-tone="bad"] { border-left-color: var(--color-error, #ff6b6b); }
+  .goal[data-tone="live"] { border-left-color: var(--cortex-accent); }
+  .goal[data-tone="good"] { border-left-color: var(--cortex-ok); }
+  .goal[data-tone="warn"] { border-left-color: var(--cortex-warn); }
+  .goal[data-tone="bad"] { border-left-color: var(--cortex-bad); }
   .head { display: flex; align-items: center; gap: 0.375rem; min-width: 0; flex-wrap: wrap; }
   .flag { font-size: 15px; color: var(--cortex-text-muted); flex: none; }
   .objective { display: block; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .status { color: var(--cortex-text-muted); font-size: 10px; }
-  .status[data-tone="good"], .status[data-tone="live"] { color: var(--color-secondary, #7ee3c3); }
-  .status[data-tone="warn"] { color: var(--color-warning, #f5b84b); }
-  .status[data-tone="bad"] { color: var(--color-error, #ff6b6b); }
+  .status[data-tone="good"], .status[data-tone="live"] { color: var(--cortex-ok); }
+  .status[data-tone="warn"] { color: var(--cortex-warn); }
+  .status[data-tone="bad"] { color: var(--cortex-bad); }
   .rows { margin: 0.25rem 0 0; padding: 0; list-style: none; }
   .row { display: flex; align-items: flex-start; gap: 0.375rem; padding: 0.0625rem 0.25rem; line-height: 1.45; }
   .ico { font-size: 14px; line-height: 1.3; flex: none; color: var(--cortex-text-muted); }
-  .row[data-state="met"] .ico { color: var(--color-secondary, #7ee3c3); }
+  .row[data-state="met"] .ico { color: var(--cortex-ok); }
   .title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .st { color: var(--cortex-text-muted); font-size: 10px; white-space: nowrap; }
   .meters { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin-top: 0.375rem; }
   .meter { display: flex; align-items: center; gap: 0.375rem; font-variant-numeric: tabular-nums; }
   .m-label { color: var(--cortex-text-muted); }
   .bar { width: 3.5rem; height: 4px; border-radius: 2px; background: var(--cortex-border); overflow: hidden; }
-  .bar i { display: block; height: 100%; background: var(--color-secondary, #7ee3c3); }
-  .bar i.hot { background: var(--color-error, #ff6b6b); }
+  .bar i { display: block; height: 100%; background: var(--cortex-ok); }
+  .bar i.hot { background: var(--cortex-bad); }
   .foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.375rem; }
   .verdict { color: var(--cortex-text-muted); }
-  .reason { color: var(--color-warning, #f5b84b); flex: 1 1 100%; overflow-wrap: anywhere; }
+  .reason { color: var(--cortex-warn); flex: 1 1 100%; overflow-wrap: anywhere; }
   .actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
   .btn {
     cursor: pointer; font: inherit; padding: 0.125rem 0.5rem; border-radius: 6px;
     border: 1px solid var(--cortex-border); background: none; color: var(--cortex-text);
   }
   .btn:hover:not(:disabled) { background: var(--cortex-surface-mid); }
-  .btn.primary { border-color: color-mix(in srgb, var(--color-primary, #8b5cf6) 45%, transparent); color: var(--color-primary, #8b5cf6); }
+  .btn.primary { border-color: color-mix(in srgb, var(--cortex-accent) 45%, transparent); color: var(--cortex-accent); }
   .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-  .btn:focus-visible, .chip-x:focus-visible { outline: 2px solid var(--color-secondary, #7ee3c3); outline-offset: 2px; }
+  .btn:focus-visible, .chip-x:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
   .chips { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0 0.75rem 0.375rem; font-family: ui-monospace, monospace; font-size: 10px; }
   .chip {
     display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%;

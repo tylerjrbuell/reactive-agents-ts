@@ -1,10 +1,42 @@
 /**
- * Tailwind config — design tokens aligned with docs.reactiveagents.dev
+ * Tailwind config — Cortex "Bench" tokens (spec:
+ * wiki/Architecture/Design-Specs/2026-11-10-cortex-ui-modernization.md, section 6).
  *
- * Brand: Geist Variable · violet #8b5cf6 · cyan #06b6d4
- * Background: #17181c (matches --sl-color-black in docs)
+ * Every colour reads a semantic `--cortex-*-rgb` channel token from
+ * `src/app.css`, so both themes come from `:root` (light) vs `html.dark` and
+ * opacity modifiers (`bg-primary/10`) keep working. The MD3 names below are
+ * aliases onto the semantic tokens, kept for one release while the pages are
+ * restyled (removed in step 8).
  */
 import type { Config } from "tailwindcss";
+
+type ColorFn = (opts: { opacityValue?: string }) => string;
+
+/** A colour from a channel token, with Tailwind's opacity modifier. */
+const tok = (name: string): string => `rgb(var(--cortex-${name}-rgb) / <alpha-value>)`;
+
+/**
+ * A text colour with an opacity floor. The muted-text opacity ladder
+ * (`text-outline/40`, `text-on-surface/60`) failed WCAG AA in both themes
+ * (spec audit A6). A numeric opacity below `floor` is raised to it, so the
+ * faintest neutral text never drops under `--cortex-text-3` (the contrast
+ * floor). Floors: on-surface (text) 0.67, on-surface-variant (text-2) 0.84,
+ * outline (text-3) 1 — at each floor the mix is at least as strong as
+ * text-3 itself (light, on canvas: 5.85 and 5.53 vs 5.46:1; dark is higher;
+ * worst case on surface-3 is 5.02:1). Backgrounds and borders keep the
+ * plain modifier.
+ */
+const textTok =
+  (name: string, floor: number): ColorFn =>
+  ({ opacityValue }) => {
+    const channels = `var(--cortex-${name}-rgb)`;
+    if (opacityValue === undefined) return `rgb(${channels})`;
+    const n = Number(opacityValue);
+    if (Number.isFinite(n)) return `rgb(${channels} / ${Math.max(n, floor)})`;
+    return `rgb(${channels} / ${opacityValue})`;
+  };
+
+const WHITE = "rgb(255 255 255 / <alpha-value>)";
 
 export default {
   content: ["./src/**/*.{html,js,svelte,ts}"],
@@ -12,56 +44,62 @@ export default {
   theme: {
     extend: {
       colors: {
-        // ── Surfaces (aligned with docs gray scale) ──────────────
-        background:                "#17181c",  // --sl-color-black
-        surface:                   "#17181c",
-        "surface-dim":             "#17181c",
-        "surface-container-lowest":"#0f1115",  // deepest
-        "surface-container-low":   "#1a1d24",  // panel bg
-        "surface-container":       "#24272f",  // --sl-color-gray-6
-        "surface-container-high":  "#353841",  // --sl-color-gray-5
-        "surface-container-highest":"#545861", // --sl-color-gray-4
-        "surface-bright":          "#545861",
-        "on-surface":              "#eceef2",  // --sl-color-gray-1
-        "on-surface-variant":      "#c0c2c7",  // --sl-color-gray-2 (muted; use secondary/primary for accents)
-        outline:                   "#888b96",  // --sl-color-gray-3
-        "outline-variant":         "#353841",
+        // ── Surfaces (MD3 aliases → Bench surfaces) ─────────────
+        background:                  tok("canvas"),
+        surface:                     tok("canvas"),
+        "surface-dim":               tok("canvas"),
+        "surface-container-lowest":  tok("canvas"),
+        "surface-container-low":     tok("surface-1"),
+        "surface-container":         tok("surface-2"),
+        "surface-container-high":    tok("surface-3"),
+        "surface-container-highest": tok("line-strong"),
+        "surface-bright":            tok("line-strong"),
+        "on-surface":                tok("text"),
+        "on-surface-variant":        tok("text-2"),
+        outline:                     tok("text-3"),
+        "outline-variant":           tok("line-strong"),
 
-        // ── Primary violet — RA brand (#8b5cf6) ────────────────
-        // Replaces MD3 pastel #d0bcff with RA brand violet
-        primary:                  "#8b5cf6",   // --ra-violet
-        "primary-container":      "#7c3aed",   // --ra-violet-deep
-        "primary-fixed":          "#c4b5fd",   // light variant for contrast
-        "primary-fixed-dim":      "#a78bfa",
-        "on-primary":             "#ffffff",
-        "on-primary-container":   "#f5f3ff",
-        "inverse-primary":        "#7c3aed",
+        // ── Primary = the agent (violet). Fills use accent-fill; text uses accent (textColor below).
+        primary:                tok("accent-fill"),
+        "primary-container":    tok("accent-fill"),
+        "primary-fixed":        tok("accent"),
+        "primary-fixed-dim":    tok("accent"),
+        "on-primary":           WHITE,
+        "on-primary-container": WHITE,
+        "inverse-primary":      tok("accent-fill"),
 
-        // ── Secondary cyan — RA brand (#06b6d4) ────────────────
-        secondary:                "#06b6d4",   // --ra-cyan
-        "secondary-container":    "#0891b2",
-        "secondary-fixed":        "#a5f3fc",
-        "secondary-fixed-dim":    "#67e8f9",
-        "on-secondary":           "#ffffff",
-        "on-secondary-container": "#f0fdff",
+        // ── Secondary = tools and data (cyan) ───────────────────
+        secondary:                tok("io"),
+        "secondary-container":    tok("io"),
+        "secondary-fixed":        tok("io"),
+        "secondary-fixed-dim":    tok("io"),
+        "on-secondary":           tok("canvas"),
+        "on-secondary-container": tok("canvas"),
 
-        // ── Tertiary amber — signal/warning color ──────────────
-        tertiary:                 "#eab308",
-        "tertiary-container":     "#ca8a04",
-        "tertiary-fixed":         "#fef08a",
-        "tertiary-fixed-dim":     "#fde047",
-        "on-tertiary":            "#ffffff",
-        "on-tertiary-container":  "#fefce8",
+        // ── Tertiary = needs attention (amber) ──────────────────
+        tertiary:                tok("warn"),
+        "tertiary-container":    tok("warn"),
+        "tertiary-fixed":        tok("warn"),
+        "tertiary-fixed-dim":    tok("warn"),
+        "on-tertiary":           tok("canvas"),
+        "on-tertiary-container": tok("canvas"),
 
-        // ── Error red ──────────────────────────────────────────
-        error:                    "#ef4444",
-        "error-container":        "#dc2626",
-        "on-error":               "#ffffff",
-        "on-error-container":     "#fef2f2",
+        // ── Error = failed (red) ────────────────────────────────
+        error:                tok("bad"),
+        "error-container":    tok("bad"),
+        "on-error":           tok("canvas"),
+        "on-error-container": tok("canvas"),
 
-        // ── Keep compatibility aliases ─────────────────────────
-        "inverse-surface":        "#eceef2",
-        "inverse-on-surface":     "#24272f",
+        "inverse-surface":    tok("text"),
+        "inverse-on-surface": tok("surface-2"),
+      },
+
+      textColor: {
+        "on-surface":         textTok("text", 0.67),
+        "on-surface-variant": textTok("text-2", 0.84),
+        outline:              textTok("text-3", 1),
+        // Violet text is the accent (6.5:1 dark, 6.6:1 light), not the button fill.
+        primary:              tok("accent"),
       },
 
       fontFamily: {
@@ -71,10 +109,20 @@ export default {
         body:     ["Geist Variable", "Geist", "ui-sans-serif", "sans-serif"],
         label:    ["Geist Variable", "Geist", "ui-sans-serif", "sans-serif"],
         geist:    ["Geist Variable", "Geist", "ui-sans-serif", "sans-serif"],
-        // Outfit — wordmark / section titles (local desk, not generic UI sans)
-        display:  ["Outfit", "Geist Variable", "Geist", "ui-sans-serif", "system-ui", "sans-serif"],
+        // Wordmark and titles: Geist 600 (owner decision 2; Outfit retired).
+        display:  ["Geist Variable", "Geist", "ui-sans-serif", "system-ui", "sans-serif"],
         // JetBrains Mono — data, metrics, code, trace
         mono:     ["JetBrains Mono", "ui-monospace", "Cascadia Code", "monospace"],
+      },
+
+      // One layer scale (spec section 6): z-sticky … z-tooltip.
+      zIndex: {
+        sticky:  "var(--cortex-z-sticky)",
+        nav:     "var(--cortex-z-nav)",
+        drawer:  "var(--cortex-z-drawer)",
+        modal:   "var(--cortex-z-modal)",
+        toast:   "var(--cortex-z-toast)",
+        tooltip: "var(--cortex-z-tooltip)",
       },
 
       borderRadius: {
@@ -85,6 +133,10 @@ export default {
         xl:      "0.75rem",
         "2xl":   "1rem",
         full:    "9999px",
+        // Bench radius by hierarchy.
+        chip:    "var(--cortex-r-chip)",
+        ctl:     "var(--cortex-r-ctl)",
+        panel:   "var(--cortex-r-panel)",
       },
 
       animation: {

@@ -3,6 +3,7 @@
   import BeaconCanvas from "$lib/components/BeaconCanvas.svelte";
   import BottomInputBar from "$lib/components/BottomInputBar.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
+  import NeuralMark from "$lib/components/kit/NeuralMark.svelte";
   import type { AgentCognitiveState } from "$lib/stores/agent-store.js";
   import type { AgentStore } from "$lib/stores/agent-store.js";
   import type { StageStore } from "$lib/stores/stage-store.js";
@@ -74,7 +75,7 @@
   <title>CORTEX — Beacon</title>
 </svelte:head>
 
-<CortexDeskShell>
+<CortexDeskShell ambient>
   {#if $agentStore.length > 0}
     <div class="flex-1 relative overflow-hidden z-10 min-h-0">
       <div class="absolute right-4 md:right-48 top-4 z-20 inline-flex items-center gap-2 rounded-lg px-2 py-1.5 backdrop-blur-sm bg-white/80 dark:bg-surface-container-low/45 shadow-[0_0_0_1px_rgba(124,58,237,0.2),0_0_0_1px_rgba(255,255,255,0.7)_inset] dark:shadow-[0_0_0_1px_rgba(139,92,246,0.28),0_0_0_1px_rgba(6,182,212,0.08)_inset]">
@@ -117,81 +118,10 @@
     <!-- ── Empty state: pulsing neural core + instructions ──────────── -->
     <div class="flex-1 flex flex-col items-center justify-center relative z-10 pb-20 min-h-0">
       <!-- Pulsing neural network icon -->
+      <!-- The neural mark, hero size (twinkle; still under reduced motion). The
+           old sonar rings are gone: the sonar means "running now" (spec 5.2). -->
       <div class="relative mb-10">
-        <!-- Outer sonar rings -->
-        <div class="absolute inset-0 flex items-center justify-center">
-          <div class="sonar-ring w-32 h-32" style="--ring-color: #8b5cf6;"></div>
-          <div class="sonar-ring w-32 h-32" style="--ring-color: #8b5cf6;"></div>
-          <div class="sonar-ring w-32 h-32" style="--ring-color: #8b5cf6;"></div>
-        </div>
-        <!-- Neural network SVG — same as header logo, larger -->
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="80" height="80" class="relative z-10">
-          <defs>
-            <linearGradient id="stage-ed" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.8"/>
-              <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.4"/>
-            </linearGradient>
-            <linearGradient id="stage-ed2" x1="100%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.6"/>
-              <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.25"/>
-            </linearGradient>
-            <filter id="stage-gC" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2.5" result="b"/>
-              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-            <filter id="stage-gN" x="-60%" y="-60%" width="220%" height="220%">
-              <feGaussianBlur stdDeviation="1.6" result="b"/>
-              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-          </defs>
-          <circle cx="24" cy="24" r="18" fill="#8b5cf6" opacity="0.06"/>
-          <line x1="14" y1="6" x2="34" y2="6" stroke="url(#stage-ed)" stroke-width="1.2" stroke-linecap="round"/>
-          <line x1="14" y1="6" x2="6" y2="20" stroke="url(#stage-ed)" stroke-width="1.2" stroke-linecap="round"/>
-          <line x1="34" y1="6" x2="42" y2="20" stroke="url(#stage-ed)" stroke-width="1.2" stroke-linecap="round"/>
-          <line x1="6" y1="20" x2="6" y2="34" stroke="url(#stage-ed)" stroke-width="1.2" stroke-linecap="round"/>
-          <line x1="42" y1="20" x2="42" y2="34" stroke="url(#stage-ed)" stroke-width="1.2" stroke-linecap="round"/>
-          <line x1="6" y1="34" x2="18" y2="44" stroke="url(#stage-ed)" stroke-width="1.2" stroke-linecap="round"/>
-          <line x1="42" y1="34" x2="30" y2="44" stroke="url(#stage-ed)" stroke-width="1.2" stroke-linecap="round"/>
-          <line x1="18" y1="44" x2="30" y2="44" stroke="url(#stage-ed)" stroke-width="1.2" stroke-linecap="round"/>
-          <line x1="14" y1="6" x2="24" y2="24" stroke="url(#stage-ed2)" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="34" y1="6" x2="24" y2="24" stroke="url(#stage-ed2)" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="6" y1="20" x2="24" y2="24" stroke="url(#stage-ed2)" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="42" y1="20" x2="24" y2="24" stroke="url(#stage-ed2)" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="6" y1="34" x2="24" y2="24" stroke="url(#stage-ed2)" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="42" y1="34" x2="24" y2="24" stroke="url(#stage-ed2)" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="18" y1="44" x2="24" y2="24" stroke="url(#stage-ed2)" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="30" y1="44" x2="24" y2="24" stroke="url(#stage-ed2)" stroke-width="1.4" stroke-linecap="round"/>
-          <circle cx="14" cy="6" r="3" fill="#8b5cf6" filter="url(#stage-gN)">
-            <animate attributeName="opacity" values="0.7;1;0.7" dur="4s" begin="0s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="34" cy="6" r="3" fill="#06b6d4" filter="url(#stage-gN)">
-            <animate attributeName="opacity" values="0.6;1;0.6" dur="5s" begin="1.2s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="6" cy="20" r="2.5" fill="#a78bfa" filter="url(#stage-gN)">
-            <animate attributeName="opacity" values="0.7;1;0.7" dur="6s" begin="2s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="42" cy="20" r="2.5" fill="#c4b5fd" filter="url(#stage-gN)">
-            <animate attributeName="opacity" values="0.6;1;0.6" dur="4.5s" begin="0.5s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="6" cy="34" r="2.5" fill="#06b6d4" filter="url(#stage-gN)">
-            <animate attributeName="opacity" values="0.7;1;0.7" dur="7s" begin="3s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="42" cy="34" r="2.5" fill="#8b5cf6" filter="url(#stage-gN)">
-            <animate attributeName="opacity" values="0.6;1;0.6" dur="5.5s" begin="1.8s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="18" cy="44" r="3" fill="#a78bfa" filter="url(#stage-gN)">
-            <animate attributeName="opacity" values="0.7;1;0.7" dur="6.5s" begin="0.8s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="30" cy="44" r="3" fill="#06b6d4" filter="url(#stage-gN)">
-            <animate attributeName="opacity" values="0.6;1;0.6" dur="4s" begin="2.5s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="24" cy="24" r="6" fill="#8b5cf6" filter="url(#stage-gC)">
-            <animate attributeName="fill" values="#8b5cf6;#a78bfa;#06b6d4;#a78bfa;#8b5cf6" dur="8s" begin="0s" repeatCount="indefinite"/>
-          </circle>
-          <circle cx="24" cy="24" r="9" fill="none" stroke="#06b6d4" stroke-width="0.6">
-            <animate attributeName="opacity" values="0.1;0.3;0.1" dur="6s" begin="0s" repeatCount="indefinite"/>
-          </circle>
-        </svg>
+        <NeuralMark size={108} hero />
       </div>
 
       <!-- Status text -->

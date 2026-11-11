@@ -95,9 +95,9 @@
     color: var(--cortex-text-muted);
   }
   .tick { font-size: 12px; line-height: 1; }
-  .tick[data-tone="done"] { color: var(--color-secondary, #7ee3c3); }
-  .tick[data-tone="failed"] { color: var(--color-error, #ff6b6b); }
-  .tick[data-tone="attention"] { color: var(--color-tertiary, #f7be1d); }
+  .tick[data-tone="done"] { color: var(--cortex-ok); }
+  .tick[data-tone="failed"] { color: var(--cortex-bad); }
+  .tick[data-tone="attention"] { color: var(--cortex-warn); }
   .when { font-variant-numeric: tabular-nums; cursor: default; }
   .strategy {
     padding: 0 0.3125rem;
@@ -128,7 +128,7 @@
     cursor: pointer;
   }
   .act:hover { background: var(--cortex-surface-mid); color: var(--cortex-text); }
-  .act:focus-visible { outline: 2px solid var(--color-secondary, #7ee3c3); }
+  .act:focus-visible { outline: 2px solid var(--cortex-focus); }
   .act .material-symbols-outlined { font-size: 14px; line-height: 1; }
   @media (hover: none) {
     .buttons { opacity: 1; }

@@ -514,23 +514,6 @@
     background: color-mix(in srgb, var(--cortex-surface-mid) 55%, transparent);
   }
 
-  .acp-chip {
-    display: inline-flex;
-    align-items: center;
-    max-width: 100%;
-    padding: 0.2rem 0.45rem;
-    border-radius: 0.35rem;
-    border: 1px solid var(--cortex-border);
-    background: color-mix(in srgb, var(--cortex-surface) 65%, transparent);
-    color: var(--cortex-text-muted);
-  }
-
-  .acp-chip--cyan {
-    border-color: color-mix(in srgb, var(--ra-cyan) 35%, var(--cortex-border));
-    color: color-mix(in srgb, var(--ra-cyan) 85%, var(--cortex-text));
-    background: color-mix(in srgb, var(--ra-cyan) 8%, var(--cortex-surface-low));
-  }
-
   :global(.agent-config-panel .acp-nav-pill) {
     padding: 0.25rem 0.6rem;
     border-radius: 9999px;
@@ -600,7 +583,7 @@
   :global(html.dark .agent-config-panel .acp-section-trigger) {
     background: linear-gradient(
       180deg,
-      color-mix(in srgb, var(--cortex-surface-high) 42%, var(--cortex-surface)) 0%,
+      color-mix(in srgb, var(--cortex-surface-3) 42%, var(--cortex-surface)) 0%,
       color-mix(in srgb, var(--cortex-surface-low) 78%, var(--cortex-surface)) 100%
     );
   }
@@ -696,11 +679,5 @@
   }
   :global(.ci-text)::placeholder {
     color: color-mix(in srgb, var(--cortex-text-muted) 55%, transparent);
-  }
-
-  :global(html.dark) .acp-chip {
-    color: color-mix(in srgb, var(--cortex-text) 88%, var(--cortex-text-muted) 12%);
-    border-color: color-mix(in srgb, var(--ra-violet) 28%, var(--cortex-border));
-    background: color-mix(in srgb, var(--cortex-surface-low) 88%, transparent);
   }
 </style>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatCost } from "@reactive-agents/ui-core";
   import type { AgentNode } from "$lib/stores/agent-store.js";
   import BeaconNode from "./BeaconNode.svelte";
   import { buildRunHierarchy, type HierarchyNode } from "$lib/run-hierarchy.js";
@@ -350,7 +351,7 @@
           <span class="hud-unit">tok</span>
         </p>
         {#if totalCost > 0}
-          <p class="hud-label mt-1">${totalCost.toFixed(4)} est.</p>
+          <p class="hud-label mt-1">{formatCost(totalCost)} est.</p>
         {/if}
       </div>
     {/if}

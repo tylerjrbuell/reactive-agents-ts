@@ -6,6 +6,9 @@
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { settings as settingsStore, DEFAULTS } from "$lib/stores/settings.js";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
+  import Field from "$lib/components/kit/Field.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
+  import { MOTION_OPTIONS, parseMotion, type MotionSetting } from "$lib/motion.js";
 
   /**
    * Explicit shape for this form state. Matches `CortexSettings` in `$lib/stores/settings.ts`
@@ -21,6 +24,7 @@
     theme: "dark" | "light";
     ollamaEndpoint: string;
     tooltipsEnabled: boolean;
+    motion: MotionSetting;
   };
 
   // Local reactive copy — bound to form inputs, written to shared store on Save
@@ -478,6 +482,14 @@
           </div>
         </div>
       </label>
+      <Field id="settings-motion" label="Motion" hint="Reduce motion stops the drift, twinkle, sonar and flowing rails. Running work still shows in status text.">
+        <Select
+          id="settings-motion"
+          options={MOTION_OPTIONS}
+          describedBy="settings-motion-hint"
+          bind:value={() => localSettings.motion, (v) => (localSettings = { ...localSettings, motion: parseMotion(v) })}
+        />
+      </Field>
       <div class="flex gap-2 flex-wrap text-[10px] font-mono text-outline/50">
         <span>Connect snippet:</span>
         <code class="text-primary/70 bg-primary/10 px-1.5 py-0.5 rounded">.withCortex()</code>

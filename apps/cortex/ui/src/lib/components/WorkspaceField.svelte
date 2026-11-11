@@ -21,7 +21,8 @@
   }
   let { id, value, onChange, browseOpen = false, onCancel }: Props = $props();
 
-  let draft = $state(value);
+  // Seeded once here; the effect below keeps it in step with `value`.
+  let draft = $state(untrack(() => value));
   let error = $state<string | null>(null);
   let suggested = $state<string[]>([]);
   // Initial value only: the dialog opens with the browser shown, the panel with it folded.

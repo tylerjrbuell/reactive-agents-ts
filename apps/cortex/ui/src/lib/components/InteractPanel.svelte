@@ -189,28 +189,28 @@
   .interact-panel__head h3 { margin: 0; font-size: 0.9rem; }
   .interact-panel__count {
     font-size: 0.75rem; padding: 0.1rem 0.45rem; border-radius: 999px;
-    background: var(--surface-2, #2a2a33); color: var(--text-2, #cbd5e1);
+    background: var(--cortex-surface-2); color: var(--cortex-text-2);
   }
-  .interact-panel__empty, .interact-panel__error { font-size: 0.8rem; color: var(--text-2, #94a3b8); margin: 0; }
-  .interact-panel__error { color: var(--danger, #f87171); }
+  .interact-panel__empty, .interact-panel__error { font-size: 0.8rem; color: var(--cortex-text-3); margin: 0; }
+  .interact-panel__error { color: var(--cortex-bad); }
   .interact-panel__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
   .interact-card {
     display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-    padding: 0.5rem 0.6rem; border: 1px solid var(--border, #2a2a33); border-radius: 0.5rem;
-    background: var(--surface-1, #1c1c22);
+    padding: 0.5rem 0.6rem; border: 1px solid var(--cortex-line); border-radius: 0.5rem;
+    background: var(--cortex-surface-1);
   }
   .interact-card__body { display: flex; flex-direction: column; gap: 0.35rem; width: 100%; }
-  .interact-card__meta { font-size: 0.7rem; color: var(--text-2, #94a3b8); }
+  .interact-card__meta { font-size: 0.7rem; color: var(--cortex-text-3); }
   .interact-card__prompt { font-size: 0.85rem; font-weight: 500; }
-  .interact-card__warn { font-size: 0.7rem; color: var(--danger, #f87171); }
+  .interact-card__warn { font-size: 0.7rem; color: var(--cortex-bad); }
   .interact-card__actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
   .interact-card__form { display: flex; flex-direction: column; gap: 0.35rem; }
   .interact-card__field { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.75rem; }
-  .interact-card__field input { font-size: 0.8rem; padding: 0.2rem 0.35rem; border-radius: 0.35rem; border: 1px solid var(--border, #2a2a33); }
+  .interact-card__field input { font-size: 0.8rem; padding: 0.2rem 0.35rem; border-radius: 0.35rem; border: 1px solid var(--cortex-line-strong); background: var(--cortex-canvas); color: var(--cortex-text); }
   .btn { font-size: 0.75rem; padding: 0.3rem 0.6rem; border-radius: 0.4rem; border: 1px solid transparent; cursor: pointer; }
   .btn:disabled { opacity: 0.5; cursor: default; }
-  .btn--choice { background: var(--surface-2, #2a2a33); color: var(--text-1, #e2e8f0); }
-  .btn--yes { background: var(--success, #16a34a); color: white; }
-  .btn--no { background: transparent; color: var(--danger, #f87171); border-color: var(--danger, #f87171); }
-  .btn--submit { background: var(--primary, #8b5cf6); color: white; align-self: flex-start; }
+  .btn--choice { background: var(--cortex-surface-2); color: var(--cortex-text); }
+  .btn--yes { background: var(--cortex-ok-tint); color: var(--cortex-ok); border-color: color-mix(in srgb, var(--cortex-ok) 40%, transparent); }
+  .btn--no { background: transparent; color: var(--cortex-bad); border-color: var(--cortex-bad); }
+  .btn--submit { background: var(--cortex-accent-fill); color: #fff; align-self: flex-start; }
 </style>

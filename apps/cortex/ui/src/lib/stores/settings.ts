@@ -6,6 +6,7 @@
  * contexts where localStorage is unavailable.
  */
 import { writable, get, type Writable } from "svelte/store";
+import { parseMotion, type MotionSetting } from "../motion.js";
 
 export interface CortexSettings {
   defaultProvider: string;
@@ -19,6 +20,8 @@ export interface CortexSettings {
   ollamaEndpoint: string;
   /** When false, hover/focus tooltips are suppressed app-wide (Tooltip component). */
   tooltipsEnabled: boolean;
+  /** Settings · Motion: follow the OS setting, or reduce motion regardless (`lib/motion.ts`). */
+  motion: MotionSetting;
 }
 
 export const DEFAULTS: CortexSettings = {
@@ -33,6 +36,7 @@ export const DEFAULTS: CortexSettings = {
   theme: "dark",
   ollamaEndpoint: "",
   tooltipsEnabled: true,
+  motion: "system",
 };
 
 const STORAGE_KEY = "cortex-settings";
@@ -51,7 +55,8 @@ function load(): CortexSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULTS };
-    return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<CortexSettings>) };
+    const merged = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<CortexSettings>) };
+    return { ...merged, motion: parseMotion(merged.motion) };
   } catch {
     return { ...DEFAULTS };
   }

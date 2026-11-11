@@ -3,6 +3,7 @@
  * display model behind `ChatGoalBar`. No I/O. Types mirror `GoalState` from
  * `@reactive-agents/core` (the UI does not depend on core) and the server's schedule shape.
  */
+import { formatCost } from "@reactive-agents/ui-core";
 
 export type GoalStatus = "proposed" | "active" | "paused" | "achieved" | "stalled" | "blocked" | "budget-exhausted" | "cancelled";
 export type GoalVerdict = "achieved" | "progressing" | "stalled" | "blocked";
@@ -138,7 +139,8 @@ const TERMINAL: ReadonlySet<GoalStatus> = new Set(["achieved", "budget-exhausted
 
 const pct = (used: number, max: number): number => (max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0);
 
-export const formatUsd = (n: number): string => `$${n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2)}`;
+/** Cost text: the one shared formatter (ui-core `formatCost`, spec G1). */
+const formatUsd = (n: number): string => formatCost(n);
 
 /** Verdict line for the latest segment. Only the goal's own status may say "achieved". */
 export function verdictText(goal: GoalWire): string {

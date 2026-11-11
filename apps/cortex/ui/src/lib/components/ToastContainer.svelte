@@ -30,7 +30,7 @@
 </script>
 
 <!-- Fixed bottom-right toast stack -->
-<div class="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none" aria-live="polite">
+<div class="fixed bottom-6 right-6 z-toastflex flex-col gap-2 pointer-events-none" aria-live="polite">
   {#each $toast as t (t.id)}
     {@const cfg = KIND_CONFIG[t.kind]}
     <div

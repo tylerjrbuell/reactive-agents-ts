@@ -68,7 +68,7 @@ describe("relativeTime", () => {
   test("buckets", () => {
     expect(relativeTime(undefined)).toBe("never");
     expect(relativeTime(1, 10_000)).toBe("just now");
-    expect(relativeTime(1, 5 * 60_000)).toBe("5m ago");
-    expect(relativeTime(1, 2 * 3_600_000)).toBe("2h ago");
+    expect(relativeTime(1, 5 * 60_000)).toBe("5 minutes ago");
+    expect(relativeTime(1, 2 * 3_600_000 + 1)).toBe("2 hours ago");
   });
 });

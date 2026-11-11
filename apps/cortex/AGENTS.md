@@ -110,17 +110,23 @@ Canonical live payload shape: **`CortexLiveMessage`** in `server/types.ts` (`v`,
 
 Cortex is a **local desk**: readable, keyboard-friendly, and visually aligned with **Reactive Agents docs** (`docs.reactiveagents.dev`), not a generic marketing site.
 
+The design language is **Bench** (`wiki/Architecture/Design-Specs/2026-11-10-cortex-ui-modernization.md`; mockups and the token source `tokens.css` beside it). Violet is the agent, cyan is tools and data, green/amber/red are outcomes; the signal gradient's motion, the live glow and the sonar mean "running now" and nothing else.
+
 | What | Where |
 |------|--------|
-| CSS variables (light/dark surfaces, markdown, borders) | `ui/src/app.css` — `--cortex-*`, `--ra-*` (violet / cyan brand) |
-| Tailwind tokens (surfaces, primary/secondary, fonts) | `ui/tailwind.config.ts` — Geist (UI), JetBrains Mono (data/code); display wordmark uses Outfit in `ui/src/app.html` |
+| Semantic tokens, both themes (`--cortex-canvas`, `--cortex-surface-1..3`, `--cortex-line(-strong)`, `--cortex-text/-2/-3`, `--cortex-accent(-fill)`, `--cortex-io`, `--cortex-ok/warn/bad` + `*-tint`, `--cortex-focus`; type, radius, `--cortex-z-*` layers, motion) | `ui/src/app.css`. Light is `:root`, dark is `html.dark`; each colour also has a `*-rgb` channel token. There is **no** light-mode override block: a new colour is a token, never an `html:not(.dark)` patch. Legacy names (`--cortex-bg`, `--cortex-surface`, `--cortex-border`, `--cortex-text-muted`, …) alias the semantic tokens until the step-8 cleanup. |
+| Tailwind colours | `ui/tailwind.config.ts` — every colour is `rgb(var(--cortex-*-rgb) / <alpha-value>)`; the MD3 names (`surface-container-low`, `on-surface`, `outline`, `primary`, …) are aliases onto the semantic tokens. `text-primary` is the accent, `bg-primary` the accent fill. The neutral text ladder has an opacity floor (`text-outline/40` renders as text-3) so muted text keeps AA. Layers: `z-sticky` `z-nav` `z-drawer` `z-modal` `z-toast` `z-tooltip`. |
+| Fonts | Self-hosted via fontsource (`app.css`): Geist for words, JetBrains Mono for machine values. Wordmark is Geist 600, sentence case. Material Symbols still loads from the Google CDN until every icon moves to `kit/Icon.svelte`. |
+| Identity layer | `NeuralMark` (`kit/NeuralMark.svelte`, geometry in `lib/neural-mark.ts`; `static/favicon.svg` matches it) is the only logo and illustration. Utilities in `app.css`: `.band` (grid behind page headers), `.dotgrid` (Beacon Field), `.glow-live` (live cards only), `.sonar` (running Field nodes only), `.rail` + `.rail-live/-failed/-attention`, `.brand-grad` (22px and up only). |
+| Motion setting | Settings · Motion (`lib/motion.ts`, stored as `motion` in `cortex-settings`) sets `html[data-motion="reduce"]`; `app.css` applies the same rules as `prefers-reduced-motion`. Every animation needs a reduced-motion fallback. |
+| Kit components | `ui/src/lib/components/kit/`: `Icon`, `NeuralMark`, `Button`, `IconButton` (label required), `Chip`, `Badge`, `Status` (ui-core `StatusTone`), `Panel` (`live`), `PageHeader` (`band`), `Tabs`, `Field` + `Input` / `Select` / `Textarea` / `Switch`, `EmptyState` (plain / `hero`), `Overlay` (modal / drawer), `Meter`, `EntropyLine`. Logic in `lib/tablist.ts`, `lib/meter.ts`, `lib/entropy-line.ts`, `lib/overlay-focus.ts`; rendering tests in `kit/kit.test.ts` (SSR through `kit/test-render.ts`). New UI uses the kit; pages move to it step by step (spec section 9). |
+| Shared formatters | ui-core `formatCost`, `formatTokens`, `formatRelativeTime`, `formatClockTime` and the status vocabulary (`statusOfRun` / `statusOfTurn` / `statusOfSubAgent`). Do not add a Cortex-local cost or time formatter. |
 | Shell layout (nav, command palette, Beacon WS) | `ui/src/routes/+layout.svelte` |
 | Beacon desk grid (fluid slots, panel chrome) | `AgentGrid.svelte`, `.cortex-beacon-desk-grid` in `app.css` |
-| **Ambient desk shell** (violet/cyan orbs behind content — all full-height routes) | `CortexDeskShell.svelte`; wrap each page root the same way as Beacon (`/`, `/chat`, `/runs`, `/lab`, `/settings`, `/run`, `/run/[runId]`) |
+| **Desk shell** (every full-height route) | `CortexDeskShell.svelte` wraps each page root (`/`, `/chat`, `/runs`, `/lab`, `/settings`, `/run`, `/run/[runId]`). Its `ambient` prop (default off) shows the two drifting orbs: on for Beacon and page-level empty states only (Runs with no runs), never behind dense content. |
 | Run detail (vitals, trace, summary shell, bottom tabs + panel) | `RunDetail.svelte`, `VitalsStrip`, `TracePanel`, `RunOverview`, `RunFinalDeliverable` |
-| Visual reference mockups | `docs/superpowers/specs/cortex-design-export.html` |
 
-When adding pages or chrome, reuse these tokens and patterns so the app stays one coherent **Cortex** product (same contrast behavior in light mode as enforced by the `html:not(.dark)` overrides in `app.css`).
+When adding pages or chrome, use the kit and the semantic tokens so both themes stay correct with no overrides.
 
 ### Layout context
 

@@ -8,6 +8,7 @@
   import BoundedText from "$lib/components/BoundedText.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import { formatCost } from "@reactive-agents/ui-core";
   import {
     plainPreviewFromMarkdown,
     preferExpandedDeliverable,
@@ -185,7 +186,7 @@
               class="mt-2 flex flex-wrap gap-3 border-t border-[var(--cortex-border)] pt-2 font-mono text-[9px] text-outline/45"
             >
               {#if (meta.estimatedCost ?? 0) > 0}
-                <span>${meta.estimatedCost!.toFixed(4)}</span>
+                <span>{formatCost(meta.estimatedCost)}</span>
               {/if}
               {#if (meta.durationMs ?? 0) > 0}
                 <span
@@ -244,14 +245,14 @@
           <span class="material-symbols-outlined text-[14px] text-tertiary">data_object</span>
           <span class="font-mono text-[10px] uppercase tracking-wide text-on-surface/70">Structured output</span>
           {#if structuredError}
-            <span class="font-mono text-[8px] text-[var(--ra-red,#f87171)]">parse-degraded</span>
+            <span class="font-mono text-[8px] text-[var(--cortex-bad)]">parse-degraded</span>
           {/if}
         </div>
         {#if structuredJson}
           <BoundedText text={structuredJson} preview={6000} maxHeight="20rem" class="text-[10px] text-on-surface/90" />
         {/if}
         {#if structuredError}
-          <p class="mt-1 font-mono text-[9px] text-[var(--ra-red,#f87171)] m-0">{structuredError}</p>
+          <p class="mt-1 font-mono text-[9px] text-[var(--cortex-bad)] m-0">{structuredError}</p>
         {/if}
       </div>
     {/if}

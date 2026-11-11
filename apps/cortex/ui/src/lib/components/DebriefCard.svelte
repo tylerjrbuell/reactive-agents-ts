@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatCost } from "@reactive-agents/ui-core";
   interface Props {
     debrief: unknown;
   }
@@ -100,13 +101,13 @@
     </div>
 
     {#if d.metrics}
-      <div class="flex flex-wrap gap-4 font-mono text-[10px] pt-4 border-t border-white/5">
+      <div class="flex flex-wrap gap-4 font-mono text-[10px] pt-4 border-t border-[var(--cortex-line)]">
         <span class="text-outline">METRICS:</span>
         <span>{d.metrics.iterations ?? 0} iter</span>
         <span>·</span>
         <span>{(d.metrics.tokens ?? 0).toLocaleString()} tok</span>
         <span>·</span>
-        <span>${(d.metrics.cost ?? 0).toFixed(4)}</span>
+        <span>{formatCost(d.metrics.cost ?? 0)}</span>
         <span>·</span>
         <span>{((d.metrics.duration ?? 0) / 1000).toFixed(1)}s</span>
         {#if toolCallSum > 0}

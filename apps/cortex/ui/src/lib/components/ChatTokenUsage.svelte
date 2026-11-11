@@ -46,8 +46,8 @@
         style:height="100%"
         title={barTitle(bar, turn.usage!.calls[i], i + 1)}
       >
-        <span class="block bg-[var(--ra-cyan,#22d3ee)]" style:height="{bar.inShare * 100}%"></span>
-        <span class="block bg-[var(--ra-primary,#8b5cf6)]" style:height="{bar.outShare * 100}%"></span>
+        <span class="block bg-[var(--cortex-io)]" style:height="{bar.inShare * 100}%"></span>
+        <span class="block bg-[var(--cortex-accent)]" style:height="{bar.outShare * 100}%"></span>
       </span>
     {/each}
     {#if bars.overflow > 0}

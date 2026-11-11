@@ -5,6 +5,7 @@
   import { AGENT_STATE_COLORS } from "$lib/constants.js";
   import { goto } from "$app/navigation";
   import { toast } from "$lib/stores/toast-store.js";
+  import { formatCost } from "@reactive-agents/ui-core";
 
   interface Props {
     agent: AgentNode;
@@ -43,12 +44,6 @@
     });
   }
 
-  function handleRunIdKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      handleRunIdClick(e);
-    }
-  }
 
   const stateIcon: Record<string, string> = {
     running: "science",
@@ -207,17 +202,16 @@
         {agent.name}
       </h3>
 
-      <p
-        class="font-mono text-[10px] text-outline/55 truncate cursor-pointer hover:text-primary hover:drop-shadow-[0_0_4px_rgba(139,92,246,0.3)] transition-colors"
+      <button
+        type="button"
+        class="block w-full border-0 bg-transparent p-0 text-left font-mono text-[10px] text-outline/55 truncate cursor-pointer hover:text-primary hover:drop-shadow-[0_0_4px_rgba(139,92,246,0.3)] transition-colors"
         title={agent.runId}
-        role="button"
-        tabindex="0"
+        aria-label="Copy run id {agent.runId}"
         onclick={handleRunIdClick}
-        onkeydown={handleRunIdKeydown}
       >
         <span class="text-outline/40">run</span>
         {runIdShort}
-      </p>
+      </button>
       {#if agent.chatSessionId}
         <button type="button" class="self-start font-mono text-[10px] text-primary hover:underline" onclick={openChat}>open chat</button>
       {/if}
@@ -270,7 +264,7 @@
       {#if agent.tokensUsed > 0}
         <p class="text-[10px] font-mono text-outline/55">
           {agent.tokensUsed.toLocaleString()} tok{#if agent.cost > 0}
-            <span class="text-outline/45"> · ${agent.cost.toFixed(4)}</span>{/if}
+            <span class="text-outline/45"> · {formatCost(agent.cost)}</span>{/if}
         </p>
       {/if}
 

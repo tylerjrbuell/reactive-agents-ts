@@ -3,6 +3,7 @@
  * Edit & Rerun prefill from a run snapshot, and loading a saved agent's config.
  */
 import { type AgentConfig, type CortexAgentToolConfig, defaultConfig } from "./types/agent-config.js";
+import { formatRelativeTime } from "@reactive-agents/ui-core";
 
 /** The Builder's config: AgentConfig plus the builder-only blocks it always carries. */
 export type BuilderAgentConfig = AgentConfig & {
@@ -136,11 +137,7 @@ export function builderConfigFromAgent(defaults: BuilderAgentConfig, sourceConfi
   };
 }
 
-/** "never" / "just now" / "5m ago" / "3h ago". */
+/** "never", or ui-core `formatRelativeTime` ("just now", "5 minutes ago", "2 hours ago"). */
 export function relativeTime(ts?: number, now: number = Date.now()): string {
-  if (!ts) return "never";
-  const d = now - ts;
-  if (d < 60000) return "just now";
-  if (d < 3600000) return `${Math.round(d/60000)}m ago`;
-  return `${Math.round(d/3600000)}h ago`;
+  return ts ? formatRelativeTime(ts, now) : "never";
 }

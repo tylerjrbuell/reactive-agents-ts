@@ -1,5 +1,5 @@
 import type { ChatTurnRow } from "../db/chat-queries.js";
-import { formatUsd } from "../../ui/src/lib/format-cost.js";
+import { formatCost } from "@reactive-agents/ui-core";
 
 /** Filesystem- and header-safe slug; falls back to `chat` when nothing usable remains. */
 export function slugifyFilename(name: string): string {
@@ -13,8 +13,8 @@ export function slugifyFilename(name: string): string {
 }
 
 function money(turn: ChatTurnRow): string {
-  if (!turn.costKnown) return turn.costUsd > 0 ? `>= $${turn.costUsd.toFixed(4)} (cost unknown)` : "cost unknown";
-  return formatUsd(turn.costUsd);
+  if (!turn.costKnown) return turn.costUsd > 0 ? `>= ${formatCost(turn.costUsd)} (cost unknown)` : "cost unknown";
+  return formatCost(turn.costUsd);
 }
 
 /** A readable Markdown transcript: roles in order, tool calls, and model + cost per assistant turn. */

@@ -141,8 +141,8 @@
   }
   .hl-backdrop :global(.hl-token) {
     border-radius: 3px;
-    background: color-mix(in oklab, var(--cortex-primary, #8b5cf6) 24%, transparent);
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--cortex-primary, #8b5cf6) 42%, transparent);
+    background: color-mix(in oklab, var(--cortex-accent) 24%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--cortex-accent) 42%, transparent);
   }
   .hl-backdrop :global(.hl-secret) {
     border-radius: 3px;

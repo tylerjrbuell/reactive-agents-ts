@@ -9,6 +9,7 @@
   import type { RunVitals, RunStatus } from "$lib/stores/run-store.js";
   import type { SignalData } from "$lib/stores/signal-store.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
+  import { formatCost } from "@reactive-agents/ui-core";
 
   interface Props {
     vitals: RunVitals;
@@ -217,7 +218,7 @@
         color: "text-primary",
       },
       { label: "Tokens", hint: "", value: vitals.tokensUsed > 0 ? vitals.tokensUsed.toLocaleString() : "—", sub: undefined, color: "text-primary" },
-      { label: "Cost", hint: "", value: vitals.cost < 0.0001 ? "<$0.0001" : `$${vitals.cost.toFixed(4)}`, sub: undefined, color: "text-secondary/80" },
+      { label: "Cost", hint: "", value: formatCost(vitals.cost), sub: undefined, color: "text-secondary/80" },
       { label: "Duration", hint: "", value: vitals.durationMs > 0 ? vitals.durationMs < 1000 ? `${vitals.durationMs}ms` : `${(vitals.durationMs/1000).toFixed(1)}s` : "—", sub: undefined, color: "text-secondary/80" },
     ] as stat}
       {#if stat.hint}

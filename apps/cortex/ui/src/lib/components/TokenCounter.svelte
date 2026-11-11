@@ -13,7 +13,7 @@
 
   const arrow = $derived(direction === "in" ? "↑" : "↓");
   const tone = $derived(
-    direction === "in" ? "text-[var(--ra-cyan,#22d3ee)]" : "text-[var(--ra-primary,#8b5cf6)]",
+    direction === "in" ? "text-[var(--cortex-io)]" : "text-[var(--cortex-accent)]",
   );
   const label = $derived(
     `${direction === "in" ? "Input" : "Output"} tokens${estimated && value > 0 ? " (estimated while streaming)" : ""}`,

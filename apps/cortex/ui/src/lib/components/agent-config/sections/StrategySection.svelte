@@ -157,7 +157,7 @@
             placeholder={'{\n  "type": "object",\n  "properties": { "name": { "type": "string" } },\n  "required": ["name"]\n}'}
             class="config-input font-mono text-[11px] leading-snug"></textarea>
           {#if outputSchemaText !== ''}
-            <p class="mt-1 font-mono text-[10px] {outputSchemaValid ? 'text-tertiary' : 'text-[var(--ra-red,#f87171)]'}">
+            <p class="mt-1 font-mono text-[10px] {outputSchemaValid ? 'text-tertiary' : 'text-[var(--cortex-bad)]'}">
               {outputSchemaValid ? '✓ Valid — answer extracted into result.object' : '✗ Invalid JSON — schema ignored until fixed'}
             </p>
             <OutputSchemaParseFailField bind:value={config.outputSchemaOnParseFail} />
@@ -248,7 +248,7 @@
           <input type="checkbox" bind:checked={config.auditRationale} class="accent-primary mt-0.5 shrink-0" />
           <span class="font-mono text-[11px] text-[var(--cortex-text)] leading-snug">
             <span class="font-semibold text-tertiary">Decision rationale in debrief</span>
-            — records the model's per-tool-call “why” for audit. <span class="font-semibold text-[var(--ra-amber-strong,inherit)]">Heads-up:</span> a cross-tier ablation found this adds latency and output tokens with no measured quality gain, and it can <em>degrade</em> answer quality on smaller / less-capable local models. Leave off unless you need the audit trail.
+            — records the model's per-tool-call “why” for audit. <span class="font-semibold text-[var(--cortex-warn)]">Heads-up:</span> a cross-tier ablation found this adds latency and output tokens with no measured quality gain, and it can <em>degrade</em> answer quality on smaller / less-capable local models. Leave off unless you need the audit trail.
           </span>
         </label>
 

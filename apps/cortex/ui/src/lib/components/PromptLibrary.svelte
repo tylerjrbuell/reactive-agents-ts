@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import {
     promptStore,
     PROMPT_TYPES,
@@ -23,7 +23,8 @@
   let saving = $state(false);
   let saveName = $state("");
   let saveBody = $state("");
-  let saveType = $state<PromptType>(defaultSaveType);
+  // Initial value only: the form keeps the user's pick after it opens.
+  let saveType = $state<PromptType>(untrack(() => defaultSaveType));
   let showSaveForm = $state(false);
 
   const unsubscribe = promptStore.subscribe((p) => (prompts = p));

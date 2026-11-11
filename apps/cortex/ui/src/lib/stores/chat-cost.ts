@@ -1,5 +1,5 @@
 import type { ChatTurn } from "./chat-store.js";
-import { formatUsd } from "../format-cost.js";
+import { formatCost } from "@reactive-agents/ui-core";
 
 /** Server-computed session totals (`GET /api/chat/sessions/:id` -> `totals`). */
 export type ChatTotals = { tokens: number; costUsd: number; costKnown: boolean; tokensIn?: number; tokensOut?: number; splitComplete?: boolean };
@@ -21,8 +21,12 @@ export function sessionCostSummary(totals: ChatTotals | undefined, turns: readon
   return { tokens, costUsd, costKnown: base.costKnown };
 }
 
-/** "$0.0123"; "<$0.0001" for sub-0.0001; "≥ $0.0123" when only a lower bound; "—" when unpriced and nothing is known. */
-export function formatCost(usd: number, known: boolean): string {
-  if (known) return formatUsd(usd);
-  return usd > 0 ? `≥ $${usd.toFixed(4)}` : "—";
+/**
+ * Session cost text. A known amount uses ui-core `formatCost` (the one cost
+ * format; `<$0.0001`, never `$0.0000`); an unpriced or incomplete amount reads
+ * as a lower bound (`≥ $0.012`), or `—` when nothing is known.
+ */
+export function formatSessionCost(usd: number, known: boolean): string {
+  if (known) return formatCost(usd);
+  return usd > 0 ? `≥ ${formatCost(usd)}` : "—";
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatCost } from "@reactive-agents/ui-core";
   interface Props {
     debrief: unknown;
     status?: string;
@@ -91,7 +92,7 @@
         <div class="hidden sm:flex items-center gap-3 font-mono text-[9px] text-outline/40">
           {#if d.metrics.iterations}<span>{d.metrics.iterations} iter</span>{/if}
           {#if d.metrics.tokens}<span>·</span><span>{(d.metrics.tokens).toLocaleString()} tok</span>{/if}
-          {#if d.metrics.cost}<span>·</span><span>${d.metrics.cost.toFixed(4)}</span>{/if}
+          {#if d.metrics.cost}<span>·</span><span>{formatCost(d.metrics.cost)}</span>{/if}
           {#if d.metrics.duration}<span>·</span><span>{(d.metrics.duration / 1000).toFixed(1)}s</span>{/if}
         </div>
       {/if}

@@ -1,35 +1,159 @@
 /* ================================================================
-   Cortex — Reactive Agents Studio
-   Design system aligned with docs.reactiveagents.dev
-   Geist Variable (UI) · Outfit (wordmark) · JetBrains Mono (data)
-   Brand accents · Violet #8b5cf6 · Cyan #06b6d4
+   Cortex — Reactive Agents Studio · "Bench" design tokens
+   Spec: wiki/Architecture/Design-Specs/2026-11-10-cortex-ui-modernization.md
+   (sections 5-6; token source of truth: the spec's mockups/tokens.css).
+   Geist (words) · JetBrains Mono (machine values) · violet = agent,
+   cyan = tools and data, green/amber/red = outcomes.
    ================================================================ */
 
-/* Geist Variable — same font as docs site */
+/* Self-hosted fonts (fontsource); nothing loads from a font CDN.
+   The wordmark is Geist 600 (owner decision 2), so Outfit is no longer loaded. */
 @import "@fontsource-variable/geist";
-/* Outfit — display headings / wordmark */
-@import "@fontsource/outfit";
-/* JetBrains Mono — data and code sections */
-@import "@fontsource/jetbrains-mono";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/400-italic.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/700.css";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Theme-aware surface tokens ───────────────────────────────── */
-/* These CSS variables change with dark/light mode and are used    */
-/* as overrides on key structural elements below.                   */
+/* ── Semantic tokens: one layer, two themes ──────────────────────
+   Components read these (directly or through the Tailwind colours in
+   tailwind.config.ts, which use the *-rgb channels so opacity modifiers
+   work). Light is the :root default; html.dark switches. No component
+   carries a light-mode override. Contrast notes are WCAG ratios. */
 :root {
-  /* Default = light */
-  --cortex-bg:           #f1f5f9;
-  --cortex-surface:      #ffffff;
-  --cortex-surface-low:  #f8fafc;
-  --cortex-surface-mid:  #e2e8f0;
-  --cortex-text:         #0f172a;
-  --cortex-text-muted:   #475569;
-  --cortex-border:       rgba(0, 0, 0, 0.08);
-  --cortex-nav-bg:       #f8fafc;
+  /* Light: lab paper (cool, not cream) */
+  color-scheme: light;
+  --cortex-canvas-rgb:      246 247 249; /* #f6f7f9 page                         */
+  --cortex-surface-1-rgb:   255 255 255; /* #ffffff panels                       */
+  --cortex-surface-2-rgb:   240 241 244; /* #f0f1f4 raised: composer, hover      */
+  --cortex-surface-3-rgb:   230 232 237; /* #e6e8ed selected, pressed            */
+  --cortex-line-rgb:        228 230 235; /* #e4e6eb hairlines                    */
+  --cortex-line-strong-rgb: 207 211 220; /* #cfd3dc control edges                */
+  --cortex-text-rgb:        20 22 27;    /* #14161b 16.9:1                       */
+  --cortex-text-2-rgb:      67 72 83;    /* #434853 8.6:1                        */
+  --cortex-text-3-rgb:      95 101 113;  /* #5f6571 5.5:1 canvas, 4.8:1 surface-3 (the floor) */
+  --cortex-accent-rgb:      109 40 217;  /* #6d28d9 agent, primary text, 6.6:1   */
+  --cortex-accent-fill-rgb: 109 40 217;  /* #6d28d9 primary button (white 7.1:1) */
+  --cortex-io-rgb:          11 100 121;  /* #0b6479 tools, data links, 6.3:1     */
+  --cortex-ok-rgb:          3 97 72;     /* #036148 */
+  --cortex-warn-rgb:        146 64 14;   /* #92400e */
+  --cortex-bad-rgb:         185 28 28;   /* #b91c1c */
+  --cortex-focus:           #0891b2;
+  --cortex-accent-tint: rgb(109 40 217 / 0.09);
+  --cortex-io-tint:     rgb(11 100 121 / 0.08);
+  --cortex-ok-tint:     rgb(3 97 72 / 0.08);
+  --cortex-warn-tint:   rgb(146 64 14 / 0.08);
+  --cortex-bad-tint:    rgb(185 28 28 / 0.07);
+  --cortex-shadow-pop: 0 12px 32px rgb(20 22 27 / 0.14), 0 0 0 1px var(--cortex-line-strong);
 
+  /* Identity layer (spec section 5.2): fixed strengths, fixed places. */
+  --cortex-orb-violet: rgb(124 58 237 / 0.06);
+  --cortex-orb-cyan:   rgb(6 182 212 / 0.045);
+  --cortex-grid-line:  rgb(15 23 42 / 0.04);
+  --cortex-grid-dot:   rgb(109 40 217 / 0.10);
+  --cortex-glow-live:  rgb(109 40 217 / 0.20);
+  --cortex-brand-a: #6d28d9;
+  --cortex-brand-b: #0b6479;
+  --cortex-mk-violet: #7c3aed;
+  --cortex-mk-cyan:   #0891b2;
+  --cortex-mk-lilac:  #8b5cf6;
+  --cortex-mk-pale:   #a78bfa;
+}
+
+html.dark {
+  /* Dark: graphite bench (canvas keeps the docs --sl-color-black) */
+  color-scheme: dark;
+  --cortex-canvas-rgb:      23 24 28;    /* #17181c */
+  --cortex-surface-1-rgb:   28 30 36;    /* #1c1e24 */
+  --cortex-surface-2-rgb:   35 38 46;    /* #23262e */
+  --cortex-surface-3-rgb:   44 47 56;    /* #2c2f38 */
+  --cortex-line-rgb:        43 46 55;    /* #2b2e37 */
+  --cortex-line-strong-rgb: 59 63 74;    /* #3b3f4a */
+  --cortex-text-rgb:        236 238 242; /* #eceef2 15.3:1 */
+  --cortex-text-2-rgb:      182 185 194; /* #b6b9c2 9.0:1  */
+  --cortex-text-3-rgb:      149 153 165; /* #9599a5 6.2:1 canvas, 4.7:1 surface-3 (the floor) */
+  --cortex-accent-rgb:      167 139 250; /* #a78bfa 6.5:1 */
+  --cortex-accent-fill-rgb: 124 58 237;  /* #7c3aed white text 5.7:1 */
+  --cortex-io-rgb:          34 211 238;  /* #22d3ee */
+  --cortex-ok-rgb:          52 211 153;  /* #34d399 */
+  --cortex-warn-rgb:        251 191 36;  /* #fbbf24 */
+  --cortex-bad-rgb:         248 113 113; /* #f87171 */
+  --cortex-focus:           #67e8f9;
+  --cortex-accent-tint: rgb(139 92 246 / 0.14);
+  --cortex-io-tint:     rgb(34 211 238 / 0.12);
+  --cortex-ok-tint:     rgb(52 211 153 / 0.12);
+  --cortex-warn-tint:   rgb(251 191 36 / 0.12);
+  --cortex-bad-tint:    rgb(248 113 113 / 0.12);
+  --cortex-shadow-pop: 0 12px 32px rgb(0 0 0 / 0.45), 0 0 0 1px var(--cortex-line-strong);
+
+  --cortex-orb-violet: rgb(139 92 246 / 0.08);
+  --cortex-orb-cyan:   rgb(6 182 212 / 0.06);
+  --cortex-grid-line:  rgb(255 255 255 / 0.035);
+  --cortex-grid-dot:   rgb(167 139 250 / 0.16);
+  --cortex-glow-live:  rgb(139 92 246 / 0.34);
+  --cortex-brand-a: #a78bfa;
+  --cortex-brand-b: #22d3ee;
+  --cortex-mk-violet: #8b5cf6;
+  --cortex-mk-cyan:   #22d3ee;
+  --cortex-mk-lilac:  #a78bfa;
+  --cortex-mk-pale:   #c4b5fd;
+}
+
+/* Colour tokens as plain colours (resolved per theme on <html>). */
+:root,
+html.dark {
+  --cortex-canvas:      rgb(var(--cortex-canvas-rgb));
+  --cortex-surface-1:   rgb(var(--cortex-surface-1-rgb));
+  --cortex-surface-2:   rgb(var(--cortex-surface-2-rgb));
+  --cortex-surface-3:   rgb(var(--cortex-surface-3-rgb));
+  --cortex-line:        rgb(var(--cortex-line-rgb));
+  --cortex-line-strong: rgb(var(--cortex-line-strong-rgb));
+  --cortex-text:        rgb(var(--cortex-text-rgb));
+  --cortex-text-2:      rgb(var(--cortex-text-2-rgb));
+  --cortex-text-3:      rgb(var(--cortex-text-3-rgb));
+  --cortex-accent:      rgb(var(--cortex-accent-rgb));
+  --cortex-accent-fill: rgb(var(--cortex-accent-fill-rgb));
+  --cortex-io:          rgb(var(--cortex-io-rgb));
+  --cortex-ok:          rgb(var(--cortex-ok-rgb));
+  --cortex-warn:        rgb(var(--cortex-warn-rgb));
+  --cortex-bad:         rgb(var(--cortex-bad-rgb));
+
+  /* Legacy names, kept as aliases onto the semantic tokens until the
+     step-8 cleanup (spec section 9) so unported components follow the theme. */
+  --cortex-bg:          var(--cortex-canvas);
+  --cortex-surface:     var(--cortex-surface-1);
+  --cortex-surface-low: var(--cortex-surface-2);
+  --cortex-surface-mid: var(--cortex-surface-3);
+  --cortex-text-muted:  var(--cortex-text-2);
+  --cortex-border:      var(--cortex-line);
+  --cortex-nav-bg:      var(--cortex-canvas);
+}
+
+/* Theme-independent scales (spec section 6). */
+:root {
+  --cortex-font-ui: "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --cortex-font-data: "JetBrains Mono", ui-monospace, monospace;
+  /* Type: nothing below 11px. */
+  --cortex-t-2xs: 11px; --cortex-t-xs: 12px; --cortex-t-sm: 13px; --cortex-t-md: 15px;
+  --cortex-t-lg: 17px;  --cortex-t-xl: 22px; --cortex-t-2xl: 30px;
+  --cortex-lh-tight: 1.25; --cortex-lh-ui: 1.45; --cortex-lh-read: 1.65;
+  --cortex-measure: 68ch;
+  /* Radius by hierarchy. */
+  --cortex-r-chip: 6px; --cortex-r-ctl: 8px; --cortex-r-panel: 12px;
+  /* Layers. Tailwind: z-sticky … z-tooltip. */
+  --cortex-z-sticky: 10; --cortex-z-nav: 20; --cortex-z-drawer: 30;
+  --cortex-z-modal: 40;  --cortex-z-toast: 50; --cortex-z-tooltip: 60;
+  /* Motion. */
+  --cortex-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --cortex-d-fast: 120ms; --cortex-d-med: 220ms;
+  /* The signal: reserved for things that are running right now. */
+  --cortex-signal: linear-gradient(90deg, #8b5cf6 0%, #22d3ee 100%);
+}
+
+:root {
   /* MarkdownRich — prose + KaTeX */
   --cortex-md-text:                #1e293b;
   --cortex-md-text-muted:          #475569;
@@ -53,17 +177,7 @@
 }
 
 html.dark {
-  --cortex-bg:           #17181c;
-  --cortex-surface:      #1a1d24;
-  --cortex-surface-low:  #24272f;
-  --cortex-surface-mid:  #353841;
-  --cortex-text:         #eceef2;
-  --cortex-text-muted:   #c0c2c7;
-  /* Violet-tinted hairline — avoids a cool white “halo” on dark desk chrome */
-  --cortex-border:       color-mix(in srgb, var(--ra-violet) 32%, rgb(0 0 0 / 0.55));
-  --cortex-nav-bg:       #17181c;
-
-  --cortex-md-text:                rgb(236 238 242 / 0.92);
+  --cortex-md-text:               rgb(236 238 242 / 0.92);
   --cortex-md-text-muted:          rgb(236 238 242 / 0.88);
   --cortex-md-h1:                  rgb(6 182 212 / 0.95);
   --cortex-md-h4:                  rgb(139 92 246 / 0.9);
@@ -88,17 +202,39 @@ html.dark {
 
 /* Apply theme tokens to structural elements */
 body {
-  background-color: var(--cortex-bg) !important;
-  color: var(--cortex-text) !important;
+  background-color: var(--cortex-canvas);
+  color: var(--cortex-text);
 }
 
-/* Keyboard focus — chrome & cards (form controls use component / browser defaults) */
+/* Keyboard focus — the one focus ring (spec principle 7). */
 a:focus-visible,
 button:focus-visible,
 [role="button"]:focus-visible,
 [role="tab"]:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ra-cyan) 75%, white 25%);
+  outline: 2px solid var(--cortex-focus);
   outline-offset: 3px;
+}
+
+/* ── Motion setting ──────────────────────────────────────────────
+   Two triggers, one rule set (spec section 5.2): the OS setting, and
+   Settings · Motion "Reduce motion", which sets html[data-motion="reduce"]
+   (lib/motion.ts). Running work still reads through status text, the static
+   rail and the static glow. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 /* Horizontal nav scroll on narrow viewports */
@@ -377,116 +513,12 @@ header.cortex-nav {
   background-color: var(--cortex-surface) !important;
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   LIGHT MODE OVERRIDES
-   All selectors under html:not(.dark) so they only fire in light mode.
-   Uses !important to override Tailwind compiled static values.
-   ══════════════════════════════════════════════════════════════════ */
-
-/* ── Text ─────────────────────────────────────────────────────── */
-html:not(.dark) .text-on-surface     { color: #0f172a !important; }
-html:not(.dark) .text-on-surface-variant { color: #334155 !important; }
-html:not(.dark) [class*="text-on-surface/"] { color: rgba(15,23,42,0.75) !important; }
-html:not(.dark) .text-outline        { color: #64748b !important; }
-html:not(.dark) [class*="text-outline/"] { color: rgba(100,116,139,0.8) !important; }
-html:not(.dark) [class*="text-on-surface"] { color: rgba(15,23,42,0.75) !important; }
-
-/* ── Page / section backgrounds ──────────────────────────────── */
-html:not(.dark) .bg-background,
-html:not(.dark) .bg-surface-dim,
-html:not(.dark) .bg-surface                { background-color: #f1f5f9 !important; }
-html:not(.dark) .bg-surface-container-low  { background-color: #f8fafc !important; }
-html:not(.dark) .bg-surface-container      { background-color: #ffffff !important; }
-html:not(.dark) .bg-surface-container-lowest { background-color: #e8ecf0 !important; }
-html:not(.dark) .bg-surface-container-high { background-color: #f1f5f9 !important; }
-
-/* ── Inline hardcoded hex backgrounds ────────────────────────── */
-html:not(.dark) .bg-\[#17181c\],
-html:not(.dark) .bg-\[#0f1115\],
-html:not(.dark) .bg-\[#111317\]        { background-color: #f8fafc !important; }
-html:not(.dark) .bg-\[#1a1d24\],
-html:not(.dark) .bg-\[#1e2024\],
-html:not(.dark) .bg-\[#12131a\]        { background-color: #ffffff !important; }
-html:not(.dark) .bg-\[#0c0e12\],
-html:not(.dark) .bg-\[#0d0f14\]        { background-color: #e8ecf0 !important; }
-
-/* ── gradient-border-glow panels (Signal Monitor, etc.) ─ */
-html:not(.dark) .gradient-border-glow {
-  background: #ffffff !important;
+/* Light mode needs no override block: every colour above is a theme token,
+   and tailwind.config.ts maps its colours onto the same tokens. */
+input::placeholder,
+textarea::placeholder {
+  color: var(--cortex-text-3);
 }
-/* The ::before pseudo on glow — lighten it slightly in light */
-html:not(.dark) .gradient-border-glow::before {
-  opacity: 0.5;
-  animation: none;
-}
-
-/* gradient-border: solid inner + gradient only in the 1px ring (no ::before “sheet”) */
-html:not(.dark) .gradient-border {
-  background:
-    linear-gradient(#ffffff, #ffffff) padding-box,
-    linear-gradient(
-      135deg,
-      rgba(139, 92, 246, 0.62) 0%,
-      rgba(6, 182, 212, 0.42) 50%,
-      rgba(139, 92, 246, 0.62) 100%
-    ) border-box !important;
-  background-clip: padding-box, border-box !important;
-  background-origin: border-box !important;
-}
-
-/* ── Inline dark backgrounds used in RunDetail / VitalsStrip ─── */
-html:not(.dark) [style*="background-color: #17181c"],
-html:not(.dark) [style*="background-color: #111317"],
-html:not(.dark) [style*="background-color: #0f1115"] {
-  background-color: #f8fafc !important;
-}
-html:not(.dark) [style*="background-color: #1a1d24"],
-html:not(.dark) [style*="background-color: #1e2024"] {
-  background-color: #ffffff !important;
-}
-
-/* ── Footer / bottom panel ────────────────────────────────────── */
-html:not(.dark) .bg-\[#17181c\]\/80,
-html:not(.dark) .bg-\[#17181c\]\/90 { background-color: rgba(248,250,252,0.9) !important; }
-html:not(.dark) footer { background-color: #f8fafc !important; }
-
-/* ── Borders ─────────────────────────────────────────────────── */
-html:not(.dark) .border-white\/5        { border-color: rgba(0,0,0,0.07) !important; }
-html:not(.dark) [class*="border-white/"]  { border-color: rgba(0,0,0,0.08) !important; }
-html:not(.dark) .border-outline-variant\/10,
-html:not(.dark) .border-outline-variant\/15,
-html:not(.dark) .border-outline-variant\/20 { border-color: rgba(0,0,0,0.1) !important; }
-
-/* ── Signal monitor D3 SVG track backgrounds ─────────────────── */
-/* These are filled via D3 with fill="#0c0e12" — override with attr selector */
-html:not(.dark) rect[fill="#0c0e12"] { fill: #e8ecf0 !important; }
-html:not(.dark) rect[stroke="rgba(255,255,255,0.05)"] { stroke: rgba(0,0,0,0.08) !important; }
-
-/* ── Opacity-variant backgrounds (Tailwind bg-X/Y classes) ─────── */
-/* Tailwind compiles bg-surface-container-low/80 to a different class
-   than bg-surface-container-low, so we need to catch via partial match.
-   Target: bottom input bar, settings form fields, Lab panels.      */
-html:not(.dark) [class*="bg-surface-container-low"] { background-color: rgba(248,250,252,0.9) !important; }
-html:not(.dark) [class*="bg-surface-container-lowest"] { background-color: #e8ecf0 !important; }
-html:not(.dark) [class*="bg-surface-container-high"] { background-color: #f1f5f9 !important; }
-html:not(.dark) [class*="bg-\[#17181c\]"] { background-color: #f8fafc !important; }
-html:not(.dark) [class*="bg-\[#111317\]"] { background-color: #f8fafc !important; }
-
-/* ── Form inputs / textareas (settings page, builder) ───────────── */
-html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-html:not(.dark) textarea,
-html:not(.dark) select {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: rgba(0,0,0,0.15) !important;
-}
-html:not(.dark) input::placeholder,
-html:not(.dark) textarea::placeholder {
-  color: #94a3b8 !important;
-}
-
-/* ── Primary/violet text stays readable on light bg ──────────── */
-/* (violet on light is fine — no override needed) */
 
 /* ── RA brand custom properties (mirrors docs custom.css) ─────── */
 :root {
@@ -522,32 +554,18 @@ html {
 }
 
 /* ── Gradient border panel — gradient is ONLY the border ring ─── */
+/* Legacy panel chrome, removed in step 8 (spec section 9); the inner fill is
+   the panel token so it follows the theme. Live cards use .glow-live. */
 .gradient-border {
   position: relative;
   border: 1px solid transparent;
   background:
-    linear-gradient(var(--ra-surface-panel), var(--ra-surface-panel)) padding-box,
+    linear-gradient(var(--cortex-surface-1), var(--cortex-surface-1)) padding-box,
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--ra-violet) 58%, transparent) 0%,
+      color-mix(in srgb, var(--ra-violet) 55%, transparent) 0%,
       color-mix(in srgb, var(--ra-cyan) 38%, transparent) 50%,
-      color-mix(in srgb, var(--ra-violet) 58%, transparent) 100%
-    ) border-box;
-  background-clip: padding-box, border-box;
-  background-origin: border-box;
-}
-
-html.dark .gradient-border {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--cortex-surface-low) 88%, var(--cortex-surface) 12%),
-      color-mix(in srgb, var(--cortex-surface-low) 88%, var(--cortex-surface) 12%)
-    ) padding-box,
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--ra-violet) 52%, transparent) 0%,
-      color-mix(in srgb, var(--ra-cyan) 36%, transparent) 50%,
-      color-mix(in srgb, var(--ra-violet) 52%, transparent) 100%
+      color-mix(in srgb, var(--ra-violet) 55%, transparent) 100%
     ) border-box;
   background-clip: padding-box, border-box;
   background-origin: border-box;
@@ -556,7 +574,7 @@ html.dark .gradient-border {
 /* Animated breathing glow variant — for active panels */
 .gradient-border-glow {
   position: relative;
-  background: #1a1d24;
+  background: var(--cortex-surface-1);
 }
 
 .gradient-border-glow::before {
@@ -721,12 +739,19 @@ html.dark .gradient-border {
   box-shadow: 0 4px 20px rgba(139,92,246,0.15);
 }
 
-/* ── Scrollbar — docs treatment ──────────────────────────────── */
-::-webkit-scrollbar       { width: 4px; height: 4px; }
+/* ── Scrollbar: neutral at rest, the signal while hovered or dragged ── */
+::-webkit-scrollbar       { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, var(--ra-violet), var(--ra-cyan));
-  border-radius: 2px;
+  background: var(--cortex-line-strong);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, #8b5cf6, #22d3ee);
+  background-clip: padding-box;
 }
 
 /* ── Selection ────────────────────────────────────────────────── */
@@ -737,11 +762,129 @@ code, pre, .font-mono {
   font-family: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
 }
 
-/* ── Inline code — matches docs treatment ────────────────────── */
+/* ── Inline code — the docs treatment: accent on accent tint (5.6:1 / 5.7:1) ── */
 :not(pre) > code {
-  background: rgba(139,92,246,0.10) !important;
-  color: var(--ra-violet) !important;
-  border-radius: 3px;
+  background: var(--cortex-accent-tint) !important;
+  color: var(--cortex-accent) !important;
+  border-radius: 4px;
   padding: 0.12em 0.3em;
   font-size: 0.875em;
 }
+
+/* ================================================================
+   Identity layer (spec section 5): Cortex's own elements at fixed
+   strengths and places. Placement rules live in the spec's 5.2 table;
+   the ambient orbs live in CortexDeskShell (`ambient` prop) and the
+   mark in kit/NeuralMark.svelte.
+   ================================================================ */
+
+/* Header band: the engineering grid behind page headers only, fading out
+   over the band, with one small violet field at the top left. Still. */
+.band { position: relative; isolation: isolate; }
+.band::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 50% 90% at 12% -20%, var(--cortex-orb-violet), transparent 70%),
+    linear-gradient(var(--cortex-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cortex-grid-line) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+  -webkit-mask-image: linear-gradient(180deg, #000 30%, transparent);
+          mask-image: linear-gradient(180deg, #000 30%, transparent);
+}
+
+/* Field dot grid: Beacon Field view only. */
+.dotgrid {
+  background-image: radial-gradient(circle, var(--cortex-grid-dot) 1px, transparent 1.4px);
+  background-size: 24px 24px;
+}
+
+/* Live glow: the violet-to-cyan edge and a soft halo, only on a card that
+   is running now. Breathes on 6s; reduced motion keeps the static halo. */
+.glow-live {
+  border-color: transparent !important;
+  background:
+    linear-gradient(var(--cortex-surface-1), var(--cortex-surface-1)) padding-box,
+    linear-gradient(135deg, rgb(139 92 246 / 0.75), rgb(34 211 238 / 0.45) 55%, rgb(139 92 246 / 0.6)) border-box !important;
+  box-shadow: 0 12px 36px -16px var(--cortex-glow-live);
+  animation: cortex-breathe 6s ease-in-out infinite;
+}
+@keyframes cortex-breathe { 50% { box-shadow: 0 14px 44px -12px var(--cortex-glow-live); } }
+
+/* Sonar: one ring, on a running Beacon Field node only (2.8s). Reduced
+   motion: no ring (the status text still says Running). */
+.sonar {
+  position: absolute;
+  inset: -6px;
+  border-radius: 14px;
+  border: 1.5px solid var(--cortex-mk-violet);
+  opacity: 0;
+  pointer-events: none;
+  animation: cortex-sonar 2.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+@keyframes cortex-sonar {
+  0%   { transform: scale(0.92); opacity: 0.55; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+
+/* Signal rail: a 2px left edge. Neutral at rest; the flowing signal means
+   live; red failed, amber needs you. Reduced motion: a static gradient. */
+.rail { position: relative; }
+.rail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--cortex-line-strong);
+}
+.rail.rail-live::before {
+  background: linear-gradient(180deg, #8b5cf6, #22d3ee, #8b5cf6);
+  background-size: 100% 200%;
+  animation: cortex-flow 2.4s linear infinite;
+}
+.rail.rail-failed::before { background: var(--cortex-bad); }
+.rail.rail-attention::before { background: var(--cortex-warn); }
+@keyframes cortex-flow { to { background-position: 0 -200%; } }
+
+/* Gradient wordmark: brand moments at 22px and up only, never in the bar. */
+.brand-grad {
+  background: linear-gradient(120deg, var(--cortex-brand-a), var(--cortex-brand-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Kit form controls (kit/Input, Select, Textarea share one look): canvas
+   fill, control edge, the one focus ring; no light-mode override. */
+.cx-control {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--cortex-r-ctl);
+  border: 1px solid var(--cortex-line-strong);
+  background: var(--cortex-canvas);
+  color: var(--cortex-text);
+  font-family: var(--cortex-font-ui);
+  font-size: var(--cortex-t-sm);
+}
+textarea.cx-control { height: auto; padding: 10px; resize: vertical; line-height: var(--cortex-lh-ui); }
+.cx-control::placeholder { color: var(--cortex-text-3); }
+.cx-control:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
+.cx-control:disabled { opacity: 0.55; cursor: not-allowed; }
+.cx-control[aria-invalid="true"] { border-color: var(--cortex-bad); }
+.cx-control.cx-mono { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sonar { display: none; }
+  .glow-live { animation: none; }
+  .rail.rail-live::before { animation: none; }
+}
+html[data-motion="reduce"] .sonar { display: none; }
+html[data-motion="reduce"] .glow-live,
+html[data-motion="reduce"] .rail.rail-live::before { animation: none; }

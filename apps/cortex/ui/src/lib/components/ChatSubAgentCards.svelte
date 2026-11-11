@@ -102,19 +102,19 @@
     color: var(--cortex-text);
   }
   .card:hover { background: var(--cortex-surface-mid); }
-  .card:focus-visible { outline: 2px solid var(--color-secondary, #7ee3c3); outline-offset: 1px; }
-  .card[data-state="running"] { --tone: var(--color-secondary, #7ee3c3); }
-  .card[data-state="done"] { --tone: color-mix(in srgb, var(--color-secondary, #7ee3c3) 45%, var(--cortex-border)); }
-  .card[data-state="failed"] { --tone: var(--color-error, #ff6b6b); }
-  .card[data-state="abstained"] { --tone: #e0b25c; }
+  .card:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
+  .card[data-state="running"] { --tone: var(--cortex-accent); }
+  .card[data-state="done"] { --tone: var(--cortex-ok); }
+  .card[data-state="failed"] { --tone: var(--cortex-bad); }
+  .card[data-state="abstained"] { --tone: var(--cortex-warn); }
   .top { display: flex; align-items: center; gap: 0.375rem; min-width: 0; font-size: 10px; }
   .dot { width: 6px; height: 6px; flex: none; border-radius: 9999px; background: var(--tone); }
   .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .goal { font-size: 12px; line-height: 1; flex: none; color: var(--cortex-text-muted); }
-  .goal[data-goal="met"] { color: var(--color-secondary, #7ee3c3); }
-  .goal[data-goal="unmet"] { color: var(--color-error, #ff6b6b); }
+  .goal[data-goal="met"] { color: var(--cortex-ok); }
+  .goal[data-goal="unmet"] { color: var(--cortex-bad); }
   .meta { margin-left: auto; flex: none; color: var(--cortex-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .failed { margin-left: 0.25rem; color: var(--color-error, #ff6b6b); }
+  .failed { margin-left: 0.25rem; color: var(--cortex-bad); }
   .activity {
     font-size: 9.5px;
     line-height: 1.45;

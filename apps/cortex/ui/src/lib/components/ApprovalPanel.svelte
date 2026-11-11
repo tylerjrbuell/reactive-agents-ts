@@ -120,22 +120,22 @@
   .approval-panel__head h3 { margin: 0; font-size: 0.9rem; }
   .approval-panel__count {
     font-size: 0.75rem; padding: 0.1rem 0.45rem; border-radius: 999px;
-    background: var(--surface-2, #2a2a33); color: var(--text-2, #cbd5e1);
+    background: var(--cortex-surface-2); color: var(--cortex-text-2);
   }
-  .approval-panel__empty, .approval-panel__error { font-size: 0.8rem; color: var(--text-2, #94a3b8); margin: 0; }
-  .approval-panel__error { color: var(--danger, #f87171); }
+  .approval-panel__empty, .approval-panel__error { font-size: 0.8rem; color: var(--cortex-text-3); margin: 0; }
+  .approval-panel__error { color: var(--cortex-bad); }
   .approval-panel__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
   .approval-card {
     display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-    padding: 0.5rem 0.6rem; border: 1px solid var(--border, #2a2a33); border-radius: 0.5rem;
-    background: var(--surface-1, #1c1c22);
+    padding: 0.5rem 0.6rem; border: 1px solid var(--cortex-line); border-radius: 0.5rem;
+    background: var(--cortex-surface-1);
   }
   .approval-card__tool { font-weight: 600; font-size: 0.85rem; }
-  .approval-card__meta { font-size: 0.7rem; color: var(--text-2, #94a3b8); }
-  .approval-card__args { display: block; margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-2, #cbd5e1); word-break: break-all; }
+  .approval-card__meta { font-size: 0.7rem; color: var(--cortex-text-3); }
+  .approval-card__args { display: block; margin-top: 0.25rem; font-size: 0.7rem; color: var(--cortex-text-2); word-break: break-all; }
   .approval-card__actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
   .btn { font-size: 0.75rem; padding: 0.3rem 0.6rem; border-radius: 0.4rem; border: 1px solid transparent; cursor: pointer; }
   .btn:disabled { opacity: 0.5; cursor: default; }
-  .btn--approve { background: var(--success, #16a34a); color: white; }
-  .btn--deny { background: transparent; color: var(--danger, #f87171); border-color: var(--danger, #f87171); }
+  .btn--approve { background: var(--cortex-ok-tint); color: var(--cortex-ok); border-color: color-mix(in srgb, var(--cortex-ok) 40%, transparent); }
+  .btn--deny { background: transparent; color: var(--cortex-bad); border-color: var(--cortex-bad); }
 </style>

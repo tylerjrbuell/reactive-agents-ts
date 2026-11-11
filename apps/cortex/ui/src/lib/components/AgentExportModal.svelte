@@ -45,7 +45,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div
-  class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+  class="fixed inset-0 z-modalflex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
   role="button"
   tabindex="-1"
   onclick={onClose}

@@ -2,6 +2,7 @@
  * Lab Tools tab (ToolWorkshop): catalog types and the pure rules behind the
  * catalog list, the test runner's default arguments and the MCP server form.
  */
+import { formatRelativeTime } from "@reactive-agents/ui-core";
 
 /** Where a catalog tool comes from. */
 export type ToolKind = "built-in" | "meta" | "mcp" | "custom";
@@ -89,13 +90,9 @@ export function kindBadgeClass(k: ToolKind): string {
   return "text-emerald-300/90 border-emerald-500/35 bg-emerald-500/10";
 }
 
-/** "just now" / "5m ago" / "3h ago", or "—" when never used. */
+/** When a tool was last used (ui-core `formatRelativeTime`: "5 minutes ago"), or "—" when never. */
 export function relativeTime(ts: number | null, now: number = Date.now()): string {
-  if (ts == null) return "—";
-  const d = now - ts;
-  if (d < 60000) return "just now";
-  if (d < 3600000) return `${Math.round(d / 60000)}m ago`;
-  return `${Math.round(d / 3600000)}h ago`;
+  return ts == null ? "—" : formatRelativeTime(ts, now);
 }
 
 /** Catalog rows matching the search text (name, description or kind label). */

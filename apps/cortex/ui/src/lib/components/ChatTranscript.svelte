@@ -167,10 +167,10 @@
   }
   .tool-badge .material-symbols-outlined { font-size: 10px; line-height: 1; }
   .tool-badge[data-tone="failed"] {
-    border-color: color-mix(in srgb, var(--color-error, #ff6b6b) 55%, transparent);
-    background: color-mix(in srgb, var(--color-error, #ff6b6b) 14%, transparent);
-    color: var(--color-error, #ff6b6b);
+    border-color: color-mix(in srgb, var(--cortex-bad) 55%, transparent);
+    background: var(--cortex-bad-tint);
+    color: var(--cortex-bad);
   }
-  .tool-badge[data-tone="fixed"] .material-symbols-outlined { color: var(--color-secondary, #7ee3c3); }
-  .tool-badge[data-tone="running"] { border-color: color-mix(in srgb, var(--color-secondary, #7ee3c3) 55%, transparent); }
+  .tool-badge[data-tone="fixed"] .material-symbols-outlined { color: var(--cortex-ok); }
+  .tool-badge[data-tone="running"] { border-color: color-mix(in srgb, var(--cortex-accent) 55%, transparent); }
 </style>

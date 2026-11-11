@@ -3,6 +3,9 @@
   import type { RunVitals, RunStatus } from "$lib/stores/run-store.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import { untrack } from "svelte";
+  import { formatCost } from "@reactive-agents/ui-core";
+  import { focusOnMount } from "$lib/actions/focus-on-mount.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
 
   export interface Props {
@@ -30,7 +33,7 @@
   let renaming = $state(false);
   let renameValue = $state("");
   // Local shadow so successful renames are reflected without mutating the prop
-  let localDisplayName = $state(displayName ?? "");
+  let localDisplayName = $state(untrack(() => displayName ?? ""));
 
   function startRename() {
     renameValue = localDisplayName || displayName || "";
@@ -114,7 +117,7 @@
   const runAccentAmber = "text-amber-800 dark:text-amber-600";
   const runAccentAmberStrong = "text-amber-900 dark:text-amber-500/90";
 
-  const costStr = $derived(vitals.cost < 0.001 ? `<$0.001` : `$${vitals.cost.toFixed(4)}`);
+  const costStr = $derived(formatCost(vitals.cost));
 
   const durationStr = $derived(
     vitals.durationMs < 1000
@@ -236,7 +239,7 @@
             onblur={() => void commitRename()}
             class="w-full min-w-0 truncate rounded border border-primary/40 bg-surface-container px-1.5 py-0.5 font-mono text-[9px] normal-case tracking-normal text-on-surface outline-none focus:border-primary"
             aria-label="Rename this run"
-            autofocus
+            use:focusOnMount
           />
           <button
             type="button"

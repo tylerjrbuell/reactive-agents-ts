@@ -57,12 +57,12 @@ describe("goalView", () => {
   test("meters and actions", () => {
     const v = goalView(goal());
     expect(v.meters[0]).toEqual({ label: "Segments", text: "2/5", pct: 40 });
-    expect(v.meters[1]).toEqual({ label: "Cost", text: "$0.25/$1.00", pct: 25 });
+    expect(v.meters[1]).toEqual({ label: "Cost", text: "$0.250/$1.00", pct: 25 });
     expect(v.actions).toEqual(["pause", "cancel"]);
     expect(goalView(goal({ status: "proposed" })).actions).toEqual(["accept", "cancel"]);
     expect(goalView(goal({ status: "paused" })).actions).toEqual(["resume", "cancel"]);
     expect(goalView(goal({ status: "budget-exhausted" })).terminal).toBe(true);
-    expect(goalView(goal({ budget: { maxSegments: 5 } })).meters[1]).toEqual({ label: "Cost", text: "$0.25", pct: null });
+    expect(goalView(goal({ budget: { maxSegments: 5 } })).meters[1]).toEqual({ label: "Cost", text: "$0.250", pct: null });
     expect(goalView(goal({ status: "stalled" })).actions).toEqual(["resume", "cancel"]);
     expect(goalView(goal({ status: "blocked" })).actions).toEqual(["resume", "cancel"]);
     expect(goalView(goal({ status: "stalled" })).terminal).toBe(false);
@@ -73,8 +73,8 @@ describe("goalView", () => {
     const v = goalView(goal({ costKnown: false, spent: { costUsd: 0, tokens: 1200, wallClockMs: 0 }, budget: { maxSegments: 5, maxCostUsd: 1, maxTokens: 200000 } }));
     expect(v.meters[1]).toEqual({ label: "Cost", text: "cost unknown", pct: null });
     expect(v.meters[2]).toEqual({ label: "Tokens", text: "1200/200000", pct: 1 });
-    expect(goalView(goal({ costKnown: true })).meters[1]?.text).toBe("$0.25/$1.00");
-    expect(goalView(goal()).meters[1]?.text).toBe("$0.25/$1.00"); // absent flag (older server) = known
+    expect(goalView(goal({ costKnown: true })).meters[1]?.text).toBe("$0.250/$1.00");
+    expect(goalView(goal()).meters[1]?.text).toBe("$0.250/$1.00"); // absent flag (older server) = known
   });
   test("schedule label", () => {
     expect(scheduleLabel({ id: "s", kind: "loop", spec: "5m", prompt: "hi", expiresAt: 0, runs: 0, lastStatus: null })).toBe("every 5m: hi");

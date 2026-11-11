@@ -8,7 +8,7 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
   import { runStatusAfter } from "$lib/run-live-status.js";
-  import { statusOfRun, type StatusTone } from "@reactive-agents/ui-core";
+  import { formatCost, formatRelativeTime, statusOfRun, type StatusTone } from "@reactive-agents/ui-core";
 
   type RunRow = {
     runId: string;
@@ -289,13 +289,7 @@
     return ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms / 60000)}m`;
   }
 
-  function relativeTime(ts: number): string {
-    const diff = Date.now() - ts;
-    if (diff < 60000) return "just now";
-    if (diff < 3600000) return `${Math.round(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.round(diff / 3600000)}h ago`;
-    return `${Math.round(diff / 86400000)}d ago`;
-  }
+  const relativeTime = (ts: number): string => formatRelativeTime(ts, Date.now());
 
   const stats = $derived({
     total: runs.length,
@@ -402,7 +396,7 @@
   <title>CORTEX — Trace</title>
 </svelte:head>
 
-<CortexDeskShell>
+<CortexDeskShell ambient={!loading && !error && runs.length === 0}>
 <div class="relative z-10 flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 sm:p-6">
   <!-- Header -->
   <div class="flex flex-shrink-0 flex-wrap items-start justify-between gap-3">
@@ -473,7 +467,7 @@
       </div>
       <div class="min-w-[4.5rem]">
         <div class="font-mono text-[9px] uppercase tracking-widest text-secondary">Cost</div>
-        <div class="font-mono text-sm tabular-nums text-cyan-800 dark:text-secondary">${stats.totalCost.toFixed(4)}</div>
+        <div class="font-mono text-sm tabular-nums text-cyan-800 dark:text-secondary">{formatCost(stats.totalCost)}</div>
       </div>
     </div>
   {/if}
@@ -703,13 +697,13 @@
               >
                 <span>{run.iterationCount} iter</span>
                 <span>{run.tokensUsed.toLocaleString()}t</span>
-                <span>${(run.cost ?? 0).toFixed(4)}</span>
+                <span>{formatCost(run.cost ?? 0)}</span>
                 <span class="w-12 text-right">{durationStr(run)}</span>
               </div>
 
               <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
                 <span
-                  class="w-14 text-right font-mono text-[10px] text-slate-400 tabular-nums dark:text-outline/50 sm:w-16"
+                  class="min-w-14 whitespace-nowrap text-right font-mono text-[10px] text-slate-400 tabular-nums dark:text-outline/50 sm:min-w-16"
                   >{relativeTime(run.startedAt)}</span>
                 <span
                   class="material-symbols-outlined text-sm text-slate-300 transition-colors group-hover:text-primary/50 dark:text-outline/25"

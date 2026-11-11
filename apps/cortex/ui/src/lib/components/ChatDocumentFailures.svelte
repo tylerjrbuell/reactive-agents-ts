@@ -13,7 +13,7 @@
   <div
     role="alert"
     data-testid="document-failures"
-    class="mx-3 mb-2 rounded border border-[color:var(--cortex-warning,#d9a441)] bg-[var(--cortex-surface)] px-3 py-2 font-mono text-[10px] text-[var(--cortex-text)]"
+    class="mx-3 mb-2 rounded border border-[color:var(--cortex-warn)] bg-[var(--cortex-surface)] px-3 py-2 font-mono text-[10px] text-[var(--cortex-text)]"
   >
     <div class="mb-1 flex items-center gap-1 font-semibold">
       <span class="material-symbols-outlined text-[14px] leading-none">warning</span>

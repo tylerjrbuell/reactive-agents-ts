@@ -27,6 +27,6 @@
     cursor: pointer;
   }
   .jump:hover { background: var(--cortex-surface-mid); }
-  .jump:focus-visible { outline: 2px solid var(--color-secondary, #7ee3c3); }
+  .jump:focus-visible { outline: 2px solid var(--cortex-focus); }
   .jump .material-symbols-outlined { font-size: 13px; line-height: 1; }
 </style>
