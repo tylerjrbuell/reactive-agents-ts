@@ -67,6 +67,7 @@
     "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/tools": "workspace:*",
     "@reactive-agents/trace": "workspace:*",
+    "@reactive-agents/replay": "workspace:*",
     "@reactive-agents/reactive-intelligence": "workspace:*"
   },
   "devDependencies": {

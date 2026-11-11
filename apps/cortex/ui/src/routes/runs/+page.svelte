@@ -31,6 +31,7 @@
     type RunStatusFilter,
   } from "$lib/runs-table.js";
   import { waitingRunsOf, withWaitingStatus } from "$lib/waiting-on-you.js";
+  import { compareHref, comparePair } from "$lib/run-compare.js";
   import { pendingApprovals } from "$lib/stores/approval-watcher.js";
   import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
 
@@ -153,6 +154,7 @@
   const counts = $derived(statusCounts(filterRuns(shown, search, "all")));
   const totals = $derived(runTotals(view));
   const empty = $derived(!loading && !error && runs.length === 0);
+  const pair = $derived(comparePair(selected));
 </script>
 
 <svelte:head>
@@ -187,6 +189,7 @@
         {#if selected.size > 0}
           <div class="bulk" role="region" aria-label="Selected runs">
             <span><b>{selected.size}</b> selected</span>
+            <Button size="sm" icon="steps" disabled={pair === null} title={pair === null ? "Select exactly two runs to compare" : undefined} href={pair ? compareHref(pair[0], pair[1]) : undefined}>Compare</Button>
             <Button size="sm" variant="danger" icon="trash" disabled={bulkDeleting} onclick={() => (showBulkDeleteConfirm = true)}>Delete</Button>
             <Button size="sm" variant="ghost" onclick={() => (selected = new Set())}>Clear selection</Button>
           </div>

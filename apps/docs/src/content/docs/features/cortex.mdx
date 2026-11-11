@@ -104,6 +104,17 @@ Under Settings · Motion, **Reduce motion** (or the system setting) stills the b
 - A run paused at an approval gate or on a question reads **Waiting on you** (in Runs, the run view and Beacon), not Running. The run view header then shows the call (`Approve git commit -m "…"?`) with **Approve** and **Deny**.
 - A run whose agent abstained (it declined, for example because an input was missing) reads **Abstained**, and a run that ended with part of the work done reads **Partial**, in Runs and on Beacon, not a red **Failed**. Runs recorded before this was stored are filled in from their last `AgentCompleted` event when Cortex starts.
 
+### Compare Runs
+
+**Compare runs** (`/runs/compare?a=&b=`) answers "what changed between these two runs", for example after you change a model, a strategy or a harness setting. Select exactly two runs in Runs and press **Compare**, or open a run and choose **Compare with…** in its More menu (runs with the same name are listed first; the open run is A).
+
+- **Summary** — outcome, model, strategy, loops, tokens, cost, duration, output speed and time to first token for both runs, with B minus A where a number moved.
+- **Config** — the settings whose resolved values differ (harness mechanisms, builder options, environment, as the run reported them on start), and how many match.
+- **Steps** — when both runs recorded a trace, the framework's replay diff (`diffTraces` from `@reactive-agents/replay`) laid out by loop: loops where both runs made the same tool calls collapse into one row, a loop that differs lists each run's calls side by side, and the step where the tool sequences first part is marked.
+- **Answer** — a line diff of the two final answers.
+
+A run without a trace file (tracing off) is compared on its summary and config only, and the page says which run is missing one.
+
 ### Run View — Deep Inspection
 
 Open any run from the Runs list, a chat turn or Beacon. The header names the run, shows its status and links back to the chat that started it; its actions are the live controls (Pause, Stop, Terminate) while it runs, **Continue in chat**, **Edit and rerun**, **Export** (run JSON, raw trace JSONL, copy the trace or the answer) and a More menu (Replay, Rerun as is, Rename, Copy run id, Delete).
@@ -118,7 +129,7 @@ One wrapping line: duration, tokens (input / output on hover), cost, steps, a lo
 
 The **Answer** panel shows the final answer as prose (long answers open as a preview with **Show all**). While the run streams it shows the output so far. A run that did not succeed opens with a banner that says how it ended: failed with its cause, abstained with its reason and what was missing, or unfinished with what was left.
 
-**Why it ended** runs the framework's trace diagnosis over the finished run, the same engine as `rax-diagnose cause` (`analyzeCause` and `attributeFailure` from `@reactive-agents/trace`). It shows the cause in plain words with its id (`tool-failure/all-calls-failed`) and how sure the trace is, who the trace says is at fault (harness, model, environment, or cannot tell), and the decisive steps. A step in a recorded loop opens that loop's row in the trace below. When the verdict is not decisive, the card lists the trace signals that would settle it. The card opens by itself for a failed, abstained, partial or stopped run and stays collapsed on a success. A run with no trace file (tracing off) says so.
+**Why it ended** runs the framework's trace diagnosis over the finished run, the same engine as `rax-diagnose cause` (`analyzeCause` and `attributeFailure` from `@reactive-agents/trace`). It shows the cause in plain words with its id (`tool-failure/all-calls-failed`) and how sure the trace is, who the trace says is at fault (harness, model, environment, or cannot tell), **What to try** (the framework's next steps for that cause, the same lines `rax-diagnose cause` prints; none for a healthy run or a user stop), and the decisive steps. A step in a recorded loop opens that loop's row in the trace below. When the verdict is not decisive, the card lists the trace signals that would settle it. The card opens by itself for a failed, abstained, partial or stopped run and stays collapsed on a success. A run with no trace file (tracing off) says so.
 
 The **Trace** panel is a step-debugger for the agent's reasoning, with two tabs:
 

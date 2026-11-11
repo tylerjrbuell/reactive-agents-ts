@@ -75,6 +75,7 @@
         "@reactive-agents/memory": "workspace:*",
         "@reactive-agents/observability": "workspace:*",
         "@reactive-agents/reactive-intelligence": "workspace:*",
+        "@reactive-agents/replay": "workspace:*",
         "@reactive-agents/runtime": "workspace:*",
         "@reactive-agents/tools": "workspace:*",
         "@reactive-agents/trace": "workspace:*",
@@ -653,10 +654,10 @@
       "name": "@reactive-agents/replay",
       "version": "0.18.0",
       "dependencies": {
-        "@reactive-agents/core": "0.17.0",
-        "@reactive-agents/llm-provider": "0.17.0",
-        "@reactive-agents/tools": "0.17.0",
-        "@reactive-agents/trace": "0.17.0",
+        "@reactive-agents/core": "0.18.0",
+        "@reactive-agents/llm-provider": "0.18.0",
+        "@reactive-agents/tools": "0.18.0",
+        "@reactive-agents/trace": "0.18.0",
         "effect": "^3.10.0",
       },
       "devDependencies": {
@@ -4441,7 +4442,7 @@
 
     "@reactive-agents/reasoning/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
-    "@reactive-agents/replay/bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
+    "@reactive-agents/replay/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 
     "@reactive-agents/runtime/bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
 

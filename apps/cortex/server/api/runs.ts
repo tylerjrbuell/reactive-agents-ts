@@ -2,7 +2,8 @@ import { Elysia, t, type Static } from "elysia";
 import { Effect, Layer, Option } from "effect";
 import { CortexStoreService } from "../services/store-service.js";
 import { CortexRunnerService, type LaunchParams } from "../services/runner-service.js";
-import { CortexError } from "../errors.js";
+import { CortexError, CortexNotFoundError } from "../errors.js";
+import { makeRunCompareReader, type RunCompareReader } from "../services/run-compare.js";
 import {
   parseAgentToolEntries,
   parseCortexShellOptions,
@@ -51,6 +52,7 @@ export const runsRouter = (
   storeLayer: Layer.Layer<CortexStoreService>,
   runnerLayer: Layer.Layer<CortexRunnerService>,
   causeReader: RunCauseReader = makeRunCauseReader(),
+  compareReader: RunCompareReader = makeRunCompareReader(),
 ) =>
   new Elysia({ prefix: "/api/runs" })
     .post(
@@ -450,6 +452,27 @@ export const runsRouter = (
     .get("/:runId/cause", async ({ params, set }) => {
       try {
         return await Effect.runPromise(causeReader.causeOf(params.runId));
+      } catch (e) {
+        set.status = 500;
+        return { error: String(e) };
+      }
+    })
+    // Compare two runs: summary + config difference always, the framework replay
+    // `diffTraces` step diff when both runs recorded a trace (`services/run-compare.ts`).
+    .get("/compare", async ({ query, set }) => {
+      const a = typeof query.a === "string" ? query.a.trim() : "";
+      const b = typeof query.b === "string" ? query.b.trim() : "";
+      if (!a || !b) {
+        set.status = 400;
+        return { error: "Pass two run ids: ?a=<runId>&b=<runId>" };
+      }
+      try {
+        const r = await Effect.runPromise(compareReader.compare(a, b).pipe(Effect.provide(storeLayer)));
+        if (r instanceof CortexNotFoundError) {
+          set.status = 404;
+          return { error: `Run not found: ${r.id}`, runId: r.id };
+        }
+        return r;
       } catch (e) {
         set.status = 500;
         return { error: String(e) };

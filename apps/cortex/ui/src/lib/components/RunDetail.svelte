@@ -19,6 +19,7 @@
   import { runSkillsFromLive } from "$lib/skill-row.js";
   import RunEndingBanner from "$lib/components/RunEndingBanner.svelte";
   import RunCauseCard from "$lib/components/run/RunCauseCard.svelte";
+  import CompareWithPicker from "$lib/components/run/CompareWithPicker.svelte";
   import { causeOpenByDefault } from "$lib/run-cause.js";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import RunFinalDeliverable from "$lib/components/RunFinalDeliverable.svelte";
@@ -360,6 +361,8 @@
     }
   }
 
+  let comparing = $state(false);
+
   const exportItems = $derived<readonly RunMenuItem[]>([
     { label: "Run and events (JSON)", icon: "download", onSelect: exportJSON },
     { label: "Raw trace (JSONL)", icon: "download", onSelect: downloadTrace },
@@ -370,6 +373,7 @@
   const moreItems = $derived<readonly RunMenuItem[]>([
     ...(isRunSettled($runStore.status) && replayMax > 0 ? [{ label: `Replay (${loopsLabel(replayMax)})`, icon: "replay" as const, onSelect: enterReplay }] : []),
     ...($runStore.launchParams ? [{ label: rerunning ? "Rerunning…" : "Rerun as is", icon: "retry" as const, disabled: rerunning, onSelect: doRerun }] : []),
+    { label: "Compare with…", icon: "steps", onSelect: () => (comparing = true) },
     { label: "Rename", icon: "edit", onSelect: () => (renaming = true) },
     { label: "Copy run id", icon: "copy", onSelect: async () => { await navigator.clipboard.writeText(runId); toast.success("Run id copied", runId); } },
     { label: deletingRun ? "Deleting…" : "Delete run", icon: "trash", danger: true, disabled: deletingRun, onSelect: () => (showDeleteConfirm = true) },
@@ -484,6 +488,8 @@
     onCancel={() => (showDeleteConfirm = false)}
   />
 {/if}
+
+<CompareWithPicker open={comparing} {runId} onclose={() => (comparing = false)} />
 
 <style>
   .run { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; background: var(--cortex-canvas); }
