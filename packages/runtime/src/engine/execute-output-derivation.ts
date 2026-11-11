@@ -23,12 +23,33 @@ export interface DerivedExecOutput {
   readonly hasSubstantiveOutput: boolean;
 }
 
+/**
+ * True when the harness wrote the terminal text itself, so it is not shipped.
+ *
+ * `harnessAuthoredOutput` has two producers. The kernel sets it only on the
+ * `harness_deliverable` terminal (a normalized tool observation such as
+ * "✓ Written to x.txt"); that relays `rawTerminatedBy: "harness_deliverable"`.
+ * The strategy substrate also sets it when a strategy ships its joined step
+ * results (`BudgetStopped`, `HarnessJoined`): that text is the model's own step
+ * work, shipped as the labelled partial with its warning. A budget stop carries
+ * `budgetTerminalPartial`; a joined run relays its last pass's raw reason. An
+ * unknown raw reason counts as harness-authored (the kernel shape).
+ */
+const isHarnessAuthoredText = (md: HarnessTextMarkers | undefined): boolean =>
+  md?.harnessAuthoredOutput === true &&
+  md.budgetTerminalPartial !== true &&
+  (md.rawTerminatedBy === undefined || md.rawTerminatedBy === "harness_deliverable");
+
+type HarnessTextMarkers = {
+  readonly harnessAuthoredOutput?: boolean;
+  readonly budgetTerminalPartial?: boolean;
+  readonly rawTerminatedBy?: string;
+};
+
 export function deriveExecOutput(ctx: Pick<ExecutionContext, "metadata">): DerivedExecOutput {
-  // A kernel terminal whose text the harness authored (e.g. the
-  // `harness_deliverable` terminal shipping a normalized tool observation
-  // such as "✓ Written to x.txt") is not the model's answer, so it is not
-  // shipped as output. The landed file is on receipt.deliverables.
-  const harnessAuthored = ctx.metadata.reasoningResult?.metadata?.harnessAuthoredOutput === true;
+  // Harness-written terminal text is not the model's answer, so it is not
+  // shipped as output; the landed file is on receipt.deliverables.
+  const harnessAuthored = isHarnessAuthoredText(ctx.metadata.reasoningResult?.metadata);
   const rawOutput: unknown = harnessAuthored ? "" : (ctx.metadata.lastResponse ?? null);
   const sanitizedOutput = typeof rawOutput === "string" ? sanitizeOutput(rawOutput) : rawOutput;
 

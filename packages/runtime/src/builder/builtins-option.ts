@@ -82,6 +82,28 @@ export const builtinSelectionFor = (
 };
 
 /**
+ * The programs `allowedTools` limits the agent's one `shell-execute` to, or
+ * `undefined` when it does not limit the shell.
+ *
+ * An allow-list never widens the shell. `allowedTools: ["git"]` resolves to
+ * `shell-execute` for the name filter, so without this the terminal
+ * (`terminal: true`) would pass whole, and `builtins: ["git"]` plus
+ * `allowedTools: ["gh-cli"]` would keep git. When the list names a shell preset
+ * or removed CLI name (`git`, `gh-cli`) but not `shell-execute` itself, the
+ * shell runs exactly those programs. Naming `shell-execute` keeps the shell as
+ * registered. The agent's own tool names (`own`) are not aliases.
+ */
+export const allowedShellPrograms = (
+  toolsOptions: ToolsOptions | undefined,
+  own: ReadonlySet<string> = ownToolNames(toolsOptions),
+): readonly string[] | undefined => {
+  const allowed = (toolsOptions?.allowedTools ?? []).filter((n) => !own.has(n));
+  if (allowed.length === 0 || allowed.includes("shell-execute")) return undefined;
+  const programs = resolveBuiltinSelection(allowed).shellPrograms;
+  return programs.length > 0 ? programs : undefined;
+};
+
+/**
  * One build warning per removed CLI tool name in the selection (deduplicated:
  * the same name in `builtins` and `allowedTools` warns once).
  */

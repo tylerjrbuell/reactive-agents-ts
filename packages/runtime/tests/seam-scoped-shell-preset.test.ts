@@ -14,6 +14,14 @@
 //       call, and the build warns once about the removed name.
 //   (c) terminal + git preset: one shell-execute whose allow-list includes gh.
 //   (d) `requiredTools: ["git-cli"]` is met by a shell-execute call.
+//   (h)-(j) An allow-list never widens the shell (2026-11-10 review): a
+//       preset named in `allowedTools` without `shell-execute` narrows the
+//       one shell to the preset's programs, the terminal included.
+//       `allowedTools: ["shell-execute", ...]` keeps the full terminal.
+//
+// Decision (2026-11-10): `allowedTools` / `requiredTools` keep opting in what
+// they name (Cortex selects the git toolset by name in `allowedTools`), but
+// only at the named grant: `git` means git+gh, never the terminal.
 //
 // RED-ON-CUT (verified by temporary mutation):
 //   - `resolveShellRegistration` returning undefined when there is no
@@ -26,6 +34,8 @@
 //     `builtinSelectionFor`: the custom `web` and custom `git` cells fail.
 //   - validating the raw contract (no `resolveContractToolNames`): the
 //     contract `gh-cli` cell fails under strict validation.
+//   - not passing `allowedShellPrograms` to the init layer (2026-11-10): (h)
+//     and (j) fail (echo runs on the terminal; git runs on the gh-only list).
 import { afterAll, afterEach, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -39,7 +49,7 @@ import { ReactiveAgents } from "../src/index.js";
 import { resolveShellRegistration } from "../src/builder/build-effect/tool-init-layer.js";
 import { scopedShellToolFor } from "@reactive-agents/tools";
 import { computeExposedToolNames } from "../src/builder/contract-tool-set.js";
-import { builtinSelectionFor, isKnownBuiltinName } from "../src/builder/builtins-option.js";
+import { allowedShellPrograms, builtinSelectionFor, isKnownBuiltinName } from "../src/builder/builtins-option.js";
 
 const MARKER = "FAKE-GH-OK-7f3a";
 /**
@@ -206,6 +216,48 @@ describe("resolveShellRegistration (pure)", () => {
   it("preset without terminal passes scopedShellConfig through (git preset inherits git config)", () => {
     const reg = resolveShellRegistration(undefined, ["git", "gh"], scopedShellToolFor, shellExecuteToolFor);
     expect(reg?.config?.inheritGitConfig).toBe(true);
+  });
+
+  it("terminal + an allow-list naming only a shell preset: the terminal is narrowed to the preset programs", () => {
+    const terminalOnly = shellExecuteToolFor(undefined, { runWorkspace: true });
+    const reg = resolveShellRegistration(
+      { cwd: "sub", timeoutMs: 1234, additionalCommands: ["node"] },
+      ["git", "gh"],
+      scopedShellToolFor,
+      shellExecuteToolFor,
+      ["git", "gh"],
+    );
+    // Exactly the preset programs: no default allow-list, no terminal extras.
+    expect(reg?.config?.allowedCommands).toEqual([]);
+    expect(reg?.config?.additionalCommands).toEqual(["git", "gh"]);
+    // The terminal's sandbox settings and its own approval posture are kept.
+    expect(reg?.config?.cwd).toBe("sub");
+    expect(reg?.config?.timeoutMs).toBe(1234);
+    expect(reg?.definition.requiresApproval).toBe(terminalOnly.requiresApproval);
+    expect(reg?.unrootedInHostCwd).toBe(false);
+  });
+
+  it("no terminal + an allow-list narrower than builtins: the scoped shell runs only the allowed programs", () => {
+    const reg = resolveShellRegistration(undefined, ["git", "gh"], scopedShellToolFor, shellExecuteToolFor, ["gh"]);
+    expect(reg?.config?.additionalCommands).toEqual(["gh"]);
+  });
+});
+
+describe("allowedShellPrograms (pure)", () => {
+  it("no allow-list, or one naming shell-execute itself: no narrowing", () => {
+    expect(allowedShellPrograms(undefined)).toBeUndefined();
+    expect(allowedShellPrograms({ terminal: true })).toBeUndefined();
+    expect(allowedShellPrograms({ terminal: true, allowedTools: ["shell-execute", "git"] })).toBeUndefined();
+  });
+
+  it("an allow-list naming a shell preset but not shell-execute: the preset's programs", () => {
+    expect(allowedShellPrograms({ terminal: true, allowedTools: ["git", "file-read"] })).toEqual(["git", "gh"]);
+    expect(allowedShellPrograms({ allowedTools: ["gh-cli"] })).toEqual(["gh"]);
+  });
+
+  it("a custom tool named `git` is not the preset", () => {
+    const git = customTool("git", () => undefined);
+    expect(allowedShellPrograms({ tools: [git], terminal: true, allowedTools: ["git"] })).toBeUndefined();
   });
 });
 
@@ -466,6 +518,61 @@ describe("scoped shell through the builder", () => {
     try {
       const { done } = await runShell(agent, "Show the repo top level");
       expect(JSON.stringify(done[0]?.result ?? done[0]?.error)).toContain("not a git repository");
+    } finally {
+      await agent.dispose();
+    }
+  }, 20000);
+
+  it("(h) terminal + allowedTools: [\"git\", \"file-read\"]: git runs, a program outside the preset is refused", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("terminal-allow-git-only")
+      .withProvider("test")
+      .withModel("test")
+      .withTestScenario(scenario("git --version", "echo hi"))
+      .withTools({ terminal: true, allowedTools: ["git", "file-read"], adaptive: false })
+      .withMaxIterations(5)
+      .build();
+    try {
+      expect((await shellDefs(agent)).length).toBe(1);
+      const { done } = await runShell(agent, "Run git --version then echo hi");
+      const text = done.map((d) => JSON.stringify(d.result ?? d.error));
+      expect(text[0]).toContain("git version");
+      expect(text[1]).toContain("not in the allowed commands list");
+    } finally {
+      await agent.dispose();
+    }
+  }, 20000);
+
+  it("(i) terminal + allowedTools naming shell-execute itself keeps the full terminal (echo runs)", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("terminal-allow-shell")
+      .withProvider("test")
+      .withModel("test")
+      .withTestScenario(scenario("echo hi"))
+      .withTools({ terminal: true, allowedTools: ["shell-execute", "git"], adaptive: false })
+      .withMaxIterations(4)
+      .build();
+    try {
+      const { done } = await runShell(agent, "Run echo hi");
+      expect(JSON.stringify(done[0]?.result ?? done[0]?.error)).not.toContain("not in the allowed commands list");
+      expect(done[0]?.success).toBe(true);
+    } finally {
+      await agent.dispose();
+    }
+  }, 20000);
+
+  it("(j) builtins: [\"git\"] + allowedTools: [\"gh-cli\"]: the shell runs gh only, git is refused", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("scoped-narrowed-by-allow")
+      .withProvider("test")
+      .withModel("test")
+      .withTestScenario(scenario("git --version"))
+      .withTools({ builtins: ["git"], allowedTools: ["gh-cli"], adaptive: false })
+      .withMaxIterations(4)
+      .build();
+    try {
+      const { done } = await runShell(agent, "Run git --version");
+      expect(JSON.stringify(done[0]?.result ?? done[0]?.error)).toContain("not in the allowed commands list");
     } finally {
       await agent.dispose();
     }

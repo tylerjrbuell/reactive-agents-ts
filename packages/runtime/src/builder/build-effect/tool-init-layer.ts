@@ -124,16 +124,25 @@ export interface ShellRegistration {
  *   allow-list via `scopedShellConfig`). With no workspace it runs in the host
  *   process cwd (`unrootedInHostCwd`), as the removed CLI wrappers did.
  * - neither: `undefined`, no shell.
+ *
+ * `allowedPrograms` (`allowedShellPrograms`: `allowedTools` names a preset but
+ * not `shell-execute`) narrows either shell to exactly those programs. The
+ * terminal keeps its sandbox settings and its own approval/risk flags.
  */
 export const resolveShellRegistration = (
   terminal: boolean | ShellExecuteConfig | undefined,
   shellPrograms: readonly string[],
   scopedShellToolFor: ScopedShellToolFor,
   shellExecuteToolFor: (config?: ShellExecuteConfig, surface?: ShellToolSurface) => ToolDefinition,
+  allowedPrograms?: readonly string[],
 ): ShellRegistration | undefined => {
   const surface: ShellToolSurface = { runWorkspace: true };
   if (terminal) {
     const base = terminal === true ? undefined : terminal;
+    if (allowedPrograms !== undefined) {
+      const config = scopedShellConfig(allowedPrograms, base);
+      return { definition: shellExecuteToolFor(config, surface), config, unrootedInHostCwd: false };
+    }
     if (shellPrograms.length === 0) {
       return { definition: shellExecuteToolFor(base, surface), config: base, unrootedInHostCwd: false };
     }
@@ -149,10 +158,11 @@ export const resolveShellRegistration = (
     return { definition: shellExecuteToolFor(config, surface), config, unrootedInHostCwd: false };
   }
   if (shellPrograms.length === 0) return undefined;
+  const programs = allowedPrograms ?? shellPrograms;
   return {
     // The description must match the handler: unrooted, it runs in process.cwd().
-    definition: scopedShellToolFor(shellPrograms, undefined, { ...surface, hostCwdWhenUnrooted: true }),
-    config: scopedShellConfig(shellPrograms),
+    definition: scopedShellToolFor(programs, undefined, { ...surface, hostCwdWhenUnrooted: true }),
+    config: scopedShellConfig(programs),
     unrootedInHostCwd: true,
   };
 };
@@ -183,6 +193,11 @@ export interface ToolInitLayerDeps {
    * `builtinSelectionFor(...).shellPrograms`. Empty or absent: no preset.
    */
   readonly shellPrograms?: readonly string[];
+  /**
+   * Programs `allowedTools` limits the shell to (`allowedShellPrograms`).
+   * Absent: the shell is not narrowed.
+   */
+  readonly allowedShellPrograms?: readonly string[];
   readonly shellExecuteHandler: (
     config?: ShellExecuteConfig,
   ) => (
@@ -278,6 +293,7 @@ export const buildToolInitLayer = (
       shellPrograms,
       scopedShellToolFor,
       shellExecuteToolFor,
+      deps.allowedShellPrograms,
     );
     const hasCustomShellExecute = (toolsOptions?.tools ?? []).some(
       (tool: { readonly definition: ToolDefinition }) =>

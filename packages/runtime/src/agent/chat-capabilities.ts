@@ -19,15 +19,25 @@ import { gatewayComplete } from '@reactive-agents/reasoning'
 import type { ChatEngineCapabilities, ChatEngineOptions } from '../chat/engine.js'
 import type { ChatMessage, SessionOptions } from '../chat.js'
 import type { AgentResult } from '../builder/types.js'
+import { runFacadeEffect } from './run-facade-effect.js'
 
 /** The services the chat capabilities run against (contravariant: any richer runtime fits). */
 type ChatRuntime = ManagedRuntime.ManagedRuntime<LLMService | EventBus, never>
 
-/** Plain conversational completion (no tools) through the LLM gateway. */
+/**
+ * Plain conversational completion (no tools) through the LLM gateway.
+ *
+ * A failed model call rejects with the provider's own error (e.g. the typed
+ * `LLMError` for a model that is not pulled), so its `message` is the cause
+ * line with no class-tag prefix. It is not a run, so there is no result
+ * envelope to carry the failure; `runStream()` reports the same failure as a
+ * `StreamCompleted` with `success: false`.
+ */
 export const makeChatComplete =
     (runtime: ChatRuntime): ChatEngineCapabilities['complete'] =>
     async (params) => {
-        const response = await runtime.runPromise(
+        const response = await runFacadeEffect(
+            runtime,
             Effect.gen(function* () {
                 const llm = yield* LLMService
                 return yield* gatewayComplete(
@@ -38,7 +48,7 @@ export const makeChatComplete =
                         systemPrompt: params.systemPrompt,
                         temperature: 0.7,
                     },
-                ).pipe(Effect.mapError((e) => Error(String(e))))
+                )
             }),
         )
         return {

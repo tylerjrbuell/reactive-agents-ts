@@ -405,7 +405,7 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `tools`             | `{ definition: ToolDefinition, handler: (args) => Effect.Effect<unknown> }[]` — custom tools (handlers return **Effect**). Each `definition` is validated against the `ToolDefinition` schema when the tool is registered (lazily, on first `run()`/`runStream()` — not at `.build()`); a malformed definition (missing `description`, a parameter with no `name`, etc.) throws a `ToolDefinitionError` naming the tool and the offending field, rather than being silently accepted and failing later during execution. |
 | `resultCompression` | `ResultCompressionConfig` — previews, overflow keys, transforms                                                           |
-| `allowedTools`      | If set, only these tool names are exposed to the model (others filtered) — and the allowlist is enforced at execution on every strategy: a call outside it is blocked, never run |
+| `allowedTools`      | If set, only these tool names are exposed to the model (others filtered) — and the allowlist is enforced at execution on every strategy: a call outside it is blocked, never run. A toolset name grants only that toolset: `["git"]` without `"shell-execute"` limits the shell to `git` and `gh`, even with `terminal` on. Name `"shell-execute"` to allow the full terminal |
 | `adaptive`          | Adaptive tool listing from task text (heuristic), reduces noise for small models                                          |
 | `terminal`          | `true \| ShellExecuteConfig` — opt in to the sandboxed `shell-execute` tool (command allowlist, blocklist, locked cwd). Its working directory is the `workspace` when one is set, else a fresh /tmp sandbox dir |
 | `workspace`         | `string` — the agent's working directory. File tools resolve relative paths against it and refuse paths outside it; `shell-execute` runs in it. A `terminal.cwd` resolves inside it and is refused if it escapes, unless `terminal.allowUnsafeCwd` is set. Stored absolute; must be an existing directory, or `.withTools()` throws `ToolsOptionError`. Sub-agents inherit it. Override per run with `run(task, { workspace })`. Precedence: run option, then this, then an ambient `withFileRoot()`, then none (`process.cwd()` for file tools). Round-trips as `tools.workspace` in `toConfig()`. |
@@ -902,6 +902,8 @@ const reply2 = await agent.chat('Search for the latest AI news', {
 console.log(reply2.toolsUsed) // ["web-search"]
 ```
 
+Failures differ by path. On the tool-capable path a failed run resolves with `failed: true` and the cause on `error`. On the direct LLM path a failed model call (for example a model that is not pulled) rejects with the provider's own error: `err.message` is the cause, with no `LLMError: ` prefix, and `err._tag` names the error class. The direct path is not a run, so it has no result to carry a failure in. `runStream()` reports the same model failure as a `StreamCompleted` with `success: false`.
+
 ```typescript
 interface ChatReply {
     message: string
@@ -1090,7 +1092,7 @@ yield * eventBus.on('ReasoningStepCompleted', onStepComplete)
 | `ExecutionPhaseEntered`      | `taskId`, `phase`                                                                  |
 | `ExecutionPhaseCompleted`    | `taskId`, `phase`, `durationMs`                                                    |
 | `ExecutionHookFired`         | `taskId`, `phase`, `timing`                                                        |
-| `ExecutionCancelled`         | `taskId`                                                                           |
+| `ExecutionCancelled`         | `taskId` — also published once when a `runStream()` is aborted (signal, `terminate()`, or the consumer stops reading) before the run ended |
 | `MemoryBootstrapped`         | `agentId`, `tier`                                                                  |
 | `MemoryFlushed`              | `agentId`                                                                          |
 | `AgentPaused`                | `agentId`, `taskId`                                                                |

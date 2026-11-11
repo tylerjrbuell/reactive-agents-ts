@@ -50,6 +50,7 @@ import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
 import type { TrustReceipt } from "@reactive-agents/core";
 import { readPosture } from "../chat/todo-seed.js";
 import { resolveWorkspaceDir, startRun } from "./start-run.js";
+import { watchRunTerminal } from "./stream-abort-terminal.js";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
  * can be attached via spread after the async signing step. */
@@ -182,6 +183,8 @@ export const makeExecuteStream =
         Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })),
       );
       const eb: EbLike | null = ebOpt._tag === "Some" ? (ebOpt.value as EbLike) : null;
+      // An aborted stream's terminal bus event (stream-abort-terminal.ts).
+      const runTerminal = eb ? yield* watchRunTerminal(eb, String(task.id)) : undefined;
 
       if (eb) {
         yield* eb
@@ -734,6 +737,10 @@ export const makeExecuteStream =
             ),
           );
         }),
+        // The producer ended on its own (completed, failed or paused): an abort
+        // after this publishes no cancel. Interrupted: the abort listener does.
+        Effect.tap(() => runTerminal?.settle ?? Effect.void),
+        Effect.ensuring(runTerminal?.release ?? Effect.void),
         Effect.forkDaemon,
       );
 
@@ -755,8 +762,11 @@ export const makeExecuteStream =
       // reactive-agent.ts's `_runStreamImpl` already uses for the consumer.
       const ctlSignal = options?.runController?.signal;
       if (ctlSignal) {
+        // After the interrupt, a run still open gets its one terminal bus event.
         const interruptProducer = (): void => {
-          Effect.runFork(Fiber.interrupt(producerFiber));
+          Effect.runFork(
+            Fiber.interrupt(producerFiber).pipe(Effect.zipRight(runTerminal?.publishIfOpen ?? Effect.void)),
+          );
         };
         if (ctlSignal.aborted) {
           interruptProducer();

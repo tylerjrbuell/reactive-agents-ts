@@ -220,4 +220,43 @@ describe("O5 — the output is only the model's answer", () => {
     // Vacuity guard: a model answer passes through untouched.
     expect(deriveExecOutput({ metadata: { lastResponse: " 42 ", reasoningResult: completedWithObservation() } }).outputForSuccess).toBe("42");
   });
+
+  // 2026-11-10 review: the strategy substrate labels joined step results
+  // harnessAuthoredOutput too (BudgetStopped / HarnessJoined). That text is
+  // the model's own step work, shipped as the labelled partial, never blanked.
+  const joinedResult = (extra: Record<string, unknown>) =>
+    ({
+      output: "Step 1: found A.\nStep 2: found B.",
+      status: "partial",
+      metadata: { cost: 0, tokensUsed: 1, stepsCount: 2, harnessAuthoredOutput: true, ...extra },
+    }) as never;
+  const JOINED = "Step 1: found A.\nStep 2: found B.";
+
+  it("a budget-stopped strategy run keeps its joined step results", () => {
+    const out = deriveExecOutput({
+      metadata: {
+        lastResponse: JOINED,
+        reasoningResult: joinedResult({ budgetTerminalPartial: true, rawTerminatedBy: "budget-limit:tokens:1200/1000" }),
+      },
+    });
+    expect(out.outputForSuccess).toBe(JOINED);
+    expect(out.hasSubstantiveOutput).toBe(true);
+  });
+
+  it("a harness-joined strategy run (no budget stop) keeps its joined step results", () => {
+    const out = deriveExecOutput({
+      metadata: { lastResponse: JOINED, reasoningResult: joinedResult({ rawTerminatedBy: "final_answer" }) },
+    });
+    expect(out.outputForSuccess).toBe(JOINED);
+  });
+
+  it("the kernel's harness_deliverable terminal is still blanked when its raw reason is relayed", () => {
+    const out = deriveExecOutput({
+      metadata: {
+        lastResponse: "✓ Written to x.txt",
+        reasoningResult: joinedResult({ rawTerminatedBy: "harness_deliverable" }),
+      },
+    });
+    expect(out.outputForSuccess).toBe("");
+  });
 });

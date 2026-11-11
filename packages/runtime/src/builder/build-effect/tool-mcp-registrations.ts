@@ -14,7 +14,7 @@ import {
   shellExecuteToolFor,
   shellExecuteHandler,
 } from "@reactive-agents/tools";
-import { builtinSelectionFor, ownToolNames } from "../builtins-option.js";
+import { allowedShellPrograms, builtinSelectionFor, ownToolNames } from "../builtins-option.js";
 import type {
   ToolDefinition,
   ParentContext,
@@ -94,11 +94,10 @@ export const buildToolMcpRegistrations = (
     // A shell preset (`builtins: ["git"]`) or removed CLI name (`gh-cli`) in
     // builtins / allowedTools / requiredTools registers a scoped shell-execute.
     // The agent's own tool names (custom, agent tools) are not aliases.
-    const shellPrograms = builtinSelectionFor(
-      deps.toolsOptions,
-      deps.requiredTools,
-      ownToolNames(deps.toolsOptions, deps.agentTools.map((t) => t.name)),
-    ).shellPrograms;
+    const own = ownToolNames(deps.toolsOptions, deps.agentTools.map((t) => t.name));
+    const shellPrograms = builtinSelectionFor(deps.toolsOptions, deps.requiredTools, own).shellPrograms;
+    // An allow-list naming a preset but not shell-execute narrows the shell to it.
+    const allowedPrograms = allowedShellPrograms(deps.toolsOptions, own);
 
     if (
       deps.agentTools.length > 0 ||
@@ -259,6 +258,7 @@ export const buildToolMcpRegistrations = (
         shellExecuteToolFor,
         scopedShellToolFor,
         shellPrograms,
+        ...(allowedPrograms !== undefined ? { allowedShellPrograms: allowedPrograms } : {}),
         shellExecuteHandler,
         onToolServiceResolved: (ts) => {
           parentToolServiceRef = ts;
