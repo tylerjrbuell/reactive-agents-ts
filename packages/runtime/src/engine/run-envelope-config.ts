@@ -26,6 +26,7 @@ import type { BuildRunEnvelopeOptions, RunEnvelopeData } from "@reactive-agents/
 import type { RunPosture, TaskContract } from "@reactive-agents/core";
 import type { ReactiveAgentsConfig } from "../types.js";
 import { disclosureHarness } from "./tool-disclosure.js";
+import { liveApprovalDecider } from "./human-gate.js";
 
 /**
  * Resolve the disclosure-mode floor for the harness config: the profile's
@@ -87,7 +88,23 @@ export type RunEnvelopeExtras = Pick<
    * auxiliary pass must not regain the execute tool surface.
    */
   readonly posture?: RunPosture;
+  /**
+   * The run's task text. Only read by the live approval gate, which shows it
+   * on pending requests (`listPendingApprovals().task`). Never reaches the
+   * envelope itself.
+   */
+  readonly runTask?: string;
 };
+
+/**
+ * True when `detach` approvals wait LIVE: a `detach` policy on an agent with
+ * no durable store. The kernel cannot detach a run with nowhere to persist
+ * it, so the run blocks at the gate in process (`engine/human-gate.ts`) until
+ * `approveRun` / `denyRun` answers. With `.withDurableRuns()` the kernel
+ * pauses and the store carries the decision across processes instead.
+ */
+export const approvalWaitsLive = (config: ReactiveAgentsConfig): boolean =>
+  config.approvalPolicy?.mode === "detach" && !config.durableRuns;
 
 /**
  * Plan posture is plan-only: a `.withContract` taskContract's REQUIRED tools must
@@ -112,7 +129,8 @@ export function buildRunEnvelopeFromConfig(
   config: ReactiveAgentsConfig,
   extras: RunEnvelopeExtras = {},
 ): RunEnvelopeData {
-  const { environmentUpdate, posture, ...buildExtras } = extras;
+  const { environmentUpdate, posture, runTask, ...buildExtras } = extras;
+  const live = approvalWaitsLive(config);
   const envelope = buildRunEnvelope({
     taskContract:
       posture === "plan" && config.taskContract
@@ -130,7 +148,9 @@ export function buildRunEnvelopeFromConfig(
     harnessProfileDefault: disclosureFloor(config),
     approvalPolicy: config.approvalPolicy
       ? {
-          mode: config.approvalPolicy.mode,
+          // A live `detach` wait is the kernel's in-process (`block`) seam with
+          // the human gate as its decider; see `approvalWaitsLive`.
+          mode: live ? "block" : config.approvalPolicy.mode,
           tools: new Set(config.approvalPolicy.tools),
           requireFor: config.approvalPolicy.requireFor,
           // Shell command rules; the agent's shells hold the same list
@@ -142,9 +162,13 @@ export function buildRunEnvelopeFromConfig(
           // into the kernel's Effect-returning `decide` HERE, the ONE config→
           // envelope seam. `detach` ignores it (it pauses instead); absent in
           // block mode ⇒ `resolveBlockApproval` denies by default.
-          ...(config.approvalPolicy.onApprove
-            ? { decide: wrapApprovalDecider(config.approvalPolicy.onApprove) }
-            : {}),
+          // A live `detach` wait asks a person (approveRun/denyRun) and, like a
+          // durable detach, ignores `onApprove`.
+          ...(live
+            ? { decide: liveApprovalDecider(runTask !== undefined ? { task: runTask } : {}) }
+            : config.approvalPolicy.onApprove
+              ? { decide: wrapApprovalDecider(config.approvalPolicy.onApprove) }
+              : {}),
         }
       : undefined,
     ...buildExtras,

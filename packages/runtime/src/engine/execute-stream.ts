@@ -50,6 +50,7 @@ import type { TrustReceipt } from "@reactive-agents/core";
 import { readPosture } from "../chat/todo-seed.js";
 import { resolveWorkspaceDir, startRun } from "./start-run.js";
 import { watchRunTerminal } from "./stream-abort-terminal.js";
+import { watchLiveGate } from "./human-gate.js";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
  * can be attached via spread after the async signing step. */
@@ -219,6 +220,9 @@ export const makeExecuteStream =
             }),
           ),
         );
+      // Live human gate (human-gate.ts): an in-process approval wait surfaces
+      // as ApprovalRequested; the run's end settles the result approveRun returns.
+      const liveGate = yield* watchLiveGate(String(task.id), config.agentId, offerAt("ApprovalRequested"));
       const subscribe = (
         tag: AgentEvent["_tag"],
         site: string,
@@ -672,7 +676,10 @@ export const makeExecuteStream =
               const completed: AgentStreamEvent = receipt !== undefined
                 ? { ...completedEvent, receipt }
                 : completedEvent;
-              return trustStep.pipe(Effect.zipRight(Queue.offer(queue, completed)));
+              // Settle BEFORE the terminal offer, so an approveRun caller has
+              // the result no later than the stream's consumer does.
+              const settled = completed._tag === "StreamCompleted" ? liveGate.completed(completed) : Effect.void;
+              return trustStep.pipe(Effect.zipRight(settled), Effect.zipRight(Queue.offer(queue, completed)));
             }),
           );
           if (!eb) return offer;
@@ -711,7 +718,7 @@ export const makeExecuteStream =
           const flushStep: Effect.Effect<void> = Effect.promise(() =>
             durableFinish ? durableFinish(false).catch(() => undefined) : Promise.resolve(),
           );
-          const offer = flushStep.pipe(Effect.zipRight(Queue.offer(queue, errorEvent)));
+          const offer = flushStep.pipe(Effect.zipRight(liveGate.failed(cause)), Effect.zipRight(Queue.offer(queue, errorEvent)));
           if (!eb) return offer;
           return offer.pipe(
             Effect.tap(() =>

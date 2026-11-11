@@ -35,7 +35,10 @@ import { Effect, Layer } from "effect";
 import type { Task } from "@reactive-agents/core";
 import { ProceduralMemoryService } from "@reactive-agents/memory";
 import {
+  BanditStore,
+  CalibrationStore,
   LearningEngineService,
+  LearningEngineServiceLive,
   TelemetryClient,
   type RunReport,
 } from "@reactive-agents/reactive-intelligence";
@@ -211,6 +214,45 @@ describe("a vetoed run is not a success in telemetry or learning", () => {
     const { learned, skillOutcomes } = await learning(vetoed, runOutcome);
     expect(learned).toEqual(["failure"]);
     expect(skillOutcomes).toEqual([false]);
+  });
+});
+
+/**
+ * Run local learning against the REAL learning engine over in-memory stores;
+ * return the strategy arms the bandit holds afterwards.
+ */
+async function banditArmsAfter(runOutcome: RunOutcomeClass) {
+  const bandit = new BanditStore(":memory:");
+  const layer = Layer.mergeAll(
+    LearningEngineServiceLive(new CalibrationStore(":memory:"), bandit),
+    Layer.succeed(ProceduralMemoryService, {
+      store: () => Effect.die("unexpected store"),
+      get: () => Effect.die("unexpected get"),
+      recordOutcome: () => Effect.void,
+      listActive: () => Effect.succeed([]),
+      findByTags: () => Effect.succeed([]),
+      delete: () => Effect.void,
+    }),
+  );
+  await Effect.runPromise(
+    runLocalLearning({ ctx: paused.ctx, task, config, runOutcome, entropyLog, executionDurationMs: 10 }).pipe(
+      Effect.provide(layer),
+    ),
+  );
+  return bandit.listArmStats();
+}
+
+// A1 (2026-11-11): the bandit rewards the run outcome and the wire outcome
+// folds `abstained` into `failure`, so an honest abstention scored as a loss
+// for the strategy. Red-on-cut: drop `runOutcome !== "abstained"` from
+// local-learning.ts -> A1 red (one arm, one pull, beta 2).
+describe("an abstained run does not train the strategy bandit", () => {
+  test("A1 abstained leaves the arm unchanged; a success still moves it", async () => {
+    expect(await banditArmsAfter("abstained")).toEqual([]);
+    const afterSuccess = await banditArmsAfter("success");
+    expect(afterSuccess.length).toBe(1);
+    expect(afterSuccess[0]?.armId).toBe("reactive");
+    expect(afterSuccess[0]?.pulls).toBe(1);
   });
 });
 

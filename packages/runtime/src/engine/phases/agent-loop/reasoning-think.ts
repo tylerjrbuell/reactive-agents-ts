@@ -415,6 +415,7 @@ export const runReasoningThink = (
         initialAdvisory: readTodoSeed(task),
         environmentUpdate: readEnvironmentUpdate(task),
         posture: readPosture(task),
+        runTask: extractTaskText(task.input),
       }),
     } as unknown as ReasoningExecuteRequest;
 

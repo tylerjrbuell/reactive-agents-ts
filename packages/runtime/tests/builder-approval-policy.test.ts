@@ -1,6 +1,8 @@
 // Run: bun test packages/runtime/tests/builder-approval-policy.test.ts
 //
-// Durable HITL (Phase D) — builder surface + the detach-requires-durable guard.
+// Durable HITL (Phase D) — builder surface. Since 2026-11-11 detach no longer
+// requires .withDurableRuns(): without a store the run waits live, in process
+// (engine/human-gate.ts; behavior pinned in live-human-gate.test.ts).
 import { describe, it, expect } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,13 +10,15 @@ import { join } from "node:path";
 import { ReactiveAgents } from "../src/builder.js";
 
 describe(".withApprovalPolicy", () => {
-  it("detach mode requires .withDurableRuns()", async () => {
-    const agent = ReactiveAgents.create()
-      .withName("hitl-guard")
+  it("detach mode builds WITHOUT .withDurableRuns() (live in-process wait)", async () => {
+    const agent = await ReactiveAgents.create()
+      .withName("hitl-live")
       .withTestScenario([{ text: "ok" }])
       .withReasoning()
-      .withApprovalPolicy({ tools: ["docker"], mode: "detach" });
-    await expect(agent.build()).rejects.toThrow(/withDurableRuns/);
+      .withApprovalPolicy({ tools: ["docker"], mode: "detach" })
+      .build();
+    expect(agent).toBeDefined();
+    await agent.dispose();
   });
 
   it("detach mode builds when durable runs are enabled", async () => {

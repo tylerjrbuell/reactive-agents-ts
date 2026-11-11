@@ -27,11 +27,11 @@ There is no single "mode" switch. Autonomy is shaped by three independent, opt-i
 
 | Mechanism | Builder method | What it does |
 |-----------|----------------|--------------|
-| Approval gates | `.withApprovalPolicy()` + `.withDurableRuns()` | Named tool calls pause the run for human approve/deny |
+| Approval gates | `.withApprovalPolicy({ mode: "detach" })` (+ `.withDurableRuns()` optional) | Named tool calls wait for human approve/deny |
 | Agent-initiated input | `.withUserInteraction()` + `.withDurableRuns()` | The agent can call `request_user_input` to pause and ask the human |
 | Runtime control | `.withKillSwitch()` | In-process `pause()` / `resume()` / `stop()` / `terminate()` on the run handle |
 
-Approval gates and agent-initiated input are **durable** — the pause persists to a run store, so a run can be approved/answered from any process (or after a crash). They require `.withDurableRuns()`.
+Approval gates wait **live** by default: the run blocks in process until `approveRun`/`denyRun` answers. Add `.withDurableRuns()` when the answer may come from another process or must survive a crash: the pause then persists to a run store. Agent-initiated input is durable-only for now and requires `.withDurableRuns()`.
 
 ## Implementation baseline — durable approval gate
 
@@ -43,10 +43,10 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning({ defaultStrategy: "plan-execute-reflect", maxIterations: 20 })
   .withTools({ allowedTools: ["web-search", "file-read", "file-write"] })
-  .withDurableRuns()                                 // required — pauses persist to a run store
+  .withDurableRuns()                                 // optional for approvals: pauses survive restarts
   .withApprovalPolicy({
-    tools: ["file-write"],                           // these calls pause for human approval
-    mode: "detach",                                  // durable pause (default when durable runs are on)
+    tools: ["file-write"],                           // these calls wait for human approval
+    mode: "detach",                                  // a person decides (durable pause here; live wait without durable runs)
   })
   .build();
 ```
@@ -61,7 +61,7 @@ Name the tool calls that must pause. When the agent tries to call one, the run p
 .withApprovalPolicy({
   tools: ["file-write", "send-email"],               // pause before any of these
   requireFor: (ctx) => ctx.iteration > 5,            // or gate by a predicate
-  mode: "detach",                                    // "detach" = durable, "block" = in-process
+  mode: "detach",                                    // "detach" = a person decides, "block" = onApprove decides
 })
 ```
 
@@ -180,9 +180,10 @@ Kill switch controls are no-ops if `.withKillSwitch()` was not called during bui
 
 ## Pitfalls
 
-- `.withApprovalPolicy({ mode: "detach" })` and `.withUserInteraction()` both REQUIRE `.withDurableRuns()` — the builder throws at `.build()` otherwise, because the pause has nowhere to persist
-- With `mode: "detach"`, a gated run returns `status: "awaiting-approval"` and does NOT block — you must call `approveRun`/`denyRun` (or pass an `onApproval` callback) to finish it
-- `mode: "block"` handles approval in-process instead and does not need durable runs, but the pause cannot outlive the process
+- `.withApprovalPolicy({ mode: "detach" })` does NOT need `.withDurableRuns()`: without it the run waits live in process (`runStream()` emits `ApprovalRequested` and stays open) until `approveRun`/`denyRun` or `run(task, { onApproval })` answers. Add `.withDurableRuns()` only when the answer comes from another process or must survive a restart
+- With `mode: "detach"` + `.withDurableRuns()`, a gated run returns `status: "awaiting-approval"` and does NOT block — you must call `approveRun`/`denyRun` (or pass an `onApproval` callback) to finish it
+- `mode: "block"` decides in code via `onApprove` (no person in the loop); with no `onApprove` every gated call is refused
+- `.withUserInteraction()` still REQUIRES `.withDurableRuns()` (the builder throws at `.build()` otherwise): `request_user_input` has no live wait yet
 - Kill switch controls (`pause`, `resume`, `stop`, `terminate`) are no-ops without `.withKillSwitch()` — no error is thrown, calls are silently ignored
 - `request_user_input` only fires if the model chooses to call it — reinforce in the system prompt when it should ask rather than guess
 - `denyRun` requires a reason string; `approveRun` takes an optional `{ reason }`

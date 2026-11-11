@@ -134,7 +134,7 @@ export const runVerificationThinkRetry = (
         // `.withFabricationGuard("block")` replaced a correct, tool-grounded
         // answer with the abstention sentinel. The evidence is in the FIRST
         // pass, which was judged as the terminal it is.
-        envelope: buildRunEnvelopeFromConfig(config, { auxiliaryPass: true, posture: readPosture(task) }),
+        envelope: buildRunEnvelopeFromConfig(config, { auxiliaryPass: true, posture: readPosture(task), runTask: extractTaskText(task.input) }),
       });
       const retryOutcome = yield* Effect.exit(retryEffect);
       if (retryOutcome._tag === "Success") {

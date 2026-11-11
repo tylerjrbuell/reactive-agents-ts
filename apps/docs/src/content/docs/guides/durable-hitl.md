@@ -1,28 +1,73 @@
 ---
-title: Durable Human-in-the-Loop
+title: Human-in-the-Loop Approval
 stability: experimental
 description: >-
-  Pause an agent on a high-risk tool call, persist it, and approve or deny from
-  any process — approval gates that survive process death.
+  Have a person approve or deny high-risk tool calls: live in process, or
+  durably from any process with gates that survive process death.
 sidebar:
   order: 27
 ---
 
 Some actions need a human's sign-off before they run — a shell command, a file
-write, a payment. **Durable human-in-the-loop (HITL)** lets an agent *pause* on
-those calls, persist the pause to disk, and hand control back so the process can
-exit. A human then approves or denies from **any** process — a CLI, a web
-dashboard, a different worker — and the run resumes from its checkpoint to
-completion.
+write, a payment. `.withApprovalPolicy({ mode: "detach" })` hands those calls to
+a person, who answers with `agent.approveRun(runId)` / `agent.denyRun(runId,
+reason)`. Where the run waits depends on whether you also turned on durable runs:
 
-It is built on the same durable RunStore as [crash-resume](/guides/durable-execution/):
-the decision and the paused checkpoint live in SQLite, so approve/deny works
-across process and machine boundaries.
+| | Without `.withDurableRuns()` (live) | With `.withDurableRuns()` (durable) |
+| --- | --- | --- |
+| The run while waiting | Stays alive in this process, blocked at the gate | Pauses; its checkpoint goes to SQLite; the process may exit |
+| `runStream()` | Emits `ApprovalRequested`, stays open, continues after the answer | Ends with `StreamCompleted` + `pendingApproval` |
+| `run()` | Waits; resolves when the run ends | Returns `status: "awaiting-approval"` |
+| Who can answer | Code in the same process | Any process, even after a restart |
+| `approveRun` resolves with | The run's final result | The resumed run's result |
+
+**You need durable runs only when** the answer may come from another process
+(a separate worker, a web server that does not own the run), or the wait must
+survive a crash or restart. For an interactive app, a chat UI or a CLI where the
+process that runs the agent also receives the human's answer, the live wait is
+enough and needs no store.
+
+The durable backend is built on the same RunStore as
+[crash-resume](/guides/durable-execution/): the decision and the paused
+checkpoint live in SQLite, so approve/deny works across process and machine
+boundaries.
+
+## Live approval (no durable store)
+
+```ts
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ builtins: ["file-write"] })
+  .withApprovalPolicy({ tools: ["file-write"], mode: "detach" })
+  .build();
+
+for await (const event of agent.runStream("clean up the temp files")) {
+  if (event._tag === "ApprovalRequested") {
+    // Show event.toolName / event.args to the user, then answer.
+    // Do not await here: approveRun resolves when the run ends,
+    // and the run's events keep arriving on this stream meanwhile.
+    void agent.approveRun(event.runId); // or agent.denyRun(event.runId, "not now")
+  }
+}
+```
+
+- `ApprovalRequested` arrives at both stream densities.
+- `agent.listPendingApprovals()` lists live waits too, so a `run()` caller (no
+  stream) can find them. `run(task, { onApproval })` answers them for you.
+- `handle.stop()` while waiting denies the call (the run then finishes);
+  `handle.terminate()` cancels the run. Nothing stays pending either way.
+- A live wait lives in the agent object: it is gone if the process exits. Use
+  durable runs when that matters.
+- An `onApprove` callback is ignored in `detach` mode (live or durable); use
+  `mode: "block"` for a programmatic decider.
 
 ## Enabling it
 
 `.withApprovalPolicy()` names which tool calls require approval. `mode: "detach"`
-(the default once `.withDurableRuns()` is set) makes a gated call pause durably.
+(the default once `.withDurableRuns()` is set) makes a gated call wait for a
+person; with `.withDurableRuns()` the wait is a durable pause.
 The data half of a policy (`mode`, `tools`, `commands`) has a declarative
 `AgentConfig` key, `approvalPolicy`, and round-trips through `toConfig()`. The
 `onApprove` / `requireFor` handlers are functions, not JSON, so supply them in
@@ -96,15 +141,17 @@ const gitAgent = await ReactiveAgents.create()
   fails; a push to a local path works. `gh` commands use your `gh` login
   (`GH_TOKEN` / `GITHUB_TOKEN` or the `gh` config directory).
 
-> `mode: "detach"` requires `.withDurableRuns()` — a detached pause needs a
-> durable store to persist it. `build()` throws if it is missing. Use
-> `mode: "block"` for the in-process approval gate (no durable pause).
+> **Migration (2026-11):** `mode: "detach"` no longer requires
+> `.withDurableRuns()`, and `build()` no longer throws without it. A detach
+> policy on a non-durable agent now waits live in process (see
+> [Live approval](#live-approval-no-durable-store)). Agents that already pair
+> detach with durable runs behave as before.
 
-## Block mode (no durable store)
+## Block mode (decided in code)
 
-`mode: "block"` is the default whenever `.withDurableRuns()` is not set — the
-common case if you haven't opted into crash-resume. A gated call is decided
-**in process**, synchronously, with no pause/resume round trip:
+`mode: "block"` is the default whenever no `mode` is given and
+`.withDurableRuns()` is not set. A gated call is decided **in process** by your
+`onApprove` callback, with no person in the loop and no pause/resume round trip:
 
 ```ts
 const agent = await ReactiveAgents.create()
@@ -128,16 +175,17 @@ throw/rejection denies (fail-closed).
 > is **refused** — the tool does not run, and the agent's loop sees the
 > refusal rather than the tool's result. Earlier versions treated `"block"` as
 > inert (nothing read it, so gated tools ran unattended); if you rely on that
-> behavior, add `onApprove`, or switch to `mode: "detach"` +
-> `.withDurableRuns()` for a real durable pause.
+> behavior, add `onApprove`, or switch to `mode: "detach"` to have a person
+> decide (live, or durable with `.withDurableRuns()`).
 >
 > A sub-agent (`.withAgentTool()` / `.withDynamicSubAgents()`) always runs in
 > block mode and inherits the parent's `onApprove` — it has no durable store
 > of its own, so it cannot pause for cross-process approval.
 
-## Pausing
+## Pausing (durable)
 
-When the agent hits a gated call, the run pauses durably and hands control back.
+With `.withDurableRuns()`, when the agent hits a gated call, the run pauses
+durably and hands control back.
 Use whichever entrypoint you already use — `run()` or `runStream()`.
 
 With **`run()`** the result carries `status: "awaiting-approval"` and a
@@ -163,8 +211,8 @@ for await (const event of agent.runStream("clean up the temp files")) {
 
 ### Same-process convenience: `onApproval`
 
-For interactive/CLI use, pass an `onApproval` callback — `run()` drives the whole
-pause → decide → resume loop in one call and returns the **final** result. You
+For interactive/CLI use, pass an `onApproval` callback — `run()` decides every
+gated call through it and returns the **final** result, durable or live. You
 never touch the runId:
 
 ```ts
@@ -200,7 +248,9 @@ approved is what runs. `denyRun` injects the denial as an observation and lets t
 agent react on the next step.
 
 Calling `approveRun`/`denyRun` on a run with no pending approval throws
-`ApprovalStateError` (already decided, completed, or never paused).
+`ApprovalStateError` (already decided, completed, or never paused). A run
+waiting live in this process is always answered first; the durable store is
+checked only when no live run matches.
 
 ## Lifecycle
 
@@ -229,7 +279,7 @@ run() / runStream() ──▶ gated call ──▶ status: awaiting-approval ─
 A complete, runnable demo lives at
 [`apps/examples/src/advanced/durable-hitl.ts`](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/advanced/durable-hitl.ts).
 With a provider key it drives the real gate (pause → approve → deny); offline it
-shows the policy wiring and the detach-requires-durable guard.
+shows the policy wiring.
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-... bun run apps/examples/src/advanced/durable-hitl.ts

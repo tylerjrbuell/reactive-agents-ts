@@ -145,7 +145,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withToolIntent` | _overlay — code-only_ | overlay | Configure tool intent. |
 | `withTools` | `tools`, `features.tools` | config | Tools layer + allowed/focused/adaptive/terminal/required options. |
 | `withTracing` | _overlay — trace persistence — observability alias (see withObservability({tracing}))_ | overlay | JSONL trace persistence. |
-| `withUserInteraction` | _overlay — durable ask overlay (channel adapters are code-only)_ | overlay | Durable user interaction. |
+| `withUserInteraction` | `userInteraction` | config | Agent-initiated user interaction (request_user_input). |
 | `withVerification` | `verification`, `features.verification` | config | Verification package (entropy/nli/thresholds/useLLMTier/onReject). |
 | `withVerificationStep` | `verificationStep` | config | Single post-answer reflect pass. |
 
@@ -421,8 +421,8 @@ See [Context Engineering](/guides/context-engineering/) for full tier defaults.
 | `withChannels(config)`               | Wire `@reactive-agents/channels` sender-policy access control (`ChannelsConfig`). See [Messaging Channels](/guides/messaging-channels/).                                                                                                                                                                                                                                                                      |
 | `withOutputSchema(schema, options?)` | **Typed structured output.** Attach any Standard Schema (Zod / Valibot / ArkType) or Effect Schema; the result carries a typed `result.object` (or `result.objectError` on parse failure). Options: `{ mode?: "auto" \| "grounded", onParseFail?: "lenient" \| "throw" }`. Builder-only — set before `.build()`. See [Typed Structured Output](/guides/structured-output/).                                       |
 | `withDurableRuns(options?)`          | Persist run state so a crashed or paused run can resume from its last checkpoint. Exposes `agent.resumeRun(runId)` and `agent.listRuns({ status? })`. Config hash = system prompt + provider. See [Durable Execution](/guides/durable-execution/).                                                                                                                                                            |
-| `withApprovalPolicy(policy)`         | Human-in-the-loop approval gate for `requiresApproval` tools. `{ tools?, commands?, requireFor?, mode?, onApprove? }`. `commands` gates shell calls by command: `["git push"]` asks before any `shell-execute` call whose command has a segment starting with those words (see [Shell command rules](/guides/durable-hitl/#shell-command-rules)); in the read-only `git` preset a matched write then runs instead of being refused. `mode`, `tools` and `commands` round-trip in `toConfig()` as `approvalPolicy`; `requireFor` and `onApprove` are code-only. `mode: "detach"` (requires `.withDurableRuns()`) pauses the run and persists `awaiting-approval`; exposes `agent.approveRun`/`denyRun`/`listPendingApprovals` — see [Durable HITL](/guides/durable-hitl/). `mode: "block"` (the default when `.withDurableRuns()` is not set) decides each gated call **in process** via `onApprove: ({ toolName, args, iteration }) => boolean \| { approve, reason }` (sync or async) — **deny-by-default**: a gated call with no `onApprove` is refused, not executed. A sub-agent (`.withAgentTool()` / `.withDynamicSubAgents()`) always runs in block mode, inheriting the parent's policy. |
-| `withUserInteraction()`              | Enable **agent-initiated** user interaction (Agentic UI). The model may call `request_user_input` to pause the run durably and ask the human for a form / choice / confirmation; `agent.respondToInteraction(...)` resumes it. Requires `.withDurableRuns()` (interaction pauses persist to the durable store). **Distinct from `withApprovalPolicy()`,** which gates *tool calls* the model already chose (human approves/denies) — `withUserInteraction()` lets the *agent* proactively request input. Zero cost when not called. |
+| `withApprovalPolicy(policy)`         | Human-in-the-loop approval gate for `requiresApproval` tools. `{ tools?, commands?, requireFor?, mode?, onApprove? }`. `commands` gates shell calls by command: `["git push"]` asks before any `shell-execute` call whose command has a segment starting with those words (see [Shell command rules](/guides/durable-hitl/#shell-command-rules)); in the read-only `git` preset a matched write then runs instead of being refused. `mode`, `tools` and `commands` round-trip in `toConfig()` as `approvalPolicy`; `requireFor` and `onApprove` are code-only. `mode: "detach"` hands each gated call to a person: `agent.approveRun`/`denyRun`/`listPendingApprovals`. Without `.withDurableRuns()` the run **waits live, in process**, and continues in the same run once answered (`runStream()` emits `ApprovalRequested`); with `.withDurableRuns()` it pauses, persists `awaiting-approval`, and can be answered from any process, even after a restart — see [Human-in-the-loop](/guides/durable-hitl/). `mode: "block"` (the default when no `mode` is given and `.withDurableRuns()` is not set) decides each gated call **in process** via `onApprove: ({ toolName, args, iteration }) => boolean \| { approve, reason }` (sync or async) — **deny-by-default**: a gated call with no `onApprove` is refused, not executed. A sub-agent (`.withAgentTool()` / `.withDynamicSubAgents()`) always runs in block mode, inheriting the parent's policy. |
+| `withUserInteraction()`              | Enable **agent-initiated** user interaction (Agentic UI). The model may call `request_user_input` to pause the run durably and ask the human for a form / choice / confirmation; `agent.respondToInteraction(...)` resumes it. Requires `.withDurableRuns()` for now (interaction pauses persist to the durable store; a live in-process wait like `detach` approvals have is not available for `request_user_input` yet). Round-trips in `toConfig()` as `userInteraction: true`. **Distinct from `withApprovalPolicy()`,** which gates *tool calls* the model already chose (human approves/denies) — `withUserInteraction()` lets the *agent* proactively request input. Zero cost when not called. |
 
 #### ToolsOptions
 
@@ -842,18 +842,22 @@ Run a task with the given input. Returns the result with output and metadata.
 Options: `{ taskId?, history?, onApproval?, workspace?, skills? }`. `skills: { activate: [...] }` pins skills for this run only (needs `.withSkills()`; see [Agent Skills](/guides/agent-skills/)). `workspace` sets the
 working directory for this run only (overrides `.withTools({ workspace })`; see
 [Working directory](/guides/tools/#working-directory-workspace)); a path that is
-not an existing directory rejects the run before anything executes. On a durable agent with
+not an existing directory rejects the run before anything executes. With
+`.withApprovalPolicy({ mode: "detach" })` and no durable runs, a gated tool call
+**waits in process** until `approveRun`/`denyRun` (or `onApproval`) answers, then
+the same run continues. On a durable agent with
 `.withApprovalPolicy({ mode: "detach" })`, a gated tool call **pauses**: the
 result carries `status: "awaiting-approval"` + `pendingApproval` (resume with
 `approveRun`/`denyRun`). A paused result has `success: false` and no
 `terminatedBy`: the run has not ended. The run's `workspace` is stored with the
-durable run, so the resumed run works in the same directory. Pass `onApproval` to handle the pause→decide→resume loop
+durable run, so the resumed run works in the same directory. Pass `onApproval` to decide every gated call
 in this one call — `(pending) => boolean | { approve, reason }` (sync or async);
-returns the final result. See [Durable HITL](/guides/durable-hitl/).
+it answers the live wait, or drives the durable pause→decide→resume loop, and
+`run()` returns the final result. See [Human-in-the-loop](/guides/durable-hitl/).
 
 ### `runStream(input, options?): AsyncGenerator<AgentStreamEvent>`
 
-Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: AbortSignal, workspace?: string, skills?: { activate?: string[] } }`. `skills` pins skills for this turn, the same as `run()`. Default density comes from `.withStreaming()` or `"tokens"`. Ends with `StreamCompleted`, `StreamError`, or `StreamCancelled`. An invalid `workspace` ends the stream with one `StreamError`. A durable run that pauses ends with a `StreamCompleted` carrying `status: "awaiting-approval"` (or `"awaiting-interaction"`), `pendingApproval` / `pendingInteraction`, `success: false` and no `terminatedBy`, the same as `run()`. `StreamCompleted.evidenceDelta` matches `AgentResult.evidenceDelta`.
+Token and phase streaming. Options: `{ density?: "tokens" | "full", signal?: AbortSignal, workspace?: string, skills?: { activate?: string[] } }`. `skills` pins skills for this turn, the same as `run()`. Default density comes from `.withStreaming()` or `"tokens"`. Ends with `StreamCompleted`, `StreamError`, or `StreamCancelled`. An invalid `workspace` ends the stream with one `StreamError`. A run waiting live for a person emits `ApprovalRequested` (`runId`, `gateId`, `toolName`, `args`) at either density and keeps the stream open; answer with `approveRun`/`denyRun` and the same stream continues (`stop()` or `terminate()` while waiting denies the call or cancels the run). A durable run that pauses ends with a `StreamCompleted` carrying `status: "awaiting-approval"` (or `"awaiting-interaction"`), `pendingApproval` / `pendingInteraction`, `success: false` and no `terminatedBy`, the same as `run()`. `StreamCompleted.evidenceDelta` matches `AgentResult.evidenceDelta`.
 
 Chat turns take a per-turn `workspace` as well: `chat(msg, { useTools: true, workspace })` and `session.runStream(msg, { workspace })` (tool and streaming paths).
 
@@ -877,15 +881,15 @@ List persisted durable runs, optionally filtered by lifecycle status (e.g. `{ st
 
 ### `listPendingApprovals(): Promise<readonly PendingApproval[]>`
 
-List runs paused awaiting a human decision, each with the pending action (`runId`, `gateId`, `toolName`, `args`, `task`). Requires `.withDurableRuns()`. See [Durable HITL](/guides/durable-hitl/).
+List runs waiting for a human decision, each with the pending action (`runId`, `gateId`, `toolName`, `args`, `task`, `updatedAt`): first the runs waiting live in this process, then (with `.withDurableRuns()`) the durable pauses in the store. See [Human-in-the-loop](/guides/durable-hitl/).
 
 ### `approveRun(runId, opts?): Promise<AgentResult>`
 
-Approve a paused run and resume it to completion — the agent executes the gated call. Callable from any process. Throws `ApprovalStateError` if the run has no pending approval.
+Approve the run's gated call — the agent executes it and continues. A run waiting live in this process takes the decision first, and the promise resolves with that run's final result (the same one its `run()` / `runStream()` caller gets). Otherwise, with `.withDurableRuns()`, the paused run resumes from its checkpoint (callable from any process). Throws `ApprovalStateError` if no run is waiting for a decision.
 
 ### `denyRun(runId, reason): Promise<AgentResult>`
 
-Deny a paused run's action and resume to completion — the agent observes the denial and continues without running the call.
+Deny the run's gated call — the agent observes the denial and continues without running it. Same live-then-durable order as `approveRun`.
 
 ### Dynamic tools & RAG (runtime)
 

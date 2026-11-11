@@ -74,18 +74,9 @@ export const buildAgent = async <TOut>(
                 tools: [...new Set([...prior, ...gatewayGated])],
             }
         }
-        // Durable HITL (Phase D): a detached approval pause needs a durable store
-        // to persist it. Guard early so misconfiguration fails fast.
-        if (state._approvalPolicy) {
-            const approvalMode =
-                state._approvalPolicy.mode ?? (state._durableRuns ? 'detach' : 'block')
-            if (approvalMode === 'detach' && !state._durableRuns) {
-                throw new Error(
-                    ".withApprovalPolicy({ mode: 'detach' }) requires .withDurableRuns() — " +
-                        'detached approval pauses need a durable store to persist them.',
-                )
-            }
-        }
+        // `mode: 'detach'` no longer needs a durable store: without one the run
+        // waits live, in process, for approveRun/denyRun (engine/human-gate.ts);
+        // with one it pauses durably and resumes from any process.
 
         // Agentic-UI (Task 11): request_user_input pauses persist to the durable
         // store, so .withUserInteraction() requires .withDurableRuns(). Mirror of

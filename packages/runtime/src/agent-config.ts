@@ -775,6 +775,8 @@ export const AgentConfigSchema = Schema.Struct({
   durableRuns: Schema.optional(DurableRunsConfigSchema),
   /** Approval policy: mode, gated tool names and shell command rules. */
   approvalPolicy: Schema.optional(ApprovalPolicyConfigSchema),
+  /** Agent-initiated user interaction (`.withUserInteraction()`): the model may call `request_user_input`. */
+  userInteraction: Schema.optional(Schema.Boolean),
   /**
    * Thinking mode. A boolean is `.withModel({ thinking })`; an object is
    * `.withThinking({ enabled, effort, budgetTokens })`.

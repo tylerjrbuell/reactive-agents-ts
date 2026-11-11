@@ -53,7 +53,9 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # shell-execute preset); their 7 `new Error(` sites are gone.
 # 2026-11-10: 266 -> 265. grep searches an invalid regex as a literal instead of
 # throwing.
-STRING_ERRORS_BASELINE=265
+# 2026-11-11: 265 -> 256. Live human gate typed its approval/interaction state
+# errors (5), structured-output pipeline throws StructuredOutputExtractionError (4).
+STRING_ERRORS_BASELINE=256
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-

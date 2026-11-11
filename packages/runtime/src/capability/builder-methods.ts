@@ -164,7 +164,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withContract: { kind: "overlay", overlayReason: "behavioral-contract overlay (not JSON data)", description: "Behavioral contract." },
   withBehavioralContracts: { kind: "overlay", overlayReason: "behavioral-contract overlay (folds into withContract)", description: "Behavioral contracts." },
   withDynamicPricing: { kind: "overlay", overlayReason: "pricing overlay (folds into withCostTracking)", description: "Dynamic pricing overlay." },
-  withUserInteraction: { kind: "overlay", overlayReason: "durable ask overlay (channel adapters are code-only)", description: "Durable user interaction." },
+  withUserInteraction: { kind: "config", configKeys: ["userInteraction"], description: "Agent-initiated user interaction (request_user_input)." },
 
   withLlmTimeout: { kind: "config", configKeys: ["execution.llmTimeoutMs"], description: "LLM request timeout (ms)." },
 

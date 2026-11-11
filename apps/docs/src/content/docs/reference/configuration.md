@@ -276,6 +276,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `tools.riskLevels` | `object` | no |  |
 | `tools.terminal` | `boolean` \| `object` | no |  |
 | `tools.workspace` | `string` | no |  |
+| `userInteraction` | `boolean` | no |  |
 | `verification.factDecomposition` | `boolean` | no |  |
 | `verification.hallucinationDetection` | `boolean` | no |  |
 | `verification.hallucinationThreshold` | `number` | no |  |

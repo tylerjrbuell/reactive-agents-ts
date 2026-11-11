@@ -724,13 +724,13 @@ export class ReactiveAgent<TOut = unknown> {
             /** Per-run override for the agent's maxIterations (chat path). */
             readonly maxIterations?: number
             /**
-             * Durable HITL (Phase D) convenience: when a gated tool call pauses the
-             * run, this callback is invoked with the pending action. Return `true`
-             * to approve (the agent executes the call and continues), `false` to
-             * deny, or `{ approve, reason }`. `run()` handles the pause→decide→resume
-             * loop and returns the FINAL result — you never touch the runId. Requires
-             * `.withDurableRuns()` + `.withApprovalPolicy({ mode: "detach" })`. Without
-             * this callback, a paused run returns `status: "awaiting-approval"` +
+             * HITL convenience for `.withApprovalPolicy({ mode: "detach" })`: called
+             * with each gated call's pending action. Return `true` to approve,
+             * `false` to deny, or `{ approve, reason }`; `run()` returns the FINAL
+             * result. Without durable runs it answers the live in-process wait;
+             * with `.withDurableRuns()` it drives the pause→decide→resume loop.
+             * Without this callback a live run waits for `approveRun`/`denyRun`,
+             * and a durable run returns `status: "awaiting-approval"` +
              * `pendingApproval` for you to handle (e.g. cross-process).
              */
             readonly onApproval?: (pending: {
@@ -749,7 +749,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
             ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
             // Chat-turn carry: environment notice + plan posture ride task context to the envelope.
-            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace), ...skillsCarry(options?.skills),
+            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace), ...skillsCarry(options?.skills), ...(options?.onApproval ? { onApproval: options.onApproval } : {}),
         }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise

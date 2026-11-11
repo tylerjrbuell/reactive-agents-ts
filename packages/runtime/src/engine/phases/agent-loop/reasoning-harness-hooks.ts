@@ -128,6 +128,7 @@ export const runReasoningHarnessHooks = (
     const continuationEnvelope = buildRunEnvelopeFromConfig(config, {
       auxiliaryPass: true,
       posture: readPosture(task),
+      runTask: extractTaskText(task.input),
     });
 
     // Common request builder for the three "continue working" style hooks.

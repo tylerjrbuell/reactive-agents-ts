@@ -64,6 +64,7 @@ export type BuilderMethod =
   | "withSkillPersistence"
   | "withDurableRuns"
   | "withApprovalPolicy"
+  | "withUserInteraction"
   | "withModelPricing"
   | "withTaskContext"
   | "withThinking"
@@ -401,6 +402,8 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
       ),
     );
   }
+
+  if (config.userInteraction === true) push(call("withUserInteraction"));
 
   if (config.pricingRegistry) push(call("withModelPricing", config.pricingRegistry));
   if (config.taskContext && Object.keys(config.taskContext).length > 0) {

@@ -84,7 +84,7 @@ const agent = await ReactiveAgents.create()
 | `.withCostTracking()` | <Badge text="recommended" variant="note" size="small" /> | Complexity routing + budget enforcement |
 | `.withKillSwitch()` | <Badge text="recommended" variant="note" size="small" /> | Per-agent + global emergency halt |
 | `.withRequiredTools({ tools: ["web-search"] })` | <Badge text="opt-in" variant="tip" size="small" /> | Force critical tool calls before answering |
-| `.withApprovalPolicy({ tools, mode: "detach" })` | <Badge text="opt-in" variant="tip" size="small" /> | Gate tool calls behind durable human approval ([HITL](/guides/durable-hitl/)) |
+| `.withApprovalPolicy({ tools, mode: "detach" })` | <Badge text="opt-in" variant="tip" size="small" /> | Gate tool calls behind human approval: live, or durable with `.withDurableRuns()` ([HITL](/guides/durable-hitl/)) |
 
 ### Observability
 

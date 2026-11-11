@@ -43,6 +43,8 @@ type AgentStreamEvent =
   | { _tag: "StreamError"; cause: string }
   | { _tag: "StreamCancelled"; reason: string }
   | { _tag: "IterationProgress"; iteration: number; maxIterations: number; tokensUsed: number }
+  | { _tag: "ApprovalRequested"; runId: string; gateId: string; toolName: string; args: unknown }
+  | { _tag: "InteractionRequested"; runId: string; interactionId: string; kind: string; prompt: string; schema: unknown }
   | { _tag: "PhaseStarted"; phase: string; timestamp: number }
   | { _tag: "PhaseCompleted"; phase: string; durationMs: number }
   | { _tag: "ThoughtEmitted"; content: string; iteration: number }
@@ -69,6 +71,8 @@ These events are emitted regardless of density mode:
 | `StreamError` | `{ cause: string }` | Execution failed. Always the last event on a failed stream. |
 | `StreamCancelled` | `{ reason: string }` | Stream was aborted via `AbortSignal`. Always the last event on a cancelled stream. |
 | `IterationProgress` | `{ iteration, maxIterations, tokensUsed }` | Emitted at the start of each reasoning iteration. Useful for progress bars and loop monitoring. |
+| `ApprovalRequested` | `{ runId, gateId, toolName, args }` | The run is waiting in process for a person to approve or deny a gated tool call (`.withApprovalPolicy({ mode: "detach" })` without durable runs). Answer with `agent.approveRun(runId)` / `agent.denyRun(runId, reason)`; the stream stays open and continues. See [Human-in-the-Loop Approval](/guides/durable-hitl/). |
+| `InteractionRequested` | `{ runId, interactionId, kind, prompt, schema }` | Reserved: the live counterpart for `request_user_input`. Not emitted yet; today `request_user_input` needs `.withDurableRuns()` and surfaces as `StreamCompleted.pendingInteraction`. |
 
 ### Full Density Only
 

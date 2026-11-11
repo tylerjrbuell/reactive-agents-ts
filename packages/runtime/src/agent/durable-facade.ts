@@ -57,7 +57,7 @@
  * observable API break outside this template's identity guarantees.
  */
 
-import { Effect } from 'effect'
+import { Effect, Option } from 'effect'
 import { ManagedRuntime } from 'effect'
 import { toolEffectIdentityKey } from '@reactive-agents/core'
 import type { EffectReceiptRecord, ToolEffectRecord } from '@reactive-agents/core'
@@ -73,7 +73,8 @@ import {
     decideInteractionRecord,
     getPendingInteractionAt,
 } from '../engine/durable-resume.js'
-import { unwrapErrorWithSuggestion } from '../errors.js'
+import { ApprovalStateError, InteractionStateError, unwrapErrorWithSuggestion } from '../errors.js'
+import { HumanGate, type HumanGateAnswer, type HumanGateRequest } from '../engine/human-gate.js'
 import { captureCallerFileRoot, workspaceCarry, type RunStateSpec } from '../engine/start-run.js'
 import type { AgentResult } from '../builder/types.js'
 import type { RunRecord, RunStatus } from '../services/run-store.js'
@@ -154,6 +155,36 @@ export const reconcileToolEffects = (
     ]
     return { recoveredMap, receiptEffects }
 }
+
+/**
+ * Deliver `answer` to a run waiting LIVE in this process (engine/human-gate.ts).
+ * Returns the effect awaiting that run's final result, or `undefined` when no
+ * run here is waiting for this answer (then the durable store is next).
+ */
+const answerLive = (
+    runId: string,
+    answer: HumanGateAnswer,
+): Effect.Effect<Effect.Effect<AgentResult, Error> | undefined> =>
+    Effect.serviceOption(HumanGate).pipe(
+        Effect.flatMap((gate) =>
+            Option.isNone(gate)
+                ? Effect.succeed(undefined)
+                : gate.value.answer(runId, answer).pipe(Effect.map(Option.getOrUndefined)),
+        ),
+    )
+
+/** The pending live requests of one kind (empty outside an agent runtime). */
+const livePending = <K extends HumanGateRequest['kind']>(
+    kind: K,
+): Effect.Effect<readonly Extract<HumanGateRequest, { kind: K }>[]> =>
+    Effect.serviceOption(HumanGate).pipe(
+        Effect.flatMap((gate) => (Option.isNone(gate) ? Effect.succeed([]) : gate.value.pending())),
+        Effect.map((all) => all.filter((r): r is Extract<HumanGateRequest, { kind: K }> => r.kind === kind)),
+    )
+
+const NOT_WAITING_HERE = (what: string): string =>
+    `no run with this id is waiting for ${what} in this process, and this agent has no durable run store ` +
+    '(.withDurableRuns()) to resume one from'
 
 /**
  * Shape of `ReactiveAgent.runDurable`'s params (the method itself stayed in
@@ -520,11 +551,17 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
             decision: { status: 'approved' | 'denied'; reason?: string },
         ): Effect.Effect<AgentResult, Error> {
             return Effect.gen(function* () {
+                // 0. A run waiting LIVE in this process (engine/human-gate.ts)
+                //    takes the decision first; the result is that same run's.
+                const live = yield* answerLive(runId, {
+                    kind: 'approval',
+                    approve: decision.status === 'approved',
+                    ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+                })
+                if (live !== undefined) return yield* live
                 if (!deps.durableResume) {
                     return yield* Effect.fail(
-                        new Error(
-                            'approveRun()/denyRun() requires .withDurableRuns() — this agent has no durable run store.',
-                        ),
+                        new ApprovalStateError({ runId, detail: NOT_WAITING_HERE('a decision') }),
                     )
                 }
                 const { dir, configHash } = deps.durableResume
@@ -597,11 +634,16 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
             Error
         > {
             return Effect.gen(function* () {
-                if (!deps.durableResume) {
-                    return yield* Effect.fail(
-                        new Error('listPendingApprovals() requires .withDurableRuns().')
-                    )
-                }
+                // Live waits (this process) first, oldest first; then the durable store.
+                const live = (yield* livePending('approval')).map((r) => ({
+                    runId: r.runId,
+                    gateId: r.gateId,
+                    toolName: r.toolName,
+                    args: r.args,
+                    task: r.task ?? '',
+                    updatedAt: r.requestedAt,
+                }))
+                if (!deps.durableResume) return live
                 const dbPath = join(deps.durableResume.dir, 'runs.db')
                 const runs = yield* Effect.promise(() =>
                     Effect.runPromise(
@@ -615,7 +657,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                     args: unknown
                     task: string
                     updatedAt: number
-                }[] = []
+                }[] = [...live]
                 for (const run of runs) {
                     const pending = yield* Effect.promise(() =>
                         Effect.runPromise(
@@ -681,11 +723,17 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
             Error
         > {
             return Effect.gen(function* () {
-                if (!deps.durableResume) {
-                    return yield* Effect.fail(
-                        new Error('listPendingInteractions() requires .withDurableRuns().')
-                    )
-                }
+                // Live waits (this process) first, oldest first; then the durable store.
+                const live = (yield* livePending('interaction')).map((r) => ({
+                    runId: r.runId,
+                    interactionId: r.interactionId,
+                    kind: r.interactionKind,
+                    prompt: r.prompt,
+                    schema: r.schema,
+                    task: r.task ?? '',
+                    updatedAt: r.requestedAt,
+                }))
+                if (!deps.durableResume) return live
                 const dbPath = join(deps.durableResume.dir, 'runs.db')
                 const runs = yield* Effect.promise(() =>
                     Effect.runPromise(
@@ -700,7 +748,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                     schema: unknown
                     task: string
                     updatedAt: number
-                }[] = []
+                }[] = [...live]
                 for (const run of runs) {
                     const pending = yield* Effect.promise(() =>
                         Effect.runPromise(
@@ -744,11 +792,12 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
             value: unknown,
         ): Effect.Effect<AgentResult, Error> {
             return Effect.gen(function* () {
+                // 0. A run waiting LIVE in this process takes the answer first.
+                const live = yield* answerLive(runId, { kind: 'interaction', interactionId, value })
+                if (live !== undefined) return yield* live
                 if (!deps.durableResume) {
                     return yield* Effect.fail(
-                        new Error(
-                            'respondToInteraction() requires .withDurableRuns() — this agent has no durable run store.',
-                        ),
+                        new InteractionStateError({ runId, detail: NOT_WAITING_HERE('an answer') }),
                     )
                 }
                 const { dir, configHash } = deps.durableResume

@@ -101,6 +101,7 @@ export interface BuilderStateForSerialization {
   _skillPersistence?: boolean;
   _durableRuns?: { dir?: string; checkpointEvery?: number };
   _approvalPolicy?: import("@reactive-agents/reasoning").AuthoredApprovalPolicy;
+  _userInteraction?: boolean;
   _ollamaTimeoutMs?: number;
   _skillsConfig?: { paths?: readonly string[]; activate?: readonly string[]; global?: boolean };
   _metaTools?: import("../types.js").MetaToolsConfig | false;
@@ -432,6 +433,9 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (ap.commands !== undefined) a["commands"] = [...ap.commands];
     config["approvalPolicy"] = a;
   }
+
+  // Agent-initiated user interaction (`.withUserInteraction()`).
+  if (state._userInteraction) config["userInteraction"] = true;
 
   if (state._skillsConfig) {
     const s = state._skillsConfig;

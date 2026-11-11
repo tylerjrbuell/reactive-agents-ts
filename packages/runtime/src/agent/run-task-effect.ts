@@ -89,6 +89,7 @@ import type {
 import type { AgentDebrief } from '../debrief.js'
 import { safeParseJson } from './_json.js'
 import { resolveWorkspaceDir, startRun, type RunStateSpec } from '../engine/start-run.js'
+import { settleFromExit, withLiveApprover, type LiveApprovalCallback } from '../engine/human-gate.js'
 
 /**
  * Loosely parse the first complete JSON value (object `{…}` or array `[…]`)
@@ -169,6 +170,12 @@ export interface RunTaskEffectOptions {
     readonly skillsActivate?: readonly string[]
     /** Per-run state the entry binds into the run scope (controller, resume, model override...). */
     readonly runState?: RunStateSpec
+    /**
+     * `run(task, { onApproval })`: answers this run's LIVE approval waits
+     * (`mode: "detach"` without durable runs, engine/human-gate.ts). The
+     * durable pause loop (`driveApprovals`) uses the same callback.
+     */
+    readonly onApproval?: LiveApprovalCallback
 }
 
 /**
@@ -651,6 +658,10 @@ export const buildRunTaskEffect = (
             (e: RuntimeErrors | TaskError | Error) =>
                 e instanceof Error ? e : new Error('message' in e ? (e as { message: string }).message : String(e))
         ),
+        // A run that waited at the live human gate hands its final result to
+        // whoever answered it (`approveRun`), success or failure alike.
+        Effect.onExit((exit) => settleFromExit(String(taskId), exit)),
+        withLiveApprover(String(taskId), options?.onApproval),
         // The run's root entry (engine/start-run.ts): built synchronously here,
         // so run(), runEffect() and runDurable capture the file root active
         // where they were called (facades pass theirs as options.fileRoot).

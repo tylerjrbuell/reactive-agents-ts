@@ -93,6 +93,36 @@ export type AgentStreamEvent =
       readonly status: string;
     }
   | {
+      /**
+       * The run is waiting, in process, for a person to approve or deny a
+       * gated tool call (`.withApprovalPolicy({ mode: "detach" })` without
+       * durable runs). Answer with `agent.approveRun(runId)` /
+       * `agent.denyRun(runId, reason)`; the same stream then continues.
+       * Emitted at both densities.
+       */
+      readonly _tag: "ApprovalRequested";
+      readonly runId: string;
+      readonly gateId: string;
+      readonly toolName: string;
+      readonly args: unknown;
+    }
+  | {
+      /**
+       * The run is waiting, in process, for a person's answer to a
+       * `request_user_input` call. Answer with
+       * `agent.respondToInteraction(runId, interactionId, value)`; the same
+       * stream then continues. Reserved: the live gate projects interaction
+       * waits here, but the kernel does not yet ask the gate for
+       * `request_user_input` (it pauses durably instead), so nothing emits it today.
+       */
+      readonly _tag: "InteractionRequested";
+      readonly runId: string;
+      readonly interactionId: string;
+      readonly kind: string;
+      readonly prompt: string;
+      readonly schema: unknown;
+    }
+  | {
       /** Emitted when the stream is cancelled via AbortSignal. Last event when cancelled. */
       readonly _tag: "StreamCancelled";
       readonly reason: string;

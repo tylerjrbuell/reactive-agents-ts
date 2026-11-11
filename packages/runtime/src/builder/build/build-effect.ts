@@ -23,6 +23,7 @@ import { buildToolMcpRegistrations } from '../build-effect/tool-mcp-registration
 import { mergeContractRequiredTools } from '../contract-tool-set.js'
 import { documentStoreLayer, ingestRagDocuments } from '../build-effect/rag-ingestion.js'
 import { agentWorkspaceLayer } from '../../engine/start-run.js'
+import { HumanGateLive } from '../../engine/human-gate.js'
 import { composeHealthLayer } from '../build-effect/health-layer.js'
 import { composeTracingLayer } from '../build-effect/tracing-layer.js'
 import { instantiateAgent } from '../build-effect/agent-instantiation.js'
@@ -270,6 +271,9 @@ export const runBuilderBuildEffect = <TOut>(
         // The agent's working directory (`.withTools({ workspace })`), bound as each run's file root.
         const workspace = state._toolsOptions?.workspace
         if (workspace !== undefined) fullRuntime = Layer.merge(fullRuntime, agentWorkspaceLayer(workspace))
+        // The agent's live human gate: a `detach` approval on a non-durable run
+        // waits here for approveRun/denyRun (engine/human-gate.ts).
+        fullRuntime = Layer.merge(fullRuntime, HumanGateLive)
 
         // ManagedRuntime + ReactiveAgent construction extracted to
         // ./builder/build-effect/agent-instantiation.ts (W26-B step 4).

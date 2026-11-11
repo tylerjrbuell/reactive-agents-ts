@@ -325,6 +325,22 @@ export class RunController implements RunControllerLike { // RunControllerLike f
         this._status = "stopped";
         // Release any pending pause so checkpoint() can observe the stop
         this._releaseAnyPause();
+        // A run waiting for a person (engine/human-gate.ts) gives up its wait.
+        for (const listener of [...this._stopListeners]) listener();
+    }
+
+    private readonly _stopListeners = new Set<() => void>();
+
+    /**
+     * Call `listener` when stop() is requested. Returns the unsubscribe. The
+     * live human gate uses it so a stopped run does not keep waiting for a
+     * decision that will never matter.
+     */
+    onStopRequested(listener: () => void): () => void {
+        this._stopListeners.add(listener);
+        return () => {
+            this._stopListeners.delete(listener);
+        };
     }
 
     terminate(): void {

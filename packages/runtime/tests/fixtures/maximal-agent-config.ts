@@ -251,6 +251,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
   skillPersistence: true,
   durableRuns: { dir: "/tmp/drift-guard-runs", checkpointEvery: 2 },
   approvalPolicy: { mode: "detach", tools: ["file-write"], commands: ["git push"] },
+  userInteraction: true,
   thinking: { enabled: true, effort: "high", budgetTokens: 8_000 },
   skills: { paths: ["./skills"], activate: ["code-review"], global: true },
   metaTools: {

@@ -75,7 +75,12 @@ export const runLocalLearning = (
     let lastLearningResult: LearningResult | undefined;
 
     // ── Local Learning: update calibration, bandit, and skill store ──
-    if (config.enableReactiveIntelligence && entropyLog.length > 0) {
+    // An abstained run is not fed to the learning engine: its bandit reward is
+    // the run outcome, and the wire outcome folds `abstained` into `failure`,
+    // so an honest abstention would count as a loss for the strategy. The
+    // engine input has no bandit-only switch, so the whole update is skipped
+    // (an abstained run also adds no calibration sample).
+    if (config.enableReactiveIntelligence && entropyLog.length > 0 && runOutcome !== "abstained") {
       yield* Effect.serviceOption(
         LearningEngineService,
       ).pipe(
