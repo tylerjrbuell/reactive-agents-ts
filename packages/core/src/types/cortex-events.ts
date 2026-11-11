@@ -1,5 +1,6 @@
 export type DebriefPayload = {
-  readonly outcome: "success" | "partial" | "failed";
+  /** `"abstained"`: the agent declined honestly (not counted as a failure). */
+  readonly outcome: "success" | "partial" | "failed" | "abstained";
   readonly summary: string;
   readonly keyFindings: ReadonlyArray<string>;
   readonly errorsEncountered: ReadonlyArray<string>;
@@ -21,8 +22,10 @@ export type DebriefPayload = {
      * result is built, so it is not in the result's `tokensUsed` / `llmCalls`.
      */
     readonly synthesisTokens?: {
-      readonly input: number;
-      readonly output: number;
+      /** Prompt tokens; absent when the provider did not report a split. */
+      readonly input?: number;
+      /** Completion tokens; absent when the provider did not report a split. */
+      readonly output?: number;
       readonly total: number;
       readonly cost: number;
       readonly calls: number;
@@ -58,6 +61,14 @@ export type ChatTurnEvent = {
   readonly content: string;
   readonly routedVia: "direct-llm" | "react-loop";
   readonly tokensUsed?: number;
+  /**
+   * `true` on an assistant turn whose run failed: `content` is then a short
+   * failure note (not an answer) and `error` holds the cause. Apps should
+   * render it as a failed turn, not as a reply.
+   */
+  readonly failed?: boolean;
+  /** Failure cause when `failed` is true. */
+  readonly error?: string;
 };
 
 export type AgentHealthReport = {

@@ -1,5 +1,6 @@
 
 import type { RunOrigin, RunAbortCause, RunAbortReason } from "../origin.js";
+import type { DeliverableReceipt } from "../receipt.js";
 
 /** Task/agent lifecycle, execution, memory, LLM, tool, reasoning, guardrail and safety events. */
 export type CoreAgentEvent =
@@ -260,6 +261,13 @@ export type CoreAgentEvent =
       readonly strategy: string;
       /** Current step number within this execution */
       readonly step: number;
+      /**
+       * Kernel iteration (model turn, 0-based) that produced this step. Not the
+       * same as `step`: one iteration can record several steps (thought, action,
+       * observation). Absent for strategy control steps and older emitters;
+       * consumers that group by turn should prefer it over `step`.
+       */
+      readonly iteration?: number;
       /** Total steps completed so far */
       readonly totalSteps: number;
       /** Model thought/reasoning text from this step (optional, depends on strategy) */
@@ -493,6 +501,20 @@ export type CoreAgentEvent =
       readonly output?: string;
       /** True iff `output` was clipped to the 64KB cap. */
       readonly outputTruncated?: boolean;
+      /**
+       * Public run outcome, the same value as `AgentResult.outcome`: `"success"`,
+       * `"partial"` (a model draft with unmet items), `"failed"` (cause on
+       * `error`, output empty) or `"abstained"` (the agent declined honestly;
+       * reason on `error`). Absent on a paused run and from older publishers.
+       * Unlike `outcome.status` (the kernel's minted status), this reflects any
+       * runtime veto applied after the kernel finished.
+       */
+      readonly runOutcome?: "success" | "partial" | "failed" | "abstained";
+      /**
+       * Files and other deliverables the run produced (verified receipts).
+       * Read these when `output` is empty because the deliverable is a file.
+       */
+      readonly deliverables?: readonly DeliverableReceipt[];
       /**
        * Plan 8 K1: the ONE reconciled terminal outcome (status, termination,
        * deliverable provenance, gate verdict, answer-satisfied, success claim),
