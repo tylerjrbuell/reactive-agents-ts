@@ -147,7 +147,7 @@ describe("todo healing: unknown actions teach", () => {
   it("unknown action still errors and names the closest valid call", () => {
     const r = applyTodoChecklistAction(three, { action: "frobnicate" });
     expect(r.ok).toBe(false);
-    expect(r.rendered).toContain('Unknown action "frobnicate". Valid: add | start | done | list.');
+    expect(r.rendered).toContain('Unknown action "frobnicate". Valid: add | start | done | reopen | list.');
     expect(r.rendered).toContain("Closest valid call:");
   });
   it("update with neither items nor id+status errors", () => {
@@ -182,6 +182,139 @@ describe("todo loop-closing line", () => {
   it("errors and empty list also end with a closing line", () => {
     expect(lastLine(applyTodoChecklistAction(three, { action: "done", id: 99 }).rendered)).toContain("Open: 2.");
     expect(lastLine(applyTodoChecklistAction(empty, { action: "list" }).rendered)).toContain("Open: 0.");
+  });
+});
+
+// Run 01M7622DY0G1D8VEKYV2FVYZW7: todo({action:"start", items:[all 5]}) set all five
+// to [~], the model repeated the identical call twice, and loop resolution ended the run.
+describe("todo start: one item in progress at a time", () => {
+  const titles = ["Read skill", "Run tests", "Diff docs", "Update docs", "Verify"];
+  const five = (): readonly AdvisoryItem[] => {
+    const added = applyTodoChecklistAction(empty, { action: "add", items: titles });
+    return foldAdvisory(added.changes.map((change, i) => ({ kind: "checklist-item", seq: i + 1, iteration: 1, change })));
+  };
+  const inProgress = (r: { rendered: string }): number => r.rendered.split("\n").filter((l) => l.startsWith("[~]")).length;
+
+  it("start with every item (by title) starts only the first open one", () => {
+    const r = applyTodoChecklistAction(five(), { action: "start", items: titles });
+    expect(r.changes).toEqual([{ op: "status", id: "1", status: "in_progress" }]);
+    expect(inProgress(r)).toBe(1);
+    expect(r.rendered).toContain("Started item 1 only");
+  });
+
+  it("start with several ids skips completed ones and starts one", () => {
+    const r = applyTodoChecklistAction(three, { action: "start", ids: [3, 1] });
+    expect(r.changes).toEqual([{ op: "status", id: "1", status: "in_progress" }]);
+  });
+
+  it("update/status in_progress over several ids is also narrowed to one", () => {
+    const r = applyTodoChecklistAction(five(), { action: "update", ids: [1, 2, 3], status: "in_progress" });
+    expect(r.changes).toEqual([{ op: "status", id: "1", status: "in_progress" }]);
+  });
+
+  it("start with no id starts the first open item", () => {
+    const r = applyTodoChecklistAction(five(), { action: "start" });
+    expect(r.ok).toBe(true);
+    expect(r.changes).toEqual([{ op: "status", id: "1", status: "in_progress" }]);
+  });
+
+  it("start with no id on an empty list still fails", () => {
+    const r = applyTodoChecklistAction(empty, { action: "start" });
+    expect(r.ok).toBe(false);
+  });
+
+  it("done with several ids still marks them all", () => {
+    expect(applyTodoChecklistAction(five(), { action: "done", ids: [1, 2] }).changes).toHaveLength(2);
+  });
+});
+
+describe("todo no-op names the next concrete action", () => {
+  it("repeating start on the in-progress item says No change and points at the work", () => {
+    const r = applyTodoChecklistAction(three, { action: "start", id: 2 });
+    expect(r.ok).toBe(true);
+    expect(r.changes).toEqual([]);
+    expect(r.rendered.split("\n")[0]).toBe(
+      'No change: item 2 is already in progress — do its work now with a tool, then todo({action:"done", id:2}).',
+    );
+  });
+
+  it("identical repeat of the all-items start returns a No change line", () => {
+    const r = applyTodoChecklistAction(three, { action: "start", items: ["Write", "Research"] });
+    expect(r.changes).toEqual([]);
+    expect(r.rendered).toContain("No change: item 2 is already in progress");
+  });
+
+  it("done on a done item names the next open item", () => {
+    const r = applyTodoChecklistAction(three, { action: "done", id: 3 });
+    expect(r.changes).toEqual([]);
+    expect(r.rendered.split("\n")[0]).toBe('No change: item 3 is already done. Next: todo({action:"start", id:1}).');
+  });
+
+  it("done on a done item when all are done says to answer", () => {
+    const done = three.map((t) => ({ ...t, status: "completed" as const }));
+    const r = applyTodoChecklistAction(done, { action: "done", id: 1 });
+    expect(r.rendered.split("\n")[0]).toBe("No change: item 1 is already done. All items are done — deliver your final answer.");
+  });
+
+  it("start with no id when everything is done says No change", () => {
+    const done = three.map((t) => ({ ...t, status: "completed" as const }));
+    const r = applyTodoChecklistAction(done, { action: "start" });
+    expect(r.changes).toEqual([]);
+    expect(r.rendered.split("\n")[0]).toContain("No change: every item is done");
+  });
+
+  it("a call that changes state has no No change line", () => {
+    expect(applyTodoChecklistAction(three, { action: "done", id: 2 }).rendered).not.toContain("No change");
+  });
+});
+
+describe("todo reopen", () => {
+  it("puts a done item back to pending", () => {
+    const r = applyTodoChecklistAction(three, { action: "reopen", id: 3 });
+    expect(r.ok).toBe(true);
+    expect(r.changes).toEqual([{ op: "status", id: "3", status: "pending" }]);
+    expect(r.rendered).toContain("[ ] 3. Review");
+    expect(lastLine(r.rendered)).toContain("Open: 3.");
+  });
+
+  it.each(["undo", "re-open", "Reopen"])("alias %s heals to reopen", (verb) => {
+    const r = applyTodoChecklistAction(three, { action: verb, id: 3 });
+    expect(r.changes).toEqual([{ op: "status", id: "3", status: "pending" }]);
+    if (verb !== "reopen") expect(r.healedTo).toBe("reopen");
+  });
+
+  it("leaves an open item alone and says so", () => {
+    const r = applyTodoChecklistAction(three, { action: "reopen", ids: [1, 2] });
+    expect(r.changes).toEqual([]);
+    expect(r.rendered.split("\n")[0]).toBe("No change: items 1, 2 are not done, so there is nothing to reopen.");
+  });
+
+  it("reopens only the done ones of several ids", () => {
+    const r = applyTodoChecklistAction(three, { action: "reopen", ids: [2, 3] });
+    expect(r.changes).toEqual([{ op: "status", id: "3", status: "pending" }]);
+  });
+
+  it("needs a target", () => {
+    expect(applyTodoChecklistAction(three, { action: "reopen" }).ok).toBe(false);
+  });
+});
+
+describe("todo list-management verbs not supported yet", () => {
+  it.each(["remove", "delete", "rm", "edit", "rename", "clear", "reset", "patch"])(
+    "%s is refused honestly, not healed to a near verb",
+    (verb) => {
+      const r = applyTodoChecklistAction(three, { action: verb, id: 1 });
+      expect(r.ok).toBe(false);
+      expect(r.changes).toEqual([]);
+      expect(r.rendered).toContain("cannot edit, remove or clear items yet");
+      expect(r.rendered).not.toContain("Closest valid call");
+    },
+  );
+
+  it("unknown-action teaching lists reopen", () => {
+    expect(applyTodoChecklistAction(three, { action: "frobnicate" }).rendered).toContain(
+      'Valid: add | start | done | reopen | list.',
+    );
   });
 });
 

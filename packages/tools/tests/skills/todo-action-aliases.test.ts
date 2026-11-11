@@ -33,17 +33,26 @@ describe("todo action aliases", () => {
   });
 
   it("canonical actions are not marked healed", () => {
-    for (const a of ["add", "start", "done", "list"]) {
+    for (const a of ["add", "start", "done", "reopen", "list"]) {
       expect(normalizeTodoAction(a)).toEqual({ action: a });
     }
   });
 
   it("table is closed: unknown strings still error with the exact message", () => {
-    for (const bad of ["delete", "remove", "update", "finalize", ""]) {
+    for (const bad of ["update", "finalize", ""]) {
       const r = applyTodoChecklistAction(items, { action: bad });
       expect(r.ok).toBe(false);
       expect(r.healedFrom).toBeUndefined();
-      expect(r.rendered.startsWith(`Unknown action "${bad}". Valid: add | start | done | list.\n`)).toBe(true);
+      expect(r.rendered.startsWith(`Unknown action "${bad}". Valid: add | start | done | reopen | list.\n`)).toBe(true);
+    }
+  });
+
+  it("delete/remove are refused honestly, never healed (the ledger has no remove op yet)", () => {
+    for (const bad of ["delete", "remove"]) {
+      const r = applyTodoChecklistAction(items, { action: bad });
+      expect(r.ok).toBe(false);
+      expect(r.healedFrom).toBeUndefined();
+      expect(r.rendered.startsWith("todo cannot edit, remove or clear items yet.")).toBe(true);
     }
   });
 });

@@ -262,7 +262,7 @@ export interface ShellGitReadOnlyConfig {
  * every git/gh segment only reads or matches one of `approvalCommands`.
  * Segments for other programs are left to the allow-list. Runs after
  * shell-execute's own checks (allow-list, block-list, expansion), so
- * `command` holds no `$`, backtick or `&`.
+ * `command` holds no `$`, backtick or background `&`.
  */
 export function readOnlyGitDenial(command: string, approvalCommands: readonly string[] = []): string | null {
   if (hasOutputRedirect(command)) {

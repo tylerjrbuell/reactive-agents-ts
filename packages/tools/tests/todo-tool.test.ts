@@ -110,13 +110,13 @@ describe("todo action aliases (trap heals)", () => {
     expect(r.healedTo).toBe("list");
   });
 
-  test.each(["clear", "reset"])("%s stays an error that lists the valid actions", (verb) => {
+  test.each(["clear", "reset"])("%s stays an error that says clearing is not supported yet", (verb) => {
     const s = makeSession();
     s.run({ action: "add", items: ["one"] });
     const r = s.run({ action: verb });
     expect(r.ok).toBe(false);
     expect(r.changes).toEqual([]);
-    expect(r.rendered).toContain("Valid: add | start | done | list");
+    expect(r.rendered).toContain("todo cannot edit, remove or clear items yet");
     expect(s.items()).toHaveLength(1);
   });
 });

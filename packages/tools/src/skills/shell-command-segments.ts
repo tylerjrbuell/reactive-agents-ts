@@ -6,7 +6,7 @@
 
 /**
  * Split a (potentially chained) command pipeline into segments on `&&`,
- * `||`, `;`, and `|` — but only outside quoted strings so jq filters like
+ * `||`, `;`, `|` and `|&` — but only outside quoted strings so jq filters like
  * `'.[] | .field'` are preserved.
  */
 export function splitCommandSegments(trimmed: string): string[] {
@@ -32,6 +32,13 @@ export function splitCommandSegments(trimmed: string): string[] {
 
     const outsideQuotes = !inSingleQuote && !inDoubleQuote;
     if (outsideQuotes) {
+      // `|&` pipes stdout and stderr: a pipe, so the next word starts a segment.
+      if (ch === "|" && next === "&") {
+        segments.push(current.trim());
+        current = "";
+        i += 1;
+        continue;
+      }
       if (ch === ";" || ch === "|") {
         segments.push(current.trim());
         current = "";
@@ -103,8 +110,36 @@ export function shellWords(segment: string): string[] {
 }
 
 /**
- * True when `command` has an output redirect (`>`, `>>`, `>|`, `&>`, `2>`)
- * outside quotes. An escaped `\>` is a literal character, not a redirect.
+ * True when the unquoted `&` at index `i` belongs to a redirect rather than
+ * backgrounding a command: right after `<` or `>` (fd dup such as `2>&1`,
+ * `>&2`, `<&0`), right after `|` (`|&` pipes stderr too), or right before `>`
+ * (`&>file`, `&>>file`). Every other lone `&` runs the command in the
+ * background.
+ *
+ * @example
+ * isRedirectAmpersand("make 2>&1", 7); // true
+ * isRedirectAmpersand("sleep 1 & ls", 8); // false
+ */
+export function isRedirectAmpersand(command: string, i: number): boolean {
+  const prev = i > 0 ? command[i - 1] : "";
+  return prev === "<" || prev === ">" || prev === "|" || command[i + 1] === ">";
+}
+
+/**
+ * Words of `command` that may name a file, for the sandbox path check. Splits
+ * on whitespace and on the redirect and control characters `< > & | ;`, so a
+ * glued redirect target (`2>/etc/x`, `&>../x`, `cmd>/x`) is its own word.
+ * Splitting more than sh does only adds words to check.
+ */
+export function pathCandidateTokens(command: string): string[] {
+  return command.split(/[\s<>&|;]+/).filter((token) => token !== "");
+}
+
+/**
+ * True when `command` has an output redirect (`>`, `>>`, `>|`, `&>`, `2>`,
+ * `>&file`) outside quotes. An escaped `\>` is a literal character, not a
+ * redirect. A file-descriptor dup (`2>&1`, `>&2`, `2>&-`) writes no file, so
+ * it does not count.
  */
 export function hasOutputRedirect(command: string): boolean {
   let quote: "'" | '"' | null = null;
@@ -120,7 +155,11 @@ export function hasOutputRedirect(command: string): boolean {
       continue;
     }
     if (ch === "'" || ch === '"') quote = ch;
-    else if (ch === ">") return true;
+    else if (ch === ">") {
+      const dup = /^&(?:\d+|-)(?=$|[\s|;&<>)])/.exec(command.slice(i + 1));
+      if (dup === null) return true;
+      i += dup[0].length;
+    }
   }
   return false;
 }

@@ -3,7 +3,13 @@
 // in scoped-shell-git-hardening.test.ts.
 import { describe, test, expect } from "bun:test";
 import { readOnlyGitDenial, GIT_READ_ONLY_SUBCOMMANDS } from "../../src/skills/shell-git-readonly.js";
-import { hasOutputRedirect, shellWords, splitCommandSegments } from "../../src/skills/shell-command-segments.js";
+import {
+  hasOutputRedirect,
+  isRedirectAmpersand,
+  pathCandidateTokens,
+  shellWords,
+  splitCommandSegments,
+} from "../../src/skills/shell-command-segments.js";
 import { minimalGitConfig, readGitIdentity, readOnlyGitEnv } from "../../src/skills/shell-git-env.js";
 import { buildHostShellEnv } from "../../src/skills/shell-host-process.js";
 
@@ -98,6 +104,36 @@ describe("shell-command-segments", () => {
     expect(hasOutputRedirect('git log --format="a>b"')).toBe(false);
     expect(hasOutputRedirect("git log \\> x")).toBe(false);
     expect(hasOutputRedirect("git log >> x")).toBe(true);
+  });
+
+  test("hasOutputRedirect: an fd dup writes no file, `&>`/`>&file` do", () => {
+    expect(hasOutputRedirect("git diff 2>&1 | head")).toBe(false);
+    expect(hasOutputRedirect("git log >&2")).toBe(false);
+    expect(hasOutputRedirect("git log 2>&-")).toBe(false);
+    expect(hasOutputRedirect("git log &>f")).toBe(true);
+    expect(hasOutputRedirect("git log >&f")).toBe(true);
+    expect(hasOutputRedirect("git log >&1f")).toBe(true);
+    expect(hasOutputRedirect("git log 2>&1 >f")).toBe(true);
+  });
+
+  test("readOnlyGitDenial allows `git diff 2>&1 | head` (run 01M7622DY0G1D8VEKYV2FVYZW7)", () => {
+    expect(readOnlyGitDenial("git diff HEAD~1 2>&1 | head -40")).toBeNull();
+    expect(readOnlyGitDenial("git log |& head")).toBeNull();
+    expect(readOnlyGitDenial("git log &>f")).toContain("output redirect");
+  });
+
+  test("isRedirectAmpersand: `&` after < > | or before > is a redirect, else background", () => {
+    const at = (command: string): boolean => isRedirectAmpersand(command, command.indexOf("&"));
+    for (const command of ["a 2>&1", "a >&2", "a <&0", "a &>f", "a &>>f", "a |& b"]) expect(at(command)).toBe(true);
+    for (const command of ["a &", "a & b", "a &b", "&b"]) expect(at(command)).toBe(false);
+  });
+
+  test("splitCommandSegments treats `|&` as a pipe", () => {
+    expect(splitCommandSegments("a 2>&1 |& b &>f")).toEqual(["a 2>&1", "b &>f"]);
+  });
+
+  test("pathCandidateTokens exposes glued redirect targets", () => {
+    expect(pathCandidateTokens(" a&>/x 2>../y b>c |& d")).toEqual(["a", "/x", "2", "../y", "b", "c", "d"]);
   });
 
   test("splitCommandSegments keeps quoted operators", () => {

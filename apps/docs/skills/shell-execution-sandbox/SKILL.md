@@ -164,6 +164,8 @@ The `shell-execute` built-in tool has these characteristics:
 - `shell-execute` has `requiresApproval: true` by default — in automated pipelines, register a custom handler with `requiresApproval: false` if human approval flow is not wired
 - Commands are allowlisted by **executable name only** (first word) — `git` is allowed regardless of sub-command args; `curl` is opt-in
 - `MAX_COMMAND_LENGTH` is 4,096 — very long piped commands will be rejected
+- Background `&` (`sleep 1 &`, `a & b`) is refused because it escapes the timeout. Redirects that contain `&` are allowed: `2>&1`, `>&2`, `&>file`, `&>>file` and `|&`. Every redirect target is path-checked like any other argument, so `2>/etc/x` and `&>../x` are refused
+- `$VAR`, `${...}`, `$(...)`, backticks and `<(...)` are refused; single quotes keep `$` literal (`awk '{print $1}'`)
 - Docker daemon must be running for `dockerEscalation` — check before enabling in CI
 - `rm`, `chmod`, `chown` are hard-excluded and cannot be added via `additionalCommands`
 - `maxOutputChars: 4000` truncates long output — increase for commands that produce large output (e.g., `git log`, `find` on large trees)

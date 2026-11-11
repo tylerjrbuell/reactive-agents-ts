@@ -108,10 +108,15 @@ type Args = Record<string, unknown>;
  * Drop the lines added after the legacy contract was frozen: the trailing
  * loop-closing line, the unknown-action teaching line, and the valid-ids line.
  * (The legacy `id: true` -> Number(true) -> item 1 accident is intentionally not healed.) Everything else must
- * stay byte-identical to the legacy oracle.
+ * stay byte-identical to the legacy oracle. 2026-11-11: the "No change: …" lead line of a start/done
+ * that changed nothing is also an addition (run 01M7622DY0G1D8VEKYV2FVYZW7; pinned in todo-healing.test.ts),
+ * and the unknown-action line now also lists `reopen` (pinned in todo-healing.test.ts).
  */
 function stripAdditions(rendered: string): string {
-  const lines = rendered.split("\n").filter((l) => !l.startsWith("Closest valid call:") && !l.startsWith("Valid ids:"));
+  const lines = rendered
+    .split("\n")
+    .filter((l) => !l.startsWith("Closest valid call:") && !l.startsWith("Valid ids:") && !l.startsWith("No change:"))
+    .map((l) => l.replace("Valid: add | start | done | reopen | list.", "Valid: add | start | done | list."));
   lines.pop();
   return lines.join("\n");
 }
@@ -198,8 +203,11 @@ describe("todo checklist: property", () => {
     fc.record({ action: fc.constant("add"), items: fc.string() }),
     fc.record({ action: fc.constant("add"), item: fc.string() }),
     fc.record({ action: fc.constant("add"), text: fc.string() }),
-    fc.record({ action: fc.constantFrom("start", "done"), id: idArb }),
-    fc.record({ action: fc.constantFrom("start", "done") }),
+    fc.record({ action: fc.constant("done"), id: idArb }),
+    // `start` with no id starts the first open item (deliberate divergence from the
+    // legacy oracle, which refused; pinned in todo-healing.test.ts), so start always carries an id here.
+    fc.record({ action: fc.constant("start"), id: idArb.filter((v) => v !== undefined) }),
+    fc.record({ action: fc.constant("done") }),
     fc.constant({ action: "list" }),
     fc.constant({}),
     fc.constant({ action: "frobnicate" }),
@@ -247,6 +255,7 @@ describe("todo checklist: changes contract", () => {
 // failures: models left items open and invented actions). Params/metadata unchanged.
 // 2026-11-10: `action` gained its enum (compact profiles drop descriptions;
 // trace 01M744TPCB87CHKCDPE964YBAP sent a task title as the action).
+// 2026-11-11 (owner): `reopen` action added (status back to pending).
 describe("todoTool definition is pinned", () => {
   it("matches the pinned literal", () => {
     const expected: ToolDefinition = {
@@ -254,17 +263,18 @@ describe("todoTool definition is pinned", () => {
       description:
         "Your task checklist. Plan once with todo({action:'add', items:['step 1','step 2',...]}); " +
         "set the item you are working on with todo({action:'start', id:N}). " +
-        "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open.",
+        "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open. " +
+        "Put a done item back with todo({action:'reopen', id:N}).",
       parameters: [
         {
           name: "action",
           type: "string",
-          description: "add | start | done | list",
-          enum: ["add", "start", "done", "list"],
+          description: "add | start | done | reopen | list",
+          enum: ["add", "start", "done", "reopen", "list"],
           required: true,
         },
         { name: "items", type: "array", description: "For 'add': list of step descriptions.", required: false },
-        { name: "id", type: "number", description: "For 'start'/'done': the item id to update.", required: false },
+        { name: "id", type: "number", description: "For 'start'/'done'/'reopen': the item id to update.", required: false },
       ],
       returnType: "string",
       riskLevel: "low",

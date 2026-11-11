@@ -27,7 +27,8 @@ describe("todo target healing (done/start)", () => {
   it("marks several: array, csv string, ids", () => {
     expect(changedIds({ action: "done", id: [1, 3] })).toEqual(["1", "3"]);
     expect(changedIds({ action: "done", id: "1,2" })).toEqual(["1", "2"]);
-    expect(changedIds({ action: "start", ids: [1, 2] })).toEqual(["1", "2"]);
+    // start keeps one item in progress at a time (run 01M7622DY0G1D8VEKYV2FVYZW7).
+    expect(changedIds({ action: "start", ids: [1, 2] })).toEqual(["1"]);
   });
 
   it("unknown id names valid ids; ambiguous title refuses", () => {

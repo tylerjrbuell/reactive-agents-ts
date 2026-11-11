@@ -11,7 +11,7 @@ import { sandboxDockerEnabled } from "../flags.js";
 import { capShellOutput, runHostShell, timeoutMarker } from "./shell-host-process.js";
 import { GIT_BLOCKED_RULES } from "./shell-git-guard.js";
 import { readOnlyGitDenial, type ShellGitReadOnlyConfig } from "./shell-git-readonly.js";
-import { splitCommandSegments } from "./shell-command-segments.js";
+import { isRedirectAmpersand, pathCandidateTokens, splitCommandSegments } from "./shell-command-segments.js";
 import {
   DEFAULT_ALLOWED_COMMANDS,
   OPT_IN_COMMANDS,
@@ -280,14 +280,14 @@ function detectShellExpansion(command: string): string | null {
       return "process substitution <(...)/>(...) is not supported by shell-execute";
     }
     // Backgrounding `&` — mid-string or trailing — escapes the timeout and the
-    // segment/allow-list splitter (e.g. `sleep 100 & evil`). `&&` chaining is fine.
+    // splitter (`sleep 100 & evil`). `&&` chaining is fine, and so is an `&` inside a
+    // redirect (`2>&1`, `>&2`, `&>f`, `|&`): see isRedirectAmpersand.
     if (ch === "&" && !inDouble) {
       if (next === "&") {
         i++; // consume the second '&' of a legitimate && chain
         continue;
       }
-      const prev = i > 0 ? command[i - 1] : "";
-      if (prev !== "&") {
+      if (!isRedirectAmpersand(command, i)) {
         return "background operator '&' is not supported by shell-execute (escapes the timeout)";
       }
     }
@@ -334,7 +334,7 @@ function detectUnsafePaths(command: string, sandboxDir: string): string | null {
     return "Command references home directory via ~ — outside the sandbox";
   }
 
-  for (const raw of command.split(/\s+/)) {
+  for (const raw of pathCandidateTokens(command)) {
     const token = unwrapToken(raw);
     if (!token) continue;
 

@@ -61,6 +61,10 @@ const TODO_ACTION_ALIASES: Readonly<Record<string, string>> = {
   begin: "start",
   in_progress: "start",
   working: "start",
+  undo: "reopen",
+  "re-open": "reopen",
+  re_open: "reopen",
+  uncheck: "reopen",
   show: "list",
   status: "list",
   view: "list",
@@ -105,7 +109,16 @@ const TODO_PARAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
 // start/done targets (id | ids | item | index | number | n, number|string|"1,2"|array|title)
 // are resolved by ./todo-targets.ts from the healed args.
 
-const TODO_VALID_ACTIONS = ["add", "start", "done", "list"] as const;
+const TODO_VALID_ACTIONS = ["add", "start", "done", "reopen", "list"] as const;
+
+/**
+ * List-management verbs the checklist ledger cannot express yet (its ops are
+ * `add` and `status` only). Refused with an honest note instead of being
+ * healed to the closest valid verb, which would turn "delete" into "done".
+ */
+const TODO_UNSUPPORTED_ACTIONS: ReadonlySet<string> = new Set([
+  "remove", "delete", "rm", "del", "edit", "rename", "update-text", "update_text", "clear", "reset", "patch",
+]);
 
 /**
  * Pure: map a raw `action` to its canonical form via the closed alias table
@@ -116,7 +129,9 @@ export function normalizeTodoAction(raw: string): { readonly action: string; rea
   const key = raw.trim().toLowerCase();
   const canonical = Object.prototype.hasOwnProperty.call(TODO_ACTION_ALIASES, key)
     ? TODO_ACTION_ALIASES[key]
-    : undefined;
+    : key !== raw && (TODO_VALID_ACTIONS as readonly string[]).includes(key)
+      ? key // `Done`, ` list ` — the canonical verb in another case or padding
+      : undefined;
   return canonical !== undefined ? { action: canonical, healedFrom: raw } : { action: raw };
 }
 
@@ -236,6 +251,48 @@ function applyChanges(items: readonly AdvisoryItem[], changes: readonly Checklis
   return next;
 }
 
+/**
+ * One item in progress at a time: of the requested ids, keep the one already
+ * in progress, else the first pending one, else the first requested.
+ */
+function oneToStart(items: readonly AdvisoryItem[], ids: readonly string[]): readonly string[] {
+  const statusOf = (id: string): ChecklistItemStatus | undefined => items.find((t) => t.id === id)?.status;
+  const pick = ids.find((id) => statusOf(id) === "in_progress") ?? ids.find((id) => statusOf(id) === "pending") ?? ids[0];
+  return pick === undefined ? [] : [pick];
+}
+
+/**
+ * The first line of a start/done call that changed nothing: says so and names
+ * the next concrete step, so a repeated identical call is not read as progress.
+ */
+function noChangeLine(
+  items: readonly AdvisoryItem[],
+  ids: readonly string[],
+  status: ChecklistItemStatus,
+  posture: TodoPosture,
+): string {
+  const first = ids[0];
+  if (first === undefined) return "No change: every item is done — deliver your final answer.";
+  const which = ids.length === 1 ? `item ${first} is` : `items ${ids.join(", ")} are`;
+  if (status === "in_progress") {
+    return posture === "plan"
+      ? `No change: ${which} already in progress.`
+      : `No change: ${which} already in progress — do its work now with a tool, then todo({action:"done", id:${first}}).`;
+  }
+  if (status === "pending") return `No change: ${which} already pending.`;
+  const open = items.find((t) => t.status !== "completed");
+  return (
+    `No change: ${which} already done. ` +
+    (open === undefined ? "All items are done — deliver your final answer." : `Next: todo({action:"start", id:${open.id}}).`)
+  );
+}
+
+/** The no-op lead line of a `reopen` whose targets are all still open. */
+function reopenNoChangeLine(ids: readonly string[]): string {
+  const which = ids.length === 1 ? `item ${ids[0]} is` : `items ${ids.join(", ")} are`;
+  return `No change: ${which} not done, so there is nothing to reopen.`;
+}
+
 function applyCanonicalTodoAction(
   items: readonly AdvisoryItem[],
   args: Record<string, unknown>,
@@ -298,20 +355,42 @@ function applyCanonicalTodoAction(
     }
     case "start":
     case "done":
+    case "reopen":
     case "set-status": {
-      const resolved = resolveTodoTargets(items, args);
+      // `start` with no target means "begin the next item": the first open one.
+      const resolved =
+        action === "start" && !hasTodoTargets(args) && items.length > 0
+          ? { ok: true as const, ids: items.filter((t) => t.status !== "completed").slice(0, 1).map((t) => t.id) }
+          : resolveTodoTargets(items, args);
       if (!resolved.ok) return fail(`${resolved.error}\n${renderTodoChecklist(items, posture)}`);
       const status: ChecklistItemStatus =
-        action === "set-status" ? (opts.status as ChecklistItemStatus) : action === "done" ? "completed" : "in_progress";
-      const changes: readonly ChecklistItemOp[] = resolved.ids.flatMap((id): ChecklistItemOp[] =>
-        items.find((t) => t.id === id)?.status === status ? [] : [{ op: "status", id, status }],
+        action === "set-status"
+          ? (opts.status as ChecklistItemStatus)
+          : action === "done" ? "completed" : action === "reopen" ? "pending" : "in_progress";
+      const ids = status === "in_progress" ? oneToStart(items, resolved.ids) : resolved.ids;
+      // `reopen` only puts done items back; it never demotes an item in progress.
+      const statusOf = (id: string): ChecklistItemStatus | undefined => items.find((t) => t.id === id)?.status;
+      const changes: readonly ChecklistItemOp[] = ids.flatMap((id): ChecklistItemOp[] =>
+        statusOf(id) === status || (action === "reopen" && statusOf(id) !== "completed") ? [] : [{ op: "status", id, status }],
       );
       const next = applyChanges(items, changes);
-      return { rendered: renderTodoChecklist(next, posture), ok: true, changes, finalItems: next };
+      const lead =
+        changes.length === 0
+          ? `${action === "reopen" ? reopenNoChangeLine(ids) : noChangeLine(items, ids, status, posture)}\n`
+          : ids.length < resolved.ids.length
+            ? `Started item ${ids[0]} only: work one item at a time and mark it done before starting the next.\n`
+            : "";
+      return { rendered: `${lead}${renderTodoChecklist(next, posture)}`, ok: true, changes, finalItems: next };
     }
     case "list":
       return { rendered: renderTodoChecklist(items, posture), ok: true, changes: [], finalItems: items };
     default: {
+      if (TODO_UNSUPPORTED_ACTIONS.has(action.trim().toLowerCase())) {
+        return fail(
+          `todo cannot edit, remove or clear items yet. Leave the item; if the plan changed, add the ` +
+            `corrected step with todo({action:"add", items:["..."]}) and work that instead.\n${renderTodoChecklist(items, posture)}`,
+        );
+      }
       const near = closestValid(action, TODO_VALID_ACTIONS);
       const example =
         near === "add"
@@ -320,7 +399,7 @@ function applyCanonicalTodoAction(
             ? `todo({action:"list"})`
             : `todo({action:"${near}", id:N})`;
       return fail(
-        `Unknown action "${action}". Valid: add | start | done | list.\n` +
+        `Unknown action "${action}". Valid: ${TODO_VALID_ACTIONS.join(" | ")}.\n` +
           `Closest valid call: ${example}\n${renderTodoChecklist(items, posture)}`,
       );
     }
@@ -332,12 +411,13 @@ export const todoTool: ToolDefinition = {
   description:
     "Your task checklist. Plan once with todo({action:'add', items:['step 1','step 2',...]}); " +
     "set the item you are working on with todo({action:'start', id:N}). " +
-    "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open.",
+    "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open. " +
+    "Put a done item back with todo({action:'reopen', id:N}).",
   parameters: [
     {
       name: "action",
       type: "string",
-      description: "add | start | done | list",
+      description: "add | start | done | reopen | list",
       // The value set lives in `enum`: compact profiles drop descriptions from
       // the wire, and a bare `action: string` let a model send its task title
       // as the action (trace 01M744TPCB87CHKCDPE964YBAP). Off-enum words are
@@ -355,7 +435,7 @@ export const todoTool: ToolDefinition = {
     {
       name: "id",
       type: "number",
-      description: "For 'start'/'done': the item id to update.",
+      description: "For 'start'/'done'/'reopen': the item id to update.",
       required: false,
     },
   ],
