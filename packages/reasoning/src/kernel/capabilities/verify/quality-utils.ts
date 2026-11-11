@@ -47,6 +47,34 @@ const OFFER_TO_CONTINUE_SENTENCE =
 const COURTESY_CLOSING_LINE =
   /^(?:please\s+)?(?:let\s+me\s+know|feel\s+free|hope\s+this\s+helps|i\s+hope\s+this\s+helps)\b(?![^.?!]*\bme\s+to\b)/i;
 
+/**
+ * One first-person future-intent clause with ANY verb ("Let me list the
+ * workspace.", "I'll check the files now."). Only used on a whole short output
+ * (see `isIntentOnlyOutput`), so the open verb slot stays high-precision.
+ * "Let me know …" is a courtesy and "I will be …" a state, not an intent; a
+ * colon means content follows the promise.
+ */
+const INTENT_CLAUSE =
+  /^(?:(?:and|so|now|next|then|first),?\s+)*(?:i\s+will|i['’]ll|i\s+shall|i\s+am\s+going\s+to|i['’]m\s+going\s+to|let\s+me)\s+(?!know\b|be\b)[a-z][^:]*$/i;
+
+/** Longest output the whole-output intent rule inspects. */
+const INTENT_ONLY_MAX_CHARS = 200;
+
+/**
+ * True when the WHOLE output is one or two sentences and every one is a
+ * first-person future-intent clause: the model announced its next step and
+ * delivered nothing (run 01M75SJ5SXXHSA63BKXM2R2P77 shipped "Let me list the
+ * workspace." as a succeeded answer). Lists, tables, code blocks and courtesy
+ * closings ("Let me know if you need more.") never match.
+ */
+const isIntentOnlyOutput = (trimmed: string): boolean => {
+  if (trimmed.length > INTENT_ONLY_MAX_CHARS || trimmed.includes("```")) return false;
+  if (/^\s*(?:[-*]|\d+[.)]|\|)/m.test(trimmed)) return false;
+  const sentences = trimmed.split(/(?<=[.!?…])\s+/).map((s) => s.trim()).filter(Boolean);
+  if (sentences.length === 0 || sentences.length > 2) return false;
+  return sentences.every((s) => INTENT_CLAUSE.test(s) && !COURTESY_CLOSING_LINE.test(s));
+};
+
 /** The final sentence of `line`. */
 const finalSentenceOf = (line: string): string => line.split(/(?<=[.!?…])\s+/).pop()?.trim() ?? "";
 
@@ -107,7 +135,7 @@ export function detectContinuationIntent(text: string): {
   const lastSentence = finalSentenceOf(lastLine);
   const futureActionSentence = !deliveredStructure && FUTURE_ACTION_SENTENCE.test(lastSentence);
 
-  if (futureActionSentence || TERMINAL_INTENT.some((p) => p.test(lastLine))) {
+  if (futureActionSentence || isIntentOnlyOutput(trimmed) || TERMINAL_INTENT.some((p) => p.test(lastLine))) {
     return {
       isContinuation: true,
       reason: `output ends on a continuation-intent ("${lastLine.slice(0, 80)}${lastLine.length > 80 ? "…" : ""}") rather than a delivered result`,

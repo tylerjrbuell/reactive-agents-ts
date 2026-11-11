@@ -425,8 +425,8 @@ export const executeTreeOfThought = (
             temperature: input.temperature ?? 0.8,
           }, { message: `Expansion failed at depth ${d}`, step: d });
 
-        // Thinking-safe extraction: rescues candidates trapped inside <think>
-        // (strict upgrade vs bare stripThinking).
+        // Thinking-safe: rescues candidates trapped in <think>. Not a deliverable — candidates
+        // only steer Phase 2; the answer is Phase 2's kernel (thinking-not-deliverable (d)).
         const candidates = parseCandidates(
           extractThinkingSafeContent(expansionResponse).content,
           breadth,

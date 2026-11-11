@@ -60,6 +60,23 @@ describe("detectContinuationIntent — terminated future-action sentence (gemma4
   });
 });
 
+describe("detectContinuationIntent — whole output is only an intent (run 01M75SJ5SXXHSA63BKXM2R2P77)", () => {
+  it("flags a 1-2 sentence output made only of first-person future-intent clauses", () => {
+    expect(detectContinuationIntent("Let me list the workspace.").isContinuation).toBe(true);
+    expect(detectContinuationIntent("I'll check the files now.").isContinuation).toBe(true);
+    expect(detectContinuationIntent("Let me open the config. Then I will inspect the logs.").isContinuation).toBe(true);
+  });
+
+  it("does not flag delivered answers, courtesy closings, or structured content", () => {
+    expect(
+      detectContinuationIntent("The launch code is 7741. Let me know if you need more.").isContinuation,
+    ).toBe(false);
+    expect(detectContinuationIntent("Let me know if you need more.").isContinuation).toBe(false);
+    expect(detectContinuationIntent("The build is green.").isContinuation).toBe(false);
+    expect(detectContinuationIntent("I'll explain:\n- step one\n- step two").isContinuation).toBe(false);
+  });
+});
+
 describe("isSatisfied", () => {
   it("returns true for SATISFIED: prefix", () => {
     expect(isSatisfied("SATISFIED: The response is complete and accurate.")).toBe(true);

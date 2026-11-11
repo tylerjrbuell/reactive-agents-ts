@@ -18,12 +18,15 @@
 //
 // RED-ON-CUT (shown during the mission, then restored): route single-analysis.ts
 // back to `extractThinkingSafeContent` → (b) fails (output === the thinking);
-// drop `strategy:` from the planner call in plan-execute.ts → (c) fails.
+// drop `strategy:` from the planner call in plan-execute.ts → (c) fails;
+// make tree-of-thought return its best candidate when Phase 2 has no output
+// → (d) fails (output === the thinking-derived candidate).
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
 import { LLMService, TestLLMService } from "@reactive-agents/llm-provider";
 import { executePlanExecute } from "../../src/strategies/plan-execute.js";
+import { executeTreeOfThought } from "../../src/strategies/tree-of-thought.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 import { extractDeliverableContent } from "../../src/kernel/utils/stream-parser.js";
@@ -107,5 +110,39 @@ describe("model thinking never becomes the deliverable", () => {
       ),
     );
     expect([...strategies]).toEqual(["plan-execute-reflect"]);
+  }, 20000);
+
+  it("(d) tree-of-thought: thinking-only candidates and execution do not ship thinking as the answer", async () => {
+    // ToT's expansion read rescues candidates from <think> (value parsing: they
+    // only steer Phase 2 as "Selected Approach"). The answer is always Phase 2's
+    // react kernel; its thinking-only turn must not become a succeeded output.
+    const candidateThinking =
+      "1. Let me check the workspace for notes.txt\n2. Let me read notes.txt directly";
+    const llm = TestLLMService([
+      { match: "Generate exactly", text: `<think>${candidateThinking}</think>` },
+      { match: "Rate each", text: "1: 0.8\n2: 0.7" },
+      { match: "Selected Approach", text: "<think>The user wants me to read the notes. Let me check the workspace.</think>" },
+    ]);
+    const result = await Effect.runPromise(
+      provideTestEnvelope(
+        executeTreeOfThought({
+          taskDescription: "Read notes.txt in the workspace and reply with the launch code only.",
+          taskType: "query",
+          memoryContext: "",
+          availableTools: [] as string[],
+          config: {
+            ...defaultReasoningConfig,
+            strategies: {
+              ...defaultReasoningConfig.strategies,
+              treeOfThought: { breadth: 2, depth: 1, pruningThreshold: 0.3, skipBfsForTrivial: false },
+            },
+          },
+        }).pipe(Effect.provide(Layer.succeed(LLMService, llm))),
+      ),
+    );
+    const output = typeof result.output === "string" ? result.output : "";
+    expect(output).not.toContain("Let me check the workspace");
+    expect(output).not.toContain("The user wants me");
+    expect(result.status).not.toBe("completed");
   }, 20000);
 });

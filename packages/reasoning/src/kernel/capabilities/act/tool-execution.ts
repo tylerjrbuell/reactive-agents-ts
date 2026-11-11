@@ -900,6 +900,8 @@ export function extractObservationFacts(
       ...(traceContext ? { traceContext } : {}),
     });
 
+    // Not a deliverable: a fact digest the model reads as tool context, so a
+    // list rescued from <think> is still useful here (deliverables use extractDeliverableContent).
     const safe = extractThinkingSafeContent(response);
     const extracted = safe.content.trim();
 
