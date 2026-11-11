@@ -21,10 +21,19 @@ export function traceDirs(): string[] {
  * or the run predates it).
  */
 export function readRunTraceFile(runId: string, dirs: readonly string[] = traceDirs()): string | undefined {
+  const file = findRunTraceFile(runId, dirs);
+  return file === undefined ? undefined : readFileSync(file, "utf8");
+}
+
+/**
+ * Path of a run's framework trace file (`<dir>/<runId>.jsonl`, first of `dirs` that has it),
+ * or `undefined` when the run id is malformed or no trace file exists.
+ */
+export function findRunTraceFile(runId: string, dirs: readonly string[] = traceDirs()): string | undefined {
   if (!SAFE_RUN_ID.test(runId)) return undefined;
   for (const dir of dirs) {
     const file = join(dir, `${runId}.jsonl`);
-    if (existsSync(file)) return readFileSync(file, "utf8");
+    if (existsSync(file)) return file;
   }
   return undefined;
 }

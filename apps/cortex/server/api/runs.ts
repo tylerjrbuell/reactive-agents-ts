@@ -12,6 +12,7 @@ import {
 import { parseVariableDefs } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
 import { readRunTraceFile } from "../services/run-trace-file.js";
+import { makeRunCauseReader, type RunCauseReader } from "../services/run-cause.js";
 import { checkWorkspaceDir } from "../services/workspace-dir.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
 import { approvalPolicyOf } from "../services/approval-policy.js";
@@ -49,6 +50,7 @@ function pickTierModels(
 export const runsRouter = (
   storeLayer: Layer.Layer<CortexStoreService>,
   runnerLayer: Layer.Layer<CortexRunnerService>,
+  causeReader: RunCauseReader = makeRunCauseReader(),
 ) =>
   new Elysia({ prefix: "/api/runs" })
     .post(
@@ -442,6 +444,16 @@ export const runsRouter = (
       return new Response(events.map((e) => JSON.stringify(e)).join("\n") + "\n", {
         headers: { ...headers, "x-trace-source": "cortex-events" },
       });
+    })
+    // Why the run ended: the framework's trace diagnosis (`rax-diagnose cause`) over the
+    // tracer JSONL, cached per run. `{ available: false }` when the run has no trace file.
+    .get("/:runId/cause", async ({ params, set }) => {
+      try {
+        return await Effect.runPromise(causeReader.causeOf(params.runId));
+      } catch (e) {
+        set.status = 500;
+        return { error: String(e) };
+      }
     })
     .get("/:runId", async ({ params, set }) => {
       const program = Effect.gen(function* () {

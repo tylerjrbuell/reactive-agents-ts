@@ -16,6 +16,7 @@
   import { DEFAULT_VISIBLE, filterRows, countByCategory, type TimelineCategory } from "../stores/timeline-filter.js";
   import type { TimelineGroup } from "../stores/timeline-store.js";
   import { tabId, tabPanelId } from "$lib/tablist.js";
+  import { untrack } from "svelte";
 
   interface Props {
     frame: CortexTraceFrame | null;
@@ -31,6 +32,8 @@
     autoOpenFinal?: boolean;
     /** Inside another surface (the Inspector's run block): no border, radius or fill of its own. */
     embedded?: boolean;
+    /** Open and scroll to this loop's row (a new object each request, so the same loop can be focused again). */
+    focus?: { readonly loop: number } | null;
   }
 
   // Default `[]` alone is inferred as `never[]` and breaks element typing in `{#each}`.
@@ -44,7 +47,10 @@
     bounded = false,
     autoOpenFinal = true,
     embedded = false,
+    focus = null,
   }: Props = $props();
+
+  let panelEl = $state<HTMLElement | null>(null);
 
   const uid = $props.id();
   const ID = `${uid}-trace`;
@@ -88,13 +94,30 @@
     }
   });
 
+  // A focus request (the run view's "Why it ended" step links): show Loops, open the row, bring it into view.
+  $effect(() => {
+    if (!focus) return;
+    const loop = focus.loop;
+    // Only a new request re-runs this: rows and expansion are read untracked, so toggling a row never scrolls.
+    untrack(() => {
+      const idx = traceRows.findIndex((r) => r.kind !== "final" && r.iteration === loop);
+      if (idx < 0) return;
+      view = "loops";
+      if (!expandedRows.includes(idx)) expandedRows = [...expandedRows, idx];
+    });
+    queueMicrotask(() => {
+      const reduce = typeof matchMedia === "function" && (matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "reduce");
+      panelEl?.querySelector(`[data-loop="${loop}"]`)?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+    });
+  });
+
   const tabs = $derived([
     { id: "loops", label: "Loops", count: traceRows.filter((r) => r.kind !== "final").length },
     { id: "timeline", label: "Timeline", count: allRows.length },
   ]);
 </script>
 
-<section class="trace" class:bounded class:embedded aria-label="Trace">
+<section class="trace" class:bounded class:embedded aria-label="Trace" bind:this={panelEl}>
   <header class="th">
     <h2>Trace</h2>
     <span class="hint">{view === "loops" ? "one row per recorded kernel loop" : "every event, by loop"}</span>

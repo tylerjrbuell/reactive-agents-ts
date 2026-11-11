@@ -118,6 +118,8 @@ One wrapping line: duration, tokens (input / output on hover), cost, steps, a lo
 
 The **Answer** panel shows the final answer as prose (long answers open as a preview with **Show all**). While the run streams it shows the output so far. A run that did not succeed opens with a banner that says how it ended: failed with its cause, abstained with its reason and what was missing, or unfinished with what was left.
 
+**Why it ended** runs the framework's trace diagnosis over the finished run, the same engine as `rax-diagnose cause` (`analyzeCause` and `attributeFailure` from `@reactive-agents/trace`). It shows the cause in plain words with its id (`tool-failure/all-calls-failed`) and how sure the trace is, who the trace says is at fault (harness, model, environment, or cannot tell), and the decisive steps. A step in a recorded loop opens that loop's row in the trace below. When the verdict is not decisive, the card lists the trace signals that would settle it. The card opens by itself for a failed, abstained, partial or stopped run and stays collapsed on a success. A run with no trace file (tracing off) says so.
+
 The **Trace** panel is a step-debugger for the agent's reasoning, with two tabs:
 
 -   **Loops** — one row per kernel loop (its reasoning, the tools it called, tokens, time and η), then the final answer. A row expands to the reasoning, action, tool result, raw model response and message thread.

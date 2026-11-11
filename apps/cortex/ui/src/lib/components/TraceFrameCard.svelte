@@ -58,7 +58,7 @@
   </section>
 {/snippet}
 
-<article class="frame" class:final={isFinal} class:selected>
+<article class="frame" class:final={isFinal} class:selected data-loop={isFinal ? undefined : f.iteration}>
   <button type="button" class="row" aria-expanded={expanded} onclick={onToggle}>
     <span class="lbl">{isFinal ? "Answer" : `Loop ${f.iteration}`}</span>
     <span class="mid">

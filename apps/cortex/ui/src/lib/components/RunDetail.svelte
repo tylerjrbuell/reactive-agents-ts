@@ -18,6 +18,8 @@
   import SkillActivationRow from "$lib/components/SkillActivationRow.svelte";
   import { runSkillsFromLive } from "$lib/skill-row.js";
   import RunEndingBanner from "$lib/components/RunEndingBanner.svelte";
+  import RunCauseCard from "$lib/components/run/RunCauseCard.svelte";
+  import { causeOpenByDefault } from "$lib/run-cause.js";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import RunFinalDeliverable from "$lib/components/RunFinalDeliverable.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
@@ -179,6 +181,14 @@
     selectedIteration === null ? ($traceStore[$traceStore.length - 1] ?? null) : ($traceStore.find((f) => f.iteration === selectedIteration) ?? null),
   );
   let tab = $state<InspectorTabId>("summary");
+  // "Why it ended" step links: select the loop and ask the trace to open and show its row.
+  let traceFocus = $state<{ loop: number } | null>(null);
+  const traceLoops = $derived(new Set($traceStore.filter((f) => f.kind !== "final").map((f) => f.iteration)));
+  function focusLoop(loop: number) {
+    selectedIteration = loop;
+    signalStore.selectIteration(loop);
+    traceFocus = { loop };
+  }
 
   // ── Actions ────────────────────────────────────────────────────────────
   let openingChat = $state(false);
@@ -434,8 +444,15 @@
         structuredObject={$runStore.structuredObject}
         structuredError={$runStore.structuredError}
       />
+      <RunCauseCard
+        {runId}
+        settled={isRunSettled($runStore.status)}
+        defaultOpen={causeOpenByDefault($runStore.status, ending?.ending)}
+        loops={traceLoops}
+        onSelectLoop={focusLoop}
+      />
       <!-- The Answer panel above shows the final answer, so the trace does not open it again. -->
-      <TracePanel autoOpenFinal={false} frames={$traceStore} timeline={$timelineStore} status={$runStore.status} streamText={$runStore.streamText} frame={selectedFrame} />
+      <TracePanel autoOpenFinal={false} frames={$traceStore} timeline={$timelineStore} status={$runStore.status} streamText={$runStore.streamText} frame={selectedFrame} focus={traceFocus} />
     </div>
     <RunInspector
       bind:tab
