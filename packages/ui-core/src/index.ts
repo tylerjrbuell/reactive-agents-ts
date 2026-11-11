@@ -113,6 +113,19 @@ export {
   type ThroughputSample,
   type Throughput,
 } from "./state/throughput.js";
+export {
+  skillActivationVia,
+  skillViaLabel,
+  runSkillsOf,
+  runSkillsRecordOf,
+  skillActivationOf,
+  foldRunSkills,
+  type SkillActivationVia,
+  type SkillActivationLike,
+  type RunSkillsRecordLike,
+  type SkillActivationView,
+  type RunSkillsView,
+} from "./state/skill-activations.js";
 export { type UiNode, isUiNode, uiTreeSchema, reconcileUiTree } from "./render/tree.js";
 export { type InboxRun, fetchInbox } from "./inbox/controller.js";
 export {
