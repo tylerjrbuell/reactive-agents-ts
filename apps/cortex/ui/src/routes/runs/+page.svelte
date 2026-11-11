@@ -30,6 +30,9 @@
     type RunSort,
     type RunStatusFilter,
   } from "$lib/runs-table.js";
+  import { waitingRunsOf, withWaitingStatus } from "$lib/waiting-on-you.js";
+  import { pendingApprovals } from "$lib/stores/approval-watcher.js";
+  import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
 
   let runs = $state<readonly RunRow[]>([]);
   let loading = $state(true);
@@ -142,9 +145,12 @@
     if (clock) clearInterval(clock);
   });
 
-  const view = $derived(sortRuns(filterRuns(runs, search, status), sort));
+  // A run paused on an approval or a question publishes no terminal event, so
+  // its stored status stays `live`: show it as "Waiting on you", not Running.
+  const shown = $derived(withWaitingStatus(runs, waitingRunsOf(runs, $pendingApprovals, $pendingInteractions)));
+  const view = $derived(sortRuns(filterRuns(shown, search, status), sort));
   const groups = $derived(groupRuns(view, pinned));
-  const counts = $derived(statusCounts(filterRuns(runs, search, "all")));
+  const counts = $derived(statusCounts(filterRuns(shown, search, "all")));
   const totals = $derived(runTotals(view));
   const empty = $derived(!loading && !error && runs.length === 0);
 </script>

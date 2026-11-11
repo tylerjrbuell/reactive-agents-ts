@@ -5,7 +5,16 @@
   import { toast } from "$lib/stores/toast-store.js";
   import type { AgentConfig } from "$lib/types/agent-config.js";
   import { SCHEDULE_PRESETS, relativeTime, type BuilderAgentConfig } from "$lib/lab-builder.js";
-  import type { GatewayAgentsStore, GatewayRow, SavedAgentsUi } from "$lib/stores/gateway-agents-store.js";
+  import { savedAgentStatusOf, type GatewayAgentsStore, type GatewayRow, type SavedAgentsUi } from "$lib/stores/gateway-agents-store.js";
+  import { formatCost, formatTokens } from "@reactive-agents/ui-core";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Chip from "$lib/components/kit/Chip.svelte";
+  import EmptyState from "$lib/components/kit/EmptyState.svelte";
+  import Field from "$lib/components/kit/Field.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Input from "$lib/components/kit/Input.svelte";
 
   interface Props {
     store: GatewayAgentsStore;
@@ -93,267 +102,204 @@
   }
 </script>
 
-    <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-    {#if ui.showForm}
-      <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4 sm:px-6 sm:pb-10 sm:pt-5">
-        <div class="mx-auto w-full max-w-5xl space-y-5 xl:max-w-6xl 2xl:max-w-7xl">
-          <div class="flex shrink-0 items-center justify-between gap-3">
-            <h2 class="font-headline text-base font-semibold text-slate-900 dark:text-on-surface">
-              {ui.editingAgent
-                ? (ui.formAgentType === "gateway" ? "Edit Gateway Agent" : "Edit Ad-hoc Agent")
-                : "New Gateway Agent"}
-            </h2>
-            <button type="button" onclick={() => (ui.showForm = false)}
-              class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-primary"
-              aria-label="Close form"
-              >close</button>
-          </div>
+<div class="saved">
+{#if ui.showForm}
+  <div class="form-wrap">
+    <div class="form-h">
+      <h2>
+        {ui.editingAgent
+          ? (ui.formAgentType === "gateway" ? "Edit gateway agent" : "Edit on-demand agent")
+          : "New gateway agent"}
+      </h2>
+      <IconButton icon="x" label="Close the form" onclick={() => (ui.showForm = false)} />
+    </div>
 
-          <div class="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)] lg:items-start lg:gap-8">
-            <aside
-              class="flex min-h-0 min-w-0 flex-col gap-4 lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100dvh-7rem)]"
-            >
-              <div class="space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-0.5">
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                  <div class={ui.formAgentType === "gateway" ? "" : "sm:col-span-2 lg:col-span-1"}>
-                    <label for="gateway-agent-name" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Name *</label>
-                    <input id="gateway-agent-name" bind:value={ui.formName} placeholder="my-gateway-agent"
-                      class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
-                  </div>
-                  {#if ui.formAgentType === "gateway"}
-                    <div class="sm:col-span-2 lg:col-span-1">
-                      <label for="gateway-agent-schedule" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">
-                        Schedule <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/50">(preset or cron, blank = manual)</span>
-                      </label>
-                      <div class="mb-1.5 flex flex-wrap gap-1">
-                        {#each SCHEDULE_PRESETS as preset}
-                          <button type="button"
-                            onclick={() => (ui.formSchedule = preset.cron)}
-                            class="cursor-pointer rounded border px-1.5 py-0.5 font-mono text-[8px] transition-colors
-                                   {ui.formSchedule === preset.cron
-                              ? 'border-primary/45 bg-violet-100/90 text-violet-900 dark:border-primary/50 dark:bg-primary/[0.18] dark:text-primary'
-                              : 'border-[var(--cortex-border)] text-slate-500 hover:border-primary/35 hover:text-primary dark:border-white/10 dark:text-on-surface-variant dark:hover:border-primary/40 dark:hover:text-primary'}">
-                            {preset.label}
-                          </button>
-                        {/each}
-                        {#if ui.formSchedule && !SCHEDULE_PRESETS.some(p => p.cron === ui.formSchedule)}
-                          <span class="self-center font-mono text-[8px] text-slate-400 dark:text-on-surface-variant/45">custom:</span>
-                        {/if}
-                      </div>
-                      <input id="gateway-agent-schedule" bind:value={ui.formSchedule} placeholder="*/5 * * * *  or leave blank for manual"
-                        class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
-                      {#if ui.formSchedule}
-                        <p class="mt-1 font-mono text-[9px] text-cyan-800 dark:text-secondary/80">
-                          Agent process will start immediately and fire on this schedule.
-                        </p>
-                      {:else}
-                        <p class="mt-1 font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/60">
-                          No schedule — use "Trigger Now" to run manually.
-                        </p>
-                      {/if}
-                    </div>
-                  {:else}
-                    <div class="flex flex-col justify-end pb-2 sm:col-span-2 lg:col-span-1">
-                      <p class="font-mono text-[9px] text-slate-600 dark:text-on-surface-variant/70">
-                        Ad-hoc agents run on demand only (Trigger Now or API). No schedule.
-                      </p>
-                    </div>
-                  {/if}
-                </div>
-
-                <div>
-                  <div class="mb-1.5 flex items-end justify-between gap-2">
-                    <label for="gateway-edit-prompt" class="block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">
-                      Prompt <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/50">(default task — same as Builder tab)</span>
-                    </label>
-                    <PromptPickerButton
-                      types={["task", "snippet"]}
-                      defaultSaveType="task"
-                      placement="down"
-                      title="Insert a saved prompt"
-                      onSelect={(body) => {
-                        ui.formConfig = { ...ui.formConfig, prompt: ui.formConfig.prompt ? `${ui.formConfig.prompt}\n${body}` : body };
-                      }}
-                    />
-                  </div>
-                  <HighlightedField
-                    multiline
-                    id="gateway-edit-prompt"
-                    value={ui.formConfig.prompt}
-                    oninput={(e) => (ui.formConfig.prompt = (e.currentTarget as HTMLTextAreaElement).value)}
-                    placeholder="Describe what this agent should do when triggered or on schedule…"
-                    rows={5}
-                    frameClass="rounded-lg border border-[var(--cortex-border)] bg-white shadow-sm transition-colors focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus-within:border-secondary/55 dark:focus-within:ring-secondary/20"
-                    textClass="w-full resize-y bg-transparent px-4 py-3 font-mono text-sm leading-5 text-slate-900 outline-none placeholder:text-slate-400 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 min-h-[7.5rem] lg:min-h-[11rem]"
-                  />
-                  <p class="mt-1 font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/65">
-                    Model-level instructions live in <span class="text-slate-700 dark:text-on-surface/80">Inference → System Prompt</span> in the panel on the right.
-                  </p>
-                </div>
-              </div>
-
-              <div
-                class="flex shrink-0 flex-col gap-2 border-t border-[var(--cortex-border)] pt-4 dark:border-white/10"
-              >
-                <div class="flex flex-wrap justify-end gap-2">
-                  <button type="button" onclick={() => (ui.showForm = false)}
-                    class="cursor-pointer rounded border border-[var(--cortex-border)] bg-transparent px-4 py-2 font-mono text-[10px] uppercase text-slate-600 transition-colors hover:border-primary/35 hover:text-primary dark:border-white/10 dark:text-on-surface-variant dark:hover:text-on-surface">
-                    Cancel</button>
-                  <button type="button" disabled={ui.formSaving} onclick={saveAgent}
-                    class="cursor-pointer rounded border-0 px-6 py-2 font-mono text-[10px] uppercase text-white shadow-[0_0_18px_rgba(139,92,246,0.35)] transition-all hover:brightness-110 disabled:opacity-40 dark:shadow-[0_0_28px_rgba(139,92,246,0.4)]"
-                    style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">
-                    {ui.formSaving ? "Saving…" : ui.editingAgent ? "Save Changes" : "Create Agent"}
-                  </button>
-                </div>
-              </div>
-            </aside>
-
-            <div class="min-w-0">
-              <AgentConfigPanel bind:config={ui.formConfig} />
+    <div class="form-grid">
+      <aside class="form-side">
+        <Field id="gateway-agent-name" label="Name">
+          <Input id="gateway-agent-name" bind:value={ui.formName} mono placeholder="my-gateway-agent" />
+        </Field>
+        {#if ui.formAgentType === "gateway"}
+          <div class="sched">
+            <Field id="gateway-agent-schedule" label="Schedule" hint={ui.formSchedule ? "The process starts now and runs on this schedule." : "No schedule: use Run to start it by hand."}>
+              <Input id="gateway-agent-schedule" bind:value={ui.formSchedule} mono placeholder="*/5 * * * * (cron), or blank" describedBy="gateway-agent-schedule-hint" />
+            </Field>
+            <div class="presets" role="group" aria-label="Schedule presets">
+              {#each SCHEDULE_PRESETS as preset (preset.cron)}
+                <Chip on={ui.formSchedule === preset.cron} onclick={() => (ui.formSchedule = preset.cron)}>{preset.label}</Chip>
+              {/each}
             </div>
-          </div>
-        </div>
-      </div>
-    {:else}
-      <div class="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-5 pt-2 sm:px-5 sm:pb-6 sm:pt-3">
-        <div class="mb-3 flex min-w-0 flex-shrink-0 flex-wrap items-center justify-between gap-2 sm:gap-3">
-          <div class="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-            <p class="font-mono text-[10px] text-slate-600 dark:text-on-surface-variant/85">
-              {gatewayAgents.length} agent{gatewayAgents.length !== 1 ? "s" : ""}
-            </p>
-            {#if gatewayAgents.length > 0}
-              <label
-                class="flex cursor-pointer select-none items-center gap-1.5 rounded-md border border-transparent px-1 py-0.5 font-mono text-[9px] uppercase tracking-wide text-slate-600 transition-colors hover:border-primary/25 hover:text-primary dark:text-on-surface-variant/90 dark:hover:border-primary/35 dark:hover:text-primary"
-              >
-                <input
-                  bind:this={gatewaySelectAllEl}
-                  type="checkbox"
-                  class="accent-primary h-3.5 w-3.5 shrink-0 rounded border-[var(--cortex-border)]"
-                  checked={gatewayAllSelected()}
-                  onchange={onGatewaySelectAllChange}
-                />
-                Select all
-              </label>
-            {/if}
-            {#if ui.selected.size > 0}
-              <button
-                type="button"
-                onclick={() => onDeleteMany(selectedGatewayAgents())}
-                class="cursor-pointer rounded-md border border-error/35 bg-error/10 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wide text-error transition-colors hover:bg-error/20 dark:border-error/40 dark:bg-error/15 dark:hover:bg-error/25"
-              >
-                Delete selected ({ui.selected.size})
-              </button>
-            {/if}
-          </div>
-          <button type="button" onclick={onNewAgent}
-            class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded border-0 px-4 py-1.5 font-mono text-[10px] uppercase text-white shadow-[0_0_18px_rgba(139,92,246,0.35)] transition-all hover:brightness-110 dark:shadow-[0_0_28px_rgba(139,92,246,0.4),0_0_20px_rgba(6,182,212,0.12)]"
-            style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">
-            <span class="material-symbols-outlined text-sm">add</span> New Agent
-          </button>
-        </div>
-        <div class="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-0.5">
-        {#if gatewayLoading}
-          <div class="flex items-center justify-center h-20">
-            <span class="material-symbols-outlined text-primary animate-spin">progress_activity</span>
-          </div>
-        {:else if gatewayAgents.length === 0}
-          <div class="py-12 text-center">
-            <span class="material-symbols-outlined mb-3 block text-3xl text-slate-300 dark:text-primary/35">hub</span>
-            <p class="font-mono text-xs text-slate-600 dark:text-on-surface-variant/80">No agents yet.</p>
-            <p class="mt-1 font-mono text-[10px] text-slate-500 dark:text-on-surface-variant/60">
-              Create gateway or ad-hoc saved agents from Builder.
-            </p>
           </div>
         {:else}
-          {#each gatewayAgents as agent (agent.agentId)}
-            <div
-              class="rounded-lg border border-[var(--cortex-border)] bg-white/90 p-4 shadow-sm transition-shadow hover:shadow-md dark:border-white/[0.1] dark:bg-surface-container-high/35 dark:shadow-[0_0_0_1px_rgba(139,92,246,0.12),0_8px_32px_-20px_rgba(0,0,0,0.5)] dark:hover:shadow-[0_0_0_1px_rgba(139,92,246,0.22),0_12px_40px_-16px_rgba(6,182,212,0.08)]"
-            >
-              <div class="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  class="accent-primary mt-1 h-3.5 w-3.5 shrink-0 rounded border-[var(--cortex-border)]"
-                  checked={ui.selected.has(agent.agentId)}
-                  onchange={(e) =>
-                    toggleGatewayAgentSelected(
-                      agent.agentId,
-                      (e.currentTarget as HTMLInputElement).checked,
-                    )}
-                  aria-label={`Select ${agent.name}`}
-                />
-                <div class="flex min-w-0 flex-1 items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <div class="mb-1 flex flex-wrap items-center gap-2">
-                    <span class="font-mono text-[12px] font-semibold text-slate-900 dark:text-on-surface">{agent.name}</span>
-                    <span class="rounded border px-1.5 py-0.5 font-mono text-[9px]
-                                 {agent.agentType === 'gateway'
-                        ? 'border-primary/40 bg-primary/10 text-violet-800 dark:border-primary/45 dark:bg-primary/[0.15] dark:text-primary'
-                        : 'border-[var(--cortex-border)] bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-surface-container-high/50 dark:text-on-surface-variant/90'}">
-                      {agent.agentType === "gateway" ? "persistent" : "ad-hoc"}
-                    </span>
-                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded border shadow-sm
-                                 {agent.status === 'active'
-                      ? 'text-cyan-800 dark:text-cyan-200 border-cyan-500/40 dark:border-cyan-500/45 bg-cyan-500/10 dark:bg-cyan-950/45 dark:shadow-none'
-                      : agent.status === 'paused'
-                        ? 'text-amber-950 dark:text-amber-500/95 border-amber-500/45 dark:border-amber-700/50 bg-amber-100/90 dark:bg-amber-950/50 dark:shadow-none'
-                        : agent.status === 'stopped'
-                          ? 'text-slate-700 dark:text-slate-300 border-slate-400/45 dark:border-slate-600/50 bg-slate-100/90 dark:bg-slate-900/55 dark:shadow-none'
-                          : 'text-red-800 dark:text-red-200 border-red-400/45 dark:border-red-500/45 bg-red-500/10 dark:bg-red-950/40 dark:shadow-none'}">
-                      {agent.status}</span>
-                    {#if agent.schedule}
-                      <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[9px] text-slate-600 dark:bg-surface-container-high/55 dark:text-secondary/90">⏰ {agent.schedule}</span>
-                    {/if}
-                  </div>
-                  <div class="flex flex-wrap items-center gap-2 font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/75">
-                    <span>{agent.config?.provider ?? "?"}/{agent.config?.model || "default"}</span>
-                    <span>·</span><span>{agent.config?.strategy ?? "reactive"}</span>
-                    <span>·</span><span>{agent.runCount} runs</span>
-                    {#if agent.lastRunAt}<span>· last {relativeTime(agent.lastRunAt)}</span>{/if}
-                  </div>
-                  {#if agentStats[agent.agentId] && agentStats[agent.agentId].runCount > 0}
-                    {@const s = agentStats[agent.agentId]}
-                    <div class="flex gap-3 font-mono text-[9px] text-outline mt-1 tabular-nums">
-                      <span>{Math.round(s.successRate * 100)}% ok</span>
-                      <span>{Math.round(s.avgTokens).toLocaleString()} avg tok</span>
-                      {#if s.totalCostUsd > 0}<span>${(s.totalCostUsd * 100).toFixed(2)}¢ total</span>{/if}
-                    </div>
-                  {/if}
-                </div>
-                <div class="flex items-center gap-1 flex-shrink-0">
-                  <!-- Run: gateway (manual fire vs cron) and ad-hoc (on-demand saved config) -->
-                  <button type="button" onclick={() => onTrigger(agent)}
-                    disabled={ui.triggeringAgent === agent.agentId || (agent.agentType === "gateway" && !!agent.processRunning)}
-                    class="cursor-pointer rounded border border-primary/40 bg-primary/[0.08] px-2 py-1 font-mono text-[9px] text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-40 dark:border-primary/50 dark:bg-primary/[0.14] dark:text-primary dark:hover:bg-primary/[0.22]"
-                    title={agent.agentType === "gateway" ? "Run now (ignores schedule)" : "Run now using saved config"}>
-                    {ui.triggeringAgent === agent.agentId ? "…" : "▶ Run"}
-                  </button>
-                  <button type="button" onclick={() => onUseInBuilder(agent)}
-                    class="cursor-pointer rounded border border-[var(--cortex-border)] bg-transparent px-2 py-1 font-mono text-[9px] text-slate-600 transition-colors hover:border-primary/35 hover:text-primary dark:border-white/10 dark:text-on-surface-variant dark:hover:border-secondary/40 dark:hover:text-secondary"
-                    title="Copy this agent config to Builder">
-                    Use in Builder
-                  </button>
-                  {#if agent.agentType === "gateway"}
-                    <button type="button" onclick={() => toggleStatus(agent)}
-                      class="text-[9px] font-mono px-2 py-1 rounded border cursor-pointer bg-transparent transition-colors
-                             {agent.status==='active' ? 'border-tertiary/30 text-tertiary hover:bg-tertiary/10' : 'border-secondary/30 text-secondary hover:bg-secondary/10'}">
-                      {agent.status==="active" ? "Pause" : "Activate"}</button>
-                  {/if}
-                  <button type="button" onclick={() => openEdit(agent)}
-                    class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-1 text-sm text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-primary"
-                    title="Edit agent">edit</button>
-                  <button type="button" onclick={() => onExport({ config: agent.config, name: agent.name })}
-                    class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-1 text-sm text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-primary"
-                    title="Export agent (TS / JSON)">ios_share</button>
-                  <button type="button" onclick={() => onDelete(agent)}
-                    class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-1 text-sm text-slate-500 hover:text-error dark:text-on-surface-variant dark:hover:text-error"
-                    title="Delete agent">delete</button>
-                </div>
-                </div>
-              </div>
-            </div>
-          {/each}
+          <p class="note">On-demand agents run only when you start them (Run or the API); they have no schedule.</p>
         {/if}
+
+        <div class="task">
+          <div class="task-h">
+            <label for="gateway-edit-prompt">Task</label>
+            <PromptPickerButton
+              types={["task", "snippet"]}
+              defaultSaveType="task"
+              placement="down"
+              title="Insert a saved prompt"
+              onSelect={(body) => {
+                ui.formConfig = { ...ui.formConfig, prompt: ui.formConfig.prompt ? `${ui.formConfig.prompt}\n${body}` : body };
+              }}
+            />
+          </div>
+          <HighlightedField
+            multiline
+            id="gateway-edit-prompt"
+            value={ui.formConfig.prompt}
+            oninput={(e) => (ui.formConfig.prompt = (e.currentTarget as HTMLTextAreaElement).value)}
+            placeholder="What this agent does when it is started or its schedule fires"
+            rows={6}
+            frameClass="ci-frame"
+            textClass="ci-text task-text resize-y"
+          />
+          <p class="note">Model instructions live in the settings on the right (Model · System prompt).</p>
         </div>
+
+        <div class="form-actions">
+          <Button variant="ghost" onclick={() => (ui.showForm = false)}>Cancel</Button>
+          <Button variant="primary" icon="check" disabled={ui.formSaving} onclick={saveAgent}>
+            {ui.formSaving ? "Saving…" : ui.editingAgent ? "Save changes" : "Create agent"}
+          </Button>
+        </div>
+      </aside>
+
+      <div class="min-w-0">
+        <AgentConfigPanel bind:config={ui.formConfig} />
       </div>
+    </div>
+  </div>
+{:else}
+  <div class="list-wrap">
+    <div class="toolbar">
+      <span class="count">{gatewayAgents.length} agent{gatewayAgents.length !== 1 ? "s" : ""}</span>
+      {#if gatewayAgents.length > 0}
+        <label class="selall">
+          <input
+            bind:this={gatewaySelectAllEl}
+            type="checkbox"
+            checked={gatewayAllSelected()}
+            onchange={onGatewaySelectAllChange}
+          />
+          Select all
+        </label>
+      {/if}
+      {#if ui.selected.size > 0}
+        <Button size="sm" variant="danger" icon="trash" onclick={() => onDeleteMany(selectedGatewayAgents())}>Delete {ui.selected.size}</Button>
+      {/if}
+      <span class="grow"></span>
+      <Button variant="primary" icon="plus" onclick={onNewAgent}>New agent</Button>
+    </div>
+
+    <div class="list">
+    {#if gatewayLoading}
+      <p class="note" role="status">Loading saved agents…</p>
+    {:else if gatewayAgents.length === 0}
+      <EmptyState icon="agents" title="No saved agents yet" description="Save an agent from the Builder to run it on demand or keep it running as a gateway process.">
+        {#snippet actions()}
+          <Button size="sm" variant="primary" icon="plus" onclick={onNewAgent}>New agent</Button>
+        {/snippet}
+      </EmptyState>
+    {:else}
+      <ul class="rows">
+      {#each gatewayAgents as agent (agent.agentId)}
+        {@const st = savedAgentStatusOf(agent.status)}
+        {@const s = agentStats[agent.agentId]}
+        <li class="row">
+          <input
+            type="checkbox"
+            class="sel"
+            checked={ui.selected.has(agent.agentId)}
+            onchange={(e) => toggleGatewayAgentSelected(agent.agentId, (e.currentTarget as HTMLInputElement).checked)}
+            aria-label={`Select ${agent.name}`}
+          />
+          <div class="main">
+            <div class="name-line">
+              <span class="name">{agent.name}</span>
+              <Badge tone={agent.agentType === "gateway" ? "accent" : "neutral"}>{agent.agentType === "gateway" ? "Gateway" : "On demand"}</Badge>
+              <Badge tone={st.tone}>{st.label}</Badge>
+              {#if agent.schedule}<Badge tone="io" data><Icon name="clock" size="sm" />{agent.schedule}</Badge>{/if}
+            </div>
+            <div class="meta">
+              <span>{agent.config?.provider ?? "?"} / {agent.config?.model || "default"}</span>
+              <span>{agent.config?.strategy ?? "reactive"}</span>
+              <span>{agent.runCount} run{agent.runCount === 1 ? "" : "s"}</span>
+              {#if agent.lastRunAt}<span>last {relativeTime(agent.lastRunAt)}</span>{/if}
+              {#if s && s.runCount > 0}
+                <span>{Math.round(s.successRate * 100)}% ok</span>
+                <span>{formatTokens(Math.round(s.avgTokens))} avg tok</span>
+                {#if s.totalCostUsd > 0}<span>{formatCost(s.totalCostUsd)} total</span>{/if}
+              {/if}
+            </div>
+          </div>
+          <div class="actions">
+            <Button size="sm" icon="play"
+              onclick={() => onTrigger(agent)}
+              disabled={ui.triggeringAgent === agent.agentId || (agent.agentType === "gateway" && !!agent.processRunning)}
+              title={agent.agentType === "gateway" ? "Run now (ignores the schedule)" : "Run now with the saved settings"}>
+              {ui.triggeringAgent === agent.agentId ? "Starting…" : "Run"}
+            </Button>
+            {#if agent.agentType === "gateway"}
+              <Button size="sm" icon={agent.status === "active" ? "pause" : "power"} onclick={() => toggleStatus(agent)}>
+                {agent.status === "active" ? "Pause" : "Activate"}
+              </Button>
+            {/if}
+            <Button size="sm" variant="ghost" onclick={() => onUseInBuilder(agent)} title="Load this agent's settings into the Builder">Use in Builder</Button>
+            <IconButton icon="edit" size="sm" label={`Edit ${agent.name}`} onclick={() => openEdit(agent)} />
+            <IconButton icon="external" size="sm" label={`Export ${agent.name}`} onclick={() => onExport({ config: agent.config, name: agent.name })} />
+            <IconButton icon="trash" size="sm" label={`Delete ${agent.name}`} onclick={() => onDelete(agent)} />
+          </div>
+        </li>
+      {/each}
+      </ul>
     {/if}
     </div>
+  </div>
+{/if}
+</div>
+
+<style>
+  .saved { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .form-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 32px 48px; }
+  .form-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .form-h h2 { margin: 0; font-size: var(--cortex-t-lg); font-weight: 600; color: var(--cortex-text); }
+  .form-grid { display: grid; grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .form-side { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 0; }
+  .form-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 16px; border-top: 1px solid var(--cortex-line); }
+  .sched { display: grid; gap: 8px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .task { display: grid; gap: 6px; }
+  .task-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .task-h label { font-size: var(--cortex-t-xs); font-weight: 500; color: var(--cortex-text-2); }
+  .task :global(.task-text) { min-height: 8.5rem; font-family: var(--cortex-font-ui); font-size: var(--cortex-t-sm); }
+  .note { margin: 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+
+  .list-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 32px 24px; gap: 12px; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .count { font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
+  .selall { display: inline-flex; align-items: center; gap: 6px; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); cursor: pointer; }
+  .selall input, .sel { accent-color: var(--cortex-accent-fill); }
+  .grow { flex: 1; }
+  .list { flex: 1; min-height: 0; overflow-y: auto; }
+  .rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 1280px; }
+  .row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: var(--cortex-r-panel);
+    border: 1px solid var(--cortex-line);
+    background: var(--cortex-surface-1);
+  }
+  .sel { margin-top: 4px; flex: none; }
+  .main { flex: 1; min-width: 0; display: grid; gap: 6px; }
+  .name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .name { font-family: var(--cortex-font-data); font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-text); }
+  .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; flex: none; }
+  @media (max-width: 1100px) { .form-grid { grid-template-columns: 1fr; } .form-side { position: static; } }
+</style>

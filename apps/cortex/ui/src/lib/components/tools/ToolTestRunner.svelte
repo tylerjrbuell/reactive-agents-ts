@@ -1,4 +1,8 @@
 <script lang="ts">
+  /** Call the selected tool: request JSON on the left, the response and its time on the right. */
+  import Button from "$lib/components/kit/Button.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+
   interface Props {
     /** The tool can be invoked from the desk. */
     executable: boolean;
@@ -15,73 +19,61 @@
   let { executable, requestJson = $bindable("{}"), responseJson, responseMs, responseOk, running, onRun, onCopyRequest, onCopyResponse }: Props = $props();
 </script>
 
-        <div class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-0 border-t border-outline-variant/15">
-          <div class="flex flex-col min-h-0 border-b md:border-b-0 md:border-r border-outline-variant/15">
-            <div
-              class="flex items-center justify-between px-3 py-2 bg-surface-container-lowest/40 border-b border-outline-variant/10 flex-shrink-0"
-            >
-              <span class="font-mono text-[8px] uppercase tracking-widest text-outline/50">request_body.json</span>
-              <div class="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={!executable}
-                  onclick={onCopyRequest}
-                  class="text-[8px] font-mono text-outline/40 hover:text-primary transition-colors border-0 bg-transparent cursor-pointer disabled:opacity-40"
-                  title="Copy request JSON"
-                >
-                  copy
-                </button>
-                <button
-                  type="button"
-                  disabled={!executable || running}
-                  onclick={onRun}
-                  class="flex items-center gap-1 text-[9px] font-mono uppercase px-2 py-1 rounded border border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-40 bg-transparent"
-                >
-                  <span class="material-symbols-outlined text-[14px]">play_arrow</span>
-                  {running ? "Running…" : "Run test"}
-                </button>
-              </div>
-            </div>
-            <textarea
-              bind:value={requestJson}
-              disabled={!executable}
-              class="flex-1 min-h-[140px] w-full bg-transparent border-0 p-3 font-mono text-[10px] text-on-surface/90 resize-none focus:outline-none focus:ring-0 disabled:opacity-40"
-              spellcheck="false"
-            ></textarea>
-          </div>
-          <div class="flex flex-col min-h-0">
-            <div
-              class="flex items-center justify-between px-3 py-2 bg-surface-container-lowest/40 border-b border-outline-variant/10 flex-shrink-0"
-            >
-              <span class="font-mono text-[8px] uppercase tracking-widest text-outline/50">response_buffer</span>
-              <div class="flex items-center gap-2">
-                {#if responseJson}
-                  <button
-                    type="button"
-                    onclick={onCopyResponse}
-                    class="text-[8px] font-mono text-outline/40 hover:text-primary transition-colors border-0 bg-transparent cursor-pointer"
-                    title="Copy response JSON"
-                  >
-                    copy
-                  </button>
-                {/if}
-                {#if responseMs != null}
-                  <span class="flex items-center gap-1 font-mono text-[9px]">
-                    {#if responseOk === true}
-                      <span class="material-symbols-outlined text-[14px] text-secondary">check_circle</span>
-                    {:else if responseOk === false}
-                      <span class="material-symbols-outlined text-[14px] text-error">error</span>
-                    {/if}
-                    <span class="text-outline/60">{responseMs}ms</span>
-                  </span>
-                {/if}
-              </div>
-            </div>
-            <div class="flex-1 min-h-[140px] relative">
-              <pre
-                class="absolute inset-0 overflow-auto p-3 font-mono text-[10px] whitespace-pre-wrap break-all text-on-surface/85"
-                >{responseJson || "—"}</pre
-              >
-            </div>
-          </div>
-        </div>
+<div class="runner">
+  <div class="pane">
+    <div class="pane-h">
+      <label for="tw-request">Request</label>
+      <span class="grow"></span>
+      <Button size="sm" variant="ghost" icon="copy" disabled={!executable} onclick={onCopyRequest}>Copy</Button>
+      <Button size="sm" variant="primary" icon="play" disabled={!executable || running} onclick={onRun}>{running ? "Running…" : "Run test"}</Button>
+    </div>
+    <textarea id="tw-request" bind:value={requestJson} disabled={!executable} spellcheck="false"></textarea>
+    {#if !executable}<p class="note">This tool cannot be called from Cortex.</p>{/if}
+  </div>
+  <div class="pane">
+    <div class="pane-h">
+      <span class="lbl" id="tw-response-label">Response</span>
+      <span class="grow"></span>
+      {#if responseMs != null}
+        <span class="time" class:ok={responseOk === true} class:bad={responseOk === false}>
+          {#if responseOk === true}<Icon name="check-circle" size="sm" />{:else if responseOk === false}<Icon name="alert-circle" size="sm" />{/if}
+          {responseMs} ms
+        </span>
+      {/if}
+      {#if responseJson}<Button size="sm" variant="ghost" icon="copy" onclick={onCopyResponse}>Copy</Button>{/if}
+    </div>
+    <pre aria-labelledby="tw-response-label">{responseJson || "No response yet. Run the test."}</pre>
+  </div>
+</div>
+
+<style>
+  .runner { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--cortex-line); }
+  .pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .pane + .pane { border-left: 1px solid var(--cortex-line); }
+  .pane-h { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--cortex-line); flex: none; }
+  .pane-h label, .lbl { font-size: var(--cortex-t-xs); font-weight: 500; color: var(--cortex-text-2); }
+  .grow { flex: 1; }
+  textarea, pre {
+    flex: 1;
+    min-height: 160px;
+    margin: 0;
+    padding: 12px;
+    border: 0;
+    background: var(--cortex-canvas);
+    color: var(--cortex-text);
+    font-family: var(--cortex-font-data);
+    font-size: var(--cortex-t-xs);
+    line-height: 1.5;
+    resize: none;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  textarea:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: -2px; }
+  textarea:disabled { opacity: 0.5; }
+  .note { margin: 0; padding: 6px 12px; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+  .time { display: inline-flex; align-items: center; gap: 4px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-2); }
+  .time.ok { color: var(--cortex-ok); }
+  .time.bad { color: var(--cortex-bad); }
+  @media (max-width: 900px) { .runner { grid-template-columns: 1fr; } .pane + .pane { border-left: 0; border-top: 1px solid var(--cortex-line); } }
+</style>

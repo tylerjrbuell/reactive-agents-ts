@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { approvalDetail, choiceOptions, formFields, waitingItemsOf } from "./waiting-on-you.js";
-import type { RunRow } from "./runs-table.js";
+import { statusOfRun } from "@reactive-agents/ui-core";
+import { approvalDetail, choiceOptions, formFields, waitingItemsOf, waitingRunsOf, waitingStatusOf, withWaitingStatus } from "./waiting-on-you.js";
+import { filterRuns, type RunRow } from "./runs-table.js";
 
 const run = (over: Partial<RunRow> & { runId: string }): RunRow => ({
   agentId: "a",
@@ -76,5 +77,36 @@ describe("interaction schemas", () => {
       { name: "n", label: "n", type: "number" },
       { name: "b", label: "Bool", type: "boolean" },
     ]);
+  });
+});
+
+describe("waitingRunsOf / waitingStatusOf: a paused run reads Waiting on you, not Running", () => {
+  const deskApproval = { runId: "durable-1", agentId: "desk-agent", gateId: "g", toolName: "shell-execute", args: {} };
+
+  it("a live desk run whose agent holds an approval waits on you (the approval carries the durable id)", () => {
+    const rows = [run({ runId: "old", agentId: "desk-agent", startedAt: 1, status: "failed" }), run({ runId: "r1", agentId: "desk-agent", startedAt: 5, status: "live" })];
+    const waiting = waitingRunsOf(rows, [deskApproval], []);
+    expect(waiting.get("r1")?.kind).toBe("approval");
+    expect(waiting.has("old")).toBe(false);
+    const shown = withWaitingStatus(rows, waiting);
+    expect(shown.map((r) => r.status)).toEqual(["failed", "awaiting-approval"]);
+    expect(statusOfRun(shown[1]!.status)).toEqual({ tone: "attention", label: "Waiting on you" });
+    expect(filterRuns(shown, "", "running")).toHaveLength(0);
+    expect(filterRuns(shown, "", "attention").map((r) => r.runId)).toEqual(["r1"]);
+  });
+
+  it("a question matches its run id; a sub-agent never takes its parent's approval", () => {
+    const rows = [run({ runId: "q", status: "live" }), run({ runId: "child", agentId: "desk-agent", parentRunId: "p", startedAt: 9, status: "live" })];
+    const waiting = waitingRunsOf(rows, [deskApproval], [{ runId: "q", interactionId: "i", kind: "confirmation", prompt: "?", schema: {} }]);
+    expect(waiting.get("q")?.kind).toBe("question");
+    expect(waiting.has("child")).toBe(false);
+    expect(waitingStatusOf("live", waiting.get("q"))).toBe("awaiting-interaction");
+  });
+
+  it("an ended run keeps its status; nothing waiting returns the same rows", () => {
+    expect(waitingStatusOf("completed", { kind: "approval", approval: deskApproval })).toBe("completed");
+    expect(waitingStatusOf("live", undefined)).toBe("live");
+    const rows = [run({ runId: "a", status: "live" })];
+    expect(withWaitingStatus(rows, new Map())).toBe(rows);
   });
 });

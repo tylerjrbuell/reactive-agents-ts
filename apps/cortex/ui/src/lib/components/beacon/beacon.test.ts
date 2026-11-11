@@ -1,7 +1,7 @@
 /**
  * Rendering tests for Beacon's Board pieces (Bench step 5): live cards carry
  * the live glow, gradient edge and entropy line; at-rest cards never glow; a
- * waiting agent says "needs you"; the view switch is a pressed-state toggle.
+ * waiting agent says "Waiting on you"; the view switch is a pressed-state toggle.
  */
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
@@ -75,13 +75,13 @@ describe("BeaconAgentCard", () => {
     expect(t).toContain("2 hours ago");
   });
 
-  test("a waiting agent says needs you instead of its source", async () => {
+  test("a waiting agent shows its Waiting on you status instead of its source", async () => {
     const html = await renderComponent(at("BeaconAgentCard"), {
-      row: row({ status: { tone: "attention", label: "Needs you" }, last: "Asked: which branch?" }),
+      row: row({ status: { tone: "attention", label: "Waiting on you" }, last: "Asked: which branch?" }),
       now: NOW,
     });
     expect(html).toContain('data-tone="warn"');
-    expect(text(html)).toContain("needs you");
+    expect(text(html)).toContain("Waiting on you");
     expect(text(html)).toContain("Asked: which branch?");
   });
 });

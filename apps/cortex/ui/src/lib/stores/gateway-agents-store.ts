@@ -17,6 +17,30 @@ export type GatewayRow = {
   processRunning?: boolean;
 };
 
+/** How a saved agent's status reads in the list: a kit Badge tone and a sentence-case label. */
+export interface SavedAgentStatusView {
+  readonly tone: "ok" | "warn" | "neutral" | "bad";
+  readonly label: string;
+}
+
+/**
+ * A saved agent's status badge: Active (green), Paused (amber), Stopped
+ * (neutral); anything else (an error state the server reports) is red with
+ * its own word, capitalised.
+ */
+export function savedAgentStatusOf(status: string): SavedAgentStatusView {
+  switch (status) {
+    case "active":
+      return { tone: "ok", label: "Active" };
+    case "paused":
+      return { tone: "warn", label: "Paused" };
+    case "stopped":
+      return { tone: "neutral", label: "Stopped" };
+    default:
+      return { tone: "bad", label: status ? `${status[0]!.toUpperCase()}${status.slice(1)}` : "Unknown" };
+  }
+}
+
 /** GET /api/agents/:id/stats. */
 export type AgentStats = { runCount: number; successRate: number; avgTokens: number; totalCostUsd: number };
 

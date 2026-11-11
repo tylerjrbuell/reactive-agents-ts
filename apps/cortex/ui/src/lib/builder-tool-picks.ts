@@ -6,6 +6,8 @@
  * kernel and configured in the Meta tools section, so listing them here showed
  * `recall` twice and offered picks that do not control anything.
  */
+import type { IconName } from "./icons.js";
+
 export interface CatalogToolRow {
   kind: string;
   name: string;
@@ -16,7 +18,8 @@ export interface CatalogToolRow {
 export interface ToolPick {
   id: string;
   label: string;
-  icon: string;
+  /** Kit icon (`lib/icons.ts`). */
+  icon: IconName;
 }
 
 /**
@@ -26,14 +29,25 @@ export interface ToolPick {
  */
 export function shellPresetPicks(presets: Readonly<Record<string, readonly string[]>>): ToolPick[] {
   return Object.entries(presets)
-    .map(([alias, programs]) => ({ id: alias, label: `${alias} (${programs.join(" · ")} via shell)`, icon: "terminal" }))
+    .map(([alias, programs]): ToolPick => ({ id: alias, label: `${alias} (${programs.join(" · ")} via shell)`, icon: "shell" }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** Built-in, enabled catalog rows as label-sorted picks; `icons` maps tool name to a Material symbol. */
-export function builderToolPicks(catalog: readonly CatalogToolRow[], icons: Readonly<Record<string, string>>): ToolPick[] {
+/** Kit icons for the common built-in tools; anything else shows the generic tool icon. */
+export const TOOL_ICONS: Readonly<Record<string, IconName>> = {
+  "web-search": "search",
+  "http-get": "external",
+  "file-read": "file",
+  "file-write": "edit",
+  "code-execute": "code",
+  "shell-execute": "shell",
+  "crypto-price": "signal",
+};
+
+/** Built-in, enabled catalog rows as label-sorted picks; `icons` maps tool name to a kit icon (fallback `tool`). */
+export function builderToolPicks(catalog: readonly CatalogToolRow[], icons: Readonly<Record<string, IconName>> = TOOL_ICONS): ToolPick[] {
   return catalog
     .filter((t) => t.kind === "built-in" && t.disabled !== true)
-    .map((t) => ({ id: t.name, label: t.displayName || t.name, icon: icons[t.name] ?? "settings" }))
+    .map((t): ToolPick => ({ id: t.name, label: t.displayName || t.name, icon: icons[t.name] ?? "tool" }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }

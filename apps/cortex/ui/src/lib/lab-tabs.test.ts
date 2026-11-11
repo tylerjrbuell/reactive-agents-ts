@@ -1,21 +1,38 @@
 import { describe, expect, test } from "bun:test";
-import { LAB_TABS, isLabTab, labTabFromHash } from "./lab-tabs.js";
+import { LAB_TABS, isLabTab, labTabFromHash, labTabHash, normalizeLabTab } from "./lab-tabs.js";
 
 describe("lab tabs", () => {
   test("tab bar order and labels", () => {
-    expect(LAB_TABS.map((t) => `${t.id}:${t.label}`)).toEqual(["builder:Builder", "gateway:Agents", "skills:Skills", "tools:Tools", "prompts:Prompts"]);
+    expect(LAB_TABS.map((t) => `${t.id}:${t.label}`)).toEqual([
+      "builder:Builder",
+      "agents:Saved agents",
+      "skills:Skills",
+      "tools:Tools",
+      "prompts:Prompts",
+    ]);
   });
-  test("hash opens a tab; anything else keeps the default", () => {
-    expect(labTabFromHash("#gateway")).toBe("gateway");
+  test("hash opens a tab; #gateway is an alias of #agents; anything else keeps the default", () => {
+    expect(labTabFromHash("#agents")).toBe("agents");
+    expect(labTabFromHash("#gateway")).toBe("agents");
     expect(labTabFromHash("#skills")).toBe("skills");
     expect(labTabFromHash("#tools")).toBe("tools");
     expect(labTabFromHash("#prompts")).toBe("prompts");
     expect(labTabFromHash("#builder")).toBeNull();
+    expect(labTabFromHash("#nope")).toBeNull();
     expect(labTabFromHash("")).toBeNull();
   });
-  test("isLabTab guards the tab-switch event", () => {
-    expect(isLabTab("tools")).toBe(true);
-    expect(isLabTab("agents")).toBe(false);
+  test("a tab writes its own hash, never the alias", () => {
+    expect(labTabHash("agents")).toBe("#agents");
+    expect(labTabHash("prompts")).toBe("#prompts");
+    expect(labTabHash("builder")).toBe("");
+    for (const t of LAB_TABS) expect(labTabFromHash(labTabHash(t.id)) ?? "builder").toBe(t.id);
+  });
+  test("the tab-switch event takes ids and the alias", () => {
+    expect(normalizeLabTab("gateway")).toBe("agents");
+    expect(normalizeLabTab("tools")).toBe("tools");
+    expect(isLabTab("agents")).toBe(true);
+    expect(isLabTab("gateway")).toBe(true);
+    expect(isLabTab("nope")).toBe(false);
     expect(isLabTab(undefined)).toBe(false);
   });
 });

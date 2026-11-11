@@ -30,6 +30,9 @@
   import { settings } from "$lib/stores/settings.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import { pendingApprovals } from "$lib/stores/approval-watcher.js";
+  import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
+  import { waitingRunsOf, waitingStatusOf } from "$lib/waiting-on-you.js";
   import { countReasoningStepDisplayMessagesInRunEvents } from "@cortex/messages-extract";
   import {
     entropySeriesOf,
@@ -123,9 +126,18 @@
   const task = $derived(runTaskOf($runStore.events) ?? (typeof $runStore.launchParams?.prompt === "string" ? $runStore.launchParams.prompt : undefined));
   let renamedTo = $state<string | null>(null);
   const title = $derived(
-    runTitleOf({ displayName: renamedTo ?? $runStore.displayName, chatSessionName: $runStore.chatSessionName, task, runId }),
+    runTitleOf({ displayName: renamedTo ?? $runStore.displayName, chatSessionName: $runStore.chatSessionName, task, runId, agentId: $runStore.agentId }),
   );
-  const headerView = $derived(runHeaderStatus($runStore.status, ending?.ending));
+  // A run paused on an approval or a question publishes no terminal event: it
+  // stays `live` in the store and reads "Waiting on you" here (same resolver as Runs and Beacon).
+  const waiting = $derived(
+    waitingRunsOf(
+      [{ runId, agentId: $runStore.agentId, startedAt: 0, ...($runStore.chatSessionId ? { chatSessionId: $runStore.chatSessionId } : {}) }],
+      $pendingApprovals,
+      $pendingInteractions,
+    ).get(runId),
+  );
+  const headerView = $derived(runHeaderStatus(waitingStatusOf($runStore.status, waiting), ending?.ending));
   const entropy = $derived(entropySeriesOf($signalStore.entropy));
   const messageCount = $derived(countReasoningStepDisplayMessagesInRunEvents($runStore.events));
   const panelEvents = $derived($runStore.events.map((m: CortexLiveMsg) => ({ type: m.type, payload: m.payload, ts: m.ts })));

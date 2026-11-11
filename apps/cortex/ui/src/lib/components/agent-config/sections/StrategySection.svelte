@@ -1,5 +1,9 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import Switch from "$lib/components/kit/Switch.svelte";
   import OutputSchemaParseFailField from "$lib/components/OutputSchemaParseFailField.svelte";
   import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
   import type { AgentConfig } from "$lib/types/agent-config.js";
@@ -16,8 +20,10 @@
     strategyLabel: string;
     /** Capability manifest (drives the generic framework-config renderer); null until loaded. */
     manifest: CapabilityManifest | null;
+    /** All framework options render as their own section (Lab builder nav): leave them out here. */
+    splitFramework?: boolean;
   }
-  let { config = $bindable(), open, onToggle, strategies: STRATEGIES, strategyLabel: acpStrategyLabel, manifest: capManifest }: Props = $props();
+  let { config = $bindable(), open, onToggle, strategies: STRATEGIES, strategyLabel: acpStrategyLabel, manifest: capManifest, splitFramework = false }: Props = $props();
 
   // Structured-output schema validity (for the editor hint).
   const outputSchemaText = $derived((config.outputSchema ?? "").trim());
@@ -63,73 +69,56 @@
   }
 </script>
 
-<ConfigSection id="strategy" {open} {onToggle}>
+<ConfigSection id="strategy" icon="strategy" title="Reasoning" {open} {onToggle}>
   {#snippet head()}
-      <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">psychology</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Reasoning</span>
-      <span class="ml-2 truncate font-mono text-[11px] text-[var(--cortex-text-muted)]">{acpStrategyLabel}</span>
-      <span class="ml-2 font-mono text-[11px] text-primary/80">{config.strategy}</span>
+      <span class="truncate">{acpStrategyLabel}</span>
   {/snippet}
-        <div class="space-y-1.5">
-          {#each STRATEGIES as s}
-            <label class="flex items-start gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-container-low/40 transition-colors
-                          {config.strategy === s.value ? 'bg-primary/10 border border-primary/20' : 'border border-transparent'}">
+        <div class="acp-choices" role="radiogroup" aria-label="Strategy">
+          {#each STRATEGIES as s (s.value)}
+            <label class="acp-choice" class:on={config.strategy === s.value}>
               <input type="radio" name="strategy" value={s.value}
                 checked={config.strategy === s.value}
-                onchange={() => (config = { ...config, strategy: s.value as AgentConfig["strategy"] })}
-                class="mt-0.5 accent-primary flex-shrink-0" />
-              <div>
-                <div class="font-mono text-[11px] font-semibold text-on-surface/80">{s.label}</div>
-                <div class="font-mono text-[11px] text-outline/70 mt-0.5">{s.desc}</div>
-              </div>
+                onchange={() => (config = { ...config, strategy: s.value as AgentConfig["strategy"] })} />
+              <span>
+                <span class="acp-check-t">{s.label}</span>
+                <span class="acp-hint">{s.desc}</span>
+              </span>
             </label>
           {/each}
         </div>
-        <div class="grid grid-cols-2 gap-3 pt-1">
-          <div>
-            <label for="max-iterations" class="config-label">Max Iterations</label>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="acp-field">
+            <label for="max-iterations" class="config-label">Max iterations</label>
             <input id="max-iterations" type="number" min="1" max="100" bind:value={config.maxIterations}
-              class="config-input" />
+              class="config-input acp-mono" />
           </div>
-          <div>
-            <label for="min-iterations" class="config-label">Min Iterations</label>
+          <div class="acp-field">
+            <label for="min-iterations" class="config-label">Min iterations</label>
             <input id="min-iterations" type="number" min="0" max="20" bind:value={config.minIterations}
-              class="config-input" />
+              class="config-input acp-mono" />
           </div>
         </div>
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="font-mono text-[11px] text-on-surface/70">Durable execution</div>
-            <div class="font-mono text-[11px] text-outline/70">Crash-resume + human approval gate (survives restart). Forces reasoning on.</div>
-          </div>
-          <button type="button" onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, enabled: !config.durableRuns.enabled } })}
-            aria-label="Toggle durable execution"
-            aria-pressed={config.durableRuns.enabled}
-            class="flex-shrink-0 w-10 h-5 rounded-full border-0 cursor-pointer relative transition-colors duration-200
-                   {config.durableRuns.enabled ? 'bg-primary' : 'bg-surface-container-highest'}">
-            <span class="pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ease-out
-                         {config.durableRuns.enabled ? 'translate-x-5' : 'translate-x-0'}"></span>
-          </button>
-        </div>
+        <Switch id="acp-durable-runs" label="Durable execution"
+          hint="Resumes after a crash and can pause for your approval (survives a restart). Turns reasoning on."
+          checked={config.durableRuns.enabled}
+          onchange={(on) => (config = { ...config, durableRuns: { ...config.durableRuns, enabled: on } })} />
         {#if config.durableRuns.enabled}
-          <div class="rounded-lg border border-[var(--cortex-border)] bg-surface-container-low/30 p-2.5">
-            <div class="font-mono text-[11px] uppercase tracking-wide text-outline/75 mb-1.5">Approval-gated tools</div>
+          <div class="acp-card">
+            <span class="config-label mb-0">Approval-gated tools</span>
             {#if config.tools.length === 0}
-              <div class="font-mono text-[11px] text-outline/70">Add tools above; gated tools pause the run for approval.</div>
+              <p class="acp-hint">Add tools first; a gated tool pauses the run until you approve it.</p>
             {:else}
-              <div class="flex flex-wrap gap-1.5">
+              <div class="acp-chips" role="group" aria-label="Approval-gated tools">
                 {#each config.tools as toolName (toolName)}
                   {@const gated = config.durableRuns.approvalTools.includes(toolName)}
-                  <button type="button"
-                    onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, approvalTools: gated ? config.durableRuns.approvalTools.filter((t) => t !== toolName) : [...config.durableRuns.approvalTools, toolName] } })}
-                    class="rounded-md border px-2 py-1 font-mono text-[11px] transition-colors
-                           {gated ? 'border-primary bg-primary/15 text-primary' : 'border-[var(--cortex-border)] text-on-surface/60 hover:text-on-surface'}">
-                    {gated ? '✓ ' : ''}{toolName}
+                  <button type="button" class="acp-toolchip" aria-pressed={gated}
+                    onclick={() => (config = { ...config, durableRuns: { ...config.durableRuns, approvalTools: gated ? config.durableRuns.approvalTools.filter((t) => t !== toolName) : [...config.durableRuns.approvalTools, toolName] } })}>
+                    {#if gated}<Icon name="check" size="sm" />{/if}{toolName}
                   </button>
                 {/each}
               </div>
-              <label for="acp-approval-mode" class="config-label mt-2.5">When a gated tool is called</label>
-              <select id="acp-approval-mode" class="config-input text-[11px]" value={config.durableRuns.approvalMode ?? "detach"}
+              <label for="acp-approval-mode" class="config-label mt-2">When a gated tool is called</label>
+              <select id="acp-approval-mode" class="config-input" value={config.durableRuns.approvalMode ?? "detach"}
                 onchange={(e) => (config = { ...config, durableRuns: { ...config.durableRuns, approvalMode: (e.currentTarget as HTMLSelectElement).value === "block" ? "block" : "detach" } })}>
                 <option value="detach">Pause the run; it resumes after approval</option>
                 <option value="block">Wait in place until approved</option>
@@ -137,47 +126,37 @@
             {/if}
           </div>
         {/if}
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="font-mono text-[11px] text-on-surface/70">Auto-switch strategy</div>
-            <div class="font-mono text-[11px] text-outline/70">Switch strategy if agent gets stuck</div>
-          </div>
-          <button type="button" onclick={() => (config = { ...config, strategySwitching: !config.strategySwitching })}
-            aria-label="Toggle auto-switch strategy"
-            aria-pressed={config.strategySwitching}
-            class="flex-shrink-0 w-10 h-5 rounded-full border-0 cursor-pointer relative transition-colors duration-200
-                   {config.strategySwitching ? 'bg-primary' : 'bg-surface-container-highest'}">
-            <span class="pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ease-out
-                         {config.strategySwitching ? 'translate-x-5' : 'translate-x-0'}"></span>
-          </button>
-        </div>
+        <Switch id="acp-strategy-switching" label="Switch strategy when stuck"
+          hint="The framework may move to another strategy when the agent stops making progress."
+          checked={config.strategySwitching}
+          onchange={(on) => (config = { ...config, strategySwitching: on })} />
         <div>
           <div class="config-label">Structured output (JSON Schema)</div>
           <textarea bind:value={config.outputSchema} rows="6" spellcheck="false"
             placeholder={'{\n  "type": "object",\n  "properties": { "name": { "type": "string" } },\n  "required": ["name"]\n}'}
-            class="config-input font-mono text-[11px] leading-snug"></textarea>
+            class="config-input acp-mono"></textarea>
           {#if outputSchemaText !== ''}
-            <p class="mt-1 font-mono text-[10px] {outputSchemaValid ? 'text-tertiary' : 'text-[var(--cortex-bad)]'}">
-              {outputSchemaValid ? '✓ Valid — answer extracted into result.object' : '✗ Invalid JSON — schema ignored until fixed'}
+            <p class="mt-1 acp-hint" class:acp-ok={outputSchemaValid} class:acp-bad={!outputSchemaValid}>
+              {outputSchemaValid ? 'Valid: the answer is extracted into result.object.' : 'Not valid JSON: the schema is ignored until it is fixed.'}
             </p>
             <OutputSchemaParseFailField bind:value={config.outputSchemaOnParseFail} />
           {:else}
-            <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — extract the agent's answer into a typed object (<code class="text-[10px]">.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
+            <p class="mt-1 acp-hint">Optional — extract the agent's answer into a typed object (<code>.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
           {/if}
         </div>
         <div>
           <div class="config-label">Harness config (JSON)</div>
           <textarea bind:value={config.harness} rows="6" spellcheck="false"
             placeholder={'{\n  "lazyDisclosure": false,\n  "verboseRules": true,\n  "toolIndex": true\n}'}
-            class="config-input font-mono text-[11px] leading-snug"></textarea>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — typed harness control surface (<code class="text-[10px]">.withHarness</code>): tool disclosure, discovery, index, verbose rules, context budgets.</p>
+            class="config-input acp-mono"></textarea>
+          <p class="mt-1 acp-hint">Optional — typed harness control surface (<code>.withHarness</code>): tool disclosure, discovery, index, verbose rules, context budgets.</p>
         </div>
         <div>
           <div class="config-label">Documents (JSON array, RAG)</div>
           <textarea bind:value={config.documents} rows="6" spellcheck="false"
             placeholder={'[\n  { "source": "./docs/README.md", "format": "markdown" }\n]'}
-            class="config-input font-mono text-[11px] leading-snug"></textarea>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Optional — ingest documents for retrieval (.withDocuments). Each entry needs source (path) or content.</p>
+            class="config-input acp-mono"></textarea>
+          <p class="mt-1 acp-hint">Optional — ingest documents for retrieval (.withDocuments). Each entry needs source (path) or content.</p>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div>
@@ -191,7 +170,7 @@
               placeholder="0 = none" class="config-input" />
           </div>
         </div>
-        <p class="-mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Run terminates when a cap is crossed (<code class="text-[10px]">.withBudget</code>).</p>
+        <p class="-mt-1 acp-hint">Run terminates when a cap is crossed (<code>.withBudget</code>).</p>
         <div>
           <label for="grounding-mode" class="config-label">Evidence grounding</label>
           <select id="grounding-mode" bind:value={config.grounding.mode} class="config-input">
@@ -199,7 +178,7 @@
             <option value="warn">Warn — flag ungrounded figures</option>
             <option value="block">Block — one corrective retry, then degrade</option>
           </select>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Checks numbers in the answer against tool data (<code class="text-[10px]">.withGrounding</code>); never hard-fails.</p>
+          <p class="mt-1 acp-hint">Checks numbers in the answer against tool data (<code>.withGrounding</code>); never hard-fails.</p>
         </div>
         <div>
           <label for="fabrication-guard-mode" class="config-label">Fabrication guard</label>
@@ -209,7 +188,7 @@
             <option value="warn">Warn — flag invented entities/measurements</option>
             <option value="block">Block — one corrective retry, then degrade</option>
           </select>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Distinct from evidence grounding above — catches invented named entities and measurements not backed by tool evidence. Always-on at Block even if left at Default (<code class="text-[10px]">.withFabricationGuard</code>).</p>
+          <p class="mt-1 acp-hint">Distinct from evidence grounding above — catches invented named entities and measurements not backed by tool evidence. Always-on at Block even if left at Default (<code>.withFabricationGuard</code>).</p>
         </div>
         <div>
           <label class="config-label flex items-center gap-2">
@@ -225,69 +204,61 @@
               <option value="opus">Opus</option>
             </select>
           {/if}
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Routes each turn to the cheapest capable model for the provider (<code class="text-[10px]">.withModelRouting</code>); degrades to the configured model on any routing error.</p>
+          <p class="mt-1 acp-hint">Routes each turn to the cheapest capable model for the provider (<code>.withModelRouting</code>); degrades to the configured model on any routing error.</p>
         </div>
         <div>
-          <label for="verification-step" class="config-label">Verification Step</label>
+          <label for="verification-step" class="config-label">Verification step</label>
           <select id="verification-step" bind:value={config.verificationStep} class="config-input">
             <option value="none">None — trust first answer</option>
             <option value="reflect">Reflect — LLM self-review pass</option>
           </select>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
+          <p class="mt-1 acp-hint leading-relaxed">
             Reflect runs one extra LLM pass on the draft answer. It is not the same as the framework verification layer below.
           </p>
         </div>
-        <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_35%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_8%,transparent)] p-2.5">
-          <input type="checkbox" bind:checked={config.runtimeVerification} class="accent-primary mt-0.5 shrink-0" />
-          <span class="font-mono text-[11px] text-[var(--cortex-text)] leading-snug">
-            <span class="font-semibold text-tertiary">Runtime verification layer</span>
-            — enables the <code class="text-[10px]">@reactive-agents/verification</code> package (semantic entropy and related checks). Adds latency and provider calls; use when you want automated confidence signals, not only a reflect pass.
+        <label class="acp-check acp-check-box">
+          <input type="checkbox" bind:checked={config.runtimeVerification} />
+          <span>
+            <span class="acp-check-t">Runtime verification layer</span>
+            <span class="acp-hint">Turns on <code>@reactive-agents/verification</code> (semantic entropy and related checks). Adds latency and provider calls; use it when you want automated confidence signals, not only a reflect pass.</span>
           </span>
         </label>
-        <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[color-mix(in_srgb,var(--ra-amber)_35%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_8%,transparent)] p-2.5">
-          <input type="checkbox" bind:checked={config.auditRationale} class="accent-primary mt-0.5 shrink-0" />
-          <span class="font-mono text-[11px] text-[var(--cortex-text)] leading-snug">
-            <span class="font-semibold text-tertiary">Decision rationale in debrief</span>
-            — records the model's per-tool-call “why” for audit. <span class="font-semibold text-[var(--cortex-warn)]">Heads-up:</span> a cross-tier ablation found this adds latency and output tokens with no measured quality gain, and it can <em>degrade</em> answer quality on smaller / less-capable local models. Leave off unless you need the audit trail.
+        <label class="acp-check acp-check-box">
+          <input type="checkbox" bind:checked={config.auditRationale} />
+          <span>
+            <span class="acp-check-t">Decision rationale in the debrief</span>
+            <span class="acp-hint">Records the model's reason for each tool call, for audit. A cross-tier ablation found it adds latency and output tokens with no measured quality gain, and it can lower answer quality on small local models. Leave it off unless you need the audit trail.</span>
           </span>
         </label>
 
         <!-- Generic framework-config renderer — auto-synced from the manifest -->
-        <AdvancedFrameworkConfig manifest={capManifest} bind:rawConfig={config.rawConfig} />
+        {#if !splitFramework}<AdvancedFrameworkConfig manifest={capManifest} bind:rawConfig={config.rawConfig} />{/if}
 
         <!-- Lifecycle webhooks -->
         <div class="acp-card">
           <div class="flex items-center justify-between gap-2">
-            <span class="font-mono text-[11px] uppercase tracking-widest text-[var(--cortex-text-muted)]">Lifecycle webhooks</span>
-            <button type="button" onclick={addWebhook}
-              class="flex items-center gap-1 rounded border border-[var(--cortex-border)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--cortex-text-muted)] hover:text-primary hover:border-primary/40 transition-colors">
-              <span class="material-symbols-outlined text-[12px] leading-none">add</span> Add URL
-            </button>
+            <span class="config-label mb-0">Lifecycle webhooks</span>
+            <Button size="sm" icon="plus" onclick={addWebhook}>Add URL</Button>
           </div>
-          <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed m-0">
-            Server POSTs a JSON payload to each URL on run start / completion / failure. Fire-and-forget; applies to saved agents.
+          <p class="acp-hint">
+            The server posts a JSON payload to each URL when a run starts, finishes or fails. Fire and forget; saved agents only.
           </p>
           {#each config.lifecycleWebhooks ?? [] as wh, i (i)}
-            <div class="space-y-1 rounded border border-[var(--cortex-border)] p-1.5">
+            <div class="acp-stack" style="gap: 8px">
               <div class="flex items-center gap-1">
                 <input
                   type="url"
                   placeholder="https://example.com/hook"
+                  aria-label="Webhook URL {i + 1}"
                   value={wh.url}
                   oninput={(e) => updateWebhookUrl(i, (e.target as HTMLInputElement).value)}
-                  class="flex-1 min-w-0 rounded border border-[var(--cortex-border)] bg-[var(--cortex-surface-low)] px-2 py-1 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+                  class="config-input acp-mono flex-1 min-w-0"
                 />
-                <button type="button" onclick={() => removeWebhook(i)}
-                  class="material-symbols-outlined text-[14px] text-[var(--cortex-text-muted)] hover:text-error transition-colors p-0.5"
-                  aria-label="Remove webhook">delete</button>
+                <IconButton icon="trash" label="Remove webhook" onclick={() => removeWebhook(i)} />
               </div>
-              <div class="flex flex-wrap gap-1">
+              <div class="acp-chips" role="group" aria-label="Events for webhook {i + 1}">
                 {#each LIFECYCLE_EVENTS as ev (ev)}
-                  <button type="button" onclick={() => toggleWebhookEvent(i, ev)}
-                    class="rounded-full px-1.5 py-0.5 font-mono text-[10px] border transition-colors
-                           {webhookHasEvent(wh, ev) ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-[var(--cortex-text-muted)] hover:border-primary/30'}">
-                    {ev}
-                  </button>
+                  <button type="button" class="acp-toolchip" aria-pressed={webhookHasEvent(wh, ev)} onclick={() => toggleWebhookEvent(i, ev)}>{ev}</button>
                 {/each}
               </div>
             </div>

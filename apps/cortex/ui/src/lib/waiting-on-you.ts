@@ -116,6 +116,86 @@ export function waitingItemsOf(
   return out;
 }
 
+/** The fields a run needs to be matched to an approval or a question. */
+export interface WaitingRunRef {
+  readonly runId: string;
+  readonly agentId: string;
+  /** Newest wins when an approval falls back to its agent or chat session. */
+  readonly startedAt: number;
+  readonly chatSessionId?: string;
+  /** Sub-agent runs never take a parent's approval. */
+  readonly parentRunId?: string;
+}
+
+/** What a waiting run waits for. */
+export type WaitingFor =
+  | { readonly kind: "approval"; readonly approval: PendingApprovalWire }
+  | { readonly kind: "question"; readonly interaction: PendingInteractionWire };
+
+/**
+ * The runs that wait on the user, by Cortex run id. A question matches its run
+ * id. A desk or gateway approval carries the DURABLE run id, so it falls back
+ * to the newest root run of the same agent; a chat approval falls back to the
+ * newest root run of its chat session. The first item per run wins. One
+ * resolver for Beacon (`needsYouByRun`), Runs and the run view.
+ */
+export function waitingRunsOf<R extends WaitingRunRef>(
+  runs: readonly R[],
+  approvals: readonly PendingApprovalWire[],
+  interactions: readonly PendingInteractionWire[],
+): ReadonlyMap<string, WaitingFor> {
+  const byId = new Map(runs.map((r) => [r.runId, r]));
+  const newest = (match: (r: R) => boolean): R | undefined => {
+    let best: R | undefined;
+    for (const r of runs) {
+      if (!match(r) || r.parentRunId) continue;
+      if (!best || r.startedAt > best.startedAt) best = r;
+    }
+    return best;
+  };
+  const out = new Map<string, WaitingFor>();
+  for (const a of approvals) {
+    const run =
+      byId.get(a.runId) ??
+      (a.chatSessionId ? newest((r) => r.chatSessionId === a.chatSessionId) : newest((r) => r.agentId === a.agentId));
+    if (!run || out.has(run.runId)) continue;
+    out.set(run.runId, { kind: "approval", approval: a });
+  }
+  for (const i of interactions) {
+    const run = byId.get(i.runId);
+    if (!run || out.has(run.runId)) continue;
+    out.set(run.runId, { kind: "question", interaction: i });
+  }
+  return out;
+}
+
+/** Run statuses that mean the run is still going (the paused run publishes no terminal event). */
+const STILL_GOING = new Set(["live", "streaming", "running"]);
+
+/**
+ * The status a run row shows: a run that is still going but waits on the user
+ * reads `awaiting-approval` / `awaiting-interaction` (ui-core `statusOfRun`:
+ * "Waiting on you"), not Running. A durable run paused at an approval gate
+ * publishes no terminal event (runtime 835c4d1cd), so its stored status stays
+ * `live`. Ended runs keep their status.
+ */
+export function waitingStatusOf(status: string, waiting: WaitingFor | undefined): string {
+  if (!waiting || !STILL_GOING.has(status)) return status;
+  return waiting.kind === "approval" ? "awaiting-approval" : "awaiting-interaction";
+}
+
+/** The rows with `waitingStatusOf` applied (same objects when nothing waits). */
+export function withWaitingStatus<T extends WaitingRunRef & { readonly status: string }>(
+  rows: readonly T[],
+  waiting: ReadonlyMap<string, WaitingFor>,
+): readonly T[] {
+  if (waiting.size === 0) return rows;
+  return rows.map((r) => {
+    const status = waitingStatusOf(r.status, waiting.get(r.runId));
+    return status === r.status ? r : { ...r, status };
+  });
+}
+
 /** The options of a `choice` interaction (strings only). */
 export function choiceOptions(schema: unknown): readonly string[] {
   if (!schema || typeof schema !== "object") return [];

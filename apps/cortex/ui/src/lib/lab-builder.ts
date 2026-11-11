@@ -33,10 +33,62 @@ export type BuilderAdHocAction = "run" | "save" | "save-run";
 
 /** The ad-hoc action menu rows. */
 export const BUILDER_ADHOC_ACTIONS: { id: BuilderAdHocAction; label: string; hint: string }[] = [
-  { id: "run", label: "Run without saving", hint: "One-off run; nothing stored under Agents." },
-  { id: "save", label: "Save only", hint: "Store blueprint without starting a run." },
-  { id: "save-run", label: "Save & run", hint: "Create agent and start the first run." },
+  { id: "run", label: "Run without saving", hint: "One-off run; nothing is stored under Saved agents." },
+  { id: "save", label: "Save", hint: "Store the agent without starting a run." },
+  { id: "save-run", label: "Save and run", hint: "Store the agent and start its first run." },
 ];
+
+/** One row of the launch panel's config summary. */
+export interface LaunchSummaryRow {
+  readonly label: string;
+  readonly value: string;
+}
+
+/**
+ * The launch panel's summary of what will run (Bench `lab.html`): model,
+ * strategy (its display name when known), tools selected (the host shell
+ * counts) and the workspace folder.
+ */
+export function launchSummaryOf(
+  config: Pick<AgentConfig, "provider" | "model" | "strategy" | "tools" | "terminalTools" | "workspace">,
+  strategyLabel?: string,
+): readonly LaunchSummaryRow[] {
+  const tools = new Set(config.tools);
+  if (config.terminalTools) tools.add("shell-execute");
+  return [
+    { label: "Model", value: [config.provider, config.model?.trim() || "default model"].filter(Boolean).join(" / ") },
+    { label: "Strategy", value: strategyLabel?.trim() || config.strategy },
+    { label: "Tools", value: tools.size === 0 ? "None" : String(tools.size) },
+    { label: "Workspace", value: config.workspace?.trim() || "None" },
+  ];
+}
+
+/** The example agent "Load example" puts in the Builder, over the current defaults. */
+export function exampleBuilderConfig(defaults: BuilderAgentConfig): BuilderAgentConfig {
+  return {
+    ...defaults,
+    agentName: "my-research-agent",
+    systemPrompt: "You are a thorough research assistant. Always cite sources.",
+    strategy: "plan-execute-reflect",
+    tools: ["web-search", "file-write"],
+    memory: { ...defaults.memory, working: true, episodic: true, semantic: false },
+  };
+}
+
+/**
+ * An imported agent config JSON (the panel's or Lab's Export) loaded over the
+ * defaults, nested blocks merged; null when the text is not a JSON object.
+ */
+export function importBuilderConfig(defaults: BuilderAgentConfig, text: string): BuilderAgentConfig | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  return builderConfigFromAgent(defaults, parsed as BuilderAgentConfig);
+}
 
 /** Inputs the ad-hoc primary button reads. */
 export interface AdHocButtonState {
@@ -61,10 +113,10 @@ export function adHocPrimaryDisabled(s: AdHocButtonState): boolean {
   }
 }
 
-/** Tooltip on the ad-hoc primary button (Save & run without a prompt). */
+/** Tooltip on the Save and run button when the task is empty. */
 export function adHocPrimaryTitle(s: AdHocButtonState): string | undefined {
   if (s.action !== "save-run") return undefined;
-  if (!s.prompt.trim()) return "Add a prompt above — it is stored on the agent and used for the first run.";
+  if (!s.prompt.trim()) return "Add a task: it is stored on the agent and used for the first run.";
   return undefined;
 }
 

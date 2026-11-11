@@ -18,13 +18,13 @@
 
 <label class="flex items-center gap-3 cursor-pointer">
   <input type="checkbox" bind:checked={config.guardrails.enabled} class="accent-primary w-3.5 h-3.5" />
-  <span class="font-mono text-[11px] text-on-surface/80">Enable guardrails</span>
+  <span class="acp-check-t">Enable guardrails</span>
 </label>
 {#if config.guardrails.enabled}
   <!-- The framework detectors are on/off (no sensitivity threshold), so these are switches. -->
   <div class="flex flex-wrap gap-x-4 gap-y-1">
     {#each GUARDRAIL_DETECTORS as g (g.key)}
-      <label class="flex cursor-pointer items-center gap-2 font-mono text-[11px] text-on-surface/80">
+      <label class="flex cursor-pointer items-center gap-2 acp-check-t">
         <input type="checkbox" class="accent-primary w-3.5 h-3.5" checked={config.guardrails[g.key] !== false}
           onchange={(e) => (config = { ...config, guardrails: { ...config.guardrails, [g.key]: (e.currentTarget as HTMLInputElement).checked } })} />
         {g.label}

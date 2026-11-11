@@ -5,6 +5,7 @@ import {
   defaultRequestJson,
   filterCatalog,
   kindLabel,
+  kindTone,
   mcpDraftFromRow,
   mcpDraftJsonError,
   previewMcpImport,
@@ -37,8 +38,9 @@ describe("filterCatalog", () => {
     expect(filterCatalog(catalog, "file").map((t) => t.id)).toEqual(["b"]);
     expect(filterCatalog(catalog, "mcp").map((t) => t.id)).toEqual(["b"]);
   });
-  test("kind labels", () => {
-    expect([kindLabel("built-in"), kindLabel("meta"), kindLabel("mcp"), kindLabel("custom")]).toEqual(["BUILT-IN", "META", "MCP", "CUSTOM"]);
+  test("kind labels are sentence case; tones carry meaning", () => {
+    expect([kindLabel("built-in"), kindLabel("meta"), kindLabel("mcp"), kindLabel("custom")]).toEqual(["Built-in", "Meta", "MCP", "Custom"]);
+    expect([kindTone("built-in"), kindTone("meta"), kindTone("mcp"), kindTone("custom")]).toEqual(["io", "accent", "neutral", "neutral"]);
   });
 });
 

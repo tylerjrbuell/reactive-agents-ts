@@ -3,10 +3,15 @@
   import {
     promptStore,
     PROMPT_TYPES,
+    PROMPT_TYPE_LABEL,
+    PROMPT_TYPE_TONE,
     type StoredPrompt,
     type PromptType,
   } from "$lib/stores/prompt-store.js";
-  import Tooltip from "$lib/components/Tooltip.svelte";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Chip from "$lib/components/kit/Chip.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
 
   interface Props {
     onSelect: (body: string) => void;
@@ -47,12 +52,7 @@
       ),
   );
 
-  const typeBadgeClass: Record<PromptType, string> = {
-    system: "bg-primary/15 text-primary",
-    persona: "bg-tertiary/15 text-tertiary",
-    task: "bg-secondary/15 text-secondary",
-    snippet: "bg-surface-container text-outline",
-  };
+
 
   async function save() {
     if (!saveBody.trim()) return;
@@ -65,124 +65,83 @@
   }
 </script>
 
-<div class="flex flex-col gap-2 p-2 min-w-[280px]">
-  <input
-    type="text"
-    bind:value={search}
-    placeholder="Search prompts…"
-    class="w-full rounded border border-[var(--cortex-border)] bg-surface px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-  />
+<div class="pl">
+  <label class="sr-only" for="pl-search">Search prompts</label>
+  <input id="pl-search" type="search" class="cx-control" bind:value={search} placeholder="Search prompts" />
   {#if visibleTypes.length > 1}
-    <div class="flex gap-1 flex-wrap">
-      <button
-        type="button"
-        class="rounded-full px-2 py-0.5 text-[9px] font-mono border transition-colors
-               {typeFilter === 'all' ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-outline hover:border-primary/30'}"
-        onclick={() => (typeFilter = "all")}
-      >
-        all
-      </button>
+    <div class="filters" role="group" aria-label="Prompt type">
+      <Chip on={typeFilter === "all"} onclick={() => (typeFilter = "all")}>All</Chip>
       {#each visibleTypes as ty (ty)}
-        <button
-          type="button"
-          class="rounded-full px-2 py-0.5 text-[9px] font-mono border transition-colors
-                 {typeFilter === ty ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-outline hover:border-primary/30'}"
-          onclick={() => (typeFilter = typeFilter === ty ? "all" : ty)}
-        >
-          {ty}
-        </button>
+        <Chip on={typeFilter === ty} onclick={() => (typeFilter = typeFilter === ty ? "all" : ty)}>{PROMPT_TYPE_LABEL[ty]}</Chip>
       {/each}
     </div>
   {/if}
-  <div class="max-h-52 overflow-y-auto flex flex-col gap-1">
+  <ul class="list">
     {#each filtered as p (p.id)}
-      <div
-        class="group flex items-start justify-between gap-1 rounded px-2 py-1.5 hover:bg-primary/5 cursor-pointer"
-        role="button"
-        tabindex="0"
-        onclick={() => onSelect(p.body)}
-        onkeydown={(e) => e.key === "Enter" && onSelect(p.body)}
-      >
-        <div class="min-w-0">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <span class="rounded-sm px-1 py-px text-[8px] font-mono uppercase flex-shrink-0 {typeBadgeClass[p.type]}">{p.type}</span>
-            {#if p.name}
-              <div class="font-mono text-[10px] font-semibold text-slate-700 dark:text-on-surface truncate">
-                {p.name}
-              </div>
-            {/if}
-          </div>
-          <div class="font-mono text-[9px] text-outline truncate">
-            {p.body.slice(0, 60)}{p.body.length > 60 ? "…" : ""}
-          </div>
-        </div>
-        <Tooltip text="Delete prompt" class="flex-shrink-0"><button
-          type="button"
-          class="opacity-0 group-hover:opacity-60 text-error hover:opacity-100 transition-opacity"
-          onclick={(e) => {
-            e.stopPropagation();
-            void promptStore.delete(p.id);
-          }}
-          aria-label="Delete prompt"
-        >
-          <span class="material-symbols-outlined text-[14px]">delete</span>
-        </button></Tooltip>
-      </div>
+      <li>
+        <button type="button" class="pick" onclick={() => onSelect(p.body)}>
+          <span class="pick-h">
+            <Badge tone={PROMPT_TYPE_TONE[p.type]}>{PROMPT_TYPE_LABEL[p.type]}</Badge>
+            {#if p.name}<span class="name">{p.name}</span>{/if}
+          </span>
+          <span class="snip">{p.body.slice(0, 80)}{p.body.length > 80 ? "…" : ""}</span>
+        </button>
+        <IconButton icon="trash" size="sm" label={`Delete ${p.name || "prompt"}`} onclick={() => void promptStore.delete(p.id)} />
+      </li>
     {/each}
     {#if filtered.length === 0}
-      <div class="font-mono text-[10px] text-outline text-center py-2">No prompts saved</div>
+      <li class="none">No saved prompts yet.</li>
     {/if}
-  </div>
+  </ul>
   {#if showSaveForm}
-    <div class="flex flex-col gap-1 border-t border-[var(--cortex-border)] pt-2">
-      <div class="flex gap-1">
-        <input
-          bind:value={saveName}
-          placeholder="Name (optional)"
-          class="flex-1 min-w-0 rounded border border-[var(--cortex-border)] px-2 py-1 text-xs font-mono bg-surface focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-        <select
-          bind:value={saveType}
-          class="rounded border border-[var(--cortex-border)] px-1 py-1 text-[10px] font-mono bg-surface focus:outline-none"
-        >
+    <div class="save">
+      <div class="save-row">
+        <input class="cx-control" aria-label="Prompt name" bind:value={saveName} placeholder="Name (optional)" />
+        <select class="cx-control type" aria-label="Prompt type" bind:value={saveType}>
           {#each PROMPT_TYPES as ty (ty)}
-            <option value={ty}>{ty}</option>
+            <option value={ty}>{PROMPT_TYPE_LABEL[ty]}</option>
           {/each}
         </select>
       </div>
-      <textarea
-        bind:value={saveBody}
-        placeholder="Prompt body…"
-        rows={3}
-        class="rounded border border-[var(--cortex-border)] px-2 py-1 text-xs font-mono bg-surface focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-      ></textarea>
-      <div class="flex gap-1">
-        <button
-          onclick={() => void save()}
-          disabled={saving || !saveBody.trim()}
-          class="flex-1 rounded bg-primary text-on-primary text-[10px] font-mono py-1 hover:bg-primary/90 disabled:opacity-40"
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <button
-          onclick={() => {
-            showSaveForm = false;
-          }}
-          class="flex-1 rounded border border-[var(--cortex-border)] text-[10px] font-mono py-1 hover:border-primary"
-        >
-          Cancel
-        </button>
+      <textarea class="cx-control" aria-label="Prompt text" bind:value={saveBody} placeholder="The prompt text" rows={3}></textarea>
+      <div class="save-row">
+        <Button size="sm" variant="ghost" onclick={() => { showSaveForm = false; }}>Cancel</Button>
+        <Button size="sm" variant="primary" disabled={saving || !saveBody.trim()} onclick={() => void save()}>{saving ? "Saving…" : "Save prompt"}</Button>
       </div>
     </div>
   {:else}
-    <button
-      onclick={() => {
-        showSaveForm = true;
-        saveType = defaultSaveType;
-      }}
-      class="rounded border border-[var(--cortex-border)] text-[10px] font-mono py-1 hover:border-primary hover:text-primary transition-colors"
-    >
-      + Save prompt
-    </button>
+    <Button size="sm" icon="plus" onclick={() => { showSaveForm = true; saveType = defaultSaveType; }}>Save a prompt</Button>
   {/if}
 </div>
+
+<style>
+  .pl { display: flex; flex-direction: column; gap: 8px; padding: 8px; min-width: 300px; }
+  .pl :global(.cx-control) { height: 30px; }
+  .pl textarea:global(.cx-control) { height: auto; }
+  .filters { display: flex; flex-wrap: wrap; gap: 4px; }
+  .list { list-style: none; margin: 0; padding: 0; max-height: 13rem; overflow-y: auto; display: grid; gap: 2px; }
+  .list li { display: flex; align-items: flex-start; gap: 2px; }
+  .pick {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--cortex-r-ctl);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--cortex-font-ui);
+  }
+  .pick:hover { background: var(--cortex-surface-2); }
+  .pick:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: -2px; }
+  .pick-h { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .name { font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .snip { font-size: var(--cortex-t-xs); color: var(--cortex-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .none { padding: 8px; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); justify-content: center; }
+  .save { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--cortex-line); }
+  .save-row { display: flex; gap: 6px; justify-content: flex-end; }
+  .save-row :global(.cx-control) { flex: 1; min-width: 0; }
+  .save-row .type { flex: none; width: 7.5rem; }
+</style>

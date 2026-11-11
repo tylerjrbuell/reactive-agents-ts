@@ -28,7 +28,7 @@
 
 <!-- Backdrop — keyboard: Escape handled by buttons inside -->
 <div
-  class="fixed inset-0 z-modalflex items-center justify-center bg-background/70 backdrop-blur-sm"
+  class="fixed inset-0 z-modal flex items-center justify-center bg-background/70 backdrop-blur-sm"
   role="dialog"
   aria-modal="true"
   aria-labelledby="confirm-modal-title"

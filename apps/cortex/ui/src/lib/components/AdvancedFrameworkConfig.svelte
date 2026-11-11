@@ -24,8 +24,10 @@
     manifest: CapabilityManifest | null;
     /** Nested partial AgentConfig; bound so edits flow back to the parent config. */
     rawConfig: Record<string, unknown>;
+    /** Show the fields directly (its own Lab section) instead of inside a collapsed disclosure. */
+    expanded?: boolean;
   }
-  let { manifest, rawConfig = $bindable() }: Props = $props();
+  let { manifest, rawConfig = $bindable(), expanded = false }: Props = $props();
 
   // Framework paths the curated panel already renders — excluded from the
   // generic section to avoid duplicate controls. Everything else framework-
@@ -119,85 +121,99 @@
   const totalRows = $derived(groups.reduce((n, g) => n + g.rows.length, 0));
 </script>
 
-{#if manifest && totalRows > 0}
-  <details class="mt-2 rounded-md border border-[var(--cortex-border)] bg-surface-container-lowest/40">
-    <summary class="cursor-pointer select-none px-3 py-2 font-mono text-[10px] uppercase text-[var(--cortex-text-muted)]">
-      Advanced — framework config
-      <span class="ml-1 opacity-60">({totalRows} fields, auto-synced)</span>
-    </summary>
-    <div class="px-3 pb-3 pt-1">
-      <p class="mb-2 font-mono text-[8px] text-[var(--cortex-text-muted)]">
-        Rendered live from the framework's typed config schema. New framework
-        fields appear here automatically. Curated controls above win on conflict.
-      </p>
-      {#each groups as group (group.name)}
-        <div class="mb-2">
-          <div class="mb-1 font-mono text-[9px] uppercase tracking-wide text-[var(--cortex-text-muted)] opacity-70">{group.name}</div>
-          {#each group.rows as row (row.field.path)}
-            {@const val = getPath(rawConfig, row.field.path)}
-            {@const coll = COLLECTIONS[row.field.path]}
-            <div class="mb-1.5">
-              {#if coll}
-                <label class="config-label block" for={`adv-${row.field.path}`} title={row.field.path}>{row.label}</label>
-                <ListField
-                  id={`adv-${row.field.path}`}
-                  mode={coll.mode}
-                  value={val}
-                  onChange={(next) => setPath(row.field.path, next)}
-                  placeholder={coll.placeholder}
-                  {...(coll.mode === "record" ? { valueKind: coll.valueKind } : { suggestions: coll.suggestions ?? [] })}
-                />
-              {:else if row.field.type === "boolean"}
-                <label class="flex items-center gap-2 font-mono text-[10px]" title={row.field.path}>
-                  <input
-                    type="checkbox"
-                    checked={val === true}
-                    onchange={(e) => setPath(row.field.path, (e.currentTarget as HTMLInputElement).checked)}
-                  />
-                  {row.label}
-                </label>
-              {:else}
-                <label class="config-label block" for={`adv-${row.field.path}`} title={row.field.path}>{row.label}</label>
-                {#if row.field.type === "enum"}
-                  <select
-                    id={`adv-${row.field.path}`}
-                    class="config-input"
-                    value={val ?? ""}
-                    onchange={(e) => setPath(row.field.path, (e.currentTarget as HTMLSelectElement).value || undefined)}
-                  >
-                    <option value="">Default</option>
-                    {#each row.field.enumValues ?? [] as opt (opt)}
-                      <option value={opt}>{opt}</option>
-                    {/each}
-                  </select>
-                {:else if row.field.type === "number"}
-                  <input
-                    id={`adv-${row.field.path}`}
-                    type="number"
-                    class="config-input"
-                    value={val ?? ""}
-                    onchange={(e) => {
-                      const raw = (e.currentTarget as HTMLInputElement).value;
-                      setPath(row.field.path, raw === "" ? undefined : Number(raw));
-                    }}
-                  />
-                {:else}
-                  <input
-                    id={`adv-${row.field.path}`}
-                    type="text"
-                    class="config-input"
-                    value={val ?? ""}
-                    onchange={(e) => setPath(row.field.path, (e.currentTarget as HTMLInputElement).value || undefined)}
-                  />
-                {/if}
-              {/if}
-              {#if row.help}
-                <p class="mt-0.5 font-mono text-[8px] text-[var(--cortex-text-muted)] opacity-70">{row.help}</p>
-              {/if}
-            </div>
-          {/each}
+
+{#snippet fields()}
+  <p class="acp-hint">
+    Read live from the framework's typed config schema: a new framework option shows up here by itself. The settings in the other sections win when both set the same option.
+  </p>
+  {#each groups as group (group.name)}
+    <div class="afc-group">
+      <h4 class="afc-group-h">{group.name}</h4>
+      {#each group.rows as row (row.field.path)}
+        {@const val = getPath(rawConfig, row.field.path)}
+        {@const coll = COLLECTIONS[row.field.path]}
+        <div class="acp-field">
+          {#if coll}
+            <label class="config-label" for={`adv-${row.field.path}`} title={row.field.path}>{row.label}</label>
+            <ListField
+              id={`adv-${row.field.path}`}
+              mode={coll.mode}
+              value={val}
+              onChange={(next) => setPath(row.field.path, next)}
+              placeholder={coll.placeholder}
+              {...(coll.mode === "record" ? { valueKind: coll.valueKind } : { suggestions: coll.suggestions ?? [] })}
+            />
+          {:else if row.field.type === "boolean"}
+            <label class="acp-check" title={row.field.path}>
+              <input
+                type="checkbox"
+                checked={val === true}
+                onchange={(e) => setPath(row.field.path, (e.currentTarget as HTMLInputElement).checked)}
+              />
+              <span><span class="acp-check-t">{row.label}</span></span>
+            </label>
+          {:else}
+            <label class="config-label" for={`adv-${row.field.path}`} title={row.field.path}>{row.label}</label>
+            {#if row.field.type === "enum"}
+              <select
+                id={`adv-${row.field.path}`}
+                class="config-input"
+                value={val ?? ""}
+                onchange={(e) => setPath(row.field.path, (e.currentTarget as HTMLSelectElement).value || undefined)}
+              >
+                <option value="">Default</option>
+                {#each row.field.enumValues ?? [] as opt (opt)}
+                  <option value={opt}>{opt}</option>
+                {/each}
+              </select>
+            {:else if row.field.type === "number"}
+              <input
+                id={`adv-${row.field.path}`}
+                type="number"
+                class="config-input acp-mono"
+                value={val ?? ""}
+                onchange={(e) => {
+                  const raw = (e.currentTarget as HTMLInputElement).value;
+                  setPath(row.field.path, raw === "" ? undefined : Number(raw));
+                }}
+              />
+            {:else}
+              <input
+                id={`adv-${row.field.path}`}
+                type="text"
+                class="config-input"
+                value={val ?? ""}
+                onchange={(e) => setPath(row.field.path, (e.currentTarget as HTMLInputElement).value || undefined)}
+              />
+            {/if}
+          {/if}
+          {#if row.help}
+            <p class="acp-hint">{row.help}</p>
+          {/if}
         </div>
       {/each}
     </div>
-  </details>
+  {/each}
+{/snippet}
+
+{#if manifest && totalRows > 0}
+  {#if expanded}
+    <div class="afc">{@render fields()}</div>
+  {:else}
+    <details class="afc acp-card">
+      <summary class="afc-summary">
+        All framework options <span class="acp-data">{totalRows} fields</span>
+      </summary>
+      <div class="afc">{@render fields()}</div>
+    </details>
+  {/if}
 {/if}
+
+<style>
+  .afc { display: grid; gap: 16px; }
+  .afc-summary { cursor: pointer; font-size: var(--cortex-t-sm); font-weight: 500; color: var(--cortex-text); }
+  .afc-summary:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; border-radius: 4px; }
+  details[open] > .afc-summary { margin-bottom: 12px; }
+  .afc-group { display: grid; gap: 12px; padding-top: 12px; border-top: 1px solid var(--cortex-line); }
+  .afc-group-h { margin: 0; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+</style>

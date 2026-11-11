@@ -128,7 +128,7 @@
       description: "Persistent scheduled agents",
       icon: "clock",
       keywords: ["gateway", "scheduled", "cron", "persistent", "agent"],
-      action: () => gotoTab("gateway"),
+      action: () => gotoTab("agents"),
     },
     {
       id: "lab-skills",
@@ -232,7 +232,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="fixed inset-0 z-modalbg-black/60 backdrop-blur-sm flex items-start justify-center pt-[15vh] px-4"
+    class="fixed inset-0 z-modal bg-black/60 backdrop-blur-sm flex items-start justify-center pt-[15vh] px-4"
     onclick={(e) => e.target === e.currentTarget && commandPalette.close()}
     role="presentation"
   >

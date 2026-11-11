@@ -49,11 +49,9 @@
   }
 </script>
 
-<ConfigSection id="skills" {open} {onToggle}>
+<ConfigSection id="skills" icon="book" title="Living skills" {open} {onToggle}>
   {#snippet head()}
-      <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">auto_awesome</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Living skills</span>
-      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">{(config.skills?.paths ?? []).length} path{(config.skills?.paths ?? []).length !== 1 ? "s" : ""}</span>
+      <span>{(config.skills?.paths ?? []).length} path{(config.skills?.paths ?? []).length !== 1 ? "s" : ""}</span>
   {/snippet}
         <div>
           <label for="skills-paths-lines" class="config-label">Skill directories <span class="text-outline/70 normal-case font-normal">(`withSkills` paths — one per line)</span></label>
@@ -72,6 +70,6 @@
             placeholder={"my-skill-name"}
             rows="2"
             class="config-input resize-none leading-relaxed font-mono text-[11px]"></textarea>
-          <p class="mt-1 font-mono text-[10px] text-[var(--cortex-text-muted)]">Task-relevant skills still auto-activate; this is a deterministic override (<code class="text-[10px]">withSkills({'{'} activate {'}'}</code>).</p>
+          <p class="mt-1 acp-hint">Task-relevant skills still auto-activate; this is a deterministic override (<code>withSkills({'{'} activate {'}'}</code>).</p>
         </div>
 </ConfigSection>

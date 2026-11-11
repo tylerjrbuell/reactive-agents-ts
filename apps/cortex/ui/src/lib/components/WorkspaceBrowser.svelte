@@ -6,6 +6,7 @@
    * refuses relative or missing paths. "Use this folder" hands the path to `onUse`.
    */
   import { onMount } from "svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
   import {
     browseWorkspace,
     pathCrumbs,
@@ -68,9 +69,9 @@
             onclick={() => onUse(s.path)}
             title={`Use ${s.path}`}
           >
-            <span class="material-symbols-outlined text-[15px] leading-none {s.current ? 'text-primary' : 'text-[var(--cortex-text-muted)]'}">{s.current ? "check_circle" : "folder_special"}</span>
+            <span class={s.current ? "text-primary" : "text-[var(--cortex-text-muted)]"}><Icon name={s.current ? "check-circle" : "folder"} size="sm" /></span>
             <span class="flex-shrink-0">{workspaceLabel(s.path)}</span>
-            <span class="min-w-0 flex-1 truncate text-[10px] text-[var(--cortex-text-muted)]">{s.current ? "current" : s.source ? workspaceSourceLabel[s.source] : ""} · {s.path}</span>
+            <span class="min-w-0 flex-1 truncate text-[12px] text-[var(--cortex-text-muted)]">{s.current ? "current" : s.source ? workspaceSourceLabel[s.source] : ""} · {s.path}</span>
           </button>
           <button
             type="button"
@@ -78,7 +79,7 @@
             onclick={() => void open(s.path)}
             aria-label={`Browse inside ${s.path}`}
             title="Browse inside"
-          ><span class="material-symbols-outlined text-[15px] leading-none">chevron_right</span></button>
+          ><Icon name="chevron" size="sm" /></button>
         </li>
       {/each}
     </ul>
@@ -95,45 +96,45 @@
             onclick={() => void open(c.path)}
           >{c.label}</button>
         {/each}
-        {#if listing.isGitRepo}<span class="ml-1 rounded-full border border-secondary/40 px-1.5 text-[9px] text-secondary">git</span>{/if}
+        {#if listing.isGitRepo}<span class="ml-1 rounded-full border border-secondary/40 px-1.5 text-[11px] text-secondary">git</span>{/if}
       </nav>
       <ul class="max-h-48 overflow-y-auto p-1" aria-label="Subfolders" aria-busy={loading}>
         {#if listing.parent}
           <li><button type="button" class="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-left text-[var(--cortex-text-muted)] hover:bg-primary/10" onclick={() => listing?.ok && listing.parent && void open(listing.parent)}>
-            <span class="material-symbols-outlined text-[15px] leading-none">arrow_upward</span>..
+            <Icon name="back" size="sm" />..
           </button></li>
         {/if}
         {#each listing.entries as e (e.path)}
           <li><button type="button" class="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-left text-[var(--cortex-text)] hover:bg-primary/10" onclick={() => void open(e.path)}>
-            <span class="material-symbols-outlined text-[15px] leading-none text-[var(--cortex-text-muted)]">folder</span>
+            <span class="text-[var(--cortex-text-muted)]"><Icon name="folder" size="sm" /></span>
             <span class="min-w-0 flex-1 truncate">{e.name}</span>
-            {#if e.isGitRepo}<span class="rounded-full border border-secondary/40 px-1.5 text-[9px] text-secondary">git</span>{/if}
+            {#if e.isGitRepo}<span class="rounded-full border border-secondary/40 px-1.5 text-[11px] text-secondary">git</span>{/if}
           </button></li>
         {:else}
-          <li class="px-2 py-1 text-[10px] text-[var(--cortex-text-muted)]">No subfolders here.</li>
+          <li class="px-2 py-1 text-[12px] text-[var(--cortex-text-muted)]">No subfolders here.</li>
         {/each}
-        {#if listing.truncated}<li class="px-2 py-1 text-[10px] text-[var(--cortex-text-muted)]">Showing the first {listing.entries.length} folders.</li>{/if}
+        {#if listing.truncated}<li class="px-2 py-1 text-[12px] text-[var(--cortex-text-muted)]">Showing the first {listing.entries.length} folders.</li>{/if}
       </ul>
     {:else if listing && !listing.ok}
-      <p class="px-2 py-2 text-[10px] text-error">{listing.error}</p>
+      <p class="px-2 py-2 text-[12px] text-error">{listing.error}</p>
     {:else}
-      <p class="px-2 py-2 text-[10px] text-[var(--cortex-text-muted)]">Loading folders…</p>
+      <p class="px-2 py-2 text-[12px] text-[var(--cortex-text-muted)]">Loading folders…</p>
     {/if}
   </div>
-  {#if browseError}<p class="text-[10px] text-error">{browseError}</p>{/if}
+  {#if browseError}<p class="text-[12px] text-error">{browseError}</p>{/if}
 
   <div class="flex flex-wrap items-center justify-between gap-2">
-    <label class="flex cursor-pointer items-center gap-1.5 text-[10px] text-[var(--cortex-text-muted)]">
+    <label class="flex cursor-pointer items-center gap-1.5 text-[12px] text-[var(--cortex-text-muted)]">
       <input type="checkbox" bind:checked={hidden} onchange={() => listing?.ok && void open(listing.path)} />
       Show hidden folders
     </label>
     <div class="flex items-center gap-2">
       {#if onCancel}
-        <button type="button" class="cursor-pointer rounded border border-[color:var(--cortex-border)] px-3 py-1 text-[10px] text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" onclick={onCancel}>Cancel</button>
+        <button type="button" class="cursor-pointer rounded border border-[color:var(--cortex-border)] px-3 py-1 text-[12px] text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" onclick={onCancel}>Cancel</button>
       {/if}
       <button
         type="button"
-        class="cursor-pointer rounded border border-primary/40 bg-primary/10 px-3 py-1 text-[10px] text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+        class="cursor-pointer rounded border border-primary/40 bg-primary/10 px-3 py-1 text-[12px] text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
         disabled={!listing?.ok}
         onclick={() => listing?.ok && onUse(listing.path)}
         title={listing?.ok ? listing.path : undefined}

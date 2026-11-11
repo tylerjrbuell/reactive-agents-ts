@@ -76,18 +76,20 @@ export const EMPTY_MCP_DRAFT: McpDraft = {
 
 /** Badge text for a tool kind. */
 export function kindLabel(k: ToolKind): string {
-  if (k === "built-in") return "BUILT-IN";
-  if (k === "meta") return "META";
+  if (k === "built-in") return "Built-in";
+  if (k === "meta") return "Meta";
   if (k === "mcp") return "MCP";
-  return "CUSTOM";
+  return "Custom";
 }
 
-/** Badge colour classes for a tool kind. */
-export function kindBadgeClass(k: ToolKind): string {
-  if (k === "built-in") return "text-cyan-300/90 border-cyan-500/35 bg-cyan-500/10";
-  if (k === "meta") return "text-violet-300/90 border-violet-500/35 bg-violet-500/10";
-  if (k === "mcp") return "text-amber-300/90 border-amber-500/35 bg-amber-500/10";
-  return "text-emerald-300/90 border-emerald-500/35 bg-emerald-500/10";
+/**
+ * Kit Badge tone for a tool kind: built-in tools are cyan (tools and data),
+ * meta tools violet (the agent's own harness), MCP and custom neutral.
+ */
+export function kindTone(k: ToolKind): "io" | "accent" | "neutral" {
+  if (k === "built-in") return "io";
+  if (k === "meta") return "accent";
+  return "neutral";
 }
 
 /** When a tool was last used (ui-core `formatRelativeTime`: "5 minutes ago"), or "—" when never. */

@@ -12,6 +12,7 @@
   import Button from "$lib/components/kit/Button.svelte";
   import Chip from "$lib/components/kit/Chip.svelte";
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
+  import { toastKeepClear } from "$lib/toast-clearance.js";
 
   interface Props {
     placeholder?: string;
@@ -64,7 +65,7 @@
 </script>
 
 <div class="bar">
-  <div class="anchor">
+  <div class="anchor" use:toastKeepClear>
     {#if expanded}
       <div class="config" role="region" aria-label="Agent settings for this run">
         <AgentConfigPanel bind:config compact={false} />

@@ -1,5 +1,6 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
+  import Badge from "$lib/components/kit/Badge.svelte";
   import type { PanelAgentConfig } from "../types.js";
 
   interface Props {
@@ -10,13 +11,9 @@
   let { config = $bindable(), open, onToggle }: Props = $props();
 </script>
 
-<ConfigSection id="observability" {open} {onToggle}>
+<ConfigSection id="observability" icon="trace" title="Observability" {open} {onToggle}>
   {#snippet head()}
-      <span class="material-symbols-outlined text-[15px] text-[var(--cortex-text-muted)] shrink-0" aria-hidden="true">monitoring</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Observability</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-cyan)_14%,transparent)] px-1.5 py-0.5 text-[11px] font-mono text-secondary">
-        {config.observabilityVerbosity}
-      </span>
+      <Badge tone="io" data>{config.observabilityVerbosity}</Badge>
   {/snippet}
         <label for="observability-off" class="config-label">Metrics Dashboard Verbosity</label>
         <div class="acp-field">
@@ -34,7 +31,7 @@
                 class="mt-0.5 accent-primary flex-shrink-0" />
               <div>
                 <div class="font-mono text-[11px] font-semibold text-on-surface/80">{opt.label}</div>
-                <div class="font-mono text-[11px] text-outline/70">{opt.desc}</div>
+                <div class="acp-hint">{opt.desc}</div>
               </div>
             </label>
           {/each}
@@ -44,8 +41,8 @@
             checked={config.observability?.checklist !== false}
             onchange={(e) => (config = { ...config, observability: { ...config.observability, checklist: e.currentTarget.checked } })} />
           <div>
-            <div class="font-mono text-[11px] text-on-surface/80">Show task checklist</div>
-            <div class="font-mono text-[11px] text-outline/70">Live plan card in chat: goal checks and the agent's to-do</div>
+            <div class="acp-check-t">Show task checklist</div>
+            <div class="acp-hint">Live plan card in chat: goal checks and the agent's to-do</div>
           </div>
         </label>
 </ConfigSection>

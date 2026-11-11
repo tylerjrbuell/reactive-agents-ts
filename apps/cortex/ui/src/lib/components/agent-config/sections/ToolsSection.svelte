@@ -1,5 +1,8 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
   import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
@@ -21,8 +24,10 @@
     shellPresets: Record<string, string[]>;
     mcpCatalog: McpCatalogRow[];
     loadMcpCatalog: () => void | Promise<void>;
+    /** The shell and workspace fields render as their own section (Lab builder nav): leave them out here. */
+    splitShell?: boolean;
   }
-  let { config = $bindable(), open, onToggle, toolsToggle, tools: AVAILABLE_TOOLS, shellPresets, mcpCatalog, loadMcpCatalog }: Props = $props();
+  let { config = $bindable(), open, onToggle, toolsToggle, tools: AVAILABLE_TOOLS, shellPresets, mcpCatalog, loadMcpCatalog, splitShell = false }: Props = $props();
 
   function toggleTool(id: string) {
     const tools = config.tools.includes(id)
@@ -76,26 +81,23 @@
   }
 </script>
 
-<ConfigSection id="tools" {open} {onToggle}>
+<ConfigSection id="tools" icon="tool" title="Tools" {open} {onToggle}>
   {#snippet head()}
-      <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">construction</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Tools</span>
-      <span class="ml-2 rounded-md bg-[color-mix(in_srgb,var(--ra-amber)_16%,transparent)] px-1.5 py-0.5 text-[11px] font-mono text-tertiary">{toolsToggle && !toolsToggle.enabled ? "off" : `${toolCountForBadges} active`}</span>
+      <Badge tone={toolsToggle && !toolsToggle.enabled ? "neutral" : "io"}>{toolsToggle && !toolsToggle.enabled ? "Off" : `${toolCountForBadges} selected`}</Badge>
   {/snippet}
         {#if toolsToggle}
-          <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40 p-3">
+          <label class="acp-check acp-check-box">
             <input
               type="checkbox"
               role="switch"
               checked={toolsToggle.enabled}
               onchange={(e) => toolsToggle.onChange((e.currentTarget as HTMLInputElement).checked)}
-              class="mt-0.5 accent-primary shrink-0"
             />
-            <span class="min-w-0">
-              <span class="block font-mono text-[11px] text-[var(--cortex-text)]">Tools {toolsToggle.enabled ? "on" : "off"}</span>
-              <span class="block font-mono text-[10px] leading-relaxed text-[var(--cortex-text-muted)]">
+            <span>
+              <span class="acp-check-t">Tools {toolsToggle.enabled ? "on" : "off"}</span>
+              <span class="acp-hint">
                 {#if toolsToggle.enabled}
-                  {toolsToggle.auto ? "On because tools are selected below. " : ""}Switch off to chat without any tools — your selection is kept.
+                  {toolsToggle.auto ? "On because tools are selected below. " : ""}Switch off to chat without any tools; your selection is kept.
                 {:else}
                   The agent answers without tools. Switch on to use the selection below.
                 {/if}
@@ -104,23 +106,22 @@
           </label>
         {/if}
         <div class="acp-stack transition-opacity {toolsToggle && !toolsToggle.enabled ? 'pointer-events-none opacity-45' : ''}" aria-disabled={toolsToggle ? !toolsToggle.enabled : undefined}>
-        <ShellWorkspaceFields bind:config {shellPresets} />
+        {#if !splitShell}<ShellWorkspaceFields bind:config {shellPresets} />{/if}
         <ToolDisclosureField bind:rawConfig={config.rawConfig} />
         <div class="acp-field">
-        <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
-          Quick picks toggle framework tool IDs in <code class="text-[10px]">allowedTools</code>. Conductor meta-tools (brief, find, …) are configured separately below in <strong>Meta tools</strong>.
-        </p>
-        <div class="grid grid-cols-2 gap-1.5">
-          {#each AVAILABLE_TOOLS as tool}
+        <span class="config-label">Quick picks</span>
+        <div class="acp-chips" role="group" aria-label="Built-in tools and shell toolsets">
+          {#each AVAILABLE_TOOLS as tool (tool.id)}
             {@const active = config.tools.includes(tool.id)}
-            <button type="button" onclick={() => toggleTool(tool.id)}
-              class="flex items-center gap-2 px-2.5 py-2 rounded-lg border text-[11px] font-mono text-left cursor-pointer transition-all
-                     {active ? 'bg-tertiary/10 border-tertiary/30 text-tertiary/90' : 'border-outline-variant/15 text-outline/75 hover:border-outline-variant/30'}">
-              <span class="material-symbols-outlined text-[12px]">{tool.icon}</span>
+            <button type="button" class="acp-toolchip" aria-pressed={active} onclick={() => toggleTool(tool.id)}>
+              <Icon name={tool.icon} size="sm" />
               {tool.label}
             </button>
           {/each}
         </div>
+        <p class="acp-hint">
+          Each pick adds a framework tool id to <code>allowedTools</code>. Meta tools (brief, find, …) live in Meta tools.
+        </p>
         </div>
         <div class="acp-field">
           <label for="acp-additional-tool-names" class="config-label mb-0">Additional allowed tools</label>
@@ -129,44 +130,38 @@
             rows={2}
             bind:value={config.additionalToolNames}
             placeholder="e.g. my-lab-tool, server/http_get (comma or newline)"
-            class="config-input font-mono text-[11px] min-h-[2.5rem] resize-y"
+            class="config-input min-h-[2.5rem] resize-y"
           ></textarea>
-          <p class="font-mono text-[10px] text-outline/70 leading-relaxed">
-            Merged with the toggles above at run time. Use exact tool registration names (see Lab → Tools for MCP and custom tools).
+          <p class="acp-hint">
+            Merged with the picks at run time. Use exact tool registration names (Lab · Tools lists MCP and custom tools).
           </p>
         </div>
         <div class="acp-group">
           <div class="flex items-center justify-between gap-2">
-            <span class="config-label mb-0">MCP tools <span class="text-outline/70 normal-case font-normal">(from Tools tab)</span></span>
-            <button type="button" onclick={() => loadMcpCatalog()}
-              class="text-[11px] font-mono text-secondary hover:text-primary bg-transparent border-0 cursor-pointer">↻ Refresh list</button>
+            <span class="config-label mb-0">MCP tools</span>
+            <Button size="sm" variant="ghost" icon="retry" onclick={() => loadMcpCatalog()}>Refresh list</Button>
           </div>
           {#if mcpCatalog.length === 0}
-            <p class="font-mono text-[11px] text-outline/70">No MCP servers saved. Add one under Lab → Tools.</p>
+            <p class="acp-hint">No MCP servers saved. Add one under Lab · Tools.</p>
           {:else}
-            {#each mcpCatalog as srv}
+            {#each mcpCatalog as srv (srv.serverId)}
               <div class="acp-card">
                 {#if srv.tools.length > 0}
                   <div class="flex items-center justify-between gap-2">
-                    <Tooltip text={selectedIn(srv) === srv.tools.length ? "Click to deselect every tool from this server" : "Click to select every tool from this server"}><button type="button" onclick={() => toggleMcpServer(srv)}
-                     
-                      class="rounded px-1.5 py-0.5 font-mono text-[11px] cursor-pointer border-0 bg-transparent transition-colors hover:bg-primary/10
-                             {selectedIn(srv) === srv.tools.length ? 'text-primary' : 'text-on-surface/80'}">{srv.name}</button></Tooltip>
-                    <span class="font-mono text-[11px] text-outline/70">{selectedIn(srv)}/{srv.tools.length} selected</span>
+                    <Tooltip text={selectedIn(srv) === srv.tools.length ? "Deselect every tool from this server" : "Select every tool from this server"}><button type="button" onclick={() => toggleMcpServer(srv)}
+                      class="acp-linkbtn" aria-pressed={selectedIn(srv) === srv.tools.length}>{srv.name}</button></Tooltip>
+                    <span class="acp-data">{selectedIn(srv)}/{srv.tools.length} selected</span>
                   </div>
                 {:else}
-                  <div class="font-mono text-[11px] text-on-surface/80">{srv.name}</div>
+                  <div class="acp-data">{srv.name}</div>
                 {/if}
                 {#if srv.tools.length === 0}
-                  <p class="font-mono text-[11px] text-outline/70">No tools cached — run “Refresh tools” in Tools tab.</p>
+                  <p class="acp-hint">No tools cached. Run Refresh tools in Lab · Tools.</p>
                 {:else}
-                  <div class="flex flex-wrap gap-1">
-                    {#each srv.tools as mt}
+                  <div class="acp-chips">
+                    {#each srv.tools as mt (mt.toolName)}
                       {@const active = config.tools.includes(mt.toolName)}
-                      <Tooltip text={mt.description ?? ""}><button type="button" onclick={() => toggleMcpRegistryTool(srv.serverId, mt.toolName)}
-                       
-                        class="px-2 py-1 rounded border text-[11px] font-mono cursor-pointer transition-colors
-                               {active ? 'bg-primary/10 border-primary/35 text-primary' : 'border-outline-variant/20 text-outline/75 hover:border-primary/25'}">
+                      <Tooltip text={mt.description ?? ""}><button type="button" class="acp-toolchip" aria-pressed={active} onclick={() => toggleMcpRegistryTool(srv.serverId, mt.toolName)}>
                         {mt.toolName.startsWith(`${srv.name}/`) ? mt.toolName.slice(srv.name.length + 1) : mt.toolName}
                       </button></Tooltip>
                     {/each}
@@ -177,7 +172,7 @@
           {/if}
         </div>
         <div class="acp-group">
-          <label class="flex items-center gap-3 cursor-pointer">
+          <label class="acp-check">
             <input type="checkbox"
               checked={config.dynamicSubAgents?.enabled ?? false}
               onchange={() => (config = {
@@ -186,12 +181,11 @@
                   enabled: !(config.dynamicSubAgents?.enabled ?? false),
                   maxIterations: config.dynamicSubAgents?.maxIterations ?? 8,
                 },
-              })}
-              class="accent-primary w-3.5 h-3.5" />
-            <div>
-              <div class="font-mono text-[11px] text-on-surface/80">Dynamic sub-agents</div>
-              <div class="font-mono text-[11px] text-outline/70">Expose <code class="text-[10px]">spawn-agent</code> for runtime delegation</div>
-            </div>
+              })} />
+            <span>
+              <span class="acp-check-t">Dynamic sub-agents</span>
+              <span class="acp-hint">Gives the agent <code>spawn-agent</code> to hand work to a new agent while it runs.</span>
+            </span>
           </label>
           {#if config.dynamicSubAgents?.enabled}
             <div>

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { get } from "svelte/store";
-import { bulkDeleteConfirmMessage, createGatewayAgentsStore, pruneSelection, type GatewayRow } from "./gateway-agents-store.js";
+import { bulkDeleteConfirmMessage, createGatewayAgentsStore, pruneSelection, savedAgentStatusOf, type GatewayRow } from "./gateway-agents-store.js";
 import { defaultConfig } from "../types/agent-config.js";
 
 type Call = { url: string; method: string; body?: unknown };
@@ -94,5 +94,17 @@ describe("helpers", () => {
     expect(msg).not.toContain("· a6");
     expect(msg).toEndWith("… and 2 more");
     expect(bulkDeleteConfirmMessage([row("x")])).toContain("1 saved agent and");
+  });
+});
+
+describe("savedAgentStatusOf", () => {
+  test("active, paused and stopped read in sentence case with an outcome tone", () => {
+    expect(savedAgentStatusOf("active")).toEqual({ tone: "ok", label: "Active" });
+    expect(savedAgentStatusOf("paused")).toEqual({ tone: "warn", label: "Paused" });
+    expect(savedAgentStatusOf("stopped")).toEqual({ tone: "neutral", label: "Stopped" });
+  });
+  test("anything else is red and keeps its word", () => {
+    expect(savedAgentStatusOf("error")).toEqual({ tone: "bad", label: "Error" });
+    expect(savedAgentStatusOf("")).toEqual({ tone: "bad", label: "Unknown" });
   });
 });

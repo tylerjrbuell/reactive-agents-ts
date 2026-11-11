@@ -6,6 +6,8 @@
    * or `terminalShellAllowedCommands` and clear legacy `commandAccess` (`shell-allowlist.ts`).
    */
   import { onMount } from "svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { defaultShellOptions, type AgentConfig } from "$lib/types/agent-config.js";
   import {
@@ -69,30 +71,24 @@
 </script>
 
 <div class="acp-field">
-  <span id="acp-shell-commands-label" class="config-label mb-0 text-[11px]">Allowed commands</span>
+  <span id="acp-shell-commands-label" class="config-label">Allowed commands</span>
   {#if catalog}
-    <p data-testid="shell-commands-summary" class="font-mono text-[10px] text-[var(--cortex-text-muted)]">
+    <p data-testid="shell-commands-summary" class="acp-hint">
       {list.length} commands ·
       {#if replacesDefaults}custom list (replaces the framework defaults){:else if added.length > 0}framework defaults + {added.length} added{:else}framework defaults{/if}
     </p>
-    <ul class="flex flex-wrap gap-1" aria-labelledby="acp-shell-commands-label" data-testid="shell-commands">
+    <ul class="acp-chips" aria-labelledby="acp-shell-commands-label" data-testid="shell-commands">
       {#each list as cmd (cmd)}
         {@const risky = isOptInCommand(cmd, catalog)}
-        <li
-          class="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] text-[var(--cortex-text)] {risky
-            ? 'border-[color-mix(in_srgb,var(--ra-amber)_55%,var(--cortex-border))] bg-[color-mix(in_srgb,var(--ra-amber)_12%,transparent)]'
-            : 'border-[var(--cortex-border)] bg-[var(--cortex-surface-mid)]/50'}"
-          title={risky ? `${cmd}: opt-in command, can run code or move data` : undefined}
-        >
+        <li class="acp-cmd" class:risky title={risky ? `${cmd}: opt-in command, can run code or move data` : undefined}>
           {cmd}
           <button
             type="button"
-            class="cursor-pointer text-[var(--cortex-text-muted)] hover:text-error disabled:cursor-not-allowed disabled:opacity-40"
             aria-label={`Remove ${cmd}`}
             disabled={list.length <= 1}
             onclick={() => setList(list.filter((c) => c !== cmd))}
           >
-            <span class="material-symbols-outlined text-[12px] leading-none">close</span>
+            <Icon name="x" size="sm" />
           </button>
         </li>
       {/each}
@@ -101,7 +97,7 @@
       <input
         id="acp-shell-command-add"
         type="text"
-        class="config-input min-w-0 flex-1 font-mono text-[11px]"
+        class="config-input acp-mono min-w-0 flex-1"
         placeholder="Add a command, e.g. stripe (Enter)"
         aria-label="Add allowed command"
         bind:value={draft}
@@ -112,38 +108,28 @@
           }
         }}
       />
-      <button
-        type="button"
-        class="cursor-pointer rounded-md border border-[var(--cortex-border)] px-2 py-1 font-mono text-[10px] text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]"
-        onclick={addDraft}>Add</button>
+      <Button size="sm" onclick={addDraft}>Add</Button>
       {#if replacesDefaults || added.length > 0}
-        <button
-          type="button"
-          class="cursor-pointer px-1 font-mono text-[10px] text-[var(--cortex-text-muted)] underline decoration-dotted hover:text-[var(--cortex-text)]"
-          onclick={() => setList(catalog!.defaults)}>Reset</button>
+        <Button size="sm" variant="ghost" onclick={() => setList(catalog!.defaults)}>Reset</Button>
       {/if}
     </div>
     {#if inputError}
-      <p class="font-mono text-[10px] text-error" role="alert">{inputError}</p>
+      <p class="acp-hint acp-bad" role="alert">{inputError}</p>
     {/if}
     {#if quickAdds.length > 0}
       <div class="flex flex-col gap-1" data-testid="shell-quick-add">
-        <span class="font-mono text-[10px] text-[var(--cortex-text-muted)]">Opt-in, add only if you accept the risk:</span>
+        <span class="acp-hint">Opt-in commands. Add them only if you accept the risk:</span>
         {#each quickAdds as g (g.id)}
-          <button
-            type="button"
-            class="flex cursor-pointer items-baseline gap-2 rounded-md border border-dashed border-[color-mix(in_srgb,var(--ra-amber)_40%,var(--cortex-border))] px-2 py-1 text-left font-mono text-[10px] text-[var(--cortex-text)] hover:bg-[color-mix(in_srgb,var(--ra-amber)_10%,transparent)]"
-            onclick={() => setList(withCommands(list, g.missing))}
-          >
-            <span>+ {g.label}: {g.missing.join(" ")}</span>
-            <span class="text-[var(--cortex-text-muted)]">{g.note}</span>
+          <button type="button" class="acp-quickadd" onclick={() => setList(withCommands(list, g.missing))}>
+            <span class="acp-data">+ {g.label}: {g.missing.join(" ")}</span>
+            <span class="acp-hint">{g.note}</span>
           </button>
         {/each}
       </div>
     {/if}
   {:else if loadFailed}
-    <p class="font-mono text-[10px] text-error">Could not load the framework allowlist from the server; the command list cannot be edited right now.</p>
+    <p class="acp-hint acp-bad">Could not load the framework allowlist from the server, so the command list cannot be edited right now.</p>
   {:else}
-    <p class="font-mono text-[10px] text-[var(--cortex-text-muted)]">Loading allowed commands…</p>
+    <p class="acp-hint" role="status">Loading allowed commands…</p>
   {/if}
 </div>

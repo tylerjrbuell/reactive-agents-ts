@@ -100,7 +100,8 @@ Under Settings · Motion, **Reduce motion** (or the system setting) stills the b
 - **Waiting on you** — a strip above the list, shown only while something waits: runs paused on an approval gate (**Approve**, **Deny**, Open run or Open chat) and `request_user_input` questions (the choice buttons, Yes / No, or a short form, answered in place).
 - **Toolbar** — search (name, chat, agent, model, strategy), a status segment with counts (All, Running, Waiting, Finished, Failed, Stopped), sort, and the token and cost totals of the runs in view.
 - **Pins and bulk delete** — pinned runs sit in their own group at the top; select rows to delete them together.
-- A run stopped from the run view, or a chat turn stopped or left mid-reply, reads **Stopped**, never live or failed.
+- A run stopped from the run view, or a chat turn stopped or left mid-reply, reads **Stopped**, never live or failed. **Stop** asks the agent to stop at its next step; if it is still working a few seconds later (inside a long model call), Cortex ends it the way **Terminate** does. **Terminate** aborts the run at once.
+- A run paused at an approval gate or on a question reads **Waiting on you** (in Runs, the run view and Beacon), not Running.
 
 ### Run View — Deep Inspection
 
@@ -244,18 +245,19 @@ A turn that pauses for approval shows an approval card in the thread, and one th
 
 The chat quick bar sets strategy, tools, shell, workspace, and the per-turn step cap next to provider and model.
 
-### Lab — Builder, Skills, Tools, and Gateway
+### Lab — Builder, Saved agents, Skills, Tools, and Prompts
 
-The Lab view is the **workshop** for configuring and launching agents directly from the Cortex UI without writing code:
+The Lab (`/lab`) is the **workshop** for configuring and launching agents directly from the Cortex UI without writing code. Its header has **Import** (load an agent config JSON into the Builder), **Export** (the Builder's agent as TypeScript or JSON) and **Load example**.
 
 ![Cortex Agent Lab — Builder tab open showing the agent blueprint editor with expandable sections for Inference, Persona, Reasoning, Tools, Sub-Agents, Skills, Memory, Guardrails, and Execution. Provider and model dropdowns show `ollama / gemma4:e4b`.](../../../assets/cortex-builder.png)
 
-| Tab         | Purpose                                                                                                                            |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Builder** | Visual agent configurator — choose provider, model, capabilities, and submit a prompt. The **Inference** section includes a **Context length (`numCtx`)** field to pin the exact provider context window (Ollama `num_ctx`); it also drives the context-usage gauge. Runs are immediately tracked in Beacon. |
-| **Gateway** | Manage persistent gateway agents: list all saved agents, see their status, last run time, and schedule. Start/stop on demand.      |
-| **Skills**  | Browse all `SKILL.md` files discovered in the workspace and stored in SQLite. View skill content, metadata, and evolution history. |
-| **Tools**   | Workshop for testing individual tools — invoke any registered tool with custom parameters and inspect the result.                  |
+| Tab (URL hash)               | Purpose                                                                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Builder** (`/lab`)         | Three columns: a section nav with **Find a setting** (Model, Persona, Reasoning, Tools, Shell and workspace, Sub-agents, Skills, Memory, Guardrails, Execution, Reliability, Observability, All framework options), the chosen section's settings, and **Run this agent**: On demand or Gateway process, a name, the task, a summary of what will run (model, strategy, tools, workspace), then **Save and run**, **Save** or **Run without saving** (a gateway agent: **Create gateway agent**). The **Model** section includes a **Context length (`numCtx`)** field to pin the exact provider context window (Ollama `num_ctx`); it also drives the context-usage gauge. Runs are immediately tracked in Beacon. |
+| **Saved agents** (`#agents`) | Saved on-demand and gateway agents: status, schedule, runs and stats. **Run** starts one now; **Pause** / **Activate** a gateway agent; **Use in Builder**, edit, export, delete. The old `#gateway` link still opens this tab. |
+| **Skills** (`#skills`)       | Browse all `SKILL.md` files discovered in the workspace and stored in SQLite. View skill content and front matter, and add skill folders to the Builder. |
+| **Tools** (`#tools`)         | Workshop for testing individual tools — invoke any registered tool with custom parameters and inspect the result. **Create tool** adds an MCP server (manual setup or JSON import) or a custom Lab tool. |
+| **Prompts** (`#prompts`)     | Reusable system prompts, personas, tasks and snippets for the Builder, chat and Beacon.                                             |
 
 ---
 

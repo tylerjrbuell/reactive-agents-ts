@@ -1,6 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import MarkdownRich from "$lib/components/MarkdownRich.svelte";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import EmptyState from "$lib/components/kit/EmptyState.svelte";
+  import Field from "$lib/components/kit/Field.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Input from "$lib/components/kit/Input.svelte";
+  import Panel from "$lib/components/kit/Panel.svelte";
+  import Textarea from "$lib/components/kit/Textarea.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import {
     formatYamlValue,
@@ -120,305 +128,253 @@
   }
 </script>
 
-    <div class="flex flex-col flex-1 min-h-0 overflow-hidden gap-3">
-      {#if ui.showNewSkillForm}
-        <div
-          class="gradient-border flex-shrink-0 rounded-lg p-4 shadow-md dark:shadow-[0_0_40px_-16px_rgba(139,92,246,0.25)]"
-        >
-          <div class="max-w-2xl space-y-3">
-            <div class="flex items-center justify-between">
-              <h3 class="font-headline text-sm font-semibold text-slate-900 dark:text-on-surface">New Skill</h3>
-              <button type="button" onclick={() => (ui.showNewSkillForm = false)}
-                class="material-symbols-outlined cursor-pointer border-0 bg-transparent text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-primary"
-                >close</button>
-            </div>
+<div class="skills">
+  <div class="head">
+    <p class="intro">
+      Skills are <code>.agents/skills/&lt;name&gt;/SKILL.md</code> files (YAML front matter and markdown). Cortex scans the server's working folder and its own app folder;
+      set <code>CORTEX_SKILL_SCAN_ROOT</code> to add another.
+    </p>
+    <div class="head-actions">
+      <Button icon="retry" onclick={() => { void store.loadDiscover(); void store.loadFsSkills(); }}>Rescan</Button>
+      <Button variant="primary" icon="plus" onclick={() => (ui.showNewSkillForm = true)}>New skill</Button>
+    </div>
+  </div>
 
-            <div>
-              <label for="new-skill-name" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Name *</label>
-              <input id="new-skill-name" bind:value={ui.newSkillName} placeholder="my-skill"
-                class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
-            </div>
+  {#if ui.showNewSkillForm}
+    <Panel class="newskill">
+      <div class="newskill-h">
+        <h2>New skill</h2>
+        <IconButton icon="x" label="Close the form" onclick={() => (ui.showNewSkillForm = false)} />
+      </div>
+      <div class="newskill-grid">
+        <Field id="new-skill-name" label="Name">
+          <Input id="new-skill-name" bind:value={ui.newSkillName} mono placeholder="my-skill" />
+        </Field>
+        <Field id="new-skill-description" label="Description" hint="Optional: one line on when to use it.">
+          <Input id="new-skill-description" bind:value={ui.newSkillDescription} placeholder="Brief one-liner" describedBy="new-skill-description-hint" />
+        </Field>
+        <Field id="new-skill-instructions" label="Instructions" class="wide">
+          <Textarea id="new-skill-instructions" bind:value={ui.newSkillInstructions} rows={6} placeholder="What this skill does and how to use it" />
+        </Field>
+        <Field id="new-skill-tags" label="Tags" hint="Optional, comma separated.">
+          <Input id="new-skill-tags" bind:value={ui.newSkillTags} placeholder="analytics, reporting, data" describedBy="new-skill-tags-hint" />
+        </Field>
+      </div>
+      <div class="newskill-actions">
+        <Button variant="ghost" onclick={() => (ui.showNewSkillForm = false)}>Cancel</Button>
+        <Button variant="primary" icon="check" disabled={ui.newSkillSaving || !ui.newSkillName.trim() || !ui.newSkillInstructions.trim()} onclick={createNewSkill}>
+          {ui.newSkillSaving ? "Saving…" : "Create skill"}
+        </Button>
+      </div>
+    </Panel>
+  {/if}
 
-            <div>
-              <label for="new-skill-instructions" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Instructions *</label>
-              <textarea id="new-skill-instructions" bind:value={ui.newSkillInstructions} placeholder="Describe what this skill does and how to use it…" rows="6"
-                class="w-full resize-none rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/50 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20">
-              </textarea>
-            </div>
-
-            <div>
-              <label for="new-skill-description" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Description <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/55">(optional)</span></label>
-              <input id="new-skill-description" bind:value={ui.newSkillDescription} placeholder="Brief one-liner"
-                class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
-            </div>
-
-            <div>
-              <label for="new-skill-tags" class="mb-1.5 block font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Tags <span class="font-normal normal-case text-slate-400 dark:text-on-surface-variant/55">(comma-separated, optional)</span></label>
-              <input id="new-skill-tags" bind:value={ui.newSkillTags} placeholder="analytics, reporting, data"
-                class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:focus:border-secondary/55 dark:focus:ring-secondary/20" />
-            </div>
-
-            <div class="flex justify-end gap-2 pt-2">
-              <button type="button" onclick={() => (ui.showNewSkillForm = false)}
-                class="cursor-pointer rounded border border-[var(--cortex-border)] bg-transparent px-4 py-1.5 font-mono text-[10px] uppercase text-slate-600 transition-colors hover:border-primary/35 hover:text-primary dark:border-white/10 dark:text-on-surface-variant dark:hover:text-on-surface">
-                Cancel</button>
-              <button type="button" disabled={ui.newSkillSaving || !ui.newSkillName.trim() || !ui.newSkillInstructions.trim()} onclick={createNewSkill}
-                class="px-6 py-1.5 rounded border-0 cursor-pointer font-mono text-[10px] uppercase text-white disabled:opacity-40 hover:brightness-110 transition-all"
-                style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);">
-                {ui.newSkillSaving ? "Saving…" : "Create Skill"}
-              </button>
-            </div>
+  <div class="cols">
+    <!-- Catalog -->
+    <aside class="catalog" aria-label="Skill catalog">
+      <div class="catalog-filter">
+        <label class="sr-only" for="skill-catalog-filter">Filter skills</label>
+        <input id="skill-catalog-filter" class="cx-control" type="search" bind:value={ui.filter} placeholder="Filter skills" />
+      </div>
+      <div class="catalog-list">
+        {#if rows.length === 0}
+          <div class="catalog-empty">
+            {#if fsSkillSummaries.length === 0 && skills.length === 0}
+              <p>No skills found.</p>
+              <p class="dim">Add <code>.agents/skills/&lt;name&gt;/SKILL.md</code> under the server's working folder, then Rescan.</p>
+            {:else}
+              <p>No skills match the filter.</p>
+              <p class="dim">Clear it or try another name.</p>
+            {/if}
           </div>
+        {/if}
+        {#each rows as row, idx (row.t === "hdr" ? `h-${idx}-${row.label}` : row.t === "fs" ? `f-${row.s.relPath}` : row.rowKey)}
+          {#if row.t === "hdr"}
+            <h3 class="group-h">{row.label}</h3>
+          {:else if row.t === "fs"}
+            <button type="button" class="item" aria-current={isFsSkillSelected(row.s) ? "true" : undefined} onclick={() => selectFilesystemSkill(row.s)}>
+              <span class="item-name">{row.s.name}</span>
+              <span class="item-desc">{row.s.description || "No description"}</span>
+              <span class="item-path" title={row.s.relPath}>{row.s.relPath}</span>
+            </button>
+          {:else}
+            <div class="item-row">
+              <button type="button" class="item" aria-current={isSqliteSkillSelected(row.s) ? "true" : undefined} onclick={() => selectSqliteSkill(row.s)}>
+                <span class="item-name"><Badge data>db</Badge> {row.s.name ?? row.s.id ?? "skill"}</span>
+                <span class="item-desc">{row.s.description ?? ""}</span>
+              </button>
+              <IconButton icon="trash" size="sm" label={`Delete ${row.s.name ?? "skill"}`} onclick={() => onDelete(row.s)} />
+            </div>
+          {/if}
+        {/each}
+      </div>
+    </aside>
+
+    <!-- Document -->
+    <section class="doc" aria-label="Skill">
+      {#if ui.detailLoading}
+        <p class="center dim" role="status">Loading the skill…</p>
+      {:else if ui.detailError}
+        <p class="err" role="alert">{ui.detailError}</p>
+      {:else if ui.detail}
+        {@const skillDetail = ui.detail}
+        <div class="doc-h">
+          <div class="doc-title">
+            <h2>{skillDetail.name}</h2>
+            <Badge tone={skillDetail.filePath.startsWith("sqlite:") ? "neutral" : "io"}>{skillDetail.filePath.startsWith("sqlite:") ? "SQLite" : "Open skill"}</Badge>
+          </div>
+          {#if skillDetail.description}
+            <p class="doc-when"><span class="dim">When to use:</span> {skillDetail.description}</p>
+          {/if}
+        </div>
+        <div class="doc-body">
+          <MarkdownRich markdown={skillDetail.instructions} class="max-w-none" showCopy={true} />
+        </div>
+      {:else}
+        <div class="center">
+          <EmptyState icon="book" title="Pick a skill" description="Its instructions show here, with its front matter and files on the right." />
         </div>
       {/if}
+    </section>
 
-      <header class="flex flex-shrink-0 flex-col gap-2 border-b border-[var(--cortex-border)] pb-3 dark:border-primary/20">
-        <div class="flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 class="font-headline text-sm font-semibold tracking-tight text-slate-900 dark:text-on-surface">Skills workshop</h2>
-            <p class="mt-1 max-w-3xl font-mono text-[10px] leading-relaxed text-slate-600 dark:text-on-surface-variant/85">
-              Open Agent Skills use <code class="text-cyan-800 dark:text-secondary/90">.agents/skills/&lt;skill-name&gt;/SKILL.md</code>
-              (YAML + markdown). The desk scans <strong class="text-slate-800 dark:text-on-surface/90">your process cwd</strong> and
-              <strong class="text-slate-800 dark:text-on-surface/90">the Cortex app folder</strong> for the roots below, so skills still appear if you start the API from an unexpected directory.
-              Optional: set <code class="text-slate-500 dark:text-on-surface-variant/70">CORTEX_SKILL_SCAN_ROOT</code> to add another base path.
-            </p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              onclick={() => {
-                void store.loadDiscover();
-                void store.loadFsSkills();
-              }}
-              class="shrink-0 cursor-pointer rounded border border-[var(--cortex-border)] bg-white px-3 py-1.5 font-mono text-[10px] text-slate-700 shadow-sm transition-colors hover:border-primary/40 hover:text-primary dark:border-white/10 dark:bg-surface-container-high/50 dark:text-on-surface-variant dark:hover:border-secondary/40 dark:hover:text-secondary"
-            >
-              ↻ Rescan
-            </button>
-            <button
-              type="button"
-              onclick={() => (ui.showNewSkillForm = true)}
-              class="flex items-center gap-1.5 px-4 py-1.5 rounded border-0 cursor-pointer font-mono text-[10px] uppercase text-white hover:brightness-110 transition-all shrink-0"
-              style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);"
-            >
-              <span class="material-symbols-outlined text-sm">add</span> New Skill
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div
-        class="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-hidden rounded-lg border border-[var(--cortex-border)] bg-white/70 shadow-inner dark:bg-surface-container-low/40 dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.08)] md:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)_minmax(220px,260px)]"
-      >
-        <!-- 1 — Catalog -->
-        <aside
-          class="flex min-h-0 flex-col border-b border-[var(--cortex-border)] bg-slate-50/80 dark:border-white/[0.08] dark:bg-surface-container/50 md:border-b-0 md:border-r"
-        >
-          <div class="flex-shrink-0 space-y-2 border-b border-[var(--cortex-border)] p-3 dark:border-white/[0.06]">
-            <label for="skill-catalog-filter" class="font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Filter catalog</label>
-            <input
-              id="skill-catalog-filter"
-              bind:value={ui.filter}
-              placeholder="Filter skills…"
-              class="w-full rounded-lg border border-[var(--cortex-border)] bg-white px-3 py-2 font-mono text-xs text-slate-900 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/25 dark:border-white/10 dark:bg-surface-container-high/60 dark:text-on-surface dark:placeholder:text-on-surface-variant/45 dark:focus:border-secondary/55 dark:focus:ring-secondary/20"
-            />
-          </div>
-          <div class="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
-            {#if rows.length === 0}
-              <div class="space-y-2 p-4 font-mono text-[10px] leading-relaxed text-slate-600 dark:text-on-surface-variant/80">
-                {#if fsSkillSummaries.length === 0 && skills.length === 0}
-                  <p>No skills found.</p>
-                  <p class="text-slate-500 dark:text-on-surface-variant/65">
-                    Create <code class="text-violet-700 dark:text-primary/90">.agents/skills/&lt;name&gt;/SKILL.md</code> (open skill layout), ensure the Cortex server cwd is the folder that contains <code class="text-slate-600 dark:text-on-surface-variant/55">.agents</code>, then <strong class="text-slate-800 dark:text-on-surface/80">Rescan</strong>.
-                  </p>
-                {:else}
-                  <p>No skills match the filter.</p>
-                  <p class="text-slate-500 dark:text-on-surface-variant/65">Clear the filter or try another name.</p>
-                {/if}
-              </div>
-            {/if}
-            {#each rows as row, idx (row.t === "hdr" ? `h-${idx}-${row.label}` : row.t === "fs" ? `f-${row.s.relPath}` : row.rowKey)}
-              {#if row.t === "hdr"}
-                <div
-                  class="border-t border-[var(--cortex-border)] px-2 pb-1 pt-3 font-mono text-[9px] uppercase tracking-widest text-cyan-800 first:border-t-0 first:pt-1 dark:border-white/[0.06] dark:text-secondary/90"
-                >
-                  {row.label}
-                </div>
-              {:else if row.t === "fs"}
-                <button
-                  type="button"
-                  class="w-full rounded-md border p-2.5 text-left transition-all {isFsSkillSelected(row.s)
-                    ? 'border-primary/45 bg-violet-100/95 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.18)] dark:border-primary/50 dark:bg-primary/[0.2] dark:shadow-[0_0_24px_-10px_rgba(139,92,246,0.35)]'
-                    : 'border-[var(--cortex-border)] bg-white/95 hover:border-primary/35 dark:border-white/10 dark:bg-surface-container-high/45 dark:hover:border-primary/40'}"
-                  onclick={() => selectFilesystemSkill(row.s)}
-                >
-                  <div class="font-mono text-[11px] font-medium leading-snug text-slate-900 dark:text-on-surface">{row.s.name}</div>
-                  <div class="mt-1 line-clamp-2 font-mono text-[9px] text-slate-600 dark:text-on-surface-variant/80">{row.s.description || "—"}</div>
-                  <div class="mt-1.5 truncate font-mono text-[8px] text-slate-400 dark:text-on-surface-variant/50" title={row.s.relPath}>{row.s.relPath}</div>
-                </button>
-              {:else}
-                <div class="flex items-stretch gap-1">
-                  <button
-                    type="button"
-                    class="flex-1 rounded-md border p-2.5 text-left transition-all {isSqliteSkillSelected(row.s)
-                      ? 'border-primary/45 bg-violet-100/95 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.18)] dark:border-primary/50 dark:bg-primary/[0.2] dark:shadow-[0_0_24px_-10px_rgba(139,92,246,0.35)]'
-                      : 'border-[var(--cortex-border)] bg-white/95 hover:border-primary/35 dark:border-white/10 dark:bg-surface-container-high/45 dark:hover:border-primary/40'}"
-                    onclick={() => selectSqliteSkill(row.s)}
-                  >
-                    <div class="mb-0.5 flex items-center gap-1.5">
-                      <span class="rounded border border-[var(--cortex-border)] px-1 font-mono text-[7px] uppercase text-slate-500 dark:border-white/10 dark:text-on-surface-variant/70">db</span>
-                      <span class="font-mono text-[11px] font-medium text-slate-900 dark:text-on-surface">{row.s.name ?? row.s.id ?? "skill"}</span>
-                    </div>
-                    <div class="line-clamp-2 font-mono text-[9px] text-slate-600 dark:text-on-surface-variant/80">{row.s.description ?? ""}</div>
-                  </button>
-                  <button
-                    type="button"
-                    onclick={() => onDelete(row.s)}
-                    class="flex cursor-pointer items-center justify-center rounded-md border border-[var(--cortex-border)] bg-transparent p-2.5 text-slate-500 transition-colors hover:border-error/40 hover:text-error dark:border-white/10 dark:text-on-surface-variant dark:hover:text-error"
-                    title="Delete skill"
-                  >
-                    <span class="material-symbols-outlined text-sm">delete</span>
-                  </button>
-                </div>
-              {/if}
+    <!-- Roots and metadata -->
+    <aside class="meta" aria-label="Skill roots and details">
+      <div class="meta-block">
+        <h3>Skill roots</h3>
+        <p class="dim">Under each base Cortex looks in <code>.agents/skills</code>, <code>skills</code>, <code>.claude/skills</code> and <code>apps/cortex/.agents/skills</code>.</p>
+        {#if discoveredSkillPaths.length === 0}
+          <p class="dim">No skill folders found from this working folder.</p>
+        {:else}
+          <ul class="roots">
+            {#each discoveredSkillPaths as p (p)}
+              <li>
+                <code class="root">{p}</code>
+                <Button size="sm" variant={skillPathInBuilder(p) ? "ghost" : "default"} icon={skillPathInBuilder(p) ? "check" : "plus"} disabled={skillPathInBuilder(p)} onclick={() => onAddPaths([p])}>
+                  {skillPathInBuilder(p) ? "In the Builder" : "Add to the Builder"}
+                </Button>
+              </li>
             {/each}
-          </div>
-        </aside>
-
-        <!-- 2 — Document (primary reading column) -->
-        <main class="flex min-h-0 min-w-0 flex-col border-b border-[var(--cortex-border)] bg-white/80 dark:border-white/[0.08] dark:bg-surface-container-low/30 md:border-b-0 xl:border-r">
-          {#if ui.detailLoading}
-            <div class="flex flex-1 items-center justify-center gap-2 p-8 font-mono text-xs text-slate-500 dark:text-on-surface-variant/80">
-              <span class="material-symbols-outlined animate-spin text-primary">progress_activity</span>
-              Loading…
-            </div>
-          {:else if ui.detailError}
-            <div class="m-4 rounded border border-error/40 bg-error/10 p-4 font-mono text-[11px] text-error dark:bg-error/15 dark:text-red-200">{ui.detailError}</div>
-          {:else if ui.detail}
-            {@const skillDetail = ui.detail}
-            <div class="flex-shrink-0 border-b border-[var(--cortex-border)] bg-slate-50/90 p-4 dark:border-white/[0.06] dark:bg-surface-container-high/30">
-              <div class="flex flex-wrap items-start gap-2">
-                <span class="material-symbols-outlined shrink-0 text-xl text-cyan-700 dark:text-secondary" aria-hidden="true">bolt</span>
-                <div class="min-w-0 flex-1">
-                  <h3 class="font-headline text-lg font-bold uppercase tracking-tight text-slate-900 dark:text-on-surface">{skillDetail.name}</h3>
-                  <div class="flex flex-wrap gap-1.5 mt-2">
-                    <span
-                      class="rounded border border-[var(--cortex-border)] px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider text-slate-600 dark:border-white/10 dark:text-on-surface-variant/85"
-                    >
-                      {skillDetail.filePath.startsWith("sqlite:") ? "SQLite" : "Open skill"}
-                    </span>
-                    {#if skillDetail.description}
-                      <span class="rounded border border-cyan-400/40 px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider text-cyan-800 dark:border-secondary/35 dark:text-secondary/90">when to use</span>
-                    {/if}
-                  </div>
-                </div>
-              </div>
-              {#if skillDetail.description}
-                <p class="mt-3 border-l-2 border-cyan-500/50 pl-3 font-mono text-[11px] leading-relaxed text-slate-700 dark:border-secondary/45 dark:text-on-surface/85">
-                  {skillDetail.description}
-                </p>
-              {/if}
-            </div>
-            <div class="flex-1 min-h-0 overflow-y-auto p-4">
-              <div class="mb-2 font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/80">Core instructions</div>
-              <MarkdownRich markdown={skillDetail.instructions} class="text-sm max-w-none" showCopy={true} />
-            </div>
-          {:else}
-            <div class="flex flex-1 items-center justify-center px-6 py-16 text-center font-mono text-xs text-slate-500 dark:text-on-surface-variant/75">
-              Pick a skill from the catalog to preview instructions.
-            </div>
+          </ul>
+          {@const missing = discoveredSkillPaths.filter((p) => !skillPathInBuilder(p))}
+          {#if missing.length > 0}
+            <Button icon="plus" onclick={() => onAddPaths(missing)}>Add all roots to the Builder</Button>
           {/if}
-        </main>
-
-        <!-- 3 — Meta sidebar (YAML, roots, wire-up) -->
-        <aside
-          class="flex max-h-[50vh] min-h-0 flex-col overflow-y-auto border-t border-[var(--cortex-border)] bg-slate-50/90 md:col-span-2 md:max-h-none xl:col-span-1 xl:max-h-full dark:border-white/[0.06] dark:bg-surface-container/40"
-        >
-          <div class="space-y-3 border-b border-[var(--cortex-border)] p-3 dark:border-white/[0.06]">
-            <div class="font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/85">Skill roots scanned</div>
-            <p class="font-mono text-[9px] leading-relaxed text-slate-600 dark:text-on-surface-variant/75">
-              Under each scan base, Cortex looks for: <code class="text-cyan-800 dark:text-secondary/90">.agents/skills</code>,
-              <code class="text-slate-700 dark:text-on-surface-variant/80">skills</code>, <code class="text-slate-700 dark:text-on-surface-variant/80">.claude/skills</code>,
-              <code class="text-slate-700 dark:text-on-surface-variant/80">apps/cortex/.agents/skills</code> (last is for monorepo-root cwd).
-            </p>
-            {#if discoveredSkillPaths.length === 0}
-              <p class="font-mono text-[9px] text-slate-500 dark:text-on-surface-variant/65">No roots found on disk from this cwd.</p>
-            {:else}
-              <ul class="space-y-2">
-                {#each discoveredSkillPaths as p (p)}
-                  <li class="flex flex-col gap-1.5 font-mono text-[9px]">
-                    <code class="break-all rounded bg-white px-2 py-1 text-cyan-800 shadow-sm dark:bg-surface-container-high/60 dark:text-secondary/90">{p}</code>
-                    <button
-                      type="button"
-                      disabled={skillPathInBuilder(p)}
-                      onclick={() => onAddPaths([p])}
-                      class="self-start cursor-pointer rounded border border-primary/40 bg-primary/[0.08] px-2 py-1 text-[8px] text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-40 dark:border-primary/50 dark:bg-primary/[0.14] dark:hover:bg-primary/[0.22]"
-                    >
-                      {skillPathInBuilder(p) ? "In Builder" : "Add to Builder"}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-              {@const missing = discoveredSkillPaths.filter((p) => !skillPathInBuilder(p))}
-              {#if missing.length > 0}
-                <button
-                  type="button"
-                  onclick={() => onAddPaths(missing)}
-                  class="w-full cursor-pointer rounded-md border-0 py-2 font-mono text-[9px] uppercase text-white shadow-[0_0_18px_rgba(139,92,246,0.35)] transition-all hover:brightness-110 dark:shadow-[0_0_26px_rgba(139,92,246,0.4)]"
-                  style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);"
-                >
-                  Add all roots to Builder
-                </button>
-              {/if}
-            {/if}
-            <p class="font-mono text-[8px] leading-relaxed text-slate-500 dark:text-on-surface-variant/65">
-              Framework runs use <strong class="text-slate-700 dark:text-on-surface/80">Living skills</strong> paths in Builder → Agent config.
-            </p>
-          </div>
-
-          {#if ui.detail && !ui.detailLoading && !ui.detailError}
-            {@const skillDetail = ui.detail}
-            <div class="p-3 space-y-3 flex-1">
-              {#if skillDetail.declaredFields && Object.keys(skillDetail.declaredFields).length > 0}
-                <div>
-                  <div class="mb-2 font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/80">Frontmatter</div>
-                  <div class="flex flex-wrap gap-1">
-                    {#each Object.entries(skillDetail.declaredFields) as [k, v] (k)}
-                      <span
-                        class="max-w-full break-all rounded border border-[var(--cortex-border)] bg-white px-1.5 py-0.5 font-mono text-[8px] text-slate-800 dark:border-white/10 dark:bg-surface-container-high/55 dark:text-on-surface/90"
-                        title={formatYamlValue(v)}
-                      >
-                        <span class="text-secondary/75">{k}</span>={formatYamlValue(v)}
-                      </span>
-                    {/each}
-                  </div>
-                </div>
-              {/if}
-              {#if skillDetail.metadata && Object.keys(skillDetail.metadata).length > 0}
-                <details class="group">
-                  <summary class="flex cursor-pointer list-none items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-slate-600 dark:text-on-surface-variant/80">
-                    <span class="material-symbols-outlined text-[14px] text-slate-400 dark:text-on-surface-variant/60">expand_more</span>
-                    metadata block
-                  </summary>
-                  <pre
-                    class="mt-2 max-h-40 overflow-y-auto overflow-x-auto break-words whitespace-pre-wrap rounded border border-[var(--cortex-border)] bg-white p-2 font-mono text-[9px] text-slate-800 dark:border-white/10 dark:bg-surface-container-high/50 dark:text-on-surface/85"
-                  >{JSON.stringify(skillDetail.metadata, null, 2)}</pre>
-                </details>
-              {/if}
-              {#if skillDetail.resources && (skillDetail.resources.scripts.length + skillDetail.resources.references.length + skillDetail.resources.assets.length > 0)}
-                <div>
-                  <div class="mb-1.5 font-mono text-[9px] uppercase tracking-widest text-slate-500 dark:text-on-surface-variant/80">Resources</div>
-                  <ul class="space-y-0.5 font-mono text-[9px] text-slate-600 dark:text-on-surface-variant/80">
-                    {#if skillDetail.resources.scripts.length}<li>scripts: {skillDetail.resources.scripts.join(", ")}</li>{/if}
-                    {#if skillDetail.resources.references.length}<li>references: {skillDetail.resources.references.join(", ")}</li>{/if}
-                    {#if skillDetail.resources.assets.length}<li>assets: {skillDetail.resources.assets.join(", ")}</li>{/if}
-                  </ul>
-                </div>
-              {/if}
-              <div class="border-t border-[var(--cortex-border)] pt-2 font-mono text-[8px] text-slate-500 dark:border-white/[0.06] dark:text-on-surface-variant/65">
-                File: <span class="break-all text-slate-700 dark:text-on-surface/75">{skillDetail.filePath}</span>
-              </div>
-            </div>
-          {/if}
-        </aside>
+        {/if}
+        <p class="dim">Runs load the folders listed in the Builder's Skills section.</p>
       </div>
-    </div>
+
+      {#if ui.detail && !ui.detailLoading && !ui.detailError}
+        {@const skillDetail = ui.detail}
+        <div class="meta-block">
+          {#if skillDetail.declaredFields && Object.keys(skillDetail.declaredFields).length > 0}
+            <h3>Front matter</h3>
+            <dl class="fm">
+              {#each Object.entries(skillDetail.declaredFields) as [k, v] (k)}
+                <div><dt>{k}</dt><dd title={formatYamlValue(v)}>{formatYamlValue(v)}</dd></div>
+              {/each}
+            </dl>
+          {/if}
+          {#if skillDetail.metadata && Object.keys(skillDetail.metadata).length > 0}
+            <details>
+              <summary>Metadata block</summary>
+              <pre>{JSON.stringify(skillDetail.metadata, null, 2)}</pre>
+            </details>
+          {/if}
+          {#if skillDetail.resources && (skillDetail.resources.scripts.length + skillDetail.resources.references.length + skillDetail.resources.assets.length > 0)}
+            <h3>Files</h3>
+            <ul class="res">
+              {#if skillDetail.resources.scripts.length}<li><span class="dim">Scripts</span> {skillDetail.resources.scripts.join(", ")}</li>{/if}
+              {#if skillDetail.resources.references.length}<li><span class="dim">References</span> {skillDetail.resources.references.join(", ")}</li>{/if}
+              {#if skillDetail.resources.assets.length}<li><span class="dim">Assets</span> {skillDetail.resources.assets.join(", ")}</li>{/if}
+            </ul>
+          {/if}
+          <p class="file"><span class="dim">File</span> <code>{skillDetail.filePath}</code></p>
+        </div>
+      {/if}
+    </aside>
+  </div>
+</div>
+
+<style>
+  .skills { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 32px 24px; overflow: hidden; }
+  .head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .intro { margin: 0; max-width: 72ch; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); line-height: var(--cortex-lh-ui); }
+  .head-actions { display: flex; gap: 8px; }
+  code { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-accent); background: var(--cortex-accent-tint); padding: 0 4px; border-radius: 4px; }
+  .dim { color: var(--cortex-text-3); }
+  :global(.newskill) { flex: none; }
+  .newskill-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .newskill-h h2 { margin: 0; font-size: var(--cortex-t-md); font-weight: 600; color: var(--cortex-text); }
+  .newskill-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  .newskill-grid :global(.wide) { grid-column: 1 / -1; }
+  .newskill-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  .cols {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 280px);
+    border: 1px solid var(--cortex-line);
+    border-radius: var(--cortex-r-panel);
+    background: var(--cortex-surface-1);
+    overflow: hidden;
+  }
+  .catalog { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--cortex-line); }
+  .catalog-filter { padding: 12px; border-bottom: 1px solid var(--cortex-line); }
+  .catalog-filter :global(.cx-control) { height: 30px; }
+  .catalog-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; display: grid; align-content: start; gap: 4px; }
+  .catalog-empty { padding: 12px; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); display: grid; gap: 6px; }
+  .catalog-empty p { margin: 0; }
+  .group-h { margin: 8px 6px 2px; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
+  .item-row { display: flex; align-items: flex-start; gap: 2px; }
+  .item {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: var(--cortex-r-ctl);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--cortex-font-ui);
+  }
+  .item:hover { background: var(--cortex-surface-2); }
+  .item[aria-current="true"] { background: var(--cortex-surface-3); }
+  .item:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: -2px; }
+  .item-name { display: flex; align-items: center; gap: 6px; font-size: var(--cortex-t-sm); font-weight: 500; color: var(--cortex-text); }
+  .item-desc { font-size: var(--cortex-t-xs); color: var(--cortex-text-2); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .item-path { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .doc { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid var(--cortex-line); }
+  .doc-h { padding: 16px 20px; border-bottom: 1px solid var(--cortex-line); display: grid; gap: 8px; }
+  .doc-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .doc-title h2 { margin: 0; font-size: var(--cortex-t-lg); font-weight: 600; color: var(--cortex-text); }
+  .doc-when { margin: 0; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); max-width: 68ch; }
+  .doc-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px; }
+  .center { flex: 1; display: grid; place-items: center; padding: 24px; margin: 0; }
+  .err { margin: 16px; padding: 12px; border-radius: var(--cortex-r-ctl); background: var(--cortex-bad-tint); color: var(--cortex-bad); font-size: var(--cortex-t-sm); }
+
+  .meta { min-height: 0; overflow-y: auto; }
+  .meta-block { display: grid; gap: 8px; padding: 14px; border-bottom: 1px solid var(--cortex-line); font-size: var(--cortex-t-xs); }
+  .meta-block h3 { margin: 0; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text); }
+  .meta-block p { margin: 0; }
+  .roots { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .roots li { display: grid; gap: 6px; justify-items: start; }
+  .root { word-break: break-all; color: var(--cortex-io); background: var(--cortex-io-tint); }
+  .fm { margin: 0; display: grid; gap: 4px; }
+  .fm div { display: flex; gap: 8px; min-width: 0; }
+  .fm dt { color: var(--cortex-text-3); flex: none; }
+  .fm dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text); }
+  details summary { cursor: pointer; color: var(--cortex-text-2); }
+  details pre { margin: 6px 0 0; max-height: 10rem; overflow: auto; padding: 8px; border-radius: var(--cortex-r-ctl); background: var(--cortex-canvas); font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text); white-space: pre-wrap; }
+  .res { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-2); }
+  .file code { word-break: break-all; }
+  @media (max-width: 1280px) {
+    .cols { grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); }
+    .meta { grid-column: 1 / -1; max-height: 40vh; border-top: 1px solid var(--cortex-line); }
+    .doc { border-right: 0; }
+  }
+</style>

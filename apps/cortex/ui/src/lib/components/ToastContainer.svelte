@@ -3,6 +3,7 @@
   import type { Toast, ToastButton } from "$lib/stores/toast-store.js";
   import Icon from "$lib/components/kit/Icon.svelte";
   import type { IconName } from "$lib/icons.js";
+  import { toastBottom } from "$lib/toast-clearance.js";
 
   let busyId = $state<string | null>(null);
 
@@ -31,8 +32,9 @@
   };
 </script>
 
-<!-- Fixed bottom-right toast stack -->
-<div class="fixed bottom-6 right-6 z-toast flex flex-col gap-2 pointer-events-none" aria-live="polite">
+<!-- Fixed bottom-right toast stack; sits above any bottom bar that registered
+     with `toastKeepClear` (Beacon's prompt bar), so it never covers Run. -->
+<div class="fixed right-6 z-toast flex flex-col gap-2 pointer-events-none" style="bottom: {$toastBottom}px" aria-live="polite">
   {#each $toast as t (t.id)}
     {@const cfg = KIND_CONFIG[t.kind]}
     <div

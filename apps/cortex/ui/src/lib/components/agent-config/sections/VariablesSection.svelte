@@ -17,17 +17,15 @@
   }
 </script>
 
-<ConfigSection id="variables" {open} {onToggle}>
+<ConfigSection id="variables" icon="code" title="Variables" {open} {onToggle}>
   {#snippet head()}
-      <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">data_object</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Variables</span>
-      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">{(config.variables ?? []).length} detected</span>
+      <span>{(config.variables ?? []).length} detected</span>
   {/snippet}
-        <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
-          Use <code class="text-[10px]">{'{{name}}'}</code> in any field — variables are detected automatically. Values are filled per run.
+        <p class="acp-hint leading-relaxed">
+          Use <code>{'{{name}}'}</code> in any field — variables are detected automatically. Values are filled per run.
         </p>
         {#if (config.variables ?? []).length === 0}
-          <p class="font-mono text-[11px] text-outline/70">No variables yet. Add a <code class="text-[10px]">{'{{name}}'}</code> token to any field above and it appears here automatically.</p>
+          <p class="acp-hint">No variables yet. Add a <code>{'{{name}}'}</code> token to any field above and it appears here automatically.</p>
         {:else}
           {#each config.variables ?? [] as v, i (v.name)}
             <div class="acp-card">

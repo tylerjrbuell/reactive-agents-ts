@@ -6,6 +6,9 @@
    * `onChange(undefined)` so the key drops out of the config instead of
    * sending `[]` / `{}`.
    */
+  import Button from "$lib/components/kit/Button.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
   type RecordValue = string | number;
   interface Props {
     id: string;
@@ -70,12 +73,12 @@
 
 <div class="space-y-1.5">
   {#if mode === "list" && items.length > 0}
-    <div class="flex flex-wrap gap-1">
+    <div class="acp-chips">
       {#each items as item (item)}
-        <span class="inline-flex items-center gap-1 rounded-md border border-[var(--cortex-border)] bg-[var(--cortex-surface-mid)]/50 px-1.5 py-0.5 font-mono text-[10px] text-[var(--cortex-text)]">
+        <span class="acp-cmd">
           {item}
-          <button type="button" class="cursor-pointer text-[var(--cortex-text-muted)] hover:text-error" aria-label={`Remove ${item}`} onclick={() => emitList(items.filter((x) => x !== item))}>
-            <span class="material-symbols-outlined text-[12px] leading-none">close</span>
+          <button type="button" aria-label={`Remove ${item}`} onclick={() => emitList(items.filter((x) => x !== item))}>
+            <Icon name="x" size="sm" />
           </button>
         </span>
       {/each}
@@ -84,8 +87,8 @@
   {#if mode === "record" && entries.length > 0}
     <div class="space-y-1">
       {#each entries as [k, v] (k)}
-        <div class="flex items-center gap-1.5 font-mono text-[10px]">
-          <span class="min-w-0 flex-1 truncate text-[var(--cortex-text)]">{k}</span>
+        <div class="flex items-center gap-1.5">
+          <span class="acp-data min-w-0 flex-1 truncate">{k}</span>
           {#if valueKind === "number"}
             <input type="number" min="1" class="ci-frame ci-text w-16" aria-label={`${k} value`} value={v}
               onchange={(e) => { const n = parseValue((e.currentTarget as HTMLInputElement).value); if (n !== undefined) emitRecord(entries.map(([ek, ev]) => [ek, ek === k ? n : ev])); }} />
@@ -95,9 +98,7 @@
               {#each valueKind as opt (opt)}<option value={opt}>{opt}</option>{/each}
             </select>
           {/if}
-          <button type="button" class="cursor-pointer text-[var(--cortex-text-muted)] hover:text-error" aria-label={`Remove ${k}`} onclick={() => emitRecord(entries.filter(([ek]) => ek !== k))}>
-            <span class="material-symbols-outlined text-[13px] leading-none">close</span>
-          </button>
+          <IconButton icon="x" size="sm" label={`Remove ${k}`} onclick={() => emitRecord(entries.filter(([ek]) => ek !== k))} />
         </div>
       {/each}
     </div>
@@ -114,7 +115,7 @@
         </select>
       {/if}
     {/if}
-    <button type="button" class="cursor-pointer rounded-md border border-[var(--cortex-border)] px-2 py-1 font-mono text-[10px] text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" onclick={add}>Add</button>
+    <Button size="sm" onclick={add}>Add</Button>
   </div>
   {#if suggestions.length > 0}
     <datalist id={`${id}-suggest`}>{#each suggestions as s (s)}<option value={s}></option>{/each}</datalist>

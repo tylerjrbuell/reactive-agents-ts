@@ -10,19 +10,17 @@
   let { config = $bindable(), open, onToggle }: Props = $props();
 </script>
 
-<ConfigSection id="reliability" {open} {onToggle}>
+<ConfigSection id="reliability" icon="goal" title="Reliability" {open} {onToggle}>
   {#snippet head()}
-      <span class="material-symbols-outlined text-[15px] text-secondary/85 shrink-0" aria-hidden="true">shield</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Reliability</span>
-      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">
+      <span>
         {config.fallbacks.enabled ? `${config.fallbacks.providers.length} fallback${config.fallbacks.providers.length !== 1 ? 's' : ''}` : 'off'}
       </span>
   {/snippet}
         <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" bind:checked={config.fallbacks.enabled} class="accent-primary w-3.5 h-3.5" />
           <div>
-            <div class="font-mono text-[11px] text-on-surface/80">Enable provider fallbacks</div>
-            <div class="font-mono text-[11px] text-outline/70">Automatically switch to a backup provider on errors</div>
+            <div class="acp-check-t">Enable provider fallbacks</div>
+            <div class="acp-hint">Automatically switch to a backup provider on errors</div>
           </div>
         </label>
         {#if config.fallbacks.enabled}
@@ -43,7 +41,7 @@
             <input id="fallback-error-threshold" type="range" min="1" max="10"
               bind:value={config.fallbacks.errorThreshold}
               class="w-full accent-primary" />
-            <div class="flex justify-between text-[10px] font-mono text-outline/70 mt-0.5">
+            <div class="flex justify-between acp-hint mt-0.5">
               <span>1 — switch on first error</span><span>10 — very tolerant</span>
             </div>
           </div>

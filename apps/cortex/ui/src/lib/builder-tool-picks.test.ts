@@ -20,15 +20,16 @@ describe("builderToolPicks", () => {
   it("offers each shell toolset by its own name, labelled with the programs it runs", () => {
     const picks = shellPresetPicks({ git: ["git", "gh"], workspace: ["gws"] });
     expect(picks).toEqual([
-      { id: "git", label: "git (git · gh via shell)", icon: "terminal" },
-      { id: "workspace", label: "workspace (gws via shell)", icon: "terminal" },
+      { id: "git", label: "git (git · gh via shell)", icon: "shell" },
+      { id: "workspace", label: "workspace (gws via shell)", icon: "shell" },
     ]);
     expect(picks.map((p) => p.id)).not.toContain("shell-execute");
   });
 
-  it("uses the icon map with a settings fallback", () => {
+  it("uses the kit icon map with a generic tool fallback", () => {
     const picks = builderToolPicks(catalog, { "web-search": "search" });
     expect(picks.find((p) => p.id === "web-search")?.icon).toBe("search");
-    expect(picks.find((p) => p.id === "file-read")?.icon).toBe("settings");
+    expect(picks.find((p) => p.id === "file-read")?.icon).toBe("tool");
+    expect(builderToolPicks(catalog).find((p) => p.id === "file-read")?.icon).toBe("file");
   });
 });

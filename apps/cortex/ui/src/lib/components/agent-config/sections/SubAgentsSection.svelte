@@ -1,5 +1,6 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
   import { defaultConfig, type CortexAgentToolConfig } from "$lib/types/agent-config.js";
   import type { PanelAgentConfig } from "../types.js";
 
@@ -46,24 +47,19 @@
   }
 </script>
 
-<ConfigSection id="subagents" {open} {onToggle}>
+<ConfigSection id="subagents" icon="agents" title="Sub-agents" {open} {onToggle}>
   {#snippet head()}
-      <span class="material-symbols-outlined text-[15px] text-primary/80 shrink-0" aria-hidden="true">hub</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Sub-agents</span>
-      <span class="ml-2 font-mono text-[11px] text-[var(--cortex-text-muted)]">{(config.agentTools ?? []).length} registered</span>
+      <span>{(config.agentTools ?? []).length} registered</span>
   {/snippet}
         <div class="flex flex-wrap gap-2">
-          <button type="button" onclick={addLocalAgentTool}
-            class="text-[11px] font-mono px-2 py-1 rounded border border-primary/30 text-primary hover:bg-primary/10 cursor-pointer bg-transparent">+ Local sub-agent</button>
-          <button type="button" onclick={addRemoteAgentTool}
-            class="text-[11px] font-mono px-2 py-1 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent">+ Remote (A2A URL)</button>
+          <Button size="sm" icon="plus" onclick={addLocalAgentTool}>Local sub-agent</Button>
+          <Button size="sm" icon="plus" onclick={addRemoteAgentTool}>Remote agent (A2A URL)</Button>
         </div>
         {#each config.agentTools ?? [] as at, i (i)}
           <div class="acp-card">
             <div class="flex items-center justify-between gap-2">
-              <span class="font-mono text-[11px] text-outline/70 uppercase">#{i + 1}</span>
-              <button type="button" onclick={() => removeAgentToolAt(i)}
-                class="text-[11px] font-mono text-error/70 hover:text-error bg-transparent border-0 cursor-pointer">Remove</button>
+              <span class="acp-check-t">{at.kind === "remote" ? "Remote agent" : "Local sub-agent"} {i + 1}</span>
+              <Button size="sm" variant="danger" icon="trash" onclick={() => removeAgentToolAt(i)}>Remove</Button>
             </div>
             {#if at.kind === "remote"}
               <div class="grid grid-cols-2 gap-2">

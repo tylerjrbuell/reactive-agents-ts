@@ -2,6 +2,9 @@
   import type { AgentConfig } from "$lib/types/agent-config.js";
   import { generateAgentTs, generateAgentJson } from "$lib/agent-export.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Chip from "$lib/components/kit/Chip.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
 
   interface Props {
     config: AgentConfig;
@@ -45,7 +48,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div
-  class="fixed inset-0 z-modalflex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+  class="fixed inset-0 z-modal flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
   role="button"
   tabindex="-1"
   onclick={onClose}
@@ -62,57 +65,21 @@
   >
     <!-- Header -->
     <div class="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[var(--cortex-border)] px-4 py-3">
-      <div class="flex items-center gap-2 min-w-0">
-        <span class="material-symbols-outlined text-[18px] text-primary">ios_share</span>
-        <h2 class="font-mono text-[12px] font-semibold uppercase tracking-wider text-on-surface truncate m-0">
-          Export “{name || "agent"}”
-        </h2>
-      </div>
-      <button
-        type="button"
-        onclick={onClose}
-        class="p-1 rounded text-outline hover:text-on-surface transition-colors"
-        aria-label="Close"
-      >
-        <span class="material-symbols-outlined text-[18px]">close</span>
-      </button>
+      <h2 class="m-0 truncate text-[15px] font-semibold text-on-surface">
+        Export {name || "agent"}
+      </h2>
+      <IconButton icon="x" label="Close" onclick={onClose} />
     </div>
 
     <!-- Format toggle + actions -->
     <div class="flex flex-shrink-0 items-center gap-2 border-b border-[var(--cortex-border)] px-4 py-2">
-      <div class="flex gap-1">
-        <button
-          type="button"
-          class="rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider border transition-colors
-                 {format === 'ts' ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-outline hover:border-primary/30'}"
-          onclick={() => (format = "ts")}
-        >
-          TypeScript
-        </button>
-        <button
-          type="button"
-          class="rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider border transition-colors
-                 {format === 'json' ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-outline hover:border-primary/30'}"
-          onclick={() => (format = "json")}
-        >
-          JSON
-        </button>
+      <div class="flex gap-1" role="group" aria-label="Format">
+        <Chip on={format === "ts"} onclick={() => (format = "ts")}>TypeScript</Chip>
+        <Chip on={format === "json"} onclick={() => (format = "json")}>JSON</Chip>
       </div>
       <div class="flex-1"></div>
-      <button
-        type="button"
-        onclick={copy}
-        class="flex items-center gap-1 rounded border border-[var(--cortex-border)] px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-outline hover:text-primary hover:border-primary/40 transition-colors"
-      >
-        <span class="material-symbols-outlined text-[14px] leading-none">content_copy</span> Copy
-      </button>
-      <button
-        type="button"
-        onclick={download}
-        class="flex items-center gap-1 rounded bg-primary px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-on-primary hover:bg-primary/90 transition-colors"
-      >
-        <span class="material-symbols-outlined text-[14px] leading-none">download</span> {filename}
-      </button>
+      <Button size="sm" icon="copy" onclick={copy}>Copy</Button>
+      <Button size="sm" variant="primary" icon="download" onclick={download}>{filename}</Button>
     </div>
 
     <!-- Code -->
@@ -120,11 +87,11 @@
       <pre class="m-0 font-mono text-[11px] leading-relaxed text-on-surface/85 whitespace-pre">{code}</pre>
     </div>
 
-    <div class="flex-shrink-0 border-t border-[var(--cortex-border)] px-4 py-2 font-mono text-[9px] text-outline/60">
+    <div class="flex-shrink-0 border-t border-[var(--cortex-border)] px-4 py-2 text-[12px] text-outline">
       {#if format === "ts"}
-        Paste into a project with <code>reactive-agents</code> installed. Tools register at build time; MCP servers and skills are configured separately.
+        Paste into a project with <code class="font-mono text-[11px]">reactive-agents</code> installed. Tools register at build time; MCP servers and skills are set up separately.
       {:else}
-        Portable config envelope — re-import via the Lab builder or your own loader.
+        A portable config: load it with the Lab's Import or your own loader.
       {/if}
     </div>
   </div>

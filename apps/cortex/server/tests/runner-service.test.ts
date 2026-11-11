@@ -4,7 +4,7 @@ import { Effect, Layer } from "effect";
 import { applySchema } from "../db/schema.js";
 import { CortexStoreServiceLive } from "../services/store-service.js";
 import { CortexIngestService } from "../services/ingest-service.js";
-import { CortexRunnerService, CortexRunnerServiceLive } from "../services/runner-service.js";
+import { CortexRunnerService, CortexRunnerServiceLive, makeCortexRunnerServiceLive } from "../services/runner-service.js";
 import { buildCortexAgent } from "../services/build-cortex-agent.js";
 
 describe("CortexRunnerService", () => {
@@ -80,6 +80,74 @@ describe("CortexRunnerService — terminate (C3)", () => {
     });
     await Effect.runPromise(program.pipe(Effect.provide(buildRunner())));
   });
+});
+
+describe("CortexRunnerService — desk Stop and Terminate end the run as stopped", () => {
+  type Recorded = { readonly runId: string; readonly tag: string; readonly error?: string };
+  const recordingRunner = (opts: { stopGraceMs?: number } = {}) => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const events: Recorded[] = [];
+    const ingestLayer = Layer.succeed(CortexIngestService, {
+      handleEvent: (_agentId, runId, msg) =>
+        Effect.sync(() => {
+          const e = msg.event as { _tag: string; error?: unknown };
+          events.push({ runId, tag: e._tag, ...(typeof e.error === "string" ? { error: e.error } : {}) });
+        }),
+      getSubscriberCount: () => Effect.succeed(0),
+    });
+    const layer = makeCortexRunnerServiceLive(opts).pipe(
+      Layer.provide(Layer.merge(CortexStoreServiceLive(db), ingestLayer)),
+    );
+    return { layer, events };
+  };
+  // One slow model call: the run sits inside the reasoning phase, where a
+  // graceful stop is only seen at the next engine phase boundary.
+  const slowRun = { provider: "test", prompt: "slow task", testScenario: [{ text: "late answer", delayMs: 4_000 }] };
+  const waitFor = (pred: () => boolean, ms: number) =>
+    Effect.gen(function* () {
+      const end = Date.now() + ms;
+      while (!pred() && Date.now() < end) yield* Effect.sleep("25 millis");
+      return pred();
+    });
+  const STOP_TAGS = new Set(["AgentStopped", "AgentTerminated", "ExecutionCancelled"]);
+
+  it("Terminate: the run ends with AgentTerminated, before any failed AgentCompleted, and never with 'ManagedRuntime disposed'", async () => {
+    const { layer, events } = recordingRunner();
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexRunnerService;
+      const { runId } = yield* svc.start(slowRun);
+      yield* Effect.sleep("300 millis");
+      yield* svc.terminate(runId as never);
+      const ended = yield* waitFor(() => events.some((e) => e.runId === runId && STOP_TAGS.has(e.tag)), 3_000);
+      expect(ended).toBe(true);
+      const mine = events.filter((e) => e.runId === runId);
+      const stopAt = mine.findIndex((e) => STOP_TAGS.has(e.tag));
+      const failAt = mine.findIndex((e) => e.tag === "AgentCompleted");
+      if (failAt >= 0) expect(stopAt).toBeLessThan(failAt);
+      expect(mine.some((e) => (e.error ?? "").includes("ManagedRuntime"))).toBe(false);
+      expect((yield* svc.getActive()).has(String(runId))).toBe(false);
+    });
+    await Effect.runPromise(program.pipe(Effect.provide(layer)));
+  }, 15_000);
+
+  it("Stop: a run that does not reach a phase boundary within the grace window still ends as stopped", async () => {
+    const { layer, events } = recordingRunner({ stopGraceMs: 300 });
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexRunnerService;
+      const { runId } = yield* svc.start(slowRun);
+      yield* Effect.sleep("300 millis");
+      yield* svc.stop(runId as never);
+      const ended = yield* waitFor(() => events.some((e) => e.runId === runId && STOP_TAGS.has(e.tag)), 2_500);
+      expect(ended).toBe(true);
+      // It did not run on to a successful finish after the user stopped it.
+      expect(events.some((e) => e.runId === runId && e.tag === "AgentCompleted" && e.error === undefined)).toBe(false);
+      yield* waitFor(() => false, 500);
+      expect((yield* svc.getActive()).has(String(runId))).toBe(false);
+      expect(events.some((e) => (e.error ?? "").includes("ManagedRuntime"))).toBe(false);
+    });
+    await Effect.runPromise(program.pipe(Effect.provide(layer)));
+  }, 15_000);
 });
 
 describe("buildCortexAgent — agentId passthrough", () => {

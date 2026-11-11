@@ -1,4 +1,14 @@
 <script lang="ts">
+  /**
+   * The collapsible panel's header (Beacon prompt bar, saved-agent form, chat
+   * session settings): import / export / example, expand all, and (not
+   * compact) the section filter and jump chips. The Lab builder leaves it out
+   * and uses its page header and section nav instead.
+   */
+  import Button from "$lib/components/kit/Button.svelte";
+  import Chip from "$lib/components/kit/Chip.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+
   interface Props {
     /** Hidden JSON file input the Import button clicks. */
     fileInput: HTMLInputElement | null;
@@ -22,78 +32,66 @@
     fileInput, compact, sectionFilter = $bindable(""), openSections, acpFilterEmpty,
     acpActiveSectionIds, acpSectionVisible, acpSectionCopy, acpScrollTo, acpExpandAll, acpCollapseAll, exportConfig, downloadExample,
   }: Props = $props();
+
+  const allOpen = $derived(openSections.size >= acpActiveSectionIds().length);
 </script>
 
-  <header class="acp-header rounded-xl border border-[var(--cortex-border)] bg-[color-mix(in_srgb,var(--cortex-surface)_92%,transparent)] px-3 py-2.5 shadow-[0_1px_0_color-mix(in_srgb,var(--ra-violet)_12%,transparent)]">
-    <div class="flex flex-wrap items-start gap-2 gap-y-2">
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-2">
-          <span class="acp-header-mark h-6 w-1 shrink-0 rounded-full bg-gradient-to-b from-primary to-secondary opacity-90" aria-hidden="true"></span>
-          <div>
-            <h2 class="font-display text-sm font-semibold tracking-tight text-[var(--cortex-text)]">Agent blueprint</h2>
-            <p class="text-[11px] text-[var(--cortex-text-muted)] leading-snug max-w-[28rem]">
-              Compose how this agent thinks, what it can call, and how it fails safe. Changes bind live to the parent form.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div class="flex flex-wrap items-center justify-end gap-1 shrink-0">
-        <button type="button" onclick={() => fileInput?.click()}
-          class="acp-toolbar-btn"
-         >
-          <span class="material-symbols-outlined text-[14px] opacity-80" aria-hidden="true">upload_file</span>
-          <span>Import</span>
-        </button>
-        <button type="button" onclick={exportConfig}
-          class="acp-toolbar-btn"
-         >
-          <span class="material-symbols-outlined text-[14px] opacity-80" aria-hidden="true">download</span>
-          <span>Export</span>
-        </button>
-        <button type="button" onclick={downloadExample}
-          class="acp-toolbar-btn acp-toolbar-btn--muted"
-         >
-          <span class="material-symbols-outlined text-[14px] opacity-70" aria-hidden="true">help_outline</span>
-          <span>Example</span>
-        </button>
-        <span class="w-px h-5 bg-[var(--cortex-border)] mx-0.5 hidden sm:block" aria-hidden="true"></span>
-        <button type="button" onclick={() => (openSections.size >= acpActiveSectionIds().length ? acpCollapseAll() : acpExpandAll())}
-          class="acp-toolbar-btn acp-toolbar-btn--ghost">
-          {openSections.size >= acpActiveSectionIds().length ? "Collapse all" : "Expand all"}
-        </button>
-      </div>
+<header class="acp-h">
+  <div class="acp-h-row">
+    <div class="acp-h-title">
+      <h2>Agent settings</h2>
+      <p>How this agent thinks, what it can call and how it fails safe.</p>
     </div>
-    {#if !compact}
-      <div class="mt-3 pt-2 border-t border-[var(--cortex-border)]">
-        <label class="sr-only" for="acp-section-filter">Filter configuration sections</label>
-        <div class="relative">
-          <span class="material-symbols-outlined pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[16px] text-[var(--cortex-text-muted)] opacity-60" aria-hidden="true">filter_alt</span>
-          <input
-            id="acp-section-filter"
-            type="search"
-            bind:value={sectionFilter}
-            placeholder="  Filter sections (e.g. guardrails, mcp, timeout)…"
-            autocomplete="off"
-            class="config-input acp-filter-input pl-9" />
-        </div>
-        <nav class="mt-3 flex flex-wrap gap-1.5" aria-label="Jump to section">
-          {#each acpActiveSectionIds() as sid (sid)}
-            {#if acpSectionVisible(sid)}
-              <button
-                type="button"
-                onclick={() => acpScrollTo(sid)}
-                class="acp-nav-pill"
-                class:acp-nav-pill--active={openSections.has(sid)}>
-                {acpSectionCopy(sid).label}
-              </button>
-            {/if}
-          {/each}
-        </nav>
-        {#if acpFilterEmpty}
-          <p class="mt-2 text-center font-mono text-[11px] text-[var(--cortex-text-muted)]" role="status">
-            No sections match “{sectionFilter.trim()}”. Clear the filter or try another keyword.
-          </p>
+    <div class="acp-h-actions">
+      <Button size="sm" variant="ghost" icon="download" onclick={() => fileInput?.click()}>Import</Button>
+      <Button size="sm" variant="ghost" icon="external" onclick={exportConfig}>Export</Button>
+      <Button size="sm" variant="ghost" icon="file" onclick={downloadExample}>Example</Button>
+      <Button size="sm" variant="ghost" onclick={() => (allOpen ? acpCollapseAll() : acpExpandAll())}>
+        {allOpen ? "Collapse all" : "Expand all"}
+      </Button>
+    </div>
+  </div>
+  {#if !compact}
+    <div class="acp-h-filter">
+      <label class="sr-only" for="acp-section-filter">Find a setting</label>
+      <span class="acp-h-filter-icon"><Icon name="search" size="sm" /></span>
+      <input
+        id="acp-section-filter"
+        type="search"
+        bind:value={sectionFilter}
+        placeholder="Find a setting (guardrails, mcp, timeout)"
+        autocomplete="off"
+        class="cx-control" />
+    </div>
+    <nav class="acp-h-nav" aria-label="Jump to section">
+      {#each acpActiveSectionIds() as sid (sid)}
+        {#if acpSectionVisible(sid)}
+          <Chip on={openSections.has(sid)} onclick={() => acpScrollTo(sid)}>{acpSectionCopy(sid).label}</Chip>
         {/if}
-      </div>
+      {/each}
+    </nav>
+    {#if acpFilterEmpty}
+      <p class="acp-hint" role="status">No sections match “{sectionFilter.trim()}”. Clear the search or try another word.</p>
     {/if}
-  </header>
+  {/if}
+</header>
+
+<style>
+  .acp-h {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border-radius: var(--cortex-r-panel);
+    border: 1px solid var(--cortex-line);
+    background: var(--cortex-surface-1);
+  }
+  .acp-h-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+  .acp-h-title { min-width: 0; flex: 1; }
+  h2 { margin: 0; font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-text); }
+  p { margin: 2px 0 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .acp-h-actions { display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-end; }
+  .acp-h-filter { position: relative; }
+  .acp-h-filter-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); display: inline-flex; color: var(--cortex-text-3); pointer-events: none; }
+  .acp-h-filter :global(.cx-control) { padding-left: 30px; }
+  .acp-h-nav { display: flex; flex-wrap: wrap; gap: 6px; }
+</style>

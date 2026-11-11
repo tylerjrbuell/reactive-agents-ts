@@ -6,8 +6,11 @@
    * Binds bidirectionally to `config` prop. Owns the config, the section open/filter
    * state and the catalogs; each section renders from `agent-config/sections/`.
    */
-  import { onMount } from "svelte";
-  import { untrack } from "svelte";
+  import { onMount, setContext, untrack } from "svelte";
+  import "$lib/components/agent-config/agent-config.css";
+  import { ACP_FLAT_CONTEXT, type AcpFlatContext } from "$lib/components/agent-config/flat-context.js";
+  import ShellWorkspaceSection from "$lib/components/agent-config/sections/ShellWorkspaceSection.svelte";
+  import FrameworkOptionsSection from "$lib/components/agent-config/sections/FrameworkOptionsSection.svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { settings } from "$lib/stores/settings.js";
@@ -18,7 +21,7 @@
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { loadCapabilities, type CapabilityManifest } from "$lib/capabilities.js";
   import { builderToolPicks, shellPresetPicks, type CatalogToolRow, type ToolPick } from "$lib/builder-tool-picks.js";
-  import { activeSectionIds, sectionCopy, sectionVisible } from "$lib/agent-config-sections.js";
+  import { activeSectionIds, builderNavEntry, sectionCopy, sectionVisible } from "$lib/agent-config-sections.js";
   import type { McpCatalogRow, PanelAgentConfig } from "$lib/components/agent-config/types.js";
   import AgentConfigHeader from "$lib/components/agent-config/AgentConfigHeader.svelte";
   import InferenceSection from "$lib/components/agent-config/sections/InferenceSection.svelte";
@@ -46,8 +49,28 @@
      * `auto` = no explicit choice: tools are on exactly when something is selected.
      */
     toolsToggle?: { enabled: boolean; auto: boolean; onChange: (enabled: boolean) => void };
+    /**
+     * Lab builder: show only this section-nav entry (`BUILDER_NAV` id), its
+     * sections flat and open, without the panel header (the Lab page carries
+     * import / export and its own nav). Omit for the collapsible panel.
+     */
+    navSection?: string;
   }
-  let { config = $bindable(defaultConfig() as PanelAgentConfig), compact = false, toolsToggle }: Props = $props();
+  let { config = $bindable(defaultConfig() as PanelAgentConfig), compact = false, toolsToggle, navSection }: Props = $props();
+
+  // Flat sections inside the Lab builder (read once by ConfigSection; the prop never changes for a mounted panel).
+  const navMembers = $derived(navSection !== undefined ? builderNavEntry(navSection).sections : null);
+  if (untrack(() => navSection !== undefined)) {
+    setContext<AcpFlatContext>(ACP_FLAT_CONTEXT, { get single() { return (navMembers?.length ?? 0) <= 1; } });
+  }
+  /** Whether a section renders: the nav entry's members in the Lab builder, else the filter. */
+  function shows(id: string): boolean {
+    return navMembers ? navMembers.includes(id) : acpSectionVisible(id);
+  }
+  /** Open state: always open in the Lab builder. */
+  function isOpen(id: string): boolean {
+    return navMembers !== null || openSections.has(id);
+  }
 
   // Section expand state
   let openSections = $state(new Set(["inference", "tools"]));
@@ -128,23 +151,6 @@
     void loadProviders().then((list) => { providerList = list; });
   });
 
-  // Icon mappings for common tool names
-  const TOOL_ICONS: Record<string, string> = {
-    "web-search": "search",
-    "http-get": "link",
-    "file-read": "folder_open",
-    "file-write": "edit_document",
-    "code-execute": "terminal",
-    "shell-execute": "terminal",
-    "crypto-price": "trending_up",
-    "checkpoint": "bookmark_added",
-    "recall": "psychology",
-    "find": "manage_search",
-    "brief": "description",
-    "pulse": "favorite",
-    "discover-tools": "auto_awesome",
-  };
-
   // Capability tools from the cortex catalog API, then the shell toolsets (git, workspace);
   // meta-tools live in the Meta tools section.
   let AVAILABLE_TOOLS = $state<ToolPick[]>([]);
@@ -158,7 +164,7 @@
           .catch((): Record<string, string[]> => ({})),
       ]);
       shellPresets = presets;
-      if (res.ok) AVAILABLE_TOOLS = [...builderToolPicks((await res.json()) as CatalogToolRow[], TOOL_ICONS), ...shellPresetPicks(presets)];
+      if (res.ok) AVAILABLE_TOOLS = [...builderToolPicks((await res.json()) as CatalogToolRow[]), ...shellPresetPicks(presets)];
     } catch (err) {
       console.warn("Failed to load tools catalog:", err);
       // Fallback to empty (users can still manually enter tool names)
@@ -264,7 +270,7 @@
   // This ensures that servers imported (or tools refreshed) in the Tools tab are
   // immediately visible without requiring a manual "↻ Refresh list" click.
   $effect(() => {
-    if (openSections.has("tools")) {
+    if (shows("tools") && isOpen("tools")) {
       void loadMcpCatalog();
     }
   });
@@ -282,6 +288,7 @@
   });
 </script>
 
+
 <!-- Hidden file input for JSON import -->
 <input
   bind:this={fileInput}
@@ -291,393 +298,92 @@
   onchange={handleFileImport}
 />
 
-<div class="agent-config-panel text-[11px] font-sans">
+<div class="agent-config-panel">
 
-  <!-- ── Header: blueprint summary + IO ───────────────────────────────── -->
-  <AgentConfigHeader
-    {fileInput}
-    {compact}
-    bind:sectionFilter
-    {openSections}
-    {acpFilterEmpty}
-    {acpActiveSectionIds}
-    {acpSectionVisible}
-    acpSectionCopy={sectionCopy}
-    {acpScrollTo}
-    {acpExpandAll}
-    {acpCollapseAll}
-    {exportConfig}
-    {downloadExample}
-  />
+  {#if navMembers === null}
+    <!-- ── Header: import / export, section filter and jump nav ─────────── -->
+    <AgentConfigHeader
+      {fileInput}
+      {compact}
+      bind:sectionFilter
+      {openSections}
+      {acpFilterEmpty}
+      {acpActiveSectionIds}
+      {acpSectionVisible}
+      acpSectionCopy={sectionCopy}
+      {acpScrollTo}
+      {acpExpandAll}
+      {acpCollapseAll}
+      {exportConfig}
+      {downloadExample}
+    />
+  {/if}
 
-  {#if acpSectionVisible("inference")}
-    <InferenceSection bind:config open={openSections.has("inference")} onToggle={() => toggle("inference")}
+  {#if shows("inference")}
+    <InferenceSection bind:config open={isOpen("inference")} onToggle={() => toggle("inference")}
       {providerList} {providerModels} {modelsLoading} {modelsError} {modelsNote} {loadModelsForProvider} />
   {/if}
 
-  {#if acpSectionVisible("persona")}
-    <PersonaSection bind:config open={openSections.has("persona")} onToggle={() => toggle("persona")} />
+  {#if shows("persona")}
+    <PersonaSection bind:config open={isOpen("persona")} onToggle={() => toggle("persona")} />
   {/if}
 
-  {#if acpSectionVisible("strategy")}
-    <StrategySection bind:config open={openSections.has("strategy")} onToggle={() => toggle("strategy")}
-      strategies={STRATEGIES} strategyLabel={acpStrategyLabel} manifest={capManifest} />
+  {#if shows("strategy")}
+    <StrategySection bind:config open={isOpen("strategy")} onToggle={() => toggle("strategy")}
+      strategies={STRATEGIES} strategyLabel={acpStrategyLabel} manifest={capManifest} splitFramework={navMembers !== null} />
   {/if}
 
-  {#if acpSectionVisible("variables")}
-    <VariablesSection bind:config open={openSections.has("variables")} onToggle={() => toggle("variables")} />
+  {#if shows("variables")}
+    <VariablesSection bind:config open={isOpen("variables")} onToggle={() => toggle("variables")} />
   {/if}
 
-  {#if !compact && acpSectionVisible("tools")}
-    <ToolsSection bind:config open={openSections.has("tools")} onToggle={() => toggle("tools")}
-      {toolsToggle} tools={AVAILABLE_TOOLS} {shellPresets} {mcpCatalog} {loadMcpCatalog} />
+  {#if !compact && shows("tools")}
+    <ToolsSection bind:config open={isOpen("tools")} onToggle={() => toggle("tools")}
+      {toolsToggle} tools={AVAILABLE_TOOLS} {shellPresets} {mcpCatalog} {loadMcpCatalog} splitShell={navMembers !== null} />
   {/if}
 
-  {#if !compact && (["subagents","skills","memory","guardrails","execution","metatools","reliability","observability"].some(acpSectionVisible))}
+  {#if navMembers?.includes("shell")}
+    <ShellWorkspaceSection bind:config open onToggle={() => {}} {shellPresets} />
+  {/if}
+
+  {#if navMembers === null && !compact && (["subagents","skills","memory","guardrails","execution","metatools","reliability","observability"].some(acpSectionVisible))}
     <div class="acp-divider" role="separator"><span>More options</span></div>
   {/if}
 
-  {#if !compact && acpSectionVisible("subagents")}
-    <SubAgentsSection bind:config open={openSections.has("subagents")} onToggle={() => toggle("subagents")} />
+  {#if !compact && shows("subagents")}
+    <SubAgentsSection bind:config open={isOpen("subagents")} onToggle={() => toggle("subagents")} />
   {/if}
 
-  {#if !compact && acpSectionVisible("skills")}
-    <SkillsSection bind:config open={openSections.has("skills")} onToggle={() => toggle("skills")} />
+  {#if !compact && shows("skills")}
+    <SkillsSection bind:config open={isOpen("skills")} onToggle={() => toggle("skills")} />
   {/if}
 
-  {#if acpSectionVisible("memory")}
-    <MemorySection bind:config open={openSections.has("memory")} onToggle={() => toggle("memory")} />
+  {#if shows("memory")}
+    <MemorySection bind:config open={isOpen("memory")} onToggle={() => toggle("memory")} />
   {/if}
 
-  {#if acpSectionVisible("guardrails")}
-    <GuardrailsSection bind:config open={openSections.has("guardrails")} onToggle={() => toggle("guardrails")} />
+  {#if shows("guardrails")}
+    <GuardrailsSection bind:config open={isOpen("guardrails")} onToggle={() => toggle("guardrails")} />
   {/if}
 
-  {#if acpSectionVisible("execution")}
-    <ExecutionSection bind:config open={openSections.has("execution")} onToggle={() => toggle("execution")} />
+  {#if shows("execution")}
+    <ExecutionSection bind:config open={isOpen("execution")} onToggle={() => toggle("execution")} />
   {/if}
 
-  {#if acpSectionVisible("metatools")}
-    <MetaToolsSection bind:config open={openSections.has("metatools")} onToggle={() => toggle("metatools")} />
+  {#if shows("metatools")}
+    <MetaToolsSection bind:config open={isOpen("metatools")} onToggle={() => toggle("metatools")} />
   {/if}
 
-  {#if acpSectionVisible("reliability")}
-    <ReliabilitySection bind:config open={openSections.has("reliability")} onToggle={() => toggle("reliability")} />
+  {#if shows("reliability")}
+    <ReliabilitySection bind:config open={isOpen("reliability")} onToggle={() => toggle("reliability")} />
   {/if}
 
-  {#if acpSectionVisible("observability")}
-    <ObservabilitySection bind:config open={openSections.has("observability")} onToggle={() => toggle("observability")} />
+  {#if shows("observability")}
+    <ObservabilitySection bind:config open={isOpen("observability")} onToggle={() => toggle("observability")} />
+  {/if}
+
+  {#if navMembers?.includes("framework")}
+    <FrameworkOptionsSection bind:config open onToggle={() => {}} manifest={capManifest} />
   {/if}
 
 </div>
-
-<style>
-  .agent-config-panel {
-    --acp-radius: 10px;
-  }
-
-
-  /* Spacing rhythm: 12px between sections, 16px inside them, 10px inside cards. */
-  .agent-config-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  :global(.agent-config-panel .acp-section-trigger) {
-    display: flex;
-    width: 100%;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    border: 0;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  :global(.agent-config-panel .acp-section-body) {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding: 16px;
-    border-top: 1px solid var(--cortex-border);
-  }
-
-  /* Field primitives (stack / field / group / callout / label / input) are :global under the
-     panel root so section components rendered inside it (ShellWorkspaceFields, GuardrailsFields,
-     AdvancedFrameworkConfig) share one look without copying these rules. */
-  .agent-config-panel :global(.acp-stack) {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  /* A label with its control and hint: tight inside, separated from the next field by the stack gap. */
-  .agent-config-panel :global(.acp-field) {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  :global(.agent-config-panel .acp-card) {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 12px;
-    border: 1px solid var(--cortex-border);
-    border-radius: var(--acp-radius);
-    background: color-mix(in srgb, var(--cortex-surface-low) 40%, transparent);
-  }
-
-  .agent-config-panel :global(.acp-group) {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding-top: 16px;
-    border-top: 1px solid var(--cortex-border);
-  }
-
-  .agent-config-panel :global(.acp-callout) {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px;
-    border: 1px solid color-mix(in srgb, var(--ra-amber) 40%, var(--cortex-border));
-    border-radius: var(--acp-radius);
-    background: color-mix(in srgb, var(--ra-amber) 10%, transparent);
-  }
-
-  .acp-divider {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--cortex-text-muted);
-  }
-  .acp-divider::before,
-  .acp-divider::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--cortex-border);
-  }
-
-  :global(.agent-config-panel .acp-header-mark) {
-    box-shadow: 0 0 14px color-mix(in srgb, var(--ra-violet) 35%, transparent);
-  }
-
-  :global(.agent-config-panel .acp-toolbar-btn) {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.35rem 0.55rem;
-    border-radius: 0.45rem;
-    border: 1px solid color-mix(in srgb, var(--cortex-border) 80%, var(--ra-violet) 20%);
-    background: color-mix(in srgb, var(--cortex-surface-low) 70%, transparent);
-    font-family: "Geist Variable", "Geist", ui-sans-serif, sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    color: color-mix(in srgb, var(--cortex-text) 88%, var(--ra-violet) 12%);
-    cursor: pointer;
-    transition:
-      border-color 0.15s ease,
-      background 0.15s ease,
-      color 0.15s ease;
-  }
-
-  :global(.agent-config-panel .acp-toolbar-btn:hover) {
-    border-color: color-mix(in srgb, var(--ra-violet) 45%, var(--cortex-border));
-    color: var(--ra-violet);
-    background: color-mix(in srgb, var(--ra-violet) 10%, var(--cortex-surface-low));
-  }
-
-  :global(.agent-config-panel .acp-toolbar-btn--muted) {
-    opacity: 0.72;
-    border-color: var(--cortex-border);
-  }
-
-  :global(.agent-config-panel .acp-toolbar-btn--muted:hover) {
-    opacity: 1;
-    color: var(--ra-cyan);
-  }
-
-  :global(.agent-config-panel .acp-toolbar-btn--ghost) {
-    border-color: transparent;
-    background: transparent;
-    font-weight: 500;
-    color: var(--cortex-text-muted);
-  }
-
-  :global(.agent-config-panel .acp-toolbar-btn--ghost:hover) {
-    color: var(--cortex-text);
-    background: color-mix(in srgb, var(--cortex-surface-mid) 55%, transparent);
-  }
-
-  :global(.agent-config-panel .acp-nav-pill) {
-    padding: 0.25rem 0.6rem;
-    border-radius: 9999px;
-    border: 1px solid var(--cortex-border);
-    background: color-mix(in srgb, var(--cortex-surface-low) 80%, transparent);
-    font-family: "Geist Variable", "Geist", ui-sans-serif, sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--cortex-text-muted);
-    cursor: pointer;
-    transition:
-      border-color 0.15s ease,
-      background 0.15s ease,
-      color 0.15s ease,
-      box-shadow 0.2s ease;
-  }
-
-  :global(.agent-config-panel .acp-nav-pill:hover) {
-    border-color: color-mix(in srgb, var(--ra-violet) 40%, var(--cortex-border));
-    color: var(--cortex-text);
-  }
-
-  :global(.agent-config-panel .acp-nav-pill--active) {
-    border-color: color-mix(in srgb, var(--ra-violet) 55%, transparent);
-    color: var(--ra-violet);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ra-cyan) 25%, transparent);
-    background: color-mix(in srgb, var(--ra-violet) 9%, var(--cortex-surface));
-  }
-
-  :global(.agent-config-panel .acp-section) {
-    scroll-margin-top: 0.75rem;
-  }
-
-  :global(.agent-config-panel .acp-section-shell) {
-    background: color-mix(in srgb, var(--cortex-surface-low) 55%, transparent);
-  }
-
-  :global(html.dark .agent-config-panel .acp-section-shell) {
-    background: color-mix(in srgb, var(--cortex-surface-low) 82%, var(--cortex-surface) 18%);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--ra-violet) 22%, transparent),
-      0 14px 48px -28px color-mix(in srgb, var(--ra-violet) 38%, transparent),
-      0 0 40px -24px color-mix(in srgb, var(--ra-cyan) 18%, transparent);
-  }
-
-  :global(.agent-config-panel .acp-section-trigger) {
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--cortex-surface) 40%, transparent) 0%,
-      color-mix(in srgb, var(--cortex-surface-low) 55%, transparent) 100%
-    );
-    transition: background 0.15s ease;
-  }
-
-  :global(.agent-config-panel .acp-section-trigger:hover) {
-    background: color-mix(in srgb, var(--ra-violet) 6%, var(--cortex-surface-low));
-  }
-
-  :global(.agent-config-panel .acp-section-body) {
-    background: color-mix(in srgb, var(--cortex-surface) 35%, transparent);
-  }
-
-  :global(html.dark .agent-config-panel .acp-section-body) {
-    background: color-mix(in srgb, var(--cortex-surface-low) 55%, var(--cortex-surface) 45%);
-  }
-
-  :global(html.dark .agent-config-panel .acp-section-trigger) {
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--cortex-surface-3) 42%, var(--cortex-surface)) 0%,
-      color-mix(in srgb, var(--cortex-surface-low) 78%, var(--cortex-surface)) 100%
-    );
-  }
-
-  :global(html.dark .agent-config-panel .acp-section-trigger:hover) {
-    background: color-mix(in srgb, var(--ra-violet) 12%, var(--cortex-surface-low));
-  }
-
-  :global(.agent-config-panel .acp-filter-input) {
-    font-family: "Geist Variable", "Geist", ui-sans-serif, sans-serif;
-    font-size: 11px;
-  }
-
-  .agent-config-panel :global(.config-label) {
-    display: block;
-    font-family: "Geist Variable", "Geist", ui-sans-serif, sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0;
-    color: color-mix(in srgb, var(--cortex-text-muted) 55%, var(--cortex-text) 45%);
-    margin-bottom: 6px;
-  }
-
-  .agent-config-panel :global(.config-input) {
-    width: 100%;
-    box-sizing: border-box;
-    background: color-mix(in srgb, var(--cortex-surface-mid) 55%, var(--cortex-surface) 45%);
-    border: 1px solid var(--cortex-border);
-    border-radius: var(--acp-radius);
-    padding: 8px 12px;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 12px;
-    color: var(--cortex-text);
-    outline: none;
-    transition:
-      border-color 0.15s ease,
-      box-shadow 0.2s ease;
-  }
-
-  .agent-config-panel :global(.config-input:focus) {
-    border-color: color-mix(in srgb, var(--ra-violet) 55%, var(--cortex-border));
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ra-violet) 18%, transparent);
-  }
-
-  .agent-config-panel :global(.config-input::placeholder) {
-    color: color-mix(in srgb, var(--cortex-text-muted) 55%, transparent);
-  }
-
-  :global(html.dark) .agent-config-panel :global(.config-input) {
-    background: color-mix(in srgb, var(--cortex-surface-mid) 72%, var(--cortex-surface-low) 28%);
-    border-color: color-mix(in srgb, white 14%, var(--cortex-border));
-    box-shadow: inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
-  }
-
-  :global(html.dark) .agent-config-panel :global(.config-input:focus) {
-    box-shadow:
-      0 0 0 3px color-mix(in srgb, var(--ra-violet) 28%, transparent),
-      inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
-  }
-
-  /* config-input split into a frame (border, bg, focus) plus text (padding, font)
-     pair so HighlightedField can border the wrapper and align its backdrop to the
-     field. :global so the rules reach the elements rendered inside the child
-     component; the cortex and ra-violet and acp-radius vars cascade in via :root. */
-  :global(.ci-frame) {
-    background: color-mix(in srgb, var(--cortex-surface-mid) 55%, var(--cortex-surface) 45%);
-    border: 1px solid var(--cortex-border);
-    border-radius: var(--acp-radius);
-    transition:
-      border-color 0.15s ease,
-      box-shadow 0.2s ease;
-  }
-  :global(.ci-frame):focus-within {
-    border-color: color-mix(in srgb, var(--ra-violet) 55%, var(--cortex-border));
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ra-violet) 18%, transparent);
-  }
-  :global(html.dark .ci-frame) {
-    background: color-mix(in srgb, var(--cortex-surface-mid) 72%, var(--cortex-surface-low) 28%);
-    border-color: color-mix(in srgb, white 14%, var(--cortex-border));
-  }
-  :global(html.dark .ci-frame):focus-within {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ra-violet) 28%, transparent);
-  }
-  :global(.ci-text) {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 6px 10px;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11px;
-    line-height: 1.5;
-    color: var(--cortex-text);
-    outline: none;
-  }
-  :global(.ci-text)::placeholder {
-    color: color-mix(in srgb, var(--cortex-text-muted) 55%, transparent);
-  }
-</style>

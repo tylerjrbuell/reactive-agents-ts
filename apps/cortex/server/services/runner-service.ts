@@ -208,7 +208,36 @@ type ActiveEntry = {
   /** Event-forwarding unsubscribe; set once the subscription is established so
    * terminate() can tear it down without the run's own `.finally` closure. */
   readonly unsubscribe?: () => void;
+  /** Resolves once `agent.run()` has settled (its `.finally` ran). */
+  readonly settled?: Promise<void>;
+  /** What the user asked for (Stop or Terminate) and whether the run already reported it. */
+  readonly control?: StopControl;
+  /** Ingest the user's stop as the run's terminal event, unless the run already published one. */
+  readonly endAsStopped?: () => Effect.Effect<void>;
 };
+
+/** A desk run's stop request: set by stop()/terminate(), read when the run settles. */
+type StopControl = {
+  requested?: "stop" | "terminate";
+  /** The run published AgentStopped / AgentTerminated / ExecutionCancelled itself. */
+  sawStopEvent: boolean;
+};
+
+const STOP_EVENT_TAGS: ReadonlySet<string> = new Set(["AgentStopped", "AgentTerminated", "ExecutionCancelled"]);
+
+/** Timing knobs for the desk Stop / Terminate paths (tests shorten them). */
+export interface CortexRunnerOptions {
+  /**
+   * How long Stop waits for the run to stop gracefully before ending it like
+   * Terminate. `agent.stop()` is honoured only at the next execution-engine
+   * phase boundary, and the reasoning loop is one phase, so a run inside a
+   * long model call or many iterations would otherwise keep going (observed:
+   * no effect in 60s). Default 5s.
+   */
+  readonly stopGraceMs?: number;
+  /** How long Terminate waits for `agent.run()` to settle before disposing the agent anyway. Default 5s. */
+  readonly settleTimeoutMs?: number;
+}
 
 export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
   CortexRunnerService,
@@ -273,7 +302,17 @@ const decideApproval = (runId: RunId, decision: ApprovalDecision, reason?: strin
 const defaultCortexHttpUrl = (): string =>
   process.env.CORTEX_URL?.replace(/^ws/, "http") ?? "http://127.0.0.1:4321";
 
-export const CortexRunnerServiceLive = Layer.effect(
+/** `true` when `settled` resolves within `ms`, `false` on timeout (no `settled`: `true`). */
+const settledWithin = (settled: Promise<void> | undefined, ms: number): Effect.Effect<boolean> =>
+  settled
+    ? Effect.race(Effect.promise(() => settled).pipe(Effect.as(true)), Effect.sleep(`${ms} millis`).pipe(Effect.as(false)))
+    : Effect.succeed(true);
+
+/** Build the runner layer with custom Stop / Terminate timing (`CortexRunnerServiceLive` uses the defaults). */
+export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) => {
+  const stopGraceMs = options.stopGraceMs ?? 5_000;
+  const settleTimeoutMs = options.settleTimeoutMs ?? 5_000;
+  return Layer.effect(
   CortexRunnerService,
   Effect.gen(function* () {
     // Services captured here during Layer composition — NOT inside method bodies.
@@ -318,6 +357,27 @@ export const CortexRunnerServiceLive = Layer.effect(
         }
       });
 
+    // Terminate (and a Stop past its grace window): interrupt the agent fiber,
+    // which aborts an in-flight model call, then let `run()` settle before
+    // disposing. Disposing first made the run's own exit fail with
+    // "ManagedRuntime disposed" (its AgentTerminated never published) and the
+    // run read `failed`. A run that will not settle is ended as stopped by
+    // Cortex and disposed anyway.
+    const endRun = (entry: ActiveEntry): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => entry.agent.terminate("Cortex UI terminate")).pipe(
+          Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:terminate", tag: errorTag(err) })),
+        );
+        const settledInTime = yield* settledWithin(entry.settled, settleTimeoutMs);
+        if (!settledInTime) {
+          cortexLog("warn", "runner", "terminate: run did not settle; disposing it", { runId: entry.runId, settleTimeoutMs });
+          if (entry.endAsStopped) yield* entry.endAsStopped();
+        }
+        // finalizeRun's atomic claim makes this a no-op when the run's own
+        // `.finally` already tore it down.
+        yield* finalizeRun(entry.runId, entry.unsubscribe, entry.agent);
+      });
+
     return {
       start: (rawParams) =>
         Effect.gen(function* () {
@@ -353,11 +413,13 @@ export const CortexRunnerServiceLive = Layer.effect(
             launchParamsJson: JSON.stringify(params),
           });
           let forwardedEvents = 0;
+          const control: StopControl = { sawStopEvent: false };
 
           const unsubscribe = yield* Effect.tryPromise({
             try: () =>
               agent.subscribe((event) => {
                 forwardedEvents += 1;
+                if (STOP_EVENT_TAGS.has(event._tag)) control.sawStopEvent = true;
                 if (forwardedEvents === 1 || forwardedEvents % 25 === 0) {
                   cortexLog("debug", "runner", "forwarding agent event to ingest", {
                     agentId,
@@ -384,10 +446,35 @@ export const CortexRunnerServiceLive = Layer.effect(
               }),
           });
 
+          // The user's Stop / Terminate is the run's ending: when the run did not
+          // publish its own stop event (a terminate that interrupts a model call,
+          // or a stop that never reached a phase boundary), Cortex ingests one so
+          // the run reads `stopped`, never `failed` (the failed AgentCompleted
+          // that may follow keeps it stopped; `updateRunStats`).
+          const endAsStopped = (): Effect.Effect<void> =>
+            Effect.suspend(() => {
+              if (!control.requested || control.sawStopEvent) return Effect.void;
+              control.sawStopEvent = true;
+              const event = {
+                _tag: control.requested === "stop" ? ("AgentStopped" as const) : ("AgentTerminated" as const),
+                agentId,
+                taskId: runId,
+                reason: control.requested === "stop" ? "Stopped from Cortex" : "Terminated from Cortex",
+              };
+              return ingest
+                .handleEvent(agentId, runId, { v: 1, agentId, runId, event })
+                .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:endAsStopped", tag: errorTag(err) })));
+            });
+
+          let markSettled: () => void = () => {};
+          const settled = new Promise<void>((resolve) => {
+            markSettled = resolve;
+          });
+
           // Register as active now that the event subscription exists, so
           // terminate()/finalizeRun can tear the subscription down too.
           yield* Ref.update(activeRef, (m) =>
-            new Map(m).set(runId, { agentId, runId, agent, startedAt, unsubscribe }),
+            new Map(m).set(runId, { agentId, runId, agent, startedAt, unsubscribe, settled, control, endAsStopped }),
           );
 
           const cortexHttp = defaultCortexHttpUrl();
@@ -419,6 +506,8 @@ export const CortexRunnerServiceLive = Layer.effect(
                 pendingApproval?: { runId: string };
                 pendingInteraction?: { runId: string };
               };
+              // Stopped from Cortex and did not finish anyway: the stop is the ending.
+              if (result.success !== true) Effect.runFork(endAsStopped());
               if (r.status === "awaiting-approval" && r.pendingApproval) {
                 paused = true;
                 // Retain the agent in the SHARED registry keyed by the DURABLE
@@ -495,10 +584,11 @@ export const CortexRunnerServiceLive = Layer.effect(
                 runId,
                 ...formatErrorDetails(err),
               });
-              // Emit AgentCompleted with error so the UI transitions out of "loading"
+              // Emit AgentCompleted with error so the UI transitions out of "loading".
+              // A run the user stopped records the stop first, so it reads `stopped`.
               const errorMessage = err instanceof Error ? err.message : String(err);
               Effect.runFork(
-                ingest
+                endAsStopped().pipe(Effect.zipRight(ingest
                   .handleEvent(agentId, runId, {
                     v: 1,
                     agentId,
@@ -514,10 +604,12 @@ export const CortexRunnerServiceLive = Layer.effect(
                       error: errorMessage,
                     } as any,
                   })
-                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:277", tag: errorTag(err) }))),
+                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:277", tag: errorTag(err) })))),
+                ),
               );
             })
             .finally(() => {
+              markSettled();
               // Paused (awaiting-approval) durable runs keep their agent + event
               // subscription alive so approveRun/denyRun can resume the SAME
               // instance. Cleanup happens when the approval is resolved.
@@ -569,8 +661,21 @@ export const CortexRunnerServiceLive = Layer.effect(
             cortexLog("debug", "runner", "stop: run not active", { runId });
             return;
           }
+          if (entry.control) entry.control.requested ??= "stop";
           yield* Effect.promise(() => entry.agent.stop("Cortex UI stop")).pipe(
             Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:329", tag: errorTag(err) })),
+          );
+          // Graceful first; a run still going after the grace window is ended
+          // like Terminate (see CortexRunnerOptions.stopGraceMs). Forked so the
+          // HTTP Stop returns at once.
+          yield* Effect.forkDaemon(
+            settledWithin(entry.settled, stopGraceMs).pipe(
+              Effect.flatMap((done) => {
+                if (done) return Effect.void;
+                cortexLog("info", "runner", "stop: no phase boundary within the grace window; terminating", { runId, stopGraceMs });
+                return endRun(entry);
+              }),
+            ),
           );
         }),
 
@@ -582,15 +687,8 @@ export const CortexRunnerServiceLive = Layer.effect(
             cortexLog("debug", "runner", "terminate: run not active", { runId });
             return;
           }
-          // Interrupt the agent fiber — aborts any in-flight LLM HTTP request
-          // (C2) instead of only halting at the next phase boundary.
-          yield* Effect.promise(() => entry.agent.terminate("Cortex UI terminate")).pipe(
-            Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:terminate", tag: errorTag(err) })),
-          );
-          // Immediate teardown — do not wait for run() to settle (it is aborting).
-          // finalizeRun's atomic claim makes this a no-op if the run's own
-          // `.finally` already fired after the interrupt.
-          yield* finalizeRun(String(runId), entry.unsubscribe, entry.agent);
+          if (entry.control) entry.control.requested ??= "terminate";
+          yield* endRun(entry);
         }),
 
       getActive: () => Ref.get(activeRef),
@@ -670,4 +768,8 @@ export const CortexRunnerServiceLive = Layer.effect(
         }),
     };
   }),
-);
+  );
+};
+
+/** The desk runner with the default Stop / Terminate timing. */
+export const CortexRunnerServiceLive = makeCortexRunnerServiceLive();

@@ -35,35 +35,33 @@
 <div class="acp-field">
   <label for="acp-workspace" class="config-label mb-0 text-[11px]">Workspace</label>
   <WorkspaceField id="acp-workspace" value={config.workspace ?? ""} onChange={(p) => (config = { ...config, workspace: p })} />
-  <p class="font-mono text-[10px] text-outline/70 leading-relaxed">
+  <p class="acp-hint leading-relaxed">
     File tools read and write inside this directory, and the shell runs in it. Empty: file tools use the server's directory and the shell gets a fresh /tmp sandbox.
   </p>
 </div>
 <div
   class="acp-callout"
 >
-  <p class="font-mono text-[10px] font-semibold uppercase tracking-wide text-tertiary">Host shell — use at your own risk</p>
-  <p class="font-mono text-[10px] text-[var(--cortex-text-muted)] leading-relaxed">
-    The <code class="text-[10px]">shell-execute</code> tool runs allowlisted commands on <strong>this machine</strong> (not an isolated container). It may run only the allowed commands listed below; risky patterns are blocklisted, but no sandbox is perfect.
-    Only enable for trusted projects and accounts. For stronger isolation, use code from your app with Docker sandboxing — see
-    <a class="text-primary underline decoration-primary/40" href="https://docs.reactiveagents.dev/" target="_blank" rel="noreferrer">docs</a>
-    (shell execution / sandbox).
+  <p class="acp-check-t" style="font-weight: 600">Full host shell: use at your own risk</p>
+  <p class="acp-hint">
+    <code>shell-execute</code> runs the allowed commands below on <strong>this machine</strong>, not in an isolated container. Risky patterns are blocked, but no sandbox is perfect.
+    Turn it on only for trusted projects. For stronger isolation, run the Docker sandbox from your app (see the
+    <a class="acp-link" href="https://docs.reactiveagents.dev/" target="_blank" rel="noreferrer">shell execution docs</a>).
   </p>
-  <label class="flex cursor-pointer items-center gap-2">
+  <label class="acp-check">
     <input
       type="checkbox"
-      class="accent-primary shrink-0"
       checked={shellBox.checked}
       aria-describedby={shellBox.hint ? "acp-shell-hint" : undefined}
       onchange={onShellClick}
     />
-    <span class="font-mono text-[11px] text-[var(--cortex-text)]">Enable host shell (<code class="text-[10px]">shell-execute</code>)</span>
+    <span><span class="acp-check-t">Full host shell (<code>shell-execute</code>)</span></span>
   </label>
   {#if shellBox.hint}
-    <p id="acp-shell-hint" data-testid="shell-hint" class="font-mono text-[10px] text-[var(--cortex-text-muted)]">{shellBox.hint}</p>
+    <p id="acp-shell-hint" data-testid="shell-hint" class="acp-hint">{shellBox.hint}</p>
   {/if}
   {#if config.terminalTools || config.tools.includes("shell-execute")}
-    <div class="acp-stack border-t border-[color-mix(in_srgb,var(--ra-amber)_25%,transparent)] pt-3">
+    <div class="acp-stack acp-group">
       <ShellCommandsField bind:config />
       <div class="grid grid-cols-2 gap-2">
         <div class="acp-field">
@@ -90,9 +88,9 @@
             onchange={(e) => setShell({ maxOutputChars: Math.max(0, parseInt((e.currentTarget as HTMLInputElement).value || "0", 10)) })} />
         </div>
       </div>
-      <label class="flex cursor-pointer items-center gap-2">
-        <input type="checkbox" class="accent-primary shrink-0" checked={shellOpts.allowUnsafeCwd} onchange={(e) => setShell({ allowUnsafeCwd: (e.currentTarget as HTMLInputElement).checked })} />
-        <span class="font-mono text-[10px] text-[var(--cortex-text)]">Allow a shell directory outside the workspace</span>
+      <label class="acp-check">
+        <input type="checkbox" checked={shellOpts.allowUnsafeCwd} onchange={(e) => setShell({ allowUnsafeCwd: (e.currentTarget as HTMLInputElement).checked })} />
+        <span><span class="acp-check-t">Allow a shell directory outside the workspace</span></span>
       </label>
     </div>
   {/if}

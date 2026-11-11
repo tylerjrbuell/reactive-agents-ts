@@ -7,6 +7,11 @@
   import ToolTestRunner from "$lib/components/tools/ToolTestRunner.svelte";
   import CreateCustomToolForm from "$lib/components/tools/CreateCustomToolForm.svelte";
   import McpServerForm from "$lib/components/tools/McpServerForm.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import EmptyState from "$lib/components/kit/EmptyState.svelte";
+  import Icon from "$lib/components/kit/Icon.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Panel from "$lib/components/kit/Panel.svelte";
   import {
     EMPTY_MCP_DRAFT,
     buildMcpPayload,
@@ -416,84 +421,31 @@
   });
 </script>
 
-<div
-  class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl border border-[var(--cortex-border)] bg-white/85 p-4 shadow-sm dark:bg-surface-container-low/45 dark:shadow-[0_0_0_1px_rgba(139,92,246,0.15),0_12px_40px_-24px_rgba(0,0,0,0.55)]"
->
-  <div class="flex flex-shrink-0 flex-wrap items-center justify-between gap-2">
-    <div>
-      <h3 class="font-headline text-sm font-semibold text-slate-900 dark:text-on-surface">Tools</h3>
-      <p class="mt-0.5 font-mono text-[9px] text-slate-600 dark:text-on-surface-variant/80">
-        One catalog: built-in, meta, MCP, and lab tools. <strong class="text-slate-800 dark:text-on-surface/85">Create tool</strong> adds custom or MCP-backed entries.
-      </p>
-    </div>
-    <div class="flex items-center gap-2">
-      <button
-        type="button"
-        onclick={() => openCreate("mcp")}
-        class="cursor-pointer rounded border border-primary/40 bg-primary/[0.08] px-3 py-1.5 font-mono text-[10px] text-primary transition-colors hover:bg-primary/15 dark:border-primary/50 dark:bg-primary/[0.14] dark:hover:bg-primary/[0.22]"
-      >
-        + Create tool
-      </button>
-      <button
-        type="button"
-        onclick={() => loadCatalog()}
-        class="cursor-pointer rounded border border-[var(--cortex-border)] bg-transparent px-3 py-1.5 font-mono text-[10px] text-slate-600 transition-colors hover:border-primary/35 hover:text-primary dark:border-white/10 dark:text-on-surface-variant dark:hover:text-secondary"
-      >
-        ↻ Reload catalog
-      </button>
+<div class="tw">
+  <div class="tw-head">
+    <p class="tw-intro">
+      One catalog: built-in, meta, MCP and Lab tools. Create tool adds a custom or MCP-backed entry; allow a tool for an agent in the Builder's Tools section.
+    </p>
+    <div class="tw-actions">
+      <Button icon="retry" onclick={() => loadCatalog()}>Reload catalog</Button>
+      <Button variant="primary" icon="plus" onclick={() => openCreate("mcp")}>Create tool</Button>
     </div>
   </div>
 
   {#if showCreate}
-    <div
-      class="gradient-border flex-shrink-0 space-y-4 rounded-lg border border-primary/30 p-4 shadow-lg dark:border-primary/35 dark:shadow-[0_0_40px_-12px_rgba(139,92,246,0.35)]"
-    >
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <span class="font-mono text-[10px] uppercase tracking-widest text-slate-600 dark:text-on-surface-variant/85">Create tool</span>
-        <button
-          type="button"
-          onclick={closeCreate}
-          class="material-symbols-outlined cursor-pointer border-0 bg-transparent p-0 text-lg leading-none text-slate-500 hover:text-primary dark:text-on-surface-variant dark:hover:text-on-surface"
-          aria-label="Close">close</button>
+    <Panel class="tw-create">
+      <div class="tw-create-h">
+        <h2>Create tool</h2>
+        <IconButton icon="x" label="Close" onclick={closeCreate} />
       </div>
-
-      <p class="font-mono text-[9px] leading-relaxed text-slate-600 dark:text-on-surface-variant/75">
-        Choose how this tool appears in the catalog. <span class="text-slate-800 dark:text-on-surface/85">Custom</span> = lab echo (prototype). <span class="text-slate-800 dark:text-on-surface/85">MCP server</span> = connect a process or URL; then
-        <strong class="text-slate-900 dark:text-on-surface/90">Refresh tools</strong> to list its tools. Built-in and meta tools ship with the framework and show up automatically — allowlist them under Builder → Tools.
-      </p>
-
-      <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
-        <button
-          type="button"
-          onclick={() => {
-            createKind = "mcp";
-            mcpCreateMode = "manual";
-          }}
-          class="rounded-lg border p-3 text-left transition-colors
-                 {createKind === 'mcp'
-            ? 'border-primary/45 bg-violet-50/95 dark:border-primary/50 dark:bg-primary/[0.18]'
-            : 'border-[var(--cortex-border)] bg-white/90 hover:border-primary/30 dark:border-white/10 dark:bg-surface-container-high/40 dark:hover:border-primary/40'}"
-        >
-          <div class="font-mono text-[10px] uppercase tracking-wider text-violet-800 dark:text-primary/90">MCP-backed tool</div>
-          <p class="mt-1 font-mono text-[9px] leading-relaxed text-slate-600 dark:text-on-surface-variant/75">
-            Connect via stdio or endpoint, refresh discovered tools, then invoke from the same test panel.
-          </p>
+      <div class="tw-kinds" role="radiogroup" aria-label="Tool kind">
+        <button type="button" role="radio" aria-checked={createKind === "mcp"} onclick={() => { createKind = "mcp"; mcpCreateMode = "manual"; }}>
+          <span class="tw-kind-t"><Icon name="server" size="sm" />MCP server</span>
+          <span class="tw-kind-d">Connect a process (stdio) or an endpoint, then Refresh tools to list what it offers. Its tools run from the same test panel.</span>
         </button>
-        <button
-          type="button"
-          onclick={() => {
-            createKind = "custom";
-            selectedMcp = null;
-          }}
-          class="rounded-lg border p-3 text-left transition-colors
-                 {createKind === 'custom'
-            ? 'border-primary/45 bg-violet-50/95 dark:border-primary/50 dark:bg-primary/[0.18]'
-            : 'border-[var(--cortex-border)] bg-white/90 hover:border-primary/30 dark:border-white/10 dark:bg-surface-container-high/40 dark:hover:border-primary/40'}"
-        >
-          <div class="font-mono text-[10px] uppercase tracking-wider text-violet-800 dark:text-primary/90">Custom tool</div>
-          <p class="mt-1 font-mono text-[9px] leading-relaxed text-slate-600 dark:text-on-surface-variant/75">
-            Fast prototype in Lab catalog. Define params, then execute with request JSON.
-          </p>
+        <button type="button" role="radio" aria-checked={createKind === "custom"} onclick={() => { createKind = "custom"; selectedMcp = null; }}>
+          <span class="tw-kind-t"><Icon name="code" size="sm" />Custom tool</span>
+          <span class="tw-kind-d">A quick prototype in the Lab catalog: define its parameters, then call it with a request JSON.</span>
         </button>
       </div>
 
@@ -533,17 +485,16 @@
           onDone={closeCreate}
         />
       {/if}
-    </div>
+    </Panel>
   {/if}
 
-  <div class="grid grid-cols-1 lg:grid-cols-[minmax(240px,320px)_1fr] gap-4 flex-1 min-h-0 overflow-hidden">
+  <div class="tw-cols">
     <ToolCatalogList bind:search {loading} entries={filtered} selectedId={selected?.id ?? null} onSelect={selectEntry} />
 
-    <div class="flex flex-col min-h-0 overflow-hidden rounded-lg border border-outline-variant/20 bg-surface-container-low/35">
+    <section class="tw-detail" aria-label="Tool">
       {#if !selected}
-        <div class="flex-1 flex items-center justify-center font-mono text-xs text-outline/45 p-8 text-center">
-          Select a tool to inspect and test.<br />
-          <span class="text-[10px] text-outline/35 mt-2 block">Need a new one? Use <strong class="text-outline/50">Create tool</strong> above.</span>
+        <div class="tw-empty">
+          <EmptyState icon="tool" title="Pick a tool" description="Its parameters show here, with a panel to call it. Need a new one? Use Create tool above." />
         </div>
       {:else}
         <ToolInspector
@@ -565,6 +516,45 @@
           onCopyResponse={() => copy(responseJson)}
         />
       {/if}
-    </div>
+    </section>
   </div>
 </div>
+
+<style>
+  .tw { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 32px 24px; overflow-y: auto; }
+  .tw-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .tw-intro { margin: 0; max-width: 72ch; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
+  .tw-actions { display: flex; gap: 8px; }
+  :global(.tw-create) { flex: none; }
+  .tw-create-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .tw-create-h h2 { margin: 0; font-size: var(--cortex-t-md); font-weight: 600; color: var(--cortex-text); }
+  .tw-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .tw-kinds button {
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid var(--cortex-line-strong);
+    border-radius: var(--cortex-r-ctl);
+    background: var(--cortex-surface-1);
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--cortex-font-ui);
+  }
+  .tw-kinds button:hover { background: var(--cortex-surface-2); }
+  .tw-kinds button[aria-checked="true"] { border-color: color-mix(in srgb, var(--cortex-accent) 45%, transparent); background: var(--cortex-accent-tint); }
+  .tw-kinds button:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
+  .tw-kind-t { display: inline-flex; align-items: center; gap: 6px; font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-text); }
+  .tw-kind-d { font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .tw-cols { flex: 1; min-height: 420px; display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 16px; }
+  .tw-detail {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--cortex-line);
+    border-radius: var(--cortex-r-panel);
+    background: var(--cortex-surface-1);
+  }
+  .tw-empty { flex: 1; display: grid; place-items: center; padding: 24px; }
+  @media (max-width: 1000px) { .tw-cols { grid-template-columns: 1fr; } .tw-kinds { grid-template-columns: 1fr; } }
+</style>

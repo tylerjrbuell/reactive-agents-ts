@@ -3,7 +3,7 @@
  * view opens (Board or Field), what each agent's status is, the Board's
  * "Running now" cards and filtered Agents grid, and the Field's node labels,
  * icons and links. Status goes through ui-core's one vocabulary
- * (`statusOfRun`); Beacon adds only "Needs you" for a run paused on an
+ * (`statusOfRun`); Beacon adds only "Waiting on you" for a run paused on an
  * approval or a question.
  */
 import { formatCost, formatTokens, statusOfRun, type PendingInteractionWire, type StatusTone, type StatusView } from "@reactive-agents/ui-core";
@@ -11,7 +11,7 @@ import type { IconName } from "./icons.js";
 import type { AgentNode } from "./stores/agent-store.js";
 import { runErrorLine } from "./run-error.js";
 import { RUN_SOURCE_LABEL, type RunSource } from "./runs-table.js";
-import { approvalDetail, type PendingApprovalWire } from "./waiting-on-you.js";
+import { approvalDetail, waitingRunsOf, type PendingApprovalWire } from "./waiting-on-you.js";
 
 // ── View (Board / Field) ──────────────────────────────────────────────
 
@@ -73,12 +73,13 @@ function runStatusOf(node: AgentNode): string {
 }
 
 /**
- * One agent's status on Beacon: "Needs you" while it waits on an approval or a
+ * One agent's status on Beacon: "Waiting on you" (the shared vocabulary; the
+ * filter chip that finds these reads "Needs you") while it waits on an approval or a
  * question, "Running" while it works, else the run vocabulary (Finished,
  * Failed, Stopped).
  */
 export function beaconStatusOf(node: AgentNode, needsYou: boolean): StatusView {
-  if (needsYou) return { tone: "attention", label: "Needs you" };
+  if (needsYou) return { tone: "attention", label: "Waiting on you" };
   if (isLiveNode(node)) return { tone: "running", label: "Running" };
   const view = statusOfRun(runStatusOf(node));
   return view.tone === "idle" ? { tone: "idle", label: "Idle" } : view;
@@ -110,28 +111,15 @@ export function needsYouByRun(
   approvals: readonly PendingApprovalWire[],
   interactions: readonly PendingInteractionWire[],
 ): ReadonlyMap<string, string> {
-  const byId = new Map(nodes.map((n) => [n.runId, n]));
-  const newest = (match: (n: AgentNode) => boolean): AgentNode | undefined => {
-    let best: AgentNode | undefined;
-    for (const n of nodes) {
-      if (!match(n) || n.parentRunId) continue;
-      if (!best || startOf(n) > startOf(best)) best = n;
-    }
-    return best;
-  };
+  const refs = nodes.map((n) => ({ ...n, startedAt: startOf(n) }));
   const out = new Map<string, string>();
-  for (const a of approvals) {
-    const node =
-      byId.get(a.runId) ??
-      (a.chatSessionId ? newest((n) => n.chatSessionId === a.chatSessionId) : newest((n) => n.agentId === a.agentId));
-    if (!node || out.has(node.runId)) continue;
-    const detail = approvalDetail(a.args);
-    out.set(node.runId, `Approve ${a.toolName || "a tool call"}${detail ? `: ${detail}` : ""}`);
-  }
-  for (const i of interactions) {
-    const node = byId.get(i.runId);
-    if (!node || out.has(node.runId)) continue;
-    out.set(node.runId, `Asked: ${firstLine(i.prompt)}`);
+  for (const [runId, w] of waitingRunsOf(refs, approvals, interactions)) {
+    if (w.kind === "approval") {
+      const detail = approvalDetail(w.approval.args);
+      out.set(runId, `Approve ${w.approval.toolName || "a tool call"}${detail ? `: ${detail}` : ""}`);
+    } else {
+      out.set(runId, `Asked: ${firstLine(w.interaction.prompt)}`);
+    }
   }
   return out;
 }

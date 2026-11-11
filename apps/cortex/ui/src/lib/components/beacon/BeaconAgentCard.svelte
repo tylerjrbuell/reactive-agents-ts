@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
-   * One card in the Board's Agents grid: status dot, name, source (or "needs
-   * you"), the last line (question, error or task) and model / tokens / time.
+   * One card in the Board's Agents grid: status dot, name, source (or its
+   * "Waiting on you" status), the last line (question, error or task) and model / tokens / time.
    * The whole card links to the run. Model: `AgentRow` from `lib/beacon-board.ts`.
    */
   import { formatRelativeTime } from "@reactive-agents/ui-core";
@@ -22,7 +22,7 @@
   <span class="top">
     <Status tone={row.status.tone} label={row.status.label} dotOnly />
     <span class="nm">{row.name}</span>
-    {#if needsYou}<Badge tone="warn">needs you</Badge>{:else}<Badge>{row.source}</Badge>{/if}
+    {#if needsYou}<Badge tone="warn">{row.status.label}</Badge>{:else}<Badge>{row.source}</Badge>{/if}
   </span>
   <span class="last" class:empty={!row.last}>{row.last || row.status.label}</span>
   <span class="data">

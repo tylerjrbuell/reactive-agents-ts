@@ -10,11 +10,9 @@
   let { config = $bindable(), open, onToggle }: Props = $props();
 </script>
 
-<ConfigSection id="execution" {open} {onToggle}>
+<ConfigSection id="execution" icon="steps" title="Execution" {open} {onToggle}>
   {#snippet head()}
-      <span class="material-symbols-outlined text-[15px] text-tertiary/90 shrink-0" aria-hidden="true">timer</span>
-      <span class="font-display text-[12px] font-semibold text-[var(--cortex-text)] tracking-tight">Execution</span>
-      <span class="ml-2 max-w-[min(12rem,45%)] truncate text-[11px] font-mono text-[var(--cortex-text-muted)]">
+      <span class="truncate">
         {[
           config.timeout > 0 ? `${Math.round(config.timeout/1000)}s timeout` : null,
           config.retryPolicy.enabled ? `${config.retryPolicy.maxRetries} retries` : null,
@@ -33,7 +31,7 @@
         <div class="space-y-2">
           <label class="flex items-center gap-3 cursor-pointer">
             <input type="checkbox" bind:checked={config.retryPolicy.enabled} class="accent-primary w-3.5 h-3.5" />
-            <span class="font-mono text-[11px] text-on-surface/80">Enable retry policy</span>
+            <span class="acp-check-t">Enable retry policy</span>
           </label>
           {#if config.retryPolicy.enabled}
             <div class="grid grid-cols-2 gap-3 pl-5">

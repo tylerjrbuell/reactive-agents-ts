@@ -34,18 +34,21 @@ export function isIdLike(s: string): boolean {
 }
 
 /**
- * The run's title: its label (run name or saved agent; a bare ULID does not
- * count), else the chat it came from, else the first line of its task (80
- * characters at most), else `Run <first 8 of the id>`. Never empty.
+ * The run's title: its label (run name or saved agent; a bare ULID or a label
+ * equal to the agent id does not count, the same rule as `runNameOf`), else
+ * the chat it came from, else the first line of its task (80 characters at
+ * most), else `Run <first 8 of the id>`. Never empty.
  */
 export function runTitleOf(input: {
   readonly displayName?: string;
   readonly chatSessionName?: string;
   readonly task?: string;
   readonly runId: string;
+  /** The run's agent id: a label equal to it is not a name. */
+  readonly agentId?: string;
 }): string {
   const name = input.displayName?.trim();
-  if (name && !isIdLike(name)) return name;
+  if (name && !isIdLike(name) && name !== input.agentId?.trim()) return name;
   const chat = input.chatSessionName?.trim();
   if (chat) return chat;
   const task = input.task ? firstLine(input.task) : "";

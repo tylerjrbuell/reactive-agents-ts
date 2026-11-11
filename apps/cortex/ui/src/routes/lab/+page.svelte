@@ -8,7 +8,13 @@
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import ParamFillModal from "$lib/components/ParamFillModal.svelte";
   import { toast } from "$lib/stores/toast-store.js";
-  import { goto } from "$app/navigation";
+  import { afterNavigate, goto, replaceState } from "$app/navigation";
+  import PageHeader from "$lib/components/kit/PageHeader.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Tabs from "$lib/components/kit/Tabs.svelte";
+  import { tabId, tabPanelId } from "$lib/tablist.js";
+  import { promptStore } from "$lib/stores/prompt-store.js";
+  import { loadCapabilities } from "$lib/capabilities.js";
   import ToolWorkshop from "$lib/components/ToolWorkshop.svelte";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import BuilderTab from "$lib/components/lab/BuilderTab.svelte";
@@ -16,10 +22,18 @@
   import SkillsTab from "$lib/components/lab/SkillsTab.svelte";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
   import { syncVariables } from "$lib/template/sync-variables.js";
-  import { LAB_TABS, isLabTab, labTabFromHash, type LabTab } from "$lib/lab-tabs.js";
-  import { builderConfigFromAgent, builderDefaults, prefillFromSnapshot, type BuilderAdHocAction, type BuilderAgentConfig } from "$lib/lab-builder.js";
+  import { LAB_TABS, labTabFromHash, labTabHash, normalizeLabTab, type LabTab } from "$lib/lab-tabs.js";
+  import {
+    builderConfigFromAgent,
+    builderDefaults,
+    exampleBuilderConfig,
+    importBuilderConfig,
+    prefillFromSnapshot,
+    type BuilderAdHocAction,
+    type BuilderAgentConfig,
+  } from "$lib/lab-builder.js";
   import { bulkDeleteConfirmMessage, createGatewayAgentsStore, pruneSelection, type GatewayRow, type SavedAgentsUi } from "$lib/stores/gateway-agents-store.js";
-  import { createLabSkillsStore, emptySkillsUi, type SkillRow } from "$lib/stores/lab-skills-store.js";
+  import { createLabSkillsStore, emptySkillsUi, skillCatalogRows, type SkillRow } from "$lib/stores/lab-skills-store.js";
 
   /** Base config for Builder / forms: static defaults + Cortex Settings default provider/model. */
   function builderDefaultsFromSettings(): BuilderAgentConfig {
@@ -28,18 +42,67 @@
 
   let activeTab = $state<LabTab>("builder");
 
+  /** SvelteKit's `replaceState` throws until the router has finished its first navigation. */
+  let routerReady = false;
+
+  /** Write the tab's hash to the URL (`#agents`, never the `#gateway` alias). */
+  function syncTabHash(tab: LabTab) {
+    if (!routerReady || typeof window === "undefined") return;
+    const url = `${window.location.pathname}${window.location.search}${labTabHash(tab)}`;
+    if (url !== `${window.location.pathname}${window.location.search}${window.location.hash}`) replaceState(url, {});
+  }
+
+  /** Switch tab and keep the URL hash in step. */
+  function selectTab(tab: LabTab) {
+    activeTab = tab;
+    syncTabHash(tab);
+  }
+
+  // The first navigation is done: rewrite an alias hash (`#gateway`) now.
+  afterNavigate(() => {
+    routerReady = true;
+    syncTabHash(activeTab);
+  });
+
   // ── Quick Run builder ─────────────────────────────────────────────────
   let builderConfig = $state<BuilderAgentConfig>(builderDefaultsFromSettings());
   let builderAgentType = $state<"ad-hoc" | "persistent">("ad-hoc");
   let builderPersistentName = $state("");
   let builderPersistentSchedule = $state("");
+  let builderSection = $state("model");
   let builderRunning = $state(false);
   let builderSaving = $state(false);
   let showParamModal = $state(false);
-  let builderAdHocAction = $state<BuilderAdHocAction>("save-run");
+  let importInput = $state<HTMLInputElement | null>(null);
 
-  async function executeBuilderAdHocAction() {
-    switch (builderAdHocAction) {
+  // Strategy display names (`reactive` reads `ReAct`) for the launch summary.
+  let strategyLabels = $state<ReadonlyMap<string, string>>(new Map());
+  const builderStrategyLabel = $derived(strategyLabels.get(builderConfig.strategy));
+
+  function importBuilderFile(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    void file.text().then((text) => {
+      const next = importBuilderConfig(builderDefaultsFromSettings(), text);
+      if (next) {
+        builderConfig = next;
+        selectTab("builder");
+        toast.success("Agent imported", file.name);
+      } else toast.error("Not an agent config", `${file.name} is not a JSON object.`);
+    });
+    input.value = "";
+  }
+
+  function loadExample() {
+    builderConfig = exampleBuilderConfig(builderDefaultsFromSettings());
+    if (!builderPersistentName.trim()) builderPersistentName = "my-research-agent";
+    selectTab("builder");
+    toast.info("Example loaded", "A research agent with web search and file writing.");
+  }
+
+  async function executeBuilderAdHocAction(action: BuilderAdHocAction) {
+    switch (action) {
       case "run":
         onRunClick();
         break;
@@ -87,7 +150,7 @@
       return;
     }
     if (runNow && builderAgentType === "ad-hoc" && !builderConfig.prompt.trim()) {
-      toast.warning("Add a prompt first", "Save & run uses the prompt stored on the agent.");
+      toast.warning("Add a task first", "Save and run uses the task stored on the agent.");
       return;
     }
     builderSaving = true;
@@ -104,7 +167,7 @@
       if (data.runId) {
         void goto(`/run/${data.runId}`);
       } else {
-        activeTab = "gateway";
+        selectTab("agents");
       }
     } catch (e) {
       toast.error("Create failed", String(e));
@@ -178,7 +241,7 @@
     builderPersistentSchedule = "";
     agentsUi.editingAgent = null;
     agentsUi.showForm = false;
-    activeTab = "builder";
+    selectTab("builder");
   }
 
   async function deleteAgent(agent: GatewayRow) {
@@ -213,13 +276,25 @@
     builderAgentType = agent.agentType === "gateway" ? "persistent" : "ad-hoc";
     builderPersistentName = agent.name;
     builderPersistentSchedule = agent.agentType === "gateway" ? (agent.schedule ?? "") : "";
-    activeTab = "builder";
+    selectTab("builder");
     toast.success("Config loaded into Builder", agent.name);
   }
 
   // ── Skills ────────────────────────────────────────────────────────────
   const skillsStore = createLabSkillsStore(CORTEX_SERVER_URL);
   let skillsUi = $state(emptySkillsUi());
+
+  /** Tab bar with counts (saved agents, skills, prompts; the tool catalog counts itself in its tab). */
+  const tabItems = $derived(
+    LAB_TABS.map((t) => {
+      const count =
+        t.id === "agents" ? $agentsStore.agents.length
+        : t.id === "skills" ? skillCatalogRows($skillsStore.fsSkills, $skillsStore.skills, "").filter((r) => r.t !== "hdr").length
+        : t.id === "prompts" ? $promptStore.length
+        : undefined;
+      return count === undefined ? t : { ...t, count };
+    }),
+  );
   let deleteConfirmSkill = $state<SkillRow | null>(null);
 
   async function deleteSkill(skill: SkillRow) {
@@ -248,30 +323,40 @@
     if (add.length === 0) return;
     const next = new Set([...(builderConfig.skills?.paths ?? []), ...add]);
     builderConfig = { ...builderConfig, skills: { ...builderConfig.skills, paths: [...next] } };
-    activeTab = "builder";
-    toast.success("Living skills updated", `${add.length} path(s) — expand Agent config → Living skills`);
+    builderSection = "skills";
+    selectTab("builder");
+    toast.success("Living skills updated", `${add.length} path${add.length === 1 ? "" : "s"} added to the Builder's Skills section.`);
   }
 
   onMount(() => {
     settings.init();
-    const fromHash = labTabFromHash(typeof window !== "undefined" ? window.location.hash : "");
-    if (fromHash) activeTab = fromHash;
+    // `#gateway` (the old name) opens Saved agents and is rewritten to `#agents`.
+    const fromHash = labTabFromHash(window.location.hash);
+    if (fromHash) selectTab(fromHash);
 
     function onTabSwitch(e: Event) {
-      const tab = (e as CustomEvent<string>).detail;
-      if (isLabTab(tab)) activeTab = tab;
+      const tab = normalizeLabTab((e as CustomEvent<string>).detail);
+      if (tab) selectTab(tab);
+    }
+    function onHashChange() {
+      selectTab(labTabFromHash(window.location.hash) ?? "builder");
     }
     window.addEventListener("cortex:lab-tab", onTabSwitch);
+    window.addEventListener("hashchange", onHashChange);
 
     void loadGatewayAgents();
     void skillsStore.loadInitial();
+    void promptStore.load();
+    void loadCapabilities()
+      .then((m) => (strategyLabels = new Map(m.strategies.map((s) => [s.name, s.label]))))
+      .catch(() => {});
 
     // Edit & Rerun: ?fromRun=<id> prefills the builder from that run's stored
     // launch snapshot, merged OVER the current defaults so a snapshot that
     // predates a new config field keeps that field's default.
     const fromRun = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("fromRun") : null;
     if (fromRun) {
-      activeTab = "builder";
+      selectTab("builder");
       void fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(fromRun)}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((run: { launchParams?: Record<string, unknown> } | null) => {
@@ -280,78 +365,41 @@
         .catch(() => {});
     }
 
-    return () => window.removeEventListener("cortex:lab-tab", onTabSwitch);
+    return () => {
+      window.removeEventListener("cortex:lab-tab", onTabSwitch);
+      window.removeEventListener("hashchange", onHashChange);
+    };
   });
 </script>
 
-<svelte:head><title>CORTEX — Lab</title></svelte:head>
 
-<CortexDeskShell>
-<div class="relative z-10 flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 sm:p-6">
-  <header class="flex flex-shrink-0 items-start justify-between gap-3">
-    <div class="min-w-0">
-      <h1 class="font-display text-2xl font-light tracking-tight text-slate-900 dark:text-on-surface">
-        Agent <span class="font-semibold text-primary">Lab</span>
-      </h1>
-      <p class="mt-1 max-w-3xl font-mono text-[10px] leading-relaxed text-slate-600 dark:text-on-surface-variant/90">
-        Build, persist, and operate Cortex agents with one control surface for config, skills, and tool wiring.
-      </p>
-    </div>
-    <a href="/runs" class="flex items-center gap-1 font-mono text-[11px] text-cyan-700 no-underline transition-colors hover:text-primary dark:text-secondary">
-      <span class="material-symbols-outlined text-sm">timeline</span> Trace
-    </a>
-  </header>
+<svelte:head><title>Lab · Cortex</title></svelte:head>
 
-  <div class="grid flex-shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
-    <div
-      class="gradient-border rounded-lg px-3 py-2 font-mono text-[10px] shadow-sm dark:shadow-[0_0_24px_-12px_rgba(139,92,246,0.35)]"
-    >
-      <div class="text-slate-500 dark:text-on-surface-variant/80">Saved agents</div>
-      <div class="mt-0.5 text-lg font-semibold tabular-nums text-violet-700 dark:text-primary">{$agentsStore.agents.length}</div>
-    </div>
-    <div class="gradient-border rounded-lg px-3 py-2 font-mono text-[10px] shadow-sm dark:shadow-[0_0_20px_-10px_rgba(6,182,212,0.2)]">
-      <div class="text-slate-500 dark:text-on-surface-variant/80">Active tab</div>
-      <div class="mt-0.5 font-semibold uppercase tracking-wide text-slate-800 dark:text-on-surface">{activeTab}</div>
-    </div>
-    <div class="gradient-border rounded-lg px-3 py-2 font-mono text-[10px] shadow-sm">
-      <div class="text-slate-500 dark:text-on-surface-variant/80">Builder mode</div>
-      <div class="mt-0.5 font-semibold text-slate-800 dark:text-on-surface">
-        {builderAgentType === "persistent" ? "persistent" : "ad-hoc"}
-      </div>
-    </div>
-    <div class="gradient-border rounded-lg px-3 py-2 font-mono text-[10px] shadow-sm">
-      <div class="text-slate-500 dark:text-on-surface-variant/80">Skill roots</div>
-      <div class="mt-0.5 text-lg font-semibold tabular-nums text-slate-800 dark:text-on-surface">{$skillsStore.discoveredPaths.length}</div>
-    </div>
+<!-- Hidden file input behind the header's Import -->
+<input bind:this={importInput} type="file" accept=".json,application/json" class="hidden" aria-hidden="true" tabindex="-1" onchange={importBuilderFile} />
+
+<!-- Opaque canvas: the engineering grid shows only on the header band (spec 5.2). -->
+<CortexDeskShell class="bg-background">
+<div class="lab">
+  <PageHeader title="Lab" description="Build an agent, save it, and run it here or as a gateway process.">
+    {#snippet actions()}
+      <Button variant="ghost" icon="download" onclick={() => importInput?.click()}>Import</Button>
+      <Button variant="ghost" icon="external" onclick={() => (exportTarget = { config: builderConfig, name: builderPersistentName.trim() || "agent" })}>Export</Button>
+      <Button variant="ghost" icon="file" onclick={loadExample}>Load example</Button>
+    {/snippet}
+  </PageHeader>
+
+  <div class="lab-tabs">
+    <Tabs
+      items={tabItems}
+      value={activeTab}
+      label="Lab sections"
+      idBase="lab"
+      onchange={(id) => { const t = normalizeLabTab(id); if (t) selectTab(t); }}
+    />
   </div>
 
-  <div
-    class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-[var(--cortex-border)] bg-white/80 p-3 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.12)] backdrop-blur-[6px] dark:bg-surface-container-low/55 dark:shadow-[0_12px_48px_-20px_rgba(0,0,0,0.65),0_0_0_1px_rgba(139,92,246,0.22),0_0_60px_-30px_rgba(6,182,212,0.12)]"
-  >
-  <!-- Tabs -->
-  <div
-    class="flex flex-shrink-0 items-center gap-2 border-b border-violet-200/80 pb-2 dark:border-primary/25 dark:shadow-[0_1px_0_rgba(6,182,212,0.08)]"
-  >
-    {#each LAB_TABS as tab}
-      {@const badge = tab.id === "gateway" ? $agentsStore.agents.length : 0}
-      <button type="button"
-        class="flex items-center gap-2 rounded-md border px-3 py-2 font-mono text-[10px] uppercase tracking-wider transition-colors duration-150
-               {activeTab === tab.id
-          ? 'border-primary/40 bg-violet-100/95 text-violet-900 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.2)] dark:border-primary/45 dark:bg-primary/[0.18] dark:text-primary dark:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.35),0_0_20px_-8px_rgba(139,92,246,0.25)]'
-          : 'border-slate-200/90 text-slate-600 hover:border-primary/30 hover:text-violet-800 dark:border-white/[0.08] dark:bg-surface-container/40 dark:text-on-surface-variant dark:hover:border-primary/35 dark:hover:bg-primary/[0.08] dark:hover:text-on-surface'}"
-        onclick={() => (activeTab = tab.id)}>
-        <span class="material-symbols-outlined text-sm opacity-90">{tab.icon}</span>{tab.label}
-        {#if badge > 0}
-          <span
-            class="rounded px-1.5 py-px font-mono text-[8px] font-semibold tabular-nums shadow-sm {tab.id === 'gateway'
-              ? 'bg-cyan-700 text-white ring-1 ring-cyan-900/25 dark:bg-secondary dark:text-on-secondary dark:ring-1 dark:ring-cyan-200/35'
-              : 'bg-violet-600 text-white ring-1 ring-violet-900/20 dark:bg-primary dark:text-on-primary dark:shadow-[0_0_12px_rgba(139,92,246,0.35)]'}"
-            >{badge}</span>
-        {/if}
-      </button>
-    {/each}
-  </div>
-
+  <div class="lab-panel" role="tabpanel" id={tabPanelId("lab", activeTab)} aria-labelledby={tabId("lab", activeTab)}>
   <!-- ── BUILDER ─────────────────────────────────────────────────────── -->
   {#if activeTab === "builder"}
     <BuilderTab
@@ -359,16 +407,16 @@
       bind:agentType={builderAgentType}
       bind:name={builderPersistentName}
       bind:schedule={builderPersistentSchedule}
-      bind:adHocAction={builderAdHocAction}
+      bind:section={builderSection}
       running={builderRunning}
       saving={builderSaving}
-      onExecute={executeBuilderAdHocAction}
+      strategyLabel={builderStrategyLabel}
+      onAction={executeBuilderAdHocAction}
       onCreatePersistent={() => createAgentFromBuilder(false)}
-      onExport={() => (exportTarget = { config: builderConfig, name: builderPersistentName.trim() || "agent" })}
     />
 
-  <!-- ── GATEWAY ─────────────────────────────────────────────────────── -->
-  {:else if activeTab === "gateway"}
+  <!-- ── SAVED AGENTS (#agents, alias #gateway) ──────────────────────── -->
+  {:else if activeTab === "agents"}
     <SavedAgentsTab
       store={agentsStore}
       bind:ui={agentsUi}
@@ -394,7 +442,7 @@
 
   <!-- ── PROMPTS (reusable prompt library manager) ─────────────────────── -->
   {:else if activeTab === "prompts"}
-    <div class="min-h-0 flex-1 overflow-hidden px-4 pb-4 pt-4 sm:px-6">
+    <div class="lab-pad">
       <PromptManager />
     </div>
 
@@ -407,6 +455,21 @@
 </div>
 </div>
 </CortexDeskShell>
+
+<style>
+  .lab {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .lab :global(.cx-page-h) { padding-bottom: 8px; }
+  .lab-tabs { padding: 0 32px; flex: none; }
+  .lab-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .lab-pad { flex: 1; min-height: 0; overflow: hidden; padding: 20px 32px; }
+</style>
 
 {#if exportTarget}
   <AgentExportModal

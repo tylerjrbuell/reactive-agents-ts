@@ -25,7 +25,7 @@
       <option value={c}>{c}: {disclosureLabel[c]}</option>
     {/each}
   </select>
-  <p class="font-mono text-[10px] text-outline/70 leading-relaxed">
+  <p class="acp-hint leading-relaxed">
     How permitted tools are shown to the model. It never changes which tools are permitted.
   </p>
 </div>

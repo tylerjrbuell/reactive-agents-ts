@@ -3,11 +3,23 @@
   import {
     promptStore,
     PROMPT_TYPES,
+    PROMPT_TYPE_LABEL,
+    PROMPT_TYPE_TONE,
     type StoredPrompt,
     type PromptType,
   } from "$lib/stores/prompt-store.js";
   import { toast } from "$lib/stores/toast-store.js";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
+  import { formatRelativeTime } from "@reactive-agents/ui-core";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import Chip from "$lib/components/kit/Chip.svelte";
+  import EmptyState from "$lib/components/kit/EmptyState.svelte";
+  import Field from "$lib/components/kit/Field.svelte";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Input from "$lib/components/kit/Input.svelte";
+  import Panel from "$lib/components/kit/Panel.svelte";
+  import Textarea from "$lib/components/kit/Textarea.svelte";
 
   let prompts = $state<StoredPrompt[]>([]);
   let search = $state("");
@@ -48,12 +60,8 @@
     ),
   );
 
-  const typeBadgeClass: Record<PromptType, string> = {
-    system: "bg-primary/15 text-primary",
-    persona: "bg-tertiary/15 text-tertiary",
-    task: "bg-secondary/15 text-secondary",
-    snippet: "bg-surface-container text-outline",
-  };
+  const TYPE_LABEL = PROMPT_TYPE_LABEL;
+  const TYPE_TONE = PROMPT_TYPE_TONE;
 
   function parseTags(raw: string): string[] {
     try {
@@ -120,152 +128,76 @@
   }
 </script>
 
-<div class="flex h-full min-h-0 flex-col gap-3">
-  <!-- Toolbar -->
-  <div class="flex flex-shrink-0 flex-wrap items-center gap-2">
-    <input
-      type="text"
-      bind:value={search}
-      placeholder="Search prompts…"
-      class="w-56 rounded-lg border border-[var(--cortex-border)] bg-surface px-3 py-1.5 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
-    />
-    <div class="flex gap-1 flex-wrap">
-      <button
-        type="button"
-        class="rounded-full px-2.5 py-1 text-[9px] font-mono border transition-colors
-               {typeFilter === 'all' ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-outline hover:border-primary/30'}"
-        onclick={() => (typeFilter = "all")}
-      >
-        all · {prompts.length}
-      </button>
+<div class="pm">
+  <div class="bar">
+    <label class="sr-only" for="pm-search">Search prompts</label>
+    <input id="pm-search" type="search" class="cx-control search" bind:value={search} placeholder="Search prompts" />
+    <div class="filters" role="group" aria-label="Prompt type">
+      <Chip on={typeFilter === "all"} onclick={() => (typeFilter = "all")}>All <span class="n">{prompts.length}</span></Chip>
       {#each PROMPT_TYPES as ty (ty)}
-        <button
-          type="button"
-          class="rounded-full px-2.5 py-1 text-[9px] font-mono border transition-colors
-                 {typeFilter === ty ? 'border-primary/50 text-primary bg-primary/10' : 'border-[var(--cortex-border)] text-outline hover:border-primary/30'}"
-          onclick={() => (typeFilter = typeFilter === ty ? "all" : ty)}
-        >
-          {ty} · {countsByType[ty]}
-        </button>
+        <Chip on={typeFilter === ty} onclick={() => (typeFilter = typeFilter === ty ? "all" : ty)}>{TYPE_LABEL[ty]} <span class="n">{countsByType[ty]}</span></Chip>
       {/each}
     </div>
-    <div class="flex-1"></div>
-    <button
-      type="button"
-      onclick={() => openCreate(typeFilter === "all" ? "snippet" : typeFilter)}
-      class="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-on-primary hover:bg-primary/90 transition-colors"
-    >
-      <span class="material-symbols-outlined text-[15px] leading-none">add</span> New prompt
-    </button>
+    <span class="grow"></span>
+    <Button variant="primary" icon="plus" onclick={() => openCreate(typeFilter === "all" ? "snippet" : typeFilter)}>New prompt</Button>
   </div>
 
-  <!-- Editor -->
   {#if editorOpen}
-    <div class="flex-shrink-0 rounded-xl border border-primary/25 bg-primary/[0.04] p-3 space-y-2">
-      <div class="flex gap-2">
-        <input
-          bind:value={editName}
-          placeholder="Name"
-          class="flex-1 min-w-0 rounded border border-[var(--cortex-border)] bg-surface px-2 py-1.5 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-        <select
-          bind:value={editType}
-          class="rounded border border-[var(--cortex-border)] bg-surface px-2 py-1.5 font-mono text-[11px] focus:outline-none"
-        >
-          {#each PROMPT_TYPES as ty (ty)}
-            <option value={ty}>{ty}</option>
-          {/each}
-        </select>
+    <Panel class="pm-editor">
+      <div class="ed-grid">
+        <Field id="pm-name" label="Name">
+          <Input id="pm-name" bind:value={editName} placeholder="Untitled" />
+        </Field>
+        <Field id="pm-type" label="Type">
+          <select id="pm-type" class="cx-control" bind:value={editType}>
+            {#each PROMPT_TYPES as ty (ty)}
+              <option value={ty}>{TYPE_LABEL[ty]}</option>
+            {/each}
+          </select>
+        </Field>
+        <Field id="pm-body" label="Prompt" hint={"{{name}} placeholders resolve where templates do."} class="wide">
+          <Textarea id="pm-body" bind:value={editBody} rows={6} placeholder="The prompt text" describedBy="pm-body-hint" />
+        </Field>
+        <Field id="pm-tags" label="Tags" hint="Optional, comma separated." class="wide">
+          <Input id="pm-tags" bind:value={editTags} placeholder="research, release" describedBy="pm-tags-hint" />
+        </Field>
       </div>
-      <textarea
-        bind:value={editBody}
-        placeholder={"Prompt body… ({{var}} placeholders supported where templates resolve)"}
-        rows={6}
-        class="w-full rounded border border-[var(--cortex-border)] bg-surface px-2 py-1.5 font-mono text-[11px] focus:outline-none focus:ring-1 focus:ring-primary resize-y"
-      ></textarea>
-      <input
-        bind:value={editTags}
-        placeholder="Tags (comma-separated)"
-        class="w-full rounded border border-[var(--cortex-border)] bg-surface px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:ring-1 focus:ring-primary"
-      />
-      <div class="flex gap-2 justify-end">
-        <button
-          type="button"
-          onclick={() => (editorOpen = false)}
-          class="rounded border border-[var(--cortex-border)] px-3 py-1 font-mono text-[10px] hover:border-primary transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onclick={() => void save()}
-          disabled={saving || !editBody.trim()}
-          class="rounded bg-primary px-4 py-1 font-mono text-[10px] text-on-primary hover:bg-primary/90 disabled:opacity-40 transition-colors"
-        >
-          {saving ? "Saving…" : editId == null ? "Create" : "Update"}
-        </button>
+      <div class="ed-actions">
+        <Button variant="ghost" onclick={() => (editorOpen = false)}>Cancel</Button>
+        <Button variant="primary" icon="check" onclick={() => void save()} disabled={saving || !editBody.trim()}>
+          {saving ? "Saving…" : editId == null ? "Create prompt" : "Save changes"}
+        </Button>
       </div>
-    </div>
+    </Panel>
   {/if}
 
-  <!-- List -->
-  <div class="min-h-0 flex-1 overflow-y-auto space-y-2">
+  <div class="list">
     {#if filtered.length === 0}
-      <div class="flex h-40 flex-col items-center justify-center gap-2 text-center">
-        <span class="material-symbols-outlined text-3xl text-outline/30">menu_book</span>
-        <p class="font-mono text-[11px] text-outline">
-          {prompts.length === 0 ? "No prompts yet — create reusable system prompts, personas, tasks, and snippets." : "No prompts match the current filter."}
-        </p>
-      </div>
+      <EmptyState
+        icon="book"
+        title={prompts.length === 0 ? "No prompts yet" : "No prompts match"}
+        description={prompts.length === 0 ? "Save system prompts, personas, tasks and snippets to reuse them in the Builder, chat and Beacon." : "Change the search or pick another type."}
+      />
     {/if}
-    {#each filtered as p (p.id)}
-      <div class="group rounded-xl border border-[var(--cortex-border)] bg-surface-container-lowest/60 p-3 hover:border-primary/30 transition-colors">
-        <div class="flex items-start justify-between gap-2">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="rounded-sm px-1.5 py-0.5 text-[8px] font-mono uppercase flex-shrink-0 {typeBadgeClass[p.type]}">{p.type}</span>
-            <h3 class="font-mono text-[12px] font-semibold text-on-surface truncate m-0">{p.name || "Untitled"}</h3>
+    <ul>
+      {#each filtered as p (p.id)}
+        <li class="item">
+          <div class="item-h">
+            <Badge tone={TYPE_TONE[p.type]}>{TYPE_LABEL[p.type]}</Badge>
+            <h3>{p.name || "Untitled"}</h3>
             {#each parseTags(p.tags) as tag (tag)}
-              <span class="rounded bg-surface-container px-1.5 py-0.5 font-mono text-[8px] text-outline flex-shrink-0">{tag}</span>
+              <Badge data>{tag}</Badge>
             {/each}
+            <span class="grow"></span>
+            <IconButton icon="copy" size="sm" label={`Copy ${p.name || "prompt"}`} onclick={() => void copyBody(p)} />
+            <IconButton icon="edit" size="sm" label={`Edit ${p.name || "prompt"}`} onclick={() => openEdit(p)} />
+            <IconButton icon="trash" size="sm" label={`Delete ${p.name || "prompt"}`} onclick={() => (deleteTarget = p)} />
           </div>
-          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-            <button
-              type="button"
-              onclick={() => void copyBody(p)}
-              class="p-1 rounded text-outline hover:text-primary transition-colors"
-              title="Copy body"
-              aria-label="Copy prompt body"
-            >
-              <span class="material-symbols-outlined text-[15px]">content_copy</span>
-            </button>
-            <button
-              type="button"
-              onclick={() => openEdit(p)}
-              class="p-1 rounded text-outline hover:text-primary transition-colors"
-              title="Edit"
-              aria-label="Edit prompt"
-            >
-              <span class="material-symbols-outlined text-[15px]">edit</span>
-            </button>
-            <button
-              type="button"
-              onclick={() => (deleteTarget = p)}
-              class="p-1 rounded text-outline hover:text-error transition-colors"
-              title="Delete"
-              aria-label="Delete prompt"
-            >
-              <span class="material-symbols-outlined text-[15px]">delete</span>
-            </button>
-          </div>
-        </div>
-        <p class="mt-1.5 font-mono text-[10px] text-on-surface/60 leading-relaxed whitespace-pre-wrap break-words line-clamp-3 m-0">
-          {p.body}
-        </p>
-        <div class="mt-1.5 font-mono text-[8px] text-outline/50">
-          updated {new Date(p.updatedAt).toLocaleString()}
-        </div>
-      </div>
-    {/each}
+          <p class="body">{p.body}</p>
+          <p class="when" title={new Date(p.updatedAt).toLocaleString()}>Updated {formatRelativeTime(new Date(p.updatedAt).getTime(), Date.now())}</p>
+        </li>
+      {/each}
+    </ul>
   </div>
 </div>
 
@@ -278,3 +210,23 @@
     onCancel={() => (deleteTarget = null)}
   />
 {/if}
+
+<style>
+  .pm { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex: none; }
+  .search { width: 15rem; height: 32px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; }
+  .n { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .grow { flex: 1; }
+  :global(.pm-editor) { flex: none; }
+  .ed-grid { display: grid; grid-template-columns: 1fr 12rem; gap: 12px 16px; }
+  .ed-grid :global(.wide) { grid-column: 1 / -1; }
+  .ed-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .list { flex: 1; min-height: 0; overflow-y: auto; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 1280px; }
+  .item { padding: 12px 14px; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-panel); background: var(--cortex-surface-1); display: grid; gap: 6px; }
+  .item-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+  h3 { margin: 0; font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .body { margin: 0; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); white-space: pre-wrap; word-break: break-word; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; max-width: 96ch; }
+  .when { margin: 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+</style>

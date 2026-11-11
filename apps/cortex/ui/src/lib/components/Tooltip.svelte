@@ -183,7 +183,7 @@
     bind:this={panelEl}
     use:portal={browser ? document.body : undefined}
     role="tooltip"
-    class="cortex-tooltip-panel pointer-events-none fixed z-tooltipflex max-h-[min(40vh,18rem)] max-w-[min(100vw-1.5rem,22rem)] flex-col overflow-visible rounded-md border border-[var(--cortex-border)] bg-surface-container-low text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.55)] ring-1 ring-primary/[0.12] dark:border-primary/20 dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.75)]"
+    class="cortex-tooltip-panel pointer-events-none fixed z-tooltip flex max-h-[min(40vh,18rem)] max-w-[min(100vw-1.5rem,22rem)] flex-col overflow-visible rounded-md border border-[var(--cortex-border)] bg-surface-container-low text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.55)] ring-1 ring-primary/[0.12] dark:border-primary/20 dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.75)]"
     style:left="{tipLeft}px"
     style:top="{tipTop}px"
   >

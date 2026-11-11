@@ -29,6 +29,11 @@ describe("runTitleOf", () => {
     expect(runTitleOf({ displayName: "01M7464PWBHXNK7FFAK7C96681", chatSessionName: "Release notes", runId: "01ABCDEFGH" })).toBe("Release notes");
     expect(runTitleOf({ displayName: "01M7464PWBHXNK7FFAK7C96681", task: "Do it", runId: "01ABCDEFGH" })).toBe("Do it");
   });
+  it("never uses a label equal to the agent id (same rule as runNameOf)", () => {
+    expect(runTitleOf({ displayName: "agent-9", agentId: "agent-9", task: "Summarise the logs", runId: "01ABCDEFGH" })).toBe("Summarise the logs");
+    expect(runTitleOf({ displayName: " agent-9 ", agentId: "agent-9", runId: "01ABCDEFGHJK" })).toBe("Run 01ABCDEF");
+    expect(runTitleOf({ displayName: "release-bot", agentId: "agent-9", runId: "01ABCDEFGH" })).toBe("release-bot");
+  });
   it("names the run by its id last", () => {
     expect(runTitleOf({ runId: "01ABCDEFGHJK" })).toBe("Run 01ABCDEF");
   });

@@ -87,7 +87,7 @@ describe("beaconStatusOf", () => {
   });
 
   it("an agent waiting on you needs you, even while its run is live", () => {
-    expect(beaconStatusOf(node({ runId: "a", state: "running" }), true)).toEqual({ tone: "attention", label: "Needs you" });
+    expect(beaconStatusOf(node({ runId: "a", state: "running" }), true)).toEqual({ tone: "attention", label: "Waiting on you" });
   });
 
   it("names the source like the Runs table", () => {
@@ -139,7 +139,7 @@ describe("boardOf", () => {
     expect(card.activity).toEqual({ verb: "Calling", tool: "http-get" });
     expect(card.foot).toBe("step 3 of 6 · 2.1k tok");
     expect(b.agents.map((a) => a.runId)).toEqual(["wait-1", "fail-1", "stop-1", "done-1"]);
-    expect(b.agents[0]).toMatchObject({ status: { tone: "attention", label: "Needs you" }, last: "Asked: which branch?" });
+    expect(b.agents[0]).toMatchObject({ status: { tone: "attention", label: "Waiting on you" }, last: "Asked: which branch?" });
     expect(b.agents[1]!.last).toBe("file-write refused: no workspace is set");
     expect(b.agents[2]!.last).toBe("Stopped before it finished");
     expect(b.agents[3]).toMatchObject({ last: "Explain hashes", model: "mimo", tokens: "2.5k tok" });

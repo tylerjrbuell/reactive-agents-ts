@@ -2,6 +2,12 @@ import { writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 
 export const PROMPT_TYPES = ["system", "persona", "task", "snippet"] as const;
+
+/** Sentence-case label of each prompt type. */
+export const PROMPT_TYPE_LABEL = { system: "System", persona: "Persona", task: "Task", snippet: "Snippet" } as const satisfies Record<(typeof PROMPT_TYPES)[number], string>;
+
+/** Kit Badge tone per type: system and persona prompts shape the agent (violet), tasks are its work (cyan), snippets neutral. */
+export const PROMPT_TYPE_TONE = { system: "accent", persona: "accent", task: "io", snippet: "neutral" } as const satisfies Record<(typeof PROMPT_TYPES)[number], "accent" | "io" | "neutral">;
 export type PromptType = (typeof PROMPT_TYPES)[number];
 
 export interface StoredPrompt {

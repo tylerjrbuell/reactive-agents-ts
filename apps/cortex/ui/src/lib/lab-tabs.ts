@@ -1,27 +1,38 @@
-/** Lab page tabs: ids, the tab bar entries, and the URL hash that opens one. */
+/** Lab page tabs: ids, the tab bar entries, and the URL hash that opens one (Bench spec section 8). */
 
-/** One Lab tab. `gateway` is the saved-agents list (labelled "Agents"). */
-export type LabTab = "builder" | "gateway" | "skills" | "tools" | "prompts";
+/** One Lab tab. `agents` is the saved-agents list (gateway and on-demand agents). */
+export type LabTab = "builder" | "agents" | "skills" | "tools" | "prompts";
 
 /** Tab bar entries in display order. */
-export const LAB_TABS: readonly { id: LabTab; label: string; icon: string }[] = [
-  { id: "builder", label: "Builder", icon: "build" },
-  { id: "gateway", label: "Agents", icon: "hub" },
-  { id: "skills", label: "Skills", icon: "psychology" },
-  { id: "tools", label: "Tools", icon: "construction" },
-  { id: "prompts", label: "Prompts", icon: "menu_book" },
+export const LAB_TABS: readonly { readonly id: LabTab; readonly label: string }[] = [
+  { id: "builder", label: "Builder" },
+  { id: "agents", label: "Saved agents" },
+  { id: "skills", label: "Skills" },
+  { id: "tools", label: "Tools" },
+  { id: "prompts", label: "Prompts" },
 ];
 
-/** True for a known tab id (the `cortex:lab-tab` event carries one). */
-export function isLabTab(v: unknown): v is LabTab {
-  return v === "builder" || v === "gateway" || v === "skills" || v === "tools" || v === "prompts";
+/**
+ * A tab id, or null. `gateway` is the old name of `agents` (the `#gateway`
+ * hash and the `cortex:lab-tab` event from older links keep working).
+ */
+export function normalizeLabTab(v: unknown): LabTab | null {
+  if (v === "gateway") return "agents";
+  return v === "builder" || v === "agents" || v === "skills" || v === "tools" || v === "prompts" ? v : null;
 }
 
-/** The tab a URL hash opens (`#gateway`, `#skills`, `#tools`, `#prompts`), or null for the default. */
+/** True for a tab id or its alias (the `cortex:lab-tab` event carries one). */
+export function isLabTab(v: unknown): boolean {
+  return normalizeLabTab(v) !== null;
+}
+
+/** The tab a URL hash opens (`#agents` or its alias `#gateway`, `#skills`, `#tools`, `#prompts`), or null for the default. */
 export function labTabFromHash(hash: string): LabTab | null {
-  if (hash === "#gateway") return "gateway";
-  if (hash === "#skills") return "skills";
-  if (hash === "#tools") return "tools";
-  if (hash === "#prompts") return "prompts";
-  return null;
+  const tab = normalizeLabTab(hash.replace(/^#/, ""));
+  return tab === "builder" ? null : tab;
+}
+
+/** The hash a tab writes to the URL (`#agents`, never the alias); the Builder is the bare `/lab`. */
+export function labTabHash(tab: LabTab): string {
+  return tab === "builder" ? "" : `#${tab}`;
 }

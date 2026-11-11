@@ -1,0 +1,270 @@
+/*
+ * Agent config panel field primitives (Bench spec sections 6-7), global under
+ * `.agent-config-panel` so every section component and the shared fields they
+ * render (ShellWorkspaceFields, GuardrailsFields, AdvancedFrameworkConfig,
+ * ListField) share one look. Semantic tokens only: both themes come from them.
+ * Words in Geist, machine values in JetBrains Mono, nothing under 11px.
+ */
+
+.agent-config-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: var(--cortex-font-ui);
+  font-size: var(--cortex-t-sm);
+  color: var(--cortex-text);
+}
+
+.agent-config-panel .acp-stack { display: flex; flex-direction: column; gap: 16px; }
+.agent-config-panel .acp-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+.agent-config-panel .acp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--cortex-line);
+  border-radius: var(--cortex-r-ctl);
+  background: var(--cortex-canvas);
+}
+
+.agent-config-panel .acp-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--cortex-line);
+}
+
+.agent-config-panel .acp-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--cortex-warn) 35%, transparent);
+  border-radius: var(--cortex-r-ctl);
+  background: var(--cortex-warn-tint);
+}
+
+.agent-config-panel .acp-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: var(--cortex-t-xs);
+  color: var(--cortex-text-3);
+}
+.agent-config-panel .acp-divider::before,
+.agent-config-panel .acp-divider::after { content: ""; flex: 1; height: 1px; background: var(--cortex-line); }
+
+/* Label, hint, machine value. */
+.agent-config-panel .config-label {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--cortex-font-ui);
+  font-size: var(--cortex-t-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cortex-text-2);
+}
+.agent-config-panel .acp-field > .config-label { margin-bottom: 0; }
+.agent-config-panel .acp-hint {
+  display: block;
+  margin: 0;
+  font-family: var(--cortex-font-ui);
+  font-size: var(--cortex-t-xs);
+  line-height: var(--cortex-lh-ui);
+  color: var(--cortex-text-3);
+}
+.agent-config-panel .acp-data { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-2); }
+.agent-config-panel code {
+  font-family: var(--cortex-font-data);
+  font-size: var(--cortex-t-2xs);
+  padding: 0 4px;
+  border-radius: 4px;
+  color: var(--cortex-accent);
+  background: var(--cortex-accent-tint);
+}
+
+/* Checkbox row: control, then a title and a hint. */
+.agent-config-panel .acp-check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.agent-config-panel .acp-check > input { margin-top: 3px; flex: none; accent-color: var(--cortex-accent-fill); }
+.agent-config-panel .acp-check > span { display: grid; gap: 2px; min-width: 0; }
+.agent-config-panel .acp-check-t { font-size: var(--cortex-t-sm); color: var(--cortex-text); }
+.agent-config-panel .acp-check-box {
+  padding: 12px;
+  border: 1px solid var(--cortex-line);
+  border-radius: var(--cortex-r-ctl);
+  background: var(--cortex-surface-2);
+}
+
+/* Selectable tool chips (cyan = tools and data, spec principle 2). */
+.agent-config-panel .acp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.agent-config-panel .acp-toolchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--cortex-r-chip);
+  border: 1px solid var(--cortex-line-strong);
+  background: var(--cortex-surface-1);
+  color: var(--cortex-text-2);
+  font-family: var(--cortex-font-data);
+  font-size: var(--cortex-t-2xs);
+  cursor: pointer;
+}
+.agent-config-panel .acp-toolchip:hover { color: var(--cortex-text); background: var(--cortex-surface-2); }
+.agent-config-panel .acp-toolchip[aria-pressed="true"] {
+  color: var(--cortex-io);
+  background: var(--cortex-io-tint);
+  border-color: color-mix(in srgb, var(--cortex-io) 35%, transparent);
+}
+.agent-config-panel .acp-toolchip:focus-visible,
+.agent-config-panel .acp-linkbtn:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
+.agent-config-panel .acp-linkbtn {
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cortex-text);
+  font-family: var(--cortex-font-data);
+  font-size: var(--cortex-t-2xs);
+  cursor: pointer;
+}
+.agent-config-panel .acp-linkbtn[aria-pressed="true"] { color: var(--cortex-accent); }
+.agent-config-panel .acp-linkbtn:hover { background: var(--cortex-surface-2); }
+
+/* Inputs: the kit control look (`.cx-control`). */
+.agent-config-panel .config-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--cortex-line-strong);
+  border-radius: var(--cortex-r-ctl);
+  background: var(--cortex-canvas);
+  color: var(--cortex-text);
+  font-family: var(--cortex-font-ui);
+  font-size: var(--cortex-t-sm);
+  outline: none;
+}
+.agent-config-panel textarea.config-input { line-height: var(--cortex-lh-ui); }
+.agent-config-panel .config-input:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
+.agent-config-panel .config-input::placeholder { color: var(--cortex-text-3); }
+.agent-config-panel .config-input:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.agent-config-panel .config-input.acp-mono { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); }
+.agent-config-panel .acp-muted { color: var(--cortex-text-3); display: flex; align-items: center; }
+.agent-config-panel .acp-bad { color: var(--cortex-bad); }
+.agent-config-panel .acp-ok { color: var(--cortex-ok); }
+.agent-config-panel .acp-link { color: var(--cortex-accent); text-decoration: underline; text-underline-offset: 2px; }
+.agent-config-panel .acp-callout .acp-hint { color: var(--cortex-text-2); }
+
+/* Radio list with a title and a hint per option (strategy). */
+.agent-config-panel .acp-choices { display: grid; gap: 4px; }
+.agent-config-panel .acp-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--cortex-r-ctl);
+  cursor: pointer;
+}
+.agent-config-panel .acp-choice:hover { background: var(--cortex-surface-2); }
+.agent-config-panel .acp-choice.on { background: var(--cortex-accent-tint); border-color: color-mix(in srgb, var(--cortex-accent) 30%, transparent); }
+.agent-config-panel .acp-choice > input { margin-top: 3px; flex: none; accent-color: var(--cortex-accent-fill); }
+.agent-config-panel .acp-choice > span { display: grid; gap: 2px; min-width: 0; }
+.agent-config-panel .config-label .cx-badge { margin-left: 6px; vertical-align: 1px; }
+.agent-config-panel .acp-range { width: 100%; accent-color: var(--cortex-accent-fill); }
+
+/* Removable value chips (shell commands, list items). Amber marks an opt-in risky command. */
+.agent-config-panel .acp-cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  border-radius: var(--cortex-r-chip);
+  border: 1px solid var(--cortex-line-strong);
+  background: var(--cortex-surface-2);
+  color: var(--cortex-text);
+  font-family: var(--cortex-font-data);
+  font-size: var(--cortex-t-2xs);
+}
+.agent-config-panel .acp-cmd.risky { border-color: color-mix(in srgb, var(--cortex-warn) 50%, transparent); background: var(--cortex-warn-tint); }
+.agent-config-panel .acp-cmd > button {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cortex-text-3);
+  cursor: pointer;
+}
+.agent-config-panel .acp-cmd > button:hover { color: var(--cortex-bad); background: var(--cortex-surface-3); }
+.agent-config-panel .acp-cmd > button:disabled { opacity: 0.4; cursor: not-allowed; }
+.agent-config-panel .acp-cmd > button:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
+.agent-config-panel .acp-quickadd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px dashed color-mix(in srgb, var(--cortex-warn) 45%, transparent);
+  border-radius: var(--cortex-r-ctl);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.agent-config-panel .acp-quickadd:hover { background: var(--cortex-warn-tint); }
+.agent-config-panel .acp-quickadd:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
+
+/* Segmented choice (radiogroup of buttons). */
+.agent-config-panel .acp-seg {
+  display: inline-flex;
+  width: fit-content;
+  padding: 2px;
+  border-radius: var(--cortex-r-ctl);
+  background: var(--cortex-surface-2);
+}
+.agent-config-panel .acp-seg > button {
+  border: 0;
+  background: none;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-family: var(--cortex-font-ui);
+  font-size: var(--cortex-t-xs);
+  color: var(--cortex-text-2);
+  cursor: pointer;
+}
+.agent-config-panel .acp-seg > button[aria-checked="true"],
+.agent-config-panel .acp-seg > button[aria-pressed="true"] {
+  background: var(--cortex-surface-1);
+  color: var(--cortex-text);
+  box-shadow: 0 0 0 1px var(--cortex-line-strong);
+}
+.agent-config-panel .acp-seg > button:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
+
+/* HighlightedField frame + text: same control look, the frame carries the border and focus ring. */
+.ci-frame {
+  border: 1px solid var(--cortex-line-strong);
+  border-radius: var(--cortex-r-ctl);
+  background: var(--cortex-canvas);
+}
+.ci-frame:focus-within { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
+.ci-text {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  font-family: var(--cortex-font-data);
+  font-size: var(--cortex-t-xs);
+  line-height: 1.5;
+  color: var(--cortex-text);
+  outline: none;
+}
+.ci-text::placeholder { color: var(--cortex-text-3); }
