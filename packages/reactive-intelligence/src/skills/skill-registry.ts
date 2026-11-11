@@ -22,6 +22,33 @@ export type SkillDiscoveryResult = {
   readonly warnings: readonly string[];
 };
 
+const DOUBLE_QUOTE_ESCAPES: Record<string, string> = {
+  n: "\n",
+  t: "\t",
+  r: "\r",
+  "0": "\0",
+  '"': '"',
+  "\\": "\\",
+  "/": "/",
+};
+
+/**
+ * Strip YAML scalar quoting from a front-matter value.
+ * `"x"` and `'x'` become `x`; double quotes honor backslash escapes
+ * (`\"`, `\\`, `\n`, `\t`, `\r`, `\0`, `\/`); single quotes honor `''` for `'`.
+ * Values that are not fully wrapped in one matching quote pair stay verbatim,
+ * so inner quotes and colons in unquoted values are kept.
+ */
+function unquoteScalar(value: string): string {
+  if (value.length < 2) return value;
+  const first = value[0];
+  const last = value[value.length - 1];
+  if (first !== last || (first !== '"' && first !== "'")) return value;
+  const inner = value.slice(1, -1);
+  if (first === "'") return inner.replace(/''/g, "'");
+  return inner.replace(/\\(.)/g, (whole, ch: string) => DOUBLE_QUOTE_ESCAPES[ch] ?? whole);
+}
+
 function parseSimpleYamlBlock(yamlBlock: string, filePath: string): Record<string, unknown> | null {
   const parsed: Record<string, unknown> = {};
   let currentKey: string | null = null;
@@ -35,7 +62,7 @@ function parseSimpleYamlBlock(yamlBlock: string, filePath: string): Record<strin
       const subMatch = line.match(/^ +([^:]+):\s*(.*)$/);
       if (subMatch) {
         const subKey = subMatch[1]!.trim();
-        const subVal = subMatch[2]!.trim();
+        const subVal = unquoteScalar(subMatch[2]!.trim());
         // `allowed-tools` (agentskills.io) is NOT enforced or parsed: it stays a raw
         // string. Skills inform the agent; they never widen or narrow the tool surface.
         if (subKey === "requires") {
@@ -59,7 +86,7 @@ function parseSimpleYamlBlock(yamlBlock: string, filePath: string): Record<strin
       } else {
         currentKey = key;
         currentObj = null;
-        parsed[key] = val;
+        parsed[key] = unquoteScalar(val);
       }
     }
   }

@@ -109,6 +109,55 @@ description: API test
       expect(fromContent!.declaredFields?.name).toBe("content-api");
     });
 
+    it("unquotes double- and single-quoted scalar values", () => {
+      const s = parseSKILLmdContent(
+        `---
+name: "quoted-skill"
+description: 'It''s a test: with colon'
+version: "1.0"
+metadata:
+  author: "Jane \\"JD\\" Doe"
+  requires: "web-search file-read"
+---
+Body.
+`,
+        "mem:quoted",
+      );
+      expect(s).not.toBeNull();
+      expect(s!.name).toBe("quoted-skill");
+      expect(s!.description).toBe("It's a test: with colon");
+      expect(s!.declaredFields?.version).toBe("1.0");
+      expect(s!.metadata.author).toBe('Jane "JD" Doe');
+      expect(s!.metadata.requires).toEqual(["web-search", "file-read"]);
+    });
+
+    it("keeps unquoted values verbatim, including colons and inner quotes", () => {
+      const s = parseSKILLmdContent(
+        `---
+name: plain-skill
+description: Use when: the user says "go" or 'stop'
+---
+Body.
+`,
+        "mem:plain",
+      );
+      expect(s!.name).toBe("plain-skill");
+      expect(s!.description).toBe(`Use when: the user says "go" or 'stop'`);
+    });
+
+    it("handles escapes inside double quotes", () => {
+      const s = parseSKILLmdContent(
+        `---
+name: "esc"
+description: "a\\tb\\nc \\\\ d"
+---
+Body.
+`,
+        "mem:esc",
+      );
+      expect(s!.description).toBe("a\tb\nc \\ d");
+    });
+
     it("parseSkillMarkdownLoose falls back when frontmatter missing", () => {
       const s = parseSkillMarkdownLoose("# Only markdown\n\nHello.", "sqlite:1", {
         name: "fallback",
