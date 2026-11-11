@@ -34,7 +34,7 @@ import type { ReasoningOptions, CalibrationMode } from "../../types.js";
 import type { TestTurn, LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { builtinTools, shellExecuteTool } from "@reactive-agents/tools";
-import { foldApprovalRequiredTools } from "./approval-autofeed.js";
+import { configureApprovalPolicy } from "./approval-autofeed.js";
 import type { TelemetryConfig } from "@reactive-agents/observability";
 import type {
   ProviderName,
@@ -638,28 +638,23 @@ export const buildBaseRuntimeAndEngine = (
       adaptiveHarness: state._adaptiveHarness || undefined,
       modelRouting: state._modelRouting,
       durableRuns: state._durableRuns,
+      // F2: auto-feed per-tool requiresApproval flags into the policy so
+      // shell-execute / code-execute / file-write (and any custom tool that
+      // declares the flag) are gated without the integrator re-listing each
+      // name. Only the actually-registered tools are considered (built-ins
+      // always; the terminal/shell tool only when enabled; custom tools as
+      // provided). `commands` rides along: the same list reaches every shell
+      // via `approvalCommandsOf` (tool-mcp-registrations).
       approvalPolicy: state._approvalPolicy
-        ? {
-            mode:
-              state._approvalPolicy.mode ??
-              (state._durableRuns ? "detach" : "block"),
-            // F2: auto-feed per-tool requiresApproval flags into the policy so
-            // shell-execute / code-execute / file-write (and any custom tool
-            // that declares the flag) are gated without the integrator
-            // re-listing each name. Only the actually-registered tools are
-            // considered (built-ins always; the terminal/shell tool only when
-            // enabled; custom tools as provided).
-            tools: foldApprovalRequiredTools(state._approvalPolicy.tools ?? [], [
+        ? configureApprovalPolicy(
+            state._approvalPolicy,
+            state._approvalPolicy.mode ?? (state._durableRuns ? "detach" : "block"),
+            [
               ...builtinTools.map((t) => t.definition),
               ...(state._toolsOptions?.terminal ? [shellExecuteTool] : []),
               ...(state._toolsOptions?.tools ?? []).map((t) => t.definition),
-            ]),
-            requireFor: state._approvalPolicy.requireFor,
-            // Block-mode in-process decider. Carried as the raw callback here
-            // (serialization-free, like requireFor); the config→envelope mapper
-            // (buildRunEnvelopeFromConfig) Effect-wraps it onto the rails.
-            onApprove: state._approvalPolicy.onApprove,
-          }
+            ],
+          )
         : undefined,
       harnessPipeline,
     });

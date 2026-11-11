@@ -9,6 +9,7 @@ import { Schema } from "effect";
 import { ReasoningStrategy } from "@reactive-agents/core";
 import { LLMProviderType } from "@reactive-agents/llm-provider";
 import type { ReactiveAgentBuilder } from "./builder.js";
+import type { AuthoredApprovalPolicy } from "@reactive-agents/reasoning";
 import { HarnessConfigSchema } from "./harness-schema.js";
 
 // ─── Provider Schema ──────────────────────────────────────────────────────────
@@ -417,6 +418,32 @@ export const DurableRunsConfigSchema = Schema.Struct({
   checkpointEvery: Schema.optional(Schema.Number),
 });
 
+/**
+ * The data half of `.withApprovalPolicy()`. `requireFor` and `onApprove` are
+ * functions and stay code-only: a stored policy re-applied without `onApprove`
+ * in block mode refuses every gated call (deny by default).
+ */
+export const ApprovalPolicyConfigSchema = Schema.Struct({
+  /** "detach" (durable pause; needs durableRuns) or "block" (decide in process). */
+  mode: Schema.optional(Schema.Literal("detach", "block")),
+  /** Tool names whose calls need approval. */
+  tools: Schema.optional(Schema.Array(Schema.String)),
+  /** Shell command rules (`"git push"`): a matching shell call needs approval. */
+  commands: Schema.optional(Schema.Array(Schema.String)),
+});
+
+// Compile-time guard: the schema stays a subset of the canonical authored
+// policy shape (reasoning approval-gate.ts), so a renamed field fails here.
+type ApprovalPolicySchemaType = Schema.Schema.Type<typeof ApprovalPolicyConfigSchema>;
+type _ApprovalSchemaFitsAuthored = Assert<
+  keyof ApprovalPolicySchemaType extends keyof AuthoredApprovalPolicy
+    ? ApprovalPolicySchemaType extends AuthoredApprovalPolicy
+      ? true
+      : false
+    : false
+>;
+type Assert<T extends true> = T;
+
 // ─── Root AgentConfig Schema ──────────────────────────────────────────────────
 
 export const AgentConfigSchema = Schema.Struct({
@@ -502,6 +529,8 @@ export const AgentConfigSchema = Schema.Struct({
   skillPersistence: Schema.optional(Schema.Boolean),
   /** Durable run persistence (crash-resume) configuration. */
   durableRuns: Schema.optional(DurableRunsConfigSchema),
+  /** Approval policy: mode, gated tool names and shell command rules. */
+  approvalPolicy: Schema.optional(ApprovalPolicyConfigSchema),
   /** Model parameters: thinking mode, temperature, max tokens. */
   thinking: Schema.optional(Schema.Boolean),
   temperature: Schema.optional(Schema.Number),
@@ -882,6 +911,16 @@ export async function agentConfigToBuilder(config: AgentConfig): Promise<Reactiv
   // Durable runs (crash-resume)
   if (config.durableRuns) {
     builder = builder.withDurableRuns(config.durableRuns);
+  }
+
+  // Approval policy (data half; requireFor / onApprove are code-only)
+  if (config.approvalPolicy) {
+    const a = config.approvalPolicy;
+    builder = builder.withApprovalPolicy({
+      ...(a.mode !== undefined ? { mode: a.mode } : {}),
+      ...(a.tools !== undefined ? { tools: [...a.tools] } : {}),
+      ...(a.commands !== undefined ? { commands: [...a.commands] } : {}),
+    });
   }
 
   // Pricing registry

@@ -67,6 +67,18 @@ Name the tool calls that must pause. When the agent tries to call one, the run p
 
 Note: tools whose definition declares `requiresApproval: true` (built-ins like `code-execute` / `file-write`, and the `shell-execute` terminal tool) are folded in automatically once any approval policy is configured — you do not have to list them by hand.
 
+Gate shell calls by command with `commands`. A rule is a word prefix of a command segment (`"git push"` matches `git push origin main`; a bare `"*"` matches nothing). With the read-only `git` preset, a matched write asks for approval instead of being refused:
+
+```ts
+.withTools({ builtins: ["git"], workspace: repoDir })
+.withApprovalPolicy({
+  commands: ["git push"],                            // asks before any `git push ...`
+  onApprove: ({ args }) => askHuman(args),           // block mode; no onApprove = refused
+})
+```
+
+An approved push still needs credentials the sandboxed shell does not have (no credential helper, no SSH keys or agent), so only pushes to a local path or an unauthenticated remote succeed.
+
 #### Resolving a paused run
 
 A paused run returns `status: "awaiting-approval"` with a `pendingApproval` descriptor. Approve or deny it — from this process or any other with access to the run store:
@@ -152,7 +164,7 @@ Kill switch controls are no-ops if `.withKillSwitch()` was not called during bui
 | Method | Notes |
 |--------|-------|
 | `.withDurableRuns(opts?)` | Required for durable approval/interaction pauses; persists run state to a store |
-| `.withApprovalPolicy(cfg)` | Gate named tool calls (or a predicate) behind human approval |
+| `.withApprovalPolicy(cfg)` | Gate named tool calls, shell commands (`commands`), or a predicate behind human approval |
 | `.withUserInteraction()` | Enable the agent-initiated `request_user_input` pause (needs `.withDurableRuns()`) |
 | `.withKillSwitch()` | In-process pause/resume/stop/terminate on the run handle |
 

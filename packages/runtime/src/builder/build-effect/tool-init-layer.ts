@@ -128,6 +128,12 @@ export interface ShellRegistration {
  * `allowedPrograms` (`allowedShellPrograms`: `allowedTools` names a preset but
  * not `shell-execute`) narrows either shell to exactly those programs. The
  * terminal keeps its sandbox settings and its own approval/risk flags.
+ *
+ * `approvalCommands` (`approvalCommandsOf` the agent's approval policy) is set
+ * on whichever shell is returned, replacing any `terminal.approvalCommands`:
+ * the read-only git/gh shell runs a rule-matched write without asking, so the
+ * rules may only come from the policy the kernel approval gate also reads.
+ * Absent: the shell carries none.
  */
 export const resolveShellRegistration = (
   terminal: boolean | ShellExecuteConfig | undefined,
@@ -135,10 +141,11 @@ export const resolveShellRegistration = (
   scopedShellToolFor: ScopedShellToolFor,
   shellExecuteToolFor: (config?: ShellExecuteConfig, surface?: ShellToolSurface) => ToolDefinition,
   allowedPrograms?: readonly string[],
+  approvalCommands?: readonly string[],
 ): ShellRegistration | undefined => {
   const surface: ShellToolSurface = { runWorkspace: true };
   if (terminal) {
-    const base = terminal === true ? undefined : terminal;
+    const base = withPolicyCommands(terminal === true ? undefined : terminal, approvalCommands);
     if (allowedPrograms !== undefined) {
       const config = scopedShellConfig(allowedPrograms, base);
       return { definition: shellExecuteToolFor(config, surface), config, unrootedInHostCwd: false };
@@ -159,12 +166,28 @@ export const resolveShellRegistration = (
   }
   if (shellPrograms.length === 0) return undefined;
   const programs = allowedPrograms ?? shellPrograms;
+  const base = withPolicyCommands(undefined, approvalCommands);
   return {
     // The description must match the handler: unrooted, it runs in process.cwd().
-    definition: scopedShellToolFor(programs, undefined, { ...surface, hostCwdWhenUnrooted: true }),
-    config: scopedShellConfig(programs),
+    definition: scopedShellToolFor(programs, base, { ...surface, hostCwdWhenUnrooted: true }),
+    config: scopedShellConfig(programs, base),
     unrootedInHostCwd: true,
   };
+};
+
+/**
+ * `config` with `approvalCommands` set to the policy's rules, or removed when
+ * the policy has none. Unchanged (same object) when there is nothing to set or
+ * remove.
+ */
+const withPolicyCommands = (
+  config: ShellExecuteConfig | undefined,
+  approvalCommands: readonly string[] | undefined,
+): ShellExecuteConfig | undefined => {
+  if (approvalCommands !== undefined) return { ...config, approvalCommands };
+  if (config?.approvalCommands === undefined) return config;
+  const { approvalCommands: _notFromPolicy, ...rest } = config;
+  return rest;
 };
 
 /** Inputs needed to compose the init layer. */
@@ -198,6 +221,12 @@ export interface ToolInitLayerDeps {
    * Absent: the shell is not narrowed.
    */
   readonly allowedShellPrograms?: readonly string[];
+  /**
+   * Shell command rules from the agent's approval policy
+   * (`approvalCommandsOf`), set as `approvalCommands` on the shell. Absent:
+   * the shell carries none.
+   */
+  readonly approvalCommands?: readonly string[];
   readonly shellExecuteHandler: (
     config?: ShellExecuteConfig,
   ) => (
@@ -294,6 +323,7 @@ export const buildToolInitLayer = (
       scopedShellToolFor,
       shellExecuteToolFor,
       deps.allowedShellPrograms,
+      deps.approvalCommands,
     );
     const hasCustomShellExecute = (toolsOptions?.tools ?? []).some(
       (tool: { readonly definition: ToolDefinition }) =>

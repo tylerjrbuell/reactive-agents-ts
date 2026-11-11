@@ -42,6 +42,9 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | --- | --- | --- | --- |
 | `adaptiveHarness` | `boolean` | no |  |
 | `agentId` | `string` | no |  |
+| `approvalPolicy.commands` | `array` | no |  |
+| `approvalPolicy.mode` | `detach` \| `block` | no |  |
+| `approvalPolicy.tools` | `array` | no |  |
 | `budget.costLimit` | `number` | no |  |
 | `budget.tokenLimit` | `number` | no |  |
 | `budget.warningRatio` | `number` | no |  |

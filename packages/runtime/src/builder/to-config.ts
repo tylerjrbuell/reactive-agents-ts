@@ -100,6 +100,7 @@ export interface BuilderStateForSerialization {
   _rateLimiterConfig?: { requestsPerMinute?: number; tokensPerMinute?: number; maxConcurrent?: number };
   _skillPersistence?: boolean;
   _durableRuns?: { dir?: string; checkpointEvery?: number };
+  _approvalPolicy?: import("@reactive-agents/reasoning").AuthoredApprovalPolicy;
 }
 
 /**
@@ -357,6 +358,17 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
 
   // Durable runs (crash-resume)
   if (state._durableRuns) config["durableRuns"] = { ...state._durableRuns };
+
+  // Approval policy: the data half only. `requireFor` / `onApprove` are
+  // functions and must be re-supplied in code after `fromConfig()`.
+  if (state._approvalPolicy) {
+    const ap = state._approvalPolicy;
+    const a: Record<string, unknown> = {};
+    if (ap.mode !== undefined) a["mode"] = ap.mode;
+    if (ap.tools !== undefined) a["tools"] = [...ap.tools];
+    if (ap.commands !== undefined) a["commands"] = [...ap.commands];
+    config["approvalPolicy"] = a;
+  }
 
   return config as AgentConfig;
 }

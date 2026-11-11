@@ -41,7 +41,7 @@ import {
 import type { ReasoningConfig, KernelMetaToolsConfig } from "@reactive-agents/reasoning";
 import { ToolResultCacheLive, ToolService, builtinTools } from "@reactive-agents/tools";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
-import { foldApprovalRequiredTools } from "./builder/build-effect/approval-autofeed.js";
+import { configureApprovalPolicy } from "./builder/build-effect/approval-autofeed.js";
 import type { ObservabilityOptions } from "./builder.js";
 import type { ReasoningOptions } from "./types.js";
 import { withoutStrategyIcsOverrides } from "./synthesis-resolve.js";
@@ -892,17 +892,9 @@ export const buildLightRuntimeConfig = (options: LightRuntimeOptions): ReactiveA
     // never executes one unattended. The same F2 autofeed the parent runs folds
     // the child's `requiresApproval` built-ins (shell/docker/code-execute/
     // file-write) into the gated set, so robustness does not depend on the
-    // parent having named them.
+    // parent having named them. Shell command rules (`commands`) carry over.
     approvalPolicy: options.approvalPolicy
-      ? {
-          mode: "block" as const,
-          tools: foldApprovalRequiredTools(
-            options.approvalPolicy.tools ?? [],
-            builtinTools.map((t) => t.definition),
-          ),
-          requireFor: options.approvalPolicy.requireFor,
-          onApprove: options.approvalPolicy.onApprove,
-        }
+      ? configureApprovalPolicy(options.approvalPolicy, "block", builtinTools.map((t) => t.definition))
       : undefined,
   };
   return config;

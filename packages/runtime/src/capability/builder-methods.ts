@@ -132,7 +132,8 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withOutputValidator: { kind: "overlay", overlayReason: "carries a validator function (folds into withVerification)", description: "Custom output validator." },
   withVerificationStep: { kind: "overlay", overlayReason: "carries a verification-step function (folds into withVerification)", description: "Single post-answer reflect pass." },
   withCustomTermination: { kind: "overlay", overlayReason: "carries a termination predicate (folds into withReasoning)", description: "Custom termination predicate." },
-  withApprovalPolicy: { kind: "overlay", overlayReason: "carries an approval predicate (HITL durability rail)", description: "Human-in-the-loop tool approval gate." },
+  // mode / tools / commands are data; requireFor / onApprove stay code-only.
+  withApprovalPolicy: { kind: "config", configKeys: ["approvalPolicy"], description: "Human-in-the-loop tool approval gate." },
 
   // ── Overlays: harness / DI / test rigs ──
   withHarness: { kind: "overlay", overlayReason: "compose-power-tier harness injection (not data)", description: "Inject a composed harness." },

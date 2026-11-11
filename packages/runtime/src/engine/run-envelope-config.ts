@@ -133,6 +133,11 @@ export function buildRunEnvelopeFromConfig(
           mode: config.approvalPolicy.mode,
           tools: new Set(config.approvalPolicy.tools),
           requireFor: config.approvalPolicy.requireFor,
+          // Shell command rules; the agent's shells hold the same list
+          // (`approvalCommandsOf`), so a matched write runs only once approved.
+          ...(config.approvalPolicy.commands !== undefined
+            ? { commands: config.approvalPolicy.commands }
+            : {}),
           // Block-mode in-process decider: lift the public `onApprove` callback
           // into the kernel's Effect-returning `decide` HERE, the ONE config→
           // envelope seam. `detach` ignores it (it pauses instead); absent in

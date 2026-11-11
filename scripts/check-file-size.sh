@@ -183,6 +183,7 @@ GIANT_BAR=1000
 # 2026-11-11 git/gh preset read-only: shell-execution.ts 874->841 (splitCommandSegments moved verbatim to skills/shell-command-segments.ts; +gitReadOnly field and delegate check to skills/shell-git-readonly.ts).
 # 2026-11-11 shell approval rules: shell-execution.ts 841->839 (gitReadOnly field moved to ShellGitReadOnlyConfig in skills/shell-git-readonly.ts, which ShellExecuteConfig extends; +approvalCommands there).
 # 2026-11-11 stop mid-loop: reactive-agent.ts 2049->2029 (emitAgentTerminated moved verbatim to agent/run-contract.ts publishAgentTerminated; run() arms armAbortTerminal so AgentTerminated lands before terminate() resolves).
+# 2026-11-11 approval command rules: runtime.ts 1114->1106 (light-runtime approval policy literal replaced by configureApprovalPolicy in builder/build-effect/approval-autofeed.ts, shared with runtime-construction).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2029"
   "runtime/src/chat/engine.ts:673"
@@ -194,7 +195,7 @@ SIZE_BASELINE=(
   "reasoning/src/strategies/plan-execute.ts:817"
   "benchmarks/src/runner.ts:964"
   "core/src/services/event-bus.ts:190"
-  "runtime/src/runtime.ts:1114"
+  "runtime/src/runtime.ts:1106"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1299"
   "llm-provider/src/providers/local.ts:1149"

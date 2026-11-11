@@ -23,9 +23,10 @@ across process and machine boundaries.
 
 `.withApprovalPolicy()` names which tool calls require approval. `mode: "detach"`
 (the default once `.withDurableRuns()` is set) makes a gated call pause durably.
-Approval policies have no declarative `AgentConfig` key (and `onApprove` /
-`requireFor` handlers are functions, not JSON), so the examples on this page are
-builder-only.
+The data half of a policy (`mode`, `tools`, `commands`) has a declarative
+`AgentConfig` key, `approvalPolicy`, and round-trips through `toConfig()`. The
+`onApprove` / `requireFor` handlers are functions, not JSON, so supply them in
+code; a stored block-mode policy with no `onApprove` refuses every gated call.
 
 <!-- docs-skip-typecheck -->
 ```ts
@@ -51,6 +52,49 @@ You can also gate by predicate instead of (or in addition to) a name list:
   mode: "detach",
 })
 ```
+
+### Shell command rules
+
+`commands` gates shell calls by what they run, not by tool name:
+
+```ts
+const gitAgent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ builtins: ["git"], workspace: process.cwd() })
+  .withApprovalPolicy({
+    commands: ["git push", "gh pr create"],
+    onApprove: ({ args }) => {
+      // Your approval UI here; `args.command` is the full command line.
+      console.log("approve?", args);
+      return false;
+    },
+  })
+  .build();
+```
+
+- A rule is a word prefix. `"git push"` matches `git push origin main`, not
+  `git pull`. A trailing `*` changes nothing (`"git push *"` = `"git push"`); a
+  rule with no words, such as a bare `"*"`, matches nothing.
+- The command is split into segments on `&&`, `||`, `;`, `|` and newlines. A
+  call needs approval when any segment matches a rule. Leading `NAME=value`
+  assignments and a bare `sudo` / `env` / `command` / `exec` / `nohup` are
+  skipped, and `/usr/bin/git` counts as `git`. `git -C dir push` does not
+  match `"git push"`; the read-only preset refuses it.
+- Rules apply to `shell-execute` calls only (also under the removed
+  `git-cli` / `gh-cli` names).
+- The read-only `git` preset (`builtins: ["git"]`) normally refuses every
+  git/gh write. With `commands`, the shell runs a refused write that matches a
+  rule. It runs only after the approval gate let the call through: refused
+  with no `onApprove` in block mode, paused in detach mode. Output redirects
+  (`>`) stay refused.
+- The shell gets the rules only from the approval policy. A
+  `terminal.approvalCommands` set by hand is ignored.
+- An approved `git push` still needs credentials, and the git preset passes
+  git none: its config holds only your user name and email (no credential
+  helper), and the shell's HOME is a sandbox directory with no SSH keys or
+  agent socket. A push to an HTTPS or SSH remote that needs authentication
+  fails; a push to a local path works. `gh` commands use your `gh` login
+  (`GH_TOKEN` / `GITHUB_TOKEN` or the `gh` config directory).
 
 > `mode: "detach"` requires `.withDurableRuns()` — a detached pause needs a
 > durable store to persist it. `build()` throws if it is missing. Use

@@ -308,6 +308,7 @@ const MAXIMAL_CONFIG: AgentConfig = {
   rateLimiting: { requestsPerMinute: 30, tokensPerMinute: 50_000, maxConcurrent: 5 },
   skillPersistence: true,
   durableRuns: { dir: "/tmp/drift-guard-runs", checkpointEvery: 2 },
+  approvalPolicy: { mode: "detach", tools: ["file-write"], commands: ["git push"] },
   thinking: true,
   temperature: 0.2,
   maxTokens: 4096,

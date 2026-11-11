@@ -39,6 +39,7 @@ import {
   createDynamicSpawnRegistrations,
 } from "./local-agent-tools.js";
 import { buildToolInitLayer } from "./tool-init-layer.js";
+import { approvalCommandsOf } from "./approval-autofeed.js";
 import type { ProviderName } from "../types.js";
 
 /**
@@ -248,6 +249,7 @@ export const buildToolMcpRegistrations = (
         }
       }
 
+      const approvalCommands = approvalCommandsOf(deps.parentApprovalPolicy);
       const toolInitLayer = buildToolInitLayer(deps.runtimeWithCortex, {
         toolsMod: {
           ToolService: toolsMod.ToolService,
@@ -259,6 +261,10 @@ export const buildToolMcpRegistrations = (
         scopedShellToolFor,
         shellPrograms,
         ...(allowedPrograms !== undefined ? { allowedShellPrograms: allowedPrograms } : {}),
+        // The agent's own approval policy (carried here as `parentApprovalPolicy`
+        // for sub-agents): the shell gets the command rules the kernel gate
+        // reads, never rules from anywhere else.
+        ...(approvalCommands !== undefined ? { approvalCommands } : {}),
         shellExecuteHandler,
         onToolServiceResolved: (ts) => {
           parentToolServiceRef = ts;

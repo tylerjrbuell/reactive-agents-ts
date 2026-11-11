@@ -17,6 +17,12 @@
  * stays pure and only gates tools that are actually callable.
  */
 
+import type {
+  ApprovalMode,
+  AuthoredApprovalPolicy,
+  ConfiguredApprovalPolicy,
+} from "@reactive-agents/reasoning";
+
 interface ApprovalFlaggable {
   readonly name: string;
   readonly requiresApproval?: boolean;
@@ -40,4 +46,47 @@ export function foldApprovalRequiredTools(
   return [
     ...new Set([...configuredTools, ...requiresApprovalToolNames(registeredDefs)]),
   ];
+}
+
+/**
+ * The shell command rules (`["git push"]`) of an approval policy, or
+ * `undefined` when there is no policy or it names none.
+ *
+ * The ONE reader of `policy.commands`. The same list goes to two places: the
+ * kernel approval gate (`ApprovalGateConfig.commands`, via
+ * {@link configureApprovalPolicy}) and every shell the agent registers
+ * (`ShellExecuteConfig.approvalCommands`, via `resolveShellRegistration`). The
+ * read-only git/gh shell runs a rule-matched write without asking, so a list
+ * that reached the shell but not the gate would run that write unapproved.
+ */
+export function approvalCommandsOf(
+  policy: AuthoredApprovalPolicy | undefined,
+): readonly string[] | undefined {
+  const commands = policy?.commands;
+  return commands !== undefined && commands.length > 0 ? [...commands] : undefined;
+}
+
+/**
+ * Resolve an authored `.withApprovalPolicy()` argument into its configured
+ * stage: `mode` decided by the caller, per-tool `requiresApproval` flags folded
+ * into `tools` (F2), and the shell command rules from
+ * {@link approvalCommandsOf}. Shared by the full runtime (runtime-construction)
+ * and sub-agents (`buildLightRuntimeConfig`), so a new policy field reaches both.
+ */
+export function configureApprovalPolicy(
+  authored: AuthoredApprovalPolicy,
+  mode: ApprovalMode,
+  registeredDefs: readonly ApprovalFlaggable[],
+): ConfiguredApprovalPolicy {
+  const commands = approvalCommandsOf(authored);
+  return {
+    mode,
+    tools: foldApprovalRequiredTools(authored.tools ?? [], registeredDefs),
+    requireFor: authored.requireFor,
+    ...(commands !== undefined ? { commands } : {}),
+    // Block-mode in-process decider. Carried as the raw callback here
+    // (serialization-free, like requireFor); the config→envelope mapper
+    // (buildRunEnvelopeFromConfig) Effect-wraps it onto the rails.
+    onApprove: authored.onApprove,
+  };
 }
