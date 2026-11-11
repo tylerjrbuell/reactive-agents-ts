@@ -181,8 +181,9 @@ GIANT_BAR=1000
 # 2026-11-10 AgentResult.outcome: builder/types.ts 1341->1063 (AgentResult + AgentResultMetadata moved verbatim to builder/agent-result.ts, re-exported; AgentOutcome added there).
 # 2026-11-10 tool-result pairing: act.ts 1127->1124 (end-of-round scratchpad sync moved to act/scratchpad-sync.ts; it now merges kernel writes, which a tool's Ref replacement used to drop).
 # 2026-11-11 git/gh preset read-only: shell-execution.ts 874->841 (splitCommandSegments moved verbatim to skills/shell-command-segments.ts; +gitReadOnly field and delegate check to skills/shell-git-readonly.ts).
+# 2026-11-11 stop mid-loop: reactive-agent.ts 2049->2029 (emitAgentTerminated moved verbatim to agent/run-contract.ts publishAgentTerminated; run() arms armAbortTerminal so AgentTerminated lands before terminate() resolves).
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2049"
+  "runtime/src/reactive-agent.ts:2029"
   "runtime/src/chat/engine.ts:673"
   "runtime/src/builder.ts:2204"
   "runtime/src/execution-engine.ts:955"

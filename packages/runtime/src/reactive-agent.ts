@@ -31,7 +31,7 @@ import { makeDurableFacade, type RunDurableParams } from './agent/durable-facade
 import { buildRunTaskEffect, type RunTaskDeps, type RunTaskEffectOptions } from './agent/run-task-effect.js'
 import { makeSessionHistoryStore } from './agent/session-store.js'
 import { startStreamPump } from './agent/stream-pump.js'
-import { bareBuilderFailure, driveApprovals, mapRunBoundaryError } from './agent/run-contract.js'
+import { armAbortTerminal, bareBuilderFailure, driveApprovals, mapRunBoundaryError, publishAgentTerminated } from './agent/run-contract.js'
 import { a2aResultToEffect } from './agent/a2a-executor.js'
 import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
@@ -747,6 +747,7 @@ export class ReactiveAgent<TOut = unknown> {
         // halting at the next phase boundary. undefined without .withKillSwitch()
         // (the service is Layer.empty, so acquisition swallows to undefined).
         const runSignal = await this.acquireRunSignal()
+        const terminal = armAbortTerminal({ signal: runSignal, taskId: taskIdOpt.taskId, publish: (tid) => publishAgentTerminated(this.runtime, this.agentId, tid, 'terminate() called') })
 
         const execute = async (): Promise<AgentResult> => {
             // Durable agents create a run row + checkpoint so a pause survives the
@@ -782,10 +783,10 @@ export class ReactiveAgent<TOut = unknown> {
                 agentId: this.agentId,
                 taskId: taskIdOpt?.taskId,
                 aborted: runSignal?.aborted === true,
-                emitTerminated: (tid) => this.emitAgentTerminated(tid, 'terminate() called'),
+                emitTerminated: terminal.emit,
                 errorHandler: this._errorHandler,
             }),
-        ) as Promise<AgentResult & { object?: TOut }>
+        ).finally(terminal.disarm) as Promise<AgentResult & { object?: TOut }>
     }
 
     /**
@@ -896,27 +897,6 @@ export class ReactiveAgent<TOut = unknown> {
                 ),
                 Effect.catchAll(() => Effect.succeed(undefined)),
             ) as Effect.Effect<AbortSignal | undefined>,
-        )
-    }
-
-    /**
-     * Publish AgentTerminated for a mid-flight abort. The engine only emits this
-     * at a phase boundary; when terminate() interrupts an in-flight LLM call the
-     * boundary check never runs, so run() emits it here to keep event parity.
-     */
-    private async emitAgentTerminated(taskId: string, reason: string): Promise<void> {
-        await this.runtime.runPromise(
-            EventBus.pipe(
-                Effect.flatMap((eb) =>
-                    eb.publish({
-                        _tag: 'AgentTerminated' as const,
-                        agentId: this.agentId,
-                        taskId,
-                        reason,
-                    } as AgentEvent),
-                ),
-                Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/reactive-agent.ts:emitTerminated", tag: errorTag(err) })),
-            ) as Effect.Effect<void>,
         )
     }
 
@@ -1870,10 +1850,10 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     /**
-     * Signal the agent to stop gracefully at the next phase boundary.
+     * Stop the agent's run within ~100ms (a lifecycle poll), even inside a model call.
      *
-     * Similar to `.cancel()` but intended for user-initiated stops.
-     * The agent will finish the current phase and transition to a stopped state.
+     * Similar to `.cancel()` but intended for user-initiated stops. In-flight
+     * reasoning is interrupted; `run()` rejects with `KillSwitchTriggeredError`.
      * Requires `.withKillSwitch()` to be enabled during build.
      *
      * @param reason - Optional reason for stopping (for logging/audit)

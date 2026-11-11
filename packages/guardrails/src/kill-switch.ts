@@ -27,7 +27,7 @@ export class KillSwitchService extends Context.Tag("KillSwitchService")<
     readonly pause: (agentId: string) => Effect.Effect<void>;
     /** Resume a paused agent. */
     readonly resume: (agentId: string) => Effect.Effect<void>;
-    /** Signal agent to stop gracefully at the next phase boundary. */
+    /** Signal agent to stop. The runtime observes it within ~100 ms, even mid model call or mid loop, and the run ends as stopped. */
     readonly stop: (agentId: string, reason: string) => Effect.Effect<void>;
     /** Immediately terminate agent (also triggers kill switch). */
     readonly terminate: (agentId: string, reason: string) => Effect.Effect<void>;

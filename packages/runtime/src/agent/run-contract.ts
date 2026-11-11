@@ -47,6 +47,66 @@ import {
     type RuntimeErrors,
 } from '../errors.js'
 import type { AgentResult } from '../builder/types.js'
+import { Effect, type ManagedRuntime } from 'effect'
+import { EventBus, emitErrorSwallowed, errorTag, type AgentEvent } from '@reactive-agents/core'
+
+/**
+ * Publish AgentTerminated for a mid-flight abort. The engine only emits this
+ * at a phase boundary; when terminate() interrupts an in-flight LLM call the
+ * boundary check never runs, so run() emits it here to keep event parity.
+ * (Moved from `ReactiveAgent.emitAgentTerminated`.)
+ */
+export const publishAgentTerminated = (
+    runtime: ManagedRuntime.ManagedRuntime<unknown, never>,
+    agentId: string,
+    taskId: string,
+    reason: string,
+): Promise<void> =>
+    runtime.runPromise(
+        EventBus.pipe(
+            Effect.flatMap((eb) =>
+                eb.publish({
+                    _tag: 'AgentTerminated' as const,
+                    agentId,
+                    taskId,
+                    reason,
+                } as AgentEvent),
+            ),
+            Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/reactive-agent.ts:emitTerminated", tag: errorTag(err) })),
+        ) as Effect.Effect<void>,
+    )
+
+/** One run's AgentTerminated emitter: armed on the run signal, emits at most once. */
+export interface AbortTerminal {
+    /** Publish AgentTerminated for this run unless already published. */
+    readonly emit: (taskId: string) => Promise<void>
+    /** Remove the abort listener (the kill-switch signal outlives the run). */
+    readonly disarm: () => void
+}
+
+/**
+ * Publish AgentTerminated the moment terminate() aborts the run signal, while
+ * terminate() itself is still running. A caller that does
+ * `await agent.terminate(); await agent.dispose()` then still sees the event:
+ * waiting for the run's rejection to reach `mapRunBoundaryError` would publish
+ * on a runtime the caller may already have disposed. The boundary path calls
+ * `emit` too (a signal already aborted before the run started); the once-guard
+ * keeps the event single.
+ */
+export const armAbortTerminal = (args: {
+    readonly signal: AbortSignal | undefined
+    readonly taskId: string | undefined
+    readonly publish: (taskId: string) => Promise<void>
+}): AbortTerminal => {
+    let published: Promise<void> | undefined
+    const emit = (taskId: string): Promise<void> => (published ??= args.publish(taskId))
+    // Fire-and-forget inside an abort listener: a publish failure must not
+    // surface as an unhandled rejection (publishAgentTerminated already
+    // routes Effect failures to emitErrorSwallowed).
+    const onAbort = (): void => void emit(args.taskId ?? 'unknown').catch(() => undefined)
+    if (args.signal && !args.signal.aborted) args.signal.addEventListener('abort', onAbort, { once: true })
+    return { emit, disarm: () => args.signal?.removeEventListener('abort', onAbort) }
+}
 
 /** `terminatedBy` values a bare builder (no explicit `.withReasoning()`) re-throws. */
 export const BARE_BUILDER_THROWS_ON: ReadonlySet<string> = new Set(['llm_error', 'max_iterations', 'guard_stop'])

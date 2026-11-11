@@ -65,7 +65,7 @@ Flags toxic, harmful, or inappropriate content using pattern matching and config
 
 ### Kill Switch
 
-Emergency halt for agents — per-agent or globally. The execution engine checks the kill switch at every phase boundary via the `guardedPhase()` wrapper, so a triggered kill switch stops the agent within one phase transition.
+Emergency halt for agents — per-agent or globally. The execution engine checks the kill switch at every phase boundary via the `guardedPhase()` wrapper, so a triggered kill switch stops the agent within one phase transition. `agent.stop()` is also watched inside a running phase (a ~100 ms lifecycle poll), so it ends a long reasoning loop or an in-flight model call promptly; `agent.terminate()` interrupts at once through the run's abort signal.
 
 <Tabs syncKey="syntax">
   <TabItem label="Declarative">
@@ -140,7 +140,7 @@ killSwitchService.clearGlobal()
 killSwitchService.pause(agentId)
 killSwitchService.resume(agentId)
 
-// Graceful stop: signals intent; agent completes current phase, then stops
+// Stop: the run ends within ~100 ms, even mid-model-call (AgentStopped)
 killSwitchService.stop(agentId, "Graceful shutdown")
 
 // Immediate termination (also triggers kill switch)
@@ -164,10 +164,11 @@ await agent.pause();
 // Resume a paused agent
 await agent.resume();
 
-// Graceful stop (completes current phase, then exits)
+// Stop: ends the run within ~100 ms, even inside a long model call
 await agent.stop("User requested stop");
 
-// Hard terminate
+// Hard terminate: interrupts at once; AgentTerminated is published
+// before this resolves, so `await agent.dispose()` right after is safe
 await agent.terminate("Emergency");
 
 // Subscribe to lifecycle events

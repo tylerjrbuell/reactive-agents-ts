@@ -1019,8 +1019,10 @@ Requires `.withKillSwitch()` to be enabled.
 | ------------------- | ----------------------------------- | ----------------------------------------------------------------------------- |
 | `pause()`           | `() => Promise<void>`               | Pause execution at the next phase boundary. Blocks until `resume()` is called |
 | `resume()`          | `() => Promise<void>`               | Resume a paused agent                                                         |
-| `stop(reason)`      | `(reason: string) => Promise<void>` | Graceful stop — signals intent; agent completes current phase then exits      |
-| `terminate(reason)` | `(reason: string) => Promise<void>` | Immediate termination (also triggers kill switch)                             |
+| `stop(reason)`      | `(reason: string) => Promise<void>` | Stop the run within ~100 ms, even mid-model-call or mid-loop. Emits `AgentStopping` + `AgentStopped`; `run()` rejects with `KillSwitchTriggeredError` |
+| `terminate(reason)` | `(reason: string) => Promise<void>` | Immediate termination: aborts the run signal (in-flight requests that forward it are cut) and triggers the kill switch. `AgentTerminated` is published before `terminate()` resolves, so disposing right after still delivers it |
+
+`stop()` and `terminate()` both end the run without a result. `stop()` is observed by a lifecycle poll inside every guarded phase (the reasoning loop included), so its latency is bounded by that poll (~100 ms) plus the time the interrupted step takes to unwind. `terminate()` interrupts at once through the abort signal.
 
 ### Event Subscription
 

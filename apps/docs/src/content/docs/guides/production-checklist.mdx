@@ -127,7 +127,7 @@ const agent = await ReactiveAgents.create()
 
 ### Kill Switch
 
-The kill switch enables programmatic lifecycle control. Call `agent.stop()` for a graceful exit that completes the current step, or `agent.terminate()` for an immediate halt.
+The kill switch enables programmatic lifecycle control. Call `agent.stop()` to end the run within about 100 ms (it is watched inside the reasoning loop and during model calls), or `agent.terminate()` for an immediate halt through the run's abort signal.
 
 <Tabs syncKey="syntax">
   <TabItem label="Declarative">
