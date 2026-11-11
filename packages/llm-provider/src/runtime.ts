@@ -87,8 +87,8 @@ export const createLLMProviderLayer = (
   if (modelParams?.maxTokens !== undefined) configOverrides.defaultMaxTokens = modelParams.maxTokens;
   if (modelParams?.numCtx !== undefined) configOverrides.explicitNumCtx = modelParams.numCtx;
   if (modelParams?.ollamaTimeoutMs !== undefined) configOverrides.ollamaTimeoutMs = modelParams.ollamaTimeoutMs;
-  // Single generic override, read by every OpenAI-compatible adapter
-  // (openai/groq/xai/litellm) — see LLMConfig.providerConfig JSDoc.
+  // Single generic override: apiKey is read by every adapter; baseUrl/headers
+  // by the OpenAI-compatible ones — see LLMConfig.providerConfig JSDoc.
   if (modelParams?.baseUrl !== undefined || modelParams?.apiKey !== undefined || modelParams?.headers !== undefined) {
     configOverrides.providerConfig = {
       baseUrl: modelParams?.baseUrl,

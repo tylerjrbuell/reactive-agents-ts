@@ -99,19 +99,22 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly xaiBaseUrl?: string;
 
     /**
-     * Runtime endpoint override for the OpenAI-compatible provider family
-     * (`openai`, `groq`, `xai`, `litellm` — all speak the same Chat
-     * Completions wire format via `makeOpenAICompatProvider`/`litellm.ts`).
-     * Set via `.withProvider(provider, { baseUrl, apiKey, headers })`; takes
+     * Runtime credential + endpoint override. Endpoint fields (`baseUrl`,
+     * `headers`) target the OpenAI-compatible provider family (`openai`,
+     * `groq`, `xai`, `litellm` — all speak the same Chat Completions wire
+     * format via `makeOpenAICompatProvider`/`litellm.ts`). Set via `.withProvider(provider, { baseUrl, apiKey, headers })`; takes
      * precedence over every provider-specific field below and over env vars.
      * The mechanism that lets `.withProvider("litellm", { baseUrl: "http://
      * localhost:8080/v1" })` target a llama.cpp server, Deepseek, or any
      * other OpenAI-compatible endpoint at runtime, without predefining
      * `LITELLM_BASE_URL`/`OPENAI_API_KEY`/etc.
      *
-     * Silently ignored by providers outside the OpenAI-compatible family
-     * (`anthropic`, `gemini`, `ollama`) — their adapters speak a different
-     * wire protocol and never read this field.
+     * `apiKey` is read by EVERY adapter (`anthropic`, `gemini`, `ollama`
+     * included) and wins over that provider's env-derived key
+     * (`ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `OLLAMA_API_KEY`, ...), so a
+     * per-agent key works for any provider. `baseUrl` and `headers` are read
+     * only by the OpenAI-compatible family above; the other adapters speak a
+     * different wire protocol and ignore them.
      *
      * @default undefined (falls back to the named per-provider fields below, then env vars)
      */

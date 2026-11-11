@@ -8,7 +8,7 @@ import {
   LLMTimeoutError,
 } from "../errors.js";
 import type { LLMErrors } from "../errors.js";
-import { mapProviderError } from "../provider-error.js";
+import { mapProviderError, resolveProviderApiKey } from "../provider-error.js";
 import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import type {
   CompletionResponse,
@@ -91,12 +91,6 @@ export const toAnthropicTool = (tool: {
   },
 });
 
-const toEffectError = (
-  error: unknown,
-  provider: "anthropic",
-  model?: string,
-): LLMErrors => mapProviderError(error, provider, model);
-
 // ── Prompt caching (automatic) ───────────────────────────────────────────────
 // Anthropic's automatic caching mode: a single top-level `cache_control: {
 // type: "ephemeral" }` field on the request (a sibling of `model`/`system`/
@@ -130,6 +124,10 @@ export const AnthropicProviderLive = Layer.effect(
   LLMService,
   Effect.gen(function* () {
     const config = yield* LLMConfig;
+    // `.withProvider("anthropic", { apiKey })` wins over ANTHROPIC_API_KEY.
+    const key = resolveProviderApiKey(config.providerConfig, config.anthropicApiKey);
+    const toEffectError = (error: unknown, provider: "anthropic", model?: string): LLMErrors =>
+      mapProviderError(error, provider, model, key.source);
 
     // Lazy-load the SDK via dynamic import so Bun `mock.module(...)` can
     // intercept it during tests (CJS `require()` is not reliably interceptable
@@ -154,7 +152,7 @@ export const AnthropicProviderLive = Layer.effect(
       if (!_clientPromise) {
         _clientPromise = (
           import("@anthropic-ai/sdk") as unknown as Promise<AnthropicModule>
-        ).then(({ default: Anthropic }) => new Anthropic({ apiKey: config.anthropicApiKey }));
+        ).then(({ default: Anthropic }) => new Anthropic({ apiKey: key.apiKey }));
       }
       return _clientPromise;
     };
@@ -493,7 +491,7 @@ export const AnthropicProviderLive = Layer.effect(
               // shared normalizer (one-line cause, no stack/JSON leak) — the
               // complete() path already does; streams regressed to the raw
               // err.message shape provider-error.ts was built to kill.
-              emit.fail(mapProviderError(error, "anthropic", model));
+              emit.fail(toEffectError(error, "anthropic", model));
             });
           }));
         }),

@@ -7,7 +7,7 @@ import {
   LLMTimeoutError,
 } from "../errors.js";
 import type { LLMErrors } from "../errors.js";
-import { mapProviderError } from "../provider-error.js";
+import { mapProviderError, resolveProviderApiKey } from "../provider-error.js";
 import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import type {
   CompletionResponse,
@@ -95,9 +95,6 @@ export const toLiteLLMMessages = (
   policy: ContentPolicy,
 ): { readonly messages: OpenAIMessage[]; readonly degraded: readonly DegradedPart[] } =>
   mapOpenAIMessages(input, policy);
-
-const toEffectError = (error: unknown): LLMErrors =>
-  mapProviderError(error, "litellm");
 
 /** @internal Exported for testing only */
 export const toLiteLLMTool = (tool: ToolDefinition) => ({
@@ -278,11 +275,14 @@ export const LiteLLMProviderLive = Layer.effect(
       config.litellmBaseUrl ??
       process.env.LITELLM_BASE_URL ??
       "http://localhost:4000";
-    const apiKey =
-      config.providerConfig?.apiKey ??
-      config.litellmApiKey ??
-      process.env.LITELLM_API_KEY ??
-      undefined;
+    // `.withProvider("litellm", { apiKey })` wins over LITELLM_API_KEY.
+    const key = resolveProviderApiKey(
+      config.providerConfig,
+      config.litellmApiKey ?? process.env.LITELLM_API_KEY,
+    );
+    const apiKey = key.apiKey;
+    const toEffectError = (error: unknown, model?: string): LLMErrors =>
+      mapProviderError(error, "litellm", model, key.source);
     const extraHeaders = config.providerConfig?.headers ?? config.litellmHeaders;
 
     const defaultModel = config.defaultModel;
@@ -592,7 +592,7 @@ export const LiteLLMProviderLive = Layer.effect(
                 }
               } catch (error) {
                 // Hotfix 0.5-5: normalize stream errors (parity with complete()).
-                emit.fail(mapProviderError(error, "litellm", model));
+                emit.fail(toEffectError(error, model));
               }
             };
             void doStream();

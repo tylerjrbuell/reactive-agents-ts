@@ -335,10 +335,10 @@ export const LocalProviderLive = Layer.effect(
             return new Ollama({
                 host: endpoint,
                 ...(signal ? { fetch: fetchWithSignal } : {}),
-                ...(config.ollamaApiKey
+                ...((config.providerConfig?.apiKey ?? config.ollamaApiKey)
                     ? {
                           headers: {
-                              Authorization: `Bearer ${config.ollamaApiKey}`,
+                              Authorization: `Bearer ${config.providerConfig?.apiKey ?? config.ollamaApiKey}`,
                           },
                       }
                     : {}),
@@ -367,7 +367,7 @@ export const LocalProviderLive = Layer.effect(
                             resolveOllamaCapability(
                                 model,
                                 endpoint,
-                                config.ollamaApiKey
+                                config.providerConfig?.apiKey ?? config.ollamaApiKey
                             ),
                         catch: () =>
                             new Error('capability resolution failed'),
@@ -657,7 +657,7 @@ export const LocalProviderLive = Layer.effect(
                                     await resolveOllamaCapability(
                                         model,
                                         endpoint,
-                                        config.ollamaApiKey
+                                        config.providerConfig?.apiKey ?? config.ollamaApiKey
                                     )
                                 const numCtx = resolveOllamaNumCtx(request, config, capability)
                                 // Inside async: emit on the default runtime (same channel as tool-schema-repaired).

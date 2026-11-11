@@ -114,13 +114,37 @@ export function oneLineReason(error: unknown): string {
 }
 
 /**
+ * Where an adapter's API key came from. `"config"` = the runtime override
+ * `LLMConfig.providerConfig.apiKey` (set by `.withProvider(p, { apiKey })`);
+ * `"env"` = the provider's named config field, read from its env var.
+ * Drives the credential-failure hint so it names the source actually used.
+ */
+export type ApiKeySource = "config" | "env";
+
+/**
+ * Resolve an adapter's API key: `providerConfig.apiKey` (from
+ * `.withProvider(p, { apiKey })`) wins over the provider's env-derived key.
+ * One precedence rule for every adapter; returns the source for error hints.
+ */
+export function resolveProviderApiKey(
+  providerConfig: { readonly apiKey?: string } | undefined,
+  envKey: string | undefined,
+): { readonly apiKey: string | undefined; readonly source: ApiKeySource } {
+  return providerConfig?.apiKey !== undefined
+    ? { apiKey: providerConfig.apiKey, source: "config" }
+    : { apiKey: envKey, source: "env" };
+}
+
+/**
  * Normalize any provider SDK error into a clean, tagged LLM error.
- * See module doc for the guarantees.
+ * See module doc for the guarantees. `keySource` (default `"env"`) picks the
+ * credential-failure hint: an env var to set, or the `.withProvider` key to check.
  */
 export function mapProviderError(
   error: unknown,
   provider: LLMProvider,
   model?: string,
+  keySource: ApiKeySource = "env",
 ): LLMErrors {
   const err = (error ?? {}) as RawProviderError;
   const status = statusOf(err);
@@ -192,14 +216,19 @@ export function mapProviderError(
   // Credential failure → one actionable line naming the env var to set.
   // First-touch DX: the raw SDK text ("Could not resolve authentication
   // method…") never names ANTHROPIC_API_KEY etc., leaving a new user to
-  // search for it. Permanent (never retried).
+  // search for it. Permanent (never retried). A key passed via
+  // `.withProvider(p, { apiKey })` names that source instead — telling the user
+  // to set an env var the adapter never read would send them the wrong way.
   if (status === 401 || status === 403 || AUTH_FAULT.test(reason)) {
     const envVar = PROVIDER_KEY_ENV[provider];
+    const said = reason ? ` Provider said: ${reason}` : "";
     return new LLMError({
-      message: envVar
-        ? `${provider} rejected the request credentials. Set ${envVar} in your environment (or a .env file) with a valid API key.` +
-          (reason ? ` Provider said: ${reason}` : "")
-        : `${provider} rejected the request credentials.${reason ? ` Provider said: ${reason}` : ""}`,
+      message:
+        keySource === "config"
+          ? `${provider} rejected the request credentials. Check the apiKey passed to .withProvider("${provider}", { apiKey }).${said}`
+          : envVar
+            ? `${provider} rejected the request credentials. Set ${envVar} in your environment (or a .env file) with a valid API key.${said}`
+            : `${provider} rejected the request credentials.${said}`,
       provider,
       cause: reason,
       ...meta,

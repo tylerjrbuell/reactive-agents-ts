@@ -9,7 +9,7 @@ import {
 import type { LLMErrors } from "../errors.js";
 import { chatToolsRequireResponsesError, warnChatToolsReasoningDisabledOnce } from "./chat-tools-rules.js";
 import { openAIToolChoiceField } from "./tool-choice.js";
-import { mapProviderError } from "../provider-error.js";
+import { mapProviderError, resolveProviderApiKey } from "../provider-error.js";
 import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
 import type {
   CompletionResponse,
@@ -100,9 +100,6 @@ export const buildTemperatureField = (
 // ─── OpenAI Message Conversion ─── (./openai-messages.ts)
 
 export { toOpenAIMessages } from "./openai-messages.js";
-
-const toEffectError = (error: unknown, provider: LLMProvider): LLMErrors =>
-  mapProviderError(error, provider);
 
 // ─── OpenAI Tool Conversion ───
 
@@ -246,6 +243,10 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
     const config = yield* LLMConfig;
     const { providerName, resolveApiKey, resolveBaseUrl, fallbackModel, supportsEmbeddings, apiKeyEnvVar } = opts;
     const supportsLogprobs = opts.supportsLogprobs ?? true;
+    // `.withProvider(p, { apiKey })` wins over the provider's env-derived key.
+    const key = resolveProviderApiKey(config.providerConfig, resolveApiKey(config));
+    const toEffectError = (error: unknown, provider: LLMProvider, model?: string): LLMErrors =>
+      mapProviderError(error, provider, model, key.source);
 
     // Lazy-load the SDK via dynamic import so Bun `mock.module(...)` can
     // intercept it during tests (CJS `require()` is not reliably interceptable
@@ -273,7 +274,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
         // over each provider's own named field/env-var resolution
         // (`resolveApiKey`/`resolveBaseUrl`), same precedence as litellm.ts.
         const baseURL = config.providerConfig?.baseUrl ?? resolveBaseUrl?.(config);
-        const apiKey = config.providerConfig?.apiKey ?? resolveApiKey(config);
+        const apiKey = key.apiKey;
         const headers = config.providerConfig?.headers;
         // D-2026-09-08-O: the `openai` SDK falls back to OPENAI_API_KEY when
         // apiKey is undefined. For any provider other than openai itself that
@@ -610,7 +611,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                 emit.end();
               } catch (error) {
                 // Hotfix 0.5-5: normalize stream errors (parity with complete()).
-                emit.fail(mapProviderError(error, providerName, model));
+                emit.fail(toEffectError(error, providerName, model));
               }
             };
             void doStream();

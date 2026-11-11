@@ -8,7 +8,7 @@ import {
 } from "../errors.js";
 import type { LLMErrors } from "../errors.js";
 import { runStructuredParseWithRetry } from "../structured-parse-retry.js";
-import { mapProviderError } from "../provider-error.js";
+import { mapProviderError, resolveProviderApiKey } from "../provider-error.js";
 import type {
   CompletionResponse,
   StreamEvent,
@@ -58,9 +58,6 @@ export const toGeminiTools = (
           })),
         },
       ];
-
-const toEffectError = (error: unknown): LLMErrors =>
-  mapProviderError(error, "gemini");
 
 // ─── Gemini Response Types ───
 
@@ -281,6 +278,10 @@ export const GeminiProviderLive = Layer.effect(
   LLMService,
   Effect.gen(function* () {
     const config = yield* LLMConfig;
+    // `.withProvider("gemini", { apiKey })` wins over GOOGLE_API_KEY.
+    const key = resolveProviderApiKey(config.providerConfig, config.googleApiKey);
+    const toEffectError = (error: unknown, model?: string): LLMErrors =>
+      mapProviderError(error, "gemini", model, key.source);
 
     // ─── Lazy-load the SDK via dynamic import (interceptable by mock.module) ───
 
@@ -313,7 +314,7 @@ export const GeminiProviderLive = Layer.effect(
       if (!_clientPromise) {
         _clientPromise = (
           import("@google/genai") as Promise<GoogleGenAIModule>
-        ).then(({ GoogleGenAI }) => new GoogleGenAI({ apiKey: config.googleApiKey }));
+        ).then(({ GoogleGenAI }) => new GoogleGenAI({ apiKey: key.apiKey }));
       }
       return _clientPromise;
     };
@@ -672,7 +673,7 @@ export const GeminiProviderLive = Layer.effect(
                 emit.end();
               } catch (error) {
                 // Hotfix 0.5-5: normalize stream errors (parity with complete()).
-                emit.fail(mapProviderError(error, "gemini", model));
+                emit.fail(toEffectError(error, model));
               }
             })();
           }));
