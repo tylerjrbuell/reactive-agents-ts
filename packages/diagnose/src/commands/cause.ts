@@ -1,9 +1,10 @@
 // `rax-diagnose cause <runId|path>` — deterministic failure-cause classifier.
 //
-// Single-run mode prints cause, confidence, evidence and the trace signals
-// that would have made the verdict decisive, plus the harness-vs-model
-// attribution (`attribution` in --json). `--all [dir]` tallies causes
-// across a directory of traces (audit §1.5 rule 13 cohort mode).
+// Single-run mode prints cause, its plain-language description, confidence,
+// evidence, the next steps the diagnosis can justify and the trace signals that
+// would have made the verdict decisive, plus the harness-vs-model attribution
+// (`attribution` in --json). `--all [dir]` tallies causes across a directory of
+// traces (audit §1.5 rule 13 cohort mode).
 
 import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -11,10 +12,13 @@ import { join, basename } from "node:path";
 import {
   analyzeCause,
   attributeFailure,
+  causeDescription,
+  causeNextActions,
   renderCause,
   tallyCauses,
   loadTrace,
   classifyProvenance,
+  type Attribution,
   type CauseAnalysis,
   type CauseTally,
 } from "@reactive-agents/trace";
@@ -85,6 +89,18 @@ export function renderCauseTally(t: CauseTally, label: string): string {
 }
 
 /**
+ * Render one run's cause report: the classifier line and evidence
+ * (`renderCause`), the cause in plain words, the next steps the diagnosis can
+ * justify, and the attribution summary (exported for tests).
+ */
+export function renderCauseReport(analysis: CauseAnalysis, attribution: Attribution): string {
+  const L: string[] = [renderCause(analysis), `  meaning   ${causeDescription(analysis.cause)}`];
+  for (const step of causeNextActions(analysis)) L.push(`  next      ${step}`);
+  L.push(`  attribution ${attribution.verdict} (${attribution.reason}) confidence=${attribution.confidence} — run \`rax-diagnose attribute\` for evidence`);
+  return L.join("\n");
+}
+
+/**
  * Run the `cause` command.
  *
  * @param target A runId, `.jsonl` path, `latest` (single mode); a directory (cohort mode, optional).
@@ -111,7 +127,11 @@ export async function causeCommand(target: string | undefined, opts: CauseOpts =
   const attribution = attributeFailure(trace);
   console.log(
     opts.json
-      ? JSON.stringify({ ...analysis, attribution }, null, 2)
-      : `${renderCause(analysis)}\n  attribution ${attribution.verdict} (${attribution.reason}) confidence=${attribution.confidence} — run \`rax-diagnose attribute\` for evidence`,
+      ? JSON.stringify(
+          { ...analysis, description: causeDescription(analysis.cause), nextActions: causeNextActions(analysis), attribution },
+          null,
+          2,
+        )
+      : renderCauseReport(analysis, attribution),
   );
 }

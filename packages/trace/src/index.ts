@@ -5,7 +5,7 @@ export type { TraceRecorder, TraceRecorderOptions } from "./recorder.js"
 export { resolveTraceDir, defaultTraceDir, effectiveTraceDir } from "./paths.js"
 export { pruneTraceDir, planRunPrune, classifyProvenance, retentionPolicyFromEnv } from "./retention.js"
 export type { RetentionPolicy, TraceFileInfo, TraceProvenance } from "./retention.js"
-export { loadTrace, traceStats } from "./replay.js"
+export { loadTrace, parseTrace, traceStats } from "./replay.js"
 export type { Trace, TraceStats } from "./replay.js"
 export {
   analyzeInterventions,
@@ -28,6 +28,8 @@ export type {
   CoverageReport,
 } from "./analyze.js"
 export { analyzeCause, renderCause, tallyCauses } from "./cause.js"
+/** Plain words and justified next steps for each failure cause (one vocabulary for every reader). */
+export { CAUSE_DESCRIPTIONS, causeDescription, causeNextActions } from "./cause-description.js"
 export { gateDecisionFor, guardEndedRun, runEndingGuardEvents } from "./guard-run-end.js"
 export type { GuardEventLike } from "./guard-run-end.js"
 export type { CauseAnalysis, CauseTally, FailureCause, CauseConfidence, CauseEvidence } from "./cause.js"

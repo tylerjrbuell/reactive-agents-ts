@@ -19,7 +19,7 @@ export { signalsCommand, renderSignalGaps } from "./commands/signals.js";
 export type { SignalsOpts } from "./commands/signals.js";
 export { detectSignalGaps } from "./lib/signal-gap-detector.js";
 export type { SignalGapFinding } from "./lib/signal-gap-detector.js";
-export { causeCommand, classifyDirectories, renderCauseTally, listTraceFilesRecursive } from "./commands/cause.js";
+export { causeCommand, classifyDirectories, renderCauseReport, renderCauseTally, listTraceFilesRecursive } from "./commands/cause.js";
 export type { CauseOpts, CohortCause } from "./commands/cause.js";
 export { attributeCommand, attributeDirectories, renderAttributionTally, tallyActivity } from "./commands/attribute.js";
 export type { AttributeOpts, CohortAttribution } from "./commands/attribute.js";

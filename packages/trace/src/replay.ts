@@ -9,16 +9,28 @@ export interface Trace {
 }
 
 /**
- * Load a JSONL trace file and parse it into a Trace object.
- * Each line must be valid JSON representing a TraceEvent.
+ * Load a JSONL trace and parse it into a Trace object: from a file path, or
+ * from JSONL text already in hand (`{ text }`, e.g. a trace a server read or
+ * received). Parsing is {@link parseTrace}.
+ *
+ * @param source A `.jsonl` file path, or `{ text }` holding the JSONL itself.
+ */
+export async function loadTrace(source: string | { readonly text: string }): Promise<Trace> {
+  return parseTrace(typeof source === "string" ? await readFile(source, "utf8") : source.text)
+}
+
+/**
+ * Parse JSONL trace text into a Trace object. Synchronous and pure.
+ * Each line must be valid JSON representing a TraceEvent; other lines are skipped.
  *
  * `isTraceEvent` checks the base fields, that `kind` is a known trace-event
  * kind, and that the fields that kind's payload requires are present (see
  * `REQUIRED_FIELDS_BY_KIND` in `events.ts`) — it does not validate nested
  * shapes or field types.
+ *
+ * @param text JSONL, one TraceEvent per line.
  */
-export async function loadTrace(path: string): Promise<Trace> {
-  const text = await readFile(path, "utf8")
+export function parseTrace(text: string): Trace {
   // A run that is cut off (cell timeout) can flush its sink twice, writing every
   // event again; `seq` is unique within a run, so the first copy wins.
   const seen = new Set<string>()
