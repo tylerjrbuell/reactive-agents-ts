@@ -12,6 +12,17 @@ export type SkillActivated = {
   readonly trigger: "model" | "harness" | "bootstrap";
   readonly iteration: number;
   readonly confidence: string;
+  /**
+   * Task id of the run the activation belongs to. Absent when the producer
+   * has no run context (e.g. older producers, or activations outside a run).
+   */
+  readonly taskId?: string;
+  /**
+   * SHA-256 hex digest of the SKILL.md body that was injected into context,
+   * so observers can tell skill versions apart. Absent when the producer did
+   * not hash the content.
+   */
+  readonly sha256?: string;
 };
 
 export type SkillRefined = {

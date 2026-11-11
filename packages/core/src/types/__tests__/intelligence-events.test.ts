@@ -14,6 +14,21 @@ describe("Intelligence event types", () => {
     expect(event._tag).toBe("SkillActivated");
   });
 
+  test("SkillActivated accepts optional taskId and sha256", () => {
+    const event: SkillActivated = {
+      _tag: "SkillActivated",
+      skillName: "data-analysis",
+      version: 1,
+      trigger: "model",
+      iteration: 2,
+      confidence: "trusted",
+      taskId: "task-1",
+      sha256: "a".repeat(64),
+    };
+    expect(event.taskId).toBe("task-1");
+    expect(event.sha256).toHaveLength(64);
+  });
+
   test("SkillRefined event can be constructed", () => {
     const event: SkillRefined = { _tag: "SkillRefined", skillName: "data-analysis", previousVersion: 1, newVersion: 2, taskCategory: "coding" };
     expect(event._tag).toBe("SkillRefined");
