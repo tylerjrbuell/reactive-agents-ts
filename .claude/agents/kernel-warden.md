@@ -13,6 +13,7 @@ Bounded specialist for `packages/reasoning/**` (owner decision 2026-11-06: strat
 **Read/Edit allowed (only):**
 - `packages/reasoning/src/**` (kernel, strategies, planning, types, assembly, services)
 - `packages/reasoning/tests/**`
+- `packages/prompts/**` (prompt templates; interim owner since 2026-11-10 until the prompt-fragment registry settles and the owner decides on a dedicated prompt warden). Model-visible wording changes need an ablation; a byte-identical move does not.
 - `packages/reactive-intelligence/**` (RI controller, entropy sensor, calibration). Rebuild it (`bunx turbo run build --filter=@reactive-agents/reactive-intelligence`) alongside reasoning before a replay, by the same rule as reasoning's `dist`
 
 **Read allowed (context, no edit):**

@@ -240,8 +240,7 @@
     },
     {
       "glob": "packages/prompts/**",
-      "owner": null,
-      "reason": "no domain warden for packages/prompts in the AGENTS.md ownership table",
+      "owner": "kernel-warden",
       "checks": [],
       "docs": []
     },

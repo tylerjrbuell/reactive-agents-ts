@@ -130,6 +130,8 @@ wardens:
       - bun run --cwd apps/docs metrics
       - bun test packages/reasoning
       - bun test packages/reactive-intelligence
+      - bun test packages/prompts
+      - bunx turbo run typecheck --filter=@reactive-agents/prompts
       - bunx turbo run typecheck --filter=@reactive-agents/reactive-intelligence
       - bunx turbo run build --filter=@reactive-agents/reactive-intelligence
       - bun test seam
