@@ -4,17 +4,35 @@
  * Runs 5 probes (steering compliance, parallel batching, recall behavior, system prompt
  * decay, compression threshold) and produces a ModelCalibration JSON.
  *
- * Designed to be: free (local models), fast (<30s), deterministic (temp=0), minimal deps.
+ * Designed to be: free (local models), deterministic (temp=0), minimal deps.
+ * One run takes about 30-120s per model (v3 attention + size probes are long).
  */
 import type { ModelCalibration } from "./calibration.js";
 import { isMain } from "@reactive-agents/runtime-shim";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 import type { Tool as OllamaTool } from "ollama";
+import {
+  ATTENTION_TOKEN,
+  ATTENTION_TURNS,
+  RESULT_QUESTION,
+  RESULT_SIZE_LADDER,
+  STEERING_CONFLICTS,
+  STEERING_TASK,
+  answersResultQuestion,
+  buildResultPayload,
+  keepsAttentionRule,
+  scoreAttention,
+  scoreResultSize,
+  scoreSteering,
+  type ChannelVerdict,
+} from "./calibration-scoring.js";
 
 // Shared resolution (OLLAMA_ENDPOINT → OLLAMA_HOST → OLLAMA_BASE → localhost)
 // so calibrating a model and running it can never disagree about the endpoint.
 const OLLAMA_BASE = resolveOllamaEndpoint();
-const PROBE_VERSION = 2;
+// v3 (2026-11-10): graded steering, per-turn attention, distractor result-size
+// ladder to 8000 (calibration-scoring.ts). v2 scorers could not tell models apart.
+const PROBE_VERSION = 3;
 
 // ── Probe Result Types ────────────────────────────────────────────────────────
 
@@ -60,53 +78,47 @@ async function getOllamaClient() {
   return new Ollama({ host: OLLAMA_BASE });
 }
 
+// Fixed context for the long probes (attention conversation, result-size
+// ladder) so the measurement is the model's, not the server's default num_ctx
+// (8000 chars of records is ~3k tokens).
+const LONG_PROBE_NUM_CTX = 8192;
+
 async function ollamaChat(
   modelId: string,
   messages: { role: "system" | "user" | "assistant" | "tool"; content: string }[],
   tools?: readonly OllamaTool[],
+  numCtx?: number,
 ) {
   const client = await getOllamaClient();
   return client.chat({
     model: modelId,
     messages,
     ...(tools ? { tools: [...tools] } : {}),
-    options: { temperature: 0 },
+    options: { temperature: 0, ...(numCtx !== undefined ? { num_ctx: numCtx } : {}) },
     stream: false,
   });
 }
 
 // ── Probe 1: Steering Channel ─────────────────────────────────────────────────
 
+// v3: channel-conflict pairs (calibration-scoring.ts). The v2 single-word rule
+// passed in every channel, so every model read "hybrid".
 async function probeSteeringChannel(
   modelId: string,
 ): Promise<ModelCalibration["steeringCompliance"]> {
-  const instruction =
-    "Respond with ONLY the single word BLUE. No other text, no punctuation.";
-
-  const sysOnly = await ollamaChat(modelId, [
-    { role: "system", content: instruction },
-    { role: "user", content: "Go." },
-  ]);
-  const userOnly = await ollamaChat(modelId, [
-    { role: "system", content: "You are a helpful assistant." },
-    { role: "user", content: instruction },
-  ]);
-  const hybrid = await ollamaChat(modelId, [
-    { role: "system", content: instruction },
-    { role: "user", content: instruction },
-  ]);
-
-  const check = (r: Awaited<ReturnType<typeof ollamaChat>>) =>
-    (r.message?.content ?? "").trim().toUpperCase() === "BLUE";
-
-  const sysOk = check(sysOnly);
-  const userOk = check(userOnly);
-  const hybridOk = check(hybrid);
-
-  if (hybridOk && !sysOk && !userOk) return "hybrid";
-  if (sysOk && !userOk) return "system-prompt";
-  if (userOk && !sysOk) return "user-message";
-  return "hybrid";
+  const verdicts: ChannelVerdict[] = [];
+  for (const pair of STEERING_CONFLICTS) {
+    try {
+      const r = await ollamaChat(modelId, [
+        { role: "system", content: pair.system },
+        { role: "user", content: `${pair.user}\n\n${STEERING_TASK}` },
+      ]);
+      verdicts.push(pair.judge(r.message?.content ?? ""));
+    } catch {
+      verdicts.push("none");
+    }
+  }
+  return scoreSteering(verdicts);
 }
 
 // ── Probe 2: Parallel Batching ────────────────────────────────────────────────
@@ -207,68 +219,63 @@ async function probeRecallBehavior(
 
 // ── Probe 4: System Prompt Decay ──────────────────────────────────────────────
 
+// v3: every turn is scored (v2 checked only turn 5, so "moderate" was
+// unreachable), and later turns ask for terse replies that pull against the
+// rule. A failed call counts as a dropped rule for that turn and ends the probe.
 async function probeSystemPromptDecay(
   modelId: string,
 ): Promise<ModelCalibration["systemPromptAttention"]> {
-  const system =
-    "You are a helpful assistant. CRITICAL RULE: Always end EVERY response with the exact token [VERIFIED] on a new line.";
+  const system = `You are a helpful assistant. CRITICAL RULE: Always end EVERY response with the exact token ${ATTENTION_TOKEN} on a new line.`;
 
   const messages: { role: "system" | "user" | "assistant" | "tool"; content: string }[] = [{ role: "system", content: system }];
+  const perTurn: boolean[] = [];
 
-  for (let turn = 1; turn <= 5; turn++) {
-    messages.push({ role: "user", content: `Turn ${turn}: Count to ${turn}.` });
+  for (const turn of ATTENTION_TURNS) {
+    messages.push({ role: "user", content: turn });
     try {
-      const res = await ollamaChat(modelId, messages);
+      const res = await ollamaChat(modelId, messages, undefined, LONG_PROBE_NUM_CTX);
       const reply = res.message?.content ?? "";
       messages.push({ role: "assistant", content: reply });
-
-      if (turn === 5) {
-        return reply.trim().endsWith("[VERIFIED]") ? "strong" : "weak";
-      }
+      perTurn.push(keepsAttentionRule(reply));
     } catch {
-      return "weak";
+      perTurn.push(false);
+      break;
     }
   }
-  return "moderate";
+  return scoreAttention(perTurn.length < ATTENTION_TURNS.length
+    ? [...perTurn, ...Array<boolean>(ATTENTION_TURNS.length - perTurn.length).fill(false)]
+    : perTurn);
 }
 
 // ── Probe 5: Compression Threshold ────────────────────────────────────────────
 
+// v3: a two-record aggregation over distractor game records instead of one
+// fact in lorem-ipsum padding, on a ladder up to 8000 chars (v2 stopped at
+// 2000, so every model read 2000).
 async function probeCompressionThreshold(modelId: string): Promise<number> {
-  const fact = "The final score was 42.";
-  const lengths = [500, 1000, 1500, 2000];
-  let maxWorking = 500;
+  const passed: Array<readonly [number, boolean]> = [];
 
-  for (const length of lengths) {
-    const padding = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(
-      Math.ceil((length - fact.length) / 60),
-    );
-    const content = `${padding}${fact}${padding}`.slice(0, length);
-
+  for (const size of RESULT_SIZE_LADDER) {
     try {
-      const res = await ollamaChat(modelId, [
-        {
-          role: "system",
-          content: "Extract the factual answer from the content below.",
-        },
-        {
-          role: "user",
-          content: `Content:\n${content}\n\nQuestion: What was the final score?`,
-        },
-      ]);
-
-      const reply = res.message?.content ?? "";
-      if (/\b42\b/.test(reply)) {
-        maxWorking = length;
-      } else {
-        break;
-      }
+      const res = await ollamaChat(
+        modelId,
+        [
+          { role: "system", content: "Answer from the tool result below." },
+          { role: "user", content: `Tool result:\n${buildResultPayload(size)}\nQuestion: ${RESULT_QUESTION}` },
+        ],
+        undefined,
+        LONG_PROBE_NUM_CTX,
+      );
+      const ok = answersResultQuestion(res.message?.content ?? "");
+      passed.push([size, ok]);
+      if (!ok) break;
     } catch {
+      passed.push([size, false]);
       break;
     }
   }
 
-  return maxWorking;
+  return scoreResultSize(passed);
 }
 
 // ── Main Runner ───────────────────────────────────────────────────────────────
@@ -330,15 +337,16 @@ export async function probeToolCallDialect(
   return emitted ? "native-fc" : "none";
 }
 
+// Sequential on purpose: Ollama serves one model's requests from a queue, so
+// concurrent probes made a short probe wait behind long thinking-model ones
+// until the client's fetch timed out (qwen3:4b, v3, 2026-11-10).
 async function runProbes(modelId: string): Promise<ProbeResults> {
-  const [steering, parallel, recall, attention, chars, dialect] = await Promise.all([
-    probeSteeringChannel(modelId),
-    probeParallelBatching(modelId),
-    probeRecallBehavior(modelId),
-    probeSystemPromptDecay(modelId),
-    probeCompressionThreshold(modelId),
-    probeToolCallDialect(modelId),
-  ]);
+  const steering = await probeSteeringChannel(modelId);
+  const parallel = await probeParallelBatching(modelId);
+  const recall = await probeRecallBehavior(modelId);
+  const attention = await probeSystemPromptDecay(modelId);
+  const chars = await probeCompressionThreshold(modelId);
+  const dialect = await probeToolCallDialect(modelId);
 
   return {
     steeringCompliance: steering,

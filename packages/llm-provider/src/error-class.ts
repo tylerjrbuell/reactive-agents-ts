@@ -23,6 +23,10 @@
  *   - Ollama server-side tool-call parser: "XML syntax error on line 1: ...",
  *     "error parsing tool call: ..."; Groq 400 `tool_use_failed` "Tool call
  *     validation failed: ..." -> `malformed_output`
+ *   - Billing / prepaid balance: Anthropic 400 "Your credit balance is too low",
+ *     Gemini 402 "Your prepayment credits are depleted", OpenAI 429
+ *     `insufficient_quota` "You exceeded your current quota", OpenAI
+ *     `billing_hard_limit_reached` -> `quota` (any status)
  *
  * {@link recoveryFor} maps each class to the recovery a caller should take.
  */
@@ -38,9 +42,14 @@
  *   than the budget, so waiting does not help; shrink the input (TPM/ITPM) or
  *   `max_tokens` (OTPM). Distinct from `request_too_large` (a hard body-size
  *   limit) and from `rate_limit` (budget used up by earlier requests).
+ * - `quota`: the account cannot pay for the request (credit balance empty,
+ *   prepaid credits depleted, quota or billing hard limit reached). Fatal: no
+ *   retry or smaller request helps until the owner adds credit. Providers send
+ *   it as 400, 402 or 429, so it is matched by message before any status rule.
  */
 export type LLMErrorClass =
   | "rate_limit"
+  | "quota"
   | "token_rate_exceeded"
   | "context_overflow"
   | "request_too_large"
@@ -89,7 +98,8 @@ const CONTENT_FILTER = /content_filter|content_policy_violation|content manageme
 const TOOL_SCHEMA =
   /does not support tools|invalid schema for function|invalid[_ ]function[_ ]parameters|input_schema|tools?(\.\d+)?\.[\w.]+:|tool_use ids? (were|was) found without|function (declarations?|parameters?).*(invalid|must)|invalid[ _]tool/i;
 const TIMEOUT = /timed? ?out|ETIMEDOUT|deadline exceeded/i;
-const QUOTA_EXHAUSTED = /insufficient_quota|exceeded your current quota/i;
+const QUOTA_EXHAUSTED =
+  /insufficient_quota|exceeded your current quota|credit balance is too low|prepayment credits (are )?depleted|billing[ _]hard[ _]limit/i;
 /**
  * "Request too large" against a per-minute token budget. "Rate limit reached
  * ... Used N, Requested M" (budget spent by earlier calls) is NOT matched: that
@@ -109,8 +119,9 @@ export const MALFORMED_OUTPUT =
 /**
  * Deterministically classify a provider failure.
  * Order matters: a per-minute-budget "request too large" first (it arrives as
- * 413 OR 429), then 429 (other rate limits that mention tokens stay rate
- * limits), overflow/size, auth, not-found, content filter, malformed model
+ * 413 OR 429), then billing/quota (it arrives as 400, 402 or 429, so it must
+ * precede the 429 and 4xx rules), then 429 (other rate limits that mention
+ * tokens stay rate limits), overflow/size, auth, not-found, content filter, malformed model
  * output (before the 4xx branch and before network: its messages carry 400 and
  * "unexpected EOF"), tool schema, other 4xx, timeout, network, 5xx.
  */
@@ -123,7 +134,8 @@ export function classifyProviderError(f: ProviderErrorFacts): ProviderErrorClass
   });
 
   if (TOKEN_RATE_EXCEEDED.test(hay)) return is("token_rate_exceeded");
-  if (status === 429) return is("rate_limit", !QUOTA_EXHAUSTED.test(hay));
+  if (QUOTA_EXHAUSTED.test(hay)) return is("quota");
+  if (status === 429) return is("rate_limit", true);
   if (status === 413) return is("request_too_large");
   if (CONTEXT_OVERFLOW.test(hay)) return is("context_overflow");
   if (REQUEST_TOO_LARGE.test(hay)) return is("request_too_large");
@@ -152,6 +164,7 @@ export type LLMRecovery = "resample" | "shrink" | "backoff" | "fatal";
 
 const RECOVERY: Readonly<Record<LLMErrorClass, LLMRecovery>> = {
   rate_limit: "backoff",
+  quota: "fatal",
   token_rate_exceeded: "shrink",
   context_overflow: "shrink",
   request_too_large: "shrink",
@@ -166,6 +179,16 @@ const RECOVERY: Readonly<Record<LLMErrorClass, LLMRecovery>> = {
   content_filter: "fatal",
   unknown: "fatal",
 };
+
+/**
+ * Structural guard: whether a string read off an error value (e.g. an
+ * `errorClass` field from a trace or an untyped cause) is a member of the
+ * closed {@link LLMErrorClass} set. Consumers narrow with this instead of
+ * keeping their own copy of the set.
+ */
+export function isLLMErrorClass(s: string): s is LLMErrorClass {
+  return Object.hasOwn(RECOVERY, s);
+}
 
 /**
  * Pure policy: the recovery for a provider-failure class. Pass the

@@ -69,7 +69,15 @@ describe("calibration runner with mock Ollama", () => {
     // `toolCallDialect: "none"` stub — priors produced by v1 carry a
     // non-measured dialect claim and are treated accordingly by the
     // confidence floor. Mock here returns no tool_calls ⇒ dialect "none".
-    expect(result.probeVersion).toBe(2);
+    // probeVersion 3 (2026-11-10): graded steering / per-turn attention /
+    // result-size ladder to 8000 (calibration-scoring.ts).
+    expect(result.probeVersion).toBe(3);
+    // The mock replies "BLUE" everywhere: it obeys only the system channel's
+    // UPPERCASE rule (1 system win, 0 user), no turn keeps [VERIFIED] (weak),
+    // and the result probe never sees 42 (floor 500).
+    expect(result.steeringCompliance).toBe("system-prompt");
+    expect(result.systemPromptAttention).toBe("weak");
+    expect(result.optimalToolResultChars).toBe(500);
     expect(result.toolCallDialect).toBe("none");
     expect(typeof result.calibratedAt).toBe("string");
     expect(typeof result.optimalToolResultChars).toBe("number");

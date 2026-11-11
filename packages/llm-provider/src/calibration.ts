@@ -5,9 +5,10 @@
  * or general LLM knowledge. Live downstream consumers (verified 2026-07-19):
  *
  * - parallelCallCapability → blueprint strategy batch cap (blueprint.ts)
- * - observationHandling → recall force-on (think.ts) + hallucinate-risk
- *   scaffolding/verifier bump (harness-plan.ts)
- * - systemPromptAttention → weak-attention scaffolding bump (harness-plan.ts)
+ * - observationHandling → recall force-on (think.ts)
+ * - systemPromptAttention (weak) and observationHandling (hallucinate-risk)
+ *   raise `guard.scaffoldingLevel` (harness-plan.ts), but that field has no
+ *   reader (verified 2026-11-10): no behavior changes from it today
  * - optimalToolResultChars → ProfileOverrides.toolResultMaxChars, applied to
  *   the runtime ContextProfile (kernel loop runner)
  * - classifierReliability → classifier bypass (runtime classifier-bypass.ts)
@@ -241,9 +242,9 @@ export function clearCalibrationCache(): void {
  * The adapter overlay is layered ON TOP of the tier adapter by
  * `selectAdapter` (see `composeAdapters` in adapter.js) — it can refine tier
  * behavior but never removes it. Today the overlay is EMPTY: every measured
- * behavioral intent is delivered through a live non-adapter channel instead
- * (see module header — harness-plan scaffolding, blueprint batch cap, recall
- * force-on). Earlier versions compiled `systemPromptPatch` / `toolGuidance`
+ * behavioral intent that IS delivered goes through a non-adapter channel
+ * (see module header — blueprint batch cap, recall force-on; the harness-plan
+ * scaffolding bump is written but unread). Earlier versions compiled `systemPromptPatch` / `toolGuidance`
  * overrides here, but those hooks lost their only call sites in `279b61fb`
  * and were removed from the ProviderAdapter contract (2026-07-19); the writes
  * were dead. If a future calibration field needs per-turn prompt shaping,

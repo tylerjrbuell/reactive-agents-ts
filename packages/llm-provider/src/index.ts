@@ -164,7 +164,7 @@ export {
   LLMMalformedOutputError,
 } from "./errors.js";
 export type { LLMErrors, ParseAttemptError, LLMErrorClassification } from "./errors.js";
-export { classifyProviderError, recoveryFor } from "./error-class.js";
+export { classifyProviderError, isLLMErrorClass, recoveryFor } from "./error-class.js";
 export type { LLMErrorClass, LLMRecovery, ProviderErrorClassification, ProviderErrorFacts } from "./error-class.js";
 
 // ─── Service Tags ───

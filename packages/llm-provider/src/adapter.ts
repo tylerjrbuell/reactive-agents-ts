@@ -16,12 +16,14 @@
  * History note (2026-07-19): three further hooks — `systemPromptPatch`,
  * `taskFraming`, `toolGuidance` — were removed from this contract. Their sole
  * call sites (APC/ContextManager) were deleted in `279b61fb`, leaving them
- * written-but-never-read. The behavioral intents they carried for calibrated
- * models are delivered through live channels instead: weak
- * `systemPromptAttention` → harness-plan scaffolding bump;
- * `parallelCallCapability` → blueprint batch cap; `observationHandling` →
- * recall force-on. Re-adding a prompt-assembly hook requires a kernel-side
- * call site (Wave 2 B4/B5 spine work), not a provider-side one.
+ * written-but-never-read. Two calibration fields reach live channels:
+ * `parallelCallCapability` → blueprint batch cap; `observationHandling`
+ * "uses-recall" → recall force-on (think.ts). Weak `systemPromptAttention`
+ * (and "hallucinate-risk") only raise `guard.scaffoldingLevel` in the
+ * reasoning harness plan, and nothing reads that field (verified 2026-11-10),
+ * so those intents are NOT delivered today. `steeringCompliance` has no
+ * reader. Re-adding a prompt-assembly hook requires a kernel-side call site
+ * (Wave 2 B4/B5 spine work), not a provider-side one.
  */
 
 export interface ProviderAdapter {

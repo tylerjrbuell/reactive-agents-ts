@@ -1,6 +1,6 @@
 // Typed provider-failure classification (measurement only — no retry change).
 import { describe, it, expect } from "bun:test";
-import { NETWORK_FAULT, classifyProviderError, recoveryFor } from "../src/error-class.js";
+import { NETWORK_FAULT, classifyProviderError, isLLMErrorClass, recoveryFor } from "../src/error-class.js";
 import { mapProviderError } from "../src/provider-error.js";
 import { LLMTimeoutError } from "../src/errors.js";
 import type { LLMErrorClass, LLMRecovery } from "../src/error-class.js";
@@ -24,7 +24,7 @@ const rows: ReadonlyArray<Row> = [
   ["openai tpm 429", "openai", 429, "Request too large for gpt-4 on tokens per min (TPM)", "token_rate_exceeded", false],
   // other 429s that mention tokens stay rate limits (budget spent by earlier calls; a wait clears it)
   ["openai tpm used 429", "openai", 429, "Rate limit reached for gpt-4 in organization org-x on tokens per min (TPM): Limit 10000, Used 9000, Requested 2000.", "rate_limit", true],
-  ["quota 429", "openai", 429, "You exceeded your current quota", "rate_limit", false, "insufficient_quota"],
+  ["quota 429", "openai", 429, "You exceeded your current quota", "quota", false, "insufficient_quota"],
   ["rate 429", "groq", 429, "rate limited", "rate_limit", true],
   // tools
   ["ollama no tools", "ollama", 400, "registry.ollama.ai/library/gemma does not support tools", "tool_schema_invalid", false],
@@ -68,6 +68,13 @@ const census: ReadonlyArray<Row> = [
   ["hard 413 body", "anthropic", 413, "Request exceeds the maximum allowed number of bytes.", "request_too_large", false],
   // genuine transport EOF stays network
   ["bare unexpected EOF", "ollama", undefined, "unexpected EOF", "network", true],
+  // billing / prepaid balance -> fatal quota (15 trace files, 2026-11-10); was invalid_param / unknown
+  ["anthropic 400 credit balance", "anthropic", 400, "anthropic request failed: 400 Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.", "quota", false],
+  ["anthropic credit balance, stream-wrapped, no status", "anthropic", undefined, "stream failed at iteration 0: anthropic call failed (anthropic:claude-sonnet-4-6): anthropic request failed: 400 Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.", "quota", false],
+  ["gemini 402 prepayment", "gemini", 402, "gemini request failed: { \"error\": { \"code\": 402, \"message\": \"Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing. Learn more at https://ai.google.dev/gemini-api/docs/billing#prepay. \", \"status\": \"RESOURCE_EXHAUSTED\" }", "quota", false],
+  ["gemini prepayment, no status", "gemini", undefined, "gemini call failed (gemini:gemini-2.5-flash): gemini request failed: Your prepayment credits are depleted. Please go to AI Studio at https://ai.studio/projects to manage your project and billing.", "quota", false],
+  ["openai 429 insufficient_quota", "openai", 429, "You exceeded your current quota, please check your plan and billing details.", "quota", false, "insufficient_quota"],
+  ["openai billing hard limit", "openai", 400, "Billing hard limit has been reached", "quota", false, "billing_hard_limit_reached"],
 ];
 
 describe("classifyProviderError — llm_error census", () => {
@@ -127,7 +134,53 @@ describe("recoveryFor — policy per class", () => {
       ...Array<LLMRecovery>(4).fill("shrink"),
       "shrink",
       "backoff",
+      ...Array<LLMRecovery>(6).fill("fatal"),
     ]);
+  });
+
+  it("quota is fatal whatever retryable says", () => {
+    expect(recoveryFor("quota")).toBe("fatal");
+    expect(recoveryFor("quota", true)).toBe("fatal");
+  });
+
+  // RED-on-cut: move the QUOTA_EXHAUSTED check below the 429 rule and this reads rate_limit.
+  it("order pin: a 429 insufficient_quota is quota, not a rate limit", () => {
+    expect(classifyProviderError({ providerId: "openai", status: 429, message: "insufficient_quota" }).errorClass).toBe("quota");
+  });
+
+  it("near-miss: a plain 429 that mentions quota limits stays a retryable rate limit", () => {
+    expect(
+      classifyProviderError({ providerId: "gemini", status: 429, message: "Resource has been exhausted (e.g. check quota)." }),
+    ).toEqual({ errorClass: "rate_limit", retryable: true });
+  });
+});
+
+describe("isLLMErrorClass — structural guard over the closed set", () => {
+  it("accepts every class recoveryFor knows, including quota", () => {
+    for (const c of ["rate_limit", "quota", "token_rate_exceeded", "malformed_output", "unknown"]) {
+      expect(isLLMErrorClass(c)).toBe(true);
+    }
+  });
+  it("rejects error tags, prototype keys and near-misses", () => {
+    for (const s of ["LLMRateLimitError", "toString", "constructor", "Quota", "invalid-param", ""]) {
+      expect(isLLMErrorClass(s)).toBe(false);
+    }
+  });
+});
+
+describe("mapProviderError — quota keeps its class on the error value", () => {
+  it("anthropic 400 credit balance -> errorClass quota, not retryable", () => {
+    const e = mapProviderError(
+      { status: 400, message: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits." },
+      "anthropic",
+    );
+    expect((e as { errorClass?: string }).errorClass).toBe("quota");
+    expect((e as { retryable?: boolean }).retryable).toBe(false);
+  });
+  it("openai 429 insufficient_quota -> errorClass quota, not retryable", () => {
+    const e = mapProviderError({ status: 429, code: "insufficient_quota", message: "You exceeded your current quota" }, "openai");
+    expect((e as { errorClass?: string }).errorClass).toBe("quota");
+    expect((e as { retryable?: boolean }).retryable).toBe(false);
   });
 });
 
