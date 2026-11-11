@@ -19,7 +19,9 @@
         "check-termination-paths",
         "check-volatile-placement"
       ],
-      "docs": ["wiki/Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md"]
+      "docs": [
+        "wiki/Architecture/Design-Specs/2026-07-11-harness-north-star-architecture.md"
+      ]
     },
     {
       "glob": "packages/reasoning/tests/kernel/**",
@@ -136,8 +138,7 @@
     },
     {
       "glob": "packages/benchmarks/**",
-      "owner": null,
-      "reason": "no domain warden for packages/benchmarks in the AGENTS.md ownership table",
+      "owner": "harness-warden",
       "checks": [],
       "docs": []
     },
@@ -156,8 +157,7 @@
     },
     {
       "glob": "packages/cost/**",
-      "owner": null,
-      "reason": "no domain warden for packages/cost in the AGENTS.md ownership table",
+      "owner": "runtime-warden",
       "checks": [],
       "docs": []
     },
@@ -170,8 +170,7 @@
     },
     {
       "glob": "packages/eval/**",
-      "owner": null,
-      "reason": "no domain warden for packages/eval in the AGENTS.md ownership table",
+      "owner": "eval-warden",
       "checks": [],
       "docs": []
     },
@@ -184,57 +183,49 @@
     },
     {
       "glob": "packages/guardrails/**",
-      "owner": null,
-      "reason": "no domain warden for packages/guardrails in the AGENTS.md ownership table",
+      "owner": "tools-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "packages/health/**",
-      "owner": null,
-      "reason": "no domain warden for packages/health in the AGENTS.md ownership table",
+      "owner": "runtime-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "packages/identity/**",
-      "owner": null,
-      "reason": "no domain warden for packages/identity in the AGENTS.md ownership table",
+      "owner": "tools-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "packages/interaction/**",
-      "owner": null,
-      "reason": "no domain warden for packages/interaction in the AGENTS.md ownership table",
+      "owner": "runtime-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "packages/judge-server/**",
-      "owner": null,
-      "reason": "no domain warden for packages/judge-server in the AGENTS.md ownership table",
+      "owner": "eval-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "packages/judgment/**",
-      "owner": null,
-      "reason": "no domain warden for packages/judgment in the AGENTS.md ownership table",
+      "owner": "eval-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "packages/observability/**",
-      "owner": null,
-      "reason": "no domain warden for packages/observability in the AGENTS.md ownership table",
+      "owner": "core-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "packages/observe/**",
-      "owner": null,
-      "reason": "no domain warden for packages/observe in the AGENTS.md ownership table",
+      "owner": "core-warden",
       "checks": [],
       "docs": []
     },
@@ -264,8 +255,7 @@
     },
     {
       "glob": "packages/replay/**",
-      "owner": null,
-      "reason": "no domain warden for packages/replay in the AGENTS.md ownership table",
+      "owner": "harness-warden",
       "checks": [],
       "docs": []
     },
@@ -283,8 +273,7 @@
     },
     {
       "glob": "packages/testing/**",
-      "owner": null,
-      "reason": "no domain warden for packages/testing in the AGENTS.md ownership table",
+      "owner": "core-warden",
       "checks": [],
       "docs": []
     },
@@ -296,8 +285,7 @@
     },
     {
       "glob": "packages/verification/**",
-      "owner": null,
-      "reason": "no domain warden for packages/verification in the AGENTS.md ownership table",
+      "owner": "eval-warden",
       "checks": [],
       "docs": []
     },

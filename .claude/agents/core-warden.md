@@ -15,7 +15,8 @@ Core is the contract layer: every other package (and every app, telemetry wire, 
 **Read/Edit:**
 - `packages/core/src/**`, `packages/core/tests/**`, `packages/core/README.md`
 - `packages/runtime-shim/src/**`, `packages/runtime-shim/tests/**`, `packages/runtime-shim/README.md`
-- `.changeset/<slug>.md` for `@reactive-agents/core` / `@reactive-agents/runtime-shim`
+- `packages/observability/**`, `packages/observe/**`, `packages/testing/**` (added 2026-11-11, [[2026-11-11-warden-ownership-gaps]]: event/trace infrastructure and the shared test doubles every package uses)
+- `.changeset/<slug>.md` for `@reactive-agents/core` / `@reactive-agents/runtime-shim` / the packages above
 
 **Read only:** every package's `src/**` (to find consumers of a type before changing it).
 

@@ -64,6 +64,9 @@ wardens:
       - bun run repo
       - bun test packages/core
       - bun test packages/runtime-shim
+      - bun test packages/observability
+      - bun test packages/observe
+      - bun test packages/testing
       - bunx turbo run typecheck
       - bunx turbo run build --filter=@reactive-agents/core
       - bun run --cwd apps/docs metrics
@@ -105,6 +108,27 @@ wardens:
       - wiki/Research/Debriefs/**
     run:
       - bun run repo
+      - find
+
+  eval-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bun test packages/eval
+      - bun test packages/judgment
+      - bun test packages/judge-server
+      - bun test packages/verification
+      - bunx turbo run typecheck --filter=@reactive-agents/eval
+      - bunx turbo run typecheck --filter=@reactive-agents/judgment
+      - bunx turbo run typecheck --filter=@reactive-agents/judge-server
+      - bunx turbo run typecheck --filter=@reactive-agents/verification
+      - bun run --cwd apps/docs metrics
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
       - find
 
   harness-warden:
@@ -197,6 +221,12 @@ wardens:
       - bunx turbo run typecheck --filter=reactive-agents
       - bun run --cwd apps/docs metrics
       - bun test packages/runtime
+      - bun test packages/interaction
+      - bun test packages/cost
+      - bun test packages/health
+      - bunx turbo run typecheck --filter=@reactive-agents/interaction
+      - bunx turbo run typecheck --filter=@reactive-agents/cost
+      - bunx turbo run typecheck --filter=@reactive-agents/health
       - bun test seam
       - bash scripts
       - for s in scripts
@@ -213,6 +243,10 @@ wardens:
       - bunx turbo run typecheck --filter=@reactive-agents/tools
       - bun run --cwd apps/docs metrics
       - bun test packages/tools
+      - bun test packages/guardrails
+      - bun test packages/identity
+      - bunx turbo run typecheck --filter=@reactive-agents/guardrails
+      - bunx turbo run typecheck --filter=@reactive-agents/identity
       - docker inspect
       - docker logs
       - docker ps

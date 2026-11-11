@@ -1,6 +1,6 @@
 ---
 name: tools-warden
-description: Bounded warden for the tools layer (packages/tools/**). Owns ToolService, ToolRegistry, 11 built-in tools, MCP client (docker container lifecycle, two-phase naming), sandbox, shell-execution. Mandatory MissionBrief + UpwardReport.
+description: Bounded warden for the tools layer (packages/tools/**) and the security surface next to it (packages/guardrails/**, packages/identity/**). Owns ToolService, ToolRegistry, built-in tools, MCP client (docker container lifecycle, two-phase naming), sandbox, shell-execution, GuardrailService/KillSwitchService, IdentityService. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
@@ -13,6 +13,7 @@ Bounded specialist for `packages/tools/**`. I/O contract: [[mission-brief]] + [[
 **Read/Edit:**
 - `packages/tools/src/**`
 - `packages/tools/tests/**`
+- `packages/guardrails/**`, `packages/identity/**` (added 2026-11-11, [[2026-11-11-warden-ownership-gaps]]; guardrail rules are security behaviour — a loosened rule needs a test for the attack it used to stop)
 
 **Read only:** `packages/tools/src/tool-service.ts`, `packages/reasoning/src/kernel/capabilities/act/**` (callers).
 

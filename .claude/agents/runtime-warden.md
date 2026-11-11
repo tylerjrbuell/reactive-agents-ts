@@ -1,6 +1,6 @@
 ---
 name: runtime-warden
-description: Bounded warden for the runtime facade (packages/runtime/**). Owns ExecutionEngine, ReactiveAgentBuilder, createRuntime(), withLeanHarness gate, builder/agent decomposition modules. Mandatory MissionBrief + UpwardReport.
+description: Bounded warden for the runtime facade (packages/runtime/**) and the facade-wired services packages/interaction/**, packages/cost/**, packages/health/**. Owns ExecutionEngine, ReactiveAgentBuilder, createRuntime(), withLeanHarness gate, builder/agent decomposition modules, human interaction, cost tracking and health. Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
@@ -14,6 +14,7 @@ Bounded specialist for `packages/runtime/**`. I/O contract: [[mission-brief]] + 
 - `packages/runtime/src/**`
 - `packages/runtime/tests/**`
 - `packages/reactive-agents/**` (the public facade: re-exports of runtime types and values; keep it a thin re-export layer)
+- `packages/interaction/**`, `packages/cost/**`, `packages/health/**` (added 2026-11-11, [[2026-11-11-warden-ownership-gaps]])
 
 **Read only:** `packages/core/src/**` (type defs; contract changes go to core-warden), all reasoning/llm-provider/tools/memory service interfaces.
 
