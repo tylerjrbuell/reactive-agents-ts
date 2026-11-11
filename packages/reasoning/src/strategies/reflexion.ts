@@ -56,7 +56,7 @@ import {
   collectToolData,
 } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
-import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
+import { extractDeliverableContent } from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -295,7 +295,7 @@ export const executeReflexion = (
           // GH #246: commanded temperature wins; unset keeps the 0.7 default.
           temperature: input.temperature ?? 0.7,
         }, { message: "Generate produced empty output and the synthesis fallback failed", step: 0 });
-      const synthText = extractThinkingSafeContent(synthResponse).content || synthResponse.content || "";
+      const synthText = extractDeliverableContent(synthResponse);
       initialResponse = synthText;
       yield* emitLog({
         _tag: "warning",

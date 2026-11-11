@@ -46,6 +46,15 @@ interface StructuredOutputBase<T> {
    * ContextPressure cannot be reported (known gap).
    */
   readonly traceContext?: { readonly taskId?: string; readonly iteration?: number };
+  /**
+   * The strategy this extraction runs inside (e.g. a planner call inside
+   * `plan-execute-reflect`). Published as `strategy` on the pipeline's
+   * `ReasoningStepCompleted` events. The pipeline is a sub-call, not a
+   * strategy: without this, consumers that read the run's strategy off those
+   * events reported "structured-output-native" for a plan-execute run
+   * (run 01M75SJ5SXXHSA63BKXM2R2P77). Unset keeps the pipeline's own labels.
+   */
+  readonly strategy?: string;
 }
 
 /**
@@ -218,7 +227,7 @@ export const extractStructuredOutput = <T>(
             yield* eb.publish({
               _tag: "ReasoningStepCompleted",
               taskId: config.traceContext?.taskId ?? "structured-output",
-              strategy: "structured-output-native",
+              strategy: config.strategy ?? "structured-output-native",
               step: 1,
               totalSteps: 1,
               prompt: { system: config.systemPrompt ?? "", user: config.prompt },
@@ -232,7 +241,7 @@ export const extractStructuredOutput = <T>(
           yield* eb.publish({
             _tag: "ReasoningStepCompleted",
             taskId: config.traceContext?.taskId ?? "structured-output",
-            strategy: "structured-output-native",
+            strategy: config.strategy ?? "structured-output-native",
             step: 1,
             totalSteps: 1,
             prompt: { system: config.systemPrompt ?? "", user: config.prompt },
@@ -303,7 +312,7 @@ export const extractStructuredOutput = <T>(
         yield* eb.publish({
           _tag: "ReasoningStepCompleted",
           taskId: config.traceContext?.taskId ?? "structured-output",
-          strategy: "structured-output",
+          strategy: config.strategy ?? "structured-output",
           step: attempt + 1,
           totalSteps: maxRetries + 1,
           prompt: { system: systemPrompt, user: prompt },

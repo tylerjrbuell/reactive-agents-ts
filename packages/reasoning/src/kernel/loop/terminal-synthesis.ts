@@ -10,8 +10,8 @@
  * handoff synthesis. Each one: `purpose: "synthesize"` on the generous budget
  * (H3: the deliverable render is the one place spend is always justified),
  * temperature 0.2, provider errors swallowed to an empty answer, and the
- * answer read through `extractThinkingSafeContent` so a `<think>` preamble
- * never leaks into the user-facing output.
+ * answer read through `extractDeliverableContent` so a `<think>` preamble
+ * never leaks into the user-facing output and thinking is never the answer.
  *
  * Callers keep their own prompt and their own empty / revalidation semantics;
  * only the call lives here. `seam-terminal-pipeline.test.ts` pins that no other
@@ -20,7 +20,7 @@
 import { Effect } from "effect";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "../llm-gateway.js";
-import { extractThinkingSafeContent } from "../utils/stream-parser.js";
+import { extractDeliverableContent } from "../utils/stream-parser.js";
 import { NO_TOKEN_SPEND, usageSpend, type TokenSpend } from "../run-budget.js";
 
 /** The rendered answer (thinking-safe, NOT trimmed) plus the call's spend (incl. the provider's split). */
@@ -57,7 +57,7 @@ export function runTerminalSynthesis(
     },
   ).pipe(
     Effect.map((response): TerminalSynthesis => ({
-      content: extractThinkingSafeContent(response).content,
+      content: extractDeliverableContent(response),
       ...usageSpend(response.usage),
     })),
     Effect.catchAll(() => Effect.succeed<TerminalSynthesis>({ content: "", ...NO_TOKEN_SPEND })),

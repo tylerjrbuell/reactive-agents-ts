@@ -16,7 +16,7 @@
 //   - call `runOutputQualityGate(` directly from runner.ts → (a) fails;
 //   - swap two entries in KERNEL_TERMINAL_STEPS → (b) fails;
 //   - inline a `budgetClass: "generous"` gatewayComplete in pace-terminal.ts → (c) fails;
-//   - drop `extractThinkingSafeContent` in terminal-synthesis.ts → (d) fails.
+//   - drop `extractDeliverableContent` in terminal-synthesis.ts → (d) fails.
 import { describe, it, expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import { readFileSync, readdirSync, statSync } from "node:fs";

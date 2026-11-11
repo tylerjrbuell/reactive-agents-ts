@@ -181,6 +181,28 @@ export function extractThinkingSafeContent(
   };
 }
 
+/**
+ * Content extractor for calls whose text becomes the run's DELIVERABLE (step
+ * results, synthesis, solve, terminal render).
+ *
+ * Strips `<think>...</think>` (and an unclosed trailing `<think>`) from
+ * `response.content` and returns what is left, trimmed. Unlike
+ * {@link extractThinkingSafeContent} it never falls back to the model's
+ * thinking: thinking is the model's working, not its answer. Run
+ * 01M75SJ5SXXHSA63BKXM2R2P77 shipped "Let me check the workspace..." as a
+ * succeeded answer because a deliverable site used the thinking fallback.
+ * An empty string means "no answer" and callers treat it that way.
+ *
+ * Parse-only call sites (scores, JSON, classifications) may keep
+ * `extractThinkingSafeContent`: there a value found in thinking is checked by
+ * the parser, never shown to the user.
+ */
+export function extractDeliverableContent(response: { content: string; thinking?: string }): string {
+  const rawContent = typeof response.content === "string" ? response.content : "";
+  if (!rawContent) return "";
+  return extractThinking(rawContent).content.trim();
+}
+
 // ── FINAL ANSWER regex (local copy to avoid circular dependency with tool-utils) ──
 const FA_RE = /(?:\*{0,2})final\s*answer(?:\*{0,2})\s*[:：]\s*/i;
 

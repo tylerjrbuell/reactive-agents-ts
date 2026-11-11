@@ -101,6 +101,7 @@ export function patchPlan(
     prompt: patchPrompt,
     systemPrompt:
       "You are a planning agent. Rewrite the failed and pending steps to recover.",
+    strategy: "plan-execute-reflect",
     maxRetries: 1,
     // GH #246: commanded temperature wins; unset keeps the 0.3 default.
     temperature: input.temperature ?? 0.3,
@@ -174,6 +175,7 @@ export function augmentPlan(
     prompt: augmentPrompt,
     systemPrompt:
       "You are a planning agent. Generate supplementary steps to fill gaps in an incomplete plan.",
+    strategy: "plan-execute-reflect",
     maxRetries: 1,
     // GH #246: commanded temperature wins; unset keeps the 0.3 default.
     temperature: input.temperature ?? 0.3,

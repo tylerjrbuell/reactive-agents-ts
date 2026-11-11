@@ -55,7 +55,7 @@ import {
   stripDeadStorageHints,
   stripFinalAnswerPrefix,
 } from "../planning/plan-text.js";
-import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
+import { extractDeliverableContent } from "../../kernel/utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import { priorResultsBudgetChars, priorResultsForPrompt } from "../planning/prior-results.js";
 import { NO_TOKEN_SPEND, addTokenSpend, usageSpend, type TokenSpend } from "../../kernel/run-budget.js";
@@ -406,7 +406,7 @@ function executeAnalysisStep(
 
     const completedAt = new Date().toISOString();
     const output = response
-      ? stripFinalAnswerPrefix(extractThinkingSafeContent(response).content)
+      ? stripFinalAnswerPrefix(extractDeliverableContent(response))
       : "";
 
     if (!output.trim()) {

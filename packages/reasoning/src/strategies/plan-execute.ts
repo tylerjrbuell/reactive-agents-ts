@@ -320,6 +320,7 @@ export const executePlanExecute = (
       systemPrompt: input.systemPrompt
         ? `${input.systemPrompt}\n${PLANNER_PERSONA}`
         : PLANNER_PERSONA,
+      strategy: "plan-execute-reflect",
       maxRetries: 2,
       // GH #246: commanded temperature wins; unset keeps the 0.5 default.
       temperature: input.temperature ?? 0.5,
@@ -365,9 +366,8 @@ export const executePlanExecute = (
       const retryResult = yield* extractStructuredOutput({
         schema: LLMPlanOutputSchema,
         prompt: reminderPrompt,
-        systemPrompt: input.systemPrompt
-          ? `${input.systemPrompt}\n${PLANNER_PERSONA} Rationale on tool_call steps is mandatory.`
-          : "You are a planning agent. Decompose the goal into structured steps. Rationale on tool_call steps is mandatory.",
+        systemPrompt: `${input.systemPrompt ? `${input.systemPrompt}\n` : ""}${PLANNER_PERSONA} Rationale on tool_call steps is mandatory.`,
+        strategy: "plan-execute-reflect",
         maxRetries: 1,
         // GH #246: commanded temperature wins; unset keeps the 0.3 default.
         temperature: input.temperature ?? 0.3,

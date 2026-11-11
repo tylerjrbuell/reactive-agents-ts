@@ -12,7 +12,8 @@ import { Effect } from "effect";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import type { LogEvent } from "@reactive-agents/observability";
 import type { ExecutionError } from "../../errors/errors.js";
-import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
+import { extractDeliverableContent } from "../../kernel/utils/stream-parser.js";
+import { unansweredPlanCause } from "./terminal-outcome.js";
 import { enforceQualityGate } from "../../kernel/loop/finalize.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
@@ -100,8 +101,11 @@ export const runSingleAnalysisShortCircuit = (
         ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
       }, { message: "Single-analysis-step generation failed", step: 0 });
 
-    only.status = "completed";
-    only.result = extractThinkingSafeContent(genResponse).content;
+    // Deliverable text: the answer channel only, never the model's thinking
+    // (run 01M75SJ5SXXHSA63BKXM2R2P77 shipped thinking as a succeeded answer).
+    only.result = extractDeliverableContent(genResponse);
+    only.status = only.result ? "completed" : "failed";
+    if (!only.result) only.error = "Analysis step produced no answer (empty content; thinking is not an answer)";
 
     let scOutput = only.result;
     run.record(makeStep("thought", `[SYNTHESIS] ${scOutput}`));
@@ -158,6 +162,7 @@ export const runSingleAnalysisShortCircuit = (
       _tag: "Result" as const,
       output: scOutput,
       status: scOutput ? ("completed" as const) : ("partial" as const),
+      ...(scOutput ? {} : { error: unansweredPlanCause(plan.steps) }),
       delivery: { runContract: deps.runContract },
     };
   });

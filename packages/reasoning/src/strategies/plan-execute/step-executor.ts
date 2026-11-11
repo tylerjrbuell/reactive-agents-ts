@@ -50,7 +50,7 @@ import { makeStep, reactResultPause } from "../../kernel/capabilities/sense/step
 import { shouldGate } from "../../kernel/capabilities/decide/tool-gating.js";
 import { deliverableToContent } from "@reactive-agents/core";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
-import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
+import { extractDeliverableContent } from "../../kernel/utils/stream-parser.js";
 import { withEnvContext } from "../../context/context-engine.js";
 import { priorResultsBudgetChars, priorResultsForPrompt } from "../planning/prior-results.js";
 import { compositeFullResult, observedToolPayloads } from "../planning/step-evidence.js";
@@ -421,7 +421,7 @@ export function executeStep(
       .pipe(
         Effect.flatMap((response) => {
           const output = stripFinalAnswerPrefix(
-            extractThinkingSafeContent(response).content,
+            extractDeliverableContent(response),
           );
           if (!output.trim()) {
             return Effect.fail(

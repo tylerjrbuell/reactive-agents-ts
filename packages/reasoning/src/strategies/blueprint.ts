@@ -57,7 +57,7 @@ import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { resolveProfile } from "../context/profile-resolver.js";
-import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
+import { extractDeliverableContent } from "../kernel/utils/stream-parser.js";
 import { extractGoalText, joinedStepResults } from "./planning/plan-text.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -287,6 +287,7 @@ const blueprintBody = (
       systemPrompt: input.systemPrompt
         ? `${input.systemPrompt}\nYou are a planning agent. Decompose the goal into a structured tool plan.`
         : "You are a planning agent. Decompose the goal into a structured tool plan.",
+      strategy: "blueprint",
       maxRetries: 2,
       // GH #246: commanded temperature wins; unset keeps the 0.4 default.
       temperature: input.temperature ?? 0.4,
@@ -705,7 +706,7 @@ const blueprintBody = (
           }),
         );
 
-      finalOutput = extractThinkingSafeContent(solveResponse).content;
+      finalOutput = extractDeliverableContent(solveResponse);
 
       run.record(makeStep("thought", `[SOLVE] ${finalOutput}`));
       yield* emitPhaseEnd({ emitLog, phase: "blueprint:solve", startedAt: start, totalTokens: run.spend().tokens });

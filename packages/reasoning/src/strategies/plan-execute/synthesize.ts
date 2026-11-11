@@ -12,7 +12,7 @@
 import { Effect } from "effect";
 import type { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "../../kernel/llm-gateway.js";
-import { extractThinkingSafeContent } from "../../kernel/utils/stream-parser.js";
+import { extractDeliverableContent } from "../../kernel/utils/stream-parser.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { makeStep } from "../../kernel/capabilities/sense/step-utils.js";
@@ -82,9 +82,9 @@ export const synthesizePlanAnswer = (
       );
 
     const totalTokens = deps.totalTokens + synthLlmResponse.usage.totalTokens;
-    // Strict upgrade vs bare stripThinking: rescues synthesized answers
-    // trapped inside <think> blocks (would have silently returned empty).
-    const finalOutput = extractThinkingSafeContent(synthLlmResponse).content;
+    // Deliverable text: think blocks stripped, never the model's thinking. An
+    // empty synthesis falls back to the steps' own results in the orchestrator.
+    const finalOutput = extractDeliverableContent(synthLlmResponse);
 
     record(makeStep("thought", `[SYNTHESIS] ${finalOutput}`));
 
