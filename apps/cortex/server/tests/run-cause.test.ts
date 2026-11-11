@@ -42,6 +42,19 @@ function abstained(runId: string): Ev[] {
   ];
 }
 
+/** A token-budget stop: `budget-cap/token-budget`, not the iteration budget. */
+function tokenBudgetStop(runId: string): Ev[] {
+  const e = at(runId);
+  return [
+    e(-1, { kind: "run-started", task: "t", model: "m", provider: "test", config: {} }),
+    e(0, {
+      kind: "guard-fired", guard: "terminal_decision", outcome: "terminate", reason: "budget_exceeded",
+      metadata: { terminatedBy: "budget_exceeded", status: "failed", authority: "budget", iterationCap: { counter: "iteration", observed: 1, threshold: 5, llmCalls: 1, capped: false } },
+    }),
+    e(-1, { kind: "run-completed", status: "failure", terminatedBy: "budget_exceeded", error: "budget_exceeded: tokens 496 ≥ tokenLimit 400", totalTokens: 496, totalCostUsd: 0, durationMs: 1 }),
+  ];
+}
+
 /** A clean success. */
 function success(runId: string): Ev[] {
   const e = at(runId);
@@ -64,6 +77,16 @@ const causeOf = (runId: string, reader = makeRunCauseReader({ dirs: () => [dir] 
   Effect.runPromise(reader.causeOf(runId));
 
 describe("run cause (framework trace diagnosis)", () => {
+  test("a token-budget stop's headline names the token budget (subCause reaches causeDescription)", async () => {
+    write("TOK1", tokenBudgetStop("TOK1"));
+    const r = await causeOf("TOK1");
+    if (!r.available) throw new Error("expected a report");
+    expect(r.cause).toBe("budget-cap");
+    expect(r.subCause).toBe("token-budget");
+    expect(r.headline).toBe("The run used up its token budget");
+    expect(r.headline).not.toBe(causeDescription("budget-cap"));
+  });
+
   test("a failed tool loop names tool-failure, links its evidence to the 1-based loop, and attributes it", async () => {
     write("FAIL1", failedToolLoop("FAIL1"));
     const r = await causeOf("FAIL1");

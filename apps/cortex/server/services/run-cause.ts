@@ -86,7 +86,7 @@ export function diagnoseTrace(trace: Trace): RunCauseReport {
     runId: c.runId,
     cause: c.cause,
     ...(c.subCause ? { subCause: c.subCause } : {}),
-    headline: causeDescription(c.cause),
+    headline: causeDescription(c.cause, c.subCause),
     nextActions: causeNextActions(c),
     confidence: c.confidence,
     outcomeStatus: c.outcomeStatus,
