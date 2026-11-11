@@ -11,6 +11,24 @@ import { DatabaseError, MemoryNotFoundError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
 import { safeJsonParse } from "../json-utils.js";
 
+// ─── Stored version shape ───
+
+/**
+ * A skill version as the store reads it back: the core `SkillVersion` plus the
+ * skill's `useCount` when the version was recorded. `null` means unknown (a row
+ * written before the column existed).
+ */
+export type StoredSkillVersion = SkillVersion & { readonly useCountAtRefinement: number | null };
+
+/**
+ * The use count recorded with a version, or `null` when the version carries
+ * none (a hand-built `SkillVersion`, or a legacy row).
+ */
+export const useCountAtRefinementOf = (version: SkillVersion): number | null =>
+  "useCountAtRefinement" in version && typeof version.useCountAtRefinement === "number"
+    ? version.useCountAtRefinement
+    : null;
+
 // ─── Service Tag ───
 
 export class SkillStoreService extends Context.Tag("SkillStoreService")<
@@ -78,7 +96,7 @@ export const SkillStoreServiceLive = Layer.effect(
 
     // ─── Row → Version ───
 
-    const rowToVersion = (r: Record<string, unknown>): SkillVersion => ({
+    const rowToVersion = (r: Record<string, unknown>): StoredSkillVersion => ({
       version: r.version as number,
       instructions: r.instructions as string,
       config: safeJsonParse<SkillFragmentConfig>(
@@ -88,6 +106,8 @@ export const SkillStoreServiceLive = Layer.effect(
       refinedAt: new Date(r.refined_at as string),
       successRateAtRefinement: r.success_rate_at_refinement as number,
       status: r.status as "candidate" | "active",
+      useCountAtRefinement:
+        typeof r.use_count_at_refinement === "number" ? r.use_count_at_refinement : null,
     });
 
     // ─── Load version history for a skill ───
@@ -415,8 +435,11 @@ export const SkillStoreServiceLive = Layer.effect(
       addVersion: (skillId: string, version: SkillVersion) =>
         db
           .exec(
-            `INSERT OR REPLACE INTO skill_versions (id, skill_id, version, instructions, config, refined_at, success_rate_at_refinement, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            // use_count_at_refinement: the version's own value when it carries
+            // one, else the skill's current use_count (refine calls this before
+            // it updates the skill row, so that is the count at refinement).
+            `INSERT OR REPLACE INTO skill_versions (id, skill_id, version, instructions, config, refined_at, success_rate_at_refinement, status, use_count_at_refinement)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, (SELECT use_count FROM skills WHERE id = ?)))`,
             [
               `${skillId}-v${version.version}`,
               skillId,
@@ -426,6 +449,8 @@ export const SkillStoreServiceLive = Layer.effect(
               version.refinedAt.toISOString(),
               version.successRateAtRefinement,
               version.status,
+              useCountAtRefinementOf(version),
+              skillId,
             ],
           )
           .pipe(Effect.map(() => undefined)),

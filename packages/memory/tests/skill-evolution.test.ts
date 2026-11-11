@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import { Effect, Layer } from "effect";
-import { SkillEvolutionService, makeSkillEvolutionService } from "../src/services/skill-evolution.js";
-import { SkillStoreService, SkillStoreServiceLive, MemoryDatabaseLive } from "../src/index.js";
+import { Database } from "@reactive-agents/runtime-shim";
+import { SkillEvolutionService, makeSkillEvolutionService, DEFAULT_REGRESSION_MIN_USES } from "../src/services/skill-evolution.js";
+import { SkillStoreService, SkillStoreServiceLive, MemoryDatabaseLive, useCountAtRefinementOf } from "../src/index.js";
 import type { SkillRecord, SkillVersion, SkillFragmentConfig } from "@reactive-agents/core";
 import type { MemoryLLM, DailyLogEntry, MemoryId } from "../src/types.js";
 import { defaultMemoryConfig } from "../src/types.js";
@@ -211,7 +212,10 @@ describe("SkillEvolutionService", () => {
     expect(root.makeSkillEvolutionService).toBe(makeSkillEvolutionService);
   });
 
-  it("refine() then a failing outcome lets checkRegression() roll back to v1", async () => {
+  // Updated for the min-evidence guard: this test used to roll back with zero
+  // uses since refinement (refined.useCount unchanged). It now records three
+  // failing uses, the default minimum, before the regression check.
+  it("refine() then three failing outcomes let checkRegression() roll back to v1", async () => {
     const layer = makeLayer(mockLLM);
     const skill = makeSkill({ successRate: 0.8 });
     await Effect.runPromise(Effect.provide(Effect.gen(function* () {
@@ -223,11 +227,90 @@ describe("SkillEvolutionService", () => {
         [1, "active"],
         [2, "candidate"],
       ]);
-      const result = yield* evo.checkRegression({ ...refined, successRate: 0.4 });
+      expect(useCountAtRefinementOf(refined.versionHistory[1]!)).toBe(3);
+      // 3 prior uses at 0.8, then 3 failures: (0.8 * 3) / 6 = 0.4
+      const result = yield* evo.checkRegression({ ...refined, useCount: 6, successRate: 0.4 });
       expect(result.rolledBack).toBe(true);
       const after = yield* store.get(skill.id);
       expect(after!.version).toBe(1);
       expect(after!.instructions).toBe(skill.instructions);
+    }), layer));
+  });
+
+  it("checkRegression() does not roll back on one failure right after a refine", async () => {
+    const layer = makeLayer(mockLLM);
+    const skill = makeSkill({ successRate: 0.8 });
+    await Effect.runPromise(Effect.provide(Effect.gen(function* () {
+      const store = yield* SkillStoreService;
+      yield* store.store(skill);
+      const evo = yield* SkillEvolutionService;
+      const refined = yield* evo.refine(skill, [makeEpisode("Episode")]);
+      // 1 and 2 failing uses since refinement: rate fell below 0.8, too little evidence
+      for (const uses of [1, DEFAULT_REGRESSION_MIN_USES - 1]) {
+        const useCount = 3 + uses;
+        const result = yield* evo.checkRegression({ ...refined, useCount, successRate: (0.8 * 3) / useCount });
+        expect(result.rolledBack).toBe(false);
+      }
+      const after = yield* store.get(skill.id);
+      expect(after!.version).toBe(2);
+      expect(after!.instructions).toBe(refined.instructions);
+    }), layer));
+  });
+
+  it("checkRegression() keeps a candidate with enough uses when its rate held", async () => {
+    const layer = makeLayer(mockLLM);
+    const skill = makeSkill({ successRate: 0.8 });
+    await Effect.runPromise(Effect.provide(Effect.gen(function* () {
+      const store = yield* SkillStoreService;
+      yield* store.store(skill);
+      const evo = yield* SkillEvolutionService;
+      const refined = yield* evo.refine(skill, [makeEpisode("Episode")]);
+      const result = yield* evo.checkRegression({ ...refined, useCount: 10, successRate: 0.8 });
+      expect(result.rolledBack).toBe(false);
+    }), layer));
+  });
+
+  it("regressionMinUses option sets the evidence bar", async () => {
+    const layer = Layer.mergeAll(
+      storeLayer,
+      makeSkillEvolutionService(mockLLM, { regressionMinUses: 1 }).pipe(Layer.provide(storeLayer)),
+    );
+    const skill = makeSkill({ successRate: 0.8 });
+    await Effect.runPromise(Effect.provide(Effect.gen(function* () {
+      const store = yield* SkillStoreService;
+      yield* store.store(skill);
+      const evo = yield* SkillEvolutionService;
+      const refined = yield* evo.refine(skill, [makeEpisode("Episode")]);
+      const result = yield* evo.checkRegression({ ...refined, useCount: 4, successRate: 0.6 });
+      expect(result.rolledBack).toBe(true);
+      expect((yield* store.get(skill.id))!.version).toBe(1);
+    }), layer));
+  });
+
+  it("a legacy skill_versions table gains use_count_at_refinement; old rows read null", async () => {
+    fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+    const old = new Database(TEST_DB, { create: true });
+    old.exec(`
+      CREATE TABLE skill_versions (
+        id TEXT PRIMARY KEY, skill_id TEXT NOT NULL, version INTEGER NOT NULL,
+        instructions TEXT NOT NULL DEFAULT '', config TEXT NOT NULL DEFAULT '{}',
+        refined_at TEXT NOT NULL, success_rate_at_refinement REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'active'
+      );
+    `);
+    old
+      .prepare(`INSERT INTO skill_versions (id, skill_id, version, refined_at, status) VALUES (?, ?, ?, ?, ?)`)
+      .run("skill-1-v1", "skill-1", 1, new Date().toISOString(), "active");
+    old.close();
+    const layer = makeLayer(mockLLM);
+    await Effect.runPromise(Effect.provide(Effect.gen(function* () {
+      const store = yield* SkillStoreService;
+      yield* store.store(makeSkill({ useCount: 7 }));
+      const legacy = (yield* store.get("skill-1"))!.versionHistory[0]!;
+      expect(useCountAtRefinementOf(legacy)).toBeNull();
+      yield* store.addVersion("skill-1", { ...legacy, version: 2, status: "candidate" });
+      const fresh = (yield* store.get("skill-1"))!.versionHistory[1]!;
+      expect(useCountAtRefinementOf(fresh)).toBe(7);
     }), layer));
   });
 

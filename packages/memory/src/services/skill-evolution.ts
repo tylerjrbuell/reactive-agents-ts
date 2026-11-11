@@ -2,7 +2,7 @@ import { Effect, Context, Layer } from "effect";
 import type { SkillRecord, SkillVersion, SkillConfidence } from "@reactive-agents/core";
 import type { MemoryLLM, DailyLogEntry } from "../types.js";
 import { DatabaseError } from "../errors.js";
-import { SkillStoreService } from "./skill-store.js";
+import { SkillStoreService, useCountAtRefinementOf } from "./skill-store.js";
 
 // ─── Service Tag ───
 
@@ -21,8 +21,11 @@ export class SkillEvolutionService extends Context.Tag("SkillEvolutionService")<
     ) => Effect.Effect<SkillRecord, DatabaseError>;
 
     /**
-     * Check if a skill has regressed post-refinement.
-     * If successRate dropped below the rate at refinement time, rollback.
+     * Check if a skill has regressed post-refinement. Rolls back a candidate
+     * version only when both hold: it has at least `regressionMinUses` uses
+     * since refinement (default {@link DEFAULT_REGRESSION_MIN_USES}), and
+     * successRate is below the rate at refinement time. One outcome is not
+     * evidence, so a single failure right after a refine never reverts it.
      */
     readonly checkRegression: (
       skill: SkillRecord,
@@ -90,13 +93,41 @@ const heuristicCondensed = (instructions: string): string => {
   return lines.slice(0, 8).join(" ");
 };
 
+// ─── Options ───
+
+/** Uses a refined version needs since refinement before a regression can roll it back. */
+export const DEFAULT_REGRESSION_MIN_USES = 3;
+
+/** Tuning for {@link makeSkillEvolutionService}. */
+export type SkillEvolutionOptions = {
+  /**
+   * Minimum uses since refinement before `checkRegression` may roll a
+   * candidate back. Default {@link DEFAULT_REGRESSION_MIN_USES}.
+   */
+  readonly regressionMinUses?: number;
+};
+
+/**
+ * Uses since `version` was recorded. A version with no recorded use count (a
+ * legacy row) counts every use the skill has: the old, pre-guard behavior.
+ */
+const usesSinceRefinement = (skill: SkillRecord, version: SkillVersion): number => {
+  const atRefinement = useCountAtRefinementOf(version);
+  return atRefinement === null ? skill.useCount : skill.useCount - atRefinement;
+};
+
 // ─── Live Implementation ───
 
-export const makeSkillEvolutionService = (llm?: MemoryLLM) =>
+/**
+ * Build the SkillEvolutionService layer. `llm` powers refinement and variant
+ * generation (heuristics without it); `options` tunes the regression guard.
+ */
+export const makeSkillEvolutionService = (llm?: MemoryLLM, options: SkillEvolutionOptions = {}) =>
   Layer.effect(
     SkillEvolutionService,
     Effect.gen(function* () {
       const store = yield* SkillStoreService;
+      const regressionMinUses = options.regressionMinUses ?? DEFAULT_REGRESSION_MIN_USES;
 
       const generateVariants = (
         instructions: string,
@@ -260,6 +291,7 @@ export const makeSkillEvolutionService = (llm?: MemoryLLM) =>
 
             if (
               latest.status === "candidate" &&
+              usesSinceRefinement(skill, latest) >= regressionMinUses &&
               skill.successRate < latest.successRateAtRefinement
             ) {
               yield* store.rollback(skill.id).pipe(

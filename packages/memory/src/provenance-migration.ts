@@ -30,6 +30,7 @@ const columnNames = (db: MigrationDb, table: string): Set<string> => {
  * Add nullable `task_id` / `run_id` columns (plus lookup indexes) to the
  * semantic and procedural memory tables when they are missing. Safe to run on
  * every open; existing rows keep their data and read back with no provenance.
+ * Also adds the nullable `skill_versions.use_count_at_refinement` column.
  */
 export const migrateProvenanceColumns = (db: MigrationDb): void => {
   for (const table of PROVENANCE_TABLES) {
@@ -46,4 +47,9 @@ export const migrateProvenanceColumns = (db: MigrationDb): void => {
     CREATE INDEX IF NOT EXISTS idx_procedural_task ON procedural_memory(task_id);
     CREATE INDEX IF NOT EXISTS idx_procedural_run ON procedural_memory(run_id);
   `);
+  // Skill versions record the skill's use count at refinement so a regression
+  // check can count uses since then. Older rows read back NULL (unknown).
+  if (!columnNames(db, "skill_versions").has("use_count_at_refinement")) {
+    db.exec(`ALTER TABLE skill_versions ADD COLUMN use_count_at_refinement INTEGER`);
+  }
 };

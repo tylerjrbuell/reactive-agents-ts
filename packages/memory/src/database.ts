@@ -208,6 +208,7 @@ const SCHEMA_CORE_SQL = `
     config      TEXT NOT NULL DEFAULT '{}',
     refined_at  TEXT NOT NULL,
     success_rate_at_refinement REAL NOT NULL DEFAULT 0,
+    use_count_at_refinement INTEGER,
     status      TEXT NOT NULL DEFAULT 'active',
     FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
   );

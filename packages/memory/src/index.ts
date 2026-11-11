@@ -154,13 +154,19 @@ export {
   type ChatMessageShape,
 } from "./services/session-store.js";
 
-export { SkillStoreService, SkillStoreServiceLive } from "./services/skill-store.js";
+export { SkillStoreService, SkillStoreServiceLive, useCountAtRefinementOf } from "./services/skill-store.js";
+export type { StoredSkillVersion } from "./services/skill-store.js";
 /**
  * Skill lifecycle service: LLM refinement into candidate versions, regression
  * rollback, and confidence promotion (tentative → trusted → expert).
  * `makeSkillEvolutionService(llm?)` builds the Layer; it requires SkillStoreService.
  */
-export { SkillEvolutionService, makeSkillEvolutionService } from "./services/skill-evolution.js";
+export {
+  SkillEvolutionService,
+  makeSkillEvolutionService,
+  DEFAULT_REGRESSION_MIN_USES,
+} from "./services/skill-evolution.js";
+export type { SkillEvolutionOptions } from "./services/skill-evolution.js";
 export {
   exportSkillToMarkdown,
   importSkillFromMarkdown,
