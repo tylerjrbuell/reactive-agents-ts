@@ -190,6 +190,10 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
           synthesisModel: r?.synthesisModel,
           synthesisProvider: r?.synthesisProvider,
           synthesisTemperature: r?.synthesisTemperature,
+          strategies: r?.strategies,
+          adaptive: r?.adaptive,
+          parallelToolCalls: r?.parallelToolCalls,
+          observationSummary: r?.observationSummary,
         }),
       ),
     );
@@ -339,8 +343,12 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
 
   if (config.gateway) push(call("withGateway", config.gateway));
   if (config.mcpServers && config.mcpServers.length > 0) push(call("withMCP", config.mcpServers));
+  // Reactive intelligence is on by default, so an explicit `false` must call
+  // withReactiveIntelligence(false); leaving it out would turn RI back on.
   if (config.features?.reactiveIntelligence || config.reactiveIntelligence?.enabled) {
     push(call("withReactiveIntelligence"));
+  } else if (config.features?.reactiveIntelligence === false || config.reactiveIntelligence?.enabled === false) {
+    push(call("withReactiveIntelligence", false));
   }
   if (config.logging) push(call("withLogging", config.logging));
   if (config.fallbacks) push(call("withFallbacks", config.fallbacks));

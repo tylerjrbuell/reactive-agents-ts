@@ -168,6 +168,8 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `rateLimiting.requestsPerMinute` | `number` | no |  |
 | `rateLimiting.tokensPerMinute` | `number` | no |  |
 | `reactiveIntelligence.enabled` | `boolean` | no |  |
+| `reasoning.adaptive.enabled` | `boolean` | no |  |
+| `reasoning.adaptive.learning` | `boolean` | no |  |
 | `reasoning.auditRationale` | `boolean` | no |  |
 | `reasoning.defaultStrategy` | `reactive` \| `plan-execute-reflect` \| `tree-of-thought` \| `reflexion` \| `adaptive` \| `direct` \| `code-action` \| `blueprint` | no |  |
 | `reasoning.enableStrategySwitching` | `boolean` | no |  |
@@ -192,6 +194,45 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.verboseRules` | `boolean` | no |  |
 | `reasoning.harness.writeCoverage` | `boolean` | no |  |
 | `reasoning.maxStrategySwitches` | `number` | no |  |
+| `reasoning.observationSummary` | `boolean` \| `"auto"` | no |  |
+| `reasoning.parallelToolCalls` | `boolean` | no |  |
+| `reasoning.strategies.planExecute.maxRefinements` | `number` | **yes** | a positive number |
+| `reasoning.strategies.planExecute.planMode` | `linear` \| `dag` | no |  |
+| `reasoning.strategies.planExecute.reflectionDepth` | `shallow` \| `deep` | **yes** |  |
+| `reasoning.strategies.planExecute.stepKernelMaxIterations` | `number` | no | a positive number |
+| `reasoning.strategies.planExecute.stepRetries` | `number` | no | an integer |
+| `reasoning.strategies.planExecute.synthesis` | `auto` \| `fast` \| `deep` \| `custom` \| `off` | no |  |
+| `reasoning.strategies.planExecute.synthesisModel` | `string` | no |  |
+| `reasoning.strategies.planExecute.synthesisProvider` | `string` | no |  |
+| `reasoning.strategies.planExecute.synthesisTemperature` | `number` | no |  |
+| `reasoning.strategies.reactive.maxIterations` | `number` | **yes** | a positive number |
+| `reasoning.strategies.reactive.maxIterationsExplicit` | `boolean` | no |  |
+| `reasoning.strategies.reactive.nextMovesPlanning.allowParallelBatching` | `boolean` | no |  |
+| `reasoning.strategies.reactive.nextMovesPlanning.enabled` | `boolean` | **yes** |  |
+| `reasoning.strategies.reactive.nextMovesPlanning.maxBatchSize` | `number` | no | a positive number |
+| `reasoning.strategies.reactive.synthesis` | `auto` \| `fast` \| `deep` \| `custom` \| `off` | no |  |
+| `reasoning.strategies.reactive.synthesisModel` | `string` | no |  |
+| `reasoning.strategies.reactive.synthesisProvider` | `string` | no |  |
+| `reasoning.strategies.reactive.synthesisTemperature` | `number` | no |  |
+| `reasoning.strategies.reactive.temperature` | `number` | **yes** |  |
+| `reasoning.strategies.reactive.toolElaboration.enabled` | `boolean` | **yes** |  |
+| `reasoning.strategies.reactive.toolElaboration.maxHintsPerTool` | `number` | no | a positive number |
+| `reasoning.strategies.reflexion.kernelMaxIterations` | `number` | no | a positive number |
+| `reasoning.strategies.reflexion.maxRetries` | `number` | **yes** | a positive number |
+| `reasoning.strategies.reflexion.selfCritiqueDepth` | `shallow` \| `deep` | **yes** |  |
+| `reasoning.strategies.reflexion.synthesis` | `auto` \| `fast` \| `deep` \| `custom` \| `off` | no |  |
+| `reasoning.strategies.reflexion.synthesisModel` | `string` | no |  |
+| `reasoning.strategies.reflexion.synthesisProvider` | `string` | no |  |
+| `reasoning.strategies.reflexion.synthesisTemperature` | `number` | no |  |
+| `reasoning.strategies.treeOfThought.breadth` | `number` | **yes** | a positive number |
+| `reasoning.strategies.treeOfThought.depth` | `number` | **yes** | a positive number |
+| `reasoning.strategies.treeOfThought.maxCost` | `number` | no |  |
+| `reasoning.strategies.treeOfThought.pruningThreshold` | `number` | **yes** |  |
+| `reasoning.strategies.treeOfThought.skipBfsForTrivial` | `boolean` | no |  |
+| `reasoning.strategies.treeOfThought.synthesis` | `auto` \| `fast` \| `deep` \| `custom` \| `off` | no |  |
+| `reasoning.strategies.treeOfThought.synthesisModel` | `string` | no |  |
+| `reasoning.strategies.treeOfThought.synthesisProvider` | `string` | no |  |
+| `reasoning.strategies.treeOfThought.synthesisTemperature` | `number` | no |  |
 | `reasoning.synthesis` | `auto` \| `fast` \| `deep` \| `custom` \| `off` | no |  |
 | `reasoning.synthesisModel` | `string` | no |  |
 | `reasoning.synthesisProvider` | `string` | no |  |

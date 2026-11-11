@@ -303,10 +303,7 @@ describe("dual-API schema-completeness round-trip pins", () => {
     expect(cfg.modelRouting).toEqual({ minTier: "sonnet" });
     expect(cfg.execution?.llmTimeoutMs).toBe(600_000);
     const rebuilt = (await agentConfigToBuilder(cfg)).toConfig();
-    // `features` is excluded: a bare builder's default reactive intelligence
-    // re-applies as withReactiveIntelligence(), which also sets
-    // features.observability (a separate, older asymmetry).
-    expect({ ...rebuilt, features: undefined }).toEqual({ ...cfg, features: undefined });
+    expect(rebuilt).toEqual(cfg);
   });
 
   it("withTools({ terminal: {...} }) keeps the shell data options", async () => {
@@ -323,6 +320,55 @@ describe("dual-API schema-completeness round-trip pins", () => {
     expect(rebuilt.tools?.terminal).toEqual(terminal);
   });
 
+  it("reasoning data options (strategies, adaptive, parallelToolCalls, observationSummary) round-trip", async () => {
+    const { ReactiveAgents } = await import("../src/builder.js");
+    const reasoning = {
+      strategies: { reflexion: { maxRetries: 2, selfCritiqueDepth: "shallow" as const } },
+      adaptive: { enabled: true, learning: false },
+      parallelToolCalls: false,
+      observationSummary: "auto" as const,
+    };
+    const out = ReactiveAgents.create().withName("r").withProvider("anthropic").withReasoning(reasoning).toConfig();
+    expect(out.reasoning).toEqual(reasoning);
+    const rebuilt = (await agentConfigToBuilder(agentConfigFromJSON(agentConfigToJSON(out)))).toConfig();
+    expect(rebuilt).toEqual(out);
+  });
+});
+
+// ─── Whole-config round trip, `features` included ────────────────────────────
+// toConfig() -> agentConfigToBuilder() -> toConfig() must be the identity. RED
+// before the fix: a bare builder serialized its default observability options
+// (`{ verbosity: "minimal" }`) while observability was off, and re-applying them
+// called .withObservability(), so the reloaded agent gained
+// features.observability: true. Disabled reactive intelligence also came back on.
+describe("builder -> config -> builder round trip is the identity", () => {
+  const roundTrip = async (cfg: AgentConfig): Promise<AgentConfig> =>
+    (await agentConfigToBuilder(agentConfigFromJSON(agentConfigToJSON(cfg)))).toConfig();
+
+  it("minimal builder", async () => {
+    const { ReactiveAgents } = await import("../src/builder.js");
+    const cfg = ReactiveAgents.create().withName("min").withProvider("anthropic").toConfig();
+    expect(cfg.observability).toBeUndefined();
+    expect(cfg.features?.observability).toBeUndefined();
+    expect(await roundTrip(cfg)).toEqual(cfg);
+  });
+
+  it("builder with reactive intelligence disabled", async () => {
+    const { ReactiveAgents } = await import("../src/builder.js");
+    const cfg = ReactiveAgents.create()
+      .withName("no-ri")
+      .withProvider("anthropic")
+      .withReactiveIntelligence(false)
+      .toConfig();
+    expect(cfg.features?.reactiveIntelligence).toBe(false);
+    expect(await roundTrip(cfg)).toEqual(cfg);
+  });
+
+  it("maximal builder (built from MAXIMAL_CONFIG)", async () => {
+    const cfg = (await agentConfigToBuilder(MAXIMAL_CONFIG)).toConfig();
+    expect(cfg.features?.observability).toBe(true);
+    expect(await roundTrip(cfg)).toEqual(cfg);
+  }, 15000);
 });
 
 // ─── Bidirectional drift guard for HarnessConfigSchema <-> HarnessConfig ────

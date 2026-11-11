@@ -187,6 +187,11 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (ro?.synthesisModel !== undefined) r["synthesisModel"] = ro.synthesisModel;
     if (ro?.synthesisProvider !== undefined) r["synthesisProvider"] = ro.synthesisProvider;
     if (ro?.synthesisTemperature !== undefined) r["synthesisTemperature"] = ro.synthesisTemperature;
+    // Copied whole: the shapes are the JSON schema's own (ReasoningOptionsJsonSchema).
+    if (ro?.strategies !== undefined) r["strategies"] = structuredClone(ro.strategies);
+    if (ro?.adaptive !== undefined) r["adaptive"] = { ...ro.adaptive };
+    if (ro?.parallelToolCalls !== undefined) r["parallelToolCalls"] = ro.parallelToolCalls;
+    if (ro?.observationSummary !== undefined) r["observationSummary"] = ro.observationSummary;
     config["reasoning"] = r;
   }
 
@@ -238,8 +243,11 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     config["memory"] = m;
   }
 
-  // Observability
-  if (state._enableObservability || state._observabilityOptions) {
+  // Observability. Gate on the flag alone: the builder always holds default
+  // options (`{ verbosity: "minimal" }`) even when observability is off, and
+  // emitting them would make agentConfigToBuilder turn observability on.
+  // Options only take effect when the flag is on (runtime-construction.ts).
+  if (state._enableObservability) {
     const o: Record<string, unknown> = {};
     const oo = state._observabilityOptions;
     if (oo?.verbosity) o["verbosity"] = oo.verbosity;

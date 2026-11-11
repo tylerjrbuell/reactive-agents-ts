@@ -11,6 +11,7 @@ import { LLMProviderType } from "@reactive-agents/llm-provider";
 import type { ReactiveAgentBuilder } from "./builder.js";
 import type { AuthoredApprovalPolicy } from "@reactive-agents/reasoning";
 import { HarnessConfigSchema } from "./harness-schema.js";
+import { ReasoningOptionsJsonSchema } from "./reasoning-options-schema.js";
 import { agentConfigToBuilderCalls, applyBuilderCall } from "./builder/config-calls.js";
 
 // ─── Provider Schema ──────────────────────────────────────────────────────────
@@ -63,6 +64,18 @@ export const ReasoningConfigSchema = Schema.Struct({
   synthesisProvider: Schema.optional(Schema.String),
   /** Sampling temperature for LLM synthesis. */
   synthesisTemperature: Schema.optional(Schema.Number),
+  /**
+   * Per-strategy settings (`reactive`, `planExecute`, `treeOfThought`,
+   * `reflexion`), each with optional synthesis overrides. Same shape as
+   * `.withReasoning({ strategies })`.
+   */
+  strategies: ReasoningOptionsJsonSchema.fields.strategies,
+  /** Adaptive strategy selection: `{ enabled, learning }`. */
+  adaptive: ReasoningOptionsJsonSchema.fields.adaptive,
+  /** `false` runs the tool calls of one model response one at a time. Default: `true`. */
+  parallelToolCalls: ReasoningOptionsJsonSchema.fields.parallelToolCalls,
+  /** Model-based fact extraction for large tool results: `true`, `false` (default) or `"auto"`. */
+  observationSummary: ReasoningOptionsJsonSchema.fields.observationSummary,
 });
 
 /**
