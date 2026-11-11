@@ -12,6 +12,8 @@ import { modelThroughputRouter } from "./api/model-throughput.js";
 import { chatRouter } from "./api/chat.js";
 import { memoryRouter } from "./api/memory.js";
 import { MemoryInspector } from "./services/memory-inspector.js";
+import { agentSkillsRouter } from "./api/agent-skills.js";
+import { AgentSkillsService } from "./services/agent-skills.js";
 import { promptRouter } from "./api/prompts.js";
 import { templateResolveRouter } from "./api/template-resolve.js";
 import { healthRouter } from "./api/health.js";
@@ -145,6 +147,7 @@ export async function startCortexServer(
     .use(modelThroughputRouter(runtime.rawDb))
     .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService))
     .use(memoryRouter(memoryInspector, runtime.rawDb))
+    .use(agentSkillsRouter(new AgentSkillsService(memoryInspector), runtime.rawDb))
     .use(promptRouter(runtime.rawDb))
     .use(templateResolveRouter())
     .use(workspaceRouter(runtime.rawDb))

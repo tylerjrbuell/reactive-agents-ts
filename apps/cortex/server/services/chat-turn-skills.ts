@@ -10,12 +10,10 @@
  * one counts for the run the session started last (a chat session runs one turn at
  * a time).
  *
- * Per-turn pins: the framework takes run pins on `agent.run/runStream(task,
- * { skills: { activate } })`, but `AgentSession.runStream` / `chat` do not forward
- * them yet. Until they do, a pinned turn runs on an agent built with the pins added
- * to `withSkills({ activate })` ({@link withTurnSkillPins}); the session config is
- * never written, and the agent is dropped after the turn so the next one rebuilds
- * without them.
+ * Per-turn pins: `AgentSession.runStream` / `chat` take `{ skills: { activate } }`
+ * and forward it to the turn's run ({@link turnSkillsOption}). The cached session
+ * agent is kept; the session config is never written, so the next turn runs
+ * without the pins.
  */
 import type { AgentEvent } from "@reactive-agents/core";
 import { foldRunSkills, type RunSkillsView } from "@reactive-agents/ui-core";
@@ -95,14 +93,12 @@ export function turnSkillPinsOf(raw: unknown): string[] {
 }
 
 /**
- * The session config with `pins` added to `skills.activate` for one turn (see the
- * module note). Returns `cfg` itself when there are no pins.
+ * The per-turn run option for `pins`: `{ skills: { activate } }`, spread into
+ * `session.runStream` / `session.chat` (runtime session-turn skills). `{}` without
+ * pins, so an unpinned turn passes nothing.
  */
-export function withTurnSkillPins(cfg: Record<string, unknown>, pins: readonly string[]): Record<string, unknown> {
-  if (pins.length === 0) return cfg;
-  const cur = cfg.skills && typeof cfg.skills === "object" && !Array.isArray(cfg.skills) ? (cfg.skills as Record<string, unknown>) : {};
-  const activate = Array.isArray(cur.activate) ? cur.activate.filter((x): x is string => typeof x === "string") : [];
-  const merged = [...activate];
-  for (const p of pins) if (!merged.some((n) => n.toLowerCase() === p.toLowerCase())) merged.push(p);
-  return { ...cfg, skills: { ...cur, paths: Array.isArray(cur.paths) ? cur.paths : [], activate: merged } };
+export function turnSkillsOption(
+  pins: readonly string[],
+): { readonly skills: { readonly activate: readonly string[] } } | Record<string, never> {
+  return pins.length > 0 ? { skills: { activate: [...pins] } } : {};
 }

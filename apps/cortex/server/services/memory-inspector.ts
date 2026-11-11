@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { defaultUserMemoryPath } from "@reactive-agents/memory";
 import {
   ReactiveAgents,
+  type ReactiveAgent,
   type AgentMemoryHandle,
   type EpisodicMemoryItem,
   type ProceduralMemoryItem,
@@ -176,6 +177,7 @@ export function isSafeAgentId(agentId: string): boolean {
 }
 
 interface Built {
+  readonly agent: ReactiveAgent;
   readonly memory: AgentMemoryHandle;
   readonly dispose: () => Promise<void>;
 }
@@ -192,8 +194,8 @@ export class MemoryInspector {
 
   constructor(private readonly dbPathOf: (agentId: string) => string = memoryDbPathOf) {}
 
-  /** The memory handle for an agent, or `undefined` when it has no database (nothing is created). */
-  private async handle(agentId: string): Promise<AgentMemoryHandle | undefined> {
+  /** The built inspector agent, or `undefined` when it has no database (nothing is created). */
+  private async built(agentId: string): Promise<Built | undefined> {
     if (!isSafeAgentId(agentId)) return undefined;
     const dbPath = this.dbPathOf(agentId);
     if (!existsSync(dbPath)) return undefined;
@@ -205,11 +207,36 @@ export class MemoryInspector {
         .withProvider("test")
         .withMemory({ dbPath })
         .build()
-        .then((agent) => ({ memory: agent.memory(), dispose: () => agent.dispose() }));
+        .then((agent) => ({ agent, memory: agent.memory(), dispose: () => agent.dispose() }));
       this.agents.set(agentId, pending);
       pending.catch(() => this.agents.delete(agentId));
     }
-    return (await pending).memory;
+    return pending;
+  }
+
+  /** The memory handle for an agent, or `undefined` when it has no database (nothing is created). */
+  private async handle(agentId: string): Promise<AgentMemoryHandle | undefined> {
+    return (await this.built(agentId))?.memory;
+  }
+
+  /** The database path the framework uses for `agentId` (see {@link memoryDbPathOf}). */
+  dbPathFor(agentId: string): string {
+    return this.dbPathOf(agentId);
+  }
+
+  /**
+   * Run `f` on the inspector agent for `agentId` (test provider, the agent's own
+   * memory database). `missing` when the agent has no database; nothing is created.
+   * The living-skills service reads and changes the agent's SkillStore through it.
+   */
+  async withAgent<A>(agentId: string, f: (agent: ReactiveAgent) => Promise<A>): Promise<MemoryResult<A>> {
+    try {
+      const b = await this.built(agentId);
+      if (!b) return { ok: false, reason: "missing", error: `No memory database for agent "${agentId}"` };
+      return { ok: true, value: await f(b.agent) };
+    } catch (e) {
+      return { ok: false, reason: isNotFound(e) ? "missing" : "error", error: errorText(e) };
+    }
   }
 
   private async call<A>(agentId: string, f: (m: AgentMemoryHandle) => Promise<A>): Promise<MemoryResult<A>> {

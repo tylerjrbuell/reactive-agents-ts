@@ -57,8 +57,16 @@ export type SkillCatalogRow =
   | { t: "ws"; s: WorkspaceSkillSummary }
   | { t: "sql"; s: SkillRow; rowKey: string };
 
+/** The Skills tab's two views: an agent's stored (living) skills, or SKILL.md files. */
+export type SkillsView = "agent" | "files";
+
 /** Skills tab view state the Lab page keeps across tab switches. */
 export type LabSkillsUi = {
+  view: SkillsView;
+  /** Agent whose stored skills the Agent skills view shows (and library moves go into). */
+  agentId: string;
+  /** Bumped after a library row moves in, so the agent view reloads. */
+  agentReload: number;
   filter: string;
   showNewSkillForm: boolean;
   newSkillName: string;
@@ -75,6 +83,9 @@ export type LabSkillsUi = {
 /** A fresh Skills tab view. */
 export function emptySkillsUi(): LabSkillsUi {
   return {
+    view: "agent",
+    agentId: "",
+    agentReload: 0,
     filter: "",
     showNewSkillForm: false,
     newSkillName: "",
@@ -242,7 +253,7 @@ export function skillCatalogRows(workspaceSkills: readonly WorkspaceSkillSummary
     for (const s of wsFiltered) rows.push({ t: "ws", s });
   }
   if (sqlFiltered.length > 0) {
-    rows.push({ t: "hdr", label: "Cortex library", note: "kept in cortex.db, not sent to agents" });
+    rows.push({ t: "hdr", label: "Cortex library (deprecated)", note: "not sent to agents; move each into an agent's skills" });
     for (let i = 0; i < sqlFiltered.length; i++) {
       const s = sqlFiltered[i]!;
       rows.push({ t: "sql", s, rowKey: `sql-${String(s.id ?? `i${i}`)}` });

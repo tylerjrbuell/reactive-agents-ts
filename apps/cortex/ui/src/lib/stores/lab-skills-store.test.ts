@@ -85,7 +85,7 @@ describe("skillCatalogRows", () => {
     expect(rows.map((r) => (r.t === "hdr" ? `#${r.label}: ${r.note}` : r.t === "ws" ? r.s.name : r.rowKey))).toEqual([
       "#Workspace: agents can load these",
       "a",
-      "#Cortex library: kept in cortex.db, not sent to agents",
+      "#Cortex library (deprecated): not sent to agents; move each into an agent's skills",
       "sql-1",
       "sql-i1",
     ]);

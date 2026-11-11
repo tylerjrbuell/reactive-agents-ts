@@ -12,7 +12,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 import { openDatabase } from "../db/schema.js";
 import { getChatSession, getChatTurns } from "../db/chat-queries.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
-import { recordSkillActivity, turnSkillPinsOf, withTurnSkillPins, withTurnSkills } from "../services/chat-turn-skills.js";
+import { recordSkillActivity, turnSkillPinsOf, turnSkillsOption, withTurnSkills } from "../services/chat-turn-skills.js";
 
 describe("recordSkillActivity", () => {
   it("keeps each run's record and activations; an activation without taskId counts for the current run", async () => {
@@ -47,10 +47,9 @@ describe("per-turn pins", () => {
     expect(turnSkillPinsOf([" a ", "A", "", 3, "b"])).toEqual(["a", "b"]);
     expect(turnSkillPinsOf("a")).toEqual([]);
   });
-  it("withTurnSkillPins adds names to activate and leaves cfg alone without pins", () => {
-    const cfg = { provider: "test", skills: { paths: ["/x"], activate: ["keep"] } };
-    expect(withTurnSkillPins(cfg, [])).toBe(cfg);
-    expect(withTurnSkillPins(cfg, ["keep", "new"]).skills).toEqual({ paths: ["/x"], activate: ["keep", "new"] });
+  it("turnSkillsOption is the session-turn run option, empty without pins", () => {
+    expect(turnSkillsOption([])).toEqual({});
+    expect(turnSkillsOption(["keep", "new"])).toEqual({ skills: { activate: ["keep", "new"] } });
   });
   it("withTurnSkills leaves a trace without skills unchanged", () => {
     expect(withTurnSkills(undefined, undefined)).toBeUndefined();

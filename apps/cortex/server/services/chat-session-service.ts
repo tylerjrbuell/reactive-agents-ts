@@ -43,7 +43,7 @@ import {
   parseDocumentSpecs,
 } from "./cortex-agent-config.js";
 import { migrateChatSkillsConfig, skillRootOf } from "./workspace-skills.js";
-import { recordSkillActivity, turnSkillPinsOf, withTurnSkillPins, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
+import { recordSkillActivity, turnSkillPinsOf, turnSkillsOption, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
 import { detectToolCallShape } from "@reactive-agents/tools";
 import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
@@ -708,12 +708,7 @@ export class ChatSessionService {
     try {
       let entry: CachedChatSession;
       try {
-        if (turnPins.length > 0) {
-          // Interim until AgentSession.runStream takes `skills`: a pinned turn gets its own agent, dropped at release.
-          await this.evictSession(sessionId);
-          this.evictAfterTurn.add(sessionId);
-        }
-        entry = await this.getOrBuildSession(sessionId, withTurnSkillPins(cfg, turnPins), row.stableAgentId);
+        entry = await this.getOrBuildSession(sessionId, cfg, row.stableAgentId);
       } catch (e) {
         yield failTurn(e);
         return;
@@ -724,7 +719,11 @@ export class ChatSessionService {
       // wrapped in the SSE event shape so Run Chat and the main Chat panel behave consistently.
       if (!enableTools && !streamReasoningSteps) {
         try {
-          const chatReply = await entry.session.chat(message, { useTools: false, ...(posture !== undefined ? { posture } : {}) });
+          const chatReply = await entry.session.chat(message, {
+            useTools: false,
+            ...(posture !== undefined ? { posture } : {}),
+            ...turnSkillsOption(turnPins),
+          });
           const replyText = chatReply.message;
           const tokensUsed = chatReply.tokens ?? 0;
           const toolsUsed = chatReply.toolsUsed ?? [];
@@ -787,6 +786,7 @@ let tokensUsed = 0;
           density: "full",
           signal: stop.signal,
           ...(posture !== undefined ? { posture } : {}),
+          ...turnSkillsOption(turnPins),
         })) {
           recorder.record(event);
           if (event._tag === "ContextPressure") {

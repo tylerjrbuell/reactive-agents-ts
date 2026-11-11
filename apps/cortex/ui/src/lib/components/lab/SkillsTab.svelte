@@ -10,6 +10,10 @@
   import Panel from "$lib/components/kit/Panel.svelte";
   import Textarea from "$lib/components/kit/Textarea.svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import Tabs from "$lib/components/kit/Tabs.svelte";
+  import AgentSkillsPanel from "$lib/components/skills/AgentSkillsPanel.svelte";
+  import { moveLibrarySkill } from "$lib/agent-skills.js";
+  import { tabId, tabPanelId } from "$lib/tablist.js";
   import {
     formatYamlValue,
     skillCatalogRows,
@@ -32,6 +36,24 @@
     onDelete: (skill: SkillRow) => void;
   }
   let { store, ui = $bindable(), scope, onDelete }: Props = $props();
+
+  const VIEWS = [
+    { id: "agent", label: "Agent skills" },
+    { id: "files", label: "Skill files" },
+  ] as const;
+
+  async function moveToAgent(s: SkillRow) {
+    const id = s.id != null ? String(s.id) : "";
+    if (!id || ui.agentId === "") return;
+    try {
+      const moved = await moveLibrarySkill(ui.agentId, id);
+      toast.success("Moved into agent skills", `${moved.name} is now a skill of ${ui.agentId}`);
+      ui.agentReload += 1;
+      await store.reloadDb();
+    } catch (e) {
+      toast.error("Move failed", e instanceof Error ? e.message : String(e));
+    }
+  }
 
   const skills = $derived($store.skills);
   const workspaceSkills = $derived($store.workspaceSkills);
@@ -128,6 +150,18 @@
 </script>
 
 <div class="skills">
+  <Tabs items={VIEWS} bind:value={ui.view} label="Skills view" idBase="lab-skills-view" />
+
+  {#if ui.view === "agent"}
+  <div class="view" role="tabpanel" id={tabPanelId("lab-skills-view", "agent")} aria-labelledby={tabId("lab-skills-view", "agent")}>
+    <p class="intro">
+      Skills an agent learned from its runs or had loaded, kept with its memory. They gain confidence as runs succeed, get refined into new
+      versions, and roll back when a refinement does worse.
+    </p>
+    <AgentSkillsPanel bind:agentId={ui.agentId} workspaceRoot={scope.root ?? ""} reloadKey={ui.agentReload} />
+  </div>
+  {:else}
+  <div class="view" role="tabpanel" id={tabPanelId("lab-skills-view", "files")} aria-labelledby={tabId("lab-skills-view", "files")}>
   <div class="head">
     <p class="intro">
       Skills are <code>&lt;name&gt;/SKILL.md</code> folders (YAML front matter and markdown). An agent finds them in its workspace
@@ -203,6 +237,15 @@
                 <span class="item-name"><Badge data>db</Badge> {row.s.name ?? row.s.id ?? "skill"}</span>
                 <span class="item-desc">{row.s.description ?? ""}</span>
               </button>
+              <IconButton
+                icon="agents"
+                size="sm"
+                label={ui.agentId === ""
+                  ? "Pick an agent under Agent skills to move this skill into"
+                  : `Move into agent skills (${ui.agentId})`}
+                disabled={ui.agentId === ""}
+                onclick={() => void moveToAgent(row.s)}
+              />
               <IconButton icon="trash" size="sm" label={`Delete ${row.s.name ?? "skill"}`} onclick={() => onDelete(row.s)} />
             </div>
           {/if}
@@ -287,10 +330,13 @@
       {/if}
     </aside>
   </div>
+  </div>
+  {/if}
 </div>
 
 <style>
   .skills { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 32px 24px; overflow: hidden; }
+  .view { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
   .head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .intro { margin: 0; max-width: 72ch; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); line-height: var(--cortex-lh-ui); }
   .head-actions { display: flex; gap: 8px; }
