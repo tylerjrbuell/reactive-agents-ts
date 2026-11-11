@@ -181,6 +181,7 @@ GIANT_BAR=1000
 # 2026-11-10 AgentResult.outcome: builder/types.ts 1341->1063 (AgentResult + AgentResultMetadata moved verbatim to builder/agent-result.ts, re-exported; AgentOutcome added there).
 # 2026-11-10 tool-result pairing: act.ts 1127->1124 (end-of-round scratchpad sync moved to act/scratchpad-sync.ts; it now merges kernel writes, which a tool's Ref replacement used to drop).
 # 2026-11-11 git/gh preset read-only: shell-execution.ts 874->841 (splitCommandSegments moved verbatim to skills/shell-command-segments.ts; +gitReadOnly field and delegate check to skills/shell-git-readonly.ts).
+# 2026-11-11 shell approval rules: shell-execution.ts 841->839 (gitReadOnly field moved to ShellGitReadOnlyConfig in skills/shell-git-readonly.ts, which ShellExecuteConfig extends; +approvalCommands there).
 # 2026-11-11 stop mid-loop: reactive-agent.ts 2049->2029 (emitAgentTerminated moved verbatim to agent/run-contract.ts publishAgentTerminated; run() arms armAbortTerminal so AgentTerminated lands before terminate() resolves).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2029"
@@ -204,7 +205,7 @@ SIZE_BASELINE=(
   "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1073"
-  "tools/src/skills/shell-execution.ts:841"
+  "tools/src/skills/shell-execution.ts:839"
   "runtime/src/types.ts:1051"
   "observability/src/exporters/console-exporter.ts:1042"
   "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:577"

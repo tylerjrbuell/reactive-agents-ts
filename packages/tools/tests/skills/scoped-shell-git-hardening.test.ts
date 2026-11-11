@@ -229,6 +229,37 @@ describe("git/gh preset: read-only subcommands run without approval", () => {
   });
 });
 
+describe("git/gh preset with approvalCommands: a matched write runs (the approval gate ran first)", () => {
+  const approved = (command: string): Promise<ShellResult> =>
+    Effect.runPromise(
+      scopedShellTool(["git", "gh"], { cwd: repo, allowUnsafeCwd: true, approvalCommands: ["git push"] }).handler({
+        command,
+      }),
+    ) as Promise<ShellResult>;
+
+  test("`git push` is refused without rules and runs with ['git push']; hooks stay off", async () => {
+    const refused = await preset("git push origin HEAD:refs/heads/approved");
+    expect(refused.executed).toBe(false);
+    expect(refused.error).toContain("read-only");
+
+    const r = await approved("git push origin HEAD:refs/heads/approved");
+    expect(r.error).toBeUndefined();
+    expect(r.executed).toBe(true);
+    expect(r.exitCode).toBe(0);
+    const ref = spawnSync("git", ["rev-parse", "--verify", "refs/heads/approved"], { cwd: upstream, encoding: "utf8" });
+    expect(ref.status).toBe(0);
+    expect(existsSync(marker("hook-ran"))).toBe(false);
+  });
+
+  test("a write the rules do not name is still refused and .git/config is unchanged", async () => {
+    const before = readFileSync(join(repo, ".git", "config"), "utf8");
+    const r = await approved(`git config alias.x '!touch ${marker("pwned")}'`);
+    expect(r.executed).toBe(false);
+    expect(r.error).toContain("read-only");
+    expect(readFileSync(join(repo, ".git", "config"), "utf8")).toBe(before);
+  });
+});
+
 describe("git config inheritance passes only the identity", () => {
   test("the shell's global config has user.name / user.email and nothing else", async () => {
     const handler = shellExecuteHandler({ inheritGitConfig: true, cwd: repo, allowUnsafeCwd: true });

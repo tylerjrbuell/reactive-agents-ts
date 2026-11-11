@@ -10,7 +10,7 @@ import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sa
 import { sandboxDockerEnabled } from "../flags.js";
 import { capShellOutput, runHostShell, timeoutMarker } from "./shell-host-process.js";
 import { GIT_BLOCKED_RULES } from "./shell-git-guard.js";
-import { readOnlyGitDenial } from "./shell-git-readonly.js";
+import { readOnlyGitDenial, type ShellGitReadOnlyConfig } from "./shell-git-readonly.js";
 import { splitCommandSegments } from "./shell-command-segments.js";
 import {
   DEFAULT_ALLOWED_COMMANDS,
@@ -397,7 +397,7 @@ function resolveCommandDirectories(commands: ReadonlyArray<string>): ReadonlyArr
 }
 
 /** Configuration for the shell-execute handler factory. */
-export interface ShellExecuteConfig {
+export interface ShellExecuteConfig extends ShellGitReadOnlyConfig {
   /** Working directory. Must be under /tmp unless `allowUnsafeCwd` is true. */
   readonly cwd?: string;
   /** Maximum characters to return in output (default: 4000). */
@@ -428,8 +428,6 @@ export interface ShellExecuteConfig {
   readonly allowUnsafeCwd?: boolean;
   /** Host mode: git gets a per-call global config with only the user's name and email (skills/shell-git-env.ts). Set by `scopedShellConfig` when git is allowed. */
   readonly inheritGitConfig?: boolean;
-  /** git and gh run only read-only subcommands (skills/shell-git-readonly.ts); hooks, fsmonitor and system config off. Set by `scopedShellConfig`. */
-  readonly gitReadOnly?: boolean;
   /**
    * Execution substrate (F1b). `"host"` (default) runs the command in the
    * process sandbox with the input filters. `"docker"` opts into running the
@@ -707,7 +705,7 @@ export function shellExecuteHandler(
         }
 
         // ── 3c. Read-only git/gh preset: allow-list of subcommands ──
-        const gitDenial = config?.gitReadOnly === true ? readOnlyGitDenial(command) : null;
+        const gitDenial = config?.gitReadOnly === true ? readOnlyGitDenial(command, config.approvalCommands) : null;
         if (gitDenial !== null) {
           audit({ command, allowed: false, reason: "git-read-only" });
           return { executed: false, success: false, error: `Command blocked by security policy: ${gitDenial}` };

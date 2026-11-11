@@ -19,6 +19,7 @@
  * user's name and email.
  */
 import { hasOutputRedirect, shellWords, splitCommandSegments } from "./shell-command-segments.js";
+import { segmentMatchesCommandRules } from "./shell-command-rules.js";
 
 /**
  * git subcommands the read-only preset runs. They read the repository;
@@ -240,13 +241,30 @@ function ghReason(args: readonly string[]): string | null {
   return null;
 }
 
+/** The read-only git/gh fields of `ShellExecuteConfig` (skills/shell-execution.ts). */
+export interface ShellGitReadOnlyConfig {
+  /** git and gh run only read-only subcommands (skills/shell-git-readonly.ts); hooks, fsmonitor and system config off. Set by `scopedShellConfig`. */
+  readonly gitReadOnly?: boolean;
+  /**
+   * Command rules (skills/shell-command-rules.ts) the read-only shell runs
+   * after approval: a git/gh segment the read-only allow-list refuses runs
+   * when it matches one, e.g. `["git push"]`. Output redirects stay refused.
+   *
+   * The shell does not ask for approval itself. Pass the same list to the
+   * kernel approval gate (`shellCallMatchesCommandRules`), so a matched
+   * command only reaches the shell after a human approved it.
+   */
+  readonly approvalCommands?: readonly string[];
+}
+
 /**
  * Why `command` is not allowed in the read-only git/gh shell, or `null` when
- * every git/gh segment only reads. Segments for other programs are left to
- * the allow-list. Runs after shell-execute's own checks (allow-list,
- * block-list, expansion), so `command` holds no `$`, backtick or `&`.
+ * every git/gh segment only reads or matches one of `approvalCommands`.
+ * Segments for other programs are left to the allow-list. Runs after
+ * shell-execute's own checks (allow-list, block-list, expansion), so
+ * `command` holds no `$`, backtick or `&`.
  */
-export function readOnlyGitDenial(command: string): string | null {
+export function readOnlyGitDenial(command: string, approvalCommands: readonly string[] = []): string | null {
   if (hasOutputRedirect(command)) {
     return deny("An output redirect (>)", "it writes files, such as .git/config or a hook");
   }
@@ -255,7 +273,7 @@ export function readOnlyGitDenial(command: string): string | null {
     const program = words[0]?.split("/").pop();
     const reason =
       program === "git" ? gitReason(words.slice(1)) : program === "gh" ? ghReason(words.slice(1)) : null;
-    if (reason !== null) return reason;
+    if (reason !== null && !segmentMatchesCommandRules(segment, approvalCommands)) return reason;
   }
   return null;
 }

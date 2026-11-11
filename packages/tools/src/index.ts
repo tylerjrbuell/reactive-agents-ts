@@ -257,7 +257,15 @@ export {
   GIT_READ_ONLY_SUBCOMMANDS,
   GH_READ_ONLY_COMMANDS,
   readOnlyGitDenial,
+  type ShellGitReadOnlyConfig,
 } from "./skills/shell-git-readonly.js";
+// Command-level approval rules: which shell commands need a human's approval.
+export {
+  SHELL_TOOL_NAMES,
+  isShellToolName,
+  commandMatchesRules,
+  shellCallMatchesCommandRules,
+} from "./skills/shell-command-rules.js";
 export {
   shellExecuteHandler,
   DEFAULT_BLOCKED_PATTERNS,

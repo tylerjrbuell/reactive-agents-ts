@@ -76,6 +76,10 @@ const exampleFor = (program: string): string => EXAMPLES[program] ?? `${program}
  * on, a base cannot turn it off): it runs only the read-only subcommands in
  * skills/shell-git-readonly.ts, because it asks for no approval. git sees
  * only the user's name and email (`inheritGitConfig`).
+ *
+ * `base.approvalCommands` passes through: a refused git/gh segment that
+ * matches one of those rules runs (e.g. `["git push"]`). The caller must give
+ * the same rules to the approval gate (`shellCallMatchesCommandRules`).
  */
 export function scopedShellConfig(
   programs: readonly string[],
@@ -118,6 +122,9 @@ export function scopedShellToolFor(
     config.gitReadOnly === true
       ? "Read-only: git status, log, diff, show, blame, grep, fetch, rev-parse, ls-files, branch/tag (list), remote -v and similar; " +
         "gh view/list/status/diff/checks and GET `gh api`. Commits, pushes, config, checkouts, other writes and output redirects (>) are refused."
+      : "",
+    config.gitReadOnly === true && (config.approvalCommands ?? []).length > 0
+      ? `These commands also run, after a human approves the call: ${(config.approvalCommands ?? []).join(", ")}.`
       : "",
     describeShellLocation(config, surface, docker),
     "Paths must stay inside the working directory. Each call is a fresh shell (cd does not persist).",
