@@ -109,4 +109,4 @@ note.md
 .wardens/
 
 # Raw ablation traces stay local (multi-MB); receipts and scripts are committed.
-wiki/Research/Ablations/*/results/traces-*/
+wiki/Research/Ablations/**/traces-*/
