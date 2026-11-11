@@ -176,6 +176,7 @@ async function learning(run: typeof vetoed | typeof paused, runOutcome: RunOutco
       recordOutcome: (_id, success) => Effect.sync(() => void skillOutcomes.push(success)),
       listActive: () => Effect.succeed([]),
       findByTags: () => Effect.succeed([]),
+      delete: () => Effect.void,
     }),
   );
   await Effect.runPromise(

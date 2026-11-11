@@ -250,7 +250,11 @@ export const runReasoningThink = (
     const resumeJson = yield* getRunSlot(resumeStateSlot);
     const resumeState = resumeJson
       ? yield* Effect.try({
-          try: () => deserializeKernelState(resumeJson),
+          // The restored state runs under THIS run's task id, so the kernel's
+          // events carry the same id as AgentStarted/AgentCompleted. A resume
+          // already runs under the checkpoint's id (no change); a fork is a new
+          // run with its own id.
+          try: () => ({ ...deserializeKernelState(resumeJson), taskId: String(c.taskId) }),
           // Preserve the underlying KernelCodecError (rather than Effect's
           // generic UnknownException wrapper) so errorTag() below reports
           // the real tag/message for triage.

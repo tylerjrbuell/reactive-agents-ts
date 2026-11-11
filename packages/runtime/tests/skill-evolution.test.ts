@@ -64,6 +64,7 @@ function makeMockProceduralMemory(opts: {
   recordCallLog?: Array<{ id: unknown; success: boolean }>;
 }) {
   return Layer.succeed(ProceduralMemoryService, {
+    delete: () => Effect.void,
     store: (entry: any) => {
       opts.storeCallLog?.push(entry);
       return Effect.succeed(entry.id as any);

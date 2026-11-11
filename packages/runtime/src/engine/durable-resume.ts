@@ -47,7 +47,34 @@ export interface ResumePayload {
   readonly toolEffects: readonly ToolEffectRow[];
   /** Iteration of the restored checkpoint — bounds which effect rows can be re-derived. */
   readonly checkpointIteration: number;
+  /**
+   * The task id the run was captured under (the restored kernel state's own
+   * `taskId`). The resumed run executes under it, so its lifecycle events and
+   * its kernel events carry one id. Absent when the checkpoint cannot be read
+   * (the resume then degrades to a fresh run under the durable run id).
+   */
+  readonly taskId?: string;
 }
+
+/**
+ * The task id a checkpoint was captured under: `state.taskId` of the kernel
+ * codec envelope (`{ codecVersion, state }`). The canonical id of a durable
+ * run's events is its TASK id; the durable `runId` names the store row only.
+ * Returns `undefined` on unreadable input or an empty id.
+ */
+export const checkpointTaskId = (stateJson: string): string | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stateJson);
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const state = (parsed as { state?: unknown }).state;
+  if (typeof state !== "object" || state === null) return undefined;
+  const taskId = (state as { taskId?: unknown }).taskId;
+  return typeof taskId === "string" && taskId.length > 0 ? taskId : undefined;
+};
 
 /**
  * Load + validate the resume payload for `runId` from the RunStore at `dbPath`.
@@ -88,11 +115,13 @@ export const loadResumePayload = (params: {
       );
     }
     const toolEffects = yield* store.listToolEffects(params.runId);
+    const taskId = checkpointTaskId(checkpoint.stateJson);
     return {
       run,
       stateJson: checkpoint.stateJson,
       toolEffects,
       checkpointIteration: checkpoint.iteration,
+      ...(taskId !== undefined ? { taskId } : {}),
     };
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
 

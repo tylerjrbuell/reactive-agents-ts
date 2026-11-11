@@ -308,7 +308,9 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 //      effect already happened. No map is bound when nothing was
                 //      recorded (runs with no recorded effects resume at zero cost).
                 const withRecovery = deps.buildRunTaskEffect(payload.run.task, {
-                    taskId: runId,
+                    // One run, one task id: continue under the id the checkpoint
+                    // was captured under, so lifecycle and kernel events agree.
+                    taskId: payload.taskId ?? runId,
                     fileRoot,
                     // The run's own workspace survives the pause (run > builder > ambient).
                     ...workspaceCarry(payload.run.workspace),
@@ -556,7 +558,8 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                         fileRoot,
                         ...workspaceCarry(payload.run.workspace),
                         input: payload.run.task,
-                        taskId: runId,
+                        // The original task id (see resumeRun): one id per run.
+                        taskId: payload.taskId ?? runId,
                         runId,
                         task: payload.run.task,
                         resume: {
@@ -782,7 +785,8 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                         fileRoot,
                         ...workspaceCarry(payload.run.workspace),
                         input: payload.run.task,
-                        taskId: runId,
+                        // The original task id (see resumeRun): one id per run.
+                        taskId: payload.taskId ?? runId,
                         runId,
                         task: payload.run.task,
                         resume: {

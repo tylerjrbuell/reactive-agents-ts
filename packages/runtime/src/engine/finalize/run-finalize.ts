@@ -20,6 +20,7 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { EbLike } from "../runtime-context.js";
 import { readTerminalOutcome } from "./terminal-outcome-read.js";
 import { foldRuntimeAuthority } from "./status-authority.js";
+import { kernelIterationArg } from "./result-verification.js";
 
 // ─── Deps interface ───────────────────────────────────────────────────────────
 
@@ -74,6 +75,18 @@ export const completionVerb = (result: CompletionInput): string => {
 };
 
 type DeliverableArgs = Parameters<typeof deriveReceiptDeliverables>[0];
+
+/**
+ * The run's loop count for `totalIterations`: the kernel's own final
+ * iteration (`metadata.extensions.kernelIteration`, the same numbering as
+ * `ReasoningIterationProgress.iteration`), falling back to the engine
+ * counter on paths with no kernel pass. The engine counter tracks reasoning
+ * STEPS (thought, action and observation each count), so it overstates loops.
+ */
+export const runLoopCount = (
+  engineIteration: number,
+  metadata: { readonly extensions?: Readonly<Record<string, unknown>> } | undefined,
+): number => kernelIterationArg(metadata).kernelIteration ?? engineIteration;
 
 /**
  * The `AgentCompleted` outcome fields: `runOutcome` (the same value as
@@ -174,7 +187,7 @@ export const finalizeRun = (
         taskId: ctx.taskId,
         agentId: config.agentId,
         success: executionSucceeded,
-        totalIterations: ctx.iteration,
+        totalIterations: runLoopCount(ctx.iteration, result.metadata as { extensions?: Readonly<Record<string, unknown>> }),
         totalTokens: ctx.tokensUsed,
         durationMs: Date.now() - executionStartMs,
         ...(!executionSucceeded && result.error ? { error: result.error } : {}),

@@ -84,6 +84,7 @@ describe("skill learning loop — store side", () => {
     const storeCallLog: unknown[] = [];
 
     const MockProceduralMemoryLayer = Layer.succeed(ProceduralMemoryService, {
+      delete: () => Effect.void,
       store: (entry: any) => {
         storeCallLog.push(entry);
         return Effect.succeed(entry.id as any);
@@ -165,6 +166,7 @@ describe("skill learning loop — store side", () => {
     const storeCallLog: unknown[] = [];
 
     const MockProceduralMemoryLayer = Layer.succeed(ProceduralMemoryService, {
+      delete: () => Effect.void,
       store: (entry: any) => {
         storeCallLog.push(entry);
         return Effect.succeed(entry.id as any);
