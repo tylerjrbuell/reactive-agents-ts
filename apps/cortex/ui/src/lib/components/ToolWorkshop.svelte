@@ -2,45 +2,25 @@
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { confirmAction } from "$lib/stores/confirm-store.js";
-
-  type ToolKind = "built-in" | "meta" | "mcp" | "custom";
-  /** User-creatable origins — one panel, no separate pages per type */
-  type CreateKind = "custom" | "mcp";
-
-  type CatalogParam = {
-    name: string;
-    type: string;
-    required: boolean;
-    description: string;
-    enum?: string[];
-  };
-
-  type CatalogEntry = {
-    id: string;
-    kind: ToolKind;
-    name: string;
-    displayName: string;
-    description: string;
-    parameters: CatalogParam[];
-    executable: boolean;
-    executableHint?: string;
-    serverId?: string;
-    serverName?: string;
-    disabled?: boolean;
-    metrics: {
-      callCount: number;
-      successRatePct: number | null;
-      avgDurationMs: number | null;
-      lastUsedAt: number | null;
-    };
-  };
-
-  type McpListRow = {
-    serverId: string;
-    name: string;
-    config: Record<string, unknown>;
-    tools: { toolName: string; description?: string }[];
-  };
+  import ToolCatalogList from "$lib/components/tools/ToolCatalogList.svelte";
+  import ToolInspector from "$lib/components/tools/ToolInspector.svelte";
+  import ToolTestRunner from "$lib/components/tools/ToolTestRunner.svelte";
+  import CreateCustomToolForm from "$lib/components/tools/CreateCustomToolForm.svelte";
+  import McpServerForm from "$lib/components/tools/McpServerForm.svelte";
+  import {
+    EMPTY_MCP_DRAFT,
+    buildMcpPayload,
+    defaultRequestJson,
+    filterCatalog,
+    mcpDraftFromRow,
+    mcpDraftJsonError,
+    previewMcpImport,
+    type CatalogEntry,
+    type CatalogParam,
+    type CreateKind,
+    type McpDraft,
+    type McpListRow,
+  } from "$lib/tool-workshop.js";
 
   interface Props {
     serverUrl: string;
@@ -73,14 +53,7 @@
   let selectedMcp = $state<McpListRow | null>(null);
   let mcpRefreshing = $state<string | null>(null);
   let mcpSaving = $state(false);
-  let mcpDraftName = $state("");
-  let mcpDraftTransport = $state<"stdio" | "sse" | "websocket" | "streamable-http">("stdio");
-  let mcpDraftCommand = $state("");
-  let mcpDraftArgs = $state("");
-  let mcpDraftEndpoint = $state("");
-  let mcpDraftHeaders = $state("");
-  let mcpDraftEnv = $state("");
-  let mcpDraftAuth = $state("");
+  let mcpDraft = $state<McpDraft>({ ...EMPTY_MCP_DRAFT });
   let mcpJsonImport = $state("");
   let mcpImporting = $state(false);
   let mcpImportPreview = $state<string | null>(null);
@@ -113,80 +86,29 @@
   }
 
   function resetMcpDraft() {
-    mcpDraftName = "";
-    mcpDraftTransport = "stdio";
-    mcpDraftCommand = "";
-    mcpDraftArgs = "";
-    mcpDraftEndpoint = "";
-    mcpDraftHeaders = "";
-    mcpDraftEnv = "";
-    mcpDraftAuth = "";
-  }
-
-  function openNewMcp() {
-    resetMcpDraft();
-    selectedMcp = null;
-    createKind = "mcp";
-    showCreate = true;
+    mcpDraft = { ...EMPTY_MCP_DRAFT };
   }
 
   function openEditMcp(row: McpListRow) {
     selectedMcp = row;
     createKind = "mcp";
     showCreate = true;
-    const c = row.config;
-    mcpDraftName = typeof c.name === "string" ? c.name : row.name;
-    mcpDraftTransport = (c.transport as typeof mcpDraftTransport) ?? "stdio";
-    mcpDraftCommand = typeof c.command === "string" ? c.command : "";
-    mcpDraftArgs = Array.isArray(c.args) ? (c.args as string[]).join(", ") : "";
-    mcpDraftEndpoint = typeof c.endpoint === "string" ? c.endpoint : "";
-    mcpDraftHeaders = c.headers && typeof c.headers === "object" ? JSON.stringify(c.headers, null, 2) : "";
-    mcpDraftEnv = c.env && typeof c.env === "object" ? JSON.stringify(c.env, null, 2) : "";
-    mcpDraftAuth = (c as { auth?: unknown }).auth && typeof (c as { auth?: unknown }).auth === "object" ? JSON.stringify((c as { auth: unknown }).auth, null, 2) : "";
-  }
-
-  function buildMcpPayload(): Record<string, unknown> {
-    const name = mcpDraftName.trim();
-    const transport = mcpDraftTransport;
-    const body: Record<string, unknown> = { name, transport };
-    if (transport === "stdio") {
-      if (mcpDraftCommand.trim()) body.command = mcpDraftCommand.trim();
-      const args = mcpDraftArgs.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
-      if (args.length > 0) body.args = args;
-    } else {
-      if (mcpDraftEndpoint.trim()) body.endpoint = mcpDraftEndpoint.trim();
-    }
-    if (mcpDraftHeaders.trim()) {
-      body.headers = JSON.parse(mcpDraftHeaders) as Record<string, string>;
-    }
-    if (mcpDraftEnv.trim()) {
-      body.env = JSON.parse(mcpDraftEnv) as Record<string, string>;
-    }
-    if (mcpDraftAuth.trim() && transport !== "stdio") {
-      body.auth = JSON.parse(mcpDraftAuth);
-    }
-    return body;
+    mcpDraft = mcpDraftFromRow(row);
   }
 
   async function saveMcpServer() {
-    if (!mcpDraftName.trim()) {
+    if (!mcpDraft.name.trim()) {
       toast.warning("MCP server name is required");
       return;
     }
-    try {
-      if (mcpDraftHeaders.trim()) JSON.parse(mcpDraftHeaders);
-      if (mcpDraftEnv.trim()) JSON.parse(mcpDraftEnv);
-      if (mcpDraftAuth.trim()) JSON.parse(mcpDraftAuth);
-      if (mcpDraftTransport === "stdio" && mcpDraftAuth.trim()) {
-        throw new Error("auth is only valid for http/sse/streamable-http transports");
-      }
-    } catch {
-      toast.error("Invalid JSON", "Headers or env must be valid JSON objects");
+    const jsonError = mcpDraftJsonError(mcpDraft);
+    if (jsonError) {
+      toast.error("Invalid JSON", jsonError);
       return;
     }
     mcpSaving = true;
     try {
-      const payload = buildMcpPayload();
+      const payload = buildMcpPayload(mcpDraft);
       const isEdit = selectedMcp != null;
       const url = isEdit
         ? `${serverUrl}/api/mcp-servers/${selectedMcp!.serverId}`
@@ -306,83 +228,12 @@
   }
 
   function previewMcpImportJson() {
-    const raw = mcpJsonImport.trim();
-    mcpImportPreview = null;
-    mcpImportPreviewError = null;
-    if (!raw) {
-      mcpImportPreviewError = "Paste JSON to validate/import.";
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      const describeServer = (obj: Record<string, unknown>) => {
-        const hasCommand = typeof obj.command === "string" || Array.isArray(obj.args);
-        const hasUrl = typeof obj.url === "string" || typeof obj.endpoint === "string";
-        return hasCommand ? "stdio" : hasUrl ? "url-based" : "unspecified";
-      };
-      if (Array.isArray(parsed)) {
-        mcpImportPreview = `Detected array with ${parsed.length} server entries.`;
-        return;
-      }
-      if (parsed && typeof parsed === "object") {
-        const rec = parsed as Record<string, unknown>;
-        if (Array.isArray(rec.servers)) {
-          mcpImportPreview = `Detected { servers: [...] } with ${rec.servers.length} entries.`;
-          return;
-        }
-        if (rec.mcpServers && typeof rec.mcpServers === "object" && !Array.isArray(rec.mcpServers)) {
-          const entries = Object.entries(rec.mcpServers as Record<string, unknown>);
-          const hints = entries
-            .slice(0, 3)
-            .map(([name, cfg]) => {
-              const kind = cfg && typeof cfg === "object" ? describeServer(cfg as Record<string, unknown>) : "unspecified";
-              return `${name} (${kind})`;
-            })
-            .join(", ");
-          mcpImportPreview = `Detected Cursor-style mcpServers (${entries.length}): ${hints}${entries.length > 3 ? ", ..." : ""}`;
-          return;
-        }
-        mcpImportPreview = "Detected single server object.";
-        return;
-      }
-      mcpImportPreviewError = "JSON shape is unsupported. Use object/array.";
-    } catch (e) {
-      mcpImportPreviewError = `Invalid JSON: ${String(e)}`;
-    }
+    const r = previewMcpImport(mcpJsonImport);
+    mcpImportPreview = r.preview;
+    mcpImportPreviewError = r.error;
   }
 
-  const filtered = $derived.by(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return catalog;
-    return catalog.filter(
-      (t) =>
-        t.displayName.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q) ||
-        kindLabel(t.kind).toLowerCase().includes(q),
-    );
-  });
-
-  function kindLabel(k: ToolKind): string {
-    if (k === "built-in") return "BUILT-IN";
-    if (k === "meta") return "META";
-    if (k === "mcp") return "MCP";
-    return "CUSTOM";
-  }
-
-  function kindBadgeClass(k: ToolKind): string {
-    if (k === "built-in") return "text-cyan-300/90 border-cyan-500/35 bg-cyan-500/10";
-    if (k === "meta") return "text-violet-300/90 border-violet-500/35 bg-violet-500/10";
-    if (k === "mcp") return "text-amber-300/90 border-amber-500/35 bg-amber-500/10";
-    return "text-emerald-300/90 border-emerald-500/35 bg-emerald-500/10";
-  }
-
-  function relativeTime(ts: number | null): string {
-    if (ts == null) return "—";
-    const d = Date.now() - ts;
-    if (d < 60000) return "just now";
-    if (d < 3600000) return `${Math.round(d / 60000)}m ago`;
-    return `${Math.round(d / 3600000)}h ago`;
-  }
+  const filtered = $derived(filterCatalog(catalog, search));
 
   async function loadCatalog() {
     loading = true;
@@ -405,14 +256,7 @@
     responseJson = "";
     responseMs = null;
     responseOk = null;
-    const o: Record<string, unknown> = {};
-    for (const p of e.parameters) {
-      if (p.enum && p.enum.length > 0) o[p.name] = p.enum[0]!;
-      else if (p.type === "number") o[p.name] = 0;
-      else if (p.type === "boolean") o[p.name] = false;
-      else o[p.name] = "";
-    }
-    requestJson = Object.keys(o).length > 0 ? JSON.stringify(o, null, 2) : "{}";
+    requestJson = defaultRequestJson(e.parameters);
   }
 
   async function runTest() {
@@ -468,44 +312,29 @@
     URL.revokeObjectURL(a.href);
   }
 
+  /** Clipboard copy; clipboard errors are ignored. */
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // ignore clipboard errors
+    }
+  }
+
   async function copyToolSchema() {
     if (!selected) return;
-    try {
-      const schema = {
-        name: selected.name,
-        displayName: selected.displayName,
-        description: selected.description,
-        parameters: selected.parameters,
-      };
-      await navigator.clipboard.writeText(JSON.stringify(schema, null, 2));
-    } catch {
-      // ignore clipboard errors
-    }
+    const schema = {
+      name: selected.name,
+      displayName: selected.displayName,
+      description: selected.description,
+      parameters: selected.parameters,
+    };
+    await copy(JSON.stringify(schema, null, 2));
   }
 
-  async function copyRequestJson() {
-    try {
-      await navigator.clipboard.writeText(requestJson);
-    } catch {
-      // ignore clipboard errors
-    }
-  }
-
-  async function copyResponseJson() {
-    try {
-      await navigator.clipboard.writeText(responseJson);
-    } catch {
-      // ignore clipboard errors
-    }
-  }
-
-  async function copyMcpConfig() {
-    if (!selectedMcp) return;
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(selectedMcp.config, null, 2));
-    } catch {
-      // ignore clipboard errors
-    }
+  async function copyMcpConfig(row: McpListRow) {
+    selectedMcp = row;
+    await copy(JSON.stringify(row.config, null, 2));
   }
 
   async function toggleCustomDisabled() {
@@ -669,336 +498,46 @@
       </div>
 
       {#if createKind === "custom"}
-        <div class="space-y-3 pt-1 border-t border-outline-variant/15">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label class="text-[9px] font-mono text-outline/60 uppercase block mb-1" for="tw-lab-name">Name (kebab-case)</label>
-              <input
-                id="tw-lab-name"
-                bind:value={newName}
-                placeholder="my-api-fetcher"
-                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono"
-              />
-            </div>
-            <div>
-              <label class="text-[9px] font-mono text-outline/60 uppercase block mb-1" for="tw-lab-desc">Description</label>
-              <input
-                id="tw-lab-desc"
-                bind:value={newDescription}
-                placeholder="What this tool represents"
-                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono"
-              />
-            </div>
-          </div>
-          <div>
-            <label class="text-[9px] font-mono text-outline/60 uppercase block mb-1" for="tw-lab-params">Parameters (JSON array)</label>
-            <textarea
-              id="tw-lab-params"
-              bind:value={newParamsJson}
-              rows="5"
-              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-y min-h-[88px]"
-            ></textarea>
-            <p class="mt-1 font-mono text-[8px] text-outline/45">
-              Example: <code>{'[{"name":"query","type":"string","required":true,"description":"Search phrase"}]'}</code>
-            </p>
-          </div>
-          <div class="flex justify-end gap-2">
-            <button
-              type="button"
-              onclick={closeCreate}
-              class="px-3 py-1.5 text-[10px] font-mono border border-outline-variant/25 rounded bg-transparent text-outline"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={creating || !newName.trim()}
-              onclick={createCustom}
-              class="px-4 py-1.5 text-[10px] font-mono rounded border-0 text-white disabled:opacity-40"
-              style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);"
-            >
-              {creating ? "Creating…" : "Add to catalog"}
-            </button>
-          </div>
-        </div>
+        <CreateCustomToolForm
+          bind:name={newName}
+          bind:description={newDescription}
+          bind:paramsJson={newParamsJson}
+          {creating}
+          onCancel={closeCreate}
+          onCreate={createCustom}
+        />
       {:else}
-        <div class="space-y-3 pt-1 border-t border-outline-variant/15">
-          <div class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onclick={() => (mcpCreateMode = "manual")}
-              class="px-3 py-1.5 rounded border text-[9px] font-mono uppercase tracking-wider
-                     {mcpCreateMode === 'manual'
-                ? 'border-primary/45 bg-primary/10 text-primary'
-                : 'border-outline-variant/25 text-outline/70 hover:border-primary/30'}"
-            >
-              Manual setup
-            </button>
-            <button
-              type="button"
-              onclick={() => (mcpCreateMode = "import")}
-              class="px-3 py-1.5 rounded border text-[9px] font-mono uppercase tracking-wider
-                     {mcpCreateMode === 'import'
-                ? 'border-primary/45 bg-primary/10 text-primary'
-                : 'border-outline-variant/25 text-outline/70 hover:border-primary/30'}"
-            >
-              Import JSON
-            </button>
-          </div>
-          <div class="rounded-lg border border-outline-variant/15 bg-surface-container-lowest/40 p-3 min-h-[140px] max-h-[260px] overflow-y-auto">
-            <div class="text-[9px] font-mono text-outline/50 uppercase tracking-widest mb-2">Saved servers (live)</div>
-            {#if mcpServersList.length === 0}
-              <p class="font-mono text-xs text-outline/40">No servers yet — import or save one to see tools immediately.</p>
-            {:else}
-              <div class="space-y-2">
-                {#each mcpServersList as s (s.serverId)}
-                  <div class="rounded border border-outline-variant/15 p-2 flex flex-col gap-1.5">
-                    <div class="flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onclick={() => openEditMcp(s)}
-                        class="text-left font-mono text-[11px] text-primary hover:underline bg-transparent border-0 cursor-pointer p-0"
-                      >
-                        {s.name}
-                      </button>
-                      <span class="text-[8px] font-mono text-outline/40">{s.tools.length} tools</span>
-                    </div>
-                    <div class="flex flex-wrap gap-1">
-                      <button
-                        type="button"
-                        disabled={mcpRefreshing === s.serverId}
-                        onclick={() => refreshMcpTools(s.serverId)}
-                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-secondary/30 text-secondary hover:bg-secondary/10 cursor-pointer bg-transparent disabled:opacity-40"
-                      >
-                        {mcpRefreshing === s.serverId ? "…" : "Refresh tools"}
-                      </button>
-                      <button
-                        type="button"
-                        onclick={() => {
-                          selectedMcp = s;
-                          copyMcpConfig();
-                        }}
-                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-outline-variant/30 text-outline/60 hover:text-primary hover:border-outline-variant/50 cursor-pointer bg-transparent"
-                      >
-                        Copy config
-                      </button>
-                      <button
-                        type="button"
-                        onclick={() => deleteMcpServerRow(s.serverId)}
-                        class="text-[8px] font-mono px-2 py-0.5 rounded border border-error/30 text-error/80 hover:bg-error/10 cursor-pointer bg-transparent"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-          </div>
-          {#if mcpCreateMode === "manual"}
-          <div class="flex items-center justify-between gap-2 flex-wrap">
-            <button
-              type="button"
-              onclick={() => {
-                resetMcpDraft();
-                selectedMcp = null;
-              }}
-              class="text-[9px] font-mono text-primary hover:underline bg-transparent border-0 cursor-pointer p-0"
-            >
-              + New server (clear form)
-            </button>
-            <button
-              type="button"
-              onclick={() => loadMcpServers()}
-              class="text-[9px] font-mono px-2 py-1 rounded border border-outline-variant/25 text-outline hover:text-primary bg-transparent"
-            >
-              ↻ Reload servers
-            </button>
-          </div>
-          <div class="space-y-2">
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-name">Server name</label>
-              <input
-                id="tw-mcp-name"
-                bind:value={mcpDraftName}
-                placeholder="e.g. filesystem"
-                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono"
-              />
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-transport">Transport</label>
-              <select
-                id="tw-mcp-transport"
-                bind:value={mcpDraftTransport}
-                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono"
-              >
-                <option value="stdio">stdio</option>
-                <option value="sse">sse</option>
-                <option value="websocket">websocket</option>
-                <option value="streamable-http">streamable-http</option>
-              </select>
-              {#if mcpDraftTransport === "stdio"}
-                <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-cmd">Command</label>
-                <input
-                  id="tw-mcp-cmd"
-                  bind:value={mcpDraftCommand}
-                  placeholder="bunx"
-                  class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono"
-                />
-                <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-args">Args (comma-separated)</label>
-                <input
-                  id="tw-mcp-args"
-                  bind:value={mcpDraftArgs}
-                  placeholder="-y, @modelcontextprotocol/server-filesystem, ."
-                  class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono"
-                />
-              {:else}
-                <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-endpoint">Endpoint URL</label>
-                <input
-                  id="tw-mcp-endpoint"
-                  bind:value={mcpDraftEndpoint}
-                  placeholder="http://127.0.0.1:8080/mcp"
-                  class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-sm font-mono"
-                />
-              {/if}
-              <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-headers">Headers JSON (optional)</label>
-              <textarea
-                id="tw-mcp-headers"
-                bind:value={mcpDraftHeaders}
-                rows="2"
-                placeholder={'{ "Authorization": "Bearer …" }'}
-                class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"
-              ></textarea>
-              {#if mcpDraftTransport === "stdio"}
-                <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-env">Env JSON (optional)</label>
-                <textarea
-                  id="tw-mcp-env"
-                  bind:value={mcpDraftEnv}
-                  rows="2"
-                  class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"
-                ></textarea>
-              {:else}
-                <label class="text-[9px] font-mono text-outline/60 uppercase tracking-widest" for="tw-mcp-auth">Auth JSON (optional, 0.17 OAuth 2.1)</label>
-                <textarea
-                  id="tw-mcp-auth"
-                  bind:value={mcpDraftAuth}
-                  rows="3"
-                  placeholder={'{ "type": "client_credentials", "clientId": "...", "clientSecret": "..." }'}
-                  class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-none"
-                ></textarea>
-                <p class="text-[9px] font-mono text-outline/40">Interactive authorization_code flow: run `rax mcp login`.</p>
-              {/if}
-              <button
-                type="button"
-                disabled={mcpSaving}
-                onclick={saveMcpServer}
-                class="w-full py-2 rounded-lg border-0 font-mono text-[10px] uppercase text-white cursor-pointer disabled:opacity-40"
-                style="background:linear-gradient(135deg,#8b5cf6,#06b6d4);"
-              >
-                {mcpSaving ? "Saving…" : selectedMcp ? "Update server" : "Save server"}
-              </button>
-          </div>
-          {:else}
-          <div class="border-t border-outline-variant/15 pt-3 space-y-2">
-            <div class="text-[9px] font-mono text-outline/60 uppercase tracking-widest">Import from JSON</div>
-            <p class="font-mono text-[9px] text-outline/45 leading-relaxed">
-              One object, an array, <code class="text-outline/55">{`{ "servers": [...] }`}</code>, or Cursor-style
-              <code class="text-outline/55">{`{ "mcpServers": { "name": { ... } } }`}</code>.
-              <code class="text-outline/55">url</code> → <code class="text-outline/55">endpoint</code>. Omitted transport: stdio if
-              <code class="text-outline/55">command</code>/<code class="text-outline/55">args</code>; URLs ending in <code class="text-outline/55">/mcp</code> →
-              <code class="text-outline/55">streamable-http</code> (Context7 log: “HTTP at …/mcp”); other URLs → <code class="text-outline/55">sse</code>
-              (legacy “/sse”). Set <code class="text-outline/55">transport</code> explicitly if needed. Cortex must reach the host (same machine as the server for
-              <code class="text-outline/55">localhost</code>).
-            </p>
-            <textarea
-              id="tw-mcp-json-import"
-              bind:value={mcpJsonImport}
-              rows="7"
-              placeholder={`{\n  "mcpServers": {\n    "context7": { "url": "http://127.0.0.1:8080/mcp" },\n    "docker-demo": {\n      "command": "docker",\n      "args": ["run", "-i", "--rm", "mcp/context7"]\n    }\n  }\n}`}
-              class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono resize-y min-h-[120px]"
-            ></textarea>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onclick={previewMcpImportJson}
-                class="w-full py-2 rounded-lg border border-outline-variant/30 font-mono text-[10px] uppercase text-outline hover:text-primary hover:border-primary/25 cursor-pointer bg-transparent"
-              >
-                Validate & preview
-              </button>
-              <button
-                type="button"
-                disabled={mcpImporting}
-                onclick={importMcpFromJson}
-                class="w-full py-2 rounded-lg border border-primary/35 font-mono text-[10px] uppercase text-primary hover:bg-primary/10 cursor-pointer bg-transparent disabled:opacity-40"
-              >
-                {mcpImporting ? "Importing…" : "Import JSON"}
-              </button>
-            </div>
-            {#if mcpImportPreview}
-              <div class="rounded border border-primary/25 bg-primary/10 px-2.5 py-2 font-mono text-[9px] text-primary/90">
-                {mcpImportPreview}
-              </div>
-            {/if}
-            {#if mcpImportPreviewError}
-              <div class="rounded border border-error/35 bg-error/10 px-2.5 py-2 font-mono text-[9px] text-error/85">
-                {mcpImportPreviewError}
-              </div>
-            {/if}
-          </div>
-          {/if}
-          <div class="flex justify-end">
-            <button
-              type="button"
-              onclick={closeCreate}
-              class="px-3 py-1.5 text-[10px] font-mono border border-outline-variant/25 rounded bg-transparent text-outline"
-            >
-              Done
-            </button>
-          </div>
-        </div>
+        <McpServerForm
+          bind:mode={mcpCreateMode}
+          bind:draft={mcpDraft}
+          bind:jsonImport={mcpJsonImport}
+          servers={mcpServersList}
+          refreshing={mcpRefreshing}
+          editing={selectedMcp != null}
+          saving={mcpSaving}
+          importing={mcpImporting}
+          importPreview={mcpImportPreview}
+          importPreviewError={mcpImportPreviewError}
+          onEdit={openEditMcp}
+          onRefresh={refreshMcpTools}
+          onCopyConfig={(row) => void copyMcpConfig(row)}
+          onDelete={deleteMcpServerRow}
+          onNewServer={() => {
+            resetMcpDraft();
+            selectedMcp = null;
+          }}
+          onReloadServers={loadMcpServers}
+          onSave={saveMcpServer}
+          onPreviewImport={previewMcpImportJson}
+          onImport={importMcpFromJson}
+          onDone={closeCreate}
+        />
       {/if}
     </div>
   {/if}
 
   <div class="grid grid-cols-1 lg:grid-cols-[minmax(240px,320px)_1fr] gap-4 flex-1 min-h-0 overflow-hidden">
-    <div class="flex flex-col min-h-0 gap-2">
-      <input
-        type="search"
-        bind:value={search}
-        placeholder="Search tools…"
-        class="w-full bg-surface-container-lowest/60 border border-outline-variant/20 rounded-lg px-3 py-2 text-[11px] font-mono placeholder:text-outline/35 flex-shrink-0"
-      />
-      <div class="overflow-y-auto min-h-0 space-y-1.5 pr-1">
-        {#if loading}
-          <div class="flex justify-center py-8">
-            <span class="material-symbols-outlined text-primary animate-spin">progress_activity</span>
-          </div>
-        {:else if filtered.length === 0}
-          <p class="font-mono text-[10px] text-outline/50 text-center py-6">No tools match.</p>
-        {:else}
-          {#each filtered as entry (entry.id)}
-            <button
-              type="button"
-              onclick={() => selectEntry(entry)}
-              class="w-full text-left p-3 rounded-lg border transition-all
-                     {selected?.id === entry.id
-                ? 'bg-primary/10 border-primary/40 ring-1 ring-primary/20'
-                : 'bg-surface-container-low/50 border-outline-variant/15 hover:border-primary/25'}"
-            >
-              <div class="flex items-center gap-2 mb-1 flex-wrap">
-                <span
-                  class="text-[7px] font-mono px-1.5 py-0.5 rounded border uppercase tracking-wider {kindBadgeClass(
-                    entry.kind,
-                  )}">{kindLabel(entry.kind)}</span
-                >
-                {#if entry.disabled}
-                  <span class="text-[7px] font-mono text-error/80 border border-error/30 rounded px-1">OFF</span>
-                {/if}
-              </div>
-              <div class="font-mono text-[11px] text-on-surface font-medium truncate">{entry.displayName}</div>
-              <div class="font-mono text-[9px] text-outline/55 line-clamp-2 mt-0.5">{entry.description}</div>
-            </button>
-          {/each}
-        {/if}
-      </div>
-    </div>
+    <ToolCatalogList bind:search {loading} entries={filtered} selectedId={selected?.id ?? null} onSelect={selectEntry} />
 
     <div class="flex flex-col min-h-0 overflow-hidden rounded-lg border border-outline-variant/20 bg-surface-container-low/35">
       {#if !selected}
@@ -1007,200 +546,24 @@
           <span class="text-[10px] text-outline/35 mt-2 block">Need a new one? Use <strong class="text-outline/50">Create tool</strong> above.</span>
         </div>
       {:else}
-        <div class="p-4 border-b border-outline-variant/15 space-y-3 flex-shrink-0 overflow-y-auto max-h-[45vh]">
-          <div class="flex items-start justify-between gap-3 flex-wrap">
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 flex-wrap mb-1">
-                <h4 class="font-headline text-sm font-bold text-on-surface uppercase tracking-wide">
-                  {selected.displayName}
-                </h4>
-                <span
-                  class="text-[7px] font-mono px-1.5 py-0.5 rounded border uppercase {kindBadgeClass(selected.kind)}"
-                  >{kindLabel(selected.kind)}</span
-                >
-              </div>
-              <p class="font-mono text-[10px] text-outline/70 leading-relaxed">{selected.description}</p>
-              {#if selected.executableHint && !selected.executable}
-                <p class="font-mono text-[9px] text-amber-200/70 mt-2">{selected.executableHint}</p>
-              {/if}
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <button
-                type="button"
-                onclick={exportEntry}
-                class="text-[9px] font-mono px-3 py-1.5 rounded border border-outline-variant/30 text-outline hover:text-on-surface bg-transparent"
-              >
-                Export
-              </button>
-              {#if selected.kind === "custom"}
-                <button
-                  type="button"
-                  onclick={toggleCustomDisabled}
-                  class="text-[9px] font-mono px-3 py-1.5 rounded border border-error/35 text-error/90 hover:bg-error/10 bg-transparent"
-                >
-                  {selected.disabled ? "Enable" : "Disable"}
-                </button>
-                <button
-                  type="button"
-                  onclick={deleteCustom}
-                  class="text-[9px] font-mono px-3 py-1.5 rounded border border-outline-variant/20 text-outline hover:text-error bg-transparent"
-                >
-                  Delete
-                </button>
-              {/if}
-            </div>
-          </div>
-
-          <div
-            class="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[9px] uppercase tracking-wider text-outline/55"
-          >
-            <div class="rounded bg-surface-container-lowest/50 px-2 py-1.5 border border-outline-variant/10">
-              <div class="text-[7px] text-outline/40">Calls</div>
-              <div class="text-secondary/90 tabular-nums">{selected.metrics.callCount}</div>
-            </div>
-            <div class="rounded bg-surface-container-lowest/50 px-2 py-1.5 border border-outline-variant/10">
-              <div class="text-[7px] text-outline/40">Success</div>
-              <div class="text-secondary/90 tabular-nums">
-                {selected.metrics.successRatePct != null ? `${selected.metrics.successRatePct}%` : "—"}
-              </div>
-            </div>
-            <div class="rounded bg-surface-container-lowest/50 px-2 py-1.5 border border-outline-variant/10">
-              <div class="text-[7px] text-outline/40">Avg</div>
-              <div class="text-secondary/90 tabular-nums">
-                {selected.metrics.avgDurationMs != null ? `${selected.metrics.avgDurationMs}ms` : "—"}
-              </div>
-            </div>
-            <div class="rounded bg-surface-container-lowest/50 px-2 py-1.5 border border-outline-variant/10">
-              <div class="text-[7px] text-outline/40">Last used</div>
-              <div class="text-secondary/90">{relativeTime(selected.metrics.lastUsedAt)}</div>
-            </div>
-          </div>
-
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <div class="text-[8px] font-mono text-outline/50 uppercase tracking-widest">Input schema</div>
-              {#if selected.parameters.length > 0}
-                <button
-                  type="button"
-                  class="text-[8px] font-mono text-outline/40 hover:text-primary transition-colors border-0 bg-transparent cursor-pointer"
-                  onclick={copyToolSchema}
-                  title="Copy schema JSON"
-                >
-                  copy
-                </button>
-              {/if}
-            </div>
-            <div class="overflow-x-auto rounded border border-outline-variant/15">
-              <table class="w-full text-left font-mono text-[9px]">
-                <thead class="bg-surface-container-lowest/80 text-outline/50 uppercase tracking-wider">
-                  <tr>
-                    <th class="px-2 py-1.5 font-normal">Property</th>
-                    <th class="px-2 py-1.5 font-normal">Type</th>
-                    <th class="px-2 py-1.5 font-normal">Status</th>
-                    <th class="px-2 py-1.5 font-normal">Description</th>
-                  </tr>
-                </thead>
-                <tbody class="text-on-surface/85">
-                  {#if selected.parameters.length === 0}
-                    <tr>
-                      <td colspan="4" class="px-2 py-3 text-outline/45 italic">
-                        {#if selected.kind === "mcp"}
-                          No cached parameters — open <strong>Create tool</strong> → MCP, select the server, run <strong>Refresh tools</strong>.
-                        {:else}
-                          No parameters declared.
-                        {/if}
-                      </td>
-                    </tr>
-                  {:else}
-                    {#each selected.parameters as p (p.name)}
-                      <tr class="border-t border-outline-variant/10">
-                        <td class="px-2 py-1.5 text-cyan-300/80">{p.name}</td>
-                        <td class="px-2 py-1.5 text-outline/70">{p.type}</td>
-                        <td class="px-2 py-1.5">
-                          <span class={p.required ? "text-error/80" : "text-outline/50"}>
-                            {p.required ? "REQUIRED" : "OPTIONAL"}
-                          </span>
-                        </td>
-                        <td class="px-2 py-1.5 text-outline/65 max-w-[200px]">{p.description}</td>
-                      </tr>
-                    {/each}
-                  {/if}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-0 border-t border-outline-variant/15">
-          <div class="flex flex-col min-h-0 border-b md:border-b-0 md:border-r border-outline-variant/15">
-            <div
-              class="flex items-center justify-between px-3 py-2 bg-surface-container-lowest/40 border-b border-outline-variant/10 flex-shrink-0"
-            >
-              <span class="font-mono text-[8px] uppercase tracking-widest text-outline/50">request_body.json</span>
-              <div class="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={!selected.executable}
-                  onclick={copyRequestJson}
-                  class="text-[8px] font-mono text-outline/40 hover:text-primary transition-colors border-0 bg-transparent cursor-pointer disabled:opacity-40"
-                  title="Copy request JSON"
-                >
-                  copy
-                </button>
-                <button
-                  type="button"
-                  disabled={!selected.executable || running}
-                  onclick={runTest}
-                  class="flex items-center gap-1 text-[9px] font-mono uppercase px-2 py-1 rounded border border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-40 bg-transparent"
-                >
-                  <span class="material-symbols-outlined text-[14px]">play_arrow</span>
-                  {running ? "Running…" : "Run test"}
-                </button>
-              </div>
-            </div>
-            <textarea
-              bind:value={requestJson}
-              disabled={!selected.executable}
-              class="flex-1 min-h-[140px] w-full bg-transparent border-0 p-3 font-mono text-[10px] text-on-surface/90 resize-none focus:outline-none focus:ring-0 disabled:opacity-40"
-              spellcheck="false"
-            ></textarea>
-          </div>
-          <div class="flex flex-col min-h-0">
-            <div
-              class="flex items-center justify-between px-3 py-2 bg-surface-container-lowest/40 border-b border-outline-variant/10 flex-shrink-0"
-            >
-              <span class="font-mono text-[8px] uppercase tracking-widest text-outline/50">response_buffer</span>
-              <div class="flex items-center gap-2">
-                {#if responseJson}
-                  <button
-                    type="button"
-                    onclick={copyResponseJson}
-                    class="text-[8px] font-mono text-outline/40 hover:text-primary transition-colors border-0 bg-transparent cursor-pointer"
-                    title="Copy response JSON"
-                  >
-                    copy
-                  </button>
-                {/if}
-                {#if responseMs != null}
-                  <span class="flex items-center gap-1 font-mono text-[9px]">
-                    {#if responseOk === true}
-                      <span class="material-symbols-outlined text-[14px] text-secondary">check_circle</span>
-                    {:else if responseOk === false}
-                      <span class="material-symbols-outlined text-[14px] text-error">error</span>
-                    {/if}
-                    <span class="text-outline/60">{responseMs}ms</span>
-                  </span>
-                {/if}
-              </div>
-            </div>
-            <div class="flex-1 min-h-[140px] relative">
-              <pre
-                class="absolute inset-0 overflow-auto p-3 font-mono text-[10px] whitespace-pre-wrap break-all text-on-surface/85"
-                >{responseJson || "—"}</pre
-              >
-            </div>
-          </div>
-        </div>
+        <ToolInspector
+          tool={selected}
+          onExport={exportEntry}
+          onToggleDisabled={toggleCustomDisabled}
+          onDelete={deleteCustom}
+          onCopySchema={copyToolSchema}
+        />
+        <ToolTestRunner
+          executable={selected.executable}
+          bind:requestJson
+          {responseJson}
+          {responseMs}
+          {responseOk}
+          {running}
+          onRun={runTest}
+          onCopyRequest={() => copy(requestJson)}
+          onCopyResponse={() => copy(responseJson)}
+        />
       {/if}
     </div>
   </div>
