@@ -137,6 +137,10 @@ const toJudgmentError = (cause: LLMErrors): JudgmentError => {
       return new JudgmentBadResponse({ message: `${cause.message}: ${cause.rawOutput.slice(0, 200)}` });
     case "LLMContextOverflowError":
       return new JudgmentBadResponse({ message: cause.message });
+    // Malformed model output (e.g. a provider-side tool-call parser failure):
+    // the judge's answer is unusable, same as an unparseable response.
+    case "LLMMalformedOutputError":
+      return new JudgmentBadResponse({ message: cause.message });
     case "LLMError":
       return new JudgmentConnectionError({ message: cause.message });
   }

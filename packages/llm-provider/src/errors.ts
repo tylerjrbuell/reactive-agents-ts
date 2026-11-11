@@ -87,12 +87,36 @@ export class LLMContextOverflowError extends Data.TaggedError(
   readonly tokenCount: number;
   /** 0 when the provider did not state it. */
   readonly maxTokens: number;
-  /** `context_overflow` (prompt exceeds window) or `request_too_large` (413 / byte limit). */
-  readonly errorClass?: "context_overflow" | "request_too_large";
+  /**
+   * `context_overflow` (prompt exceeds window), `request_too_large` (413 / byte
+   * limit) or `token_rate_exceeded` (input exceeds the per-minute token budget;
+   * `maxTokens` is that budget).
+   */
+  readonly errorClass?: "context_overflow" | "request_too_large" | "token_rate_exceeded";
   /** Always false: re-sending the identical request cannot succeed. */
   readonly retryable?: boolean;
   readonly status?: number;
 }> {}
+
+/**
+ * The provider rejected the model's own output: its server-side tool-call
+ * parser failed (Ollama "XML syntax error on line 1: unexpected EOF", "error
+ * parsing tool call") or its validator refused the call (Groq "Tool call
+ * validation failed", `tool_use_failed`). The request was fine; sampling is
+ * stochastic, so the identical request can succeed. The provider retry
+ * schedule resamples it (on a stream, only before the first emitted event);
+ * after that, recovery belongs to the caller (`recoveryFor` → `"resample"`).
+ */
+export class LLMMalformedOutputError extends Data.TaggedError("LLMMalformedOutputError")<{
+  readonly message: string;
+  readonly provider: LLMProvider;
+  readonly status?: number;
+}> {
+  /** Always `"malformed_output"` (structural classification, see error-class.ts). */
+  readonly errorClass = "malformed_output" as const;
+  /** A resample of the identical request can succeed. */
+  readonly retryable = true;
+}
 
 /**
  * Live model discovery failed (see `model-discovery.ts`). Deliberately NOT part
@@ -115,4 +139,5 @@ export type LLMErrors =
   | LLMRateLimitError
   | LLMTimeoutError
   | LLMParseError
-  | LLMContextOverflowError;
+  | LLMContextOverflowError
+  | LLMMalformedOutputError;

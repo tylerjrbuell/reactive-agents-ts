@@ -3,23 +3,33 @@ import type { LLMErrors, LLMTimeoutError } from "./errors.js";
 import type { StreamEvent } from "./types.js";
 
 /**
+ * Whether the provider retry schedule may re-send this failed request.
+ *
+ * Keys on the error's structural `retryable` flag (set from its class by
+ * `mapProviderError`; always true on `LLMTimeoutError` and
+ * `LLMMalformedOutputError`). An error built without the flag falls back to
+ * its tag: only `LLMRateLimitError` retries (`LLMTimeoutError` always carries
+ * the flag). So a 429 for an exhausted quota (`retryable: false`) is not
+ * retried, and a malformed model output (`retryable: true`) is resampled.
+ */
+export function isRetryableLLMError(error: LLMErrors): boolean {
+  if ("retryable" in error && typeof error.retryable === "boolean") return error.retryable;
+  return error._tag === "LLMRateLimitError";
+}
+
+/**
  * Retry policy for LLM calls — exponential backoff, up to 3 retries.
  *
- * Retries the two retryable classes: `LLMRateLimitError` (429 AND transient
- * 5xx / 529-overload / network faults — see `mapProviderError`, which routes
- * those to this class since the remediation is identical: back off and retry)
- * and `LLMTimeoutError`. Permanent failures (4xx bad-request/auth, model-not-
- * found, parse, context-overflow) are NOT retried — retrying can't change them.
+ * Retries what {@link isRetryableLLMError} allows: rate limits, transient
+ * 5xx / 529-overload / network faults (routed to `LLMRateLimitError` by
+ * `mapProviderError`), timeouts, and malformed model output (a resample).
+ * Permanent failures (4xx bad-request/auth, model-not-found, parse,
+ * context-overflow) are NOT retried — retrying can't change them.
  */
 export const retryPolicy = Schedule.intersect(
   Schedule.recurs(3),
   Schedule.exponential("1 second", 2.0),
-).pipe(
-  Schedule.whileInput<LLMErrors>(
-    (error) =>
-      error._tag === "LLMRateLimitError" || error._tag === "LLMTimeoutError",
-  ),
-);
+).pipe(Schedule.whileInput<LLMErrors>(isRetryableLLMError));
 
 /**
  * `retryPolicy`'s streaming counterpart (EH-1, 2026-07-29 systems audit,
@@ -46,11 +56,7 @@ export function retryStreamBeforeFirstEmission<E extends LLMErrors, R>(
 ): Stream.Stream<StreamEvent, E, R> {
   let emittedAny = false;
   const guardedPolicy = retryPolicy.pipe(
-    Schedule.whileInput<LLMErrors>(
-      (error) =>
-        !emittedAny &&
-        (error._tag === "LLMRateLimitError" || error._tag === "LLMTimeoutError"),
-    ),
+    Schedule.whileInput<LLMErrors>((error) => !emittedAny && isRetryableLLMError(error)),
   );
   return stream.pipe(
     Stream.tap(() => Effect.sync(() => { emittedAny = true; })),

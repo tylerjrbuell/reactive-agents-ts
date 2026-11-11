@@ -1,5 +1,5 @@
-import { LLMContextOverflowError, LLMError, LLMRateLimitError } from "./errors.js";
-import { NETWORK_FAULT, classifyProviderError, parseOverflowTokens } from "./error-class.js";
+import { LLMContextOverflowError, LLMError, LLMMalformedOutputError, LLMRateLimitError } from "./errors.js";
+import { NETWORK_FAULT, OUTPUT_TOKEN_RATE, classifyProviderError, parseOverflowTokens } from "./error-class.js";
 import type { LLMErrors } from "./errors.js";
 import type { LLMProvider } from "./types.js";
 
@@ -134,8 +134,19 @@ export function mapProviderError(
   });
   const meta = { errorClass: cls.errorClass, retryable: cls.retryable, status } as const;
 
-  // Context overflow / request too large: typed, permanent (never retried).
-  if (cls.errorClass === "context_overflow" || cls.errorClass === "request_too_large") {
+  // Output-side per-minute budget (OTPM): the prompt is not the problem, so it
+  // must not reach the kernel's compact-the-prompt path. Permanent as sent.
+  if (cls.errorClass === "token_rate_exceeded" && OUTPUT_TOKEN_RATE.test(reason)) {
+    return new LLMError({ message: `${provider} request failed: ${reason}`, provider, cause: reason, ...meta });
+  }
+
+  // Context overflow / request too large / input per-minute budget: typed,
+  // permanent as sent (never retried); a smaller request can succeed.
+  if (
+    cls.errorClass === "context_overflow" ||
+    cls.errorClass === "request_too_large" ||
+    cls.errorClass === "token_rate_exceeded"
+  ) {
     return new LLMContextOverflowError({
       message: `${provider} request failed: ${reason}`,
       ...parseOverflowTokens(reason),
@@ -143,6 +154,14 @@ export function mapProviderError(
       retryable: false,
       status,
     });
+  }
+
+  // Malformed model output (provider's tool-call parser / validator failed):
+  // its own tag, retryable, so the schedule resamples (before first stream
+  // emission). Checked BEFORE the transient branch: "XML syntax error ...:
+  // unexpected EOF" also matches NETWORK_FAULT.
+  if (cls.errorClass === "malformed_output") {
+    return new LLMMalformedOutputError({ message: reason, provider, status });
   }
 
   if (status === 429) {
