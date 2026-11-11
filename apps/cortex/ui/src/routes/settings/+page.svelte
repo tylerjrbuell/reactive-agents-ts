@@ -13,7 +13,8 @@
   import { settings as settingsStore, DEFAULTS, type CortexSettings } from "$lib/stores/settings.js";
   import { MOTION_OPTIONS, parseMotion } from "$lib/motion.js";
   import { THEME_OPTIONS, parseTheme } from "$lib/theme.js";
-  import { keyBadgesOf, keyEnvOf, savePatchOf, SETTINGS_SECTIONS } from "$lib/settings-page.js";
+  import { aboutVersionsOf, keyEnvOf, savePatchOf, SETTINGS_SECTIONS, type AboutVersions } from "$lib/settings-page.js";
+  import ProviderKeysPanel from "$lib/components/settings/ProviderKeysPanel.svelte";
   import { modelHref } from "$lib/model-link.js";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import PageHeader from "$lib/components/kit/PageHeader.svelte";
@@ -21,7 +22,6 @@
   import Select from "$lib/components/kit/Select.svelte";
   import Input from "$lib/components/kit/Input.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
-  import Badge from "$lib/components/kit/Badge.svelte";
   import Status from "$lib/components/kit/Status.svelte";
   import NeuralMark from "$lib/components/kit/NeuralMark.svelte";
   import SettingsGroup from "$lib/components/settings/SettingsGroup.svelte";
@@ -32,9 +32,8 @@
   let saved = $state(false);
   let notifPermission = $state<NotificationPermission | "unsupported">("default");
   let serverHealth = $state<"checking" | "online" | "offline">("checking");
-  let serverVersion = $state<string | null>(null);
+  let versions = $state<AboutVersions>({ cortex: null, commit: null, framework: null });
   let providerHealth = $state<Record<string, string>>({});
-  let checkingProviders = $state(true);
   let activeSection = $state(SETTINGS_SECTIONS[0]?.id ?? "defaults");
 
   /** From `/api/models/:provider` (same source as the Lab builder). */
@@ -76,7 +75,7 @@
     };
   });
 
-  const keyBadges = $derived(keyBadgesOf(providerHealth));
+  const providerLabelOf = (id: string): string => providerList.find((p) => p.id === id)?.label ?? id;
   const providerOptions = $derived(
     providerList.map((p) => ({
       value: p.id,
@@ -91,8 +90,8 @@
   });
   const providerKeyEnv = $derived(keyEnvOf(localSettings.defaultProvider));
 
+  /** Key presence per provider (env or saved), for the "(key missing)" provider labels. */
   async function checkProviderHealth() {
-    checkingProviders = true;
     try {
       const res = await fetch(`${CORTEX_SERVER_URL}/api/health/providers`);
       if (res.ok) {
@@ -107,8 +106,6 @@
       }
     } catch {
       // The server may be unreachable; the Cortex server row says so.
-    } finally {
-      checkingProviders = false;
     }
   }
 
@@ -123,9 +120,9 @@
           serverHealth = "offline";
           return;
         }
-        const data = (await res.json()) as { ok: boolean; version: string };
+        const data: unknown = await res.json();
         serverHealth = "online";
-        serverVersion = data.version;
+        versions = aboutVersionsOf(data);
       })
       .catch(() => { serverHealth = "offline"; });
 
@@ -239,7 +236,7 @@
           <SettingsRow label="Provider" for="settings-default-provider">
             {#snippet help()}
               {#if providerKeyEnv}
-                {providerList.find((p) => p.id === localSettings.defaultProvider)?.label ?? localSettings.defaultProvider} needs <code>{providerKeyEnv}</code> in the server's environment.
+                {providerLabelOf(localSettings.defaultProvider)} needs a key: <code>{providerKeyEnv}</code> in the server's environment, or one saved under Providers.
               {:else}
                 Local and self-hosted providers need no key.
               {/if}
@@ -290,21 +287,8 @@
           </SettingsRow>
         </SettingsGroup>
 
-        <SettingsGroup id="providers" title="Providers" description="Cortex reads API keys from the server's environment; it never stores them.">
-          <SettingsRow label="API keys found" wide>
-            {#snippet help()}Restart Cortex after adding a key to <code>.env</code>.{/snippet}
-            {#snippet control()}
-              <div class="st-keys">
-                {#if checkingProviders}
-                  <span class="st-muted" role="status">Checking…</span>
-                {:else if keyBadges.length === 0}
-                  <span class="st-muted">Unavailable: the server did not answer</span>
-                {:else}
-                  {#each keyBadges as b (b.key)}<Badge tone={b.tone}>{b.text}</Badge>{/each}
-                {/if}
-              </div>
-            {/snippet}
-          </SettingsRow>
+        <SettingsGroup id="providers" title="Providers" description="API keys for cloud providers: from the server's environment, or saved here.">
+          <ProviderKeysPanel labelOf={providerLabelOf} onchange={checkProviderHealth} />
           <SettingsRow label="Ollama endpoint" for="settings-ollama-endpoint">
             {#snippet help()}Leave blank to use <code>OLLAMA_HOST</code> or http://localhost:11434.{/snippet}
             {#snippet control()}
@@ -321,7 +305,7 @@
             {#snippet help()}<span class="st-data">{CORTEX_SERVER_URL}</span>. To use another server, start with <code>CORTEX_URL=http://host:port bun cortex</code>.{/snippet}
             {#snippet control()}
               {#if serverHealth === "online"}
-                <Status tone="done" label={serverVersion ? `Connected · v${serverVersion}` : "Connected"} />
+                <Status tone="done" label={versions.cortex ? `Connected · ${versions.cortex}` : "Connected"} />
               {:else if serverHealth === "offline"}
                 <Status tone="failed" label="Offline" />
               {:else}
@@ -426,7 +410,17 @@
             <NeuralMark size={64} hero />
             <div>
               <div class="st-word"><span class="brand-grad">Cortex</span></div>
-              <p class="st-about-line">The local desk for Reactive Agents{serverVersion ? ` · v${serverVersion}` : ""}</p>
+              <p class="st-about-line">The local desk for Reactive Agents</p>
+              {#if versions.cortex}
+                <dl class="st-versions">
+                  <dt>Cortex</dt>
+                  <dd>{versions.cortex}{#if versions.commit}{" "}<span class="st-commit">({versions.commit})</span>{/if}</dd>
+                  {#if versions.framework}
+                    <dt>Framework</dt>
+                    <dd>{versions.framework}</dd>
+                  {/if}
+                </dl>
+              {/if}
             </div>
           </div>
         </SettingsGroup>
@@ -457,8 +451,6 @@
   .st-nav a:hover { color: var(--cortex-text); background: var(--cortex-surface-1); }
   .st-nav a[aria-current="true"] { background: var(--cortex-surface-2); color: var(--cortex-text); font-weight: 500; }
   .st-col { display: grid; gap: 32px; min-width: 0; }
-  .st-keys { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-  .st-muted { font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   .st-ok { color: var(--cortex-ok); }
   .st-bad { color: var(--cortex-bad); }
   .st-data { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); }
@@ -471,6 +463,10 @@
   .st-about { display: flex; align-items: center; gap: 16px; padding: 16px; }
   .st-word { font-size: var(--cortex-t-xl); font-weight: 600; letter-spacing: -0.015em; line-height: var(--cortex-lh-tight); }
   .st-about-line { margin: 2px 0 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .st-versions { display: grid; grid-template-columns: auto auto; justify-content: start; gap: 2px 12px; margin: 8px 0 0; font-size: var(--cortex-t-xs); }
+  .st-versions dt { color: var(--cortex-text-2); }
+  .st-versions dd { margin: 0; font-family: var(--cortex-font-data); color: var(--cortex-text); }
+  .st-commit { color: var(--cortex-text-2); }
   @media (max-width: 860px) {
     .st-wrap { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 8px 16px 40px; }
     .st-nav { position: static; display: flex; flex-wrap: wrap; }

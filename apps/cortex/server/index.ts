@@ -13,6 +13,9 @@ import { memoryRouter } from "./api/memory.js";
 import { promptRouter } from "./api/prompts.js";
 import { templateResolveRouter } from "./api/template-resolve.js";
 import { healthRouter } from "./api/health.js";
+import { providerKeysRouter } from "./api/provider-keys.js";
+import { installProviderKeyStore, ProviderKeyStore } from "./services/provider-key-store.js";
+import { dirname } from "node:path";
 import { capabilitiesRouter } from "./api/capabilities.js";
 import { workspaceRouter } from "./api/workspace.js";
 import { ChatSessionBusyError, ChatSessionService } from "./services/chat-session-service.js";
@@ -71,6 +74,11 @@ export async function startCortexServer(
 
   const runtime = createCortexRuntime(resolvedConfig);
 
+  // Provider keys saved in Settings: encrypted beside the DB; every build path reads them
+  // through `providerKeyForAgent` (services/provider-key-store.ts).
+  const providerKeys = new ProviderKeyStore({ dir: dirname(resolvedConfig.dbPath) });
+  installProviderKeyStore(providerKeys);
+
   const bridgeSvc = await Effect.runPromise(
     CortexEventBridge.pipe(Effect.provide(runtime.bridgeLayer)),
   );
@@ -118,6 +126,7 @@ export async function startCortexServer(
 
   const app = new Elysia()
     .use(healthRouter)
+    .use(providerKeysRouter(providerKeys))
     .use(capabilitiesRouter)
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
     .use(messagesRouter(runtime.rawDb))

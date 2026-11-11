@@ -315,12 +315,12 @@ With durable execution on, the agent can also stop and ask you something (`reque
 Settings has a section nav on the left and one row per setting. **Save settings** writes Defaults, Providers, Notifications, Storage and Developer; Appearance applies at once.
 
 -   **Defaults** — the provider and model that Beacon, new chats and the Lab Builder start with. A provider without its API key reads "(key missing)", and the help text names the variable to set.
--   **Providers** — which API keys the server found (Anthropic, OpenAI, Gemini), the Ollama endpoint, and whether the Cortex server is connected. Keys come from the server's environment and are never stored by Cortex; restart Cortex after adding one to `.env`.
+-   **Providers** — one row per cloud provider (Anthropic, OpenAI, Gemini, Groq, xAI, LiteLLM) saying which key agents use, then the Ollama endpoint and whether the Cortex server is connected. **Add key** / **Replace** saves a key on the Cortex server, **Test** lists the provider's models with it (a typed key is tested before you save it), **Remove** deletes it. Saved keys are encrypted (AES-256-GCM) in `.cortex/` beside the database, in files only your user can read, and the browser only ever sees `••••` plus the last four characters. A key in the server's environment (or `.env`) wins; when both exist, **Use the saved key instead** switches to the saved one. Agents get the saved key through `.withProvider(provider, { apiKey })`. For Anthropic and Gemini the framework adapter does not take a passed key yet, so a saved key there works for Test and the model list, and agents still need the environment variable; the row says so.
 -   **Notifications** — allow desktop notifications and pick which runs notify you.
 -   **Appearance** — **Theme** follows the system setting or pins dark or light (the top-bar switch pins the opposite of what is showing). **Motion** follows the system's reduced-motion setting or reduces motion in Cortex regardless: it stops the ambient drift, the logo twinkle and the live animations, and running work still shows in status text.
 -   **Storage** — how long to keep runs, and **Prune now** to delete older ones. Runs live in `.cortex/cortex.db` under the server's working directory.
 -   **Developer** — debug mode, hover tooltips, and how to connect an app (`.withCortex()` or `CORTEX_URL`).
--   **About** — the Cortex version the server reports.
+-   **About** — the Cortex and framework versions. Run from a source checkout, Cortex reads the repo's `VERSION` file and shows the git commit; an installed package shows its released version.
 
 Both themes come from one set of design tokens, so every page reads the same in either. Fonts and icons are bundled with Cortex; nothing loads from a font CDN.
 

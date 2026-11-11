@@ -35,6 +35,7 @@ import {
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
 import { jsonSchemaToStandardSchema } from "./json-schema-output.js";
+import { providerKeyForAgent } from "./provider-key-store.js";
 
 export interface BuildCortexAgentParams {
   readonly agentName?: string;
@@ -271,6 +272,12 @@ export async function buildCortexAgent(
   const agentConfig = cortexParamsToAgentConfig(params, agentNameFallback);
 
   let b = await agentConfigToBuilder(agentConfig);
+
+  // A key saved in Settings · Providers, when it wins over the env key (none in env, or
+  // "use stored key"). Passed as the provider config; process.env is never written. One
+  // funnel, so chat, desk runs and gateway agents all get it.
+  const storedKey = providerKeyForAgent(agentConfig.provider);
+  if (storedKey) b = b.withProvider(agentConfig.provider, { apiKey: storedKey });
 
   if (params.agentId) b = b.withAgentId(params.agentId);
 

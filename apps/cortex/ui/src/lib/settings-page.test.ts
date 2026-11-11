@@ -1,5 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { keyBadgesOf, keyEnvOf, savePatchOf, SETTINGS_SECTIONS } from "./settings-page.js";
+import { aboutVersionsOf, keyBadgesOf, keyEnvOf, savePatchOf, SETTINGS_SECTIONS } from "./settings-page.js";
+
+describe("aboutVersionsOf", () => {
+  test("reads cortex, commit and framework versions", () => {
+    expect(aboutVersionsOf({ version: "0.18.0", cortexVersion: "0.18.0", commit: "abc1234", frameworkVersion: "0.18.0" })).toEqual({
+      cortex: "v0.18.0",
+      commit: "abc1234",
+      framework: "v0.18.0",
+    });
+  });
+  test("older servers send only version", () => {
+    expect(aboutVersionsOf({ version: "0.10.6" })).toEqual({ cortex: "v0.10.6", commit: null, framework: null });
+    expect(aboutVersionsOf(null)).toEqual({ cortex: null, commit: null, framework: null });
+  });
+});
 import { DEFAULTS } from "./stores/settings.js";
 
 describe("settings page", () => {

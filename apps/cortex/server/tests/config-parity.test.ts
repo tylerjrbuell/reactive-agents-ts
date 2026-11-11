@@ -301,7 +301,9 @@ const WIRED = new Set([
   "withAgentId", "withAgentTool", "withApprovalPolicy", "withBudget", "withDocuments", "withDurableRuns",
   "withDynamicSubAgents", "withFabricationGuard", "withGrounding", "withHarness", "withKillSwitch",
   "withMemory", "withMetaTools", "withMinIterations", "withModelRouting", "withObservability", "withOutputSchema",
-  "withReasoning", "withRemoteAgent", "withSkills", "withStreaming", "withTaskContext",
+  // withProvider: provider comes through AgentConfig; the overlay re-calls it with { apiKey }
+  // for a key saved in Settings (services/provider-key-store.ts).
+  "withProvider", "withReasoning", "withRemoteAgent", "withSkills", "withStreaming", "withTaskContext",
   "withTestScenario", "withTools", "withTracing", "withUserInteraction", "withVerification",
   "withVerificationStep",
 ]);
@@ -321,7 +323,7 @@ const NOT_APPLICABLE = new Set([
   "withLearning", "withLlmTimeout", "withLogging", "withLongHorizon", "withMCP",
   "withMaxIterations", "withMemoryConsolidation", "withModel", "withModelPricing",
   "withName", "withOpenInference", "withOutputValidator",
-  "withPersona", "withProfile", "withPrompts", "withProvider", "withRateLimiting",
+  "withPersona", "withProfile", "withPrompts", "withRateLimiting",
   "withReactiveIntelligence", "withReceiptSigning", "withReplayLLM", "withRequiredTools",
   "withRetryPolicy", "withSelfImprovement", "withSkillPersistence", "withStallPolicy",
   "withStrictValidation", "withSystemPrompt", "withThinking", "withTimeout",

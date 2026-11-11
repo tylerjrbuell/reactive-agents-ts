@@ -55,6 +55,32 @@ export function keyEnvOf(provider: string): string | undefined {
   return KEYED_PROVIDERS.find((p) => p.key === provider)?.env;
 }
 
+/** Versions from `GET /api/health`, ready for Settings · About and the server row. */
+export interface AboutVersions {
+  /** `v0.18.0` (or null when the server did not say). */
+  readonly cortex: string | null;
+  /** Git short sha in a source checkout, else null. */
+  readonly commit: string | null;
+  /** `v0.18.0` for the framework runtime, or null. */
+  readonly framework: string | null;
+}
+
+/**
+ * Read the versions from a `/api/health` body: `cortexVersion` (older servers send
+ * only `version`), `commit`, `frameworkVersion`.
+ */
+export function aboutVersionsOf(health: unknown): AboutVersions {
+  const h = typeof health === "object" && health !== null ? (health as Record<string, unknown>) : {};
+  const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const cortex = str(h.cortexVersion) ?? str(h.version);
+  const framework = str(h.frameworkVersion);
+  return {
+    cortex: cortex ? `v${cortex}` : null,
+    commit: str(h.commit),
+    framework: framework ? `v${framework}` : null,
+  };
+}
+
 /** Settings · Appearance keys: they apply at once, so Save never writes them. */
 export type AppearanceKey = "theme" | "motion";
 

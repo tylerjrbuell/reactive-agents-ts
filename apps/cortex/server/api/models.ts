@@ -14,6 +14,11 @@ import {
 } from "@reactive-agents/llm-provider";
 import { Effect } from "effect";
 import { Elysia } from "elysia";
+import {
+  installedProviderKeyStore,
+  providerKeyForAgent,
+  storedKeyAppliesToAgents,
+} from "../services/provider-key-store.js";
 
 /** One model in the `/api/models/:provider` response. */
 export interface ModelEntry {
@@ -41,11 +46,27 @@ export interface ModelsDeps {
   readonly fetch: typeof fetch;
   /** Environment used to report whether a provider key is set (defaults to `process.env`). */
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /**
+   * Keys saved in Settings · Providers. `forAgent` is the key agents get (used for the
+   * model list); `has` says one is stored (for `keyConfigured`). Default: the server's
+   * installed key store.
+   */
+  readonly storedKeys?: {
+    readonly forAgent: (provider: string) => string | undefined;
+    readonly has: (provider: string) => boolean;
+  };
 }
+
+const installedStoredKeys: NonNullable<ModelsDeps["storedKeys"]> = {
+  forAgent: (p) => providerKeyForAgent(p),
+  // Counts only where the key reaches agents (keyConfigured says whether runs can work).
+  has: (p) => storedKeyAppliesToAgents(p) && installedProviderKeyStore()?.storedKey(p) !== undefined,
+};
 
 const defaultDeps: ModelsDeps = {
   resolve: (provider, opts) => Effect.runPromise(resolveProviderModels(provider, opts)),
   fetch,
+  storedKeys: installedStoredKeys,
 };
 
 /** Env vars that hold each hosted provider's key; providers absent here need none. */
@@ -80,6 +101,7 @@ export function buildCapabilityResponse(
   provider: string,
   model: string,
   env: Readonly<Record<string, string | undefined>> = process.env,
+  hasStoredKey: (provider: string) => boolean = () => false,
 ): ModelCapabilityResponse {
   const cap = resolveCapability(provider, model);
   const keys = KEY_ENV[provider];
@@ -95,7 +117,7 @@ export function buildCapabilityResponse(
     toolCallDialect: cap.toolCallDialect,
     tier: cap.tier,
     source: cap.source,
-    keyConfigured: keys ? keys.some((k) => Boolean(env[k])) : null,
+    keyConfigured: keys ? keys.some((k) => Boolean(env[k])) || hasStoredKey(provider) : null,
   };
 }
 
@@ -188,7 +210,12 @@ export async function buildModelsResponse(
   deps: ModelsDeps = defaultDeps,
 ): Promise<ModelsResponse> {
   const baseUrl = provider === "ollama" ? endpoint || OLLAMA_DEFAULT : provider === "litellm" ? endpoint || undefined : undefined;
-  const resolved = await deps.resolve(provider, { ...(baseUrl ? { baseUrl } : {}), fetch: deps.fetch });
+  const apiKey = deps.storedKeys?.forAgent(provider);
+  const resolved = await deps.resolve(provider, {
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(apiKey ? { apiKey } : {}),
+    fetch: deps.fetch,
+  });
   const toEntry = async (m: DiscoveredModel): Promise<ModelEntry> => ({
     name: m.id,
     label: m.label,
@@ -234,7 +261,7 @@ export function createModelsRouter(deps: ModelsDeps = defaultDeps) {
         set.status = 400;
         return { error: "provider and model are required" };
       }
-      return buildCapabilityResponse(provider, model, deps.env ?? process.env);
+      return buildCapabilityResponse(provider, model, deps.env ?? process.env, deps.storedKeys?.has);
     })
     .get("/:provider", ({ params, query, set }) => forProvider(params.provider, endpointOf(query), set));
 }
