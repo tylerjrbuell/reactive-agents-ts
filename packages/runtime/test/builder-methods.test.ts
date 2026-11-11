@@ -16,8 +16,15 @@ describe("deriveBuilderMethods", () => {
     expect(derived).toEqual(liveWith);
   });
 
-  it("annotates withModelRouting as an overlay method", () => {
+  it("annotates withModelRouting as a config method mapped to modelRouting", () => {
     const m = deriveBuilderMethods().find((x) => x.name === "withModelRouting");
+    expect(m?.kind).toBe("config");
+    expect(m?.configKeys).toEqual(["modelRouting"]);
+    expect(m?.inferred).toBe(false);
+  });
+
+  it("annotates withHook as an overlay method", () => {
+    const m = deriveBuilderMethods().find((x) => x.name === "withHook");
     expect(m?.kind).toBe("overlay");
     expect(m?.inferred).toBe(false);
   });

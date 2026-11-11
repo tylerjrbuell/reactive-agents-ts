@@ -61,7 +61,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
     configKeys: ["model", "thinking", "temperature", "maxTokens", "numCtx"],
     description: "Model id + params (thinking/temperature/maxTokens/numCtx).",
   },
-  withThinking: { kind: "config", configKeys: ["thinking"], description: "Extended thinking / reasoning effort." },
+  withThinking: { kind: "config", configKeys: ["thinking"], description: "Extended thinking: on/off, effort, token budget." },
   withSystemPrompt: { kind: "config", configKeys: ["systemPrompt"], description: "System prompt." },
   withPersona: { kind: "config", configKeys: ["persona"], description: "Role/tone/instructions persona." },
   withTaskContext: { kind: "config", configKeys: ["taskContext"], description: "Background key/value facts for reasoning." },
@@ -130,7 +130,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withHook: { kind: "overlay", overlayReason: "carries a lifecycle callback function (not JSON)", description: "Lifecycle hook." },
   withErrorHandler: { kind: "overlay", overlayReason: "carries an error-handler function (not JSON)", description: "Custom error handler." },
   withOutputValidator: { kind: "overlay", overlayReason: "carries a validator function (folds into withVerification)", description: "Custom output validator." },
-  withVerificationStep: { kind: "overlay", overlayReason: "carries a verification-step function (folds into withVerification)", description: "Single post-answer reflect pass." },
+  withVerificationStep: { kind: "config", configKeys: ["verificationStep"], description: "Single post-answer reflect pass." },
   withCustomTermination: { kind: "overlay", overlayReason: "carries a termination predicate (folds into withReasoning)", description: "Custom termination predicate." },
   // mode / tools / commands are data; requireFor / onApprove stay code-only.
   withApprovalPolicy: { kind: "config", configKeys: ["approvalPolicy"], description: "Human-in-the-loop tool approval gate." },
@@ -151,21 +151,24 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withTracing: { kind: "overlay", overlayReason: "trace persistence — observability alias (see withObservability({tracing}))", description: "JSONL trace persistence." },
   withEvents: { kind: "overlay", overlayReason: "carries an event stream/callback (folds into withObservability)", description: "Event stream sink." },
   withReceiptSigning: { kind: "overlay", overlayReason: "carries a private signing key (secret, never serialized)", description: "Ed25519 receipt signing." },
-  withDocuments: { kind: "overlay", overlayReason: "ingestion side-effect (folds into withTools({documents}))", description: "RAG document ingestion." },
-  withMetaTools: { kind: "overlay", overlayReason: "code-only meta-tool registry", description: "Conductor's-suite meta-tools." },
-  withSkills: { kind: "overlay", overlayReason: "code-only SKILL.md directory registry", description: "Living SKILL.md directories." },
-  withAgentTool: { kind: "overlay", overlayReason: "code-only sub-agent registry", description: "Register a sub-agent as a tool." },
-  withDynamicSubAgents: { kind: "overlay", overlayReason: "code-only dynamic sub-agent registry", description: "Dynamic sub-agent spawning." },
-  withRemoteAgent: { kind: "overlay", overlayReason: "code-only remote-agent registry", description: "Register a remote agent." },
+  // The shared `store` option is code-only; the document list is data.
+  withDocuments: { kind: "config", configKeys: ["documents"], description: "RAG document ingestion." },
+  withMetaTools: { kind: "config", configKeys: ["metaTools"], description: "Conductor's-suite meta-tools." },
+  withSkills: { kind: "config", configKeys: ["skills"], description: "Living SKILL.md directories." },
+  // `agent.parameters` (ToolParameter list) stays code-only.
+  withAgentTool: { kind: "config", configKeys: ["agentTools"], description: "Register a sub-agent as a tool." },
+  withDynamicSubAgents: { kind: "config", configKeys: ["dynamicSubAgents"], description: "Dynamic sub-agent spawning." },
+  withRemoteAgent: { kind: "config", configKeys: ["agentTools"], description: "Register a remote agent." },
   withA2A: { kind: "overlay", overlayReason: "multi-agent transport topology primitive (not data)", description: "Agent-to-Agent server." },
-  withModelRouting: { kind: "overlay", overlayReason: "cost-aware routing capability with no config representation (G4)", description: "Cost-aware model routing." },
+  withModelRouting: { kind: "config", configKeys: ["modelRouting"], description: "Cost-aware model routing." },
   withContract: { kind: "overlay", overlayReason: "behavioral-contract overlay (not JSON data)", description: "Behavioral contract." },
   withBehavioralContracts: { kind: "overlay", overlayReason: "behavioral-contract overlay (folds into withContract)", description: "Behavioral contracts." },
   withDynamicPricing: { kind: "overlay", overlayReason: "pricing overlay (folds into withCostTracking)", description: "Dynamic pricing overlay." },
   withUserInteraction: { kind: "overlay", overlayReason: "durable ask overlay (channel adapters are code-only)", description: "Durable user interaction." },
 
-  // ── Overlays: timeouts/validation with no schema field (gaps G3) ──
-  withLlmTimeout: { kind: "overlay", overlayReason: "sets _ollamaTimeoutMs; no schema field (G3, folds into withBudget)", description: "LLM request timeout (ms)." },
+  withLlmTimeout: { kind: "config", configKeys: ["execution.llmTimeoutMs"], description: "LLM request timeout (ms)." },
+
+  // ── Overlays: validation with no schema field ──
   withLazyValidation: { kind: "overlay", overlayReason: "no schema field (folds into withVerification timing)", description: "Lazy output validation." },
 };
 

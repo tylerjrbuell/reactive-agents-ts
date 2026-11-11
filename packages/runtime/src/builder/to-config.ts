@@ -101,7 +101,51 @@ export interface BuilderStateForSerialization {
   _skillPersistence?: boolean;
   _durableRuns?: { dir?: string; checkpointEvery?: number };
   _approvalPolicy?: import("@reactive-agents/reasoning").AuthoredApprovalPolicy;
+  _ollamaTimeoutMs?: number;
+  _skillsConfig?: { paths?: readonly string[]; activate?: readonly string[]; global?: boolean };
+  _metaTools?: import("../types.js").MetaToolsConfig | false;
+  _agentTools: readonly import("./types.js").AgentToolOptions[];
+  _allowDynamicSubAgents: boolean;
+  _dynamicSubAgentOptions?: { maxIterations?: number; maxRecursionDepth?: number };
+  _verificationStep?: { mode: "reflect"; prompt?: string };
+  _documents: readonly import("../context-ingestion.js").DocumentSpec[];
+  _modelRouting?: import("./types.js").ModelRoutingOptions;
 }
+
+/** Keep only the keys whose value is not `undefined`. */
+const defined = (obj: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) if (v !== undefined) out[k] = v;
+  return out;
+};
+
+type ShellConfig = Exclude<NonNullable<ToolsOptions["terminal"]>, boolean>;
+
+/** The data fields of a shell config; RegExp and function fields are code-only. */
+const shellData = (t: ShellConfig): Record<string, unknown> =>
+  defined({
+    cwd: t.cwd,
+    allowUnsafeCwd: t.allowUnsafeCwd,
+    timeoutMs: t.timeoutMs,
+    maxOutputChars: t.maxOutputChars,
+    allowedCommands: t.allowedCommands ? [...t.allowedCommands] : undefined,
+    additionalCommands: t.additionalCommands ? [...t.additionalCommands] : undefined,
+    commandAccess: t.commandAccess
+      ? defined({
+          capabilities: t.commandAccess.capabilities ? [...t.commandAccess.capabilities] : undefined,
+          commands: t.commandAccess.commands ? [...t.commandAccess.commands] : undefined,
+        })
+      : undefined,
+    sandbox: t.sandbox,
+  });
+
+/** One sub-agent tool as config data; `agent.parameters` is code-only. */
+const agentToolData = (t: import("./types.js").AgentToolOptions): Record<string, unknown> => {
+  if (t.remoteUrl !== undefined) return { name: t.name, remoteUrl: t.remoteUrl };
+  if (!t.agent) return { name: t.name };
+  const { parameters: _codeOnly, ...agent } = t.agent;
+  return { name: t.name, agent: defined({ ...agent, tools: agent.tools ? [...agent.tools] : undefined }) };
+};
 
 /**
  * Build an `AgentConfig` from the internal state of a `ReactiveAgentBuilder`.
@@ -119,8 +163,10 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   if (state._stableAgentId) config["agentId"] = state._stableAgentId;
 
   if (state._model) config["model"] = state._model;
-  if (state._thinking !== undefined) config["thinking"] = state._thinking;
-  if (state._thinkingOptions !== undefined) config["thinkingOptions"] = state._thinkingOptions;
+  // Thinking: the object form only when it carries more than on/off.
+  const th = state._thinkingOptions;
+  if (th && (th.effort !== undefined || th.budgetTokens !== undefined)) config["thinking"] = { ...th };
+  else if (state._thinking !== undefined) config["thinking"] = state._thinking;
   if (state._temperature !== undefined) config["temperature"] = state._temperature;
   if (state._maxTokens !== undefined) config["maxTokens"] = state._maxTokens;
   if (state._numCtx !== undefined) config["numCtx"] = state._numCtx;
@@ -137,6 +183,10 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (ro?.fallbackStrategy) r["fallbackStrategy"] = ro.fallbackStrategy;
     if (ro?.auditRationale !== undefined) r["auditRationale"] = ro.auditRationale;
     if (ro?.harness !== undefined) r["harness"] = ro.harness;
+    if (ro?.synthesis !== undefined) r["synthesis"] = ro.synthesis;
+    if (ro?.synthesisModel !== undefined) r["synthesisModel"] = ro.synthesisModel;
+    if (ro?.synthesisProvider !== undefined) r["synthesisProvider"] = ro.synthesisProvider;
+    if (ro?.synthesisTemperature !== undefined) r["synthesisTemperature"] = ro.synthesisTemperature;
     config["reasoning"] = r;
   }
 
@@ -148,8 +198,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (to?.focusedTools) t["focusedTools"] = [...to.focusedTools];
     if (to?.adaptive !== undefined) t["adaptive"] = to.adaptive;
     if (to?.terminal !== undefined) {
-      t["terminal"] =
-        typeof to.terminal === "boolean" ? to.terminal : true;
+      t["terminal"] = typeof to.terminal === "boolean" ? to.terminal : shellData(to.terminal);
     }
     if (to?.builtins !== undefined) {
       t["builtins"] = Array.isArray(to.builtins) ? [...to.builtins] : to.builtins;
@@ -246,6 +295,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   if (state._executionTimeoutMs !== undefined) exec["timeoutMs"] = state._executionTimeoutMs;
   if (state._retryPolicy) exec["retryPolicy"] = { ...state._retryPolicy };
   if (state._strictValidation) exec["strictValidation"] = true;
+  if (state._ollamaTimeoutMs !== undefined) exec["llmTimeoutMs"] = state._ollamaTimeoutMs;
   if (Object.keys(exec).length > 0) config["execution"] = exec;
 
   // Gateway
@@ -369,6 +419,25 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (ap.commands !== undefined) a["commands"] = [...ap.commands];
     config["approvalPolicy"] = a;
   }
+
+  if (state._skillsConfig) {
+    const s = state._skillsConfig;
+    config["skills"] = defined({
+      paths: s.paths ? [...s.paths] : undefined,
+      activate: s.activate ? [...s.activate] : undefined,
+      global: s.global,
+    });
+  }
+  if (state._metaTools !== undefined) {
+    config["metaTools"] = state._metaTools === false ? false : { ...state._metaTools };
+  }
+  if (state._agentTools.length > 0) config["agentTools"] = state._agentTools.map(agentToolData);
+  if (state._allowDynamicSubAgents) config["dynamicSubAgents"] = defined({ ...state._dynamicSubAgentOptions });
+  if (state._verificationStep) config["verificationStep"] = defined({ ...state._verificationStep });
+  if (state._documents.length > 0) {
+    config["documents"] = state._documents.map((d) => defined({ ...d }));
+  }
+  if (state._modelRouting) config["modelRouting"] = defined({ ...state._modelRouting });
 
   return config as AgentConfig;
 }

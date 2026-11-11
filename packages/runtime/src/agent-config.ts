@@ -52,13 +52,189 @@ export const ReasoningConfigSchema = Schema.Struct({
   auditRationale: Schema.optional(Schema.Boolean),
   /** Harness mechanism switches (W3). Set via `.withHarness({...})`; precedence config over environment variable over built-in default. */
   harness: Schema.optional(HarnessConfigSchema),
+  /**
+   * Context synthesis mode (`.withReasoning({ synthesis })`). `"custom"` also
+   * needs a `synthesisStrategy` function, which is code-only. Absent = "auto".
+   */
+  synthesis: Schema.optional(Schema.Literal("auto", "fast", "deep", "custom", "off")),
+  /** Model for LLM synthesis (`"deep"`). Absent = the agent's model. */
+  synthesisModel: Schema.optional(Schema.String),
+  /** Provider for LLM synthesis. Absent = the agent's provider. */
+  synthesisProvider: Schema.optional(Schema.String),
+  /** Sampling temperature for LLM synthesis. */
+  synthesisTemperature: Schema.optional(Schema.Number),
+});
+
+/**
+ * The data half of `ShellExecuteConfig` (`@reactive-agents/tools`), the object
+ * form of `.withTools({ terminal })`. `blockedPatterns` (RegExp), `onAudit`
+ * (function) and `dockerEscalation` stay code-only.
+ */
+export const ShellConfigSchema = Schema.Struct({
+  /** Working directory. Must be under /tmp unless `allowUnsafeCwd` is true. */
+  cwd: Schema.optional(Schema.String),
+  /** Allow `cwd` outside /tmp. */
+  allowUnsafeCwd: Schema.optional(Schema.Boolean),
+  /** Per-command timeout in ms. Default: 30000. */
+  timeoutMs: Schema.optional(Schema.Number),
+  /** Max characters of output returned. Default: 4000. */
+  maxOutputChars: Schema.optional(Schema.Number),
+  /** Replace the default command allow-list. */
+  allowedCommands: Schema.optional(Schema.Array(Schema.String)),
+  /** Commands to allow on top of the allow-list (for example `"gh"`). */
+  additionalCommands: Schema.optional(Schema.Array(Schema.String)),
+  /** Grant commands by group (`github`, `web`, `javascript`, ...) and by name. */
+  commandAccess: Schema.optional(
+    Schema.Struct({
+      capabilities: Schema.optional(
+        Schema.Array(Schema.Literal("github", "web", "javascript", "python", "archive", "environment")),
+      ),
+      commands: Schema.optional(Schema.Array(Schema.String)),
+    }),
+  ),
+  /** `"host"` (default) or `"docker"` (throwaway hardened container). */
+  sandbox: Schema.optional(Schema.Literal("host", "docker")),
+});
+
+/** Object form of `.withThinking(options)`. A plain boolean is the quick on/off. */
+export const ThinkingConfigSchema = Schema.Struct({
+  /** `false` disables thinking. Absent = enabled. */
+  enabled: Schema.optional(Schema.Boolean),
+  /** Reasoning effort (OpenAI `reasoning_effort`; advisory elsewhere). */
+  effort: Schema.optional(Schema.Literal("low", "medium", "high")),
+  /** Thinking budget in tokens (clamped by the provider). */
+  budgetTokens: Schema.optional(Schema.Number),
+});
+
+/** `.withSkills(options)`: SKILL.md directories and pinned skills. */
+export const SkillsConfigSchema = Schema.Struct({
+  /** Extra skill directories (each holds `<skill>/SKILL.md`). */
+  paths: Schema.optional(Schema.Array(Schema.String)),
+  /** Skill names always activated at bootstrap. */
+  activate: Schema.optional(Schema.Array(Schema.String)),
+  /** Also scan `~/.agents/skills` and `~/.reactive-agents/skills`. Default: false. */
+  global: Schema.optional(Schema.Boolean),
+});
+
+const HarnessSkillValueSchema = Schema.Union(Schema.Boolean, Schema.String);
+
+/** `.withMetaTools(config)`: mirrors `MetaToolsConfig` (types.ts). */
+export const MetaToolsConfigSchema = Schema.Struct({
+  brief: Schema.optional(Schema.Boolean),
+  find: Schema.optional(Schema.Boolean),
+  pulse: Schema.optional(Schema.Boolean),
+  recall: Schema.optional(Schema.Boolean),
+  relate: Schema.optional(Schema.Boolean),
+  todo: Schema.optional(Schema.Boolean),
+  todoGuidance: Schema.optional(
+    Schema.Struct({
+      reminder: Schema.optional(Schema.Boolean),
+      systemLine: Schema.optional(Schema.Boolean),
+    }),
+  ),
+  harnessSkill: Schema.optional(
+    Schema.Union(
+      HarnessSkillValueSchema,
+      Schema.Struct({
+        frontier: Schema.optional(HarnessSkillValueSchema),
+        local: Schema.optional(HarnessSkillValueSchema),
+      }),
+    ),
+  ),
+  findConfig: Schema.optional(
+    Schema.Struct({
+      autoStoreThreshold: Schema.optional(Schema.Number),
+      minRagScore: Schema.optional(Schema.Number),
+      webFallback: Schema.optional(Schema.Boolean),
+      preferredScope: Schema.optional(Schema.Literal("documents", "web")),
+    }),
+  ),
+  pulseConfig: Schema.optional(
+    Schema.Struct({
+      useLLMRecommendation: Schema.optional(Schema.Boolean),
+      includeControllerDecisions: Schema.optional(Schema.Boolean),
+      includeBehavior: Schema.optional(Schema.Boolean),
+    }),
+  ),
+  recallConfig: Schema.optional(
+    Schema.Struct({
+      previewLength: Schema.optional(Schema.Number),
+      autoFullThreshold: Schema.optional(Schema.Number),
+      maxEntries: Schema.optional(Schema.Number),
+      maxTotalBytes: Schema.optional(Schema.Number),
+    }),
+  ),
+});
+
+/**
+ * One sub-agent tool: a local agent (`.withAgentTool(name, agent)`) or a remote
+ * A2A agent (`.withRemoteAgent(name, remoteUrl)`). Mirrors `AgentToolOptions`
+ * (builder/types.ts) minus the code-only `agent.parameters`.
+ */
+export const AgentToolConfigSchema = Schema.Struct({
+  /** Tool name the parent model calls. */
+  name: Schema.String,
+  /** Local sub-agent settings (mutually exclusive with `remoteUrl`). */
+  agent: Schema.optional(
+    Schema.Struct({
+      name: Schema.String,
+      description: Schema.optional(Schema.String),
+      provider: Schema.optional(Schema.String),
+      model: Schema.optional(Schema.String),
+      tools: Schema.optional(Schema.Array(Schema.String)),
+      maxIterations: Schema.optional(Schema.Number),
+      systemPrompt: Schema.optional(Schema.String),
+      persona: Schema.optional(PersonaConfigSchema),
+      requiresApproval: Schema.optional(Schema.Boolean),
+      timeoutMs: Schema.optional(Schema.Number),
+      maxCallsPerTool: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Number })),
+    }),
+  ),
+  /** Base URL of a remote A2A agent (mutually exclusive with `agent`). */
+  remoteUrl: Schema.optional(Schema.String),
+});
+
+/** `.withDynamicSubAgents(options)`. Present (even `{}`) = enabled. */
+export const DynamicSubAgentsConfigSchema = Schema.Struct({
+  maxIterations: Schema.optional(Schema.Number),
+  maxRecursionDepth: Schema.optional(Schema.Number),
+});
+
+/** `.withVerificationStep(config)`: one post-answer reflect pass. */
+export const VerificationStepConfigSchema = Schema.Struct({
+  mode: Schema.optional(Schema.Literal("reflect")),
+  prompt: Schema.optional(Schema.String),
+});
+
+/** One `.withDocuments([...])` entry. The shared `store` option is code-only. */
+export const DocumentConfigSchema = Schema.Struct({
+  /** File path, URL or label. Read from disk or fetched when `content` is absent. */
+  source: Schema.String,
+  content: Schema.optional(Schema.String),
+  format: Schema.optional(Schema.String),
+  chunkStrategy: Schema.optional(Schema.String),
+  maxChunkSize: Schema.optional(Schema.Number),
+  allowPrivateHosts: Schema.optional(Schema.Boolean),
+});
+
+/** `.withModelRouting(options)`. Present (even `{}`) = enabled. */
+export const ModelRoutingConfigSchema = Schema.Struct({
+  tierModels: Schema.optional(
+    Schema.Struct({
+      haiku: Schema.optional(Schema.String),
+      sonnet: Schema.optional(Schema.String),
+      opus: Schema.optional(Schema.String),
+    }),
+  ),
+  minTier: Schema.optional(Schema.Literal("haiku", "sonnet", "opus")),
 });
 
 export const ToolsConfigSchema = Schema.Struct({
   allowedTools: Schema.optional(Schema.Array(Schema.String)),
   focusedTools: Schema.optional(Schema.Array(Schema.String)),
   adaptive: Schema.optional(Schema.Boolean),
-  terminal: Schema.optional(Schema.Boolean),
+  /** Shell access (`shell-execute`): `true` for defaults or the shell's data options. */
+  terminal: Schema.optional(Schema.Union(Schema.Boolean, ShellConfigSchema)),
   /** Built-in opt-in: `true`, one name (sugar for `[name]`), or names/toolsets. See `ToolsOptions.builtins`. */
   builtins: Schema.optional(Schema.Union(Schema.Boolean, Schema.String, Schema.Array(Schema.String))),
   /** How permitted tools are shown to the model. See `ToolsOptions.disclosure`. Default: undefined (tier default). */
@@ -174,6 +350,8 @@ export const ExecutionConfigSchema = Schema.Struct({
     }),
   ),
   strictValidation: Schema.optional(Schema.Boolean),
+  /** Per-LLM-call timeout in ms for local providers (`.withLlmTimeout(ms)`). */
+  llmTimeoutMs: Schema.optional(Schema.Number),
 });
 
 export const GatewayCronSchema = Schema.Struct({
@@ -532,8 +710,25 @@ export const AgentConfigSchema = Schema.Struct({
   durableRuns: Schema.optional(DurableRunsConfigSchema),
   /** Approval policy: mode, gated tool names and shell command rules. */
   approvalPolicy: Schema.optional(ApprovalPolicyConfigSchema),
-  /** Model parameters: thinking mode, temperature, max tokens. */
-  thinking: Schema.optional(Schema.Boolean),
+  /**
+   * Thinking mode. A boolean is `.withModel({ thinking })`; an object is
+   * `.withThinking({ enabled, effort, budgetTokens })`.
+   */
+  thinking: Schema.optional(Schema.Union(Schema.Boolean, ThinkingConfigSchema)),
+  /** SKILL.md directories and pinned skills (`.withSkills()`). */
+  skills: Schema.optional(SkillsConfigSchema),
+  /** Meta-tools (`.withMetaTools()`). `false` turns them off. */
+  metaTools: Schema.optional(Schema.Union(Schema.Literal(false), MetaToolsConfigSchema)),
+  /** Sub-agent tools: local (`.withAgentTool()`) and remote (`.withRemoteAgent()`). */
+  agentTools: Schema.optional(Schema.Array(AgentToolConfigSchema)),
+  /** Dynamic sub-agent spawning (`.withDynamicSubAgents()`). Present = on. */
+  dynamicSubAgents: Schema.optional(DynamicSubAgentsConfigSchema),
+  /** Post-answer reflect pass (`.withVerificationStep()`). */
+  verificationStep: Schema.optional(VerificationStepConfigSchema),
+  /** Documents ingested for RAG retrieval (`.withDocuments()`). */
+  documents: Schema.optional(Schema.Array(DocumentConfigSchema)),
+  /** Cost-aware model routing (`.withModelRouting()`). Present = on. */
+  modelRouting: Schema.optional(ModelRoutingConfigSchema),
   temperature: Schema.optional(Schema.Number),
   maxTokens: Schema.optional(Schema.Number),
   /** Context window size for local providers (Ollama `options.num_ctx`); ignored by hosted providers. */

@@ -70,10 +70,10 @@ const NON_BUILDER_ROUNDTRIP = new Set<string>([
 //     not orthogonal data; serializing them alongside the fields they mutate
 //     would produce contradictory configs.
 //   - Runtime/secrets/integration: withEnvironment (secrets), withChannels,
-//     withCortex, withTracing, withTelemetry, withApprovalPolicy (carries a
-//     predicate), withCalibration (runtime-probed), withDocuments (ingestion
-//     side-effect), withRemoteAgent, withDynamicSubAgents, withMetaTools,
-//     withSkills (code-only registries).
+//     withCortex, withTracing, withTelemetry, withCalibration (runtime-probed).
+//   - Partly code-only: withApprovalPolicy (requireFor/onApprove), withDocuments
+//     (shared `store`), withAgentTool (`agent.parameters`), withTools terminal
+//     (blockedPatterns/onAudit/dockerEscalation). Their data halves ARE covered.
 // When promoting one of these to data: add it to the schema + MAXIMAL_CONFIG +
 // serializeBuilder + agentConfigToBuilder, and this guard will verify it.
 
@@ -251,6 +251,76 @@ describe("dual-API schema-completeness round-trip pins", () => {
     const json = agentConfigToJSON(cfg);
     const decoded = agentConfigFromJSON(json);
     expect(decoded.reasoning?.harness?.numCtxPolicy).toBe("demand");
+  });
+
+  it("withThinking({ effort }) survives toConfig() -> JSON -> agentConfigToBuilder", async () => {
+    // RED before the fix: serializeBuilder emitted `thinkingOptions`, a key the
+    // schema lacks, so decoding stripped it and the effort was lost.
+    const { ReactiveAgents } = await import("../src/builder.js");
+    const src = ReactiveAgents.create()
+      .withName("think-pin")
+      .withProvider("anthropic")
+      .withThinking({ effort: "high", budgetTokens: 8_000 });
+    const decoded = agentConfigFromJSON(agentConfigToJSON(src.toConfig()));
+    expect(decoded.thinking).toEqual({ enabled: true, effort: "high", budgetTokens: 8_000 });
+    const rebuilt = (await agentConfigToBuilder(decoded)).toConfig();
+    expect(rebuilt.thinking).toEqual({ enabled: true, effort: "high", budgetTokens: 8_000 });
+  });
+
+  it("a plain thinking boolean still serializes as a boolean", async () => {
+    const { ReactiveAgents } = await import("../src/builder.js");
+    const out = ReactiveAgents.create().withName("t").withProvider("anthropic").withThinking().toConfig();
+    expect(out.thinking).toBe(true);
+  });
+
+  it("data-like builder options round-trip through toConfig() and agentConfigToBuilder", async () => {
+    const { ReactiveAgents } = await import("../src/builder.js");
+    const src = ReactiveAgents.create()
+      .withName("data-pin")
+      .withProvider("anthropic")
+      .withSkills({ paths: ["./skills"], activate: ["review"], global: true })
+      .withMetaTools({ brief: true, recall: true, harnessSkill: { frontier: true, local: "lite" } })
+      .withAgentTool("researcher", { name: "Researcher", tools: ["web-search"], maxIterations: 4 })
+      .withRemoteAgent("remote", "http://localhost:8000")
+      .withDynamicSubAgents({ maxRecursionDepth: 2 })
+      .withVerificationStep({ prompt: "Check the answer." })
+      .withReasoning({ synthesis: "deep", synthesisModel: "claude-haiku-4-5" })
+      .withDocuments([{ source: "notes.md", content: "# Notes" }])
+      .withModelRouting({ minTier: "sonnet" })
+      .withLlmTimeout(600_000);
+    const cfg = agentConfigFromJSON(agentConfigToJSON(src.toConfig()));
+    expect(cfg.skills).toEqual({ paths: ["./skills"], activate: ["review"], global: true });
+    expect(cfg.metaTools).toEqual({ brief: true, recall: true, harnessSkill: { frontier: true, local: "lite" } });
+    expect(cfg.agentTools).toEqual([
+      { name: "researcher", agent: { name: "Researcher", tools: ["web-search"], maxIterations: 4 } },
+      { name: "remote", remoteUrl: "http://localhost:8000" },
+    ]);
+    expect(cfg.dynamicSubAgents).toEqual({ maxRecursionDepth: 2 });
+    expect(cfg.verificationStep).toEqual({ mode: "reflect", prompt: "Check the answer." });
+    expect(cfg.reasoning?.synthesis).toBe("deep");
+    expect(cfg.reasoning?.synthesisModel).toBe("claude-haiku-4-5");
+    expect(cfg.documents).toEqual([{ source: "notes.md", content: "# Notes" }]);
+    expect(cfg.modelRouting).toEqual({ minTier: "sonnet" });
+    expect(cfg.execution?.llmTimeoutMs).toBe(600_000);
+    const rebuilt = (await agentConfigToBuilder(cfg)).toConfig();
+    // `features` is excluded: a bare builder's default reactive intelligence
+    // re-applies as withReactiveIntelligence(), which also sets
+    // features.observability (a separate, older asymmetry).
+    expect({ ...rebuilt, features: undefined }).toEqual({ ...cfg, features: undefined });
+  });
+
+  it("withTools({ terminal: {...} }) keeps the shell data options", async () => {
+    const { ReactiveAgents } = await import("../src/builder.js");
+    const terminal = {
+      additionalCommands: ["gh"],
+      timeoutMs: 10_000,
+      cwd: "/tmp/shell-pin",
+      sandbox: "docker" as const,
+    };
+    const out = ReactiveAgents.create().withName("s").withProvider("anthropic").withTools({ terminal }).toConfig();
+    expect(out.tools?.terminal).toEqual(terminal);
+    const rebuilt = (await agentConfigToBuilder(agentConfigFromJSON(agentConfigToJSON(out)))).toConfig();
+    expect(rebuilt.tools?.terminal).toEqual(terminal);
   });
 
 });

@@ -65,7 +65,17 @@ export type BuilderMethod =
   | "withDurableRuns"
   | "withApprovalPolicy"
   | "withModelPricing"
-  | "withTaskContext";
+  | "withTaskContext"
+  | "withThinking"
+  | "withLlmTimeout"
+  | "withSkills"
+  | "withMetaTools"
+  | "withAgentTool"
+  | "withRemoteAgent"
+  | "withDynamicSubAgents"
+  | "withVerificationStep"
+  | "withDocuments"
+  | "withModelRouting";
 
 // Compile-time guard: a renamed or removed builder method fails here.
 type Assert<T extends true> = T;
@@ -136,8 +146,10 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
   // that sets temperature/maxTokens/thinking/numCtx without an explicit model
   // (or with the legacy `model: ""` sentinel) still threads them through; the
   // provider supplies the default model. (Fixes silent param-drop, audit C1.)
+  // A boolean `thinking` rides withModel; the object form is `.withThinking()`.
+  const thinkingFlag = typeof config.thinking === "boolean" ? config.thinking : undefined;
   const hasParams =
-    config.thinking !== undefined ||
+    thinkingFlag !== undefined ||
     config.temperature !== undefined ||
     config.maxTokens !== undefined ||
     config.numCtx !== undefined;
@@ -149,7 +161,7 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
         "withModel",
         defined({
           model: config.model ? config.model : undefined,
-          thinking: config.thinking,
+          thinking: thinkingFlag,
           temperature: config.temperature,
           maxTokens: config.maxTokens,
           numCtx: config.numCtx,
@@ -157,6 +169,7 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
       ),
     );
   }
+  if (typeof config.thinking === "object") push(call("withThinking", { ...config.thinking }));
 
   if (config.systemPrompt) push(call("withSystemPrompt", config.systemPrompt));
   if (config.persona) push(call("withPersona", config.persona));
@@ -173,6 +186,10 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
           maxStrategySwitches: r?.maxStrategySwitches,
           fallbackStrategy: r?.fallbackStrategy ? r.fallbackStrategy : undefined,
           auditRationale: r?.auditRationale,
+          synthesis: r?.synthesis,
+          synthesisModel: r?.synthesisModel,
+          synthesisProvider: r?.synthesisProvider,
+          synthesisTemperature: r?.synthesisTemperature,
         }),
       ),
     );
@@ -318,6 +335,7 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
   if (exec?.timeoutMs !== undefined) push(call("withTimeout", exec.timeoutMs));
   if (exec?.retryPolicy) push(call("withRetryPolicy", exec.retryPolicy));
   if (exec?.strictValidation) push(call("withStrictValidation"));
+  if (exec?.llmTimeoutMs !== undefined) push(call("withLlmTimeout", exec.llmTimeoutMs));
 
   if (config.gateway) push(call("withGateway", config.gateway));
   if (config.mcpServers && config.mcpServers.length > 0) push(call("withMCP", config.mcpServers));
@@ -374,6 +392,21 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
   if (config.taskContext && Object.keys(config.taskContext).length > 0) {
     push(call("withTaskContext", config.taskContext));
   }
+
+  if (config.skills) {
+    const s = config.skills;
+    push(optionsCall("withSkills", defined({ paths: s.paths, activate: s.activate, global: s.global })));
+  }
+  // `{}` and no argument differ here: no argument enables the default suite.
+  if (config.metaTools !== undefined) push(call("withMetaTools", config.metaTools));
+  for (const t of config.agentTools ?? []) {
+    if (t.remoteUrl !== undefined) push(call("withRemoteAgent", t.name, t.remoteUrl));
+    else if (t.agent) push(call("withAgentTool", t.name, t.agent));
+  }
+  if (config.dynamicSubAgents) push(optionsCall("withDynamicSubAgents", defined({ ...config.dynamicSubAgents })));
+  if (config.verificationStep) push(optionsCall("withVerificationStep", defined({ ...config.verificationStep })));
+  if (config.documents && config.documents.length > 0) push(call("withDocuments", config.documents));
+  if (config.modelRouting) push(optionsCall("withModelRouting", defined({ ...config.modelRouting })));
 
   return calls;
 }

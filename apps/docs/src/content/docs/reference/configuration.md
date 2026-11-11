@@ -42,6 +42,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | --- | --- | --- | --- |
 | `adaptiveHarness` | `boolean` | no |  |
 | `agentId` | `string` | no |  |
+| `agentTools` | `array` | no |  |
 | `approvalPolicy.commands` | `array` | no |  |
 | `approvalPolicy.mode` | `detach` \| `block` | no |  |
 | `approvalPolicy.tools` | `array` | no |  |
@@ -53,8 +54,12 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `costTracking.monthly` | `number` | no |  |
 | `costTracking.perRequest` | `number` | no |  |
 | `costTracking.perSession` | `number` | no |  |
+| `documents` | `array` | no |  |
 | `durableRuns.checkpointEvery` | `number` | no |  |
 | `durableRuns.dir` | `string` | no |  |
+| `dynamicSubAgents.maxIterations` | `number` | no |  |
+| `dynamicSubAgents.maxRecursionDepth` | `number` | no |  |
+| `execution.llmTimeoutMs` | `number` | no |  |
 | `execution.maxIterations` | `number` | no |  |
 | `execution.minIterations` | `number` | no |  |
 | `execution.retryPolicy.backoffMs` | `number` | **yes** |  |
@@ -123,7 +128,12 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `memory.memoryConsolidation` | `boolean` | no |  |
 | `memory.retainDays` | `number` | no |  |
 | `memory.tier` | `standard` \| `enhanced` | no |  |
+| `metaTools` | `false` \| `object` | no |  |
 | `model` | `string` | no |  |
+| `modelRouting.minTier` | `haiku` \| `sonnet` \| `opus` | no |  |
+| `modelRouting.tierModels.haiku` | `string` | no |  |
+| `modelRouting.tierModels.opus` | `string` | no |  |
+| `modelRouting.tierModels.sonnet` | `string` | no |  |
 | `name` | `string` | **yes** |  |
 | `numCtx` | `number` | no |  |
 | `observability.audit` | `boolean` | no |  |
@@ -182,16 +192,23 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.verboseRules` | `boolean` | no |  |
 | `reasoning.harness.writeCoverage` | `boolean` | no |  |
 | `reasoning.maxStrategySwitches` | `number` | no |  |
+| `reasoning.synthesis` | `auto` \| `fast` \| `deep` \| `custom` \| `off` | no |  |
+| `reasoning.synthesisModel` | `string` | no |  |
+| `reasoning.synthesisProvider` | `string` | no |  |
+| `reasoning.synthesisTemperature` | `number` | no |  |
 | `requiredTools.adaptive` | `boolean` | no |  |
 | `requiredTools.maxRetries` | `number` | no |  |
 | `requiredTools.tools` | `array` | no |  |
 | `skillPersistence` | `boolean` | no |  |
+| `skills.activate` | `array` | no |  |
+| `skills.global` | `boolean` | no |  |
+| `skills.paths` | `array` | no |  |
 | `stallPolicy.escalateNudgeContent` | `boolean` | no |  |
 | `stallPolicy.ignoredNudgeTolerance` | `number` | no |  |
 | `systemPrompt` | `string` | no |  |
 | `taskContext` | `object` | no |  |
 | `temperature` | `number` | no |  |
-| `thinking` | `boolean` | no |  |
+| `thinking` | `boolean` \| `object` | no |  |
 | `tools.adaptive` | `boolean` | no |  |
 | `tools.allowedTools` | `array` | no |  |
 | `tools.builtins` | `boolean` \| `string` \| `string[]` | no |  |
@@ -199,7 +216,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `tools.focusedTools` | `array` | no |  |
 | `tools.maxCallsPerTool` | `object` | no |  |
 | `tools.riskLevels` | `object` | no |  |
-| `tools.terminal` | `boolean` | no |  |
+| `tools.terminal` | `boolean` \| `object` | no |  |
 | `tools.workspace` | `string` | no |  |
 | `verification.factDecomposition` | `boolean` | no |  |
 | `verification.hallucinationDetection` | `boolean` | no |  |
@@ -212,6 +229,8 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `verification.selfConsistency` | `boolean` | no |  |
 | `verification.semanticEntropy` | `boolean` | no |  |
 | `verification.useLLMTier` | `boolean` | no |  |
+| `verificationStep.mode` | `reflect` | no |  |
+| `verificationStep.prompt` | `string` | no |  |
 
 <!-- END GENERATED: config-field-reference -->
 
