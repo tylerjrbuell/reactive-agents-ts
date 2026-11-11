@@ -42,7 +42,7 @@ export function publishBudgetExhaustedAtTerminal(
         .pipe(
           Effect.catchAll((err) =>
             emitErrorSwallowed({
-              site: "reasoning/src/kernel/loop/budget-exhausted-terminal.ts",
+              site: "reasoning/src/kernel/loop/budget-exhausted-terminal.ts:publishBudgetExhaustedAtTerminal",
               tag: errorTag(err),
             }),
           ),
