@@ -20,9 +20,23 @@
  * - `abstained`: the agent declined to answer (no grounded answer, a required
  *   tool missing). Not a crash: show the reason, not an error.
  * - `paused`: a durable run is waiting on an approval or a user answer.
- * - `cancelled` / `errored`: the stream was stopped or broke before completing.
+ * - `interrupted`: the turn was stopped before its run completed (the user
+ *   stopped it, or the client's connection closed). Stored, so a reloaded
+ *   transcript can say why the reply is missing.
+ * - `cancelled` / `errored`: the live stream was stopped or broke before completing.
  */
-export type TurnEnding = "succeeded" | "partial" | "failed" | "abstained" | "paused" | "cancelled" | "errored";
+export type TurnEnding =
+  | "succeeded"
+  | "partial"
+  | "failed"
+  | "abstained"
+  | "paused"
+  | "interrupted"
+  | "cancelled"
+  | "errored";
+
+/** Who stopped an interrupted turn: the user (Stop), or the client's connection closing. */
+export type InterruptedBy = "user" | "disconnect";
 
 /** A declared deliverable and whether the run produced it (`receipt.deliverables`). */
 export interface TurnDeliverable {
@@ -45,6 +59,8 @@ export interface TurnOutcome {
   readonly unfinished?: readonly string[];
   /** Declared deliverables from the receipt, when the run declared any. */
   readonly deliverables?: readonly TurnDeliverable[];
+  /** Interrupted turns: who stopped it, when known. */
+  readonly interruptedBy?: InterruptedBy;
 }
 
 /**
@@ -66,7 +82,49 @@ export interface RunCompletionLike {
   readonly pendingApproval?: unknown;
   readonly pendingInteraction?: unknown;
   readonly metadata?: unknown;
+  /**
+   * Set when the turn never completed: `"user"` (stopped), `"disconnect"` (the
+   * client went away) or `true` (unknown). A `StreamCancelled.reason` can be
+   * passed as is. Absent or `false` on a run that completed.
+   */
+  readonly interrupted?: unknown;
 }
+
+/**
+ * The cause line of an interrupted turn, for apps that store or show one.
+ * `undefined` reads as "stopped before it finished" without naming who.
+ */
+export function interruptionCause(by: InterruptedBy | undefined): string {
+  switch (by) {
+    case "user":
+      return "You stopped this reply before it finished.";
+    case "disconnect":
+      return "The connection closed before the reply finished (the page was closed or left), so the run was stopped.";
+    default:
+      return "The reply was stopped before it finished.";
+  }
+}
+
+/**
+ * One display line for an error cause: the first non-blank line of the text
+ * (or of an `Error`'s message) without the error class tags a thrown tagged
+ * error carries (`LLMError: `, `Error: FiberFailure: `). `undefined` when there
+ * is no text. Pure.
+ */
+export function causeLineOf(raw: unknown): string | undefined {
+  const text = typeof raw === "string" ? raw : messageOf(raw);
+  const line = text?.split("\n").find((l) => l.trim() !== "")?.trim();
+  if (line === undefined) return undefined;
+  const stripped = line.replace(ERROR_TAGS, "").trim();
+  return stripped.length > 0 ? stripped : line;
+}
+
+/** The `message` of an `Error` (or any object carrying one), read without `instanceof`. */
+const messageOf = (v: unknown): string | undefined =>
+  v !== null && typeof v === "object" && "message" in v && typeof v.message === "string" ? v.message : undefined;
+
+/** Leading class tags (`Error: `, `LLMError: `, `FiberFailure: `), repeated. */
+const ERROR_TAGS = /^(?:(?:[A-Z][A-Za-z0-9]*Error|Error|FiberFailure)(?: \[[^\]]*\])?:\s*)+/;
 
 /** The kernel's partial-run header (`Unfinished:` on its own line, then `- item` lines). */
 const UNFINISHED = /(?:^|\n)[ \t]*Unfinished:[ \t]*\n((?:[ \t]*[-*][^\n]*(?:\n|$))+)/;
@@ -115,6 +173,8 @@ const abstentionOf = (v: unknown): TurnOutcome["abstention"] | undefined => {
 /**
  * Classify a finished run from the framework's result fields.
  *
+ * - Interrupted: `interrupted` is set (the turn never completed). The cause is
+ *   `error`, else {@link interruptionCause}.
  * - Paused: `status` is `awaiting-approval` / `awaiting-interaction`, or a pending
  *   approval / interaction is attached.
  * - Abstained: `terminatedBy: "abstained"`, an `abstention` object, or
@@ -137,6 +197,17 @@ export function turnOutcomeOf(c: RunCompletionLike): TurnOutcome {
     ...(terminatedBy !== undefined ? { terminatedBy } : {}),
     ...(deliverables.length > 0 ? { deliverables } : {}),
   };
+
+  if (c.interrupted !== undefined && c.interrupted !== false && c.interrupted !== null) {
+    const by: InterruptedBy | undefined =
+      c.interrupted === "user" || c.interrupted === "disconnect" ? c.interrupted : undefined;
+    return {
+      ending: "interrupted",
+      ...base,
+      error: error ?? interruptionCause(by),
+      ...(by !== undefined ? { interruptedBy: by } : {}),
+    };
+  }
 
   const status = str(c.status);
   if (status === "awaiting-approval" || status === "awaiting-interaction" || c.pendingApproval || c.pendingInteraction) {

@@ -24,3 +24,23 @@ export { useAgent } from "./use-agent.js";
 export { useStructuredObject } from "./use-structured-object.js";
 export { parsePartialObject } from "./parse-partial.js";
 export type { AgentStreamEvent, AgentHookState } from "./types.js";
+
+/**
+ * Shared display helpers from `@reactive-agents/ui-core`: cost, token and time
+ * formatters and the one status vocabulary (running / attention / done / failed /
+ * stopped / idle), so an app's chat UI shows the same states the same way.
+ */
+export {
+  formatCost,
+  formatTokens,
+  formatRelativeTime,
+  formatClockTime,
+  formatTurnDuration,
+  statusOfTurn,
+  statusOfRun,
+  statusOfSubAgent,
+  modelWaitLabel,
+  type StatusTone,
+  type StatusView,
+  type TimeFormatOptions,
+} from "@reactive-agents/ui-core";

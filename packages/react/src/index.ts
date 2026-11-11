@@ -64,3 +64,23 @@ export {
 export { AgentDevtools, type AgentDevtoolsProps } from "./components/AgentDevtools.js";
 // Re-export ui-core protocol + state types for consumers.
 export type { RunState, UiStreamEvent, UiRunStatus, PendingInteractionWire } from "@reactive-agents/ui-core";
+
+/**
+ * Shared display helpers from `@reactive-agents/ui-core`: cost, token and time
+ * formatters and the one status vocabulary (running / attention / done / failed /
+ * stopped / idle), so an app's chat UI shows the same states the same way.
+ */
+export {
+  formatCost,
+  formatTokens,
+  formatRelativeTime,
+  formatClockTime,
+  formatTurnDuration,
+  statusOfTurn,
+  statusOfRun,
+  statusOfSubAgent,
+  modelWaitLabel,
+  type StatusTone,
+  type StatusView,
+  type TimeFormatOptions,
+} from "@reactive-agents/ui-core";

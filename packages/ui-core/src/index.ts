@@ -29,11 +29,23 @@ export {
 export {
   turnOutcomeOf,
   splitUnfinished,
+  interruptionCause,
+  causeLineOf,
   type TurnEnding,
   type TurnOutcome,
   type TurnDeliverable,
   type RunCompletionLike,
+  type InterruptedBy,
 } from "./state/turn-outcome.js";
+export { initialModelWait, foldModelWait, modelWaitLabel, type ModelWaitState } from "./state/model-wait.js";
+export { statusOfTurn, statusOfRun, statusOfSubAgent, type StatusTone, type StatusView } from "./state/status.js";
+export {
+  formatCost,
+  formatTokens,
+  formatRelativeTime,
+  formatClockTime,
+  type TimeFormatOptions,
+} from "./state/format.js";
 export {
   buildTurnSteps,
   turnStepsOf,

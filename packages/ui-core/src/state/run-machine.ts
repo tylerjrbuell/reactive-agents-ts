@@ -2,6 +2,7 @@ import { parsePartialObject } from "../parse-partial.js";
 import { foldSubAgentActivity, type SubAgentTrace } from "./sub-agent-fold.js";
 import { foldTurnTrace, initialTurnTrace, type TurnTraceState } from "./turn-trace.js";
 import { turnOutcomeOf, type TurnOutcome } from "./turn-outcome.js";
+import { foldModelWait, initialModelWait, type ModelWaitState } from "./model-wait.js";
 import type {
   ChecklistSnapshotWire,
   PendingInteractionWire,
@@ -38,6 +39,11 @@ export interface RunState {
   readonly checklist?: ChecklistSnapshotWire;
   /** Sub-agent blocks (recursive, same fold as the turn trace); absent until a child reports. */
   readonly subAgents?: Readonly<Record<string, SubAgentTrace>>;
+  /**
+   * Whether the run waits on the model (a call is out, no token back yet) and
+   * since when (`ReduceOptions.now`). Absent before the first event.
+   */
+  readonly modelWait?: ModelWaitState;
   readonly lastSeq?: number;
 }
 
@@ -56,6 +62,8 @@ export const initialRunState = (): RunState => ({
 
 export interface ReduceOptions {
   readonly objectMode?: boolean;
+  /** Epoch ms of this event, used to stamp when a model wait began. The reducer reads no clock itself. */
+  readonly now?: number;
 }
 
 export const reduceRunState = (
@@ -67,6 +75,7 @@ export const reduceRunState = (
     ...state,
     events: [...state.events, event],
     lastSeq: event.seq ?? state.lastSeq,
+    modelWait: foldModelWait(state.modelWait ?? initialModelWait(opts.now), event, opts.now),
   };
 
   switch (event._tag) {
