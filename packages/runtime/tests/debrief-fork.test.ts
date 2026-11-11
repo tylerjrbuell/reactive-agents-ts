@@ -80,8 +80,11 @@ describe("debrief — forked off critical path", () => {
         { tokens: 0, in: 0, out: 0, calls: 0 },
       );
       expect(billed.tokens).toBe(result.metadata.tokensUsed + synthesis!.total);
-      expect(billed.in).toBe((result.metadata.inputTokens ?? 0) + synthesis!.input);
-      expect(billed.out).toBe((result.metadata.outputTokens ?? 0) + synthesis!.output);
+      // The test provider reports a split, so both synthesis halves are known.
+      expect(typeof synthesis!.input).toBe("number");
+      expect(typeof synthesis!.output).toBe("number");
+      expect(billed.in).toBe((result.metadata.inputTokens ?? 0) + (synthesis!.input ?? Number.NaN));
+      expect(billed.out).toBe((result.metadata.outputTokens ?? 0) + (synthesis!.output ?? Number.NaN));
       expect(billed.calls).toBe((result.metadata.llmCalls ?? 0) + synthesis!.calls);
       // Telemetry fact: DebriefCompleted carries the same spend, keyed to the run.
       expect(debriefEvents).toEqual([{ taskId: String(result.taskId), synthesis }]);

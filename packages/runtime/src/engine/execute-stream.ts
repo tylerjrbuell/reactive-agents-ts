@@ -9,12 +9,11 @@
  * the only structural change is that `config` and `execute` are now factory parameters
  * instead of closure-captured.
  */
-import { surfaceFailedOutput } from "./strategy-failure.js";
 import { toThinkingStreamEvent } from "./thinking-stream.js";
 import { toContextPressureStreamEvent } from "./context-pressure-stream.js";
 import { toTokenUsageStreamEvent } from "./token-usage-stream.js";
 import { subscribeChecklistStream } from "./checklist-stream.js";
-import { toThoughtStreamEvent, toExitGateStreamEvent } from "./strategy-neutral-stream.js";
+import { makeThoughtProjection, toExitGateStreamEvent } from "./strategy-neutral-stream.js";
 import { Effect, Either, Fiber, Layer, Option, Queue, Stream as EStream } from "effect";
 import type { Task, TaskResult, RunControllerLike, AgentEvent, TerminatedBy } from "@reactive-agents/core";
 import { projectAbstention } from "./abstention-projection.js";
@@ -39,7 +38,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import type { ReactiveAgentsConfig } from "../types.js";
-import type { AgentResultMetadata } from "../builder/types.js";
+import type { AgentOutcome, AgentResultMetadata } from "../builder/types.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
@@ -262,7 +261,9 @@ export const makeExecuteStream =
         );
 
         // Kernel thoughts only; strategy narration and gate checks have their own events.
-        yield* subscribe("ReasoningStepCompleted", "ThoughtEmitted", toThoughtStreamEvent);
+        // The thought's iteration comes from its turn's LLM call (see makeThoughtProjection).
+        const thoughts = makeThoughtProjection();
+        yield* subscribe("ReasoningStepCompleted", "ThoughtEmitted", thoughts.project);
         yield* subscribe("GuardFiredEmitted", "ExitGateDecision", toExitGateStreamEvent);
 
         yield* subscribe("ThinkingEmitted", "ThinkingEmitted", (event) =>
@@ -273,9 +274,10 @@ export const makeExecuteStream =
           toContextPressureStreamEvent(event, String(event.taskId ?? "")),
         );
 
-        yield* subscribe("LLMRequestCompleted", "TokenUsage", (event) =>
-          toTokenUsageStreamEvent(event, String(event.taskId ?? "")),
-        );
+        yield* subscribe("LLMRequestCompleted", "TokenUsage", (event) => {
+          thoughts.observeLlmCall(event);
+          return toTokenUsageStreamEvent(event, String(event.taskId ?? ""));
+        });
       }
 
       // Tool lifecycle. Both loops already publish these on the bus (kernel:
@@ -531,17 +533,10 @@ export const makeExecuteStream =
           );
           const streamMetadata: AgentResultMetadata =
             derivedStreamToolCalls.length > 0 ? { ...baseMetadata, toolCalls: derivedStreamToolCalls } : baseMetadata;
-          const rawStreamOutput = String((taskResult as { output?: unknown }).output ?? "");
-          // A failed, non-paused run with an empty answer must not complete
-          // silently (consumers skip empty replies) — name the strategy.
-          const streamOutput =
-            !isPausedRun && (taskResult as { success?: unknown }).success === false
-              ? surfaceFailedOutput(
-                  String((streamMetadata as { selectedStrategy?: string }).selectedStrategy ?? config.defaultStrategy ?? "reactive"),
-                  rawStreamOutput,
-                  (taskResult as { terminatedBy?: string }).terminatedBy,
-                )
-              : rawStreamOutput;
+          // A failed run's output is never replaced with harness text (owner
+          // decision 2026-11-10): an empty answer stays empty and the cause
+          // rides `error` below, same as run()'s AgentResult.
+          const streamOutput = String((taskResult as { output?: unknown }).output ?? "");
           const completedEvent: StreamCompletedEvent = {
             _tag: "StreamCompleted",
             output: streamOutput,
@@ -552,7 +547,15 @@ export const makeExecuteStream =
             ...(toolSummary.length > 0 ? { toolSummary } : {}),
             // success/terminatedBy/status: same rule as run()'s AgentResult
             // (terminalOutcomeFields): a durable pause is not a successful end_turn.
-            ...terminalOutcomeFields(paused || pausedInteraction, taskResult as { success?: unknown; terminatedBy?: TerminatedBy }),
+            ...terminalOutcomeFields(
+              paused || pausedInteraction,
+              taskResult as { success?: unknown; terminatedBy?: TerminatedBy; outcome?: AgentOutcome; output?: unknown },
+            ),
+            // The failure cause (same as AgentResult.error), so stream consumers
+            // such as ChatEngine can record a failed run without its output text.
+            ...(!isPausedRun && taskResult.success === false && typeof taskResult.error === "string"
+              ? { error: taskResult.error }
+              : {}),
             ...(paused ? { status: "awaiting-approval" as const } : pausedInteraction ? { status: "awaiting-interaction" as const } : {}),
             ...((taskResult as { evidenceDelta?: number }).evidenceDelta !== undefined
               ? { evidenceDelta: (taskResult as { evidenceDelta?: number }).evidenceDelta }

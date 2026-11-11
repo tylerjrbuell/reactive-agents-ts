@@ -37,6 +37,8 @@ function resultOfCompleted(event: Extract<AgentStreamEvent, { _tag: "StreamCompl
     agentId: event.agentId ?? "",
     metadata: event.metadata,
     ...(event.terminatedBy !== undefined ? { terminatedBy: event.terminatedBy } : {}),
+    ...(event.outcome !== undefined ? { outcome: event.outcome } : {}),
+    ...(event.error !== undefined ? { error: event.error } : {}),
     ...(event.goalAchieved !== undefined ? { goalAchieved: event.goalAchieved } : {}),
     ...(event.receipt !== undefined ? { receipt: event.receipt } : {}),
     ...(event.evidenceDelta !== undefined ? { evidenceDelta: event.evidenceDelta } : {}),

@@ -84,14 +84,17 @@ export interface RiskLevelOverrideCheckInput {
   readonly customToolNames: readonly string[];
   /** Names of agent tools (`.withAgentTool`, remote agents). */
   readonly agentToolNames: readonly string[];
-  /** Whether `.withTools({ terminal })` registers `shell-execute`. */
+  /**
+   * Whether the agent registers `shell-execute`: `.withTools({ terminal })`,
+   * or a scoped shell from a preset (`builtins: ["git"]`) or removed CLI name.
+   */
   readonly terminal: boolean;
 }
 
 /**
  * Names in `riskLevels` that match no tool the agent can statically register:
  * built-ins, framework meta-tools, the spawn tools, custom tools, agent tools
- * and the terminal tool. MCP tool names are only known at connect time, so callers should
+ * and `shell-execute` (terminal or scoped preset). MCP tool names are only known at connect time, so callers should
  * phrase the warning accordingly when MCP servers are configured.
  */
 export const unknownRiskLevelToolNames = (

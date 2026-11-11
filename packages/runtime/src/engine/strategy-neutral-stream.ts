@@ -25,15 +25,41 @@ const EXIT_GATE_GUARDS: ReadonlySet<string> = new Set(["exit_gate", "strategy_de
 /**
  * Project a bus `ReasoningStepCompleted` onto `ThoughtEmitted`. Only steps the
  * kernel produced (`producedBy === "kernel"`) with a non-empty thought qualify.
+ *
+ * `iteration` is the kernel iteration of the turn: the event's own `iteration`
+ * when the emitter stamps one, else `fallbackIteration`. Never `event.step`:
+ * that is a step index (thought + action + observation steps), so reading it
+ * split one turn across several iterations in chat UIs (2026-11-10).
  */
-export function toThoughtStreamEvent(event: BusEvent): AgentStreamEvent | undefined {
+export function toThoughtStreamEvent(event: BusEvent, fallbackIteration = 0): AgentStreamEvent | undefined {
   if (event.producedBy !== "kernel") return undefined;
   const thought = typeof event.thought === "string" ? event.thought.trim() : "";
   if (thought.length === 0) return undefined;
   return {
     _tag: "ThoughtEmitted",
     content: thought,
-    iteration: typeof event.step === "number" ? event.step : 0,
+    iteration: typeof event.iteration === "number" ? event.iteration : fallbackIteration,
+  };
+}
+
+/**
+ * Stateful thought projection for one stream. The bus `ReasoningStepCompleted`
+ * carries no iteration today, but the turn's LLM call (`LLMRequestCompleted`,
+ * stamped with the kernel iteration) completes before its thought is
+ * published. `observeLlmCall` records that iteration per task (root and
+ * sub-agent runs share the bus); `project` stamps it on the next thought of
+ * the same task.
+ */
+export function makeThoughtProjection(): {
+  readonly observeLlmCall: (event: BusEvent) => void;
+  readonly project: (event: BusEvent) => AgentStreamEvent | undefined;
+} {
+  const lastIteration = new Map<string, number>();
+  return {
+    observeLlmCall: (event) => {
+      if (typeof event.iteration === "number") lastIteration.set(String(event.taskId ?? ""), event.iteration);
+    },
+    project: (event) => toThoughtStreamEvent(event, lastIteration.get(String(event.taskId ?? "")) ?? 0),
   };
 }
 

@@ -40,12 +40,13 @@ describe("toThoughtStreamEvent", () => {
   test("a strategy step (no producedBy) is never a thought", () => {
     expect(toThoughtStreamEvent({ step: 2, thought: "[PLAN 2] Generated 6 steps" })).toBeUndefined();
   });
-  test("a kernel step with a thought projects ThoughtEmitted", () => {
-    expect(toThoughtStreamEvent({ step: 3, thought: "  check the file  ", producedBy: "kernel" })).toEqual({
+  test("a kernel step with a thought projects ThoughtEmitted at its iteration, never its step index", () => {
+    expect(toThoughtStreamEvent({ step: 3, iteration: 1, thought: "  check the file  ", producedBy: "kernel" })).toEqual({
       _tag: "ThoughtEmitted",
       content: "check the file",
-      iteration: 3,
+      iteration: 1,
     });
+    expect(toThoughtStreamEvent({ step: 3, thought: "x", producedBy: "kernel" }, 2)).toMatchObject({ iteration: 2 });
   });
   test("a kernel step with an empty thought yields nothing", () => {
     expect(toThoughtStreamEvent({ step: 1, thought: "   ", producedBy: "kernel" })).toBeUndefined();

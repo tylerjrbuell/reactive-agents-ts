@@ -37,7 +37,7 @@ import { __testOnlyDeriveDebriefOutcome } from "../src/debrief.js";
 const TRUTH_TABLE: ReadonlyArray<{
   readonly terminatedBy: TerminatedBy;
   readonly hadErrors: boolean;
-  readonly outcome: "success" | "partial" | "failure";
+  readonly outcome: "success" | "partial" | "failure" | "abstained";
 }> = [
   // Clean finishes with nothing wrong.
   { terminatedBy: "final_answer_tool", hadErrors: false, outcome: "success" },
@@ -67,10 +67,10 @@ const TRUTH_TABLE: ReadonlyArray<{
   { terminatedBy: "llm_error", hadErrors: true, outcome: "failure" },
 
   // The agent honestly declined. Not a success: nothing was delivered, and it
-  // must never be reinforced as one. The honesty of the decline is carried by
-  // AgentResult.abstention and the receipt, not by this coarse enum.
-  { terminatedBy: "abstained", hadErrors: false, outcome: "failure" },
-  { terminatedBy: "abstained", hadErrors: true, outcome: "failure" },
+  // must never be reinforced as one. Not a failure either (owner decision
+  // 2026-11-10): it is recorded on its own label in every lane.
+  { terminatedBy: "abstained", hadErrors: false, outcome: "abstained" },
+  { terminatedBy: "abstained", hadErrors: true, outcome: "abstained" },
 ];
 
 describe("deriveRunOutcome — the whole truth table", () => {
@@ -116,5 +116,21 @@ describe("classifyComplexity — a run stopped unfinished is never trivial", () 
     expect(classifyComplexity(1, undefined, 0, "end_turn")).toBe("trivial");
     expect(classifyComplexity(1, undefined, 0, "max_iterations")).toBe("moderate");
     expect(classifyComplexity(1, undefined, 0, "guard_stop")).toBe("moderate");
+  });
+});
+
+// 2026-11-10: a guard stop with no model answer now ends FAILED in the kernel
+// (evidence attached, no harness-written answer). The public label is still
+// `guard_stop` / `max_iterations`, so the classifier reads the kernel's own
+// failed status; a guard stop where the model wrote a draft ends `partial`.
+// Red-on-cut: delete the `kernelDeliveredNothing` early return in deriveRunOutcome.
+describe("a kernel-failed guard stop is a failure, not a partial", () => {
+  it("guard_stop / max_iterations with the kernel failed: failure in every lane", () => {
+    for (const terminatedBy of ["guard_stop", "max_iterations"] as const) {
+      expect(deriveRunOutcome(terminatedBy, false, "failed")).toBe("failure");
+      expect(__testOnlyDeriveDebriefOutcome(terminatedBy, [], "failed")).toBe("failed");
+      // Vacuity guard: the same label without a kernel failure stays partial.
+      expect(deriveRunOutcome(terminatedBy, false)).toBe("partial");
+    }
   });
 });

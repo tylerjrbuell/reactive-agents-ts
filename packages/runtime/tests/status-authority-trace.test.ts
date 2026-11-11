@@ -9,6 +9,10 @@
 //  (c) tool-call-end / strategy-switched iterations are populated.
 //  (d) session.chat() runs report the session/turn origin.
 //
+// (a) uses a verifier-blocked run for the runtime-veto case: since 2026-11-10
+// (no harness-written answers) the stalled run ends failed in the kernel
+// itself, and an abstention carries the kernel's own `abstained` status.
+//
 // RED-ON-CUT:
 //  - drop the foldRuntimeAuthority call in engine/finalize/run-finalize.ts -> (a) red.
 //  - drop `authority` in engine/finalize/terminal-outcome-read.ts -> (a) red.
@@ -69,19 +73,95 @@ async function stalledRun() {
   return { evs: await events(dir), result };
 }
 
+/**
+ * A run the KERNEL closes as `completed` and the RUNTIME scores as a failure
+ * (verifier gate, `onReject: "block"`): the done-vs-failure disagreement the
+ * fold must explain. (Since 2026-11-10 the stalled run above ends failed in the
+ * kernel itself, and an abstention carries the kernel's own `abstained`
+ * status, so neither exercises a runtime veto any more.)
+ */
+async function verifierBlockedRun() {
+  const dir = await mkdtemp(join(tmpdir(), "ra-authority-verify-"));
+  const agent = await ReactiveAgents.create()
+    .withName("authority-verify")
+    .withProvider("test")
+    .withModel("test")
+    .withTestScenario([{ text: "FINAL ANSWER: 4." }] as never)
+    .withTools({ builtins: [], adaptive: false } as never)
+    .withVerification({ onReject: "block" })
+    .withReasoning({ defaultStrategy: "reactive", enableStrategySwitching: false })
+    .withMaxIterations(4)
+    .withObservability({ tracing: { dir } })
+    .build();
+  const result = await agent.run("What is 2 + 2?");
+  await agent.dispose();
+  return { evs: await events(dir), result };
+}
+
+/** A run the kernel itself ends `abstained` (required tool never registered). */
+async function abstainedRun() {
+  const dir = await mkdtemp(join(tmpdir(), "ra-authority-abstain-"));
+  const agent = await ReactiveAgents.create()
+    .withName("authority-abstain")
+    .withProvider("test")
+    .withModel("test")
+    .withTestScenario([
+      { text: "I cannot ground this without the required tool." },
+      { text: "I cannot ground this without the required tool." },
+    ] as never)
+    .withTools({ builtins: [], adaptive: false } as never)
+    .withRequiredTools({ tools: ["tool-that-does-not-exist"] })
+    .withReasoning({ defaultStrategy: "reactive", enableStrategySwitching: false })
+    .withMaxIterations(2)
+    .withObservability({ tracing: { dir } })
+    .build();
+  const result = await agent.run("What is the population of the fictional city of Aetheria?");
+  await agent.dispose();
+  return { evs: await events(dir), result };
+}
+
 describe("status authority is one recorded value", () => {
-  it("(a) runtime veto of a kernel done: authority is the runtime gate, kernelAuthority is the kernel's", async () => {
-    const { evs, result } = await stalledRun();
+  it("(a) runtime veto of a kernel-closed run: authority is the runtime veto, kernelAuthority is the kernel's", async () => {
+    const { evs, result } = await verifierBlockedRun();
     const rc = evs.find((e) => e.kind === "run-completed");
     expect(rc?.kind).toBe("run-completed");
     if (rc?.kind !== "run-completed") return;
     expect(rc.outcome).toBeDefined();
-    expect(typeof rc.outcome!.authority).toBe("string");
     expect(rc.status).toBe("failure");
     expect(result.success).toBe(false);
-    // Vacuity guard: the kernel said gate-verdict, the runtime owns the final status.
-    expect(rc.outcome!.authority).toMatch(/^runtime-(verifier-gate|success-veto:.+)$/);
-    expect(rc.outcome!.kernelAuthority).toBe("gate-verdict");
+    // Vacuity guard: the kernel closed the run itself; the runtime owns the final status.
+    expect(rc.outcome!.status).toBe("completed");
+    expect(rc.outcome!.authority).toBe("runtime-verifier-gate");
+    expect(rc.outcome!.kernelAuthority).toBe("model-final");
+    expect(rc.outcome!.statusReason).toContain("owned by runtime-verifier-gate");
+    // The withheld answer is not replaced with harness text; the cause is on error.
+    expect(result.output).toBe("");
+    expect(String(result.error)).toContain("Verification rejected the response");
+  }, 20000);
+
+  it("(a) kernel abstention: the kernel owns the status, no runtime veto claims it", async () => {
+    const { evs, result } = await abstainedRun();
+    const rc = evs.find((e) => e.kind === "run-completed");
+    if (rc?.kind !== "run-completed") throw new Error("no run-completed");
+    expect(result.success).toBe(false);
+    expect(result.terminatedBy).toBe("abstained");
+    expect(rc.status).toBe("failure");
+    expect(rc.outcome!.status).toBe("abstained");
+    expect(rc.outcome!.authority).toBe("abstention");
+    expect(rc.outcome!.kernelAuthority).toBeUndefined();
+    expect(rc.outcome!.statusReason).toContain("agrees with kernel outcome abstained");
+  }, 20000);
+
+  it("(a) kernel-owned failure: authority is the kernel's, no kernelAuthority, the reason records agreement", async () => {
+    const { evs, result } = await stalledRun();
+    const rc = evs.find((e) => e.kind === "run-completed");
+    if (rc?.kind !== "run-completed") throw new Error("no run-completed");
+    expect(result.success).toBe(false);
+    expect(rc.status).toBe("failure");
+    expect(rc.outcome!.success).toBe(false);
+    expect(rc.outcome!.authority).not.toMatch(/^runtime-/);
+    expect(rc.outcome!.kernelAuthority).toBeUndefined();
+    expect(rc.outcome!.statusReason).toContain("agrees with kernel outcome");
   }, 20000);
 });
 

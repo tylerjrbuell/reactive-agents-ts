@@ -85,7 +85,6 @@ const assemble = (ctx: ExecutionContext) =>
     rr: undefined,
     verificationOutcome: { output: "done", success: true, blocked: false },
     executionDurationMs: 1,
-    outputForSuccess: "done",
     toolCallLog: [],
     entropyLog: [],
     terminatedByRaw: "final_answer",

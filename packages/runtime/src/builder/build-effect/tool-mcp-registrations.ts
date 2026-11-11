@@ -4,12 +4,17 @@
  * Bakes registrations into the runtime layer via Layer.effectDiscard so they
  * run inside the ManagedRuntime scope (not a throwaway scope). Conditional on
  * any of: agentTools / allowDynamicSubAgents / mcpServers / toolsOptions.tools
- * / toolsOptions.terminal.
+ * / toolsOptions.terminal / a scoped shell preset (`builtinSelectionFor`).
  *
  * Extracted verbatim from builder.ts:2213-2374.
  */
 import { Effect, Layer } from "effect";
-import { shellExecuteToolFor, shellExecuteHandler } from "@reactive-agents/tools";
+import {
+  scopedShellToolFor,
+  shellExecuteToolFor,
+  shellExecuteHandler,
+} from "@reactive-agents/tools";
+import { builtinSelectionFor, ownToolNames } from "../builtins-option.js";
 import type {
   ToolDefinition,
   ParentContext,
@@ -45,6 +50,12 @@ export interface ToolMcpRegistrationsDeps extends ParentSafetyRails {
   readonly runtimeWithCortex: Layer.Layer<unknown, unknown, unknown>;
   readonly mcpServers: readonly MCPServerConfig[];
   readonly toolsOptions?: ToolsOptions;
+  /**
+   * The agent's required tool names (`.withRequiredTools`, plus contract
+   * `required` tools). A removed CLI name here (`git-cli`) selects a scoped
+   * shell-execute, same as in `builtins` / `allowedTools`.
+   */
+  readonly requiredTools?: readonly string[];
   readonly agentTools: readonly AgentToolOptions[];
   readonly allowDynamicSubAgents: boolean;
   readonly dynamicSubAgentOptions?: {
@@ -80,13 +91,22 @@ export const buildToolMcpRegistrations = (
 ): Effect.Effect<ToolMcpRegistrationsOutput, never> =>
   Effect.gen(function* () {
     let fullRuntime: Layer.Layer<unknown, unknown, unknown> = deps.runtimeWithCortex;
+    // A shell preset (`builtins: ["git"]`) or removed CLI name (`gh-cli`) in
+    // builtins / allowedTools / requiredTools registers a scoped shell-execute.
+    // The agent's own tool names (custom, agent tools) are not aliases.
+    const shellPrograms = builtinSelectionFor(
+      deps.toolsOptions,
+      deps.requiredTools,
+      ownToolNames(deps.toolsOptions, deps.agentTools.map((t) => t.name)),
+    ).shellPrograms;
 
     if (
       deps.agentTools.length > 0 ||
       deps.allowDynamicSubAgents ||
       deps.mcpServers.length > 0 ||
       (deps.toolsOptions?.tools?.length ?? 0) > 0 ||
-      deps.toolsOptions?.terminal !== undefined
+      deps.toolsOptions?.terminal !== undefined ||
+      shellPrograms.length > 0
     ) {
       const toolsMod = yield* Effect.promise(
         () => import("@reactive-agents/tools"),
@@ -237,6 +257,8 @@ export const buildToolMcpRegistrations = (
         toolsOptions: deps.toolsOptions,
         registrations,
         shellExecuteToolFor,
+        scopedShellToolFor,
+        shellPrograms,
         shellExecuteHandler,
         onToolServiceResolved: (ts) => {
           parentToolServiceRef = ts;

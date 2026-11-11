@@ -162,17 +162,21 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.actOrAnswer` | `boolean` \| `"proactive"` \| `"auto"` | no |  |
 | `reasoning.harness.assemblyDebug` | `boolean` | no |  |
 | `reasoning.harness.auditRationale` | `boolean` | no |  |
+| `reasoning.harness.compactCallConstraints` | `boolean` | no |  |
 | `reasoning.harness.inputCoverage` | `boolean` | no |  |
 | `reasoning.harness.lazyDisclosure` | `boolean` | no |  |
+| `reasoning.harness.llmRecoveryBudget` | `number` | no |  |
 | `reasoning.harness.numCtxPolicy` | `fixed` \| `demand` | no |  |
 | `reasoning.harness.promptDumpPathPrefix` | `string` | no |  |
 | `reasoning.harness.recencyBudgetChars` | `number` | no |  |
+| `reasoning.harness.stableToolList` | `boolean` | no |  |
 | `reasoning.harness.toolDiscovery` | `boolean` | no |  |
 | `reasoning.harness.toolIndex` | `boolean` | no |  |
 | `reasoning.harness.toolIndexMaxEntries` | `number` | no |  |
 | `reasoning.harness.toolResultBudgetChars` | `number` | no |  |
 | `reasoning.harness.treeOfThoughtExploreBudgetMs` | `number` | no |  |
 | `reasoning.harness.verboseRules` | `boolean` | no |  |
+| `reasoning.harness.writeCoverage` | `boolean` | no |  |
 | `reasoning.maxStrategySwitches` | `number` | no |  |
 | `requiredTools.adaptive` | `boolean` | no |  |
 | `requiredTools.maxRetries` | `number` | no |  |

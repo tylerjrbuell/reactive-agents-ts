@@ -182,7 +182,8 @@ describe("builder→runtime seam — behavioral (RED-ON-CUT)", () => {
       expect(r.terminatedBy).toBe("max_iterations");
       // 2 iterations → a small, bounded step count. The default cap (≥10) would
       // blow past this bound if the wiring were cut.
-      expect(r.metadata.stepsCount).toBeLessThanOrEqual(6);
+      // 2026-11-10: the reserved budget answer turn adds one gate step (reservation + answer-turn thought + refusal + handoff); a run without the cap still goes far past 7.
+      expect(r.metadata.stepsCount).toBeLessThanOrEqual(7);
     } finally {
       await agent.dispose();
     }

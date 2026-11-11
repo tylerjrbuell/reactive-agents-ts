@@ -98,6 +98,25 @@ export const kernelIterationArg = (
   return typeof k === "number" && Number.isFinite(k) ? { kernelIteration: k } : {};
 };
 
+/** Verification-package Tier-1 pure-compute checks (shadow; never enforced). */
+const tier1ShadowChecks = (output: string, task: string) =>
+  Effect.all([checkSemanticEntropy(output, task), checkNli(output, task)], {
+    concurrency: 2,
+  }).pipe(
+    Effect.map(([entropyResult, nliResult]) => [
+      {
+        name: "tier1-semantic-entropy",
+        passed: entropyResult.passed,
+        ...(entropyResult.details !== undefined ? { reason: entropyResult.details } : {}),
+      },
+      {
+        name: "tier1-nli",
+        passed: nliResult.passed,
+        ...(nliResult.details !== undefined ? { reason: nliResult.details } : {}),
+      },
+    ]),
+  );
+
 export interface ResultVerificationOutcome {
   readonly result: VerificationResult;
   /** pass | warn | reject | escalate — lands on receipt.verifierVerdict. */
@@ -108,15 +127,25 @@ export interface ResultVerificationOutcome {
 
 /**
  * Verify the shipped answer. Returns the verdict + (on failure) the reason,
- * so the caller can stamp the receipt and the result metadata. Never throws;
- * an empty output short-circuits to `undefined` (the empty-output invariant
- * already owns that case).
+ * so the caller can stamp the receipt and the result metadata. Never throws.
+ *
+ * Empty output splits on `success`:
+ *   - a SUCCESSFUL run with empty output short-circuits to `undefined` (the
+ *     empty-output invariant already owns that case);
+ *   - a FAILED run ships empty output BY CONTRACT (2026-11-10: the cause rides
+ *     `result.error`, never the answer). It still gets a verdict — skipping it
+ *     would erase the runtime verdict event and `receipt.verifierVerdict` from
+ *     every failed run. The verdict is `reject` on `action-success`; the
+ *     contractual empty answer is not reported as a separate finding, and the
+ *     Tier-1 shadow checks are skipped (there is no text to judge).
  */
 export const verifyResultBoundary = (
   args: ResultVerificationArgs,
 ): Effect.Effect<ResultVerificationOutcome | undefined, never> =>
   Effect.gen(function* () {
-    if (args.output.trim().length === 0) return undefined;
+    const emptyOutput = args.output.trim().length === 0;
+    if (emptyOutput && args.success) return undefined;
+    const emptyFailure = emptyOutput && !args.success;
 
     // A REPLAY IS NOT VERIFIABLE. Every check this verifier runs detects a
     // PROBLEM in the run's own record — scaffold leak, harness parrot,
@@ -170,25 +199,11 @@ export const verifyResultBoundary = (
     // lift rule: recorded in the trace event's checks, NEVER enforced — they
     // cannot flip the verdict, only annotate. Enforcement rides a future
     // ablation with measured lift, not this commit.
-    const [entropyResult, nliResult] = yield* Effect.all(
-      [
-        checkSemanticEntropy(args.output, args.task),
-        checkNli(args.output, args.task),
-      ],
-      { concurrency: 2 },
-    );
-    const tier1Checks = [
-      {
-        name: "tier1-semantic-entropy",
-        passed: entropyResult.passed,
-        ...(entropyResult.details !== undefined ? { reason: entropyResult.details } : {}),
-      },
-      {
-        name: "tier1-nli",
-        passed: nliResult.passed,
-        ...(nliResult.details !== undefined ? { reason: nliResult.details } : {}),
-      },
-    ];
+    const tier1Checks = emptyFailure ? [] : yield* tier1ShadowChecks(args.output, args.task);
+    // A failed run's empty answer is the contract, not a finding.
+    const boundaryChecks = emptyFailure
+      ? result.checks.filter((c) => c.name !== "non-empty-content")
+      : result.checks;
 
     // Trace: this is the event that was missing from every strategy trace.
     // The verdict is stamped `source: "runtime"` so it stays distinguishable
@@ -207,7 +222,7 @@ export const verifyResultBoundary = (
           verified: result.verified,
           summary: result.summary,
           checks: [
-            ...result.checks.map((c) => ({
+            ...boundaryChecks.map((c) => ({
               name: c.name,
               passed: c.passed,
               ...(c.reason !== undefined ? { reason: c.reason } : {}),
@@ -227,7 +242,7 @@ export const verifyResultBoundary = (
     }
 
     const verdict = result.severity ?? (result.verified ? "pass" : "reject");
-    const failed = result.checks.filter((c) => !c.passed && c.reason !== undefined);
+    const failed = boundaryChecks.filter((c) => !c.passed && c.reason !== undefined);
     const hasPriorReason =
       args.priorRejectionReason !== undefined &&
       args.priorRejectionReason.trim().length > 0;

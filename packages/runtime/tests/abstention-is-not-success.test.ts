@@ -70,10 +70,12 @@ describe("an abstention is not reported as a success", () => {
 
     // Precondition — if this run stops taking the abstention path for some
     // unrelated reason, the cell must fail loudly rather than pass on a run it
-    // never exercised. `terminatedBy` is not surfaced on AgentResult.metadata,
-    // so the abstention sentinel's own text is the available signal.
-    expect(String(result.output)).toContain("Could not complete the task");
-    expect(String(result.output)).toContain("Cause:");
+    // never exercised. Owner decision 2026-11-10: the abstention ships output
+    // "" and its sentinel is the cause on `error`.
+    expect(result.terminatedBy).toBe("abstained");
+    expect(result.output).toBe("");
+    expect(String(result.error)).toContain("Could not complete the task");
+    expect(String(result.error)).toContain("Cause:");
 
     // The load-bearing assertion.
     expect(result.success).toBe(false);

@@ -153,7 +153,7 @@ export const buildAgent = async <TOut>(
         // froze to the 2048-ctx `source: "fallback"` while the wire got the real
         // probed window (e.g. gemma4 32768) — a 16× budget/wire divergence that
         // starved every tool-result compression budget (live-confirmed 2026-07-30:
-        // a 25-KB gh-cli result crushed to ~1.2 KB → model fabricated the tail).
+        // a 25-KB result from the since-removed gh-cli tool crushed to ~1.2 KB → model fabricated the tail).
         // Best-effort: never throws, no-op for providers without a probe.
         const { primeCapability, registerUserSuppliedCapability } = await import(
             '@reactive-agents/llm-provider'
@@ -204,19 +204,32 @@ export const buildAgent = async <TOut>(
         } catch {
             // ignore — provider defaults unavailable
         }
+        // The built-in selection over builtins / allowedTools / requiredTools
+        // (contract-required included, as registration uses). Removed CLI
+        // names gh-cli / git-cli select a scoped shell-execute; workspace /
+        // gws-cli select nothing. Each removed name adds a deprecation.
+        const { builtinSelectionFor, builtinDeprecationWarnings, ownToolNames } = await import('../builtins-option.js')
+        const { computeExposedToolNames, mergeContractRequiredTools, resolveContractToolNames } =
+            await import('../contract-tool-set.js')
+        const ownNames = ownToolNames(state._toolsOptions, state._agentTools.map((t) => t.name))
+        const toolSelection = builtinSelectionFor(
+            state._toolsOptions,
+            mergeContractRequiredTools(state._requiredToolsConfig, state._taskContract)?.tools,
+            ownNames
+        )
         let taskContractInput:
             | import('../../build-validation.js').TaskContractValidationInput
             | undefined
         if (state._taskContract) {
-            const { computeExposedToolNames } = await import(
-                '../contract-tool-set.js'
-            )
+            // Contract tool names resolve like requiredTools: `gh-cli` means the
+            // scoped shell-execute the build registers for it.
+            const exposed = computeExposedToolNames(state._toolsOptions, state._requiredToolsConfig?.tools)
+            if (toolSelection.shellPrograms.length > 0 && !exposed.includes('shell-execute')) {
+                exposed.push('shell-execute')
+            }
             taskContractInput = {
-                contract: state._taskContract,
-                exposedToolNames: computeExposedToolNames(
-                    state._toolsOptions,
-                    state._requiredToolsConfig?.tools
-                ),
+                contract: resolveContractToolNames(state._taskContract, ownNames),
+                exposedToolNames: exposed,
                 hasMcpServers: state._mcpServers.length > 0,
             }
         }
@@ -229,6 +242,8 @@ export const buildAgent = async <TOut>(
             taskContractInput,
             state._providerConfig?.apiKey
         )
+        // Each requested removed CLI name is a build warning, never an error.
+        validation.warnings.push(...builtinDeprecationWarnings(toolSelection))
         // `.withTools({ riskLevels })` names that match no tool: warn, never throw.
         if (state._toolsOptions?.riskLevels) {
             const { unknownRiskLevelToolNames, riskLevelOverrideWarning } =
@@ -240,7 +255,9 @@ export const buildAgent = async <TOut>(
                         (t) => t.definition.name
                     ),
                     agentToolNames: state._agentTools.map((t) => t.name),
-                    terminal: Boolean(state._toolsOptions.terminal),
+                    terminal:
+                        Boolean(state._toolsOptions.terminal) ||
+                        toolSelection.shellPrograms.length > 0,
                 }),
                 state._mcpServers.length > 0
             )

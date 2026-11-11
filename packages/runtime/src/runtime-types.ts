@@ -401,7 +401,7 @@ export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCa
   /**
    * What to do when verification still rejects after retries (F10). Default
    * "proceed" (ship the answer — telemetry only); "block" withholds it and
-   * fails the run; "annotate" ships with a visible warning prepended.
+   * fails the run; "annotate" ships it unchanged + `metadata.verificationNote`.
    */
   verificationOnReject?: "block" | "annotate" | "proceed";
 

@@ -15,8 +15,18 @@
  */
 import type { ReconciledOutcome } from "./terminal-outcome-read.js";
 
+/**
+ * `ctx.metadata` marker stamped when the shipped strategy result reports
+ * `failed`/`error` but its minted kernel outcome still says `completed` or
+ * `partial`: a later pass (e.g. a failed verification retry) failed after the
+ * kernel minted that record. The fold then reports `status: "failed"`, so
+ * `AgentCompleted.outcome.status` agrees with `runOutcome`.
+ */
+export const STRATEGY_RESULT_FAILED_MARKER = "strategyResultFailed";
+
 /** Marker flag -> authority, in the order the engine applies them. */
 const VETO_MARKERS: readonly (readonly [string, string])[] = [
+  [STRATEGY_RESULT_FAILED_MARKER, "runtime-success-veto:strategy-result-failed"],
   ["verificationBlocked", "runtime-verifier-gate"],
   ["abstainedNotSuccess", "runtime-success-veto:abstained"],
   ["outstandingContractNotSuccess", "runtime-success-veto:outstanding-criteria"],
@@ -103,8 +113,12 @@ export function foldRuntimeAuthority(
   const runtime = runtimeStatusAuthority(metadata);
   const decision = success === undefined ? undefined : deriveFinalStatus(success, outcome, metadata);
   if (runtime === undefined && decision === undefined) return outcome;
+  // A stale minted record: the strategy result the run shipped failed, so the
+  // status is the one it ended with (the reason still names the minted one).
+  const staleRecord = metadata?.[STRATEGY_RESULT_FAILED_MARKER] === true;
   return {
     ...outcome,
+    ...(staleRecord ? { status: "failed" as const, success: false } : {}),
     ...(runtime !== undefined
       ? {
           authority: runtime,

@@ -33,6 +33,42 @@ export const HarnessConfigSchema = Schema.Struct({
    * run may finish. Off by default pending ablation. (`RA_INPUT_COVERAGE=1`)
    */
   inputCoverage: Schema.optional(Schema.Boolean),
+  /**
+   * Write coverage. Opt-in: each in-place edit target the task lists must be
+   * written before the run may finish. Off by default pending ablation.
+   * (`RA_WRITE_COVERAGE=1`)
+   */
+  writeCoverage: Schema.optional(Schema.Boolean),
+  /**
+   * Stable tool list. Opt-in: a kernel pass picks its tool list on the first
+   * think turn and keeps it, only appending tools (via `discover-tools` or a
+   * tool the model uses). The tool block at the head of the prompt stays the
+   * same between turns, so the provider prompt cache keeps working. A listed
+   * tool that is not ready yet is refused when called, with a note saying what
+   * to do first. Off by default pending ablation. (`RA_STABLE_TOOL_LIST=1`)
+   */
+  stableToolList: Schema.optional(Schema.Boolean),
+  /**
+   * Compact call constraints. Opt-in: compact tool profiles (`names-only`,
+   * `names-and-types`, the local tier) drop description prose. With this on
+   * they keep the sentences that limit a parameter's values ("type is one of
+   * url, referrer, ...") in the prompt tool reference, the driver listing and
+   * the wire description, and the compact reference shows enum values as
+   * `a|b|c`. Full-detail profiles are unchanged. Off by default: the ablation
+   * verdict was OPT-IN, not default-on. (`RA_COMPACT_CALL_CONSTRAINTS=1`)
+   */
+  compactCallConstraints: Schema.optional(Schema.Boolean),
+  /**
+   * LLM recovery budget: how many recoverable provider failures on think
+   * turns one run may retry instead of ending with `llm_error`. Malformed
+   * model output is resampled; a request over the context window or the
+   * per-minute token budget is shrunk and re-sent; a rate limit, timeout,
+   * network or 5xx failure backs off and re-sends. Fatal classes (auth,
+   * quota, invalid request) still end the run. Whole number, clamped to
+   * 0..10. Default 2. `0` turns recovery off, overflow compaction included.
+   * Config only (no env var).
+   */
+  llmRecoveryBudget: Schema.optional(Schema.Number),
 });
 
 export type HarnessConfigEncoded = typeof HarnessConfigSchema.Type;

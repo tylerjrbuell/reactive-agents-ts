@@ -103,7 +103,8 @@ export const runVerificationQualityGate = (
 
     // If still rejected after retry, apply the onReject policy (F10). Default
     // "proceed" ships the answer (telemetry only); "block" withholds it and
-    // fails the run; "annotate" ships with a visible warning. The flag set here
+    // fails the run; "annotate" ships the answer unchanged with a typed note
+    // (`metadata.verificationNote`), never text in the output. The flag set here
     // is read at result assembly (applyVerificationOutcome) — a real
     // enforcement point, not dead telemetry.
     const vResultAfterRetry = ctx.metadata.verificationResult as
@@ -124,7 +125,7 @@ export const runVerificationQualityGate = (
           ...ctx,
           metadata: {
             ...ctx.metadata,
-            verificationAnnotation: `⚠ This response failed verification (${reason}) and may be unreliable.`,
+            verificationAnnotation: `This response failed verification (${reason}) and may be unreliable.`,
           },
         };
       }

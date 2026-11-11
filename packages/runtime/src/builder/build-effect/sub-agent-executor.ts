@@ -33,6 +33,12 @@ import { ObservabilityService, ChildDashboardRegistry } from "@reactive-agents/o
 
 import { buildSubAgentLogPrefix } from "./log-prefix.js";
 import { makeChildSpendProbe, foldChildMeter, spendOfChildResult } from "./child-spend-probe.js";
+import {
+  resolveSubAgentToolNames,
+  subAgentToolUniverse,
+  unresolvedSubAgentToolsResult,
+  withSubAgentToolNote,
+} from "./sub-agent-tool-names.js";
 export { buildSubAgentLogPrefix };
 
 /** Per-execution shared handles resolved from the parent's ambient context. */
@@ -424,6 +430,9 @@ export const buildSubAgentTask = (
       // List the parent's already-connected tools and register proxy handlers
       // that route calls through the parent's ToolService (no duplicate Docker).
       let parentMcpToolDefs: ParentMcpToolDef[] = [];
+      // False while MCP servers are configured but their tools could not be
+      // listed: names are then passed through, never dropped as unknown.
+      let childToolNamesKnown = mcpServers.length === 0;
       const parentToolServiceRef = getParentToolService();
       if (parentToolServiceRef && mcpServers.length > 0) {
         const listed = yield* Effect.either(
@@ -440,13 +449,27 @@ export const buildSubAgentTask = (
           parentMcpToolDefs = listed.right.filter(
             (m) => m.source === "mcp" || m.name?.includes("/"),
           );
+          childToolNamesKnown = true;
         }
         // Left ⇒ parent tools unavailable — sub-agent gets built-ins only.
       }
 
+      // Resolve the requested names against the tools the child will have
+      // (`umami_get_website_stats` → `umami/get_website_stats`) before they
+      // become its allowlist and required tools. Nothing resolves ⇒ do not
+      // start a child that could only fail with an empty toolbox.
+      const childUniverse = subAgentToolUniverse(parentMcpToolDefs.map((m) => m.name));
+      const toolResolution =
+        t.tools !== undefined && childToolNamesKnown
+          ? resolveSubAgentToolNames(t.tools, childUniverse)
+          : undefined;
+      if (toolResolution && toolResolution.tools.length === 0 && toolResolution.unresolved.length > 0) {
+        return unresolvedSubAgentToolsResult(t.name, toolResolution, childUniverse);
+      }
+
       // Auto-scope: when no explicit whitelist was given, filter MCP tools by
       // task relevance so the sub-agent doesn't see all 40+ tools.
-      let subAllowed = toolsMod.computeEffectiveTools(t.tools);
+      let subAllowed = toolsMod.computeEffectiveTools(toolResolution?.tools ?? t.tools);
       if (
         (!subAllowed || subAllowed.length === 0) &&
         parentMcpToolDefs.length > 0
@@ -734,7 +757,8 @@ export const buildSubAgentTask = (
           // straight into the LLM's context (and the tool cache) for free.
         };
 
-        return toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
+        const finalized = toolsMod.finalizeSubAgentResult({ name: t.name }, raw);
+        return withSubAgentToolNote(finalized, toolResolution);
       }
 
       // Failure or interruption — contained, never rethrown to the parent.
@@ -749,7 +773,7 @@ export const buildSubAgentTask = (
       // D-2026-10-29-CHILD-COST: fold the failed child's full meter (tokens,
       // cost, in/out, llmCalls) through the same fold as the success branch.
       const failedSpend = yield* foldChildMeter(spendProbe.read());
-      return {
+      const failed = {
         subAgentName: t.name,
         success: false,
         summary,
@@ -757,5 +781,6 @@ export const buildSubAgentTask = (
         stepsCompleted: 0,
         completionStatus: "failed",
       } satisfies SubAgentResult;
+      return withSubAgentToolNote(failed, toolResolution);
     }),
   );

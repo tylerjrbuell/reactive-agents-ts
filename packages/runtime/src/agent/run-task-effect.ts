@@ -83,6 +83,7 @@ import type { RuntimeErrors } from '../errors.js'
 import type {
     AgentResult,
     AgentResultMetadata,
+    AgentOutcome,
     OutputSchemaOptions,
 } from '../builder/types.js'
 import type { AgentDebrief } from '../debrief.js'
@@ -274,6 +275,7 @@ export const buildRunTaskEffect = (
                 terminatedBy?: TerminatedBy
                 debrief?: AgentDebrief
                 evidenceDelta?: number
+                outcome?: AgentOutcome
                 awaitingApprovalFor?: { gateId: string; toolName: string; args: unknown }
                 awaitingInteractionFor?: { interactionId: string; kind: string; prompt: string; schemaJson: string }
             }

@@ -31,7 +31,6 @@ import {
   childContext,
 } from "@reactive-agents/core";
 import { childRunScope } from "@reactive-agents/core/internal/run-scope";
-import { addRunSpend } from "@reactive-agents/reasoning";
 import type {
   ParentContext,
   SubAgentResult,
@@ -46,12 +45,19 @@ import {
   makeSpawnHandlers,
   type SpawnHandlers,
 } from "./spawn-handlers.js";
+import { foldChildMeter, spendOfChildResult } from "./child-spend-probe.js";
 import type { ParentSafetyRails, SubAgentTaskArgs } from "./sub-agent-executor.js";
 import {
   childCompletionEnvelope,
   inheritedSafetyRails,
   resolveSpawningContext,
 } from "./sub-agent-executor.js";
+import {
+  resolveSubAgentToolNames,
+  subAgentToolUniverse,
+  unresolvedSubAgentToolsResult,
+  withSubAgentToolNote,
+} from "./sub-agent-tool-names.js";
 
 /** Registration entry produced by both helpers — `(toolDef, handler)` pair. */
 export interface LocalAgentToolRegistration {
@@ -278,12 +284,19 @@ export const createLocalAgentToolRegistration = (
 
         // Per-call tools override (like spawn-agent's `tools` param). Falls
         // back to the static `agent.tools` allowlist when not provided.
-        const perCallTools =
-          Array.isArray(args.tools)
-            ? (args.tools as unknown[]).filter(
-                (x): x is string => typeof x === "string",
-              )
-            : undefined;
+        // Resolved against the child's real tools (built-ins + meta-tools; a
+        // local agent gets no proxied parent tools) — see sub-agent-tool-names.ts.
+        const childUniverse = subAgentToolUniverse();
+        const toolResolution = Array.isArray(args.tools)
+          ? resolveSubAgentToolNames(
+              (args.tools as unknown[]).filter((x): x is string => typeof x === "string"),
+              childUniverse,
+            )
+          : undefined;
+        if (toolResolution && toolResolution.tools.length === 0 && toolResolution.unresolved.length > 0) {
+          return unresolvedSubAgentToolsResult(subName, toolResolution, childUniverse);
+        }
+        const perCallTools = toolResolution?.tools;
         const busOpt = yield* Effect.serviceOption(EventBus);
         const sharedEventBus = busOpt._tag === "Some" ? busOpt.value : undefined;
 
@@ -329,16 +342,13 @@ export const createLocalAgentToolRegistration = (
           // W5.4 budget inheritance (mirror of sub-agent-executor.ts): the
           // local-agent child runs on a light runtime whose LLM path never
           // feeds the ambient run meter; fold its spend into the parent's
-          // meter so `.withBudget()` sees the true run total. No-op when the
-          // run carries no budget (meter null). `addRunSpend` goes through the
-          // meter's own apply, so a settled parent meter ignores the fold.
-          if (typeof result.metadata.tokensUsed === "number") {
-            yield* addRunSpend({
-              tokens: result.metadata.tokensUsed,
-              cost: typeof result.metadata.cost === "number" ? result.metadata.cost : 0,
-            });
-          }
-          return finalizeSubAgentResult(
+          // meter so `.withBudget()` sees the true run total. The child's
+          // prompt/completion split and call count ride along (from its own
+          // run meter), so the parent's in/out/llmCalls include the child. A
+          // child that reports a total only folds no split. `foldChildMeter`
+          // is the one fold shared with the spawn path (child-spend-probe.ts).
+          yield* foldChildMeter(spendOfChildResult(result.metadata));
+          const finalized = finalizeSubAgentResult(
             { name: subName },
             {
               output: String(result.output ?? ""),
@@ -348,11 +358,12 @@ export const createLocalAgentToolRegistration = (
             },
             parentScratchpadWriter,
           );
+          return withSubAgentToolNote(finalized, toolResolution);
         }
         const summary = Exit.isInterrupted(exit)
           ? "Sub-agent was interrupted before completion"
           : `Sub-agent failed: ${String(exit.cause)}`;
-        return {
+        const failed = {
           subAgentName: subName,
           success: false,
           summary,
@@ -360,6 +371,7 @@ export const createLocalAgentToolRegistration = (
           // Wave 5.3 review fix: stamp the crash (see sub-agent-executor.ts).
           completionStatus: "failed",
         } satisfies SubAgentResult;
+        return withSubAgentToolNote(failed, toolResolution);
       }),
     );
   return { def: toolDef, handler };

@@ -7,7 +7,7 @@ import type { RunHandle } from "../run-controller.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import { applyHistoryWindow, applyHistoryWindowWithOverflow, type HistoryOverflowHandler } from "../gateway-context-formatting.js";
 import { workspaceCarry, type WorkspaceOption } from "../engine/start-run.js";
-import { healShapedAssistantTurns, recordedTurnPair } from "./history-hygiene.js";
+import { assistantTurnOf, healShapedAssistantTurns, recordedTurnPair, type AssistantTurn } from "./history-hygiene.js";
 import { assembleToolReply } from "./tool-reply.js";
 import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
@@ -371,9 +371,9 @@ export class ChatEngine {
         ...workspaceCarry(options?.workspace),
       });
       const reply = assembleToolReply(result, options, this.#deps.scratchpadEntries?.() ?? {});
-      const userText = options.recordUserText ?? message;
-      this.#recordBothTurns(userText, reply.message);
-      await this.#publishTurns(result.taskId, "react-loop", userText, reply.message, result.metadata.tokensUsed);
+      const userText = options.recordUserText ?? message, assistant = assistantTurnOf(result);
+      this.#recordBothTurns(userText, assistant);
+      await this.#publishTurns(result.taskId, "react-loop", userText, assistant, result.metadata.tokensUsed);
       await this.#persistHistory();
       this.#env.commit();
       return reply;
@@ -394,7 +394,7 @@ export class ChatEngine {
     // assistant turn after the reply resolves.
     const userText = options?.recordUserText ?? message;
     this.#recordBothTurns(userText, reply.message);
-    await this.#publishTurns("chat", "direct-llm", userText, reply.message, reply.tokens);
+    await this.#publishTurns("chat", "direct-llm", userText, { content: reply.message }, reply.tokens);
     await this.#persistHistory();
     this.#env.commit();
     return reply;
@@ -427,7 +427,12 @@ export class ChatEngine {
    * consumer iterating past the terminal records exactly once. On `StreamError` (or
    * a cancelled/aborted stream that never reaches `StreamCompleted`) NOTHING is
    * recorded, published, or persisted — a failed stream leaves no trace in session
-   * history.
+   * history. A run that completes FAILED (`success: false`, not paused) is
+   * recorded as a failed turn, here and in `turn()`: the assistant row is
+   * `[previous run failed: <cause>; no answer was given]` with `failed: true` and
+   * `error` (see `ChatMessage.failed`), never the run's output, so the next turn's
+   * history tells the model no answer was given; the published ChatTurn carries
+   * the same note plus `failed: true` and `error`.
    *
    * The `RunHandle` verbs (`pause/resume/stop/terminate/status/inspect`) delegate to
    * the inner handle returned by `runStreamTask`. They are lazily bound: the inner
@@ -494,14 +499,9 @@ export class ChatEngine {
         engine.#todo.observe(event);
         if (event._tag === "StreamCompleted" && !recorded) {
           recorded = true;
-          engine.#recordBothTurns(userText, event.output);
-          await engine.#publishTurns(
-            event.taskId ?? "stream",
-            "react-loop",
-            userText,
-            event.output,
-            event.metadata?.tokensUsed,
-          );
+          const assistant = assistantTurnOf(event);
+          engine.#recordBothTurns(userText, assistant);
+          await engine.#publishTurns(event.taskId ?? "stream", "react-loop", userText, assistant, event.metadata?.tokensUsed);
           await engine.#persistHistory();
           engine.#env.commit();
         }
@@ -567,8 +567,8 @@ export class ChatEngine {
    * User content is `recordUserText ?? message` (gateway enriched-instruction
    * case records the raw user text, not the sent instruction).
    */
-  #recordBothTurns(userContent: string, assistantContent: string): void {
-    this.#history.push(...recordedTurnPair(userContent, assistantContent));
+  #recordBothTurns(userContent: string, assistant: string | AssistantTurn): void {
+    this.#history.push(...recordedTurnPair(userContent, assistant));
   }
 
   /**
@@ -576,19 +576,14 @@ export class ChatEngine {
    * `publishTurn` capability. Event shape mirrors `chat.ts:buildChatTurnEvents`
    * (the current publish closure contents): `_tag`, `taskId`, `sessionId`
    * (canonical engine session id), `routedVia` naming the path, role-tagged
-   * pair, and `tokensUsed` on the assistant turn when known.
+   * pair, and `tokensUsed` on the assistant turn when known. A failed run's
+   * assistant turn also carries `failed: true` and `error` (its cause).
    *
    * Swallow-site: publish failures are telemetry-quality — never turn-fatal.
    * Errors surface as an `ErrorSwallowed` event with site tag
    * `chat/engine.ts:publishTurn`.
    */
-  async #publishTurns(
-    taskId: string,
-    routedVia: "direct-llm" | "react-loop",
-    userMessage: string,
-    assistantMessage: string,
-    tokensUsed?: number,
-  ): Promise<void> {
+  async #publishTurns(taskId: string, routedVia: "direct-llm" | "react-loop", userMessage: string, assistant: AssistantTurn, tokensUsed?: number): Promise<void> {
     const publish = this.#deps.publishTurn;
     if (!publish) return;
     const base = {
@@ -602,8 +597,9 @@ export class ChatEngine {
       {
         ...base,
         role: "assistant",
-        content: assistantMessage,
+        content: assistant.content,
         ...(tokensUsed !== undefined ? { tokensUsed } : {}),
+        ...(assistant.failed ? { failed: true, ...(assistant.error !== undefined ? { error: assistant.error } : {}) } : {}),
       },
     ];
     for (const event of events) {

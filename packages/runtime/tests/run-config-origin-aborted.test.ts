@@ -169,6 +169,90 @@ describe("run-started config + origin", () => {
       .mechanisms;
     expect(mech?.inputCoverage).toBe(true);
   });
+
+  test(".withHarness({ stableToolList: true }) is recorded as a mechanism (default off)", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const prior = process.env.RA_STABLE_TOOL_LIST;
+    delete process.env.RA_STABLE_TOOL_LIST;
+    try {
+      const on = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .withHarness({ stableToolList: true })
+        .build();
+      const onMech = await mechanismsOf(on.run("stable-tool-list pin"));
+      await on.dispose();
+      expect(onMech?.stableToolList).toBe(true);
+
+      const off = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .build();
+      const offMech = await mechanismsOf(off.run("stable-tool-list default pin"));
+      await off.dispose();
+      expect(offMech?.stableToolList).toBe(false);
+    } finally {
+      if (prior !== undefined) process.env.RA_STABLE_TOOL_LIST = prior;
+    }
+  });
+
+  test(".withHarness({ compactCallConstraints: true }) is recorded as a mechanism (default off)", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const prior = process.env.RA_COMPACT_CALL_CONSTRAINTS;
+    delete process.env.RA_COMPACT_CALL_CONSTRAINTS;
+    try {
+      const on = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .withHarness({ compactCallConstraints: true })
+        .build();
+      const onMech = await mechanismsOf(on.run("compact-call-constraints pin"));
+      await on.dispose();
+      expect(onMech?.compactCallConstraints).toBe(true);
+
+      const off = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .build();
+      const offMech = await mechanismsOf(off.run("compact-call-constraints default pin"));
+      await off.dispose();
+      expect(offMech?.compactCallConstraints).toBe(false);
+    } finally {
+      if (prior !== undefined) process.env.RA_COMPACT_CALL_CONSTRAINTS = prior;
+    }
+  });
+
+  test("llmRecoveryBudget is recorded as a mechanism (default 2; .withHarness({ llmRecoveryBudget: 0 }) gives 0)", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const zero = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withHarness({ llmRecoveryBudget: 0 })
+      .build();
+    const zeroMech = await mechanismsOf(zero.run("llm-recovery-budget zero pin"));
+    await zero.dispose();
+    expect(zeroMech?.llmRecoveryBudget).toBe(0);
+
+    const dflt = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .build();
+    const dfltMech = await mechanismsOf(dflt.run("llm-recovery-budget default pin"));
+    await dflt.dispose();
+    expect(dfltMech?.llmRecoveryBudget).toBe(2);
+  });
 });
 
 describe("run-aborted sentinel", () => {

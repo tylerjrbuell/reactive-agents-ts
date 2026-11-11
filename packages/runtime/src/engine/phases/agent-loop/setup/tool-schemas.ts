@@ -97,7 +97,8 @@ export interface PreparedToolSchemas {
    * kernel wired discovery to `allToolSchemas`, which the engine built as a
    * snapshot of the RAW registry taken before any filtering — so a run
    * configured `builtins: ["file-write"]` was told "10 tools available (now
-   * callable)" listing file-read, code-execute, git-cli and gh-cli, and could
+   * callable)" listing file-read, code-execute and the since-removed git-cli and
+   * gh-cli tools, and could
    * then call them. Least-privilege break, not a cost issue.
    *
    * Distinct from `availableToolSchemas` on purpose: discovery must still
@@ -260,8 +261,9 @@ export const prepareReasoningToolSchemas = (
       // floor incidentally protected it). `builtins: true` (legacy opt-in to
       // everything) deliberately does NOT floor — that would disable
       // filtering wholesale.
+      // Resolved names, so a preset floors its tools (`git` -> shell-execute).
       if (Array.isArray(builtinsOpt)) {
-        for (const name of builtinsOpt) filteredSet.add(name);
+        for (const name of resolveBuiltinNames(builtinsOpt)) filteredSet.add(name);
       }
 
       // Filter schemas to only those in the filtered set

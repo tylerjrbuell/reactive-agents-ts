@@ -24,7 +24,8 @@ import { RegistrationHarness, HarnessPipeline } from "@reactive-agents/core";
 import { defaultUserMemoryPath } from "@reactive-agents/memory";
 import { ExecutionEngine } from "../../execution-engine.js";
 import { contractForbiddenTools, mergeContractRequiredTools } from "../contract-tool-set.js";
-import { builtinsAsList } from "../builtins-option.js";
+import { builtinsAsList, ownToolNames } from "../builtins-option.js";
+import { resolveRequiredToolNames, resolveToolNameList } from "../../tool-name-resolution.js";
 import type {
   ContextProfile,
   KernelMetaToolsConfig,
@@ -193,6 +194,8 @@ export interface BuilderRuntimeStateView {
    */
   readonly _taskContract?: import("@reactive-agents/core").TaskContract;
   readonly _toolsOptions?: ToolsOptions;
+  /** `.withAgentTool` entries; their names stay literal in allowed/required lists. */
+  readonly _agentTools?: ReadonlyArray<{ readonly name: string }>;
   readonly _enableMemory: boolean;
   readonly _enableExperienceLearning: boolean;
   readonly _enableMemoryConsolidation: boolean;
@@ -539,11 +542,18 @@ export const buildBaseRuntimeAndEngine = (
       // adaptive classification for reasoning+tools callers — that default was
       // removed 2026-07-29: it silently defeated classifier.ts:82-116's opt-in
       // fix (0pp accuracy lift at +25%..+167% token cost, cross-tier ablation).
-      requiredTools: mergeContractRequiredTools(
-        state._requiredToolsConfig,
-        state._taskContract,
+      // Both name lists resolve aliases and removed CLI names here, once, so
+      // every reader (schema filter, kernel gate, verifier) sees concrete
+      // tool names: `requiredTools: ["git-cli"]` is met by a shell-execute call.
+      // The agent's own tool names stay literal (a custom tool named `web`).
+      requiredTools: resolveRequiredToolNames(
+        mergeContractRequiredTools(state._requiredToolsConfig, state._taskContract),
+        ownToolNames(state._toolsOptions, (state._agentTools ?? []).map((t) => t.name)),
       ),
-      allowedTools: state._toolsOptions?.allowedTools,
+      allowedTools: resolveToolNameList(
+        state._toolsOptions?.allowedTools,
+        ownToolNames(state._toolsOptions, (state._agentTools ?? []).map((t) => t.name)),
+      ),
       focusedTools: state._toolsOptions?.focusedTools,
       riskLevels: state._toolsOptions?.riskLevels,
       maxCallsPerTool: state._toolsOptions?.maxCallsPerTool,

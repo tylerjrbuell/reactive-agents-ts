@@ -71,16 +71,18 @@ const stall = [
 ];
 
 describe("(a)(b) run-completed.outcome carries the kernel's split fields", () => {
-  it("refused-deliverable run: deliverable decision + verifier verdict + outstanding on the trace", async () => {
+  // Since 2026-11-10 an unanswered run ends failed with NO deliverable (the
+  // harness writes no answer), so the gate never judged one: `deliverable` and
+  // `verifierVerdict` are forwarded as explicit `null`, and `outstanding` names
+  // what was left. Dropping the optional-field read leaves them `undefined`.
+  it("unanswered run: deliverable decision, verifier verdict and outstanding reach the trace", async () => {
     const { evs } = await run(stall, "Research the topic and summarize it.", { withGather: true });
     const rc = evs.find((e) => e.kind === "run-completed");
     expect(rc?.kind).toBe("run-completed");
     if (rc?.kind !== "run-completed") return;
-    expect(rc.outcome?.deliverable).toBeDefined();
-    expect(rc.outcome?.deliverable).not.toBeNull();
-    expect(rc.outcome?.deliverable?.accepted).toBe(false);
-    expect(rc.outcome?.verifierVerdict).toBeDefined();
-    expect(Array.isArray(rc.outcome?.outstanding)).toBe(true);
+    expect(rc.outcome?.deliverable).toBeNull();
+    expect(rc.outcome?.verifierVerdict).toBeNull();
+    expect(rc.outcome?.outstanding?.length ?? 0).toBeGreaterThan(0);
   }, 20000);
 
   it("readTerminalOutcome forwards valid fields and drops malformed ones without voiding the outcome", () => {
@@ -140,6 +142,36 @@ describe("(c) verdict iteration is the kernel's exact iteration", () => {
       }).pipe(Effect.provide(EventBusLive), Effect.runPromise);
     expect(await stamp(2)).toBe(2); // exact wins
     expect(await stamp()).toBe(5); // fallback: thought-count approximation
+  });
+
+  // Owner decision 2026-11-10: a failed run ships output "". The boundary must
+  // still judge it (verdict event + receipt verdict), naming the failed action,
+  // not the contractual empty answer. A successful empty output still skips:
+  // the empty-output invariant owns that case.
+  it("empty output: a FAILED run still gets a reject verdict; a successful one is skipped", async () => {
+    const judge = (success: boolean) =>
+      Effect.gen(function* () {
+        const bus = yield* EventBus;
+        const seen: AgentEvent[] = [];
+        yield* bus.on("VerifierVerdictEmitted", (ev) => Effect.sync(() => void seen.push(ev)));
+        const outcome = yield* verifyResultBoundary({
+          config: {} as never, taskId: "t", task: "Find the price.", output: "", success,
+          steps: [], toolsUsed: new Set(), iteration: 3,
+        });
+        const ev = seen.find((e) => e._tag === "VerifierVerdictEmitted");
+        return { outcome, ev: ev?._tag === "VerifierVerdictEmitted" ? ev : undefined };
+      }).pipe(Effect.provide(EventBusLive), Effect.runPromise);
+
+    const failedRun = await judge(false);
+    expect(failedRun.outcome?.verdict).toBe("reject");
+    expect(failedRun.outcome?.warning).toContain("action-success");
+    expect(failedRun.outcome?.warning).not.toContain("non-empty-content");
+    expect(failedRun.ev?.source).toBe("runtime");
+    expect(failedRun.ev?.checks.map((c) => c.name)).not.toContain("tier1-nli");
+
+    const okRun = await judge(true);
+    expect(okRun.outcome).toBeUndefined();
+    expect(okRun.ev).toBeUndefined();
   });
 
   it("scripted run: runtime verdict iter === result.metadata.extensions.kernelIteration", async () => {

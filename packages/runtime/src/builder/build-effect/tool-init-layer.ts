@@ -20,9 +20,11 @@ import type { Context } from "effect";
 import * as path from "node:path";
 import { getRunSlot } from "@reactive-agents/core/internal/run-scope";
 import { fileRootSlot } from "@reactive-agents/tools/internal/run-slots";
+import { scopedShellConfig } from "@reactive-agents/tools";
 import type {
   MCPServer,
   ShellExecuteConfig,
+  ShellToolSurface,
   ToolDefinition,
 } from "@reactive-agents/tools";
 import type { ToolService as ToolServiceTag } from "@reactive-agents/tools";
@@ -48,8 +50,11 @@ type ShellHandler = (args: Record<string, unknown>) => Effect.Effect<unknown, Er
  * `withFileRoot()`) is read at call time, so the shell and the file tools
  * share one root:
  *
- * - no root bound: the configured handler, unchanged (its `cwd`, else a fresh
- *   /tmp sandbox dir).
+ * - no root bound, `unrootedInHostCwd` and no `config.cwd`: the shell runs in
+ *   `process.cwd()`, read at call time (a scoped preset without the terminal:
+ *   the removed git-cli/gh-cli tools ran in the host process directory).
+ * - no root bound otherwise: the configured handler, unchanged (its `cwd`,
+ *   else a fresh /tmp sandbox dir).
  * - root, no `config.cwd`: the shell runs in the root.
  * - root and `config.cwd`: the cwd resolves against the root and must stay
  *   inside it; one that escapes is refused, unless `allowUnsafeCwd` is set
@@ -60,6 +65,7 @@ type ShellHandler = (args: Record<string, unknown>) => Effect.Effect<unknown, Er
 export const runRootShellHandler = (
   factory: (config?: ShellExecuteConfig) => ShellHandler,
   config: ShellExecuteConfig | undefined,
+  unrootedInHostCwd = false,
 ): ShellHandler => {
   const unrooted = factory(config);
   const byDir = new Map<string, ShellHandler>();
@@ -72,7 +78,10 @@ export const runRootShellHandler = (
   };
   return (args) =>
     Effect.flatMap(getRunSlot(fileRootSlot), (root) => {
-      if (root === undefined) return unrooted(args);
+      if (root === undefined) {
+        if (unrootedInHostCwd && config?.cwd === undefined) return inDir(process.cwd())(args);
+        return unrooted(args);
+      }
       if (config?.cwd === undefined) return inDir(root)(args);
       const dir = path.resolve(root, config.cwd);
       const rel = path.relative(root, dir);
@@ -84,6 +93,68 @@ export const runRootShellHandler = (
         error: `Working directory '${dir}' is outside the workspace '${root}'. Set terminal.allowUnsafeCwd to override.`,
       });
     });
+};
+
+type ScopedShellToolFor = (
+  programs: readonly string[],
+  base?: ShellExecuteConfig,
+  surface?: ShellToolSurface,
+) => ToolDefinition;
+
+/** The one `shell-execute` an agent registers: its definition and handler config. */
+export interface ShellRegistration {
+  readonly definition: ToolDefinition;
+  readonly config: ShellExecuteConfig | undefined;
+  /**
+   * With no workspace bound, run in `process.cwd()` instead of a /tmp sandbox.
+   * True only for a scoped preset without the terminal (parity with the
+   * removed CLI wrappers); the terminal keeps its own cwd rules.
+   */
+  readonly unrootedInHostCwd: boolean;
+}
+
+/**
+ * Decide the agent's single `shell-execute`. Pure.
+ *
+ * - `terminal` set: the terminal shell, with its own approval/risk flags.
+ *   Preset programs (`shellPrograms`) are added to its `additionalCommands`,
+ *   so one tool runs both; `inheritGitConfig` defaults on when git is allowed.
+ * - no terminal, `shellPrograms` non-empty: `shell-execute` scoped to exactly
+ *   those programs (`scopedShellToolFor`; the handler config is the same
+ *   allow-list via `scopedShellConfig`). With no workspace it runs in the host
+ *   process cwd (`unrootedInHostCwd`), as the removed CLI wrappers did.
+ * - neither: `undefined`, no shell.
+ */
+export const resolveShellRegistration = (
+  terminal: boolean | ShellExecuteConfig | undefined,
+  shellPrograms: readonly string[],
+  scopedShellToolFor: ScopedShellToolFor,
+  shellExecuteToolFor: (config?: ShellExecuteConfig, surface?: ShellToolSurface) => ToolDefinition,
+): ShellRegistration | undefined => {
+  const surface: ShellToolSurface = { runWorkspace: true };
+  if (terminal) {
+    const base = terminal === true ? undefined : terminal;
+    if (shellPrograms.length === 0) {
+      return { definition: shellExecuteToolFor(base, surface), config: base, unrootedInHostCwd: false };
+    }
+    const additionalCommands = [...new Set([...(base?.additionalCommands ?? []), ...shellPrograms])];
+    // The terminal definition keeps its own approval/risk flags (a full shell
+    // is not downgraded to the preset's). git reads the user's git config only
+    // when git is allowed, as the scoped preset does; an explicit value wins.
+    const config: ShellExecuteConfig = {
+      ...base,
+      additionalCommands,
+      inheritGitConfig: base?.inheritGitConfig ?? additionalCommands.includes("git"),
+    };
+    return { definition: shellExecuteToolFor(config, surface), config, unrootedInHostCwd: false };
+  }
+  if (shellPrograms.length === 0) return undefined;
+  return {
+    // The description must match the handler: unrooted, it runs in process.cwd().
+    definition: scopedShellToolFor(shellPrograms, undefined, { ...surface, hostCwdWhenUnrooted: true }),
+    config: scopedShellConfig(shellPrograms),
+    unrootedInHostCwd: true,
+  };
 };
 
 /** Inputs needed to compose the init layer. */
@@ -103,8 +174,15 @@ export interface ToolInitLayerDeps {
    */
   readonly shellExecuteToolFor: (
     config?: ShellExecuteConfig,
-    surface?: { readonly runWorkspace?: boolean },
+    surface?: ShellToolSurface,
   ) => ToolDefinition;
+  /** Builds the scoped `shell-execute` definition (`@reactive-agents/tools`). */
+  readonly scopedShellToolFor: ScopedShellToolFor;
+  /**
+   * Programs a scoped `shell-execute` must allow, from
+   * `builtinSelectionFor(...).shellPrograms`. Empty or absent: no preset.
+   */
+  readonly shellPrograms?: readonly string[];
   readonly shellExecuteHandler: (
     config?: ShellExecuteConfig,
   ) => (
@@ -136,9 +214,11 @@ export const buildToolInitLayer = (
     toolsOptions,
     registrations,
     shellExecuteToolFor,
+    scopedShellToolFor,
     shellExecuteHandler,
     onToolServiceResolved,
   } = deps;
+  const shellPrograms = deps.shellPrograms ?? [];
 
   /**
    * Adapt a handler's `Error` channel to the `ToolExecutionError` channel that
@@ -190,20 +270,25 @@ export const buildToolInitLayer = (
         yield* ts.register(tool.definition, adaptHandler(tool.handler));
       }
     }
-    // Register terminal tool if enabled
-    const terminalOptions: boolean | ShellExecuteConfig | undefined =
-      toolsOptions?.terminal;
+    // Register shell-execute: the terminal, or a scoped shell for a preset
+    // (`builtins: ["git"]`) or removed CLI name (`gh-cli`). Never both: with
+    // the terminal on, the preset's programs join its additionalCommands.
+    const shell = resolveShellRegistration(
+      toolsOptions?.terminal,
+      shellPrograms,
+      scopedShellToolFor,
+      shellExecuteToolFor,
+    );
     const hasCustomShellExecute = (toolsOptions?.tools ?? []).some(
       (tool: { readonly definition: ToolDefinition }) =>
         tool.definition.name === "shell-execute",
     );
-    if (terminalOptions && !hasCustomShellExecute) {
-      const terminalConfig =
-        terminalOptions === true ? undefined : terminalOptions;
-      // runWorkspace: runRootShellHandler runs in the run's workspace when bound.
+    if (shell !== undefined && !hasCustomShellExecute) {
+      // runWorkspace: runRootShellHandler runs in the run's workspace when bound,
+      // so a scoped git shell sees the repo, not a /tmp sandbox.
       yield* ts.register(
-        shellExecuteToolFor(terminalConfig, { runWorkspace: true }),
-        adaptHandler(runRootShellHandler(shellExecuteHandler, terminalConfig)),
+        shell.definition,
+        adaptHandler(runRootShellHandler(shellExecuteHandler, shell.config, shell.unrootedInHostCwd)),
       );
     }
     // Capture parent ToolService ref so spawn-agent can proxy MCP tools

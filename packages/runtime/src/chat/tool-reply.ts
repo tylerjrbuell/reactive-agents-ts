@@ -57,5 +57,9 @@ export function assembleToolReply(
     ...(result.status !== undefined ? { status: result.status } : {}),
     ...(result.pendingApproval !== undefined ? { pendingApproval: result.pendingApproval } : {}),
     ...(result.pendingInteraction !== undefined ? { pendingInteraction: result.pendingInteraction } : {}),
+    // A failed run is not an answer: say so, with its cause (paused runs are not failures).
+    ...(!result.success && result.status === undefined
+      ? { failed: true, ...(result.error !== undefined ? { error: result.error } : {}) }
+      : {}),
   };
 }

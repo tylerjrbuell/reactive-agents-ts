@@ -1,5 +1,6 @@
 import type { TrustReceipt, TerminatedBy, ChecklistSnapshot } from "@reactive-agents/core";
 import type { AgentResultMetadata } from "./builder.js";
+import type { AgentOutcome } from "./builder/agent-result.js";
 
 /** How many event types the stream emits.
  * - `"tokens"`: TextDelta + StreamCompleted + StreamError only (minimal overhead)
@@ -63,6 +64,14 @@ export type AgentStreamEvent =
       readonly success?: boolean;
       /** Same as `AgentResult.terminatedBy`. Absent on a paused run (it has not terminated). */
       readonly terminatedBy?: TerminatedBy;
+      /** Same as `AgentResult.outcome` (`success | partial | failed | abstained`). Absent on a paused run. */
+      readonly outcome?: AgentOutcome;
+      /**
+       * Same as `AgentResult.error`: the failure cause (provider error, runtime
+       * veto, termination), never the output text. Present only when
+       * `success` is `false` on a terminated (not paused) run.
+       */
+      readonly error?: string;
       /** Same as `AgentResult.status`: set when a durable run paused (`pendingApproval` / `pendingInteraction` say for what). */
       readonly status?: "awaiting-approval" | "awaiting-interaction";
       /** Same as `AgentResult.evidenceDelta`: the run's summed assessment evidence. */
@@ -121,8 +130,11 @@ export type AgentStreamEvent =
        * strategy's delivery gate. A clean accept emits nothing.
        * - `"repair"`: the exit was denied once; the run continues on the
        *   `outstanding` items.
-       * - `"handoff"`: the run stops with items unfinished; the answer is a
-       *   labelled partial.
+       * - `"handoff"`: the run stops with items unfinished. The harness never
+       *   writes the answer: if the model wrote a draft, it ships as a partial
+       *   (`success: false`, the draft followed by an `Unfinished:` list);
+       *   otherwise the run fails, its cause in `error`, and the gathered
+       *   evidence rides `metadata.extensions.unfinishedEvidence`.
        * - `"accept-unfinished"`: the run stops on its honest failure, naming
        *   what stayed outstanding.
        */

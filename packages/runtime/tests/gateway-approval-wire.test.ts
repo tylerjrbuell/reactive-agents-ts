@@ -37,7 +37,7 @@ const loopTool = (name: string, onCall: () => void) => ({
 async function runArm(opts: {
   gatewayGated?: readonly string[];
   explicitTools?: readonly string[];
-}): Promise<{ executed: number; output: string }> {
+}): Promise<{ executed: number; output: string; error: string }> {
   let executed = 0;
   let b = ReactiveAgents.create()
     .withName("gateway-approval")
@@ -52,7 +52,7 @@ async function runArm(opts: {
   const agent = await b.build();
   try {
     const r = await agent.run("loop forever");
-    return { executed, output: String(r.output ?? "") };
+    return { executed, output: String(r.output ?? ""), error: String(r.error ?? "") };
   } finally {
     await agent.dispose();
   }
@@ -68,9 +68,11 @@ describe("6.1 gateway requireApprovalFor wire", () => {
     expect(r.executed).toBe(0);
     // Refusal signal, not a silent skip: the run reports the gated attempt
     // by name with zero successes (the denial observation itself lives in
-    // the steps; the harness-authored summary carries the count).
-    expect(r.output).toContain("danger_tool");
-    expect(r.output).toContain("0 succeeded");
+    // the steps). Owner decision 2026-11-10: a failed run's output is empty;
+    // the cause and "What was attempted" summary ride `result.error`.
+    expect(r.output).toBe("");
+    expect(r.error).toContain("danger_tool");
+    expect(r.error).toContain("0 succeeded");
   });
 
   it("explicit policy + gateway list union (neither order drops the other)", async () => {

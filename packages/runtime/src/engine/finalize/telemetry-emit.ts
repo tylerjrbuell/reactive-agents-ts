@@ -43,7 +43,7 @@ import {
 import { diffClassifierAccuracy } from "../../classifier-accuracy.js";
 import { isSubagentCall } from "../../subagent-telemetry.js";
 import { computeArgValidityRate } from "../../arg-validity.js";
-import { extractTaskText, deriveRunOutcome } from "../util.js";
+import { extractTaskText, deriveRunOutcome, toRiWireOutcome } from "../util.js";
 import type { ToolCallEntry } from "../execute-event-collectors.js";
 import { readActOrAnswerCounts } from "./act-or-answer-read.js";
 
@@ -159,8 +159,7 @@ export const emitTelemetryRunReport = (
           const toolsUsed = [...new Set(toolCallLog.map(t => t.toolName))];
           const strategySwitched = !!rr?.metadata?.strategyFallback;
 
-          const outcome: "success" | "partial" | "failure" =
-            deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0);
+          const outcome = deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0, rr?.status);
 
           // ── Enrichment fields (see telemetry-enrichment.ts for logic + tests) ──
           const trajectoryFingerprint = buildTrajectoryFingerprint(entropyLog);
@@ -221,8 +220,9 @@ export const emitTelemetryRunReport = (
             strategyUsed: ctx.selectedStrategy ?? "reactive",
             strategySwitched,
             entropyTrace: entropyLog,
+            // An abstention rides `terminatedBy: "abstained"`; the wire enum has no label for it yet.
             terminatedBy: terminatedByRaw,
-            outcome,
+            outcome: toRiWireOutcome(outcome),
             totalIterations: ctx.iteration,
             totalTokens: ctx.tokensUsed,
             durationMs: executionDurationMs,

@@ -29,7 +29,15 @@ type Row = {
   kind?: string;
   status?: string;
   config?: { posture?: string };
-  outcome?: { status: string; success: boolean; terminatedBy: string | null; verdict: { accepted: boolean } | null };
+  output?: string;
+  error?: string;
+  outcome?: {
+    status: string;
+    success: boolean;
+    terminatedBy: string | null;
+    verdict: { accepted: boolean } | null;
+    outstanding?: readonly string[];
+  };
 };
 
 async function readTrace(dir: string): Promise<Row[]> {
@@ -91,7 +99,12 @@ describe("seam: run-completed.outcome is published from the strategy result", ()
     expect(success).toBe(true);
   }, 20000);
 
-  it("stall_deliverable shape: outcome.success=false AND the run is a failure end to end", async () => {
+  // Since 2026-11-10 the harness never writes the answer: a guard stop before
+  // the model answered ends FAILED with the guard's own reason (no
+  // `harness_deliverable`), the outstanding items named, and the gathered
+  // evidence attached raw. It is never a success, and no answer is assembled
+  // from the tool results.
+  it("unanswered guard stop: outcome.success=false, outstanding named, the run is a failure end to end", async () => {
     const { rows, success } = await runTraced({
       scenario: [
         ...Array.from({ length: 5 }, () => ({ toolCall: { name: "gather", args: { q: "a" } } })),
@@ -101,13 +114,18 @@ describe("seam: run-completed.outcome is published from the strategy result", ()
       withGather: true,
     });
     const rc = rows.find((r) => r.kind === "run-completed");
-    // Vacuity guard: the run really took the refused-deliverable path.
+    // Vacuity guard: the run really stopped before the model answered.
     expect(rc?.outcome).toBeDefined();
-    expect(rc!.outcome!.terminatedBy).toBe("harness_deliverable");
-    expect(rc!.outcome!.verdict?.accepted).toBe(false);
+    expect(rc!.outcome!.terminatedBy).not.toBe("harness_deliverable");
+    expect(rc!.outcome!.terminatedBy).not.toBeNull();
+    expect(rc!.outcome!.status).toBe("failed");
+    expect((rc!.outcome!.outstanding ?? []).length).toBeGreaterThan(0);
     expect(rc!.outcome!.success).toBe(false);
     expect(rc!.status).toBe("failure");
     expect(success).toBe(false);
+    // No harness-written answer: the raw tool evidence is not shipped as output.
+    expect(rc!.output ?? "").not.toContain("KEY FACT");
+    expect(rc!.error ?? "").toContain("Outstanding:");
   }, 20000);
 });
 

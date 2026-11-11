@@ -173,9 +173,29 @@ export function classifyComplexity(
   return "complex";
 }
 
+/** The coarse run-outcome enum of the telemetry / learning / debrief lanes. */
+export type RunOutcomeClass = "success" | "partial" | "failure" | "abstained";
+
+/**
+ * The reactive-intelligence wire types (`RunReport.outcome`,
+ * `RunCompletedData.outcome`) have no `"abstained"` member yet. Until they do,
+ * an abstention crosses that ONE boundary as `"failure"`; the same record
+ * carries `terminatedBy: "abstained"`, so it stays distinguishable. Learning
+ * reads this only to gate skill synthesis on `"success"`, so the mapping does
+ * not change what it learns.
+ *
+ * The remote telemetry server (api.reactiveagents.dev) can't accept
+ * `"abstained"` yet (owner, 2026-11-10). Widen the wire types only after the
+ * server accepts it; then delete this mapping.
+ */
+export function toRiWireOutcome(outcome: RunOutcomeClass): "success" | "partial" | "failure" {
+  return outcome === "abstained" ? "failure" : outcome;
+}
+
 /**
  * Classify a finished run into the coarse outcome enum shared by the telemetry
- * record and the procedural-learning loop (`"success" | "partial" | "failure"`).
+ * record and the procedural-learning loop
+ * (`"success" | "partial" | "failure" | "abstained"`).
  *
  * ONE definition because there were three hand-copied copies of this ternary
  * (telemetry-emit, local-learning x2), and all three were wrong in the same way:
@@ -205,11 +225,23 @@ export function classifyComplexity(
 export function deriveRunOutcome(
   terminatedBy: TerminatedBy,
   hadErrors: boolean,
-): "success" | "partial" | "failure" {
-  // The agent honestly declined. Nothing was delivered, so it is not a success;
-  // it must never be reinforced as one. The honesty of the decline is carried by
-  // `AgentResult.abstention` + the trust receipt, not by this coarse enum.
-  if (terminatedBy === "abstained") return "failure";
+  kernelStatus?: string,
+): RunOutcomeClass {
+  // The agent honestly declined (owner decision 2026-11-10: abstention is a
+  // first-class outcome). Nothing was delivered, so it is not a success and
+  // must never be reinforced as one; but an honest "I can't" is not a failure
+  // either, so telemetry, debriefs and learning record it on its own label.
+  // The kernel's own `abstained` status counts under any termination label.
+  if (terminatedBy === "abstained" || kernelStatus === "abstained") return "abstained";
+
+  // The kernel itself ended the run without delivering (strategy result status
+  // "failed"): since 2026-11-10 a guard stop with no model answer fails with
+  // its evidence attached instead of shipping a harness-written answer.
+  // Nothing was delivered, so a `guard_stop` / `max_iterations` / `end_turn`
+  // label must not read as "partial" or "success" here. A guard stop where the
+  // MODEL wrote a draft ends `partial` in the kernel and keeps the "partial"
+  // verdict below.
+  if (kernelDeliveredNothing(kernelStatus)) return "failure";
 
   // A provider failure is not a success. This used to fall through to the
   // trailing `return "success"` whenever the loop happened to collect no error
@@ -238,6 +270,17 @@ export function deriveRunOutcome(
 }
 
 /**
+ * Did the kernel end the run without delivering an answer? True for the
+ * strategy result statuses `"failed"` and `"abstained"` (owner decision
+ * 2026-11-10: both ship output "" with the cause on `error`). `rr.status` is a
+ * string at the runtime boundary, so every reader that must tell "the kernel
+ * delivered nothing" from `completed`/`partial` goes through this one check.
+ */
+export function kernelDeliveredNothing(status: string | undefined): boolean {
+  return status === "failed" || status === "abstained";
+}
+
+/**
  * Did the terminal mint ENFORCE an honest abstention on this result?
  *
  * Review C1 fenced enforcement OFF for auxiliary passes (verification retries,
@@ -250,13 +293,18 @@ export function deriveRunOutcome(
  * run under `.withFabricationGuard("block")` + `.withMinIterations(2)` would
  * ship the continuation's ungrounded prose in place of the sentinel.
  *
- * Reads the ONE record the mint writes (`metadata.verdict.enforced`) rather
- * than sniffing the sentinel text.
+ * Reads the records the kernel writes (`metadata.verdict.enforced`, and since
+ * 2026-11-10 the strategy status `"abstained"`, which every abstention trigger
+ * sets) rather than sniffing the sentinel text. An abstention ships output "",
+ * so an auxiliary pass that overwrote it would refill it with an answer the
+ * kernel declined to give.
  */
 export function isEnforcedAbstention(
-  result: { readonly metadata: { readonly verdict?: { readonly enforced: boolean } } } | undefined,
+  result:
+    | { readonly status?: string; readonly metadata: { readonly verdict?: { readonly enforced: boolean } } }
+    | undefined,
 ): boolean {
-  return result?.metadata.verdict?.enforced === true;
+  return result?.status === "abstained" || result?.metadata.verdict?.enforced === true;
 }
 
 /**

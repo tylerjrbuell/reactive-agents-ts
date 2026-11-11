@@ -10,7 +10,7 @@ import { emitErrorSwallowed, errorTag } from '@reactive-agents/core'
  * because it overflowed the per-result budget.
  *
  * This is the signal whose absence cost a full debugging session (2026-07-30):
- * a 25-KB gh-cli result was silently crushed to a ~1.2-KB preview of author-URL
+ * a 25-KB result from the since-removed gh-cli tool was silently crushed to a ~1.2-KB preview of author-URL
  * noise, the model couldn't see the commit data, and it fabricated the answer —
  * and NONE of it was visible without `RA_PROMPT_DUMP` archaeology. The root was
  * a budget/wire window divergence (budget froze to a 2048 fallback while the

@@ -175,6 +175,7 @@ export const prepareDebrief = (
       terminatedBy: terminatedByRaw,
       finalAnswerCapture: rr?.metadata?.finalAnswerCapture as DebriefInput["finalAnswerCapture"],
       finalOutputText: hasSubstantiveOutput ? outputForSuccess : undefined,
+      ...(rr?.status !== undefined ? { kernelStatus: rr.status } : {}),
       toolCallHistory,
       errorsFromLoop,
       metrics: {
@@ -280,6 +281,7 @@ export const finalizeDebriefBackground = (
           _tag: "DebriefCompleted",
           taskId: debriefInput.taskId,
           agentId: debriefInput.agentId,
+          // An abstention crosses as "abstained" (core's DebriefPayload carries it).
           debrief,
         })
         .pipe(

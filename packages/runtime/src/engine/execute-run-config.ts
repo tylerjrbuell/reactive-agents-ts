@@ -18,7 +18,12 @@
  *    `truncated: true`).
  */
 import { isRunOrigin, type RunOrigin, type Task } from "@reactive-agents/core";
-import { resolveActOrAnswer, resolveHarnessConfig, type ActOrAnswerCalibration } from "@reactive-agents/reasoning";
+import {
+  llmRecoveryBudgetOf,
+  resolveActOrAnswer,
+  resolveHarnessConfig,
+  type ActOrAnswerCalibration,
+} from "@reactive-agents/reasoning";
 import type { ReactiveAgentsConfig } from "../types.js";
 import { disclosureFloor } from "./run-envelope-config.js";
 import { disclosureHarness, resolveDisclosure, type ResolvedDisclosure } from "./tool-disclosure.js";
@@ -141,6 +146,9 @@ export function buildRunConfigSnapshot(args: {
     actOrAnswer: actOrAnswer.mode,
     actOrAnswerSource: actOrAnswer.source,
     inputCoverage: harness.inputCoverage === true,
+    stableToolList: harness.stableToolList === true,
+    compactCallConstraints: harness.compactCallConstraints === true,
+    llmRecoveryBudget: llmRecoveryBudgetOf(harness),
   });
   const contract = config.taskContract;
   const metaOn = config.metaTools

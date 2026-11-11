@@ -42,6 +42,30 @@ export interface VerificationThinkRetryDeps {
   readonly eb: EbLike | null;
 }
 
+/**
+ * End the run on a failed retry the same way as any other reasoning failure:
+ * the output is empty (the harness never writes its own text into it) and the
+ * cause rides the strategy result's `error`, which result assembly reads as
+ * the run's failure cause. The first pass's steps and metadata are kept.
+ */
+const failedRetry = (c: ExecutionContext, cause: string): ExecutionContext => {
+  const prior = c.metadata.reasoningResult;
+  return {
+    ...c,
+    metadata: {
+      ...c.metadata,
+      lastResponse: "",
+      isComplete: true,
+      reasoningResult: {
+        ...(prior ?? { metadata: { cost: 0, tokensUsed: 0, stepsCount: 0 } }),
+        output: "",
+        status: "failed",
+        error: cause,
+      },
+    },
+  };
+};
+
 export const runVerificationThinkRetry = (
   c: ExecutionContext,
   deps: VerificationThinkRetryDeps,
@@ -151,14 +175,7 @@ export const runVerificationThinkRetry = (
             "[engine] WARN: verification retry — reasoning returned invalid shape; terminating with error",
           ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/verification-think-retry.ts:invalid-shape", tag: errorTag(err) })));
         }
-        return {
-          ...c,
-          metadata: {
-            ...c.metadata,
-            lastResponse: "Verification retry failed — reasoning returned an invalid result shape",
-            isComplete: true,
-          },
-        };
+        return failedRetry(c, "Verification retry failed: reasoning returned an invalid result shape.");
       }
       // Reasoning effect failed — log + terminate.
       if (obs) {
@@ -166,14 +183,7 @@ export const runVerificationThinkRetry = (
           `[engine] WARN: verification retry — reasoning failed: ${String(retryOutcome.cause)}`,
         ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/verification-think-retry.ts:reasoning-failed", tag: errorTag(err) })));
       }
-      return {
-        ...c,
-        metadata: {
-          ...c.metadata,
-          lastResponse: `Verification retry failed: ${String(retryOutcome.cause)}`,
-          isComplete: true,
-        },
-      };
+      return failedRetry(c, `Verification retry failed: ${String(retryOutcome.cause)}`);
     }
 
     // ── Fallback: inline LLM call (preserves the no-reasoning

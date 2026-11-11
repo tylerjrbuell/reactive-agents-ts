@@ -1,9 +1,10 @@
 // Run: bun test packages/runtime/tests/abstention-synthesis-206.test.ts --timeout 20000
 // Live Ollama opt-in: REACTIVE_AGENTS_RUN_LIVE_OLLAMA_TESTS=1 bun test packages/runtime/tests/abstention-synthesis-206.test.ts --timeout 180000
 //
-// GH #206 — a budget-exhausted run with no valid answer ships a deterministic
-// honest abstention instead of empty output. `success` stays false (this is not
-// a success claim), and the message names what was attempted.
+// GH #206 — a budget-exhausted run with no valid answer ends with a
+// deterministic honest abstention cause instead of silence. `success` stays
+// false (this is not a success claim), and the message names what was
+// attempted. Since 2026-11-10 that cause rides `error`; `output` is "".
 //
 // The offline cases pin the behavior with the deterministic `test` provider. The
 // live case drives a real local model (Ollama) through a guaranteed-failing
@@ -37,7 +38,7 @@ const ollamaState = await (async (): Promise<
 })();
 
 describe("GH #206 — honest abstention on budget exhaustion", () => {
-  it("ships an abstention (not empty output) when the loop exhausts with no answer", async () => {
+  it("ships an honest abstention cause (on error, output empty) when the loop exhausts with no answer", async () => {
     const agent = await ReactiveAgents.create()
       .withName("abstention-206-empty-loop")
       .withTestScenario([{ text: "" }])
@@ -47,13 +48,14 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
     const result = await agent.run("Test task");
 
     expect(result.success).toBe(false);
-    expect(typeof result.output).toBe("string");
-    expect(result.output.length).toBeGreaterThan(0);
+    // Owner decision 2026-11-10: the harness never writes text into output.
     // W4-live: the default-on zero-evidence stand-down owns this terminal
-    // earlier (<=2 iterations) and ships the honest `no_substantive_output`
-    // abstention; both honest-abstention sentinels share this prefix.
-    expect(result.output).toContain("Could not complete the task");
-    expect(result.metadata.harnessAuthoredOutput).toBe(true);
+    // earlier (<=2 iterations) and records the honest `no_substantive_output`
+    // abstention; both honest-abstention sentinels share this prefix. The
+    // sentinel is the run's cause on `error`, never a harness-authored answer.
+    expect(result.output).toBe("");
+    expect(result.metadata.harnessAuthoredOutput).toBeUndefined();
+    expect(String(result.error)).toContain("Could not complete the task");
     await agent.dispose();
   }, 20000);
 
@@ -69,10 +71,13 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
     expect(result.success).toBe(false);
     // The rejected continuation itself must never ship as the answer.
     expect(result.output).not.toContain("one more attempt");
-    // W4-live: the default-on zero-evidence stand-down owns this terminal
-    // earlier (<=2 iterations) and ships the honest `no_substantive_output`
-    // abstention; both honest-abstention sentinels share this prefix.
-    expect(result.output).toContain("Could not complete the task");
+    // Owner decision 2026-11-10: a failed run's output is EMPTY (the harness
+    // never writes the answer). The honest cause rides `result.error` instead:
+    // the kernel's own verifier rejection, naming the continuation it refused.
+    expect(result.output).toBe("");
+    expect(result.metadata.harnessAuthoredOutput).toBeUndefined();
+    expect(String(result.error)).toContain("Verifier rejected output");
+    expect(String(result.error)).toContain("continuation-intent");
     await agent.dispose();
   }, 20000);
 
@@ -93,8 +98,11 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
     const result = await agent.run("Test task");
 
     expect(result.success).toBe(false);
-    expect(result.output).toContain("Could not complete the task within the available budget.");
-    expect(result.metadata.harnessAuthoredOutput).toBe(true);
+    // Owner decision 2026-11-10: output stays empty; the exact #206 sentinel
+    // is the run's cause on `result.error`, never a harness-authored answer.
+    expect(result.output).toBe("");
+    expect(result.metadata.harnessAuthoredOutput).toBeUndefined();
+    expect(String(result.error)).toContain("Could not complete the task within the available budget.");
     await agent.dispose();
   }, 20000);
 
@@ -140,15 +148,15 @@ describe("GH #206 — honest abstention on budget exhaustion", () => {
         );
 
         // One iteration with a tool that always fails cannot yield a grounded
-        // answer, so the run must not claim success and must not ship empty
-        // output: it ships the honest abstention.
+        // answer, so the run must not claim success and must not end silent:
+        // the honest abstention is its cause on `error`, and output stays
+        // empty (owner decision 2026-11-10).
         expect(r.success).toBe(false);
-        expect(typeof r.output).toBe("string");
-        expect(r.output.trim().length).toBeGreaterThan(0);
+        expect(r.output).toBe("");
         // W4-live: the default-on zero-evidence stand-down owns this terminal
         // earlier; both honest-abstention sentinels share this prefix.
-        expect(r.output).toContain("Could not complete the task");
-        console.log(`[live #206] model=${model} output=${JSON.stringify(r.output)}`);
+        expect(String(r.error)).toContain("Could not complete the task");
+        console.log(`[live #206] model=${model} error=${JSON.stringify(r.error)}`);
       } finally {
         await agent.dispose();
       }

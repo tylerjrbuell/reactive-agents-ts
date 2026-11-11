@@ -22,6 +22,7 @@ import {
 import { fetchAndMergePricing } from '../build-effect/pricing-fetch.js'
 import { setupParentContext } from '../build-effect/parent-context.js'
 import { buildToolMcpRegistrations } from '../build-effect/tool-mcp-registrations.js'
+import { mergeContractRequiredTools } from '../contract-tool-set.js'
 import { documentStoreLayer, ingestRagDocuments } from '../build-effect/rag-ingestion.js'
 import { agentWorkspaceLayer } from '../../engine/start-run.js'
 import { composeHealthLayer } from '../build-effect/health-layer.js'
@@ -209,6 +210,12 @@ export const runBuilderBuildEffect = <TOut>(
                 runtimeWithCortex,
                 mcpServers,
                 toolsOptions,
+                // Same list the run config carries, so a removed CLI name
+                // there (`git-cli`) registers the scoped shell it resolves to.
+                requiredTools: mergeContractRequiredTools(
+                    state._requiredToolsConfig,
+                    state._taskContract,
+                )?.tools,
                 agentTools,
                 allowDynamicSubAgents,
                 dynamicSubAgentOptions,

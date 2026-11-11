@@ -1,7 +1,7 @@
 /**
  * Strategy-failure surfacing — the ONE place a failed strategy/LLM terminal is
- * turned into user-visible text. Used by the think phase (strategy Exit
- * failure) and the streaming terminal (silent empty-output failure).
+ * turned into a failure message. Used by the think phase (strategy Exit
+ * failure), which puts it on the result's `error`, never its `output`.
  */
 import { Cause } from "effect";
 
@@ -25,14 +25,4 @@ export function describeStrategyFailure(strategy: string, reason: unknown): stri
 /** {@link describeStrategyFailure} for an Effect `Cause`. */
 export function describeStrategyCause(strategy: string, cause: Cause.Cause<unknown>): string {
   return describeStrategyFailure(strategy, Cause.squash(cause));
-}
-
-/**
- * Terminal output for a FAILED run: an empty output gets a named failure
- * message; non-empty output is untouched (strategies may carry a real
- * explanation). Successful runs must not call this.
- */
-export function surfaceFailedOutput(strategy: string, output: string, terminatedBy: string | undefined): string {
-  if (output.trim().length > 0) return output;
-  return describeStrategyFailure(strategy, terminatedBy ?? "run failed with no output");
 }

@@ -110,7 +110,7 @@
     {
       "_tag": "ThoughtEmitted",
       "content": "FINAL ANSWER: done",
-      "iteration": 4
+      "iteration": 1
     },
     {
       "_tag": "LedgerEntry",
@@ -193,6 +193,7 @@
       "output": "done",
       "success": true,
       "terminatedBy": "end_turn",
+      "outcome": "success",
       "evidenceDelta": 1,
       "goalAchieved": null
     }
@@ -228,6 +229,7 @@
       "output": "done",
       "success": true,
       "terminatedBy": "end_turn",
+      "outcome": "success",
       "evidenceDelta": 1,
       "goalAchieved": null
     }

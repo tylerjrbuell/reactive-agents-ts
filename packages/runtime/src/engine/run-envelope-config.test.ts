@@ -50,6 +50,33 @@ describe("buildRunEnvelopeFromConfig — disclosure-mode floor (F-4)", () => {
     expect(envelope.harness.toolDiscovery).toBe(true);
   });
 
+  it("reasoningOptions.harness.compactCallConstraints reaches the ResolvedHarness (default off)", () => {
+    const saved = process.env["RA_COMPACT_CALL_CONSTRAINTS"];
+    delete process.env["RA_COMPACT_CALL_CONSTRAINTS"];
+    try {
+      const on = buildRunEnvelopeFromConfig(
+        withProfile({ reasoningOptions: { harness: { compactCallConstraints: true } } }),
+      );
+      expect(on.harness.compactCallConstraints).toBe(true);
+      const off = buildRunEnvelopeFromConfig(withProfile({}));
+      expect(off.harness.compactCallConstraints).toBeUndefined();
+    } finally {
+      if (saved !== undefined) process.env["RA_COMPACT_CALL_CONSTRAINTS"] = saved;
+    }
+  });
+
+  it("reasoningOptions.harness.llmRecoveryBudget reaches the ResolvedHarness (0 kept, absent stays absent)", () => {
+    const zero = buildRunEnvelopeFromConfig(
+      withProfile({ reasoningOptions: { harness: { llmRecoveryBudget: 0 } } }),
+    );
+    expect(zero.harness.llmRecoveryBudget).toBe(0);
+    const five = buildRunEnvelopeFromConfig(
+      withProfile({ reasoningOptions: { harness: { llmRecoveryBudget: 5 } } }),
+    );
+    expect(five.harness.llmRecoveryBudget).toBe(5);
+    expect(buildRunEnvelopeFromConfig(withProfile({})).harness.llmRecoveryBudget).toBeUndefined();
+  });
+
   it("an explicit RA_LAZY_TOOLS env var still wins over the profile floor", () => {
     const saved = process.env["RA_LAZY_TOOLS"];
     process.env["RA_LAZY_TOOLS"] = "0";

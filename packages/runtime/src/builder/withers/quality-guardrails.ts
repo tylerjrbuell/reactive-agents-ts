@@ -48,7 +48,8 @@ export const applyWithGuardrails = (state: BuilderState, options?: GuardrailsOpt
  * @param options.passThreshold - Overall pass threshold (0-1). Default: 0.7
  * @param options.riskThreshold - Risk threshold below which outputs are flagged (0-1). Default: 0.5
  * @param options.useLLMTier - Use runtime LLMService for LLM-backed verification. Default: true
- * @param options.onReject - "block" | "annotate" | "proceed" on rejection. Default: "proceed"
+ * @param options.onReject - "block" | "annotate" | "proceed" on rejection. Default: "proceed".
+ *   "annotate" never edits the output: the note rides `metadata.verificationNote`.
  * @param options.strictValidation - Promote missing-key/unknown-model checks to hard build errors
  * @param options.lazyValidation - Keep checks as warnings even under strict validation
  * @returns `this` for chaining

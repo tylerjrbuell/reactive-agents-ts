@@ -80,6 +80,8 @@ export {
 export type {
   AgentResult,
   AgentResultMetadata,
+  AgentOutcome,
+  StrategySwitchRecord,
   AgentDebrief,
   LifecyclePhase,
   HookTiming,

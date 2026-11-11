@@ -79,7 +79,11 @@ async function observe(
       .withTestScenario(scenario)
       .build();
 
-    await agent.run(TASK, { taskId: label });
+    // Reachability is read off the trace, not the result. A bare builder
+    // re-throws a guard stop (agent/run-contract.ts), and since 2026-11-10 a
+    // guard stop before the model answers fails instead of shipping a
+    // harness-written answer, so the default arm may reject here.
+    await agent.run(TASK, { taskId: label }).catch(() => undefined);
     await agent.dispose();
 
     const kinds = new Set<string>();

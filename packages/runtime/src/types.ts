@@ -612,7 +612,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   /**
    * What to do when verification still rejects after retries (F10). Default
    * "proceed" (ship the answer — telemetry only). "block" withholds the answer
-   * and fails the run; "annotate" ships with a visible warning prepended.
+   * and fails the run; "annotate" ships it unchanged + `metadata.verificationNote`.
    */
   verificationOnReject: Schema.optional(
     Schema.Literal("block", "annotate", "proceed"),

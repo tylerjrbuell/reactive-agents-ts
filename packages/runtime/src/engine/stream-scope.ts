@@ -10,6 +10,7 @@
 import { Effect } from "effect";
 import type { RunNode, RunTree } from "@reactive-agents/core";
 import type { AgentStreamEvent, SubAgentRunInfo } from "../stream-types.js";
+import type { AgentOutcome } from "../builder/agent-result.js";
 
 /** Tree plus whether descendant activity is forwarded (full density only). */
 export interface StreamScope {
@@ -61,6 +62,8 @@ interface LifecycleEvent {
   readonly timestamp?: unknown;
   readonly success?: unknown;
   readonly output?: unknown;
+  readonly runOutcome?: unknown;
+  readonly error?: unknown;
   readonly totalTokens?: unknown;
   readonly totalCostUsd?: unknown;
   readonly durationMs?: unknown;
@@ -74,11 +77,20 @@ export const projectChildStarted = (e: LifecycleEvent): AgentStreamEvent => ({
   timestamp: typeof e.timestamp === "number" ? e.timestamp : Date.now(),
 });
 
-/** A child's `AgentCompleted` becomes a `StreamCompleted` with output, success, tokens, cost. */
+const RUN_OUTCOMES: readonly AgentOutcome[] = ["success", "partial", "failed", "abstained"];
+const isRunOutcome = (v: unknown): v is AgentOutcome => RUN_OUTCOMES.some((o) => o === v);
+
+/**
+ * A child's `AgentCompleted` becomes a `StreamCompleted` with output, success,
+ * outcome, failure cause, tokens, cost. The child's deliverables stay on its
+ * `AgentCompleted.deliverables` (a child chunk has no receipt to carry them).
+ */
 export const projectChildCompleted = (e: LifecycleEvent): AgentStreamEvent => ({
   _tag: "StreamCompleted",
   output: typeof e.output === "string" ? e.output : "",
   success: e.success !== false,
+  ...(isRunOutcome(e.runOutcome) ? { outcome: e.runOutcome } : {}),
+  ...(e.success === false && typeof e.error === "string" && e.error.length > 0 ? { error: e.error } : {}),
   metadata: {
     duration: typeof e.durationMs === "number" ? e.durationMs : 0,
     cost: typeof e.totalCostUsd === "number" ? e.totalCostUsd : 0,

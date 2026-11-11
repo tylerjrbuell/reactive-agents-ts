@@ -95,11 +95,17 @@ describe("status tolerance is a typed, explained exception", () => {
     expect(rc.outcome?.tolerated).toBe(true);
   }, 30_000);
 
-  it("(d) tree-of-thought refused deliverable: vetoed, never tolerated", async () => {
+  // Since 2026-11-10 the kernel no longer writes an answer for a model that
+  // never answered: this run ends failed in the kernel (no runtime veto
+  // needed), naming what stayed outstanding. It must never be tolerated.
+  it("(d) tree-of-thought unanswered run: failure, outstanding named, never tolerated", async () => {
     const rc = await runCompleted("tree-of-thought", loop, 2);
     expect(rc.status).toBe("failure");
-    expect(rc.outcome?.authority).toBe("runtime-success-veto:outstanding-criteria");
+    expect(rc.outcome?.success).toBe(false);
+    expect(rc.outcome?.status).not.toBe("completed");
+    expect((rc.outcome?.outstanding ?? []).length).toBeGreaterThan(0);
     expect(rc.outcome?.tolerated).toBeUndefined();
+    expect(rc.outcome?.toleratedBy).toBeUndefined();
   }, 30_000);
 });
 

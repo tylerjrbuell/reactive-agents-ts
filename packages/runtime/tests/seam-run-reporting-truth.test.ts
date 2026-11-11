@@ -20,9 +20,12 @@ import { Effect } from "effect";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
 import type { Task, TaskResult } from "@reactive-agents/core";
 import {
+  appendStrategySwitches,
   captureStrategySwitch,
   readStrategySwitchedTo,
+  readStrategySwitches,
   STRATEGY_SWITCHED_TO_KEY,
+  STRATEGY_SWITCHES_KEY,
 } from "../src/engine/phases/agent-loop/strategy-switch-capture.js";
 import { emitCompletionObservability } from "../src/engine/execute-completion-obs.js";
 import type { ObsLike } from "../src/engine/runtime-context.js";
@@ -159,6 +162,90 @@ describe("R2: strategyUsed names the strategy that finished the run", () => {
   }, 20000);
 });
 
+// R2b — `metadata.strategySwitches` carries EVERY switch, in order, on run()
+// AND StreamCompleted, so a UI can show "plan-execute -> reactive" honestly.
+// RED-ON-CUT: drop the strategySwitches spread in engine/execute-result-assembly.ts,
+// or keep only the last record in captureStrategySwitch -> red.
+function twoSwitchTool(taskIdRef: { current: string | undefined }) {
+  return {
+    ...switchingTool(taskIdRef),
+    handler: () =>
+      Effect.gen(function* () {
+        const bus = yield* EventBus;
+        const taskId = taskIdRef.current ?? "";
+        const base = { reason: "loop detected", timestamp: Date.now() };
+        yield* bus.publish({ _tag: "StrategySwitched", taskId, from: "reactive", to: "plan-execute-reflect", iteration: 1, ...base });
+        yield* bus.publish({ _tag: "StrategySwitched", taskId: "some-other-task", from: "reactive", to: "tree-of-thought", ...base });
+        yield* bus.publish({ _tag: "StrategySwitched", taskId, from: "plan-execute-reflect", to: "reactive", ...base });
+        return "KEY FACT: the core metric rose 12% last quarter.";
+      }),
+  };
+}
+
+type SwitchMeta = { strategyUsed?: string; strategySwitches?: ReadonlyArray<{ from: string; to: string; iteration?: number }> };
+
+async function twoSwitchAgent(taskIdRef: { current: string | undefined }) {
+  const agent = await ReactiveAgents.create()
+    .withName("strategy-switches-pin")
+    .withProvider("test")
+    .withModel("test")
+    .withTestScenario(switchScenario as never)
+    .withTools({ tools: [twoSwitchTool(taskIdRef)], adaptive: false } as never)
+    .withReasoning({ defaultStrategy: "reactive" })
+    .withMaxIterations(4)
+    .build();
+  const unsub = await agent.subscribe("AgentStarted", (e) => {
+    taskIdRef.current = String(e.taskId);
+  });
+  return { agent, unsub };
+}
+
+const expectedSwitches = [
+  { from: "reactive", to: "plan-execute-reflect", iteration: 1 },
+  { from: "plan-execute-reflect", to: "reactive" },
+];
+
+describe("R2b: strategySwitches records every switch in order", () => {
+  it("StreamCompleted.metadata.strategySwitches carries both switches; strategyUsed is unchanged", async () => {
+    const taskIdRef: { current: string | undefined } = { current: undefined };
+    const { agent, unsub } = await twoSwitchAgent(taskIdRef);
+    let meta: SwitchMeta | undefined;
+    for await (const ev of agent.runStream("Research the topic and summarize it.")) {
+      if (ev._tag === "StreamCompleted") meta = ev.metadata as SwitchMeta;
+    }
+    unsub();
+    await agent.dispose();
+    expect(taskIdRef.current).toBeDefined();
+    expect(meta?.strategySwitches).toEqual(expectedSwitches);
+    expect(meta?.strategyUsed).toBe("reactive");
+  }, 20000);
+
+  it("run() result metadata carries the same history", async () => {
+    const taskIdRef: { current: string | undefined } = { current: undefined };
+    const { agent, unsub } = await twoSwitchAgent(taskIdRef);
+    const result = await agent.run("Research the topic and summarize it.");
+    unsub();
+    await agent.dispose();
+    expect(result.metadata.strategySwitches).toEqual(expectedSwitches);
+  }, 20000);
+
+  it("a run that never switched carries no strategySwitches field", async () => {
+    const taskIdRef: { current: string | undefined } = { current: "not-this-run" };
+    const agent = await ReactiveAgents.create()
+      .withName("strategy-switches-none")
+      .withProvider("test")
+      .withModel("test")
+      .withTestScenario(switchScenario as never)
+      .withTools({ tools: [switchingTool(taskIdRef)], adaptive: false } as never)
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withMaxIterations(4)
+      .build();
+    const result = await agent.run("Research the topic and summarize it.");
+    await agent.dispose();
+    expect(result.metadata.strategySwitches).toBeUndefined();
+  }, 20000);
+});
+
 describe("strategy-switch capture (seam)", () => {
   it("keeps the LAST switch target for the task and unsubscribes after the pass", async () => {
     const program = Effect.gen(function* () {
@@ -182,7 +269,12 @@ describe("strategy-switch capture (seam)", () => {
     const { pass, late } = await Effect.runPromise(program.pipe(Effect.provide(EventBusLive)));
     expect(pass.exit._tag).toBe("Success");
     expect(pass.switchedTo).toBe("blueprint");
+    expect(pass.switches).toEqual([
+      { from: "x", to: "plan-execute-reflect" },
+      { from: "x", to: "blueprint" },
+    ]);
     expect(late.switchedTo).toBeUndefined();
+    expect(late.switches).toEqual([]);
     expect(readStrategySwitchedTo({ [STRATEGY_SWITCHED_TO_KEY]: "blueprint" })).toBe("blueprint");
     expect(readStrategySwitchedTo({ [STRATEGY_SWITCHED_TO_KEY]: undefined })).toBeUndefined();
   });
@@ -191,6 +283,20 @@ describe("strategy-switch capture (seam)", () => {
     const pass = await Effect.runPromise(captureStrategySwitch("t1", Effect.fail("boom" as const)));
     expect(pass.exit._tag).toBe("Failure");
     expect(pass.switchedTo).toBeUndefined();
+    expect(pass.switches).toEqual([]);
+  });
+
+  it("the history accumulates across passes and drops malformed entries", () => {
+    const first = appendStrategySwitches({}, [{ from: "reactive", to: "plan-execute-reflect" }]);
+    const both = appendStrategySwitches(
+      { [STRATEGY_SWITCHES_KEY]: [...first, { from: 3 }] },
+      [{ from: "plan-execute-reflect", to: "reactive", iteration: 4 }],
+    );
+    expect(both).toEqual([
+      { from: "reactive", to: "plan-execute-reflect" },
+      { from: "plan-execute-reflect", to: "reactive", iteration: 4 },
+    ]);
+    expect(readStrategySwitches({})).toEqual([]);
   });
 });
 

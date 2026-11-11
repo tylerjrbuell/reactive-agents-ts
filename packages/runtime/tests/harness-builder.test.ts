@@ -36,6 +36,47 @@ describe(".withHarness()", () => {
     expect(json.reasoning?.harness?.recencyBudgetChars).toBe(4096);
   });
 
+  it("carries stableToolList through toConfig, JSON and fromConfig", async () => {
+    const cfg = ReactiveAgents.create()
+      .withName("h")
+      .withProvider("anthropic")
+      .withModel("claude-haiku-4-5-20251001")
+      .withHarness({ stableToolList: true })
+      .toConfig();
+    expect(cfg.reasoning?.harness?.stableToolList).toBe(true);
+    const json = JSON.parse(JSON.stringify(cfg)) as typeof cfg;
+    const rebuilt = (await ReactiveAgents.fromConfig(json)).toConfig();
+    expect(rebuilt.reasoning?.harness?.stableToolList).toBe(true);
+  });
+
+  it("carries compactCallConstraints through toConfig, JSON and fromConfig", async () => {
+    const cfg = ReactiveAgents.create()
+      .withName("h")
+      .withProvider("anthropic")
+      .withModel("claude-haiku-4-5-20251001")
+      .withHarness({ compactCallConstraints: true })
+      .toConfig();
+    expect(cfg.reasoning?.harness?.compactCallConstraints).toBe(true);
+    const json = JSON.parse(JSON.stringify(cfg)) as typeof cfg;
+    const rebuilt = (await ReactiveAgents.fromConfig(json)).toConfig();
+    expect(rebuilt.reasoning?.harness?.compactCallConstraints).toBe(true);
+  });
+
+  it("carries llmRecoveryBudget (including 0) through toConfig, JSON and fromConfig", async () => {
+    for (const budget of [0, 5]) {
+      const cfg = ReactiveAgents.create()
+        .withName("h")
+        .withProvider("anthropic")
+        .withModel("claude-haiku-4-5-20251001")
+        .withHarness({ llmRecoveryBudget: budget })
+        .toConfig();
+      expect(cfg.reasoning?.harness?.llmRecoveryBudget).toBe(budget);
+      const json = JSON.parse(JSON.stringify(cfg)) as typeof cfg;
+      const rebuilt = (await ReactiveAgents.fromConfig(json)).toConfig();
+      expect(rebuilt.reasoning?.harness?.llmRecoveryBudget).toBe(budget);
+    }
+  });
+
   it("survives a later .withReasoning() call regardless of call order", () => {
     const cfgHarnessFirst = ReactiveAgents.create()
       .withName("h")

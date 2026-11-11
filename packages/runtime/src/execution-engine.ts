@@ -368,7 +368,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   // be a snapshot of the RAW registry taken above, BEFORE the
                   // builtins opt-in ran — so `builtins: ["file-write"]` was
                   // advertised as "10 tools available (now callable)" and
-                  // file-read/code-execute/git-cli were reachable. Narrow it to
+                  // file-read/code-execute/(old) git-cli were reachable. Narrow to
                   // what the caller actually permitted. Discovery still surfaces
                   // permitted-but-pruned tools (the escape hatch is intact);
                   // it can no longer surface tools that were never exposed.
@@ -534,7 +534,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 const rr = ctx.metadata.reasoningResult;
                 // Body extracted to engine/execute-output-derivation.ts (GH #221 W26).
                 const { sanitizedOutput, outputForSuccess, hasSubstantiveOutput } =
-                  deriveExecOutput(ctx, rr);
+                  deriveExecOutput(ctx);
 
                 // ── Behavioral contract checkOutput + guardrail final-output screen ──
                 // Bodies extracted to engine/execute-output-screens.ts (GH #221 W26).
@@ -546,7 +546,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   terminatedByRaw,
                   dialectObserved,
                   executionSucceeded,
-                  emptyOutputCompletionNote,
                 } = deriveExecutionSuccess({
                   ctx,
                   task,
@@ -596,11 +595,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
                 // F10: apply the verification onReject policy. When the gate
                 // flagged a still-rejected response for "block", the answer is
-                // withheld and the run fails; "annotate" prepends a warning.
+                // withheld and the run fails; "annotate" adds a typed note only.
                 const verificationOutcome = applyVerificationOutcome(
-                  // Empty-output success with verified deliverables ships the
-                  // deterministic completion note (see invariant above).
-                  emptyOutputCompletionNote ?? sanitizedOutput,
+                  sanitizedOutput,
                   executionSucceeded,
                   ctx.metadata as Record<string, unknown>,
                 );
@@ -672,7 +669,6 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   rr,
                   verificationOutcome,
                   executionDurationMs,
-                  outputForSuccess,
                   toolCallLog,
                   entropyLog,
                   terminatedByRaw,

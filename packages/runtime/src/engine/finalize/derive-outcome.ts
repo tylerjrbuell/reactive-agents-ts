@@ -7,6 +7,7 @@ import {
 } from '../../builder/helpers.js'
 import type { ReasoningStep } from '@reactive-agents/reasoning'
 import type { RunLedgerEntryShape } from '../../types.js'
+import type { AgentOutcome } from '../../builder/agent-result.js'
 
 /**
  * Terminal outcome of a completed run — the single computed answer to "what
@@ -187,21 +188,60 @@ export function deriveTaskOutcome(taskResult: TaskResult, ctx: DeriveTaskOutcome
     return { toolCalls, deliverables, goalAchieved, receipt }
 }
 
+/** Inputs of {@link deriveAgentOutcome}: the shipped success bit and what the run ended with. */
+export interface AgentOutcomeInput {
+    /** The final success bit (after every runtime veto and the verifier gate). */
+    readonly success: boolean
+    readonly terminatedBy?: TerminatedBy | string
+    /** The strategy result's own status (`completed | partial | failed | abstained`), when known. */
+    readonly kernelStatus?: string
+    /** The shipped output (the model's answer only). */
+    readonly output: string
+}
+
 /**
- * `success` + `terminatedBy` of a result, one rule for `run()` and
- * `runStream()`. A run paused for approval or interaction has not terminated:
- * it reports `success: false` and no `terminatedBy` (its `status` and
- * `pendingApproval`/`pendingInteraction` say why). A terminal run passes both
- * through unchanged.
+ * The ONE rule for `AgentResult.outcome` (see `AgentOutcome` for the reading
+ * table). Pure; `success === true` exactly when the result is `"success"`.
+ * An abstention is checked first so an honest decline is never labelled
+ * `failed`; a kernel or provider failure is `failed` even if text exists; any
+ * other non-success that still carries the model's answer is `partial`.
+ */
+export function deriveAgentOutcome(input: AgentOutcomeInput): AgentOutcome {
+    if (input.terminatedBy === 'abstained' || input.kernelStatus === 'abstained') return 'abstained'
+    if (input.success) return 'success'
+    if (input.kernelStatus === 'failed' || input.terminatedBy === 'llm_error') return 'failed'
+    return input.output.trim().length > 0 ? 'partial' : 'failed'
+}
+
+/**
+ * `success` + `terminatedBy` + `outcome` of a result, one rule for `run()`
+ * and `runStream()`. A run paused for approval or interaction has not
+ * terminated: it reports `success: false`, no `terminatedBy` and no `outcome`
+ * (its `status` and `pendingApproval`/`pendingInteraction` say why). A
+ * terminal run passes `success`/`terminatedBy` through and carries the
+ * engine's `outcome` (derived by the same rule when a producer omitted it).
  */
 export function terminalOutcomeFields(
     paused: boolean,
-    taskResult: { readonly success?: unknown; readonly terminatedBy?: TerminatedBy },
-): { success: boolean; terminatedBy?: TerminatedBy } {
+    taskResult: {
+        readonly success?: unknown
+        readonly terminatedBy?: TerminatedBy
+        readonly outcome?: AgentOutcome
+        readonly output?: unknown
+    },
+): { success: boolean; terminatedBy?: TerminatedBy; outcome?: AgentOutcome } {
     if (paused) return { success: false }
+    const success = Boolean(taskResult.success)
     return {
-        success: Boolean(taskResult.success),
+        success,
         ...(taskResult.terminatedBy !== undefined ? { terminatedBy: taskResult.terminatedBy } : {}),
+        outcome:
+            taskResult.outcome ??
+            deriveAgentOutcome({
+                success,
+                ...(taskResult.terminatedBy !== undefined ? { terminatedBy: taskResult.terminatedBy } : {}),
+                output: String(taskResult.output ?? ''),
+            }),
     }
 }
 

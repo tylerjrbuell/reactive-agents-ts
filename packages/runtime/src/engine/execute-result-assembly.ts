@@ -23,7 +23,11 @@ import { readRunLedger } from "./run-ledger-scope.js";
 import { readSettledRunSplit } from "./run-budget-arm.js";
 import { classifyComplexity } from "./util.js";
 import { exportableSteps } from "./exportable-steps.js";
-import { readStrategySwitchedTo } from "./phases/agent-loop/strategy-switch-capture.js";
+import { deriveFailureCause } from "./finalize/failure-cause.js";
+import { deriveAgentOutcome } from "./finalize/derive-outcome.js";
+import { isPausedResult } from "./finalize/run-finalize.js";
+import type { AgentOutcome } from "../builder/agent-result.js";
+import { readStrategySwitchedTo, readStrategySwitches } from "./phases/agent-loop/strategy-switch-capture.js";
 import type { VerificationOutcome } from "./finalize/verification-outcome.js";
 import type { ResultVerificationOutcome } from "./finalize/result-verification.js";
 import type { TraceLinkage } from "./finalize/trace-linkage.js";
@@ -38,7 +42,6 @@ export interface ResultAssemblyDeps {
   readonly rr: ReasoningResultLike;
   readonly verificationOutcome: VerificationOutcome;
   readonly executionDurationMs: number;
-  readonly outputForSuccess: string;
   readonly toolCallLog: readonly ToolCallEntry[];
   readonly entropyLog: readonly EntropyLogEntry[];
   readonly terminatedByRaw: TerminatedBy;
@@ -57,6 +60,7 @@ export function assembleTaskResult(
   terminatedBy?: string;
   debrief?: AgentDebrief;
   evidenceDelta?: number;
+  outcome?: AgentOutcome;
 } {
   const {
     task,
@@ -64,7 +68,6 @@ export function assembleTaskResult(
     rr,
     verificationOutcome,
     executionDurationMs,
-    outputForSuccess,
     toolCallLog,
     entropyLog,
     terminatedByRaw,
@@ -77,43 +80,63 @@ export function assembleTaskResult(
 
   // Prompt/completion split + call count from the run meter (the same source
   // as tokensUsed/cost, settled by settleRunSpend). The split is used only when
-  // the provider reported one (in + out > 0); otherwise the strategy's own
-  // figures stay, so a provider that reports totals only never reads as 0/0.
+  // the meter knows both halves and they are non-zero (in + out > 0). A half
+  // the meter does not know (a total-only call) is absent, so no half-split is
+  // ever published. Fallback: the strategy's own split, but only when it sums
+  // to the meter's tokens. A strategy split that disagrees with tokensUsed is
+  // someone else's accounting, so it is dropped rather than published next to
+  // a total it does not describe.
   const settledSplit = readSettledRunSplit(ctx.metadata);
+  const settledIn = settledSplit?.inputTokens;
+  const settledOut = settledSplit?.outputTokens;
   const meterSplit =
-    settledSplit !== undefined && settledSplit.inputTokens + settledSplit.outputTokens > 0
-      ? settledSplit
+    settledIn !== undefined && settledOut !== undefined && settledIn + settledOut > 0
+      ? { inputTokens: settledIn, outputTokens: settledOut }
       : undefined;
-  const inputTokens = meterSplit?.inputTokens ?? rr?.metadata?.inputTokens;
-  const outputTokens = meterSplit?.outputTokens ?? rr?.metadata?.outputTokens;
+  const strategyIn = rr?.metadata?.inputTokens;
+  const strategyOut = rr?.metadata?.outputTokens;
+  const strategySplit =
+    typeof strategyIn === "number" &&
+    typeof strategyOut === "number" &&
+    strategyIn + strategyOut === ctx.tokensUsed
+      ? { inputTokens: strategyIn, outputTokens: strategyOut }
+      : undefined;
+  const inputTokens = (meterSplit ?? strategySplit)?.inputTokens;
+  const outputTokens = (meterSplit ?? strategySplit)?.outputTokens;
 
   const result: TaskResult & {
     format?: string;
     terminatedBy?: string;
     debrief?: AgentDebrief;
     evidenceDelta?: number;
+    outcome?: AgentOutcome;
   } = {
     taskId: task.id,
     agentId: task.agentId,
     output: verificationOutcome.output,
     success: verificationOutcome.success,
+    // AgentResult.outcome, derived ONCE here where the kernel's own status is
+    // exact. A paused run has not ended, so it carries none.
+    ...(rr?.metadata !== undefined && isPausedResult(rr.metadata as Record<string, unknown>)
+      ? {}
+      : {
+          outcome: deriveAgentOutcome({
+            success: verificationOutcome.success,
+            terminatedBy: terminatedByRaw,
+            ...(typeof rr?.status === "string" ? { kernelStatus: rr.status } : {}),
+            output: String(verificationOutcome.output ?? ""),
+          }),
+        }),
+    // A failed run's error is its cause (verifier block, kernel/provider
+    // failure, runtime veto, termination), never its output text.
     ...(!verificationOutcome.success
       ? {
-          error:
-            verificationOutcome.error ??
-            (ctx.metadata.emptyOutputFailure
-              ? "Run ended with no output and no verified deliverable — nothing to ship."
-              : outputForSuccess.length > 0
-              ? outputForSuccess
-              : rr?.status === "failed"
-                // Prefer the real kernel failure detail (provider
-                // 413/400 message via explainProviderError) over the
-                // generic label — the error was captured in
-                // state.error and carried onto rr.error.
-                ? (typeof rr?.error === "string" && rr.error.trim().length > 0
-                    ? rr.error
-                    : "Reasoning failed")
-                : "Execution did not complete successfully"),
+          error: deriveFailureCause({
+            ...(verificationOutcome.error !== undefined ? { verificationError: verificationOutcome.error } : {}),
+            ...(rr !== undefined ? { reasoning: rr } : {}),
+            markers: ctx.metadata as Record<string, unknown>,
+            terminatedBy: ctx.metadata.rawTerminatedBy ?? terminatedByRaw,
+          }),
         }
       : {}),
     metadata: {
@@ -132,6 +155,11 @@ export function assembleTaskResult(
       // A mid-run kernel switch is invisible on ctx.selectedStrategy (the
       // strategy result names the entry strategy); report the switch target.
       strategyUsed: readStrategySwitchedTo(ctx.metadata) ?? ctx.selectedStrategy,
+      // Every switch of the run, in order (absent when it never switched).
+      ...(() => {
+        const switches = readStrategySwitches(ctx.metadata);
+        return switches.length > 0 ? ({ strategySwitches: switches } as Record<string, unknown>) : {};
+      })(),
       stepsCount: ctx.metadata.stepsCount ?? ctx.iteration,
       iterations: ctx.iteration,
       // Forward reasoning steps so chat() can access tool results and analysis.
@@ -245,6 +273,11 @@ export function assembleTaskResult(
         : {}),
       ...(boundaryVerification?.warning !== undefined
         ? ({ verificationWarning: boundaryVerification.warning } as Record<string, unknown>)
+        : {}),
+      // onReject "annotate": the verifier's note rides its own field; the
+      // answer in `output` is never edited (owner rule 2026-11-10).
+      ...(verificationOutcome.note !== undefined
+        ? ({ verificationNote: verificationOutcome.note } as Record<string, unknown>)
         : {}),
       // A semantic-cache HIT short-circuits the whole loop: no LLM
       // call, no tool dispatch, no steps, no ledger. The flag was

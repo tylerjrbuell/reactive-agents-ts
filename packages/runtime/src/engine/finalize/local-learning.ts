@@ -14,7 +14,7 @@ import type { LearningResult } from "@reactive-agents/reactive-intelligence";
 import { ProceduralMemoryService, MemoryIdSchema } from "@reactive-agents/memory";
 import { LearningEngineService, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { extractTaskText, deriveRunOutcome } from "../util.js";
+import { extractTaskText, deriveRunOutcome, toRiWireOutcome } from "../util.js";
 import { SkillStoreService } from "@reactive-agents/memory";
 import { skillFragmentToSkillRecord } from "@reactive-agents/reactive-intelligence";
 
@@ -76,7 +76,7 @@ export const runLocalLearning = (
               modelId,
               taskDescription: extractTaskText(task.input),
               strategy: ctx.selectedStrategy ?? "reactive",
-              outcome: deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0),
+              outcome: toRiWireOutcome(deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0, ctx.metadata.reasoningResult?.status)),
               entropyHistory: entropyLog,
               totalTokens: ctx.tokensUsed,
               durationMs: executionDurationMs,
@@ -144,9 +144,11 @@ export const runLocalLearning = (
         // skill. Before `deriveRunOutcome` centralized this, an abstained run
         // landed on "success" and CREDITED the skill that led the agent to
         // decline. See DEBT-REGISTER §3 (2026-07-23).
-        const skillOutcome = deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0);
+        const skillOutcome = deriveRunOutcome(terminatedByRaw, errorsFromLoop.length > 0, ctx.metadata.reasoningResult?.status);
 
-        yield* Effect.serviceOption(ProceduralMemoryService).pipe(
+        // An honest abstention neither credits nor penalizes the skill: the
+        // agent declined, so the skill's own success rate has no new evidence.
+        if (skillOutcome !== "abstained") yield* Effect.serviceOption(ProceduralMemoryService).pipe(
           Effect.flatMap((svcOpt) => {
             if (svcOpt._tag !== "Some") return Effect.void;
             return Effect.gen(function* () {

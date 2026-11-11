@@ -86,6 +86,9 @@ export const armRunBudget = <T extends { readonly id: unknown; readonly agentId?
  * forked debrief synthesis, any post-settle call) is ignored by the meter, so
  * the total copied here and `runBudgetSpend` read later cannot diverge. The
  * meter owns the "no spend after settle" rule; callers need no detach.
+ *
+ * A half the meter does not know (some call reported a total only) is
+ * recorded absent, never as 0.
  */
 export const settleRunSpend = <C extends Pick<ExecutionContext, "tokensUsed" | "cost" | "metadata">>(
   ctx: C,
@@ -105,10 +108,13 @@ export const settleRunSpend = <C extends Pick<ExecutionContext, "tokensUsed" | "
  * The run meter's accounting-only fields, settled alongside `tokensUsed`/`cost`
  * so the result reports the prompt/completion split and the call count from
  * the SAME source as the total (they cannot disagree with it).
+ *
+ * A half is absent when the meter does not know it (a call reported a total
+ * only); it is never reported as 0.
  */
 export interface SettledRunSplit {
-  readonly inputTokens: number;
-  readonly outputTokens: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
   readonly llmCalls: number;
 }
 
@@ -116,16 +122,18 @@ export interface SettledRunSplit {
 const SETTLED_SPLIT_KEY = "settledRunSplit";
 
 const splitOf = (meter: RunBudgetMeter): SettledRunSplit => ({
-  inputTokens: meter.inputTokens ?? 0,
-  outputTokens: meter.outputTokens ?? 0,
+  ...(meter.inputTokens !== undefined ? { inputTokens: meter.inputTokens } : {}),
+  ...(meter.outputTokens !== undefined ? { outputTokens: meter.outputTokens } : {}),
   llmCalls: meter.llmCalls ?? 0,
 });
+
+const isOptionalNumber = (v: unknown): boolean => v === undefined || typeof v === "number";
 
 const isSettledRunSplit = (v: unknown): v is SettledRunSplit =>
   typeof v === "object" &&
   v !== null &&
-  typeof (v as Record<string, unknown>)["inputTokens"] === "number" &&
-  typeof (v as Record<string, unknown>)["outputTokens"] === "number" &&
+  isOptionalNumber((v as Record<string, unknown>)["inputTokens"]) &&
+  isOptionalNumber((v as Record<string, unknown>)["outputTokens"]) &&
   typeof (v as Record<string, unknown>)["llmCalls"] === "number";
 
 /** The split `settleRunSpend` recorded; `undefined` when no meter was settled. */

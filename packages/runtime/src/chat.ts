@@ -32,6 +32,17 @@ export interface ChatMessage {
   content: string;
   /** Unix timestamp in milliseconds when the message was added */
   timestamp: number;
+  /**
+   * `true` on an assistant row recording a run that FAILED (`success: false`,
+   * not paused). Its `content` is then the failure note
+   * `[previous run failed: <cause>; no answer was given]`, never the failed
+   * run's output, so the next turn's history tells the model no answer was
+   * given. Render it as a failed turn, not as an agent reply. Absent on
+   * normal rows.
+   */
+  failed?: boolean;
+  /** The failure cause (`AgentResult.error`), present only when `failed` is `true`. */
+  error?: string;
 }
 
 /**
@@ -112,6 +123,15 @@ export interface ChatReply {
   pendingApproval?: AgentResult["pendingApproval"];
   /** Tool-capable path only: present when `status === "awaiting-interaction"`. The paused interaction and the durable runId to respond to. */
   pendingInteraction?: AgentResult["pendingInteraction"];
+  /**
+   * Tool-capable path only: `true` when the run failed (`AgentResult.success`
+   * false, not paused). `message` is then the failed run's output (its last
+   * narration or draft), not an answer; the session history records the turn
+   * as failed (see `ChatMessage.failed`). Absent on a normal run.
+   */
+  failed?: boolean;
+  /** Tool-capable path only: the failure cause (`AgentResult.error`), present only when `failed` is `true`. */
+  error?: string;
 }
 
 /**

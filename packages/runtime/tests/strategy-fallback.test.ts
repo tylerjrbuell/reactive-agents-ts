@@ -114,8 +114,12 @@ describe("Strategy execution fallback (GAP-17)", () => {
       }).pipe(Effect.provide(testLayer)),
     );
 
-    // Strategy fails but execution completes with fallback error result
-    expect(result.output).toContain("Strategy execution failed");
+    // Strategy fails but execution completes with a fallback error result.
+    // The message is the cause on `error`; output stays empty (owner decision
+    // 2026-11-10: the harness writes no text into output).
+    expect(result.success).toBe(false);
+    expect(result.output).toBe("");
+    expect(result.error).toContain("Strategy execution failed");
     expect((result.metadata as any).strategyFallback).toBe(true);
   });
 

@@ -9,7 +9,11 @@
  */
 import { Effect } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
-import type { Task, TaskResult } from "@reactive-agents/core";
+import type { DeliverableReceipt, Task, TaskResult } from "@reactive-agents/core";
+import type { AgentOutcome } from "../../builder/agent-result.js";
+import { deriveReceiptDeliverables } from "../../builder/helpers.js";
+import { readPosture } from "../../chat/todo-seed.js";
+import { extractTaskText } from "../util.js";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { RunSummary } from "@reactive-agents/observability";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -24,7 +28,8 @@ export interface RunFinalizeDeps {
   readonly task: Task;
   readonly config: ReactiveAgentsConfig;
   readonly eb: EbLike | null;
-  readonly result: TaskResult;
+  /** The assembled result; `outcome` is `AgentResult.outcome` (absent on a paused run). */
+  readonly result: TaskResult & { readonly outcome?: AgentOutcome };
   readonly executionStartMs: number;
   readonly entropyLog: readonly { composite: number }[];
   readonly executionSucceeded: boolean;
@@ -68,12 +73,50 @@ export const completionVerb = (result: CompletionInput): string => {
   return result.success ? "completed" : "failed";
 };
 
+type DeliverableArgs = Parameters<typeof deriveReceiptDeliverables>[0];
+
+/**
+ * The `AgentCompleted` outcome fields: `runOutcome` (the same value as
+ * `AgentResult.outcome`, derived once at result assembly) and the verified
+ * `deliverables`, computed by the same rule as `receipt.deliverables`.
+ * A paused run has not ended, so it carries neither.
+ */
+export const completedOutcomeFields = (
+  task: Task,
+  config: ReactiveAgentsConfig,
+  result: TaskResult & { readonly outcome?: AgentOutcome },
+): { runOutcome?: AgentOutcome; deliverables?: readonly DeliverableReceipt[] } => {
+  if (isPausedResult(result)) return {};
+  const meta = result.metadata as {
+    readonly reasoningSteps?: DeliverableArgs["reasoningSteps"];
+    readonly runLedger?: DeliverableArgs["runLedger"];
+  };
+  const deliverables = deriveReceiptDeliverables({
+    task: extractTaskText(task.input),
+    ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
+    ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
+    ...(readPosture(task) === "plan" ? { posture: "plan" as const } : {}),
+    reasoningSteps: meta.reasoningSteps,
+    runLedger: meta.runLedger,
+    output: typeof result.output === "string" ? result.output : "",
+  });
+  return {
+    ...(result.outcome !== undefined ? { runOutcome: result.outcome } : {}),
+    ...(deliverables !== undefined ? { deliverables } : {}),
+  };
+};
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export const finalizeRun = (
   deps: RunFinalizeDeps,
 ): Effect.Effect<void, never> => {
-  const { ctx, task, config, eb, result, executionStartMs, entropyLog, executionSucceeded } = deps;
+  const { ctx, task, config, eb, result, executionStartMs, entropyLog } = deps;
+  // The SHIPPED success bit. The verifier gate (`onReject: "block"`) withholds
+  // the answer after `executionSucceeded` was derived, so a blocked run used to
+  // publish `AgentCompleted.success: true` / `run-completed.status: "success"`
+  // next to `AgentResult.success: false`. Both bits must hold.
+  const executionSucceeded = deps.executionSucceeded && result.success;
 
   return Effect.gen(function* () {
     // Phase 0.2: Lifecycle completion events (aligned with TaskResult.success)
@@ -144,6 +187,7 @@ export const finalizeRun = (
           : {}),
         ...(signalTally !== undefined ? { signals: signalTally } : {}),
         ...(reconciledOutcome !== undefined ? { outcome: reconciledOutcome } : {}),
+        ...completedOutcomeFields(task, config, result),
       }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/run-finalize.ts:agent-completed-event", tag: errorTag(err) })));
       yield* eb.publish({
         _tag: "TaskCompleted",

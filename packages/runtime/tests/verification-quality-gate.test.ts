@@ -434,13 +434,24 @@ describe("Verification Quality Gate", () => {
     const result = await runWith("block");
     expect(result.success).toBe(false);
     expect(String(result.output)).not.toContain("This answer is wrong");
-    expect(String(result.output).toLowerCase()).toContain("withheld");
+    // Owner decision 2026-11-10: the withheld answer leaves output empty; the
+    // cause rides `error`.
+    expect(result.output).toBe("");
+    expect(String(result.error)).toContain("Verification rejected the response");
   });
 
-  it("onReject:'annotate' ships the answer with a warning", async () => {
+  // Owner rule 2026-11-10: the harness never writes text into output. The
+  // answer ships unchanged; the verifier's note rides metadata.verificationNote.
+  it("onReject:'annotate' ships the answer unchanged with a typed note", async () => {
     const result = await runWith("annotate");
-    expect(String(result.output)).toContain("failed verification");
-    expect(String(result.output)).toContain("This answer is wrong");
+    expect(result.output).toBe("This answer is wrong and unverifiable.");
+    const note = (result.metadata as { verificationNote?: string }).verificationNote;
+    expect(note).toContain("failed verification");
+  });
+
+  it("default (proceed) carries no verification note", async () => {
+    const result = await runWith(undefined);
+    expect((result.metadata as { verificationNote?: string }).verificationNote).toBeUndefined();
   });
 
   it("default (proceed) ships the rejected answer unchanged", async () => {

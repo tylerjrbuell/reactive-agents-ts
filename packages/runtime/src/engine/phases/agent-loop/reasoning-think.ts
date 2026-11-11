@@ -37,7 +37,12 @@ import {
 } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { resolveAdaptiveModelPool } from "../adaptive-model-pool.js";
-import { captureStrategySwitch, STRATEGY_SWITCHED_TO_KEY } from "./strategy-switch-capture.js";
+import {
+  appendStrategySwitches,
+  captureStrategySwitch,
+  STRATEGY_SWITCHED_TO_KEY,
+  STRATEGY_SWITCHES_KEY,
+} from "./strategy-switch-capture.js";
 import { skillsContextFromMetadata } from "../../bootstrap/skill-activatable.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
@@ -411,7 +416,7 @@ export const runReasoningThink = (
 
     const strategyEffect = reasoningService.execute(executeRequest);
     // The kernel's mid-run switch target (reporting only — see strategy-switch-capture.ts).
-    const { exit: strategyOutcome, switchedTo } = yield* captureStrategySwitch(String(c.taskId), strategyEffect);
+    const { exit: strategyOutcome, switchedTo, switches } = yield* captureStrategySwitch(String(c.taskId), strategyEffect);
     if (strategyOutcome._tag === "Success") {
       const normalizedResult = normalizeReasoningResult(strategyOutcome.value);
       if (!normalizedResult && obs) {
@@ -420,8 +425,12 @@ export const runReasoningThink = (
           `classify.required=${effectiveRequiredTools?.join(",") ?? "(none)"}`
         ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-think.ts:normalize-null-warn", tag: errorTag(err) })));
       }
+      // A fallback result carries its message on `error`, never `output`: the
+      // harness writes no text into output (owner decision 2026-11-10), and
+      // failure-cause.ts publishes `error` as TaskResult.error.
       result = normalizedResult ?? {
-        output: "Strategy returned an invalid result shape",
+        output: "",
+        error: "Strategy returned an invalid result shape",
         status: "error",
         steps: [],
         metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, strategyFallback: true },
@@ -437,7 +446,8 @@ export const runReasoningThink = (
         ).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/phases/agent-loop/reasoning-think.ts:strategy-fallback-warn", tag: errorTag(err) })));
       }
       result = {
-        output: describeStrategyCause(effectiveStrategyName, strategyError),
+        output: "",
+        error: describeStrategyCause(effectiveStrategyName, strategyError),
         status: "error",
         steps: [],
         metadata: { cost: 0, tokensUsed: 0, stepsCount: 0, strategyFallback: true },
@@ -460,6 +470,8 @@ export const runReasoningThink = (
         ...c.metadata,
         // Per pass: a later pass that did not switch clears an earlier target.
         [STRATEGY_SWITCHED_TO_KEY]: switchedTo,
+        // The history accumulates across passes: every switch happened.
+        [STRATEGY_SWITCHES_KEY]: appendStrategySwitches(c.metadata, switches),
         lastResponse: String(result.output ?? ""),
         isComplete: result.status === "completed",
         reasoningResult: result,

@@ -97,7 +97,7 @@ export function deriveTaskComplexity(
 
 /**
  * Categorize failure pattern from error signals.
- * Returns undefined when the run succeeded.
+ * Returns undefined when the run succeeded or abstained.
  *
  * Priority order:
  * 1. context-overflow (context pressure > 0.95)
@@ -107,12 +107,13 @@ export function deriveTaskComplexity(
  * 5. unknown
  */
 export function deriveFailurePattern(
-  outcome: "success" | "partial" | "failure",
+  outcome: "success" | "partial" | "failure" | "abstained",
   terminatedBy: string,
   errorsFromLoop: readonly string[],
   ctxPressurePeak: number | undefined,
 ): FailurePattern | undefined {
-  if (outcome === "success") return undefined;
+  // An honest abstention is not a failure, so it has no failure pattern.
+  if (outcome === "success" || outcome === "abstained") return undefined;
   if ((ctxPressurePeak ?? 0) > 0.95) return "context-overflow";
   if (terminatedBy === "max_iterations" || terminatedBy === "guard_stop") return "loop-detected";
   if (errorsFromLoop.some(e => e.toLowerCase().includes("guardrail"))) return "guardrail-halt";

@@ -6,8 +6,7 @@
  * the observed-dialect extraction, the coarse `executionSucceeded` bit
  * (status/partial tolerance lane), the F7 abstention veto, the W5 outstanding
  * contract veto, and the M7-mirror empty-output/deliverable-honesty invariant
- * (declared-deliverable scan, harness-authored completion note, F1
- * "talking is not doing" veto).
+ * (declared-deliverable scan, F1 "talking is not doing" veto).
  *
  * Writes the honesty markers onto ctx.metadata exactly as the inline code did
  * (shared object identity — the ctx instance is the engine's own).
@@ -22,7 +21,11 @@ import { readPosture } from "../chat/todo-seed.js";
 import { isMetaTool } from "@reactive-agents/reasoning";
 import { readRunLedger } from "./run-ledger-scope.js";
 import { readTerminalOutcome } from "./finalize/terminal-outcome-read.js";
-import { PARTIAL_SUBSTANTIVE_OUTPUT, PARTIAL_TOLERANCE_MARKER } from "./finalize/status-authority.js";
+import {
+  PARTIAL_SUBSTANTIVE_OUTPUT,
+  PARTIAL_TOLERANCE_MARKER,
+  STRATEGY_RESULT_FAILED_MARKER,
+} from "./finalize/status-authority.js";
 
 /** Shape of the reasoning result stored in ctx.metadata.reasoningResult. */
 type ReasoningResultLike = ExecutionContext["metadata"]["reasoningResult"];
@@ -50,7 +53,6 @@ export interface SuccessInvariantsResult {
     | "nameless-shape"
     | "none";
   readonly executionSucceeded: boolean;
-  readonly emptyOutputCompletionNote: string | undefined;
 }
 
 export function deriveExecutionSuccess(
@@ -86,9 +88,11 @@ export function deriveExecutionSuccess(
   // Reactive strategy often reports partial + max_iterations whenever the kernel did not
   // reach state "done", even if the last LLM turn produced a usable string. Treat
   // completed, or partial with non-empty output, as success; empty partial as failure.
+  // `abstained` (the kernel's own status since 2026-11-10) is never a success:
+  // the kernel declined and shipped output "".
   let executionSucceeded =
     rr !== undefined && typeof rr.status === "string"
-      ? rr.status === "failed" || rr.status === "error"
+      ? rr.status === "failed" || rr.status === "error" || rr.status === "abstained"
         ? false
         : rr.status === "completed" ||
           (rr.status === "partial" && hasSubstantiveOutput)
@@ -119,6 +123,11 @@ export function deriveExecutionSuccess(
   // The decline stays HONEST and machine-readable: `terminatedBy`
   // is "abstained" and `result.abstention` carries reason +
   // missing. Only the coarse success bit changes.
+  //
+  // Since 2026-11-10 the kernel reports its own `status: "abstained"`,
+  // so `executionSucceeded` is already false above and this veto does
+  // not fire: the kernel owns that status. It stays for a strategy
+  // result that still reports `completed` with an abstained terminal.
   if (executionSucceeded && terminatedByRaw === "abstained") {
     executionSucceeded = false;
     ctx.metadata.abstainedNotSuccess = true;
@@ -161,6 +170,17 @@ export function deriveExecutionSuccess(
   // from its own delivery decision, and a `partial` whose verdict is refused is
   // vetoed the same way. An accepted or null (unjudged) verdict keeps the lane.
   const reconciled = readTerminalOutcome(rr?.metadata);
+  // A pass after the kernel minted its outcome failed (e.g. a failed
+  // verification retry keeps the first pass's metadata but reports `failed`).
+  // The minted record is then stale: stamp it, so the finalize fold reports
+  // the status the shipped strategy result actually ended with.
+  if (
+    reconciled !== undefined &&
+    (rr?.status === "failed" || rr?.status === "error") &&
+    (reconciled.status === "completed" || reconciled.status === "partial")
+  ) {
+    ctx.metadata[STRATEGY_RESULT_FAILED_MARKER] = true;
+  }
   if (
     executionSucceeded &&
     reconciled !== undefined &&
@@ -197,12 +217,12 @@ export function deriveExecutionSuccess(
   // success from isComplete alone, shipping success:true with
   // EMPTY output (p10 second run, p5 rerun). Empty-output
   // success is honest ONLY when every DECLARED deliverable
-  // verifiably landed — the artifacts are the answer, and a
-  // deterministic completion note (marked harness-authored, #40
-  // channel) replaces the silence. Otherwise it is a failure
-  // with a real cause. Deliverable flags come from the
-  // RunContract × step-ledger scan — no model judgment.
-  let emptyOutputCompletionNote: string | undefined;
+  // verifiably landed — the artifacts are the answer, and they
+  // ride `receipt.deliverables`; the output stays empty (owner
+  // decision 2026-11-10: the harness never writes text into
+  // output). Otherwise it is a failure with a real cause.
+  // Deliverable flags come from the RunContract × step-ledger
+  // scan — no model judgment.
   // Task 3 (2026-08-14): this deliverable-honesty scan used to run
   // ONLY when `executionSucceeded` was already true — but a plain
   // empty final turn with no tool artifacts already forces
@@ -221,8 +241,13 @@ export function deriveExecutionSuccess(
   // not let a real kernel error (rr.error non-empty) be shadowed by
   // this branch — that detail still wins via the `rr?.error` check
   // in the result's `error` field below.
+  //
+  // An abstained kernel is excluded: its empty output is the honest
+  // decline, not a missing answer, so no runtime empty-output veto
+  // claims its status (the kernel owns it; failure-cause.ts names it).
   const emptyOutputNoErrorDetail =
     !hasSubstantiveOutput &&
+    rr?.status !== "abstained" &&
     !(typeof rr?.error === "string" && rr.error.trim().length > 0);
   if (executionSucceeded || emptyOutputNoErrorDetail) {
     const declaredDeliverables = deriveReceiptDeliverables({
@@ -244,13 +269,10 @@ export function deriveExecutionSuccess(
 
     if (!hasSubstantiveOutput) {
       // Empty output is honest ONLY when every declared deliverable
-      // verifiably landed — the artifacts are the answer, and a
-      // deterministic completion note (harness-authored, #40
-      // channel) replaces the silence.
-      if (allProduced) {
-        emptyOutputCompletionNote = `Completed: ${declared.map((d) => d.spec).join("; ")}.`;
-        ctx.metadata.harnessAuthoredOutput = true;
-      } else {
+      // verifiably landed — the artifacts are the answer. The output
+      // stays empty; the landed deliverables ride `receipt.deliverables`
+      // (derive-outcome.ts reads the same RunContract scan).
+      if (!allProduced) {
         executionSucceeded = false;
         ctx.metadata.emptyOutputFailure = true;
       }
@@ -281,5 +303,5 @@ export function deriveExecutionSuccess(
     }
   }
 
-  return { terminatedByRaw, dialectObserved, executionSucceeded, emptyOutputCompletionNote };
+  return { terminatedByRaw, dialectObserved, executionSucceeded };
 }

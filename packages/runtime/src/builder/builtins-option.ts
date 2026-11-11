@@ -14,21 +14,80 @@
  * behavior (an unmatched entry is a literal name that matches nothing).
  */
 import { Either } from "effect";
-import { BUILTIN_TOOL_NAMES, BUILTIN_TOOLSET_ALIASES } from "@reactive-agents/tools";
+import {
+  BUILTIN_TOOL_NAMES,
+  BUILTIN_TOOLSET_ALIASES,
+  DEPRECATED_CLI_TOOLS,
+  REMOVED_BUILTIN_NAMES,
+  resolveBuiltinSelection,
+} from "@reactive-agents/tools";
+import type { BuiltinSelection } from "@reactive-agents/tools";
 import { ToolsOptionError } from "../errors.js";
 import type { ToolsOptions } from "./types.js";
 
 const ALL_TOKENS: ReadonlySet<string> = new Set(["*", "all"]);
 
-/** Whether `name` resolves to at least one built-in (alias, all-token or tool name). */
+/**
+ * Whether `name` resolves to at least one built-in (alias, all-token or tool
+ * name). A removed name counts too, so the scalar spelling warns like the
+ * array one: `gh-cli` / `git-cli` resolve to a scoped `shell-execute`;
+ * `workspace` / `gws-cli` select no tool. Both report a deprecation.
+ */
 export const isKnownBuiltinName = (name: string): boolean => {
   const token = name.toLowerCase();
   return (
     ALL_TOKENS.has(token) ||
     Object.prototype.hasOwnProperty.call(BUILTIN_TOOLSET_ALIASES, token) ||
+    Object.prototype.hasOwnProperty.call(DEPRECATED_CLI_TOOLS, token) ||
+    Object.prototype.hasOwnProperty.call(REMOVED_BUILTIN_NAMES, token) ||
     BUILTIN_TOOL_NAMES.has(name)
   );
 };
+
+/**
+ * Names of the tools the agent registers itself, known at build time: custom
+ * tools (`.withTools({ tools })`) and agent tools (`.withAgentTool`). In
+ * `allowedTools` / `requiredTools` these stay literal, never read as aliases.
+ */
+export const ownToolNames = (
+  toolsOptions: ToolsOptions | undefined,
+  agentToolNames: readonly string[] = [],
+): ReadonlySet<string> =>
+  new Set([...(toolsOptions?.tools ?? []).map((t) => t.definition.name), ...agentToolNames]);
+
+/**
+ * The built-in selection one agent's tool options imply: the `builtins` list
+ * plus every `allowedTools` and `requiredTools` name, resolved by the
+ * tools-owned `resolveBuiltinSelection`. `builtins: true` adds the capability
+ * built-ins only; like `"all"`, it never grants a shell. A list name that is
+ * one of the agent's own tools (`own`, default: its custom tools) is not an
+ * alias and selects nothing here.
+ *
+ * `shellPrograms` non-empty means the agent gets a `shell-execute` scoped to
+ * those programs (or, with `terminal` on, those programs added to the
+ * terminal). `deprecations` lists removed names that were requested.
+ */
+export const builtinSelectionFor = (
+  toolsOptions: ToolsOptions | undefined,
+  requiredTools?: readonly string[],
+  own: ReadonlySet<string> = ownToolNames(toolsOptions),
+): BuiltinSelection => {
+  const builtins = builtinsAsList(toolsOptions?.builtins);
+  const notOwn = (n: string): boolean => !own.has(n);
+  return resolveBuiltinSelection([
+    ...(Array.isArray(builtins) ? builtins : []),
+    ...(toolsOptions?.allowedTools ?? []).filter(notOwn),
+    ...(requiredTools ?? []).filter(notOwn),
+  ]);
+};
+
+/**
+ * One build warning per removed CLI tool name in the selection (deduplicated:
+ * the same name in `builtins` and `allowedTools` warns once).
+ */
+export const builtinDeprecationWarnings = (selection: BuiltinSelection): readonly string[] => [
+  ...new Set(selection.deprecations.map((d) => d.message)),
+];
 
 /**
  * The `builtins` value in the `boolean | string[]` shape every reader uses:

@@ -79,11 +79,19 @@ describe("Behavioral Contract Enforcement (real kernel arm)", () => {
         .withTools({ tools: [makeTrackedTool("custom-writer", calls)] })
         .build();
 
+      // The model only ever asks for the denied tool, so it never answers. Since
+      // 2026-11-10 the kernel ends that run failed (guard stop, no
+      // harness-written answer), and a bare builder re-throws a guard stop
+      // (run-contract.ts BARE_BUILDER_THROWS_ON). Either way it is not a success.
+      let succeeded: boolean;
       try {
-        await agent.run("write a file");
+        succeeded = (await agent.run("write a file")).success;
+      } catch {
+        succeeded = false;
       } finally {
         await agent.dispose();
       }
+      expect(succeeded).toBe(false);
 
       // The denied tool is merged into `config.forbiddenTools` (excluded from
       // the prompt-visible schema — the model never even sees it as callable)

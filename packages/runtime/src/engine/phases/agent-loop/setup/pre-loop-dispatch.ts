@@ -19,6 +19,7 @@
 import { Effect } from "effect";
 import { CostService } from "@reactive-agents/cost";
 import type { ToolDefinition } from "@reactive-agents/tools";
+import { resolveToolNameList } from "../../../../tool-name-resolution.js";
 import { BudgetExceededError, type RuntimeErrors } from "../../../../errors.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../../types.js";
 import type { Task } from "@reactive-agents/core";
@@ -125,8 +126,12 @@ export const runPreLoopDispatch = (
     // ── Tool registry fetch + allowedTools warn + strategy summary ──
     // Extracted to engine/phases/agent-loop/setup/tools-registry.ts (W23 step 4).
     const cachedToolDefs = yield* fetchToolsRegistry(config, ctx, obs, isNormal);
-    // Used downstream by built-ins opt-in logic.
-    const effectiveAllowedTools = config.allowedTools ?? [];
+    // Used downstream by built-ins opt-in logic. Aliases and removed CLI names
+    // resolve to concrete tools (`gh-cli` -> shell-execute); a registered tool's
+    // own name stays literal. The builder already resolves this list; this
+    // covers a config passed to createRuntime directly.
+    const registeredNames: ReadonlySet<string> = new Set(cachedToolDefs.map((t) => t.name));
+    const effectiveAllowedTools = resolveToolNameList(config.allowedTools ?? [], registeredNames) ?? [];
     const effectiveFocusedTools = config.focusedTools ?? [];
 
     // ── LLM-based tool classification (required + relevant) ──
@@ -134,15 +139,18 @@ export const runPreLoopDispatch = (
     // Decision tree: no classification / low-reliability literal-mention
     // fallback / LLM classify with hallucination demotion + sequential
     // clamp + relevant set merge.
-    const { effectiveRequiredTools, effectiveRequiredToolQuantities, classifiedRelevantTools } =
-      yield* classifyTools({
-        config,
-        task,
-        cachedToolDefs,
-        resolvedCalibration,
-        obs,
-        isNormal,
-      });
+    const classified = yield* classifyTools({
+      config,
+      task,
+      cachedToolDefs,
+      resolvedCalibration,
+      obs,
+      isNormal,
+    });
+    const { effectiveRequiredToolQuantities, classifiedRelevantTools } = classified;
+    // `requiredTools: ["git-cli"]` is met by a shell-execute call (same
+    // resolution as allowedTools above).
+    const effectiveRequiredTools = resolveToolNameList(classified.effectiveRequiredTools, registeredNames);
 
     return {
       ctx,

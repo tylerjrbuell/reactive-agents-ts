@@ -18,7 +18,8 @@
  *   - opted-in builtins: `toolsOptions.builtins` (`true` → all canonical
  *     `BUILTIN_TOOL_NAMES`; `string[]` → that subset) ∪ any builtin named in
  *     `allowedTools` / `requiredTools`
- *   - the `shell-execute` terminal tool when `toolsOptions.terminal` is set
+ *   - `shell-execute` when `toolsOptions.terminal` is set, or when a shell
+ *     preset / removed CLI name selects a scoped shell (`builtinSelectionFor`)
  *
  * KNOWN HOLE / conservative approximation: MCP-server tools are NOT included —
  * their names are discovered when buildEffect connects, after build-time
@@ -33,7 +34,34 @@
 import { BUILTIN_TOOL_NAMES, resolveBuiltinNames, shellExecuteTool } from "@reactive-agents/tools";
 import type { TaskContract } from "@reactive-agents/core";
 import type { ToolsOptions } from "./types.js";
-import { builtinsAsList, builtinsFixHint } from "./builtins-option.js";
+import {
+  builtinsAsList,
+  builtinSelectionFor,
+  builtinsFixHint,
+  ownToolNames,
+} from "./builtins-option.js";
+import { resolveToolNameList } from "../tool-name-resolution.js";
+
+/**
+ * The contract with each `required` / `available` tool name resolved like
+ * `requiredTools` (`gh-cli` -> `shell-execute`; one entry per resolved tool),
+ * so the build-time exposure check reads names the way the run does. The
+ * agent's own tool names (`own`) stay literal; `forbidden` entries are
+ * unchanged.
+ */
+export function resolveContractToolNames(
+  contract: TaskContract,
+  own: ReadonlySet<string>,
+): TaskContract {
+  return {
+    ...contract,
+    tools: contract.tools.flatMap((t): Array<TaskContract["tools"][number]> =>
+      t.kind === "forbidden"
+        ? [t]
+        : (resolveToolNameList([t.name], own) ?? []).map((name) => ({ ...t, name })),
+    ),
+  };
+}
 
 export function computeExposedToolNames(
   toolsOptions: ToolsOptions | undefined,
@@ -48,7 +76,10 @@ export function computeExposedToolNames(
 
   // Built-ins opt-in (mirrors tool-schemas.ts:91-108). allowedTools and
   // requiredTools entries always opt a built-in in, even without `builtins`.
-  const allowed = toolsOptions?.allowedTools;
+  // Both lists resolve like the runtime config does (`resolveToolNameList`):
+  // `allowedTools: ["gh-cli"]` means `shell-execute`.
+  const own = ownToolNames(toolsOptions);
+  const allowed = resolveToolNameList(toolsOptions?.allowedTools, own);
   const builtins = builtinsAsList(toolsOptions?.builtins);
   const optedInBuiltins = new Set<string>();
   if (builtins === true) {
@@ -57,13 +88,15 @@ export function computeExposedToolNames(
     for (const n of resolveBuiltinNames(builtins)) optedInBuiltins.add(n);
   }
   for (const n of allowed ?? []) optedInBuiltins.add(n);
-  for (const n of requiredTools ?? []) optedInBuiltins.add(n);
+  for (const n of resolveToolNameList(requiredTools, own) ?? []) optedInBuiltins.add(n);
   for (const n of optedInBuiltins) {
     if (BUILTIN_TOOL_NAMES.has(n)) names.add(n);
   }
 
-  // Terminal shell-execute tool — always in the base schema when enabled.
-  if (toolsOptions?.terminal) names.add(shellExecuteTool.name);
+  // shell-execute: the terminal tool, or the scoped shell a preset
+  // (`builtins: ["git"]`) or removed CLI name (`gh-cli`) registers.
+  const hasShellPreset = builtinSelectionFor(toolsOptions, requiredTools).shellPrograms.length > 0;
+  if (toolsOptions?.terminal || hasShellPreset) names.add(shellExecuteTool.name);
 
   // allowedTools, when set, restricts the surviving set to the allowlist
   // (mirrors tool-schemas.ts:148-152). Names in allowedTools that survived the

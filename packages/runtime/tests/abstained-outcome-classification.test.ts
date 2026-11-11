@@ -24,11 +24,13 @@ import { deriveRunOutcome } from "../src/engine/util.js";
 import { buildFallbackDebrief } from "../src/debrief.js";
 
 describe("an abstained run is never classified as a success", () => {
-  it("deriveRunOutcome maps abstained to failure, not success", () => {
+  it("deriveRunOutcome maps abstained to its own label, never success", () => {
     // No loop errors — this is precisely the shape that used to fall through to
     // "success": the run terminated cleanly, it just declined to answer.
-    expect(deriveRunOutcome("abstained", false)).toBe("failure");
-    expect(deriveRunOutcome("abstained", true)).toBe("failure");
+    // Owner decision 2026-11-10: an honest decline is not a failure either, so
+    // it carries its own "abstained" label (was "failure", the closest one then).
+    expect(deriveRunOutcome("abstained", false)).toBe("abstained");
+    expect(deriveRunOutcome("abstained", true)).toBe("abstained");
   });
 
   it("a clean, error-free finish is still a success (the abstention fix changed nothing here)", () => {
@@ -58,7 +60,7 @@ describe("an abstained run is never classified as a success", () => {
     expect(deriveRunOutcome("final_answer_tool", true)).toBe("partial");
   });
 
-  it("the debrief reports an abstained run as failed, not success", () => {
+  it("the debrief reports an abstained run as abstained, not success", () => {
     const debrief = buildFallbackDebrief({
       taskPrompt: "What is the population of Aetheria?",
       agentId: "agent-1",
@@ -71,7 +73,7 @@ describe("an abstained run is never classified as a success", () => {
 
     // Was "success" before the fix — the debrief record told the user, and the
     // debrief store, that a run which delivered nothing had succeeded.
-    expect(debrief.outcome).toBe("failed");
+    expect(debrief.outcome).toBe("abstained");
   });
 
   it("still reports a clean answered run as success", () => {

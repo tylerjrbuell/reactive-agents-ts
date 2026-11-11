@@ -9,6 +9,7 @@
  */
 import type { AgentConfig } from "./agent-config.js";
 import type { AgentResult } from "./builder.js";
+import type { AgentOutcome } from "./builder/agent-result.js";
 import type { ReactiveAgentBuilder } from "./builder.js";
 
 // ─── AgentFn Type ─────────────────────────────────────────────────────────────
@@ -180,9 +181,20 @@ export function parallel(...fns: AgentFn[]): AgentFn {
       .map((r, i) => `[${fns[i].config.name}]: ${r.output}`)
       .join("\n\n");
 
+    // All branches succeeded → success; every branch declined → abstained;
+    // some branch delivered something → partial; otherwise failed.
+    const outcome: AgentOutcome = results.every((r) => r.success)
+      ? "success"
+      : results.every((r) => r.outcome === "abstained")
+        ? "abstained"
+        : results.some((r) => r.outcome === "success" || r.outcome === "partial")
+          ? "partial"
+          : "failed";
+
     return {
       output,
       success: results.every((r) => r.success),
+      outcome,
       taskId: results[0]?.taskId ?? "",
       agentId: composedName,
       metadata: {

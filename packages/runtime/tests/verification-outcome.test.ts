@@ -17,17 +17,36 @@ describe("F10 — applyVerificationOutcome", () => {
     expect(r.success).toBe(false);
     expect(r.blocked).toBe(true);
     expect(r.output).not.toBe("the risky answer");
-    expect(String(r.output)).toContain("withheld");
+    // Owner decision 2026-11-10: the withheld answer is not replaced with
+    // harness text; output is empty and the cause rides `error`.
+    expect(r.output).toBe("");
+    expect(String(r.error)).toContain("Verification rejected the response");
     expect(r.error).toContain("low factuality score");
   });
 
-  test("annotate prepends a warning and keeps the answer + success", () => {
+  // Owner rule 2026-11-10: the harness never writes text into output. The
+  // verifier's note rides `note`; the answer ships byte-identical.
+  // RED-ON-CUT: prepend the annotation to output in applyVerificationOutcome.
+  test("annotate keeps the answer byte-identical and carries the note on `note`", () => {
     const r = applyVerificationOutcome("the answer", true, {
-      verificationAnnotation: "⚠ failed verification",
+      verificationAnnotation: "failed verification",
     });
     expect(r.success).toBe(true);
     expect(r.blocked).toBe(false);
-    expect(String(r.output)).toContain("⚠ failed verification");
-    expect(String(r.output)).toContain("the answer");
+    expect(r.output).toBe("the answer");
+    expect(r.note).toBe("failed verification");
+  });
+
+  test("no onReject mode writes harness text into a non-empty output", () => {
+    const answer = "the model's answer";
+    const proceed = applyVerificationOutcome(answer, true, {});
+    const annotate = applyVerificationOutcome(answer, true, { verificationAnnotation: "note" });
+    const block = applyVerificationOutcome(answer, true, { verificationBlocked: { reason: "r" } });
+    expect(proceed.output).toBe(answer);
+    expect(annotate.output).toBe(answer);
+    // block withholds: empty, never a harness sentence.
+    expect(block.output).toBe("");
+    expect(proceed.note).toBeUndefined();
+    expect(block.note).toBeUndefined();
   });
 });

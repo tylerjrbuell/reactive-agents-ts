@@ -51,6 +51,12 @@ export interface DebriefInput {
    * no summary.
    */
   readonly finalOutputText?: string;
+  /**
+   * The strategy result's status (`"completed" | "partial" | "failed" | "abstained"`).
+   * A kernel that ended `"failed"` or `"abstained"` delivered no answer, so the
+   * outcome is then `"failed"` whatever `terminatedBy` says.
+   */
+  readonly kernelStatus?: string;
   /** Decision rationale events collected during execution (why agent made key choices) */
   readonly rationale?: readonly {
     readonly iteration: number;
@@ -94,8 +100,8 @@ function briefOutputFallback(text: string | undefined): string | undefined {
  * ```
  */
 export interface AgentDebrief {
-  /** Overall execution outcome */
-  outcome: "success" | "partial" | "failed";
+  /** Overall execution outcome. `"abstained"`: the agent honestly declined (not a failure). */
+  outcome: "success" | "partial" | "failed" | "abstained";
   /** One-paragraph summary of what the agent did and accomplished */
   summary: string;
   /** Key facts or results discovered during execution */
@@ -129,8 +135,10 @@ export interface AgentDebrief {
      * call's `LLMRequestCompleted` carries the run's taskId.
      */
     synthesisTokens?: {
-      readonly input: number;
-      readonly output: number;
+      /** Prompt tokens; absent when the provider reported a total only. */
+      readonly input?: number;
+      /** Completion tokens; absent when the provider reported a total only. */
+      readonly output?: number;
       readonly total: number;
       readonly cost: number;
       /** LLM calls the debrief made (1 when this field is present). */
@@ -179,17 +187,16 @@ export interface DebriefResult {
  * All that remains here is vocabulary: this lane says `"failed"` where the
  * canonical enum says `"failure"`. Same verdict, different word.
  *
- * (The abstention rule this function used to spell out is unchanged — it now
- * lives in `deriveRunOutcome`, which maps `"abstained"` to `"failure"` for the
- * same reason: nothing was delivered, so it must never be reinforced as a win.
- * The honesty of the decline is carried by `AgentResult.abstention` and the
- * trust receipt, not by this coarse enum.)
+ * (The abstention rule lives in `deriveRunOutcome`: an honest decline is its
+ * own `"abstained"` outcome, never a success and not a failure. Owner
+ * decision 2026-11-10.)
  */
 function deriveOutcome(
   terminatedBy: DebriefInput["terminatedBy"],
   errorsFromLoop: string[],
+  kernelStatus?: string,
 ): AgentDebrief["outcome"] {
-  const outcome = deriveRunOutcome(terminatedBy, errorsFromLoop.length > 0);
+  const outcome = deriveRunOutcome(terminatedBy, errorsFromLoop.length > 0, kernelStatus);
   return outcome === "failure" ? "failed" : outcome;
 }
 
@@ -235,7 +242,7 @@ You MUST align your summary with it: if it substantively answers the task (relat
  *     trivial-task path.
  */
 export function buildFallbackDebrief(input: DebriefInput): AgentDebrief {
-  const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop);
+  const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop, input.kernelStatus);
   const summary =
     input.finalAnswerCapture?.summary ??
     briefOutputFallback(input.finalOutputText) ??
@@ -267,7 +274,7 @@ export function synthesizeDebrief(
 ): Effect.Effect<DebriefResult, Error, LLMService> {
   return Effect.gen(function* () {
     const llm = yield* LLMService;
-    const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop);
+    const outcome = deriveOutcome(input.terminatedBy, input.errorsFromLoop, input.kernelStatus);
 
     const toolSummary =
       input.toolCallHistory
@@ -410,8 +417,9 @@ export function synthesizeDebrief(
         ...(llmResponse.usage.totalTokens > 0
           ? {
               synthesisTokens: {
-                input: llmResponse.usage.inputTokens ?? 0,
-                output: llmResponse.usage.outputTokens ?? 0,
+                // An unreported half stays absent, never 0.
+                ...(llmResponse.usage.inputTokens !== undefined ? { input: llmResponse.usage.inputTokens } : {}),
+                ...(llmResponse.usage.outputTokens !== undefined ? { output: llmResponse.usage.outputTokens } : {}),
                 total: llmResponse.usage.totalTokens,
                 cost: llmResponse.usage.estimatedCost ?? 0,
                 calls: 1,
