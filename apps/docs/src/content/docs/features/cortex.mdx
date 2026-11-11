@@ -304,15 +304,19 @@ With durable execution on, the agent can also stop and ask you something (`reque
 
 ### Settings
 
-Configure global Cortex defaults:
+Settings has a section nav on the left and one row per setting. **Save settings** writes Defaults, Providers, Notifications, Storage and Developer; Appearance applies at once.
 
--   **Default provider and model** — used as the pre-fill in the Lab Builder
--   **Ollama endpoint** — custom local Ollama server URL
--   **Motion** — follow the system's reduced-motion setting, or reduce motion in Cortex regardless (stops the ambient drift, the logo twinkle and the live animations; running work still shows in status text)
--   **Notifications** — enable / disable toast notifications
+-   **Defaults** — the provider and model that Beacon, new chats and the Lab Builder start with. A provider without its API key reads "(key missing)", and the help text names the variable to set.
+-   **Providers** — which API keys the server found (Anthropic, OpenAI, Gemini), the Ollama endpoint, and whether the Cortex server is connected. Keys come from the server's environment and are never stored by Cortex; restart Cortex after adding one to `.env`.
+-   **Notifications** — allow desktop notifications and pick which runs notify you.
+-   **Appearance** — **Theme** follows the system setting or pins dark or light (the top-bar switch pins the opposite of what is showing). **Motion** follows the system's reduced-motion setting or reduces motion in Cortex regardless: it stops the ambient drift, the logo twinkle and the live animations, and running work still shows in status text.
+-   **Storage** — how long to keep runs, and **Prune now** to delete older ones. Runs live in `.cortex/cortex.db` under the server's working directory.
+-   **Developer** — debug mode, hover tooltips, and how to connect an app (`.withCortex()` or `CORTEX_URL`).
+-   **About** — the Cortex version the server reports.
 
-The light / dark switch sits in the top bar. Both themes come from one set of design tokens, so every page reads the same in either. Fonts are bundled with Cortex; the text fonts make no network request.
--   **Storage** — view current SQLite path and database size
+Both themes come from one set of design tokens, so every page reads the same in either. Fonts and icons are bundled with Cortex; nothing loads from a font CDN.
+
+The model link in a chat turn or under Defaults opens the **model page** (`/models/<provider>/<model>`): context window, max output, tool-call support and thinking, the remaining capability values, a note when the values are fallback defaults rather than measured ones (with what recorded runs on that model used), recent runs by name, and **Start a chat with this model**.
 
 ---
 

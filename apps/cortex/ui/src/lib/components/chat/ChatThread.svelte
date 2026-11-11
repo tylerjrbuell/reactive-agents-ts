@@ -57,7 +57,8 @@
 
   const toBottom = () => {
     if (!scrollEl) return;
-    scrollEl.scrollTop = scrollEl.scrollHeight;
+    // An empty chat has no latest turn: show its hero from the top on short windows.
+    scrollEl.scrollTop = empty ? 0 : scrollEl.scrollHeight;
     follow = { atBottom: true, lastTop: scrollEl.scrollTop };
   };
 
@@ -150,7 +151,8 @@
     padding: 24px 24px 40px;
     font-family: var(--cortex-font-ui);
   }
-  .thread-scroll.is-empty { display: grid; align-content: center; }
+  /* `safe`: when the empty state is taller than the pane it starts at the top instead of overflowing upward (clipped hero mark). */
+  .thread-scroll.is-empty { display: grid; align-content: safe center; }
   /* One reading column, centred (spec section 8: 760px). */
   .thread { max-width: 760px; margin: 0 auto; display: grid; gap: 32px; min-width: 0; }
   .thread > :global(*) { min-width: 0; }

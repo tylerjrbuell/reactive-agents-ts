@@ -30,11 +30,11 @@
           {#each config.variables ?? [] as v, i (v.name)}
             <div class="acp-card">
               <div class="flex items-center justify-between gap-2">
-                <span class="font-mono text-[11px] font-semibold text-tertiary">{v.name}</span>
-                <label class="flex items-center gap-1.5 cursor-pointer font-mono text-[11px] text-on-surface/70">
+                <span class="font-mono text-[11px] font-semibold text-warn">{v.name}</span>
+                <label class="flex items-center gap-1.5 cursor-pointer font-mono text-[11px] text-text/70">
                   <input type="checkbox" checked={v.required}
                     onchange={(e) => patchVariable(i, { ...v, required: (e.currentTarget as HTMLInputElement).checked })}
-                    class="accent-tertiary w-3 h-3" />
+                    class="accent-warn w-3 h-3" />
                   required
                 </label>
               </div>
@@ -51,7 +51,7 @@
                   </select>
                 </div>
                 <div>
-                  <label class="config-label" for={`var-${i}-default`}>Default <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
+                  <label class="config-label" for={`var-${i}-default`}>Default <span class="text-text-3/70 normal-case font-normal">(optional)</span></label>
                   <input id={`var-${i}-default`} class="config-input"
                     placeholder="default value"
                     value={v.default ?? ""}
@@ -59,7 +59,7 @@
                 </div>
                 {#if v.type === "enum"}
                   <div class="col-span-2">
-                    <label class="config-label" for={`var-${i}-enum`}>Allowed values <span class="text-outline/70 normal-case font-normal">(comma-separated)</span></label>
+                    <label class="config-label" for={`var-${i}-enum`}>Allowed values <span class="text-text-3/70 normal-case font-normal">(comma-separated)</span></label>
                     <input id={`var-${i}-enum`} class="config-input font-mono text-[11px]"
                       placeholder="comma,separated,values"
                       value={(v.enumValues ?? []).join(",")}
@@ -67,7 +67,7 @@
                   </div>
                 {/if}
                 <div class="col-span-2">
-                  <label class="config-label" for={`var-${i}-desc`}>Description <span class="text-outline/70 normal-case font-normal">(optional)</span></label>
+                  <label class="config-label" for={`var-${i}-desc`}>Description <span class="text-text-3/70 normal-case font-normal">(optional)</span></label>
                   <input id={`var-${i}-desc`} class="config-input"
                     placeholder="What this variable controls…"
                     value={v.description ?? ""}

@@ -55,7 +55,7 @@
   onkeydown={(e) => e.key === "Enter" && onClose()}
 >
   <div
-    class="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--cortex-border)] bg-surface-container-lowest shadow-2xl"
+    class="flex max-h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--cortex-line)] bg-canvas shadow-2xl"
     role="dialog"
     aria-modal="true"
     aria-label="Export agent"
@@ -64,15 +64,15 @@
     onkeydown={(e) => e.stopPropagation()}
   >
     <!-- Header -->
-    <div class="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[var(--cortex-border)] px-4 py-3">
-      <h2 class="m-0 truncate text-[15px] font-semibold text-on-surface">
+    <div class="flex flex-shrink-0 items-center justify-between gap-2 border-b border-[var(--cortex-line)] px-4 py-3">
+      <h2 class="m-0 truncate text-[15px] font-semibold text-text">
         Export {name || "agent"}
       </h2>
       <IconButton icon="x" label="Close" onclick={onClose} />
     </div>
 
     <!-- Format toggle + actions -->
-    <div class="flex flex-shrink-0 items-center gap-2 border-b border-[var(--cortex-border)] px-4 py-2">
+    <div class="flex flex-shrink-0 items-center gap-2 border-b border-[var(--cortex-line)] px-4 py-2">
       <div class="flex gap-1" role="group" aria-label="Format">
         <Chip on={format === "ts"} onclick={() => (format = "ts")}>TypeScript</Chip>
         <Chip on={format === "json"} onclick={() => (format = "json")}>JSON</Chip>
@@ -83,11 +83,11 @@
     </div>
 
     <!-- Code -->
-    <div class="min-h-0 flex-1 overflow-auto bg-surface-container-low/40 p-4">
-      <pre class="m-0 font-mono text-[11px] leading-relaxed text-on-surface/85 whitespace-pre">{code}</pre>
+    <div class="min-h-0 flex-1 overflow-auto bg-surface-1/40 p-4">
+      <pre class="m-0 font-mono text-[11px] leading-relaxed text-text/85 whitespace-pre">{code}</pre>
     </div>
 
-    <div class="flex-shrink-0 border-t border-[var(--cortex-border)] px-4 py-2 text-[12px] text-outline">
+    <div class="flex-shrink-0 border-t border-[var(--cortex-line)] px-4 py-2 text-[12px] text-text-3">
       {#if format === "ts"}
         Paste into a project with <code class="font-mono text-[11px]">reactive-agents</code> installed. Tools register at build time; MCP servers and skills are set up separately.
       {:else}

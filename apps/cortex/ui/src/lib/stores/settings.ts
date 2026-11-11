@@ -7,6 +7,7 @@
  */
 import { writable, get, type Writable } from "svelte/store";
 import { parseMotion, type MotionSetting } from "../motion.js";
+import { parseTheme, type ThemeSetting } from "../theme.js";
 
 export interface CortexSettings {
   defaultProvider: string;
@@ -15,7 +16,8 @@ export interface CortexSettings {
   notificationsEnabled: boolean;
   runRetentionDays: number;
   debugMode: boolean;
-  theme: "dark" | "light";
+  /** Settings · Appearance: follow the OS, or pin dark / light (`lib/theme.ts`). */
+  theme: ThemeSetting;
   /** Override Ollama endpoint (empty = server default localhost:11434) */
   ollamaEndpoint: string;
   /** When false, hover/focus tooltips are suppressed app-wide (Tooltip component). */
@@ -56,7 +58,7 @@ function load(): CortexSettings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULTS };
     const merged = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<CortexSettings>) };
-    return { ...merged, motion: parseMotion(merged.motion) };
+    return { ...merged, motion: parseMotion(merged.motion), theme: parseTheme(merged.theme) };
   } catch {
     return { ...DEFAULTS };
   }

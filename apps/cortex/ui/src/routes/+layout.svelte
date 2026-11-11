@@ -20,6 +20,7 @@
   import type { AgentStore } from "$lib/stores/agent-store.js";
   import type { StageStore } from "$lib/stores/stage-store.js";
   import { applyMotion } from "$lib/motion.js";
+  import { resolveTheme, toggledTheme, type ResolvedTheme } from "$lib/theme.js";
   import TopBar from "$lib/components/TopBar.svelte";
   import { needsYouByRun, runningCount } from "$lib/beacon-board.js";
 
@@ -39,20 +40,18 @@
 
   let isDark = $state(true);
 
-  function applyTheme(theme: "dark" | "light") {
+  /** Paint a resolved theme: `html.dark` switches the token layer in app.css. */
+  function applyTheme(theme: ResolvedTheme) {
     isDark = theme === "dark";
     if (typeof document !== "undefined") {
-      // Toggle the .dark class — Tailwind reads this for dark: variants
       document.documentElement.classList.toggle("dark", isDark);
-      // Also set data-theme for any CSS selectors that use it
       document.documentElement.setAttribute("data-theme", theme);
     }
   }
 
+  /** Top-bar switch: pin the opposite of what is showing (the settings subscription paints it). */
   function toggleTheme() {
-    const next = isDark ? "light" : "dark";
-    applyTheme(next);
-    settings.save({ theme: next });
+    settings.save({ theme: toggledTheme(isDark ? "dark" : "light") });
   }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
@@ -90,11 +89,17 @@
   onMount(() => {
     settings.init(); // warm up from localStorage before any submitPrompt call
 
-    // Apply saved theme immediately
-    const s: CortexSettings = settings.get();
-    applyTheme(s.theme);
-    // Settings · Motion: keep html[data-motion] in step with the saved choice.
-    const stopMotion = settings.subscribe((v) => applyMotion(document.documentElement, v.motion));
+    // Settings · Appearance: keep the theme and html[data-motion] in step with
+    // the saved choices; "Follow the system setting" also tracks OS changes.
+    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    let themeSetting: CortexSettings["theme"] = settings.get().theme;
+    const paintTheme = () => applyTheme(resolveTheme(themeSetting, darkQuery.matches));
+    const stopMotion = settings.subscribe((v) => {
+      themeSetting = v.theme;
+      paintTheme();
+      applyMotion(document.documentElement, v.motion);
+    });
+    darkQuery.addEventListener("change", paintTheme);
 
     stageStore.setNavigate((path) => goto(path));
     // Durable-HITL: app-wide interactive approval toasts (Approve/Deny).
@@ -231,6 +236,7 @@
 
     return () => {
       stopMotion();
+      darkQuery.removeEventListener("change", paintTheme);
       window.removeEventListener("keydown", handleGlobalKeydown);
       window.removeEventListener("cortex:toggle-theme", toggleTheme as EventListener);
       window.removeEventListener("focus", refreshAgentsSoon);
@@ -255,7 +261,7 @@
   });
 </script>
 
-<div class="h-screen w-screen flex flex-col overflow-hidden cortex-shell-bg text-on-surface">
+<div class="h-screen w-screen flex flex-col overflow-hidden bg-canvas text-text">
   <TopBar
     pathname={$page.url.pathname}
     running={runningCount($agentStore, needsYouByRun($agentStore, $pendingApprovals, $pendingInteractions))}

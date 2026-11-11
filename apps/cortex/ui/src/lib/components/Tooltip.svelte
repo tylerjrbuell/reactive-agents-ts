@@ -183,7 +183,7 @@
     bind:this={panelEl}
     use:portal={browser ? document.body : undefined}
     role="tooltip"
-    class="cortex-tooltip-panel pointer-events-none fixed z-tooltip flex max-h-[min(40vh,18rem)] max-w-[min(100vw-1.5rem,22rem)] flex-col overflow-visible rounded-md border border-[var(--cortex-border)] bg-surface-container-low text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.55)] ring-1 ring-primary/[0.12] dark:border-primary/20 dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.75)]"
+    class="cortex-tooltip-panel pointer-events-none fixed z-tooltip flex max-h-[min(40vh,18rem)] max-w-[min(100vw-1.5rem,22rem)] flex-col overflow-visible rounded-md border border-[var(--cortex-line)] bg-surface-1 text-left shadow-[0_10px_40px_-10px_rgba(0,0,0,0.55)] ring-1 ring-accent-fill/[0.12] dark:border-accent-fill/20 dark:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.75)]"
     style:left="{tipLeft}px"
     style:top="{tipTop}px"
   >
@@ -200,7 +200,7 @@
       >
         <path
           d="M9 0.85 L16.35 8.15 H1.65 L9 0.85Z"
-          fill="var(--cortex-surface-low)"
+          fill="var(--cortex-surface-2)"
           stroke="var(--cortex-tip-caret-stroke)"
           stroke-width="1"
           stroke-linejoin="round"
@@ -208,7 +208,7 @@
       </svg>
     {/if}
     <span
-      class="min-h-0 max-h-full overflow-y-auto whitespace-pre-wrap break-words px-2.5 py-2 font-mono text-[10px] font-normal normal-case leading-relaxed tracking-normal text-on-surface/90"
+      class="min-h-0 max-h-full overflow-y-auto whitespace-pre-wrap break-words px-2.5 py-2 font-mono text-[10px] font-normal normal-case leading-relaxed tracking-normal text-text/90"
     >
       {body}
     </span>
@@ -225,7 +225,7 @@
       >
         <path
           d="M9 8.15 L1.65 0.85 H16.35 L9 8.15Z"
-          fill="var(--cortex-surface-low)"
+          fill="var(--cortex-surface-2)"
           stroke="var(--cortex-tip-caret-stroke)"
           stroke-width="1"
           stroke-linejoin="round"

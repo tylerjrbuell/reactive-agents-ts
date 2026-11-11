@@ -111,7 +111,7 @@ export async function renderMarkdownWithMath(markdown: string): Promise<string> 
         );
       } catch {
         parts.push(
-          `<pre class="font-mono text-[10px] text-error/70 whitespace-pre-wrap break-words border border-error/20 rounded p-2 my-2">${escapeHtml(seg.text)}</pre>`,
+          `<pre class="font-mono text-[10px] text-bad/70 whitespace-pre-wrap break-words border border-bad/20 rounded p-2 my-2">${escapeHtml(seg.text)}</pre>`,
         );
       }
     }

@@ -187,27 +187,27 @@
   .st { color: var(--cortex-text-2); font-size: var(--cortex-t-2xs); white-space: nowrap; }
   .meters { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin-top: 0.375rem; }
   .meter { display: flex; align-items: center; gap: 0.375rem; font-variant-numeric: tabular-nums; }
-  .m-label { color: var(--cortex-text-muted); }
-  .bar { width: 3.5rem; height: 4px; border-radius: 2px; background: var(--cortex-border); overflow: hidden; }
+  .m-label { color: var(--cortex-text-2); }
+  .bar { width: 3.5rem; height: 4px; border-radius: 2px; background: var(--cortex-line); overflow: hidden; }
   .bar i { display: block; height: 100%; background: var(--cortex-ok); }
   .bar i.hot { background: var(--cortex-bad); }
   .foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.375rem; }
-  .verdict { color: var(--cortex-text-muted); }
+  .verdict { color: var(--cortex-text-2); }
   .reason { color: var(--cortex-warn); flex: 1 1 100%; overflow-wrap: anywhere; }
   .actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
   .btn {
     cursor: pointer; font: inherit; padding: 0.125rem 0.5rem; border-radius: 6px;
-    border: 1px solid var(--cortex-border); background: none; color: var(--cortex-text);
+    border: 1px solid var(--cortex-line); background: none; color: var(--cortex-text);
   }
-  .btn:hover:not(:disabled) { background: var(--cortex-surface-mid); }
+  .btn:hover:not(:disabled) { background: var(--cortex-surface-3); }
   .btn.primary { border-color: color-mix(in srgb, var(--cortex-accent) 45%, transparent); color: var(--cortex-accent); }
   .btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .btn:focus-visible, .chip-x:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; font-family: var(--cortex-font-ui); font-size: var(--cortex-t-2xs); }
   .chip {
     display: inline-flex; align-items: center; gap: 0.25rem; max-width: 100%;
-    border: 1px solid var(--cortex-border); border-radius: 9999px; padding: 0.0625rem 0.25rem 0.0625rem 0.5rem;
-    color: var(--cortex-text-muted);
+    border: 1px solid var(--cortex-line); border-radius: 9999px; padding: 0.0625rem 0.25rem 0.0625rem 0.5rem;
+    color: var(--cortex-text-2);
   }
   .chip-ico { display: inline-flex; }
   .chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

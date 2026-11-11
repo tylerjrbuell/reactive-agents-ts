@@ -20,7 +20,7 @@
       </span>
   {/snippet}
         <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" bind:checked={config.metaTools.enabled} class="accent-primary w-3.5 h-3.5" />
+          <input type="checkbox" bind:checked={config.metaTools.enabled} class="accent-accent-fill w-3.5 h-3.5" />
           <div>
             <div class="acp-check-t">Enable Conductor's Suite</div>
             <div class="acp-hint">Give the agent self-awareness and intelligence tools</div>
@@ -36,12 +36,12 @@
               { key: "harnessSkill",label: "Harness Skill",desc: "Built-in conductor workflow" },
               { key: "todo",        label: "To-do list",   desc: "Agent keeps its own to-do list (shown in the plan card). On by default for chat" },
             ] as mt}
-              <label class="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-surface-container-low/40 transition-colors
-                            {config.metaTools[mt.key as keyof typeof config.metaTools] ? 'bg-secondary/10 border border-secondary/20' : 'border border-transparent'}">
+              <label class="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-surface-1/40 transition-colors
+                            {config.metaTools[mt.key as keyof typeof config.metaTools] ? 'bg-io/10 border border-io/20' : 'border border-transparent'}">
                 <input type="checkbox"
                   checked={config.metaTools[mt.key as keyof typeof config.metaTools] as boolean}
                   onchange={() => (config = { ...config, metaTools: { ...config.metaTools, [mt.key]: !config.metaTools[mt.key as keyof typeof config.metaTools] } })}
-                  class="accent-secondary w-3 h-3 flex-shrink-0" />
+                  class="accent-io w-3 h-3 flex-shrink-0" />
                 <div>
                   <div class="acp-check-t">{mt.label}</div>
                   <div class="acp-hint">{mt.desc}</div>
@@ -49,12 +49,12 @@
               </label>
             {/each}
             <label class="col-span-2 flex items-center gap-2 p-2 ml-5 rounded-lg border border-transparent transition-colors
-                          {config.metaTools.todo ? 'cursor-pointer hover:bg-surface-container-low/40' : 'opacity-40 cursor-not-allowed'}">
+                          {config.metaTools.todo ? 'cursor-pointer hover:bg-surface-1/40' : 'opacity-40 cursor-not-allowed'}">
               <input type="checkbox" id="acp-todo-guidance"
                 disabled={!config.metaTools.todo}
                 checked={todoGuidanceOn(config.metaTools)}
                 onchange={() => (config = { ...config, metaTools: setTodoGuidance(config.metaTools, !todoGuidanceOn(config.metaTools)) })}
-                class="accent-secondary w-3 h-3 flex-shrink-0" />
+                class="accent-io w-3 h-3 flex-shrink-0" />
               <div>
                 <div class="acp-check-t">Keep to-do list current</div>
                 <div class="acp-hint">Nudges the agent to update its to-do list as it works. Experimental — adds a short system line and an occasional reminder.</div>

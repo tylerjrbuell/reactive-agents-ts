@@ -21,7 +21,7 @@
             <input type="checkbox"
               checked={config.memory[tier.key as keyof typeof config.memory]}
               onchange={() => (config = { ...config, memory: { ...config.memory, [tier.key]: !config.memory[tier.key as keyof typeof config.memory] } })}
-              class="accent-primary w-3.5 h-3.5" />
+              class="accent-accent-fill w-3.5 h-3.5" />
             <div>
               <div class="acp-check-t">{tier.label}</div>
               <div class="acp-hint">{tier.desc}</div>

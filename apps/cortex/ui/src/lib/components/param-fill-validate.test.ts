@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { validateParamValues, initialValues } from "./param-fill-validate.js";
+import { validateParamValues, initialValues, paramSeedKey, paramValue } from "./param-fill-validate.js";
 import type { VariableDef } from "../types/agent-config.js";
 
 const v = (o: Partial<VariableDef> & { name: string }): VariableDef => ({ type: "string", required: true, ...o });
@@ -7,6 +7,28 @@ const v = (o: Partial<VariableDef> & { name: string }): VariableDef => ({ type: 
 describe("initialValues", () => {
   test("prefills from defaults", () => {
     expect(initialValues([v({ name: "a", default: "x" }), v({ name: "b" })])).toEqual({ a: "x", b: "" });
+  });
+});
+
+describe("paramValue", () => {
+  test("unset reads as empty (never undefined), set values pass through", () => {
+    expect(paramValue({}, "topic")).toBe("");
+    expect(paramValue({ topic: "rust" }, "topic")).toBe("rust");
+  });
+});
+
+describe("paramSeedKey", () => {
+  test("closed dialog has an empty key", () => {
+    expect(paramSeedKey(false, [v({ name: "a" })])).toBe("");
+  });
+  test("same names in a fresh array give the same key (input kept)", () => {
+    expect(paramSeedKey(true, [v({ name: "a" }), v({ name: "b" })])).toBe(
+      paramSeedKey(true, [v({ name: "a", default: "x" }), v({ name: "b" })]),
+    );
+  });
+  test("names joined with NUL: a name with a space never collides with two names", () => {
+    expect(paramSeedKey(true, [v({ name: "a b" })])).not.toBe(paramSeedKey(true, [v({ name: "a" }), v({ name: "b" })]));
+    expect(paramSeedKey(true, [v({ name: "a" }), v({ name: "b" })])).toBe("a\u0000b");
   });
 });
 

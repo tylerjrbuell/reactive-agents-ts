@@ -21,7 +21,7 @@
           <input type="checkbox"
             checked={config.persona?.enabled ?? false}
             onchange={() => (config = { ...config, persona: { ...(config.persona ?? { role: "", tone: "concise", traits: "", responseStyle: "prose" }), enabled: !(config.persona?.enabled ?? false) } })}
-            class="accent-primary w-3.5 h-3.5" />
+            class="accent-accent-fill w-3.5 h-3.5" />
           <div>
             <div class="acp-check-t">Enable persona</div>
             <div class="acp-hint">Shape agent behaviour with a named role and communication style</div>
@@ -29,7 +29,7 @@
         </label>
         {#if config.persona?.enabled}
           <div>
-            <label for="persona-role" class="config-label">Role <span class="text-outline/70 normal-case font-normal">(e.g. research assistant, code reviewer)</span></label>
+            <label for="persona-role" class="config-label">Role <span class="text-text-3/70 normal-case font-normal">(e.g. research assistant, code reviewer)</span></label>
             <HighlightedField
               id="persona-role"
               value={config.persona.role}
@@ -65,7 +65,7 @@
             </div>
           </div>
           <div>
-            <label for="persona-traits" class="config-label">Traits <span class="text-outline/70 normal-case font-normal">(comma-separated, e.g. analytical, thorough, skeptical)</span></label>
+            <label for="persona-traits" class="config-label">Traits <span class="text-text-3/70 normal-case font-normal">(comma-separated, e.g. analytical, thorough, skeptical)</span></label>
             <HighlightedField
               multiline
               id="persona-traits"

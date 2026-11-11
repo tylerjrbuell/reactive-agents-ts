@@ -65,17 +65,17 @@
         <li class="flex items-center gap-1">
           <button
             type="button"
-            class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-primary/10 {s.current ? 'text-primary' : 'text-[var(--cortex-text)]'}"
+            class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-accent-fill/10 {s.current ? 'text-accent' : 'text-[var(--cortex-text)]'}"
             onclick={() => onUse(s.path)}
             title={`Use ${s.path}`}
           >
-            <span class={s.current ? "text-primary" : "text-[var(--cortex-text-muted)]"}><Icon name={s.current ? "check-circle" : "folder"} size="sm" /></span>
+            <span class={s.current ? "text-accent" : "text-[var(--cortex-text-2)]"}><Icon name={s.current ? "check-circle" : "folder"} size="sm" /></span>
             <span class="flex-shrink-0">{workspaceLabel(s.path)}</span>
-            <span class="min-w-0 flex-1 truncate text-[12px] text-[var(--cortex-text-muted)]">{s.current ? "current" : s.source ? workspaceSourceLabel[s.source] : ""} · {s.path}</span>
+            <span class="min-w-0 flex-1 truncate text-[12px] text-[var(--cortex-text-2)]">{s.current ? "current" : s.source ? workspaceSourceLabel[s.source] : ""} · {s.path}</span>
           </button>
           <button
             type="button"
-            class="flex-shrink-0 cursor-pointer rounded-md p-1 text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-low)] hover:text-[var(--cortex-text)]"
+            class="flex-shrink-0 cursor-pointer rounded-md p-1 text-[var(--cortex-text-2)] transition-colors hover:bg-[var(--cortex-surface-2)] hover:text-[var(--cortex-text)]"
             onclick={() => void open(s.path)}
             aria-label={`Browse inside ${s.path}`}
             title="Browse inside"
@@ -85,56 +85,56 @@
     </ul>
   {/if}
 
-  <div class="rounded-md border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]">
+  <div class="rounded-md border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-2)]">
     {#if listing?.ok}
-      <nav class="flex flex-wrap items-center gap-0.5 border-b border-[color:var(--cortex-border)] px-2 py-1.5" aria-label="Folder path">
+      <nav class="flex flex-wrap items-center gap-0.5 border-b border-[color:var(--cortex-line)] px-2 py-1.5" aria-label="Folder path">
         {#each pathCrumbs(listing.path) as c, i (c.path)}
-          {#if i > 1}<span class="text-[var(--cortex-text-muted)]/60">/</span>{/if}
+          {#if i > 1}<span class="text-[var(--cortex-text-2)]/60">/</span>{/if}
           <button
             type="button"
-            class="cursor-pointer rounded px-1 transition-colors hover:bg-primary/10 {c.path === listing.path ? 'text-[var(--cortex-text)]' : 'text-[var(--cortex-text-muted)]'}"
+            class="cursor-pointer rounded px-1 transition-colors hover:bg-accent-fill/10 {c.path === listing.path ? 'text-[var(--cortex-text)]' : 'text-[var(--cortex-text-2)]'}"
             onclick={() => void open(c.path)}
           >{c.label}</button>
         {/each}
-        {#if listing.isGitRepo}<span class="ml-1 rounded-full border border-secondary/40 px-1.5 text-[11px] text-secondary">git</span>{/if}
+        {#if listing.isGitRepo}<span class="ml-1 rounded-full border border-io/40 px-1.5 text-[11px] text-io">git</span>{/if}
       </nav>
       <ul class="max-h-48 overflow-y-auto p-1" aria-label="Subfolders" aria-busy={loading}>
         {#if listing.parent}
-          <li><button type="button" class="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-left text-[var(--cortex-text-muted)] hover:bg-primary/10" onclick={() => listing?.ok && listing.parent && void open(listing.parent)}>
+          <li><button type="button" class="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-left text-[var(--cortex-text-2)] hover:bg-accent-fill/10" onclick={() => listing?.ok && listing.parent && void open(listing.parent)}>
             <Icon name="back" size="sm" />..
           </button></li>
         {/if}
         {#each listing.entries as e (e.path)}
-          <li><button type="button" class="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-left text-[var(--cortex-text)] hover:bg-primary/10" onclick={() => void open(e.path)}>
-            <span class="text-[var(--cortex-text-muted)]"><Icon name="folder" size="sm" /></span>
+          <li><button type="button" class="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-left text-[var(--cortex-text)] hover:bg-accent-fill/10" onclick={() => void open(e.path)}>
+            <span class="text-[var(--cortex-text-2)]"><Icon name="folder" size="sm" /></span>
             <span class="min-w-0 flex-1 truncate">{e.name}</span>
-            {#if e.isGitRepo}<span class="rounded-full border border-secondary/40 px-1.5 text-[11px] text-secondary">git</span>{/if}
+            {#if e.isGitRepo}<span class="rounded-full border border-io/40 px-1.5 text-[11px] text-io">git</span>{/if}
           </button></li>
         {:else}
-          <li class="px-2 py-1 text-[12px] text-[var(--cortex-text-muted)]">No subfolders here.</li>
+          <li class="px-2 py-1 text-[12px] text-[var(--cortex-text-2)]">No subfolders here.</li>
         {/each}
-        {#if listing.truncated}<li class="px-2 py-1 text-[12px] text-[var(--cortex-text-muted)]">Showing the first {listing.entries.length} folders.</li>{/if}
+        {#if listing.truncated}<li class="px-2 py-1 text-[12px] text-[var(--cortex-text-2)]">Showing the first {listing.entries.length} folders.</li>{/if}
       </ul>
     {:else if listing && !listing.ok}
-      <p class="px-2 py-2 text-[12px] text-error">{listing.error}</p>
+      <p class="px-2 py-2 text-[12px] text-bad">{listing.error}</p>
     {:else}
-      <p class="px-2 py-2 text-[12px] text-[var(--cortex-text-muted)]">Loading folders…</p>
+      <p class="px-2 py-2 text-[12px] text-[var(--cortex-text-2)]">Loading folders…</p>
     {/if}
   </div>
-  {#if browseError}<p class="text-[12px] text-error">{browseError}</p>{/if}
+  {#if browseError}<p class="text-[12px] text-bad">{browseError}</p>{/if}
 
   <div class="flex flex-wrap items-center justify-between gap-2">
-    <label class="flex cursor-pointer items-center gap-1.5 text-[12px] text-[var(--cortex-text-muted)]">
+    <label class="flex cursor-pointer items-center gap-1.5 text-[12px] text-[var(--cortex-text-2)]">
       <input type="checkbox" bind:checked={hidden} onchange={() => listing?.ok && void open(listing.path)} />
       Show hidden folders
     </label>
     <div class="flex items-center gap-2">
       {#if onCancel}
-        <button type="button" class="cursor-pointer rounded border border-[color:var(--cortex-border)] px-3 py-1 text-[12px] text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]" onclick={onCancel}>Cancel</button>
+        <button type="button" class="cursor-pointer rounded border border-[color:var(--cortex-line)] px-3 py-1 text-[12px] text-[var(--cortex-text-2)] hover:text-[var(--cortex-text)]" onclick={onCancel}>Cancel</button>
       {/if}
       <button
         type="button"
-        class="cursor-pointer rounded border border-primary/40 bg-primary/10 px-3 py-1 text-[12px] text-primary transition-colors hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
+        class="cursor-pointer rounded border border-accent-fill/40 bg-accent-fill/10 px-3 py-1 text-[12px] text-accent transition-colors hover:bg-accent-fill/20 disabled:cursor-not-allowed disabled:opacity-40"
         disabled={!listing?.ok}
         onclick={() => listing?.ok && onUse(listing.path)}
         title={listing?.ok ? listing.path : undefined}

@@ -160,7 +160,7 @@
 </svelte:head>
 
 <!-- Opaque canvas under the page: the engineering grid shows only on the header band (spec 5.2); the orbs sit above the canvas when empty. -->
-<CortexDeskShell ambient={empty} class="bg-background">
+<CortexDeskShell ambient={empty} class="bg-canvas">
   <div class="page">
     <div class="wrap">
       <PageHeader title="Runs" description="Every agent run Cortex has seen: chat turns, desk runs and gateway agents.">
@@ -235,7 +235,7 @@
 
 <style>
   .page { position: relative; z-index: 1; height: 100%; min-height: 0; overflow-y: auto; }  .wrap { max-width: 1280px; margin: 0 auto; }
-  .body { display: grid; gap: 12px; padding: 0 32px 48px; }
+  .body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 0 32px 48px; }
   .bulk {
     display: flex;
     align-items: center;

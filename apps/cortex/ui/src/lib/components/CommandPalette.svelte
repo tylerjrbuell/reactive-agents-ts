@@ -237,16 +237,16 @@
     role="presentation"
   >
     <div
-      class="w-full max-w-lg rounded-xl border border-outline-variant/25 bg-surface-container/95 dark:bg-surface-container-low/95 backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.35)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.55)] p-4"
+      class="w-full max-w-lg rounded-xl border border-line-strong/25 bg-surface-2/95 dark:bg-surface-1/95 backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.35)] dark:shadow-[0_24px_80px_rgba(0,0,0,0.55)] p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
     >
-      <div class="flex items-center gap-2 border-b border-outline-variant/15 pb-3 mb-3">
-        <Icon name="search" class="text-secondary/80" />
+      <div class="flex items-center gap-2 border-b border-line-strong/15 pb-3 mb-3">
+        <Icon name="search" class="text-io/80" />
         <input
           bind:this={inputEl}
-          class="flex-1 bg-transparent font-mono text-sm text-on-surface outline-none placeholder:text-on-surface-variant/80"
+          class="flex-1 bg-transparent font-mono text-sm text-text outline-none placeholder:text-text-2/80"
           placeholder="Type a command or route…"
           value={$commandPaletteQuery}
           oninput={(e) => commandPaletteQuery.set(e.currentTarget.value)}
@@ -256,7 +256,7 @@
       </div>
       <div class="max-h-72 overflow-y-auto space-y-1" role="listbox">
         {#if $commandPaletteFiltered.length === 0}
-          <p class="font-mono text-xs text-on-surface-variant px-2 py-4 text-center">No matches</p>
+          <p class="font-mono text-xs text-text-2 px-2 py-4 text-center">No matches</p>
         {:else}
           {#each $commandPaletteFiltered as cmd, i (cmd.id)}
             <button
@@ -265,22 +265,22 @@
               aria-selected={i === selectedIndex}
               class="w-full text-left px-3 py-2 rounded-lg font-mono text-xs transition-colors {i ===
               selectedIndex
-                ? 'bg-primary/15 text-primary border border-primary/30'
-                : 'text-on-surface-variant hover:bg-surface-container-high border border-transparent'}"
+                ? 'bg-accent-fill/15 text-accent border border-accent-fill/30'
+                : 'text-text-2 hover:bg-surface-3 border border-transparent'}"
               onclick={() => {
                 selectedIndex = i;
                 runSelected();
               }}
             >
-              <span class="text-on-surface">{cmd.label}</span>
+              <span class="text-text">{cmd.label}</span>
               {#if cmd.description}
-                <span class="block text-[10px] text-on-surface-variant mt-0.5">{cmd.description}</span>
+                <span class="block text-[10px] text-text-2 mt-0.5">{cmd.description}</span>
               {/if}
             </button>
           {/each}
         {/if}
       </div>
-      <p class="mt-3 font-mono text-[10px] text-on-surface-variant text-center">
+      <p class="mt-3 font-mono text-[10px] text-text-2 text-center">
         ↑↓ navigate · ↵ run · esc close · ⌘K toggle
       </p>
     </div>

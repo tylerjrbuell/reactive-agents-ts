@@ -108,7 +108,7 @@ export function modelsFallbackNote(
 ): string | undefined {
   if (live) return undefined;
   const keyVar = error?.reason === "no-credentials" ? /\b[A-Z][A-Z0-9_]*_API_KEY\b/.exec(error.message)?.[0] : undefined;
-  const why = keyVar ? ` (add ${keyVar} in Settings)` : error ? ` (${error.message})` : "";
+  const why = keyVar ? ` (set ${keyVar} in the server's environment, then restart Cortex)` : error ? ` (${error.message})` : "";
   return count > 0
     ? `Showing built-in list${why}.`
     : `No built-in models${why}. Type a model id.`;

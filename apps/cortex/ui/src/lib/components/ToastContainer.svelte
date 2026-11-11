@@ -18,17 +18,17 @@
   }
 
   const BTN_VARIANT: Record<NonNullable<ToastButton["variant"]>, string> = {
-    primary: "bg-primary text-white border-primary",
-    danger: "bg-transparent text-error border-error",
-    ghost: "bg-transparent text-on-surface-variant border-[var(--cortex-border)]",
+    primary: "bg-accent-fill text-white border-accent-fill",
+    danger: "bg-transparent text-bad border-bad",
+    ghost: "bg-transparent text-text-2 border-[var(--cortex-line)]",
   };
 
   const KIND_CONFIG: Record<Toast["kind"], { icon: IconName; border: string; accent: string; label: string }> = {
-    success:    { icon: "check-circle",   border: "border-secondary/40",  accent: "bg-secondary",  label: "text-secondary"  },
-    error:      { icon: "alert-circle",   border: "border-error/40",      accent: "bg-error",      label: "text-error"      },
-    warning:    { icon: "alert",          border: "border-tertiary/40",   accent: "bg-tertiary",   label: "text-tertiary"   },
-    info:       { icon: "info",           border: "border-primary/40",    accent: "bg-primary",    label: "text-primary"    },
-    connection: { icon: "bolt",           border: "border-primary/30",    accent: "bg-primary",    label: "text-primary"    },
+    success:    { icon: "check-circle",   border: "border-io/40",  accent: "bg-io",  label: "text-io"  },
+    error:      { icon: "alert-circle",   border: "border-bad/40",      accent: "bg-bad",      label: "text-bad"      },
+    warning:    { icon: "alert",          border: "border-warn/40",   accent: "bg-warn",   label: "text-warn"   },
+    info:       { icon: "info",           border: "border-accent-fill/40",    accent: "bg-accent-fill",    label: "text-accent"    },
+    connection: { icon: "bolt",           border: "border-accent-fill/30",    accent: "bg-accent-fill",    label: "text-accent"    },
   };
 </script>
 
@@ -39,7 +39,7 @@
     {@const cfg = KIND_CONFIG[t.kind]}
     <div
       class="pointer-events-auto flex items-start gap-3 min-w-[280px] max-w-[360px]
-             bg-surface-container-high border {cfg.border}
+             bg-surface-3 border {cfg.border}
              rounded-lg shadow-neural-strong p-4 relative overflow-hidden
              animate-slide-right"
       role="alert"
@@ -52,11 +52,11 @@
 
       <!-- Content -->
       <div class="flex-1 min-w-0 pl-1">
-        <div class="text-[13px] font-semibold text-on-surface">
+        <div class="text-[13px] font-semibold text-text">
           {t.title}
         </div>
         {#if t.message}
-          <p class="text-xs text-on-surface-variant mt-0.5 leading-relaxed break-words">
+          <p class="text-xs text-text-2 mt-0.5 leading-relaxed break-words">
             {t.message}
           </p>
         {/if}
@@ -89,8 +89,8 @@
       <!-- Dismiss -->
       <button
         type="button"
-        class="flex-shrink-0 text-outline/60
-               hover:text-outline transition-colors bg-transparent border-0 cursor-pointer p-0 leading-none"
+        class="flex-shrink-0 text-text-3/60
+               hover:text-text-3 transition-colors bg-transparent border-0 cursor-pointer p-0 leading-none"
         onclick={() => toast.remove(t.id)}
         aria-label="Dismiss"
         title="Dismiss"

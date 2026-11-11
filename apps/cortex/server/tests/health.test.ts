@@ -1,5 +1,15 @@
 import { describe, it, expect } from "bun:test";
-import { checkProviders } from "../api/health.js";
+import { checkProviders, healthRouter } from "../api/health.js";
+import pkg from "../../package.json" with { type: "json" };
+
+describe("GET /api/health", () => {
+  it("reports the Cortex package version, not a hard-coded one", async () => {
+    const res = await healthRouter.handle(new Request("http://localhost/api/health/"));
+    const body = (await res.json()) as { ok: boolean; version: string };
+    expect(body.ok).toBe(true);
+    expect(body.version).toBe(pkg.version);
+  });
+});
 
 describe("checkProviders", () => {
   it("returns missing when env var not set", () => {

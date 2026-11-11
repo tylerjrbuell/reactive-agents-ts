@@ -2,8 +2,10 @@
  * /api/health — server health and uptime information.
  */
 import { Elysia } from "elysia";
+import pkg from "../../package.json" with { type: "json" };
 
-const VERSION = "0.1.0";
+/** The Cortex package version (stamped at release; Settings · About shows it). */
+export const CORTEX_VERSION: string = pkg.version;
 const SERVER_START_TIME = Date.now();
 
 type ProviderStatus = "ok" | "missing";
@@ -25,7 +27,7 @@ export const healthRouter = new Elysia({ prefix: "/api/health" })
       const uptimeSeconds = Math.floor(uptimeMs / 1000);
       return {
         ok: true,
-        version: VERSION,
+        version: CORTEX_VERSION,
         uptime: uptimeSeconds,
       };
     },

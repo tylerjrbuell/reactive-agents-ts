@@ -92,12 +92,12 @@
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, description: (e.target as HTMLInputElement).value } })} />
                 </div>
                 <div>
-                  <label class="config-label" for={`subagent-l-${i}-provider`}>Provider <span class="normal-case text-outline/70">(optional)</span></label>
+                  <label class="config-label" for={`subagent-l-${i}-provider`}>Provider <span class="normal-case text-text-3/70">(optional)</span></label>
                   <input id={`subagent-l-${i}-provider`} class="config-input" value={at.agent.provider ?? ""} placeholder="inherit"
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, provider: (e.target as HTMLInputElement).value || undefined } })} />
                 </div>
                 <div>
-                  <label class="config-label" for={`subagent-l-${i}-model`}>Model <span class="normal-case text-outline/70">(optional)</span></label>
+                  <label class="config-label" for={`subagent-l-${i}-model`}>Model <span class="normal-case text-text-3/70">(optional)</span></label>
                   <input id={`subagent-l-${i}-model`} class="config-input" value={at.agent.model ?? ""} placeholder="inherit"
                     oninput={(e) => patchAgentTool(i, { ...at, agent: { ...at.agent, model: (e.target as HTMLInputElement).value || undefined } })} />
                 </div>
@@ -110,7 +110,7 @@
                     })} />
                 </div>
                 <div class="col-span-2">
-                  <label class="config-label" for={`subagent-l-${i}-tools`}>Sub-agent tools <span class="normal-case text-outline/70">(comma-separated)</span></label>
+                  <label class="config-label" for={`subagent-l-${i}-tools`}>Sub-agent tools <span class="normal-case text-text-3/70">(comma-separated)</span></label>
                   <input id={`subagent-l-${i}-tools`} class="config-input font-mono text-[11px]"
                     value={(at.agent.tools ?? []).join(", ")}
                     oninput={(e) => {

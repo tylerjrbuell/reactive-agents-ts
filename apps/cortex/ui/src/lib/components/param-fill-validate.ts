@@ -29,6 +29,28 @@ export function validateParamValues(
   return errors;
 }
 
+/** Separator for {@link paramSeedKey}: a NUL, which cannot occur in a variable name. */
+const SEED_SEPARATOR = "\u0000";
+
+/**
+ * When the fill dialog re-seeds its inputs: the variable name set while it is
+ * open, `""` while closed. A parent passing a fresh `variables` array with the
+ * same names keeps the user's input; reopening or a new name set re-seeds.
+ * Names are joined with NUL so `["a b"]` and `["a", "b"]` never collide.
+ */
+export function paramSeedKey(open: boolean, vars: readonly VariableDef[]): string {
+  return open ? vars.map((v) => v.name).join(SEED_SEPARATOR) : "";
+}
+
+/**
+ * A field's value for binding: `""` while unset. The dialog's fields render
+ * before its seeding effect runs, and a kit input bound to `undefined`
+ * throws `props_invalid_value`.
+ */
+export function paramValue(values: ParamValues, name: string): string {
+  return values[name] ?? "";
+}
+
 /** Coerce string inputs to the typed values the run body expects. */
 export function toVariableValues(
   vars: readonly VariableDef[],

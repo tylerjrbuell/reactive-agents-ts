@@ -5,27 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Cortex — Reactive Agents Studio</title>
-    <!-- Text fonts are self-hosted (fontsource, imported in app.css).
-         Material Symbols stays on the CDN only until every ligature icon has
-         moved to kit/Icon.svelte (Bench spec A8, page steps 3-7). -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
-      rel="stylesheet"
-    />
+    <!-- Fonts are self-hosted (fontsource, imported in app.css) and icons are
+         inline SVG (kit/Icon.svelte): nothing loads from a font CDN. -->
     <script>
-      // Apply the saved theme and motion setting before first paint (no flash).
+      // Apply the saved theme (lib/theme.ts) and motion setting before first paint (no flash).
       try {
         var s = JSON.parse(localStorage.getItem("cortex-settings") || "{}");
-        if (s.theme === "light") document.documentElement.classList.remove("dark");
+        var light =
+          s.theme === "light" ||
+          (s.theme === "system" && !window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (light) document.documentElement.classList.remove("dark");
         if (s.motion === "reduce") document.documentElement.setAttribute("data-motion", "reduce");
       } catch (e) {}
     </script>
     %sveltekit.head%
   </head>
   <body
-    class="bg-background text-on-surface overflow-hidden h-screen w-screen"
+    class="bg-canvas text-text overflow-hidden h-screen w-screen"
     data-sveltekit-preload-data="hover"
   >
     <div id="svelte" class="h-full w-full">%sveltekit.body%</div>

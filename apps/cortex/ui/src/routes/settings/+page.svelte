@@ -1,42 +1,43 @@
 <script lang="ts">
+  /**
+   * Settings (Bench spec section 8): a section nav, then rows of label, help
+   * text and control. Defaults, Providers, Notifications, Storage and
+   * Developer are a form written by Save; Appearance (theme, motion) applies
+   * at once. Rules: `lib/settings-page.ts`, `lib/theme.ts`, `lib/motion.ts`.
+   */
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
-  import { settings as settingsStore, DEFAULTS } from "$lib/stores/settings.js";
+  import { settings as settingsStore, DEFAULTS, type CortexSettings } from "$lib/stores/settings.js";
+  import { MOTION_OPTIONS, parseMotion } from "$lib/motion.js";
+  import { THEME_OPTIONS, parseTheme } from "$lib/theme.js";
+  import { keyBadgesOf, keyEnvOf, savePatchOf, SETTINGS_SECTIONS } from "$lib/settings-page.js";
+  import { modelHref } from "$lib/model-link.js";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
-  import Field from "$lib/components/kit/Field.svelte";
+  import PageHeader from "$lib/components/kit/PageHeader.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
   import Select from "$lib/components/kit/Select.svelte";
-  import { MOTION_OPTIONS, parseMotion, type MotionSetting } from "$lib/motion.js";
+  import Input from "$lib/components/kit/Input.svelte";
+  import Switch from "$lib/components/kit/Switch.svelte";
+  import Badge from "$lib/components/kit/Badge.svelte";
+  import Status from "$lib/components/kit/Status.svelte";
+  import NeuralMark from "$lib/components/kit/NeuralMark.svelte";
+  import SettingsGroup from "$lib/components/settings/SettingsGroup.svelte";
+  import SettingsRow from "$lib/components/settings/SettingsRow.svelte";
 
-  /**
-   * Explicit shape for this form state. Matches `CortexSettings` in `$lib/stores/settings.ts`
-   * (Svelte’s TS analysis in `.svelte` files can lose `ollamaEndpoint` when using imported `CortexSettings` alone).
-   */
-  type LocalSettings = {
-    defaultProvider: string;
-    defaultModel: string;
-    notificationLevel: "all" | "completions" | "failures" | "none";
-    notificationsEnabled: boolean;
-    runRetentionDays: number;
-    debugMode: boolean;
-    theme: "dark" | "light";
-    ollamaEndpoint: string;
-    tooltipsEnabled: boolean;
-    motion: MotionSetting;
-  };
-
-  // Local reactive copy — bound to form inputs, written to shared store on Save
-  let localSettings = $state<LocalSettings>({ ...DEFAULTS } as LocalSettings);
+  // Local copy bound to the form; Save writes it (without Appearance) to the shared store.
+  let localSettings = $state<CortexSettings>({ ...DEFAULTS });
   let saved = $state(false);
-  let notifPermission = $state<NotificationPermission>("default");
+  let notifPermission = $state<NotificationPermission | "unsupported">("default");
   let serverHealth = $state<"checking" | "online" | "offline">("checking");
   let serverVersion = $state<string | null>(null);
   let providerHealth = $state<Record<string, string>>({});
-  let checkingProviders = $state(false);
+  let checkingProviders = $state(true);
+  let activeSection = $state(SETTINGS_SECTIONS[0]?.id ?? "defaults");
 
-  /** From `/api/models/:provider` (same source as Lab builder). */
+  /** From `/api/models/:provider` (same source as the Lab builder). */
   let providerModelOptions = $state<UiModelOption[]>([]);
   let modelsLoading = $state(false);
   let modelsError = $state<string | null>(null);
@@ -75,6 +76,21 @@
     };
   });
 
+  const keyBadges = $derived(keyBadgesOf(providerHealth));
+  const providerOptions = $derived(
+    providerList.map((p) => ({
+      value: p.id,
+      label: providerHealth[p.id] === "missing" ? `${p.label} (key missing)` : p.label,
+    })),
+  );
+  const modelOptions = $derived.by(() => {
+    const opts = providerModelOptions.map((m) => ({ value: m.value, label: m.label }));
+    const pinned = localSettings.defaultModel.trim();
+    if (pinned && !opts.some((o) => o.value === pinned)) opts.push({ value: pinned, label: `${pinned} (saved)` });
+    return opts;
+  });
+  const providerKeyEnv = $derived(keyEnvOf(localSettings.defaultProvider));
+
   async function checkProviderHealth() {
     checkingProviders = true;
     try {
@@ -84,13 +100,13 @@
         if (data && typeof data === "object" && !Array.isArray(data)) {
           providerHealth = Object.fromEntries(
             Object.entries(data as Record<string, unknown>).filter(
-              (entry): entry is [string, string] => entry[1] === "ok" || entry[1] === "missing"
-            )
+              (entry): entry is [string, string] => entry[1] === "ok" || entry[1] === "missing",
+            ),
           );
         }
       }
     } catch {
-      // silently ignore — server may not be reachable
+      // The server may be unreachable; the Cortex server row says so.
     } finally {
       checkingProviders = false;
     }
@@ -98,59 +114,75 @@
 
   onMount(() => {
     settingsStore.init();
-    // Populate local form from persisted settings
-    localSettings = { ...settingsStore.get() } as LocalSettings;
-
-    if ("Notification" in window) {
-      notifPermission = Notification.permission;
-    }
+    localSettings = { ...settingsStore.get() };
+    notifPermission = "Notification" in window ? Notification.permission : "unsupported";
 
     fetch(`${CORTEX_SERVER_URL}/api/health`)
       .then(async (res) => {
-        if (res.ok) {
-          const data = await res.json() as { ok: boolean; version: string; uptime: number };
-          serverHealth = "online";
-          serverVersion = data.version;
-        } else {
+        if (!res.ok) {
           serverHealth = "offline";
+          return;
         }
+        const data = (await res.json()) as { ok: boolean; version: string };
+        serverHealth = "online";
+        serverVersion = data.version;
       })
       .catch(() => { serverHealth = "offline"; });
 
     void checkProviderHealth();
   });
 
+  let scroller: HTMLDivElement | undefined = $state();
+
+  /** Section nav: the last section whose top has passed the top of the scroll area (the last one at the bottom). */
+  function trackSection() {
+    if (!scroller) return;
+    const top = scroller.getBoundingClientRect().top + 96;
+    const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4;
+    let current = SETTINGS_SECTIONS[0]?.id ?? "defaults";
+    for (const s of SETTINGS_SECTIONS) {
+      const el = document.getElementById(s.id);
+      if (el && el.getBoundingClientRect().top <= top) current = s.id;
+    }
+    activeSection = atBottom ? (SETTINGS_SECTIONS.at(-1)?.id ?? current) : current;
+  }
+
   function saveSettings() {
-    // Write to shared store — propagates live to stage prompt + builder form
-    settingsStore.save(localSettings);
+    // Shared store: the Beacon prompt, new chats and the Lab builder read it live.
+    settingsStore.save(savePatchOf(localSettings));
     saved = true;
-    toast.success("Settings saved", "Provider and model defaults updated.");
+    toast.success("Settings saved", "New chats and runs use these defaults.");
     setTimeout(() => (saved = false), 2000);
   }
 
   function resetSettings() {
-    localSettings = { ...DEFAULTS } as LocalSettings;
+    localSettings = { ...DEFAULTS };
     settingsStore.reset();
     toast.info("Settings reset to defaults");
   }
 
+  async function onProviderChange() {
+    localSettings = { ...localSettings, defaultModel: "" };
+    const p = localSettings.defaultProvider;
+    const { options, default: def } = await fetchModelsForProvider(p, p === "ollama" ? localSettings.ollamaEndpoint : undefined);
+    const seed = def && options.some((o) => o.value === def) ? def : options[0]?.value;
+    if (seed) localSettings = { ...localSettings, defaultModel: seed };
+  }
+
   async function requestNotificationPermission() {
     if (!("Notification" in window)) {
-      toast.warning("Notifications not supported", "Your browser does not support desktop notifications.");
+      toast.warning("Notifications not supported", "This browser has no desktop notifications.");
       return;
     }
     const result = await Notification.requestPermission();
     notifPermission = result;
     if (result === "granted") {
       localSettings = { ...localSettings, notificationsEnabled: true };
-      toast.success("Notifications enabled", "You'll be notified when agents complete or fail.");
-      new Notification("Cortex", {
-        body: "Notifications are now enabled for Reactive Agents.",
-        icon: "/favicon.svg",
-      });
+      toast.success("Notifications enabled", "Cortex will notify you when agents finish or fail.");
+      new Notification("Cortex", { body: "Notifications are on for Reactive Agents.", icon: "/favicon.svg" });
     } else if (result === "denied") {
       localSettings = { ...localSettings, notificationsEnabled: false };
-      toast.error("Notifications blocked", "Enable them in your browser settings.");
+      toast.error("Notifications blocked", "Allow them in your browser's site settings.");
     }
   }
 
@@ -162,362 +194,286 @@
         body: JSON.stringify({ olderThanDays: localSettings.runRetentionDays }),
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const { pruned } = await res.json() as { pruned: number };
+      const { pruned } = (await res.json()) as { pruned: number };
       toast.success(`Pruned ${pruned} old runs`);
     } catch (e) {
       toast.error("Prune failed", String(e));
     }
   }
+
+  const NOTIFY_OPTIONS = [
+    { value: "all", label: "All events (finishes, failures, errors, decisions)" },
+    { value: "completions", label: "Finished and failed runs (recommended)" },
+    { value: "failures", label: "Failed runs only" },
+    { value: "none", label: "Never" },
+  ] as const;
+  const parseNotify = (v: string): CortexSettings["notificationLevel"] =>
+    v === "all" || v === "failures" || v === "none" ? v : "completions";
 </script>
 
 <svelte:head>
-  <title>CORTEX — Settings</title>
+  <title>Settings · Cortex</title>
 </svelte:head>
 
-<CortexDeskShell>
-<div class="relative z-10 h-full min-h-0 overflow-y-auto p-4 sm:p-6">
-  <div class="mx-auto max-w-2xl space-y-8">
-
-    <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="font-display text-2xl font-light tracking-tight text-on-surface">
-          <span class="font-semibold text-primary">Settings</span>
-        </h1>
-        <p class="font-mono text-[10px] text-outline mt-1">Cortex companion studio preferences</p>
-      </div>
-      <a href="/" class="flex items-center gap-1 font-mono text-[11px] text-cyan-700 no-underline transition-colors hover:text-primary dark:text-secondary">
-        <span class="material-symbols-outlined text-sm">arrow_back</span>
-        Beacon
-      </a>
+<!-- Opaque canvas: the engineering grid shows only on the header band (spec 5.2). -->
+<CortexDeskShell class="bg-canvas">
+  <div class="st-page" bind:this={scroller} onscroll={trackSection}>
+    <div class="st-head">
+      <PageHeader title="Settings" description="Defaults for new chats and runs, provider access, and notifications.">
+        {#snippet actions()}
+          <Button variant="ghost" onclick={resetSettings}>Reset to defaults</Button>
+          <Button variant="primary" icon={saved ? "check" : undefined} onclick={saveSettings}>{saved ? "Saved" : "Save settings"}</Button>
+        {/snippet}
+      </PageHeader>
     </div>
 
-    <!-- Connection -->
-    <section class="gradient-border rounded-lg p-5 space-y-3">
-      <h2 class="font-mono text-xs uppercase tracking-widest text-primary font-semibold flex items-center gap-2">
-        <span class="material-symbols-outlined text-sm">cable</span>
-        Connection
-      </h2>
-      <div class="flex items-center justify-between">
-        <div>
-          <div class="font-mono text-[11px] text-on-surface/70">Cortex Server</div>
-          <div class="font-mono text-[10px] text-outline mt-0.5">{CORTEX_SERVER_URL}</div>
-          {#if serverVersion}
-            <div class="font-mono text-[10px] text-outline/60 mt-1">v{serverVersion}</div>
-          {/if}
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full {serverHealth === 'online' ? 'bg-secondary' : serverHealth === 'offline' ? 'bg-error' : 'bg-outline/40'} {serverHealth === 'online' ? '' : ''}"></span>
-          <span class="font-mono text-[10px] {serverHealth === 'online' ? 'text-secondary' : serverHealth === 'offline' ? 'text-error' : 'text-outline'}">
-            {serverHealth === "online" ? "Connected" : serverHealth === "offline" ? "Offline" : "Checking…"}
-          </span>
-        </div>
-      </div>
-      <p class="font-mono text-[10px] text-outline/60">
-        To use a different server, set <code class="text-primary">CORTEX_URL</code> before starting: <code class="text-primary">CORTEX_URL=http://host:port bun cortex</code>
-      </p>
-      <div>
-        <label for="settings-ollama-endpoint" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">
-          Ollama Endpoint
-        </label>
-        <input
-          id="settings-ollama-endpoint"
-          bind:value={localSettings.ollamaEndpoint}
-          placeholder="http://localhost:11434  (leave blank for default)"
-          class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
-                 text-sm font-mono text-on-surface placeholder:text-outline/40
-                 focus:border-primary/50 focus:outline-none"
-        />
-        <p class="font-mono text-[10px] text-outline/50 mt-1">
-          Override the Ollama server used when selecting the Ollama provider in agent config.
-          Can also be set server-side via <code class="text-primary/70">OLLAMA_HOST</code>.
-        </p>
-      </div>
+    <div class="st-wrap">
+      <nav class="st-nav" aria-label="Settings sections">
+        {#each SETTINGS_SECTIONS as s (s.id)}
+          <a href="#{s.id}" aria-current={activeSection === s.id ? "true" : undefined}>{s.label}</a>
+        {/each}
+      </nav>
 
-      <!-- Provider API Key Status -->
-      <div>
-        <div class="font-mono text-[10px] text-outline uppercase tracking-widest mb-2">
-          API Key Status
-        </div>
-        {#if checkingProviders}
-          <div class="font-mono text-[10px] text-outline/50">Checking…</div>
-        {:else if Object.keys(providerHealth).length === 0}
-          <div class="font-mono text-[10px] text-outline/50">Unavailable (server offline)</div>
-        {:else}
-          <div class="flex flex-wrap gap-2">
-            {#each [
-              { key: "anthropic", label: "Anthropic" },
-              { key: "openai",    label: "OpenAI" },
-              { key: "gemini",    label: "Gemini" },
-            ] as provider}
-              {@const status = providerHealth[provider.key]}
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-mono text-[10px]
-                {status === 'ok'
-                  ? 'bg-secondary/10 border-secondary/30 text-secondary'
-                  : 'bg-amber-500/10 border-amber-500/30 text-amber-500 dark:text-amber-400'}">
-                <span class="material-symbols-outlined text-[12px]">
-                  {status === 'ok' ? 'check_circle' : 'warning'}
-                </span>
-                {provider.label}
-                <span class="opacity-70">{status === 'ok' ? 'configured' : 'missing'}</span>
-              </span>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    </section>
-
-    <!-- Default Agent Config -->
-    <section class="gradient-border rounded-lg p-5 space-y-4">
-      <h2 class="font-mono text-xs uppercase tracking-widest text-primary font-semibold flex items-center gap-2">
-        <span class="material-symbols-outlined text-sm">smart_toy</span>
-        Default Agent Config
-      </h2>
-      <p class="font-mono text-[10px] text-outline/60">
-        Used when launching agents from the Beacon input bar or the Lab Builder without explicit configuration.
-      </p>
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label for="settings-default-provider" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Provider</label>
-          <select
-            id="settings-default-provider"
-            bind:value={localSettings.defaultProvider}
-            onchange={async () => {
-              localSettings = { ...localSettings, defaultModel: "" };
-              const p = localSettings.defaultProvider;
-              const { options, default: def } = await fetchModelsForProvider(
-                p,
-                p === "ollama" ? localSettings.ollamaEndpoint : undefined,
-              );
-              const seed = def && options.some((o) => o.value === def) ? def : options[0]?.value;
-              if (seed) {
-                localSettings = { ...localSettings, defaultModel: seed };
-              }
-            }}
-            class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
-                   text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
-          >
-            {#each providerList as p}
-              <option value={p.id}>{p.label}</option>
-            {/each}
-          </select>
-        </div>
-        <div>
-          <label for="settings-default-model" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">Model</label>
-          {#if modelsError}
-            <p class="font-mono text-[10px] text-error/80 mb-1.5">{modelsError}</p>
-          {:else if modelsNote}
-            <p class="font-mono text-[10px] text-outline/70 mb-1.5">{modelsNote}</p>
-          {/if}
-          {#if modelsLoading}
-            <div
-              class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
-                     text-sm font-mono text-outline/50"
-            >
-              Loading models…
-            </div>
-          {:else if providerModelOptions.length > 0}
-            <select
-              id="settings-default-model"
-              bind:value={localSettings.defaultModel}
-              class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
-                     text-sm font-mono text-on-surface focus:border-primary/50 focus:outline-none"
-            >
-              {#each providerModelOptions as m}
-                <option value={m.value}>{m.label}</option>
-              {/each}
-              {#if localSettings.defaultModel.trim() && !providerModelOptions.some((o) => o.value === localSettings.defaultModel)}
-                <option value={localSettings.defaultModel}>{localSettings.defaultModel} (saved)</option>
+      <div class="st-col">
+        <SettingsGroup id="defaults" title="Defaults" description="Used by Beacon, new chats and the Lab builder until you pick something else.">
+          <SettingsRow label="Provider" for="settings-default-provider">
+            {#snippet help()}
+              {#if providerKeyEnv}
+                {providerList.find((p) => p.id === localSettings.defaultProvider)?.label ?? localSettings.defaultProvider} needs <code>{providerKeyEnv}</code> in the server's environment.
+              {:else}
+                Local and self-hosted providers need no key.
               {/if}
-            </select>
-          {:else}
-            <input
-              id="settings-default-model"
-              bind:value={localSettings.defaultModel}
-              placeholder="Model id"
-              class="w-full bg-surface-container-lowest border border-outline-variant/20 rounded px-3 py-2
-                     text-sm font-mono text-on-surface placeholder:text-outline/40
-                     focus:border-primary/50 focus:outline-none"
-            />
-          {/if}
-        </div>
-      </div>
-      <p class="font-mono text-[10px] text-outline/50">
-        API keys are read from environment variables: <code class="text-primary/70">ANTHROPIC_API_KEY</code>, <code class="text-primary/70">OPENAI_API_KEY</code>, etc.
-      </p>
-    </section>
-
-    <!-- Notifications -->
-    <section class="gradient-border rounded-lg p-5 space-y-4">
-      <h2 class="font-mono text-xs uppercase tracking-widest text-primary font-semibold flex items-center gap-2">
-        <span class="material-symbols-outlined text-sm">notifications</span>
-        Notifications
-      </h2>
-
-      <div class="flex items-center justify-between">
-        <div>
-          <div class="font-mono text-[11px] text-on-surface/80">Desktop Notifications</div>
-          <div class="font-mono text-[10px] text-outline mt-0.5">
-            {#if notifPermission === "granted"}
-              <span class="text-secondary">Enabled</span>
-            {:else if notifPermission === "denied"}
-              <span class="text-error">Blocked in browser settings</span>
-            {:else}
-              Not yet requested
-            {/if}
-          </div>
-        </div>
-        {#if notifPermission !== "granted"}
-          <button
-            type="button"
-            onclick={requestNotificationPermission}
-            class="px-4 py-1.5 bg-primary/10 border border-primary/30 text-primary font-mono text-[10px]
-                   uppercase rounded hover:bg-primary/20 transition-colors cursor-pointer"
-          >
-            Enable
-          </button>
-        {:else}
-          <button
-            type="button"
-            onclick={() => {
-              new Notification("Cortex test", { body: "Notifications are working!", icon: "/favicon.svg" });
-            }}
-            class="px-4 py-1.5 border border-outline-variant/20 text-outline font-mono text-[10px]
-                   uppercase rounded hover:text-primary hover:border-primary/30 transition-colors cursor-pointer"
-          >
-            Test
-          </button>
-        {/if}
-      </div>
-
-      <fieldset class="border-0 p-0 m-0 min-w-0">
-        <legend class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5 px-0">
-          Notify me when
-        </legend>
-        <div class="space-y-2">
-          {#each [
-            { value: "all",         label: "All events (completions, failures, errors, decisions)" },
-            { value: "completions", label: "Agent completions and failures only (recommended)" },
-            { value: "failures",    label: "Failures only" },
-            { value: "none",        label: "Never" },
-          ] as option}
-            <label class="flex items-center gap-3 cursor-pointer">
-              <input
-                type="radio"
-                name="notifLevel"
-                value={option.value}
-                bind:group={localSettings.notificationLevel}
-                class="accent-primary"
+            {/snippet}
+            {#snippet control()}
+              <Select
+                id="settings-default-provider"
+                options={providerOptions}
+                describedBy="settings-default-provider-hint"
+                bind:value={localSettings.defaultProvider}
+                onchange={onProviderChange}
               />
-              <span class="font-mono text-[11px] text-on-surface/70">{option.label}</span>
-            </label>
-          {/each}
-        </div>
-      </fieldset>
-    </section>
+            {/snippet}
+          </SettingsRow>
+          <SettingsRow label="Model" for="settings-default-model">
+            {#snippet help()}
+              {#if modelsError}
+                <span class="st-bad">{modelsError}</span>
+              {:else if modelsNote}
+                {modelsNote}
+              {:else}
+                Listed from the provider.
+              {/if}
+              {#if localSettings.defaultModel.trim()}
+                <a class="st-link" href={modelHref(localSettings.defaultProvider, localSettings.defaultModel)}>Model details</a>
+              {/if}
+            {/snippet}
+            {#snippet control()}
+              {#if modelsLoading}
+                <Select id="settings-default-model" options={[{ value: "", label: "Loading models…" }]} value="" disabled />
+              {:else if modelOptions.length > 0}
+                <Select
+                  id="settings-default-model"
+                  options={modelOptions}
+                  describedBy="settings-default-model-hint"
+                  bind:value={localSettings.defaultModel}
+                />
+              {:else}
+                <Input
+                  id="settings-default-model"
+                  mono
+                  placeholder="Model id"
+                  describedBy="settings-default-model-hint"
+                  bind:value={localSettings.defaultModel}
+                />
+              {/if}
+            {/snippet}
+          </SettingsRow>
+        </SettingsGroup>
 
-    <!-- Data & Storage -->
-    <section class="gradient-border rounded-lg p-5 space-y-4">
-      <h2 class="font-mono text-xs uppercase tracking-widest text-primary font-semibold flex items-center gap-2">
-        <span class="material-symbols-outlined text-sm">storage</span>
-        Data & Storage
-      </h2>
+        <SettingsGroup id="providers" title="Providers" description="Cortex reads API keys from the server's environment; it never stores them.">
+          <SettingsRow label="API keys found" wide>
+            {#snippet help()}Restart Cortex after adding a key to <code>.env</code>.{/snippet}
+            {#snippet control()}
+              <div class="st-keys">
+                {#if checkingProviders}
+                  <span class="st-muted" role="status">Checking…</span>
+                {:else if keyBadges.length === 0}
+                  <span class="st-muted">Unavailable: the server did not answer</span>
+                {:else}
+                  {#each keyBadges as b (b.key)}<Badge tone={b.tone}>{b.text}</Badge>{/each}
+                {/if}
+              </div>
+            {/snippet}
+          </SettingsRow>
+          <SettingsRow label="Ollama endpoint" for="settings-ollama-endpoint">
+            {#snippet help()}Leave blank to use <code>OLLAMA_HOST</code> or http://localhost:11434.{/snippet}
+            {#snippet control()}
+              <Input
+                id="settings-ollama-endpoint"
+                mono
+                placeholder="http://localhost:11434"
+                describedBy="settings-ollama-endpoint-hint"
+                bind:value={localSettings.ollamaEndpoint}
+              />
+            {/snippet}
+          </SettingsRow>
+          <SettingsRow label="Cortex server">
+            {#snippet help()}<span class="st-data">{CORTEX_SERVER_URL}</span>. To use another server, start with <code>CORTEX_URL=http://host:port bun cortex</code>.{/snippet}
+            {#snippet control()}
+              {#if serverHealth === "online"}
+                <Status tone="done" label={serverVersion ? `Connected · v${serverVersion}` : "Connected"} />
+              {:else if serverHealth === "offline"}
+                <Status tone="failed" label="Offline" />
+              {:else}
+                <Status tone="idle" label="Checking…" />
+              {/if}
+            {/snippet}
+          </SettingsRow>
+        </SettingsGroup>
 
-      <div class="flex items-center gap-4">
-        <div class="flex-1">
-          <label for="settings-run-retention" class="font-mono text-[10px] text-outline uppercase tracking-widest block mb-1.5">
-            Keep runs for
-          </label>
-          <div class="flex items-center gap-3">
-            <input
-              id="settings-run-retention"
-              type="range"
-              min="1"
-              max="90"
-              bind:value={localSettings.runRetentionDays}
-              class="flex-1 accent-primary"
-            />
-            <span class="font-mono text-sm text-primary w-16 text-right tabular-nums">
-              {localSettings.runRetentionDays}d
-            </span>
+        <SettingsGroup id="notifications" title="Notifications" description="Desktop notifications when agents finish or fail while Cortex is in the background.">
+          <SettingsRow label="Desktop notifications">
+            {#snippet help()}
+              {#if notifPermission === "granted"}
+                <span class="st-ok">Allowed in this browser.</span>
+              {:else if notifPermission === "denied"}
+                <span class="st-bad">Blocked: allow them in your browser's site settings.</span>
+              {:else if notifPermission === "unsupported"}
+                This browser has no desktop notifications.
+              {:else}
+                Not allowed yet. The browser asks once.
+              {/if}
+            {/snippet}
+            {#snippet control()}
+              {#if notifPermission === "granted"}
+                <Button
+                  size="sm"
+                  onclick={() => new Notification("Cortex test", { body: "Notifications are working.", icon: "/favicon.svg" })}
+                >Send a test</Button>
+              {:else}
+                <Button size="sm" disabled={notifPermission === "unsupported"} onclick={requestNotificationPermission}>Allow notifications</Button>
+              {/if}
+            {/snippet}
+          </SettingsRow>
+          <SettingsRow label="Notify me about" for="settings-notify-level">
+            {#snippet control()}
+              <Select
+                id="settings-notify-level"
+                options={NOTIFY_OPTIONS}
+                bind:value={() => localSettings.notificationLevel, (v) => (localSettings = { ...localSettings, notificationLevel: parseNotify(v) })}
+              />
+            {/snippet}
+          </SettingsRow>
+        </SettingsGroup>
+
+        <SettingsGroup id="appearance" title="Appearance" description="These apply at once.">
+          <SettingsRow label="Theme" for="settings-theme" description="Dark is the graphite bench; light is cool lab paper.">
+            {#snippet control()}
+              <Select
+                id="settings-theme"
+                options={THEME_OPTIONS}
+                describedBy="settings-theme-hint"
+                bind:value={() => $settingsStore.theme, (v) => settingsStore.save({ theme: parseTheme(v) })}
+              />
+            {/snippet}
+          </SettingsRow>
+          <SettingsRow
+            label="Motion"
+            for="settings-motion"
+            description="Reduce stops the orb drift, the mark twinkle, the sonar ring and the flowing rail. Running work still shows by its status, the static rail and the glow."
+          >
+            {#snippet control()}
+              <Select
+                id="settings-motion"
+                options={MOTION_OPTIONS}
+                describedBy="settings-motion-hint"
+                bind:value={() => $settingsStore.motion, (v) => settingsStore.save({ motion: parseMotion(v) })}
+              />
+            {/snippet}
+          </SettingsRow>
+        </SettingsGroup>
+
+        <SettingsGroup id="storage" title="Storage">
+          {#snippet body()}Run events are stored in <code>.cortex/cortex.db</code> (SQLite) under the server's working directory.{/snippet}
+          <SettingsRow label="Keep runs for" for="settings-run-retention" description="Prune deletes runs older than this." wide>
+            {#snippet control()}
+              <div class="st-range">
+                <input
+                  id="settings-run-retention"
+                  type="range"
+                  min="1"
+                  max="90"
+                  aria-describedby="settings-run-retention-hint"
+                  bind:value={localSettings.runRetentionDays}
+                />
+                <span class="st-data st-days">{localSettings.runRetentionDays} days</span>
+                <Button size="sm" variant="danger" onclick={pruneOldRuns}>Prune now</Button>
+              </div>
+            {/snippet}
+          </SettingsRow>
+        </SettingsGroup>
+
+        <SettingsGroup id="developer" title="Developer">
+          <div class="st-switch"><Switch id="settings-debug" label="Debug mode" hint="Show extra event detail and verbose logging in the run view's Events tab." bind:checked={localSettings.debugMode} /></div>
+          <div class="st-switch"><Switch id="settings-tooltips" label="Hover tooltips" hint="Help text on controls in the Lab, Runs and the command palette." bind:checked={localSettings.tooltipsEnabled} /></div>
+          <SettingsRow label="Connect an app">
+            {#snippet help()}Add <code>.withCortex()</code> to an agent, or set <code>CORTEX_URL={CORTEX_SERVER_URL}</code>, and its runs show up here.{/snippet}
+          </SettingsRow>
+        </SettingsGroup>
+
+        <SettingsGroup id="about" title="About">
+          <div class="st-about">
+            <NeuralMark size={64} hero />
+            <div>
+              <div class="st-word"><span class="brand-grad">Cortex</span></div>
+              <p class="st-about-line">The local desk for Reactive Agents{serverVersion ? ` · v${serverVersion}` : ""}</p>
+            </div>
           </div>
-        </div>
-        <button
-          type="button"
-          onclick={pruneOldRuns}
-          class="px-4 py-1.5 border border-outline-variant/20 text-outline font-mono text-[10px]
-                 uppercase rounded hover:text-error hover:border-error/30 transition-colors cursor-pointer flex-shrink-0"
-        >
-          Prune now
-        </button>
+        </SettingsGroup>
       </div>
-
-      <p class="font-mono text-[10px] text-outline/50">
-        Run events are stored in <code class="text-primary/70">.cortex/cortex.db</code> (SQLite, WAL mode).
-        Each run retains up to 50 most recent executions per agent automatically.
-      </p>
-    </section>
-
-    <!-- Debug -->
-    <section class="gradient-border rounded-lg p-5 space-y-4">
-      <h2 class="font-mono text-xs uppercase tracking-widest text-primary font-semibold flex items-center gap-2">
-        <span class="material-symbols-outlined text-sm">bug_report</span>
-        Developer
-      </h2>
-      <label class="flex items-center gap-3 cursor-pointer">
-        <input type="checkbox" bind:checked={localSettings.debugMode} class="accent-primary w-4 h-4" />
-        <div>
-          <div class="font-mono text-[11px] text-on-surface/80">Debug mode</div>
-          <div class="font-mono text-[10px] text-outline/60 mt-0.5">
-            Show additional event details and verbose logging in the Raw Events tab
-          </div>
-        </div>
-      </label>
-      <label class="flex items-center gap-3 cursor-pointer">
-        <input type="checkbox" bind:checked={localSettings.tooltipsEnabled} class="accent-primary w-4 h-4" />
-        <div>
-          <div class="font-mono text-[11px] text-on-surface/80">Show hover tooltips</div>
-          <div class="font-mono text-[10px] text-outline/60 mt-0.5">
-            Help text on controls (Lab, runs, command palette). Turn off if you find them distracting.
-          </div>
-        </div>
-      </label>
-      <Field id="settings-motion" label="Motion" hint="Reduce motion stops the drift, twinkle, sonar and flowing rails. Running work still shows in status text.">
-        <Select
-          id="settings-motion"
-          options={MOTION_OPTIONS}
-          describedBy="settings-motion-hint"
-          bind:value={() => localSettings.motion, (v) => (localSettings = { ...localSettings, motion: parseMotion(v) })}
-        />
-      </Field>
-      <div class="flex gap-2 flex-wrap text-[10px] font-mono text-outline/50">
-        <span>Connect snippet:</span>
-        <code class="text-primary/70 bg-primary/10 px-1.5 py-0.5 rounded">.withCortex()</code>
-        <span>or</span>
-        <code class="text-primary/70 bg-primary/10 px-1.5 py-0.5 rounded">CORTEX_URL={CORTEX_SERVER_URL}</code>
-      </div>
-    </section>
-
-    <!-- Save / Reset -->
-    <div class="flex items-center justify-between pb-8">
-      <button
-        type="button"
-        onclick={resetSettings}
-        class="px-4 py-2 border border-outline-variant/20 text-outline font-mono text-xs uppercase
-               rounded hover:text-error hover:border-error/30 transition-colors cursor-pointer"
-      >
-        Reset to defaults
-      </button>
-      <button
-        type="button"
-        onclick={saveSettings}
-        class="px-6 py-2 bg-primary text-on-primary font-mono text-xs uppercase
-               rounded shadow-glow-violet hover:brightness-110 active:scale-95 transition-all cursor-pointer"
-      >
-        {saved ? "✓ Saved" : "Save Settings"}
-      </button>
     </div>
-
   </div>
-</div>
 </CortexDeskShell>
+
+<style>
+  .st-page { position: relative; z-index: 1; height: 100%; min-height: 0; overflow-y: auto; scroll-behavior: smooth; }
+  .st-head { max-width: 1044px; margin: 0 auto; }
+  .st-wrap {
+    max-width: 1044px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 32px;
+    padding: 8px 32px 48px;
+  }
+  .st-nav { position: sticky; top: 16px; align-self: start; display: grid; gap: 2px; }
+  .st-nav a {
+    padding: 6px 10px;
+    border-radius: var(--cortex-r-ctl);
+    font-size: var(--cortex-t-sm);
+    color: var(--cortex-text-2);
+    text-decoration: none;
+  }
+  .st-nav a:hover { color: var(--cortex-text); background: var(--cortex-surface-1); }
+  .st-nav a[aria-current="true"] { background: var(--cortex-surface-2); color: var(--cortex-text); font-weight: 500; }
+  .st-col { display: grid; gap: 32px; min-width: 0; }
+  .st-keys { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .st-muted { font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+  .st-ok { color: var(--cortex-ok); }
+  .st-bad { color: var(--cortex-bad); }
+  .st-data { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); }
+  .st-link { margin-left: 6px; color: var(--cortex-accent); }
+  .st-range { display: flex; align-items: center; gap: 10px; width: 100%; }
+  .st-range input { flex: 1; min-width: 0; accent-color: var(--cortex-accent-fill); }
+  .st-range input:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
+  .st-days { width: 58px; text-align: right; color: var(--cortex-text); }
+  .st-switch { padding: 12px 16px; }
+  .st-about { display: flex; align-items: center; gap: 16px; padding: 16px; }
+  .st-word { font-size: var(--cortex-t-xl); font-weight: 600; letter-spacing: -0.015em; line-height: var(--cortex-lh-tight); }
+  .st-about-line { margin: 2px 0 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  @media (max-width: 860px) {
+    .st-wrap { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 8px 16px 40px; }
+    .st-nav { position: static; display: flex; flex-wrap: wrap; }
+  }
+  @media (prefers-reduced-motion: reduce) { .st-page { scroll-behavior: auto; } }
+</style>

@@ -54,7 +54,7 @@
 
 {#snippet toolCard(call: ChatToolCall)}
         {@const open = isOpen(call.id, false)}
-        <div class="overflow-hidden rounded-md border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-mid)]/40">
+        <div class="overflow-hidden rounded-md border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-3)]/40">
           <button
             type="button"
             onclick={() => toggle(call.id, false)}
@@ -69,22 +69,22 @@
             ><Icon name={call.status === "running" ? "circle" : call.status === "failed" ? "alert" : "tool"} size="sm" /></span>
             <span class="font-semibold text-[var(--cortex-io)]">{call.name}</span>
             {#if !open && call.args !== undefined}
-              <span class="min-w-0 flex-1 truncate text-[var(--cortex-text-muted)]">{previewArgs(call.args)}</span>
+              <span class="min-w-0 flex-1 truncate text-[var(--cortex-text-2)]">{previewArgs(call.args)}</span>
             {:else}
               <span class="flex-1"></span>
             {/if}
             {#if call.durationMs != null}
-              <span class="shrink-0 tabular-nums text-[var(--cortex-text-muted)]">{call.durationMs}ms</span>
+              <span class="shrink-0 tabular-nums text-[var(--cortex-text-2)]">{call.durationMs}ms</span>
             {/if}
           </button>
           {#if open}
-            <div class="space-y-1.5 border-t border-[color:var(--cortex-border)] px-2 py-1.5">
+            <div class="space-y-1.5 border-t border-[color:var(--cortex-line)] px-2 py-1.5">
               <div>
                 <div class="mb-0.5 text-[11px] text-[var(--cortex-text-3)]">Parameters</div>
                 {#if call.args !== undefined}
                   <pre class="m-0 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono leading-snug text-[var(--cortex-text)] {text}">{pretty(call.args)}</pre>
                 {:else}
-                  <span class="font-mono italic text-[var(--cortex-text-muted)] {text}">not reported</span>
+                  <span class="font-mono italic text-[var(--cortex-text-2)] {text}">not reported</span>
                 {/if}
               </div>
               <div>
@@ -92,11 +92,11 @@
                   {call.status === "failed" ? "Error" : "Result"}
                 </div>
                 {#if call.status === "running"}
-                  <span class="font-mono italic text-[var(--cortex-text-muted)] {text}">running…</span>
+                  <span class="font-mono italic text-[var(--cortex-text-2)] {text}">running…</span>
                 {:else if (call.status === "failed" ? call.error : call.result) !== undefined}
                   <pre class="m-0 max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono leading-snug {call.status === 'failed' ? 'text-[var(--cortex-bad)]' : 'text-[var(--cortex-text)]'} {text}">{call.status === "failed" ? call.error : call.result}{call.resultTruncated ? "\n… (truncated)" : ""}</pre>
                 {:else}
-                  <span class="font-mono italic text-[var(--cortex-text-muted)] {text}">no output</span>
+                  <span class="font-mono italic text-[var(--cortex-text-2)] {text}">no output</span>
                 {/if}
               </div>
             </div>
@@ -106,7 +106,7 @@
 
 {#if steps.length > 0 || (!embedded && (turn.subAgents?.length ?? 0) > 0)}
   {#if steps.length > 0 && !embedded}
-    <p data-testid="turn-summary" class="m-0 mb-1 font-mono {text} tabular-nums text-[var(--cortex-text-muted)]">{summary.line}</p>
+    <p data-testid="turn-summary" class="m-0 mb-1 font-mono {text} tabular-nums text-[var(--cortex-text-2)]">{summary.line}</p>
   {/if}
   <ol class="mb-2 m-0 list-none space-y-1 p-0" aria-label="Steps">
     {#each steps as step, i (step.key)}
@@ -116,7 +116,7 @@
         <button
           type="button"
           onclick={() => toggle(step.key, stepDefault(i))}
-          class="flex w-full cursor-pointer items-center gap-1.5 py-0.5 text-left font-mono {text} text-[var(--cortex-text-muted)] transition-colors hover:text-[var(--cortex-text)]"
+          class="flex w-full cursor-pointer items-center gap-1.5 py-0.5 text-left font-mono {text} text-[var(--cortex-text-2)] transition-colors hover:text-[var(--cortex-text)]"
           aria-expanded={open}
         >
           <span class="inline-flex text-[var(--cortex-text-3)] transition-transform duration-150" style="transform: rotate({open ? '90deg' : '0deg'})"><Icon name="chevron" size="sm" /></span>
@@ -139,14 +139,14 @@
             {#if embedded}
               <!-- narration is the transcript's prose; not repeated here -->
             {:else if step.narration}
-              <p class="m-0 whitespace-pre-wrap leading-relaxed text-[var(--cortex-text-muted)] {text}">{step.narration}</p>
+              <p class="m-0 whitespace-pre-wrap leading-relaxed text-[var(--cortex-text-2)] {text}">{step.narration}</p>
             {:else if step.sameAsStep !== undefined}
-              <p class="m-0 italic text-[var(--cortex-text-muted)] {text}">Same narration as step {step.sameAsStep}.</p>
+              <p class="m-0 italic text-[var(--cortex-text-2)] {text}">Same narration as step {step.sameAsStep}.</p>
             {/if}
             {#if step.thinking}
               <details class="group">
-                <summary class="cursor-pointer list-none font-mono {text} text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]">Thinking</summary>
-                <p class="m-0 mt-0.5 whitespace-pre-wrap leading-relaxed italic text-[var(--cortex-text-muted)] {text}">{step.thinking}</p>
+                <summary class="cursor-pointer list-none font-mono {text} text-[var(--cortex-text-2)] hover:text-[var(--cortex-text)]">Thinking</summary>
+                <p class="m-0 mt-0.5 whitespace-pre-wrap leading-relaxed italic text-[var(--cortex-text-2)] {text}">{step.thinking}</p>
               </details>
             {/if}
             {#each step.failures as f (f.callId)}
@@ -154,7 +154,7 @@
                 <span class="text-[var(--cortex-bad)]">{f.tool.split("/").pop()} failed:</span>
                 <span class="text-[var(--cortex-text)]">{f.reason}</span>
                 {#if f.fixedBy}
-                  <span class="text-[var(--cortex-text-muted)]">· fixed by a later call{f.fixedBy.step !== step.n ? ` in step ${f.fixedBy.step}` : ""}</span>
+                  <span class="text-[var(--cortex-text-2)]">· fixed by a later call{f.fixedBy.step !== step.n ? ` in step ${f.fixedBy.step}` : ""}</span>
                 {/if}
               </p>
             {/each}
@@ -174,7 +174,7 @@
   <!-- History loaded from the server keeps only tool names, not per-call detail. -->
   <div class="mb-2 flex flex-wrap gap-1 font-mono text-[11px]">
     {#each groupToolNames(turn.toolsUsed) as tool (tool.name)}
-      <span class="rounded bg-[var(--cortex-surface-mid)] px-1.5 py-0.5 text-[var(--cortex-text)]">{tool.name}{tool.count > 1 ? ` ×${tool.count}` : ""}</span>
+      <span class="rounded bg-[var(--cortex-surface-3)] px-1.5 py-0.5 text-[var(--cortex-text)]">{tool.name}{tool.count > 1 ? ` ×${tool.count}` : ""}</span>
     {/each}
   </div>
 {/if}

@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Panel: surface-1, a hairline edge, 12px radius, optional header with a
-   * title and actions. Replaces `gradient-border` panels. `live` adds the
+   * title and actions. The one panel chrome (no gradient borders). `live` adds the
    * live glow and gradient edge (`.glow-live`), only for a card whose work is
    * running now (spec section 5.2).
    */

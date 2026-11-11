@@ -99,7 +99,7 @@
 </svelte:head>
 
 <!-- Opaque canvas: the line grid shows only on the header band, the dot grid only in Field (spec 5.2). -->
-<CortexDeskShell ambient class="bg-background">
+<CortexDeskShell ambient class="bg-canvas">
   <div class="beacon" data-state={empty ? "empty" : "default"}>
     {#if empty}
       <div></div>

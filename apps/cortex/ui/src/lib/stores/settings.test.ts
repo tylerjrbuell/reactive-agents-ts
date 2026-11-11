@@ -3,7 +3,7 @@ import { DEFAULTS, type CortexSettings } from "./settings.js";
 
 describe("CortexSettings", () => {
   it("DEFAULTS includes theme for layout / persisted UI preference", () => {
-    expect(DEFAULTS.theme === "dark" || DEFAULTS.theme === "light").toBe(true);
+    expect(DEFAULTS.theme).toBe("dark");
   });
 
   it("CortexSettings type includes theme (compile-time shape for +layout applyTheme)", () => {

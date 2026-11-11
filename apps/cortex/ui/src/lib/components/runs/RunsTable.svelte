@@ -109,6 +109,12 @@
     overflow: clip;
   }
   table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--cortex-t-sm); color: var(--cortex-text); }
+  /* Narrow windows: drop Strategy, Steps and Time (the run view has them) so the table fits without clipping. */
+  @media (max-width: 960px) {
+    th:nth-child(5), td:nth-child(5),
+    th:nth-child(6), td:nth-child(6),
+    th:nth-child(9), td:nth-child(9) { display: none; }
+  }
   th {
     position: sticky;
     top: 0;

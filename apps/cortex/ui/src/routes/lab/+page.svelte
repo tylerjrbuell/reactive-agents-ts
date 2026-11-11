@@ -379,7 +379,7 @@
 <input bind:this={importInput} type="file" accept=".json,application/json" class="hidden" aria-hidden="true" tabindex="-1" onchange={importBuilderFile} />
 
 <!-- Opaque canvas: the engineering grid shows only on the header band (spec 5.2). -->
-<CortexDeskShell class="bg-background">
+<CortexDeskShell class="bg-canvas">
 <div class="lab">
   <PageHeader title="Lab" description="Build an agent, save it, and run it here or as a gateway process.">
     {#snippet actions()}

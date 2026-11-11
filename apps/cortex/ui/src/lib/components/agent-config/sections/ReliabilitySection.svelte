@@ -17,7 +17,7 @@
       </span>
   {/snippet}
         <label class="flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" bind:checked={config.fallbacks.enabled} class="accent-primary w-3.5 h-3.5" />
+          <input type="checkbox" bind:checked={config.fallbacks.enabled} class="accent-accent-fill w-3.5 h-3.5" />
           <div>
             <div class="acp-check-t">Enable provider fallbacks</div>
             <div class="acp-hint">Automatically switch to a backup provider on errors</div>
@@ -25,7 +25,7 @@
         </label>
         {#if config.fallbacks.enabled}
           <div>
-            <label for="fallback-providers" class="config-label">Fallback Providers <span class="text-outline/70 normal-case font-normal">(comma-separated, e.g. openai, gemini)</span></label>
+            <label for="fallback-providers" class="config-label">Fallback Providers <span class="text-text-3/70 normal-case font-normal">(comma-separated, e.g. openai, gemini)</span></label>
             <input
               id="fallback-providers"
               value={config.fallbacks.providers.join(", ")}
@@ -36,11 +36,11 @@
           <div>
             <label for="fallback-error-threshold" class="config-label flex items-center justify-between">
               Error Threshold
-              <span class="font-mono text-primary tabular-nums">{config.fallbacks.errorThreshold}</span>
+              <span class="font-mono text-accent tabular-nums">{config.fallbacks.errorThreshold}</span>
             </label>
             <input id="fallback-error-threshold" type="range" min="1" max="10"
               bind:value={config.fallbacks.errorThreshold}
-              class="w-full accent-primary" />
+              class="w-full accent-accent-fill" />
             <div class="flex justify-between acp-hint mt-0.5">
               <span>1 — switch on first error</span><span>10 — very tolerant</span>
             </div>

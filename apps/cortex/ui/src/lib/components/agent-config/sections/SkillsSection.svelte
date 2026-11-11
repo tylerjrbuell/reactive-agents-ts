@@ -54,7 +54,7 @@
       <span>{(config.skills?.paths ?? []).length} path{(config.skills?.paths ?? []).length !== 1 ? "s" : ""}</span>
   {/snippet}
         <div>
-          <label for="skills-paths-lines" class="config-label">Skill directories <span class="text-outline/70 normal-case font-normal">(`withSkills` paths — one per line)</span></label>
+          <label for="skills-paths-lines" class="config-label">Skill directories <span class="text-text-3/70 normal-case font-normal">(`withSkills` paths — one per line)</span></label>
           <textarea id="skills-paths-lines"
             bind:value={skillsPathsDraft}
             onblur={commitSkillsPathsDraft}
@@ -63,7 +63,7 @@
             class="config-input resize-none leading-relaxed font-mono text-[11px]"></textarea>
         </div>
         <div>
-          <label for="skills-activate-lines" class="config-label">Force-activate <span class="text-outline/70 normal-case font-normal">(skill names — one per line; always loaded in full, bypassing task-relevance auto-activation)</span></label>
+          <label for="skills-activate-lines" class="config-label">Force-activate <span class="text-text-3/70 normal-case font-normal">(skill names — one per line; always loaded in full, bypassing task-relevance auto-activation)</span></label>
           <textarea id="skills-activate-lines"
             bind:value={skillsActivateDraft}
             onblur={commitSkillsActivateDraft}

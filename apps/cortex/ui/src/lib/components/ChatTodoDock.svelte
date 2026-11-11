@@ -160,29 +160,29 @@
     color: var(--cortex-text);
   }
   .now-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .done-note { color: var(--cortex-text-muted); }
+  .done-note { color: var(--cortex-text-2); }
   .ok { display: inline-flex; color: var(--cortex-ok); }
   .spin {
     width: 8px; height: 8px; flex: none; border-radius: 9999px; box-sizing: border-box;
-    border: 1.5px solid var(--cortex-border); border-top-color: var(--cortex-accent);
+    border: 1.5px solid var(--cortex-line); border-top-color: var(--cortex-accent);
   }
-  .bar { width: 4.5rem; flex: none; height: 3px; border-radius: 2px; background: var(--cortex-border); overflow: hidden; }
+  .bar { width: 4.5rem; flex: none; height: 3px; border-radius: 2px; background: var(--cortex-line); overflow: hidden; }
   .fill { display: block; height: 100%; background: var(--cortex-ok); transition: width 200ms ease-out; }
 
-  .panel { border-top: 1px solid var(--cortex-border); padding: 0.375rem 0.625rem 0.5rem; }
+  .panel { border-top: 1px solid var(--cortex-line); padding: 0.375rem 0.625rem 0.5rem; }
   .rows { margin: 0; padding: 0; list-style: none; max-height: 11rem; overflow-y: auto; }
   .row { display: flex; align-items: flex-start; gap: 0.25rem; padding: 0.0625rem 0.25rem; border-radius: 4px; line-height: 1.5; }
   .row.current { background: var(--cortex-accent-tint); }
   .row .title { padding-top: 0.0625rem; min-width: 0; overflow-wrap: anywhere; }
-  .row[data-status="pending"] .title { color: var(--cortex-text-muted); }
-  .row[data-status="completed"] .title { color: var(--cortex-text-muted); text-decoration: line-through; opacity: 0.7; }
+  .row[data-status="pending"] .title { color: var(--cortex-text-2); }
+  .row[data-status="completed"] .title { color: var(--cortex-text-2); text-decoration: line-through; opacity: 0.7; }
   .row.current .title { color: var(--cortex-text); font-weight: 600; }
-  .tick { flex: none; display: inline-flex; padding: 0; background: none; border: 0; cursor: pointer; color: var(--cortex-text-muted); }
+  .tick { flex: none; display: inline-flex; padding: 0; background: none; border: 0; cursor: pointer; color: var(--cortex-text-2); }
   .tick:disabled { cursor: default; opacity: 0.6; }
   .ico { display: inline-flex; padding-top: 2px; }
   .row[data-status="completed"] .ico, .row[data-status="in_progress"] .ico { color: var(--cortex-ok); }
 
-  .unmarked { color: var(--cortex-text-muted); font-style: italic; opacity: 0.8; }
+  .unmarked { color: var(--cortex-text-2); font-style: italic; opacity: 0.8; }
   /* Inferred = done by deterministic evidence, not marked: dashed ring instead of the solid check. */
   .ico-inferred {
     display: inline-flex; align-items: center; justify-content: center;
@@ -196,12 +196,12 @@
   .add { display: flex; gap: 0.25rem; flex: 1 1 12rem; min-width: 0; }
   .add-input {
     flex: 1; min-width: 0; padding: 0.1875rem 0.5rem; font: inherit; color: var(--cortex-text);
-    background: var(--cortex-surface-low); border: 1px solid var(--cortex-border); border-radius: 6px;
+    background: var(--cortex-surface-2); border: 1px solid var(--cortex-line); border-radius: 6px;
   }
-  .add-input::placeholder { color: var(--cortex-text-muted); }
+  .add-input::placeholder { color: var(--cortex-text-2); }
   .btn {
-    padding: 0.1875rem 0.5rem; font: inherit; color: var(--cortex-text-muted); cursor: pointer;
-    background: none; border: 1px solid var(--cortex-border); border-radius: 6px;
+    padding: 0.1875rem 0.5rem; font: inherit; color: var(--cortex-text-2); cursor: pointer;
+    background: none; border: 1px solid var(--cortex-line); border-radius: 6px;
   }
   .btn:hover:not(:disabled) { color: var(--cortex-text); border-color: var(--cortex-line-strong); }
   .btn:disabled { cursor: default; opacity: 0.45; }

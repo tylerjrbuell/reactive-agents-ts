@@ -21,7 +21,7 @@
   {/snippet}
         <!-- Timeout -->
         <div>
-          <label for="execution-timeout" class="config-label">Timeout <span class="text-outline/70 normal-case font-normal">(seconds, 0 = none)</span></label>
+          <label for="execution-timeout" class="config-label">Timeout <span class="text-text-3/70 normal-case font-normal">(seconds, 0 = none)</span></label>
           <input id="execution-timeout" type="number" min="0" max="3600" step="5"
             value={Math.round(config.timeout / 1000)}
             oninput={(e) => (config = { ...config, timeout: parseInt((e.target as HTMLInputElement).value || "0") * 1000 })}
@@ -30,7 +30,7 @@
         <!-- Retry policy -->
         <div class="space-y-2">
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" bind:checked={config.retryPolicy.enabled} class="accent-primary w-3.5 h-3.5" />
+            <input type="checkbox" bind:checked={config.retryPolicy.enabled} class="accent-accent-fill w-3.5 h-3.5" />
             <span class="acp-check-t">Enable retry policy</span>
           </label>
           {#if config.retryPolicy.enabled}
@@ -42,7 +42,7 @@
                   class="config-input" />
               </div>
               <div>
-                <label for="retry-backoff-ms" class="config-label">Backoff <span class="text-outline/70 normal-case font-normal">(ms)</span></label>
+                <label for="retry-backoff-ms" class="config-label">Backoff <span class="text-text-3/70 normal-case font-normal">(ms)</span></label>
                 <input id="retry-backoff-ms" type="number" min="100" max="30000" step="100"
                   bind:value={config.retryPolicy.backoffMs}
                   class="config-input" />

@@ -174,38 +174,38 @@
 
 {#snippet runBlock(run: RunTraceView)}
   {@const open = openRuns[run.runId] ?? false}
-  <section class="rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]/50">
+  <section class="rounded-lg border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-2)]/50">
     <div class="flex items-center">
     <button
       type="button"
       onclick={() => toggleRun(run.runId)}
       aria-expanded={open}
-      class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-[var(--cortex-text)] transition-colors hover:bg-[var(--cortex-surface-mid)]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+      class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-[var(--cortex-text)] transition-colors hover:bg-[var(--cortex-surface-3)]/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-fill"
     >
       <span class="inline-flex transition-transform motion-reduce:transition-none" style="transform: rotate({open ? '90deg' : '0deg'})"><Icon name="chevron" size="sm" /></span>
       <Tooltip text={run.name} class="min-w-0 flex-1"><span class="block truncate">{run.depth === 0 ? "Main run" : `Sub-agent: ${run.name}`}</span></Tooltip>
       <span class="shrink-0 rounded px-1.5 py-0.5 text-[11px] {run.status === 'failed' ? 'bg-[var(--cortex-bad-tint)] text-[var(--cortex-bad)]' : run.status === 'running' ? 'bg-[var(--cortex-accent-tint)] text-[var(--cortex-accent)]' : 'bg-[var(--cortex-surface-2)] text-[var(--cortex-text-2)]'}">{run.status}</span>
-      <span class="shrink-0 tabular-nums text-[11px] text-[var(--cortex-text-muted)]">{run.frames.length} {run.frames.length === 1 ? "frame" : "frames"}</span>
+      <span class="shrink-0 tabular-nums text-[11px] text-[var(--cortex-text-2)]">{run.frames.length} {run.frames.length === 1 ? "frame" : "frames"}</span>
     </button>
     <!-- Chat runs are ingested under their task id, which is the tracer's run id, so the run view has them. -->
     <Tooltip text="Open this run in the run view"><a
       href={runViewHref(run.runId)}
       data-testid="chat-trace-run-link"
       aria-label={`Open ${run.depth === 0 ? "main run" : `sub-agent run ${run.name}`} in the run view`}
-      class="mr-1.5 flex flex-shrink-0 items-center rounded p-1 text-[var(--cortex-text-muted)] transition-colors hover:bg-[var(--cortex-surface-mid)] hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+      class="mr-1.5 flex flex-shrink-0 items-center rounded p-1 text-[var(--cortex-text-2)] transition-colors hover:bg-[var(--cortex-surface-3)] hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-fill"
     ><Icon name="external" size="sm" /></a></Tooltip>
     </div>
     {#if open}
-      <div class="space-y-2 border-t border-[color:var(--cortex-border)] p-2">
+      <div class="space-y-2 border-t border-[color:var(--cortex-line)] p-2">
         {#if run.frames.length > 0}
           <div class="h-[26rem]">
             <TracePanel bounded frames={run.frames} timeline={run.timeline} frame={run.frames.at(-1) ?? null} status={run.status === "running" ? "live" : "done"} />
           </div>
         {:else}
-          <p class="m-0 px-1 py-2 text-[12px] text-[var(--cortex-text-muted)]">This run recorded no reasoning steps.</p>
+          <p class="m-0 px-1 py-2 text-[12px] text-[var(--cortex-text-2)]">This run recorded no reasoning steps.</p>
         {/if}
         {#each run.children as child (child.runId)}
-          <div class="ml-3 border-l border-[color:var(--cortex-border)] pl-2">
+          <div class="ml-3 border-l border-[color:var(--cortex-line)] pl-2">
             {@render runBlock(child)}
           </div>
         {/each}
@@ -216,7 +216,7 @@
 
 <svelte:window onkeydown={onEsc} />
 <aside
-  class="chat-drawer-in flex flex-shrink-0 flex-col border-l border-[color:var(--cortex-border)]
+  class="chat-drawer-in flex flex-shrink-0 flex-col border-l border-[color:var(--cortex-line)]
          {overlay ? 'absolute inset-y-0 right-0 z-drawer bg-[var(--cortex-surface-1)] shadow-2xl' : 'relative h-full bg-[var(--cortex-surface-1)]'}"
   style="width: {width}px"
   aria-label="Inspector"
@@ -233,7 +233,7 @@
     tabindex="0"
     onpointerdown={startResize}
     onkeydown={resizeKey}
-    class="absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
+    class="absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors hover:bg-accent-fill/30 focus-visible:bg-accent-fill/40 focus-visible:outline-none"
   ></div>
 
   <div class="flex flex-shrink-0 items-center justify-between px-4 pt-3">
@@ -241,7 +241,7 @@
     <IconButton icon="x" label="Close inspector" onclick={onClose} />
   </div>
 
-  <div role="tablist" aria-label="Inspector sections" class="flex flex-shrink-0 gap-1 border-b border-[color:var(--cortex-border)] px-3 pt-2">
+  <div role="tablist" aria-label="Inspector sections" class="flex flex-shrink-0 gap-1 border-b border-[color:var(--cortex-line)] px-3 pt-2">
     {#each TABS as t (t.id)}
       <button
         type="button"
@@ -250,19 +250,19 @@
         aria-selected={tab === t.id}
         aria-controls="chat-trace-panel"
         onclick={() => (tab = t.id)}
-        class="-mb-px cursor-pointer border-0 border-b-2 bg-transparent px-2.5 py-2 text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary
-               {tab === t.id ? 'border-primary font-medium text-[var(--cortex-text)]' : 'border-transparent text-[var(--cortex-text-muted)] hover:text-[var(--cortex-text)]'}"
+        class="-mb-px cursor-pointer border-0 border-b-2 bg-transparent px-2.5 py-2 text-[12px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-fill
+               {tab === t.id ? 'border-accent-fill font-medium text-[var(--cortex-text)]' : 'border-transparent text-[var(--cortex-text-2)] hover:text-[var(--cortex-text)]'}"
       >{t.label}</button>
     {/each}
   </div>
 
   <div id="chat-trace-panel" role="tabpanel" aria-labelledby="chat-trace-tab-{tab}" class="flex min-h-0 flex-1 flex-col">
     {#if (tab === "steps" || tab === "trace") && assistantTurns.length > 1}
-      <div class="flex-shrink-0 border-b border-[color:var(--cortex-border)] px-4 py-2">
-        <label class="text-[11px] text-[var(--cortex-text-muted)]">
+      <div class="flex-shrink-0 border-b border-[color:var(--cortex-line)] px-4 py-2">
+        <label class="text-[11px] text-[var(--cortex-text-2)]">
           Turn
           <select
-            class="ml-2 rounded border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)] px-2 py-1 text-[12px] text-[var(--cortex-text)]"
+            class="ml-2 rounded border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-2)] px-2 py-1 text-[12px] text-[var(--cortex-text)]"
             value={turn?.id}
             onchange={(e) => {
               const id = Number((e.currentTarget as HTMLSelectElement).value);
@@ -279,8 +279,8 @@
     {#if tab === "context"}
       <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
         <section>
-          <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-muted)]">Session</h4>
-          <dl class="m-0 divide-y divide-[color:var(--cortex-border)] rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]/50">
+          <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-2)]">Session</h4>
+          <dl class="m-0 divide-y divide-[color:var(--cortex-line)] rounded-lg border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-2)]/50">
             {#each [
               ["Session", sessionContext.sessionName],
               ["Provider", sessionContext.provider],
@@ -305,7 +305,7 @@
               ["Last activity", sessionContext.lastActivity ? formatTs(sessionContext.lastActivity) : "–"],
             ] as [label, value] (label)}
               <div class="flex items-baseline justify-between gap-4 px-3 py-2 text-[12px]">
-                <dt class="flex-shrink-0 text-[var(--cortex-text-muted)]">{label}</dt>
+                <dt class="flex-shrink-0 text-[var(--cortex-text-2)]">{label}</dt>
                 <dd class="m-0 min-w-0 text-right tabular-nums text-[var(--cortex-text)]"><Tooltip text={value} class="min-w-0 max-w-full"><span class="block truncate">{value}</span></Tooltip></dd>
               </div>
             {/each}
@@ -314,42 +314,42 @@
 
         {#if sessionContext.contextLimit}
           <section>
-            <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-muted)]">Context window</h4>
-            <div class="rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]/50 px-3 py-2.5">
+            <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-2)]">Context window</h4>
+            <div class="rounded-lg border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-2)]/50 px-3 py-2.5">
               <div class="mb-1.5 flex items-baseline justify-between text-[12px]">
-                <span class="text-[var(--cortex-text-muted)]">Used</span>
+                <span class="text-[var(--cortex-text-2)]">Used</span>
                 <span class="tabular-nums text-[var(--cortex-text)]">{sessionContext.usagePct ?? 0}%{sessionContext.estimated ? " ~" : ""}</span>
               </div>
-              <div class="h-1.5 overflow-hidden rounded-full bg-[var(--cortex-surface-mid)]" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={sessionContext.usagePct ?? 0} aria-label="Context window used">
-                <div class="h-full rounded-full bg-primary" style="width: {Math.min(100, Math.max(0, sessionContext.usagePct ?? 0))}%"></div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-[var(--cortex-surface-3)]" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={sessionContext.usagePct ?? 0} aria-label="Context window used">
+                <div class="h-full rounded-full bg-accent-fill" style="width: {Math.min(100, Math.max(0, sessionContext.usagePct ?? 0))}%"></div>
               </div>
             </div>
           </section>
         {/if}
 
         <section>
-          <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-muted)]">Raw messages</h4>
+          <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-2)]">Raw messages</h4>
           <div class="space-y-2">
             {#each sessionContext.rawMessages as m (m.id)}
-              <details class="rounded-lg border border-[color:var(--cortex-border)] bg-[var(--cortex-surface-low)]/50">
+              <details class="rounded-lg border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-2)]/50">
                 <summary class="cursor-pointer px-3 py-2 text-[12px] text-[var(--cortex-text)]">
                   <span class="font-medium">{m.role}</span> · #{m.id} · {formatTs(m.ts)}
                   {#if m.tokens} · {m.tokens} tok{/if}
                 </summary>
-                <div class="border-t border-[color:var(--cortex-border)] px-3 py-2">
-                  <p class="m-0 mb-2 whitespace-pre-wrap break-words text-[12px] text-[var(--cortex-text-muted)]">{m.content.slice(0, 400)}{m.content.length > 400 ? "…" : ""}</p>
+                <div class="border-t border-[color:var(--cortex-line)] px-3 py-2">
+                  <p class="m-0 mb-2 whitespace-pre-wrap break-words text-[12px] text-[var(--cortex-text-2)]">{m.content.slice(0, 400)}{m.content.length > 400 ? "…" : ""}</p>
                   {#if m.role === "assistant"}
                     <button
                       type="button"
                       onclick={() => { onSelectTurn?.(m.id); tab = "steps"; }}
-                      class="rounded-md border border-[color:var(--cortex-border)] px-2 py-1 text-[11px] text-[var(--cortex-text)] hover:bg-[var(--cortex-surface-mid)]"
+                      class="rounded-md border border-[color:var(--cortex-line)] px-2 py-1 text-[11px] text-[var(--cortex-text)] hover:bg-[var(--cortex-surface-3)]"
                     >Inspect turn</button>
                   {/if}
                 </div>
               </details>
             {/each}
             {#if sessionContext.rawMessages.length === 0}
-              <p class="m-0 text-[12px] text-[var(--cortex-text-muted)]">No messages yet.</p>
+              <p class="m-0 text-[12px] text-[var(--cortex-text-2)]">No messages yet.</p>
             {/if}
           </div>
         </section>
@@ -360,7 +360,7 @@
           <ChatTurnTimeline {turn} />
         {/key}
         {#if calls.length === 0 && !(turn.reasoningSteps?.length)}
-          <p class="m-0 text-[12px] leading-relaxed text-[var(--cortex-text-muted)]">This turn was answered directly: no thinking or tool calls were recorded.</p>
+          <p class="m-0 text-[12px] leading-relaxed text-[var(--cortex-text-2)]">This turn was answered directly: no thinking or tool calls were recorded.</p>
         {/if}
       </div>
     {:else if tab === "trace"}
@@ -375,11 +375,11 @@
           {/each}
         </div>
       {:else if trace.kind === "loading"}
-        <p class="m-0 p-4 text-[12px] text-[var(--cortex-text-muted)]" role="status">Loading trace…</p>
+        <p class="m-0 p-4 text-[12px] text-[var(--cortex-text-2)]" role="status">Loading trace…</p>
       {:else if trace.kind === "error"}
-        <p class="m-0 p-4 text-[12px] text-error" role="alert">Could not load the trace ({trace.message}). Reopen this tab to retry.</p>
+        <p class="m-0 p-4 text-[12px] text-bad" role="alert">Could not load the trace ({trace.message}). Reopen this tab to retry.</p>
       {:else if trace.kind === "empty"}
-        <p class="m-0 p-4 text-[12px] leading-relaxed text-[var(--cortex-text-muted)]">{trace.reason}</p>
+        <p class="m-0 p-4 text-[12px] leading-relaxed text-[var(--cortex-text-2)]">{trace.reason}</p>
       {/if}
     {/if}
   </div>
