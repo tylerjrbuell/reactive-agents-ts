@@ -22,7 +22,6 @@
 import { agentConfigToSource, type AgentConfig } from "@reactive-agents/runtime";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
-import { isDurableBuild } from "./crashed-runs.js";
 import { KEYED_PROVIDER_ENV, providerKeyForAgent } from "./provider-key-store.js";
 
 /** A setting the agent runs with in Cortex that the exported code does not contain. */
@@ -55,7 +54,6 @@ export const CORTEX_OVERLAY_CALLS: readonly string[] = [
   "withTools",
   "withTracing",
   "withOutputSchema",
-  "withUserInteraction",
 ];
 
 const list = (xs: readonly string[]): string => xs.join(", ");
@@ -90,7 +88,6 @@ export function cortexOnlySettings(
   if (params.outputSchema && Object.keys(params.outputSchema).length > 0) {
     add("Structured output schema", "withOutputSchema", "The schema object is code-only.");
   }
-  if (isDurableBuild(params)) add("User questions (durable runs)", "withUserInteraction");
   return out;
 }
 

@@ -97,7 +97,8 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     label: "Execution",
     icon: "timer",
     keywords: "timeout retry cache checkpoint progress ttl timer durable resume crash budget token cost cap output schema structured json webhooks lifecycle",
-    configPaths: ["execution.timeoutMs", "execution.retryPolicy", "budget.tokenLimit", "budget.costLimit", "outputSchemaOptions.onParseFail"],
+    // `userInteraction` (the request_user_input rail) is set with durable runs.
+    configPaths: ["execution.timeoutMs", "execution.retryPolicy", "budget.tokenLimit", "budget.costLimit", "outputSchemaOptions.onParseFail", "userInteraction"],
   },
   { id: "metatools", label: "Meta tools", icon: "wand_stars", keywords: "conductor brief find pulse recall harness suite wand stars", configPaths: ["metaTools"] },
   { id: "reliability", label: "Reliability", icon: "shield", keywords: "fallback provider errors shield backup", configPaths: ["fallbacks"] },

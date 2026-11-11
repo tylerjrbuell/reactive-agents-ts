@@ -86,9 +86,9 @@ describe("Export as code", () => {
 
   it("FULL_CONFIG_BODY: only the true overlays are listed; every data setting is in the code", async () => {
     const { json } = await postSource(makeApp(), FULL_CONFIG_BODY);
-    // FULL_CONFIG_BODY sets durable runs (user-question rail) and no host tools,
-    // scenario, trace dir, output schema or saved key.
-    expect(json.notInCode.map((s) => s.call)).toEqual(["withUserInteraction"]);
+    // FULL_CONFIG_BODY sets durable runs (the user-question rail is now in the code
+    // as `.withUserInteraction()`) and no host tools, scenario, trace dir, output schema or saved key.
+    expect(json.notInCode.map((s) => s.call)).toEqual([]);
     for (const call of [
       ".withAgentTool(", ".withDynamicSubAgents(", ".withTaskContext(", ".withSkills(",
       ".withMinIterations(", ".withVerificationStep(", ".withVerification(", ".withMetaTools(",
@@ -111,7 +111,7 @@ describe("Export as code", () => {
       outputSchema: { type: "object" },
       approvalPolicy: { mode: "detach", tools: ["file-write"] },
     });
-    expect(notes.map((n) => n.call)).toEqual(["withTestScenario", "withTools", "withTracing", "withOutputSchema", "withUserInteraction"]);
+    expect(notes.map((n) => n.call)).toEqual(["withTestScenario", "withTools", "withTracing", "withOutputSchema"]);
     expect(notes.find((n) => n.call === "withTools")?.detail).toBe("session-control");
   });
 

@@ -321,6 +321,10 @@ export function cortexParamsToAgentConfig(
       ...(params.durableRuns?.dir ? { dir: params.durableRuns.dir } : {}),
       ...(params.durableRuns?.checkpointEvery !== undefined ? { checkpointEvery: params.durableRuns.checkpointEvery } : {}),
     };
+    // Agentic-UI interaction rail (`request_user_input` pauses): on with durable
+    // runs, where a pause can persist and resume. An AgentConfig path since
+    // runtime 078365780 (was a Cortex overlay).
+    draft.userInteraction = true;
   }
 
   if (params.guardrails?.enabled === true) {

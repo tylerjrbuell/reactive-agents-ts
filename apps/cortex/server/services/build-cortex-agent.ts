@@ -32,7 +32,6 @@ import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
 import { jsonSchemaToStandardSchema } from "./json-schema-output.js";
 import { providerKeyForAgent } from "./provider-key-store.js";
-import { isDurableBuild } from "./crashed-runs.js";
 
 export interface BuildCortexAgentParams {
   readonly agentName?: string;
@@ -272,9 +271,8 @@ export async function cortexAgentBuilder(
     ) as typeof b;
   }
 
-  // Agentic-UI interaction rail: enables request_user_input pauses. Build-guarded on
-  // durable runs (the AgentConfig carries `durableRuns` when isDurableBuild).
-  if (isDurableBuild(params)) b = b.withUserInteraction();
+  // The agentic-UI interaction rail (request_user_input) rides the AgentConfig
+  // (`userInteraction`, set with durable runs in cortexParamsToAgentConfig).
 
   return b;
 }
