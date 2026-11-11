@@ -850,6 +850,64 @@ describe("Drift S11 — synthesis-gate provenance", () => {
     expect(state.meta.outputSynthesized).toBe(true);
     expect(state.output).toBe(synthTable);
   });
+
+  // Golden `terse-tool-loop` (packages/benchmarks/golden): the terminal verify
+  // gate labels a harness_deliverable terminal `harnessAuthoredOutput`, then
+  // this gate replaces the harness text with an LLM-written synthesis. The
+  // runtime does not ship text labelled harness-authored (owner decision
+  // 2026-11-10, execute-output-derivation.ts), so a stale label blanked a
+  // model-written answer: the run paid for the synthesis call and returned "".
+  // The label describes the text that ships, so the synthesis clears it; the
+  // verifier's warning (the honest record that the model's own turn never
+  // answered) stays.
+  it("a synthesized answer is not labelled harness-authored; the verifier warning stays", async () => {
+    const synthText = "Wrote the log and read it back, it is done.";
+    const synthLayer = TestLLMServiceLayer([{ text: synthText }]);
+    const stall = makeStallAfterToolKernel("line one\nline two");
+    const kernel: ThoughtKernel = (state, ctx) =>
+      state.iteration === 0
+        ? stall(state, ctx)
+        : Effect.succeed(
+            transitionState(state, {
+              status: "done",
+              iteration: state.iteration + 1,
+              meta: { ...state.meta, terminatedBy: "end_turn" },
+            }),
+          );
+    const state = await Effect.runPromise(
+      runKernel(kernel, { task: "read the log back, then report done" }, { ...defaultOptions, maxIterations: 5 }).pipe(
+        Effect.provide(synthLayer),
+      ),
+    );
+    expect(state.meta.terminatedBy).toBe("harness_deliverable");
+    expect(state.meta.outputSynthesized).toBe(true);
+    expect(state.output).toBe(synthText);
+    expect(state.meta.harnessAuthoredOutput).not.toBe(true);
+    expect(typeof state.meta.verificationWarning).toBe("string");
+  });
+
+  it("an empty synthesis keeps the harness-authored label on the de-scaffolded floor", async () => {
+    const emptyLayer = TestLLMServiceLayer([{ text: "" }]);
+    const stall = makeStallAfterToolKernel("line one\nline two");
+    const kernel: ThoughtKernel = (state, ctx) =>
+      state.iteration === 0
+        ? stall(state, ctx)
+        : Effect.succeed(
+            transitionState(state, {
+              status: "done",
+              iteration: state.iteration + 1,
+              meta: { ...state.meta, terminatedBy: "end_turn" },
+            }),
+          );
+    const state = await Effect.runPromise(
+      runKernel(kernel, { task: "read the log back, then report done" }, { ...defaultOptions, maxIterations: 5 }).pipe(
+        Effect.provide(emptyLayer),
+      ),
+    );
+    expect(state.meta.terminatedBy).toBe("harness_deliverable");
+    expect(state.meta.outputSynthesized).not.toBe(true);
+    expect(state.meta.harnessAuthoredOutput).toBe(true);
+  });
 });
 
 // ── Output-ownership invariant: never ship empty output when work was done ────

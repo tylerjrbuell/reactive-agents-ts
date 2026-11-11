@@ -29,6 +29,17 @@ import {
 import { detectContinuationIntent } from "../../kernel/capabilities/verify/quality-utils.js";
 import { commitDeliverable } from "./runner-helpers/deliverable.js";
 
+/**
+ * Meta for a synthesis this gate committed. `harnessAuthoredOutput` describes
+ * the text that ships: the terminal verify gate sets it when the harness
+ * assembled the answer, and the runtime does not ship text carrying it (owner
+ * decision 2026-11-10). The synthesis replaces that text with what the LLM
+ * wrote, so the label is cleared; `verificationWarning` keeps the record that
+ * the model's own turn never answered. The de-scaffold floor below is harness
+ * text and keeps the label.
+ */
+const LLM_WRITTEN_TEXT = { harnessAuthoredOutput: false } as const;
+
 /** Run the §9 output quality gate over a finalized `state` (Effect). */
 export function runOutputQualityGate(args: {
   state: KernelState;
@@ -143,7 +154,7 @@ export function runOutputQualityGate(args: {
               state = commitDeliverable(
                 state,
                 harnessSynthesisDeliverable([], undefined, synthContent),
-                { outputSynthesized: true, outputFormatValidated: true },
+                { outputSynthesized: true, outputFormatValidated: true, ...LLM_WRITTEN_TEXT },
               );
               yield* emitLog({
                 _tag: "warning",
@@ -159,7 +170,7 @@ export function runOutputQualityGate(args: {
               state = commitDeliverable(
                 state,
                 harnessSynthesisDeliverable([], undefined, synthContent),
-                { outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined },
+                { outputSynthesized: true, outputFormatValidated: formatOk, outputFormatReason: !formatOk ? "Format mismatch after synthesis" : !contentOk ? "Content incomplete after synthesis" : undefined, ...LLM_WRITTEN_TEXT },
               );
               yield* emitLog({ _tag: "warning", message: `[output-gate] Synthesis imperfect but using over raw artifacts (format=${formatOk}, content=${contentOk})`, timestamp: new Date() });
             } else {
