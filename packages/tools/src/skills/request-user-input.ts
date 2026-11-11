@@ -16,7 +16,7 @@ export const requestUserInputTool: ToolDefinition = {
   description:
     "Pause this run and ask the human user for input. Use ONLY when you cannot proceed without " +
     "information or a decision that the user must provide (a choice between options, a confirmation, " +
-    "or structured form values). The run suspends durably until the user responds; their response " +
+    "or structured form values). The run waits until the user responds; their response " +
     "arrives as this tool's result. Do not use it for information you can obtain with other tools.",
   parameters: [
     {

@@ -11,6 +11,14 @@ describe("request_user_input tool definition", () => {
     expect(requestUserInputTool.description.length).toBeGreaterThan(20);
   });
 
+  test("description holds for both live and durable answering paths", () => {
+    // A live answer continues the same run, so the model must not be told it suspends durably.
+    expect(requestUserInputTool.description).not.toContain("durabl");
+    expect(requestUserInputTool.description).toContain(
+      "The run waits until the user responds; their response arrives as this tool's result.",
+    );
+  });
+
   test("schema declares kind/prompt/schema params", () => {
     const json = JSON.stringify(requestUserInputTool);
     expect(json).toContain("kind");
