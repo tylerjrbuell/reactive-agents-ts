@@ -167,7 +167,24 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `rateLimiting.maxConcurrent` | `number` | no |  |
 | `rateLimiting.requestsPerMinute` | `number` | no |  |
 | `rateLimiting.tokensPerMinute` | `number` | no |  |
+| `reactiveIntelligence.calibrationDbPath` | `string` | no |  |
+| `reactiveIntelligence.controller.branching` | `boolean` | no |  |
+| `reactiveIntelligence.controller.causalAttribution` | `boolean` | no |  |
+| `reactiveIntelligence.controller.contextCompression` | `boolean` | no |  |
+| `reactiveIntelligence.controller.earlyStop` | `boolean` | no |  |
+| `reactiveIntelligence.controller.strategySwitch` | `boolean` | no |  |
 | `reactiveIntelligence.enabled` | `boolean` | no |  |
+| `reactiveIntelligence.entropy.enabled` | `boolean` | **yes** |  |
+| `reactiveIntelligence.entropy.semanticEntropy` | `boolean` | no |  |
+| `reactiveIntelligence.entropy.tokenEntropy` | `boolean` | no |  |
+| `reactiveIntelligence.entropy.trajectoryTracking` | `boolean` | no |  |
+| `reactiveIntelligence.learning.banditStrategySelection.armIds` | `array` | no |  |
+| `reactiveIntelligence.learning.banditStrategySelection.enabled` | `boolean` | **yes** |  |
+| `reactiveIntelligence.learning.skillDir` | `string` | no |  |
+| `reactiveIntelligence.learning.skillSynthesis` | `boolean` | no |  |
+| `reactiveIntelligence.models` | `object` | no |  |
+| `reactiveIntelligence.notice` | `boolean` | no |  |
+| `reactiveIntelligence.telemetry` | `boolean` \| `object` | no |  |
 | `reasoning.adaptive.enabled` | `boolean` | no |  |
 | `reasoning.adaptive.learning` | `boolean` | no |  |
 | `reasoning.auditRationale` | `boolean` | no |  |

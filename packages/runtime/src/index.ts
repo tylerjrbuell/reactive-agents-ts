@@ -233,6 +233,10 @@ export {
 export {
   resolveModelCalibration,
   resolveModelCalibrationAsync,
+  resolveModelCalibrationWithProvenance,
+  type CalibrationSource,
+  type CalibrationProvenance,
+  type ResolvedModelCalibration,
   type ResolveModelCalibrationOptions,
   type ResolveModelCalibrationAsyncOptions,
 } from "./calibration-resolver.js";
@@ -266,6 +270,7 @@ export {
 export {
   RunStoreLive,
   RunStoreService,
+  defaultDurableRunsDir,
   type RunRecord,
   type RunStatus as RunStoreStatus,
 } from "./services/run-store.js";

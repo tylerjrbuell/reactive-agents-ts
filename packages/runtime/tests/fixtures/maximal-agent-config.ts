@@ -201,7 +201,26 @@ export const MAXIMAL_CONFIG: AgentConfig = {
   mcpServers: [
     { name: "fs", transport: "stdio", command: "mcp-fs", args: ["--root", "/"] },
   ],
-  reactiveIntelligence: { enabled: true },
+  reactiveIntelligence: {
+    enabled: true,
+    entropy: { enabled: true, tokenEntropy: true, semanticEntropy: false, trajectoryTracking: true },
+    controller: {
+      earlyStop: true,
+      branching: false,
+      contextCompression: false,
+      strategySwitch: true,
+      causalAttribution: false,
+    },
+    learning: {
+      skillSynthesis: true,
+      skillDir: "/tmp/ri-skills",
+      banditStrategySelection: { enabled: true, armIds: ["reactive", "plan-execute-reflect"] },
+    },
+    telemetry: { enabled: false, endpoint: "https://telemetry.example.invalid" },
+    notice: false,
+    models: { "local-model": { contextLimit: 8192, tier: "local", logprobSupport: false } },
+    calibrationDbPath: ":memory:",
+  },
   logging: { level: "info", format: "json", output: "console" },
   fallbacks: {
     providers: ["openai"],

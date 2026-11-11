@@ -24,7 +24,7 @@ import type { ReactiveAgentsConfig } from "../../../../types.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 
 export const resolveCalibration = (
-  config: ReactiveAgentsConfig,
+  config: Pick<ReactiveAgentsConfig, "calibration" | "provider" | "defaultModel" | "reactiveIntelligenceOptions">,
 ): Effect.Effect<ModelCalibration | undefined, never> =>
   Effect.gen(function* () {
     const cal = config.calibration;
@@ -35,23 +35,29 @@ export const resolveCalibration = (
         (config.reactiveIntelligenceOptions as { communityCalibration?: boolean } | undefined)?.communityCalibration !== false;
       const modelId = String(config.defaultModel ?? "");
       const observationsBaseDir = process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"];
+      // The scripted test provider never learns from the user's real
+      // ~/.reactive-agents/observations (test runs used to write there, and
+      // un-calibrated models now resolve from local observations): only an
+      // explicit observations dir applies to it.
+      const localObservations = config.provider !== "test" || observationsBaseDir !== undefined;
 
       if (fetchCommunity) {
         return yield* Effect.tryPromise(() =>
           resolveModelCalibrationAsync(modelId, {
             observationsBaseDir,
+            localObservations,
             fetchCommunity: true,
           }),
         ).pipe(
           Effect.catchAll(() =>
             Effect.succeed(
-              resolveModelCalibration(modelId, { observationsBaseDir }),
+              resolveModelCalibration(modelId, { observationsBaseDir, localObservations }),
             ),
           ),
         );
       }
 
-      return resolveModelCalibration(modelId, { observationsBaseDir });
+      return resolveModelCalibration(modelId, { observationsBaseDir, localObservations });
     }
 
     // Caller provided a fully-specified ModelCalibration object

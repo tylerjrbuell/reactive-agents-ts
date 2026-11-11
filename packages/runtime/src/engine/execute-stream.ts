@@ -34,7 +34,6 @@ import {
   rootContext,
 } from "@reactive-agents/core";
 import { hash } from "@reactive-agents/runtime-shim";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import type { ReactiveAgentsConfig } from "../types.js";
@@ -42,7 +41,7 @@ import type { AgentOutcome, AgentResultMetadata } from "../builder/types.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
-import { RunStoreLive, RunStoreService, durableConfigHash } from "../services/run-store.js";
+import { RunStoreLive, RunStoreService, defaultDurableRunsDir, durableConfigHash } from "../services/run-store.js";
 import { installDurableCheckpointing } from "../run-controller.js";
 import { deriveReceiptModelId } from "../builder/helpers.js";
 import { deriveTaskOutcome, deriveMetadataToolCalls, terminalOutcomeFields } from "./finalize/derive-outcome.js";
@@ -415,9 +414,7 @@ export const makeExecuteStream =
       let runStoreCtx: { runId: string; runStoreLayer: Layer.Layer<RunStoreService> } | undefined;
       if (config.durableRuns && options?.runController) {
         const agentId = config.agentId;
-        const dir =
-          config.durableRuns.dir ??
-          join(homedir(), ".reactive-agents", agentId);
+        const dir = config.durableRuns.dir ?? defaultDurableRunsDir(agentId);
         mkdirSync(dir, { recursive: true });
         const dbPath = join(dir, "runs.db");
         const checkpointEvery = config.durableRuns.checkpointEvery ?? 1;

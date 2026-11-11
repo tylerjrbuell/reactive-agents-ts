@@ -215,6 +215,39 @@ describe("dual-API schema-completeness round-trip pins", () => {
     expect(() => agentConfigToJSON(out)).not.toThrow();
   });
 
+  it("withReactiveIntelligence controller options survive builder -> config -> builder", async () => {
+    const { ReactiveAgents } = await import("../src/builder.js");
+    const builder = ReactiveAgents.create()
+      .withName("ripin")
+      .withProvider("anthropic")
+      .withReactiveIntelligence({
+        controller: { earlyStop: false, strategySwitch: true },
+        notice: false,
+        onControllerDecision: () => {},
+      });
+    const cfg = builder.toConfig();
+    // Hooks are code-only; the data options serialize.
+    expect(cfg.reactiveIntelligence).toEqual({
+      enabled: true,
+      controller: { earlyStop: false, strategySwitch: true },
+      notice: false,
+    });
+    expect(() => agentConfigToJSON(cfg)).not.toThrow();
+    const again = (await agentConfigToBuilder(agentConfigFromJSON(agentConfigToJSON(cfg)))).toConfig();
+    expect(again.reactiveIntelligence).toEqual(cfg.reactiveIntelligence);
+  });
+
+  it("reactiveIntelligence options without `enabled` still apply", async () => {
+    const out = (
+      await agentConfigToBuilder({
+        name: "ri-noflag",
+        provider: "anthropic",
+        reactiveIntelligence: { controller: { earlyStop: false } },
+      })
+    ).toConfig();
+    expect(out.reactiveIntelligence?.controller).toEqual({ earlyStop: false });
+  });
+
   it("P4/G12: gateway.accessControl survives JSON decode AND builder round-trip", () => {
     const accessControl = {
       accessPolicy: "allowlist" as const,

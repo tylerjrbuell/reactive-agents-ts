@@ -11,9 +11,7 @@
  */
 
 import { Effect, Layer } from 'effect'
-import { join } from 'node:path'
-import { homedir } from 'node:os'
-import { durableConfigHash } from '../../services/run-store.js'
+import { defaultDurableRunsDir, durableConfigHash } from '../../services/run-store.js'
 import { buildSubAgentSystemPrompt } from '../helpers.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -316,13 +314,11 @@ export const runBuilderBuildEffect = <TOut>(
             // Phase C: when durable runs are enabled, resolve the same
             // checkpoint dir + identity configHash execute-stream computes
             // at run start, so agent.resume(runId) can open the store and
-            // guard config drift. dir derivation MUST mirror
-            // execute-stream.ts:175-179.
+            // guard config drift. The default dir comes from the one
+            // resolver execute-stream also uses (defaultDurableRunsDir).
             durableResume: state._durableRuns
                 ? {
-                      dir:
-                          state._durableRuns.dir ??
-                          join(homedir(), '.reactive-agents', agentId),
+                      dir: state._durableRuns.dir ?? defaultDurableRunsDir(agentId),
                       configHash: durableConfigHash({
                           systemPrompt: composedSystemPrompt,
                           provider: state._provider,

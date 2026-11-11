@@ -286,9 +286,12 @@ export const emitTelemetryRunReport = (
               argValidityRate: toolArgValidityRate,
               actOrAnswer,
             });
-            persistRunObservation(modelId, observation, {
-              baseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
-            });
+            // The scripted test provider writes only to an explicit dir, never
+            // the user's real ~/.reactive-agents/observations.
+            const observationsDir = process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"];
+            if (String(config.provider) !== "test" || observationsDir !== undefined) {
+              persistRunObservation(modelId, observation, { baseDir: observationsDir });
+            }
           } catch {
             // Observer failure must not affect the run
           }

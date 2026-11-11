@@ -73,6 +73,22 @@ Declarative `durableRuns` / builder `withDurableRuns` options:
 | `dir` | `~/.reactive-agents/<agentId>` | Directory for the SQLite run store (`runs.db`). |
 | `checkpointEvery` | `1` | Persist a snapshot every N iterations. |
 
+To read an agent's store from another process (a dashboard, a supervisor),
+resolve the default directory with `defaultDurableRunsDir(agentId)` instead of
+rebuilding the path; the framework uses the same function. Each store operation
+(`listDurableRuns`, or an `Effect.provide(RunStoreLive(dbPath))` of your own)
+opens the SQLite file and closes it when the operation ends, so a host that
+polls the store keeps no files open.
+
+```typescript
+import { join } from "node:path";
+import { Effect } from "effect";
+import { defaultDurableRunsDir, listDurableRuns } from "@reactive-agents/runtime";
+
+const dbPath = join(defaultDurableRunsDir("research-agent"), "runs.db");
+const runs = await Effect.runPromise(listDurableRuns({ dbPath, status: "running" }));
+```
+
 Each checkpoint is a **lossless serialized `KernelState`** — iteration counter,
 reasoning steps, scratchpad, tools used, token accounting, and the provider
 message thread. Checkpoints fire at every iteration boundary on the streaming

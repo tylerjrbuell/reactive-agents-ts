@@ -312,9 +312,14 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // MCP servers
   if (state._mcpServers.length > 0) config["mcpServers"] = [...state._mcpServers];
 
-  // Reactive intelligence
+  // Reactive intelligence: `enabled` plus the options object of
+  // `.withReactiveIntelligence({...})` (hooks were split off when it was applied).
   if (state._enableReactiveIntelligence) {
-    config["reactiveIntelligence"] = { enabled: true };
+    const riOptions =
+      typeof state._reactiveIntelligenceOptions === "object" && state._reactiveIntelligenceOptions !== null
+        ? (state._reactiveIntelligenceOptions as Record<string, unknown>)
+        : {};
+    config["reactiveIntelligence"] = { enabled: true, ...riOptions };
   }
 
   // Logging

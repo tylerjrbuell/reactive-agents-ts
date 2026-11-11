@@ -10,13 +10,38 @@
  * (`serializeKernelState`) so a crashed run can be rehydrated.
  *
  * DB API: `@reactive-agents/runtime-shim` `Database` — `db.exec(sql)` for DDL,
- * `db.prepare(sql).run(...params)` for writes, `db.prepare(sql).get(...params)`
+ * `db.query(sql).run(...params)` for writes, `db.query(sql).get(...params)`
  * for single-row reads (verified against runtime-shim/src/database.ts).
+ * `query` (not `prepare`): Bun caches `query` statements and finalizes them on
+ * `close()`, so the handle really closes; an un-finalized `prepare` statement
+ * keeps the file open after `close()` until garbage collection.
  */
 import { Context, Effect, Layer } from "effect";
-import { Database, hash } from "@reactive-agents/runtime-shim";
+import { Database, hash, type DatabaseLike } from "@reactive-agents/runtime-shim";
 import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+
+/**
+ * The default durable-runs directory of an agent: `~/.reactive-agents/<agentId>`.
+ * The store file is `runs.db` inside it. `.withDurableRuns({ dir })` overrides it.
+ *
+ * The one resolver for this default: the write path (`execute-stream`), the
+ * resume path (`agent.resumeRun` / `listRuns`) and hosts that read an agent's
+ * store from outside (e.g. Cortex crash recovery) all call it, so they cannot
+ * disagree on where a run lives.
+ *
+ * @param agentId - The agent id the runs belong to.
+ * @param home - Home directory override (tests). Default: `os.homedir()`.
+ * @returns The absolute default directory for the agent's `runs.db`.
+ *
+ * @example
+ * ```typescript
+ * const dbPath = join(defaultDurableRunsDir("my-agent"), "runs.db");
+ * ```
+ */
+export const defaultDurableRunsDir = (agentId: string, home: string = homedir()): string =>
+  join(home, ".reactive-agents", agentId);
 
 /**
  * Canonical durable config hash (Phase C config-hash guard).
@@ -356,9 +381,27 @@ interface ToolEffectDbRow {
 /**
  * Live RunStore backed by SQLite at `dbPath` (use `":memory:"` for tests).
  * Schema is created idempotently when the layer is constructed.
+ *
+ * Scoped: the SQLite handle opens when the layer is built and closes when its
+ * scope ends (`Effect.provide(RunStoreLive(path))` closes it as the provided
+ * effect finishes). Each build opens its own handle, so a host that polls the
+ * store does not accumulate open files.
  */
 export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
-  return Layer.sync(RunStoreService, () => {
+  return Layer.scoped(
+    RunStoreService,
+    Effect.map(
+      Effect.acquireRelease(
+        Effect.sync(() => openRunStoreDb(dbPath)),
+        (db) => Effect.sync(() => db.close()),
+      ),
+      makeRunStore,
+    ),
+  );
+}
+
+/** Open the SQLite file at `dbPath` and create the schema idempotently. */
+function openRunStoreDb(dbPath: string): DatabaseLike {
     // Ensure the parent dir exists before opening. The write path (execute-stream)
     // mkdirs, but the READ path (listRuns / listPendingApprovals / resumeRun /
     // approveRun) opens the same db on a fresh agent that has never persisted a
@@ -381,7 +424,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
     // Identity columns on `runs` — guarded ALTER so pre-existing DBs (created
     // before per-user/per-org identity was tracked) pick them up idempotently.
     const runsCols = db
-      .prepare("PRAGMA table_info(runs)")
+      .query("PRAGMA table_info(runs)")
       .all()
       .map((c) => (c as { name: string }).name);
     if (!runsCols.includes("user_id")) {
@@ -463,14 +506,18 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
         PRIMARY KEY (run_id, effect_id)
       )`,
     );
+    return db;
+}
 
+/** The RunStore operations over an open database. */
+function makeRunStore(db: DatabaseLike): RunStore {
     const now = (): number => Date.now();
 
     return {
       createRun: ({ runId, agentId, task, configHash, userId, orgId, forkedFrom, forkedAtIteration, workspace }) =>
         Effect.sync(() => {
           const ts = now();
-          db.prepare(
+          db.query(
             `INSERT OR REPLACE INTO runs
                (run_id, agent_id, task, status, config_hash, created_at, updated_at, user_id, org_id, forked_from, forked_at_iteration, workspace)
              VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -491,7 +538,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
 
       setStatus: (runId, status) =>
         Effect.sync(() => {
-          db.prepare(
+          db.query(
             `UPDATE runs SET status = ?, updated_at = ? WHERE run_id = ?`,
           ).run(status, now(), runId);
         }),
@@ -499,12 +546,12 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       putCheckpoint: (runId, iteration, stateJson) =>
         Effect.sync(() => {
           const ts = now();
-          db.prepare(
+          db.query(
             `INSERT OR REPLACE INTO run_checkpoints
                (run_id, iteration, state_json, created_at)
              VALUES (?, ?, ?, ?)`,
           ).run(runId, iteration, stateJson, ts);
-          db.prepare(
+          db.query(
             `UPDATE runs SET updated_at = ? WHERE run_id = ?`,
           ).run(ts, runId);
         }),
@@ -512,7 +559,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       latestCheckpoint: (runId) =>
         Effect.sync(() => {
           const row = db
-            .prepare(
+            .query(
               `SELECT iteration, state_json, created_at
                  FROM run_checkpoints
                 WHERE run_id = ?
@@ -532,7 +579,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       checkpointAt: (runId, iteration) =>
         Effect.sync(() => {
           const row = db
-            .prepare(
+            .query(
               `SELECT iteration, state_json, created_at
                  FROM run_checkpoints
                 WHERE run_id = ? AND iteration <= ?
@@ -552,7 +599,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       getRun: (runId) =>
         Effect.sync(() => {
           const row = db
-            .prepare(`SELECT ${RUN_COLUMNS} FROM runs WHERE run_id = ?`)
+            .query(`SELECT ${RUN_COLUMNS} FROM runs WHERE run_id = ?`)
             .get(runId) as RunRow | undefined;
           return row ? runRecordOf(row) : undefined;
         }),
@@ -574,14 +621,14 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
           const whereClause =
             conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
           const rows = db
-            .prepare(`SELECT ${RUN_COLUMNS} FROM runs${whereClause} ORDER BY updated_at DESC`)
+            .query(`SELECT ${RUN_COLUMNS} FROM runs${whereClause} ORDER BY updated_at DESC`)
             .all(...params) as RunRow[];
           return rows.map(runRecordOf);
         }),
 
       putApproval: ({ runId, gateId, toolName, argsJson }) =>
         Effect.sync(() => {
-          db.prepare(
+          db.query(
             `INSERT OR REPLACE INTO run_approvals
                (run_id, gate_id, tool_name, args_json, status, reason, created_at, decided_at)
              VALUES (?, ?, ?, ?, 'pending', NULL, ?, NULL)`,
@@ -591,7 +638,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       getPendingApproval: (runId) =>
         Effect.sync(() => {
           const row = db
-            .prepare(
+            .query(
               `SELECT run_id, gate_id, tool_name, args_json, status, reason
                  FROM run_approvals
                 WHERE run_id = ? AND status = 'pending'
@@ -614,7 +661,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       decideApproval: (runId, gateId, status, reason) =>
         Effect.sync(() => {
           const res = db
-            .prepare(
+            .query(
               `UPDATE run_approvals
                   SET status = ?, reason = ?, decided_at = ?
                 WHERE run_id = ? AND gate_id = ? AND status = 'pending'`,
@@ -625,7 +672,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
 
       appendRunEvent: (runId, seq, eventJson) =>
         Effect.sync(() => {
-          db.prepare(
+          db.query(
             `INSERT OR REPLACE INTO run_events
                (run_id, seq, event_json, created_at)
              VALUES (?, ?, ?, ?)`,
@@ -637,7 +684,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
           const rows = (
             afterSeq === undefined
               ? db
-                  .prepare(
+                  .query(
                     `SELECT seq, event_json, created_at
                        FROM run_events
                       WHERE run_id = ?
@@ -645,7 +692,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
                   )
                   .all(runId)
               : db
-                  .prepare(
+                  .query(
                     `SELECT seq, event_json, created_at
                        FROM run_events
                       WHERE run_id = ? AND seq > ?
@@ -663,7 +710,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       nextEventSeq: (runId) =>
         Effect.sync(() => {
           const row = db
-            .prepare(
+            .query(
               `SELECT COALESCE(MAX(seq), 0) + 1 AS next
                  FROM run_events
                 WHERE run_id = ?`,
@@ -674,7 +721,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
 
       putInteraction: ({ runId, interactionId, kind, schemaJson, prompt }) =>
         Effect.sync(() => {
-          db.prepare(
+          db.query(
             `INSERT OR REPLACE INTO run_interactions
                (run_id, interaction_id, kind, schema_json, prompt, status, value_json, created_at, decided_at)
              VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, NULL)`,
@@ -684,7 +731,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       getPendingInteraction: (runId) =>
         Effect.sync(() => {
           const row = db
-            .prepare(
+            .query(
               `SELECT run_id, interaction_id, kind, schema_json, prompt, status, value_json
                  FROM run_interactions
                 WHERE run_id = ? AND status = 'pending'
@@ -708,7 +755,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       decideInteraction: (runId, interactionId, valueJson) =>
         Effect.sync(() => {
           const res = db
-            .prepare(
+            .query(
               `UPDATE run_interactions
                   SET status = 'answered', value_json = ?, decided_at = ?
                 WHERE run_id = ? AND interaction_id = ? AND status = 'pending'`,
@@ -719,7 +766,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
 
       putToolEffect: ({ runId, effectId, toolName, toolCallId, iteration, argsJson }) =>
         Effect.sync(() => {
-          db.prepare(
+          db.query(
             `INSERT OR REPLACE INTO run_effects
                (run_id, effect_id, tool_name, tool_call_id, iteration, args_json, status, result_content, error_text, created_at, committed_at)
              VALUES (?, ?, ?, ?, ?, ?, 'executing', NULL, NULL, ?, NULL)`,
@@ -729,7 +776,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       updateToolEffectOutcome: ({ runId, effectId, status, resultContent, errorText }) =>
         Effect.sync(() => {
           const res = db
-            .prepare(
+            .query(
               `UPDATE run_effects
                   SET status = ?, result_content = ?, error_text = ?, committed_at = ?
                 WHERE run_id = ? AND effect_id = ? AND status = 'executing'`,
@@ -748,7 +795,7 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
       listToolEffects: (runId) =>
         Effect.sync(() => {
           const rows = db
-            .prepare(
+            .query(
               `SELECT run_id, effect_id, tool_name, tool_call_id, iteration, args_json, status,
                       result_content, error_text, created_at, committed_at
                  FROM run_effects
@@ -771,5 +818,4 @@ export function RunStoreLive(dbPath: string): Layer.Layer<RunStoreService> {
           }));
         }),
     };
-  });
 }

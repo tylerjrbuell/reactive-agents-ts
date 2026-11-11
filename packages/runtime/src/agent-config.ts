@@ -443,8 +443,60 @@ export const MCPServerConfigSchema = Schema.Struct({
   headers: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
 });
 
+/**
+ * Reactive intelligence config: `enabled` plus the JSON-safe options of
+ * `.withReactiveIntelligence({...})` (`ReactiveIntelligenceConfig` from
+ * @reactive-agents/reactive-intelligence). Hook callbacks are code-only.
+ */
 export const ReactiveIntelligenceConfigSchema = Schema.Struct({
   enabled: Schema.optional(Schema.Boolean),
+  entropy: Schema.optional(
+    Schema.Struct({
+      enabled: Schema.Boolean,
+      tokenEntropy: Schema.optional(Schema.Boolean),
+      semanticEntropy: Schema.optional(Schema.Boolean),
+      trajectoryTracking: Schema.optional(Schema.Boolean),
+    }),
+  ),
+  controller: Schema.optional(
+    Schema.Struct({
+      earlyStop: Schema.optional(Schema.Boolean),
+      branching: Schema.optional(Schema.Boolean),
+      contextCompression: Schema.optional(Schema.Boolean),
+      strategySwitch: Schema.optional(Schema.Boolean),
+      causalAttribution: Schema.optional(Schema.Boolean),
+    }),
+  ),
+  learning: Schema.optional(
+    Schema.Struct({
+      skillSynthesis: Schema.optional(Schema.Boolean),
+      skillDir: Schema.optional(Schema.String),
+      banditStrategySelection: Schema.optional(
+        Schema.Struct({
+          enabled: Schema.Boolean,
+          armIds: Schema.optional(Schema.Array(Schema.String)),
+        }),
+      ),
+    }),
+  ),
+  telemetry: Schema.optional(
+    Schema.Union(
+      Schema.Boolean,
+      Schema.Struct({ enabled: Schema.Boolean, endpoint: Schema.optional(Schema.String) }),
+    ),
+  ),
+  notice: Schema.optional(Schema.Boolean),
+  models: Schema.optional(
+    Schema.Record({
+      key: Schema.String,
+      value: Schema.Struct({
+        contextLimit: Schema.Number,
+        tier: Schema.Literal("frontier", "local", "unknown"),
+        logprobSupport: Schema.Boolean,
+      }),
+    }),
+  ),
+  calibrationDbPath: Schema.optional(Schema.String),
 });
 
 export const LoggingConfigSchema = Schema.Struct({

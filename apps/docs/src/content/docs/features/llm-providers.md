@@ -314,6 +314,22 @@ import { localModelAdapter, midModelAdapter, defaultAdapter } from "@reactive-ag
 
 **Calibration composes with the tier adapter — it no longer replaces it.** A model that has a calibration file keeps *all* of its tier-adapter hooks (`continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`) and *additionally* gains its calibrated profile overrides (e.g. `toolResultMaxChars`). Calibration is additive: earlier releases dropped every tier hook when a calibration file was present, which strictly weakened the harness for calibrated models.
 
+### Where a calibration comes from
+
+With calibration on (`.withCalibration("auto")`, the default when reasoning is enabled), a model's calibration resolves in three tiers: the calibration file shipped with the framework, then the community profile (when fetched), then this machine's local run observations (`~/.reactive-agents/observations/`, once at least 5 runs are recorded). A model with no shipped file still learns: after 5 recorded runs it resolves to the framework defaults plus the learned fields.
+
+`resolveModelCalibrationWithProvenance(modelId)` returns the calibration and the source of each field (`"shipped"`, `"community"`, `"learned"` or `"default"`):
+
+```typescript
+import { resolveModelCalibrationWithProvenance } from "@reactive-agents/runtime";
+
+const res = resolveModelCalibrationWithProvenance("qwen3:4b");
+res?.calibration.parallelCallCapability; // "partial"
+res?.provenance.parallelCallCapability;  // "learned"
+```
+
+A learned value equal to the earlier tier's value keeps the earlier tier's label.
+
 ## Embeddings
 
 Embeddings are routed through the configured embedding provider regardless of which chat provider you use:

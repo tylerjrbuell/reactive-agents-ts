@@ -345,9 +345,15 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
   if (config.mcpServers && config.mcpServers.length > 0) push(call("withMCP", config.mcpServers));
   // Reactive intelligence is on by default, so an explicit `false` must call
   // withReactiveIntelligence(false); leaving it out would turn RI back on.
-  if (config.features?.reactiveIntelligence || config.reactiveIntelligence?.enabled) {
-    push(call("withReactiveIntelligence"));
-  } else if (config.features?.reactiveIntelligence === false || config.reactiveIntelligence?.enabled === false) {
+  // The options besides `enabled` go into the call's options object; options
+  // without an explicit `enabled` still apply them (RI is on by default).
+  const { enabled: riEnabled, ...riRest } = config.reactiveIntelligence ?? {};
+  const riOptions = defined(riRest);
+  const riOff = config.features?.reactiveIntelligence === false || riEnabled === false;
+  const riOn = config.features?.reactiveIntelligence === true || riEnabled === true;
+  if (riOn || (!riOff && Object.keys(riOptions).length > 0)) {
+    push(optionsCall("withReactiveIntelligence", riOptions));
+  } else if (riOff) {
     push(call("withReactiveIntelligence", false));
   }
   if (config.logging) push(call("withLogging", config.logging));
