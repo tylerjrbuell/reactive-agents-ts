@@ -110,7 +110,9 @@ export function skillActivatedTrigger(via: StagedSkillActivation["via"]): SkillA
  * from the round's ledger commit (round-exit.ts `deriveRoundLedger`), which
  * runs once per round, so each `skill-activated` fact has exactly one event.
  * `iteration` is the iteration the fact is stamped with. The kernel has no
- * confidence tier for a skill, so `confidence` is "unrated".
+ * confidence tier for a skill, so `confidence` is "unrated". `taskId` is the
+ * run's task id (omitted when empty); `sha256` is the activated body's hash,
+ * as staged on the round and recorded on the fact.
  *
  * Best-effort: no EventBus means no event; a publish failure goes to the
  * shared swallow channel (telemetry never fails a round).
@@ -119,6 +121,7 @@ export function emitSkillsActivated(args: {
   readonly activations: readonly StagedSkillActivation[];
   readonly skills: ResolvedSkills | undefined;
   readonly iteration: number;
+  readonly taskId?: string;
 }): Effect.Effect<void, never> {
   if (args.activations.length === 0) return Effect.void;
   return Effect.gen(function* () {
@@ -136,6 +139,8 @@ export function emitSkillsActivated(args: {
             trigger: skillActivatedTrigger(a.via),
             iteration: args.iteration,
             confidence: "unrated",
+            ...(args.taskId ? { taskId: args.taskId } : {}),
+            ...(a.sha256 ? { sha256: a.sha256 } : {}),
           })
           .pipe(
             Effect.catchAll((err) =>

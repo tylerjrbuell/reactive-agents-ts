@@ -126,6 +126,7 @@ export function deriveRoundLedger(
       activations: round.skills,
       skills: state.skillsContext?.skills,
       iteration: state.iteration + 1,
+      taskId: state.taskId,
     });
     // Plan-declared files get the same DECLARED lifecycle fact the runner mints
     // for compile-time requirements (idempotent by id).

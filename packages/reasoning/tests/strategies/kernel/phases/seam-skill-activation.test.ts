@@ -284,8 +284,12 @@ describe("activate-skill on a run with a skill catalog (skills step 4)", () => {
         trigger: "model",
         iteration: facts[0]!.iteration,
         confidence: "unrated",
+        // Run identity and body hash: Cortex ties the event to its run and version.
+        taskId: "seam-skill-activation",
+        sha256: facts[0]!.sha256,
       },
     ]);
+    expect(skillEvents[0]!.sha256).toBe(`sha-${BODY_MARKER}`);
   });
 
   it("a pinned skill (already in the system prompt) answers already-loaded", async () => {
