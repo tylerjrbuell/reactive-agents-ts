@@ -126,6 +126,19 @@ export {
   type SkillActivationView,
   type RunSkillsView,
 } from "./state/skill-activations.js";
+export {
+  SKILL_CONFIDENCE_TIERS,
+  SKILL_LIFECYCLE_TAGS,
+  skillConfidenceLabel,
+  skillLineDiff,
+  skillDiffStats,
+  skillLifecycleEntryOf,
+  type SkillConfidenceTier,
+  type SkillDiffLine,
+  type SkillLifecycleEventLike,
+  type SkillLifecycleKind,
+  type SkillLifecycleEntry,
+} from "./state/skill-evolution.js";
 export { type UiNode, isUiNode, uiTreeSchema, reconcileUiTree } from "./render/tree.js";
 export { type InboxRun, fetchInbox } from "./inbox/controller.js";
 export {
