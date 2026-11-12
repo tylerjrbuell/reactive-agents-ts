@@ -134,10 +134,24 @@ describe("voice runtime", () => {
     const { rt } = runtime();
     expect(get(rt.modeState).phase).toBe("idle");
     const sent: string[] = [];
-    const a = rt.voiceMode({ send: (t) => void sent.push(`a:${t}`), stopRun: () => undefined });
-    const b = rt.voiceMode({ send: (t) => void sent.push(`b:${t}`), stopRun: () => undefined });
+    const answerQuestion = async () => ({ ok: true }) as const;
+    const a = rt.voiceMode({ send: (t) => void sent.push(`a:${t}`), stopRun: () => undefined, answerQuestion });
+    const b = rt.voiceMode({ send: (t) => void sent.push(`b:${t}`), stopRun: () => undefined, answerQuestion });
     expect(a).toBe(b);
     rt.dispatchMode({ type: "settings", autoSpeak: false });
     expect(get(rt.modeState).autoSpeak).toBe(false);
+  });
+
+  test("a question is a no-op before voice mode exists, then reads and tracks its state", () => {
+    const { rt, b } = runtime();
+    const q = { id: "q1", prompt: "Which one?", spec: { kind: "text" } } as const;
+    rt.askQuestion(q);
+    expect(get(rt.questionState).phase).toBe("idle");
+    rt.voiceMode({ send: () => undefined, stopRun: () => undefined, answerQuestion: async () => ({ ok: true }) as const });
+    rt.askQuestion(q);
+    expect(get(rt.questionState).phase).toBe("speaking");
+    expect(b.spoken.length).toBeGreaterThan(0);
+    rt.dispatchQuestion({ type: "cancel" });
+    expect(get(rt.questionState).phase).toBe("idle");
   });
 });

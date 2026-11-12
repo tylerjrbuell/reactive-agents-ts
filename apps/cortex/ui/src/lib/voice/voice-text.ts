@@ -3,6 +3,8 @@
  * chat turn finishing, failing or waiting maps to a voice-mode event. Pure.
  */
 import type { VoiceModeEvent, VoiceWaitingOn } from "@reactive-agents/ui-core";
+import { voiceQuestionSpec } from "./voice-answer.js";
+import type { VoiceQuestion } from "./voice-question.js";
 
 /** What the Settings Test buttons read aloud. */
 export const VOICE_TEST_TEXT = "Cortex voice test. This is how replies will sound.";
@@ -37,6 +39,20 @@ export function waitingOf(turns: readonly VoiceTurnLike[]): VoiceWaitingOn {
   if (last.liveInteraction !== undefined && last.liveInteraction !== null) return "question";
   if ((last.liveApproval !== undefined && last.liveApproval !== null) || last.awaitingApproval === true) return "approval";
   return null;
+}
+
+/**
+ * The live question the latest assistant turn is blocked on, in the shape the voice
+ * question flow takes, or `null` (no question, or the turn is not streaming).
+ * An approval is never a question here: it always needs a click.
+ */
+export function voiceQuestionOf(turns: readonly VoiceTurnLike[]): VoiceQuestion | null {
+  const last = [...turns].reverse().find((t) => t.role === "assistant");
+  const q = last?.liveInteraction;
+  if (last === undefined || last.streaming !== true || typeof q !== "object" || q === null) return null;
+  const o = q as Record<string, unknown>;
+  if (typeof o.interactionId !== "string" || typeof o.prompt !== "string" || typeof o.kind !== "string" || o.prompt.trim() === "") return null;
+  return { id: o.interactionId, prompt: o.prompt, spec: voiceQuestionSpec({ kind: o.kind, schema: o.schema }) };
 }
 
 /** Chat state before and after an update. */

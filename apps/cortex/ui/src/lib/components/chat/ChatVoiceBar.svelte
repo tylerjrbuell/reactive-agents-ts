@@ -18,6 +18,8 @@
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Select from "$lib/components/kit/Select.svelte";
+  import VoiceSpeedStepper from "./VoiceSpeedStepper.svelte";
+  import VoiceQuestionStrip from "./VoiceQuestionStrip.svelte";
   import type { IconName } from "$lib/icons.js";
   import { toastDue } from "$lib/voice/audio-diagnostic.js";
   import type { VoiceInfo } from "@reactive-agents/ui-core";
@@ -106,7 +108,7 @@
       <strong>{phaseLabel}</strong>
     </span>
     <span class="said" aria-live="off">
-      {#if $modeState.phase === "listening" && $interim}{$interim}{:else if $modeState.notice}{$modeState.notice}{:else if $modeState.phase === "thinking" && $modeState.waitingOn}Answer in the thread above, then voice mode carries on.{:else if $modeState.phase === "listening"}Say something. It is sent when you stop talking.{/if}
+      {#if $modeState.phase === "listening" && $interim}{$interim}{:else if $modeState.notice}{$modeState.notice}{:else if $modeState.phase === "thinking" && $modeState.waitingOn === "question"}Answer by voice here, or in the thread above, then voice mode carries on.{:else if $modeState.phase === "thinking" && $modeState.waitingOn}Answer in the thread above, then voice mode carries on.{:else if $modeState.phase === "listening"}Say something. It is sent when you stop talking.{/if}
     </span>
     {#if $modeState.phase === "speaking" || $modeState.phase === "thinking"}
       <Button size="sm" variant="ghost" icon="skip-forward" onclick={() => v.dispatchMode({ type: "interrupt" })}>Interrupt</Button>
@@ -114,6 +116,8 @@
     {#if $modeState.phase === "error"}
       <Button size="sm" onclick={() => v.dispatchMode({ type: "retry" })}>Listen again</Button>
     {/if}
+    <VoiceSpeedStepper />
+    <VoiceQuestionStrip />
     <Button size="sm" icon="stop" onclick={() => v.dispatchMode({ type: "stop" })} data-testid="voice-mode-stop">Stop voice mode</Button>
   </section>
 {:else if reading}

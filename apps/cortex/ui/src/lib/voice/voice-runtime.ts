@@ -19,6 +19,9 @@ import { buildEngines, sttFor, ttsFor, type VoiceEngines } from "./engines.js";
 import { loadPrefs, savePrefs, type PrefsStorage, type VoicePrefs } from "./voice-prefs.js";
 import { EMPTY_VOICE_SETTINGS, voiceApi, type VoiceSettingsPatch, type VoiceSettingsView } from "./voice-api.js";
 import { createVoiceModeHost, type VoiceModeHost } from "./voice-mode-host.js";
+import { createVoiceQuestionHost, type VoiceQuestionHost } from "./voice-question-host.js";
+import { IDLE_VOICE_QUESTION, type VoiceQuestion, type VoiceQuestionEvent, type VoiceQuestionState } from "./voice-question.js";
+import type { VoiceAnswerValue } from "./voice-answer.js";
 import type { VoiceTurnLike } from "./voice-text.js";
 import { transcriptMarkdown } from "./voice-text.js";
 
@@ -36,6 +39,8 @@ export interface VoiceRuntimeEnv {
 export interface VoiceChatHooks {
   readonly send: (text: string) => void | Promise<void>;
   readonly stopRun: () => void | Promise<void>;
+  /** Deliver a spoken answer to the question the agent asked; `ok: false` says why it was not. */
+  readonly answerQuestion: (question: VoiceQuestion, value: VoiceAnswerValue) => Promise<{ readonly ok: true } | { readonly ok: false; readonly error: string }>;
 }
 
 /** The shared voice runtime. */
@@ -64,6 +69,12 @@ export interface VoiceRuntime {
   readonly modeInterim: Readable<string>;
   /** Send an event to voice mode (no-op before it was built). */
   dispatchMode(event: VoiceModeEvent): void;
+  /** Where answering the agent's question by voice is (idle until one is asked). */
+  readonly questionState: Readable<VoiceQuestionState>;
+  /** Read a question aloud and listen for its answer (no-op before voice mode was built). */
+  askQuestion(question: VoiceQuestion): void;
+  /** Send an event to the question flow (no-op before voice mode was built). */
+  dispatchQuestion(event: VoiceQuestionEvent): void;
   /** The STT engine the settings pick (for the composer's dictation). */
   sttEngine(): ReturnType<typeof sttFor>;
 }
@@ -91,6 +102,8 @@ export function createVoiceRuntime(env: VoiceRuntimeEnv): VoiceRuntime {
   let hooks: VoiceChatHooks | null = null;
   const modeState = writable<VoiceModeState>(IDLE_VOICE_MODE);
   const modeInterim = writable("");
+  let questions: VoiceQuestionHost | null = null;
+  const questionState = writable<VoiceQuestionState>(IDLE_VOICE_QUESTION);
 
   return {
     engines,
@@ -141,9 +154,21 @@ export function createVoiceRuntime(env: VoiceRuntimeEnv): VoiceRuntime {
         });
         host.subscribe((s) => modeState.set(s));
         host.dictation.subscribe((d) => modeInterim.set(d.status === "listening" ? d.interim : ""));
+        questions = createVoiceQuestionHost({
+          engine: () => sttFor(engines, get(settings)),
+          language: () => get(prefs).language,
+          silenceMs: () => get(prefs).silenceMs,
+          reader,
+          autoSend: () => get(prefs).autoSend,
+          deliver: (q, value) => (hooks === null ? Promise.resolve({ ok: false, error: "Chat is not open." }) : hooks.answerQuestion(q, value)),
+        });
+        questions.subscribe((s) => questionState.set(s));
       }
       return host;
     },
+    questionState: { subscribe: questionState.subscribe },
+    askQuestion: (question) => questions?.ask(question),
+    dispatchQuestion: (event) => questions?.dispatch(event),
     modeState: { subscribe: modeState.subscribe },
     modeInterim: { subscribe: modeInterim.subscribe },
     dispatchMode: (event) => host?.dispatch(event),

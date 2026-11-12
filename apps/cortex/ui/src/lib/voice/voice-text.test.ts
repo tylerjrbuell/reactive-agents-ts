@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { replyEventOf, transcriptMarkdown, waitingOf, type VoiceTurnLike } from "./voice-text.js";
+import { replyEventOf, transcriptMarkdown, voiceQuestionOf, waitingOf, type VoiceTurnLike } from "./voice-text.js";
 
 const user = (content: string): VoiceTurnLike => ({ role: "user", content });
 const agent = (content: string, extra: Partial<VoiceTurnLike> = {}): VoiceTurnLike => ({ role: "assistant", content, ...extra });
@@ -41,5 +41,24 @@ describe("replyEventOf", () => {
     expect(replyEventOf(sending, { sending: false, turns: [user("q"), agent("part", { cancelled: true })] })).toBeNull();
     expect(replyEventOf(sending, sending)).toBeNull();
     expect(replyEventOf({ sending: false, turns: [] }, { sending: false, turns: [user("q")] })).toBeNull();
+  });
+});
+
+describe("voiceQuestionOf", () => {
+  const ask = (extra: Record<string, unknown> = {}) => ({ runId: "r", interactionId: "i1", kind: "choice", prompt: "Which one?", schema: { options: ["A", "B"] }, ...extra });
+  test("a streaming turn's live question becomes a voice question with its spec", () => {
+    expect(voiceQuestionOf([user("x"), agent("", { streaming: true, liveInteraction: ask() })])).toEqual({
+      id: "i1",
+      prompt: "Which one?",
+      spec: { kind: "choice", options: ["A", "B"] },
+    });
+    expect(voiceQuestionOf([agent("", { streaming: true, liveInteraction: ask({ kind: "confirmation" }) })])?.spec).toEqual({ kind: "boolean" });
+    expect(voiceQuestionOf([agent("", { streaming: true, liveInteraction: ask({ kind: "text" }) })])?.spec).toEqual({ kind: "text" });
+  });
+  test("no question, a finished turn, a blank prompt, or only an approval gives nothing", () => {
+    expect(voiceQuestionOf([user("x")])).toBeNull();
+    expect(voiceQuestionOf([agent("", { liveInteraction: ask() })])).toBeNull();
+    expect(voiceQuestionOf([agent("", { streaming: true, liveInteraction: ask({ prompt: "  " }) })])).toBeNull();
+    expect(voiceQuestionOf([agent("", { streaming: true, liveApproval: { runId: "r" } })])).toBeNull();
   });
 });

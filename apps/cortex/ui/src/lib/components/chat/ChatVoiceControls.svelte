@@ -15,7 +15,9 @@
   import Icon from "$lib/components/kit/Icon.svelte";
   import { createComposerDictation } from "$lib/voice/composer-dictation.js";
   import { sttReadiness, ttsReadiness } from "$lib/voice/voice-status.js";
-  import { replyEventOf, waitingOf, type ChatSnapshot } from "$lib/voice/voice-text.js";
+  import { replyEventOf, voiceQuestionOf, waitingOf, type ChatSnapshot } from "$lib/voice/voice-text.js";
+  import { answerLiveInteraction, type LiveInteraction } from "$lib/chat-live-interaction.js";
+  import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
   import type { DictationState, VoiceWaitingOn } from "@reactive-agents/ui-core";
 
   interface Props {
@@ -99,10 +101,32 @@
   }
 
   // ── Voice mode ────────────────────────────────────────────────────────────
+  // The latest chat turns, so a spoken answer finds the live question it belongs to.
+  let latestTurns: ChatSnapshot["turns"] = [];
   const host = v.voiceMode({
     send: (text) => chatStore.sendMessageStream(text),
     stopRun: () => chatStore.stop(),
+    answerQuestion: async (question, value) => {
+      const live = [...latestTurns].reverse().map((t) => t.liveInteraction as LiveInteraction | undefined).find((q) => q?.interactionId === question.id);
+      if (live === undefined) return { ok: false, error: "The agent is no longer waiting for an answer." };
+      const out = await answerLiveInteraction(live, value);
+      if (out.ok) pendingInteractions.update((list) => list.filter((p) => !(p.runId === live.runId && p.interactionId === live.interactionId)));
+      return out;
+    },
   });
+
+  // A question the agent asks while voice mode waits is read aloud and answered by voice.
+  let askedId: string | null = null;
+  function syncQuestion(turns: ChatSnapshot["turns"], sending: boolean) {
+    const q = host.get().phase === "thinking" && sending ? voiceQuestionOf(turns) : null;
+    if (q !== null && q.id !== askedId) {
+      askedId = q.id;
+      v.askQuestion(q);
+    } else if (q === null && askedId !== null) {
+      askedId = null;
+      v.dispatchQuestion({ type: "cancel" });
+    }
+  }
 
   function toggleMode() {
     if (modeOn) {
@@ -132,8 +156,12 @@
     void v.load();
     let prev: ChatSnapshot = { sending: false, turns: [] };
     let lastWait: VoiceWaitingOn = null;
+    // Voice mode stopping, or leaving its wait (Interrupt), ends a question being asked.
+    const unsubMode = host.subscribe(() => syncQuestion(latestTurns, prev.sending));
     const unsub = chatStore.subscribe((s) => {
       const next: ChatSnapshot = { sending: s.sending, turns: s.activeTurns, error: s.error };
+      latestTurns = next.turns;
+      syncQuestion(next.turns, next.sending);
       if (host.get().phase !== "idle") {
         const ev = replyEventOf(prev, next);
         if (ev !== null) {
@@ -157,6 +185,8 @@
     document.addEventListener("keydown", onKey);
     return () => {
       unsub();
+      unsubMode();
+      v.dispatchQuestion({ type: "cancel" });
       document.removeEventListener("keydown", onKey);
       dictation.abort();
       if (host.get().phase !== "idle") host.dispatch({ type: "stop" });
