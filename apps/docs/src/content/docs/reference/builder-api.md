@@ -907,7 +907,7 @@ List persisted durable runs, optionally filtered by lifecycle status (e.g. `{ st
 
 ### `listPendingApprovals(): Promise<readonly PendingApproval[]>`
 
-List runs waiting for a human decision, each with the pending action (`runId`, `gateId`, `toolName`, `args`, `task`, `updatedAt`): first the runs waiting live in this process, then (with `.withDurableRuns()`) the durable pauses in the store. See [Human-in-the-loop](/guides/durable-hitl/).
+List runs waiting for a human decision, each with the pending action (`runId`, `gateId`, `toolName`, `args`, `task`, `updatedAt`, and `subAgent` when a sub-agent raised the request): first the runs waiting live in this process, then (with `.withDurableRuns()`) the durable pauses in the store. See [Human-in-the-loop](/guides/durable-hitl/).
 
 ### `approveRun(runId, opts?): Promise<AgentResult>`
 
@@ -1006,7 +1006,7 @@ interface ChatOptions {
 
 ### `session(options?): AgentSession`
 
-Start a multi-turn conversation session with auto-managed history. Conversation history is forwarded to the LLM on every subsequent turn.
+Start a multi-turn conversation session with auto-managed history. Conversation history is forwarded to the LLM on every subsequent turn. `session.chat()` and `session.runStream()` take a string or `ContentPart[]` (images, audio), the same as `agent.chat()`.
 
 Pass `{ persist: true, id: "my-session" }` to persist conversation history to SQLite via `SessionStoreService`. Persistent sessions survive process restarts and can be resumed by passing the same `id`. **Persistence requires the memory layer** (`.withMemory()`): the session store is wired only when memory is enabled — without it, `persist: true` silently no-ops and the session stays in-memory only.
 

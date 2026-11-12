@@ -979,7 +979,7 @@ export class ReactiveAgent<TOut = unknown> {
             toolName: string
             args: unknown
             task: string
-            updatedAt: number
+            updatedAt: number; subAgent?: string
         }[]
     > {
         return runFacadeEffect(this.runtime, this._durable().listPendingApprovals())

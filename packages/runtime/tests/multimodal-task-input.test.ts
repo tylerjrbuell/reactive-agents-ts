@@ -264,3 +264,54 @@ describe("agent.runStream / chat with parts", () => {
     }
   });
 });
+
+describe("AgentSession accepts TaskInput", () => {
+  it("session.chat: image part reaches the provider", async () => {
+    register("seer", { vision: true });
+    const captured: Req[] = [];
+    const agent = await build("seer", captured);
+    try {
+      const reply = await agent.session().chat([TEXT, IMAGE]);
+      expect(typeof reply.message).toBe("string");
+      expect(sawImage(captured)).toBe(true);
+    } finally {
+      await agent.dispose();
+    }
+  });
+
+  it("session.chat: no-vision model + image rejects with the typed error", async () => {
+    register("blind", { vision: false });
+    const captured: Req[] = [];
+    const agent = await build("blind", captured);
+    try {
+      const failure = await agent.session().chat([TEXT, IMAGE]).then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect((failure as UnsupportedModalityError).partType).toBe("image");
+      expect(captured.length).toBe(0);
+    } finally {
+      await agent.dispose();
+    }
+  });
+
+  it("session.runStream: image part reaches the provider", async () => {
+    register("seer", { vision: true });
+    const captured: Req[] = [];
+    const agent = await build("seer", captured);
+    try {
+      for await (const _ of agent.session().runStream([TEXT, IMAGE])) void _;
+      expect(sawImage(captured)).toBe(true);
+    } finally {
+      await agent.dispose();
+    }
+  });
+});
+
+describe("listPendingApprovals declared type", () => {
+  it("includes optional subAgent", () => {
+    type Item = Awaited<ReturnType<import("../src/reactive-agent.js").ReactiveAgent["listPendingApprovals"]>>[number];
+    const item: Item = { runId: "r", gateId: "g", toolName: "t", args: {}, task: "x", updatedAt: 1, subAgent: "researcher" };
+    expect(item.subAgent).toBe("researcher");
+  });
+});

@@ -12,6 +12,7 @@ import {
 export type { HistoryOverflowHandler } from "./gateway-context-formatting.js";
 import type { RunHandle } from "./run-controller.js";
 import { ChatEngine } from "./chat/engine.js";
+import { taskInputText, type TaskInput } from "./agent/task-input.js";
 import { ChatEngineCapabilityError } from "./chat/engine-errors.js";
 import type { StreamDensity } from "./stream-types.js";
 import { originCarry, planPosture, type TodoSeedItem } from "./chat/todo-seed.js";
@@ -414,7 +415,7 @@ export class AgentSession {
    * Engine-backed sessions delegate to the held {@link ChatEngine}; legacy
    * sessions retain the pre-engine windowing + recording behavior.
    */
-  async chat(message: string, options?: ChatOptions): Promise<ChatReply> {
+  async chat(message: TaskInput, options?: ChatOptions): Promise<ChatReply> {
     if (this.engine) {
       return this.engine.turn(message, options);
     }
@@ -425,8 +426,9 @@ export class AgentSession {
     const historyForChat = this.onOverflow
       ? await applyHistoryWindowWithOverflow(this._history, this.onOverflow)
       : this._history;
-    const reply = await this.chatFn!(message, historyForChat, options);
-    this._history.push({ role: "user", content: message, timestamp: Date.now() });
+    const text = taskInputText(message);
+    const reply = await this.chatFn!(text, historyForChat, options);
+    this._history.push({ role: "user", content: text, timestamp: Date.now() });
     this._history.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
     if (this.onSave) await this.onSave(this._history);
     return reply;
@@ -467,7 +469,7 @@ export class AgentSession {
    * only (legacy `chatFn` sessions have no streaming capability).
    */
   runStream(
-    message: string,
+    message: TaskInput,
     options?: { readonly density?: StreamDensity; readonly signal?: AbortSignal; readonly posture?: RunPosture; readonly origin?: RunOrigin } & WorkspaceOption & SkillsRunOption,
   ): RunHandle {
     if (!this.engine) {
