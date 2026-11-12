@@ -40,7 +40,7 @@ cost <- core, judgment, llm-provider, memory
 identity, observability, a2a, trace, observe <- core
 interaction <- core, judgment, observability, reasoning
 eval <- core, llm-provider, judgment
-gateway <- core, llm-provider, tools
+gateway <- core, runtime-shim
 channels <- core, gateway
 testing (dev only) <- core, llm-provider
 health <- runtime-shim

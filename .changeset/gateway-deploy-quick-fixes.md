@@ -1,10 +1,10 @@
 ---
-"@reactive-agents/gateway": patch
-"@reactive-agents/channels": patch
-"@reactive-agents/cli": patch
+"@reactive-agents/gateway": minor
+"@reactive-agents/channels": minor
+"@reactive-agents/cli": minor
 ---
 
-Gateway and deploy hardening.
+Gateway and deploy hardening. **Breaking:** `allowedSenders` / `blockedSenders` entries must now carry a platform prefix (`signal:+1555…`, `telegram:123…`); bare entries no longer match, so existing allowlists fail closed until migrated. Cloud Run deploys are authenticated by default (`--allow-unauthenticated` to opt out).
 
 - Gateway: the hourly action cap (`maxActionsPerHour`) and daily token budget now reset when their window elapses. Before, a long-running gateway stopped acting after 30 runs until restarted.
 - Channel access control is now keyed by `platform:userId` (for example `signal:+15551234567`), so ids on different platforms cannot collide, and a channel event with an empty sender is denied. **Migration:** prefix existing `allowedSenders` / `blockedSenders` entries with the platform; bare entries no longer match platform-tagged senders. `replyToUnknown` is now sent by `ChannelService` (`replyToUnknown` dep) to allowlist-denied senders; the MCP-push Signal/Telegram path still does not send it.
