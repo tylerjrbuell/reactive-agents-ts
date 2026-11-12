@@ -15,6 +15,7 @@ export interface SettingsSection {
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: "defaults", label: "Defaults" },
   { id: "providers", label: "Providers" },
+  { id: "web-search", label: "Web search" },
   { id: "voice", label: "Voice" },
   { id: "notifications", label: "Notifications" },
   { id: "appearance", label: "Appearance" },

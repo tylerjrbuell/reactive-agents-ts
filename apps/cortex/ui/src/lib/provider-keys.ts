@@ -70,6 +70,20 @@ export function parseKeyStatus(v: unknown): ProviderKeyStatus | null {
  */
 export const VOICE_KEY_IDS: readonly string[] = ["voice-stt", "voice-tts"];
 
+/** Key-store id prefix of the web-search provider keys (Settings · Web search). */
+export const WEB_SEARCH_KEY_PREFIX = "websearch-";
+
+/** True for a web-search provider key id. */
+export const isWebSearchKey = (provider: string): boolean => provider.startsWith(WEB_SEARCH_KEY_PREFIX);
+
+/** Which Settings panel lists a key: LLM providers, or web-search providers. */
+export type KeyScope = "llm" | "web-search";
+
+/** The keys one panel lists (voice keys are already out of the response). */
+export function keysInScope(list: readonly ProviderKeyStatus[], scope: KeyScope): ProviderKeyStatus[] {
+  return list.filter((p) => isWebSearchKey(p.provider) === (scope === "web-search"));
+}
+
 /** `GET /api/settings/keys` body from untrusted JSON (voice endpoint keys left out). */
 export function parseKeysResponse(v: unknown): ProviderKeysResponse {
   if (!isRecord(v) || !Array.isArray(v.providers)) return { providers: [], dir: "" };
@@ -95,6 +109,10 @@ export interface KeyRowView {
 }
 
 const ROW_LABELS: Readonly<Record<string, string>> = {
+  "websearch-tavily": "Tavily",
+  "websearch-brave": "Brave Search",
+  "websearch-serper": "Serper (Google)",
+  "websearch-keenable": "Keenable",
   ollama: "Ollama Cloud (API key)",
   typesafe: "TypeSafe (Jev judgment)",
 };
@@ -107,6 +125,12 @@ export function keyRowLabelOf(provider: string): string | undefined {
 const ROW_HINTS: Readonly<Record<string, string>> = {
   ollama:
     "For Ollama Cloud or an authenticated remote server. Set the endpoint below (Ollama Cloud preset); the key is sent to that host only and never to a local server.",
+  ...Object.fromEntries(
+    ["websearch-tavily", "websearch-brave", "websearch-serper", "websearch-keenable"].map((id) => [
+      id,
+      "Agents' web-search tool reads this key from the server's environment only, so a saved key is stored and testable here but is not yet passed to agents. Set the variable where Cortex runs.",
+    ]),
+  ),
   typesafe: "Used by Lab · Judgment when the TypeSafe backend runs. Test reads your model list; it asks no judgment, so nothing is billed.",
 };
 
@@ -118,10 +142,22 @@ export function keyRowHintOf(provider: string): string | null {
 /** The row text for one provider. */
 export function keyRowOf(s: ProviderKeyStatus): KeyRowView {
   const envName = s.env[0] ?? `${s.provider.toUpperCase()}_API_KEY`;
-  const showPrefer = s.stored !== null && s.envSet;
+  const showPrefer = s.stored !== null && s.envSet && !isWebSearchKey(s.provider);
   let note: string | null = null;
   if (s.unreadable) {
     note = "A saved key could not be decrypted (the key file was replaced). Save the key again.";
+  }
+  if (isWebSearchKey(s.provider) && s.source !== "env") {
+    // Web-search keys do not reach agents yet, so never say agents use a saved one.
+    return {
+      envName,
+      badge: s.stored ? { tone: "neutral", text: "Saved, not used yet" } : { tone: "bad", text: "No key" },
+      summary: s.stored
+        ? `Saved key ${s.stored.masked}. Agents still read ${envName} from the server's environment.`
+        : `Set ${envName} in the server's environment, or save a key here to keep it and test it.`,
+      note,
+      showPrefer: false,
+    };
   }
   if (s.source === "stored" && s.stored) {
     return {
@@ -158,7 +194,8 @@ export function keyRowOf(s: ProviderKeyStatus): KeyRowView {
 export function testResultLine(r: ProviderKeyTestResult): { readonly tone: "ok" | "bad"; readonly text: string } {
   if (r.ok) {
     const what = r.tried === "typed" ? "This key" : r.tried === "stored" ? "The saved key" : "The environment key";
-    const n = r.models ?? 0;
+    if (r.models === undefined) return { tone: "ok", text: `${what} works: a test search succeeded.` };
+    const n = r.models;
     return { tone: "ok", text: `${what} works: ${n} model${n === 1 ? "" : "s"} listed.` };
   }
   return { tone: "bad", text: r.error?.trim() || "The provider refused the key." };

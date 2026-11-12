@@ -22,6 +22,7 @@ import {
   OLLAMA_AUTH_MESSAGE,
 } from "../services/ollama-cloud.js";
 import { listJudgmentCatalog, TYPESAFE_KEY_ID, type ListJudgmentCatalog } from "../services/cortex-judgment.js";
+import { isWebSearchKeyId, probeWebSearchKey, type WebSearchProbe } from "../services/web-search-keys.js";
 import {
   isKeyedProvider,
   redactKey,
@@ -68,6 +69,7 @@ export function providerKeysRouter(
   store: ProviderKeyStore,
   listModels: ListModelsWithKey = defaultListModels,
   listCatalog: ListJudgmentCatalog = listJudgmentCatalog,
+  probeWebSearch: WebSearchProbe = probeWebSearchKey,
 ) {
   const reply = <A>(
     r: { readonly ok: true; readonly value: A } | { readonly ok: false; readonly error: ProviderKeyStoreError },
@@ -109,6 +111,17 @@ export function providerKeysRouter(
         }
         const typed = body?.apiKey?.trim() || undefined;
         const status = store.status(provider);
+        // A web-search key is checked with a one-result search against that provider's API.
+        if (isWebSearchKeyId(provider)) {
+          const stored = typed ? undefined : store.storedKey(provider);
+          const envNames = status.ok ? status.value.env : [];
+          const envKey = typed || stored ? undefined : envNames.map((n) => process.env[n]?.trim()).find(Boolean);
+          const key = typed ?? stored ?? envKey;
+          const via: ProviderKeyTestResult["tried"] = typed ? "typed" : stored ? "stored" : envKey ? "env" : "none";
+          if (!key) return { ok: false, tried: "none", error: "No key to test: type one or save one first." };
+          const p = await probeWebSearch(provider, key);
+          return p.ok ? { ok: true, tried: via } : { ok: false, tried: via, error: redactKey(p.error, key) };
+        }
         const agentKey = typed ? undefined : store.keyForAgent(provider);
         const apiKey = typed ?? agentKey;
         const tried: ProviderKeyTestResult["tried"] = typed

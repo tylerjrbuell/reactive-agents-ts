@@ -35,6 +35,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { effectiveOllamaEndpoint, ollamaKeyApplies } from "./ollama-cloud.js";
+import { WEB_SEARCH_KEYED_ENV } from "./web-search-keys.js";
 
 /** File holding the 32-byte AES key. */
 export const SECRET_KEY_FILE = "secret.key";
@@ -70,6 +71,10 @@ export const KEYED_PROVIDER_ENV: Readonly<Record<string, readonly string[]>> = {
   // `api/voice.ts`; the Providers panel hides them (`isVoiceKeyId`, UI `provider-keys.ts`).
   [VOICE_STT_KEY_ID]: ["CORTEX_VOICE_STT_API_KEY"],
   [VOICE_TTS_KEY_ID]: ["CORTEX_VOICE_TTS_API_KEY"],
+  // Web-search provider keys (Settings · Web search): `websearch-<provider>`. The framework's
+  // web-search tool reads them from the process environment only, so they do not reach agents
+  // (`AGENT_APPLIES` leaves them out); see `web-search-keys.ts`.
+  ...WEB_SEARCH_KEYED_ENV,
 };
 
 /**

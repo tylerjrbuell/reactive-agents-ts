@@ -308,6 +308,10 @@
           </SettingsRow>
         </SettingsGroup>
 
+        <SettingsGroup id="web-search" title="Web search" description="API keys for the web-search tool's providers (Tavily, Brave, Serper, Keenable). DuckDuckGo instant answers need none.">
+          <ProviderKeysPanel scope="web-search" labelOf={providerLabelOf} />
+        </SettingsGroup>
+
         <SettingsGroup id="voice" title="Voice" description="Talk to the agent and have it read aloud. Browser engines need nothing installed; a server engine uses any OpenAI-compatible speech endpoint, local or cloud.">
           <VoiceSettingsPanel />
         </SettingsGroup>

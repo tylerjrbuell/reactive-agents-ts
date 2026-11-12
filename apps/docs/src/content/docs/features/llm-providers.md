@@ -153,6 +153,7 @@ LITELLM_BASE_URL=http://localhost:4000   # LiteLLM proxy endpoint
 TAVILY_API_KEY=tvly-...                  # web search — Tavily (primary)
 BRAVE_SEARCH_API_KEY=BSA...              # web search — Brave (fallback)
 SERPER_API_KEY=...                       # web search — Serper/Google (fallback)
+KEENABLE_API_KEY=...                     # web search — Keenable (fallback)
 
 LLM_DEFAULT_MODEL=claude-sonnet-4-6
 LLM_DEFAULT_TEMPERATURE=0.7
@@ -162,19 +163,20 @@ LLM_TIMEOUT_MS=30000
 
 ## Web Search Providers
 
-The built-in `web-search` tool supports four providers that are tried in priority order. The first provider that returns usable results wins; the rest are skipped. No configuration is required to use DuckDuckGo (the no-key fallback).
+The built-in `web-search` tool supports five providers that are tried in priority order. The first provider that returns usable results wins; the rest are skipped. No configuration is required to use DuckDuckGo (the no-key fallback).
 
 | Provider       | Env var                                       | API key required | Notes                                          |
 | -------------- | --------------------------------------------- | :--------------: | ---------------------------------------------- |
 | **Tavily**     | `TAVILY_API_KEY`                              | Yes              | High-quality results; primary recommended provider |
 | **Brave**      | `BRAVE_SEARCH_API_KEY` or `BRAVE_API_KEY`     | Yes              | Full-web coverage; good Tavily fallback        |
 | **Serper**     | `SERPER_API_KEY`                              | Yes              | Google-backed results; 2,500 free queries/month, low-cost plans |
+| **Keenable**   | `KEENABLE_API_KEY`                            | Yes              | Tried after Serper and before DuckDuckGo       |
 | **DuckDuckGo** | *(none)*                                      | No               | Instant answers only; limited coverage but always available |
 
 ### Provider chain
 
 ```
-Tavily → Brave → Serper → DuckDuckGo
+Tavily → Brave → Serper → Keenable → DuckDuckGo
 ```
 
 Each provider is skipped automatically if its API key is not set. If a provider returns an error or no usable rows, the chain continues to the next one.
@@ -195,7 +197,7 @@ const agent = await ReactiveAgents.create()
   .withTools(["web-search"])
   .build();
 
-// The agent will now use Tavily → Brave → Serper → DuckDuckGo as its search chain
+// The agent will now use Tavily → Brave → Serper → Keenable → DuckDuckGo as its search chain
 ```
 
 ## Live Model Discovery

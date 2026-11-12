@@ -13,6 +13,8 @@
   import {
     keyRowHintOf,
     keyRowOf,
+    keysInScope,
+    type KeyScope,
     providerKeysApi,
     testResultLine,
     withStatus,
@@ -28,9 +30,11 @@
     labelOf: (provider: string) => string;
     /** Called after a key is saved or removed (e.g. to refresh key badges). */
     onchange?: () => void;
+    /** Which keys this panel lists: LLM providers (default) or web-search providers. */
+    scope?: KeyScope;
   }
 
-  let { labelOf, onchange }: Props = $props();
+  let { labelOf, onchange, scope = "llm" }: Props = $props();
 
   const api = providerKeysApi(CORTEX_SERVER_URL);
   let statuses = $state<ProviderKeyStatus[]>([]);
@@ -141,7 +145,7 @@
 {:else if loadError}
   <div class="pk-row"><span class="pk-bad">Keys unavailable: {loadError}</span></div>
 {:else}
-  {#each statuses as s (s.provider)}
+  {#each keysInScope(statuses, scope) as s (s.provider)}
     {@const row = keyRowOf(s)}
     {@const result = results[s.provider]}
     {@const formId = `pk-input-${s.provider}`}

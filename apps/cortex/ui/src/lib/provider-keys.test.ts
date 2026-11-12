@@ -3,6 +3,7 @@ import {
   keyRowHintOf,
   keyRowLabelOf,
   keyRowOf,
+  keysInScope,
   parseKeysResponse,
   providerKeysApi,
   testResultLine,
@@ -34,6 +35,27 @@ describe("Ollama Cloud and TypeSafe rows", () => {
     const row = keyRowOf({ ...base, provider: "ollama", env: ["OLLAMA_API_KEY"], envSet: true, source: "env" });
     expect(row.summary).toContain("OLLAMA_API_KEY");
     expect(row.badge.text).toBe("Environment");
+  });
+});
+
+describe("web-search key rows", () => {
+  const ws: ProviderKeyStatus = { ...base, provider: "websearch-keenable", env: ["KEENABLE_API_KEY"], appliesToAgents: false };
+  test("scopes split LLM and web-search keys", () => {
+    const list = [base, ws, { ...ws, provider: "websearch-tavily" }];
+    expect(keysInScope(list, "llm").map((p) => p.provider)).toEqual(["openai"]);
+    expect(keysInScope(list, "web-search").map((p) => p.provider)).toEqual(["websearch-keenable", "websearch-tavily"]);
+  });
+  test("named, and never claims agents use a saved key", () => {
+    expect(keyRowLabelOf("websearch-keenable")).toBe("Keenable");
+    const row = keyRowOf({ ...ws, stored: saved, source: "stored" });
+    expect(row.badge.text).toBe("Saved, not used yet");
+    expect(row.summary).toContain("KEENABLE_API_KEY");
+    expect(row.summary).not.toContain("Agents use the saved");
+    expect(row.showPrefer).toBe(false);
+    expect(keyRowHintOf("websearch-keenable")).toContain("environment only");
+  });
+  test("a web-search Test line has no model count", () => {
+    expect(testResultLine({ ok: true, tried: "stored" }).text).toBe("The saved key works: a test search succeeded.");
   });
 });
 
