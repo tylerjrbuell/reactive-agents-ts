@@ -114,16 +114,15 @@ export class RouterEngine {
 
   // ── Events ──────────────────────────────────────────────────────────────
 
-  /** Router events ride the core `Custom` member until core adds typed ones. Never carries text or secrets. */
-  private emit(type: string, payload: Record<string, unknown>): Effect.Effect<void> {
+  /** Publish a typed router event. Strict-only: non-strict (ChannelService) keeps its original event stream. Never carries text or secrets. */
+  private emit(event: AgentEvent): Effect.Effect<void> {
     const bus = this.deps.eventBus;
-    // Non-strict (ChannelService) keeps its original event stream: router events are strict-only.
-    return bus && this.deps.strict ? bus.publish({ _tag: "Custom", type, payload }) : Effect.void;
+    return bus && this.deps.strict ? bus.publish(event) : Effect.void;
   }
 
   private onChannelFailed(adapterId: string, error: ChannelError): Effect.Effect<void> {
     return error.kind === "conflict"
-      ? this.emit("ChannelOwnershipChanged", { channelId: adapterId, state: "conflict" })
+      ? this.emit({ _tag: "ChannelOwnershipChanged", channelId: adapterId, state: "conflict" })
       : Effect.void;
   }
 
@@ -212,7 +211,7 @@ export class RouterEngine {
       const route = matchRoute(routes, input);
       if (!route) {
         self.unrouted += 1;
-        yield* self.emit("ChannelUnrouted", { channelId: adapterId, simulated });
+        yield* self.emit({ _tag: "ChannelUnrouted", channelId: adapterId, simulated });
         return { _tag: "Unrouted" } as const;
       }
 
@@ -220,14 +219,14 @@ export class RouterEngine {
         ? deps.access(route, platform, msg, adapterId)
         : decideRouteAccess(route, platform, msg.senderId));
       if (!verdict.allowed) {
-        yield* self.emit("ChannelRouteDenied", { routeId: route.id, channelId: adapterId, simulated });
+        yield* self.emit({ _tag: "ChannelRouteDenied", routeId: route.id, channelId: adapterId, simulated });
         if (verdict.reply !== undefined && !simulated && self.hub.has(adapterId)) {
           yield* self.reply(adapterId, msg, verdict.reply, taskId).pipe(Effect.ignore);
         }
         return { _tag: "Denied", routeId: route.id, reason: verdict.reason } as const;
       }
       const role = verdict.role;
-      yield* self.emit("ChannelRouteMatched", { routeId: route.id, channelId: adapterId, role, simulated });
+      yield* self.emit({ _tag: "ChannelRouteMatched", routeId: route.id, channelId: adapterId, role, simulated });
 
       if (deps.strict) {
         if (!groupAllowed(route, input)) return yield* self.drop("group", route.id, simulated);
@@ -250,7 +249,7 @@ export class RouterEngine {
 
   private drop(reason: DropReason, routeId: string, simulated: boolean): Effect.Effect<RouteOutcome> {
     this.dropped[reason] += 1;
-    return Effect.as(this.emit("ChannelTurnDropped", { routeId, reason, simulated }), {
+    return Effect.as(this.emit({ _tag: "ChannelTurnDropped", routeId, reason, simulated }), {
       _tag: "Dropped",
       reason,
       routeId,
@@ -361,7 +360,7 @@ export class RouterEngine {
     const self = this;
     const { adapterId, msg, route, role, key, taskId, simulated } = args;
     return Effect.gen(function* () {
-      yield* self.emit("ChannelTurnStarted", { routeId: route.id, role, simulated });
+      yield* self.emit({ _tag: "ChannelTurnStarted", routeId: route.id, role, simulated });
       const turn: RoutedTurn = {
         text: msg.content,
         parts: partsOf(msg),
@@ -394,11 +393,12 @@ export class RouterEngine {
       );
       self.totalProcessed += 1;
       if (Either.isLeft(attempt)) {
-        yield* self.emit("ChannelTurnCompleted", { routeId: route.id, role, ok: false, reason: attempt.left.reason, simulated });
+        yield* self.emit({ _tag: "ChannelTurnCompleted", routeId: route.id, role, ok: false, reason: attempt.left.reason, simulated });
         return { _tag: "Failed", routeId: route.id, role, error: attempt.left } as const;
       }
       const reply: RoutedReply = attempt.right;
-      yield* self.emit("ChannelTurnCompleted", {
+      yield* self.emit({
+        _tag: "ChannelTurnCompleted",
         routeId: route.id,
         role,
         ok: true,
@@ -406,6 +406,7 @@ export class RouterEngine {
         ...(reply.tokens !== undefined ? { tokens: reply.tokens } : {}),
         ...(reply.costUsd !== undefined ? { costUsd: reply.costUsd } : {}),
         ...(reply.runId !== undefined ? { runId: reply.runId } : {}),
+        ...(reply.agentId !== undefined ? { agentId: reply.agentId } : {}),
       });
       if (!reply.text || simulated || !self.hub.has(adapterId)) {
         return { _tag: "Answered", routeId: route.id, role, reply } as const;

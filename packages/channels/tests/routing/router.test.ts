@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
+import type { AgentEvent } from "@reactive-agents/core";
 import { TelegramChannelAdapter } from "../../src/adapters/telegram.js";
 import { channelError } from "../../src/errors.js";
 import { makeFileLeases, makeMemoryLeases } from "../../src/routing/lease.js";
@@ -455,5 +456,46 @@ describe("the real Telegram adapter works through the router", () => {
         expect(fake.methods.filter((m) => m === "getUpdates").length).toBe(1);
       }),
     );
+  });
+});
+
+describe("typed router events", () => {
+  const collector = () => {
+    const seen: AgentEvent[] = [];
+    return { seen, bus: { publish: (e: AgentEvent) => Effect.sync(() => void seen.push(e)) } };
+  };
+
+  test("route, turn and unrouted events are typed members, not Custom", async () => {
+    const chan = makeScriptedAdapter({ id: "chan" });
+    const { seen, bus } = collector();
+    await withRouter({ channels: [chan], routes: [route("r1")], agents: makeFakeAgents().resolver, eventBus: bus }, (router) =>
+      Effect.gen(function* () {
+        yield* router.simulate(env({ userId: "alice" }), "chan");
+        yield* router.simulate(env({ userId: "mallory" }), "chan");
+        yield* router.simulate(env({ userId: "alice", channelId: "elsewhere" }), "other");
+      }),
+    );
+    const tags = seen.map((e) => e._tag);
+    expect(tags).toContain("ChannelRouteMatched");
+    expect(tags).toContain("ChannelTurnStarted");
+    expect(tags).toContain("ChannelTurnCompleted");
+    expect(tags).toContain("ChannelRouteDenied");
+    expect(tags).toContain("ChannelUnrouted");
+    expect(tags).not.toContain("Custom");
+    const done = seen.find((e) => e._tag === "ChannelTurnCompleted");
+    expect(done && done._tag === "ChannelTurnCompleted" && done.ok).toBe(true);
+  });
+
+  test("an inbound conflict publishes ChannelOwnershipChanged", async () => {
+    const chan = makeScriptedAdapter({ id: "chan" });
+    const { seen, bus } = collector();
+    await withRouter({ channels: [chan], routes: [route("r1")], agents: makeFakeAgents().resolver, eventBus: bus }, () =>
+      Effect.gen(function* () {
+        chan.failInbound(channelError("chan", "conflict"));
+        yield* Effect.promise(() => waitFor(() => seen.some((e) => e._tag === "ChannelOwnershipChanged")));
+      }),
+    );
+    const ev = seen.find((e) => e._tag === "ChannelOwnershipChanged");
+    expect(ev && ev._tag === "ChannelOwnershipChanged" && ev.state).toBe("conflict");
   });
 });

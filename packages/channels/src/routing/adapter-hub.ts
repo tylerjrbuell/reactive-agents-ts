@@ -231,8 +231,7 @@ export class AdapterHub {
                   _tag: "ChannelDeliveryFailed",
                   taskId,
                   adapterId,
-                  // `conflict` is a receive-side kind; the core event union has no member for it.
-                  kind: error.kind === "conflict" ? "unknown" : error.kind,
+                  kind: error.kind,
                   retryable: error.retryable,
                   ...(error.retryAfterMs !== undefined ? { retryAfterMs: error.retryAfterMs } : {}),
                   conversationId: message.conversation.channelId,

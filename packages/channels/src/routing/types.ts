@@ -140,6 +140,8 @@ export interface RoutedReply {
   readonly tokens?: number;
   readonly costUsd?: number;
   readonly runId?: string;
+  /** Id of the agent that ran the turn, when the resolver knows it. */
+  readonly agentId?: string;
 }
 
 /** A live conversation with one (route, role) agent. */

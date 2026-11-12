@@ -230,6 +230,7 @@ export type PlatformAgentEvent =
         | "too_large"
         | "unsupported"
         | "network"
+        | "conflict"
         | "unknown";
       /** True when retrying the same send may succeed (e.g. rate_limited, network). */
       readonly retryable: boolean;
@@ -237,6 +238,90 @@ export type PlatformAgentEvent =
       readonly retryAfterMs?: number;
       /** Conversation the send targeted. Absent when it was not known. */
       readonly conversationId?: string;
+    }
+  // ─── Channel router events (never carry message text or secrets) ───
+  | {
+      /** The channel router matched an inbound message to an enabled route and its access check allowed it. */
+      readonly _tag: "ChannelRouteMatched";
+      /** Id of the matched route. */
+      readonly routeId: string;
+      /** Id of the channel (adapter) the message arrived on. */
+      readonly channelId: string;
+      /** Role the sender resolved to on this route (e.g. "owner", "member"). */
+      readonly role: string;
+      /** True when produced by a router simulation (dry run); nothing was sent to the platform. */
+      readonly simulated?: boolean;
+    }
+  | {
+      /** A route matched but its access policy denied the sender. */
+      readonly _tag: "ChannelRouteDenied";
+      /** Id of the route that denied the sender. */
+      readonly routeId: string;
+      /** Id of the channel (adapter) the message arrived on. */
+      readonly channelId: string;
+      /** True when produced by a router simulation (dry run). */
+      readonly simulated?: boolean;
+    }
+  | {
+      /** No enabled route matched an inbound message. */
+      readonly _tag: "ChannelUnrouted";
+      /** Id of the channel (adapter) the message arrived on. */
+      readonly channelId: string;
+      /** True when produced by a router simulation (dry run). */
+      readonly simulated?: boolean;
+    }
+  | {
+      /** An agent turn started for a routed message. */
+      readonly _tag: "ChannelTurnStarted";
+      /** Id of the route the turn runs under. */
+      readonly routeId: string;
+      /** Role the sender resolved to on this route. */
+      readonly role: string;
+      /** True when produced by a router simulation (dry run). */
+      readonly simulated?: boolean;
+    }
+  | {
+      /** A routed agent turn finished, successfully or not. */
+      readonly _tag: "ChannelTurnCompleted";
+      /** Id of the route the turn ran under. */
+      readonly routeId: string;
+      /** Role the sender resolved to on this route. */
+      readonly role: string;
+      /** True when the turn produced a reply; false when it failed or timed out. */
+      readonly ok: boolean;
+      /** Failure reason (e.g. "turn_timeout"). Absent when `ok` is true. */
+      readonly reason?: string;
+      /** Id of the agent that ran the turn. Absent when the router did not know it. */
+      readonly agentId?: string;
+      /** Id of the run the turn produced. Absent when the turn failed or the agent reported none. */
+      readonly runId?: string;
+      /** Total tokens the turn used. Absent when the agent reported none. */
+      readonly tokens?: number;
+      /** Cost of the turn in USD. Absent when the agent reported none. */
+      readonly costUsd?: number;
+      /** True when produced by a router simulation (dry run). */
+      readonly simulated?: boolean;
+    }
+  | {
+      /** A routed message was dropped before an agent turn ran. */
+      readonly _tag: "ChannelTurnDropped";
+      /** Id of the route that dropped the message. */
+      readonly routeId: string;
+      /**
+       * Why: backpressure (conversation queue full), rate (turn rate limit), budget (route budget spent),
+       * group (group messages not allowed), echo (the bot's own message), disabled-channel (channel is off).
+       */
+      readonly reason: "backpressure" | "rate" | "budget" | "group" | "echo" | "disabled-channel";
+      /** True when produced by a router simulation (dry run). */
+      readonly simulated?: boolean;
+    }
+  | {
+      /** Ownership of a channel's platform account changed, e.g. another consumer took it over. */
+      readonly _tag: "ChannelOwnershipChanged";
+      /** Id of the channel (adapter) whose ownership changed. */
+      readonly channelId: string;
+      /** New state: "conflict" means another consumer owns the account and the channel was stopped. */
+      readonly state: "conflict";
     }
   | {
       /** Outbound message was sent on a channel (bots, webhooks, MCP-backed transports). */
