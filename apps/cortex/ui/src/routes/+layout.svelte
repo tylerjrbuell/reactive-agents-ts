@@ -13,6 +13,7 @@
   import { runEndToast } from "$lib/run-toast.js";
   import { pendingApprovals, startApprovalWatcher } from "$lib/stores/approval-watcher.js";
   import { pendingInteractions, startInteractionWatcher } from "$lib/stores/interaction-watcher.js";
+  import { notifyRunEnd, setNotificationNavigator, startDesktopNotifier } from "$lib/stores/desktop-notifier.js";
   import { settings, type CortexSettings } from "$lib/stores/settings.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
   import { createAgentStore, beaconDeskRunLabel } from "$lib/stores/agent-store.js";
@@ -36,6 +37,7 @@
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
   let stopApprovalWatcher: (() => void) | null = null;
   let stopInteractionWatcher: (() => void) | null = null;
+  let stopDesktopNotifier: (() => void) | null = null;
   const wsClient = createWsClient("/ws/live/cortex-broadcast");
 
   let isDark = $state(true);
@@ -106,6 +108,8 @@
     stopApprovalWatcher = startApprovalWatcher();
     // Durable-HITL: app-wide `request_user_input` polling (feeds the Runs "Waiting on you" strip).
     stopInteractionWatcher = startInteractionWatcher();
+    setNotificationNavigator((href) => void goto(href));
+    stopDesktopNotifier = startDesktopNotifier();
     window.addEventListener("keydown", handleGlobalKeydown);
     window.addEventListener("cortex:toggle-theme", toggleTheme as EventListener);
     window.addEventListener("focus", refreshAgentsSoon);
@@ -169,7 +173,10 @@
           name: node?.name ?? msg.agentId.slice(0, 20),
           payload: msg.payload ?? {},
         });
-        if (end) toast[end.kind](end.title, end.message, { label: "View run", href: end.href }, end.key);
+        if (end) {
+          toast[end.kind](end.title, end.message, { label: "View run", href: end.href }, end.key);
+          notifyRunEnd(end); // desktop notification when Cortex is in the background (desktop-notify.ts)
+        }
       }
     });
 
@@ -195,6 +202,8 @@
       stopApprovalWatcher = null;
       stopInteractionWatcher?.();
       stopInteractionWatcher = null;
+      stopDesktopNotifier?.();
+      stopDesktopNotifier = null;
       if (refreshTimer) {
         clearInterval(refreshTimer);
         refreshTimer = null;

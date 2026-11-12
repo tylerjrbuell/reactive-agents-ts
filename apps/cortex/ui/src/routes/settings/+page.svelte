@@ -7,6 +7,7 @@
    */
   import { onMount } from "svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import { showDesktopNotice, TEST_NOTICE } from "$lib/desktop-notify.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
@@ -179,7 +180,7 @@
     if (result === "granted") {
       localSettings = { ...localSettings, notificationsEnabled: true };
       toast.success("Notifications enabled", "Cortex will notify you when agents finish or fail.");
-      new Notification("Cortex", { body: "Notifications are on for Reactive Agents.", icon: "/favicon.svg" });
+      showDesktopNotice(TEST_NOTICE);
     } else if (result === "denied") {
       localSettings = { ...localSettings, notificationsEnabled: false };
       toast.error("Notifications blocked", "Allow them in your browser's site settings.");
@@ -202,8 +203,8 @@
   }
 
   const NOTIFY_OPTIONS = [
-    { value: "all", label: "All events (finishes, failures, errors, decisions)" },
-    { value: "completions", label: "Finished and failed runs (recommended)" },
+    { value: "all", label: "Everything: finished and failed runs, approvals and questions waiting on you" },
+    { value: "completions", label: "Finished and failed runs, and anything waiting on you (recommended)" },
     { value: "failures", label: "Failed runs only" },
     { value: "none", label: "Never" },
   ] as const;
@@ -328,21 +329,25 @@
               {#if notifPermission === "granted"}
                 <Button
                   size="sm"
-                  onclick={() => new Notification("Cortex test", { body: "Notifications are working.", icon: "/favicon.svg" })}
+                  onclick={() => showDesktopNotice(TEST_NOTICE)}
                 >Send a test</Button>
               {:else}
                 <Button size="sm" disabled={notifPermission === "unsupported"} onclick={requestNotificationPermission}>Allow notifications</Button>
               {/if}
             {/snippet}
           </SettingsRow>
-          <SettingsRow label="Notify me about" for="settings-notify-level">
+          <SettingsRow label="Notify me about" for="settings-notify-level" description="Applies at once. Cortex stays quiet while its tab is in front and focused: the toasts and panels already show it.">
             {#snippet control()}
               <Select
                 id="settings-notify-level"
                 options={NOTIFY_OPTIONS}
-                bind:value={() => localSettings.notificationLevel, (v) => (localSettings = { ...localSettings, notificationLevel: parseNotify(v) })}
-              />
-            {/snippet}
+                bind:value={() => localSettings.notificationLevel, (v) => {
+                  const notificationLevel = parseNotify(v);
+                  localSettings = { ...localSettings, notificationLevel };
+                  // Applies at once: the notifier reads the saved level when an event fires.
+                  settingsStore.save({ notificationLevel });
+                }}
+              />            {/snippet}
           </SettingsRow>
         </SettingsGroup>
 
