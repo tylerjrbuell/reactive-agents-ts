@@ -32,6 +32,86 @@ function fakeEngine() {
   return { engine, live };
 }
 
+describe("a multi-sentence reading is strictly sequential", () => {
+  const TEXT = "Cortex voice test. This is how replies will sound. And a third sentence.";
+
+  test("remote engine: one play at a time, chunk N+1 starts only after chunk N ended", async () => {
+    const log: string[] = [];
+    let playing = 0;
+    let overlap = false;
+    const audios: Array<{ onended: (() => void) | null; id: number }> = [];
+    class Audio implements AudioLike {
+      onended: AudioLike["onended"] = null;
+      onerror: AudioLike["onerror"] = null;
+      onplaying: AudioLike["onplaying"] = null;
+      id = audios.length;
+      constructor() {
+        audios.push(this);
+      }
+      async play() {
+        playing += 1;
+        if (playing > 1) overlap = true;
+        log.push(`play${this.id}`);
+        this.onplaying?.();
+      }
+      pause() {
+        if (playing > 0) playing -= 1;
+      }
+    }
+    const remote = createRemoteTts({
+      speakUrl: "/s",
+      voicesUrl: "/v",
+      fetch: async () => new Response(new Blob(["a"])),
+      createAudio: () => new Audio(),
+      createObjectURL: () => "blob:x",
+      revokeObjectURL: () => undefined,
+    });
+    const reader = createReadAloud({ engine: () => remote });
+    reader.play("voice-test", TEXT);
+    await tick();
+    await tick();
+    expect(log).toEqual(["play0"]);
+    for (let i = 0; i < 3; i += 1) {
+      playing -= 1; // the sentence finishes playing, then its element reports the end
+      audios[i]!.onended?.();
+      await tick();
+      await tick();
+    }
+    expect(log).toEqual(["play0", "play1", "play2"]);
+    expect(overlap).toBe(false);
+    expect(reader.get().status).toBe("idle");
+  });
+
+  test("browser engine: speechSynthesis never holds two utterances; the next speaks on the previous end", () => {
+    const queue: UtteranceLike[] = [];
+    let live = 0;
+    let overlap = false;
+    const synth: SynthLike = {
+      speak: (u) => {
+        live += 1;
+        if (live > 1) overlap = true;
+        queue.push(u);
+        u.onstart?.();
+      },
+      cancel: () => undefined,
+      pause: () => undefined,
+      resume: () => undefined,
+      getVoices: () => [],
+    };
+    const browser = createBrowserTts(synth, () => ({ voice: null, rate: 1, lang: "", onstart: null, onend: null, onerror: null }));
+    const reader = createReadAloud({ engine: () => browser });
+    reader.play("voice-test", TEXT);
+    expect(queue.length).toBe(1);
+    for (let i = 0; i < 3; i += 1) {
+      live -= 1;
+      queue[i]!.onend?.();
+    }
+    expect(queue.length).toBe(3);
+    expect(overlap).toBe(false);
+    expect(reader.get().status).toBe("idle");
+  });
+});
+
 describe("speech coordinator", () => {
   test("starting B while A plays cancels A exactly once and A's callbacks go inert", () => {
     const { engine, live } = fakeEngine();
