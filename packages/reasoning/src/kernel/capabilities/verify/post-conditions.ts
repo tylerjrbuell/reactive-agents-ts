@@ -24,6 +24,7 @@
 //     in the ledger, NOT from the real filesystem.
 
 import type { ReasoningStep } from "../../../types/index.js";
+import { categorizeToolName, type ObservationCategory } from "../../../types/observation.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../../ledger/run-ledger.js";
 import { missingRequired, toolEvidence } from "./requirement-state.js";
 import { evidenceOfSteps } from "../../ledger/step-projection.js";
@@ -297,6 +298,18 @@ function isSubstantiveToolName(toolName: string | undefined): toolName is string
 }
 
 /**
+ * Retrieval categories: a tool that only reads (web search, HTTP GET, file
+ * read) cannot change the world, so its success is never evidence that a
+ * requested mutation landed. Unknown/custom tools stay mutation candidates
+ * (fail-closed toward the existing behavior).
+ */
+const RETRIEVAL_CATEGORIES: ReadonlySet<ObservationCategory> = new Set(["web-search", "http-get", "file-read"]);
+
+function isRetrievalToolName(toolName: string): boolean {
+  return RETRIEVAL_CATEGORIES.has(categorizeToolName(toolName));
+}
+
+/**
  * Can this tool surface do real work, i.e. does it hold a substantive (non-meta,
  * non-pseudo) tool? A surface of only harness meta-tools (brief, recall, find,
  * final-answer) cannot land a side effect. `undefined` means the surface is
@@ -329,7 +342,7 @@ export function isSideEffectLanded(
   if (results.length > 0) {
     for (let i = results.length - 1; i >= 0; i--) {
       const entry = results[i]!;
-      if (!isSubstantiveToolName(entry.toolName)) continue;
+      if (!isSubstantiveToolName(entry.toolName) || isRetrievalToolName(entry.toolName)) continue;
       return entry.success === true;
     }
     return false;
@@ -338,7 +351,7 @@ export function isSideEffectLanded(
     const step = steps[i]!;
     if (step.type !== "observation" || step.metadata?.frameworkInstrumentation === GUARD_OBSERVATION_TAG) continue;
     const result = step.metadata?.observationResult as ObservationResultLike | undefined;
-    if (!isSubstantiveToolName(result?.toolName)) continue;
+    if (!isSubstantiveToolName(result?.toolName) || isRetrievalToolName(result?.toolName ?? "")) continue;
     return result?.success === true;
   }
   return false;

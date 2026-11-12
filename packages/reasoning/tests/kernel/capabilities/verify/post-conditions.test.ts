@@ -368,4 +368,23 @@ describe("SideEffectLanded — the mutation must actually land", () => {
     const r = verify([sideEffectLanded()], [obs("final-answer", true)]);
     expect(r.unmet).toHaveLength(1);
   }, 15000);
+
+  // Real Telegram traces (2026-11-12): the model searched the web for how to
+  // send, the search succeeded, and the success was read as the send landing.
+  // A retrieval tool cannot change the world, so it never lands a side effect.
+  it("UNMET when the only successful substantive call is a retrieval tool (web-search)", () => {
+    const r = verify([sideEffectLanded()], [obs("web-search", true)]);
+    expect(r.unmet).toHaveLength(1);
+  }, 15000);
+
+  it("UNMET when a retrieval success trails a FAILED mutation attempt", () => {
+    const steps = [obs("gws-cli", false), obs("web-search", true), obs("http-get", true), obs("file-read", true)];
+    const r = verify([sideEffectLanded()], steps);
+    expect(r.unmet).toHaveLength(1);
+  }, 15000);
+
+  it("MET when a retrieval call trails a mutation that landed", () => {
+    const r = verify([sideEffectLanded()], [obs("gws-cli", true), obs("web-search", true)]);
+    expect(r.unmet).toHaveLength(0);
+  }, 15000);
 });
