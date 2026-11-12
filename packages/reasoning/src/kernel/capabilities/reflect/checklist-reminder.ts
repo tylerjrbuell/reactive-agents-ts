@@ -102,7 +102,7 @@ export function summarizeRecentRounds(ledger: RunLedger | undefined, currentIter
 }
 
 /** The run's own advisory rows (merged sub-agent facts excluded). */
-function ownItems(ledger: RunLedger | undefined): readonly AdvisoryItem[] {
+export function ownItems(ledger: RunLedger | undefined): readonly AdvisoryItem[] {
   const own: ChecklistFact[] = [];
   for (const e of ledger ?? []) {
     if (e.kind === "checklist-item" && !(e.pass ?? "").startsWith(CHILD_PASS_PREFIX)) own.push(e);

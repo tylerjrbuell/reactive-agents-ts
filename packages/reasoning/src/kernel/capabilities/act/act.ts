@@ -493,7 +493,7 @@ export function handleActing(
               return disposed.state;
             }
             // The gate denied the claim: answer the call with what is outstanding and keep acting.
-            rejectionMsg = `final-answer rejected by the exit gate. ${disposed.state.pendingGuidance?.qualityGateHint ?? ""}`;
+            rejectionMsg = `final-answer rejected by the exit gate. ${disposed.state.pendingGuidance?.qualityGateHint ?? disposed.state.pendingGuidance?.checklistReminder ?? ""}`;
             gateSteps = disposed.state.steps.slice(stateWithSteps.steps.length);
           }
 

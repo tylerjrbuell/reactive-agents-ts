@@ -66,6 +66,7 @@ const AUTHORITY_BY_ACTOR: Readonly<Record<string, AuthorityClass>> = {
   "fabrication-guard": "deterministic", // fabricated-measurement check rejected the output
   "exit-gate": "deterministic", // outstanding contract items / stale answer at a proposed exit
   "pending-batch": "deterministic", // the run ended with model tool calls that never ran
+  "todo-wrap-up": "deterministic", // todo rows still open at the model's final answer (one turn, todo-wrap-up.ts)
   "act-or-answer": "deterministic", // no-call turn while required tools / tool conditions are outstanding
 };
 

@@ -91,6 +91,7 @@ import {
   MIN_MODEL_SYNTHESIS_LENGTH,
   passthroughOutputDeliverable,
 } from "./runner-helpers/deliverable.js";
+import { todoWrapUpAwaitingReply } from "../capabilities/decide/todo-wrap-up.js";
 import { deliverableEvidenceVerified, type DeliverableDecision } from "./runner-helpers/deliverable-decision.js";
 
 /** The guard that proposed an exit. */
@@ -663,6 +664,23 @@ export function proposeExit(args: {
         outcome: "block",
         reason: proposal.reason,
         metadata: { proposedBy: proposal.proposedBy, gateDecision: "deferred-to-cap", outstanding: [], handoffSynthesis: false },
+      });
+      return disposed("deny", transitionState(state, {
+        status: "thinking",
+        error: null,
+        meta: { ...state.meta, terminatedBy: undefined },
+      }));
+    }
+    if (proposal.kind === "soft" && proposal.proposedBy !== "model" && todoWrapUpAwaitingReply(state.steps)) {
+      // The todo wrap-up turn (todo-wrap-up.ts) is owed its reply: a guard firing
+      // now would hand off the answer the model already wrote. Defer one pass.
+      yield* emitGuardFired({
+        taskId: args.taskId,
+        iteration: state.iteration,
+        guard: "exit_gate",
+        outcome: "block",
+        reason: proposal.reason,
+        metadata: { proposedBy: proposal.proposedBy, gateDecision: "deferred-to-todo-wrap-up", outstanding: [], handoffSynthesis: false },
       });
       return disposed("deny", transitionState(state, {
         status: "thinking",

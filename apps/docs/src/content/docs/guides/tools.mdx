@@ -344,6 +344,7 @@ Models of different capability drift on enum-like values and parameter names (`t
 
 - **Closed alias tables.** Each tool lists the exact variants it accepts. Anything outside the table is still rejected, and the error names the closest valid call. Healing never widens a value into something the tool did not declare.
 - **Context decides, not the verb alone.** `todo` treats `update`/`set` as "add" when `items` is present, as an edit when `id` + `text` are present, and as a status change when `id` + `status` are present.
+- **One wrap-up turn before the run finishes.** When the model writes its final answer while `todo` items are still open, the harness holds the answer for one more turn and names the open items: mark them done, remove them, or finish them. It never checks an item for the model, asks only once per run, and does nothing when the list is empty or closed or no turn is left. The second final answer always ends the run.
 - **One item in progress at a time.** `todo` `start` with several targets starts only one (the item already in progress, else the first pending one); `start` with no id starts the first open item. A `start` or `done` that changes nothing returns a `No change: …` line that names the next step, so a repeated call is not mistaken for progress. `reopen` puts a done item back to pending (`undo` heals to it).
 - **The list can be managed.** `todo` also edits, removes and clears items:
   - `todo({action:"edit", id:2, text:"new title"})` renames one item and keeps its status. The title must not be empty.

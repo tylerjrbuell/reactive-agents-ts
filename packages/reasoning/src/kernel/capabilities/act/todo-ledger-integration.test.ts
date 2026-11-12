@@ -247,6 +247,9 @@ describe("todo -> checklist-item ledger facts", () => {
         { name: "todo", args: { action: "done", id: 2 } },
         { name: "final-answer", args: { output: "all done", format: "text", summary: "s", confidence: "high" } },
       ),
+      // Row 1 is still open, so the first final-answer is held for one wrap-up
+      // turn (decide/todo-wrap-up.ts); the model then finishes without closing it.
+      FINAL,
     ]);
     expect(pass.state.status).toBe("done");
     expect(foldAdvisory(checklistFacts(pass.state.ledger)).map((i) => [i.id, i.status])).toEqual([

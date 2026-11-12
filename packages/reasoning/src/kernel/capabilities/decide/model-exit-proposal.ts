@@ -28,7 +28,8 @@
 import { Effect } from "effect";
 import { modelSynthesisDeliverable } from "@reactive-agents/core";
 import type { KernelInput, KernelState } from "../../state/kernel-state.js";
-import { DISPATCHER_EARLY_STOP, proposeExit, type ExitGateDecision, type ExitProposal } from "../../loop/exit-gate.js";
+import { stepTodoWrapUp } from "./todo-wrap-up.js";
+import { DISPATCHER_EARLY_STOP, outstandingItems, proposeExit, type ExitGateDecision, type ExitProposal } from "../../loop/exit-gate.js";
 import { isTemplatedTerminateReason } from "../../loop/terminate-reason.js";
 import type { ArbitrationContext } from "./arbitration-types.js";
 import { arbitrateAndApply, arbitrationContextFromState } from "./arbitrator.js";
@@ -58,18 +59,24 @@ export function disposeModelExit(
   if (arbiterOwnsClaim(ctx, intent)) {
     return Effect.succeed({ decision: "arbiter", state: arbitrateAndApply(state, intent, ctx, extraMeta) });
   }
+  const origin = proposalOrigin(intent);
+  const deliverable = modelSynthesisDeliverable({
+    type: "thought",
+    content: intent.output,
+    iteration: state.iteration,
+  });
+  const maxIterations = (state.meta.maxIterations as number | undefined) ?? 10;
+  // Todo wrap-up: the gate would accept (nothing outstanding) but todo rows are
+  // still open: one bounded turn to reconcile them (todo-wrap-up.ts).
+  if (origin.proposedBy === "model" && outstandingItems(state, input, deliverable).length === 0) {
+    const wrapUp = stepTodoWrapUp(state, maxIterations);
+    if (wrapUp !== undefined) return Effect.succeed({ decision: "deny", state: wrapUp });
+  }
   return proposeExit({
     state,
     input,
-    proposal: {
-      ...proposalOrigin(intent),
-      deliverable: modelSynthesisDeliverable({
-        type: "thought",
-        content: intent.output,
-        iteration: state.iteration,
-      }),
-    },
-    maxIterations: (state.meta.maxIterations as number | undefined) ?? 10,
+    proposal: { ...origin, deliverable },
+    maxIterations,
     taskId: state.taskId,
     accept: (accepted) => Effect.succeed(arbitrateAndApply(accepted, intent, contextOf(accepted), extraMeta)),
   });
