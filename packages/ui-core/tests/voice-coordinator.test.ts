@@ -102,7 +102,7 @@ describe("speech coordinator", () => {
       resume: () => undefined,
       getVoices: () => [],
     };
-    const browser = createBrowserTts(synth, () => ({ text: "", rate: 1, lang: "", voice: null, onstart: null, onend: null, onerror: null }) as unknown as UtteranceLike);
+    const browser = createBrowserTts(synth, (): UtteranceLike => ({ rate: 1, lang: "", voice: null, onstart: null, onend: null, onerror: null }));
     class Audio implements AudioLike {
       onended: AudioLike["onended"] = null;
       onerror: AudioLike["onerror"] = null;
