@@ -203,6 +203,25 @@ console.log(grade.verdict, grade.score, grade.fields);
 
 Every grader returns a `GradeResult`: `verdict` (`"pass"`, `"fail"` or `"inconclusive"`), `score` (passed ÷ decided checks), the `passed`, `failed` and `invalid` counts, and the per-field `fields`. Schema validation is available as a function only, because an Effect Schema cannot be stored in a suite file. Use `type` checks for shape checks inside a suite.
 
+## Rubric Grading: Calibrated Judgment
+
+When data cannot decide a case, an `EvalCase` can carry a `rubric`: one judgment question answered by the [JudgmentService](/features/judgment-layer/) and compared to a pass condition.
+
+```typescript
+const rubric = {
+  question: { type: "noul", instructions: "Does the answer cite a source for each claim?" },
+  passWhen: { minProbability: 0.7 }, // noul: probability the answer is "true"
+  minConfidence: 0.6,                // optional, default 0.6
+};
+```
+
+`passWhen` takes the form that matches the question kind: `{ minProbability }` for yes/no (default `0.5`), `{ accept: ["good", "great"] }` for a choice, and `{ minScore }` for a score.
+
+- **Structured first.** Structured checks run before the rubric. The rubric is asked only if they pass or are absent, so a failed deterministic check never spends a judgment call. One grade carries the per-check `checks` breakdown.
+- **Abstains instead of guessing.** The grade is `inconclusive` for low confidence, any judgment error, a wrong answer kind, non-finite values, an invalid rubric, or when no `JudgmentService` is wired. Yes/no answers have no confidence, so it is taken as `max(p, 1 - p)`.
+- **Uncalibrated backends.** The `llm` emulation backend is not calibrated, so it must reach confidence `0.8` (or your `minConfidence`, if higher) or the grade is `inconclusive`.
+- **Results.** `EvalResult` gains `verdict`, `rubric` (answer, score, confidence, calibrated, backend, required confidence, reason) and `checks`. `EvalRunSummary.inconclusive` counts abstained cases; they are excluded from `passed`, `failed` and the averages. `checkRegression` returns `passRate` over decided cases and the `inconclusive` counts; a rise in inconclusive never counts as a regression.
+
 ## EvalCase Schema
 
 ```typescript

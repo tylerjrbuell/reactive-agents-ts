@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { RubricSchema } from "./rubric.js";
 import { StructuredExpectationSchema } from "./structured-expectation.js";
 
 export const EvalCaseSchema = Schema.Struct({
@@ -23,6 +24,15 @@ export const EvalCaseSchema = Schema.Struct({
    * `actualOutput` parsed as JSON.
    */
   structured: Schema.optional(StructuredExpectationSchema),
+  /**
+   * A calibrated judgment question for what data cannot decide (a
+   * `JudgmentService` Noul, Choice or Score with a pass rule). With
+   * `structured` too, the structured checks run first and the rubric is
+   * asked only if they pass. A judge that errors or is not confident enough
+   * makes the case `inconclusive`, never a pass. The suite's judge
+   * dimensions are not scored for a rubric case.
+   */
+  rubric: Schema.optional(RubricSchema),
 });
 export type EvalCase = typeof EvalCaseSchema.Type;
 

@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { CaseVerdictSchema, CheckBreakdownSchema, RubricVerdictSchema } from "./rubric.js";
 import { GradeFieldResultSchema } from "./structured-expectation.js";
 
 export const DimensionScoreSchema = Schema.Struct({
@@ -30,6 +31,16 @@ export const EvalResultSchema = Schema.Struct({
   error: Schema.optional(Schema.String),
   /** Per-field results of a structured case's deterministic grade. Absent for judged cases. */
   fieldResults: Schema.optional(Schema.Array(GradeFieldResultSchema)),
+  /**
+   * Set for cases graded by `structured` and/or `rubric`. `inconclusive` means
+   * the grader could not decide: `passed` is false, but the case is counted
+   * apart from failures in the run summary and in `checkRegression`.
+   */
+  verdict: Schema.optional(CaseVerdictSchema),
+  /** The rubric judge's verdict: raw answer, confidence, calibration and backend. */
+  rubric: Schema.optional(RubricVerdictSchema),
+  /** Per-check breakdown (structured, rubric) behind `verdict`. */
+  checks: Schema.optional(Schema.Array(CheckBreakdownSchema)),
 });
 export type EvalResult = typeof EvalResultSchema.Type;
 
@@ -52,6 +63,12 @@ export const EvalRunSummarySchema = Schema.Struct({
   totalCases: Schema.Number,
   passed: Schema.Number,
   failed: Schema.Number,
+  /**
+   * Cases a grader could not decide (`verdict: "inconclusive"`). Not in
+   * `passed` or `failed`, and left out of the averages. Absent in runs saved
+   * before rubric graders; read as 0.
+   */
+  inconclusive: Schema.optional(Schema.Number),
   avgScore: Schema.Number,
   avgLatencyMs: Schema.Number,
   totalCostUsd: Schema.Number,

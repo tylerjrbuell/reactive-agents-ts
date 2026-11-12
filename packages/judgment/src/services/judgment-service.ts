@@ -35,6 +35,12 @@ export class JudgmentService extends Context.Tag("JudgmentService")<
      * `DEFAULT_JUDGMENT_CAPABILITIES`.
      */
     readonly capabilities?: () => Effect.Effect<JudgmentCapabilities>;
+    /**
+     * Name of the backend answering (for example `"jev"`, `"llm"`, `"ollama"`),
+     * so consumers can record which judge produced a verdict. Optional for the
+     * same reason as `capabilities`.
+     */
+    readonly backend?: string;
   }
 >() {}
 
@@ -90,6 +96,7 @@ export const makeJudgmentServiceLive = (backend: JudgmentBackend): Layer.Layer<J
       backend.listModels?.() ??
       Effect.fail(new JudgmentUnsupported({ message: `Backend "${backend.name}" has no model catalog` })),
     capabilities: () => Effect.succeed(caps),
+    backend: backend.name,
   });
 };
 
@@ -149,6 +156,7 @@ export const withEvents = (
           }),
         listModels: () => inner.listModels(),
         capabilities: inner.capabilities,
+        backend: inner.backend ?? backendName,
       };
     }),
   );

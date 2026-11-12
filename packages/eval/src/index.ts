@@ -50,6 +50,19 @@ export {
 } from "./graders/index.js";
 export type { PointerResolution, ParsedStructuredOutput, StructuredCaseGrade } from "./graders/index.js";
 
+// Rubric graders (calibrated judgment, run after deterministic checks)
+export type { Rubric, RubricVerdict, CaseVerdict, CheckBreakdown } from "./types/rubric.js";
+export { RubricSchema, RubricVerdictSchema, CaseVerdictSchema, CheckBreakdownSchema } from "./types/rubric.js";
+export {
+  gradeRubric,
+  readRubricAnswer,
+  rubricProblem,
+  DEFAULT_RUBRIC_MIN_CONFIDENCE,
+  UNCALIBRATED_MIN_CONFIDENCE,
+} from "./graders/rubric.js";
+export { gradeCase, gradedResult, hasCaseGrader, RUBRIC_DIMENSION } from "./graders/case-verdict.js";
+export type { CaseGrade } from "./graders/case-verdict.js";
+
 // Errors
 export { EvalError, BenchmarkError, DatasetError } from "./errors/errors.js";
 export type { EvalErrors } from "./errors/errors.js";

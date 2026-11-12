@@ -20,7 +20,7 @@ import { scoreRelevance } from "../dimensions/relevance.js";
 import { scoreCompleteness } from "../dimensions/completeness.js";
 import { scoreSafety } from "../dimensions/safety.js";
 import { scoreCostEfficiency } from "../dimensions/cost-efficiency.js";
-import { gradeStructuredCase } from "../graders/case-grading.js";
+import { gradeCase, gradedResult, hasCaseGrader } from "../graders/case-verdict.js";
 
 /**
  * Per-case SUT runner. Invoked by `runSuite` for each `EvalCase` to produce
@@ -84,7 +84,14 @@ export class EvalService extends Context.Tag("EvalService")<
       current: EvalRun,
       baseline: EvalRun,
       threshold?: number,
-    ) => Effect.Effect<{ hasRegression: boolean; details: string[] }>;
+    ) => Effect.Effect<{
+      hasRegression: boolean;
+      details: string[];
+      /** Pass rate of cases a data/rubric grader decided; undefined when a run has none. */
+      passRate: { current: number | undefined; baseline: number | undefined };
+      /** Cases a grader could not decide, reported apart from failures. */
+      inconclusive: { current: number; baseline: number };
+    }>;
 
     readonly getHistory: (
       suiteId: string,
@@ -214,11 +221,22 @@ const scoreDimensionsWithEngine = (
     return { scores, judgmentDims: new Set(judgmentScores.keys()) };
   });
 
+/** Verdict tallies for a run's graded (structured/rubric) cases. */
+const verdictCounts = (run: EvalRun): { pass: number; fail: number; inconclusive: number } => ({
+  pass: run.results.filter((r) => r.verdict === "pass").length,
+  fail: run.results.filter((r) => r.verdict === "fail").length,
+  inconclusive: run.results.filter((r) => r.verdict === "inconclusive").length,
+});
+
 const buildSummary = (
-  results: EvalResult[],
+  allResults: EvalResult[],
   perCaseRepeatStats?: Record<string, RepeatStats[]>,
   repeats?: number,
 ): EvalRunSummary => {
+  // An inconclusive case has no score to average (its grader could not
+  // decide), so it is counted on its own and kept out of the averages.
+  const results = allResults.filter((r) => r.verdict !== "inconclusive");
+  const inconclusive = allResults.length - results.length;
   const allDimensions = new Set(results.flatMap((r) => r.scores.map((s) => s.dimension)));
   const dimensionAverages: Record<string, number> = {};
 
@@ -248,18 +266,19 @@ const buildSummary = (
       : undefined;
 
   return {
-    totalCases: results.length,
+    totalCases: allResults.length,
     // Each result already decided `passed` (judged: overallScore >=
     // passThreshold; structured: every check passed), so count that.
     passed: results.filter((r) => r.passed).length,
     failed: results.filter((r) => !r.passed).length,
+    ...(inconclusive > 0 ? { inconclusive } : {}),
     avgScore: results.length > 0
       ? results.reduce((s, r) => s + r.overallScore, 0) / results.length
       : 0,
-    avgLatencyMs: results.length > 0
-      ? results.reduce((s, r) => s + r.latencyMs, 0) / results.length
+    avgLatencyMs: allResults.length > 0
+      ? allResults.reduce((s, r) => s + r.latencyMs, 0) / allResults.length
       : 0,
-    totalCostUsd: results.reduce((s, r) => s + r.costUsd, 0),
+    totalCostUsd: allResults.reduce((s, r) => s + r.costUsd, 0),
     dimensionAverages,
     ...(dimensionVariance ? { dimensionVariance } : {}),
     ...(repeats ? { repeats } : {}),
@@ -340,25 +359,22 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
               const sutCostUsd = sutRun.metrics?.costUsd ?? 0;
 
               // A case with `structured` expectations is graded field by
-              // field from data, with no judge call (golden rule 5). The
-              // result is deterministic, so repeats would add nothing.
-              if (evalCase.structured !== undefined) {
-                const grade = gradeStructuredCase(evalCase.structured, sutRun.actualOutput, sutRun.structuredOutput);
-                results.push({
-                  caseId: evalCase.id,
-                  timestamp: new Date(),
-                  agentConfig,
-                  scores: grade.scores,
-                  overallScore: grade.overallScore,
-                  actualOutput: sutRun.actualOutput,
+              // field from data, with no judge call (golden rule 5). A
+              // `rubric` is asked only after those checks pass. The grade is
+              // asked once: repeats would add nothing to the data checks.
+              if (hasCaseGrader(evalCase)) {
+                const grade = yield* gradeCase(
+                  evalCase,
+                  sutRun.actualOutput,
+                  sutRun.structuredOutput,
+                  Option.getOrUndefined(judgment),
+                );
+                results.push(gradedResult(evalCase, agentConfig, grade, sutRun.actualOutput, {
                   latencyMs: sutRun.metrics?.latencyMs ?? Date.now() - start,
                   costUsd: sutCostUsd,
                   tokensUsed: sutRun.metrics?.tokensUsed ?? 0,
                   stepsExecuted: sutRun.metrics?.stepsExecuted ?? 0,
-                  passed: grade.passed,
-                  fieldResults: grade.fieldResults,
-                  ...(grade.error !== undefined ? { error: grade.error } : {}),
-                });
+                }));
                 continue;
               }
 
@@ -475,23 +491,14 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
           const start = Date.now();
           const costUsd = metrics?.costUsd ?? 0;
 
-          if (evalCase.structured !== undefined) {
-            const grade = gradeStructuredCase(evalCase.structured, actualOutput);
-            return {
-              caseId: evalCase.id,
-              timestamp: new Date(),
-              agentConfig,
-              scores: grade.scores,
-              overallScore: grade.overallScore,
-              actualOutput,
+          if (hasCaseGrader(evalCase)) {
+            const grade = yield* gradeCase(evalCase, actualOutput, undefined, Option.getOrUndefined(judgment));
+            return gradedResult(evalCase, agentConfig, grade, actualOutput, {
               latencyMs: metrics?.latencyMs ?? Date.now() - start,
               costUsd,
               tokensUsed: metrics?.tokensUsed ?? 0,
               stepsExecuted: metrics?.stepsExecuted ?? 0,
-              passed: grade.passed,
-              fieldResults: grade.fieldResults,
-              ...(grade.error !== undefined ? { error: grade.error } : {}),
-            } satisfies EvalResult;
+            });
           }
 
           const { scores } = yield* scoreDimensionsWithEngine(
@@ -613,7 +620,23 @@ export const makeEvalServiceLive = (store?: EvalStore) =>
             );
           }
 
-          return { hasRegression: details.length > 0, details };
+          // Pass rate over cases a data/rubric grader decided. Inconclusive
+          // cases are reported apart, never counted as passes, and a rise in
+          // them is a signal on its own, not a regression of the rate.
+          const cur = verdictCounts(current);
+          const base = verdictCounts(baseline);
+          const curRate = cur.pass + cur.fail > 0 ? cur.pass / (cur.pass + cur.fail) : undefined;
+          const baseRate = base.pass + base.fail > 0 ? base.pass / (base.pass + base.fail) : undefined;
+          if (curRate !== undefined && baseRate !== undefined && curRate < baseRate - t) {
+            details.push(`pass rate: ${curRate.toFixed(3)} < baseline ${baseRate.toFixed(3)} (delta ${(curRate - baseRate).toFixed(3)})`);
+          }
+
+          return {
+            hasRegression: details.length > 0,
+            details,
+            passRate: { current: curRate, baseline: baseRate },
+            inconclusive: { current: cur.inconclusive, baseline: base.inconclusive },
+          };
         });
       },
 
