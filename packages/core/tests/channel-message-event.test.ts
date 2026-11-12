@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
 import { EventBus, EventBusLive } from "../src/services/event-bus.js";
+import type { AgentEvent } from "../src/types/agent-event.js";
 
 describe("ChannelMessageReceived event", () => {
   test("EventBus accepts and delivers ChannelMessageReceived", async () => {
@@ -28,5 +29,43 @@ describe("ChannelMessageReceived event", () => {
     expect((received[0] as any)._tag).toBe("ChannelMessageReceived");
     expect((received[0] as any).sender).toBe("+15551234567");
     expect((received[0] as any).platform).toBe("signal");
+  });
+});
+
+describe("channel event contract pins", () => {
+  test("ChannelMessageReceived accepts optional adapterId and conversation", () => {
+    const e: Extract<AgentEvent, { _tag: "ChannelMessageReceived" }> = {
+      _tag: "ChannelMessageReceived",
+      sender: "u1",
+      platform: "slack",
+      message: "hi",
+      timestamp: 1,
+      mcpServer: "",
+      adapterId: "slack-main",
+      conversation: { channelId: "C1", threadId: "t1", isGroup: true },
+    };
+    expect(e.conversation?.isGroup).toBe(true);
+  });
+
+  test("EventBus delivers ChannelDeliveryFailed with minimal payload", async () => {
+    const received: AgentEvent[] = [];
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const eb = yield* EventBus;
+        yield* eb.on("ChannelDeliveryFailed", (event) => {
+          received.push(event);
+          return Effect.void;
+        });
+        yield* eb.publish({
+          _tag: "ChannelDeliveryFailed",
+          adapterId: "slack-main",
+          kind: "rate_limited",
+          retryable: true,
+          retryAfterMs: 1000,
+        });
+      }).pipe(Effect.provide(EventBusLive)),
+    );
+    expect(received).toHaveLength(1);
+    expect(received[0]?._tag).toBe("ChannelDeliveryFailed");
   });
 });

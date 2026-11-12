@@ -192,6 +192,51 @@ export type PlatformAgentEvent =
       readonly mcpServer: string;
       /** Optional group identifier */
       readonly groupId?: string;
+      /**
+       * Id of the `ChannelAdapter` that received the message. Absent for MCP-notification
+       * sourced messages, which have no adapter.
+       */
+      readonly adapterId?: string;
+      /**
+       * Where the message arrived, in adapter-neutral terms. Absent for MCP-notification
+       * sourced messages.
+       */
+      readonly conversation?: {
+        /** Platform channel / chat id the message arrived in. */
+        readonly channelId: string;
+        /** Thread id within the channel. Absent when the platform has no thread or the message is not in one. */
+        readonly threadId?: string;
+        /** True when the conversation has more than two participants (group chat, public channel). */
+        readonly isGroup: boolean;
+      };
+    }
+  | {
+      /**
+       * An outbound delivery through a channel adapter failed. Typed counterpart of the
+       * delivery receipt: carries a classification only. It never carries credentials,
+       * request bodies, or the underlying cause object; look at adapter logs for those.
+       */
+      readonly _tag: "ChannelDeliveryFailed";
+      /** Task the delivery belonged to. Absent when the send was not made inside a task (e.g. a workflow Deliver node outside a run). */
+      readonly taskId?: string;
+      /** Id of the adapter whose send failed. */
+      readonly adapterId: string;
+      /** Failure class: auth, rate_limited, not_found, forbidden, too_large, unsupported, network, or unknown. */
+      readonly kind:
+        | "auth"
+        | "rate_limited"
+        | "not_found"
+        | "forbidden"
+        | "too_large"
+        | "unsupported"
+        | "network"
+        | "unknown";
+      /** True when retrying the same send may succeed (e.g. rate_limited, network). */
+      readonly retryable: boolean;
+      /** Milliseconds to wait before retrying, when the platform said so. Absent otherwise. */
+      readonly retryAfterMs?: number;
+      /** Conversation the send targeted. Absent when it was not known. */
+      readonly conversationId?: string;
     }
   | {
       /** Outbound message was sent on a channel (bots, webhooks, MCP-backed transports). */
