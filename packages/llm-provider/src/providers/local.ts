@@ -309,7 +309,7 @@ export const LocalProviderLive = Layer.effect(
         const config = yield* LLMConfig
         const { endpoint, apiKey: ollamaKey, headers: authHeaders } = resolveOllamaTarget({
             baseUrl: config.providerConfig?.baseUrl ?? config.ollamaEndpoint,
-            apiKey: config.providerConfig?.apiKey ?? config.ollamaApiKey,
+            apiKey: config.providerConfig?.apiKey, ambientApiKey: config.ollamaApiKey,
         })
         const defaultModel =
             config.defaultModel.startsWith('claude') ||

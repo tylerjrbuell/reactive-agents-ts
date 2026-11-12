@@ -33,7 +33,7 @@ import { resolveCapability } from "./capability-resolver.js";
 import { registerReportedModelMetadata, type ReportedModelMetadata } from "./capability-reported.js";
 import type { CapabilitySource } from "./capability.js";
 import { listFrameworkModelsForProvider } from "./model-catalog.js";
-import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
+import { resolveOllamaEndpoint, resolveOllamaTarget } from "./ollama-endpoint.js";
 
 export { ModelDiscoveryError };
 
@@ -421,7 +421,13 @@ export function listProviderModels(
       (provider === "litellm" && envBase !== undefined && trimSlash(opts.baseUrl) === trimSlash(envBase)) ||
       (provider === "ollama" && resolveOllamaEndpoint(opts.baseUrl) === resolveOllamaEndpoint()) ||
       (provider !== "litellm" && provider !== "ollama");
-    const apiKey = opts.apiKey?.trim() || (envName && envKeyAllowed ? envOf(envName) : undefined);
+    // Ollama: the one helper decides (explicit key always; env key https-only, never loopback).
+    const apiKey =
+      provider === "ollama"
+        ? envKeyAllowed
+          ? resolveOllamaTarget({ baseUrl: opts.baseUrl, apiKey: opts.apiKey }).apiKey
+          : opts.apiKey?.trim() || undefined
+        : opts.apiKey?.trim() || (envName && envKeyAllowed ? envOf(envName) : undefined);
     const keyRequired = provider !== "litellm" && provider !== "ollama";
     if (keyRequired && !apiKey && KEY_ENV[provider] !== undefined) {
       return Effect.fail(fail(provider, "no-credentials", `${provider} needs ${envName}; none set`));

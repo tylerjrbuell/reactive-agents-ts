@@ -60,23 +60,65 @@ export interface OllamaTarget {
   readonly apiKey: string | undefined;
   /** Request headers carrying the key. Empty when there is no key. */
   readonly headers: Readonly<Record<string, string>>;
+  /** Set when a key was withheld or would travel in cleartext. Never contains a secret. */
+  readonly warning?: string;
+}
+
+const OLLAMA_CLOUD_ORIGIN = "https://ollama.com";
+
+function isLoopbackHost(hostname: string): boolean {
+  const h = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return h === "localhost" || h === "::1" || /^127\.\d+\.\d+\.\d+$/.test(h);
+}
+
+/** Env/ambient keys may only go to https endpoints (or the Ollama Cloud origin), never loopback. */
+function ambientKeyAllowed(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (isLoopbackHost(url.hostname)) return false;
+  return url.protocol === "https:" || url.origin === OLLAMA_CLOUD_ORIGIN;
 }
 
 /**
  * Resolve `{ endpoint, apiKey, headers }` for one Ollama call site.
  *
  * Endpoint: `resolveOllamaEndpoint` (explicit `baseUrl` first, then env).
- * Key: explicit `apiKey` (`.withProvider("ollama", { apiKey })`), else
- * `OLLAMA_API_KEY`. Ollama Cloud rejects unauthenticated requests, so every
+ * Key: explicit `apiKey` (`.withProvider("ollama", { apiKey })`) is always
+ * honoured (caller intent). The ambient key (`ambientApiKey`, else
+ * `OLLAMA_API_KEY`) is attached only when the endpoint is https (or exactly
+ * `https://ollama.com`) and not loopback; otherwise it is withheld and
+ * `warning` says so. Ollama Cloud rejects unauthenticated requests, so every
  * call (pre-flight, /api/show, /api/tags, /api/chat) must use this one
  * result. The key is only ever attached to the resolved endpoint.
  */
-export function resolveOllamaTarget(opts: { readonly baseUrl?: string; readonly apiKey?: string } = {}): OllamaTarget {
-  const apiKey = firstNonBlank(opts.apiKey, process.env.OLLAMA_API_KEY);
+export function resolveOllamaTarget(
+  opts: { readonly baseUrl?: string; readonly apiKey?: string; readonly ambientApiKey?: string } = {},
+): OllamaTarget {
+  const endpoint = resolveOllamaEndpoint(opts.baseUrl);
+  const explicit = firstNonBlank(opts.apiKey);
+  const ambient = firstNonBlank(opts.ambientApiKey, process.env.OLLAMA_API_KEY);
+  let apiKey = explicit;
+  let warning: string | undefined;
+  if (explicit !== undefined) {
+    if (endpoint.startsWith("http://") && !isLoopbackHost(new URL(endpoint).hostname)) {
+      warning = `Ollama API key is sent over cleartext http to ${endpoint}. Use https.`;
+    }
+  } else if (ambient !== undefined) {
+    if (ambientKeyAllowed(endpoint)) {
+      apiKey = ambient;
+    } else if (endpoint.startsWith("http://") && !isLoopbackHost(new URL(endpoint).hostname)) {
+      warning = `OLLAMA_API_KEY not sent to cleartext http endpoint ${endpoint}. Use https, or pass apiKey explicitly to .withProvider("ollama", { apiKey }).`;
+    }
+  }
   return {
-    endpoint: resolveOllamaEndpoint(opts.baseUrl),
+    endpoint,
     apiKey,
     headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+    ...(warning !== undefined ? { warning } : {}),
   };
 }
 

@@ -92,7 +92,7 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-Or set `OLLAMA_API_KEY` (and `OLLAMA_ENDPOINT`) in the environment. The key is sent as a Bearer token, only to that endpoint, for chat, the capability probe, model discovery and the build-time connection check. A rejected key fails with a typed `OllamaAuthError`. Cloud-hosted judgment models are not available; judgment runs on a local Ollama.
+Or set `OLLAMA_API_KEY` (and `OLLAMA_ENDPOINT`) in the environment. An `OLLAMA_API_KEY` from the environment is attached only when the endpoint is `https` (never to loopback or plain `http` hosts such as a LAN Ollama); a key passed explicitly via `.withProvider("ollama", { apiKey })` is always sent. The key is sent as a Bearer token, only to that endpoint, for chat, the capability probe, model discovery and the build-time connection check. A rejected key fails with a typed `OllamaAuthError`. Cloud-hosted judgment models are not available; judgment runs on a local Ollama.
 
 ## Model Recommendations
 

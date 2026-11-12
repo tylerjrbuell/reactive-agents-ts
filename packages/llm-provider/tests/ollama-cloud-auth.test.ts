@@ -116,12 +116,42 @@ const authFor = (p: string): ReadonlyArray<string | undefined> =>
   seen.filter((s) => s.path === p).map((s) => s.authorization);
 
 describe("resolveOllamaTarget", () => {
-  it("explicit key wins over OLLAMA_API_KEY; env is the fallback; none means no headers", () => {
+  it("explicit key wins over OLLAMA_API_KEY; env is the fallback on https; none means no headers", () => {
     process.env.OLLAMA_API_KEY = "env-key";
-    expect(resolveOllamaTarget({ apiKey: "cfg-key" }).headers).toEqual({ Authorization: "Bearer cfg-key" });
-    expect(resolveOllamaTarget().headers).toEqual({ Authorization: "Bearer env-key" });
+    const https = "https://ollama.example.com";
+    expect(resolveOllamaTarget({ baseUrl: https, apiKey: "cfg-key" }).headers).toEqual({ Authorization: "Bearer cfg-key" });
+    expect(resolveOllamaTarget({ baseUrl: https }).headers).toEqual({ Authorization: "Bearer env-key" });
+    expect(resolveOllamaTarget({ baseUrl: "https://ollama.com" }).headers).toEqual({ Authorization: "Bearer env-key" });
     delete process.env.OLLAMA_API_KEY;
-    expect(resolveOllamaTarget().headers).toEqual({});
+    expect(resolveOllamaTarget({ baseUrl: https }).headers).toEqual({});
+  });
+
+  it("env key is withheld from http endpoints (LAN and loopback); warning on LAN carries no secret", () => {
+    process.env.OLLAMA_API_KEY = "env-key";
+    const lan = resolveOllamaTarget({ baseUrl: "http://192.168.1.50:11434" });
+    expect(lan.headers).toEqual({});
+    expect(lan.apiKey).toBeUndefined();
+    expect(lan.warning).toContain("not sent");
+    expect(lan.warning).not.toContain("env-key");
+    for (const u of ["http://localhost:11434", "http://127.0.0.2:11434", "http://[::1]:11434", "https://localhost:11434"]) {
+      const t = resolveOllamaTarget({ baseUrl: u });
+      expect(t.headers).toEqual({});
+      expect(t.warning).toBeUndefined();
+    }
+    expect(resolveOllamaTarget({ baseUrl: "http://ollama.com" }).headers).toEqual({});
+  });
+
+  it("explicit key is honoured on http; non-loopback http warns", () => {
+    const lan = resolveOllamaTarget({ baseUrl: "http://192.168.1.50:11434", apiKey: "cfg-key" });
+    expect(lan.headers).toEqual({ Authorization: "Bearer cfg-key" });
+    expect(lan.warning).toContain("cleartext");
+    expect(lan.warning).not.toContain("cfg-key");
+    expect(resolveOllamaTarget({ baseUrl: "http://127.0.0.1:1", apiKey: "cfg-key" }).warning).toBeUndefined();
+  });
+
+  it("ambientApiKey follows the same https-only rule", () => {
+    expect(resolveOllamaTarget({ baseUrl: "http://10.0.0.5:1", ambientApiKey: "amb" }).headers).toEqual({});
+    expect(resolveOllamaTarget({ baseUrl: "https://h.example", ambientApiKey: "amb" }).headers).toEqual({ Authorization: "Bearer amb" });
   });
 
   it("explicit baseUrl wins over env endpoint", () => {
@@ -137,10 +167,26 @@ describe("pre-flight connection check", () => {
     expect(authFor("/api/tags")).toEqual([`Bearer ${KEY}`]);
   });
 
-  it("falls back to OLLAMA_API_KEY", async () => {
+  it("does not send OLLAMA_API_KEY to an http endpoint", async () => {
     process.env.OLLAMA_API_KEY = KEY;
-    expect((await checkOllamaConnection({ baseUrl: base })).ok).toBe(true);
-    expect(authFor("/api/tags")).toEqual([`Bearer ${KEY}`]);
+    expect((await checkOllamaConnection({ baseUrl: base })).ok).toBe(false);
+    expect(authFor("/api/tags")).toEqual([undefined]);
+  });
+
+  it("sends OLLAMA_API_KEY to an https endpoint (injected fetch)", async () => {
+    process.env.OLLAMA_API_KEY = KEY;
+    const realFetch = globalThis.fetch;
+    const calls: Array<{ url: string; auth: string | undefined }> = [];
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      calls.push({ url: String(input), auth: new Headers(init?.headers).get("authorization") ?? undefined });
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+    try {
+      expect((await checkOllamaConnection({ baseUrl: "https://ollama.com" })).ok).toBe(true);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    expect(calls).toEqual([{ url: "https://ollama.com/api/tags", auth: `Bearer ${KEY}` }]);
   });
 
   it("401 without a key yields a typed OllamaAuthError with status and no key in the message", async () => {
@@ -169,10 +215,12 @@ describe("capability probe", () => {
     expect(authFor("/api/show")).toEqual([`Bearer ${KEY}`]);
   });
 
-  it("falls back to OLLAMA_API_KEY", async () => {
+  it("does not send OLLAMA_API_KEY to an http endpoint", async () => {
     process.env.OLLAMA_API_KEY = KEY;
+    requireKey = false;
     await primeCapability("ollama", "stub-model:cloud", { endpoint: base });
-    expect(authFor("/api/show")).toEqual([`Bearer ${KEY}`]);
+    expect(authFor("/api/show").length).toBeGreaterThan(0);
+    expect(authFor("/api/show").every((a) => a === undefined)).toBe(true);
   });
 });
 
@@ -190,11 +238,40 @@ describe("model discovery", () => {
     expect(authFor("/api/tags")).toEqual([undefined]);
   });
 
-  it("sends OLLAMA_API_KEY to the env-resolved endpoint", async () => {
+  it("does not send OLLAMA_API_KEY to the env-resolved http endpoint", async () => {
     process.env.OLLAMA_API_KEY = KEY;
     process.env.OLLAMA_ENDPOINT = base;
+    requireKey = false;
     await Effect.runPromise(listProviderModels("ollama", {}));
-    expect(authFor("/api/tags")).toEqual([`Bearer ${KEY}`]);
+    expect(authFor("/api/tags")).toEqual([undefined]);
+  });
+
+  it("sends OLLAMA_API_KEY to an https env-resolved endpoint (injected fetch)", async () => {
+    process.env.OLLAMA_API_KEY = KEY;
+    process.env.OLLAMA_ENDPOINT = "https://ollama.com";
+    const calls: Array<string | undefined> = [];
+    const fetchImpl = (async (_u: unknown, init?: RequestInit) => {
+      calls.push(new Headers(init?.headers).get("authorization") ?? undefined);
+      return new Response(JSON.stringify({ models: [{ name: "m:cloud", details: {} }] }), { status: 200 });
+    }) as typeof fetch;
+    await Effect.runPromise(listProviderModels("ollama", { fetch: fetchImpl }));
+    expect(calls).toEqual([`Bearer ${KEY}`]);
+  });
+});
+
+describe("adapter env key scope", () => {
+  it("complete() does not send OLLAMA_API_KEY (env) to an http providerConfig.baseUrl", async () => {
+    process.env.OLLAMA_API_KEY = KEY;
+    requireKey = false;
+    // Distinct model: the adapter caches capability per model, which would hide /api/show in later tests.
+    const layer = createLLMProviderLayer("ollama", undefined, "env-scope-model:cloud", { baseUrl: base });
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({ messages: [{ role: "user", content: "hi" }] });
+      }).pipe(Effect.provide(layer)),
+    );
+    expect(authFor("/api/chat")).toEqual([undefined]);
   });
 });
 
