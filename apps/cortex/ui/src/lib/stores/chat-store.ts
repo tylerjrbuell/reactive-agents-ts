@@ -237,6 +237,8 @@ export type ChatSession = {
   sessionId: string;
   name: string;
   agentConfig: Record<string, unknown>;
+  /** The chat agent's stable id: its memory database is keyed by it (Context tab, Memory studio). */
+  stableAgentId?: string;
   createdAt: number;
   lastUsedAt: number;
   turns?: ChatTurn[];

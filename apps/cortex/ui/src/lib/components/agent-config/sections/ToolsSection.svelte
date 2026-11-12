@@ -9,7 +9,7 @@
   import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
   import ApprovalPolicyFields from "../ApprovalPolicyFields.svelte";
   import { toggleServerTools } from "$lib/tool-selection.js";
-  import { unlistedTools } from "$lib/chat-quickbar.js";
+  import { disclosureChoice, unlistedTools } from "$lib/chat-quickbar.js";
   import type { ToolPick } from "$lib/builder-tool-picks.js";
   import type { McpCatalogRow, PanelAgentConfig } from "../types.js";
 
@@ -104,6 +104,8 @@
 <ConfigSection id="tools" icon="tool" title="Tools" {open} {onToggle}>
   {#snippet head()}
       <Badge tone={toolsToggle && !toolsToggle.enabled ? "neutral" : "io"}>{toolsToggle && !toolsToggle.enabled ? "Off" : `${toolCountForBadges} selected`}</Badge>
+      <!-- A stored disclosure mode shows while the section is closed; the default stays quiet. -->
+      {#if disclosureChoice({ rawConfig: config.rawConfig })}<Badge tone="neutral">Disclosure: {disclosureChoice({ rawConfig: config.rawConfig })}</Badge>{/if}
   {/snippet}
         {#if toolsToggle}
           <label class="acp-check acp-check-box">
@@ -127,7 +129,7 @@
         {/if}
         <div class="acp-stack transition-opacity {toolsToggle && !toolsToggle.enabled ? 'pointer-events-none opacity-45' : ''}" aria-disabled={toolsToggle ? !toolsToggle.enabled : undefined}>
         {#if !splitShell}<ShellWorkspaceFields bind:config {shellPresets} />{/if}
-        <ToolDisclosureField bind:rawConfig={config.rawConfig} />
+        <ToolDisclosureField bind:rawConfig={config.rawConfig} tools={config.tools} />
         <div class="acp-field">
         <span class="config-label">Quick picks</span>
         <div class="acp-chips" role="group" aria-label="Built-in tools and shell toolsets">

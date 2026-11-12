@@ -21,6 +21,7 @@ describe("Cortex utility prompts run the lightweight one-shot path", () => {
     ["chat-session-service.ts", "chat-titler"],
     ["chat-session-service.ts", "chat-compactor"],
     ["chat-goal-service.ts", "goal-checker"],
+    ["chat-btw.ts", "chat-btw"],
   ])("%s builds %s with UTILITY_AGENT_PARAMS", (file, agentName) => {
     const src = readFileSync(join(services, file), "utf8");
     const at = src.indexOf(`agentName: "${agentName}"`);

@@ -4,12 +4,16 @@
    * `.withTools({ disclosure })` via `rawConfig.tools.disclosure`; shares
    * `DISCLOSURE_CHOICES` / `disclosurePatch` with the chat `/tools` picker.
    * Empty = the framework's model-tier default (never re-defaulted here).
+   * A summary line states what is in force now (`disclosureSummary`, the same words
+   * as the chat Config popover) with a one-click explainer.
    */
   import { DISCLOSURE_CHOICES, disclosureChoice, disclosureLabel, disclosurePatch, type DisclosureChoice } from "$lib/chat-quickbar.js";
+  import { disclosureSummary } from "$lib/chat-composer-bar.js";
 
-  let { rawConfig = $bindable() }: { rawConfig: Record<string, unknown> } = $props();
+  let { rawConfig = $bindable(), tools = [] }: { rawConfig: Record<string, unknown>; tools?: readonly string[] } = $props();
 
   const current = $derived(disclosureChoice({ rawConfig }) ?? "");
+  const summary = $derived(disclosureSummary({ tools: [...tools], rawConfig }));
   function set(value: string) {
     const choice = DISCLOSURE_CHOICES.find((c): c is DisclosureChoice => c === value);
     rawConfig = disclosurePatch({ rawConfig }, choice).rawConfig;
@@ -25,7 +29,9 @@
       <option value={c}>{c}: {disclosureLabel[c]}</option>
     {/each}
   </select>
-  <p class="acp-hint leading-relaxed">
-    How permitted tools are shown to the model. It never changes which tools are permitted.
-  </p>
+  <p class="acp-hint leading-relaxed" data-testid="disclosure-summary">{summary.text}</p>
+  <details class="acp-hint leading-relaxed">
+    <summary class="cursor-pointer">What is tool disclosure?</summary>
+    {summary.explain}
+  </details>
 </div>

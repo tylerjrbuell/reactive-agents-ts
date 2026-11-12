@@ -3,7 +3,7 @@ import { configAppliedNote, isLiveConfigCommand, slashMenuAllowed, submitRoute, 
 
 describe("config during a run never queues", () => {
   it("config commands dispatch during a run; messages and other commands queue", () => {
-    for (const cmd of ["model", "strategy", "tools", "terminal", "workspace", "iterations", "thinking", "provider"]) {
+    for (const cmd of ["model", "strategy", "tools", "terminal", "workspace", "iterations", "thinking", "provider", "mcp", "btw"]) {
       expect(submitRoute({ sending: true, command: cmd })).toBe("dispatch");
     }
     expect(submitRoute({ sending: true })).toBe("queue");

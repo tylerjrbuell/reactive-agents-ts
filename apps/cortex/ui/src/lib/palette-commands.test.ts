@@ -46,6 +46,12 @@ describe("paletteCommands", () => {
     expect(b.calls).toEqual(["goto /lab", "event cortex:lab-tab builder"]);
   });
 
+  test("Add an MCP server opens Lab Tools, where the one-line add lives", async () => {
+    const h = harness();
+    await h.run("add-mcp-server");
+    expect(h.calls).toEqual(["goto /lab#tools", "event cortex:lab-tab tools"]);
+  });
+
   test("latest run opens /run/<id>; nothing happens without runs", async () => {
     const h = harness("01ABC");
     await h.run("view-last-run");

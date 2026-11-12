@@ -55,6 +55,15 @@ export function paletteCommands(deps: PaletteDeps): Command[] {
       }),
     ),
     {
+      id: "add-mcp-server",
+      group: "Actions",
+      label: "Add an MCP server",
+      description: "Paste a command or URL in Lab Tools (in a chat: /mcp add)",
+      icon: "server",
+      keywords: ["mcp", "server", "tools", "connect", "add", "context7"],
+      action: labTab("tools"),
+    },
+    {
       id: "view-last-run",
       group: "Runs",
       label: "Open the latest run",

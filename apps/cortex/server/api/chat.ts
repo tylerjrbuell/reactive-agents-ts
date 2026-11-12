@@ -5,6 +5,7 @@ import { causeLineOf } from "@reactive-agents/ui-core";
 import { readRunTreeTraces } from "../services/run-trace-file.js";
 import type { ChatScheduleService } from "../services/chat-schedule-service.js";
 import type { ChatGoalService, GoalFailure } from "../services/chat-goal-service.js";
+import type { ChatBtwService } from "../services/chat-btw.js";
 import type { ChatProposalService, ProposalResult } from "../services/chat-proposal-service.js";
 import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
 import { withCheckedWorkspace } from "../services/workspace-dir.js";
@@ -65,7 +66,7 @@ function proposalResponse(r: ProposalResult, set: { status?: number | string }):
   return { ...(r.proposal ? { proposal: r.proposal } : {}), error: r.message };
 }
 
-export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService, goals?: ChatGoalService, proposals?: ChatProposalService) =>
+export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService, goals?: ChatGoalService, proposals?: ChatProposalService, btw?: ChatBtwService) =>
   new Elysia({ prefix: "/api/chat" })
     .get("/sessions", () => svc.listSessions())
     .post(
@@ -221,6 +222,35 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         }
       },
       { body: t.Object({ keepLast: t.Optional(t.Number()) }) },
+    )
+    // `/btw`: a read-only side question about the run in progress (or the last turn); never touches the session or its history.
+    .post(
+      "/sessions/:sessionId/btw",
+      async ({ params, body, set }) => {
+        if (!btw) {
+          set.status = 501;
+          return { error: "Side questions are not available on this server" };
+        }
+        const out = await btw.answer(params.sessionId, body.question, body.context);
+        if (!out.ok) {
+          set.status = out.status;
+          return { error: out.error };
+        }
+        return { answer: out.answer, running: out.running };
+      },
+      {
+        body: t.Object({
+          question: t.String(),
+          context: t.Optional(
+            t.Object({
+              task: t.String(),
+              running: t.Boolean(),
+              draft: t.String(),
+              steps: t.Array(t.Object({ tool: t.String(), args: t.Optional(t.String()), result: t.Optional(t.String()), failed: t.Optional(t.Boolean()) })),
+            }),
+          ),
+        }),
+      },
     )
     .patch(
       "/sessions/:sessionId/summary",

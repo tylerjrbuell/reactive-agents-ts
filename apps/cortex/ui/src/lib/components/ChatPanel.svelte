@@ -37,7 +37,10 @@
   import { tick, untrack } from "svelte";
   import { selectedTools, terminalChoice } from "$lib/chat-quickbar.js";
   import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
-  import { quickBarChips } from "$lib/chat-quickbar-chips.js";
+  import { quickBarChips, type QuickBarChipContext } from "$lib/chat-quickbar-chips.js";
+  import { composerBar, configGroups, disclosureSummary } from "$lib/chat-composer-bar.js";
+  import { btwStore } from "$lib/stores/chat-btw.js";
+  import { quickAddMcpToChat } from "$lib/mcp-quick-add.js";
   import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
   import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
   import { closeMenu as closedMenu, createToggleQueue, keepsMenuOpen, NO_CHIP_MENU, pickChip as chipPicked, syncChipMenu, type ChipMenu, type MenuUi } from "$lib/chat-menu.js";
@@ -412,6 +415,23 @@
   /** true = the current model has a thinking mode, false = it does not, null = not known. */
   const modelThinking = $derived(models.find((m) => m.value === model)?.thinking ?? null);
 
+  // The composer bar: the model chip + settings changed from the defaults; the rest sit in its Config popover.
+  const chipCtx: QuickBarChipContext = $derived({ provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, availableSkillCount: skillList?.length ?? 0, documentCount: docs.length, shellPresets: catalog.shellPresets });
+  const allChips = $derived(quickBarChips(cfg, chipCtx));
+  const bar = $derived(composerBar(allChips, cfg, chipCtx));
+  const groups = $derived(configGroups(allChips, cfg, chipCtx));
+
+  /** `/mcp add <line>`: save the server, list its tools, turn it on for this chat. */
+  function addMcp(line: string) {
+    setMenu(closedMenu(menuUi(), "picked"));
+    void quickAddMcpToChat(line, {
+      cfg: () => cfg,
+      patch: patchConfig,
+      reloadCatalog: () => loadQuickbarCatalog().then((c) => { catalog = c; }),
+      notify: (kind, title, detail) => void toast[kind](title, detail),
+    });
+  }
+
   // Menu rows are built in chat-menu-items.ts. `cfg` is a getter: rows read it again when they run.
   const pickItems = $derived(
     pickerItems({
@@ -431,6 +451,7 @@
         setMenu(closedMenu(menuUi(), "picked"));
         workspaceDialog = true;
       },
+      addMcp,
       info: (title, detail) => void toast.info(title, detail),
     }),
   );
@@ -479,7 +500,7 @@
       toast.error(`Nothing to ${cmd.name} yet`);
       return;
     }
-    if ((cmd.name === "rename" || cmd.picker || cmd.name === "goal" || cmd.name === "loop" || cmd.name === "schedule") && arg === "") {
+    if ((cmd.name === "rename" || cmd.picker || cmd.name === "goal" || cmd.name === "loop" || cmd.name === "schedule" || cmd.name === "btw") && arg === "") {
       completeCommand(cmd);
       return;
     }
@@ -508,7 +529,10 @@
       case "workspace":
       case "iterations":
       case "approvals":
+      case "mcp":
         return; // second-level picks are executed from the menu rows
+      case "btw":
+        return void (await btwStore.ask(sessionId, arg.trim(), turns));
       case "goal":
       case "loop":
       case "schedule":
@@ -763,7 +787,10 @@
       {#if provider || draftSkillList.length > 0}
         <ChatQuickBar
           queuedSkills={draftSkillList}
-          chips={quickBarChips(cfg, { provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, availableSkillCount: skillList?.length ?? 0, documentCount: docs.length, shellPresets: catalog.shellPresets })}
+          chips={bar.shown}
+          hidden={bar.hidden}
+          {groups}
+          disclosure={disclosureSummary(cfg)}
           onRemoveSkill={removeDraftSkill}
           onPick={pickChip}
         />

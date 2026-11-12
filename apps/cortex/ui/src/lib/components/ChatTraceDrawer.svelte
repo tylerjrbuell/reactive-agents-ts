@@ -10,6 +10,7 @@
   import { buildSessionContext } from "$lib/chat-session-context.js";
   import { formatSessionCost as formatCost } from "$lib/stores/chat-cost.js";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
+  import ContextSources from "$lib/components/ContextSources.svelte";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import { buildRunTrees, runViewHref, traceUrl, type RunTraceView } from "$lib/chat-export.js";
   import { saveTextFile } from "$lib/chat-download.js";
@@ -281,6 +282,7 @@
     {/if}
     {#if tab === "context"}
       <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <ContextSources skills={turn?.skills} agentId={session?.stableAgentId} runId={turn?.runId} settledKey={turn?.streaming ? "" : "done"} />
         <section>
           <h4 class="m-0 mb-1.5 text-[11px] font-medium text-[var(--cortex-text-2)]">Session</h4>
           <dl class="m-0 divide-y divide-[color:var(--cortex-line)] rounded-lg border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-2)]/50">

@@ -34,6 +34,7 @@ import {
 import type { QuickbarCatalog } from "./chat-quickbar-data.js";
 import { addDocumentPatch, removeDocumentPatch, toggleSkillPatch, type DiscoveredSkill } from "./chat-config-patch.js";
 import { skillDetail } from "./chat-skills.js";
+import { parseMcpQuickAdd } from "./mcp-quick-add.js";
 import { shellOffDetail, shellOffLabel } from "./shell-from-picks.js";
 import { workspaceLabel, workspaceSourceLabel, workspaceSuggestions } from "./workspace-api.js";
 import type { UiModelOption } from "./framework-models.js";
@@ -88,6 +89,8 @@ export interface PickerContext {
   readonly swapDraft: (next: string) => void;
   /** Close the menu and open the workspace folder browser. */
   readonly browseWorkspace: () => void;
+  /** `/mcp add <line>`: save the server, discover its tools and turn it on for this chat. */
+  readonly addMcp?: (line: string) => void | Promise<void>;
   readonly info: (title: string, detail?: string) => void;
 }
 
@@ -210,6 +213,8 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
     }
     case "approvals":
       return approvalRows(ctx, q, multiRow);
+    case "mcp":
+      return mcpRows(ctx, q, multiRow);
     case "skill":
       return (ctx.skills ?? []).filter((s) => has(s.name, s.description)).map((s) =>
         multiRow(s.name, "bolt", s.name, `Pin ${s.name}`, () => toggleSkillPatch(ctx.cfg, s), {
@@ -250,6 +255,35 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
       return rows;
     }
   }
+}
+
+/**
+ * `/mcp` rows: each saved MCP server (select to turn it on or off for this chat, the
+ * `/tools` toggle), then `add <command or URL>`. Typing `add <line>` offers the row that
+ * saves it, discovers its tools and turns it on (`ctx.addMcp`, `mcp-quick-add.ts`).
+ */
+function mcpRows(
+  ctx: PickerContext,
+  q: string,
+  multiRow: (key: string, icon: IconName, label: string, what: string, patch: () => Patch, extra?: Partial<MenuItem>) => MenuItem,
+): MenuItem[] {
+  if (q.startsWith("add ")) {
+    const line = (ctx.slash?.arg ?? "").slice(4).trim();
+    if (line === "") return [];
+    const parsed = parseMcpQuickAdd(line);
+    if (!parsed.ok) return [configRow("add:error", "alert", "Not a command or URL", () => ctx.info("Cannot add this server", parsed.error), { detail: parsed.error })];
+    const { body } = parsed;
+    return [configRow(`add:${line}`, "plus", `Add ${body.name}`, () => ctx.addMcp?.(line), { detail: "endpoint" in body ? body.endpoint : [body.command, ...(body.args ?? [])].join(" ") })];
+  }
+  const has = (...parts: string[]) => q === "" || parts.some((p) => p.toLowerCase().includes(q));
+  const ids = Array.isArray(ctx.cfg.mcpServerIds) ? (ctx.cfg.mcpServerIds as string[]) : [];
+  const rows = ctx.catalog.mcpServers.filter((s) => has(s.name, s.serverId)).map((s) =>
+    multiRow(`mcp:${s.serverId}`, "server", s.name, s.name, () => toggleMcpServerPatch(ctx.cfg, s.serverId, s.tools), { active: ids.includes(s.serverId), hint: ids.includes(s.serverId) ? "on for this chat" : "off", detail: `${s.tools.length} tool${s.tools.length === 1 ? "" : "s"}` }),
+  );
+  if (q === "" || "add".startsWith(q)) {
+    rows.push(configRow("add", "plus", "add <command or URL>", () => ctx.swapDraft("/mcp add "), { detail: ctx.catalog.mcpServers.length === 0 ? "No servers yet, e.g. npx -y @scope/server or https://host/mcp" : "Save another server", complete: () => ctx.swapDraft("/mcp add ") }));
+  }
+  return rows;
 }
 
 /**

@@ -9,6 +9,7 @@
   import { hiddenApprovalCards, orphanChatApprovals } from "$lib/chat-live-approval.js";
   import { pendingApprovals } from "$lib/stores/approval-watcher.js";
   import ChatProposals from "$lib/components/ChatProposals.svelte";
+  import ChatBtwAsides from "./ChatBtwAsides.svelte";
   import CompactionSummary from "$lib/components/CompactionSummary.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import Button from "$lib/components/kit/Button.svelte";
@@ -173,6 +174,7 @@
     {/each}
     <ChatInteractionCards {sessionId} />
     <ChatProposals {sessionId} streaming={sending} />
+    <ChatBtwAsides {sessionId} />
   </div>
 </div>
 

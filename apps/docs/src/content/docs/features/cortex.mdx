@@ -208,7 +208,13 @@ Chat shows what each turn did and what it cost:
 
 #### Quick bar
 
-The chip row above the input holds the settings you change most. Click a chip, or type its slash command, to pick a new value; the change is saved to the session and the next turn uses it. This also works while a reply runs: the change is saved straight away (not queued as a message), the running turn keeps the settings it started with, and a toast says the change applies to the next turn.
+The row above the input shows the model and only the settings that differ from the defaults: a thinking choice, a strategy other than ReAct, a step cap other than 16, tools, the shell, a workspace, pinned skills, documents, agent control. At most four chips show; the **Config** button (with `+N` for changed settings that did not fit) opens a popover with every setting grouped as Model (provider, model, thinking), Reasoning (strategy, skills, agent control), Tools (tools, shell, MCP servers, tool disclosure, approvals), Workspace (directory, documents) and Limits (steps), each with its current value. A Config row opens the same picker as its slash command. Click a chip or row, or type the slash command, to pick a new value; the change is saved to the session and the next turn uses it. This also works while a reply runs: the change is saved straight away (not queued as a message), the running turn keeps the settings it started with, and a toast says the change applies to the next turn.
+
+**Tool disclosure** is how the permitted tools are shown to the model: `all` (every tool's full schema), `index` (a list of names; schemas load when a tool is used) or `discover` (only through `discover-tools`). Unset, the framework picks by model tier. The Config popover and the builder's Tools section both state what is in force (`Disclosure: index (3 tools picked), a name index; schemas load on use`) with a "What is tool disclosure?" explainer, and a closed Tools section shows a **Disclosure** badge when a mode is set.
+
+**`/mcp`** turns a saved MCP server on or off for this chat (its tools move with it). `/mcp add <command or URL>` saves a new one, lists its tools and turns it on: `/mcp add https://mcp.context7.com/mcp`, `/mcp add npx -y @modelcontextprotocol/server-filesystem /tmp`, or `/mcp add docs https://host/mcp` to name it. If the tools cannot be listed the server stays saved but is not turned on, and the toast says why. Lab → Tools has the same one-line add (and **Add an MCP server** in the command palette goes there); headers and environment variables still need the manual form below it.
+
+**`/btw <question>`** asks a side question about the run while it works, or about the last reply when nothing is running. A separate tool-less call on the chat's own provider and model answers from a snapshot (the task, the tool calls so far with their results, the text drafted so far; credential-shaped values are redacted before it leaves the browser). It shows as a collapsible aside in the thread, marked as not part of the chat: it is never added to the history, never sent to the running turn, and the call reads and writes no memory. Its tokens are not added to the chat's totals.
 
 | Chip | Command | Sets |
 | ---- | ------- | ---- |
@@ -219,6 +225,8 @@ The chip row above the input holds the settings you change most. Click a chip, o
 | Steps | `/iterations` | Most steps one turn may take (1 to 200; presets 4, 8, 16, 32, 64). |
 
 Workspace and shell settings only reach the agent when the chat has tools on. A new chat has no workspace until you pick one: Cortex suggests the launch project but does not set it for you, so file tools never get write access to a directory you did not choose.
+
+The run view's **Context** tab and the chat inspector's Context tab open with the run's knowledge sources: the skills it had active and why (pinned, matched the task, loaded by the agent; a link to Lab Skills) and the memories it wrote (facts, workflows and log entries from the agent's memory, filtered to that run, with a link to the Memory studio). Which memories the agent *recalled* is not shown: the framework publishes no recall event yet, and the tab says so instead of guessing. Below them, the context-window gauge as before.
 
 While a picker is open, clicking another chip switches straight to that picker, and clicking the same chip, clicking anywhere else or pressing Escape closes it. Whatever you had typed in the composer comes back. Multi-value pickers (tools, skills, documents) show checkboxes and stay open while you toggle several items: click or Tab toggles the highlighted row, Enter toggles it and closes. Single-value pickers (strategy, shell, steps, model) close when you pick.
 
@@ -258,10 +266,12 @@ In a chat, these slash commands drive longer work:
 - `/loop` and `/schedule` — repeat work on a schedule.
 - `/agent on` — opt the chat into agent session control ("let the agent manage this chat"). Off by default.
 - `/tools` — the tool disclosure picker (`all`, `index`, `discover`, or tier).
+- `/mcp` — turn an MCP server on for this chat, or `/mcp add <command or URL>`.
+- `/btw <question>` — a read-only side question about the run in progress; never changes the run.
 
 A tool call shows the arguments it was called with as soon as it starts, so a long-running call (a slow shell command, a large fetch) says what it is doing before it finishes; credential-shaped values (API keys, bearer tokens, `?key=` query values) are redacted on screen. A turn that pauses for approval shows an approval card in the thread, and one that asks you a question shows a reply box (Yes/No, choices, form fields, or free text). A live context meter reads the `ContextPressure` event, and a `TokenUsage` event drives the live input/output counters and the per-call strip; estimates are marked `~`. Usage details consolidate into the **Inspector's Context tab** (session, provider/model, context limit, usage, total/input/output/cache tokens, message counts, cost, timestamps, raw messages) alongside Steps and Run trace.
 
-The chat quick bar sets strategy, tools, shell, workspace, and the per-turn step cap next to provider and model.
+The chat quick bar shows the model and the settings changed from their defaults; its Config popover sets strategy, tools, shell, workspace, and the per-turn step cap next to provider and model.
 
 ### Lab — Builder, Saved agents, Skills, Tools, and Prompts
 

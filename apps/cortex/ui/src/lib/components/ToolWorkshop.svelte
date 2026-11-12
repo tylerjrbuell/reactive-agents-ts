@@ -7,6 +7,7 @@
   import ToolTestRunner from "$lib/components/tools/ToolTestRunner.svelte";
   import CreateCustomToolForm from "$lib/components/tools/CreateCustomToolForm.svelte";
   import McpServerForm from "$lib/components/tools/McpServerForm.svelte";
+  import McpQuickAdd from "$lib/components/tools/McpQuickAdd.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import EmptyState from "$lib/components/kit/EmptyState.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
@@ -426,6 +427,7 @@
     <p class="tw-intro">
       One catalog: built-in, meta, MCP and Lab tools. Create tool adds a custom or MCP-backed entry; allow a tool for an agent in the Builder's Tools section.
     </p>
+    <McpQuickAdd onAdded={async () => { await loadMcpServers(); await loadCatalog(); }} />
     <div class="tw-actions">
       <Button icon="retry" onclick={() => loadCatalog()}>Reload catalog</Button>
       <Button variant="primary" icon="plus" onclick={() => openCreate("mcp")}>Create tool</Button>

@@ -244,3 +244,44 @@ describe("inlineMenuItems", () => {
     expect(inlineMenuItems(ctx("review", { pinned: ["review"] }))[0]).toMatchObject({ label: "/review", hint: "every turn", active: true });
   });
 });
+
+describe("/mcp rows", () => {
+  const catalog = { ...EMPTY_CATALOG, mcpServers: [{ serverId: "s1", name: "docs", tools: ["docs/search", "docs/read"] }, { serverId: "s2", name: "git", tools: ["git/log"] }] };
+
+  test("lists each saved server with its state, then the add row", () => {
+    const { ctx } = picker("/mcp ", { catalog, cfg: { mcpServerIds: ["s1"], tools: ["docs/search", "docs/read"] } });
+    const rows = pickerItems(ctx);
+    expect(rows.map((r) => r.key)).toEqual(["mcp:s1", "mcp:s2", "add"]);
+    expect(rows[0]).toMatchObject({ active: true, hint: "on for this chat", detail: "2 tools", multi: true });
+    expect(rows[1]).toMatchObject({ active: false, hint: "off", detail: "1 tool" });
+  });
+
+  test("a server row toggles its id and its tools together", () => {
+    const { ctx, calls } = picker("/mcp git", { catalog });
+    void pickerItems(ctx)[0]!.run();
+    expect(calls).toEqual([`toggle:git:${JSON.stringify({ tools: ["git/log"], mcpServerIds: ["s2"], enableTools: true })}`]);
+  });
+
+  test("the add row puts `/mcp add ` in the composer", () => {
+    const { ctx, calls } = picker("/mcp ", { catalog });
+    void pickerItems(ctx).find((r) => r.key === "add")!.run();
+    expect(calls).toEqual(["draft:/mcp add "]);
+  });
+
+  test("`add <command|URL>` offers one row that adds the parsed server", () => {
+    const added: string[] = [];
+    const { ctx } = picker("/mcp add https://mcp.context7.com/mcp", { catalog, addMcp: (line) => void added.push(line) });
+    const rows = pickerItems(ctx);
+    expect(rows.map((r) => r.label)).toEqual(["Add context7"]);
+    void rows[0]!.run();
+    expect(added).toEqual(["https://mcp.context7.com/mcp"]);
+  });
+
+  test("`add` with a line that cannot be a server explains why instead of adding", () => {
+    const { ctx, calls } = picker("/mcp add https://a.dev/mcp --header x", { catalog });
+    const [row] = pickerItems(ctx);
+    expect(row).toMatchObject({ key: "add:error" });
+    void row!.run();
+    expect(calls).toEqual(["info:Cannot add this server"]);
+  });
+});

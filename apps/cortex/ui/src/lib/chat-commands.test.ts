@@ -49,3 +49,11 @@ describe("matchCommands exact-match ranking", () => {
     expect(matchCommands("go").map((c) => c.name).slice(0, 2)).toEqual(["go", "goal"]);
   });
 });
+
+describe("/mcp and /btw", () => {
+  test("/mcp is a picker command, /btw takes a question", () => {
+    expect(resolveCommand(parseSlash("/mcp ")!)).toMatchObject({ name: "mcp", picker: "mcp" });
+    expect(parseSlash("/btw what did the last tool return?")).toEqual({ query: "btw", arg: "what did the last tool return?", hasArg: true });
+    expect(resolveCommand(parseSlash("/btw x")!)?.needsTurns).toBe(false);
+  });
+});

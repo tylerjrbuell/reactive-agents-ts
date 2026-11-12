@@ -22,6 +22,11 @@ export const LIVE_CONFIG_COMMANDS: ReadonlySet<string> = new Set([
   "skills",
   "docs",
   "agent",
+  // `/mcp` toggles or adds an MCP server (a config PATCH, applied next turn).
+  "mcp",
+  // `/btw` asks a read-only side question: it is meant to run while a turn is in progress,
+  // never queued behind it and never part of the running turn.
+  "btw",
 ]);
 
 /** True for a config-only slash command (allowed during a run). */

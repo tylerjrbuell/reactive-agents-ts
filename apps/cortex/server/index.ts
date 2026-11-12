@@ -13,6 +13,7 @@ import { modelThroughputRouter } from "./api/model-throughput.js";
 import { modelInsightsRouter } from "./api/model-insights.js";
 import { crashedRunsRouter } from "./api/crashed-runs.js";
 import { chatRouter } from "./api/chat.js";
+import { ChatBtwService } from "./services/chat-btw.js";
 import { memoryRouter } from "./api/memory.js";
 import { MemoryInspector } from "./services/memory-inspector.js";
 import { agentSkillsRouter } from "./api/agent-skills.js";
@@ -152,7 +153,7 @@ export async function startCortexServer(
     .use(modelThroughputRouter(runtime.rawDb))
     .use(modelInsightsRouter(runtime.rawDb))
     .use(crashedRunsRouter(runtime.rawDb, runtime.runnerLayer))
-    .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService))
+    .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService, new ChatBtwService(runtime.rawDb)))
     .use(memoryRouter(memoryInspector, runtime.rawDb))
     .use(
       agentSkillsRouter(

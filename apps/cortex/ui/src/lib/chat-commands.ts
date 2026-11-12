@@ -8,10 +8,10 @@ export type ChatCommandName =
   | "clear" | "compact" | "fork" | "rerun" | "rewind" | "copy" | "export" | "rename" | "help"
   | "model" | "provider" | "thinking" | "skill" | "skills" | "docs"
   | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals"
-  | "goal" | "plan" | "go" | "loop" | "schedule" | "agent";
+  | "goal" | "plan" | "go" | "loop" | "schedule" | "agent" | "mcp" | "btw";
 
 /** What `/cmd <partial>` offers as second-level choices. */
-export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "skill-once" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals";
+export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "skill-once" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals" | "mcp";
 
 export interface ChatCommand {
   readonly name: ChatCommandName;
@@ -43,6 +43,8 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "strategy", icon: "strategy", summary: "Switch the reasoning strategy", arg: "[strategy]", needsTurns: false, picker: "strategy" },
   { name: "tools", icon: "tool", summary: "Choose tools: toolsets, single tools, MCP servers, saved agents, how tools are shown", arg: "[tool]", needsTurns: false, picker: "tools" },
   { name: "terminal", icon: "shell", summary: "Turn the shell off, on this machine, or in a Docker sandbox", arg: "[off|host|docker]", needsTurns: false, picker: "terminal" },
+  { name: "mcp", icon: "server", summary: "Turn an MCP server on for this chat, or add one from a command or URL", arg: "[server | add <command|URL>]", needsTurns: false, picker: "mcp" },
+  { name: "btw", icon: "info", summary: "Ask a side question about this run; it never changes the run", arg: "<question>", needsTurns: false },
   { name: "workspace", icon: "folder", summary: "Set the directory file tools and the shell work in", arg: "[/absolute/path]", needsTurns: false, picker: "workspace" },
   { name: "iterations", icon: "steps", summary: "Cap the steps one turn may take", arg: "[number]", needsTurns: false, picker: "iterations" },
   { name: "approvals", icon: "pause", summary: "Choose which tools and shell commands wait for your approval", arg: "[add <command>]", needsTurns: false, picker: "approvals" },
