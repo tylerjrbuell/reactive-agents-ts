@@ -1,13 +1,14 @@
 <script lang="ts">
   /**
    * Execution: how a run is carried out. Limits (timeout, token and cost caps),
-   * retries, durable runs, the structured-output schema and lifecycle webhooks.
+   * retries, durable runs, questions to the user (`request_user_input`) and lifecycle
+   * webhooks. The output schema is its own section (OutputSchemaSection).
    */
   import ConfigSection from "../ConfigSection.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
-  import OutputSchemaParseFailField from "$lib/components/OutputSchemaParseFailField.svelte";
+  import { ASK_MODES, askModeOf, withAskMode, type AskMode } from "$lib/user-interaction.js";
   import type { PanelAgentConfig } from "../types.js";
 
   interface Props {
@@ -16,18 +17,6 @@
     onToggle: () => void;
   }
   let { config = $bindable(), open, onToggle }: Props = $props();
-
-  // Structured-output schema validity (for the editor hint).
-  const outputSchemaText = $derived((config.outputSchema ?? "").trim());
-  const outputSchemaValid = $derived.by(() => {
-    if (outputSchemaText === "") return false;
-    try {
-      const p = JSON.parse(outputSchemaText) as unknown;
-      return p != null && typeof p === "object" && !Array.isArray(p);
-    } catch {
-      return false;
-    }
-  });
 
 
   // ── Lifecycle webhooks ────────────────────────────────────────────────
@@ -122,20 +111,16 @@
           hint="Resumes after a crash, and keeps a run that waits for your approval across a restart. Turns reasoning on."
           checked={config.durableRuns.enabled}
           onchange={(on) => (config = { ...config, durableRuns: { ...config.durableRuns, enabled: on } })} />
-        <!-- Structured output -->
+        <!-- Questions (request_user_input) -->
         <div>
-          <div class="config-label">Structured output (JSON Schema)</div>
-          <textarea bind:value={config.outputSchema} rows="6" spellcheck="false"
-            placeholder={'{\n  "type": "object",\n  "properties": { "name": { "type": "string" } },\n  "required": ["name"]\n}'}
-            class="config-input acp-mono"></textarea>
-          {#if outputSchemaText !== ''}
-            <p class="mt-1 acp-hint" class:acp-ok={outputSchemaValid} class:acp-bad={!outputSchemaValid}>
-              {outputSchemaValid ? 'Valid: the answer is extracted into result.object.' : 'Not valid JSON: the schema is ignored until it is fixed.'}
-            </p>
-            <OutputSchemaParseFailField bind:value={config.outputSchemaOnParseFail} />
-          {:else}
-            <p class="mt-1 acp-hint">Optional — extract the agent's answer into a typed object (<code>.withOutputSchema</code>). Result shows in the run's Structured Output view.</p>
-          {/if}
+          <label for="acp-ask-mode" class="config-label">Ask me questions</label>
+          <select id="acp-ask-mode" class="config-input" value={askModeOf(config.rawConfig)}
+            onchange={(e) => (config = { ...config, rawConfig: withAskMode(config.rawConfig, e.currentTarget.value as AskMode) })}>
+            {#each ASK_MODES as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
+          </select>
+          <p class="mt-1 acp-hint">
+            The agent may stop to ask you something (<code>request_user_input</code>). The run waits for your answer in the chat or under Waiting on you, then carries on. With durable execution it pauses and survives a restart.
+          </p>
         </div>
         <!-- Lifecycle webhooks -->
         <div class="acp-card">

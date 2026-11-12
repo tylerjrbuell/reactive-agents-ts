@@ -3,6 +3,9 @@
   import ChatApprovalCards from "$lib/components/ChatApprovalCards.svelte";
   import ChatInteractionCards from "$lib/components/ChatInteractionCards.svelte";
   import ChatLiveApproval from "$lib/components/ChatLiveApproval.svelte";
+  import ChatLiveInteraction from "$lib/components/ChatLiveInteraction.svelte";
+  import { orphanChatInteractions, type LiveInteraction } from "$lib/chat-live-interaction.js";
+  import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
   import { hiddenApprovalCards, orphanChatApprovals } from "$lib/chat-live-approval.js";
   import { pendingApprovals } from "$lib/stores/approval-watcher.js";
   import ChatProposals from "$lib/components/ChatProposals.svelte";
@@ -63,6 +66,15 @@
       new Set($chatStore.activePendingApprovals.map((p) => p.runId)),
       new Set(turns.flatMap((t) => (t.streaming && t.liveApproval ? [t.liveApproval.runId] : []))),
       $hiddenApprovalCards,
+    ),
+  );
+
+  // Live questions of this chat that no streaming turn shows (e.g. after a reload).
+  const interactionOrphans = $derived(
+    orphanChatInteractions(
+      sessionId,
+      $pendingInteractions as readonly (LiveInteraction & { chatSessionId?: string })[],
+      new Set(turns.flatMap((t) => (t.streaming && t.liveInteraction ? [t.liveInteraction.runId] : []))),
     ),
   );
 
@@ -155,6 +167,9 @@
     <ChatApprovalCards {sessionId} />
     {#each liveOrphans as approval (approval.runId)}
       <ChatLiveApproval {approval} />
+    {/each}
+    {#each interactionOrphans as question (question.runId + question.interactionId)}
+      <ChatLiveInteraction {question} />
     {/each}
     <ChatInteractionCards {sessionId} />
     <ChatProposals {sessionId} streaming={sending} />

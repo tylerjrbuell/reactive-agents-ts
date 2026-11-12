@@ -50,7 +50,7 @@ import { traceDirs } from "./run-trace-file.js";
 import { cortexLog } from "../cortex-log.js";
 import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
 import { buildCortexAgent } from "./build-cortex-agent.js";
-import { approvalsWaitLive, durableApprovals } from "./durable-approvals.js";
+import { waitsLive, durableApprovals } from "./durable-approvals.js";
 import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
 import { compactionContextEstimate, compactionPrompt, structureCompactionSummary } from "./compaction-summary.js";
 import { attachChatIngest, withStartedArgs, type ChatIngestHandle, type ChatIngestSink } from "./chat-ingest.js";
@@ -1026,8 +1026,9 @@ let tokensUsed = 0;
     const { recorder: assessments, unsubscribe: unAssess } = await recordTurnAssessments(agent);
     const { log: runErrors, unsubscribe: unErrors } = await recordRunErrors(agent);
     const { log: skillActivity, unsubscribe: unSkills } = await recordSkillActivity(agent);
-    // A `detach` gate without durable runs waits live mid-turn: list and answer it (durable-approvals.ts).
-    const unLive = approvalsWaitLive(params)
+    // A `detach` gate or a `request_user_input` question without durable runs waits live
+    // mid-turn: list and answer it (durable-approvals.ts).
+    const unLive = waitsLive(params)
       ? durableApprovals.watchLive({ agentId: stableAgentId ?? sessionId, agent, chatSessionId: sessionId })
       : undefined;
     const unsubscribe = () => {
@@ -1376,7 +1377,10 @@ let tokensUsed = 0;
       ...(harness ? { harness } : {}),
       ...(documents ? { documents } : {}),
       ...(auditRationale ? { auditRationale: true } : {}),
-      ...(rawConfig && Object.keys(rawConfig).length > 0 ? { rawConfig } : {}),
+      // A chat is interactive: the agent may ask a question mid-turn and the turn waits for the
+      // answer inline (live `request_user_input`). Cortex default; `rawConfig.userInteraction: false`
+      // (Lab Execution · "Ask me questions") turns it off, `{ timeoutMs }` bounds the wait.
+      rawConfig: { userInteraction: true, ...rawConfig },
       ...(durableRuns ? { durableRuns } : {}),
       ...(approvalPolicy ? { approvalPolicy } : {}),
       ...(workspace ? { workspace } : {}),

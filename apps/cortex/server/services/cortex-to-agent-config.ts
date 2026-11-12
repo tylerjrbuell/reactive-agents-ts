@@ -4,8 +4,8 @@
  * Every setting with an AgentConfig path goes through here, so the config a
  * saved agent, an export or the CLI sees is the agent Cortex runs. Only the
  * true overlays stay in build-cortex-agent.ts: values that are not data (host
- * tool code, a scripted test scenario, the output schema object, a saved
- * provider key) and Cortex host wiring (trace dir, user-interaction rail).
+ * tool code, a scripted test scenario, a saved provider key) and Cortex host
+ * wiring (trace dir).
  */
 import { Schema } from "effect";
 import { AgentConfigSchema, type AgentConfig } from "@reactive-agents/runtime";
@@ -324,7 +324,18 @@ export function cortexParamsToAgentConfig(
     // Agentic-UI interaction rail (`request_user_input` pauses): on with durable
     // runs, where a pause can persist and resume. An AgentConfig path since
     // runtime 078365780 (was a Cortex overlay).
-    draft.userInteraction = true;
+    // An explicit `rawConfig.userInteraction` (e.g. `{ timeoutMs }`) is kept.
+    if (params.rawConfig?.userInteraction === undefined) draft.userInteraction = true;
+  }
+  // Without durable runs `userInteraction` is the framework's LIVE ask: the run
+  // waits in process for an answer (`respondToInteraction`). It rides `rawConfig`
+  // like any AgentConfig path (Lab Execution · "Ask me questions", chat default).
+
+  // Typed structured output: plain JSON Schema in the AgentConfig (runtime
+  // 7d4664da2). Lenient by default (`objectError` on a miss); `throw` fails the run.
+  if (params.outputSchema && Object.keys(params.outputSchema).length > 0) {
+    draft.outputSchema = params.outputSchema;
+    if (params.outputSchemaOnParseFail === "throw") draft.outputSchemaOptions = { onParseFail: "throw" };
   }
 
   if (params.guardrails?.enabled === true) {

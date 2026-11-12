@@ -8,6 +8,7 @@
     type StoredPrompt,
     type PromptType,
   } from "$lib/stores/prompt-store.js";
+  import { emptyPromptsText, pickerPrompts } from "$lib/prompt-picker.js";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Chip from "$lib/components/kit/Chip.svelte";
@@ -15,7 +16,7 @@
 
   interface Props {
     onSelect: (body: string) => void;
-    /** Restrict the picker to these prompt types. Empty/omitted = all types. */
+    /** Prompt types listed first (the field's own kinds). Others stay listed after them. */
     types?: PromptType[];
     /** Pre-selected type for the save form (e.g. "system" next to a system-prompt field). */
     defaultSaveType?: PromptType;
@@ -38,19 +39,10 @@
     return unsubscribe;
   });
 
-  const visibleTypes = $derived(types.length > 0 ? types : [...PROMPT_TYPES]);
-
-  const filtered = $derived(
-    prompts
-      .filter((p) => (types.length === 0 ? true : types.includes(p.type)))
-      .filter((p) => (typeFilter === "all" ? true : p.type === typeFilter))
-      .filter(
-        (p) =>
-          !search.trim() ||
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.body.toLowerCase().includes(search.toLowerCase()),
-      ),
-  );
+  // `types` only puts the field's own kinds first; every saved prompt stays listed (lib/prompt-picker.ts).
+  const visibleTypes = [...PROMPT_TYPES];
+  const filtered = $derived(pickerPrompts(prompts, { preferred: types, typeFilter, search }));
+  const emptyText = $derived(emptyPromptsText(prompts.length, filtered.length));
 
 
 
@@ -89,8 +81,8 @@
         <IconButton icon="trash" size="sm" label={`Delete ${p.name || "prompt"}`} onclick={() => void promptStore.delete(p.id)} />
       </li>
     {/each}
-    {#if filtered.length === 0}
-      <li class="none">No saved prompts yet.</li>
+    {#if emptyText}
+      <li class="none">{emptyText}</li>
     {/if}
   </ul>
   {#if showSaveForm}

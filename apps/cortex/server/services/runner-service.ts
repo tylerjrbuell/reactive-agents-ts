@@ -10,7 +10,7 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
 import { CortexIngestService } from "./ingest-service.js";
-import { approvalsWaitLive, durableApprovals, type ApprovalDecision, type PendingApprovalRow } from "./durable-approvals.js";
+import { waitsLive, durableApprovals, type ApprovalDecision, type PendingApprovalRow } from "./durable-approvals.js";
 import { CortexStoreService } from "./store-service.js";
 import { cortexLog, cortexLogRunnerExecution, formatErrorDetails } from "../cortex-log.js";
 import type {
@@ -283,6 +283,9 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
         schema: unknown;
         task: string;
         updatedAt: number;
+        /** Set on a live question (no durable runs): the agent asking and, for a chat, its session. */
+        agentId?: string;
+        chatSessionId?: string;
       }[],
       never
     >;
@@ -579,7 +582,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
           let paused = false;
           // A `detach` gate without durable runs waits live while this run runs:
           // list and answer its waits through the shared registry until it ends.
-          const unwatchLive = approvalsWaitLive(buildParams) ? durableApprovals.watchLive({ agentId, agent }) : undefined;
+          const unwatchLive = waitsLive(buildParams) ? durableApprovals.watchLive({ agentId, agent }) : undefined;
 
           void agent
             .run(params.prompt, { taskId: runId })
@@ -621,7 +624,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
               // so the desk can render the extracted typed value. Emitted as a
               // synthetic event (the framework has no StructuredOutput event yet);
               // the live message carries the _tag string + payload verbatim.
-              const ro = result as { object?: unknown; objectError?: string };
+              const ro = result as { object?: unknown; objectError?: string; objectReport?: unknown };
               if (ro.object !== undefined || ro.objectError !== undefined) {
                 Effect.runFork(
                   ingest
@@ -635,6 +638,8 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
                         agentId,
                         ...(ro.object !== undefined ? { object: ro.object } : {}),
                         ...(ro.objectError !== undefined ? { objectError: ro.objectError } : {}),
+                        // How the pipeline got (or failed to get) the object; also live as StructuredOutputReported.
+                        ...(ro.objectReport !== undefined ? { objectReport: ro.objectReport } : {}),
                       } as any,
                     })
                     .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:structured-output", tag: errorTag(err) }))),
@@ -759,6 +764,8 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
             schema: unknown;
             task: string;
             updatedAt: number;
+            agentId?: string;
+            chatSessionId?: string;
           }[] = [];
           for (const entry of durableApprovals.list()) {
             // Chat-owned entries pause on approval gates only (no interaction rail in chat yet).
@@ -787,6 +794,22 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
               });
             }
           }
+          // Questions agents are waiting on live (no durable runs): desk runs and chats.
+          const live = yield* Effect.promise(() => durableApprovals.listLiveInteractions());
+          for (const r of live) {
+            if (out.some((o) => o.runId === r.runId && o.interactionId === r.interactionId)) continue;
+            out.push({
+              runId: r.runId,
+              interactionId: r.interactionId,
+              kind: r.kind,
+              prompt: r.prompt,
+              schema: r.schema,
+              task: "",
+              updatedAt: Date.now(),
+              ...(r.chatSessionId !== undefined ? { chatSessionId: r.chatSessionId } : {}),
+              agentId: r.agentId,
+            });
+          }
           return out;
         }),
 
@@ -794,6 +817,9 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
         Effect.gen(function* () {
           const agent = durableApprovals.get(String(runId))?.agent;
           if (!agent) {
+            // A live question (no durable runs): the waiting run takes the answer and goes on.
+            const live = yield* Effect.promise(() => durableApprovals.answerLiveInteraction(String(runId), interactionId, value));
+            if (live.ok) return { success: true, output: "" };
             cortexLog("debug", "runner", "respondToInteraction: run not pending interaction", { runId });
             return { success: false, output: "" };
           }

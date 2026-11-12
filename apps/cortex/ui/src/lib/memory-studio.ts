@@ -230,19 +230,19 @@ async function readJson<T>(res: Response): Promise<T> {
 }
 
 /** Agents that have a memory database. */
-export async function fetchMemoryAgents(fetchFn: typeof fetch = fetch): Promise<MemoryAgent[]> {
-  const body = await readJson<{ agents?: MemoryAgent[] }>(await fetchFn(`${CORTEX_SERVER_URL}/api/memory/agents`));
+export async function fetchMemoryAgents(fetchFn: typeof fetch = fetch, signal?: AbortSignal): Promise<MemoryAgent[]> {
+  const body = await readJson<{ agents?: MemoryAgent[] }>(await fetchFn(`${CORTEX_SERVER_URL}/api/memory/agents`, signal ? { signal } : undefined));
   return body.agents ?? [];
 }
 
-/** An agent's memory; `runId` narrows it to what that run wrote. */
-export async function fetchMemory(agentId: string, runId?: string, fetchFn: typeof fetch = fetch): Promise<MemoryListing> {
-  return readJson<MemoryListing>(await fetchFn(memoryUrl(agentId, "", { runId })));
+/** An agent's memory; `runId` narrows it to what that run wrote. `signal` cancels a stale request. */
+export async function fetchMemory(agentId: string, runId?: string, fetchFn: typeof fetch = fetch, signal?: AbortSignal): Promise<MemoryListing> {
+  return readJson<MemoryListing>(await fetchFn(memoryUrl(agentId, "", { runId }), signal ? { signal } : undefined));
 }
 
-/** Full-text search over semantic memory. */
-export async function searchMemory(agentId: string, q: string, runId?: string, fetchFn: typeof fetch = fetch): Promise<SemanticMemory[]> {
-  const body = await readJson<{ results?: SemanticMemory[] }>(await fetchFn(memoryUrl(agentId, "/search", { q, runId })));
+/** Full-text search over semantic memory. `signal` cancels a stale request. */
+export async function searchMemory(agentId: string, q: string, runId?: string, fetchFn: typeof fetch = fetch, signal?: AbortSignal): Promise<SemanticMemory[]> {
+  const body = await readJson<{ results?: SemanticMemory[] }>(await fetchFn(memoryUrl(agentId, "/search", { q, runId }), signal ? { signal } : undefined));
   return body.results ?? [];
 }
 

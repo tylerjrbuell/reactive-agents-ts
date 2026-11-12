@@ -34,6 +34,7 @@
   import MemorySection from "$lib/components/agent-config/sections/MemorySection.svelte";
   import GuardrailsSection from "$lib/components/agent-config/sections/GuardrailsSection.svelte";
   import ExecutionSection from "$lib/components/agent-config/sections/ExecutionSection.svelte";
+  import OutputSchemaSection from "$lib/components/agent-config/sections/OutputSchemaSection.svelte";
   import MetaToolsSection from "$lib/components/agent-config/sections/MetaToolsSection.svelte";
   import ReliabilitySection from "$lib/components/agent-config/sections/ReliabilitySection.svelte";
   import ObservabilitySection from "$lib/components/agent-config/sections/ObservabilitySection.svelte";
@@ -376,6 +377,10 @@
 
   {#if shows("execution")}
     <ExecutionSection bind:config open={isOpen("execution")} onToggle={() => toggle("execution")} />
+  {/if}
+
+  {#if shows("outputschema")}
+    <OutputSchemaSection bind:config open={isOpen("outputschema")} onToggle={() => toggle("outputschema")} />
   {/if}
 
   {#if shows("metatools")}

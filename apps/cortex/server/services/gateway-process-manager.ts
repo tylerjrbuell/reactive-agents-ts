@@ -32,7 +32,7 @@ import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
-import { approvalsWaitLive, durableApprovals } from "./durable-approvals.js";
+import { waitsLive, durableApprovals } from "./durable-approvals.js";
 import { approvalPolicyOf } from "./approval-policy.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -380,7 +380,7 @@ export class GatewayProcessManager {
       // /api/runs/pending-approvals endpoints (same as the runner path).
       let paused = false;
       // A `detach` gate without durable runs waits live: listed and answered via the registry while it runs.
-      const unwatchLive = approvalsWaitLive(buildParams) ? durableApprovals.watchLive({ agentId: agentId_, agent }) : undefined;
+      const unwatchLive = waitsLive(buildParams) ? durableApprovals.watchLive({ agentId: agentId_, agent }) : undefined;
 
       void agent.run(prompt, { taskId: runId })
         .then((result) => {

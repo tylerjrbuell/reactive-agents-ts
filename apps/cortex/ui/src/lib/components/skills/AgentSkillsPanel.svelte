@@ -14,7 +14,8 @@
   import Button from "$lib/components/kit/Button.svelte";
   import EmptyState from "$lib/components/kit/EmptyState.svelte";
   import Meter from "$lib/components/kit/Meter.svelte";
-  import Select from "$lib/components/kit/Select.svelte";
+  import Combobox from "$lib/components/kit/Combobox.svelte";
+  import { agentComboItems } from "$lib/combobox.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { fetchMemoryAgents, runHref, type MemoryAgent } from "$lib/memory-studio.js";
   import {
@@ -72,10 +73,10 @@
   const diff = $derived(shown && diffFrom !== null ? versionDiff(rows, diffFrom, shown.version) : []);
   const diffStats = $derived(skillDiffStats(diff));
   const skillTimelineItems = $derived(selected ? timeline.filter((t) => t.skillName === selected.name) : timeline);
-  const agentOptions = $derived([
-    { value: "", label: agents.length === 0 ? "No agent has memory yet" : "Pick an agent" },
-    ...agents.map((a) => ({ value: a.agentId, label: a.label === a.agentId ? a.agentId : `${a.label} (${a.agentId})` })),
-  ]);
+  // Named agents first, recent first; at most a screenful rendered (kit Combobox).
+  const agentItems = $derived(agentComboItems(agents));
+  // The latest load; a newer one cancels the one in flight.
+  let loadCtl: AbortController | undefined;
   const refineModel = $derived(refineModelText(listing?.refineWith ?? null));
   const lock = $derived(selected ? lockActionOf(selected) : null);
 
@@ -83,7 +84,8 @@
     void fetchMemoryAgents()
       .then((a) => {
         agents = a;
-        if (agentId === "" && a.length > 0) agentId = a[0]!.agentId;
+        // Load an agent's skills only once chosen (each load builds that agent); a lone agent is the obvious pick.
+        if (agentId === "" && a.length === 1) agentId = a[0]!.agentId;
       })
       .catch((e) => (loadError = String(e)));
   });
@@ -100,20 +102,24 @@
   });
 
   async function load(id: string) {
+    loadCtl?.abort();
+    const ctl = new AbortController();
+    loadCtl = ctl;
     loading = true;
     loadError = null;
     refineResult = null;
     try {
-      const [l, events] = await Promise.all([fetchAgentSkills(id), fetchSkillEvents(id)]);
-      if (id !== agentId) return;
+      const [l, events] = await Promise.all([fetchAgentSkills(id, fetch, ctl.signal), fetchSkillEvents(id, undefined, fetch, ctl.signal)]);
+      if (id !== agentId || ctl.signal.aborted) return;
       listing = l;
       timeline = skillTimeline(events);
       // A reload can follow a refine or rollback: show the current version again.
       pick(l.skills.some((s) => s.name === selectedName) ? selectedName : (l.skills[0]?.name ?? null));
     } catch (e) {
+      if (ctl.signal.aborted) return;
       loadError = e instanceof Error ? e.message : String(e);
     } finally {
-      loading = false;
+      if (loadCtl === ctl) loading = false;
     }
   }
 
@@ -195,7 +201,14 @@
   <div class="bar">
     <div class="agent">
       <label for="agent-skills-agent">Agent</label>
-      <Select id="agent-skills-agent" bind:value={agentId} options={agentOptions} />
+      <Combobox
+        id="agent-skills-agent"
+        label="Agent"
+        bind:value={agentId}
+        items={agentItems}
+        placeholder={agents.length === 0 ? "No agent has memory yet" : "Pick an agent"}
+        emptyText="No agent matches"
+      />
     </div>
     <div class="refine">
       {#if refineResult}<span class="refine-result" role="status">{refineResult}</span>{/if}

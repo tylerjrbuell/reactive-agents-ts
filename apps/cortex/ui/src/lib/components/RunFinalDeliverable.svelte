@@ -12,7 +12,8 @@
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import { toast } from "$lib/stores/toast-store.js";
-  import { formatCost, formatTurnDuration } from "@reactive-agents/ui-core";
+  import StructuredResult from "$lib/components/StructuredResult.svelte";
+  import { formatCost, formatTurnDuration, type StructuredOutputReportWire } from "@reactive-agents/ui-core";
   import { formatSize } from "$lib/text-budget.js";
   import { plainPreviewFromMarkdown, preferExpandedDeliverable } from "$lib/markdown/plain-preview.js";
 
@@ -27,11 +28,16 @@
     /** Typed structured output (`.withOutputSchema`), rendered as a JSON block when present. */
     structuredObject?: unknown;
     structuredError?: string | null;
+    /** How the typed object was obtained (framework `StructuredOutputReport`). */
+    structuredReport?: StructuredOutputReportWire | null;
+    /** The output JSON Schema, for field descriptions. */
+    structuredSchema?: unknown;
   }
-  let { status, deliverableText, streamText, failureMessage, abstained = false, meta, structuredObject, structuredError }: Props = $props();
+  let { status, deliverableText, streamText, failureMessage, abstained = false, meta, structuredObject, structuredError, structuredReport = null, structuredSchema }: Props = $props();
 
-  const structuredJson = $derived(structuredObject !== undefined && structuredObject !== null ? JSON.stringify(structuredObject, null, 2) : "");
-  const showStructured = $derived(structuredJson.length > 0 || !!structuredError);
+  const showStructured = $derived(
+    (structuredObject !== undefined && structuredObject !== null) || !!structuredError || structuredReport !== null,
+  );
   const answer = $derived(deliverableText.trim());
   const showLiveStream = $derived(status === "live" && streamText.length > 0);
   const showDeliverable = $derived(answer.length > 0 && status !== "live" && status !== "loading");
@@ -99,9 +105,7 @@
 
     {#if showStructured}
       <div class="structured">
-        <div class="sh">Structured output {#if structuredError}<Badge tone="warn">parse degraded</Badge>{/if}</div>
-        {#if structuredJson}<BoundedText text={structuredJson} preview={6000} maxHeight="20rem" />{/if}
-        {#if structuredError}<p class="err">{structuredError}</p>{/if}
+        <StructuredResult object={structuredObject} error={structuredError} report={structuredReport} schema={structuredSchema} />
       </div>
     {/if}
   </section>
@@ -123,7 +127,5 @@
   .live { margin: 0; max-height: 12rem; overflow-y: auto; padding: 12px 16px; font-size: var(--cortex-t-md); line-height: var(--cortex-lh-read); color: var(--cortex-text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
   .fail { padding: 12px 16px; color: var(--cortex-bad); font-size: var(--cortex-t-sm); }
   .fail.quiet { color: var(--cortex-text-2); }
-  .structured { margin: 0 16px 14px; padding: 10px 12px; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-ctl); background: var(--cortex-canvas); }
-  .sh { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
-  .err { margin: 6px 0 0; font-size: var(--cortex-t-xs); color: var(--cortex-bad); }
+  .structured { margin: 0 16px 14px; }
 </style>

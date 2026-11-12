@@ -13,6 +13,8 @@
   import ChatRunFailedNote from "$lib/components/ChatRunFailedNote.svelte";
   import { abstentionInAnswer, bareEnding } from "$lib/turn-ending.js";
   import ChatStructuredOutput from "$lib/components/ChatStructuredOutput.svelte";
+  import ChatLiveInteraction from "$lib/components/ChatLiveInteraction.svelte";
+  import StructuredResult from "$lib/components/StructuredResult.svelte";
   import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import Status from "$lib/components/kit/Status.svelte";
@@ -55,7 +57,7 @@
       : undefined,
   );
   // A run waiting on the user's approval is not thinking: the approval card says what it waits for.
-  const waitingOnYou = $derived(turn.streaming === true && turn.liveApproval !== undefined);
+  const waitingOnYou = $derived(turn.streaming === true && (turn.liveApproval !== undefined || turn.liveInteraction !== undefined));
   const showIdle = $derived(turn.streaming === true && answer === undefined && !lastIsRunningGroup && !waitingOnYou);
 </script>
 
@@ -123,8 +125,11 @@
     <ChatSubAgentCards agents={turn.subAgents ?? []} checklist={turn.checklist} />
   {/if}
 
+  <!-- One question at a time: the run waits on one thing, and the amber card says which. -->
   {#if waitingOnYou && turn.liveApproval}
     <ChatLiveApproval approval={turn.liveApproval} />
+  {:else if waitingOnYou && turn.liveInteraction}
+    <ChatLiveInteraction question={turn.liveInteraction} />
   {/if}
 
   {#if showIdle && turn.awaitingModelSince !== undefined}
@@ -153,7 +158,11 @@
     <!-- Ended with no recorded outcome (older rows): still a cause line and Retry, never a bare tick. -->
     <ChatRunFailedNote error={undefined} {onRetry} />
   {/if}
-  <ChatStructuredOutput value={turn.liveObject} />
+  {#if turn.structured && !turn.streaming}
+    <StructuredResult object={turn.structured.object} error={turn.structured.error} report={turn.structured.report} />
+  {:else}
+    <ChatStructuredOutput value={turn.liveObject} />
+  {/if}
 
   <!-- Quiet footer: goal checks (open while a plan runs or a check fails), then the turn's rollup. -->
   {#if (turn.checklist && !planHidden) || (steps.length > 0 && !turn.streaming)}

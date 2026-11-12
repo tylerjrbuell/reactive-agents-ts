@@ -18,7 +18,8 @@
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import Input from "$lib/components/kit/Input.svelte";
   import Overlay from "$lib/components/kit/Overlay.svelte";
-  import Select from "$lib/components/kit/Select.svelte";
+  import Combobox from "$lib/components/kit/Combobox.svelte";
+  import { agentComboItems } from "$lib/combobox.js";
   import Tabs from "$lib/components/kit/Tabs.svelte";
   import Textarea from "$lib/components/kit/Textarea.svelte";
   import { tabId, tabPanelId } from "$lib/tablist.js";
@@ -78,11 +79,14 @@
   const now = Date.now();
   const tabs = $derived(memoryLayerTabs(listing));
   const blurb = $derived(MEMORY_LAYERS.find((l) => l.id === layer)?.blurb ?? "");
-  const agentOptions = $derived([
-    { value: "", label: agents.length ? "Pick an agent" : "No agents with memory" },
-    ...agents.map((a) => ({ value: a.agentId, label: a.label === a.agentId ? a.agentId : `${a.label} (${shortId(a.agentId)})` })),
-    ...(agentId && !agents.some((a) => a.agentId === agentId) ? [{ value: agentId, label: agentId }] : []),
+  // Named agents first, recent first; at most a screenful rendered (kit Combobox).
+  const agentItems = $derived([
+    ...agentComboItems(agents),
+    ...(agentId && !agents.some((a) => a.agentId === agentId) ? [{ value: agentId, label: "Unnamed agent", hint: shortId(agentId), group: "Unnamed" }] : []),
   ]);
+  // The latest request per kind; a newer one cancels the one in flight so a slow answer never lands late.
+  let loadCtl: AbortController | undefined;
+  let searchCtl: AbortController | undefined;
   const hint = $derived(searchHint(query));
 
   const rows = $derived.by((): Selected[] => {
@@ -117,16 +121,23 @@
       listing = null;
       return;
     }
+    loadCtl?.abort();
+    searchCtl?.abort();
+    const ctl = new AbortController();
+    loadCtl = ctl;
     loading = true;
     loadError = null;
     try {
-      listing = await fetchMemory(agentId, runFilter || undefined);
+      const next = await fetchMemory(agentId, runFilter || undefined, fetch, ctl.signal);
+      if (ctl.signal.aborted) return;
+      listing = next;
       if (query.trim() && layer === "semantic") await runSearch();
     } catch (e) {
+      if (ctl.signal.aborted) return;
       loadError = e instanceof Error ? e.message : String(e);
       listing = null;
     } finally {
-      loading = false;
+      if (loadCtl === ctl) loading = false;
     }
   }
 
@@ -136,13 +147,17 @@
       searchResults = null;
       return;
     }
+    searchCtl?.abort();
+    const ctl = new AbortController();
+    searchCtl = ctl;
     searching = true;
     try {
-      searchResults = await searchMemory(agentId, q, runFilter || undefined);
+      const found = await searchMemory(agentId, q, runFilter || undefined, fetch, ctl.signal);
+      if (!ctl.signal.aborted) searchResults = found;
     } catch (e) {
-      toast.error("Search failed", e instanceof Error ? e.message : String(e));
+      if (!ctl.signal.aborted) toast.error("Search failed", e instanceof Error ? e.message : String(e));
     } finally {
-      searching = false;
+      if (searchCtl === ctl) searching = false;
     }
   }
 
@@ -269,7 +284,15 @@
   <div class="head">
     <div class="pick">
       <label class="sr-only" for="memory-agent">Agent</label>
-      <Select id="memory-agent" value={agentId} options={agentOptions} onchange={(e) => pickAgent((e.currentTarget as HTMLSelectElement).value)} />
+      <Combobox
+        id="memory-agent"
+        label="Agent"
+        value={agentId}
+        items={agentItems}
+        placeholder={agents.length ? "Pick an agent" : "No agents with memory"}
+        emptyText="No agent matches"
+        onpick={pickAgent}
+      />
       {#if runFilter}
         <span class="runfilter">
           Written by run <a href={`/run/${encodeURIComponent(runFilter)}`} use:tooltip={runFilter}>{shortId(runFilter)}</a>

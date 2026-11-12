@@ -24,6 +24,7 @@ import { projectSubAgents } from "../sub-agent-view.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
 import { cancelledEnding, completionEnding, failedBeforeStream } from "../turn-ending.js";
 import { liveApprovalAfter, type LiveApproval } from "../chat-live-approval.js";
+import { liveInteractionAfter, type LiveInteraction } from "../chat-live-interaction.js";
 
 /**
  * Single SSE → ChatTurn reduction shared by the desk Chat store and the run-view
@@ -163,11 +164,14 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   let modelWait: ModelWaitState = initialModelWait(Date.now());
   // A live approval wait (no durable runs): the turn shows Approve / Deny until the run moves on.
   let liveApproval: LiveApproval | undefined;
+  // A live question (`request_user_input`, no durable runs): the turn shows its reply controls.
+  let liveInteraction: LiveInteraction | undefined;
 
   for await (const event of connectRunStream({ endpoint: opts.endpoint, body: opts.body, signal: opts.signal })) {
     if (opts.structuredOutput) rs = reduceRunState(rs, event, { objectMode: true });
     trackModelWait(event);
     trackLiveApproval(event);
+    trackLiveInteraction(event);
     reduceEvent(event);
   }
   // Flush any coalesced text deltas before persistence / return.
@@ -224,6 +228,15 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
     liveApproval = next;
     flushPending();
     apply((turns) => patchTurn(turns, id, (t) => ({ ...t, liveApproval: next })));
+  }
+
+  /** Set or clear the turn's live question (chat-live-interaction.ts). */
+  function trackLiveInteraction(event: UiStreamEvent): void {
+    const next = liveInteractionAfter(liveInteraction, event);
+    if (next === liveInteraction) return;
+    liveInteraction = next;
+    flushPending();
+    apply((turns) => patchTurn(turns, id, (t) => ({ ...t, liveInteraction: next })));
   }
 
   /**
@@ -475,6 +488,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
             // Live turn: `ts` is the send time, so it ends at ts + the run's reported duration.
             ...(trace.durationMs !== undefined ? { durationMs: trace.durationMs, finishedAt: t.ts + trace.durationMs } : {}),
             ...(Object.keys(trace.subAgents).length > 0 ? { subAgents: projectSubAgents(trace.subAgents) } : {}),
+            ...(trace.structured !== undefined ? { structured: trace.structured } : {}),
             ...(ended.runFailed ? { runFailed: ended.runFailed } : {}),
             ...(ended.deliverables ? { deliverables: ended.deliverables } : {}),
           })),
@@ -501,6 +515,14 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
             streaming: false,
           })),
         );
+        return;
+      }
+      case "StructuredOutputReported": {
+        // How the typed answer was obtained: kept on the turn beside the object (`StreamCompleted` brings it).
+        flushPending();
+        trace = foldTurnTrace(trace, event);
+        const structured = trace.structured;
+        if (structured !== undefined) apply((turns) => patchTurn(turns, id, (t) => ({ ...t, structured })));
         return;
       }
       default:

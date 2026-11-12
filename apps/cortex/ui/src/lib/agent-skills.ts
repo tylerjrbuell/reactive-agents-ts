@@ -211,14 +211,14 @@ const post = (u: string, body: object, fetchFn: typeof fetch) =>
   fetchFn(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
 /** An agent's skills. */
-export async function fetchAgentSkills(agentId: string, fetchFn: typeof fetch = fetch): Promise<AgentSkillsListing> {
-  return readJson<AgentSkillsListing>(await fetchFn(url(agentId)));
+export async function fetchAgentSkills(agentId: string, fetchFn: typeof fetch = fetch, signal?: AbortSignal): Promise<AgentSkillsListing> {
+  return readJson<AgentSkillsListing>(await fetchFn(url(agentId), signal ? { signal } : undefined));
 }
 
-/** Lifecycle events, newest first; `skill` narrows to one skill. */
-export async function fetchSkillEvents(agentId: string, skill?: string, fetchFn: typeof fetch = fetch): Promise<SkillEventRow[]> {
+/** Lifecycle events, newest first; `skill` narrows to one skill. `signal` cancels a stale request. */
+export async function fetchSkillEvents(agentId: string, skill?: string, fetchFn: typeof fetch = fetch, signal?: AbortSignal): Promise<SkillEventRow[]> {
   const q = skill ? `?skill=${encodeURIComponent(skill)}` : "";
-  return (await readJson<{ events?: SkillEventRow[] }>(await fetchFn(url(agentId, `/events${q}`)))).events ?? [];
+  return (await readJson<{ events?: SkillEventRow[] }>(await fetchFn(url(agentId, `/events${q}`), signal ? { signal } : undefined))).events ?? [];
 }
 
 /** One refinement pass on the agent's last recorded model. */

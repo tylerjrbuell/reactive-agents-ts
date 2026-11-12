@@ -7,11 +7,12 @@ import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import { turnModelOf } from "../chat-live-config.js";
 import type { ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent } from "@reactive-agents/ui-core";
-import type { RunSkillsView, TurnDeliverable, TurnUsage } from "@reactive-agents/ui-core";
+import type { RunSkillsView, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
 import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
 import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
 import type { ChatPendingApprovalWire } from "../chat-approvals.js";
 import type { LiveApproval } from "../chat-live-approval.js";
+import type { LiveInteraction } from "../chat-live-interaction.js";
 import type { ChatPendingInteractionWire } from "../chat-interactions.js";
 
 /**
@@ -96,6 +97,11 @@ export type ChatTurn = {
    * `ApprovalRequested`); cleared once the run moves on. See `chat-live-approval.ts`.
    */
   liveApproval?: LiveApproval;
+  /**
+   * The question this streaming turn's agent asked and waits on live (no durable runs,
+   * `InteractionRequested`); cleared once the run moves on. See `chat-live-interaction.ts`.
+   */
+  liveInteraction?: LiveInteraction;
   /** Latest context-window reading from this turn's run (the prompt last sent to the model). */
   context?: ChatContext;
   /** Provider / model that produced this answer (persisted per turn, so it survives a mid-chat switch). */
@@ -122,6 +128,8 @@ export type ChatTurn = {
    * streaming completes as the final deliverable preview.
    */
   liveObject?: Record<string, unknown>;
+  /** The typed object of a turn run with an output schema, and how it was obtained (ui-core `foldStructured`). */
+  structured?: TurnStructured;
   /** Running totals during streaming — undefined when not streaming. */
   liveTokens?: number;
   liveCost?: number;
@@ -186,6 +194,8 @@ type PersistedTrace = {
   durationMs?: number;
   /** Skills the run had active and why. */
   skills?: RunSkillsView;
+  /** The typed object and how it was obtained, for a turn run with an output schema. */
+  structured?: TurnStructured;
 };
 
 /** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
@@ -219,6 +229,7 @@ export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTur
     ...(trace.usage ? { usage: trace.usage } : {}),
     ...(trace.strategy ? { strategy: trace.strategy } : {}),
     ...(trace.skills && trace.skills.activations.length > 0 ? { skills: trace.skills } : {}),
+    ...(trace.structured ? { structured: trace.structured } : {}),
   };
 }
 

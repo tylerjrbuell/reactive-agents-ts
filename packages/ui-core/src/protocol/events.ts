@@ -94,6 +94,12 @@ export interface StreamCompleted {
   };
   readonly pendingInteraction?: PendingInteractionWire;
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
+  /** The schema-valid value, when the run (or turn) had an output schema (mirrors runtime `StreamCompleted.object`). */
+  readonly object?: unknown;
+  /** Why no schema-valid value was produced, when the run had an output schema (mirrors runtime `objectError`). */
+  readonly objectError?: string;
+  /** How the structured-output pipeline got `object`, or why it failed (mirrors runtime `objectReport`). */
+  readonly objectReport?: StructuredOutputReportWire;
   /**
    * Full trust receipt (Arc 1 Task 8 closure) — present on terminal
    * completions when the server runtime attaches it; absent on pause
@@ -212,6 +218,42 @@ export interface PhaseCompleted {
   readonly _tag: "PhaseCompleted";
   readonly phase: string;
   readonly durationMs: number;
+}
+
+/** One validation failure at a field of a structured-output extraction. */
+export interface StructuredFieldErrorWire {
+  /** RFC 6901 JSON Pointer to the failing field (`""` = the root value). */
+  readonly path: string;
+  readonly message: string;
+}
+
+/**
+ * How one structured-output extraction got its value, or why it failed
+ * (mirrors core `StructuredOutputReport`, re-declared structurally because
+ * ui-core stays dependency-free). Layers and repair steps are open strings so
+ * a newer framework's additions pass through.
+ */
+export interface StructuredOutputReportWire {
+  readonly outcome: "success" | "failure";
+  /** `native` | `prompt` | `repaired` | `coerced` | `retried`; `null` on failure. */
+  readonly layer: string | null;
+  /** `not-attempted` | `succeeded` | `failed` | `contract-rejected`. */
+  readonly native: string;
+  readonly attempts: number;
+  readonly promptAttempts: number;
+  readonly repairs: readonly string[];
+  readonly coerced: boolean;
+  readonly budgetEscalated: boolean;
+  readonly fieldErrors: readonly StructuredFieldErrorWire[];
+  readonly failure?: { readonly kind: string; readonly message: string };
+}
+
+/** A structured-output extraction finished (full density only). */
+export interface StructuredOutputReported {
+  readonly _tag: "StructuredOutputReported";
+  readonly taskId: string;
+  readonly strategy?: string;
+  readonly report: StructuredOutputReportWire;
 }
 
 // ── New tags (this kit) ───────────────────────────────────────────────────
@@ -416,6 +458,7 @@ export type UiStreamEvent =
   | RunAttached
   | InteractionRequested
   | ApprovalRequested
+  | StructuredOutputReported
   | RunPaused
   | Abstained
   | CostDelta

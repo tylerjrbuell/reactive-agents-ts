@@ -470,6 +470,8 @@
         meta={finalMeta}
         structuredObject={$runStore.structuredObject}
         structuredError={$runStore.structuredError}
+        structuredReport={$runStore.structuredReport}
+        structuredSchema={$runStore.launchParams?.outputSchema}
       />
       <RunCauseCard
         {runId}

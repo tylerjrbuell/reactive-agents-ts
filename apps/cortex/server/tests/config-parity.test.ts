@@ -268,7 +268,8 @@ const WIRED = new Set([
 // decision doc.
 const NOT_APPLICABLE = new Set([
   "withAdaptiveHarness", "withAudit", "withBehavioralContracts", "withCalibration",
-  "withChannels", "withCircuitBreaker", "withContextProfile", "withContract", "withCortex",
+  // withDebrief (runtime, `debrief`): an AgentConfig path, set from All framework options (rawConfig).
+  "withChannels", "withCircuitBreaker", "withDebrief", "withContextProfile", "withContract", "withCortex",
   "withCostTracking", "withCustomTermination", "withDynamicPricing",
   "withEnvironment", "withErrorHandler", "withEvents", "withExperienceLearning",
   "withFallbacks", "withGateway", "withGuardrails", "withHealthCheck",

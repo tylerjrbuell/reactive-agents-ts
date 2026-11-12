@@ -12,15 +12,15 @@ import {
 } from "./agent-config-sections.js";
 
 describe("agent config section registry", () => {
-  test("13 sections in panel order", () => {
+  test("14 sections in panel order", () => {
     expect(AGENT_CONFIG_SECTIONS.map((s) => s.id)).toEqual([
       "inference", "persona", "strategy", "variables", "tools", "subagents", "skills",
-      "memory", "guardrails", "execution", "metatools", "reliability", "observability",
+      "memory", "guardrails", "execution", "outputschema", "metatools", "reliability", "observability",
     ]);
   });
   test("compact hides variables, tools, sub-agents and skills", () => {
-    expect(activeSectionIds(true)).toEqual(["inference", "persona", "strategy", "memory", "guardrails", "execution", "metatools", "reliability", "observability"]);
-    expect(activeSectionIds(false)).toHaveLength(13);
+    expect(activeSectionIds(true)).toEqual(["inference", "persona", "strategy", "memory", "guardrails", "execution", "outputschema", "metatools", "reliability", "observability"]);
+    expect(activeSectionIds(false)).toHaveLength(14);
   });
   test("copy falls back to the id", () => {
     expect(sectionCopy("strategy").label).toBe("Reasoning");
@@ -38,10 +38,10 @@ describe("agent config section registry", () => {
 });
 
 describe("Lab builder section nav (registry-driven)", () => {
-  test("14 entries: 13 grouped from the panel's 13 sections and Shell, plus All framework options", () => {
+  test("15 entries: 14 grouped from the panel's 14 sections and Shell, plus All framework options", () => {
     expect(BUILDER_NAV.map((e) => e.label)).toEqual([
       "Model", "Persona", "Variables", "Reasoning", "Tools", "Shell and workspace", "Sub-agents", "Skills",
-      "Memory", "Guardrails", "Execution", "Reliability", "Observability", "All framework options",
+      "Memory", "Guardrails", "Execution", "Output schema", "Reliability", "Observability", "All framework options",
     ]);
   });
   test("every panel section is reachable from exactly one entry", () => {
@@ -53,7 +53,7 @@ describe("Lab builder section nav (registry-driven)", () => {
     expect(builderNavEntry("nope").id).toBe("model");
   });
   test("Find a setting matches titles, member keywords and the entry's own words", () => {
-    expect(filterBuilderNav("").length).toBe(14);
+    expect(filterBuilderNav("").length).toBe(15);
     expect(filterBuilderNav("temperature").map((e) => e.id)).toEqual(["model"]);
     expect(filterBuilderNav("template").map((e) => e.id)).toEqual(["variables"]);
     expect(filterBuilderNav("variable").map((e) => e.id)).toEqual(["variables"]);
@@ -69,7 +69,8 @@ describe("Lab builder section nav (registry-driven)", () => {
     expect(filterBuilderNav("recursion").map((e) => e.id)).toEqual(["subagents"]);
     expect(filterBuilderNav("durable").map((e) => e.id)).toEqual(["execution"]);
     expect(filterBuilderNav("webhook").map((e) => e.id)).toEqual(["execution"]);
-    expect(filterBuilderNav("output schema").map((e) => e.id)).toEqual(["execution"]);
+    expect(filterBuilderNav("output schema").map((e) => e.id)).toEqual(["outputschema"]);
+    expect(filterBuilderNav("request_user_input").map((e) => e.id)).toEqual(["execution"]);
     expect(filterBuilderNav("budget").map((e) => e.id)).toEqual(["execution"]);
     expect(filterBuilderNav("routing").map((e) => e.id)).toEqual(["model"]);
     expect(filterBuilderNav("documents").map((e) => e.id)).toEqual(["memory"]);
@@ -79,7 +80,9 @@ describe("Lab builder section nav (registry-driven)", () => {
     expect(owner("approvalPolicy")).toBe("tools");
     expect(owner("dynamicSubAgents")).toBe("subagents");
     expect(owner("budget.tokenLimit")).toBe("execution");
-    expect(owner("outputSchemaOptions.onParseFail")).toBe("execution");
+    expect(owner("outputSchema")).toBe("outputschema");
+    expect(owner("outputSchemaOptions")).toBe("outputschema");
+    expect(owner("userInteraction")).toBe("execution");
     expect(owner("modelRouting.minTier")).toBe("inference");
     expect(owner("documents")).toBe("memory");
     const reasoning = AGENT_CONFIG_SECTIONS.find((s) => s.id === "strategy")!;

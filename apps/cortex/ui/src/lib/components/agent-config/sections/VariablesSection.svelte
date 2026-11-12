@@ -1,5 +1,7 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
+  import FieldEditor from "../FieldEditor.svelte";
+  import { VARIABLE_FIELD_TYPES } from "$lib/field-editor.js";
   import type { VariableDef } from "$lib/types/agent-config.js";
   import type { PanelAgentConfig } from "../types.js";
 
@@ -10,9 +12,9 @@
   }
   let { config = $bindable(), open, onToggle }: Props = $props();
 
-  function patchVariable(index: number, next: VariableDef) {
-    const variables = [...(config.variables ?? [])];
-    variables[index] = next;
+  // Names come from the `{{tokens}}` in the config (AgentConfigPanel keeps them in sync), so the
+  // editor locks them; the rest (type, default, description, required) is edited like any field.
+  function setVariables(variables: VariableDef[]) {
     config = { ...config, variables };
   }
 </script>
@@ -21,60 +23,12 @@
   {#snippet head()}
       <span>{(config.variables ?? []).length} detected</span>
   {/snippet}
-        <p class="acp-hint leading-relaxed">
-          Use <code>{'{{name}}'}</code> in any field — variables are detected automatically. Values are filled per run.
-        </p>
-        {#if (config.variables ?? []).length === 0}
-          <p class="acp-hint">No variables yet. Add a <code>{'{{name}}'}</code> token to any field above and it appears here automatically.</p>
-        {:else}
-          {#each config.variables ?? [] as v, i (v.name)}
-            <div class="acp-card">
-              <div class="flex items-center justify-between gap-2">
-                <span class="font-mono text-[11px] font-semibold text-warn">{v.name}</span>
-                <label class="flex items-center gap-1.5 cursor-pointer font-mono text-[11px] text-text/70">
-                  <input type="checkbox" checked={v.required}
-                    onchange={(e) => patchVariable(i, { ...v, required: (e.currentTarget as HTMLInputElement).checked })}
-                    class="accent-warn w-3 h-3" />
-                  required
-                </label>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="config-label" for={`var-${i}-type`}>Type</label>
-                  <select id={`var-${i}-type`} class="config-input"
-                    value={v.type}
-                    onchange={(e) => patchVariable(i, { ...v, type: (e.currentTarget as HTMLSelectElement).value as VariableDef["type"] })}>
-                    <option value="string">string</option>
-                    <option value="number">number</option>
-                    <option value="enum">enum</option>
-                    <option value="multiline">multiline</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="config-label" for={`var-${i}-default`}>Default <span class="text-text-3/70 normal-case font-normal">(optional)</span></label>
-                  <input id={`var-${i}-default`} class="config-input"
-                    placeholder="default value"
-                    value={v.default ?? ""}
-                    oninput={(e) => patchVariable(i, { ...v, default: (e.currentTarget as HTMLInputElement).value })} />
-                </div>
-                {#if v.type === "enum"}
-                  <div class="col-span-2">
-                    <label class="config-label" for={`var-${i}-enum`}>Allowed values <span class="text-text-3/70 normal-case font-normal">(comma-separated)</span></label>
-                    <input id={`var-${i}-enum`} class="config-input font-mono text-[11px]"
-                      placeholder="comma,separated,values"
-                      value={(v.enumValues ?? []).join(",")}
-                      oninput={(e) => patchVariable(i, { ...v, enumValues: (e.currentTarget as HTMLInputElement).value.split(",").map((s) => s.trim()).filter(Boolean) })} />
-                  </div>
-                {/if}
-                <div class="col-span-2">
-                  <label class="config-label" for={`var-${i}-desc`}>Description <span class="text-text-3/70 normal-case font-normal">(optional)</span></label>
-                  <input id={`var-${i}-desc`} class="config-input"
-                    placeholder="What this variable controls…"
-                    value={v.description ?? ""}
-                    oninput={(e) => patchVariable(i, { ...v, description: (e.currentTarget as HTMLInputElement).value })} />
-                </div>
-              </div>
-            </div>
-          {/each}
-        {/if}
+  <p class="acp-hint leading-relaxed">
+    Use <code>{'{{name}}'}</code> in any field — variables are detected automatically. Values are filled per run.
+  </p>
+  {#if (config.variables ?? []).length === 0}
+    <p class="acp-hint">No variables yet. Add a <code>{'{{name}}'}</code> token to any field above and it appears here automatically.</p>
+  {:else}
+    <FieldEditor fields={config.variables ?? []} types={VARIABLE_FIELD_TYPES} onChange={setVariables} lockNames showDefault idPrefix="var" />
+  {/if}
 </ConfigSection>

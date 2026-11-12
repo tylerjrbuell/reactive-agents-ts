@@ -7,7 +7,7 @@
  *
  * `buildCortexAgent` then applies an overlay of the few builder calls that have
  * no AgentConfig form (host tool code, the test scenario, Cortex's trace dir, the
- * output schema object, a saved key, the user-interaction rail). Those cannot be
+ * a saved key). Those cannot be
  * in the exported code, so
  * {@link cortexOnlySettings} lists each one that is set, in plain words, and the
  * export shows the list beside the code. `CORTEX_OVERLAY_CALLS` names every
@@ -53,7 +53,6 @@ export const CORTEX_OVERLAY_CALLS: readonly string[] = [
   "withTestScenario",
   "withTools",
   "withTracing",
-  "withOutputSchema",
 ];
 
 const list = (xs: readonly string[]): string => xs.join(", ");
@@ -85,9 +84,7 @@ export function cortexOnlySettings(
     add("Host tools", "withTools", list((params.extraTools ?? []).map((t) => t.definition.name)));
   }
   if (params.tracing) add("Run traces", "withTracing", params.tracing.dir);
-  if (params.outputSchema && Object.keys(params.outputSchema).length > 0) {
-    add("Structured output schema", "withOutputSchema", "The schema object is code-only.");
-  }
+  // The output schema is plain JSON Schema in the AgentConfig (runtime 7d4664da2), so it is in the code.
   return out;
 }
 

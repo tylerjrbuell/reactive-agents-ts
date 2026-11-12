@@ -111,7 +111,8 @@ describe("Export as code", () => {
       outputSchema: { type: "object" },
       approvalPolicy: { mode: "detach", tools: ["file-write"] },
     });
-    expect(notes.map((n) => n.call)).toEqual(["withTestScenario", "withTools", "withTracing", "withOutputSchema"]);
+    // The output schema is JSON Schema in the AgentConfig now: exported in the code, no overlay.
+    expect(notes.map((n) => n.call)).toEqual(["withTestScenario", "withTools", "withTracing"]);
     expect(notes.find((n) => n.call === "withTools")?.detail).toBe("session-control");
   });
 

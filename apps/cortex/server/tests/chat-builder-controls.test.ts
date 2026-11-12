@@ -58,7 +58,8 @@ describe("chat session → agent params", () => {
       },
     });
     const p = paramsOf(id);
-    expect(p.rawConfig).toEqual({ profile: "lean", tools: { maxCallsPerTool: { "web-search": 2 } } });
+    // A chat may ask a question mid-turn (live request_user_input): Cortex's chat default.
+    expect(p.rawConfig).toEqual({ userInteraction: true, profile: "lean", tools: { maxCallsPerTool: { "web-search": 2 } } });
     // The Lab's legacy durableRuns gate becomes the framework's top-level approvalPolicy.
     expect(p.durableRuns).toEqual({ enabled: true });
     expect(p.approvalPolicy).toEqual({ mode: "block", tools: ["file-write"] });

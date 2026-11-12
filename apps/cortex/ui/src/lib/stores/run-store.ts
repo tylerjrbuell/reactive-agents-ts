@@ -4,7 +4,7 @@
 import { writable } from "svelte/store";
 import { createWsClient } from "./ws-client.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
-import { foldRunStrategy, initialRunStrategy, runStrategyOf, type RunStrategyState, type ThroughputSample } from "@reactive-agents/ui-core";
+import { foldRunStrategy, initialRunStrategy, runStrategyOf, type RunStrategyState, type StructuredOutputReportWire, type ThroughputSample } from "@reactive-agents/ui-core";
 import { throughputSampleOf } from "../llm-throughput.js";
 import { abortStatusOf } from "../run-live-status.js";
 
@@ -93,6 +93,11 @@ export interface RunVitals {
 }
 
 /** Tolerance facts from `AgentCompleted.outcome`; empty when the run was not tolerated. */
+/** A stored event's report field is a real report (has an outcome), not a stray value. */
+function reportOf(v: unknown): boolean {
+  return typeof v === "object" && v !== null && ((v as { outcome?: unknown }).outcome === "success" || (v as { outcome?: unknown }).outcome === "failure");
+}
+
 function readTolerance(p: Record<string, unknown>): Pick<RunVitals, "toleratedBy" | "statusReason"> {
   const o = p.outcome;
   if (!o || typeof o !== "object") return {};
@@ -147,6 +152,8 @@ export interface RunState {
   readonly structuredObject: unknown | null;
   /** Lenient parse-fail message when extraction failed. */
   readonly structuredError: string | null;
+  /** How the typed object was obtained: the framework's `StructuredOutputReported` (or the runner's `StructuredOutputExtracted.objectReport`). */
+  readonly structuredReport: StructuredOutputReportWire | null;
   /** Per-run launch config snapshot (from `launch_params_json`); enables Rerun / Edit & Rerun. */
   readonly launchParams: Record<string, unknown> | null;
   /** Run label (`display_name`, else the saved agent's name). */
@@ -345,6 +352,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
     errorMessage: null,
     structuredObject: null,
     structuredError: null,
+    structuredReport: null,
     launchParams: null,
   });
 
@@ -375,9 +383,13 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
       // Typed structured output (.withOutputSchema) — surfaced by the runner.
       let structuredObject = s.structuredObject;
       let structuredError = s.structuredError;
+      let structuredReport = s.structuredReport;
       if (msg.type === "StructuredOutputExtracted") {
         if ("object" in msg.payload) structuredObject = msg.payload.object;
         if (typeof msg.payload.objectError === "string") structuredError = msg.payload.objectError;
+        if (reportOf(msg.payload.objectReport)) structuredReport = msg.payload.objectReport as StructuredOutputReportWire;
+      } else if (msg.type === "StructuredOutputReported" && reportOf(msg.payload.report)) {
+        structuredReport = msg.payload.report as StructuredOutputReportWire;
       }
 
       // Live streaming text — accumulate TextDelta, clear on new iteration
@@ -413,6 +425,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         errorMessage,
         structuredObject,
         structuredError,
+        structuredReport,
         agentId: msg.agentId || s.agentId,
       };
     });

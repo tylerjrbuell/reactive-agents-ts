@@ -1,5 +1,6 @@
 import type { ChecklistSnapshotWire, ExitGateDecision, SubAgentRunInfoWire, UiStreamEvent } from "../protocol/events.js";
 import { foldSubAgentActivity, type SubAgentFolder, type SubAgentTrace } from "./sub-agent-fold.js";
+import { foldStructured, type TurnStructured } from "./structured-output.js";
 import { summarizeUsage, type TurnUsage } from "./token-usage.js";
 import { turnOutcomeOf, type TurnEnding, type TurnOutcome } from "./turn-outcome.js";
 
@@ -70,6 +71,8 @@ export interface TurnTraceState {
   readonly durationMs?: number;
   /** True once an `IterationProgress` fixed the cursor (before that, `iteration` is provisional). */
   readonly progressSeen?: true;
+  /** The typed object and its provenance report, for a turn run with an output schema. */
+  readonly structured?: TurnStructured;
 }
 
 /** The context window the turn's model calls ran in. */
@@ -123,6 +126,8 @@ export interface TurnTrace {
   readonly strategy?: string;
   /** How long the run took (ms), when it reported. */
   readonly durationMs?: number;
+  /** The typed object and how it was obtained, present only for a turn run with an output schema. */
+  readonly structured?: TurnStructured;
 }
 
 /** An empty trace, before any event of the turn. */
@@ -265,12 +270,16 @@ export function foldTurnTrace(s: TurnTraceState, event: UiStreamEvent): TurnTrac
       return { ...s, subAgents: foldSubAgentActivity(subAgentFolder, s.subAgents, event) };
     case "TokenUsage":
       return { ...s, usage: summarizeUsage(s.usage, event) };
+    case "StructuredOutputReported":
+      return { ...s, structured: foldStructured(s.structured, event) };
     case "StreamCompleted": {
       const outcome = turnOutcomeOf(event);
       const strategy = event.metadata?.strategyUsed;
       const duration = event.metadata?.duration;
+      const structured = foldStructured(s.structured, event);
       return {
         ...s,
+        ...(structured !== undefined ? { structured } : {}),
         answer: event.output,
         ended: outcome.ending,
         outcome,
@@ -383,7 +392,8 @@ export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: 
     s.usage === undefined &&
     outcome === undefined &&
     s.strategy === undefined &&
-    s.durationMs === undefined
+    s.durationMs === undefined &&
+    s.structured === undefined
   ) return undefined;
   return {
     reasoningSteps,
@@ -395,5 +405,6 @@ export function finishTurnTrace(s: TurnTraceState, opts: { readonly resultCap?: 
     ...(outcome !== undefined ? { outcome } : {}),
     ...(s.strategy !== undefined ? { strategy: s.strategy } : {}),
     ...(s.durationMs !== undefined ? { durationMs: s.durationMs } : {}),
+    ...(s.structured !== undefined ? { structured: s.structured } : {}),
   };
 }

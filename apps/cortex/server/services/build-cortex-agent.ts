@@ -30,7 +30,6 @@ import {
 } from "./cortex-agent-config.js";
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
-import { jsonSchemaToStandardSchema } from "./json-schema-output.js";
 import { providerKeyForAgent } from "./provider-key-store.js";
 
 export interface BuildCortexAgentParams {
@@ -226,8 +225,7 @@ export async function buildCortexAgent(
  *
  * Only true overlays remain here, each with no AgentConfig form: a saved provider
  * key (a secret, never in config), the scripted test scenario, host tool code
- * (`extraTools`), Cortex's trace dir, the output schema object and the
- * user-interaction rail. `CORTEX_OVERLAY_CALLS` (cortex-agent-source.ts) lists them.
+ * (`extraTools`) and Cortex's trace dir. `CORTEX_OVERLAY_CALLS` (cortex-agent-source.ts) lists them.
  */
 export async function cortexAgentBuilder(
   params: BuildCortexAgentParams,
@@ -262,17 +260,9 @@ export async function cortexAgentBuilder(
   // bare `.withTracing()` does not (framework gap, reported).
   if (params.tracing) b = b.withTracing({ dir: params.tracing.dir });
 
-  // Typed structured output (v0.12) — extract the answer into the user's JSON
-  // Schema. Lenient by default (objectError on parse-fail, never throws).
-  if (params.outputSchema && Object.keys(params.outputSchema).length > 0) {
-    b = b.withOutputSchema(
-      jsonSchemaToStandardSchema(params.outputSchema),
-      params.outputSchemaOnParseFail === "throw" ? { onParseFail: "throw" } : {},
-    ) as typeof b;
-  }
-
-  // The agentic-UI interaction rail (request_user_input) rides the AgentConfig
-  // (`userInteraction`, set with durable runs in cortexParamsToAgentConfig).
+  // The output schema (JSON Schema, `outputSchemaOptions`) and the agentic-UI
+  // interaction rail (`userInteraction`) ride the AgentConfig
+  // (cortexParamsToAgentConfig); they are not overlays.
 
   return b;
 }

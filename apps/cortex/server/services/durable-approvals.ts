@@ -74,7 +74,19 @@ export interface PendingApprovalRow {
 }
 
 /** The agent surface a live wait is read and answered through. */
-export type LiveApprovableAgent = Pick<ReactiveAgent, "listPendingApprovals" | "approveRun" | "denyRun">;
+export type LiveApprovableAgent = Pick<ReactiveAgent, "listPendingApprovals" | "approveRun" | "denyRun"> &
+  Partial<Pick<ReactiveAgent, "listPendingInteractions" | "respondToInteraction">>;
+
+/** One question a running agent is waiting on (`request_user_input` without durable runs). */
+export interface LiveInteractionRow {
+  readonly runId: string;
+  readonly interactionId: string;
+  readonly kind: string;
+  readonly prompt: string;
+  readonly schema: unknown;
+  readonly agentId: string;
+  readonly chatSessionId?: string;
+}
 
 /** A running agent whose `detach` approvals wait live (no durable store). */
 export interface LiveApprovalSource {
@@ -95,6 +107,23 @@ export function approvalsWaitLive(p: {
 }): boolean {
   return p.approvalPolicy?.mode === "detach" && p.durableRuns?.enabled !== true;
 }
+
+/**
+ * True when a build's `request_user_input` questions wait live: the agent may
+ * ask (`rawConfig.userInteraction` set and not `false`) and there are no durable
+ * runs (with them the run pauses durably and the durable rail answers).
+ */
+export function askWaitsLive(p: {
+  readonly durableRuns?: { readonly enabled?: boolean };
+  readonly rawConfig?: Record<string, unknown>;
+}): boolean {
+  const ui = p.rawConfig?.userInteraction;
+  return p.durableRuns?.enabled !== true && ui !== undefined && ui !== false;
+}
+
+/** True when a running agent of this build can hold a live wait (approval or question) a person must answer. */
+export const waitsLive = (p: Parameters<typeof approvalsWaitLive>[0] & Parameters<typeof askWaitsLive>[0]): boolean =>
+  approvalsWaitLive(p) || askWaitsLive(p);
 
 const pending = new Map<string, PendingApprovalEntry>();
 const liveSources = new Set<LiveApprovalSource>();
@@ -208,6 +237,52 @@ export const durableApprovals = {
       return { ok: true };
     }
     return { ok: false, code: "not-found", message: `Run ${runId} is not waiting for approval in this process` };
+  },
+  /**
+   * Questions the live sources are waiting on (the agent's `listPendingInteractions()`:
+   * live waits only, the sources have no durable store here). Oldest first per source.
+   */
+  async listLiveInteractions(): Promise<readonly LiveInteractionRow[]> {
+    const out: LiveInteractionRow[] = [];
+    for (const source of liveSources) {
+      let rows: Awaited<ReturnType<NonNullable<LiveApprovableAgent["listPendingInteractions"]>>> = [];
+      try {
+        rows = (await source.agent.listPendingInteractions?.()) ?? [];
+      } catch {
+        rows = [];
+      }
+      for (const r of rows) {
+        out.push({
+          runId: r.runId,
+          interactionId: r.interactionId,
+          kind: r.kind,
+          prompt: r.prompt,
+          schema: r.schema,
+          agentId: source.agentId,
+          ...(source.chatSessionId !== undefined ? { chatSessionId: source.chatSessionId } : {}),
+        });
+      }
+    }
+    return out;
+  },
+  /**
+   * Answer a question a run is waiting on in this process. `not-found` when no live
+   * source holds it. Like {@link decideLive}, delivered not awaited to the run's end.
+   */
+  async answerLiveInteraction(runId: string, interactionId: string, value: unknown): Promise<DecideResult> {
+    for (const source of liveSources) {
+      if (!source.agent.respondToInteraction) continue;
+      const rows = await durableApprovals.listLiveInteractions();
+      if (!rows.some((r) => r.runId === runId && r.interactionId === interactionId && r.agentId === source.agentId)) continue;
+      void source.agent.respondToInteraction(runId, interactionId, value).catch((e: unknown) => {
+        cortexLog("debug", "approvals", "live run ended with an error after an answer", {
+          runId,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      });
+      return { ok: true };
+    }
+    return { ok: false, code: "not-found", message: `Run ${runId} is not waiting for an answer in this process` };
   },
   /**
    * Approve or deny a registered run. Agent-owned: resume via the agent, keep it
