@@ -44,6 +44,22 @@ Not tagged yet. These are on `dev` and may still change before release.
 - **Canonical `ChannelAdapter` contract** with native Signal and Telegram bot adapters. See [Messaging Channels](/guides/messaging-channels/).
 - **Deploy hardening.** Validated agent names, always-on daemon settings per target, and the Cloud Run auth default above. See [`rax deploy`](/reference/cli/#rax-deploy).
 
+### Security hardening
+
+Behavior changes first. Each one can break an existing setup. See [Security Hardening](/guides/security-hardening/) for the full trust-boundary summary.
+
+- **SDK server needs a bearer key.** The server `rax deploy --mode sdk` generates requires `Authorization: Bearer <RAX_API_KEY>` on `/chat` and `/chat/stream`. With `RAX_API_KEY` unset, a random key is generated and printed once at startup. Bodies over 1 MiB are rejected and the wildcard CORS header is gone, so browser apps on other origins need a gateway in front. `/health`, `/ready` and the agent card stay open.
+- **Cortex off loopback needs `CORTEX_TOKEN`.** Binding with `CORTEX_HOST=0.0.0.0` now refuses to start without it. Cross-site requests (`Sec-Fetch-Site: cross-site`) are refused. See [Settings and keys](/features/cortex/settings-and-keys/#access-token).
+- **File tools refuse secret paths.** `file-read`, `file-write`, `file-edit`, `list-directory` and `grep` refuse credential paths inside the file root (`.env`, `.env.*`, `.ssh`, `.cortex`, `secret.key`, `provider-keys.json`, ...), including through symlinks. Hosts opt out explicitly with `withSecretPathAccess`.
+- **Shell escapes closed.** `shell-execute` parses `sed` and `awk` programs and refuses any construct that can run commands or write files, refuses `sort --compress-program`, and path-checks option values (`sort --output=/tmp/x`). File tools resolve symlinks before confining a path, and `grep` globs can no longer leave the file root.
+- **Empty webhook secrets fail closed.** An empty or whitespace webhook or Telegram `secretToken` is treated as unset instead of accepting any signature.
+- **SSRF guard covers more address forms.** `assertPublicUrl` now applies the private, loopback and metadata rules to IPv4-mapped, IPv4-compatible, NAT64 and 6to4 IPv6 forms, and blocks `localhost.` and `*.localhost`.
+- **Approval rules see through wrappers.** A `"git push"` rule still matches `git -C dir push`, `env git push`, `xargs`, `timeout` and `sudo -u x`. `shell-execute` forwards `gh` and `gws` credentials only when that command is granted.
+- **Owner-only file modes.** New trace, log and exporter directories are `0700` and files `0600`. The same holds for durable-run storage (`runs.db`), memory directories, the memory SQLite file and `memory.md`, scratchpad spill files and `.cortex/`. Existing files keep their current permissions. Agent ids are contained to one path segment in the durable-runs and memory directories.
+- **Redaction covers modern key formats.** Traces, logs and OTel output redact `sk-proj-` keys, OpenRouter, fine-grained GitHub, Slack, Stripe, Groq and xAI keys, PEM private-key blocks, `Basic` credentials and `password=` / `secret=` / `token=` assignments.
+- **Dependencies.** `effect` is pinned to 3.22.4 workspace-wide (AsyncLocalStorage advisory) and `@modelcontextprotocol/sdk` is `^1.32.2`. `client_credentials` and `private_key_jwt` MCP auth accept an optional `expectedIssuer`.
+- **Smaller fixes.** A2A and channels bound request bytes and task and session stores; `rax deploy` scaffolds write a `.dockerignore` for `.git` and `.env*`; MCP docker HTTP mode binds `127.0.0.1`; `http-get` drops credential headers on cross-origin redirects.
+
 ### Cortex
 
 Chat composer with a Config popover, `/mcp` and `/btw` commands, a Context tab (active skills and recalled memories), judgments, rich answers, `@` file tags, attachments, and voice (dictation, read aloud, voice mode). See [Cortex](/features/cortex/).

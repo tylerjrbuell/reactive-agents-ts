@@ -39,8 +39,31 @@ rax cortex
 ```
 
 <Aside type="caution">
-Anyone who can reach a non-loopback address can browse folder names, read skill files and start agent runs. Expose Cortex only on a network you trust, or behind your own authentication.
+Without a token, anyone who can reach a non-loopback address can browse folder names, read skill files and start agent runs. Set `CORTEX_TOKEN` (below) and expose Cortex only on a network you trust.
 </Aside>
+
+### Access token
+
+On loopback (the default bind) no token is needed. Binding off loopback (`CORTEX_HOST=0.0.0.0`) requires `CORTEX_TOKEN`; the server refuses to start without it.
+
+```bash
+CORTEX_HOST=0.0.0.0 CORTEX_TOKEN="$(openssl rand -hex 32)" rax cortex
+```
+
+When `CORTEX_TOKEN` is set, `/api/*` and `/ws/*` accept it in any one of three forms:
+
+- `Authorization: Bearer <token>`
+- the `cortex_token` cookie. Open `GET /?token=<token>` once in the browser and Cortex sets it (HttpOnly, SameSite=Strict).
+- `?token=<token>` on `/ws/*` connections.
+
+Requests tagged `Sec-Fetch-Site: cross-site` are refused, which closes cross-site `GET`s that carry no `Origin`.
+
+### Other guards
+
+- **Tool playground approval.** `POST /api/tools/invoke` answers 409 for tools the framework gates with `requiresApproval` (`code-execute`, `file-write`, `file-edit`, docker and shell) until the body carries `approved: true`. The Tool Workshop asks you to confirm first.
+- **MCP secrets are write-only.** `GET /api/mcp-servers` masks `env` and `headers` values and OAuth secrets. Saving a config that still holds a masked value keeps the stored one.
+- **Outbound URL validation.** The Ollama endpoint and the voice base URLs accept http(s) only, no embedded credentials, and no link-local or cloud-metadata host (including names that resolve to one). Model discovery and voice calls never follow redirects.
+- **Private storage.** `.cortex/` is created `0700` and the database (and its `-wal` / `-shm`) `0600`.
 
 ### Environment Variables
 
@@ -53,6 +76,7 @@ Anyone who can reach a non-loopback address can browse folder names, read skill 
 | `CORTEX_LOG`             | `info`                  | Server log verbosity: `error` \| `warn` \| `info` \| `debug` |
 | `CORTEX_SKILL_SCAN_ROOT` | —                       | Extra folder suggested in the workspace picker (and scanned by the older `GET /api/skills/files`) |
 | `CORTEX_ALLOWED_HOSTS`   | unset                   | Extra host names the request guard accepts (comma-separated) |
+| `CORTEX_TOKEN`           | unset                   | Access token; required when `CORTEX_HOST` is not loopback    |
 | `CORTEX_CHAT_MAX_SESSIONS` | `8`                   | Cached chat agents kept in an LRU                            |
 
 ## Model pages
