@@ -159,7 +159,7 @@ import type { StreamDensity } from './stream-types.js'
 import type { Redactor, TelemetryConfig } from '@reactive-agents/observability'
 import { OpenInferenceTracerLayer } from '@reactive-agents/observe'
 import type { DocumentSpec } from './context-ingestion.js'
-import type { ChannelsConfig } from "@reactive-agents/channels";
+import type { ChannelsConfig } from "./channels-config.js";
 import { toOutputSchemaContract, type OutputSchemaInput } from './engine/finalize/json-schema-contract.js'
 import type { SchemaContract } from '@reactive-agents/reasoning'
 import type { OutputSchemaOptions } from './builder/types.js'

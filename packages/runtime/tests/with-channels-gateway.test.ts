@@ -29,6 +29,7 @@ describe("ReactiveAgent .withChannels() + gateway start", () => {
     const webhook = new WebhookChannelAdapter({
       id: "hook-e2e",
       platform: "telegram-bot",
+      allowUnsigned: true,
       onResponse: async (_t, c) => {
         replies.push(c.text);
       },
@@ -86,6 +87,11 @@ describe("ReactiveAgent .withChannels() + gateway start", () => {
         headers: {},
       }),
     );
+    // Ingress is acknowledged once queued; the consumer fiber produces the reply.
+    const replyDeadline = Date.now() + 5000;
+    while (replies.length === 0 && Date.now() < replyDeadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
     await handle.stop();
     expect(replies.length).toBe(1);
     expect(replies[0]).toContain("pong");

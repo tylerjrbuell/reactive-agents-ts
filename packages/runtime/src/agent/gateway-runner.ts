@@ -27,7 +27,7 @@ import {
   GatewayChatManager,
   channelOutboundToolGuidance,
 } from "../gateway-context-formatting.js";
-import type { ChannelsConfig } from "@reactive-agents/channels";
+import type { ChannelsConfig } from "../channels-config.js";
 import type { GatewaySummary, GatewayHandle } from "../builder/types.js";
 
 /**

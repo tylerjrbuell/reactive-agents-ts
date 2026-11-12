@@ -12,7 +12,7 @@ import { ReactiveAgent } from "../../reactive-agent.js";
 import type { ExecutionContext } from "../../types.js";
 import type { StreamDensity } from "../../stream-types.js";
 import type { ExecuteStreamFn } from "../../engine/execute-stream.js";
-import type { ChannelsConfig } from "@reactive-agents/channels";
+import type { ChannelsConfig } from "../../channels-config.js";
 import type { RuntimeErrors } from "../../errors.js";
 import type {
   Task,

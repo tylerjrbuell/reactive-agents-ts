@@ -22,7 +22,7 @@ import type {
     SchedulerService as SchedulerServiceTag,
 } from '@reactive-agents/gateway'
 import type { ObservabilityService as ObservabilityServiceTag } from '@reactive-agents/observability'
-import type { ChannelsConfig } from '@reactive-agents/channels'
+import type { ChannelsConfig } from '../channels-config.js'
 import type { ChatReply } from '../chat.js'
 import { yieldService } from '../builder/helpers.js'
 
@@ -237,7 +237,14 @@ export const bootstrapGateway = async (
                 `channels: started ${channelsConfig.adapters.length} adapter(s)`
             )
             channelAdaptersCleanup = async () => {
+                try {
+                    await Effect.runPromise(channelSvc.shutdown())
+                } catch {
+                    /* ignore */
+                }
+                // shutdown() only owns canonical adapters; legacy ones still disconnect here.
                 for (const adapter of channelsConfig.adapters) {
+                    if (chMod.isChannelAdapter(adapter)) continue
                     try {
                         await Effect.runPromise(adapter.disconnect())
                     } catch {

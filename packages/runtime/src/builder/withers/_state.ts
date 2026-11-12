@@ -42,7 +42,7 @@ import type {
   AgentToolOptions,
 } from "../types.js";
 import type { ContextProfile } from "@reactive-agents/reasoning";
-import type { ChannelsConfig } from "@reactive-agents/channels";
+import type { ChannelsConfig } from "../../channels-config.js";
 import type {
   ResultCompressionConfig,
   ShellExecuteConfig,

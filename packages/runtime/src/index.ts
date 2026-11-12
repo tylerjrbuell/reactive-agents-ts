@@ -153,7 +153,7 @@ export type {
 } from "./agent/memory-facade.js";
 export type { ToolDisclosure, ResolvedDisclosure, DisclosureSource } from "./engine/tool-disclosure.js";
 
-export type { ChannelsConfig } from "@reactive-agents/channels";
+export type { ChannelsConfig } from "./channels-config.js";
 
 // ─── Streaming ───
 export type { AgentStreamEvent, StreamDensity } from "./stream-types.js";

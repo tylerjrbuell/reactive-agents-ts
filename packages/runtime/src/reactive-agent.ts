@@ -110,7 +110,7 @@ import {
 import { streamObjectFrom } from './engine/stream-object.js'
 import { runTurnWithSchema, type OutputSchemaRunOption } from './agent/turn-schema.js'
 import type { DeepPartial } from './builder/types.js'
-import type { ChannelsConfig } from "@reactive-agents/channels";
+import type { ChannelsConfig } from "./channels-config.js";
 import type {
     GatewayHandle,
     AgentResult,

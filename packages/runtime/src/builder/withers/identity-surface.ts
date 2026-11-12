@@ -7,7 +7,7 @@
  */
 import type { AgentPersona, AgentToolOptions, A2AOptions, GatewayOptions } from '../types.js'
 import type { ProviderName } from '../types.js'
-import type { ChannelsConfig } from '@reactive-agents/channels'
+import type { ChannelsConfig } from '../../channels-config.js'
 import { ToolsOptionError } from '../../errors.js'
 import type { BuilderState } from './_state.js'
 import { invalidMaxCallsPerTool } from './tools.js'
