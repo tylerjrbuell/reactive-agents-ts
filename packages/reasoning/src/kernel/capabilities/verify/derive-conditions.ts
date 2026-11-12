@@ -74,7 +74,13 @@ export function pickWritingTool(requiredTools: readonly string[]): string {
 //
 // Path token: optional leading "./", at least one path segment, a ".ext"
 // (2-5 alnum). We require the path to look like a real filename, not prose.
-export const PATH_TOKEN = /(\.?\/?[\w./-]*[\w-]+\.[A-Za-z0-9]{1,5})/;
+//
+// Linear on unbroken runs: the match may only START at a token boundary (the
+// lookbehind) and the pre-dot tail is ONE `[\w-]` (the old `[\w-]+` made every
+// backtrack step rescan the run — O(n^3) on dot-free tokens, a 65 KB minified
+// line pinned a core). The language and the leftmost/rightmost-dot match are
+// unchanged.
+export const PATH_TOKEN = /(?<![\w./-])(\.?\/?[\w./-]*[\w-]\.[A-Za-z0-9]{1,5})/;
 const WRITE_VERB = /\b(write|create|save|generate|produce|output)\b/gi;
 
 // Real file extensions we accept when the candidate has NO explicit path
