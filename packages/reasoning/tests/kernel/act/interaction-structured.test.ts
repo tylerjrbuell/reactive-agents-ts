@@ -101,7 +101,7 @@ async function driveKernel(
     availableToolSchemas: [ASK_SCHEMA],
     allToolSchemas: [ASK_SCHEMA],
     metaTools: { userInteraction: true },
-  } as unknown as KernelInput;
+  } as KernelInput;
   await Effect.runPromise(
     provideTestEnvelope(
       runKernel(reactKernel, input, { maxIterations: 4, strategy: "react", kernelType: "react" } as never),
