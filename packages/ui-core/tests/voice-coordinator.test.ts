@@ -183,6 +183,7 @@ describe("no play() rejection is ever unhandled", () => {
       createAudio: () => new PendingAudio(),
       createObjectURL: () => "blob:x",
       revokeObjectURL: () => undefined,
+      retryDelayMs: 0,
     });
     return { remote, audios };
   }
@@ -241,17 +242,20 @@ describe("no play() rejection is ever unhandled", () => {
       const errors: string[] = [];
       // A handler that throws while the interrupted play() is being settled (inside the async body).
       remote.speak("x", {}, {
-        onEnd: () => {
+        onEnd: () => undefined,
+        onError: (e) => {
+          errors.push(e.kind);
           throw new Error("handler blew up");
         },
-        onError: (e) => errors.push(e.kind),
       });
       await tick();
       await tick();
-      audios[0]!.pause(); // rejects the pending play() with AbortError -> onEnd throws
+      audios[0]!.pause(); // an outside pause rejects the pending play(); the retry is paused again -> onError throws
       await tick();
-      await tick();
-      expect(errors.length).toBeLessThanOrEqual(1);
+      await new Promise<void>((r) => setTimeout(r, 5));
+      audios[0]!.pause();
+      await new Promise<void>((r) => setTimeout(r, 15));
+      expect(errors).toEqual(["playback"]);
     });
     expect(seen).toEqual([]);
   });

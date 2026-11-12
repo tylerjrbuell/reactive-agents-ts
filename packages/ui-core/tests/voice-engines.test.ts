@@ -3,6 +3,8 @@ import {
   analyserProbe,
   createBrowserStt,
   createBrowserTts,
+  createReadAloud,
+  EXTERNAL_PAUSE_MESSAGE,
   createRemoteStt,
   createRemoteTts,
   recognitionError,
@@ -327,7 +329,8 @@ describe("remote TTS", () => {
         audios.push(this);
       }
       async play() {
-        if (playError !== undefined) throw playError();
+        const failure = playError?.();
+        if (failure !== undefined) throw failure;
         this.playing = true;
         this.onplaying?.();
       }
@@ -349,6 +352,7 @@ describe("remote TTS", () => {
       createAudio: (src) => new FakeAudio(src),
       createObjectURL: () => "blob:test",
       revokeObjectURL: (u) => revoked.push(u),
+      retryDelayMs: 0,
     });
     return { engine, audios, requests, revoked };
   }
@@ -394,21 +398,42 @@ describe("remote TTS", () => {
     expect(events).toEqual([]);
   });
 
-  test("an AbortError from a play() that is still sounding pauses the element and ends once, even if it later fires 'ended'", async () => {
-    const { engine, audios } = setup(undefined, () => domError("AbortError", "interrupted"));
+  const settleTime = () => new Promise<void>((r) => setTimeout(r, 15));
+
+  test("something outside pauses the audio once: play() is retried and the reading continues", async () => {
+    let calls = 0;
+    const { engine, audios } = setup(undefined, () => (calls++ === 0 ? domError("AbortError", "interrupted by a call to pause()") : undefined));
     const events: string[] = [];
-    engine.speak("x", {}, { onEnd: () => events.push("end"), onError: (e) => events.push(`error:${e.message}`) });
-    await tick();
-    await tick();
+    engine.speak("x", {}, { onStart: () => events.push("start"), onEnd: () => events.push("end"), onError: (e) => events.push(`error:${e.message}`) });
+    await settleTime();
+    expect(calls).toBe(2);
+    expect(events).toEqual(["start"]); // the retry sounded; no error was reported
+    audios[0]!.onended?.();
+    expect(events).toEqual(["start", "end"]);
+  });
+
+  test("paused from outside twice: one typed external-pause error, the element is silenced, a late 'ended' is inert", async () => {
+    const { engine, audios } = setup(undefined, () => domError("AbortError", "interrupted by a call to pause()"));
+    const events: string[] = [];
+    const errors: Array<{ code?: string; kind: string; message: string }> = [];
+    engine.speak("x", {}, { onEnd: () => events.push("end"), onError: (e) => errors.push(e) });
+    await settleTime();
     const a = audios[0]!;
-    a.playing = true; // the element kept sounding despite the rejection
-    expect(events).toEqual(["end"]);
-    // The utterance is settled: it paused the element and dropped its handlers.
+    expect(errors).toEqual([{ kind: "playback", code: "external-pause", message: EXTERNAL_PAUSE_MESSAGE }]);
     expect(a.onended).toBeNull();
     a.onended?.();
-    a.onerror?.();
-    expect(events).toEqual(["end"]);
+    expect(events).toEqual([]);
     expect(a.pauses).toBeGreaterThan(0);
+  });
+
+  test("a queue stops on an external pause instead of advancing silently", async () => {
+    const { engine } = setup(undefined, () => domError("AbortError", "interrupted by a call to pause()"));
+    const reader = createReadAloud({ engine: () => engine });
+    reader.play("t", "First sentence here. Second sentence here.");
+    await settleTime();
+    expect(reader.get().status).toBe("error");
+    expect(reader.get().error).toMatchObject({ code: "external-pause" });
+    expect(reader.get().index).toBe(0);
   });
 
   test("ended then a stray error fire a single callback, and the element is silenced", async () => {
@@ -428,15 +453,6 @@ describe("remote TTS", () => {
   });
 
   const domError = (name: string, message: string): Error => Object.assign(new Error(message), { name });
-
-  test("an interrupted play() (AbortError) is a normal stop: no error, the utterance ends", async () => {
-    const { engine } = setup(undefined, () => domError("AbortError", "The play() request was interrupted because the media was removed from the document."));
-    const events: string[] = [];
-    engine.speak("x", {}, { onEnd: () => events.push("end"), onError: (e) => events.push(`error:${e.message}`) });
-    await tick();
-    await tick();
-    expect(events).toEqual(["end"]);
-  });
 
   test("an AbortError caused by a user pause stays silent and does not end the utterance", async () => {
     let handle: { pause(): void } | undefined;

@@ -70,7 +70,16 @@ export interface VoiceInfo {
 export interface TtsError {
   readonly kind: "unsupported" | "network" | "server" | "playback" | "other";
   readonly message: string;
+  /**
+   * A finer reason an app can act on: `external-pause` = something outside the page paused the
+   * audio; `autoplay-blocked` = the browser refused to start audio before a user gesture.
+   */
+  readonly code?: "external-pause" | "autoplay-blocked";
 }
+
+/** Shown when the page's audio keeps being paused by something outside it (extension, media keys). */
+export const EXTERNAL_PAUSE_MESSAGE =
+  "Something outside Cortex paused the audio (often a browser extension or a media-key controller). Try an Incognito window, or switch Reading engine to Browser speech.";
 
 /** Options for one utterance. */
 export interface TtsSpeakOptions {

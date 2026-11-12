@@ -51,3 +51,7 @@ An API key, when the endpoint needs one, is saved through the same encrypted sto
 Language, speed, the browser voice and the mic mode are kept by the browser; the engines, endpoints, models and server voice are kept on the Cortex server. Microphone access needs a secure page: open Cortex on `localhost` or over https.
 
 Step-by-step local setups, including the Speaches container, are in [Local setup recipes](/features/cortex/local-setup-recipes/).
+
+## Troubleshooting
+
+**Reading starts and stops at once, or you see "Something outside Cortex paused the audio".** Cortex retries once, then stops the reading and tells you instead of looking like it is playing. Something outside the page is pausing its audio: usually a browser extension that manages media (a media-key or "pause other tabs" tool) or a desktop media controller. Open Cortex in an Incognito or private window to check; if it works there, disable the extension for Cortex's address. Or set **Reading engine** to **Browser** speech, which does not use an audio element. **Audio diagnostic**, next to **Test** under Reading engine, plays a short tone through the same path and reports whether it played, was paused by something outside Cortex, or was blocked by the browser (which only plays sound after you interact with the page).

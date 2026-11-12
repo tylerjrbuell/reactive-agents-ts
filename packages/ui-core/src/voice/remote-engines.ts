@@ -11,7 +11,7 @@
  * keys stay on the server. Browser globals are injected, so the engines are tested
  * without a DOM.
  */
-import { causeMessage, type VoiceFetch, type SttEngine, SttError, SttHandle, SttHandlers, SttStartOptions, TtsEngine, TtsError, TtsHandle, TtsHandlers, TtsSpeakOptions, VoiceInfo } from "./types.js";
+import { causeMessage, EXTERNAL_PAUSE_MESSAGE, type VoiceFetch, type SttEngine, SttError, SttHandle, SttHandlers, SttStartOptions, TtsEngine, TtsError, TtsHandle, TtsHandlers, TtsSpeakOptions, VoiceInfo } from "./types.js";
 import { exclusive } from "./speech-coordinator.js";
 
 /** Root-mean-square level (0 to 1) of unsigned-byte time-domain samples (128 = silence). */
@@ -262,6 +262,8 @@ export interface RemoteTtsDeps {
   readonly createAudio: ((src: string) => AudioLike) | undefined;
   readonly createObjectURL: (blob: Blob) => string;
   readonly revokeObjectURL: (url: string) => void;
+  /** Wait before the one retry after something outside the page paused the audio (default 60 ms). */
+  readonly retryDelayMs?: number;
 }
 
 const CACHE_LIMIT = 6;
@@ -373,17 +375,32 @@ function createRemoteTtsUnguarded(deps: RemoteTtsDeps): TtsEngine {
             if (settle() && !cancelled) h.onEnd();
           };
           a.onerror = () => fail({ kind: "playback", message: "The audio could not be played." });
-          await a.play();
+          // Our own pause/cancel/settle set `paused` / `cancelled` / `settled` before they touch the
+          // element, so an AbortError with none of them set came from outside the page (an extension
+          // or a media-key controller pausing the element). Retry once; if it is paused again, stop the
+          // reading with one typed error rather than letting a queue run silently.
+          const tryPlay = async (): Promise<"ok" | "external"> => {
+            try {
+              await a.play();
+              return "ok";
+            } catch (c) {
+              if (isAbortError(c) && !cancelled && !settled && !paused) return "external";
+              throw c;
+            }
+          };
+          let outcome = await tryPlay();
+          if (outcome === "external") {
+            await new Promise<void>((r) => setTimeout(r, deps.retryDelayMs ?? 60));
+            if (cancelled || settled) return;
+            outcome = await tryPlay();
+          }
+          if (outcome === "external" && settle()) h.onError({ kind: "playback", code: "external-pause", message: EXTERNAL_PAUSE_MESSAGE });
         } catch (cause) {
           if (cancelled) return;
           const name = typeof cause === "object" && cause !== null && "name" in cause ? String((cause as { name: unknown }).name) : "";
-          // play() was interrupted (pause(), element removed, source swapped): a normal stop, not a failure.
-          // A user pause stays paused; any other interruption ends the utterance so a queue moves on.
-          if (name === "AbortError") {
-            if (!paused && settle()) h.onEnd();
-            return;
-          }
-          if (name === "NotAllowedError") return fail({ kind: "playback", message: "The browser blocked audio until you interact with the page. Press play again." });
+          // Interrupted by our own pause or settle: a normal stop, not a failure.
+          if (name === "AbortError") return;
+          if (name === "NotAllowedError") return fail({ kind: "playback", code: "autoplay-blocked", message: "The browser blocked audio until you interact with the page. Press play again." });
           // Anything else thrown once the audio exists is a playback problem, not an unreachable server.
           if (audio !== null) return fail({ kind: "playback", message: "The audio could not be played." });
           fail({ kind: "network", message: `Could not reach Cortex for speech${causeMessage(cause) ? `: ${causeMessage(cause)}` : "."}` });

@@ -11,6 +11,7 @@
   import Input from "$lib/components/kit/Input.svelte";
   import Select from "$lib/components/kit/Select.svelte";
   import { modelInstallHelp, presetFor, leavesThisMachine, STT_PRESETS, TTS_PRESETS, type SttPreset, type TtsPreset } from "$lib/voice/voice-presets.js";
+  import { diagnosisLine, htmlAudio, runAudioDiagnostic } from "$lib/voice/audio-diagnostic.js";
   import { VOICE_TEST_TEXT } from "$lib/voice/voice-text.js";
   import { CUSTOM_VOICE,endpointKeyLine, reconcileVoice, voiceSelectOptions, voiceWarning } from "$lib/voice/voice-status.js";
   import { STT_KEY_ID, TTS_KEY_ID, type ServerVoiceOption } from "$lib/voice/voice-api.js";
@@ -131,6 +132,19 @@
     }
   });
 
+  /** Plays a 0.3 s tone through the reading path and says whether something outside Cortex interfered. */
+  async function diagnose() {
+    busy = true;
+    result = null;
+    const d = await runAudioDiagnostic({
+      createAudio: htmlAudio,
+      createObjectURL: (b) => URL.createObjectURL(b),
+      revokeObjectURL: (u) => URL.revokeObjectURL(u),
+    });
+    busy = false;
+    result = diagnosisLine(d);
+  }
+
   async function test() {
     busy = true;
     result = null;
@@ -199,6 +213,7 @@
   <div class="vb-row">
     <Button size="sm" variant="primary" disabled={!dirty || busy} onclick={saveEndpoint}>Save endpoint</Button>
     <Button size="sm" variant="ghost" disabled={busy || cfg.baseUrl === "" || dirty || voiceProblem !== null} onclick={test}>Test</Button>
+    {#if direction === "tts"}<Button size="sm" variant="ghost" disabled={busy} onclick={diagnose}>Audio diagnostic</Button>{/if}
     {#if dirty}<span class="vb-help">Save before testing.</span>{/if}
   </div>
   {#if result}<p class="vb-result" class:vb-ok={result.tone === "ok"} class:vb-bad={result.tone === "bad"} role="status">{result.text}</p>

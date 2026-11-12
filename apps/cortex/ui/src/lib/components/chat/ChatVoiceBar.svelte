@@ -19,6 +19,7 @@
   import Button from "$lib/components/kit/Button.svelte";
   import Select from "$lib/components/kit/Select.svelte";
   import type { IconName } from "$lib/icons.js";
+  import { toastDue } from "$lib/voice/audio-diagnostic.js";
   import type { VoiceInfo } from "@reactive-agents/ui-core";
 
   const v = voice();
@@ -64,9 +65,15 @@
 
   // A failed reading says why, once.
   let toldError: string | null = null;
+  let toldExternalAt: number | null = null;
   $effect(() => {
     const e = $readerState.error;
-    if (e !== null && e.message !== toldError && $readerState.sourceId !== VOICE_MODE_SOURCE) toast.error("Read aloud", e.message);
+    // The "something outside Cortex paused the audio" hint is rate-limited: once a minute, never per chunk.
+    const due = e?.code !== "external-pause" || toastDue(toldExternalAt, Date.now());
+    if (e !== null && e.message !== toldError && due && $readerState.sourceId !== VOICE_MODE_SOURCE) {
+      toast.error("Read aloud", e.message);
+      if (e.code === "external-pause") toldExternalAt = Date.now();
+    }
     toldError = e?.message ?? null;
   });
 
