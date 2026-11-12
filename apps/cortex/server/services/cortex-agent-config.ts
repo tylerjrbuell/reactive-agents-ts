@@ -155,6 +155,10 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   if (raw.healthCheck === true) out.healthCheck = true;
   else delete out.healthCheck;
 
+  // "Ask before risky tools" is on unless switched off: only a literal `false` is kept.
+  if (raw.askBeforeRiskyTools === false) out.askBeforeRiskyTools = false;
+  else delete out.askBeforeRiskyTools;
+
   // Agent self-control is strictly opt-in: only a literal `true` keeps it on.
   if (raw.agentControl === true) out.agentControl = true;
   else delete out.agentControl;

@@ -39,8 +39,9 @@
   });
 
   const policy = $derived<ApprovalPolicyConfig>(config.approvalPolicy ?? { mode: "detach", tools: [], commands: [] });
+  const asks = $derived(config.askBeforeRiskyTools !== false);
   const tools = $derived(gateableTools(config.tools, config.terminalTools, presets));
-  const locked = $derived(autoGatedTools(policy, config.tools, hasFullShell(config.tools, config.terminalTools), required));
+  const locked = $derived(autoGatedTools(policy, config.tools, hasFullShell(config.tools, config.terminalTools), required, asks));
   const hasShell = $derived(tools.includes("shell-execute"));
 
   function set(next: Partial<ApprovalPolicyConfig>) {
@@ -57,6 +58,13 @@
 
 <div class="acp-card" data-testid="approval-policy">
   <span class="config-label mb-0">Approvals</span>
+  <label class="acp-check acp-check-box" data-testid="ask-before-risky">
+    <input type="checkbox" role="switch" checked={asks} onchange={(e) => (config = { ...config, askBeforeRiskyTools: e.currentTarget.checked })} />
+    <span>
+      <span class="acp-check-t">Ask before risky tools</span>
+      <span class="acp-hint">{asks ? "On: writing files, running code and the shell wait for your approval, even with no rule below." : "Off: those tools run without asking unless a tool or rule below is set."}</span>
+    </span>
+  </label>
   <p class="acp-hint">Choose which tool calls and shell commands wait for you before they run.</p>
 
   <span id="acp-approval-tools-label" class="config-label mt-2 mb-0">Tools</span>
@@ -74,7 +82,7 @@
       {/each}
     </div>
     {#if locked.length > 0}
-      <p class="acp-hint">{locked.join(", ")} always {locked.length === 1 ? "asks" : "ask"} once anything here is set: the framework marks {locked.length === 1 ? "it" : "them"} as needing approval.</p>
+      <p class="acp-hint">{locked.join(", ")} always {locked.length === 1 ? "asks" : "ask"}{asks ? "" : " once anything here is set"}: the framework marks {locked.length === 1 ? "it" : "them"} as needing approval.</p>
     {/if}
     {#if hasShell}
       <p class="acp-hint">Gating <code>shell-execute</code> asks before every shell command. To ask only for some, add command rules below.</p>

@@ -17,7 +17,7 @@ import { readRunTraceFile } from "../services/run-trace-file.js";
 import { makeRunCauseReader, type RunCauseReader } from "../services/run-cause.js";
 import { checkWorkspaceDir } from "../services/workspace-dir.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
-import { approvalPolicyOf } from "../services/approval-policy.js";
+import { effectiveApprovalPolicy } from "../services/approval-policy.js";
 
 /**
  * Body schema for `POST /api/runs`: the run-launch inputs plus the shared
@@ -61,7 +61,7 @@ export function runBodyToLaunchParams(b: Static<typeof RunConfigBody>, workspace
   const agentTools = parseAgentToolEntries(b.agentTools);
   const variables = parseVariableDefs(b.variables);
   const tierModels = pickTierModels(b.modelRouting?.tierModels);
-  const approvalPolicy = approvalPolicyOf(b);
+  const approvalPolicy = effectiveApprovalPolicy(b);
   return {
     prompt: b.prompt,
     ...(b.provider         ? { provider:         b.provider }         : {}),

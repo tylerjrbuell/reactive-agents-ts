@@ -12,9 +12,9 @@ describe("config during a run never queues", () => {
     expect(submitRoute({ sending: false, command: "clear" })).toBe("dispatch");
   });
 
-  it("the picker of a config command opens during a run; the command list does not", () => {
+  it("the panel of a config command and the root list (config commands only) open during a run", () => {
     expect(slashMenuAllowed({ sending: true, command: "model", hasArg: true })).toBe(true);
-    expect(slashMenuAllowed({ sending: true, command: "model", hasArg: false })).toBe(false);
+    expect(slashMenuAllowed({ sending: true, hasArg: false })).toBe(true);
     expect(slashMenuAllowed({ sending: true, command: "rewind", hasArg: true })).toBe(false);
     expect(slashMenuAllowed({ sending: false, hasArg: false })).toBe(true);
     expect(isLiveConfigCommand(undefined)).toBe(false);

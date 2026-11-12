@@ -87,7 +87,7 @@ bun run build
 ## Features
 
 - **Beacon** — live board and field of running agents, with a prompt bar.
-- **Chat** — multimodal composer (pictures, audio, files, `@` file tags), slash commands such as `/mcp` and `/btw`, rich answers with deliverables, live approvals and questions, and voice (dictation, read aloud, voice mode).
+- **Chat** — multimodal composer (pictures, audio, files, `@` file tags), slash commands such as `/mcp` and `/btw`, rich answers with deliverables, live approvals and questions (agents ask before risky tools such as writing files or running the shell by default; switch it off per agent), one command list shared by `/` and the Config button, and voice (dictation, read aloud, voice mode).
 - **Runs and run view** — run table, trace, "Why it ended", and an inspector with Context (skills and recalled memories), Memory, Safety and Judgments tabs. Compare two runs.
 - **Lab** — agent builder (with TypeScript export), saved agents, memory studio, agent skills, tools and prompts.
 - **Settings** — provider keys (including Ollama Cloud), judgment backends, voice engines.

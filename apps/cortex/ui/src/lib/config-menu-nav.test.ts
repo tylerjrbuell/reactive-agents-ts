@@ -1,79 +1,125 @@
 import { describe, expect, test } from "bun:test";
-import { CLOSED_NAV, configNavReduce as step, groupOf, groupSummary, type ConfigNav, type ConfigNavEvent } from "./config-menu-nav.js";
-import type { ConfigGroup } from "./chat-composer-bar.js";
+import { commandNameOf, matchEntries, panelTitle, settingEntries, surfaceBack, surfaceView } from "./config-menu-nav.js";
+import { CHAT_COMMANDS, parseSlash, resolveCommand } from "./chat-commands.js";
+import { configGroups } from "./chat-composer-bar.js";
+import { quickBarChips, type QuickBarChipContext } from "./chat-quickbar-chips.js";
+import { commandMenuItems } from "./chat-menu-items.js";
 
-const run = (events: readonly ConfigNavEvent[], from: ConfigNav = CLOSED_NAV): ConfigNav => events.reduce(step, from);
-const inGroup = run([{ type: "toggle" }, { type: "enter-group", group: "Tools" }]);
-const picked = step(inGroup, { type: "pick", cmd: "/terminal " });
+const chipCtx: QuickBarChipContext = {
+  provider: "ollama",
+  model: "qwen3",
+  modelThinking: null,
+  thinkingChoice: "auto",
+  strategyLabel: "ReAct",
+  pinnedSkillCount: 0,
+  documentCount: 0,
+};
+const groups = configGroups(quickBarChips({}, chipCtx), {}, chipCtx);
+const settings = settingEntries(groups);
+const rows = groups.flatMap((g) => g.rows);
 
-describe("configNavReduce", () => {
-  test("toggle opens on the main menu and closes again", () => {
-    expect(step(CLOSED_NAV, { type: "toggle" })).toEqual({ open: true, level: "menu", group: null, item: null });
-    expect(step(step(CLOSED_NAV, { type: "toggle" }), { type: "toggle" })).toEqual(CLOSED_NAV);
+describe("one registry: Config rows and slash commands are the same entries", () => {
+  test("every Config row's slash alias is a real command", () => {
+    for (const r of rows) {
+      expect(CHAT_COMMANDS.map((c) => String(c.name))).toContain(commandNameOf(r.cmd));
+    }
   });
 
-  test("choosing a group drills in", () => {
-    expect(inGroup).toEqual({ open: true, level: "group", group: "Tools", item: null });
+  test("every setting command (one with a panel) has a Config row, bar the one-message /skill", () => {
+    const withPanel = CHAT_COMMANDS.filter((c) => c.picker !== undefined).map((c) => c.name);
+    const missing = withPanel.filter((n) => !settings.has(n) && n !== "skill");
+    expect(missing).toEqual([]);
   });
 
-  test("Back from a group returns to the main menu; Back from the menu closes", () => {
-    const menu = step(inGroup, { type: "back" });
-    expect(menu).toEqual({ open: true, level: "menu", group: null, item: null });
-    expect(step(menu, { type: "back" })).toEqual(CLOSED_NAV);
+  test("/agent has a panel, so Agent control opens in place with its on/off rows", () => {
+    expect(resolveCommand(parseSlash("/agent ")!)).toMatchObject({ name: "agent", picker: "agent" });
+    expect(settings.get("agent")).toMatchObject({ label: "Agent control" });
   });
 
-  test("Escape goes back one level before closing", () => {
-    expect(step(inGroup, { type: "escape" }).level).toBe("menu");
-    expect(step(step(inGroup, { type: "escape" }), { type: "escape" })).toEqual(CLOSED_NAV);
-  });
-
-  test("picking a row hides the popover but remembers the group and row", () => {
-    expect(picked).toEqual({ open: false, level: "item", group: "Tools", item: "/terminal " });
-  });
-
-  test("when the picker closes, the user lands back on the group", () => {
-    expect(step(picked, { type: "picker-closed" })).toEqual({ open: true, level: "group", group: "Tools", item: null });
-  });
-
-  test("Back or Escape from a picker also returns to the group", () => {
-    expect(step(picked, { type: "back" }).level).toBe("group");
-    expect(step(picked, { type: "escape" })).toEqual({ open: true, level: "group", group: "Tools", item: null });
-  });
-
-  test("a click outside closes from any level, picker included, and the picker closing afterwards stays closed", () => {
-    const after = step(picked, { type: "outside" });
-    expect(after).toEqual(CLOSED_NAV);
-    expect(step(after, { type: "picker-closed" })).toEqual(CLOSED_NAV);
-    expect(step(inGroup, { type: "outside" })).toEqual(CLOSED_NAV);
-  });
-
-  test("re-entry: reopening after a close starts at the main menu, and a group can be entered again", () => {
-    const reopened = step(step(inGroup, { type: "outside" }), { type: "toggle" });
-    expect(reopened.level).toBe("menu");
-    expect(step(reopened, { type: "enter-group", group: "Limits" }).group).toBe("Limits");
-  });
-
-  test("events on a closed popover do nothing", () => {
-    expect(step(CLOSED_NAV, { type: "enter-group", group: "Tools" })).toEqual(CLOSED_NAV);
-    expect(step(CLOSED_NAV, { type: "pick", cmd: "/model " })).toEqual(CLOSED_NAV);
-    expect(step(CLOSED_NAV, { type: "picker-closed" })).toEqual(CLOSED_NAV);
+  test("the alias of a row with arguments still names its command", () => {
+    expect(commandNameOf("/tools disclosure")).toBe("tools");
+    expect(commandNameOf("/model ")).toBe("model");
   });
 });
 
-const groups: readonly ConfigGroup[] = [
-  { title: "Model", rows: [{ label: "Provider", value: "ollama", cmd: "/provider ", icon: "cloud", on: false }, { label: "Model", value: "qwen3", cmd: "/model ", icon: "model", on: false }] },
-  { title: "Limits", rows: [{ label: "Steps per turn", value: "30 steps", cmd: "/iterations ", icon: "steps", on: true }] },
-];
+describe("the root list", () => {
+  const names = (q: string) => matchEntries(q, settings).map((c) => c.name);
 
-describe("groupOf / groupSummary", () => {
-  test("finds the group a nav points at, and tolerates one that vanished", () => {
-    expect(groupOf(groups, inGroup)).toBeUndefined();
-    expect(groupOf(groups, { ...inGroup, group: "Limits" })?.title).toBe("Limits");
-    expect(groupOf(groups, CLOSED_NAV)).toBeUndefined();
+  test("no text after the slash lists every command", () => {
+    expect(names("")).toEqual(CHAT_COMMANDS.map((c) => c.name));
   });
 
-  test("summary names what differs from the default, else the first values", () => {
-    expect(groupSummary(groups[1]!)).toBe("Steps per turn 30 steps");
-    expect(groupSummary(groups[0]!)).toBe("ollama, qwen3");
+  test("filters by the text after the slash, name first", () => {
+    expect(names("mod")[0]).toBe("model");
+    expect(names("zzz")).toEqual([]);
+  });
+
+  test("a Config name finds its command: /control reaches /agent", () => {
+    expect(names("control")).toContain("agent");
+    expect(names("directory")).toContain("workspace");
+  });
+
+  test("the list shows each setting's alias with its current value as the hint", () => {
+    const items = commandMenuItems({
+      slash: parseSlash("/")!,
+      settings,
+      skills: null,
+      queuedSkills: [],
+      pinned: [],
+      runCommand: () => undefined,
+      completeCommand: () => undefined,
+      toggleQueuedSkill: () => undefined,
+    });
+    const provider = items.find((i) => i.key === "provider");
+    expect(provider).toMatchObject({ label: "/provider", hint: "ollama" });
+    expect(items.find((i) => i.key === "agent")).toMatchObject({ label: "/agent", hint: "Off" });
+    // A command without a setting keeps the argument hint.
+    expect(items.find((i) => i.key === "rename")).toMatchObject({ label: "/rename", hint: "<name>" });
+  });
+
+  test("during a run only the config commands are listed", () => {
+    const items = commandMenuItems({
+      slash: parseSlash("/")!,
+      settings,
+      sending: true,
+      skills: [{ name: "x", description: "", path: "" } as never],
+      queuedSkills: [],
+      pinned: [],
+      runCommand: () => undefined,
+      completeCommand: () => undefined,
+      toggleQueuedSkill: () => undefined,
+    });
+    expect(items.map((i) => i.key)).toContain("model");
+    expect(items.map((i) => i.key)).not.toContain("clear");
+    expect(items.some((i) => i.key.startsWith("skill:"))).toBe(false);
+  });
+});
+
+describe("surface levels (the composer text is the state)", () => {
+  test("no slash is closed; / and /mod are the root; /model is its panel", () => {
+    expect(surfaceView(parseSlash("hello"))).toEqual({ kind: "closed" });
+    expect(surfaceView(parseSlash("/"))).toEqual({ kind: "root", query: "" });
+    expect(surfaceView(parseSlash("/mod"))).toEqual({ kind: "root", query: "mod" });
+    expect(surfaceView(parseSlash("/model "))).toMatchObject({ kind: "panel", command: { name: "model" } });
+    expect(surfaceView(parseSlash("/agent "))).toMatchObject({ kind: "panel", command: { name: "agent" } });
+  });
+
+  test("a command with a typed argument and no panel is not a panel", () => {
+    expect(surfaceView(parseSlash("/rename Foo"))).toEqual({ kind: "closed" });
+    expect(surfaceView(parseSlash("/nosuch x"))).toEqual({ kind: "closed" });
+  });
+
+  test("Back goes from a panel to the unfiltered root, then closes", () => {
+    const panel = surfaceView(parseSlash("/tools research"));
+    expect(surfaceBack(panel)).toBe("/");
+    const root = surfaceView(parseSlash(surfaceBack(panel)!));
+    expect(root).toEqual({ kind: "root", query: "" });
+    expect(surfaceBack(root)).toBeNull();
+    expect(surfaceBack({ kind: "closed" })).toBeNull();
+  });
+
+  test("a panel is titled by its Config name, else its alias", () => {
+    expect(panelTitle(resolveCommand(parseSlash("/agent ")!)!, settings)).toBe("Agent control");
+    expect(panelTitle(resolveCommand(parseSlash("/agent ")!)!, new Map())).toBe("/agent");
   });
 });

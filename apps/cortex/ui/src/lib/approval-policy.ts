@@ -12,6 +12,8 @@
  *   `block` decides in place, and Cortex has no in-process approver, so a gated
  *   call is refused and the agent is told so.
  *
+ * Cortex asks by default (`askBeforeRiskyTools`, on unless switched off): it sends
+ * a rule-less policy so the framework gates the `requiresApproval` tools below.
  * Once any tool or rule is set, the framework also gates every tool flagged
  * `requiresApproval` (file-write, file-edit, code-execute, the full shell):
  * {@link autoGatedTools} names the ones this agent has, so the editor shows them
@@ -99,8 +101,9 @@ export function autoGatedTools(
   selectedTools: readonly string[],
   fullShell: boolean,
   required: readonly string[],
+  asksBeforeRisky = false,
 ): string[] {
-  if (!hasApprovalGate(policy)) return [];
+  if (!asksBeforeRisky && !hasApprovalGate(policy)) return [];
   const have = new Set(selectedTools);
   if (fullShell) have.add("shell-execute");
   return required.filter((t) => have.has(t));
@@ -157,9 +160,42 @@ export function approvalPatch(
   return { approvalPolicy: { mode: next.mode, tools: [...next.tools], commands: [...next.commands] } };
 }
 
-/** One line for the editor and the chat menu: `2 tools · 1 command · pause` or `off`. */
-export function approvalSummary(p: ApprovalPolicyConfig): string {
-  if (!hasApprovalGate(p)) return "off";
+/**
+ * Cortex asks before risky tools (file-write, code-execute, the shell...) unless the
+ * config says `askBeforeRiskyTools: false`. Only a literal `false` opts out, the
+ * same rule as the server's `asksBeforeRiskyTools`.
+ */
+export function asksBeforeRiskyToolsFrom(raw: Readonly<Record<string, unknown>>): boolean {
+  return raw.askBeforeRiskyTools !== false;
+}
+
+/** The run / chat body field for the switch: sent only when it is off (the default is on). */
+export function askBeforeRiskyBody(asks: boolean | undefined): { askBeforeRiskyTools?: false } {
+  return asks === false ? { askBeforeRiskyTools: false } : {};
+}
+
+/** The chat session PATCH that switches the default gate on or off (the server drops `true`, it is the default). */
+export function askBeforeRiskyPatch(asks: boolean): { askBeforeRiskyTools: boolean } {
+  return { askBeforeRiskyTools: asks };
+}
+
+/**
+ * The chat session PATCH behind "Turn approvals off": clears every tool and rule
+ * AND switches the default gate off (clearing the lists alone would leave Cortex
+ * asking before risky tools).
+ */
+export function approvalsOffPatch(
+  cfg: Readonly<Record<string, unknown>>,
+): { approvalPolicy: { mode: ApprovalMode; tools: string[]; commands: string[] }; askBeforeRiskyTools: false } {
+  return { ...approvalPatch(cfg, (p) => ({ ...p, tools: [], commands: [] })), askBeforeRiskyTools: false };
+}
+
+/**
+ * One line for the editor and the chat menu: `2 tools · 1 command · pause`, or
+ * with nothing set `risky tools` while the default gate is on, else `off`.
+ */
+export function approvalSummary(p: ApprovalPolicyConfig, asksBeforeRisky = false): string {
+  if (!hasApprovalGate(p)) return asksBeforeRisky ? "risky tools" : "off";
   const parts = [
     ...(p.tools.length > 0 ? [`${p.tools.length} tool${p.tools.length === 1 ? "" : "s"}`] : []),
     ...(p.commands.length > 0 ? [`${p.commands.length} command${p.commands.length === 1 ? "" : "s"}`] : []),

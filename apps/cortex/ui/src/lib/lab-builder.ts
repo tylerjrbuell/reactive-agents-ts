@@ -4,7 +4,7 @@
  */
 import { type AgentConfig, type CortexAgentToolConfig, defaultConfig } from "./types/agent-config.js";
 import { formatRelativeTime } from "@reactive-agents/ui-core";
-import { approvalPolicyFrom } from "./approval-policy.js";
+import { approvalPolicyFrom, asksBeforeRiskyToolsFrom } from "./approval-policy.js";
 
 /** The Builder's config: AgentConfig plus the builder-only blocks it always carries. */
 export type BuilderAgentConfig = AgentConfig & {
@@ -188,6 +188,7 @@ export function builderConfigFromAgent(defaults: BuilderAgentConfig, sourceConfi
     // Stored configs carry the approval gate in the server shape (or the old durableRuns one).
     durableRuns: { enabled: sourceConfig.durableRuns?.enabled === true },
     approvalPolicy: approvalPolicyFrom(sourceConfig as unknown as Record<string, unknown>),
+    askBeforeRiskyTools: asksBeforeRiskyToolsFrom(sourceConfig as unknown as Record<string, unknown>),
     skills: {
       paths: [...(sourceConfig.skills?.paths ?? defaults.skills.paths)],
       ...(sourceConfig.skills?.activate?.length

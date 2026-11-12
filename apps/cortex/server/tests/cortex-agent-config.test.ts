@@ -203,6 +203,12 @@ describe("normalizeCortexAgentConfig — v0.12 fields (saved-agent durable/struc
     }) as Normalized;
     expect(out.approvalPolicy).toBeUndefined();
   });
+  test("askBeforeRiskyTools keeps only a literal false; true or junk is dropped (the default is on)", () => {
+    expect((normalizeCortexAgentConfig({ provider: "ollama", askBeforeRiskyTools: false }) as { askBeforeRiskyTools?: unknown }).askBeforeRiskyTools).toBe(false);
+    for (const v of [true, "false", 0, null]) {
+      expect("askBeforeRiskyTools" in normalizeCortexAgentConfig({ provider: "ollama", askBeforeRiskyTools: v })).toBe(false);
+    }
+  });
   test("round-trips approvalPolicy with command rules; the top level wins over a legacy gate", () => {
     const saved = {
       provider: "ollama",

@@ -4,6 +4,10 @@ import {
   approvalPolicyBody,
   approvalPolicyFrom,
   approvalSummary,
+  approvalsOffPatch,
+  askBeforeRiskyBody,
+  askBeforeRiskyPatch,
+  asksBeforeRiskyToolsFrom,
   autoGatedTools,
   defaultApprovalPolicy,
   gateableTools,
@@ -12,7 +16,7 @@ import {
   ruleMatchesNothing,
   toggleGatedTool,
 } from "./approval-policy.js";
-import { hydrateAgentConfig } from "./types/agent-config.js";
+import { defaultConfig, hydrateAgentConfig } from "./types/agent-config.js";
 
 describe("command rules", () => {
   it("normalizes on add and refuses duplicates and empties", () => {
@@ -91,5 +95,34 @@ describe("toggleGatedTool / approvalSummary", () => {
     expect(approvalSummary(defaultApprovalPolicy())).toBe("off");
     expect(approvalSummary({ mode: "detach", tools: ["a"], commands: ["git push", "gh pr create"] })).toBe("1 tool · 2 commands · pause");
     expect(approvalSummary({ mode: "block", tools: [], commands: ["git push"] })).toBe("1 command · refuse");
+  });
+});
+
+describe("ask before risky tools (Cortex default)", () => {
+  it("is on unless the config has a literal false", () => {
+    expect(asksBeforeRiskyToolsFrom({})).toBe(true);
+    expect(asksBeforeRiskyToolsFrom({ askBeforeRiskyTools: true })).toBe(true);
+    expect(asksBeforeRiskyToolsFrom({ askBeforeRiskyTools: false })).toBe(false);
+    expect(defaultConfig().askBeforeRiskyTools).toBe(true);
+    expect(hydrateAgentConfig({}).askBeforeRiskyTools).toBe(true);
+    expect(hydrateAgentConfig({ askBeforeRiskyTools: false }).askBeforeRiskyTools).toBe(false);
+  });
+  it("the body carries only the opt-out", () => {
+    expect(askBeforeRiskyBody(true)).toEqual({});
+    expect(askBeforeRiskyBody(undefined)).toEqual({});
+    expect(askBeforeRiskyBody(false)).toEqual({ askBeforeRiskyTools: false });
+  });
+  it("the summary shows the default gate instead of off, and locks auto-gated tools without any rule", () => {
+    expect(approvalSummary(defaultApprovalPolicy(), true)).toBe("risky tools");
+    expect(approvalSummary(defaultApprovalPolicy(), false)).toBe("off");
+    expect(approvalSummary({ mode: "detach", tools: ["a"], commands: [] }, true)).toBe("1 tool · pause");
+    const required = ["file-write", "shell-execute"];
+    expect(autoGatedTools(defaultApprovalPolicy(), ["file-write"], true, required, true)).toEqual(["file-write", "shell-execute"]);
+    expect(autoGatedTools(defaultApprovalPolicy(), ["file-write"], true, required, false)).toEqual([]);
+  });
+  it("Turn approvals off clears the lists AND the default; turning it on is a plain true", () => {
+    const cfg = { approvalPolicy: { mode: "block", tools: ["x"], commands: ["git push"] } };
+    expect(approvalsOffPatch(cfg)).toEqual({ approvalPolicy: { mode: "block", tools: [], commands: [] }, askBeforeRiskyTools: false });
+    expect(askBeforeRiskyPatch(true)).toEqual({ askBeforeRiskyTools: true });
   });
 });

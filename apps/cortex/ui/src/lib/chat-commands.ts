@@ -11,7 +11,7 @@ export type ChatCommandName =
   | "goal" | "plan" | "go" | "loop" | "schedule" | "agent" | "mcp" | "btw";
 
 /** What `/cmd <partial>` offers as second-level choices. */
-export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "skill-once" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals" | "mcp";
+export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "skill-once" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals" | "mcp" | "agent";
 
 export interface ChatCommand {
   readonly name: ChatCommandName;
@@ -53,7 +53,7 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "go", icon: "play", summary: "Carry out the plan you just asked for (ends planning mode)", needsTurns: true },
   { name: "loop", icon: "retry", summary: "Re-run a prompt on an interval (5m, 1h, 1d)", arg: "<5m|1h|1d> <prompt> | stop", needsTurns: false },
   { name: "schedule", icon: "clock", summary: "Run a prompt on a cron schedule", arg: '"<cron>" <prompt> | list | rm <id>', needsTurns: false },
-  { name: "agent", icon: "agents", summary: "Let the agent manage this chat: it proposes, you approve each change (off by default)", arg: "[on|off]", needsTurns: false },
+  { name: "agent", icon: "agents", summary: "Let the agent manage this chat: it proposes, you approve each change (off by default)", arg: "[on|off]", needsTurns: false, picker: "agent" },
   { name: "rename", icon: "edit", summary: "Rename this chat", arg: "<name>", needsTurns: false },
   { name: "help", icon: "info", summary: "List slash commands", needsTurns: false },
 ];

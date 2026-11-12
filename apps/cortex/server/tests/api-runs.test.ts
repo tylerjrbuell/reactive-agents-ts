@@ -746,6 +746,25 @@ describe("POST /api/runs — durableRuns passthrough (Phase E)", () => {
     expect(captured.params?.approvalPolicy).toEqual({ mode: "detach", tools: ["shell-execute"] });
   });
 
+  it("asks before risky tools by default; askBeforeRiskyTools:false opts out", async () => {
+    const run = async (extra: Record<string, unknown>) => {
+      const captured = { params: null as LaunchParams | null };
+      const db = new Database(":memory:");
+      applySchema(db);
+      const app = new Elysia().use(runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)));
+      await app.handle(
+        new Request("http://localhost/api/runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: "write a file", provider: "test", ...extra }),
+        }),
+      );
+      return captured.params;
+    };
+    expect((await run({}))?.approvalPolicy).toEqual({ mode: "detach" });
+    expect((await run({ askBeforeRiskyTools: false }))?.approvalPolicy).toBeUndefined();
+  });
+
   it("forwards a top-level approvalPolicy with shell command rules", async () => {
     const captured = { params: null as LaunchParams | null };
     const db = new Database(":memory:");

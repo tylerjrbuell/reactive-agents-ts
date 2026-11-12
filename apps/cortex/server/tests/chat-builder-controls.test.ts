@@ -76,6 +76,38 @@ describe("chat session → agent params", () => {
     expect(paramsOf(off).approvalPolicy).toBeUndefined();
   });
 
+  it("asks before risky tools by default (detach), unless askBeforeRiskyTools is false; a tools-off chat gets no gate", async () => {
+    const dflt = await svc.createSession({ agentConfig: { provider: "test", tools: ["file-write"] } });
+    expect(paramsOf(dflt).approvalPolicy).toEqual({ mode: "detach" });
+    const optOut = await svc.createSession({ agentConfig: { provider: "test", tools: ["file-write"], askBeforeRiskyTools: false } });
+    expect(paramsOf(optOut).approvalPolicy).toBeUndefined();
+    const toolsOff = await svc.createSession({ agentConfig: { provider: "test", enableTools: false } });
+    expect(paramsOf(toolsOff).approvalPolicy).toBeUndefined();
+  });
+
+  it("the opt-out survives the session create + PATCH config round-trip", async () => {
+    const app = new Elysia().use(chatRouter(svc));
+    const created = await app.handle(
+      new Request("http://localhost/api/chat/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "test", tools: ["file-write"], askBeforeRiskyTools: false }),
+      }),
+    );
+    const { sessionId } = (await created.json()) as { sessionId: string };
+    expect(getChatSession(db, sessionId)!.agentConfig.askBeforeRiskyTools).toBe(false);
+    const patched = await app.handle(
+      new Request(`http://localhost/api/chat/sessions/${sessionId}/config`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ askBeforeRiskyTools: true }),
+      }),
+    );
+    expect(patched.status).toBe(200);
+    expect(getChatSession(db, sessionId)!.agentConfig.askBeforeRiskyTools).toBeUndefined();
+    expect(paramsOf(sessionId).approvalPolicy).toEqual({ mode: "detach" });
+  });
+
   it("forwards workspace + shell options when tools are on", async () => {
     const id = await svc.createSession({
       agentConfig: {
@@ -117,6 +149,7 @@ describe("chat shell runs in the workspace", () => {
         maxIterations: 4,
         terminalTools: true,
         workspace: dir,
+        askBeforeRiskyTools: false, // runs the shell for real; the default would wait for an approver
         testScenario: [{ toolCall: { name: "shell-execute", args: { command: "ls" } } }, { text: "done" }],
       },
     });

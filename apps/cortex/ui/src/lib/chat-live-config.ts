@@ -45,13 +45,14 @@ export function submitRoute(input: { readonly sending: boolean; readonly command
 }
 
 /**
- * Whether the slash menu may open. Idle: always. During a run: only a config
- * command's picker (its rows PATCH the config); the command list itself and
- * history commands (clear, rewind, fork…) wait for the run to end.
+ * Whether the command surface may open. Idle: always. During a run: the root list
+ * (it then lists only the config commands, `commandMenuItems`) and a config command's
+ * panel (its rows PATCH the config); history commands (clear, rewind, fork…) wait
+ * for the run to end.
  */
 export function slashMenuAllowed(input: { readonly sending: boolean; readonly command?: string | undefined; readonly hasArg: boolean }): boolean {
   if (!input.sending) return true;
-  return input.hasArg && isLiveConfigCommand(input.command);
+  return !input.hasArg || isLiveConfigCommand(input.command);
 }
 
 /** Toast after a config change: during a run it says the running turn keeps its settings. */

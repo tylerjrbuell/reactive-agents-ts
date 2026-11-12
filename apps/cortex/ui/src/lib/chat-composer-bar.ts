@@ -6,7 +6,7 @@
  */
 import type { QuickBarChip, QuickBarChipContext } from "./chat-quickbar-chips.js";
 import { CHAT_DEFAULT_MAX_ITERATIONS, disclosureChoice, disclosureLabel, effectiveIterations, selectedTools } from "./chat-quickbar.js";
-import { approvalPolicyFrom, approvalSummary } from "./approval-policy.js";
+import { approvalPolicyFrom, approvalSummary, asksBeforeRiskyToolsFrom } from "./approval-policy.js";
 import type { IconName } from "./icons.js";
 
 type Cfg = Record<string, unknown>;
@@ -93,6 +93,7 @@ export function configGroups(chips: readonly QuickBarChip[], cfg: Cfg, ctx: Pick
   };
   const mcp = Array.isArray(cfg.mcpServerIds) ? cfg.mcpServerIds.length : 0;
   const policy = approvalPolicyFrom(cfg);
+  const asks = asksBeforeRiskyToolsFrom(cfg);
   const disclosure = disclosureSummary(cfg);
   const onBar = (c: QuickBarChip | undefined) => (c ? chipOnBar(c, cfg, ctx) : false);
   return [
@@ -119,7 +120,7 @@ export function configGroups(chips: readonly QuickBarChip[], cfg: Cfg, ctx: Pick
         row("Shell", "/terminal ", "shell", "Shell off"),
         { label: "MCP servers", value: mcp > 0 ? `${mcp} on` : "None on", cmd: "/mcp ", icon: "server", on: mcp > 0 },
         { label: "Tool disclosure", value: disclosure.text.replace(/^Disclosure: /, ""), cmd: "/tools disclosure", icon: "eye", on: disclosureChoice({ rawConfig: cfg.rawConfig }) !== undefined },
-        { label: "Approvals", value: approvalSummary(policy), cmd: "/approvals ", icon: "pause", on: approvalSummary(policy) !== "off" },
+        { label: "Approvals", value: approvalSummary(policy, asks), cmd: "/approvals ", icon: "pause", on: approvalSummary(policy, asks) !== "off" },
       ],
     },
     {

@@ -16,12 +16,21 @@
     selected: number;
     onHover: (index: number) => void;
     onDismiss: () => void;
-    /** Set when the Config popover opened this menu: a Back row naming the group the user came from. */
-    header?: { readonly title: string; readonly onBack: () => void };
+    /** Set inside a command's panel: a Back row to the command list, naming the panel and its slash alias. */
+    header?: { readonly title: string; readonly alias: string; readonly onBack: () => void };
   }
   const { items, selected, onHover, onDismiss, header }: Props = $props();
 
   let listEl = $state<HTMLUListElement | undefined>();
+  /** More rows below the fold: a fade at the bottom edge says "scroll" (a thin scrollbar is easy to miss). */
+  let moreBelow = $state(false);
+  const measure = () => {
+    if (listEl) moreBelow = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight > 2;
+  };
+  $effect(() => {
+    void items.length;
+    queueMicrotask(measure);
+  });
   const multi = $derived(items.some((i) => i.multi));
 
   $effect(() => {
@@ -47,12 +56,14 @@
   data-testid="chat-slash-menu"
   class="chat-menu-in menu"
   data-config-keep
+  onscroll={measure}
 >
   {#if header}
     <li class="head" role="presentation">
       <!-- tabindex -1 and no focus steal, like the rows: the composer keeps the keyboard (Esc does the same as Back). -->
-      <button type="button" tabindex="-1" class="back" aria-label="Back to {header.title}" onmousedown={(e) => e.preventDefault()} onclick={header.onBack}><Icon name="back" size="sm" />Back</button>
+      <button type="button" tabindex="-1" class="back" aria-label="Back to all commands" onmousedown={(e) => e.preventDefault()} onclick={header.onBack}><Icon name="back" size="sm" />Back</button>
       <span class="gtitle">{header.title}</span>
+      <span class="galias">{header.alias}</span>
     </li>
   {/if}
   {#each items as item, i (item.key)}
@@ -75,11 +86,11 @@
       </button>
     </li>
   {/each}
-  <li class="foot" aria-hidden="true">
+  <li class="foot" class:fade={moreBelow} aria-hidden="true">
     {#if multi}
       Click or Tab toggles. Enter toggles and closes. Esc or a click away when done.
     {:else if header}
-      ↑↓ to move, Enter to choose, Esc to go back to {header.title}
+      ↑↓ to move, Enter to choose, Esc to go back
     {:else}
       ↑↓ to move, Tab to complete, Enter to run, Esc to close
     {/if}
@@ -93,10 +104,17 @@
     left: 0;
     right: 0;
     z-index: var(--cortex-z-drawer);
-    width: min(808px, calc(100% - 48px));
-    max-height: 18rem;
+    /* The composer's own column and edges for both entry points (typing "/" and the Config button), never wider than the panel. */
+    box-sizing: border-box;
+    width: min(var(--cortex-chat-col), 100%);
+    max-height: min(22rem, 55dvh);
+    overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--cortex-line-strong) transparent;
     margin: 0 auto 6px;
+    border: 1px solid var(--cortex-line-strong);
     padding: 4px;
     list-style: none;
     border-radius: var(--cortex-r-panel);
@@ -122,12 +140,15 @@
   .back { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 6px; border: 0; border-radius: var(--cortex-r-ctl); background: none; color: var(--cortex-text-2); font: inherit; font-size: var(--cortex-t-sm); cursor: pointer; }
   .back:hover { background: var(--cortex-surface-2); color: var(--cortex-text); }
   .gtitle { font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-text); }
+  .galias { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   .row.sel { background: var(--cortex-surface-2); color: var(--cortex-text); }
   .ico { display: inline-flex; color: var(--cortex-text-3); }
   .row.sel .ico, .row.active .ico, .badge { color: var(--cortex-accent); }
   .badge { display: inline-flex; }
   .label { flex-shrink: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cortex-text); font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); }
-  .hint { flex-shrink: 0; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
+  .hint { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   .detail { min-width: 0; flex: 1; padding-left: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
-  .foot { padding: 6px 8px 2px; font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  /* Sticks to the bottom edge; while rows are hidden below it fades the last visible one out. */
+  .foot { position: sticky; bottom: -4px; padding: 6px 8px 4px; margin: 0 -4px -4px; background: var(--cortex-surface-1); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .foot.fade { box-shadow: 0 -10px 10px -4px var(--cortex-surface-1); }
 </style>

@@ -1,69 +1,88 @@
 /**
- * Navigation of the chat Config popover (pure; `ChatQuickBar.svelte` renders it).
+ * The one command surface of the chat composer (pure; `ChatPanel.svelte` and
+ * `ChatSlashMenu.svelte` render it).
  *
- * Three levels: the main menu (the groups), one group's rows, and the picker a row
- * opens (the slash menu above the composer, owned by ChatPanel). The popover hides
- * while a picker shows; when the picker closes the user lands back on that group, so
- * a place is never lost. Back and Escape both go up one level; only Escape or Back
- * from the main menu, or a click outside, closes everything.
+ * Typing `/` and pressing the Config button open the SAME list, anchored to the
+ * composer: every slash command (`CHAT_COMMANDS`), the settings among them shown with
+ * their current value. A command with a panel (`/model`, `/tools`, `/agent`, …) drills
+ * into it in place under a Back row; a command without one runs at once. The place the
+ * user is at lives in the composer text, so there is no second state to keep in sync:
+ * `/` or `/mod` is the root (filtered by what follows the slash), `/model ` is that
+ * command's panel. Back and Escape go up one level, then close.
+ *
+ * The Config rows (`configGroups`, `chat-composer-bar.ts`) are the same entries seen
+ * through their current values: {@link settingEntries} joins them to the commands by
+ * alias, so the registry has one source (`chat-commands.ts`).
  */
 import type { ConfigGroup } from "./chat-composer-bar.js";
+import { CHAT_COMMANDS, matchCommands, resolveCommand, type ChatCommand, type ParsedSlash } from "./chat-commands.js";
 
-/** Where the user is in the Config popover. */
-export interface ConfigNav {
-  /** The popover is on screen. */
-  readonly open: boolean;
-  readonly level: "menu" | "group" | "item";
-  /** Title of the group being viewed or picked from. */
-  readonly group: string | null;
-  /** Slash command of the row whose picker is showing (level `item`). */
-  readonly item: string | null;
+/** A setting's current state as the root list shows it next to its slash alias. */
+export interface EntryState {
+  /** The Config row's name, e.g. "Agent control" (also matched when filtering). */
+  readonly label: string;
+  /** Current value, e.g. "ollama" or "risky tools". */
+  readonly value: string;
+  /** Differs from the default. */
+  readonly on: boolean;
 }
 
-/** The popover closed and reset to its main menu. */
-export const CLOSED_NAV: ConfigNav = { open: false, level: "menu", group: null, item: null };
+/** `"/tools disclosure"` → `"tools"`: the command a Config row's slash alias belongs to. */
+export function commandNameOf(cmd: string): string {
+  return cmd.trim().replace(/^\//, "").split(/\s+/)[0] ?? "";
+}
 
-/** Events that move through the popover. */
-export type ConfigNavEvent =
-  | { readonly type: "toggle" }
-  | { readonly type: "enter-group"; readonly group: string }
-  | { readonly type: "pick"; readonly cmd: string }
-  | { readonly type: "back" }
-  | { readonly type: "escape" }
-  | { readonly type: "outside" }
-  | { readonly type: "picker-closed" };
-
-const MENU: ConfigNav = { open: true, level: "menu", group: null, item: null };
-
-/** Next navigation state for an event. */
-export function configNavReduce(s: ConfigNav, e: ConfigNavEvent): ConfigNav {
-  switch (e.type) {
-    case "toggle":
-      return s.open ? CLOSED_NAV : MENU;
-    case "enter-group":
-      return s.open ? { open: true, level: "group", group: e.group, item: null } : s;
-    case "pick":
-      return s.open && s.group !== null ? { open: false, level: "item", group: s.group, item: e.cmd } : s;
-    case "back":
-    case "escape":
-      if (s.level === "item") return { open: true, level: "group", group: s.group, item: null };
-      if (s.open && s.level === "group") return MENU;
-      return CLOSED_NAV;
-    case "outside":
-      return CLOSED_NAV;
-    case "picker-closed":
-      return s.level === "item" ? { open: true, level: "group", group: s.group, item: null } : s;
+/**
+ * Current state per command name, from the Config rows. A command with several rows
+ * (`/tools` has Tools and Tool disclosure) is described by its first.
+ */
+export function settingEntries(groups: readonly ConfigGroup[]): ReadonlyMap<string, EntryState> {
+  const out = new Map<string, EntryState>();
+  for (const g of groups) {
+    for (const r of g.rows) {
+      const name = commandNameOf(r.cmd);
+      if (!out.has(name)) out.set(name, { label: r.label, value: r.value, on: r.on });
+    }
   }
+  return out;
 }
 
-/** The group a nav points at, if it still exists (a setting may remove a group). */
-export function groupOf(groups: readonly ConfigGroup[], nav: ConfigNav): ConfigGroup | undefined {
-  return nav.group === null ? undefined : groups.find((g) => g.title === nav.group);
+/**
+ * Commands for the root list: those whose name matches the text after the slash
+ * (`matchCommands`), then settings whose Config name matches (`/control` finds
+ * `/agent`). Empty text lists every command.
+ */
+export function matchEntries(query: string, settings: ReadonlyMap<string, EntryState>): readonly ChatCommand[] {
+  const byName = matchCommands(query);
+  if (query === "") return byName;
+  const seen = new Set(byName.map((c) => c.name));
+  const byLabel = CHAT_COMMANDS.filter((c) => !seen.has(c.name) && (settings.get(c.name)?.label.toLowerCase().replace(/\s+/g, "-").includes(query) ?? false));
+  return [...byName, ...byLabel];
 }
 
-/** One line under a group's name on the main menu: what differs from the default, else the first values. */
-export function groupSummary(g: ConfigGroup): string {
-  const changed = g.rows.filter((r) => r.on);
-  if (changed.length > 0) return changed.map((r) => `${r.label} ${r.value}`).join(", ");
-  return g.rows.slice(0, 2).map((r) => r.value).join(", ");
+/** Where the user is on the surface. */
+export type SurfaceView =
+  | { readonly kind: "closed" }
+  | { readonly kind: "root"; readonly query: string }
+  | { readonly kind: "panel"; readonly command: ChatCommand };
+
+/** The level the composer text points at: no slash, the root list, or one command's panel. */
+export function surfaceView(slash: ParsedSlash | null): SurfaceView {
+  if (slash === null) return { kind: "closed" };
+  if (!slash.hasArg) return { kind: "root", query: slash.query };
+  const command = resolveCommand(slash);
+  return command?.picker ? { kind: "panel", command } : { kind: "closed" };
+}
+
+/**
+ * Back / Escape: the composer text of the level above (`/` from a panel, the unfiltered
+ * root), or `null` when there is none and the surface should close.
+ */
+export function surfaceBack(view: SurfaceView): string | null {
+  return view.kind === "panel" ? "/" : null;
+}
+
+/** Title of a panel's Back row: the setting's name when it has one (`Agent control`), else the alias. */
+export function panelTitle(command: ChatCommand, settings: ReadonlyMap<string, EntryState>): string {
+  return settings.get(command.name)?.label ?? `/${command.name}`;
 }

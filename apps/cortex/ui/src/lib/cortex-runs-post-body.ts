@@ -3,7 +3,7 @@
  * so desk runs match server expectations (including `taskContext` → `withTaskContext`).
  */
 import { shellOptionsBody, type AgentConfig } from "./types/agent-config.js";
-import { approvalPolicyBody } from "./approval-policy.js";
+import { approvalPolicyBody, askBeforeRiskyBody } from "./approval-policy.js";
 import { judgmentBodyOf } from "./judgment-config.js";
 
 function shellExecuteActive(cfg: AgentConfig): boolean {
@@ -169,6 +169,8 @@ export function cortexRunsPostBody(
       const approvalPolicy = approvalPolicyBody(cfg.approvalPolicy);
       return approvalPolicy ? { approvalPolicy } : {};
     })(),
+    // Cortex asks before risky tools by default: only the opt-out is sent.
+    ...askBeforeRiskyBody(cfg.askBeforeRiskyTools),
     ...(cfg.memory ? { memory: cfg.memory } : {}),
     ...(cfg.contextSynthesis ? { contextSynthesis: cfg.contextSynthesis } : {}),
     ...(cfg.guardrails?.enabled ? { guardrails: cfg.guardrails } : {}),

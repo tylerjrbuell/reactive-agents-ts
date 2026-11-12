@@ -4,7 +4,7 @@
 // AgentConfig.approvalPolicy: mode, tools, commands) across chat, desk runs and
 // gateway agents, including the legacy shapes stored under durableRuns.
 import { describe, expect, it } from "bun:test";
-import { approvalPolicyOf } from "../services/approval-policy.js";
+import { approvalPolicyOf, asksBeforeRiskyTools, effectiveApprovalPolicy } from "../services/approval-policy.js";
 import { approvalRequiredToolNames } from "../services/tool-catalog.js";
 
 describe("approvalPolicyOf", () => {
@@ -46,5 +46,30 @@ describe("approvalRequiredToolNames", () => {
     const names = approvalRequiredToolNames();
     expect(names).toEqual(expect.arrayContaining(["file-write", "shell-execute"]));
     expect(names).not.toContain("web-search");
+  });
+});
+
+describe("effectiveApprovalPolicy (Cortex asks before risky tools by default)", () => {
+  it("an empty config gets a rule-less detach policy: the framework then gates every requiresApproval tool", () => {
+    expect(effectiveApprovalPolicy({})).toEqual({ mode: "detach" });
+    expect(effectiveApprovalPolicy({ askBeforeRiskyTools: true })).toEqual({ mode: "detach" });
+  });
+
+  it("only a literal false opts out", () => {
+    expect(effectiveApprovalPolicy({ askBeforeRiskyTools: false })).toBeUndefined();
+    expect(effectiveApprovalPolicy({ askBeforeRiskyTools: "false" })).toEqual({ mode: "detach" });
+    expect(asksBeforeRiskyTools({ askBeforeRiskyTools: false })).toBe(false);
+    expect(asksBeforeRiskyTools({})).toBe(true);
+  });
+
+  it("a headless surface (gateway) blocks instead of waiting for a person who is not there", () => {
+    expect(effectiveApprovalPolicy({}, { headless: true })).toEqual({ mode: "block" });
+    expect(effectiveApprovalPolicy({ askBeforeRiskyTools: false }, { headless: true })).toBeUndefined();
+  });
+
+  it("an explicit policy wins over the default, whatever the surface", () => {
+    const cfg = { approvalPolicy: { mode: "detach", commands: ["git push"] } };
+    expect(effectiveApprovalPolicy(cfg, { headless: true })).toEqual({ mode: "detach", commands: ["git push"] });
+    expect(effectiveApprovalPolicy({ ...cfg, askBeforeRiskyTools: false })).toEqual({ mode: "detach", commands: ["git push"] });
   });
 });

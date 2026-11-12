@@ -1,5 +1,5 @@
 /** Shared AgentConfig type and defaults used across Cortex UI */
-import { approvalPolicyFrom, defaultApprovalPolicy, type ApprovalPolicyConfig } from "../approval-policy.js";
+import { approvalPolicyFrom, asksBeforeRiskyToolsFrom, defaultApprovalPolicy, type ApprovalPolicyConfig } from "../approval-policy.js";
 import { defaultJudgment, judgmentFrom, type JudgmentFormConfig } from "../judgment-config.js";
 
 /** Matches server `CortexAgentToolEntry` for POST /api/runs and saved gateway config. */
@@ -191,6 +191,12 @@ export interface AgentConfig {
    */
   approvalPolicy: ApprovalPolicyConfig;
   /**
+   * Cortex asks before risky tools (file-write, code-execute, the shell...) even with
+   * no rule above. On by default; only `false` opts out. Cortex-only (the framework's
+   * own default stays off); sent as `askBeforeRiskyTools`.
+   */
+  askBeforeRiskyTools: boolean;
+  /**
    * Typed structured output (v0.12): a JSON Schema (as text) the run's answer is
    * extracted into. Empty = off. Sent as `outputSchema` → `.withOutputSchema()`;
    * the extracted value surfaces in the run's Structured Output view.
@@ -269,6 +275,7 @@ export function hydrateAgentConfig(raw: Record<string, unknown>): AgentConfig {
     durableRuns: { enabled: dr.enabled === true },
     // Old saves kept the gate under durableRuns; approvalPolicyFrom reads both shapes.
     approvalPolicy: approvalPolicyFrom(raw),
+    askBeforeRiskyTools: asksBeforeRiskyToolsFrom(raw),
     rawConfig: Object.keys(obj(raw.rawConfig)).length > 0 ? obj(raw.rawConfig) : {},
     outputSchemaOnParseFail: raw.outputSchemaOnParseFail === "throw" ? "throw" : "degrade",
     // The panel edits these as JSON text; the server stores them parsed.
@@ -297,6 +304,7 @@ export function defaultConfig(): AgentConfig {
     strategySwitching: false,
     durableRuns: { enabled: false },
     approvalPolicy: defaultApprovalPolicy(),
+    askBeforeRiskyTools: true,
     outputSchema: "",
     outputSchemaOnParseFail: "degrade",
     budget: { tokenLimit: 0, costLimit: 0 },

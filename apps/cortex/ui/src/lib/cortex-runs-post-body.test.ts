@@ -121,6 +121,10 @@ describe("cortexRunsPostBody — durable execution", () => {
     // A rule that can match nothing (`*`) is not sent.
     expect(body.approvalPolicy).toEqual({ mode: "detach", tools: ["shell-execute"], commands: ["git push"] });
   });
+  it("sends askBeforeRiskyTools only as the opt-out", () => {
+    expect((cortexRunsPostBody("x", defaultConfig()) as Record<string, unknown>).askBeforeRiskyTools).toBeUndefined();
+    expect((cortexRunsPostBody("x", { ...defaultConfig(), askBeforeRiskyTools: false }) as Record<string, unknown>).askBeforeRiskyTools).toBe(false);
+  });
   it("omits approvalPolicy when nothing is gated", () => {
     expect((cortexRunsPostBody("x", defaultConfig()) as Record<string, unknown>).approvalPolicy).toBeUndefined();
   });

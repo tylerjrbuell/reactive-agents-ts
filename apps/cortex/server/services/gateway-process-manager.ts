@@ -34,7 +34,7 @@ import { generateTaskId } from "@reactive-agents/core";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
 import { parseCortexJudgmentConfig } from "./cortex-judgment.js";
 import { waitsLive, durableApprovals } from "./durable-approvals.js";
-import { approvalPolicyOf } from "./approval-policy.js";
+import { effectiveApprovalPolicy } from "./approval-policy.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
@@ -73,7 +73,8 @@ export function gatewayConfigToBuildParams(input: {
   const durableRuns = obj(config.durableRuns)?.enabled
     ? (config.durableRuns as NonNullable<BuildCortexAgentParams["durableRuns"]>)
     : undefined;
-  const approvalPolicy = approvalPolicyOf(config);
+  // Headless: nobody watches a gateway agent, so the default gate refuses instead of waiting.
+  const approvalPolicy = effectiveApprovalPolicy(config, { headless: true });
   const rawConfig = obj(config.rawConfig);
   const taskContext = coerceTaskContextRecord(config.taskContext);
   const skills = parseCortexSkillsConfig(config.skills);

@@ -175,4 +175,6 @@ export const AgentConfigBodyFields = {
   rawConfig: t.Optional(t.Record(t.String(), t.Unknown())),
   durableRuns: t.Optional(DurableRunsBody),
   approvalPolicy: t.Optional(ApprovalPolicyBody),
+  /** Cortex asks before risky tools (file-write, code-execute, shell...) unless this is `false`. */
+  askBeforeRiskyTools: t.Optional(t.Boolean()),
 };

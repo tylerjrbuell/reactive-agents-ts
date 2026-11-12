@@ -182,6 +182,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ...(body.durableRuns?.enabled ? { durableRuns: body.durableRuns } : {}),
               // normalizeCortexAgentConfig moves a legacy durableRuns gate here.
               ...(body.approvalPolicy ? { approvalPolicy: body.approvalPolicy } : {}),
+              ...(body.askBeforeRiskyTools === false ? { askBeforeRiskyTools: false } : {}),
             },
           });
           return { sessionId };

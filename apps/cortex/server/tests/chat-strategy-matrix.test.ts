@@ -115,6 +115,7 @@ function sessionFor(strategy: string): Promise<string> {
       provider: "test",
       model: "test-model",
       enableTools: true,
+      askBeforeRiskyTools: false, // strategies run tools (code-action sandbox) unattended here
       strategy,
       mcpServerIds: [MCP_ID],
       // the UI selects MCP tools by name; the allowlist makes them visible to the kernel

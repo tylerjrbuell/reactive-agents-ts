@@ -38,12 +38,12 @@
   import { selectedTools, terminalChoice } from "$lib/chat-quickbar.js";
   import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
   import { quickBarChips, type QuickBarChipContext } from "$lib/chat-quickbar-chips.js";
-  import { composerBar, configGroups, disclosureSummary } from "$lib/chat-composer-bar.js";
+  import { composerBar, configGroups } from "$lib/chat-composer-bar.js";
   import { btwStore } from "$lib/stores/chat-btw.js";
   import { quickAddMcpToChat } from "$lib/mcp-quick-add.js";
   import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
   import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
-  import { CLOSED_NAV, type ConfigNav } from "$lib/config-menu-nav.js";
+  import { panelTitle, settingEntries, surfaceBack, surfaceView } from "$lib/config-menu-nav.js";
   import { closeMenu as closedMenu, createToggleQueue, keepsMenuOpen, NO_CHIP_MENU, pickChip as chipPicked, syncChipMenu, type ChipMenu, type MenuUi } from "$lib/chat-menu.js";
   import { commandMenuItems, inlineMenuItems, pickerItems } from "$lib/chat-menu-items.js";
   import WorkspacePickerDialog from "$lib/components/WorkspacePickerDialog.svelte";
@@ -411,8 +411,6 @@
   // Quick-bar chips open their picker; the draft they replace comes back when the picker closes.
   let chipMenu = $state<ChipMenu>(NO_CHIP_MENU);
   let workspaceDialog = $state(false);
-  // Where the Config popover is; a picker it opened shows a Back row (config-menu-nav.ts).
-  let configNav = $state<ConfigNav>(CLOSED_NAV);
   const menuUi = (): MenuUi => ({ chip: chipMenu, message, dismissed: menuDismissed });
   const setMenu = (u: MenuUi) => { chipMenu = u.chip; message = u.message; menuDismissed = u.dismissed; };
 
@@ -444,6 +442,16 @@
     menuRaw = 0;
     inputEl?.focus();
   }
+  /** Back row and Escape inside a panel: return to the unfiltered command list, keeping the stashed draft. */
+  function goBack() {
+    const text = surfaceBack(surface);
+    if (text === null) return closeMenu();
+    // The chip flow restores its stash when the list closes at the text it inserted: the list is that text now.
+    if (chipMenu.chipCmd !== null) chipMenu = { ...chipMenu, chipCmd: text };
+    message = text;
+    menuRaw = 0;
+    inputEl?.focus();
+  }
   /** Escape, click outside, or Enter on a multi row: close and give the composer back. */
   function closeMenu() {
     setMenu(closedMenu(menuUi(), "dismiss"));
@@ -468,7 +476,8 @@
   const chipCtx: QuickBarChipContext = $derived({ provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, availableSkillCount: skillList?.length ?? 0, documentCount: docs.length, shellPresets: catalog.shellPresets });
   const allChips = $derived(quickBarChips(cfg, chipCtx));
   const bar = $derived(composerBar(allChips, cfg, chipCtx));
-  const groups = $derived(configGroups(allChips, cfg, chipCtx));
+  // The Config rows' current values, shown next to each setting's slash alias in the one command list.
+  const settings = $derived(settingEntries(configGroups(allChips, cfg, chipCtx)));
 
   /** `/mcp add <line>`: save the server, list its tools, turn it on for this chat. */
   function addMcp(line: string) {
@@ -507,6 +516,8 @@
   const commandItems = $derived(
     commandMenuItems({
       slash,
+      settings,
+      sending,
       skills: skillList,
       queuedSkills: draftSkillList,
       pinned,
@@ -516,6 +527,7 @@
     }),
   );
   const inlineItems = $derived(inlineMenuItems({ trigger: inline, skills: skillList, pinned, pick: pickSkillFromMenu }));
+  const surface = $derived(surfaceView(slash));
   const menuItems = $derived(slash ? (slash.hasArg ? pickItems : commandItems) : inlineItems);
   let menuRaw = $state(0);
   const menuIndex = $derived(Math.min(menuRaw, Math.max(0, menuItems.length - 1)));
@@ -657,7 +669,9 @@
       }
       if (e.key === "Escape") {
         e.preventDefault();
-        closeMenu();
+        // One level up first (a panel returns to the command list), then close.
+        if (surfaceBack(surface) !== null) goBack();
+        else closeMenu();
         return;
       }
     }
@@ -799,7 +813,7 @@
   {#if error}<ChatErrorBanner {error} onRetry={lastSent ? () => void retry() : undefined} />{/if}
   {#if showJumpToLatest({ atBottom, turnCount: turns.length, menuOpen })}<ChatJumpToLatest onJump={() => thread?.jumpToLatest()} live={sending} />{/if}
   {#if menuOpen}
-    <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} onDismiss={closeMenu} header={configNav.level === "item" && configNav.group ? { title: configNav.group, onBack: closeMenu } : undefined} />
+    <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} onDismiss={closeMenu} header={surface.kind === "panel" ? { title: panelTitle(surface.command, settings), alias: `/${surface.command.name}`, onBack: goBack } : undefined} />
   {/if}
   {#if workspaceDialog}
     <WorkspacePickerDialog
@@ -851,10 +865,8 @@
           queuedSkills={draftSkillList}
           chips={bar.shown}
           hidden={bar.hidden}
-          {groups}
-          disclosure={disclosureSummary(cfg)}
-          bind:nav={configNav}
-          pickerOpen={menuOpen || workspaceDialog}
+          config={provider !== ""}
+          open={menuOpen}
           onRemoveSkill={removeDraftSkill}
           onPick={pickChip}
         />

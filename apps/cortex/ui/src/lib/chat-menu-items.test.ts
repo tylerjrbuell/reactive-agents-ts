@@ -68,6 +68,42 @@ describe("/approvals rows", () => {
   });
 });
 
+describe("/agent panel", () => {
+  test("On and Off rows PATCH agentControl; the current state is marked", () => {
+    const patches: Patch[] = [];
+    const p = picker("/agent ", { cfg: { agentControl: true }, apply: (_w, patch) => void patches.push(patch) });
+    const rows = pickerItems(p.ctx);
+    expect(rows.map((r) => [r.key, r.active])).toEqual([["on", true], ["off", false]]);
+    void rows[1]!.run();
+    expect(patches).toEqual([{ agentControl: false }]);
+  });
+});
+
+describe("/approvals rows with the default gate", () => {
+  const catalog = { ...EMPTY_CATALOG, approvalRequired: ["file-write", "shell-execute"] };
+  const run = (cfg: Patch, toolNames: string[]) => {
+    const patches: Patch[] = [];
+    const p = picker("/approvals ", { cfg, toolNames, catalog, apply: (_w, patch) => void patches.push(patch) });
+    return { rows: pickerItems(p.ctx), patches };
+  };
+
+  test("with nothing set the risky tools show locked on and Turn approvals off is offered", () => {
+    const { rows, patches } = run({}, ["file-write"]);
+    expect(rows.find((r) => r.key === "tool:file-write")).toMatchObject({ active: true, hint: "always asks" });
+    expect(rows.find((r) => r.key === "on")).toBeUndefined();
+    void rows.find((r) => r.key === "off")!.run();
+    expect(patches).toEqual([{ approvalPolicy: { mode: "detach", tools: [], commands: [] }, askBeforeRiskyTools: false }]);
+  });
+
+  test("after the opt-out the tools are unlocked and a row turns the default back on", () => {
+    const { rows, patches } = run({ askBeforeRiskyTools: false }, ["file-write"]);
+    expect(rows.find((r) => r.key === "tool:file-write")).toMatchObject({ active: false, hint: "tool" });
+    expect(rows.find((r) => r.key === "off")).toBeUndefined();
+    void rows.find((r) => r.key === "on")!.run();
+    expect(patches).toEqual([{ askBeforeRiskyTools: true }]);
+  });
+});
+
 describe("pickerItems", () => {
   test("no rows until a picker command has an argument", () => {
     expect(pickerItems(picker("/model").ctx)).toEqual([]);

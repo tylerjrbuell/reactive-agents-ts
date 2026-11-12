@@ -235,6 +235,22 @@ describe("three-path build parity (runner / chat / gateway)", () => {
   });
 });
 
+describe("ask-before-risky-tools default (owner decision 2026-11-12)", () => {
+  const bare = { provider: "test", tools: ["file-write"] };
+  it("every path builds with a rule-less approval policy: detach where a person watches, block for the headless gateway", async () => {
+    expect((await runnerParams(bare)).approvalPolicy).toEqual({ mode: "detach" });
+    expect((await chatParams(bare)).approvalPolicy).toEqual({ mode: "detach" });
+    expect(gatewayParams(bare).approvalPolicy).toEqual({ mode: "block" });
+  });
+
+  it("askBeforeRiskyTools:false switches the gate off on every path", async () => {
+    const off = { ...bare, askBeforeRiskyTools: false };
+    expect((await runnerParams(off)).approvalPolicy).toBeUndefined();
+    expect((await chatParams(off)).approvalPolicy).toBeUndefined();
+    expect(gatewayParams(off).approvalPolicy).toBeUndefined();
+  });
+});
+
 describe("chat path fixes", () => {
   it("a tools-off chat never gets shell-execute, even with terminalTools stored", async () => {
     const p = await chatParams({ provider: "test", enableTools: false, terminalTools: true, terminalShellAdditionalCommands: "gh" });

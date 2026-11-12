@@ -67,6 +67,12 @@ describe("configGroups", () => {
     expect(rows.find((r) => r.cmd === "/mcp ")).toBeDefined();
   });
 
+  test("the Approvals row shows the default gate, and off after the opt-out", () => {
+    const row = (cfg: Record<string, unknown>) => configGroups(quickBarChips(cfg, ctx()), cfg, ctx()).flatMap((g) => g.rows).find((r) => r.cmd === "/approvals ");
+    expect(row({})).toMatchObject({ value: "risky tools", on: true });
+    expect(row({ askBeforeRiskyTools: false })).toMatchObject({ value: "off", on: false });
+  });
+
   test("a setting with no chip still has a row", () => {
     const rows = configGroups(quickBarChips({}, ctx()), {}, ctx()).flatMap((g) => g.rows);
     expect(rows.find((r) => r.cmd === "/docs ")).toMatchObject({ value: "None", on: false });

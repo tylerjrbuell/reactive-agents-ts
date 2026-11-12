@@ -37,6 +37,7 @@ describe("chat() turn → run verdict for goals", () => {
         maxIterations: 4,
         tools: ["file-write"],
         workspace: root,
+        askBeforeRiskyTools: false, // this pin runs the tool; the default would wait for an approver
         testScenario: [
           { toolCall: { name: "file-write", args: { path: join(root, "out.txt"), content: "hello" } } },
           { text: "wrote it" },

@@ -46,7 +46,7 @@ function cleanList(v: unknown): string[] {
 const modeOf = (v: unknown): CortexApprovalMode | undefined => (v === "detach" || v === "block" ? v : undefined);
 
 /**
- * The approval policy a stored or posted config asks for, or `undefined` when it
+ * The approval policy a stored or posted config asks for **explicitly**, or `undefined` when it
  * gates nothing (no tools, no command rules). A policy with no rules is dropped on
  * purpose: any policy makes the framework also gate every registered tool flagged
  * `requiresApproval` (file-write, file-edit, code-execute, the full shell).
@@ -75,4 +75,38 @@ export function approvalPolicyOf(raw: Readonly<Record<string, unknown>>): Cortex
     ...(tools.length > 0 ? { tools } : {}),
     ...(commands.length > 0 ? { commands } : {}),
   };
+}
+
+/** Where an agent runs: `headless` means no person is watching to answer a prompt (gateway agents). */
+export interface ApprovalSurface {
+  readonly headless?: boolean;
+}
+
+/**
+ * True unless the config opts out with a literal `askBeforeRiskyTools: false`.
+ * Cortex asks by default (owner decision 2026-11-12); the framework's own default
+ * stays opt-in, so this module is the one place Cortex turns the gate on.
+ */
+export const asksBeforeRiskyTools = (raw: Readonly<Record<string, unknown>>): boolean => raw.askBeforeRiskyTools !== false;
+
+/**
+ * The approval policy a Cortex agent is BUILT with, on every path (chat, desk
+ * runs, Lab, gateway): the explicit one ({@link approvalPolicyOf}), else, unless
+ * the config sets `askBeforeRiskyTools: false`, a rule-less `{ mode }` policy.
+ * A policy with no rules still makes the framework gate every registered tool
+ * flagged `requiresApproval` (file-write, file-edit, code-execute, shell-execute,
+ * docker), so no tool list is hardcoded here.
+ *
+ * Mode: `detach` (the run waits live for Approve / Deny in Cortex). A `headless`
+ * agent has nobody to answer, so it gets `block`: Cortex supplies no approver, a
+ * gated call is refused and the agent is told so (fail closed, no hung run).
+ */
+export function effectiveApprovalPolicy(
+  raw: Readonly<Record<string, unknown>>,
+  surface: ApprovalSurface = {},
+): CortexApprovalPolicy | undefined {
+  const explicit = approvalPolicyOf(raw);
+  if (explicit) return explicit;
+  if (!asksBeforeRiskyTools(raw)) return undefined;
+  return { mode: surface.headless === true ? "block" : "detach" };
 }

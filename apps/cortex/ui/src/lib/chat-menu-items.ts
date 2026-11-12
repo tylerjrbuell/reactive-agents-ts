@@ -7,8 +7,10 @@
  * patch from the config the previous toggle left behind (chat-menu.ts createToggleQueue).
  */
 import type { ChatCommand, ParsedSlash } from "./chat-commands.js";
-import { matchCommands } from "./chat-commands.js";
+import { isLiveConfigCommand } from "./chat-live-config.js";
+import { matchEntries, type EntryState } from "./config-menu-nav.js";
 import type { MenuItem } from "./chat-menu.js";
+import { agentControlEnabled } from "./proposal-view.js";
 import type { InlineTrigger } from "./chat-inline-commands.js";
 import type { IconName } from "./icons.js";
 import {
@@ -44,6 +46,9 @@ import {
   approvalPatch,
   approvalPolicyFrom,
   approvalSummary,
+  approvalsOffPatch,
+  askBeforeRiskyPatch,
+  asksBeforeRiskyToolsFrom,
   autoGatedTools,
   gateableTools,
   hasApprovalGate,
@@ -211,6 +216,12 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
       }
       return rows;
     }
+    case "agent": {
+      const on = agentControlEnabled(cfg);
+      return ([[true, "On", "The agent proposes changes to this chat; you approve each one", "Agent may propose changes (you approve each)"], [false, "Off", "The agent cannot change this chat (default)", "Agent control off"]] as const)
+        .filter(([, label]) => has(label))
+        .map(([want, label, detail, what]) => configRow(want ? "on" : "off", "agents", label, () => ctx.apply(what, { agentControl: want }), { active: want === on, detail }));
+    }
     case "approvals":
       return approvalRows(ctx, q, multiRow);
     case "mcp":
@@ -298,6 +309,7 @@ function approvalRows(
 ): MenuItem[] {
   const has = (...parts: string[]) => q === "" || parts.some((p) => p.toLowerCase().includes(q));
   const policy = approvalPolicyFrom(ctx.cfg);
+  const asks = asksBeforeRiskyToolsFrom(ctx.cfg);
   if (q.startsWith("add ")) {
     const rule = normalizeRule(ctx.slash?.arg.slice(4) ?? "");
     if (rule === "") return [];
@@ -314,7 +326,7 @@ function approvalRows(
     }));
   }
   const terminal = ctx.cfg.terminalTools === true;
-  const locked = autoGatedTools(policy, ctx.toolNames, hasFullShell(ctx.toolNames, terminal), ctx.catalog.approvalRequired);
+  const locked = autoGatedTools(policy, ctx.toolNames, hasFullShell(ctx.toolNames, terminal), ctx.catalog.approvalRequired, asks);
   for (const t of gateableTools(ctx.toolNames, terminal, ctx.catalog.shellPresets).filter((t) => has(t))) {
     if (locked.includes(t)) {
       rows.push(configRow(`tool:${t}`, "tool", t, () => ctx.info(`${t} always asks`, "The framework marks it as needing approval once any approval is set"), { active: true, hint: "always asks", multi: true }));
@@ -330,8 +342,11 @@ function approvalRows(
   if (q === "" || "add".startsWith(q)) {
     rows.push(configRow("add", "plus", "add <command>", () => ctx.swapDraft("/approvals add "), { detail: "e.g. git push: ask before any command that starts with it", complete: () => ctx.swapDraft("/approvals add ") }));
   }
-  if (hasApprovalGate(policy) && (q === "" || "off".startsWith(q) || "clear".startsWith(q))) {
-    rows.push(configRow("off", "x", "Turn approvals off", () => ctx.apply("Approvals off", approvalPatch(ctx.cfg, (p) => ({ ...p, tools: [], commands: [] }))), { detail: approvalSummary(policy) }));
+  if ((hasApprovalGate(policy) || asks) && (q === "" || "off".startsWith(q) || "clear".startsWith(q))) {
+    rows.push(configRow("off", "x", "Turn approvals off", () => ctx.apply("Approvals off", approvalsOffPatch(ctx.cfg)), { detail: approvalSummary(policy, asks) }));
+  }
+  if (!asks && (q === "" || "on".startsWith(q) || "ask".startsWith(q) || "risky".startsWith(q))) {
+    rows.push(configRow("on", "pause", "Ask before risky tools", () => ctx.apply("Asking before risky tools", askBeforeRiskyPatch(true)), { detail: "file-write, code-execute and the shell wait for you" }));
   }
   return rows;
 }
@@ -342,6 +357,10 @@ export interface CommandMenuContext {
   readonly skills: readonly DiscoveredSkill[] | null;
   readonly queuedSkills: readonly string[];
   readonly pinned: readonly string[];
+  /** Current state per setting command (`settingEntries`): shown as the entry's hint. */
+  readonly settings?: ReadonlyMap<string, EntryState>;
+  /** A run is going: only config commands are listed. */
+  readonly sending?: boolean;
   readonly runCommand: (cmd: ChatCommand) => void | Promise<void>;
   readonly completeCommand: (cmd: ChatCommand) => void;
   readonly toggleQueuedSkill: (name: string) => void;
@@ -401,15 +420,19 @@ export function inlineMenuItems(ctx: InlineMenuContext): MenuItem[] {
 /** The plain `/` menu: commands matching the query, then skill rows. */
 export function commandMenuItems(ctx: CommandMenuContext): MenuItem[] {
   const { slash } = ctx;
+  const settings = ctx.settings ?? new Map<string, EntryState>();
+  // During a run only the config commands apply (history commands wait for it to end).
+  const allowed = (cmd: ChatCommand) => !ctx.sending || isLiveConfigCommand(cmd.name);
   return slash && !slash.hasArg
-    ? [...matchCommands(slash.query).map((cmd): MenuItem => ({
+    ? [...matchEntries(slash.query, settings).filter(allowed).map((cmd): MenuItem => ({
         key: cmd.name,
         icon: cmd.icon,
         label: `/${cmd.name}`,
-        ...(cmd.arg ? { hint: cmd.arg } : {}),
+        // A setting shows its current value (the Config row); other commands show the argument they take.
+        ...(settings.has(cmd.name) ? { hint: settings.get(cmd.name)!.value, active: settings.get(cmd.name)!.on } : cmd.arg ? { hint: cmd.arg } : {}),
         detail: cmd.summary,
         run: () => ctx.runCommand(cmd),
         complete: () => ctx.completeCommand(cmd),
-      })), ...skillMenuItems(ctx)]
+      })), ...(ctx.sending ? [] : skillMenuItems(ctx))]
     : [];
 }
