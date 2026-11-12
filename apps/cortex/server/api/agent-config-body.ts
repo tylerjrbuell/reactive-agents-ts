@@ -162,6 +162,8 @@ export const AgentConfigBodyFields = {
     t.Object({ mode: t.Union([t.Literal("warn"), t.Literal("block")]), tolerance: t.Optional(t.Number()) }),
   ),
   fabricationGuard: t.Optional(t.Union([t.Literal("off"), t.Literal("warn"), t.Literal("block")])),
+  /** Judgment backend (`.withJudgment()`); read by `parseCortexJudgmentConfig`, which drops anything not enabled. */
+  judgment: t.Optional(t.Record(t.String(), t.Unknown())),
   modelRouting: t.Optional(
     t.Object({
       enabled: t.Optional(t.Boolean()),

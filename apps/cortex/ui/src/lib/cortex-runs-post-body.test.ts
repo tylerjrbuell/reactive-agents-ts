@@ -283,3 +283,15 @@ describe("builder controls round-trip (panel → body → stored config → pane
     expect(hydrateAgentConfig({ terminalShellOptions: { sandbox: "docker" } }).terminalShellOptions).toEqual({ ...defaultShellOptions(), sandbox: "docker" });
   });
 });
+
+describe("cortexRunsPostBody — judgment", () => {
+  it("omits judgment while off (the default)", () => {
+    expect((cortexRunsPostBody("x", defaultConfig()) as { judgment?: unknown }).judgment).toBeUndefined();
+  });
+  it("sends the set fields while on", () => {
+    const body = cortexRunsPostBody("x", { ...defaultConfig(), judgment: { enabled: true, backend: "ollama", model: "nimble", keepAlive: "5m" } }) as {
+      judgment?: unknown;
+    };
+    expect(body.judgment).toEqual({ enabled: true, backend: "ollama", model: "nimble", keepAlive: "5m" });
+  });
+});

@@ -23,6 +23,9 @@ import { promptRouter } from "./api/prompts.js";
 import { templateResolveRouter } from "./api/template-resolve.js";
 import { healthRouter } from "./api/health.js";
 import { providerKeysRouter } from "./api/provider-keys.js";
+import { judgmentRouter } from "./api/judgment.js";
+import { ollamaSettingsRouter } from "./api/ollama-settings.js";
+import { installOllamaEndpointStore, OllamaEndpointStore } from "./services/ollama-cloud.js";
 import { installProviderKeyStore, ProviderKeyStore } from "./services/provider-key-store.js";
 import { dirname } from "node:path";
 import { capabilitiesRouter } from "./api/capabilities.js";
@@ -87,6 +90,10 @@ export async function startCortexServer(
   // through `providerKeyForAgent` (services/provider-key-store.ts).
   const providerKeys = new ProviderKeyStore({ dir: dirname(resolvedConfig.dbPath) });
   installProviderKeyStore(providerKeys);
+  // The Ollama endpoint saved in Settings (Ollama Cloud preset) applies to every agent build
+  // and probe in this process (services/ollama-cloud.ts).
+  const ollamaEndpoint = new OllamaEndpointStore(dirname(resolvedConfig.dbPath));
+  installOllamaEndpointStore(ollamaEndpoint);
 
   const bridgeSvc = await Effect.runPromise(
     CortexEventBridge.pipe(Effect.provide(runtime.bridgeLayer)),
@@ -141,6 +148,8 @@ export async function startCortexServer(
   const app = new Elysia()
     .use(healthRouter)
     .use(providerKeysRouter(providerKeys))
+    .use(judgmentRouter(providerKeys))
+    .use(ollamaSettingsRouter(ollamaEndpoint))
     .use(capabilitiesRouter)
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
     .use(agentConfigSourceRouter(runtime.storeLayer))
@@ -263,6 +272,7 @@ export async function startCortexServer(
       await chatSessionService.disposeAll();
       await memoryInspector.disposeAll();
       await app.stop(true);
+      installOllamaEndpointStore(null); // restores the env the server started with
     },
   };
 }

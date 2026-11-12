@@ -42,6 +42,7 @@ import {
   parseCortexSkillsConfig,
   parseDocumentSpecs,
 } from "./cortex-agent-config.js";
+import { parseCortexJudgmentConfig } from "./cortex-judgment.js";
 import { migrateChatSkillsConfig, skillRootOf } from "./workspace-skills.js";
 import { recordSkillActivity, turnSkillPinsOf, turnSkillsOption, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
 import { detectToolCallShape } from "@reactive-agents/tools";
@@ -1297,6 +1298,7 @@ let tokensUsed = 0;
     const documents = parseDocumentSpecs(agentConfig.documents);
 
     const auditRationale = agentConfig.auditRationale === true ? true : undefined;
+    const judgment = parseCortexJudgmentConfig(agentConfig.judgment);
 
     // Same keys the Lab run path forwards (runner-service): generic framework overrides and
     // durable execution / approval gate. Both arrive already normalised (normalizeCortexAgentConfig).
@@ -1377,6 +1379,7 @@ let tokensUsed = 0;
       ...(harness ? { harness } : {}),
       ...(documents ? { documents } : {}),
       ...(auditRationale ? { auditRationale: true } : {}),
+      ...(judgment ? { judgment } : {}),
       // A chat is interactive: the agent may ask a question mid-turn and the turn waits for the
       // answer inline (live `request_user_input`). Cortex default; `rawConfig.userInteraction: false`
       // (Lab Execution · "Ask me questions") turns it off, `{ timeoutMs }` bounds the wait.

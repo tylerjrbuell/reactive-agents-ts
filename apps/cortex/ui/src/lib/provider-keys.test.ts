@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  keyRowHintOf,
+  keyRowLabelOf,
   keyRowOf,
   parseKeysResponse,
   providerKeysApi,
@@ -18,6 +20,22 @@ const base: ProviderKeyStatus = {
   appliesToAgents: true,
 };
 const saved = { masked: "••••WXYZ", updatedAt: 1, preferStored: false };
+
+describe("Ollama Cloud and TypeSafe rows", () => {
+  test("named for what they are, with a hint that says where the key goes", () => {
+    expect(keyRowLabelOf("ollama")).toBe("Ollama Cloud (API key)");
+    expect(keyRowLabelOf("typesafe")).toBe("TypeSafe (Jev judgment)");
+    expect(keyRowLabelOf("openai")).toBeUndefined();
+    expect(keyRowHintOf("ollama")).toContain("never to a local server");
+    expect(keyRowHintOf("typesafe")).toContain("nothing is billed");
+    expect(keyRowHintOf("openai")).toBeNull();
+  });
+  test("an env-only Ollama key reads like any provider's", () => {
+    const row = keyRowOf({ ...base, provider: "ollama", env: ["OLLAMA_API_KEY"], envSet: true, source: "env" });
+    expect(row.summary).toContain("OLLAMA_API_KEY");
+    expect(row.badge.text).toBe("Environment");
+  });
+});
 
 describe("provider key rows", () => {
   test("no key asks for one and names the env variable", () => {

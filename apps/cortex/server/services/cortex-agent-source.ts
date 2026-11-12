@@ -23,6 +23,7 @@ import { agentConfigToSource, type AgentConfig } from "@reactive-agents/runtime"
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 import { KEYED_PROVIDER_ENV, providerKeyForAgent } from "./provider-key-store.js";
+import { parseCortexJudgmentConfig, TYPESAFE_KEY_ID } from "./cortex-judgment.js";
 
 /** A setting the agent runs with in Cortex that the exported code does not contain. */
 export interface CortexOnlySetting {
@@ -53,6 +54,7 @@ export const CORTEX_OVERLAY_CALLS: readonly string[] = [
   "withTestScenario",
   "withTools",
   "withTracing",
+  "withJudgment",
 ];
 
 const list = (xs: readonly string[]): string => xs.join(", ");
@@ -84,6 +86,21 @@ export function cortexOnlySettings(
     add("Host tools", "withTools", list((params.extraTools ?? []).map((t) => t.definition.name)));
   }
   if (params.tracing) add("Run traces", "withTracing", params.tracing.dir);
+  const judgment = parseCortexJudgmentConfig(params.judgment);
+  if (judgment) {
+    const keyed = providerKeyForAgent(TYPESAFE_KEY_ID) !== undefined;
+    add(
+      "Judgment backend",
+      "withJudgment",
+      [
+        judgment.backend ?? "default backend",
+        judgment.model,
+        keyed ? `Saved TypeSafe key not exported. Set ${KEYED_PROVIDER_ENV[TYPESAFE_KEY_ID]?.[0]} where the code runs.` : undefined,
+      ]
+        .filter((x): x is string => x !== undefined)
+        .join(" · "),
+    );
+  }
   // The output schema is plain JSON Schema in the AgentConfig (runtime 7d4664da2), so it is in the code.
   return out;
 }

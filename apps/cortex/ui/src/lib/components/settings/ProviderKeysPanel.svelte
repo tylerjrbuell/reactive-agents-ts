@@ -11,6 +11,7 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { confirmAction } from "$lib/stores/confirm-store.js";
   import {
+    keyRowHintOf,
     keyRowOf,
     providerKeysApi,
     testResultLine,
@@ -149,6 +150,7 @@
         <div class="pk-text">
           <span class="pk-label">{labelOf(s.provider)}</span>
           <p class="pk-help">{row.summary}</p>
+          {#if keyRowHintOf(s.provider)}<p class="pk-help">{keyRowHintOf(s.provider)}</p>{/if}
           {#if row.note}<p class="pk-help pk-warn">{row.note}</p>{/if}
         </div>
         <div class="pk-controls">

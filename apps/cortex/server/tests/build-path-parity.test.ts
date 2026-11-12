@@ -46,7 +46,7 @@ const PARAM_KEYS: Record<keyof BuildCortexAgentParams, true> = {
   auditRationale: true, memory: true, contextSynthesis: true, guardrails: true, persona: true,
   testScenario: true, streaming: true, outputSchema: true, outputSchemaOnParseFail: true,
   documents: true, budget: true, grounding: true, fabricationGuard: true, modelRouting: true,
-  rawConfig: true, durableRuns: true, approvalPolicy: true,
+  rawConfig: true, durableRuns: true, approvalPolicy: true, judgment: true,
 };
 
 /**
@@ -126,6 +126,7 @@ const fixture = (): Record<string, unknown> => ({
   budget: { tokenLimit: 5000 },
   grounding: { mode: "warn" },
   fabricationGuard: "warn",
+  judgment: { enabled: true, backend: "ollama", model: "nimble", timeoutMs: 20000, keepAlive: "5m" },
   modelRouting: { enabled: true, minTier: "haiku" },
   rawConfig: { profile: "lean" },
   durableRuns: { enabled: true },

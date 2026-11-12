@@ -32,6 +32,7 @@ import { CortexIngestService } from "./ingest-service.js";
 import type { Layer } from "effect";
 import { generateTaskId } from "@reactive-agents/core";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
+import { parseCortexJudgmentConfig } from "./cortex-judgment.js";
 import { waitsLive, durableApprovals } from "./durable-approvals.js";
 import { approvalPolicyOf } from "./approval-policy.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
@@ -65,6 +66,7 @@ export function gatewayConfigToBuildParams(input: {
     : undefined;
   const budget = config.budget as { tokenLimit?: number; costLimit?: number } | undefined;
   const grounding = config.grounding as { mode: "warn" | "block"; tolerance?: number } | undefined;
+  const judgment = parseCortexJudgmentConfig(config.judgment);
   const modelRouting = obj(config.modelRouting)?.enabled
     ? (config.modelRouting as NonNullable<BuildCortexAgentParams["modelRouting"]>)
     : undefined;
@@ -143,6 +145,7 @@ export function gatewayConfigToBuildParams(input: {
     ...(config.fabricationGuard === "off" || config.fabricationGuard === "warn" || config.fabricationGuard === "block"
       ? { fabricationGuard: config.fabricationGuard }
       : {}),
+    ...(judgment ? { judgment } : {}),
     ...(harness ? { harness } : {}),
     ...(documents ? { documents } : {}),
     ...(modelRouting ? { modelRouting } : {}),

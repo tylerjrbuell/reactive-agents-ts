@@ -107,6 +107,14 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     keywords: "output schema structured json typed object result fields extract object parse degrade throw",
     configPaths: ["outputSchema", "outputSchemaOptions"],
   },
+  {
+    id: "judgment",
+    label: "Judgment",
+    icon: "balance",
+    keywords: "judgment judge typesafe jev noul score choice calibrated confidence ollama system one nimble clef shadow backend keep alive emulation",
+    // `.withJudgment()` has no AgentConfig form (framework gap): an overlay, so no config path.
+    configPaths: [],
+  },
   { id: "metatools", label: "Meta tools", icon: "wand_stars", keywords: "conductor brief find pulse recall harness suite wand stars", configPaths: ["metaTools"] },
   { id: "reliability", label: "Reliability", icon: "shield", keywords: "fallback provider errors shield backup", configPaths: ["fallbacks"] },
   {
@@ -195,6 +203,7 @@ export const BUILDER_NAV: readonly BuilderNavEntry[] = [
   { id: "guardrails", label: "Guardrails", icon: "alert", description: "Checks on what goes in and comes out: injection, PII and toxicity.", sections: ["guardrails"], keywords: "" },
   { id: "execution", label: "Execution", icon: "steps", description: "How a run is carried out: limits, retries, durable runs, questions to you and webhooks.", sections: ["execution"], keywords: "durable runs" },
   { id: "outputschema", label: "Output schema", icon: "goal", description: "The typed object the agent returns: its fields, as a table in the run and the chat.", sections: ["outputschema"], keywords: "structured output json schema typed result" },
+  { id: "judgment", label: "Judgment", icon: "goal", description: "The backend that answers typed judgments (TypeSafe Jev, an Ollama System One model, or the agent's own model), and how it is reached.", sections: ["judgment"], keywords: "judge typesafe jev noul score choice calibrated shadow nimble" },
   { id: "reliability", label: "Reliability", icon: "goal", description: "Fallback providers for when a call fails.", sections: ["reliability"], keywords: "" },
   { id: "observability", label: "Observability", icon: "trace", description: "How much the run reports while it works.", sections: ["observability"], keywords: "" },
   { id: "framework", label: "All framework options", icon: "settings", description: "Every builder option the framework exposes, read from its capability manifest.", sections: ["framework"], keywords: "advanced raw config manifest builder options" },

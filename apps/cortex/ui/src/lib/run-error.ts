@@ -1,3 +1,14 @@
+/** The plain line for a run the Ollama server refused for its credential. */
+export const OLLAMA_AUTH_LINE = "Ollama Cloud key missing or invalid. Add or replace it in Settings · Providers.";
+
+/**
+ * True when a run's error reads as an Ollama authentication failure (the provider names itself
+ * and the cause is a 401 / unauthorized), so the screen can say what to fix and link Settings.
+ */
+export function isOllamaAuthError(raw: unknown): boolean {
+  return typeof raw === "string" && /ollama/i.test(raw) && /\b401\b|unauthori[sz]ed|invalid api key/i.test(raw);
+}
+
 /** Display cap for a run's error line (characters). */
 const MAX_CHARS = 280;
 
@@ -34,6 +45,7 @@ export function runErrorLine(raw: unknown): string | undefined {
   if (typeof raw !== "string") return undefined;
   const first = raw.split("\n").find((l) => l.trim() !== "")?.trim();
   if (!first) return undefined;
+  if (isOllamaAuthError(first)) return OLLAMA_AUTH_LINE;
   const line = redactSecrets(first);
   return line.length > MAX_CHARS ? `${line.slice(0, MAX_CHARS - 1)}…` : line;
 }

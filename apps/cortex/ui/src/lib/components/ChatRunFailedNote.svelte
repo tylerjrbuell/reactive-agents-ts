@@ -4,7 +4,7 @@
    * low") in the red ending box, with Retry when the host offers it. Without a cause it
    * still says the run stopped before it could answer.
    */
-  import { runErrorLine } from "$lib/run-error.js";
+  import { isOllamaAuthError, runErrorLine } from "$lib/run-error.js";
   import Icon from "$lib/components/kit/Icon.svelte";
   import Button from "$lib/components/kit/Button.svelte";
 
@@ -20,6 +20,7 @@
 <div class="ending" role="note">
   <p class="h"><Icon name="alert" size="sm" /><span>The run stopped before it could answer</span></p>
   {#if line}<p class="line" data-testid="chat-run-error"><span class="lbl">Run error:</span> {line}</p>{/if}
+  {#if isOllamaAuthError(error)}<p class="line"><a class="underline" href="/settings#providers">Open Settings · Providers</a></p>{/if}
   {#if onRetry}<div class="acts"><Button size="sm" variant="ghost" icon="retry" onclick={onRetry}>Retry</Button></div>{/if}
 </div>
 

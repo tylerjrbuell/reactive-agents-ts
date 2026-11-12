@@ -18,7 +18,8 @@
   import MessagesPanel from "$lib/components/MessagesPanel.svelte";
   import RawEventLog from "$lib/components/RawEventLog.svelte";
   import RunSafety from "./RunSafety.svelte";
-  import type { SafetyEntry } from "@reactive-agents/ui-core";
+  import RunJudgments from "./RunJudgments.svelte";
+  import type { JudgmentLedger, SafetyEntry } from "@reactive-agents/ui-core";
   import { tabPanelId, tabId } from "$lib/tablist.js";
   import { inspectorTabsOf, type InspectorTabId } from "$lib/run-view.js";
   import type { RunStatus, RunVitals } from "$lib/stores/run-store.js";
@@ -47,6 +48,8 @@
     /** Safety lane entries (ui-core `safetyEntriesOf`) and how many fired (`safetySummaryOf`). */
     safety: readonly SafetyEntry[];
     safetyCount: number;
+    /** The run's judgment ledger (ui-core `foldJudgments`): the Judgments tab. */
+    judgments: JudgmentLedger;
     /** Loops with a trace row, and how to open one (a Safety entry's loop link). */
     traceLoops: ReadonlySet<number>;
     onSelectLoop: (loop: number) => void;
@@ -67,12 +70,13 @@
     onSelectIteration,
     safety,
     safetyCount,
+    judgments,
     traceLoops,
     onSelectLoop,
   }: Props = $props();
 
   const ID = "run-insp";
-  const tabs = $derived(inspectorTabsOf({ messages: messageCount, events: events.length, safety: safetyCount }));
+  const tabs = $derived(inspectorTabsOf({ messages: messageCount, events: events.length, safety: safetyCount, judgments: judgments.rows.length }));
   /** The Tabs kit reports a plain string id; the list above is the only source of ids. */
   function onchange(id: string) {
     const next = tabs.find((t) => t.id === id);
@@ -89,6 +93,8 @@
       <RunConfigSnapshot {launchParams} />
     {:else if tab === "safety"}
       <RunSafety entries={safety} loops={traceLoops} {onSelectLoop} />
+    {:else if tab === "judgments"}
+      <RunJudgments ledger={judgments} />
     {:else if tab === "decisions"}
       <DecisionLog {events} />
     {:else if tab === "signal"}

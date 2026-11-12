@@ -48,6 +48,8 @@ export const FULL_CONFIG_BODY = {
   modelRouting:       { enabled: true, minTier: "haiku" },
   /** Fabrication guard override — `.withFabricationGuard()`. Always-on at "block" without this. */
   fabricationGuard:   "warn",
+  /** Judgment backend — `.withJudgment()` (overlay; no AgentConfig form) */
+  judgment:           { enabled: true as const, backend: "ollama" as const, model: "nimble", timeoutMs: 20000, keepAlive: "5m" },
   /** Working directory for file tools + shell — must exist (checked by the route). */
   workspace:          tmpdir(),
   terminalShellOptions: { cwd: "sub", allowUnsafeCwd: true, timeoutMs: 9000, maxOutputChars: 800, commandAccess: ["github"], sandbox: "docker" } satisfies CortexShellOptions,

@@ -31,6 +31,12 @@ import {
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
 import { providerKeyForAgent } from "./provider-key-store.js";
+import {
+  judgmentBuilderOptionsOf,
+  parseCortexJudgmentConfig,
+  TYPESAFE_KEY_ID,
+  type CortexJudgmentConfig,
+} from "./cortex-judgment.js";
 
 export interface BuildCortexAgentParams {
   readonly agentName?: string;
@@ -196,6 +202,11 @@ export interface BuildCortexAgentParams {
    * them it pauses durably. Read from any stored shape by `approvalPolicyOf`.
    */
   readonly approvalPolicy?: CortexApprovalPolicy;
+  /**
+   * Judgment backend (`.withJudgment()`): present only when a desk user turned it on. An
+   * overlay, not an AgentConfig field (the framework has no config form for it).
+   */
+  readonly judgment?: CortexJudgmentConfig;
 }
 
 export {
@@ -259,6 +270,12 @@ export async function cortexAgentBuilder(
   // `observability.tracing: { dir }`, also turns the observability layer on, which a
   // bare `.withTracing()` does not (framework gap, reported).
   if (params.tracing) b = b.withTracing({ dir: params.tracing.dir });
+
+  // Judgment (Lab · Judgment): `AgentConfig` has no `judgment` field (framework gap), so
+  // `.withJudgment()` is an overlay. The saved TypeSafe key (Settings · Providers) is a secret,
+  // so it rides here and not in a config; without one the framework reads TYPESAFE_API_KEY.
+  const judgment = parseCortexJudgmentConfig(params.judgment);
+  if (judgment) b = b.withJudgment(judgmentBuilderOptionsOf(judgment, providerKeyForAgent(TYPESAFE_KEY_ID)));
 
   // The output schema (JSON Schema, `outputSchemaOptions`) and the agentic-UI
   // interaction rail (`userInteraction`) ride the AgentConfig

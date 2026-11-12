@@ -86,6 +86,27 @@ export interface KeyRowView {
   readonly showPrefer: boolean;
 }
 
+const ROW_LABELS: Readonly<Record<string, string>> = {
+  ollama: "Ollama Cloud (API key)",
+  typesafe: "TypeSafe (Jev judgment)",
+};
+
+/** A row's display name for the entries that are not an LLM provider's key (or need a clearer name); else undefined. */
+export function keyRowLabelOf(provider: string): string | undefined {
+  return ROW_LABELS[provider];
+}
+
+const ROW_HINTS: Readonly<Record<string, string>> = {
+  ollama:
+    "For Ollama Cloud or an authenticated remote server. Set the endpoint below (Ollama Cloud preset); the key is sent to that host only and never to a local server.",
+  typesafe: "Used by Lab · Judgment when the TypeSafe backend runs. Test reads your model list; it asks no judgment, so nothing is billed.",
+};
+
+/** One line of context under a row (what the key is for), or null. */
+export function keyRowHintOf(provider: string): string | null {
+  return ROW_HINTS[provider] ?? null;
+}
+
 /** The row text for one provider. */
 export function keyRowOf(s: ProviderKeyStatus): KeyRowView {
   const envName = s.env[0] ?? `${s.provider.toUpperCase()}_API_KEY`;

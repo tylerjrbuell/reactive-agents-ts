@@ -4,6 +4,7 @@
  */
 import { shellOptionsBody, type AgentConfig } from "./types/agent-config.js";
 import { approvalPolicyBody } from "./approval-policy.js";
+import { judgmentBodyOf } from "./judgment-config.js";
 
 function shellExecuteActive(cfg: AgentConfig): boolean {
   return cfg.terminalTools === true || cfg.tools.includes("shell-execute");
@@ -129,6 +130,8 @@ export function cortexRunsPostBody(
     ...(cfg.fabricationGuard && cfg.fabricationGuard.mode !== "default"
       ? { fabricationGuard: cfg.fabricationGuard.mode }
       : {}),
+    // Judgment backend — send only while on (the server applies `.withJudgment()`).
+    ...(judgmentBodyOf(cfg.judgment) ? { judgment: judgmentBodyOf(cfg.judgment) } : {}),
     // Harness typed control surface — send when valid JSON non-empty.
     ...(cfg.harness && cfg.harness.trim()
       ? (() => {

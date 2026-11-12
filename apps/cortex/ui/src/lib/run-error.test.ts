@@ -1,5 +1,20 @@
 import { describe, expect, it } from "bun:test";
-import { runErrorLine } from "./run-error.js";
+import { isOllamaAuthError, OLLAMA_AUTH_LINE, runErrorLine } from "./run-error.js";
+
+describe("Ollama authentication failures", () => {
+  const cloud401 = "LLM stream failed at iteration 0: ollama call failed (ollama:gpt-oss:120b): ollama request failed: 401 unauthorized";
+  it("reads 'Ollama Cloud key missing or invalid' and points at Settings", () => {
+    expect(isOllamaAuthError(cloud401)).toBe(true);
+    expect(runErrorLine(cloud401)).toBe(OLLAMA_AUTH_LINE);
+    expect(OLLAMA_AUTH_LINE.startsWith("Ollama Cloud key missing or invalid")).toBe(true);
+    expect(OLLAMA_AUTH_LINE).toContain("Settings · Providers");
+  });
+  it("leaves other providers' 401s and other Ollama failures alone", () => {
+    expect(isOllamaAuthError("anthropic request failed: 401 invalid x-api-key")).toBe(false);
+    expect(isOllamaAuthError("ollama request failed: model not found")).toBe(false);
+    expect(runErrorLine("anthropic request failed: 401 bad")).toContain("401 bad");
+  });
+});
 
 /** The cause observed live (2026-11-10) on a failed Anthropic chat turn. */
 const PROVIDER_ERROR =

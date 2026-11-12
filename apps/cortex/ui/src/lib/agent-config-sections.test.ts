@@ -12,15 +12,15 @@ import {
 } from "./agent-config-sections.js";
 
 describe("agent config section registry", () => {
-  test("14 sections in panel order", () => {
+  test("15 sections in panel order", () => {
     expect(AGENT_CONFIG_SECTIONS.map((s) => s.id)).toEqual([
       "inference", "persona", "strategy", "variables", "tools", "subagents", "skills",
-      "memory", "guardrails", "execution", "outputschema", "metatools", "reliability", "observability",
+      "memory", "guardrails", "execution", "outputschema", "judgment", "metatools", "reliability", "observability",
     ]);
   });
   test("compact hides variables, tools, sub-agents and skills", () => {
-    expect(activeSectionIds(true)).toEqual(["inference", "persona", "strategy", "memory", "guardrails", "execution", "outputschema", "metatools", "reliability", "observability"]);
-    expect(activeSectionIds(false)).toHaveLength(14);
+    expect(activeSectionIds(true)).toEqual(["inference", "persona", "strategy", "memory", "guardrails", "execution", "outputschema", "judgment", "metatools", "reliability", "observability"]);
+    expect(activeSectionIds(false)).toHaveLength(15);
   });
   test("copy falls back to the id", () => {
     expect(sectionCopy("strategy").label).toBe("Reasoning");
@@ -38,10 +38,10 @@ describe("agent config section registry", () => {
 });
 
 describe("Lab builder section nav (registry-driven)", () => {
-  test("15 entries: 14 grouped from the panel's 14 sections and Shell, plus All framework options", () => {
+  test("16 entries: 15 grouped from the panel's 15 sections and Shell, plus All framework options", () => {
     expect(BUILDER_NAV.map((e) => e.label)).toEqual([
       "Model", "Persona", "Variables", "Reasoning", "Tools", "Shell and workspace", "Sub-agents", "Skills",
-      "Memory", "Guardrails", "Execution", "Output schema", "Reliability", "Observability", "All framework options",
+      "Memory", "Guardrails", "Execution", "Output schema", "Judgment", "Reliability", "Observability", "All framework options",
     ]);
   });
   test("every panel section is reachable from exactly one entry", () => {
@@ -53,7 +53,8 @@ describe("Lab builder section nav (registry-driven)", () => {
     expect(builderNavEntry("nope").id).toBe("model");
   });
   test("Find a setting matches titles, member keywords and the entry's own words", () => {
-    expect(filterBuilderNav("").length).toBe(15);
+    expect(filterBuilderNav("").length).toBe(16);
+    expect(filterBuilderNav("typesafe").map((e) => e.id)).toEqual(["judgment"]);
     expect(filterBuilderNav("temperature").map((e) => e.id)).toEqual(["model"]);
     expect(filterBuilderNav("template").map((e) => e.id)).toEqual(["variables"]);
     expect(filterBuilderNav("variable").map((e) => e.id)).toEqual(["variables"]);

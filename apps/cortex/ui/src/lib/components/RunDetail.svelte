@@ -51,8 +51,9 @@
     type InspectorTabId,
   } from "$lib/run-view.js";
   import { runToChatSession } from "$lib/run-to-chat-session.js";
-  import { safetyEntriesOf, safetySummaryOf } from "@reactive-agents/ui-core";
+  import { foldJudgments, judgmentBadgeOf, safetyEntriesOf, safetySummaryOf } from "@reactive-agents/ui-core";
   import { safetyBadgeTone } from "$lib/run-safety.js";
+  import { judgmentBadgeTone } from "$lib/run-judgments.js";
   import { loadCapabilities, strategyOptions } from "$lib/capabilities.js";
 
   interface Props {
@@ -183,6 +184,9 @@
   // Safety lane: guardrails, verifiers, budgets, context, calibration and controller interventions (ui-core).
   const safetyEntries = $derived(safetyEntriesOf(panelEvents));
   const safetySummary = $derived(safetySummaryOf(safetyEntries));
+  // Judgments: every typed judgment the run asked, failed or compared in shadow (ui-core).
+  const judgmentLedger = $derived(foldJudgments(panelEvents));
+  const judgmentBadge = $derived(judgmentBadgeOf(judgmentLedger));
   // Strategy display names from the framework manifest (`reactive` reads `ReAct`).
   let strategyLabels = $state<ReadonlyMap<string, string>>(new Map());
   const strategyLabel = (id: string): string => strategyLabels.get(id) ?? id;
@@ -203,6 +207,10 @@
   /** The header's safety count: open the Safety tab and bring the inspector into view (it stacks under the trace below 1360px). */
   function openSafety() {
     tab = "safety";
+    document.querySelector(".run .insp")?.scrollIntoView({ block: "nearest" });
+  }
+  function openJudgments() {
+    tab = "judgments";
     document.querySelector(".run .insp")?.scrollIntoView({ block: "nearest" });
   }
   function focusLoop(loop: number) {
@@ -439,6 +447,9 @@
     safety={safetySummary.tone
       ? { count: safetySummary.count, tone: safetyBadgeTone(safetySummary.tone), onOpen: openSafety }
       : undefined}
+    judgments={judgmentBadge
+      ? { text: judgmentBadge.text, tone: judgmentBadgeTone(judgmentBadge), onOpen: openJudgments }
+      : undefined}
   />
 
   <RunVitals vitals={$runStore.vitals} status={$runStore.status} {entropy} {replayLoop} {replayMax} {strategyLabel} />
@@ -499,6 +510,7 @@
       {strategyLabel}
       safety={safetyEntries}
       safetyCount={safetySummary.count}
+      judgments={judgmentLedger}
       {traceLoops}
       onSelectLoop={focusLoop}
       onSelectIteration={(n) => {

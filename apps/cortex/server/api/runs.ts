@@ -10,6 +10,7 @@ import {
   parseCortexSkillsConfig,
   parseDocumentSpecs,
 } from "../services/cortex-agent-config.js";
+import { parseCortexJudgmentConfig } from "../services/cortex-judgment.js";
 import { parseVariableDefs } from "../services/resolve-template.js";
 import type { RunId } from "../types.js";
 import { readRunTraceFile } from "../services/run-trace-file.js";
@@ -119,6 +120,10 @@ export function runBodyToLaunchParams(b: Static<typeof RunConfigBody>, workspace
     ...(b.budget && ((b.budget.tokenLimit ?? 0) > 0 || (b.budget.costLimit ?? 0) > 0) ? { budget: b.budget } : {}),
     ...(b.grounding?.mode ? { grounding: b.grounding } : {}),
     ...(b.fabricationGuard ? { fabricationGuard: b.fabricationGuard } : {}),
+    ...(() => {
+      const judgment = parseCortexJudgmentConfig(b.judgment);
+      return judgment ? { judgment } : {};
+    })(),
     ...(b.modelRouting?.enabled
       ? {
           modelRouting: {

@@ -100,6 +100,7 @@ describe("inspectorTabsOf", () => {
     expect(inspectorTabsOf({ messages: 0, events: 0 }).map((t) => t.id)).toEqual([
       "summary",
       "safety",
+      "judgments",
       "decisions",
       "signal",
       "context",
@@ -113,6 +114,10 @@ describe("inspectorTabsOf", () => {
     expect(tabs.find((t) => t.id === "messages")?.count).toBe(3);
     expect(tabs.find((t) => t.id === "events")?.count).toBe(62);
     expect(inspectorTabsOf({ messages: 0, events: 0 }).find((t) => t.id === "events")?.count).toBeUndefined();
+  });
+  it("counts judgment rows when there are any; none shows no count", () => {
+    expect(inspectorTabsOf({ messages: 0, events: 9, judgments: 4 }).find((t) => t.id === "judgments")?.count).toBe(4);
+    expect(inspectorTabsOf({ messages: 0, events: 9 }).find((t) => t.id === "judgments")?.count).toBeUndefined();
   });
   it("counts safety events that fired; none shows no count", () => {
     expect(inspectorTabsOf({ messages: 0, events: 9, safety: 2 }).find((t) => t.id === "safety")?.count).toBe(2);

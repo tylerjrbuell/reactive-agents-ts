@@ -56,6 +56,12 @@
       readonly tone: SafetyBadgeTone;
       readonly onOpen: () => void;
     };
+    /** Set when the run asked judgments (ui-core `judgmentBadgeOf`): `N judgments, K failed or degraded`, opens the Judgments tab. */
+    judgments?: {
+      readonly text: string;
+      readonly tone: SafetyBadgeTone;
+      readonly onOpen: () => void;
+    };
   }
   const p: Props = $props();
 
@@ -101,6 +107,11 @@
       {#if p.safety && p.safety.count > 0}
         <button type="button" class="safety tone-{p.safety.tone}" onclick={p.safety.onOpen} use:tooltip={"Open the Safety tab"}>
           <Icon name="alert-circle" size="sm" />{safetyCountLabel(p.safety.count)}
+        </button>
+      {/if}
+      {#if p.judgments}
+        <button type="button" class="safety tone-{p.judgments.tone}" data-testid="judgments-badge" onclick={p.judgments.onOpen} use:tooltip={"Open the Judgments tab"}>
+          <Icon name="goal" size="sm" />{p.judgments.text}
         </button>
       {/if}
     </div>

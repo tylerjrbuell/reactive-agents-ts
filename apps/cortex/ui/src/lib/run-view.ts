@@ -147,7 +147,7 @@ export function loopsLabel(n: number): string {
 }
 
 /** One inspector tab id (spec section 8, Run view). */
-export type InspectorTabId = "summary" | "safety" | "decisions" | "signal" | "context" | "memory" | "messages" | "events";
+export type InspectorTabId = "summary" | "safety" | "judgments" | "decisions" | "signal" | "context" | "memory" | "messages" | "events";
 
 /** One inspector tab: id, label and an optional count. */
 export interface InspectorTab {
@@ -158,15 +158,17 @@ export interface InspectorTab {
 
 /**
  * The run inspector's tabs, in order: Summary, Safety (with the count of
- * safety events that fired, ui-core `safetySummaryOf`), Decisions, Signal,
+ * safety events that fired, ui-core `safetySummaryOf`), Judgments (with the
+ * ledger's row count, ui-core `foldJudgments`), Decisions, Signal,
  * Context, Memory, Messages (with the message count) and Events (with the
  * event count). There is no Chat tab: a run continues in a chat session
  * instead (owner decision 5, `run-to-chat-session.ts`).
  */
-export function inspectorTabsOf(counts: { readonly messages: number; readonly events: number; readonly safety?: number }): readonly InspectorTab[] {
+export function inspectorTabsOf(counts: { readonly messages: number; readonly events: number; readonly safety?: number; readonly judgments?: number }): readonly InspectorTab[] {
   return [
     { id: "summary", label: "Summary" },
     { id: "safety", label: "Safety", ...((counts.safety ?? 0) > 0 ? { count: counts.safety } : {}) },
+    { id: "judgments", label: "Judgments", ...((counts.judgments ?? 0) > 0 ? { count: counts.judgments } : {}) },
     { id: "decisions", label: "Decisions" },
     { id: "signal", label: "Signal" },
     { id: "context", label: "Context" },

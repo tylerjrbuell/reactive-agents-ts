@@ -13,7 +13,9 @@
   import { settings as settingsStore, DEFAULTS, type CortexSettings } from "$lib/stores/settings.js";
   import { MOTION_OPTIONS, parseMotion } from "$lib/motion.js";
   import { THEME_OPTIONS, parseTheme } from "$lib/theme.js";
+  import { keyRowLabelOf } from "$lib/provider-keys.js";
   import { aboutVersionsOf, keyEnvOf, savePatchOf, SETTINGS_SECTIONS, type AboutVersions } from "$lib/settings-page.js";
+  import OllamaEndpointRow from "$lib/components/settings/OllamaEndpointRow.svelte";
   import ProviderKeysPanel from "$lib/components/settings/ProviderKeysPanel.svelte";
   import { modelHref } from "$lib/model-link.js";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
@@ -75,7 +77,7 @@
     };
   });
 
-  const providerLabelOf = (id: string): string => providerList.find((p) => p.id === id)?.label ?? id;
+  const providerLabelOf = (id: string): string => keyRowLabelOf(id) ?? providerList.find((p) => p.id === id)?.label ?? id;
   const providerOptions = $derived(
     providerList.map((p) => ({
       value: p.id,
@@ -289,18 +291,7 @@
 
         <SettingsGroup id="providers" title="Providers" description="API keys for cloud providers: from the server's environment, or saved here.">
           <ProviderKeysPanel labelOf={providerLabelOf} onchange={checkProviderHealth} />
-          <SettingsRow label="Ollama endpoint" for="settings-ollama-endpoint">
-            {#snippet help()}Leave blank to use <code>OLLAMA_HOST</code> or http://localhost:11434.{/snippet}
-            {#snippet control()}
-              <Input
-                id="settings-ollama-endpoint"
-                mono
-                placeholder="http://localhost:11434"
-                describedBy="settings-ollama-endpoint-hint"
-                bind:value={localSettings.ollamaEndpoint}
-              />
-            {/snippet}
-          </SettingsRow>
+          <OllamaEndpointRow bind:value={localSettings.ollamaEndpoint} onapplied={checkProviderHealth} />
           <SettingsRow label="Cortex server">
             {#snippet help()}<span class="st-data">{CORTEX_SERVER_URL}</span>. To use another server, start with <code>CORTEX_URL=http://host:port bun cortex</code>.{/snippet}
             {#snippet control()}

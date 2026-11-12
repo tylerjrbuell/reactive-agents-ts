@@ -1,5 +1,6 @@
 /** Shared AgentConfig type and defaults used across Cortex UI */
 import { approvalPolicyFrom, defaultApprovalPolicy, type ApprovalPolicyConfig } from "../approval-policy.js";
+import { defaultJudgment, judgmentFrom, type JudgmentFormConfig } from "../judgment-config.js";
 
 /** Matches server `CortexAgentToolEntry` for POST /api/runs and saved gateway config. */
 export type CortexAgentToolConfig =
@@ -212,6 +213,8 @@ export interface AgentConfig {
    * `.withFabricationGuard()`.
    */
   fabricationGuard: { mode: "default" | "off" | "warn" | "block" };
+  /** Judgment backend (`.withJudgment()`, applied as an overlay: no AgentConfig form). Off = not sent. */
+  judgment: JudgmentFormConfig;
   /** Harness typed control surface (0.16) — JSON object → `.withHarness()`. Empty = off. */
   harness: string;
   /** RAG documents (JSON array of {source, content?, ...}) — `.withDocuments()`. Empty = off. */
@@ -273,6 +276,7 @@ export function hydrateAgentConfig(raw: Record<string, unknown>): AgentConfig {
     harness: jsonText(raw.harness),
     documents: jsonText(raw.documents),
     workspace: typeof raw.workspace === "string" ? raw.workspace : "",
+    judgment: judgmentFrom(raw.judgment),
   };
 }
 
@@ -298,6 +302,7 @@ export function defaultConfig(): AgentConfig {
     budget: { tokenLimit: 0, costLimit: 0 },
     grounding: { mode: "off" },
     fabricationGuard: { mode: "default" },
+    judgment: defaultJudgment(),
     harness: "",
     documents: "",
     modelRouting: { enabled: false },

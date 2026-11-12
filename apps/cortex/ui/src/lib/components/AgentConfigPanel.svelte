@@ -34,6 +34,7 @@
   import MemorySection from "$lib/components/agent-config/sections/MemorySection.svelte";
   import GuardrailsSection from "$lib/components/agent-config/sections/GuardrailsSection.svelte";
   import ExecutionSection from "$lib/components/agent-config/sections/ExecutionSection.svelte";
+  import JudgmentSection from "$lib/components/agent-config/sections/JudgmentSection.svelte";
   import OutputSchemaSection from "$lib/components/agent-config/sections/OutputSchemaSection.svelte";
   import MetaToolsSection from "$lib/components/agent-config/sections/MetaToolsSection.svelte";
   import ReliabilitySection from "$lib/components/agent-config/sections/ReliabilitySection.svelte";
@@ -381,6 +382,10 @@
 
   {#if shows("outputschema")}
     <OutputSchemaSection bind:config open={isOpen("outputschema")} onToggle={() => toggle("outputschema")} />
+  {/if}
+
+  {#if shows("judgment")}
+    <JudgmentSection bind:config open={isOpen("judgment")} onToggle={() => toggle("judgment")} />
   {/if}
 
   {#if shows("metatools")}

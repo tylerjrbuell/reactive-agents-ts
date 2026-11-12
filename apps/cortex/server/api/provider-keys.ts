@@ -16,6 +16,13 @@ import { Effect, Either } from "effect";
 import { Elysia, t } from "elysia";
 import { resolve } from "node:path";
 import {
+  bearerFetch,
+  effectiveOllamaEndpoint,
+  isLoopbackEndpoint,
+  OLLAMA_AUTH_MESSAGE,
+} from "../services/ollama-cloud.js";
+import { listJudgmentCatalog, TYPESAFE_KEY_ID, type ListJudgmentCatalog } from "../services/cortex-judgment.js";
+import {
   isKeyedProvider,
   redactKey,
   type ProviderKeyStatus,
@@ -55,7 +62,11 @@ const statusCodeOf = (e: ProviderKeyStoreError): number =>
   e.reason === "unknown-provider" || e.reason === "empty-key" ? 400 : e.reason === "not-found" ? 404 : 500;
 
 /** Build the router over `store`; `listModels` lets tests replace the provider call. */
-export function providerKeysRouter(store: ProviderKeyStore, listModels: ListModelsWithKey = defaultListModels) {
+export function providerKeysRouter(
+  store: ProviderKeyStore,
+  listModels: ListModelsWithKey = defaultListModels,
+  listCatalog: ListJudgmentCatalog = listJudgmentCatalog,
+) {
   const reply = <A>(
     r: { readonly ok: true; readonly value: A } | { readonly ok: false; readonly error: ProviderKeyStoreError },
     set: { status?: number | string },
@@ -102,6 +113,30 @@ export function providerKeysRouter(store: ProviderKeyStore, listModels: ListMode
               ? "env"
               : "none";
         if (tried === "none") return { ok: false, tried, error: "No key to test: type one or save one first." };
+        // The TypeSafe key is not an LLM provider's: test it by reading the Jev model
+        // catalog (no `ask`, nothing billed). The env key is read by the framework itself.
+        if (provider === TYPESAFE_KEY_ID) {
+          const c = await listCatalog(apiKey ? { apiKey } : {});
+          return c.ok
+            ? { ok: true, tried, models: c.models.length }
+            : { ok: false, tried, error: redactKey(c.message, apiKey) };
+        }
+        // Ollama: list the configured endpoint's models with the bearer on that host only (the
+        // framework's Ollama listing sends no auth header). A rejected key reads plainly.
+        if (provider === "ollama") {
+          const endpoint = effectiveOllamaEndpoint();
+          const key = apiKey ?? process.env.OLLAMA_API_KEY?.trim();
+          if (isLoopbackEndpoint(endpoint)) {
+            return { ok: false, tried, error: "The Ollama endpoint is this machine, which needs no key. Set the endpoint to Ollama Cloud first." };
+          }
+          const o = await listModels("ollama", {
+            baseUrl: endpoint,
+            ...(key ? { apiKey: key, fetch: bearerFetch(endpoint, key) } : {}),
+          });
+          if (o.ok) return { ok: true, tried, models: o.count };
+          const msg = /\b40[13]\b|unauthori[sz]ed/i.test(o.message) ? OLLAMA_AUTH_MESSAGE : o.message;
+          return { ok: false, tried, error: redactKey(msg, key) };
+        }
         const r = await listModels(provider, apiKey ? { apiKey } : {});
         return r.ok
           ? { ok: true, tried, models: r.count }

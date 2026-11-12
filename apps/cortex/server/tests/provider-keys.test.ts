@@ -92,7 +92,8 @@ describe("ProviderKeyStore", () => {
   });
 
   it("refuses unknown providers and empty keys", () => {
-    const unknown = store.set("ollama", KEY);
+    // (ollama is a keyed entry now: Ollama Cloud. "test" has no key.)
+    const unknown = store.set("test", KEY);
     expect(unknown.ok).toBe(false);
     const empty = store.set("openai", "   ");
     expect(empty.ok).toBe(false);
@@ -169,7 +170,7 @@ describe("/api/settings/keys", () => {
     const deleted = (await (await call(a, "DELETE", "/openai")).json()) as { stored: unknown; source: string };
     expect(deleted.stored).toBeNull();
     expect(deleted.source).toBe("none");
-    expect((await call(a, "PUT", "/ollama", { apiKey: KEY })).status).toBe(400);
+    expect((await call(a, "PUT", "/test", { apiKey: KEY })).status).toBe(400);
     expect((await call(a, "PATCH", "/groq", { preferStored: true })).status).toBe(404);
   });
 

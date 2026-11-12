@@ -34,6 +34,7 @@ import {
   writeSync,
 } from "node:fs";
 import { join } from "node:path";
+import { effectiveOllamaEndpoint, ollamaKeyApplies } from "./ollama-cloud.js";
 
 /** File holding the 32-byte AES key. */
 export const SECRET_KEY_FILE = "secret.key";
@@ -53,16 +54,23 @@ export const KEYED_PROVIDER_ENV: Readonly<Record<string, readonly string[]>> = {
   groq: ["GROQ_API_KEY"],
   xai: ["XAI_API_KEY"],
   litellm: ["LITELLM_API_KEY"],
+  // Ollama Cloud / an authenticated remote Ollama. A local server needs none: the key is sent
+  // only when the endpoint is not loopback (`ollama-cloud.ts` `ollamaKeyApplies`).
+  ollama: ["OLLAMA_API_KEY"],
+  // Not an LLM provider: the TypeSafe (Jev) judgment backend's key. It reaches the agent as
+  // `.withJudgment({ apiKey })` (`cortexAgentBuilder`), never `.withProvider`.
+  typesafe: ["TYPESAFE_API_KEY"],
 };
 
 /**
  * Providers whose framework adapter reads `.withProvider(p, { apiKey })`. Since
  * llm-provider d1955526c every adapter honours a passed key (anthropic and gemini
- * included), so this is every provider Settings can store a key for. Ollama takes no
- * key and is not stored. A provider added to {@link KEYED_PROVIDER_ENV} whose adapter
+ * included), so this is every provider Settings can store a key for. Ollama's key is
+ * for Ollama Cloud or an authenticated remote server and is gated by the endpoint
+ * (`ollamaKeyApplies`). A provider added to {@link KEYED_PROVIDER_ENV} whose adapter
  * ignores a passed key must be left out here.
  */
-const AGENT_APPLIES: ReadonlySet<string> = new Set(["anthropic", "openai", "gemini", "groq", "xai", "litellm"]);
+const AGENT_APPLIES: ReadonlySet<string> = new Set(["anthropic", "openai", "gemini", "groq", "xai", "litellm", "ollama", "typesafe"]);
 
 /** True when a stored key for `provider` reaches the agent's provider adapter. */
 export const storedKeyAppliesToAgents = (provider: string): boolean => AGENT_APPLIES.has(provider);
@@ -400,7 +408,14 @@ export function installedProviderKeyStore(): ProviderKeyStore | null {
   return installed;
 }
 
-/** The stored key the agent for `provider` should get, or undefined (env or none). */
+/**
+ * The stored key the agent for `provider` should get, or undefined (env or none).
+ * An Ollama key is withheld while the effective Ollama endpoint is loopback: a local server
+ * needs none and the key never goes to localhost.
+ */
 export function providerKeyForAgent(provider: string | undefined): string | undefined {
-  return provider && installed ? installed.keyForAgent(provider) : undefined;
+  if (!provider || !installed) return undefined;
+  const key = installed.keyForAgent(provider);
+  if (key !== undefined && provider === "ollama" && !ollamaKeyApplies(effectiveOllamaEndpoint())) return undefined;
+  return key;
 }

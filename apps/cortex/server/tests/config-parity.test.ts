@@ -136,6 +136,7 @@ describe("AgentConfig → LaunchParams parity", () => {
 
     // ── Fabrication guard ─────────────────────────────────────────────────
     expect(p.fabricationGuard).toBe("warn");
+    expect(p.judgment).toEqual(FULL_CONFIG_BODY.judgment);
 
     // ── Workspace / shell / guardrails / durable / generic overrides ─────
     expect(p.workspace).toBe(tmpdir());
@@ -252,7 +253,9 @@ import { readFileSync } from "node:fs";
 
 const WIRED = new Set([
   "withAgentId", "withAgentTool", "withApprovalPolicy", "withBudget", "withDocuments", "withDurableRuns",
-  "withDynamicSubAgents", "withFabricationGuard", "withGrounding", "withHarness", "withKillSwitch",
+  "withDynamicSubAgents", "withFabricationGuard", "withGrounding", "withHarness",
+  // withJudgment: no AgentConfig form (framework gap), so Lab · Judgment is an overlay with the saved TypeSafe key.
+  "withJudgment", "withKillSwitch",
   "withMemory", "withMetaTools", "withMinIterations", "withModelRouting", "withObservability", "withOutputSchema",
   // withProvider: provider comes through AgentConfig; the overlay re-calls it with { apiKey }
   // for a key saved in Settings (services/provider-key-store.ts).
@@ -273,7 +276,7 @@ const NOT_APPLICABLE = new Set([
   "withCostTracking", "withCustomTermination", "withDynamicPricing",
   "withEnvironment", "withErrorHandler", "withEvents", "withExperienceLearning",
   "withFallbacks", "withGateway", "withGuardrails", "withHealthCheck",
-  "withHook", "withJudgment", "withLayers", "withLazyValidation", "withLeanHarness",
+  "withHook", "withLayers", "withLazyValidation", "withLeanHarness",
   "withLearning", "withLlmTimeout", "withLogging", "withLongHorizon", "withMCP",
   "withMaxIterations", "withMemoryConsolidation", "withModel", "withModelPricing",
   "withName", "withOpenInference", "withOutputValidator",

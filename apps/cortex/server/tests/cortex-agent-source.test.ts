@@ -88,7 +88,8 @@ describe("Export as code", () => {
     const { json } = await postSource(makeApp(), FULL_CONFIG_BODY);
     // FULL_CONFIG_BODY sets durable runs (the user-question rail is now in the code
     // as `.withUserInteraction()`) and no host tools, scenario, trace dir, output schema or saved key.
-    expect(json.notInCode.map((s) => s.call)).toEqual([]);
+    // FULL_CONFIG_BODY also sets a judgment backend: `.withJudgment()` has no AgentConfig form.
+    expect(json.notInCode.map((s) => s.call)).toEqual(["withJudgment"]);
     for (const call of [
       ".withAgentTool(", ".withDynamicSubAgents(", ".withTaskContext(", ".withSkills(",
       ".withMinIterations(", ".withVerificationStep(", ".withVerification(", ".withMetaTools(",

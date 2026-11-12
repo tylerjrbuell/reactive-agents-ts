@@ -7,6 +7,7 @@
 import type { DocumentSpec } from "@reactive-agents/runtime";
 import { migrateLegacyCliToolNames } from "./legacy-cli-tools.js";
 import { approvalPolicyOf } from "./approval-policy.js";
+import { parseCortexJudgmentConfig } from "./cortex-judgment.js";
 
 function asFiniteNumber(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -302,6 +303,11 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   const fg = raw.fabricationGuard;
   if (fg === "off" || fg === "warn" || fg === "block") out.fabricationGuard = fg;
   else delete out.fabricationGuard;
+
+  // Judgment backend (Lab · Judgment): kept only when turned on.
+  const judgment = parseCortexJudgmentConfig(raw.judgment);
+  if (judgment) out.judgment = judgment;
+  else delete out.judgment;
 
   // ── Five previously dead-end fields ─────────────────────────────────────
 

@@ -16,6 +16,7 @@
  */
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag, type AgentEvent } from "@reactive-agents/core";
+import { JUDGMENT_EVENT_TAGS } from "@reactive-agents/ui-core";
 import { CortexError } from "../errors.js";
 import type { CortexIngestMessage } from "../types.js";
 
@@ -108,13 +109,21 @@ export async function attachChatIngest(
     );
   };
 
+  /** The one chat root still open this turn, else undefined (none, or ambiguous). */
+  const onlyOpenRoot = (): string | undefined => {
+    const roots = [...open].filter((t) => chatRoots.has(t));
+    return roots.length === 1 ? roots[0] : undefined;
+  };
+
   const detach = await agent.subscribe((event) => {
     const e = event as { readonly _tag: string } & Readonly<Record<string, unknown>>;
     if (e._tag === "ToolCallStarted" && e.args !== undefined) {
       const callId = str(e.callId);
       if (callId !== undefined) startedArgs.set(callId, e.args);
     }
-    const taskId = str(e.taskId);
+    // Judgment events carry no `taskId` (framework gap: core `judgment-events.ts`). A chat
+    // session runs one root at a time, so the turn's open root is the run that asked.
+    const taskId = str(e.taskId) ?? (JUDGMENT_EVENT_TAGS.includes(e._tag) ? onlyOpenRoot() : undefined);
     if (taskId === undefined) return;
     if (e._tag === "AgentStarted") {
       if (str(e.parentRunId) === undefined) chatRoots.add(taskId);

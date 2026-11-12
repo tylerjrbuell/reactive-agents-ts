@@ -15,6 +15,12 @@ import {
 import { Effect } from "effect";
 import { Elysia } from "elysia";
 import {
+  bearerFetch,
+  effectiveOllamaEndpoint,
+  OLLAMA_AUTH_MESSAGE,
+  ollamaListKey,
+} from "../services/ollama-cloud.js";
+import {
   installedProviderKeyStore,
   providerKeyForAgent,
   storedKeyAppliesToAgents,
@@ -151,8 +157,6 @@ export function listProviders(): readonly ProviderInfo[] {
   return ids.map((id) => ({ id, label: PROVIDER_LABELS[id] ?? id, local: LOCAL_PROVIDERS.has(id) }));
 }
 
-const OLLAMA_DEFAULT = process.env.OLLAMA_HOST ?? "http://localhost:11434";
-
 /** Ollama reports a model's capabilities (`completion`, `tools`, `thinking`, …) via /api/show. Cached per endpoint + model name. */
 const ollamaThinkingCache = new Map<string, boolean | null>();
 async function ollamaSupportsThinking(doFetch: typeof fetch, baseUrl: string, name: string): Promise<boolean | null> {
@@ -209,12 +213,16 @@ export async function buildModelsResponse(
   endpoint: string | undefined,
   deps: ModelsDeps = defaultDeps,
 ): Promise<ModelsResponse> {
-  const baseUrl = provider === "ollama" ? endpoint || OLLAMA_DEFAULT : provider === "litellm" ? endpoint || undefined : undefined;
+  const baseUrl = provider === "ollama" ? endpoint || effectiveOllamaEndpoint() : provider === "litellm" ? endpoint || undefined : undefined;
   const apiKey = deps.storedKeys?.forAgent(provider);
+  // Ollama Cloud: the framework's Ollama model listing sends no auth header (gap, reported), so the
+  // bearer rides a fetch that adds it for the configured host only (`ollamaListKey`).
+  const ollamaKey = provider === "ollama" && baseUrl ? ollamaListKey(baseUrl, apiKey) : undefined;
+  const listFetch = ollamaKey && baseUrl ? bearerFetch(baseUrl, ollamaKey, deps.fetch) : deps.fetch;
   const resolved = await deps.resolve(provider, {
     ...(baseUrl ? { baseUrl } : {}),
     ...(apiKey ? { apiKey } : {}),
-    fetch: deps.fetch,
+    fetch: listFetch,
   });
   const toEntry = async (m: DiscoveredModel): Promise<ModelEntry> => ({
     name: m.id,
@@ -222,14 +230,21 @@ export async function buildModelsResponse(
     source: m.source,
     supportsThinking:
       provider === "ollama" && m.source === "live" && baseUrl
-        ? await ollamaSupportsThinking(deps.fetch, baseUrl, m.id)
+        ? await ollamaSupportsThinking(listFetch, baseUrl, m.id)
         : m.supportsThinking,
   });
   const models = await Promise.all(resolved.models.map(toEntry));
   return {
     models,
     live: resolved.live,
-    ...(resolved.error ? { error: { reason: resolved.error.reason, message: resolved.error.message } } : {}),
+    ...(resolved.error
+      ? {
+          error:
+            provider === "ollama" && /\b40[13]\b|unauthori[sz]ed/i.test(resolved.error.message)
+              ? { reason: "unauthorized", message: OLLAMA_AUTH_MESSAGE }
+              : { reason: resolved.error.reason, message: resolved.error.message },
+        }
+      : {}),
     // Cortex does not hardcode a default; the UI seeds from the framework's current one.
     default: getProviderDefaultModel(provider) ?? null,
   };

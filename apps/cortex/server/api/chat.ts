@@ -106,6 +106,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ...(body.budget ? { budget: body.budget } : {}),
               ...(body.grounding ? { grounding: body.grounding } : {}),
               ...(body.fabricationGuard ? { fabricationGuard: body.fabricationGuard } : {}),
+              ...(body.judgment ? { judgment: body.judgment } : {}),
               ...(body.modelRouting ? { modelRouting: body.modelRouting } : {}),
               ...(body.outputSchema ? { outputSchema: body.outputSchema } : {}),
               ...(body.outputSchemaOnParseFail ? { outputSchemaOnParseFail: body.outputSchemaOnParseFail } : {}),

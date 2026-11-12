@@ -20,6 +20,7 @@ import type {
   CortexSkillsConfig,
 } from "./cortex-agent-config.js";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
+import type { CortexJudgmentConfig } from "./cortex-judgment.js";
 import { resolveLaunchPayload } from "./resolve-template.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
 import type { VariableDef } from "./resolve-template.js";
@@ -100,6 +101,8 @@ export interface LaunchParams {
   readonly grounding?: { mode: "warn" | "block"; tolerance?: number };
   /** Fabrication guard override — `.withFabricationGuard()`. Always-on at "block" by default; pass to override. */
   readonly fabricationGuard?: "off" | "warn" | "block";
+  /** Judgment backend — `.withJudgment()` (an overlay; see build-cortex-agent.ts). */
+  readonly judgment?: CortexJudgmentConfig;
   /** Cost-aware model routing (`.withModelRouting()`). enabled=false → not applied. */
   readonly modelRouting?: {
     readonly enabled?: boolean;
@@ -189,6 +192,7 @@ export function launchParamsToBuildParams(
     ...(params.budget ? { budget: params.budget } : {}),
     ...(params.grounding ? { grounding: params.grounding } : {}),
     ...(params.fabricationGuard ? { fabricationGuard: params.fabricationGuard } : {}),
+    ...(params.judgment ? { judgment: params.judgment } : {}),
     ...(params.modelRouting?.enabled ? { modelRouting: params.modelRouting } : {}),
     ...(params.harness ? { harness: params.harness } : {}),
     ...(params.documents && params.documents.length > 0 ? { documents: [...params.documents] } : {}),
