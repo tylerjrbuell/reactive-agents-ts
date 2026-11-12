@@ -9,6 +9,7 @@
    */
   import { DISCLOSURE_CHOICES, disclosureChoice, disclosureLabel, disclosurePatch, type DisclosureChoice } from "$lib/chat-quickbar.js";
   import { disclosureSummary } from "$lib/chat-composer-bar.js";
+  import Select from "$lib/components/kit/Select.svelte";
 
   let { rawConfig = $bindable(), tools = [] }: { rawConfig: Record<string, unknown>; tools?: readonly string[] } = $props();
 
@@ -22,13 +23,11 @@
 
 <div class="acp-field">
   <label for="acp-tool-disclosure" class="config-label mb-0 text-[11px]">Tool disclosure</label>
-  <select id="acp-tool-disclosure" class="config-input text-[11px]" value={current}
-    onchange={(e) => set((e.currentTarget as HTMLSelectElement).value)}>
-    <option value="">Tier default (framework picks by model tier)</option>
-    {#each DISCLOSURE_CHOICES as c}
-      <option value={c}>{c}: {disclosureLabel[c]}</option>
-    {/each}
-  </select>
+  <Select id="acp-tool-disclosure" class="config-input text-[11px]" value={current} onchange={set}
+    options={[
+      { value: "", label: "Tier default", description: "The framework picks by model tier" },
+      ...DISCLOSURE_CHOICES.map((c) => ({ value: c, label: c, description: disclosureLabel[c] })),
+    ]} />
   <p class="acp-hint leading-relaxed" data-testid="disclosure-summary">{summary.text}</p>
   <details class="acp-hint leading-relaxed">
     <summary class="cursor-pointer">What is tool disclosure?</summary>

@@ -3,6 +3,7 @@
   import Icon from "$lib/components/kit/Icon.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import Button from "$lib/components/kit/Button.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import { onMount, untrack } from "svelte";
   import type { ChatTurn } from "$lib/stores/chat-store.js";
   import type { ChatSession } from "$lib/stores/chat-store.js";
@@ -263,21 +264,19 @@
   <div id="chat-trace-panel" role="tabpanel" aria-labelledby="chat-trace-tab-{tab}" class="flex min-h-0 flex-1 flex-col">
     {#if (tab === "steps" || tab === "trace") && assistantTurns.length > 1}
       <div class="flex-shrink-0 border-b border-[color:var(--cortex-line)] px-4 py-2">
-        <label class="text-[11px] text-[var(--cortex-text-2)]">
-          Turn
-          <select
-            class="ml-2 rounded border border-[color:var(--cortex-line)] bg-[var(--cortex-surface-2)] px-2 py-1 text-[12px] text-[var(--cortex-text)]"
-            value={turn?.id}
-            onchange={(e) => {
-              const id = Number((e.currentTarget as HTMLSelectElement).value);
+        <div class="flex items-center gap-2 text-[11px] text-[var(--cortex-text-2)]">
+          <label for="chat-trace-turn">Turn</label>
+          <Select
+            id="chat-trace-turn"
+            class="min-w-0 flex-1"
+            value={turn ? String(turn.id) : ""}
+            options={assistantTurns.map((t) => ({ value: String(t.id), label: `#${t.id} · ${formatTs(t.ts)} · ${t.tokensUsed} tok` }))}
+            onchange={(v) => {
+              const id = Number(v);
               if (Number.isFinite(id)) onSelectTurn?.(id);
             }}
-          >
-            {#each assistantTurns as t (t.id)}
-              <option value={t.id}>#{t.id} · {formatTs(t.ts)} · {t.tokensUsed} tok</option>
-            {/each}
-          </select>
-        </label>
+          />
+        </div>
       </div>
     {/if}
     {#if tab === "context"}

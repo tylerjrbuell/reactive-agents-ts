@@ -9,6 +9,7 @@
   import Button from "$lib/components/kit/Button.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   type RecordValue = string | number;
   interface Props {
     id: string;
@@ -93,10 +94,9 @@
             <input type="number" min="1" class="ci-frame ci-text w-16" aria-label={`${k} value`} value={v}
               onchange={(e) => { const n = parseValue((e.currentTarget as HTMLInputElement).value); if (n !== undefined) emitRecord(entries.map(([ek, ev]) => [ek, ek === k ? n : ev])); }} />
           {:else}
-            <select class="ci-frame ci-text w-24" aria-label={`${k} value`} value={v}
-              onchange={(e) => emitRecord(entries.map(([ek, ev]) => [ek, ek === k ? (e.currentTarget as HTMLSelectElement).value : ev]))}>
-              {#each valueKind as opt (opt)}<option value={opt}>{opt}</option>{/each}
-            </select>
+            <Select id={`${id}-value-${k}`} class="ci-frame ci-text w-24" aria-label={`${k} value`} value={String(v)}
+              options={valueKind.map((opt) => ({ value: opt, label: opt }))}
+              onchange={(next) => emitRecord(entries.map(([ek, ev]) => [ek, ek === k ? next : ev]))} />
           {/if}
           <IconButton icon="x" size="sm" label={`Remove ${k}`} onclick={() => emitRecord(entries.filter(([ek]) => ek !== k))} />
         </div>
@@ -110,9 +110,10 @@
       {#if valueKind === "number"}
         <input type="number" min="1" class="ci-frame ci-text w-16" placeholder="cap" aria-label="Value" bind:value={draftValue} onkeydown={onKey} />
       {:else}
-        <select class="ci-frame ci-text w-24" aria-label="Value" bind:value={draftValue}>
-          {#each valueKind as opt (opt)}<option value={opt}>{opt}</option>{/each}
-        </select>
+        <Select id={`${id}-draft-value`} class="ci-frame ci-text w-24" aria-label="Value"
+          value={String(draftValue ?? "") || (valueKind[0] ?? "")}
+          options={valueKind.map((opt) => ({ value: opt, label: opt }))}
+          onchange={(next) => (draftValue = next)} />
       {/if}
     {/if}
     <Button size="sm" onclick={add}>Add</Button>

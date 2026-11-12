@@ -1,6 +1,7 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import HighlightedField from "$lib/components/HighlightedField.svelte";
   import type { AgentConfig } from "$lib/types/agent-config.js";
   import type { PanelAgentConfig } from "../types.js";
@@ -40,28 +41,30 @@
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label for="persona-tone" class="config-label">Tone</label>
-              <select
+              <Select
                 id="persona-tone"
                 value={config.persona.tone}
-                onchange={(e) => (config = { ...config, persona: { ...config.persona, tone: (e.target as HTMLSelectElement).value as AgentConfig["persona"]["tone"] } })}
-                class="config-input">
-                <option value="concise">Concise — brief, direct</option>
-                <option value="formal">Formal — professional</option>
-                <option value="casual">Casual — conversational</option>
-                <option value="technical">Technical — precise, expert</option>
-              </select>
+                onchange={(v) => (config = { ...config, persona: { ...config.persona, tone: v as AgentConfig["persona"]["tone"] } })}
+                class="config-input"
+                options={[
+                  { value: "concise", label: "Concise", description: "Brief, direct" },
+                  { value: "formal", label: "Formal", description: "Professional" },
+                  { value: "casual", label: "Casual", description: "Conversational" },
+                  { value: "technical", label: "Technical", description: "Precise, expert" },
+                ]} />
             </div>
             <div>
               <label for="persona-response-style" class="config-label">Response Style</label>
-              <select
+              <Select
                 id="persona-response-style"
                 value={config.persona.responseStyle}
-                onchange={(e) => (config = { ...config, persona: { ...config.persona, responseStyle: (e.target as HTMLSelectElement).value as AgentConfig["persona"]["responseStyle"] } })}
-                class="config-input">
-                <option value="prose">Prose — narrative paragraphs</option>
-                <option value="bullet-points">Bullets — scannable lists</option>
-                <option value="structured">Structured — headers + sections</option>
-              </select>
+                onchange={(v) => (config = { ...config, persona: { ...config.persona, responseStyle: v as AgentConfig["persona"]["responseStyle"] } })}
+                class="config-input"
+                options={[
+                  { value: "prose", label: "Prose", description: "Narrative paragraphs" },
+                  { value: "bullet-points", label: "Bullets", description: "Scannable lists" },
+                  { value: "structured", label: "Structured", description: "Headers and sections" },
+                ]} />
             </div>
           </div>
           <div>

@@ -2,6 +2,7 @@
   import { onMount, untrack } from "svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import ChatSessionRow from "$lib/components/chat/ChatSessionRow.svelte";
   import { sessionRailGroups } from "$lib/chat-session-rail.js";
   import { clock } from "$lib/stores/clock.js";
@@ -64,6 +65,8 @@
 
   let runs = $state<RunOption[]>([]);
   let selectedRunId = $state("");
+  /** The saved agent the new chat started from ("" = blank). */
+  let fromAgentId = $state("");
 
   type SavedAgent = { agentId: string; name: string; config: Record<string, unknown> };
   let savedAgents = $state<SavedAgent[]>([]);
@@ -162,6 +165,7 @@
     toolsOverride = undefined;
     autoName = true;
     selectedRunId = "";
+    fromAgentId = "";
     editingSessionId = null;
     configMode = "create";
     showConfigModal = true;
@@ -348,16 +352,16 @@
         {#if configMode === "create"}
           <div>
             <label class={label} for="chat-from-agent">Start from saved agent</label>
-            <select
+            <Select
               id="chat-from-agent"
               class={field}
-              onchange={(e) => snapshotFromAgent((e.currentTarget as HTMLSelectElement).value)}
-            >
-              <option value="">Blank (defaults)</option>
-              {#each savedAgents as a (a.agentId)}
-                <option value={a.agentId}>{a.name}</option>
-              {/each}
-            </select>
+              value={fromAgentId}
+              options={[{ value: "", label: "Blank (defaults)" }, ...savedAgents.map((a) => ({ value: a.agentId, label: a.name }))]}
+              onchange={(v) => {
+                fromAgentId = v;
+                snapshotFromAgent(v);
+              }}
+            />
             <p class={hint}>
               Copies the agent's settings into this chat. Later edits here do not change the saved agent.
             </p>
@@ -373,17 +377,13 @@
 
         <div>
           <label class={label} for="chat-run">Prior run (optional)</label>
-          <select
+          <Select
             id="chat-run"
             class={field}
             value={selectedRunId}
-            onchange={(e) => onRunChange((e.target as HTMLSelectElement).value)}
-          >
-            <option value="">None (a fresh chat)</option>
-            {#each runs as r (r.runId)}
-              <option value={r.runId}>{r.label}</option>
-            {/each}
-          </select>
+            options={[{ value: "", label: "None (a fresh chat)" }, ...runs.map((r) => ({ value: r.runId, label: r.label }))]}
+            onchange={onRunChange}
+          />
           <p class={hint}>
             Gives the agent that run's debrief and events as context.
           </p>

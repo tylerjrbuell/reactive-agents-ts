@@ -488,7 +488,6 @@
   .studio { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px 32px 24px; overflow: hidden; }
   .head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
   .pick { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
-  .pick :global(select) { min-width: 280px; max-width: 420px; }
   .runfilter { display: inline-flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px; border-radius: var(--cortex-r-ctl); background: var(--cortex-io-tint); color: var(--cortex-text); font-size: var(--cortex-t-xs); }
   .runfilter a, .meta a { color: var(--cortex-io); font-family: var(--cortex-font-data); }
   .head-actions { display: flex; gap: 8px; }

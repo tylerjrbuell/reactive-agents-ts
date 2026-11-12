@@ -6,6 +6,7 @@
    * Tools, documents in Memory, model routing in Model.
    */
   import ConfigSection from "../ConfigSection.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
   import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
   import type { AgentConfig } from "$lib/types/agent-config.js";
@@ -70,29 +71,41 @@
         </div>
         <div>
           <label for="grounding-mode" class="config-label">Evidence grounding</label>
-          <select id="grounding-mode" bind:value={config.grounding.mode} class="config-input">
-            <option value="off">Off</option>
-            <option value="warn">Warn — flag ungrounded figures</option>
-            <option value="block">Block — one corrective retry, then degrade</option>
-          </select>
+          <Select
+            id="grounding-mode"
+            class="config-input"
+            bind:value={() => config.grounding.mode, (v) => (config.grounding.mode = v as AgentConfig["grounding"]["mode"])}
+            options={[
+              { value: "off", label: "Off" },
+              { value: "warn", label: "Warn", description: "Flag ungrounded figures" },
+              { value: "block", label: "Block", description: "One corrective retry, then degrade" },
+            ]} />
           <p class="mt-1 acp-hint">Checks numbers in the answer against tool data (<code>.withGrounding</code>); never hard-fails.</p>
         </div>
         <div>
           <label for="fabrication-guard-mode" class="config-label">Fabrication guard</label>
-          <select id="fabrication-guard-mode" bind:value={config.fabricationGuard.mode} class="config-input">
-            <option value="default">Default — always on, block</option>
-            <option value="off">Off</option>
-            <option value="warn">Warn — flag invented entities/measurements</option>
-            <option value="block">Block — one corrective retry, then degrade</option>
-          </select>
+          <Select
+            id="fabrication-guard-mode"
+            class="config-input"
+            bind:value={() => config.fabricationGuard.mode, (v) => (config.fabricationGuard.mode = v as AgentConfig["fabricationGuard"]["mode"])}
+            options={[
+              { value: "default", label: "Default", description: "Always on, block" },
+              { value: "off", label: "Off" },
+              { value: "warn", label: "Warn", description: "Flag invented entities and measurements" },
+              { value: "block", label: "Block", description: "One corrective retry, then degrade" },
+            ]} />
           <p class="mt-1 acp-hint">Distinct from evidence grounding above — catches invented named entities and measurements not backed by tool evidence. Always-on at Block even if left at Default (<code>.withFabricationGuard</code>).</p>
         </div>
         <div>
           <label for="verification-step" class="config-label">Verification step</label>
-          <select id="verification-step" bind:value={config.verificationStep} class="config-input">
-            <option value="none">None — trust first answer</option>
-            <option value="reflect">Reflect — LLM self-review pass</option>
-          </select>
+          <Select
+            id="verification-step"
+            class="config-input"
+            bind:value={() => config.verificationStep, (v) => (config.verificationStep = v as AgentConfig["verificationStep"])}
+            options={[
+              { value: "none", label: "None", description: "Trust the first answer" },
+              { value: "reflect", label: "Reflect", description: "LLM self-review pass" },
+            ]} />
           <p class="mt-1 acp-hint leading-relaxed">
             Reflect runs one extra LLM pass on the draft answer. It is not the same as the framework verification layer below.
           </p>

@@ -74,7 +74,7 @@
       id="voice-stt-engine"
       value={$settings.stt.engine}
       options={[{ value: "browser", label: "Browser (nothing to install)" }, { value: "server", label: "Server (OpenAI-compatible)" }]}
-      onchange={(e) => void setEngine("stt", e.currentTarget.value)}
+      onchange={(x) => void setEngine("stt", x)}
     />
   {/snippet}
 </SettingsRow>
@@ -87,7 +87,7 @@
       id="voice-mic-mode"
       value={$prefs.micMode}
       options={[{ value: "toggle", label: "Click to start and stop" }, { value: "push-to-talk", label: "Push to talk" }]}
-      onchange={(e) => v.setPrefs({ micMode: e.currentTarget.value === "push-to-talk" ? "push-to-talk" : "toggle" })}
+      onchange={(x) => v.setPrefs({ micMode: x === "push-to-talk" ? "push-to-talk" : "toggle" })}
     />
   {/snippet}
 </SettingsRow>
@@ -101,7 +101,7 @@
 {#if $prefs.autoSend}
   <SettingsRow label="Quiet moment" for="voice-silence" description="How long you stay silent before it counts as finished. Voice mode uses the same value.">
     {#snippet control()}
-      <Select id="voice-silence" value={String($prefs.silenceMs)} options={SILENCE_STEPS.map((ms) => ({ value: String(ms), label: `${ms / 1000} s` }))} onchange={(e) => v.setPrefs({ silenceMs: Number(e.currentTarget.value) })} />
+      <Select id="voice-silence" value={String($prefs.silenceMs)} options={SILENCE_STEPS.map((ms) => ({ value: String(ms), label: `${ms / 1000} s` }))} onchange={(x) => v.setPrefs({ silenceMs: Number(x) })} />
     {/snippet}
   </SettingsRow>
 {/if}
@@ -112,7 +112,7 @@
       id="voice-tts-engine"
       value={$settings.tts.engine}
       options={[{ value: "browser", label: "Browser (nothing to install)" }, { value: "server", label: "Server (OpenAI-compatible)" }]}
-      onchange={(e) => void setEngine("tts", e.currentTarget.value)}
+      onchange={(x) => void setEngine("tts", x)}
     />
   {/snippet}
 </SettingsRow>
@@ -121,7 +121,7 @@
 
 <SettingsRow label="Reading speed" for="voice-rate" description="Applies at once, also to a reading in progress.">
   {#snippet control()}
-    <Select id="voice-rate" value={String($prefs.rate)} options={RATE_STEPS.map((r) => ({ value: String(r), label: `${r}×` }))} onchange={(e) => v.setPrefs({ rate: Number(e.currentTarget.value) })} />
+    <Select id="voice-rate" value={String($prefs.rate)} options={RATE_STEPS.map((r) => ({ value: String(r), label: `${r}×` }))} onchange={(x) => v.setPrefs({ rate: Number(x) })} />
   {/snippet}
 </SettingsRow>
 {#if $settings.tts.engine === "browser"}
@@ -131,7 +131,7 @@
         id="voice-browser-voice"
         value={$prefs.browserVoice}
         options={[{ value: "", label: "Default voice" }, ...browserVoices.map((x) => ({ value: x.id, label: x.label }))]}
-        onchange={(e) => v.setPrefs({ browserVoice: e.currentTarget.value })}
+        onchange={(x) => v.setPrefs({ browserVoice: x })}
       />
       <Button size="sm" variant="ghost" icon="speaker" disabled={testing} onclick={testBrowserVoice}>Test</Button>
     {/snippet}

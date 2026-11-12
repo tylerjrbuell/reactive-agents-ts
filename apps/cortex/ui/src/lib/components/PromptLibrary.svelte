@@ -13,6 +13,7 @@
   import Button from "$lib/components/kit/Button.svelte";
   import Chip from "$lib/components/kit/Chip.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
 
   interface Props {
     onSelect: (body: string) => void;
@@ -89,11 +90,14 @@
     <div class="save">
       <div class="save-row">
         <input class="cx-control" aria-label="Prompt name" bind:value={saveName} placeholder="Name (optional)" />
-        <select class="cx-control type" aria-label="Prompt type" bind:value={saveType}>
-          {#each PROMPT_TYPES as ty (ty)}
-            <option value={ty}>{PROMPT_TYPE_LABEL[ty]}</option>
-          {/each}
-        </select>
+        <Select
+          id="pl-type"
+          class="type"
+          aria-label="Prompt type"
+          value={saveType}
+          options={PROMPT_TYPES.map((ty) => ({ value: ty, label: PROMPT_TYPE_LABEL[ty] }))}
+          onchange={(v) => (saveType = PROMPT_TYPES.find((ty) => ty === v) ?? saveType)}
+        />
       </div>
       <textarea class="cx-control" aria-label="Prompt text" bind:value={saveBody} placeholder="The prompt text" rows={3}></textarea>
       <div class="save-row">
@@ -135,5 +139,5 @@
   .save { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--cortex-line); }
   .save-row { display: flex; gap: 6px; justify-content: flex-end; }
   .save-row :global(.cx-control) { flex: 1; min-width: 0; }
-  .save-row .type { flex: none; width: 7.5rem; }
+  .save-row :global(.type) { flex: none; width: 7.5rem; }
 </style>

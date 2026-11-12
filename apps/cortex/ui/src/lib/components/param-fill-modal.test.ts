@@ -28,7 +28,8 @@ describe("ParamFillModal", () => {
     expect(html).toContain("What to write about");
     expect(html).toContain("cx-control");
     expect(html).toContain("<textarea");
-    expect(html).toContain("<select");
+    expect(html).toContain('role="combobox"');
+    expect(html).not.toContain("<select");
   });
 
   test("labels are sentence case, never uppercase or under 11px", async () => {

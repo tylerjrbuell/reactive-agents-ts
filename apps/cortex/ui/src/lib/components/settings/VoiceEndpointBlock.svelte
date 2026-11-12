@@ -130,7 +130,7 @@
       id="vb-preset-{direction}"
       value={preset?.id ?? ""}
       options={[{ value: "", label: "Custom" }, ...presets.map((p) => ({ value: p.id, label: p.label }))]}
-      onchange={(e) => applyPreset(e.currentTarget.value)}
+      onchange={applyPreset}
     />
 
     <label class="vb-l" for="vb-url-{direction}">Endpoint URL</label>

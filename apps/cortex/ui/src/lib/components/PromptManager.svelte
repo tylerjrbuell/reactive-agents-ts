@@ -15,6 +15,7 @@
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Chip from "$lib/components/kit/Chip.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import EmptyState from "$lib/components/kit/EmptyState.svelte";
   import Field from "$lib/components/kit/Field.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
@@ -150,11 +151,12 @@
           <Input id="pm-name" bind:value={editName} placeholder="Untitled" />
         </Field>
         <Field id="pm-type" label="Type">
-          <select id="pm-type" class="cx-control" bind:value={editType}>
-            {#each PROMPT_TYPES as ty (ty)}
-              <option value={ty}>{TYPE_LABEL[ty]}</option>
-            {/each}
-          </select>
+          <Select
+            id="pm-type"
+            value={editType}
+            options={PROMPT_TYPES.map((ty) => ({ value: ty, label: TYPE_LABEL[ty] }))}
+            onchange={(v) => (editType = PROMPT_TYPES.find((ty) => ty === v) ?? editType)}
+          />
         </Field>
         <Field id="pm-body" label="Prompt" hint={"{{name}} placeholders resolve where templates do."} class="wide">
           <Textarea id="pm-body" bind:value={editBody} rows={6} placeholder="The prompt text" describedBy="pm-body-hint" />

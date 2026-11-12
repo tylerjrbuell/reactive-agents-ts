@@ -16,6 +16,7 @@
    */
   import { onMount } from "svelte";
   import { tooltip } from "$lib/actions/tooltip.js";
+  import Select from "$lib/components/kit/Select.svelte";
   import { hintFor } from "$lib/config-presentation.js";
   import { builtinsSuggestions } from "$lib/chat-quickbar.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
@@ -131,17 +132,13 @@
             />
           {:else if choices}
             <label class="config-label" for={`adv-${row.field.path}`} use:tooltip={row.field.path}>{row.label}</label>
-            <select
+            <Select
               id={`adv-${row.field.path}`}
               class="config-input"
               value={val === undefined ? "" : choiceKey(val as ChoiceValue)}
-              onchange={(e) => setPath(row.field.path, choiceFromKey(row.field.path, (e.currentTarget as HTMLSelectElement).value))}
-            >
-              <option value="">Default</option>
-              {#each choices as opt (choiceKey(opt))}
-                <option value={choiceKey(opt)}>{String(opt)}</option>
-              {/each}
-            </select>
+              options={[{ value: "", label: "Default" }, ...choices.map((opt) => ({ value: choiceKey(opt), label: String(opt) }))]}
+              onchange={(v) => setPath(row.field.path, choiceFromKey(row.field.path, v))}
+            />
           {:else if row.field.type === "boolean"}
             <label class="acp-check" use:tooltip={row.field.path}>
               <input
@@ -154,17 +151,13 @@
           {:else}
             <label class="config-label" for={`adv-${row.field.path}`} use:tooltip={row.field.path}>{row.label}</label>
             {#if row.field.type === "enum"}
-              <select
+              <Select
                 id={`adv-${row.field.path}`}
                 class="config-input"
-                value={val ?? ""}
-                onchange={(e) => setPath(row.field.path, (e.currentTarget as HTMLSelectElement).value || undefined)}
-              >
-                <option value="">Default</option>
-                {#each row.field.enumValues ?? [] as opt (opt)}
-                  <option value={opt}>{opt}</option>
-                {/each}
-              </select>
+                value={String(val ?? "")}
+                options={[{ value: "", label: "Default" }, ...(row.field.enumValues ?? []).map((opt) => ({ value: opt, label: opt }))]}
+                onchange={(v) => setPath(row.field.path, v || undefined)}
+              />
             {:else if row.field.type === "number"}
               <input
                 id={`adv-${row.field.path}`}

@@ -154,7 +154,16 @@ describe("Field family", () => {
     expect(input).toContain('aria-describedby="a-error"');
     const select = await renderComponent(kit("Select"), { id: "b", value: "2", options: [{ value: "1", label: "One" }, { value: "2", label: "Two" }] });
     expect(select).toContain("cx-control");
-    expect(select.match(/<option/g)).toHaveLength(2);
+    expect(select).toContain('role="combobox"');
+    expect(select).toContain('aria-haspopup="listbox"');
+    expect(select).toContain('aria-expanded="false"');
+    expect(text(select)).toBe("Two");
+    expect(select).not.toContain("<select");
+    const invalid = await renderComponent(kit("Select"), { id: "d", value: "", options: [], placeholder: "Pick one", invalid: true, describedBy: "d-hint", name: "field" });
+    expect(invalid).toContain('aria-invalid="true"');
+    expect(invalid).toContain('aria-describedby="d-hint"');
+    expect(invalid).toContain('<input type="hidden" name="field"');
+    expect(text(invalid)).toBe("Pick one");
     const area = await renderComponent(kit("Textarea"), { id: "c", value: "hi", rows: 3 });
     expect(area).toContain('rows="3"');
     expect(area).toContain("cx-control");

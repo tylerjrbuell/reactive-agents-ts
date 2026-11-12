@@ -13,6 +13,7 @@
   import Chip from "$lib/components/kit/Chip.svelte";
   import { type AgentConfig, defaultConfig } from "$lib/types/agent-config.js";
   import { toastKeepClear } from "$lib/toast-clearance.js";
+  import { clickOutside } from "$lib/actions/click-outside.js";
 
   interface Props {
     placeholder?: string;
@@ -31,6 +32,8 @@
   let value = $state("");
   let inputEl = $state<HTMLInputElement | null>(null);
   let expanded = $state(false);
+  /** The model chip's wrapper: a press on it toggles the panel, so it is not an outside press. */
+  let chipWrap = $state<HTMLElement>();
   let config = $state<AgentConfig>(defaultConfig());
 
   onMount(() => {
@@ -67,12 +70,19 @@
 <div class="bar">
   <div class="anchor" use:toastKeepClear>
     {#if expanded}
-      <div class="config" role="region" aria-label="Agent settings for this run">
+      <div
+        class="config"
+        role="region"
+        aria-label="Agent settings for this run"
+        use:clickOutside={{ onclose: () => (expanded = false), ignore: [chipWrap] }}
+      >
         <AgentConfigPanel bind:config compact={false} />
       </div>
     {/if}
     <div class="prompt">
-      <Chip icon="model" data on={expanded} title="Agent settings for this run" onclick={() => (expanded = !expanded)}>{modelLabel}</Chip>
+      <span class="chip-wrap" bind:this={chipWrap}>
+        <Chip icon="model" data on={expanded} title="Agent settings for this run" onclick={() => (expanded = !expanded)}>{modelLabel}</Chip>
+      </span>
       <input
         bind:this={inputEl}
         bind:value
@@ -126,6 +136,7 @@
     border: 1px solid var(--cortex-line-strong);
   }
   .prompt:focus-within { border-color: var(--cortex-accent); box-shadow: 0 0 0 3px var(--cortex-accent-tint); }
+  .chip-wrap { display: contents; }
   .prompt :global(.cx-chip) { max-width: 220px; overflow: hidden; text-overflow: ellipsis; flex: none; }
   input {
     flex: 1;

@@ -7,6 +7,7 @@
   import ConfigSection from "../ConfigSection.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
   import { ASK_MODES, askModeOf, withAskMode, type AskMode } from "$lib/user-interaction.js";
   import type { PanelAgentConfig } from "../types.js";
@@ -114,10 +115,9 @@
         <!-- Questions (request_user_input) -->
         <div>
           <label for="acp-ask-mode" class="config-label">Ask me questions</label>
-          <select id="acp-ask-mode" class="config-input" value={askModeOf(config.rawConfig)}
-            onchange={(e) => (config = { ...config, rawConfig: withAskMode(config.rawConfig, e.currentTarget.value as AskMode) })}>
-            {#each ASK_MODES as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
-          </select>
+          <Select id="acp-ask-mode" class="config-input" value={askModeOf(config.rawConfig)}
+            options={ASK_MODES.map((m) => ({ value: m.value, label: m.label }))}
+            onchange={(v) => (config = { ...config, rawConfig: withAskMode(config.rawConfig, v as AskMode) })} />
           <p class="mt-1 acp-hint">
             The agent may stop to ask you something (<code>request_user_input</code>). The run waits for your answer in the chat or under Waiting on you, then carries on. With durable execution it pauses and survives a restart.
           </p>

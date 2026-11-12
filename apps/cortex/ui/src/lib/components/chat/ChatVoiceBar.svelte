@@ -131,12 +131,12 @@
         id="read-rate"
         value={String($prefs.rate)}
         options={RATE_STEPS.map((r) => ({ value: String(r), label: `${r}×` }))}
-        onchange={(e) => v.setPrefs({ rate: Number(e.currentTarget.value) })}
+        onchange={(x) => v.setPrefs({ rate: Number(x) })}
       />
     </label>
     <label class="opt vsel">
       <span class="sr">Voice</span>
-      <Select id="read-voice" value={currentVoice} options={voiceOptions} onchange={(e) => void pickVoice(e.currentTarget.value)} />
+      <Select id="read-voice" value={currentVoice} options={voiceOptions} onchange={(x) => void pickVoice(x)} />
     </label>
   </section>
 {/if}

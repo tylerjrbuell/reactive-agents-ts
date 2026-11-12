@@ -2,6 +2,7 @@
   import ConfigSection from "../ConfigSection.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import HighlightedField from "$lib/components/HighlightedField.svelte";
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
@@ -88,10 +89,8 @@
         <div class="grid grid-cols-2 gap-4">
           <div class="acp-field">
             <label for="provider-select" class="config-label">Provider</label>
-            <select id="provider-select" value={config.provider} onchange={(e) => setProvider((e.target as HTMLSelectElement).value)}
-              class="config-input">
-              {#each providerList as p}<option value={p.id}>{p.id}</option>{/each}
-            </select>
+            <Select id="provider-select" class="config-input" value={config.provider} onchange={setProvider}
+              options={providerList.map((p) => ({ value: p.id, label: p.id }))} />
           </div>
           <div class="acp-field">
             <div class="flex items-center justify-between gap-2">
@@ -106,9 +105,8 @@
             {:else if modelsLoading}
               <div class="config-input acp-muted" role="status">Loading models…</div>
             {:else if modelOptionsForSelect.length > 0}
-              <select id="model-select" bind:value={config.model} class="config-input">
-                {#each modelOptionsForSelect as m}<option value={m.value}>{m.label}{m.thinking ? " (thinking)" : ""}</option>{/each}
-              </select>
+              <Select id="model-select" class="config-input" bind:value={config.model}
+                options={modelOptionsForSelect.map((m) => ({ value: m.value, label: `${m.label}${m.thinking ? " (thinking)" : ""}` }))} />
               {#if modelsNote}<p class="acp-hint">{modelsNote}</p>{/if}
             {:else}
               <input id="model-select" bind:value={config.model} placeholder="Model name" class="config-input acp-mono" />
@@ -178,12 +176,18 @@
           </label>
           {#if config.modelRouting.enabled}
             <label for="routing-min-tier" class="config-label mt-1">Minimum tier</label>
-            <select id="routing-min-tier" bind:value={config.modelRouting.minTier} class="config-input">
-              <option value={undefined}>Auto — cheapest capable</option>
-              <option value="haiku">Haiku</option>
-              <option value="sonnet">Sonnet</option>
-              <option value="opus">Opus</option>
-            </select>
+            <Select
+              id="routing-min-tier"
+              class="config-input"
+              value={config.modelRouting.minTier ?? ""}
+              options={[
+                { value: "", label: "Auto", description: "Cheapest capable" },
+                { value: "haiku", label: "Haiku" },
+                { value: "sonnet", label: "Sonnet" },
+                { value: "opus", label: "Opus" },
+              ]}
+              onchange={(v) => (config.modelRouting.minTier = v === "haiku" || v === "sonnet" || v === "opus" ? v : undefined)}
+            />
           {/if}
           <p class="mt-1 acp-hint">Routes each turn to the cheapest capable model for the provider (<code>.withModelRouting</code>); degrades to the configured model on any routing error.</p>
         </div>

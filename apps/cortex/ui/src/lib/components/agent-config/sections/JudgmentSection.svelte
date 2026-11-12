@@ -8,6 +8,7 @@
    */
   import { onMount } from "svelte";
   import ConfigSection from "../ConfigSection.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { providerKeysApi } from "$lib/provider-keys.js";
   import {
@@ -103,17 +104,13 @@
   {#if j.enabled}
     <div>
       <label for="judgment-backend" class="config-label">Backend</label>
-      <select
+      <Select
         id="judgment-backend"
         class="config-input"
         value={backendValue}
-        onchange={(e) => {
-          const v = (e.target as HTMLSelectElement).value;
-          patch({ backend: v === "auto" ? undefined : (v as JudgmentBackendChoice) });
-        }}
-      >
-        {#each JUDGMENT_BACKEND_OPTIONS as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
-      </select>
+        onchange={(v) => patch({ backend: v === "auto" ? undefined : (v as JudgmentBackendChoice) })}
+        options={JUDGMENT_BACKEND_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+      />
       <p class="acp-hint mt-1" data-testid="judgment-active">
         Active: <strong>{active.backend}</strong> ({active.why}).
         {#if active.backend === "jev" && keySource === "none"}

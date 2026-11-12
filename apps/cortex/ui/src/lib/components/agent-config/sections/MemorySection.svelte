@@ -1,5 +1,6 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import type { PanelAgentConfig } from "../types.js";
   import { debriefSwitchHint, debriefsOn, rawConfigForDebriefs } from "$lib/debrief-memory.js";
 
@@ -43,12 +44,16 @@
         {/each}
         <div class="pt-1">
           <label for="context-synthesis" class="config-label">Context Synthesis</label>
-          <select id="context-synthesis" bind:value={config.contextSynthesis} class="config-input">
-            <option value="auto">Auto — framework decides</option>
-            <option value="template">Template — fast, rule-based</option>
-            <option value="llm">LLM — deep synthesis call</option>
-            <option value="none">None — raw context</option>
-          </select>
+          <Select
+            id="context-synthesis"
+            class="config-input"
+            bind:value={() => config.contextSynthesis, (v) => (config.contextSynthesis = v as PanelAgentConfig["contextSynthesis"])}
+            options={[
+              { value: "auto", label: "Auto", description: "Framework decides" },
+              { value: "template", label: "Template", description: "Fast, rule-based" },
+              { value: "llm", label: "LLM", description: "Deep synthesis call" },
+              { value: "none", label: "None", description: "Raw context" },
+            ]} />
         </div>
         <div>
           <div class="config-label">Documents (JSON array, RAG)</div>

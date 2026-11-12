@@ -6,7 +6,10 @@
   import IconButton from "$lib/components/kit/IconButton.svelte";
   import Input from "$lib/components/kit/Input.svelte";
   import Textarea from "$lib/components/kit/Textarea.svelte";
-  import type { McpDraft, McpListRow } from "$lib/tool-workshop.js";
+  import Select from "$lib/components/kit/Select.svelte";
+  import type { McpDraft, McpListRow, McpTransport } from "$lib/tool-workshop.js";
+
+  const TRANSPORTS: readonly McpTransport[] = ["stdio", "sse", "websocket", "streamable-http"];
 
   interface Props {
     /** Manual setup form or JSON import. */
@@ -79,12 +82,13 @@
         <Input id="tw-mcp-name" bind:value={draft.name} mono placeholder="e.g. filesystem" />
       </Field>
       <Field id="tw-mcp-transport" label="Transport">
-        <select id="tw-mcp-transport" class="cx-control cx-mono" bind:value={draft.transport}>
-          <option value="stdio">stdio</option>
-          <option value="sse">sse</option>
-          <option value="websocket">websocket</option>
-          <option value="streamable-http">streamable-http</option>
-        </select>
+        <Select
+          id="tw-mcp-transport"
+          class="cx-mono"
+          value={draft.transport}
+          options={TRANSPORTS.map((t) => ({ value: t, label: t }))}
+          onchange={(v) => (draft.transport = TRANSPORTS.find((t) => t === v) ?? draft.transport)}
+        />
       </Field>
       {#if draft.transport === "stdio"}
         <Field id="tw-mcp-cmd" label="Command">

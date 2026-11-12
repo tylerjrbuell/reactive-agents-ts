@@ -5,6 +5,7 @@
    * Tools section, whose field styles cascade in via `.agent-config-panel`.
    */
   import WorkspaceField from "$lib/components/WorkspaceField.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import ShellCommandsField from "$lib/components/ShellCommandsField.svelte";
   import {
     defaultShellOptions,
@@ -66,11 +67,12 @@
       <div class="grid grid-cols-2 gap-2">
         <div class="acp-field">
           <label for="acp-shell-sandbox" class="config-label mb-0 text-[11px]">Runs on</label>
-          <select id="acp-shell-sandbox" class="config-input text-[11px]" value={shellOpts.sandbox}
-            onchange={(e) => setShell({ sandbox: (e.currentTarget as HTMLSelectElement).value === "docker" ? "docker" : "host" })}>
-            <option value="host">This machine</option>
-            <option value="docker">Docker sandbox (no host files)</option>
-          </select>
+          <Select id="acp-shell-sandbox" class="config-input text-[11px]" value={shellOpts.sandbox}
+            options={[
+              { value: "host", label: "This machine" },
+              { value: "docker", label: "Docker sandbox", description: "No host files" },
+            ]}
+            onchange={(v) => setShell({ sandbox: v === "docker" ? "docker" : "host" })} />
         </div>
         <div class="acp-field">
           <label for="acp-shell-cwd" class="config-label mb-0 text-[11px]">Shell directory</label>
