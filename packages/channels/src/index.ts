@@ -25,6 +25,14 @@ export {
   type MatchInput,
 } from "./routing/match.js";
 export { makeMemoryRouterStore } from "./routing/store.js";
+export {
+  makeRouteMeter,
+  type RouteMeter,
+  type RouteMeterOptions,
+  type RouteMeterSnapshot,
+  type MeterReservation,
+  type MeterRefusal,
+} from "./routing/meter.js";
 export { makeFileLeases, makeMemoryLeases, defaultLeaseDir, type AccountLeases } from "./routing/lease.js";
 export { createChannelRouter, type ChannelRouter, type ChannelRouterOptions } from "./routing/router.js";
 export * from "./adapters/webhook.js";

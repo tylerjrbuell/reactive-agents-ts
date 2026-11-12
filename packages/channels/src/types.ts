@@ -217,7 +217,11 @@ export interface ChannelStatus {
 export type AgentSessionFactory = (
   agentConfig: TriggerAgentConfig | undefined,
   sessionId: string,
-) => Promise<{ chat: (message: string) => Promise<{ message: string; tokens?: number }> }>;
+) => Promise<{
+  chat: (message: string) => Promise<{ message: string; tokens?: number }>;
+  /** Called when the bridge tears the session down (idle, ttl, single_response, release, eviction). */
+  close?: () => Promise<void>;
+}>;
 
 export interface SessionBridgeResolveParams {
   readonly identity: ExternalIdentity;

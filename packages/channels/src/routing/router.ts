@@ -5,6 +5,7 @@ import type { ChannelAdapter, DeliveryReceipt, InboundEnvelope, OutboundMessage 
 import { isChannelError, type ChannelError } from "../errors.js";
 import { RouterEngine } from "./engine.js";
 import { makeFileLeases, type AccountLeases } from "./lease.js";
+import type { RouteMeter } from "./meter.js";
 import { makeMemoryRouterStore } from "./store.js";
 import {
   RoutingError,
@@ -29,6 +30,12 @@ export interface ChannelRouterOptions {
   readonly store?: RouterStore;
   /** Defaults to lock files in the OS temp dir. Pass `makeMemoryLeases()` for a single-process host. */
   readonly leases?: AccountLeases;
+  /**
+   * Per-route cost and message meter (`makeRouteMeter`). A turn that would exceed a route's
+   * `maxCostPerDayUsd` (or the meter's message cap) is refused before the resolver runs and counted
+   * as `ChannelTurnDropped` with reason `budget` (cost) or `rate` (messages). Omitted: no metering.
+   */
+  readonly meter?: RouteMeter;
   readonly eventBus?: { publish: (e: AgentEvent) => Effect.Effect<void, never> };
   readonly taskId?: () => string;
 }
@@ -90,6 +97,7 @@ export const createChannelRouter = (
       taskId: options.taskId ?? (() => `route-${Date.now()}-${++counter}`),
       ...(options.eventBus ? { eventBus: options.eventBus } : {}),
       strict: true,
+      ...(options.meter ? { meter: options.meter } : {}),
     });
     yield* Effect.addFinalizer(() => engine.shutdown());
 

@@ -6,6 +6,7 @@ import { envelopeToInboundMessage, type InboundEnvelope, type SenderGate } from 
 import type { ChannelError } from "../errors.js";
 import type { InboundMessage } from "../types.js";
 import { AdapterHub } from "./adapter-hub.js";
+import type { RouteMeter } from "./meter.js";
 import {
   decideRouteAccess,
   explainRoute,
@@ -67,6 +68,8 @@ export interface EngineDeps {
     sender: Parameters<SenderGate>[0],
   ) => Effect.Effect<boolean>;
   readonly conversationQueue?: number;
+  /** Optional per-route cost and message meter; a refused reservation drops the turn before the resolver is called. */
+  readonly meter?: RouteMeter;
 }
 
 const conversationKeyOf = (adapterId: string, msg: InboundMessage): string => {
@@ -94,6 +97,7 @@ export class RouterEngine {
     rate: 0,
     backpressure: 0,
     "disabled-channel": 0,
+    budget: 0,
   };
   private readonly sessions = new Map<string, { readonly session: RoutedSession; readonly scope: Scope.CloseableScope }>();
   private readonly pending = new Map<string, number>();
@@ -359,7 +363,16 @@ export class RouterEngine {
   }): Effect.Effect<RouteOutcome> {
     const self = this;
     const { adapterId, msg, route, role, key, taskId, simulated } = args;
+    const meter = self.deps.meter;
     return Effect.gen(function* () {
+      const reservation = meter ? yield* meter.reserve(route) : undefined;
+      if (reservation && !reservation.ok) {
+        return yield* self.drop(reservation.reason === "cost" ? "budget" : "rate", route.id, simulated);
+      }
+      const reservationId = reservation?.ok ? reservation.id : undefined;
+      // Idempotent: a settled reservation is already gone, so this only frees a failed or interrupted turn.
+      const releaseHeld =
+        meter && reservationId !== undefined ? meter.release(reservationId) : Effect.void;
       yield* self.emit({ _tag: "ChannelTurnStarted", routeId: route.id, role, simulated });
       const turn: RoutedTurn = {
         text: msg.content,
@@ -390,6 +403,13 @@ export class RouterEngine {
             ? bounded.pipe(Effect.ensuring(Scope.close(entry.scope, Exit.void)))
             : bounded;
         }),
+      ).pipe(
+        Effect.tap((result) =>
+          meter && reservationId !== undefined && Either.isRight(result)
+            ? meter.settle(reservationId, result.right.costUsd ?? 0)
+            : Effect.void,
+        ),
+        Effect.ensuring(releaseHeld),
       );
       self.totalProcessed += 1;
       if (Either.isLeft(attempt)) {

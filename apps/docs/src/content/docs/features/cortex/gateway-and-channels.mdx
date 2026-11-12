@@ -58,6 +58,23 @@ The **Gateway** tab in the Lab lists every saved gateway agent. It is read-only 
 
 A summary at the top counts agents listening, channels connected and agents that need attention. The data comes from `GET /api/gateway/status`.
 
+## Session lifecycle and route budgets (framework, builder code)
+
+These two controls live in `@reactive-agents/channels`. Cortex does not expose them yet.
+
+**Session lifecycle.** A trigger's `lifecycle` now decides when its agent is torn down. The agent is built on the first message and kept while the conversation is active:
+
+| Lifecycle | Teardown |
+|---|---|
+| `{ type: "conversation", idleTimeoutMs? }` | After the idle time with no message (default 30 minutes). |
+| `{ type: "ttl", durationMs }` | `durationMs` after the agent was built, whatever the activity. |
+| `{ type: "single_response" }` | Right after the reply. Each message gets a fresh session with no memory. |
+| `{ type: "persistent" }`, or none | Only when evicted (least recently used beyond 500) or released. |
+
+Teardown closes the agent, but `conversation`, `ttl` and `persistent` keep the same session id, so the next message rebuilds the agent and history persisted under that id resumes. Expiry is checked on the next message and by `SessionBridge.sweep()`; nothing runs on a timer. A session with a reply in progress is never torn down.
+
+**Route budgets.** `makeRouteMeter({ reserveUsd?, maxMessagesPerDay? })` passed as `createChannelRouter({ meter })` counts messages and USD per route over the last 24 hours. Before a turn starts the meter reserves a worst case (`reserveUsd`); a turn that would pass the route's `maxCostPerDayUsd` is refused before any agent is built and counted as dropped with reason `budget` (`ChannelTurnDropped`). A message over `maxMessagesPerDay` drops with reason `rate`. When the turn ends the reservation becomes the real `costUsd`; a failed turn spends nothing. Counters are in memory and reset on restart, as `status.durableStore` says.
+
 ### Current limits
 
 - **Counts start when the agent starts listening.** The counts and the queue come from the framework (`agent.channelStatus()` and `agent.gatewayStatus().inboundQueue`). They read zero until a message arrives and restart each time the gateway host restarts. A refused sender still counts as a message in.

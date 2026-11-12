@@ -191,7 +191,7 @@ export interface RouterStore {
 export type RouteRole = "owner" | "sender";
 
 /** Why a message was dropped before reaching an agent. */
-export type DropReason = "echo" | "group" | "rate" | "backpressure" | "disabled-channel";
+export type DropReason = "echo" | "group" | "rate" | "backpressure" | "disabled-channel" | "budget";
 
 /** What happened to one inbound message. */
 export type RouteOutcome =
