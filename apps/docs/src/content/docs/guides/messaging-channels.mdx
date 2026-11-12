@@ -369,7 +369,7 @@ const signal = new SignalChannelAdapter({
 | Errors | Typed `ChannelError`: `not_found` (unregistered recipient, unknown group), `auth` (account not registered or authorization failed), `rate_limited` with `retryAfterMs`, `forbidden` (untrusted identity), `too_large`, `network`. |
 | Reconnect | Connection loss reconnects with exponential backoff. An `auth` failure stops retrying and sets the state to `failed`. |
 | Attachments | Inbound bytes arrive as `Uint8Array` (fetched with `getAttachment`; failures are counted in `metadata.attachmentsUnavailable`). Outbound accepts bytes only, not urls. |
-| Secrets | The account is `Redacted`, kept out of errors, receipts, state and logs. Raw `signal-cli` text lives only in `ChannelError.cause`. |
+| Secrets | The account is `Redacted`, kept out of errors, receipts, state and logs. Spawn and socket failures keep only `{ name, code }` as the `cause` (Node's own error carries the account in `spawnargs`). The last 50 `signal-cli` stderr lines are held in a ring with the account masked and readable through `transport.diagnostics()`. A line over 1 MiB, or more than 1000 unread notifications, fails the connection with a `too_large` error instead of growing memory. |
 
 The adapter's `deliveryUpdates` stream is not yet published as an EventBus event by `ChannelService`; read it directly if you need receipts today.
 
@@ -401,7 +401,9 @@ const telegram = new TelegramChannelAdapter({
 
 A bot can use only one of the two. If another process polls the same bot, or a webhook is set while you poll, Telegram answers `409 Conflict`; the adapter stops with a `ChannelError` that says so instead of retrying. The adapter never deletes your webhook for you. In webhook mode `handleWebhook` checks `X-Telegram-Bot-Api-Secret-Token` in constant time and rejects every request when no secret is configured.
 
-To serve the webhook, mount the adapter on the gateway ingress server instead of writing your own route: `startIngress({ channelRoutes: [channelWebhookRoute("/channels/telegram", telegram)], onEvent })` (`channelWebhookRoute` is exported by `@reactive-agents/channels`, `startIngress` by `@reactive-agents/gateway`). It binds `127.0.0.1` by default, rejects non-POST requests and bodies over `maxBodyBytes` (default 1 MiB) before the adapter sees them, and maps adapter errors to generic status codes (a wrong secret is 401). See the gateway guide for the full list.
+To serve the webhook, mount the adapter on the gateway ingress server instead of writing your own route: `startIngress({ channelRoutes: [channelWebhookRoute("/channels/telegram", telegram)], onEvent })` (`channelWebhookRoute` is exported by `@reactive-agents/channels`, `startIngress` by `@reactive-agents/gateway`). It binds `127.0.0.1` by default, rejects non-POST requests and bodies over `maxBodyBytes` (default 1 MiB) before the adapter sees them, answers 408 to a sender that stalls the body past `bodyTimeoutMs` (default 10 s) and 503 beyond `maxInFlight` (default 64) concurrent requests, and maps adapter errors to generic status codes (a wrong secret is 401). See the gateway guide for the full list.
+
+**Schedule delivery records.** `lastRun.delivery` uses the channel vocabulary: `adapterId`, `receiptStatus` (`sent`, `queued`, `delivered`) on success, `errorKind` (the `ChannelError` kind) and `retryable` on failure. Waiting events in the in-memory inbound queue are lost on restart; cron fires replay via the schedule registry.
 
 **Restart safety.** The polling offset advances only after an update was handed to the inbound queue, so a crash replays at most the updates not yet handed off, and repeats are deduplicated by `update_id` and message id. To also survive a process restart, persist the offset: pass `onOffset: (offset) => save(offset)` and start with `initialOffset: await load()`. Without them Telegram re-sends unconfirmed updates itself (up to 24 hours).
 

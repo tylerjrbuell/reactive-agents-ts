@@ -167,6 +167,10 @@ const program = Effect.gen(function* () {
 
 **Restart catch-up.** The registry stores `lastCheckedAt`. After downtime, fires that were due more than 5 minutes ago are "missed" and follow the schedule's `catchUp` policy: `skip` drops them, `fire-once` (default) runs the most recent one once, `fire-all` runs them oldest first, at most `maxFires` (default 10) of the newest. Time spent paused is never caught up. A skipped one-shot leaves a `skipped` receipt in `lastRun`.
 
+**Crash safety.** A fire is saved as `running` before it is handed to the executor. If the process dies before the run is settled, the next start re-offers it under the same `fireId` (delivery is at-least-once, so make scheduled instructions safe to repeat), following the schedule's `catchUp` policy: `skip` closes the interrupted run as `failed` ("interrupted by gateway restart"), `fire-once` re-offers the newest, `fire-all` re-offers up to `maxFires`. Manual runs and runs of paused schedules are closed, never re-run. Each fire keeps its own result: `runs` holds the last 20 runs (oldest first) and `lastRun` is the newest. Waiting events in the in-memory inbound queue are lost on restart; cron fires replay via the registry.
+
+**Config re-sync.** On every start, config-declared schedules take `priority` from the config again. A runtime pause survives a restart unless the config's own `enabled` value changed since the last start, in which case the config wins.
+
 **Reporting results.** A fired schedule starts with `lastRun.status: "running"`. The executor reports the outcome with `completeRun(id, fireId, { runId, status, outputRef?, error? })`. The `scheduleId` and `fireId` travel in the `GatewayEvent.metadata` of the cron event. `recordDelivery` stores the typed delivery outcome; `deliverScheduleResult` in `@reactive-agents/channels` sends the result through `ChannelService.deliver` and records the real message id or the error kind.
 
 ### Webhooks
@@ -218,7 +222,7 @@ const serve = startIngress({
 }).pipe(Effect.provide(WebhookServiceLive()), Effect.scoped);
 ```
 
-Fail-closed by design: POST only (405 otherwise), bodies over `maxBodyBytes` (default 1 MiB) get 413 before any parsing, unknown paths 404, a webhook route with no secret refuses every request, and a bad or missing signature is 401. Error bodies are generic; adapter messages never leave the process. Behind a public URL, terminate TLS in a reverse proxy.
+Fail-closed by design: POST only (405 otherwise), bodies over `maxBodyBytes` (default 1 MiB) get 413 before any parsing, a sender that stalls longer than `bodyTimeoutMs` (default 10 s) gets 408, more than `maxInFlight` (default 64) simultaneous requests get 503 before any body is read, unknown paths 404, a webhook route with no secret refuses every request, and a bad or missing signature is 401. Error bodies are generic; adapter messages never leave the process. Behind a public URL, terminate TLS in a reverse proxy.
 
 #### Custom Webhook Adapters
 

@@ -258,12 +258,26 @@ describe("ScheduleRegistry: restart catch-up", () => {
     });
   });
 
-  test("a fire already collected before the restart is not fired twice", async () => {
+  test("a fire collected but never settled is re-offered after restart, as the same fire, not a duplicate", async () => {
     await withTmpDb(async (path) => {
       await lifetime({ path }, T0, (r) => r.create({ id: "d", ...daily({ mode: "fire-all" }) }));
-      await lifetime({ path }, T0 + HOUR, (r) => r.collectDue());
+      const first = await lifetime({ path }, T0 + HOUR, (r) => r.collectDue());
       const again = await lifetime({ path }, T0 + HOUR + 60_000, (r) => r.collectDue());
-      expect(again).toEqual([]);
+      expect(again.map((f) => f.fireId)).toEqual(first.map((f) => f.fireId));
+      expect((await lifetime({ path }, T0 + HOUR + 120_000, (r) => r.get("d"))).runCount).toBe(1);
+    });
+  });
+
+  test("a settled fire is not fired twice after restart", async () => {
+    await withTmpDb(async (path) => {
+      await lifetime({ path }, T0, (r) => r.create({ id: "d", ...daily({ mode: "fire-all" }) }));
+      await lifetime({ path }, T0 + HOUR, (r) =>
+        Effect.gen(function* () {
+          const [fire] = yield* r.collectDue();
+          yield* r.completeRun("d", fire!.fireId, { status: "succeeded" });
+        }),
+      );
+      expect(await lifetime({ path }, T0 + HOUR + 60_000, (r) => r.collectDue())).toEqual([]);
     });
   });
 

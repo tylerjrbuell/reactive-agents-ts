@@ -5,6 +5,7 @@ import {
   SchedulerServiceLive,
   makeScheduleRegistry,
   createScheduleEvent,
+  makeMemoryScheduleStore,
   type ScheduleRegistryService,
 } from "@reactive-agents/gateway";
 import { deliverScheduleResult } from "@reactive-agents/channels";
@@ -114,8 +115,48 @@ describe("cron outcome reaches the ScheduleRegistry (seam)", () => {
       await new Promise((r) => setTimeout(r, 10));
       expect(delivered).toEqual([{ id: "telegram", text: "the report" }]);
       const last = await Effect.runPromise(registry.lastResult(s.id));
-      expect(last?.delivery).toEqual({ status: "delivered", messageId: "m-42" });
+      expect(last?.delivery).toMatchObject({
+        status: "delivered",
+        messageId: "m-42",
+        receiptStatus: "sent",
+      });
+      // adapterId is additive: when present it must name the target adapter.
+      if (last?.delivery?.adapterId !== undefined) expect(last.delivery.adapterId).toBe("telegram");
     });
+  });
+
+  it("a crash-recovered fire is re-offered after restart, executed once, and completeRun is recorded", async () => {
+    const store = makeMemoryScheduleStore();
+    const at = Date.now() + 1000;
+    // Lifetime 1: fire is handed out (persisted as running) and the process "dies" before settling.
+    const { id, fireId } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const registry = yield* makeScheduleRegistry({ store });
+        const s = yield* registry.create({ runAt: at, instruction: "daily report" });
+        const [fire] = yield* registry.collectDue(at + 1);
+        if (!fire) throw new Error("fire expected");
+        return { id: s.id, fireId: fire.fireId };
+      }).pipe(Effect.scoped),
+    );
+    // Lifetime 2: restart over the same store.
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const registry = yield* makeScheduleRegistry({ store });
+        const fires = yield* registry.collectDue(at + 2);
+        expect(fires.map((f) => f.fireId)).toEqual([fireId]);
+        const ran: string[] = [];
+        const q = mkQueue(registry, async (_e, _s, i) => (ran.push(i), "recovered out"));
+        q.enqueue(createScheduleEvent("agent", fires[0]!), "cron", "daily report");
+        yield* Effect.promise(() => q.idle());
+        yield* Effect.promise(() => new Promise((r) => setTimeout(r, 10)));
+        expect(ran).toEqual(["daily report"]);
+        const last = yield* registry.lastResult(id);
+        expect(last?.fireId).toBe(fireId);
+        expect(last?.status).toBe("succeeded");
+        // Settled: a further collection must not offer it again.
+        expect(yield* registry.collectDue(at + 3)).toEqual([]);
+      }).pipe(Effect.scoped),
+    );
   });
 
   it("no delivery target: deliver is never called", async () => {

@@ -2,10 +2,18 @@ import { Effect } from "effect";
 import type {
   IngressChannelRoute,
   ScheduleRegistryService,
+  ScheduleDeliveryErrorKind,
   ScheduleDeliveryRecord,
   ScheduleDeliveryTarget,
 } from "@reactive-agents/gateway";
-import type { ChannelError } from "../errors.js";
+
+/**
+ * Compile-time pin: the gateway's delivery error vocabulary and `ChannelErrorKind` are the same
+ * set. Adding a kind on either side without the other fails the typecheck here.
+ */
+type SameSet<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
+export const DELIVERY_KINDS_MATCH: SameSet<ChannelErrorKind, ScheduleDeliveryErrorKind> = true;
+import type { ChannelError, ChannelErrorKind } from "../errors.js";
 import type { ChannelService } from "./channel-service.js";
 
 /** A canonical adapter that takes inbound updates over HTTP (`TelegramChannelAdapter` in webhook mode). */
@@ -47,8 +55,23 @@ export const deliverScheduleResult = (
   const target = run.delivery;
   if (!target) return Effect.succeed<ScheduleDeliveryRecord | undefined>(undefined);
   return channels.deliver(target.adapterId, { conversation: { channelId: target.conversationId }, text }).pipe(
-    Effect.map((r): ScheduleDeliveryRecord => ({ status: "delivered", messageId: r.messageId })),
-    Effect.catchAll((e) => Effect.succeed<ScheduleDeliveryRecord>({ status: "failed", error: e.kind })),
+    Effect.map(
+      (r): ScheduleDeliveryRecord => ({
+        status: "delivered",
+        messageId: r.messageId,
+        adapterId: r.adapterId,
+        receiptStatus: r.status,
+      }),
+    ),
+    Effect.catchAll((e) =>
+      Effect.succeed<ScheduleDeliveryRecord>({
+        status: "failed",
+        error: e.kind,
+        adapterId: e.adapter,
+        errorKind: e.kind,
+        retryable: e.retryable,
+      }),
+    ),
     Effect.tap((record) => registry.recordDelivery(run.scheduleId, run.fireId, record)),
   );
 };

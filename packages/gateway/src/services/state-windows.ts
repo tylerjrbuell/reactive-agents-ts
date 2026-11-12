@@ -13,7 +13,8 @@ export const DAY_MS = 24 * HOUR_MS;
 export const rollWindows = (state: GatewayState, nowMs: number): GatewayState => {
   const hourElapsed = nowMs - state.hourWindowStart.getTime() >= HOUR_MS;
   const dayElapsed = nowMs - state.dayWindowStart.getTime() >= DAY_MS;
-  if (!hourElapsed && !dayElapsed) return state;  return {
+  if (!hourElapsed && !dayElapsed) return state;
+  return {
     ...state,
     ...(hourElapsed ? { actionsThisHour: 0, hourWindowStart: new Date(nowMs) } : {}),
     ...(dayElapsed ? { tokensUsedToday: 0, dayWindowStart: new Date(nowMs) } : {}),

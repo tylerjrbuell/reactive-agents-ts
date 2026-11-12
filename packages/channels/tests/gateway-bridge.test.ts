@@ -112,7 +112,7 @@ describe("deliverScheduleResult", () => {
       const record = await Effect.runPromise(
         deliverScheduleResult(channels, registry, { scheduleId: s.id, fireId: fire.fireId, delivery: s.delivery }, "report"),
       );
-      expect(record).toEqual({ status: "delivered", messageId: "tg-99" });
+      expect(record).toEqual({ status: "delivered", messageId: "tg-99", adapterId: "tg", receiptStatus: "sent" });
       expect(sent).toEqual(["report"]);
       expect((await Effect.runPromise(registry.lastResult("s1")))?.delivery).toEqual(record);
     }));
@@ -132,7 +132,13 @@ describe("deliverScheduleResult", () => {
           "report",
         ),
       );
-      expect(record).toEqual({ status: "failed", error: "rate_limited" });
+      expect(record).toEqual({
+        status: "failed",
+        error: "rate_limited",
+        adapterId: "tg",
+        errorKind: "rate_limited",
+        retryable: true,
+      });
       expect(JSON.stringify(await Effect.runPromise(registry.lastResult("s2")))).not.toContain("tok_SECRET");
     }));
 

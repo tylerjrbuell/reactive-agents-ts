@@ -5,6 +5,8 @@ import { WebhookService, WebhookServiceLive } from "../services/webhook-service.
 import type { EventBusLike, GatewayConfig, GatewayEvent } from "../types.js";
 
 const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
+const DEFAULT_BODY_TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_IN_FLIGHT = 64;
 const LOOPBACK = "127.0.0.1";
 
 /** What an ingress channel route needs from a channel adapter (`TelegramChannelAdapter.handleWebhook`). */
@@ -30,6 +32,10 @@ export interface IngressOptions {
   readonly port?: number;
   /** Largest accepted request body. Default 1 MiB. Larger bodies get 413 and are never parsed. */
   readonly maxBodyBytes?: number;
+  /** Longest a sender may take to deliver the body. Default 10 s. Slower senders get 408. */
+  readonly bodyTimeoutMs?: number;
+  /** Most requests handled at once. Default 64. Beyond it the server answers 503 immediately. */
+  readonly maxInFlight?: number;
   readonly channelRoutes?: readonly IngressChannelRoute[];
   /**
    * Receives each verified webhook as a {@link GatewayEvent}. Must enqueue, not run the agent:
@@ -52,10 +58,12 @@ const REASONS: Readonly<Record<number, string>> = {
   403: "forbidden",
   404: "not found",
   405: "method not allowed",
+  408: "request timeout",
   413: "payload too large",
   429: "rate limited",
   500: "internal error",
   502: "bad gateway",
+  503: "busy",
 };
 
 const reply = (status: number): Response =>
@@ -85,25 +93,42 @@ const channelStatus = (kind: string): number => {
   }
 };
 
-/** Read at most `max` bytes; null when the body is larger (the stream is cancelled, not buffered). */
-const readCapped = async (req: Request, max: number): Promise<string | null> => {
+/** Outcome of {@link readCapped}: the body, or why it was refused. */
+type BodyRead =
+  | { readonly kind: "ok"; readonly body: string }
+  | { readonly kind: "too_large" }
+  | { readonly kind: "timeout" };
+
+/**
+ * Read at most `max` bytes within `timeoutMs`. A larger body or a slow sender (slowloris) is
+ * refused and the stream cancelled, never buffered.
+ */
+const readCapped = async (req: Request, max: number, timeoutMs: number): Promise<BodyRead> => {
   const declared = Number(req.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > max) return null;
-  if (!req.body) return "";
+  if (Number.isFinite(declared) && declared > max) return { kind: "too_large" };
+  if (!req.body) return { kind: "ok", body: "" };
   const reader = req.body.getReader();
+  const signal = AbortSignal.timeout(timeoutMs);
+  const aborted = new Promise<"timeout">((resolve) => {
+    signal.addEventListener("abort", () => resolve("timeout"), { once: true });
+  });
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > max) {
-      await reader.cancel();
-      return null;
+    const next = await Promise.race([reader.read(), aborted]);
+    if (next === "timeout") {
+      await reader.cancel().catch(() => undefined);
+      return { kind: "timeout" };
     }
-    chunks.push(value);
+    if (next.done) break;
+    total += next.value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      return { kind: "too_large" };
+    }
+    chunks.push(next.value);
   }
-  return Buffer.concat(chunks).toString("utf8");
+  return { kind: "ok", body: Buffer.concat(chunks).toString("utf8") };
 };
 
 const headersOf = (req: Request): Record<string, string> => {
@@ -133,12 +158,28 @@ export const startIngress = (
     const maxBody = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
     const routes = new Map((options.channelRoutes ?? []).map((r) => [r.path, r] as const));
 
+    const bodyTimeoutMs = options.bodyTimeoutMs ?? DEFAULT_BODY_TIMEOUT_MS;
+    const maxInFlight = options.maxInFlight ?? DEFAULT_MAX_IN_FLIGHT;
+    let inFlight = 0;
+
     const handle = async (req: Request): Promise<Response> => {
       const path = new URL(req.url).pathname;
       if (req.method !== "POST") return reply(405);
-      const body = await readCapped(req, maxBody);
-      if (body === null) return reply(413);
-      const request = { body, headers: headersOf(req) };
+      // Shed load before reading anything: slow or numerous connections cannot pile up unbounded.
+      if (inFlight >= maxInFlight) return reply(503);
+      inFlight += 1;
+      try {
+        return await handleAdmitted(req, path);
+      } finally {
+        inFlight -= 1;
+      }
+    };
+
+    const handleAdmitted = async (req: Request, path: string): Promise<Response> => {
+      const read = await readCapped(req, maxBody, bodyTimeoutMs);
+      if (read.kind === "too_large") return reply(413);
+      if (read.kind === "timeout") return reply(408);
+      const request = { body: read.body, headers: headersOf(req) };
 
       const channel = routes.get(path);
       if (channel) {

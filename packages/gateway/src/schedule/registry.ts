@@ -8,6 +8,7 @@ import {
 import type { CronEntry } from "../types.js";
 import { parseCron } from "../services/cron-parser.js";
 import { cronMatches, nextCronFire } from "./cron-scan.js";
+import { appendRun, planRecovery, updateRun } from "./runs.js";
 import { makeMemoryScheduleStore, makeSqliteScheduleStore, type ScheduleStore } from "./store.js";
 import type {
   Schedule,
@@ -236,11 +237,21 @@ export const makeScheduleRegistry = (options: ScheduleRegistryOptions = {}) =>
       schedule: s,
     });
 
-    const withRun = (s: Schedule, f: ScheduleFire): Schedule => ({
-      ...s,
-      runCount: s.runCount + 1,
-      lastRun: { fireId: f.fireId, runId: f.fireId, firedAt: f.firedAt, trigger: f.trigger, status: "running" },
-    });
+    const withRun = (s: Schedule, f: ScheduleFire): Schedule =>
+      appendRun(
+        { ...s, runCount: s.runCount + 1 },
+        {
+          fireId: f.fireId,
+          runId: f.fireId,
+          firedAt: f.firedAt,
+          scheduledFor: f.scheduledFor,
+          trigger: f.trigger,
+          status: "running",
+        },
+      );
+
+    /** Fires interrupted by a crash, re-offered by the next `collectDue` (see `planRecovery`). */
+    let recovered: readonly ScheduleFire[] = [];
 
     /** Fires one schedule owes between `lastCheckedAt` and `now`, with catch-up policy applied. */
     const dueFor = (s: Schedule, now: number): { fires: ScheduleFire[]; skipped: number } => {
@@ -288,17 +299,14 @@ export const makeScheduleRegistry = (options: ScheduleRegistryOptions = {}) =>
               next = { ...next, nextFireAt: spent ? null : s.nextFireAt };
               if (spent && due.length === 0) {
                 // Missed and skipped: leave a receipt instead of vanishing silently.
-                next = {
-                  ...next,
-                  lastRun: {
-                    fireId: `${s.id}@${s.nextFireAt}`,
-                    runId: `${s.id}@${s.nextFireAt}`,
-                    firedAt: now,
-                    trigger: "schedule",
-                    status: "skipped",
-                    error: "missed while the gateway was not running (catch-up: skip)",
-                  },
-                };
+                next = appendRun(next, {
+                  fireId: `${s.id}@${s.nextFireAt}`,
+                  runId: `${s.id}@${s.nextFireAt}`,
+                  firedAt: now,
+                  trigger: "schedule",
+                  status: "skipped",
+                  error: "missed while the gateway was not running (catch-up: skip)",
+                });
               }
             } else {
               next = { ...next, nextFireAt: nextFire(next, now) };
@@ -306,8 +314,12 @@ export const makeScheduleRegistry = (options: ScheduleRegistryOptions = {}) =>
             fires.push(...due);
             changed.push(next);
           }
+          // Persist each fire as `running` BEFORE handing it out: a crash after this point leaves
+          // a durable record that `planRecovery` re-offers on the next start.
           yield* commit(changed);
-          return fires;
+          const reoffered = recovered;
+          recovered = [];
+          return [...reoffered, ...fires];
         }),
       );
 
@@ -327,14 +339,26 @@ export const makeScheduleRegistry = (options: ScheduleRegistryOptions = {}) =>
       lock.withPermits(1)(
         Effect.gen(function* () {
           const cur = yield* lookup(id);
-          if (!cur.lastRun || cur.lastRun.fireId !== fireId) return;
-          yield* commit([{ ...cur, lastRun: f(cur.lastRun) }]);
+          const next = updateRun(cur, fireId, f);
+          if (next) yield* commit([next]);
         }),
       );
 
     // ── Load + config sync ───────────────────────────────────────────────
     const loaded = yield* store.load();
     yield* Ref.set(state, new Map(loaded.map((s) => [s.id, s])));
+
+    // Crash recovery: fires that were handed out but never settled.
+    const reoffer: ScheduleFire[] = [];
+    for (const s of loaded) {
+      const plan = planRecovery(s);
+      if (!plan) continue;
+      yield* commit([plan.schedule]);
+      for (const run of plan.reoffer) {
+        reoffer.push(makeFire(plan.schedule, run.scheduledFor ?? run.firedAt, run.firedAt, "catch-up", run.fireId));
+      }
+    }
+    recovered = reoffer;
 
     if (options.crons !== undefined) {
       const wanted = new Map<string, CronEntry>();
@@ -347,8 +371,22 @@ export const makeScheduleRegistry = (options: ScheduleRegistryOptions = {}) =>
       }
       const existing = yield* Ref.get(state);
       for (const [id, entry] of wanted) {
-        if (existing.has(id)) continue;
         const now = yield* Clock.currentTimeMillis;
+        const current = (yield* Ref.get(state)).get(id);
+        if (current !== undefined) {
+          // Re-sync the non-identity fields the config declares; a runtime pause survives unless
+          // the config's own `enabled` value changed since the last sync.
+          const priority = entry.priority ?? "normal";
+          const wantEnabled = entry.enabled !== false;
+          const priorEnabled = current.configEnabled ?? true;
+          let next: Schedule = { ...current, priority, configEnabled: wantEnabled };
+          if (wantEnabled !== priorEnabled) {
+            next = { ...next, enabled: wantEnabled, ...(wantEnabled ? { lastCheckedAt: now } : {}) };
+            next = { ...next, nextFireAt: nextFire(next, now) };
+          }
+          if (JSON.stringify(next) !== JSON.stringify(current)) yield* commit([next]);
+          continue;
+        }
         const schedule = build(
           {
             cron: entry.schedule,
@@ -365,7 +403,7 @@ export const makeScheduleRegistry = (options: ScheduleRegistryOptions = {}) =>
           // Config crons evaluate the minute they were seeded in (a restart inside the slot still fires).
           Math.floor(now / MINUTE_MS) * MINUTE_MS - 1,
         );
-        yield* commit([schedule]);
+        yield* commit([{ ...schedule, configEnabled: entry.enabled !== false }]);
       }
       // The config is declarative: config-sourced schedules it no longer lists are removed.
       for (const s of existing.values()) {

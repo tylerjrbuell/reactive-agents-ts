@@ -24,11 +24,39 @@ export type ScheduleRunStatus = "running" | "succeeded" | "failed" | "skipped";
 
 export type ScheduleTrigger = "schedule" | "catch-up" | "manual";
 
-/** Outcome of the delivery attempt for a run (typed receipt id or error summary, never secrets). */
+/**
+ * Why a delivery failed. Mirrors the channels package's `ChannelErrorKind` (channels depends on
+ * gateway, so the vocabulary is declared here and pinned equal by a type-level check in channels).
+ */
+export type ScheduleDeliveryErrorKind =
+  | "auth"
+  | "rate_limited"
+  | "not_found"
+  | "forbidden"
+  | "too_large"
+  | "unsupported"
+  | "network"
+  | "unknown";
+
+/**
+ * Outcome of the delivery attempt for a run (typed receipt id or error summary, never secrets).
+ * `status`, `messageId` and `error` are the original shape; the remaining fields carry the
+ * channels `DeliveryReceipt` / `ChannelError` vocabulary and are additive, so rows persisted
+ * before they existed stay readable.
+ */
 export interface ScheduleDeliveryRecord {
   readonly status: "delivered" | "failed";
   readonly messageId?: string;
+  /** Error kind as text (kept for compatibility; equals `errorKind` when set). */
   readonly error?: string;
+  /** The adapter that was asked to deliver. */
+  readonly adapterId?: string;
+  /** `DeliveryReceipt.status` on success. */
+  readonly receiptStatus?: "sent" | "queued" | "delivered";
+  /** `ChannelError.kind` on failure. */
+  readonly errorKind?: ScheduleDeliveryErrorKind;
+  /** `ChannelError.retryable` on failure. */
+  readonly retryable?: boolean;
 }
 
 /** The most recent run of a schedule. */
@@ -38,6 +66,8 @@ export interface ScheduleRun {
   /** Agent run id once the executor reports it; the fire id until then. */
   readonly runId: string;
   readonly firedAt: number;
+  /** The slot this run was for (differs from `firedAt` for catch-up runs). */
+  readonly scheduledFor?: number;
   readonly trigger: ScheduleTrigger;
   readonly status: ScheduleRunStatus;
   /** Opaque pointer to the output (trace id, file path, message id). */
@@ -71,6 +101,13 @@ export interface Schedule {
   readonly nextFireAt: number | null;
   readonly runCount: number;
   readonly lastRun?: ScheduleRun;
+  /** Bounded history of recent runs, oldest first; the last entry is `lastRun`. */
+  readonly runs?: readonly ScheduleRun[];
+  /**
+   * Config schedules only: the `enabled` value the config declared when last synced. A runtime
+   * pause survives a restart; a changed config value wins.
+   */
+  readonly configEnabled?: boolean;
 }
 
 /** Input to `create`. Provide `cron` or `runAt`. */
