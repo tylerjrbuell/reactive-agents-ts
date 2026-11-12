@@ -12,6 +12,7 @@ import type { MemoryId, SearchOptions, SemanticEntry } from "../types.js";
 import { safeJsonParse } from "../json-utils.js";
 import { toFts5Query } from "../fts5-query.js";
 import { provenanceClause } from "../provenance-filter.js";
+import { escapeLike } from "../path-safety.js";
 
 const decodeEmbedding = (raw: unknown): number[] | undefined => {
   if (!raw) return undefined;
@@ -73,11 +74,11 @@ export const searchSemanticRows = (
       : yield* db.query(
           `SELECT sm.*
            FROM semantic_memory sm
-           WHERE sm.content LIKE ?
+           WHERE sm.content LIKE ? ESCAPE '\\'
              AND sm.agent_id = ? ${extra}
            ORDER BY sm.created_at DESC
            LIMIT ?`,
-          [`%${options.query}%`, options.agentId, ...filterParams, limit],
+          [`%${escapeLike(options.query)}%`, options.agentId, ...filterParams, limit],
         );
 
     return rows.map(rowToSemanticEntry);

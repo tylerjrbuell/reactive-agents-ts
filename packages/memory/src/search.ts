@@ -6,6 +6,7 @@ import { DatabaseError } from "./errors.js";
 import { safeJsonParse } from "./json-utils.js";
 import { toFts5Query } from "./fts5-query.js";
 import { rowToSemanticEntry, searchSemanticRows } from "./services/semantic-rows.js";
+import { escapeLike } from "./path-safety.js";
 
 // ─── Service Tag ───
 
@@ -71,13 +72,13 @@ export const MemorySearchServiceLive = Layer.effect(
                  LIMIT ?`
               : `SELECT *
                  FROM episodic_log
-                 WHERE content LIKE ?
+                 WHERE content LIKE ? ESCAPE '\\'
                    AND agent_id = ?
                  ORDER BY created_at DESC
                  LIMIT ?`,
             db.hasFTS5
               ? [ftsQuery, options.agentId, limit]
-              : [`%${options.query}%`, options.agentId, limit],
+              : [`%${escapeLike(options.query)}%`, options.agentId, limit],
           );
 
           return rows.map((r) => ({

@@ -3,6 +3,7 @@ import { Database } from "@reactive-agents/runtime-shim";
 import { DatabaseError } from "./errors.js";
 import type { MemoryConfig } from "./types.js";
 import { migrateProvenanceColumns } from "./provenance-migration.js";
+import { MEMORY_DIR_MODE, MEMORY_FILE_MODE } from "./path-safety.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -291,7 +292,7 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
       const dbDir = path.dirname(config.dbPath);
       yield* Effect.sync(() => {
         if (!fs.existsSync(dbDir)) {
-          fs.mkdirSync(dbDir, { recursive: true });
+          fs.mkdirSync(dbDir, { recursive: true, mode: MEMORY_DIR_MODE });
         }
       });
 
@@ -305,6 +306,17 @@ export const MemoryDatabaseLive = (config: MemoryConfig) =>
             cause: e,
           }),
       });
+
+      // Owner-only db file (SQLite derives -wal/-shm modes from it).
+      if (config.dbPath !== ":memory:") {
+        yield* Effect.sync(() => {
+          try {
+            fs.chmodSync(config.dbPath, MEMORY_FILE_MODE);
+          } catch {
+            // best-effort: non-POSIX filesystems may reject chmod
+          }
+        });
+      }
 
       // Run core schema migrations (always required)
       yield* Effect.try({

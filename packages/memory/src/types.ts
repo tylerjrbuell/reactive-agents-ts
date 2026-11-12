@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { safeAgentPathSegment } from "./path-safety.js";
 
 // ─── Memory ID (branded string) ───
 
@@ -506,8 +507,9 @@ export type MemoryConfig = typeof MemoryConfigSchema.Type;
  */
 export const defaultUserMemoryPath = (agentId: string): string => {
   const home = process.env.HOME ?? process.env.USERPROFILE;
-  if (!home) return `.reactive-agents/memory/${agentId}/memory.db`;
-  return `${home}/.reactive-agents/memory/${agentId}/memory.db`;
+  const seg = safeAgentPathSegment(agentId);
+  if (!home) return `.reactive-agents/memory/${seg}/memory.db`;
+  return `${home}/.reactive-agents/memory/${seg}/memory.db`;
 };
 
 export const defaultMemoryConfig = (agentId: string): MemoryConfig => ({

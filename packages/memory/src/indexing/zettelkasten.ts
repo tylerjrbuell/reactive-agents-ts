@@ -3,6 +3,7 @@ import type { MemoryId, ZettelLink, LinkType } from "../types.js";
 import { DatabaseError } from "../errors.js";
 import { MemoryDatabase } from "../database.js";
 import { toFts5Query } from "../fts5-query.js";
+import { escapeLike } from "../path-safety.js";
 
 // ─── Service Tag ───
 
@@ -169,13 +170,13 @@ export const ZettelkastenServiceLive = Layer.effect(
             : db.query<{ id: string; rank: number }>(
                 `SELECT id, -0.5 AS rank
                  FROM semantic_memory
-                 WHERE content LIKE ?
+                 WHERE content LIKE ? ESCAPE '\\'
                    AND agent_id = ?
                    AND id != ?
                  ORDER BY created_at DESC
                  LIMIT 5`,
                 [
-                  `%${content.split(/\s+/).filter((w) => w.length > 3).slice(0, 3).join("%")}%`,
+                  `%${content.split(/\s+/).filter((w) => w.length > 3).slice(0, 3).map(escapeLike).join("%")}%`,
                   agentId,
                   memoryId,
                 ],

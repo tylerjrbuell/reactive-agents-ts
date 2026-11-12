@@ -21,6 +21,7 @@ import { MemoryFileSystem } from "../fs/memory-file-system.js";
 import { ZettelkastenService } from "../indexing/zettelkasten.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { buildBootstrapRecallEvents } from "./recall-event.js";
+import { safeAgentPathSegment } from "../path-safety.js";
 
 // ─── Service Tag ───
 //
@@ -133,7 +134,7 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
       const basePath =
         config.dbPath === ":memory:"
           ? `.reactive-agents/memory`
-          : path.basename(path.dirname(config.dbPath)) === config.agentId
+          : path.basename(path.dirname(config.dbPath)) === safeAgentPathSegment(config.agentId)
             ? path.dirname(path.dirname(config.dbPath))
             : path.dirname(config.dbPath);
 

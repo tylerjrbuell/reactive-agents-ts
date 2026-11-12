@@ -2,6 +2,11 @@ import { Effect, Context, Layer } from "effect";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { MemoryError } from "../errors.js";
+import {
+  MEMORY_DIR_MODE,
+  MEMORY_FILE_MODE,
+  safeAgentPathSegment,
+} from "../path-safety.js";
 
 // ─── Service Tag ───
 
@@ -35,9 +40,12 @@ export const MemoryFileSystemLive = Layer.succeed(MemoryFileSystem, {
   writeMarkdown: (agentId, content, basePath) =>
     Effect.tryPromise({
       try: async () => {
-        const dir = path.join(basePath, agentId);
-        await fs.mkdir(dir, { recursive: true });
-        await fs.writeFile(path.join(dir, "memory.md"), content, "utf8");
+        const dir = path.join(basePath, safeAgentPathSegment(agentId));
+        await fs.mkdir(dir, { recursive: true, mode: MEMORY_DIR_MODE });
+        await fs.writeFile(path.join(dir, "memory.md"), content, {
+          encoding: "utf8",
+          mode: MEMORY_FILE_MODE,
+        });
       },
       catch: (e) =>
         new MemoryError({
@@ -49,7 +57,11 @@ export const MemoryFileSystemLive = Layer.succeed(MemoryFileSystem, {
   readMarkdown: (agentId, basePath) =>
     Effect.tryPromise({
       try: async () => {
-        const filePath = path.join(basePath, agentId, "memory.md");
+        const filePath = path.join(
+          basePath,
+          safeAgentPathSegment(agentId),
+          "memory.md",
+        );
         try {
           return await fs.readFile(filePath, "utf8");
         } catch {
@@ -66,7 +78,10 @@ export const MemoryFileSystemLive = Layer.succeed(MemoryFileSystem, {
   ensureDirectory: (agentId, basePath) =>
     Effect.tryPromise({
       try: async () => {
-        await fs.mkdir(path.join(basePath, agentId), { recursive: true });
+        await fs.mkdir(path.join(basePath, safeAgentPathSegment(agentId)), {
+          recursive: true,
+          mode: MEMORY_DIR_MODE,
+        });
       },
       catch: (e) =>
         new MemoryError({
