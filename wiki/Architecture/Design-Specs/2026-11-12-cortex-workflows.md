@@ -319,3 +319,11 @@ Phase 1 steps 1.1-1.4 plus a read-only run view prove the idea. Cut in this orde
 - *Hermes parity trap.* Hermes bundles scheduler + gateway + skills + session search as one agent. Our `run_workflow`/`/workflows` and deliver-to-channel give the delivery half; session search is already a Cortex/memory concern and is intentionally not part of this spec.
 
 **What to cut first if this proves too big:** the canvas (ship the form editor), sub-workflows, loops, the channel trigger, templates beyond two. Never cut: schema-validated outputs, durable node records, the calibrated/uncertain Judge routing, per-node trace links. Those are the product.
+
+## 12. Owner decisions (2026-11-12)
+
+- **Q1 package:** new package `@reactive-agents/workflow`, headless-runnable, owned by runtime-warden (new package approved).
+- **Q2 storage:** workflows live in the DB with JSON export and import.
+- **Q3 phasing:** Phase 0 (durable ScheduleRegistry, canonical ChannelAdapter, webhook ingress, inbound queue) is a hard dependency of the first slice; it starts first.
+- **Q4 Judge node:** allowed on the uncalibrated `llm` fallback with an "uncalibrated" badge and the stricter 0.8 threshold; calibrated backends use 0.6; low confidence routes to the `uncertain` port.
+- **Q5 naming:** still open (Workflows, Flows or Automations; `/flows` alias).
