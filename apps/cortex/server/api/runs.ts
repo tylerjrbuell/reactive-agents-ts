@@ -273,7 +273,7 @@ export const runsRouter = (
       async ({ params, body, set }) => {
         const program = Effect.gen(function* () {
           const runner = yield* CortexRunnerService;
-          yield* runner.approveApproval(params.runId as RunId, body?.reason);
+          yield* runner.approveApproval(params.runId as RunId, body?.reason, body?.gateId);
           return { ok: true as const };
         });
         try {
@@ -283,14 +283,15 @@ export const runsRouter = (
           return { error: String(e) };
         }
       },
-      { body: t.Optional(t.Object({ reason: t.Optional(t.String()) })) },
+      // `gateId` answers ONE waiting request: parallel sub-agents share the run id.
+      { body: t.Optional(t.Object({ reason: t.Optional(t.String()), gateId: t.Optional(t.String()) })) },
     )
     .post(
       "/:runId/deny",
       async ({ params, body, set }) => {
         const program = Effect.gen(function* () {
           const runner = yield* CortexRunnerService;
-          yield* runner.denyApproval(params.runId as RunId, body?.reason ?? "Denied from Cortex");
+          yield* runner.denyApproval(params.runId as RunId, body?.reason ?? "Denied from Cortex", body?.gateId);
           return { ok: true as const };
         });
         try {
@@ -300,7 +301,7 @@ export const runsRouter = (
           return { error: String(e) };
         }
       },
-      { body: t.Optional(t.Object({ reason: t.Optional(t.String()) })) },
+      { body: t.Optional(t.Object({ reason: t.Optional(t.String()), gateId: t.Optional(t.String()) })) },
     )
     // ── Durable interaction rail (Agentic-UI) — request_user_input pauses,
     // clone of the approval routes above. ──

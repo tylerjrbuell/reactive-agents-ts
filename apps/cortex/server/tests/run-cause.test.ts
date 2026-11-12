@@ -87,6 +87,19 @@ describe("run cause (framework trace diagnosis)", () => {
     expect(r.headline).not.toBe(causeDescription("budget-cap"));
   });
 
+  test("a guardrail-aborted run's headline says a guardrail blocked it", async () => {
+    const e = at("GRD1");
+    write("GRD1", [
+      e(-1, { kind: "run-started", task: "t", model: "m", provider: "test", config: {} }),
+      e(-1, { kind: "run-aborted", causeClass: "failure", reason: "guardrail", durationMs: 3 }),
+    ]);
+    const r = await causeOf("GRD1");
+    if (!r.available) throw new Error("expected a report");
+    expect(r.cause).toBe("aborted");
+    expect(r.subCause).toBe("guardrail-block");
+    expect(r.headline).toBe("A guardrail blocked the run");
+  });
+
   test("a failed tool loop names tool-failure, links its evidence to the 1-based loop, and attributes it", async () => {
     write("FAIL1", failedToolLoop("FAIL1"));
     const r = await causeOf("FAIL1");

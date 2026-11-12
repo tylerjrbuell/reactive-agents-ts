@@ -44,7 +44,8 @@ import {
 } from "./cortex-agent-config.js";
 import { parseCortexJudgmentConfig } from "./cortex-judgment.js";
 import { migrateChatSkillsConfig, skillRootOf } from "./workspace-skills.js";
-import { recordSkillActivity, turnSkillPinsOf, turnSkillsOption, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
+import { recordRecallActivity, withTurnRecall, type RecallActivityLog } from "./chat-turn-recall.js";
+import { recordSkillActivity,turnSkillPinsOf, turnSkillsOption, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
 import { detectToolCallShape } from "@reactive-agents/tools";
 import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
@@ -183,6 +184,8 @@ export interface CachedChatSession {
   readonly runErrors?: RunErrorLog;
   /** Skills each run had active and why (see `chat-turn-skills.ts`). */
   readonly skillActivity?: SkillActivityLog;
+  /** Memories each run recalled (see `chat-turn-recall.ts`). */
+  readonly recallActivity?: RecallActivityLog;
   /** The same agent's durable approve/deny surface (see `chat-approvals.ts`). */
   readonly approvable?: ApprovableAgent;
 }
@@ -849,7 +852,10 @@ let tokensUsed = 0;
           // held: nothing lands in the thread until the user decides / answers
         } else if (completed && (replyText.length > 0 || outcome !== undefined || producedFiles)) {
           // Failed / abstained turns (empty output) and file-only answers are kept too.
-          const trace = withTurnSkills(withTurnOutcome(recorder.finish(), outcome), entry.skillActivity?.skillsOf(streamRunId));
+          const trace = withTurnRecall(
+            withTurnSkills(withTurnOutcome(recorder.finish(), outcome), entry.skillActivity?.skillsOf(streamRunId)),
+            entry.recallActivity?.recalledOf(streamRunId),
+          );
           this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context, {
             inputTokens: streamInputTokens,
             outputTokens: streamOutputTokens,
@@ -1027,6 +1033,7 @@ let tokensUsed = 0;
     const { recorder: assessments, unsubscribe: unAssess } = await recordTurnAssessments(agent);
     const { log: runErrors, unsubscribe: unErrors } = await recordRunErrors(agent);
     const { log: skillActivity, unsubscribe: unSkills } = await recordSkillActivity(agent);
+    const { log: recallActivity, unsubscribe: unRecall } = await recordRecallActivity(agent);
     // A `detach` gate or a `request_user_input` question without durable runs waits live
     // mid-turn: list and answer it (durable-approvals.ts).
     const unLive = waitsLive(params)
@@ -1038,8 +1045,9 @@ let tokensUsed = 0;
       unAssess();
       unErrors();
       unSkills();
+      unRecall();
     };
-    return { session, agent, unsubscribe, ...(ingest ? { ingest } : {}), assessments, runErrors, skillActivity, approvable: agent };
+    return { session, agent, unsubscribe, ...(ingest ? { ingest } : {}), assessments, runErrors, skillActivity, recallActivity, approvable: agent };
   }
 
   private resolveIngestSink(): Promise<ChatIngestSink | undefined> {

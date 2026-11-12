@@ -188,6 +188,14 @@ export {
   type RunSkillsView,
 } from "./state/skill-activations.js";
 export {
+  MAX_RECALLED_MEMORIES,
+  memoryRecalledOf,
+  foldRecalledMemories,
+  type RecalledItemLike,
+  type MemoryRecalledLike,
+  type RecalledMemoryView,
+} from "./state/recalled-memories.js";
+export {
   SKILL_CONFIDENCE_TIERS,
   SKILL_LIFECYCLE_TAGS,
   skillConfidenceLabel,

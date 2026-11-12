@@ -23,8 +23,35 @@ describe("orphanChatApprovals", () => {
   const p = (runId: string, chatSessionId?: string) => ({ runId, agentId: "a", gateId: "g", toolName: "file-read", args: { path: "x" }, ...(chatSessionId ? { chatSessionId } : {}) });
   test("lists this chat's live waits that no card shows yet; skips durable, streaming, hidden and other chats", () => {
     const pending = [p("live", "s1"), p("durable", "s1"), p("streaming", "s1"), p("hidden", "s1"), p("other", "s2"), p("desk")];
-    const out = orphanChatApprovals("s1", pending, new Set(["durable"]), new Set(["streaming"]), new Set([approvalCardKey({ runId: "hidden", gateId: "g" })]));
+    const out = orphanChatApprovals("s1", pending, new Set(["durable"]), new Set([approvalCardKey({ runId: "streaming", gateId: "g" })]), new Set([approvalCardKey({ runId: "hidden", gateId: "g" })]));
     expect(out).toEqual([{ runId: "live", gateId: "g", toolName: "file-read", args: { path: "x" } }]);
+  });
+
+  test("parallel sub-agents share a run id: the streaming card hides only its own gate, the other gate stays, with its sub-agent", () => {
+    const pending = [
+      { runId: "root", agentId: "a", gateId: "gate-a", toolName: "risky", args: {}, chatSessionId: "s1", subAgent: "alpha" },
+      { runId: "root", agentId: "a", gateId: "gate-b", toolName: "risky", args: {}, chatSessionId: "s1", subAgent: "beta" },
+    ];
+    const out = orphanChatApprovals("s1", pending, new Set(), new Set([approvalCardKey({ runId: "root", gateId: "gate-b" })]), new Set());
+    expect(out).toEqual([{ runId: "root", gateId: "gate-a", toolName: "risky", args: {}, subAgent: "alpha" }]);
+  });
+});
+
+describe("approval by gate", () => {
+  test("ApprovalRequested carries the sub-agent that asks", () => {
+    const got = liveApprovalAfter(undefined, { _tag: "ApprovalRequested", runId: "root", gateId: "g2", toolName: "risky", args: {}, subAgent: "beta" });
+    expect(got).toEqual({ runId: "root", gateId: "g2", toolName: "risky", args: {}, subAgent: "beta" });
+  });
+
+  test("decideLiveApproval sends the gate so only that request is answered", async () => {
+    const bodies: unknown[] = [];
+    const fetchFn = (async (_url: unknown, init?: { body?: string }) => {
+      bodies.push(JSON.parse(init?.body ?? "{}"));
+      return { ok: true } as Response;
+    }) as unknown as typeof fetch;
+    await decideLiveApproval("root", "approve", undefined, fetchFn, "gate-b");
+    await decideLiveApproval("root", "deny", "no", fetchFn, "gate-a");
+    expect(bodies).toEqual([{ gateId: "gate-b" }, { reason: "no", gateId: "gate-a" }]);
   });
 });
 

@@ -47,6 +47,13 @@ describe("reduceRunState", () => {
     expect(s.pendingApproval?.gateId).toBe("g1");
   });
 
+  test("ApprovalRequested mirrors the sub-agent that asks (additive; absent for the agent's own call)", () => {
+    const s = feed([{ _tag: "ApprovalRequested", runId: "r1", gateId: "g2", toolName: "shell", args: {}, subAgent: "beta", seq: 1 }]);
+    expect(s.pendingApproval).toMatchObject({ gateId: "g2", subAgent: "beta" });
+    const own = feed([{ _tag: "ApprovalRequested", runId: "r1", gateId: "g3", toolName: "shell", args: {}, seq: 1 }]);
+    expect(own.pendingApproval).not.toHaveProperty("subAgent");
+  });
+
   test("objectMode derives partial object from text", () => {
     const s = feed(
       [

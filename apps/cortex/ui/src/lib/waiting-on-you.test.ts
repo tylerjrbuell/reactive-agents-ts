@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { statusOfRun } from "@reactive-agents/ui-core";
-import { approvalDetail, choiceOptions, formFields, runApprovalOf, waitingItemsOf, waitingRunsOf, waitingStatusOf, withWaitingStatus } from "./waiting-on-you.js";
+import { approvalDetail, choiceOptions, formFields, runApprovalOf, runApprovalsOf, waitingItemsOf, waitingRunsOf, waitingStatusOf, withWaitingStatus } from "./waiting-on-you.js";
 import { filterRuns, type RunRow } from "./runs-table.js";
 
 const run = (over: Partial<RunRow> & { runId: string }): RunRow => ({
@@ -114,7 +114,20 @@ describe("waitingRunsOf / waitingStatusOf: a paused run reads Waiting on you, no
 describe("runApprovalOf", () => {
   it("names the approve/deny target by the approval's durable run id, with the call in short", () => {
     const approval = { runId: "durable-1", agentId: "a", gateId: "g", toolName: "shell-execute", args: { command: "git commit -m wip" } };
-    expect(runApprovalOf({ kind: "approval", approval })).toEqual({ approvalRunId: "durable-1", toolName: "shell-execute", detail: "git commit -m wip" });
+    expect(runApprovalOf({ kind: "approval", approval })).toEqual({ approvalRunId: "durable-1", gateId: "g", toolName: "shell-execute", detail: "git commit -m wip" });
+  });
+  it("parallel sub-agents under one run each stay answerable: waitingRunsOf keeps every gate, runApprovalsOf lists them with who asks", () => {
+    const mk = (gateId: string, subAgent: string) => ({ runId: "root", agentId: "a", gateId, toolName: "risky", args: {}, subAgent });
+    const runs = [{ runId: "root", agentId: "a", startedAt: 1 }];
+    const w = waitingRunsOf(runs, [mk("g1", "alpha"), mk("g2", "beta"), mk("g1", "alpha")], []).get("root");
+    expect(runApprovalsOf(w).map((a) => [a.gateId, a.subAgent])).toEqual([["g1", "alpha"], ["g2", "beta"]]);
+    expect(runApprovalOf(w)?.gateId).toBe("g1");
+    expect(runApprovalsOf(undefined)).toEqual([]);
+  });
+  it("the Runs strip lists one item per gate, each with its gate and sub-agent", () => {
+    const mk = (gateId: string, subAgent: string) => ({ runId: "root", agentId: "a", gateId, toolName: "risky", args: {}, subAgent });
+    const items = waitingItemsOf([mk("g1", "alpha"), mk("g2", "beta")], [], []);
+    expect(items.map((i) => (i.kind === "approval" ? [i.key, i.gateId, i.subAgent] : []))).toEqual([["a:root:g1", "g1", "alpha"], ["a:root:g2", "g2", "beta"]]);
   });
   it("is undefined for no wait or a question", () => {
     expect(runApprovalOf(undefined)).toBeUndefined();

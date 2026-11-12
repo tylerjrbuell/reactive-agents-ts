@@ -24,6 +24,8 @@ export interface RunState {
     readonly gateId: string;
     readonly toolName: string;
     readonly args: unknown;
+    /** The sub-agent asking, when the gated call runs inside one. */
+    readonly subAgent?: string;
   };
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
   /**
@@ -99,6 +101,7 @@ export const reduceRunState = (
           gateId: event.gateId,
           toolName: event.toolName,
           args: event.args,
+          ...(event.subAgent !== undefined ? { subAgent: event.subAgent } : {}),
         },
       };
     case "RunPaused":

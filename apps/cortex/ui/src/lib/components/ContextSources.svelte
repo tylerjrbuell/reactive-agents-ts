@@ -1,27 +1,29 @@
 <script lang="ts">
   /**
    * The Context view's knowledge sources for one run: the skills it had active and why,
-   * and the memories it wrote (same API as the Memory studio, filtered to the run). What
-   * the agent recalled is not reported by the framework, and this says so
-   * (`lib/context-sources.ts`). Used by the run inspector's Context tab and the chat
+   * the memories it recalled into its context (its `MemoryRecalled` events; a run that
+   * reported none keeps the "not reported" note) and the memories it wrote (same API as
+   * the Memory studio, filtered to the run) (`lib/context-sources.ts`). Used by the run inspector's Context tab and the chat
    * inspector's Context tab.
    */
   import type { RunSkillsView } from "@reactive-agents/ui-core";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import { tooltip } from "$lib/actions/tooltip.js";
-  import { contextSourcesOf, RECALL_NOT_REPORTED, SKILLS_HREF } from "$lib/context-sources.js";
+  import { contextSourcesOf, NO_RECALL, RECALL_NOT_REPORTED, SKILLS_HREF, type RunRecall } from "$lib/context-sources.js";
   import { fetchMemory, memoryStudioHref, type MemoryListing } from "$lib/memory-studio.js";
 
   interface Props {
     skills: RunSkillsView | undefined;
+    /** Memories the run recalled into its context (its `MemoryRecalled` events). */
+    recall?: RunRecall;
     /** The agent whose memory the run wrote to (a chat's stable agent id, a run's agent id). */
     agentId?: string | undefined;
     runId?: string | undefined;
     /** Changes when the run ends: memory is written at the end of a run, so reload then. */
     settledKey?: string;
   }
-  const { skills, agentId, runId, settledKey = "" }: Props = $props();
+  const { skills, recall = NO_RECALL, agentId, runId, settledKey = "" }: Props = $props();
 
   let listing = $state<MemoryListing | null>(null);
   let loading = $state(false);
@@ -41,7 +43,7 @@
       .finally(() => { loading = false; });
   });
 
-  const view = $derived(contextSourcesOf(skills, listing));
+  const view = $derived(contextSourcesOf(skills, listing, recall, agentId));
   const KIND = { fact: "fact", workflow: "workflow", log: "log" } as const;
 </script>
 
@@ -64,7 +66,27 @@
   {/if}
   <div class="links"><Button size="sm" variant="ghost" icon="bolt" href={SKILLS_HREF}>Skills in the Lab</Button></div>
 
-  <h3>Memories</h3>
+  <h3>Memories recalled</h3>
+  {#if view.recallReported && view.recalled.length === 0}
+    <p class="hint">The run looked in memory and recalled nothing.</p>
+  {:else if view.recallReported}
+    <ul data-testid="recalled-memories">
+      {#each view.recalled as m (`${m.tier}:${m.id}`)}
+        <li class="mem">
+          <span class="kind">{m.tier}</span>
+          <span class="title">
+            {#if m.href}<a href={m.href} data-testid="recalled-link">{m.title}</a>{:else}{m.title}{/if}
+            {#if m.query}<span class="why"> · for “{m.query}”</span>{/if}
+          </span>
+          <span class="meta">{m.detail}</span>
+        </li>
+      {/each}
+    </ul>
+  {:else}
+    <p class="hint note">{RECALL_NOT_REPORTED}</p>
+  {/if}
+
+  <h3>Memories written</h3>
   {#if loading && listing === null}
     <p class="hint" role="status">Loading memory…</p>
   {:else if error}
@@ -86,7 +108,6 @@
       {/each}
     </ul>
   {/if}
-  <p class="hint note">{RECALL_NOT_REPORTED}</p>
   {#if agentId && runId && listing?.available}
     <div class="links"><Button size="sm" variant="ghost" icon="book" href={memoryStudioHref(agentId, runId)}>Open in the Memory studio</Button></div>
   {/if}

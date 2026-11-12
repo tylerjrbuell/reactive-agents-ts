@@ -91,6 +91,8 @@ export interface StreamCompleted {
     readonly gateId: string;
     readonly toolName: string;
     readonly args: unknown;
+    /** The sub-agent asking, when the gated call runs inside one. */
+    readonly subAgent?: string;
   };
   readonly pendingInteraction?: PendingInteractionWire;
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
@@ -277,9 +279,12 @@ export interface InteractionRequested extends PendingInteractionWire {
 export interface ApprovalRequested {
   readonly _tag: "ApprovalRequested";
   readonly runId: string;
+  /** Identifies this request: parallel sub-agents share `runId`, so answer with `gateId` to target one. */
   readonly gateId: string;
   readonly toolName: string;
   readonly args: unknown;
+  /** The sub-agent asking (its name) when the gated call runs inside one; absent for the agent's own calls. */
+  readonly subAgent?: string;
 }
 export interface RunPaused {
   readonly _tag: "RunPaused";

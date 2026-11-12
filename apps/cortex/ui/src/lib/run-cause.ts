@@ -61,7 +61,7 @@ export async function fetchRunCause(runId: string, fetchImpl: (url: string) => P
  */
 export function causeOpenByDefault(status: string, ending: string | undefined): boolean {
   if (ending === "abstained" || ending === "partial" || ending === "failed") return true;
-  return status === "failed" || status === "stopped";
+  return status === "failed" || status === "stopped" || status === "blocked";
 }
 
 /** Badge tone for an outcome-neutral display of the attribution. */

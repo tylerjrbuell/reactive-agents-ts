@@ -271,10 +271,10 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
     // is paused awaiting approval (in-process, live-session). ──
     /** Pending durable approvals across all paused runs in this process. */
     readonly listPendingApprovals: () => Effect.Effect<readonly PendingApprovalRow[], never>;
-    /** Approve a paused run's pending tool call; the run continues durably. */
-    readonly approveApproval: (runId: RunId, reason?: string) => Effect.Effect<void, CortexError>;
-    /** Deny a paused run's pending tool call; the run is terminated. */
-    readonly denyApproval: (runId: RunId, reason: string) => Effect.Effect<void, CortexError>;
+    /** Approve a paused run's pending tool call; the run continues durably. `gateId` targets one request (parallel sub-agents share the run id). */
+    readonly approveApproval: (runId: RunId, reason?: string, gateId?: string) => Effect.Effect<void, CortexError>;
+    /** Deny a paused run's pending tool call; the run is terminated. `gateId` targets one request. */
+    readonly denyApproval: (runId: RunId, reason: string, gateId?: string) => Effect.Effect<void, CortexError>;
     // ── Durable interaction rail (Agentic-UI) — `request_user_input` pauses,
     // clone of the approval rail above. ──
     /** Pending durable `request_user_input` pauses across all paused runs in this process. */
@@ -303,9 +303,9 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
 >() {}
 
 /** Approve/deny through the shared registry. An unknown run is a logged no-op (it may have resolved already). */
-const decideApproval = (runId: RunId, decision: ApprovalDecision, reason?: string): Effect.Effect<void, CortexError> =>
+const decideApproval = (runId: RunId, decision: ApprovalDecision, reason?: string, gateId?: string): Effect.Effect<void, CortexError> =>
   Effect.gen(function* () {
-    const out = yield* Effect.promise(() => durableApprovals.decide(String(runId), decision, reason));
+    const out = yield* Effect.promise(() => durableApprovals.decide(String(runId), decision, reason, gateId));
     if (out.ok) return;
     if (out.code === "not-found") {
       cortexLog("debug", "runner", `${decision === "approved" ? "approve" : "deny"}: run not pending approval`, { runId });
@@ -752,9 +752,9 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
 
       // `decide` resumes agent-owned runs (re-pause keeps them registered) and
       // delegates chat-owned ones so the reply lands in the chat thread.
-      approveApproval: (runId, reason) => decideApproval(runId, "approved", reason),
+      approveApproval: (runId, reason, gateId) => decideApproval(runId, "approved", reason, gateId),
 
-      denyApproval: (runId, reason) => decideApproval(runId, "denied", reason),
+      denyApproval: (runId, reason, gateId) => decideApproval(runId, "denied", reason, gateId),
 
       // Reads the SHARED registry, same mechanism as listPendingApprovals —
       // both approval + interaction pauses register their agent handle there.

@@ -16,6 +16,8 @@ export interface PendingApprovalWire {
   readonly toolName: string;
   readonly args: unknown;
   readonly chatSessionId?: string;
+  /** The sub-agent asking (its name), when the gated call runs inside one. */
+  readonly subAgent?: string;
 }
 
 /** One item waiting on the user. */
@@ -24,6 +26,10 @@ export type WaitingItem =
       readonly kind: "approval";
       readonly key: string;
       readonly runId: string;
+      /** The request to answer: parallel sub-agents share `runId`, so approve / deny pass this. */
+      readonly gateId: string;
+      /** Who is asking: the sub-agent's name, when the gated call runs inside one. */
+      readonly subAgent?: string;
       readonly toolName: string;
       /** The call's arguments, short (`rm -rf build/` for a shell command). */
       readonly detail: string;
@@ -100,6 +106,8 @@ export function waitingItemsOf(
       kind: "approval",
       key: `a:${a.runId}:${a.gateId}`,
       runId: a.runId,
+      gateId: a.gateId,
+      ...(a.subAgent !== undefined ? { subAgent: a.subAgent } : {}),
       toolName: a.toolName || "Tool call",
       detail: approvalDetail(a.args),
       context: contextOf(run, a.chatSessionId),
@@ -134,7 +142,13 @@ export interface WaitingRunRef {
 
 /** What a waiting run waits for. */
 export type WaitingFor =
-  | { readonly kind: "approval"; readonly approval: PendingApprovalWire }
+  | {
+      readonly kind: "approval";
+      /** The first approval the run waits on. */
+      readonly approval: PendingApprovalWire;
+      /** The run's other waiting requests (parallel sub-agents share a run), in listed order. */
+      readonly also?: readonly PendingApprovalWire[];
+    }
   | { readonly kind: "question"; readonly interaction: PendingInteractionWire };
 
 /**
@@ -163,8 +177,14 @@ export function waitingRunsOf<R extends WaitingRunRef>(
     const run =
       byId.get(a.runId) ??
       (a.chatSessionId ? newest((r) => r.chatSessionId === a.chatSessionId) : newest((r) => r.agentId === a.agentId));
-    if (!run || out.has(run.runId)) continue;
-    out.set(run.runId, { kind: "approval", approval: a });
+    if (!run) continue;
+    const prev = out.get(run.runId);
+    if (prev === undefined) {
+      out.set(run.runId, { kind: "approval", approval: a });
+    } else if (prev.kind === "approval" && a.gateId !== prev.approval.gateId && !(prev.also ?? []).some((x) => x.gateId === a.gateId)) {
+      // Another gate of the same run (a parallel sub-agent): kept, so each can be answered.
+      out.set(run.runId, { ...prev, also: [...(prev.also ?? []), a] });
+    }
   }
   for (const i of interactions) {
     const run = byId.get(i.runId);
@@ -178,16 +198,33 @@ export function waitingRunsOf<R extends WaitingRunRef>(
 export interface RunApproval {
   /** The id the approve / deny endpoints take: the durable run id the approval carries (not the Cortex run id). */
   readonly approvalRunId: string;
+  /** The request to answer (approve / deny pass it): parallel sub-agents share the run id. */
+  readonly gateId: string;
+  /** The sub-agent asking (its name), when the gated call runs inside one. */
+  readonly subAgent?: string;
   readonly toolName: string;
   /** The call in short (`git commit -m "…"`). */
   readonly detail: string;
 }
 
-/** The approval a run waits on (from {@link waitingRunsOf}); `undefined` when it waits on nothing or on a question. */
+const runApprovalFrom = (a: PendingApprovalWire): RunApproval => ({
+  approvalRunId: a.runId,
+  gateId: a.gateId,
+  ...(a.subAgent !== undefined ? { subAgent: a.subAgent } : {}),
+  toolName: a.toolName,
+  detail: approvalDetail(a.args),
+});
+
+/** The first approval a run waits on (from {@link waitingRunsOf}); `undefined` when it waits on nothing or on a question. */
 export function runApprovalOf(waiting: WaitingFor | undefined): RunApproval | undefined {
   if (waiting?.kind !== "approval") return undefined;
-  const a = waiting.approval;
-  return { approvalRunId: a.runId, toolName: a.toolName, detail: approvalDetail(a.args) };
+  return runApprovalFrom(waiting.approval);
+}
+
+/** Every approval a run waits on, each answerable on its own (parallel sub-agents); `[]` when none. */
+export function runApprovalsOf(waiting: WaitingFor | undefined): readonly RunApproval[] {
+  if (waiting?.kind !== "approval") return [];
+  return [waiting.approval, ...(waiting.also ?? [])].map(runApprovalFrom);
 }
 
 /** Run statuses that mean the run is still going (the paused run publishes no terminal event). */

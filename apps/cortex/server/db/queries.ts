@@ -115,9 +115,9 @@ export function updateRunStats(
     values.push(patch.cost);
   }
   if (patch.status !== undefined) {
-    // A stopped run that then reports a failure failed because it was stopped: it stays
-    // `stopped`. A run that reports success after all is `completed`.
-    sets.push(patch.status === "failed" ? "status = CASE WHEN status = 'stopped' THEN 'stopped' ELSE ? END" : "status = ?");
+    // A stopped (or guardrail-blocked) run that then reports a failure failed because of
+    // that: it keeps its status. A run that reports success after all is `completed`.
+    sets.push(patch.status === "failed" ? "status = CASE WHEN status IN ('stopped', 'blocked') THEN status ELSE ? END" : "status = ?");
     values.push(patch.status);
   }
   if (patch.ending !== undefined) {
@@ -486,6 +486,11 @@ function toObjectPayload(payload: string): Record<string, unknown> {
   }
 }
 
+type DerivedRunStatus = "live" | "completed" | "failed" | "stopped" | "blocked";
+
+/** A run ended from outside (stopped) or by a guardrail (blocked) keeps that status when a failure follows. */
+const keepsEnding = (s: DerivedRunStatus): s is "stopped" | "blocked" => s === "stopped" || s === "blocked";
+
 /**
  * Recompute rollup stats in `cortex_runs` from persisted `cortex_events`.
  * Useful for repairing rows that were created before stat mapping fixes.
@@ -507,7 +512,7 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
   let iterationCount = 0;
   let tokensUsed = 0;
   let cost = 0;
-  let status: "live" | "completed" | "failed" | "stopped" = "live";
+  let status = "live" as DerivedRunStatus;
   let completedAt: number | null = null;
   let debrief: string | null = null;
   let ending: string | null = null;
@@ -536,12 +541,24 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
         );
         break;
       case "AgentCompleted":
-        status = p.success === false ? (status === "stopped" ? "stopped" : "failed") : "completed";
+        status = p.success === false ? (keepsEnding(status) ? status : "failed") : "completed";
         ending = runEndingOf(p);
         completedAt = row.ts;
         break;
       case "TaskFailed":
-        status = status === "stopped" ? "stopped" : "failed";
+        status = keepsEnding(status) ? status : "failed";
+        completedAt = row.ts;
+        break;
+      case "AgentAborted":
+        // Same rule as ingest and the UI's `abortStatusOf`; a failure keeps an earlier stop/block.
+        status =
+          p.reason === "user-stop" || p.reason === "terminate"
+            ? "stopped"
+            : p.reason === "guardrail"
+              ? "blocked"
+              : keepsEnding(status)
+                ? status
+                : "failed";
         completedAt = row.ts;
         break;
       case "ExecutionCancelled":

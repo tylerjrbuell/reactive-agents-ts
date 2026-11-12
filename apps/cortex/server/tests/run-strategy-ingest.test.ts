@@ -13,6 +13,7 @@ import { runStrategyOfEvents } from "@reactive-agents/ui-core";
 import { CortexIngestService, CortexIngestServiceLive } from "../services/ingest-service.js";
 import { CortexEventBridgeLive } from "../services/event-bridge.js";
 import { applySchema } from "../db/schema.js";
+import { recomputeRunStats } from "../db/queries.js";
 
 const ingest = async (runId: string, events: readonly Record<string, unknown>[]): Promise<string | null> => {
   const db = new Database(":memory:");
@@ -60,6 +61,35 @@ describe("AgentAborted settles the run row", () => {
   it("a user stop or terminate abort is stopped", async () => {
     expect((await statusAfter("ab2", { causeClass: "interrupt", reason: "user-stop" })).status).toBe("stopped");
     expect((await statusAfter("ab3", { causeClass: "interrupt", reason: "terminate" })).status).toBe("stopped");
+  });
+
+  it("a guardrail abort is blocked, and a later failed completion keeps it blocked", async () => {
+    const row = await statusAfter("ab4", { causeClass: "failure", reason: "guardrail", error: "GuardrailViolationError: blocked" });
+    expect(row.status).toBe("blocked");
+    expect(row.error_message).toBe("GuardrailViolationError: blocked");
+    expect(row.completed_at).not.toBeNull();
+  });
+
+  it("a stored guardrail abort recomputes as blocked (not live)", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexIngestService;
+      for (const event of [
+        { _tag: "AgentStarted", taskId: "t", agentId: "a", provider: "p", model: "m", timestamp: 1 },
+        { _tag: "AgentAborted", taskId: "t", agentId: "a", durationMs: 5, timestamp: 2, causeClass: "failure", reason: "guardrail" },
+        { _tag: "AgentCompleted", taskId: "t", agentId: "a", success: false, totalTokens: 0, durationMs: 5, timestamp: 3 },
+      ]) {
+        yield* svc.handleEvent("a", "ab5", { v: 1, agentId: "a", runId: "ab5", event: event as unknown as AgentEvent });
+      }
+    });
+    await Effect.runPromise(program.pipe(Effect.provide(CortexIngestServiceLive(db).pipe(Layer.provide(CortexEventBridgeLive)))));
+    const live = db.prepare("SELECT status FROM cortex_runs WHERE run_id = ?").get("ab5") as { status: string };
+    expect(live.status).toBe("blocked");
+    recomputeRunStats(db, "ab5");
+    const again = db.prepare("SELECT status FROM cortex_runs WHERE run_id = ?").get("ab5") as { status: string };
+    expect(again.status).toBe("blocked");
+    db.close();
   });
 });
 

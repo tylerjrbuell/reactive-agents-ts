@@ -3,11 +3,12 @@ import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
 import { carryContext } from "../chat-context.js";
 import { failTurn, requestTurnStop, streamAssistantTurn } from "./chat-stream.js";
+import { ATTACH_ACTIVE_TURN, chatStreamEndpoint, fetchActiveTurn, resumedTurns, shouldResume } from "./chat-resume.js";
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import { turnModelOf } from "../chat-live-config.js";
 import type { ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent } from "@reactive-agents/ui-core";
-import type { RunSkillsView, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
+import type { RecalledMemoryView, RunSkillsView, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
 import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
 import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
 import type { ChatPendingApprovalWire } from "../chat-approvals.js";
@@ -174,6 +175,8 @@ export type ChatTurn = {
   awaitingModelSince?: number;
   /** Skills the turn's run had active and why (ui-core `RunSkillsView`, stored by the server). */
   skills?: RunSkillsView;
+  /** Memories the turn's run recalled into its context (stored by the server); absent when it reported none. */
+  recalled?: readonly RecalledMemoryView[];
 };
 
 /** Server-persisted thinking + tool-call detail for a finished assistant turn. */
@@ -194,6 +197,8 @@ type PersistedTrace = {
   durationMs?: number;
   /** Skills the run had active and why. */
   skills?: RunSkillsView;
+  /** Memories the run recalled (`MemoryRecalled`); [] = it looked and recalled nothing. */
+  recalled?: readonly RecalledMemoryView[];
   /** The typed object and how it was obtained, for a turn run with an output schema. */
   structured?: TurnStructured;
 };
@@ -229,6 +234,7 @@ export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTur
     ...(trace.usage ? { usage: trace.usage } : {}),
     ...(trace.strategy ? { strategy: trace.strategy } : {}),
     ...(trace.skills && trace.skills.activations.length > 0 ? { skills: trace.skills } : {}),
+    ...(trace.recalled ? { recalled: trace.recalled } : {}),
     ...(trace.structured ? { structured: trace.structured } : {}),
   };
 }
@@ -352,6 +358,8 @@ function createChatStore() {
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
     update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [], activePendingApprovals: session.pendingApprovals ?? [], activePendingInteractions: session.pendingInteractions ?? [], planning: false, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
+    // A turn still running server-side (the page was reloaded mid-wait) is attached to, not lost.
+    void resumeActiveTurn(sessionId);
   }
 
   async function createSession(opts: { name?: string } & ChatSessionConfigInput): Promise<string> {
@@ -633,16 +641,34 @@ function createChatStore() {
       error: null,
     }));
 
+    await consumeTurnStream(sessionId!, assistantTurnId, structuredOutput, {
+      body: {
+        message,
+        ...(opts.posture !== undefined ? { posture: opts.posture } : {}),
+        ...(opts.skills && opts.skills.length > 0 ? { skills: [...opts.skills] } : {}),
+      },
+    });
+  }
+
+  /**
+   * Stream one turn into the assistant turn `assistantTurnId` and settle it. With a `body` the turn is
+   * sent (POST); without one it attaches to the turn already running on the server (a resumed page).
+   * Either way a dropped connection re-attaches from the last event seen: the turn is detached from
+   * the connection server-side, so it kept running.
+   */
+  async function consumeTurnStream(
+    sessionId: string,
+    assistantTurnId: number,
+    structuredOutput: boolean,
+    source: { readonly body?: Record<string, unknown> },
+  ): Promise<void> {
     try {
       const controller = new AbortController();
       activeController = controller;
       const outcome = await streamAssistantTurn({
-        endpoint: `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId!)}/chat/stream`,
-        body: {
-          message,
-          ...(opts.posture !== undefined ? { posture: opts.posture } : {}),
-          ...(opts.skills && opts.skills.length > 0 ? { skills: [...opts.skills] } : {}),
-        },
+        endpoint: chatStreamEndpoint(sessionId),
+        ...(source.body !== undefined ? { body: source.body } : {}),
+        attach: ATTACH_ACTIVE_TURN,
         signal: controller.signal,
         assistantTurnId,
         structuredOutput,
@@ -652,6 +678,13 @@ function createChatStore() {
       activeController = null;
 
       if (outcome.preStreamFailure !== undefined) {
+        if (source.body === undefined) {
+          // A resumed turn that cannot be attached to ended while the page was away: its stored
+          // exchange is in the history, so drop the placeholder bubbles and read it.
+          update((s) => ({ ...s, sending: false, activeTurns: s.activeTurns.filter((t) => t.id !== assistantTurnId && t.id !== assistantTurnId - 1) }));
+          await refreshTurns(sessionId);
+          return;
+        }
         // Nothing streamed: the message stays and the reply ends as a failed turn with the
         // cause and Retry (B1), never an empty bubble or a banner that loses the text.
         const failed = outcome.preStreamFailure;
@@ -662,7 +695,7 @@ function createChatStore() {
       // A completed turn is persisted server-side: re-sync so row ids (rewind / fork) and the stored trace line up.
       // Cancelled / errored turns persist nothing, so keep the local partial instead.
       const finished = get({ subscribe }).activeTurns.find((t) => t.id === assistantTurnId)?.cancelled !== true;
-      if (outcome.streamError === undefined && finished) await refreshTurns(sessionId!, { onlyIfSameLength: true });
+      if (outcome.streamError === undefined && finished) await refreshTurns(sessionId, { onlyIfSameLength: true });
       // Auto-naming lands server-side just after the first exchange (instant title, then a model-written one).
       if (outcome.streamError === undefined && get({ subscribe }).activeTurns.length <= 2) {
         for (const delay of [0, 5_000, 12_000]) setTimeout(() => { void loadSessions().catch(() => {}); }, delay);
@@ -673,6 +706,22 @@ function createChatStore() {
       activeController = null;
       update((s) => ({ ...s, sending: false, activeTurns: failTurn(s.activeTurns, assistantTurnId, e) }));
     }
+  }
+
+  /**
+   * Re-attach to the session's turn if one is still running on the server (the page was reloaded or
+   * closed while it ran, e.g. waiting on an approval or a question). The turn's events replay from the
+   * start, which brings back its pending card, then follow it live to its end. A no-op when nothing
+   * runs or this page is already streaming.
+   */
+  async function resumeActiveTurn(sessionId: string): Promise<boolean> {
+    const info = await fetchActiveTurn(sessionId);
+    const snapshot = get({ subscribe });
+    if (snapshot.activeSessionId !== sessionId || !shouldResume(info, { sending: snapshot.sending, turns: snapshot.activeTurns })) return false;
+    const { user, assistant } = resumedTurns(info, Date.now(), turnModelOf(snapshot.sessions.find((x) => x.sessionId === sessionId)?.agentConfig));
+    update((s) => ({ ...s, activeTurns: [...s.activeTurns, user, assistant], sending: true, error: null }));
+    void consumeTurnStream(sessionId, assistant.id, snapshot.structuredOutput, {});
+    return true;
   }
 
   /** Replace the conversation's to-do list (user edit); the next turn is seeded from it. Reverts on failure. */

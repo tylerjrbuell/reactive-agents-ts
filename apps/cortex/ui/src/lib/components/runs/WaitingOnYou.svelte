@@ -58,9 +58,11 @@
     }
   }
 
-  async function decide(key: string, runId: string, action: "approve" | "deny") {
-    const ok = await post(key, `${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/${action}`, action === "deny" ? { reason: "Denied from Cortex" } : {}, action === "approve" ? "Approve failed" : "Deny failed");
-    if (ok) approvals = approvals.filter((a) => a.runId !== runId);
+  // The gate says WHICH request: parallel sub-agents share the run id, and each is answered on its own.
+  async function decide(key: string, runId: string, gateId: string, action: "approve" | "deny") {
+    const body = { ...(action === "deny" ? { reason: "Denied from Cortex" } : {}), ...(gateId ? { gateId } : {}) };
+    const ok = await post(key, `${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/${action}`, body, action === "approve" ? "Approve failed" : "Deny failed");
+    if (ok) approvals = approvals.filter((a) => !(a.runId === runId && a.gateId === gateId));
     void load();
   }
 
@@ -93,15 +95,15 @@
         <div class="line">
           <Status tone="attention" label={item.kind === "approval" ? "Approval" : "Question"} />
           {#if item.kind === "approval"}
-            <span class="what">{item.toolName}{#if item.detail}<span class="data">{item.detail}</span>{/if}</span>
+            <span class="what">{#if item.subAgent}<span class="who">{item.subAgent} wants </span>{/if}{item.toolName}{#if item.detail}<span class="data">{item.detail}</span>{/if}</span>
           {:else}
             <span class="what">{item.interaction.prompt}</span>
           {/if}
           {#if item.context}<span class="ctx">{item.context}</span>{/if}
           <div class="btns">
             {#if item.kind === "approval"}
-              <Button size="sm" variant="primary" disabled={busy === item.key} onclick={() => decide(item.key, item.runId, "approve")}>Approve</Button>
-              <Button size="sm" variant="danger" disabled={busy === item.key} onclick={() => decide(item.key, item.runId, "deny")}>Deny</Button>
+              <Button size="sm" variant="primary" disabled={busy === item.key} onclick={() => decide(item.key, item.runId, item.gateId, "approve")}>Approve</Button>
+              <Button size="sm" variant="danger" disabled={busy === item.key} onclick={() => decide(item.key, item.runId, item.gateId, "deny")}>Deny</Button>
               {#if item.chatSessionId}
                 <Button size="sm" variant="ghost" href="/chat?session={encodeURIComponent(item.chatSessionId)}">Open chat</Button>
               {:else if item.openRunId}

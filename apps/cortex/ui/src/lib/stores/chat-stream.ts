@@ -53,7 +53,13 @@ type TurnsUpdater = (f: (turns: ChatTurn[]) => ChatTurn[]) => void;
 
 export interface StreamTurnOptions {
   readonly endpoint: string;
-  readonly body: Record<string, unknown>;
+  /** POST body for a new turn; omit to only attach to a turn already running on the server (`attach`). */
+  readonly body?: Record<string, unknown>;
+  /**
+   * Re-attach target (`GET endpoint/:runId?cursor=`): after a dropped connection the turn, which
+   * keeps running server-side, is followed again from the last event seen (SSE `id:`).
+   */
+  readonly attach?: { readonly runId: string; readonly cursor?: number };
   readonly signal: AbortSignal;
   /** Id of the (already-inserted, `streaming: true`) assistant turn the events fold into. */
   readonly assistantTurnId: number;
@@ -167,7 +173,12 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   // A live question (`request_user_input`, no durable runs): the turn shows its reply controls.
   let liveInteraction: LiveInteraction | undefined;
 
-  for await (const event of connectRunStream({ endpoint: opts.endpoint, body: opts.body, signal: opts.signal })) {
+  for await (const event of connectRunStream({
+    endpoint: opts.endpoint,
+    ...(opts.body !== undefined ? { body: opts.body } : {}),
+    ...(opts.attach !== undefined ? { attach: opts.attach } : {}),
+    signal: opts.signal,
+  })) {
     if (opts.structuredOutput) rs = reduceRunState(rs, event, { objectMode: true });
     trackModelWait(event);
     trackLiveApproval(event);

@@ -37,7 +37,7 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { clearApproval, pendingApprovals, setApprovalView } from "$lib/stores/approval-watcher.js";
   import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
-  import { runApprovalOf, waitingRunsOf, waitingStatusOf } from "$lib/waiting-on-you.js";
+  import { runApprovalsOf, waitingRunsOf, waitingStatusOf, type RunApproval } from "$lib/waiting-on-you.js";
   import { countReasoningStepDisplayMessagesInRunEvents } from "@cortex/messages-extract";
   import {
     answerWithheld,
@@ -150,8 +150,8 @@
   );
   const headerView = $derived(runHeaderStatus(waitingStatusOf($runStore.status, waiting), ending?.ending));
   // Approve / Deny in the header while the run waits at an approval gate. The
-  // endpoints take the durable run id the approval carries (runApprovalOf).
-  const approval = $derived(runApprovalOf(waiting));
+  // endpoints take the durable run id the approval carries and its gate (runApprovalsOf).
+  const approvals = $derived(runApprovalsOf(waiting));
   // This run's approval shows in the header, so the app-wide toast skips it (approval-surface.ts).
   const viewAgentId = $derived($runStore.agentId);
   const viewChatSessionId = $derived($runStore.chatSessionId);
@@ -159,19 +159,18 @@
     setApprovalView({ kind: "run", runId, agentId: viewAgentId, ...(viewChatSessionId ? { chatSessionId: viewChatSessionId } : {}) }),
   );
   let deciding = $state(false);
-  async function decideApproval(action: "approve" | "deny") {
-    const target = approval;
-    if (!target) return;
+  // Each waiting request is answered by its gate: parallel sub-agents share the run id.
+  async function decideApproval(target: RunApproval, action: "approve" | "deny") {
     deciding = true;
     try {
       const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(target.approvalRunId)}/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(action === "deny" ? { reason: "Denied from Cortex" } : {}),
+        body: JSON.stringify({ ...(action === "deny" ? { reason: "Denied from Cortex" } : {}), ...(target.gateId ? { gateId: target.gateId } : {}) }),
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      clearApproval(target.approvalRunId);
-      toast.success(action === "approve" ? "Approved" : "Denied", `${target.toolName}: ${target.detail}`);
+      clearApproval(target.approvalRunId, target.gateId || undefined);
+      toast.success(action === "approve" ? "Approved" : "Denied", `${target.subAgent ? `${target.subAgent}: ` : ""}${target.toolName}: ${target.detail}`);
     } catch (e) {
       toast.error(action === "approve" ? "Approve failed" : "Deny failed", e instanceof Error ? e.message : String(e));
     } finally {
@@ -441,8 +440,16 @@
     onResume={() => void runStore.resume()}
     onStop={() => void runStore.stop()}
     onTerminate={() => void confirmTerminate()}
-    approval={approval
-      ? { toolName: approval.toolName, detail: approval.detail, busy: deciding, onApprove: () => void decideApproval("approve"), onDeny: () => void decideApproval("deny") }
+    approvals={approvals.length > 0
+      ? approvals.map((a) => ({
+          key: `${a.approvalRunId}|${a.gateId}`,
+          toolName: a.toolName,
+          detail: a.detail,
+          ...(a.subAgent !== undefined ? { subAgent: a.subAgent } : {}),
+          busy: deciding,
+          onApprove: () => void decideApproval(a, "approve"),
+          onDeny: () => void decideApproval(a, "deny"),
+        }))
       : undefined}
     safety={safetySummary.tone
       ? { count: safetySummary.count, tone: safetyBadgeTone(safetySummary.tone), onOpen: openSafety }

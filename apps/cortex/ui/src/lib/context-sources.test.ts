@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { contextSourcesOf, RECALL_NOT_REPORTED, writtenMemories } from "./context-sources.js";
+import { contextSourcesOf, NO_RECALL, RECALL_NOT_REPORTED, recalledRows, runRecallFromLive, writtenMemories } from "./context-sources.js";
 import type { MemoryListing } from "./memory-studio.js";
 
 const listing: MemoryListing = {
@@ -46,7 +46,52 @@ describe("contextSourcesOf", () => {
     expect(contextSourcesOf(undefined, null).summary).toBe("0 skills used · 0 memories written");
   });
 
-  test("the recall caveat names what the framework does not report", () => {
-    expect(RECALL_NOT_REPORTED).toContain("not reported by the framework");
+  test("a run that reported no MemoryRecalled keeps the note and no recalled list", () => {
+    const v = contextSourcesOf(skills, listing);
+    expect(v.recallReported).toBe(false);
+    expect(v.recalled).toEqual([]);
+    expect(RECALL_NOT_REPORTED).toContain("reported no recalled memories");
+  });
+});
+
+describe("recalled memories (MemoryRecalled)", () => {
+  const live = [
+    { type: "AgentStarted", payload: {} },
+    {
+      type: "MemoryRecalled",
+      payload: { _tag: "MemoryRecalled", taskId: "t", tier: "semantic", items: [{ id: "s1", tier: "semantic", summary: "Prefers tabs", score: 0.91, importance: 0.8 }] },
+    },
+    {
+      type: "MemoryRecalled",
+      payload: { _tag: "MemoryRecalled", taskId: "t", tier: "working", query: "tabs", items: [{ id: "w1", tier: "working", summary: "scratch" }] },
+    },
+  ];
+
+  test("runRecallFromLive folds the run's events; none is not-reported", () => {
+    const r = runRecallFromLive(live);
+    expect(r.reported).toBe(true);
+    expect(r.items.map((i) => i.id)).toEqual(["s1", "w1"]);
+    expect(runRecallFromLive([{ type: "AgentStarted", payload: {} }])).toEqual(NO_RECALL);
+  });
+
+  test("rows carry tier, summary, relevance and importance, and link a studio tier to the Memory item", () => {
+    const rows = recalledRows(runRecallFromLive(live), "agent-1");
+    expect(rows[0]).toEqual({
+      id: "s1",
+      tier: "semantic",
+      title: "Prefers tabs",
+      detail: "relevance 0.91 · importance 0.80",
+      href: "/lab?agent=agent-1&item=s1#memory",
+    });
+    // The working tier has no studio layer: no link. The query that surfaced it is kept.
+    expect(rows[1]).toEqual({ id: "w1", tier: "working", title: "scratch", detail: "", query: "tabs" });
+    expect(recalledRows(runRecallFromLive(live), undefined)[0]!.href).toBeUndefined();
+  });
+
+  test("with events the note goes away and the summary counts them", () => {
+    const v = contextSourcesOf(undefined, listing, runRecallFromLive(live), "agent-1");
+    expect(v.recallReported).toBe(true);
+    expect(v.recalled).toHaveLength(2);
+    expect(v.summary).toBe("0 skills used · 2 memories recalled · 3 memories written");
   });
 });

@@ -37,6 +37,13 @@ describe("run view status (B3)", () => {
     expect(deriveStatus("completed", msg("AgentAborted", { causeClass: "failure" }))).toBe("completed");
   });
 
+  it("a guardrail abort reads blocked, and blocked is settled and sticky", () => {
+    expect(deriveStatus("live", msg("AgentAborted", { causeClass: "failure", reason: "guardrail" }))).toBe("blocked");
+    expect(deriveStatus("blocked", msg("AgentCompleted", { success: false }))).toBe("blocked");
+    expect(deriveStatus("blocked", msg("TaskFailed"))).toBe("blocked");
+    expect(isRunSettled("blocked")).toBe(true);
+  });
+
   it("stopped is settled", () => {
     expect(isRunSettled("stopped")).toBe(true);
     expect(isRunSettled("paused")).toBe(false);

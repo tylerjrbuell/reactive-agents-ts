@@ -26,11 +26,12 @@
   async function decide(verb: "approve" | "deny") {
     busy = verb;
     error = undefined;
-    const out = await decideLiveApproval(approval.runId, verb, verb === "deny" ? reason : undefined);
+    // By gate: parallel sub-agents share the run id, and this card answers only its own request.
+    const out = await decideLiveApproval(approval.runId, verb, verb === "deny" ? reason : undefined, fetch, approval.gateId);
     if (out.ok) {
       // Answered: clear it everywhere (toast, Runs strip, run header) and drop this card;
       // the running tool row shows what the call is doing from here.
-      clearApproval(approval.runId);
+      clearApproval(approval.runId, approval.gateId);
       answered = true;
       return;
     }
@@ -40,9 +41,12 @@
 </script>
 
 {#if !hidden && !answered}
-<div class="card rail rail-attention" data-testid="chat-live-approval" data-run-id={approval.runId}>
+<div class="card rail rail-attention" data-testid="chat-live-approval" data-run-id={approval.runId} data-gate-id={approval.gateId}>
   <p class="h"><Status tone="attention" label="Waiting on you" /></p>
-  <p class="what">The agent wants to run <span class="tool">{approval.toolName}</span>.</p>
+  <p class="what">
+    {#if approval.subAgent}<span class="who" data-testid="approval-sub-agent">{approval.subAgent}</span> wants to run{:else}The agent wants to run{/if}
+    <span class="tool">{approval.toolName}</span>.
+  </p>
   {#if rows.length > 0}
     <dl class="args">
       {#each rows as row (row.key)}
@@ -75,6 +79,7 @@
   .card { display: grid; gap: 8px; padding-left: 20px; max-width: var(--cortex-measure); font-size: var(--cortex-t-sm); }
   .h, .what, .busy, .err { margin: 0; }
   .what { color: var(--cortex-text); }
+  .who { font-weight: 600; color: var(--cortex-accent); }
   .tool { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-io); }
   .args { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); }
   dt { color: var(--cortex-text-3); }

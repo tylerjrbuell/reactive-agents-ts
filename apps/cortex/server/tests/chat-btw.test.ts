@@ -132,7 +132,8 @@ describe("the side-question agent", () => {
     expect(withBtwParams.memory).toBeUndefined();
     expect(withBtwParams.features?.memory).toBeUndefined();
     // Cortex's default (no memory choice) does turn it on: the explicit off is what keeps the aside clean.
-    expect(cortexParamsToAgentConfig({ agentName: "chat-btw", provider: "test", ...UTILITY_AGENT_PARAMS }).features?.memory).toBe(true);
+    const { memory: _off, ...withoutMemoryChoice } = UTILITY_AGENT_PARAMS;
+    expect(cortexParamsToAgentConfig({ agentName: "chat-btw", provider: "test", ...withoutMemoryChoice }).features?.memory).toBe(true);
   });
 
   it("builds from the source with the memory-off params spread in", () => {

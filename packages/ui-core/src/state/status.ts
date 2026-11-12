@@ -48,8 +48,10 @@ export function statusOfTurn(ending: TurnEnding | undefined, opts: { readonly st
 
 /**
  * Status of a run summary row (`live`, `completed`, `failed`, `stopped`,
- * `paused`, `awaiting-*`), with the same labels a chat turn uses: Running,
- * Finished, Failed, Stopped, Waiting on you.
+ * `blocked`, `paused`, `awaiting-*`), with the same labels a chat turn uses:
+ * Running, Finished, Failed, Stopped, Waiting on you. `blocked` is a run a
+ * guardrail ended (`AgentAborted` with reason `guardrail`): the framework
+ * working as configured, so it reads as an at-rest stop, not a red failure.
  */
 export function statusOfRun(status: string): StatusView {
   switch (status) {
@@ -64,6 +66,8 @@ export function statusOfRun(status: string): StatusView {
     case "stopped":
     case "cancelled":
       return { tone: "stopped", label: "Stopped" };
+    case "blocked":
+      return { tone: "stopped", label: "Blocked by guardrail" };
     case "paused":
     case "awaiting-approval":
     case "awaiting-interaction":

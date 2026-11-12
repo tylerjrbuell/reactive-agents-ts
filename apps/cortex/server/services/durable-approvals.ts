@@ -63,7 +63,12 @@ export type PendingApprovalEntry =
   | (PendingApprovalBase & { readonly agent: ReactiveAgent; readonly owner?: undefined })
   | (PendingApprovalBase & { readonly owner: PendingApprovalOwner; readonly agent?: undefined });
 
-/** One row of `GET /api/runs/pending-approvals`. `chatSessionId` is set for chat turns. */
+/**
+ * One row of `GET /api/runs/pending-approvals`. `chatSessionId` is set for chat turns.
+ * `subAgent` names the sub-agent asking when the gated call runs inside one. Parallel
+ * sub-agents share the root `runId`, so `gateId` is what tells their rows apart and
+ * what an answer targets.
+ */
 export interface PendingApprovalRow {
   readonly runId: string;
   readonly agentId: string;
@@ -71,7 +76,21 @@ export interface PendingApprovalRow {
   readonly toolName: string;
   readonly args: unknown;
   readonly chatSessionId?: string;
+  readonly subAgent?: string;
 }
+
+/** Row identity: a run can hold several gates at once (parallel sub-agents). */
+const rowKey = (runId: string, gateId: string): string => `${runId}|${gateId}`;
+
+/**
+ * The sub-agent name a framework row carries. `ReactiveAgent.listPendingApprovals()`'s
+ * declared type omits `subAgent` (framework gap: the runtime facade returns it), so it is
+ * read off the row with a guard rather than a cast.
+ */
+const subAgentOf = (row: object): string | undefined => {
+  const v = (row as { readonly subAgent?: unknown }).subAgent;
+  return typeof v === "string" && v !== "" ? v : undefined;
+};
 
 /** The agent surface a live wait is read and answered through. */
 export type LiveApprovableAgent = Pick<ReactiveAgent, "listPendingApprovals" | "approveRun" | "denyRun"> &
@@ -153,15 +172,15 @@ export const durableApprovals = {
   /**
    * Pending gates across every registered run. Agent-owned entries are read from
    * the agent's durable store; owner-managed entries from their gate snapshot.
-   * Deduped by runId: two agents sharing a durable dir both list every paused run
-   * in that store.
+   * Deduped by run + gate: two agents sharing a durable dir both list every paused run
+   * in that store, and parallel sub-agents hold several gates under one run id.
    */
   async listPending(): Promise<readonly PendingApprovalRow[]> {
     const out = new Map<string, PendingApprovalRow>();
     for (const entry of pending.values()) {
       if (entry.owner) {
         const { gate, sessionId } = entry.owner;
-        out.set(entry.durableRunId, {
+        out.set(rowKey(entry.durableRunId, gate.gateId), {
           runId: entry.durableRunId,
           agentId: entry.agentId,
           gateId: gate.gateId,
@@ -179,25 +198,31 @@ export const durableApprovals = {
       }
       for (const p of rows) {
         const runId = p.runId ?? entry.durableRunId;
-        if (out.has(runId)) continue;
-        out.set(runId, {
+        const key = rowKey(runId, p.gateId ?? "");
+        if (out.has(key)) continue;
+        const subAgent = subAgentOf(p);
+        out.set(key, {
           runId,
           agentId: entry.agentId,
           gateId: p.gateId ?? "",
           toolName: p.toolName ?? "",
           args: p.args ?? null,
+          ...(subAgent !== undefined ? { subAgent } : {}),
         });
       }
     }
     for (const source of liveSources) {
       for (const p of await liveRowsOf(source)) {
-        if (out.has(p.runId)) continue;
-        out.set(p.runId, {
+        const key = rowKey(p.runId, p.gateId);
+        if (out.has(key)) continue;
+        const subAgent = subAgentOf(p);
+        out.set(key, {
           runId: p.runId,
           agentId: source.agentId,
           gateId: p.gateId,
           toolName: p.toolName,
           args: p.args ?? null,
+          ...(subAgent !== undefined ? { subAgent } : {}),
           ...(source.chatSessionId !== undefined ? { chatSessionId: source.chatSessionId } : {}),
         });
       }
@@ -219,14 +244,16 @@ export const durableApprovals = {
    * holds a wait for `runId`. The decision is delivered, not awaited to the
    * run's end: the run continues on its own caller, which reports how it ends.
    */
-  async decideLive(runId: string, decision: ApprovalDecision, reason?: string): Promise<DecideResult> {
+  async decideLive(runId: string, decision: ApprovalDecision, reason?: string, gateId?: string): Promise<DecideResult> {
     for (const source of liveSources) {
       const rows = await liveRowsOf(source);
-      if (!rows.some((r) => r.runId === runId)) continue;
+      if (!rows.some((r) => r.runId === runId && (gateId === undefined || r.gateId === gateId))) continue;
+      // `gateId` targets ONE request: parallel sub-agents share the root run id, and an answer
+      // by run id alone always takes the oldest waiter.
       const answered =
         decision === "approved"
-          ? source.agent.approveRun(runId, reason ? { reason } : undefined)
-          : source.agent.denyRun(runId, reason?.trim() ? reason : "Denied in Cortex");
+          ? source.agent.approveRun(runId, { ...(reason ? { reason } : {}), ...(gateId !== undefined ? { gateId } : {}) })
+          : source.agent.denyRun(runId, reason?.trim() ? reason : "Denied in Cortex", gateId !== undefined ? { gateId } : undefined);
       // Resolves (or rejects) when the run ends; its own caller handles that.
       void answered.catch((e: unknown) => {
         cortexLog("debug", "approvals", "live run ended with an error after a decision", {
@@ -236,7 +263,11 @@ export const durableApprovals = {
       });
       return { ok: true };
     }
-    return { ok: false, code: "not-found", message: `Run ${runId} is not waiting for approval in this process` };
+    return {
+      ok: false,
+      code: "not-found",
+      message: `Run ${runId} is not waiting for approval${gateId !== undefined ? ` (gate ${gateId})` : ""} in this process`,
+    };
   },
   /**
    * Questions the live sources are waiting on (the agent's `listPendingInteractions()`:
@@ -288,17 +319,26 @@ export const durableApprovals = {
    * Approve or deny a registered run. Agent-owned: resume via the agent, keep it
    * registered if it re-paused, otherwise finalize. Owner-managed: delegate.
    */
-  async decide(durableRunId: string, decision: ApprovalDecision, reason?: string): Promise<DecideResult> {
+  async decide(durableRunId: string, decision: ApprovalDecision, reason?: string, gateId?: string): Promise<DecideResult> {
     const entry = pending.get(durableRunId);
-    if (!entry) return durableApprovals.decideLive(durableRunId, decision, reason);
-    if (entry.owner) return entry.owner.decide(decision, reason);
+    if (!entry) return durableApprovals.decideLive(durableRunId, decision, reason, gateId);
+    if (entry.owner) {
+      // A held chat turn has one gate; an answer aimed at a different gate takes nothing.
+      if (gateId !== undefined && entry.owner.gate.gateId !== gateId) {
+        return { ok: false, code: "not-found", message: `Run ${durableRunId} is not waiting at gate ${gateId}` };
+      }
+      return entry.owner.decide(decision, reason);
+    }
     const agent = entry.agent;
     try {
       if (decision === "approved") {
-        const result = await agent.approveRun(durableRunId, reason ? { reason } : undefined);
+        const result = await agent.approveRun(durableRunId, {
+          ...(reason ? { reason } : {}),
+          ...(gateId !== undefined ? { gateId } : {}),
+        });
         if (result.status === "awaiting-approval") return { ok: true };
       } else {
-        await agent.denyRun(durableRunId, reason ?? "Denied in Cortex");
+        await agent.denyRun(durableRunId, reason ?? "Denied in Cortex", gateId !== undefined ? { gateId } : undefined);
       }
     } catch (e) {
       return { ok: false, code: "failed", message: e instanceof Error ? e.message : String(e) };

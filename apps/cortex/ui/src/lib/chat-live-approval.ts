@@ -15,9 +15,12 @@ import type { PendingApprovalWire } from "./waiting-on-you.js";
 /** The approval a streaming chat turn is waiting on. */
 export interface LiveApproval {
   readonly runId: string;
+  /** Identifies this request: parallel sub-agents share `runId`, and an answer targets one `gateId`. */
   readonly gateId: string;
   readonly toolName: string;
   readonly args: unknown;
+  /** The sub-agent asking (its name), when the gated call runs inside one. */
+  readonly subAgent?: string;
 }
 
 /** Events that mean the run moved past its wait (answered, refused, or ended). */
@@ -38,7 +41,13 @@ const MOVED_ON: ReadonlySet<UiStreamEvent["_tag"]> = new Set([
  */
 export function liveApprovalAfter(current: LiveApproval | undefined, event: UiStreamEvent): LiveApproval | undefined {
   if (event._tag === "ApprovalRequested") {
-    return { runId: event.runId, gateId: event.gateId, toolName: event.toolName, args: event.args };
+    return {
+      runId: event.runId,
+      gateId: event.gateId,
+      toolName: event.toolName,
+      args: event.args,
+      ...(event.subAgent !== undefined ? { subAgent: event.subAgent } : {}),
+    };
   }
   return current !== undefined && MOVED_ON.has(event._tag) ? undefined : current;
 }
@@ -62,13 +71,15 @@ export function hideApprovalCard(a: { readonly runId: string; readonly gateId: s
  * The live approvals of an open chat that no streaming turn shows: a wait the
  * app-wide list knows for `sessionId` (e.g. after a reload, when the turn's stream
  * is gone) that is neither a held durable pause (`durableRunIds`, its own card)
- * nor a streaming turn's `liveApproval` (`streamingRunIds`), and not hidden.
+ * nor a streaming turn's `liveApproval` (`streamingCards`, by {@link approvalCardKey}:
+ * parallel sub-agents hold several gates under one run id, so a run id alone would
+ * hide the ones the turn does not show), and not hidden.
  */
 export function orphanChatApprovals(
   sessionId: string,
   pending: readonly PendingApprovalWire[],
   durableRunIds: ReadonlySet<string>,
-  streamingRunIds: ReadonlySet<string>,
+  streamingCards: ReadonlySet<string>,
   hidden: ReadonlySet<string>,
 ): LiveApproval[] {
   return pending
@@ -76,24 +87,38 @@ export function orphanChatApprovals(
       (p) =>
         p.chatSessionId === sessionId &&
         !durableRunIds.has(p.runId) &&
-        !streamingRunIds.has(p.runId) &&
+        !streamingCards.has(approvalCardKey(p)) &&
         !hidden.has(approvalCardKey(p)),
     )
-    .map((p) => ({ runId: p.runId, gateId: p.gateId, toolName: p.toolName, args: p.args }));
+    .map((p) => ({
+      runId: p.runId,
+      gateId: p.gateId,
+      toolName: p.toolName,
+      args: p.args,
+      ...(p.subAgent !== undefined ? { subAgent: p.subAgent } : {}),
+    }));
 }
 
-/** Approve or deny a live wait. `ok: false` carries the reason it was not delivered. */
+/**
+ * Approve or deny a live wait. `gateId` answers exactly that request (parallel
+ * sub-agents share the run id); without it the server answers the oldest wait.
+ * `ok: false` carries the reason it was not delivered.
+ */
 export async function decideLiveApproval(
   runId: string,
   verb: "approve" | "deny",
   reason?: string,
   fetchFn: typeof fetch = fetch,
+  gateId?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const res = await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/${verb}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(verb === "deny" ? { reason: reason?.trim() ? reason.trim() : "Denied in Cortex chat." } : {}),
+      body: JSON.stringify({
+        ...(verb === "deny" ? { reason: reason?.trim() ? reason.trim() : "Denied in Cortex chat." } : {}),
+        ...(gateId !== undefined ? { gateId } : {}),
+      }),
     });
     if (!res.ok) return { ok: false, error: `Server returned ${res.status}` };
     return { ok: true };

@@ -1,7 +1,6 @@
 import { Elysia, t } from "elysia";
 import { ChatSessionBusyError, type ChatSessionService } from "../services/chat-session-service.js";
-import type { AgentStreamEvent } from "@reactive-agents/runtime";
-import { causeLineOf } from "@reactive-agents/ui-core";
+import { DetachedTurns, sseFrame, type DetachedTurn } from "../services/chat-detached-turn.js";
 import { readRunTreeTraces } from "../services/run-trace-file.js";
 import type { ChatScheduleService } from "../services/chat-schedule-service.js";
 import type { ChatGoalService, GoalFailure } from "../services/chat-goal-service.js";
@@ -66,8 +65,29 @@ function proposalResponse(r: ProposalResult, set: { status?: number | string }):
   return { ...(r.proposal ? { proposal: r.proposal } : {}), error: r.message };
 }
 
-export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService, goals?: ChatGoalService, proposals?: ChatProposalService, btw?: ChatBtwService) =>
-  new Elysia({ prefix: "/api/chat" })
+/** An SSE response over a detached turn from `fromId`; the connection closing only detaches this reader. */
+function sseResponse(turn: DetachedTurn, fromId: number): Response {
+  const enc = new TextEncoder();
+  const leave = new AbortController();
+  const frames = turn.attach(fromId, leave.signal)[Symbol.asyncIterator]();
+  const readable = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const next = await frames.next();
+      if (next.done) controller.close();
+      else controller.enqueue(enc.encode(sseFrame(next.value)));
+    },
+    cancel() {
+      leave.abort();
+    },
+  });
+  return new Response(readable, {
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+  });
+}
+
+export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService, goals?: ChatGoalService, proposals?: ChatProposalService, btw?: ChatBtwService) => {
+  const detachedTurns = new DetachedTurns();
+  return new Elysia({ prefix: "/api/chat" })
     .get("/sessions", () => svc.listSessions())
     .post(
       "/sessions",
@@ -657,9 +677,31 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
     // stored as interrupted by the user; a client that only drops the stream reads as a
     // disconnect (chat-turn-stop.ts).
     .post("/sessions/:sessionId/chat/stop", ({ params }) => ({ stopped: svc.stopTurn(params.sessionId) }))
+    // The session's streamed turn that is still running (a reloaded page asks, then attaches).
+    // `message` is the user message the turn answers: it is stored with the turn only when it ends.
+    .get("/sessions/:sessionId/chat/active", ({ params }) => {
+      const turn = detachedTurns.running(params.sessionId);
+      return turn ? { active: true as const, message: turn.message, startedAt: turn.startedAt } : { active: false as const };
+    })
+    // Attach to the session's turn: replay its buffered events, then follow it live. `cursor` is the
+    // last event id the client saw (SSE `id:`); events after it are sent. 404 when there is no turn
+    // (it ended and aged out: the stored turn is in the session's history).
+    .get(
+      "/sessions/:sessionId/chat/stream/active",
+      ({ params, query, set }) => {
+        const turn = detachedTurns.get(params.sessionId);
+        if (!turn) {
+          set.status = 404;
+          return { error: "No turn to attach to" };
+        }
+        const cursor = query.cursor !== undefined ? Number(query.cursor) : undefined;
+        return sseResponse(turn, cursor !== undefined && Number.isFinite(cursor) ? cursor + 1 : 0);
+      },
+      { query: t.Object({ cursor: t.Optional(t.String()) }) },
+    )
     .post(
       "/sessions/:sessionId/chat/stream",
-      async ({ params, body, set, request }) => {
+      async ({ params, body, set }) => {
         const blocked = goalTurnBlock(goals, params.sessionId);
         if (blocked) {
           set.status = 409;
@@ -675,44 +717,23 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
           set.status = 409;
           return { error: "A turn in this session is awaiting approval or your reply: answer it first" };
         }
+        // One turn in flight per session; a second sender attaches instead (GET .../chat/stream/active).
+        if (detachedTurns.running(params.sessionId)) {
+          set.status = 409;
+          return { error: "A turn in this session is already running: reattach to it" };
+        }
         try {
-          const enc = new TextEncoder();
-          const readable = new ReadableStream<Uint8Array>({
-            async start(controller) {
-              try {
-                for await (const event of svc.chatStream(params.sessionId, body.message, request?.signal, posture, {
-                  ...(body.skills ? { skills: body.skills } : {}),
-                })) {
-                  // Stream the event as SSE
-                  controller.enqueue(enc.encode(`data: ${JSON.stringify(event)}\n\n`));
-
-                  if (event._tag === "StreamCompleted" || event._tag === "StreamError" || event._tag === "StreamCancelled") {
-                    controller.close();
-                    return;
-                  }
-                }
-                controller.close();
-              } catch (e) {
-                try {
-                  const errorEvent = {
-                    _tag: "StreamError" as const,
-                    cause: causeLineOf(e) ?? "Chat stream failed",
-                  };
-                  controller.enqueue(enc.encode(`data: ${JSON.stringify(errorEvent)}\n\n`));
-                  controller.close();
-                } catch {
-                  // controller already closed
-                }
-              }
-            },
-          });
-          return new Response(readable, {
-            headers: {
-              "Content-Type": "text/event-stream",
-              "Cache-Control": "no-cache",
-              Connection: "keep-alive",
-            },
-          });
+          // The turn runs to its end whether or not this connection stays open (chat-detached-turn.ts):
+          // closing or reloading the page no longer aborts it, so a wait on an approval or a question
+          // survives. The request's own signal is deliberately not passed; Stop is explicit.
+          const turn = detachedTurns.start(
+            params.sessionId,
+            body.message,
+            svc.chatStream(params.sessionId, body.message, undefined, posture, {
+              ...(body.skills ? { skills: body.skills } : {}),
+            }),
+          );
+          return sseResponse(turn, 0);
         } catch (e) {
           const msg = String(e);
           set.status = chatErrorStatus(e, msg);
@@ -724,3 +745,4 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         body: t.Object({ message: t.String(), posture: t.Optional(t.String()), skills: t.Optional(t.Array(t.String())) }),
       },
     );
+};

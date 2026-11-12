@@ -8,7 +8,7 @@
 import type { Database } from "bun:sqlite";
 import { buildCortexAgent } from "./build-cortex-agent.js";
 import { getChatSession, getChatTurns, type ChatTurnRow } from "../db/chat-queries.js";
-import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
+import { UTILITY_AGENT_PARAMS, UTILITY_MEMORY_OFF, utilityOutput, utilityPrompt } from "./utility-agent.js";
 
 /** One tool call of the run so far. */
 export interface BtwStep {
@@ -75,7 +75,7 @@ export type BtwAsk = (cfg: Record<string, unknown>, prompt: string) => Promise<s
  * on by default, and an observer's question must not become an episodic entry or recall
  * facts into the observer's own prompt. An explicit all-off `memory` builds no memory layer.
  */
-export const BTW_MEMORY_OFF = { working: false, episodic: false, semantic: false } as const;
+export const BTW_MEMORY_OFF = UTILITY_MEMORY_OFF;
 
 /** Default: a tool-less one-shot agent on the session's own provider and model (same build as the goal checker). */
 export const askWithAgent: BtwAsk = async (cfg, prompt) => {

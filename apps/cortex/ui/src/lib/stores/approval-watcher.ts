@@ -46,10 +46,12 @@ const shown = new Set<string>();
  * An approval was answered (from a toast, a chat card or the run header): drop it
  * from the shared store and remove its toast now, without waiting for the next poll.
  */
-export function clearApproval(runId: string): void {
-  pendingApprovals.update((list) => list.filter((a) => a.runId !== runId));
+export function clearApproval(runId: string, gateId?: string): void {
+  // With a `gateId` only that request goes: parallel sub-agents share the run id and the
+  // others are still waiting. Without one, every gate of the run (the run was answered whole).
+  pendingApprovals.update((list) => list.filter((a) => a.runId !== runId || (gateId !== undefined && a.gateId !== gateId)));
   for (const key of [...shown]) {
-    if (key.startsWith(`approval:${runId}|`)) {
+    if (gateId !== undefined ? key === `approval:${runId}|${gateId}` : key.startsWith(`approval:${runId}|`)) {
       toast.removeByKey(key);
       shown.delete(key);
     }
@@ -70,18 +72,23 @@ function argPreview(args: unknown): string {
  * Never the agent id (a chat agent's is a bare ULID, a desk run's a name plus
  * a timestamp); the Runs strip and the chat card name the run.
  */
-export function approvalToastMessage(p: Pick<Pending, "toolName" | "args" | "chatSessionId">): string {
-  return `${p.toolName}(${argPreview(p.args)}) · ${p.chatSessionId ? "from a chat" : "from a desk run"}`;
+export function approvalToastMessage(p: Pick<Pending, "toolName" | "args" | "chatSessionId" | "subAgent">): string {
+  const who = p.subAgent ? `${p.subAgent} wants ` : "";
+  return `${who}${p.toolName}(${argPreview(p.args)}) · ${p.chatSessionId ? "from a chat" : "from a desk run"}`;
 }
 
-async function decide(runId: string, action: "approve" | "deny"): Promise<void> {
+/** Answer one pending approval by its gate: parallel sub-agents share the run id, so the gate says which. */
+async function decide(p: Pick<Pending, "runId" | "gateId">, action: "approve" | "deny"): Promise<void> {
   try {
-    const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/${action}`, {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(p.runId)}/${action}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(action === "deny" ? { reason: "Denied from Cortex" } : {}),
+      body: JSON.stringify({
+        ...(action === "deny" ? { reason: "Denied from Cortex" } : {}),
+        ...(p.gateId ? { gateId: p.gateId } : {}),
+      }),
     });
-    if (res.ok) clearApproval(runId);
+    if (res.ok) clearApproval(p.runId, p.gateId || undefined);
   } catch {
     /* network / server error — next poll re-surfaces if still pending */
   }
@@ -109,8 +116,8 @@ function reconcile(approvals: readonly Pending[], view: ApprovalView): void {
       message: approvalToastMessage(p),
       key,
       buttons: [
-        { label: "Approve", variant: "primary", onClick: () => decide(p.runId, "approve") },
-        { label: "Deny", variant: "danger", onClick: () => decide(p.runId, "deny") },
+        { label: "Approve", variant: "primary", onClick: () => decide(p, "approve") },
+        { label: "Deny", variant: "danger", onClick: () => decide(p, "deny") },
       ],
     });
   }

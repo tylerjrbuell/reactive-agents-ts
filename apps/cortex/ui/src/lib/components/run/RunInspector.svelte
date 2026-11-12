@@ -15,6 +15,7 @@
   import MemoryPanel from "$lib/components/MemoryPanel.svelte";
   import ContextSources from "$lib/components/ContextSources.svelte";
   import { runSkillsFromLive } from "$lib/skill-row.js";
+  import { runRecallFromLive } from "$lib/context-sources.js";
   import MessagesPanel from "$lib/components/MessagesPanel.svelte";
   import RawEventLog from "$lib/components/RawEventLog.svelte";
   import RunSafety from "./RunSafety.svelte";
@@ -100,7 +101,7 @@
     {:else if tab === "signal"}
       <SignalMonitor data={signal} onselectIteration={onSelectIteration} />
     {:else if tab === "context"}
-      <ContextSources skills={runSkillsFromLive(events)} {agentId} {runId} settledKey={status === "live" ? "" : status} />
+      <ContextSources skills={runSkillsFromLive(events)} recall={runRecallFromLive(events)} {agentId} {runId} settledKey={status === "live" ? "" : status} />
       <ContextGauge {events} />
     {:else if tab === "memory"}
       <MemoryPanel {events} {agentId} {runId} />

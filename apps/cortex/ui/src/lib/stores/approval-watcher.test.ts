@@ -10,6 +10,12 @@ describe("approvalToastMessage", () => {
     expect(approvalToastMessage({ toolName: "file-write", args: { path: "a.md" } })).toBe('file-write({"path":"a.md"}) · from a desk run');
   });
 
+  test("a sub-agent's request names who is asking", () => {
+    expect(approvalToastMessage({ toolName: "file-write", args: { path: "a.md" }, subAgent: "researcher", chatSessionId: "s1" })).toBe(
+      'researcher wants file-write({"path":"a.md"}) · from a chat',
+    );
+  });
+
   test("long arguments are cut", () => {
     const msg = approvalToastMessage({ toolName: "web-search", args: { query: "x".repeat(200) } });
     expect(msg.length).toBeLessThan(120);

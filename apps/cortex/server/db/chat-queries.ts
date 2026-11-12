@@ -281,6 +281,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
             ...(typeof parsed.durationMs === "number" && parsed.durationMs >= 0 ? { durationMs: parsed.durationMs } : {}),
             // Skills the run had active and why (chat-turn-skills.ts).
             ...(parsed.skills && Array.isArray(parsed.skills.activations) ? { skills: parsed.skills } : {}),
+            // Memories the run recalled (chat-turn-recall.ts); [] = reported, recalled nothing.
+            ...(Array.isArray(parsed.recalled) ? { recalled: parsed.recalled } : {}),
           };
         }
       } catch {

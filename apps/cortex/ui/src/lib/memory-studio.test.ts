@@ -3,6 +3,7 @@ import {
   deleteMemoryEntry,
   fetchMemory,
   filterEntries,
+  findMemoryItem,
   memoryLayerTabs,
   memoryStudioHref,
   memoryUrl,
@@ -67,6 +68,13 @@ describe("provenance", () => {
   test("the studio link carries the agent and the run", () => {
     expect(memoryStudioHref("agent a", "run-1")).toBe("/lab?agent=agent+a&run=run-1#memory");
     expect(memoryStudioHref("a")).toBe("/lab?agent=a#memory");
+  });
+  test("an entry deep link carries the item id and findMemoryItem resolves it to its layer", () => {
+    expect(memoryStudioHref("a", undefined, "sem-1")).toBe("/lab?agent=a&item=sem-1#memory");
+    const listing: MemoryListing = { agentId: "a", available: true, dbPath: "/x", semantic: [sem], procedural: [proc], episodic: [] };
+    expect(findMemoryItem(listing, "sem-1")).toEqual({ layer: "semantic", entry: sem });
+    expect(findMemoryItem(listing, "proc-1")).toEqual({ layer: "procedural", entry: proc });
+    expect(findMemoryItem(listing, "nope")).toBeUndefined();
   });
   test("long ids are shortened for labels", () => {
     expect(shortId("01HXABCDEFGHJKMNPQ")).toBe("01HXAB…MNPQ");

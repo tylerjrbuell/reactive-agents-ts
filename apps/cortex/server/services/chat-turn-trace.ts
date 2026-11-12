@@ -7,6 +7,7 @@ import {
   turnOutcomeOf as readTurnOutcome,
   type InterruptedBy,
   type RunCompletionLike,
+  type RecalledMemoryView,
   type RunSkillsView,
   type TurnDeliverable,
   type TurnTrace,
@@ -83,6 +84,8 @@ export type StoredTurnTrace = Omit<TurnTrace, "outcome"> & {
   readonly deliverables?: readonly TurnDeliverable[];
   /** Skills the run had active and why (ui-core `foldRunSkills`, `chat-turn-skills.ts`). */
   readonly skills?: RunSkillsView;
+  /** Memories the run recalled into its context (ui-core `foldRecalledMemories`, `chat-turn-recall.ts`); absent when it reported none. */
+  readonly recalled?: readonly RecalledMemoryView[];
 };
 
 /**

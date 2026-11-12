@@ -6,7 +6,7 @@
   import ChatLiveInteraction from "$lib/components/ChatLiveInteraction.svelte";
   import { orphanChatInteractions, type LiveInteraction } from "$lib/chat-live-interaction.js";
   import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
-  import { hiddenApprovalCards, orphanChatApprovals } from "$lib/chat-live-approval.js";
+  import { approvalCardKey, hiddenApprovalCards, orphanChatApprovals } from "$lib/chat-live-approval.js";
   import { pendingApprovals } from "$lib/stores/approval-watcher.js";
   import ChatProposals from "$lib/components/ChatProposals.svelte";
   import ChatBtwAsides from "./ChatBtwAsides.svelte";
@@ -65,7 +65,7 @@
       sessionId,
       $pendingApprovals,
       new Set($chatStore.activePendingApprovals.map((p) => p.runId)),
-      new Set(turns.flatMap((t) => (t.streaming && t.liveApproval ? [t.liveApproval.runId] : []))),
+      new Set(turns.flatMap((t) => (t.streaming && t.liveApproval ? [approvalCardKey(t.liveApproval)] : []))),
       $hiddenApprovalCards,
     ),
   );

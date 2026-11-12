@@ -8,12 +8,15 @@ import { foldRunStrategy, initialRunStrategy, runStrategyOf, type RunStrategySta
 import { throughputSampleOf } from "../llm-throughput.js";
 import { abortStatusOf } from "../run-live-status.js";
 
-/** `stopped`: ended from outside (desk Stop, or a chat turn stopped or left mid-run). */
-export type RunStatus = "live" | "completed" | "failed" | "paused" | "stopped" | "loading";
+/**
+ * `stopped`: ended from outside (desk Stop, or a chat turn stopped or left mid-run).
+ * `blocked`: a guardrail ended it (`AgentAborted` reason `guardrail`).
+ */
+export type RunStatus = "live" | "completed" | "failed" | "paused" | "stopped" | "blocked" | "loading";
 
 /** A finished run: nothing more will happen to it. */
 export function isRunSettled(status: RunStatus): boolean {
-  return status === "completed" || status === "failed" || status === "stopped";
+  return status === "completed" || status === "failed" || status === "stopped" || status === "blocked";
 }
 
 /**
@@ -31,6 +34,8 @@ export function runStatusOfSummary(status: string): RunStatus {
     case "stopped":
     case "cancelled":
       return "stopped";
+    case "blocked":
+      return "blocked";
     default:
       return "completed";
   }
@@ -315,6 +320,9 @@ export function deriveStatus(current: RunStatus, msg: CortexLiveMsg): RunStatus 
     return "live";
   }
   if (msg.type === "ExecutionCancelled" || msg.type === "AgentStopped" || msg.type === "AgentTerminated") return "stopped";
+  if (current === "blocked" && (msg.type === "TaskFailed" || msg.type === "AgentCompleted" || msg.type === "DebriefCompleted")) {
+    return current;
+  }
   if (current === "stopped" && (msg.type === "TaskFailed" || msg.type === "AgentCompleted" || msg.type === "DebriefCompleted")) {
     return current;
   }

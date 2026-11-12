@@ -37,6 +37,7 @@
     searchHint,
     searchMemory,
     semanticDraftOf,
+    findMemoryItem,
     semanticPatchOf,
     shortId,
     updateProceduralMemory,
@@ -60,6 +61,8 @@
   let agentsLoaded = $state(false);
   let agentId = $state("");
   let runFilter = $state("");
+  /** Entry id from a `?item=` link, opened once the listing loads. */
+  let itemId = "";
   let listing = $state<MemoryListing | null>(null);
   let loading = $state(false);
   let loadError = $state<string | null>(null);
@@ -131,6 +134,13 @@
       const next = await fetchMemory(agentId, runFilter || undefined, fetch, ctl.signal);
       if (ctl.signal.aborted) return;
       listing = next;
+      // A `?item=` deep link (Context · recalled memories) opens that entry once.
+      const hit = itemId ? findMemoryItem(next, itemId) : undefined;
+      itemId = "";
+      if (hit) {
+        layer = hit.layer;
+        selected = hit;
+      }
       if (query.trim() && layer === "semantic") await runSearch();
     } catch (e) {
       if (ctl.signal.aborted) return;
@@ -269,6 +279,7 @@
     const q = new URLSearchParams(window.location.search);
     agentId = q.get("agent") ?? "";
     runFilter = q.get("run") ?? "";
+    itemId = q.get("item") ?? "";
     fetchMemoryAgents()
       .then((a) => {
         agents = a;

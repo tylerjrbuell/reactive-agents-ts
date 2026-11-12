@@ -40,16 +40,20 @@
     onStop: () => void;
     onTerminate: () => void;
     /**
-     * Set while the run waits on an approval: the header offers Approve / Deny in
-     * place of the live controls (the run is paused at the gate, not working).
+     * Set while the run waits on approvals: the header offers Approve / Deny in
+     * place of the live controls (the run is paused at the gate, not working). One
+     * entry per waiting request, each answered on its own (parallel sub-agents ask
+     * under one run); `subAgent` names who is asking.
      */
-    approval?: {
+    approvals?: readonly {
+      readonly key: string;
       readonly toolName: string;
       readonly detail: string;
+      readonly subAgent?: string;
       readonly busy: boolean;
       readonly onApprove: () => void;
       readonly onDeny: () => void;
-    };
+    }[];
     /** Set when a safety mechanism fired (ui-core `safetySummaryOf`): a count beside the status that opens the Safety tab. */
     safety?: {
       readonly count: number;
@@ -117,12 +121,15 @@
     </div>
   </div>
   <div class="actions">
-    {#if p.approval}
-      <span class="ask" use:tooltip={`${p.approval.toolName}: ${p.approval.detail}`}>
-        Approve <span class="data">{p.approval.detail || p.approval.toolName}</span>?
-      </span>
-      <Button size="sm" variant="primary" icon="check" disabled={p.approval.busy} onclick={p.approval.onApprove}>Approve</Button>
-      <Button size="sm" variant="danger" icon="x" disabled={p.approval.busy} onclick={p.approval.onDeny}>Deny</Button>
+    {#if p.approvals && p.approvals.length > 0}
+      {#each p.approvals as a (a.key)}
+        <span class="ask" data-testid="run-approval" use:tooltip={`${a.subAgent ? `${a.subAgent} · ` : ""}${a.toolName}: ${a.detail}`}>
+          {#if a.subAgent}<span class="who">{a.subAgent}:</span>{/if}
+          Approve <span class="data">{a.detail || a.toolName}</span>?
+        </span>
+        <Button size="sm" variant="primary" icon="check" disabled={a.busy} onclick={a.onApprove}>Approve</Button>
+        <Button size="sm" variant="danger" icon="x" disabled={a.busy} onclick={a.onDeny}>Deny</Button>
+      {/each}
     {:else if p.status === "live"}
       <Button size="sm" icon="pause" onclick={p.onPause}>Pause</Button>
       <Button size="sm" icon="stop" onclick={p.onStop}>Stop</Button>
@@ -174,6 +181,7 @@
   .safety:hover { border-color: currentColor; }
   .safety:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
   .ask { display: inline-flex; align-items: baseline; gap: 4px; max-width: 28rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
+  .ask .who { color: var(--cortex-accent); font-weight: 500; }
   .ask .data { overflow: hidden; text-overflow: ellipsis; color: var(--cortex-text); }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
 </style>

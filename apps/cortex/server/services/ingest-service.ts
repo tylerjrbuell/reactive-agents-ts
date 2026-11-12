@@ -122,12 +122,14 @@ const deriveRunStats = (
     };
   }
   // The run's effect failed, crashed or was interrupted without AgentCompleted (e.g. an
-  // output guardrail block): failed, or stopped when a user stop / terminate ended it.
+  // output guardrail block): failed, stopped when a user stop / terminate ended it, or
+  // blocked when a guardrail did (reason `guardrail`).
   // Same rule as the UI's `abortStatusOf` (`ui/src/lib/run-live-status.ts`).
   if (event._tag === "AgentAborted") {
     const e = event as { reason?: string; error?: string };
     return {
-      status: e.reason === "user-stop" || e.reason === "terminate" ? "stopped" : "failed",
+      status:
+        e.reason === "user-stop" || e.reason === "terminate" ? "stopped" : e.reason === "guardrail" ? "blocked" : "failed",
       completedAt: Date.now(),
       ...(typeof e.error === "string" && e.error ? { errorMessage: e.error } : {}),
     };

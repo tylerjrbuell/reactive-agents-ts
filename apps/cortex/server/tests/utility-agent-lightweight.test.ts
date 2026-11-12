@@ -29,6 +29,29 @@ describe("Cortex utility prompts run the lightweight one-shot path", () => {
     expect(src.slice(at, at + 160)).toContain("...UTILITY_AGENT_PARAMS");
   });
 
+  // Incident (2026-11): utility agents are keyed by name and Cortex turns memory on by default, so each
+  // titler / compactor / goal-checker run created a memory folder (27k of them) and recalled/wrote memory.
+  it("UTILITY_AGENT_PARAMS carries the explicit all-off memory: no memory layer, no memory feature (red-on-cut: drop `memory`)", () => {
+    expect(UTILITY_AGENT_PARAMS.memory).toEqual({ working: false, episodic: false, semantic: false });
+    const cfg = cortexParamsToAgentConfig({ agentName: "chat-titler", provider: "test", ...UTILITY_AGENT_PARAMS });
+    expect(cfg.memory).toBeUndefined();
+    expect(cfg.features?.memory).toBeUndefined();
+    const { memory: _off, ...cut } = UTILITY_AGENT_PARAMS;
+    expect(cortexParamsToAgentConfig({ agentName: "chat-titler", provider: "test", ...cut }).features?.memory).toBe(true);
+  });
+
+  // Every utility agent the server builds goes through UTILITY_AGENT_PARAMS (which is memory-off), so a
+  // new one that skips the spread would leave memory on. This lists every `agentName` built with a utility
+  // name and requires the spread next to each.
+  it("no utility-named buildCortexAgent call skips the shared params", () => {
+    for (const file of ["chat-session-service.ts", "chat-goal-service.ts", "chat-btw.ts"]) {
+      const src = readFileSync(join(services, file), "utf8");
+      const names = [...src.matchAll(/agentName: "(chat-titler|chat-compactor|goal-checker|chat-btw)"/g)];
+      expect(names.length).toBeGreaterThan(0);
+      for (const m of names) expect(src.slice(m.index!, m.index! + 160)).toContain("...UTILITY_AGENT_PARAMS");
+    }
+  });
+
   // Repro (2026-11-03, cogito:8b): titling a failed first turn made the direct run fail too;
   // its text became the title. A failed run now ships `output: ""` (cause on `error`), but its
   // output can still hold the model's own last text or a partial draft: never a title.

@@ -25,6 +25,12 @@ describe("runStatusAfter (B3: stopped runs leave the live list)", () => {
     expect(runStatusAfter("stopped", "AgentAborted", { causeClass: "failure" })).toBeUndefined();
   });
 
+  test("a guardrail AgentAborted is blocked, and a failure after it keeps it blocked", () => {
+    expect(runStatusAfter("live", "AgentAborted", { causeClass: "failure", reason: "guardrail" })).toBe("blocked");
+    expect(runStatusAfter("blocked", "AgentCompleted", { success: false })).toBeUndefined();
+    expect(runStatusAfter("blocked", "TaskFailed", {})).toBeUndefined();
+  });
+
   test("completion and failure behave as before", () => {
     expect(runStatusAfter("live", "AgentCompleted", { success: true })).toBe("completed");
     expect(runStatusAfter("live", "AgentCompleted", { success: false })).toBe("failed");

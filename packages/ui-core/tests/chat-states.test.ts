@@ -146,6 +146,7 @@ describe("status vocabulary (G2)", () => {
     expect(statusOfRun("completed").tone).toBe("done");
     expect(statusOfRun("failed").tone).toBe("failed");
     expect(statusOfRun("stopped")).toEqual({ tone: "stopped", label: "Stopped" });
+    expect(statusOfRun("blocked")).toEqual({ tone: "stopped", label: "Blocked by guardrail" });
     expect(statusOfRun("paused").tone).toBe("attention");
     expect(statusOfRun("awaiting-approval").tone).toBe("attention");
     expect(statusOfRun("whatever").tone).toBe("idle");

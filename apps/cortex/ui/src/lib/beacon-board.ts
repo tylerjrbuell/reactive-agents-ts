@@ -117,7 +117,10 @@ export function needsYouByRun(
   for (const [runId, w] of waitingRunsOf(refs, approvals, interactions)) {
     if (w.kind === "approval") {
       const detail = approvalDetail(w.approval.args);
-      out.set(runId, `Approve ${w.approval.toolName || "a tool call"}${detail ? `: ${detail}` : ""}`);
+      // Who is asking (a sub-agent's name) and how many more requests wait on the same run.
+      const who = w.approval.subAgent ? `${w.approval.subAgent}: ` : "";
+      const more = w.also && w.also.length > 0 ? ` (+${w.also.length} more waiting)` : "";
+      out.set(runId, `${who}Approve ${w.approval.toolName || "a tool call"}${detail ? `: ${detail}` : ""}${more}`);
     } else {
       out.set(runId, `Asked: ${firstLine(w.interaction.prompt)}`);
     }

@@ -225,11 +225,11 @@ export function entropyToState(entropy: number, isRunning: boolean): AgentCognit
 
 /** Cognitive state of a run that ended: completed, error, or idle once stopped. */
 function settledState(runStatus: string): AgentCognitiveState {
-  return runStatus === "failed" ? "error" : runStatus === "stopped" ? "idle" : "completed";
+  return runStatus === "failed" ? "error" : runStatus === "stopped" || runStatus === "blocked" ? "idle" : "completed";
 }
 
 const isTerminalRunStatus = (s: string | undefined): boolean =>
-  s === "completed" || s === "failed" || s === "stopped";
+  s === "completed" || s === "failed" || s === "stopped" || s === "blocked";
 
 function launchTaskOf(launchParams: Readonly<Record<string, unknown>> | undefined): string | undefined {
   const prompt = launchParams?.prompt;

@@ -83,6 +83,50 @@ describe("durableApprovals live sources", () => {
   });
 });
 
+describe("parallel sub-agents waiting under one run id", () => {
+  // Parallel gated sub-agents ask under the ROOT run id: an answer by run id alone always took the oldest.
+  const parallelAgent = (calls: string[]) => {
+    const rows = [
+      { runId: "root", gateId: "gate-a", toolName: "risky", args: { who: "alpha" }, subAgent: "alpha" },
+      { runId: "root", gateId: "gate-b", toolName: "risky", args: { who: "beta" }, subAgent: "beta" },
+    ];
+    const answer = (runId: string, gateId: string | undefined, what: string) => {
+      const i = gateId === undefined ? 0 : rows.findIndex((r) => r.gateId === gateId);
+      if (i >= 0) rows.splice(i, 1);
+      calls.push(`${what}:${runId}:${gateId ?? "oldest"}`);
+      return {} as never;
+    };
+    return {
+      listPendingApprovals: async () => rows.map((r) => ({ ...r, task: "", updatedAt: 0 })),
+      approveRun: async (runId: string, opts?: { gateId?: string }) => answer(runId, opts?.gateId, "approve"),
+      denyRun: async (runId: string, _reason: string, opts?: { gateId?: string }) => answer(runId, opts?.gateId, "deny"),
+    } as unknown as LiveApprovableAgent;
+  };
+
+  it("lists both gates with the sub-agent that asks, and answers each by its gate, separately", async () => {
+    const calls: string[] = [];
+    const unwatch = durableApprovals.watchLive({ agentId: "chat-agent", agent: parallelAgent(calls), chatSessionId: "s1" });
+    try {
+      const listed = (await durableApprovals.listPending()).filter((r) => r.runId === "root");
+      expect(listed.map((r) => [r.gateId, r.subAgent])).toEqual([["gate-a", "alpha"], ["gate-b", "beta"]]);
+
+      // Approve beta only: alpha keeps waiting.
+      expect(await durableApprovals.decide("root", "approved", undefined, "gate-b")).toEqual({ ok: true });
+      expect((await durableApprovals.listPending()).filter((r) => r.runId === "root").map((r) => r.gateId)).toEqual(["gate-a"]);
+
+      // Deny alpha by its own gate.
+      expect(await durableApprovals.decide("root", "denied", "no", "gate-a")).toEqual({ ok: true });
+      expect(calls).toEqual(["approve:root:gate-b", "deny:root:gate-a"]);
+
+      // A gate nobody holds takes nothing.
+      const none = await durableApprovals.decide("root", "approved", undefined, "gate-zzz");
+      expect(none.ok).toBe(false);
+    } finally {
+      unwatch();
+    }
+  });
+});
+
 /** A chat session whose scripted model calls the gated `file-write`, then answers. No durable runs. */
 async function liveGatedSession(tag: string): Promise<{ id: string; target: string }> {
   const workspace = mkdtempSync(join(root, `ws-${tag}-`));

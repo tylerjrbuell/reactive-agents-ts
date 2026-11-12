@@ -92,6 +92,10 @@ describe("beaconStatusOf", () => {
     expect(beaconStatusOf(node({ runId: "a", state: "error", runStatus: "failed", runEnding: "failed" }), false).label).toBe("Failed");
   });
 
+  it("a run a guardrail ended reads Blocked by guardrail (an at-rest stop, not a red Failed)", () => {
+    expect(beaconStatusOf(node({ runId: "a", state: "idle", runStatus: "blocked" }), false)).toEqual({ tone: "stopped", label: "Blocked by guardrail" });
+  });
+
   it("an agent waiting on you needs you, even while its run is live", () => {
     expect(beaconStatusOf(node({ runId: "a", state: "running" }), true)).toEqual({ tone: "attention", label: "Waiting on you" });
   });
@@ -124,6 +128,12 @@ describe("needsYouByRun", () => {
     expect(map.get("desk")).toBe("Approve shell-execute: rm -rf build/");
     expect(map.get("chat-new")).toBe("Approve file-write: {}");
     expect(map.has("chat-old")).toBe(false);
+  });
+
+  it("names the sub-agent that asks and how many more requests wait on the same run", () => {
+    const ask = (gateId: string, subAgent: string) => ({ runId: "root", agentId: "a", gateId, toolName: "risky", args: {}, subAgent });
+    const map = needsYouByRun([node({ runId: "root", agentId: "a" })], [ask("g1", "alpha"), ask("g2", "beta")], []);
+    expect(map.get("root")).toBe("alpha: Approve risky: {} (+1 more waiting)");
   });
 });
 

@@ -85,11 +85,32 @@ export function runHref(runId: string): string {
   return `/run/${encodeURIComponent(runId)}`;
 }
 
-/** The Lab Memory tab opened on an agent (and optionally narrowed to one run). */
-export function memoryStudioHref(agentId: string, runId?: string): string {
+/** The Lab Memory tab opened on an agent (optionally narrowed to one run, optionally on one entry `itemId`). */
+export function memoryStudioHref(agentId: string, runId?: string, itemId?: string): string {
   const q = new URLSearchParams({ agent: agentId });
   if (runId) q.set("run", runId);
+  if (itemId) q.set("item", itemId);
   return `/lab?${q.toString()}#memory`;
+}
+
+/**
+ * The entry with id `itemId` in a listing (a `?item=` deep link), with the layer
+ * it lives in; `undefined` when no layer holds it.
+ */
+export function findMemoryItem(
+  listing: MemoryListing,
+  itemId: string,
+):
+  | { readonly layer: "semantic"; readonly entry: SemanticMemory }
+  | { readonly layer: "procedural"; readonly entry: ProceduralMemory }
+  | { readonly layer: "episodic"; readonly entry: EpisodicMemory }
+  | undefined {
+  const s = listing.semantic.find((e) => e.id === itemId);
+  if (s) return { layer: "semantic", entry: s };
+  const p = listing.procedural.find((e) => e.id === itemId);
+  if (p) return { layer: "procedural", entry: p };
+  const ep = listing.episodic.find((e) => e.id === itemId);
+  return ep ? { layer: "episodic", entry: ep } : undefined;
 }
 
 /** Where an entry came from: the run that wrote it, or an honest "not recorded". */
