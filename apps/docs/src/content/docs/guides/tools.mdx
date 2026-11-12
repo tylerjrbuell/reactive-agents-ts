@@ -523,6 +523,17 @@ TAVILY_API_KEY=tvly-...
 KEENABLE_API_KEY=...
 ```
 
+Embedders can pass keys per agent instead of through `process.env`. `makeWebSearchHandler({ apiKeys, providers })` (from `@reactive-agents/tools`) builds a `web-search` handler where an explicit key wins over the env var, a provider without one falls back to its env var, and `providers` sets the order and limits the chain (leave out `"duckduckgo"` to disable the keyless fallback). `WEB_SEARCH_PROVIDERS` lists the provider ids and the env vars each reads. Keys are scrubbed from error text.
+
+```ts
+import { makeWebSearchHandler } from "@reactive-agents/tools";
+
+const handler = makeWebSearchHandler({
+  apiKeys: { tavily: process.env.MY_TAVILY_KEY },
+  providers: ["tavily", "duckduckgo"],
+});
+```
+
 Each provider that fails (for example a 401) is recorded in the error text and the next one is tried. Results are `{ title, url, content }`. If no provider returns results, the agent sees an explicit error listing every attempt.
 
 ## Sandboxed Execution

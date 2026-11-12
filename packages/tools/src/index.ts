@@ -197,6 +197,10 @@ export {
 export {
   webSearchTool,
   webSearchHandler,
+  makeWebSearchHandler,
+  WEB_SEARCH_PROVIDERS,
+  type WebSearchConfig,
+  type WebSearchKeyedProvider,
   type WebSearchHandlerResult,
   type WebSearchProvider,
   type WebSearchResultRow,

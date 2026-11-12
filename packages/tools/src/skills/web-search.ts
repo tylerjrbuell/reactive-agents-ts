@@ -1,10 +1,40 @@
-import { Effect } from "effect";
+import { Effect, Redacted } from "effect";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, WebSearchProviderError, toToolError } from "../errors.js";
 
+/**
+ * Ordered web-search provider chain with the env var(s) each one reads (first
+ * match wins). Default order of the handler; `duckduckgo` needs no key.
+ */
+export const WEB_SEARCH_PROVIDERS = [
+  { id: "tavily", envVars: ["TAVILY_API_KEY"] },
+  { id: "brave", envVars: ["BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY"] },
+  { id: "serper", envVars: ["SERPER_API_KEY"] },
+  { id: "keenable", envVars: ["KEENABLE_API_KEY"] },
+  { id: "duckduckgo", envVars: [] },
+] as const;
+
 /** Which backend produced the result list (for debugging and traces). */
-export type WebSearchProvider = "tavily" | "brave" | "serper" | "keenable" | "duckduckgo";
+export type WebSearchProvider = (typeof WEB_SEARCH_PROVIDERS)[number]["id"];
+
+/** Providers that take an API key (everything except DuckDuckGo). */
+export type WebSearchKeyedProvider = Exclude<WebSearchProvider, "duckduckgo">;
+
+/**
+ * Per-agent web-search configuration. Explicit keys win over environment
+ * variables; a provider with no explicit key falls back to its env var(s).
+ */
+export type WebSearchConfig = {
+  /** Explicit API keys per provider. Plain strings or `Redacted` values. */
+  readonly apiKeys?: Partial<Record<WebSearchKeyedProvider, string | Redacted.Redacted<string>>>;
+  /**
+   * Ordered subset of providers to try. Omitted: the full default chain.
+   * A provider left out is never tried (omit `duckduckgo` to disable the
+   * keyless fallback).
+   */
+  readonly providers?: ReadonlyArray<WebSearchProvider>;
+};
 
 export type WebSearchResultRow = {
   readonly title: string;
@@ -22,12 +52,43 @@ export type WebSearchHandlerResult = {
 const clampMaxResults = (n: number): number =>
   Math.min(10, Math.max(1, Number.isFinite(n) ? Math.floor(n) : 5));
 
-const braveApiKey = (): string | undefined =>
-  process.env.BRAVE_SEARCH_API_KEY ?? process.env.BRAVE_API_KEY;
+/** Replace every secret value in `text` so keys never reach results, errors or traces. */
+function scrubSecrets(text: string, secrets: ReadonlyArray<string>): string {
+  let out = text;
+  for (const secret of secrets) {
+    if (secret.length > 0) out = out.split(secret).join("[REDACTED]");
+  }
+  return out;
+}
 
-function formatProviderAttemptError(providerLabel: string, e: unknown): string {
+function formatProviderAttemptError(
+  providerLabel: string,
+  e: unknown,
+  secrets: ReadonlyArray<string>,
+): string {
   const msg = e instanceof Error ? e.message : String(e);
-  return `${providerLabel}: ${msg}`;
+  return scrubSecrets(`${providerLabel}: ${msg}`, secrets);
+}
+
+const unwrapKey = (k: string | Redacted.Redacted<string> | undefined): string | undefined => {
+  if (k === undefined) return undefined;
+  const v = typeof k === "string" ? k : Redacted.value(k);
+  return v.length > 0 ? v : undefined;
+};
+
+/** Explicit key first, then each env var in order. */
+function resolveProviderKey(
+  id: WebSearchKeyedProvider,
+  config: WebSearchConfig | undefined,
+): string | undefined {
+  const explicit = unwrapKey(config?.apiKeys?.[id]);
+  if (explicit) return explicit;
+  const spec = WEB_SEARCH_PROVIDERS.find((p) => p.id === id);
+  for (const name of spec?.envVars ?? []) {
+    const v = process.env[name];
+    if (v) return v;
+  }
+  return undefined;
 }
 
 /** HTTP statuses where the provider refused or overloaded — always try the next backend. */
@@ -478,92 +539,104 @@ export const webSearchTool: ToolDefinition = {
   cardinality: "batch",
 };
 
-export const webSearchHandler = (
-  args: Record<string, unknown>,
-): Effect.Effect<WebSearchHandlerResult, ToolExecutionError> =>
-  Effect.tryPromise({
-    try: async (): Promise<WebSearchHandlerResult> => {
-      const query = clampQueryLength(args.query as string);
-      const maxResults = clampMaxResults((args.maxResults as number) ?? 5);
-      const attempts: string[] = [];
+type ChainEntry = {
+  readonly label: string;
+  readonly emptyMessage: string;
+  readonly run: (
+    query: string,
+    maxResults: number,
+    apiKey: string,
+  ) => Promise<ReadonlyArray<WebSearchResultRow>>;
+};
 
-      const tavilyKey = process.env.TAVILY_API_KEY;
-      if (tavilyKey) {
-        try {
-          const results = await searchTavily(query, maxResults, tavilyKey);
-          if (results.length > 0) {
-            return { query, maxResults, provider: "tavily", results };
+const CHAIN: Readonly<Record<WebSearchKeyedProvider, ChainEntry>> = {
+  tavily: { label: "Tavily", emptyMessage: "Tavily returned no usable rows.", run: searchTavily },
+  brave: {
+    label: "Brave Search",
+    emptyMessage: "Brave Search returned no usable rows.",
+    run: searchBrave,
+  },
+  serper: { label: "Serper", emptyMessage: "Serper returned no usable rows.", run: searchSerper },
+  keenable: {
+    label: "Keenable",
+    emptyMessage: "Keenable returned no usable rows.",
+    run: searchKeenable,
+  },
+};
+
+/**
+ * Build a `web-search` handler bound to explicit per-agent keys and an ordered
+ * provider list. With no config it behaves exactly like the env-only default.
+ * Keys are scrubbed from every error message the handler produces.
+ */
+export const makeWebSearchHandler =
+  (config?: WebSearchConfig) =>
+  (
+    args: Record<string, unknown>,
+  ): Effect.Effect<WebSearchHandlerResult, ToolExecutionError> =>
+    Effect.tryPromise({
+      try: async (): Promise<WebSearchHandlerResult> => {
+        const query = clampQueryLength(args.query as string);
+        const maxResults = clampMaxResults((args.maxResults as number) ?? 5);
+        const attempts: string[] = [];
+
+        const order = [
+          ...new Set(config?.providers ?? WEB_SEARCH_PROVIDERS.map((p) => p.id)),
+        ];
+        const keys = new Map<WebSearchKeyedProvider, string>();
+        for (const spec of WEB_SEARCH_PROVIDERS) {
+          if (spec.id === "duckduckgo") continue;
+          const k = resolveProviderKey(spec.id, config);
+          if (k) keys.set(spec.id, k);
+        }
+        const secrets = [...keys.values()];
+        const tavilyKey = keys.get("tavily");
+
+        for (const id of order) {
+          if (id === "duckduckgo") {
+            try {
+              const results = await searchDuckDuckGoInstant(query, maxResults);
+              if (results.length > 0) {
+                return { query, maxResults, provider: "duckduckgo", results };
+              }
+              attempts.push("DuckDuckGo instant answers returned no usable rows.");
+            } catch (e) {
+              attempts.push(formatProviderAttemptError("DuckDuckGo", e, secrets));
+            }
+            continue;
           }
-          attempts.push("Tavily returned no usable rows.");
-        } catch (e) {
-          attempts.push(formatProviderAttemptError("Tavily", e));
-        }
-      }
-
-      const braveKey = braveApiKey();
-      if (!braveKey && tavilyKey) {
-        attempts.push("Brave Search is not configured as a fallback.");
-      }
-      if (braveKey) {
-        try {
-          const results = await searchBrave(query, maxResults, braveKey);
-          if (results.length > 0) {
-            return { query, maxResults, provider: "brave", results };
+          const entry = CHAIN[id];
+          const key = keys.get(id);
+          if (!key) {
+            if (id === "brave" && tavilyKey) {
+              attempts.push("Brave Search is not configured as a fallback.");
+            }
+            continue;
           }
-          attempts.push("Brave Search returned no usable rows.");
-        } catch (e) {
-          attempts.push(formatProviderAttemptError("Brave Search", e));
-        }
-      }
-
-      const serperKey = process.env.SERPER_API_KEY;
-      if (serperKey) {
-        try {
-          const results = await searchSerper(query, maxResults, serperKey);
-          if (results.length > 0) {
-            return { query, maxResults, provider: "serper", results };
+          try {
+            const results = await entry.run(query, maxResults, key);
+            if (results.length > 0) return { query, maxResults, provider: id, results };
+            attempts.push(entry.emptyMessage);
+          } catch (e) {
+            attempts.push(formatProviderAttemptError(entry.label, e, secrets));
           }
-          attempts.push("Serper returned no usable rows.");
-        } catch (e) {
-          attempts.push(formatProviderAttemptError("Serper", e));
         }
-      }
 
-      const keenableKey = process.env.KEENABLE_API_KEY;
-      if (keenableKey) {
-        try {
-          const results = await searchKeenable(query, maxResults, keenableKey);
-          if (results.length > 0) {
-            return { query, maxResults, provider: "keenable", results };
-          }
-          attempts.push("Keenable returned no usable rows.");
-        } catch (e) {
-          attempts.push(formatProviderAttemptError("Keenable", e));
-        }
-      }
-
-      try {
-        const results = await searchDuckDuckGoInstant(query, maxResults);
-        if (results.length > 0) {
-          return { query, maxResults, provider: "duckduckgo", results };
-        }
-        attempts.push("DuckDuckGo instant answers returned no usable rows.");
-      } catch (e) {
-        attempts.push(formatProviderAttemptError("DuckDuckGo", e));
-      }
-
-      throw formatWebSearchFailure(
-        query,
-        attempts,
-        Boolean(tavilyKey || braveKey || serperKey || keenableKey),
-      );
-    },
-    catch: toToolError("web-search", "Web search"),
-  }).pipe(
-    // Developer log: provider setup advice the model must not see.
-    Effect.tapError(() =>
-      Effect.logWarning("web-search-providers-exhausted").pipe(
-        Effect.annotateLogs({ configHint: WEB_SEARCH_CONFIG_HINT }),
+        throw formatWebSearchFailure(
+          query,
+          attempts,
+          order.some((id) => id !== "duckduckgo" && keys.has(id)),
+        );
+      },
+      catch: toToolError("web-search", "Web search"),
+    }).pipe(
+      // Developer log: provider setup advice the model must not see.
+      Effect.tapError(() =>
+        Effect.logWarning("web-search-providers-exhausted").pipe(
+          Effect.annotateLogs({ configHint: WEB_SEARCH_CONFIG_HINT }),
+        ),
       ),
-    ),
-  );
+    );
+
+/** Env-only default handler (no explicit keys). */
+export const webSearchHandler = makeWebSearchHandler();
