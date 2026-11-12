@@ -1,11 +1,12 @@
 // Run: bun run repo test apps/cortex/server/tests/debrief-memory.test.ts
 //
-// The framework writes a run debrief (`DebriefCompleted`) only when memory is on
-// and the run took the reasoning path (runtime `debrief-synthesis.ts`
-// `shouldFinalize`); there is no separate debrief switch. Pins, after the
-// AgentConfig migration: the Lab default (working memory on) still gets a debrief,
-// a config with no memory choice still gets the memory layer, and an all-off
-// memory (the chat default) gets none. The UI's wording rule is `lib/debrief-memory.ts`.
+// The framework writes a run debrief (`DebriefCompleted`) per `isDebriefEnabled`
+// (`debrief ?? enableMemory === true`) when the run took the reasoning path
+// (runtime `debrief-synthesis.ts` `shouldFinalize`). Pins: the Lab default
+// (working memory on) gets a debrief, an all-off memory (the chat default) gets
+// none, `rawConfig.debrief: true` gets one with memory off, `debrief: false`
+// suppresses it with memory on, and a config with no memory choice still gets
+// the memory layer. The UI's wording rule is `lib/debrief-memory.ts`.
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -55,6 +56,23 @@ describe("debrief follows memory", () => {
 
   it("chat default (all memory off): no debrief", async () => {
     const tags = await runTags({ memory: { working: false, episodic: false, semantic: false } });
+    expect(tags).toContain("AgentCompleted");
+    expect(tags).not.toContain("DebriefCompleted");
+  }, 30_000);
+
+  it("rawConfig.debrief true with memory off: the run publishes DebriefCompleted", async () => {
+    const tags = await runTags({
+      memory: { working: false, episodic: false, semantic: false },
+      rawConfig: { debrief: true, memory: { dbPath: join(dir, "off.db") } },
+    });
+    expect(tags).toContain("DebriefCompleted");
+  }, 30_000);
+
+  it("rawConfig.debrief false with memory on: no debrief", async () => {
+    const tags = await runTags({
+      memory: { working: true, episodic: false, semantic: false },
+      rawConfig: { debrief: false, memory: { dbPath: join(dir, "on.db") } },
+    });
     expect(tags).toContain("AgentCompleted");
     expect(tags).not.toContain("DebriefCompleted");
   }, 30_000);

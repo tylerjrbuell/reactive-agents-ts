@@ -1,7 +1,7 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
   import type { PanelAgentConfig } from "../types.js";
-  import { debriefSwitchHint, debriefsOn, memoryForDebriefs } from "$lib/debrief-memory.js";
+  import { debriefSwitchHint, debriefsOn, rawConfigForDebriefs } from "$lib/debrief-memory.js";
 
   interface Props {
     config: PanelAgentConfig;
@@ -9,9 +9,9 @@
     onToggle: () => void;
   }
   let { config = $bindable(), open, onToggle }: Props = $props();
-  // Debriefs follow memory (framework rule, `lib/debrief-memory.ts`): the switch
-  // reads and writes the tiers below; there is no separate debrief flag.
-  const debriefs = $derived(debriefsOn(config.memory));
+  // Debrief = `rawConfig.debrief ?? memory on` (framework `isDebriefEnabled`,
+  // `lib/debrief-memory.ts`): the switch writes `rawConfig.debrief`, never the tiers.
+  const debriefs = $derived(debriefsOn(config.memory, config.rawConfig));
 </script>
 
 <ConfigSection id="memory" icon="folder" title="Memory" {open} {onToggle}>
@@ -19,10 +19,10 @@
         <label class="acp-check">
           <input type="checkbox"
             checked={debriefs}
-            onchange={(e) => (config = { ...config, memory: memoryForDebriefs(config.memory, (e.currentTarget as HTMLInputElement).checked) })} />
+            onchange={(e) => (config = { ...config, rawConfig: rawConfigForDebriefs(config.memory, config.rawConfig, (e.currentTarget as HTMLInputElement).checked) })} />
           <span>
             <span class="acp-check-t">Debrief after each run</span>
-            <span class="acp-hint">{debriefSwitchHint(config.memory)}</span>
+            <span class="acp-hint">{debriefSwitchHint(config.memory, config.rawConfig)}</span>
           </span>
         </label>
         {#each [

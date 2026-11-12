@@ -1,12 +1,12 @@
 /**
- * Debriefs follow memory. The framework writes a run debrief (`DebriefCompleted`)
- * only when the agent has memory on and the run took the reasoning loop (runtime
- * `engine/finalize/debrief-synthesis.ts`, `shouldFinalize`); there is no separate
- * debrief setting. Small or local runs get the deterministic debrief, larger
- * models a synthesised one. These rules drive the builder's "Debrief after each
- * run" switch (it reads and writes the memory tiers) and the run view's empty
- * state. Pure; pinned by `debrief-memory.test.ts`, the framework side by
- * `server/tests/debrief-memory.test.ts`.
+ * Debriefs follow memory unless set. The framework's `isDebriefEnabled`
+ * (runtime `debrief.ts`) is `debrief ?? enableMemory === true`: an explicit
+ * `withDebrief(true|false)` wins, unset follows memory. The run must also take
+ * the reasoning loop (`engine/finalize/debrief-synthesis.ts`, `shouldFinalize`).
+ * Cortex carries the setting as `rawConfig.debrief`. These rules drive the
+ * builder's "Debrief after each run" switch (memory tiers stay independent) and
+ * the run view's empty state. Pure; pinned by `debrief-memory.test.ts`, the
+ * framework side by `server/tests/debrief-memory.test.ts`.
  */
 
 /** The panel's memory tiers. */
@@ -16,26 +16,40 @@ export interface MemoryTiers {
   readonly semantic: boolean;
 }
 
-/** Whether runs get a debrief: any memory tier on. */
-export function debriefsOn(memory: MemoryTiers): boolean {
-  return memory.working || memory.episodic || memory.semantic;
+const memoryOn = (m: MemoryTiers): boolean => m.working || m.episodic || m.semantic;
+const explicit = (rawConfig: Record<string, unknown> | undefined): boolean | undefined => {
+  const d = rawConfig?.["debrief"];
+  return typeof d === "boolean" ? d : undefined;
+};
+
+/** Whether runs get a debrief: explicit `rawConfig.debrief`, else any memory tier on. */
+export function debriefsOn(memory: MemoryTiers, rawConfig?: Record<string, unknown>): boolean {
+  return explicit(rawConfig) ?? memoryOn(memory);
 }
 
 /**
- * The memory tiers after flipping "Debrief after each run": on turns working
- * memory on (the lightest tier) when every tier is off; off turns every tier off,
- * since a debrief cannot be had without memory.
+ * `rawConfig` after flipping "Debrief after each run". Memory is never changed.
+ * `debrief` is stored only when it differs from what memory implies, so an
+ * unset value keeps following memory.
  */
-export function memoryForDebriefs(memory: MemoryTiers, on: boolean): MemoryTiers {
-  if (on) return debriefsOn(memory) ? memory : { ...memory, working: true };
-  return { working: false, episodic: false, semantic: false };
+export function rawConfigForDebriefs(
+  memory: MemoryTiers,
+  rawConfig: Record<string, unknown>,
+  on: boolean,
+): Record<string, unknown> {
+  const { debrief: _drop, ...rest } = rawConfig;
+  return on === memoryOn(memory) ? rest : { ...rest, debrief: on };
 }
 
 /** The hint under the switch. */
-export function debriefSwitchHint(memory: MemoryTiers): string {
-  return debriefsOn(memory)
-    ? "On because memory is on: the framework writes a debrief when memory is on. Turning this off turns memory off."
-    : "Debriefs need memory. Turning this on turns working memory on.";
+export function debriefSwitchHint(memory: MemoryTiers, rawConfig?: Record<string, unknown>): string {
+  const e = explicit(rawConfig);
+  const mem = memoryOn(memory);
+  if (e === true && !mem) return "On without memory: the debrief is written to a small debrief store.";
+  if (e === false && mem) return "Off although memory is on.";
+  return mem
+    ? "On because it follows memory. Turn it off to skip debriefs while keeping memory."
+    : "Off while memory is off. Turn it on to write debriefs without memory.";
 }
 
 /** The run view's text when a run has no debrief, and where to change it. */
@@ -52,18 +66,29 @@ const tiersOf = (launch: Record<string, unknown> | null): MemoryTiers | null => 
   return { working: r["working"] === true, episodic: r["episodic"] === true, semantic: r["semantic"] === true };
 };
 
+const rawOf = (launch: Record<string, unknown> | null): Record<string, unknown> | undefined => {
+  const r = launch?.["rawConfig"];
+  return r && typeof r === "object" && !Array.isArray(r) ? (r as Record<string, unknown>) : undefined;
+};
+
 /** What the Debrief panel says without a debrief. */
 export function debriefEmptyState(status: string, runId: string, launch: Record<string, unknown> | null): DebriefEmptyState {
   if (status === "loading") return { text: "Loading the run…" };
   if (status === "live") return { text: "The debrief is written when the run finishes." };
   const href = launch ? `/lab?fromRun=${encodeURIComponent(runId)}` : undefined;
+  const raw = rawOf(launch);
   const tiers = tiersOf(launch);
-  if (tiers && debriefsOn(tiers)) {
+  const flag = explicit(raw);
+  if (flag === false) {
+    const text = "No debrief was recorded: debrief was turned off for this agent. Turn on Debrief after each run in the agent's Memory settings.";
+    return href ? { text, href } : { text };
+  }
+  if (flag === true || (tiers && memoryOn(tiers))) {
     return {
-      text: "No debrief was recorded although memory was on. The framework skips it for a paused run and for a turn that ran without the reasoning loop (a chat with tools off).",
+      text: "No debrief was recorded although debrief was on. The framework skips it for a paused run and for a turn that ran without the reasoning loop (a chat with tools off).",
     };
   }
   const text =
-    "No debrief was recorded. The framework writes one only when the agent has memory on: turn on Debrief after each run in the agent's Memory settings.";
+    "No debrief was recorded. Debrief follows memory unless set: turn on Debrief after each run in the agent's Memory settings.";
   return href ? { text, href } : { text };
 }
