@@ -574,3 +574,12 @@ Done criterion for P1: all eleven green, `bun run repo verify` on each touched p
 4. Update flow polish (manual reinstall suffices at first).
 5. `llm.before/after` and `approval` hooks (keep `tool.before/after`, `output`).
 6. Never cut: manifest + lockfile + integrity, no-postinstall, permission review card, `pluginId` on events, `run-started.config.plugins`, kill switch. Those are the trust floor.
+
+## Owner decisions (2026-11-12)
+
+Ratified in [[../../Decisions/2026-11-12-workflows-plugins-and-c5]].
+- **Package:** new `@reactive-agents/plugin` (contracts only, depends on core, runtime-warden).
+- **Sequencing:** amend 09 C5 and the Plan 9 deferral (A1, A2); the trust layer and converged extension points are authorized now.
+- **Combinators:** approved as specced: `Member` programs in `packages/compose`, lowering to the workflow graph.
+- **Autotune:** diagnose-only skeleton in P1, full loop later (P4).
+- **Defaults taken (owner may overrule):** say "plugin" everywhere; first-party plugins live in `plugins/` in this repo; `tool.before` allows `Continue|Deny` only in v1 (no `Rewrite`); declarative panels, not an iframe.

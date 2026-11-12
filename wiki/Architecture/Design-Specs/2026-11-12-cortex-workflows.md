@@ -3,6 +3,7 @@ type: design-spec
 status: proposed
 created: 2026-11-12
 tags: [cortex, workflows, gateway, compose, durable]
+related: ["[[2026-09-08-multi-agent-orchestration-design]]", "[[2026-05-06-compose-harness-api]]", "[[2026-11-12-plugin-system]]"]
 ---
 
 # Cortex Workflows: an n8n-style automation tool where every agent node keeps its full loop
@@ -22,11 +23,46 @@ Status: proposed, for owner ratification. Nothing here is built. Companion to [[
 
 ### Non-goals (v1)
 - No second execution engine, scheduler, retry framework, or agent loop.
+- No new orchestration combinators and no change to delegation (`route`, `fanOut`, `quorum`, `.withSubAgents()` stay owned by the multi-agent spec; see Prior art).
+- No revival of `@reactive-agents/orchestration` (deleted in Wave 3; see Prior art).
 - No arbitrary code in expressions or code nodes (section 5). No marketplace, no 400-integration catalogue; integrations come from MCP and the tool registry.
 - No multi-user, workspaces, RBAC, billing, metering UI. Seams only.
 - No distributed or multi-node execution. One process runs a workflow run; others may resume it after a crash.
 - No visual "any-to-any" data mapping UI. Mapping is JSON Pointer picking.
 - No natural-language workflow generation in v1 (a later Lab-style helper; the JSON schema makes it easy, do not build it first).
+
+## Prior art and prior plans (reconciliation, 2026-11-12)
+
+Authority order (AGENTS.md): 09 > 08 > harness north star > active plans. This spec amends none of them.
+
+**1. Multi-agent orchestration: [[2026-09-08-multi-agent-orchestration-design]]** (draft; Decision Index "Multi-Agent Orchestration & Teamwork" still reads DEFERRED, target v1.0+). It defines one child-spawn boundary, `delegation.requested/result` tags, `.withSubAgents()`, and in-run combinators (`route`, `fanOut`, `firstSuccess`, `quorum`, `budgetPerSubAgent`, `capDelegationDepth`) applied via `.compose()`. It says it "deliberately does not introduce a new orchestration package", and its section 13 recommends building only Phase 0, Phase 1 and the documented example.
+- Layering: that spec is *in-run delegation decided by an agent or harness*. Workflows are *author-drawn, durable, cross-run graphs*. They meet at one boundary: an Agent node starts an ordinary durable agent run via `buildCortexAgent`, and anything that agent spawns goes through that spec's spawn boundary. Workflows add no delegation API and are not a reason to build its Phases 2-4.
+- Overlap: Join `any`/`n-of` vs `firstSuccess`/`quorum`. The merge/quorum rule is one pure function that lives with whichever lands first; the other imports it. No second copy.
+- Its section 2.8 (a cron-triggered run hits a gated tool with no human present) gets an explicit answer here: the node and run go `waiting`, `onTimeout` decides, a notification event fires; never a hang or a silent deny.
+- Its section 2.5 (five overlapping HITL mechanisms) is why Approval/Ask nodes reuse `HumanGate*` shapes (section 6).
+
+**2. Compose: [[2026-05-06-compose-harness-api]].** `.compose(h => ...)` with five tag namespaces, 12 lifecycle phases (`harness.before/after/onError`), `RunHandle` pause/resume/stop/terminate, killswitch library, "Don't config, compose".
+- **Direction (decided here): workflows do not compile to compose combinators, and compose does not compile to workflows.** Compose is a per-run, in-process harness surface; its `pause/resume` is in-process only (v0.11 scope) and `requireApprovalFor` is a synchronous callback, so neither can carry a durable wait. Workflows are a compose *consumer*: node `timeoutMs` and `maxCostUsd` map to `timeoutAfter` and `budgetLimit` on the node's agent run; cancel uses `RunHandle.stop`. No workflow phase, tag or hook is added to compose. A saved agent's own `.compose()` config applies unchanged inside its node. Section 2 below ("compile to existing pieces") means the existing *services*, not the compose pipeline.
+
+**3. The workflow/DAG gap and the deleted package: [[../../Research/2026-05-23-primitive-audit-fresh-lens]] (G-H), [[../DEBT-REGISTER]] section 4, `wiki/Reference/Changelog.md`.** The audit asked whether to own a declarative DAG primitive or document it out of scope; this spec is the "own it" answer, deliberately smaller than LangGraph (no `StateGraph` API, no code nodes, node-level durable records). `@reactive-agents/orchestration` (WorkflowEngine, `requiresApproval` on `WorkflowStep`, `approveStep()`/`rejectStep()`, event sourcing, worker pool) was **deleted in Wave 3, 2026-07-20** (-2833 LOC; subpath and `apps/examples/09-orchestration` removed; v0.14 breaking). 08 records why it died: its "durable" checkpoints, event log and step approvals lived in in-memory `Ref`s (a crash lost everything), the worker pool was dormant, `orchestrator-workers` fell through to sequential, and nothing real consumed it.
+- Reuse the idea: the step-approval shape survives as the Approval node.
+- Do not repeat: (a) durability claimed but in-memory: here the store is the truth and tests 3-5 restart the walker on the same SQLite file (08 Arc 3 item 3 prescribed "onto the RunStore rail"); (b) a package with no consumer: Cortex is consumer one from slice 1.4; (c) dormant breadth: minimal node set, each with an acceptance test, breadth cut first; (d) public API before proof: the package ships unstable-labelled until Phase 2.
+
+**4. Convergence program, extension points: [[../../Planning/Implementation-Plans/2026-11-04-architecture-convergence-program]].** Typed kernel extension points arrive per phase (strategy, acceptance check, kernel operation, guidance producer, tool-call dialect, tier profile); a public plugin API is built on converged surfaces "never on today's multiplicity"; plugin packaging is a separate design after Phase 4. Workflows add no kernel extension point and no kernel change. They add product-level registries: `NodeKind`, `TriggerKind`, and the delivery `ChannelAdapter`. In v1 these are internal typed registries with one conformance suite and built-ins only (no third-party loading).
+
+**5. Authority docs: [[../Specs/09-UNIFIED-PROGRAM]] and [[../Specs/08-AGENTIC-OS-NORTH-STAR]].** Not contradicted, but there is a tension: 09 C5 / WIP=1 holds orchestration topology behind RunAssessment (see risk "Program fit", Q6). Consistency with 08: fixed author-drawn topology (08 non-goal is *learned* topologies), no new reasoning strategy, durable on the RunStore rail, catalogue breadth last. Honest-claims law: docs say "calibrated when the backend is calibrated".
+
+**6. Cortex constraints: [[2026-10-25-cortex-chat-engine-overhaul-spec]], [[2026-11-10-cortex-ui-modernization]], `apps/cortex/server/services/chat-schedule-service.ts`.** Bench identity (semantic `--cortex-*` tokens over `--ra-*`, Geist + JetBrains Mono) and the frozen giants (AgentConfigPanel, lab page, ToolWorkshop, ChatPanel) that are "split first, then restyle".
+- UI: the Workflows route and editor are new small modules in their own folder, started after Bench step 0, using Bench tokens. `ChatPanel.svelte` gets wiring only (slash command through the already-split composer and slash-menu components).
+- Schedules: chat schedules are per-session loop/cron with a 3-per-session cap, mandatory TTL, per-fire cost cap and `skipped:busy` recorded in a fire log. Workflow cron triggers go through the audit's `ScheduleRegistry`, not through `chat-schedule-service`; its caps (TTL, cost cap, record-the-skip) are the precedent copied into trigger policy. Long term a chat schedule is a degenerate workflow; migrating it is a later decision (Q7).
+
+**7. Sibling spec: [[2026-11-12-plugin-system]]** (being written in parallel; may not exist when this is read). Contract offered to it:
+- `NodeKind = { tag, configSchema, inputSchema, outputSchema, ports, execute(ctx, input): Effect<NodeResult, NodeError> }` is the only way the walker runs a node; the walker has no per-type branching. `TriggerKind` is analogous.
+- Combinators (compose, multi-agent Phase 4) are a *different* extension point (in-run, `(harness) => void`) and are not interchangeable with nodes.
+- A plugin may ship a workflow template (data) or a node kind, and never runs code outside the node's declared permissions (section 9).
+- Direction: nodes and combinators sit side by side on the same agent-run boundary; neither compiles to the other. If the plugin spec chooses otherwise, resolve the disagreement before either is ratified.
+
+**Net changes this reconciliation made:** storage moved from Cortex-only SQLite to the workflow package on the RunStore rail; compose described accurately (five killswitches) and limited to consumer; Approval/Ask reuse `HumanGate*` shapes; non-goals extended; new risks (program fit, budget escape, repeating the deleted package); new questions Q6 and Q7.
 
 ## 2. Core principle: workflows COMPILE TO existing pieces
 
@@ -50,7 +86,7 @@ A workflow is **data**. Running it is a thin, deterministic graph walker that ca
 | Per-schedule cost caps and TTL precedent | `chat-schedule-service.ts` (`maxCostUsd`, expiry, `skipped:busy`, fire log) | `apps/cortex/server/services/chat-schedule-service.ts` |
 
 ### What compose does NOT give us (stating it precisely)
-`packages/compose` today is **only the six-name killswitch registry** (`budgetLimit`, `timeoutAfter`, `maxIterations`, `requireApprovalFor`, `watchdog`, plus the registry listing) and its tests. It is *harness* composition: wrap **one run** with limits. It has no notion of a graph, of one run's output feeding another, of branching, or of a multi-step durable unit. Durable runs are likewise **per agent run**: `RunStore` knows one run's kernel state, not "this run is step 4 of workflow W run R".
+`packages/compose` today is **only the five killswitches** (`budgetLimit`, `timeoutAfter`, `maxIterations`, `requireApprovalFor`, `watchdog`) and a registry that lists their names and its tests. It is *harness* composition: wrap **one run** with limits. It has no notion of a graph, of one run's output feeding another, of branching, or of a multi-step durable unit. Durable runs are likewise **per agent run**: `RunStore` knows one run's kernel state, not "this run is step 4 of workflow W run R".
 
 ### What is genuinely missing (the only new framework surface)
 1. **A durable workflow-run record** (`workflow_runs`, `node_runs`): which node finished, with what output, which is waiting on what. Kernel checkpoints cannot hold this.
@@ -140,7 +176,7 @@ Rules:
 - **Versioned and portable.** `format`+`version` on the file; `revision` on the workflow. A `WorkflowRun` pins `revision`; editing a workflow never mutates an in-flight run. Import validates with the same schema as the editor; unknown node `_tag` is a typed import error.
 - **Secrets are references** (`SecretRef = { name }`), never values, in the file. Export strips them and lists required names.
 - **Agents by reference, optionally embedded.** A node names a saved agent id. Export embeds the agent's `AgentConfig` (Cortex Plan 10 P2 makes this one schema) so the file is self-contained; import maps them onto local saved agents (create or pick).
-- **Storage.** Cortex SQLite tables `workflows`, `workflow_revisions`, `workflow_runs`, `workflow_node_runs`, `workflow_triggers` (registration state is delegated to `ScheduleRegistry` once it exists; v1 may keep a table behind the same interface). The `WorkflowStore` is an Effect `Context.Tag` with one SQLite implementation, so hosted can swap it.
+- **Storage.** Tables live in the workflow package's own `workflows.db`, opened through `runtime-shim` `Database` on the same rail as `RunStore` (08 Arc 3 item 3: orchestration durability "onto the existing RunStore rail"). Cortex reads and writes only through the `WorkflowStore` service and keeps no copy. Tables: `workflows`, `workflow_revisions`, `workflow_runs`, `workflow_node_runs`, `workflow_triggers` (registration state is delegated to `ScheduleRegistry` once it exists; v1 may keep a table behind the same interface). The `WorkflowStore` is an Effect `Context.Tag` with one SQLite implementation, so hosted can swap it.
 - Edge `from.port` set per node type; the validator rejects dangling ports, cycles outside a Loop node, unreachable nodes, and two edges into a non-join input.
 
 ## 4. Node catalogue for v1
@@ -156,7 +192,7 @@ Common to all: inputs arrive on port `in` (a JSON value shaped by the edge `map`
 | **Agent** | `agentId`; `task` template; `inputSchema`; `outputSchema` (JSON Schema, default from the saved agent's `outputSchema`); `memory` (`inherit`/`off`); `maxCostUsd`; `maxIterations` | the agent's structured output (validated), plus `meta {agentRunId, costUsd, status}` | schema extraction failed after the framework's own repair (`extract-object`), agent budget stop, agent paused for tool approval (node goes `waiting`), provider error | build with `buildCortexAgent(config)`, `.withOutputSchema(...)`, `.withDurableRuns()`, killswitches via compose; run through the same desk runner so `cortex_runs` / run view see it. `agentRunId` stored on `NodeRun` |
 | **Judge (branch)** | `question`: `choice{labels,criteria}` / `noul` / `score`; `state` (the pointer or template giving the judged value); `minConfidence`; `onLowConfidence`: `route:<label>` (default port `uncertain`) | `{answer, confidence?, calibrated, backend}`; emitted on the port named by the label, or `uncertain` | `JudgmentUnsupported` / timeout / unauthorized (typed errors from the judgment package); **uncalibrated backend** (see below) | `JudgmentService.ask` + `passes()`; `capabilitiesOf` to know up front |
 | **If (field branch)** | one predicate over the input: `{path, op, value}` with `op` in `eq ne gt gte lt lte exists in contains`; combinable with `all`/`any`/`not` | passes input through on `true` or `false` | pointer missing (treated as `exists=false`, never an exception); type mismatch is a validation error at edit time | pure function, zero tokens |
-| **Parallel / Join** | Parallel: fans out on all outgoing edges. Join: `mode: all\|any\|n-of`, `timeoutMs`, `onTimeout` | Join: `{[sourceNodeId]: output}` | one branch fails (`all` fails join unless branch `onError: continue`), `any` + late arrivals (cancelled via `RunHandle`) | walker concurrency (bounded, section 6) |
+| **Parallel / Join** (author-drawn and durable; not the in-run `fanOut`/`firstSuccess`/`quorum` combinators) | Parallel: fans out on all outgoing edges. Join: `mode: all\|any\|n-of`, `timeoutMs`, `onTimeout` | Join: `{[sourceNodeId]: output}` | one branch fails (`all` fails join unless branch `onError: continue`), `any` + late arrivals (cancelled via `RunHandle`) | walker concurrency (bounded, section 6) |
 | **Loop** | `over: JsonPointer` (array) or `until: predicate`; `maxIterations` (required, default 10, hard cap 100); body = a sub-graph or a sub-workflow | array of body outputs, or last output | cap reached (`exit` port `capped`, never silent), body fails | walker; body iterations are separate `NodeRun`s keyed by `iteration` |
 | **Approval** | `message` template, `showFields` (pointers to display), `timeoutMs`, `onTimeout`: `deny\|approve\|fail`, `approvers` (v1: "local user") | ports `approved`, `denied`; payload carries `decidedBy`, `reason` | timeout, nobody reachable (delivery of the request failed) | durable `awaiting-approval` pause model; the walker owns its own gate record (see below). Surfaces in Cortex approvals UI and as a channel message |
 | **Ask user** | `prompt`, `kind: form\|choice\|confirmation`, `schema` for the answer | the validated answer | timeout, schema-invalid answer (re-asked once, then fail) | `request_user_input` / `InteractionRequested` / `respondToInteraction` shapes (`HumanGateRequest.kind="interaction"`) |
@@ -167,6 +203,7 @@ Common to all: inputs arrive on port `in` (a JSON value shaped by the edge `map`
 Notes on the three non-obvious nodes:
 
 - **Judge node and honesty.** Branching on a number the model made up is the thing to avoid. The node records `calibrated` on every `NodeRun.judgment`. Rules: (1) a Choice/Score branch is taken only if `confidence >= minConfidence`; (2) the default `minConfidence` follows the rubric grader precedent: 0.6 when `calibrated`, 0.8 when not; (3) the editor shows a visible "uncalibrated" badge on the node when the configured backend reports `calibrated: false` (e.g. the `llm` fallback), and the run view shows the confidence next to the taken edge; (4) below threshold, the answer goes to the `uncertain` port, which the author can wire to an Approval or Ask-user node. That "low confidence -> ask a human" wiring is the headline template. Noul has probability only, so for Noul the gate is the probability margin (`p >= t` or `p <= 1-t`), not a fabricated confidence.
+- **No sixth HITL vocabulary.** The multi-agent spec counts five overlapping human-in-the-loop mechanisms and schedules their consolidation (its Phase 8). Approval/Ask nodes reuse the `HumanGateRequest` / `HumanGateAnswer` shapes (`approval` + `gateId`, `interaction` + `interactionId`) and Cortex's durable approvals surface. They add one *storage* location (the `NodeRun` gate record, needed because no agent run exists behind a workflow-level gate) and no new request/answer types; after Phase 8 the record consumes the consolidated mechanism.
 - **Approval is not the agent's tool approval.** A tool approval *inside* an agent node (the agent's own gated tool) uses the existing durable pause for that agent run and shows as the Agent node `waiting`. An Approval *node* is workflow-level: a gate the author placed. They share the UI and the Cortex approvals list, not the mechanism. The walker stores the gate (`waitingOn`) in `NodeRun`, which is trivially durable; it does not need a kernel run to be paused.
 - **Tool/MCP node vs Agent node.** Use a Tool node when the call is deterministic (fetch, post, write). Use an Agent node when the *how* needs judgment. The editor says so in one line. This keeps cheap steps cheap and is the "deterministic over LLM-driven" rule applied to workflows.
 
@@ -220,7 +257,7 @@ Deliberately not in v1: Code node, Set/Transform node (use edge `map`), HTTP nod
 
 ## 8. Local-first storage and seams for hosted multi-user
 
-v1: one local SQLite (the Cortex DB), `WorkflowStore` Effect service, files exportable. The following are **seams, not features**, each costing a field or an interface now and nothing else:
+v1: one local SQLite (`workflows.db`, owned by the workflow package), `WorkflowStore` Effect service, files exportable. The following are **seams, not features**, each costing a field or an interface now and nothing else:
 
 | Later need | Seam built now | Not built |
 |---|---|---|
@@ -301,9 +338,11 @@ Phase 1 steps 1.1-1.4 plus a read-only run view prove the idea. Cut in this orde
 
 **Questions for the owner**
 - Q1. New package `@reactive-agents/workflow` (headless-runnable, clean hosted path) versus a module inside `packages/runtime`? Recommendation: new package, owned by runtime-warden. It is a new-package decision, so it needs your approval.
-- Q2. Is "workflows are saved in Cortex's SQLite and exported as files" enough for v1, or do you want workflows as files on disk (git-friendly, repo-style `workflows/*.json`) as the *primary* store? Files-first is more developer-friendly; DB-first is smoother for the UI and hosted path. Recommendation: DB primary, one-click export/import, revisit after use.
+- Q2. Is "workflows are saved in the workflow package's local SQLite and exported as files" enough for v1, or do you want workflows as files on disk (git-friendly, repo-style `workflows/*.json`) as the *primary* store? Files-first is more developer-friendly; DB-first is smoother for the UI and hosted path. Recommendation: DB primary, one-click export/import, revisit after use.
 - Q3. Is Phase 0 (ScheduleRegistry, ChannelAdapter, webhook ingress) acceptable as a hard dependency of triggers and Deliver? Without it a workflow cron would sit on the audit's in-memory scheduler and the Deliver node would have no honest receipt. The alternative is a webhook-only Phase 1 (no cron, no channel delivery), which weakens the pitch.
 - Q4. Judge backend default for Cortex: the calibrated TypeSafe `jev` backend needs a key; the `llm` fallback is uncalibrated. Do we ship the Judge node enabled on the fallback with the uncalibrated badge and a stricter default threshold (this spec), or require `jev`/`ollama` calibrated backends?
+- Q6. Ruling needed: are workflows the "orchestration topology" 09 C5 holds behind RunAssessment (WIP=1), or a product feature on single-agent runs that proceeds now? Either way record it as a 09 amendment.
+- Q7. Should chat schedules eventually become workflows (one scheduler, one run history), or stay a separate lightweight chat feature?
 - Q5. Naming: "Workflows" vs "Flows" vs "Automations", and whether `/workflows` should also alias `/flows`.
 
 **Risks**
@@ -315,6 +354,9 @@ Phase 1 steps 1.1-1.4 plus a read-only run view prove the idea. Cut in this orde
 - *Triggers inherit the audit's bugs.* G1-G4, G6, G8 are open correctness issues; shipping triggers before they are fixed would put a flaky foundation under the headline feature. Phase 0 is not optional.
 - *Resumed agent node cost.* `resumeRun` re-enters from a checkpoint; model state is not byte-identical, so a resumed node may produce a different (still schema-valid) output. Documented, and the Judge `NodeRun` stores its input so branch decisions are reviewable.
 - *Cortex file-size/cast gates.* Cortex has frozen giants (see UI modernization spec); the editor must be new, small modules, not additions to `ChatPanel.svelte`. `repo place` before creating files.
+- *Program fit (09 C5, WIP=1).* 09 says orchestration topology is "not authorized before RunAssessment ships", and the multi-agent spec's section 13 recommends stopping at its Phase 0, Phase 1 and the documented example. Workflows are a Cortex product feature on single-agent runs (each node an independent durable run, no parent supervising child progress, no kernel change). That is the argument that C5 does not block them, but it is an interpretation and needs an explicit owner ruling recorded as a 09 amendment, not silent drift (Q6).
+- *Budget escape inside a node.* A node's `maxCostUsd` bounds that node's own agent. Until multi-agent Phase 0 and 5b land, sub-agents spawned inside an Agent node can escape the cap (that spec, sections 2.3 and 4.5). Do not advertise hard workflow-wide budgets before then.
+- *Repeating the deleted package's mistakes.* See Prior art: no in-memory durability claims, no zero-consumer package, no dormant breadth.
 - *Local resource contention.* Parallel agent nodes on a single local model serialize badly; the global agent semaphore default of 2 avoids melt but makes fan-out slower than users expect. Surface "queued" in node state.
 - *Hermes parity trap.* Hermes bundles scheduler + gateway + skills + session search as one agent. Our `run_workflow`/`/workflows` and deliver-to-channel give the delivery half; session search is already a Cortex/memory concern and is intentionally not part of this spec.
 
@@ -327,3 +369,7 @@ Phase 1 steps 1.1-1.4 plus a read-only run view prove the idea. Cut in this orde
 - **Q3 phasing:** Phase 0 (durable ScheduleRegistry, canonical ChannelAdapter, webhook ingress, inbound queue) is a hard dependency of the first slice; it starts first.
 - **Q4 Judge node:** allowed on the uncalibrated `llm` fallback with an "uncalibrated" badge and the stricter 0.8 threshold; calibrated backends use 0.6; low confidence routes to the `uncertain` port.
 - **Q5 naming:** still open (Workflows, Flows or Automations; `/flows` alias).
+
+## 13. C5 ruling (Q6)
+
+Workflows are not held by 09 C5; ruled by the owner 2026-11-12, see [[../../Decisions/2026-11-12-workflows-plugins-and-c5]]. Direction agreed with the plugin spec: combinators lower to the workflow graph, workflows consume compose only for timeouts, budgets and cancel. Q7 (chat schedules becoming workflows) stays open; Q5 (naming) stays open.

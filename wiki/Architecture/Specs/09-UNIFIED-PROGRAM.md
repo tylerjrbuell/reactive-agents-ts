@@ -85,6 +85,10 @@ K makes agents capable. P makes them governable. T keeps both honest.
   and a "puppeteer" orchestrator role split (planner/executor/validator) over the A2A
   protocol for inter-agent discovery. None of this is authorized before RunAssessment
   ships — §8's WIP=1 rule still applies.
+  **Ruling 2026-11-12 (owner):** Cortex workflows (author-drawn durable graphs of
+  single-agent runs, no kernel or delegation change) and the plugin trust layer with the
+  already-converged extension points are NOT held by C5; supervisor/debate/topology
+  selection still are. See [[../../Decisions/2026-11-12-workflows-plugins-and-c5]].
 - **C6 — The flywheel is the policy compiler grown up.** Arc 4 + Wave G + Phase 7 are one movement.
 - **C7 — One terminal truth.** **NEW 2026-08-12.** `run()`, `runStream()`, durable rows,
   trace completion and UI state are projections of one supervisor-owned outcome. No path
