@@ -22,12 +22,37 @@ const DEFAULT_DENY_HINT =
 
 // ─── Status Snapshot ────────────────────────────────────────────────────────
 
+/**
+ * Live snapshot of the inbound event queue that serializes agent runs. The queue is owned by the
+ * runtime, so {@link GatewayService.status} leaves this out; `agent.gatewayStatus()` fills it.
+ */
+export interface InboundQueueStatus {
+  /** Events cleared to run and waiting for the single worker. */
+  readonly ready: number;
+  /** Events the policy answered `queue` for, held until a limit window rolls. */
+  readonly deferred: number;
+  /** Maximum waiting events per list. */
+  readonly capacity: number;
+  /** What a full list discards. */
+  readonly overflow: "drop-oldest" | "drop-newest";
+  /** Events discarded because a list was full, since the gateway started. */
+  readonly dropped: number;
+}
+
 export interface GatewayStatus {
   readonly isRunning: boolean;
   readonly stats: GatewayStats;
   readonly uptime: number;
   readonly state: GatewayState;
+  /** Inbound queue depth, capacity and drop count. Present on `agent.gatewayStatus()`. */
+  readonly inboundQueue?: InboundQueueStatus;
 }
+
+/** Attach a queue snapshot to a gateway status without mutating it. */
+export const withInboundQueue = (status: GatewayStatus, inboundQueue: InboundQueueStatus): GatewayStatus => ({
+  ...status,
+  inboundQueue,
+});
 
 // ─── Initial Stats ──────────────────────────────────────────────────────────
 

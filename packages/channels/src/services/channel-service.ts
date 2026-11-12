@@ -64,6 +64,10 @@ interface RegisteredAdapter {
   readonly readState?: Effect.Effect<ConnectionState>;
   readonly deliveryFailures: number;
   readonly lastError?: ChannelError;
+  readonly messagesReceived: number;
+  readonly messagesSent: number;
+  readonly lastInboundAt?: number;
+  readonly lastSentAt?: number;
 }
 
 function toGatewayEvent(adapterId: string, msg: InboundMessage): GatewayEvent {
@@ -129,6 +133,8 @@ export class ChannelService {
         platform: adapter.id,
         state: { status: "connected" },
         deliveryFailures: 0,
+        messagesReceived: 0,
+        messagesSent: 0,
         send: (m) =>
           adapter
             .sendMessage(
@@ -179,6 +185,8 @@ export class ChannelService {
         state: yield* adapter.currentState,
         readState: adapter.currentState,
         deliveryFailures: 0,
+        messagesReceived: 0,
+        messagesSent: 0,
       });
       yield* Scope.extend(adapter.start(), scope);
       self.update(adapter.id, { state: yield* adapter.currentState });
@@ -234,6 +242,12 @@ export class ChannelService {
       }
       const bus = self.deps.eventBus;
       return yield* reg.send(message).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            const cur = self.adapters.get(adapterId);
+            if (cur) self.update(adapterId, { messagesSent: cur.messagesSent + 1, lastSentAt: Date.now() });
+          }),
+        ),
         Effect.tap((receipt) =>
           bus
             ? bus.publish({
@@ -313,6 +327,8 @@ export class ChannelService {
         .pipe(Effect.ignore);
 
     return Effect.gen(function* () {
+      const reg = self.adapters.get(adapterId);
+      if (reg) self.update(adapterId, { messagesReceived: reg.messagesReceived + 1, lastInboundAt: Date.now() });
       const taskId = self.deps.taskId();
       const decision = yield* self.deps.evaluatePolicy(toGatewayEvent(adapterId, msg));
       if (decision.action !== "execute") {
@@ -372,10 +388,15 @@ export class ChannelService {
   status(): ChannelStatus {
     const adapters: AdapterInfo[] = [...this.adapters.values()].map((a) => ({
       id: a.id,
+      platform: a.platform,
       connected: a.state.status === "connected",
       sessionsActive: 0,
       state: a.state,
       deliveryFailures: a.deliveryFailures,
+      messagesReceived: a.messagesReceived,
+      messagesSent: a.messagesSent,
+      ...(a.lastInboundAt !== undefined ? { lastInboundAt: a.lastInboundAt } : {}),
+      ...(a.lastSentAt !== undefined ? { lastSentAt: a.lastSentAt } : {}),
       ...(a.lastError ? { lastError: a.lastError } : {}),
     }));
     return {

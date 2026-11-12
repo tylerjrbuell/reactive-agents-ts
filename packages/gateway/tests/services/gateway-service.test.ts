@@ -181,3 +181,22 @@ describe("GatewayService", () => {
     expect(result.stats.channelMessages).toBe(1);
   });
 });
+
+describe("GatewayStatus inbound queue snapshot", () => {
+  test("withInboundQueue attaches depth, capacity and drop counters without mutating", async () => {
+    const { GatewayService, GatewayServiceLive, withInboundQueue } = await import(
+      "../../src/services/gateway-service.js"
+    );
+    const base = await Effect.runPromise(
+      Effect.gen(function* () {
+        const gw = yield* GatewayService;
+        return yield* gw.status();
+      }).pipe(Effect.provide(GatewayServiceLive({ heartbeat: { intervalMs: 60000, policy: "adaptive" } }))),
+    );
+    expect(base.inboundQueue).toBeUndefined();
+    const withQ = withInboundQueue(base, { ready: 2, deferred: 1, capacity: 100, overflow: "drop-oldest", dropped: 3 });
+    expect(withQ.inboundQueue).toEqual({ ready: 2, deferred: 1, capacity: 100, overflow: "drop-oldest", dropped: 3 });
+    expect(withQ.stats).toBe(base.stats);
+    expect(base.inboundQueue).toBeUndefined();
+  });
+});

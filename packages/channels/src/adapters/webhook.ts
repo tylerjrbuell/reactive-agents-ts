@@ -245,6 +245,27 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
     });
   }
 
+  /**
+   * Ingress-route handler: the same verification and enqueue as {@link handleRequest}, with the
+   * failure typed as a {@link ChannelError} so it fits the gateway's `IngressChannelRoute.handle`
+   * directly. Signature, timestamp and secret failures are `auth`; a malformed body or an adapter
+   * nobody consumes is `unsupported`. The failure reason is the message.
+   */
+  handleWebhook(req: {
+    readonly body: string;
+    readonly headers: Readonly<Record<string, string>>;
+  }): Effect.Effect<void, ChannelError> {
+    const id = this.id;
+    return this.handleRequest({ body: req.body, headers: { ...req.headers } }).pipe(
+      Effect.mapError((e) =>
+        channelError(id, e.reason === "invalid_json" || e.reason === "not_started" ? "unsupported" : "auth", {
+          message: `channel ${id}: ${e.reason}`,
+          cause: e,
+        }),
+      ),
+    );
+  }
+
   // ── Legacy MessageChannel ───────────────────────────────────────────────
 
   connect(): Effect.Effect<void, ChannelConnectionError> {

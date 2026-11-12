@@ -179,6 +179,8 @@ export interface ActiveSession {
 
 export interface AdapterInfo {
   readonly id: string;
+  /** Platform the adapter serves (`telegram`, `signal`, `webhook`, ...). */
+  readonly platform: string;
   /** True only when the adapter reports `ConnectionState.status === "connected"`. */
   readonly connected: boolean;
   /** @deprecated Always 0; use {@link ChannelStatus.activeSessions}. */
@@ -189,6 +191,14 @@ export interface AdapterInfo {
   readonly deliveryFailures: number;
   /** Most recent delivery failure, if any. */
   readonly lastError?: ChannelError;
+  /** Inbound messages handed to the pipeline since registration (echoes excluded). */
+  readonly messagesReceived: number;
+  /** Outbound messages the platform accepted since registration. */
+  readonly messagesSent: number;
+  /** Epoch ms of the latest inbound message. */
+  readonly lastInboundAt?: number;
+  /** Epoch ms of the latest successful outbound send. */
+  readonly lastSentAt?: number;
 }
 
 export interface ChannelStatus {
