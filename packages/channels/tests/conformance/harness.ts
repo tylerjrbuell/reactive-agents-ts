@@ -58,7 +58,14 @@ export interface AdapterHarness {
    * `channelId`. Platforms whose message ids are structured (Signal: `<author>:<timestamp>`) or whose
    * DM conversation is the sender's address supply this.
    */
-  readonly expected?: (message: PlatformInbound) => { readonly id: string; readonly channelId: string };
+  readonly expected?: (message: PlatformInbound) => {
+    readonly id: string;
+    readonly channelId: string;
+    /** Platforms whose user ids are numeric (Telegram) map the pushed `senderId`. Default: `senderId`. */
+    readonly userId?: string;
+  };
+  /** A thread reference this platform can parse (inbound `threadId` and outbound `threadId`). Default: opaque strings. */
+  readonly threadRef?: string;
   /** A reply reference this platform can parse (inbound `replyTo` and outbound `replyTo`). Default: opaque strings. */
   readonly replyToRef?: string;
   /** Attachment kinds the platform carries. Default: both. */

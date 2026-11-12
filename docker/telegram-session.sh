@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Telegram Session Helper
+# Telegram Session Helper (LEGACY, personal-account path)
+# For a bot, use TelegramChannelAdapter from @reactive-agents/channels with a BotFather token
+# (see the "Telegram (bot)" section of the messaging-channels guide). This script is only for
+# acting as your own Telegram account through the Telethon MCP server.
+#
 # Generates a session string for the Telegram MCP server (chigwell/telegram-mcp).
 # Must be a normal *user* login (phone + OTP). Bot tokens / bot sessions will fail
 # at runtime with BotMethodInvalidError on get_dialogs().

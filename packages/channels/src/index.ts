@@ -15,3 +15,6 @@ export * from "./adapters/webhook.js";
 export * from "./adapters/signal.js";
 export * from "./adapters/signal-protocol.js";
 export * from "./adapters/signal-transport.js";
+export * from "./adapters/telegram.js";
+export * from "./adapters/telegram-api.js";
+export * from "./adapters/telegram-protocol.js";

@@ -29,8 +29,10 @@ const out = (text: string, over: Partial<OutboundMessage> = {}): OutboundMessage
 });
 
 /** The envelope identifiers a pushed message must produce (identity unless the harness says otherwise). */
-const ex = (h: AdapterHarness, m: PlatformInbound): { id: string; channelId: string } =>
-  h.expected?.(m) ?? { id: m.id, channelId: m.channelId ?? "chan-1" };
+const ex = (h: AdapterHarness, m: PlatformInbound): { id: string; channelId: string; userId: string } => {
+  const e = h.expected?.(m) ?? { id: m.id, channelId: m.channelId ?? "chan-1" };
+  return { ...e, userId: e.userId ?? m.senderId };
+};
 
 /** Start collecting inbound envelopes until the one for `last` arrives (inclusive). */
 const collectThrough = (h: AdapterHarness, last: PlatformInbound) =>
@@ -67,7 +69,7 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
       const [env] = yield* Fiber.join(fiber);
       expect(env?.id).toBe(ex(h, m).id);
       expect(env?.text).toBe("hello");
-      expect(env?.sender.userId).toBe("user-1");
+      expect(env?.sender.userId).toBe(ex(h, m).userId);
       expect(env?.sender.displayName).toBe("Ann");
       expect(env?.conversation.channelId).toBe(ex(h, m).channelId);
       expect(env?.conversation.isGroup).toBe(false);
@@ -109,7 +111,8 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
   "group messages keep the individual sender and thread (group vs DM)": ({ make }) =>
     Effect.gen(function* () {
       const h = yield* make();
-      const g1 = msg({ id: "g1", channelId: "group-9", isGroup: true, threadId: "t-3", senderId: "alice", mentionsSelf: true });
+      const thread = h.threadRef ?? "t-3";
+      const g1 = msg({ id: "g1", channelId: "group-9", isGroup: true, threadId: thread, senderId: "alice", mentionsSelf: true });
       const g2 = msg({ id: "g2", channelId: "dm-alice", senderId: "alice" });
       const fiber = yield* collectThrough(h, g2);
       yield* h.pushInbound(g1);
@@ -118,9 +121,9 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
       expect(group?.conversation).toEqual({
         channelId: ex(h, g1).channelId,
         isGroup: true,
-        ...(h.adapter.capabilities.threads ? { threadId: "t-3" } : {}),
+        ...(h.adapter.capabilities.threads ? { threadId: thread } : {}),
       });
-      expect(group?.sender.userId).toBe("alice");
+      expect(group?.sender.userId).toBe(ex(h, g1).userId);
       expect(group?.mentionsSelf).toBe(true);
       expect(dm?.conversation.isGroup).toBe(false);
       expect(dm?.conversation.threadId).toBeUndefined();
@@ -157,15 +160,16 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
       const h = yield* make();
       const threads = h.adapter.capabilities.threads;
       const replyTo = h.replyToRef ?? "m-0";
+      const thread = h.threadRef ?? "t-1";
       const receipt = yield* h.adapter.send(
-        out("hi there", { conversation: { channelId: "chan-1", ...(threads ? { threadId: "t-1" } : {}) }, replyTo }),
+        out("hi there", { conversation: { channelId: "chan-1", ...(threads ? { threadId: thread } : {}) }, replyTo }),
       );
       expect(receipt.messageId.length).toBeGreaterThan(0);
       expect(receipt.adapterId).toBe(h.adapter.id);
       expect(receipt.platform).toBe(h.adapter.platform);
       expect(["sent", "queued", "delivered"]).toContain(receipt.status);
       const sent = yield* h.platformSent;
-      expect(sent).toEqual([{ channelId: "chan-1", ...(threads ? { threadId: "t-1" } : {}), text: "hi there", replyTo }]);
+      expect(sent).toEqual([{ channelId: "chan-1", ...(threads ? { threadId: thread } : {}), text: "hi there", replyTo }]);
     }),
 
   "receipts are unique and their timestamps never go backwards": ({ make }) =>
