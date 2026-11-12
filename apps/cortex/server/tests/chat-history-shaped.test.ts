@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { appendChatTurn, getChatTurns, type ChatTurnRow } from "../db/chat-queries.js";
 import { ChatSessionService, turnsToChatMessages } from "../services/chat-session-service.js";
 
-const DB = "/tmp/cortex-chat-shaped-test.db";
+const DB = tmpDbPath("chat-shaped");
 const SHAPED = '{"name":"web-search","parameters":{"query":"x"}}';
 let db: ReturnType<typeof openDatabase>;
 let svc: ChatSessionService;
@@ -15,7 +15,7 @@ beforeAll(() => {
 });
 afterAll(() => {
   db.close();
-  rmSync(DB, { force: true });
+  rmDbFiles(DB);
 });
 
 const row = (id: number, role: "user" | "assistant", content: string): ChatTurnRow =>

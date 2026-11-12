@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { openDatabase } from "../db/schema.js";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { upsertRun, updateRunStats } from "../db/queries.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
 
-const TEST_DB_PATH = "/tmp/cortex-chat-svc-test.db";
+const TEST_DB_PATH = tmpDbPath("chat-svc");
 let db: ReturnType<typeof openDatabase>;
 let svc: ChatSessionService;
 
@@ -15,7 +15,7 @@ beforeAll(() => {
 
 afterAll(() => {
   db.close();
-  rmSync(TEST_DB_PATH, { force: true });
+  rmDbFiles(TEST_DB_PATH);
 });
 
 describe("ChatSessionService", () => {

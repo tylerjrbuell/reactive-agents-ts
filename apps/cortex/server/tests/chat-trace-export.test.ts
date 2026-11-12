@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { join } from "node:path";
 import { Elysia } from "elysia";
 import { openDatabase } from "../db/schema.js";
@@ -25,7 +26,7 @@ afterEach(() => {
 });
 
 function setup() {
-  const path = `/tmp/cortex-chat-trace-export-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-trace-export");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db);
   const app = new Elysia().use(chatRouter(svc));
@@ -37,7 +38,7 @@ function setup() {
     cleanup: async () => {
       await svc.disposeAll();
       db.close();
-      rmSync(path, { force: true });
+      rmDbFiles(path);
     },
   };
 }

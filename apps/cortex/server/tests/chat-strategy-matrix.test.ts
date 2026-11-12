@@ -9,7 +9,7 @@
  * `items`), so a strategy that trips on a bad tool surface fails here.
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { join } from "node:path";
 import { getCapabilityManifest } from "@reactive-agents/runtime";
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
@@ -18,7 +18,7 @@ import { getChatTurns } from "../db/chat-queries.js";
 import { insertMcpServer } from "../db/mcp-queries.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
 
-const DB_PATH = "/tmp/cortex-chat-strategy-matrix.db";
+const DB_PATH = tmpDbPath("chat-strategy-matrix");
 const FIXTURE = join(import.meta.dir, "fixtures", "malformed-schema-mcp-server.ts");
 const MCP_ID = "matrix-fixture";
 const TIMEOUT = 60_000;
@@ -30,7 +30,6 @@ let db: ReturnType<typeof openDatabase>;
 let svc: ChatSessionService;
 
 beforeAll(() => {
-  for (const sfx of ["", "-wal", "-shm"]) rmSync(DB_PATH + sfx, { force: true });
   db = openDatabase(DB_PATH);
   insertMcpServer(db, MCP_ID, {
     name: "matrix",
@@ -43,7 +42,7 @@ beforeAll(() => {
 
 afterAll(() => {
   db.close();
-  for (const sfx of ["", "-wal", "-shm"]) rmSync(DB_PATH + sfx, { force: true });
+  rmDbFiles(DB_PATH);
 });
 
 async function collect(sessionId: string, message: string): Promise<AgentStreamEvent[]> {

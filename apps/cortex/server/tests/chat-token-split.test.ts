@@ -1,14 +1,14 @@
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { appendChatTurn, getChatTurns, getChatSessionTotals } from "../db/chat-queries.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
 
 function setup() {
-  const path = `/tmp/cortex-chat-split-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-split");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db);
-  return { db, svc, cleanup: () => { db.close(); rmSync(path, { force: true }); } };
+  return { db, svc, cleanup: () => { db.close(); rmDbFiles(path); } };
 }
 
 type FakeEvent = Record<string, unknown>;
@@ -16,13 +16,13 @@ type Internal = { sessions: Map<string, { session: { runStream: unknown; chat: u
 
 describe("chat token split persistence", () => {
   it("migrates an older table on reopen without throwing", () => {
-    const path = `/tmp/cortex-chat-split-mig-${crypto.randomUUID()}.db`;
+    const path = tmpDbPath("chat-split-mig");
     const db1 = openDatabase(path);
     db1.close();
     const db2 = openDatabase(path);
     expect(() => db2.prepare("PRAGMA table_info(cortex_chat_turns)").all()).not.toThrow();
     db2.close();
-    rmSync(path, { force: true });
+    rmDbFiles(path);
   });
 
   it("round-trips tokensIn/tokensOut; absent stays absent", () => {

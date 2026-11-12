@@ -5,8 +5,7 @@ import { mergeCortexUiToolNames, normalizeCortexAgentConfig } from "../services/
 import { cortexParamsToAgentConfig } from "../services/cortex-to-agent-config.js";
 import { openDatabase } from "../db/schema.js";
 import { createChatSession, getChatSession, listChatSessions } from "../db/chat-queries.js";
-import { rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { join } from "node:path";
 
 /**
@@ -72,7 +71,7 @@ describe("legacy CLI tool names (gh-cli / git-cli / gws-cli) and the retired wor
   });
 
   test("a chat session stored with the old names reads back migrated (what the UI shows)", () => {
-    const path = join(tmpdir(), `cortex-legacy-cli-${process.pid}-${Date.now()}.db`);
+    const path = tmpDbPath("legacy-cli");
     const db = openDatabase(path);
     try {
       const id = createChatSession(db, { agentConfig: OLD_STORED_CONFIG });
@@ -80,7 +79,7 @@ describe("legacy CLI tool names (gh-cli / git-cli / gws-cli) and the retired wor
       expect(listChatSessions(db).find((s) => s.sessionId === id)?.agentConfig.tools).toEqual(["web-search", "git"]);
     } finally {
       db.close();
-      rmSync(path, { force: true });
+      rmDbFiles(path);
     }
   });
 

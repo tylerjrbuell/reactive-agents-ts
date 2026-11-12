@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { join } from "node:path";
 import { Elysia } from "elysia";
 import { openDatabase } from "../db/schema.js";
@@ -33,7 +34,7 @@ beforeAll(async () => {
   writeFileSync(join(ws, "src", "notes.md"), "# notes\n");
   writeFileSync(join(ws, ".env"), "SECRET=1");
   writeFileSync(join(ws, "blob.bin"), Buffer.from([0, 1, 0, 2]));
-  dbPath = `/tmp/cortex-files-api-${crypto.randomUUID()}.db`;
+  dbPath = tmpDbPath("files-api");
   const db = openDatabase(dbPath);
   svc = new ChatSessionService(db, { title: async () => "" });
   app = new Elysia().use(chatRouter(svc));
@@ -45,7 +46,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await svc.disposeAll();
   rmSync(ws, { recursive: true, force: true });
-  rmSync(dbPath, { force: true });
+  rmDbFiles(dbPath);
 });
 
 describe("GET /sessions/:id/files", () => {

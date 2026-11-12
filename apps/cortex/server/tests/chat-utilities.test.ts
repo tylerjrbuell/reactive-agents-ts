@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { appendChatTurn, getChatTurns, COMPACTED_USER_MARKER } from "../db/chat-queries.js";
 import { chatRouter } from "../api/chat.js";
@@ -11,7 +11,7 @@ import { COMPACTION_SECTIONS } from "../services/compaction-summary.js";
 const SUMMARY = COMPACTION_SECTIONS.map((s) => `## ${s}\nNone.`).join("\n\n");
 
 function setup() {
-  const path = `/tmp/cortex-chat-utils-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-utils");
   const db = openDatabase(path);
   const summaries: string[][] = [];
   const svc = new ChatSessionService(db, {
@@ -20,7 +20,7 @@ function setup() {
       return SUMMARY;
     },
   });
-  return { db, svc, summaries, cleanup: () => (db.close(), rmSync(path, { force: true })) };
+  return { db, svc, summaries, cleanup: () => (db.close(), rmDbFiles(path)) };
 }
 
 async function seeded(svc: ChatSessionService, db: ReturnType<typeof openDatabase>, exchanges: number) {

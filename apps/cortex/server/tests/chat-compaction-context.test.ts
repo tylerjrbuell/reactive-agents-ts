@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { appendChatTurn, getChatTurns, type StoredContext } from "../db/chat-queries.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
@@ -8,10 +8,10 @@ import { COMPACTION_SECTIONS, UNSTRUCTURED_SUMMARY_HEADING } from "../services/c
 const STRUCTURED = COMPACTION_SECTIONS.map((s) => `## ${s}\nNone.`).join("\n\n");
 
 function setup(summary: string) {
-  const path = `/tmp/cortex-compact-ctx-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("compact-ctx");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db, { summarize: async () => summary });
-  return { db, svc, cleanup: () => (db.close(), rmSync(path, { force: true })) };
+  return { db, svc, cleanup: () => (db.close(), rmDbFiles(path)) };
 }
 
 /** Three exchanges; the assistant reply of each carries a reading when `window` is given. */

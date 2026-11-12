@@ -1,22 +1,18 @@
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { Database } from "bun:sqlite";
 import { openDatabase, applySchema } from "../db/schema.js";
-import { rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { join } from "node:path";
 import { getRunMessages } from "../db/messages-queries.js";
 
 // Unique per run, and the WAL sidecars are removed too: a fixed path left a stale
 // `-shm` from an overlapping run that made the next open fail ("no such table").
-const TEST_DB_PATH = join(tmpdir(), `cortex-messages-test-${process.pid}-${Date.now()}.db`);
-const removeDb = () => {
-  for (const suffix of ["", "-wal", "-shm"]) rmSync(`${TEST_DB_PATH}${suffix}`, { force: true });
-};
+const TEST_DB_PATH = tmpDbPath("messages");
+const removeDb = () => rmDbFiles(TEST_DB_PATH);
 
 let db: ReturnType<typeof openDatabase>;
 
 beforeAll(() => {
-  removeDb();
   db = openDatabase(TEST_DB_PATH);
   // Seed a run and two ReasoningStepCompleted events
   db.prepare(

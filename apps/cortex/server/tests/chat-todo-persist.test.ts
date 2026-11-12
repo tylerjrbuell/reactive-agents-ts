@@ -1,14 +1,14 @@
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
 import type { TodoSeedItem } from "@reactive-agents/runtime";
 
 function setup() {
-  const path = `/tmp/cortex-chat-todo-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-todo");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db);
-  return { db, svc, cleanup: () => { db.close(); rmSync(path, { force: true }); } };
+  return { db, svc, cleanup: () => { db.close(); rmDbFiles(path); } };
 }
 type FakeEvent = Record<string, unknown>;
 type Internal = { sessions: Map<string, { session: { runStream: unknown; todo: () => readonly TodoSeedItem[] } }> };
@@ -42,7 +42,7 @@ describe("conversation to-do persistence", () => {
   });
 
   it("legacy DB without the column migrates idempotently", () => {
-    const path = `/tmp/cortex-chat-todo-mig-${crypto.randomUUID()}.db`;
+    const path = tmpDbPath("chat-todo-mig");
     try {
       const db = openDatabase(path);
       db.close();
@@ -50,7 +50,7 @@ describe("conversation to-do persistence", () => {
       const cols = (again.prepare("PRAGMA table_info(cortex_chat_sessions)").all() as Array<{ name: string }>).map((c) => c.name);
       expect(cols.filter((c) => c === "todo_json")).toHaveLength(1);
       again.close();
-    } finally { rmSync(path, { force: true }); }
+    } finally { rmDbFiles(path); }
   });
 
   it("a completed streamed turn persists session.todo() and GET exposes it", async () => {

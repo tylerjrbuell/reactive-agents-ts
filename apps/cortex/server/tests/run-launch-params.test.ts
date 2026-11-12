@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { createGatewayAgent, getLaunchParams, getRunById, upsertRun } from "../db/queries.js";
 
 function setup() {
-  const path = `/tmp/cortex-launch-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("launch");
   const db = openDatabase(path);
-  return { db, cleanup: () => (db.close(), rmSync(path, { force: true })) };
+  return { db, cleanup: () => (db.close(), rmDbFiles(path)) };
 }
 
 describe("run launch params (Rerun availability for Lab / gateway agents)", () => {

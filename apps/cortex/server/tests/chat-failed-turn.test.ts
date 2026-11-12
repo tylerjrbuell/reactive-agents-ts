@@ -8,7 +8,7 @@
 //  - the next turn's DB-seeded history never carries the narration as an answer,
 //  - the titler never sees it as a reply.
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { persistedTurnStepsOf } from "@reactive-agents/ui-core";
 import { openDatabase } from "../db/schema.js";
 import { getChatTurns, renameSession } from "../db/chat-queries.js";
@@ -61,7 +61,7 @@ type Internal = { sessions: Map<string, { session: { runStream: unknown }; runEr
 
 describe("a failed chat turn (01M73GND shape)", () => {
   it("is stored failed with steps intact, and stays out of the next turn's history and the title", async () => {
-    const path = `/tmp/cortex-chat-failed-turn-${crypto.randomUUID()}.db`;
+    const path = tmpDbPath("chat-failed-turn");
     const db = openDatabase(path);
     const titled: string[] = [];
     const svc = new ChatSessionService(db, {
@@ -111,7 +111,7 @@ describe("a failed chat turn (01M73GND shape)", () => {
       await svc.disposeAll();
     } finally {
       db.close();
-      rmSync(path, { force: true });
+      rmDbFiles(path);
     }
   });
 

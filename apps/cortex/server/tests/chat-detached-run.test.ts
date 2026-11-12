@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { getChatTurns } from "../db/chat-queries.js";
 import { chatRouter } from "../api/chat.js";
@@ -14,7 +14,7 @@ import { DetachedTurns } from "../services/chat-detached-turn.js";
 import { makeDetachedRunner } from "../services/chat-detached-run.js";
 import { ChatSessionBusyError, ChatSessionService } from "../services/chat-session-service.js";
 
-const path = `/tmp/cortex-detached-run-${crypto.randomUUID()}.db`;
+const path = tmpDbPath("detached-run");
 let db: ReturnType<typeof openDatabase>;
 let svc: ChatSessionService;
 let turns: DetachedTurns;
@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   db.close();
-  rmSync(path, { force: true });
+  rmDbFiles(path);
 });
 
 const newSession = () =>

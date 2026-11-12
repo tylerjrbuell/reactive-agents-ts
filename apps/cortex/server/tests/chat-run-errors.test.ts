@@ -1,6 +1,6 @@
 // Run: bun run repo test apps/cortex/server/tests/chat-run-errors.test.ts
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import type { AgentEvent } from "@reactive-agents/core";
 import { openDatabase } from "../db/schema.js";
 import { getChatTurns } from "../db/chat-queries.js";
@@ -78,7 +78,7 @@ async function turnWith(
   completion: Record<string, unknown>,
   busError?: string,
 ): Promise<{ done: Record<string, unknown>; last: ReturnType<typeof getChatTurns>[number] | undefined; history: string }> {
-  const path = `/tmp/cortex-chat-run-error-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-run-error");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db);
   try {
@@ -101,7 +101,7 @@ async function turnWith(
     return { done: events.find((e) => e._tag === "StreamCompleted")!, last, history: last ? historyContentOf(last) : "" };
   } finally {
     db.close();
-    rmSync(path, { force: true });
+    rmDbFiles(path);
   }
 }
 

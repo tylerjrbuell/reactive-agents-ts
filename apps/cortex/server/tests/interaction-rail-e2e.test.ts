@@ -14,10 +14,10 @@
 // real agent built through the actual Cortex build path
 // (`buildCortexAgent` via `CortexRunnerService.start`), on the deterministic
 // `test` provider — no mocks of the runner or the agent.
-import { describe, it, expect } from "bun:test";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { afterAll, describe, it, expect } from "bun:test";
+import { rmTmpDirs, tmpDir } from "./helpers/tmp-db.js";
+
+afterAll(rmTmpDirs);
 import { Database } from "bun:sqlite";
 import { Context, Effect, Layer, Schedule } from "effect";
 import { applySchema } from "../db/schema.js";
@@ -42,7 +42,7 @@ const waitForPendingInteraction = (svc: RunnerServiceShape) =>
     }),
   );
 
-const durableDir = () => mkdtempSync(join(tmpdir(), "cortex-interaction-e2e-"));
+const durableDir = () => tmpDir("interaction-e2e");
 
 /** Real runner layer: real store + a no-op ingest stub (event forwarding is
  * not under test here — only the pause/register/respond round trip is). */

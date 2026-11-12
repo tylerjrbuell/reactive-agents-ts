@@ -1,14 +1,14 @@
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { appendChatTurn, getChatTurns } from "../db/chat-queries.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
 
 function setup() {
-  const path = `/tmp/cortex-chat-ctx-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-ctx");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db);
-  return { db, svc, cleanup: () => { db.close(); rmSync(path, { force: true }); } };
+  return { db, svc, cleanup: () => { db.close(); rmDbFiles(path); } };
 }
 type FakeEvent = Record<string, unknown>;
 type Internal = { sessions: Map<string, { session: { runStream: unknown } }> };

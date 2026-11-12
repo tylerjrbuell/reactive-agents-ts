@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
-import { rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { join } from "node:path";
 import { outputTokensPerSecond } from "@reactive-agents/core";
 import { throughputOf } from "@reactive-agents/ui-core";
@@ -9,10 +8,8 @@ import { getRecentLlmCalls } from "../db/model-throughput-queries.js";
 import { modelThroughputOf } from "../services/model-throughput.js";
 import { modelThroughputRouter } from "../api/model-throughput.js";
 
-const TEST_DB_PATH = join(tmpdir(), `cortex-model-throughput-${process.pid}-${Date.now()}.db`);
-const removeDb = () => {
-  for (const suffix of ["", "-wal", "-shm"]) rmSync(`${TEST_DB_PATH}${suffix}`, { force: true });
-};
+const TEST_DB_PATH = tmpDbPath("model-throughput");
+const removeDb = () => rmDbFiles(TEST_DB_PATH);
 
 let db: ReturnType<typeof openDatabase>;
 let seq = 0;
@@ -28,7 +25,6 @@ const call = (runId: string, payload: Record<string, unknown>) =>
     .run("agent-t", runId, seq++, Date.now(), "LLMRequestCompleted", JSON.stringify({ _tag: "LLMRequestCompleted", ...payload }));
 
 beforeAll(() => {
-  removeDb();
   db = openDatabase(TEST_DB_PATH);
   run("r-old", "ollama", "qwen3:4b", 1000);
   run("r-new", "ollama", "qwen3:4b", 2000);

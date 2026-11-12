@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { getChatTurns } from "../db/chat-queries.js";
 import { chatRouter } from "../api/chat.js";
@@ -9,12 +9,12 @@ import { cortexRunsPostBody } from "../../ui/src/lib/cortex-runs-post-body.js";
 import { ChatSessionBusyError, ChatSessionService } from "../services/chat-session-service.js";
 
 function setup(opts?: { maxCachedSessions?: number }) {
-  const path = `/tmp/cortex-chat-lifecycle-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-lifecycle");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db, opts);
   const cleanup = () => {
     db.close();
-    rmSync(path, { force: true });
+    rmDbFiles(path);
   };
   return { db, svc, cleanup };
 }

@@ -4,21 +4,20 @@
  * root chat run is tagged with its chat session.
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { Layer } from "effect";
 import { openDatabase } from "../db/schema.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
 import { CortexIngestService, CortexIngestServiceLive } from "../services/ingest-service.js";
 import { CortexEventBridgeLive } from "../services/event-bridge.js";
 
-const DB_PATH = "/tmp/cortex-chat-ingest.db";
+const DB_PATH = tmpDbPath("chat-ingest");
 const filler = "prime the delegation run with a long preamble. ".repeat(6);
 
 let db: ReturnType<typeof openDatabase>;
 let svc: ChatSessionService;
 
 beforeAll(() => {
-  for (const sfx of ["", "-wal", "-shm"]) rmSync(DB_PATH + sfx, { force: true });
   db = openDatabase(DB_PATH);
   const ingestLayer = CortexIngestServiceLive(db).pipe(
     Layer.provide(CortexEventBridgeLive),
@@ -29,7 +28,7 @@ beforeAll(() => {
 afterAll(async () => {
   await svc.disposeAll();
   db.close();
-  for (const sfx of ["", "-wal", "-shm"]) rmSync(DB_PATH + sfx, { force: true });
+  rmDbFiles(DB_PATH);
 });
 
 type EventRow = { run_id: string; type: string; session_id: string | null; payload: string };

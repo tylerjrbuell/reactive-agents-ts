@@ -7,7 +7,7 @@
  * - B3: a stopped or disconnected chat run stayed `live` in the run list forever.
  */
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { Layer } from "effect";
 import { openDatabase } from "../db/schema.js";
 import { getChatTurns } from "../db/chat-queries.js";
@@ -19,7 +19,7 @@ type FakeEvent = Record<string, unknown>;
 type Internal = { sessions: Map<string, { session: { runStream: unknown; chat: unknown } }> };
 
 function setup(withIngest = false) {
-  const path = `/tmp/cortex-chat-endings-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-endings");
   const db = openDatabase(path);
   const ingestLayer = withIngest
     ? (CortexIngestServiceLive(db).pipe(Layer.provide(CortexEventBridgeLive)) as Layer.Layer<CortexIngestService>)
@@ -31,7 +31,7 @@ function setup(withIngest = false) {
     cleanup: async () => {
       await svc.disposeAll();
       db.close();
-      for (const sfx of ["", "-wal", "-shm"]) rmSync(path + sfx, { force: true });
+      rmDbFiles(path);
     },
   };
 }

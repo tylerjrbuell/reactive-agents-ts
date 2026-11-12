@@ -1,14 +1,14 @@
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
 import { countTodoEdits } from "../services/chat-environment.js";
 
 function setup() {
-  const path = `/tmp/cortex-chat-env-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-env");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db);
-  return { svc, cleanup: () => { db.close(); rmSync(path, { force: true }); } };
+  return { svc, cleanup: () => { db.close(); rmDbFiles(path); } };
 }
 const drain = async (svc: ChatSessionService, id: string, msg: string): Promise<void> => {
   for await (const e of svc.chatStream(id, msg)) void e;

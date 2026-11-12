@@ -5,12 +5,13 @@
 // desk can list + resume + approve durable runs. These pin the wiring: the
 // durable surface is present, and approval-policy builds only because the durable
 // store is also present (the framework build-guard requires it).
-import { describe, it, expect } from "bun:test";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { afterAll, describe, it, expect } from "bun:test";
 import { buildCortexAgent } from "../services/build-cortex-agent.js";
+import { rmTmpDirs, tmpDir } from "./helpers/tmp-db.js";
 
-const freshDir = () => join(tmpdir(), `cortex-durable-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+afterAll(rmTmpDirs);
+
+const freshDir = () => tmpDir("durable");
 
 describe("buildCortexAgent — durable runs enabler (Phase E1)", () => {
   it("wires the durable surface: listRuns/listPendingApprovals resolve", async () => {

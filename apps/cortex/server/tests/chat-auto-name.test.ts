@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { getChatSession } from "../db/chat-queries.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
 import { cleanChatTitle, fallbackChatTitle } from "../services/chat-title.js";
 
 function setup(title: () => Promise<string>) {
-  const path = `/tmp/cortex-autoname-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("autoname");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db, { title });
-  return { db, svc, cleanup: () => (db.close(), rmSync(path, { force: true })) };
+  return { db, svc, cleanup: () => (db.close(), rmDbFiles(path)) };
 }
 const tick = () => new Promise((r) => setTimeout(r, 20));
 const cfg = { provider: "test", model: "test-model" };

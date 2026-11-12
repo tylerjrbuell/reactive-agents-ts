@@ -1,6 +1,6 @@
 // Run: bun run repo test apps/cortex/server/tests/chat-aborted-turn.test.ts
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { getChatTurns, getChatSessionTotals } from "../db/chat-queries.js";
 import { ChatSessionService, turnsToChatMessages } from "../services/chat-session-service.js";
@@ -9,10 +9,10 @@ type FakeEvent = Record<string, unknown>;
 type Internal = { sessions: Map<string, { session: { runStream: unknown; chat: unknown } }> };
 
 function setup() {
-  const path = `/tmp/cortex-chat-abort-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-abort");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db);
-  return { db, svc, cleanup: () => { db.close(); rmSync(path, { force: true }); } };
+  return { db, svc, cleanup: () => { db.close(); rmDbFiles(path); } };
 }
 
 const usageEvent = (): FakeEvent => ({

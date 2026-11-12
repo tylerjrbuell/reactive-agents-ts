@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { join } from "node:path";
 import { ATTACHMENT_CAPS } from "@reactive-agents/ui-core";
 import { openDatabase } from "../db/schema.js";
@@ -112,7 +113,7 @@ describe("buildTurnInput", () => {
 
 describe("the attachments reach the session and are stored as metadata", () => {
   it("chatStream hands the session the parts, stores names and sizes on the user row, never bytes", async () => {
-    const path = `/tmp/cortex-chat-attach-${crypto.randomUUID()}.db`;
+    const path = tmpDbPath("chat-attach");
     const db = openDatabase(path);
     const svc = new ChatSessionService(db, { title: async () => "" });
     try {
@@ -142,7 +143,7 @@ describe("the attachments reach the session and are stored as metadata", () => {
       await svc.disposeAll();
     } finally {
       db.close();
-      rmSync(path, { force: true });
+      rmDbFiles(path);
     }
   });
 

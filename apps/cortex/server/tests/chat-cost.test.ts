@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import {
   appendChatTurn,
@@ -13,7 +13,7 @@ import { ChatSessionService } from "../services/chat-session-service.js";
 import { turnCostOf } from "../services/chat-turn-cost.js";
 
 function setup() {
-  const path = `/tmp/cortex-chat-cost-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("chat-cost");
   const db = openDatabase(path);
   const svc = new ChatSessionService(db);
   return {
@@ -21,7 +21,7 @@ function setup() {
     svc,
     cleanup: () => {
       db.close();
-      rmSync(path, { force: true });
+      rmDbFiles(path);
     },
   };
 }
@@ -151,7 +151,7 @@ describe("session totals, fork, rewind, compact, migration", () => {
   });
 
   it("pre-migration rows load with cost 0 and known", () => {
-    const path = `/tmp/cortex-chat-cost-mig-${crypto.randomUUID()}.db`;
+    const path = tmpDbPath("chat-cost-mig");
     try {
       const first = openDatabase(path);
       first.prepare(`INSERT INTO cortex_chat_sessions (session_id, name, agent_config) VALUES ('s','n','{}')`).run();
@@ -165,7 +165,7 @@ describe("session totals, fork, rewind, compact, migration", () => {
       expect(getChatSessionTotals(db, "s")).toEqual({ tokens: 7, tokensIn: 0, tokensOut: 0, splitComplete: false, costUsd: 0, costKnown: true });
       db.close();
     } finally {
-      rmSync(path, { force: true });
+      rmDbFiles(path);
     }
   });
 

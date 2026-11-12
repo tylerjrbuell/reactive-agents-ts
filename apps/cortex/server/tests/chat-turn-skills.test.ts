@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { join } from "node:path";
 import type { AgentEvent } from "@reactive-agents/core";
 import { openDatabase } from "../db/schema.js";
@@ -59,7 +60,7 @@ describe("per-turn pins", () => {
 
 describe("chatStream with a one-turn pin (test provider, real agent)", () => {
   let ws: string;
-  const path = `/tmp/cortex-turn-skills-${crypto.randomUUID()}.db`;
+  const path = tmpDbPath("turn-skills");
   beforeAll(() => {
     ws = mkdtempSync(join(tmpdir(), "cortex-turn-skills-"));
     const dir = join(ws, ".agents", "skills", "release-notes");
@@ -68,7 +69,7 @@ describe("chatStream with a one-turn pin (test provider, real agent)", () => {
   });
   afterAll(() => {
     rmSync(ws, { recursive: true, force: true });
-    for (const sfx of ["", "-wal", "-shm"]) rmSync(path + sfx, { force: true });
+    rmDbFiles(path);
   });
 
   it("the pinned turn records the skill as pinned; the session config is untouched", async () => {

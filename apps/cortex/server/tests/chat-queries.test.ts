@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { openDatabase } from "../db/schema.js";
-import { rmSync } from "node:fs";
+import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import {
   createChatSession,
   getChatSession,
@@ -12,7 +12,7 @@ import {
   updateSessionLastUsed,
 } from "../db/chat-queries.js";
 
-const TEST_DB_PATH = "/tmp/cortex-chat-queries-test.db";
+const TEST_DB_PATH = tmpDbPath("chat-queries");
 let db: ReturnType<typeof openDatabase>;
 
 beforeAll(() => {
@@ -20,7 +20,7 @@ beforeAll(() => {
 });
 afterAll(() => {
   db.close();
-  rmSync(TEST_DB_PATH, { force: true });
+  rmDbFiles(TEST_DB_PATH);
 });
 
 describe("chat sessions", () => {

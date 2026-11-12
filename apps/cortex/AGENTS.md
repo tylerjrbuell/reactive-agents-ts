@@ -101,6 +101,8 @@ The UI depends on `@reactive-agents/svelte` (via `ui/src/lib/stores/framework.ts
 
 Testing: scoped `bun test apps/cortex/server/tests/<file>.ts --timeout 15000`; after UI changes `cd apps/cortex/ui && bun run build`. Do not run the full monorepo suite unless the task requires it.
 
+Temp files in server tests: `/tmp` is RAM-backed and a WAL db leaves `-wal`/`-shm` beside it. Make DB paths with `tmpDbPath` and remove them with `rmDbFiles` (`server/tests/helpers/tmp-db.ts`); scratch dirs use `tmpDir` + `rmTmpDirs` in `afterAll`; prefer `:memory:`. `tmp-hygiene.test.ts` fails on hand-rolled temp DB names.
+
 Owner: `cortex-warden` (`.claude/agents/cortex-warden.md`). Domain edits go through it.
 
 ---
