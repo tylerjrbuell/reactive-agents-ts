@@ -9,6 +9,7 @@ import type {
 } from "../types.js";
 import { initialGatewayState } from "../types.js";
 import { evaluatePolicies } from "./policy-engine.js";
+import { anchorWindows, rollStateWindows } from "./state-windows.js";
 import type { SchedulingPolicy } from "./policy-engine.js";
 import { createAdaptiveHeartbeatPolicy } from "../policies/adaptive-heartbeat.js";
 import { createCostBudgetPolicy } from "../policies/cost-budget.js";
@@ -62,6 +63,7 @@ export const GatewayServiceLive = (config: Partial<GatewayConfig>, bus?: EventBu
     GatewayService,
     Effect.gen(function* () {
       const stateRef = yield* Ref.make<GatewayState>(initialGatewayState());
+      yield* anchorWindows(stateRef);
       const statsRef = yield* Ref.make<GatewayStats>(initialStats());
       const startedAt = Date.now();
 
@@ -126,7 +128,7 @@ export const GatewayServiceLive = (config: Partial<GatewayConfig>, bus?: EventBu
               }
             });
 
-            const state = yield* Ref.get(stateRef);
+            const state = yield* rollStateWindows(stateRef);
             const decision = yield* evaluatePolicies(policies, event, state);
 
             // ── Publish GatewayEventReceived (always, when bus provided) ──
@@ -229,7 +231,7 @@ export const GatewayServiceLive = (config: Partial<GatewayConfig>, bus?: EventBu
 
         status: () =>
           Effect.gen(function* () {
-            const state = yield* Ref.get(stateRef);
+            const state = yield* rollStateWindows(stateRef);
             const stats = yield* Ref.get(statsRef);
             return {
               isRunning: state.isRunning,
@@ -241,6 +243,7 @@ export const GatewayServiceLive = (config: Partial<GatewayConfig>, bus?: EventBu
 
         updateTokensUsed: (tokens: number) =>
           Effect.gen(function* () {
+            yield* rollStateWindows(stateRef);
             yield* Ref.update(stateRef, (s) => ({
               ...s,
               tokensUsedToday: s.tokensUsedToday + tokens,

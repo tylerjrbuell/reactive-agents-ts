@@ -55,10 +55,9 @@ export const renderProvider: DeployProvider = {
     if (!hasDockerfile) plan.push("scaffold Dockerfile");
     if (!hasRenderYaml) plan.push(`scaffold render.yaml (mode: ${opts.mode})`);
     if (hasCli) {
-      plan.push("render blueprint launch");
-    } else {
-      plan.push("git push (or connect via Render dashboard)");
+      plan.push("render blueprints validate render.yaml");
     }
+    plan.push("git push, then connect the repo at https://dashboard.render.com/blueprints (Render has no CLI deploy-from-blueprint command)");
 
     return {
       provider: "render",
@@ -107,33 +106,31 @@ export const renderProvider: DeployProvider = {
 
     console.log("\n  🚀 Deploying to Render...\n");
 
-    // Try Render CLI first if available
+    // The Render CLI can validate a blueprint but cannot create services from one:
+    // deploys happen when a connected Git repo is pushed.
     if (hasCommand("render")) {
-      console.log("  Using Render CLI...\n");
-      const code = execLive("render blueprint launch", cwd);
-      if (code === 0) {
-        console.log("\n  ✅ Deployed to Render!");
-        console.log("\n  ⚠️  Set your environment secrets in the Render dashboard:");
-        console.log("     ANTHROPIC_API_KEY, TAVILY_API_KEY\n");
-        return;
+      console.log("  Validating render.yaml with the Render CLI...\n");
+      const code = execLive(["render", "blueprints", "validate", "render.yaml"], cwd);
+      if (code !== 0) {
+        console.error("\n  ❌ render.yaml failed validation. Fix it and re-run.\n");
+        process.exit(1);
       }
-      console.log("\n  ⚠️  Render CLI deploy failed, showing manual steps...\n");
     }
 
-    // Fallback to instructions
-    console.log("  Render deploys via Git push or dashboard. Options:\n");
-    console.log("  Option 1 — Dashboard (recommended):");
-    console.log("    1. Go to https://dashboard.render.com/new/blueprint");
-    console.log("    2. Connect your Git repo");
-    console.log("    3. Render will auto-detect render.yaml\n");
-    console.log("  Option 2 — Render CLI:");
-    console.log("    render blueprint launch\n");
-    console.log("  Option 3 — Git push (if repo is connected):");
-    console.log("    git push render main\n");
+    console.log("  Render deploys from a connected Git repository:\n");
+    console.log("    1. Commit render.yaml and Dockerfile, push to GitHub/GitLab/Bitbucket");
+    console.log("    2. Open https://dashboard.render.com/blueprints and click \"New Blueprint Instance\"");
+    console.log("    3. Connect the repo; Render reads render.yaml and creates the service");
+    console.log("    4. Later pushes to the tracked branch auto-deploy (autoDeploy: true)\n");
 
     console.log("  ⚠️  Set your environment secrets in the Render dashboard:");
-    console.log("     ANTHROPIC_API_KEY, TAVILY_API_KEY\n");
-    console.log("  ✅ render.yaml is ready. Push to deploy.\n");
+    console.log("     ANTHROPIC_API_KEY, TAVILY_API_KEY");
+    if (opts.mode === "daemon") {
+      console.log("  ⚠️  The gateway daemon needs an always-on instance: use a paid plan");
+      console.log("     (starter or higher). Free web services spin down after idle time.");
+    }
+    console.log("");
+    console.log("  ✅ render.yaml is ready.\n");
   },
 
   down(ctx) {
@@ -157,7 +154,7 @@ export const renderProvider: DeployProvider = {
 
     if (hasCommand("render")) {
       console.log("\n📊 Render Service Status\n");
-      execLive("render services list", cwd);
+      execLive(["render", "services", "list"], cwd);
     } else {
       console.log("\n  View status at: https://dashboard.render.com\n");
       console.log("  Or install the Render CLI for local status checks.");
@@ -168,7 +165,7 @@ export const renderProvider: DeployProvider = {
     const { cwd } = ctx;
 
     if (hasCommand("render")) {
-      execLive("render logs", cwd);
+      execLive(["render", "logs"], cwd);
     } else {
       console.log("\n  View logs at: https://dashboard.render.com\n");
       console.log("  Or install the Render CLI: render logs");

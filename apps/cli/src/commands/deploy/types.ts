@@ -18,6 +18,8 @@ export interface DeployOptions {
   detach: boolean;
   gpu: boolean;
   dryRun: boolean;
+  /** Cloud Run only: make the service publicly reachable. Default false (authenticated). */
+  allowUnauthenticated?: boolean;
 }
 
 /** Everything a provider adapter needs to do its job */

@@ -4,12 +4,12 @@ import { join } from "node:path";
 import { railwayJsonTemplate } from "../../templates/railway.js";
 import type { DeployProvider, DeployContext, PreflightCheck, PreflightReport } from "./types.js";
 import { scaffoldDocker } from "./scaffold.js";
-import { hasCommand, execLive, exec } from "./exec.js";
+import { hasCommand, execLive, execQuiet, exec } from "./exec.js";
 
 /** Check if railway CLI is authenticated */
 function isAuthenticated(): boolean {
   try {
-    const out = exec("railway whoami 2>/dev/null");
+    const out = exec(["railway", "whoami"]);
     return out.length > 0;
   } catch {
     return false;
@@ -19,8 +19,7 @@ function isAuthenticated(): boolean {
 /** Check if a Railway project is linked in cwd */
 function isProjectLinked(cwd: string): boolean {
   try {
-    const code = execLive("railway status 2>/dev/null", cwd);
-    return code === 0;
+    return execQuiet(["railway", "status"], cwd) === 0;
   } catch {
     return false;
   }
@@ -132,11 +131,11 @@ export const railwayProvider: DeployProvider = {
 
     // Check if project is linked
     console.log("\n  🔍 Checking Railway project status...\n");
-    const statusCode = execLive("railway status 2>/dev/null", cwd);
+    const statusCode = execQuiet(["railway", "status"], cwd);
 
     if (statusCode !== 0) {
       console.log("\n  📦 Linking Railway project...\n");
-      const linkCode = execLive("railway link", cwd);
+      const linkCode = execLive(["railway", "link"], cwd);
       if (linkCode !== 0) {
         console.error("\n  ❌ Failed to link Railway project.");
         console.error("  Make sure you're logged in: railway login\n");
@@ -149,7 +148,7 @@ export const railwayProvider: DeployProvider = {
     console.log("     railway variables set TAVILY_API_KEY=tvly-...\n");
 
     console.log("  🚀 Deploying to Railway...\n");
-    const deployCode = execLive("railway up", cwd);
+    const deployCode = execLive(["railway", "up"], cwd);
 
     if (deployCode === 0) {
       console.log("\n  ✅ Deployed to Railway!");
@@ -173,7 +172,7 @@ export const railwayProvider: DeployProvider = {
     }
 
     console.log("\n🛑 Tearing down Railway deployment...\n");
-    const code = execLive("railway down --yes", cwd);
+    const code = execLive(["railway", "down", "--yes"], cwd);
     if (code === 0) {
       console.log("\n  ✅ Railway deployment torn down.\n");
     } else {
@@ -191,7 +190,7 @@ export const railwayProvider: DeployProvider = {
     }
 
     console.log("\n📊 Railway Deployment Status\n");
-    execLive("railway status", cwd);
+    execLive(["railway", "status"], cwd);
   },
 
   logs(ctx) {
@@ -202,6 +201,6 @@ export const railwayProvider: DeployProvider = {
       process.exit(1);
     }
 
-    execLive("railway logs", cwd);
+    execLive(["railway", "logs"], cwd);
   },
 };

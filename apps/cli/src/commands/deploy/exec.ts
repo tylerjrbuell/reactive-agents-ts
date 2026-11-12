@@ -1,28 +1,72 @@
 // apps/cli/src/commands/deploy/exec.ts
-import { execSync, spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { execFileSync, execSync, spawnSync } from "node:child_process";
+
+/**
+ * A command to run: an argv array (program first) or, for legacy fixed strings only,
+ * a shell string. Deploy targets MUST pass argv arrays so no value is ever shell-parsed.
+ */
+export type Command = string | readonly string[];
+
+/** Agent names become app/service names and file contents: keep them to a safe slug. */
+export const AGENT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,40}$/;
+
+/** True when `name` is a safe deploy agent name (`/^[a-z0-9][a-z0-9-]{0,40}$/`). */
+export function isValidAgentName(name: string): boolean {
+  return AGENT_NAME_PATTERN.test(name);
+}
+
+/** Throw a clear error for an unsafe agent name; returns the name when valid. */
+export function assertValidAgentName(name: string): string {
+  if (!isValidAgentName(name)) {
+    throw new Error(
+      `Invalid agent name "${name}". Use lowercase letters, digits and "-" only, ` +
+        `starting with a letter or digit, at most 41 characters (${AGENT_NAME_PATTERN}).`,
+    );
+  }
+  return name;
+}
+
+/** Derive a valid agent name from an arbitrary string (package/dir name). */
+export function slugifyAgentName(raw: string): string {
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 41)
+    .replace(/-+$/g, "");
+  return slug || "agent";
+}
 
 /** Run a command and return stdout. Throws on failure. */
-export function exec(cmd: string, cwd?: string): string {
-  return execSync(cmd, {
-    cwd,
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-  }).trim();
+export function exec(cmd: Command, cwd?: string): string {
+  const stdio: ["pipe", "pipe", "pipe"] = ["pipe", "pipe", "pipe"];
+  if (typeof cmd === "string") {
+    return execSync(cmd, { cwd, encoding: "utf-8", stdio }).trim();
+  }
+  const [program, ...args] = cmd;
+  return execFileSync(program, args, { cwd, encoding: "utf-8", stdio }).trim();
 }
 
 /** Run a command with inherited stdio (user sees output). Returns exit code. */
-export function execLive(cmd: string, cwd?: string): number {
-  const result = spawnSync("sh", ["-c", cmd], {
-    cwd,
-    stdio: "inherit",
-  });
+export function execLive(cmd: Command, cwd?: string): number {
+  const result =
+    typeof cmd === "string"
+      ? spawnSync("sh", ["-c", cmd], { cwd, stdio: "inherit" })
+      : spawnSync(cmd[0], cmd.slice(1), { cwd, stdio: "inherit" });
+  return result.status ?? 1;
+}
+
+/** Run an argv command silently (no output). Returns exit code; 1 when it cannot start. */
+export function execQuiet(argv: readonly string[], cwd?: string): number {
+  const result = spawnSync(argv[0], argv.slice(1), { cwd, stdio: "ignore" });
   return result.status ?? 1;
 }
 
 /** Check if a CLI tool is available on PATH */
 export function hasCommand(name: string): boolean {
   try {
-    execSync(`command -v ${name}`, { stdio: "pipe", timeout: 5_000 });
+    // name is a positional parameter ($1), never interpolated into the script.
+    execFileSync("sh", ["-c", 'command -v "$1"', "sh", name], { stdio: "pipe", timeout: 5_000 });
     return true;
   } catch {
     return false;
@@ -111,7 +155,7 @@ export function resolveCli(names: readonly string[]): ResolvedCli | null {
     if (hasCommand(name)) {
       let version: string | undefined;
       try {
-        version = exec(`${name} --version 2>/dev/null`).split("\n")[0];
+        version = exec([name, "--version"]).split("\n")[0];
       } catch {
         // some CLIs don't support --version
       }

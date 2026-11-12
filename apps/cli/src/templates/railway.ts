@@ -10,7 +10,6 @@ export const railwayJsonTemplate = (
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",

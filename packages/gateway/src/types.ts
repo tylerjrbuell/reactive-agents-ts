@@ -69,9 +69,16 @@ export interface GatewayEvent {
 export type PolicyDecision =
   | { readonly action: "execute"; readonly taskDescription: string }
   | { readonly action: "queue"; readonly reason: string }
-  | { readonly action: "skip"; readonly reason: string }
+  | { readonly action: "skip"; readonly reason: string; readonly code?: PolicyDecisionCode }
   | { readonly action: "merge"; readonly mergeKey: string }
-  | { readonly action: "escalate"; readonly reason: string };
+  | { readonly action: "escalate"; readonly reason: string; readonly code?: PolicyDecisionCode };
+
+/**
+ * Machine-readable cause on a skip/escalate decision.
+ * - `unknown-sender`: access control denied a sender that is not allowlisted
+ *   (the only case `replyToUnknown` answers).
+ */
+export type PolicyDecisionCode = "unknown-sender";
 
 // ─── Configuration Schemas ───────────────────────────────────────────────────
 

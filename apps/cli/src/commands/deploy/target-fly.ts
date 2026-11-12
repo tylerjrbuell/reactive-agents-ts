@@ -4,7 +4,7 @@ import { join, relative } from "node:path";
 import { flyTomlTemplate } from "../../templates/fly-toml.js";
 import type { DeployProvider, DeployContext, PreflightCheck, PreflightReport } from "./types.js";
 import { scaffoldDocker } from "./scaffold.js";
-import { hasCommand, execLive, exec } from "./exec.js";
+import { hasCommand, execLive, execQuiet, exec } from "./exec.js";
 import { DEPLOY_DEFAULTS } from "./manifest.js";
 
 /** Resolve the flyctl binary name (flyctl or fly) */
@@ -17,7 +17,7 @@ function flyCmd(): string {
 /** Check if flyctl is authenticated */
 function isAuthenticated(): boolean {
   try {
-    const out = exec(`${flyCmd()} auth whoami 2>/dev/null`);
+    const out = exec([flyCmd(), "auth", "whoami"]);
     return out.length > 0;
   } catch {
     return false;
@@ -88,7 +88,7 @@ export const flyProvider: DeployProvider = {
   },
 
   scaffold(ctx) {
-    const { cwd, agentName, monorepoRoot } = ctx;
+    const { cwd, agentName, monorepoRoot, opts } = ctx;
 
     // Dockerfile
     if (!existsSync(join(cwd, "Dockerfile"))) {
@@ -107,7 +107,7 @@ export const flyProvider: DeployProvider = {
       ? relative(monorepoRoot, cwd).replace(/\\/g, "/")
       : undefined;
 
-    writeFileSync(flyTomlPath, flyTomlTemplate(agentName, isMonorepo, appPath), "utf-8");
+    writeFileSync(flyTomlPath, flyTomlTemplate(agentName, isMonorepo, appPath, opts.mode), "utf-8");
     console.log("  create fly.toml");
   },
 
@@ -137,12 +137,12 @@ export const flyProvider: DeployProvider = {
 
     // Check if app already exists (launched)
     console.log("\n  🔍 Checking Fly.io app status...\n");
-    const statusCode = execLive(`${cmd} status 2>/dev/null`, cwd);
+    const statusCode = execQuiet([cmd, "status"], cwd);
 
     if (statusCode !== 0) {
       console.log("\n  🚀 Launching new Fly.io app...\n");
       const launchCode = execLive(
-        `${cmd} launch --copy-config --name raxd-${agentName} --no-deploy`,
+        [cmd, "launch", "--copy-config", "--name", `raxd-${agentName}`, "--no-deploy"],
         cwd,
       );
       if (launchCode !== 0) {
@@ -157,7 +157,7 @@ export const flyProvider: DeployProvider = {
     }
 
     console.log("  🚀 Deploying to Fly.io...\n");
-    const deployCode = execLive(`${cmd} deploy`, cwd);
+    const deployCode = execLive([cmd, "deploy"], cwd);
 
     if (deployCode === 0) {
       console.log("\n  ✅ Deployed to Fly.io!");
@@ -184,7 +184,7 @@ export const flyProvider: DeployProvider = {
 
     console.log("\n🛑 Destroying Fly.io app...\n");
     console.log("  ⚠️  This will permanently delete the app and all its data.\n");
-    const code = execLive(`${cmd} apps destroy --yes`, cwd);
+    const code = execLive([cmd, "apps", "destroy", "--yes"], cwd);
     if (code === 0) {
       console.log("\n  ✅ Fly.io app destroyed.\n");
     } else {
@@ -203,7 +203,7 @@ export const flyProvider: DeployProvider = {
     }
 
     console.log("\n📊 Fly.io App Status\n");
-    execLive(`${cmd} status`, cwd);
+    execLive([cmd, "status"], cwd);
   },
 
   logs(ctx) {
@@ -215,6 +215,6 @@ export const flyProvider: DeployProvider = {
       process.exit(1);
     }
 
-    execLive(`${cmd} logs`, cwd);
+    execLive([cmd, "logs"], cwd);
   },
 };

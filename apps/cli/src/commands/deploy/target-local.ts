@@ -166,7 +166,7 @@ export const localProvider: DeployProvider = {
 
     // 4. Build
     console.log("  🔨 Building Docker image...\n");
-    const buildCode = execLive("docker compose build", cwd);
+    const buildCode = execLive(["docker", "compose", "build"], cwd);
     if (buildCode !== 0) {
       console.error("\n  ❌ Docker build failed. Check the output above.");
       process.exit(1);
@@ -175,7 +175,7 @@ export const localProvider: DeployProvider = {
 
     // 5. Deploy
     console.log("  🚀 Starting container...\n");
-    const upCode = execLive("docker compose up -d", cwd);
+    const upCode = execLive(["docker", "compose", "up", "-d"], cwd);
     if (upCode !== 0) {
       console.error("\n  ❌ Failed to start container.");
       process.exit(1);
@@ -221,7 +221,7 @@ export const localProvider: DeployProvider = {
     }
 
     console.log("\n🛑 Stopping containers...\n");
-    const code = execLive("docker compose down", cwd);
+    const code = execLive(["docker", "compose", "down"], cwd);
     if (code === 0) {
       console.log("\n  ✅ Containers stopped and removed.\n");
     } else {
@@ -244,7 +244,7 @@ export const localProvider: DeployProvider = {
     }
 
     console.log("\n📊 Container Status\n");
-    execLive("docker compose ps", cwd);
+    execLive(["docker", "compose", "ps"], cwd);
 
     const healthPort = readHealthPort(cwd);
     const healthUrl = `http://localhost:${healthPort}/health`;
@@ -272,7 +272,9 @@ export const localProvider: DeployProvider = {
       process.exit(1);
     }
 
-    const cmd = opts.follow ? "docker compose logs -f" : "docker compose logs --tail=100";
+    const cmd = opts.follow
+      ? ["docker", "compose", "logs", "-f"]
+      : ["docker", "compose", "logs", "--tail=100"];
     execLive(cmd, cwd);
   },
 };

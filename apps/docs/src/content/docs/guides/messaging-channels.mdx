@@ -270,6 +270,23 @@ Telegram via `uvx` runs as your host user; apply process isolation separately if
 - **Use Docker volumes** for Signal auth keys (`./signal-data/`)
 - **Add `.env.telegram` and `signal-data/` to `.gitignore`**
 
+### Sender Access Control
+
+Inbound messages are untrusted. With `accessControl` configured, the gateway decides who may trigger the agent, keyed by **`platform:userId`** so a Signal number and a Telegram id can never collide:
+
+```typescript
+const accessControl = {
+  accessPolicy: "allowlist" as const, // default; unknown senders are skipped
+  allowedSenders: ["signal:+15551234567", "telegram:123456789"],
+};
+// pass as the `accessControl` field of .withGateway({ ... })
+```
+
+- Entries **must** carry the platform prefix (`signal:+1555...`). A bare `+1555...` no longer matches a platform-tagged sender; update existing allow/block lists when you upgrade.
+- A channel event with an **empty sender** is always denied (fail closed), even under `"open"`.
+- `unknownSenderAction: "escalate"` surfaces the denied sender instead of silently skipping.
+- `replyToUnknown` (a fixed text sent to an allowlist-denied sender) is only delivered by the `@reactive-agents/channels` `ChannelService` (`deps.replyToUnknown`). The MCP-push path used by the Signal and Telegram setups above has no deterministic send step, so it does **not** send that reply today.
+
 ### Guardrails
 
 Always enable `.withGuardrails()` for messaging agents. Inbound messages from external users can contain prompt injection attempts. Guardrails check for injection, PII, and toxicity **before** the LLM processes the message.

@@ -1,17 +1,37 @@
 // apps/cli/src/commands/deploy/target-cloudrun.ts
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { cloudRunYamlTemplate } from "../../templates/cloudrun.js";
+import { cloudRunYamlTemplate, cloudRunFlags } from "../../templates/cloudrun.js";
 import type { DeployProvider, DeployContext, PreflightCheck, PreflightReport } from "./types.js";
 import { scaffoldDocker } from "./scaffold.js";
 import { hasCommand, execLive, exec } from "./exec.js";
 import { DEPLOY_DEFAULTS } from "./manifest.js";
 
+/**
+ * argv for `gcloud run deploy`. Authenticated by default (`--allow-unauthenticated` is an
+ * explicit opt-in); daemon mode keeps one instance warm with CPU always allocated so the
+ * gateway's cron/heartbeat keep running. Every element is a separate argument: no shell.
+ */
+export function cloudRunDeployArgv(ctx: DeployContext, region: string): string[] {
+  return [
+    "gcloud", "run", "deploy", `raxd-${ctx.agentName}`,
+    "--source", ".",
+    "--region", region,
+    "--port", String(DEPLOY_DEFAULTS.port),
+    "--memory", DEPLOY_DEFAULTS.resources.memory.replace("m", "Mi"),
+    "--timeout", "300",
+    ...cloudRunFlags({
+      allowUnauthenticated: ctx.opts.allowUnauthenticated === true,
+      daemon: ctx.opts.mode === "daemon",
+    }),
+  ];
+}
+
 /** Try to detect GCP project ID from gcloud config */
 function detectProjectId(): string {
   try {
     if (hasCommand("gcloud")) {
-      return exec("gcloud config get-value project 2>/dev/null").trim() || "YOUR_PROJECT_ID";
+      return exec(["gcloud", "config", "get-value", "project"]).trim() || "YOUR_PROJECT_ID";
     }
   } catch {
     // ignore
@@ -26,7 +46,7 @@ function getRegion(): string {
 /** Check if gcloud is authenticated */
 function isAuthenticated(): boolean {
   try {
-    const out = exec("gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null");
+    const out = exec(["gcloud", "auth", "list", "--filter=status:ACTIVE", "--format=value(account)"]);
     return out.trim().length > 0;
   } catch {
     return false;
@@ -94,7 +114,14 @@ export const cloudrunProvider: DeployProvider = {
     // Build plan
     if (!hasDockerfile) plan.push("scaffold Dockerfile");
     if (!hasCloudBuild) plan.push("scaffold cloudbuild.yaml");
-    plan.push(`gcloud run deploy raxd-${agentName} --source . --region ${region} --port ${DEPLOY_DEFAULTS.port} --memory ${DEPLOY_DEFAULTS.resources.memory.replace("m", "Mi")} --timeout 300 --allow-unauthenticated`);
+    plan.push(cloudRunDeployArgv(ctx, region).join(" "));
+    if (opts.allowUnauthenticated) {
+      checks.push({
+        label: "Public access (--allow-unauthenticated)",
+        status: "warn",
+        detail: "The agent API has no auth of its own: anyone with the URL can call it",
+      });
+    }
 
     return {
       provider: "cloudrun",
@@ -123,7 +150,14 @@ export const cloudrunProvider: DeployProvider = {
     const projectId = detectProjectId();
     const region = getRegion();
 
-    writeFileSync(cloudBuildPath, cloudRunYamlTemplate(agentName, projectId, region), "utf-8");
+    writeFileSync(
+      cloudBuildPath,
+      cloudRunYamlTemplate(agentName, projectId, region, {
+        allowUnauthenticated: ctx.opts.allowUnauthenticated === true,
+        daemon: ctx.opts.mode === "daemon",
+      }),
+      "utf-8",
+    );
     console.log("  create cloudbuild.yaml");
   },
 
@@ -137,8 +171,11 @@ export const cloudrunProvider: DeployProvider = {
       console.log("\n  ✅ Cloud Run files scaffolded. Next steps:");
       console.log("     1. gcloud auth login");
       console.log("     2. gcloud config set project YOUR_PROJECT_ID");
-      console.log(`     3. gcloud run deploy raxd-${agentName} --source . --region ${region}`);
-      console.log("     4. gcloud run services update raxd-" + agentName + " --set-secrets ...\n");
+      console.log(`     3. ${cloudRunDeployArgv(ctx, region).join(" ")}`);
+      console.log("     4. gcloud run services update raxd-" + agentName + " --set-secrets ...");
+      console.log(opts.allowUnauthenticated
+        ? "     NOTE: --allow-unauthenticated makes the agent API public.\n"
+        : "     The service requires IAM auth. Call it with: curl -H \"Authorization: Bearer $(gcloud auth print-identity-token)\" <url>\n");
       return;
     }
 
@@ -152,10 +189,7 @@ export const cloudrunProvider: DeployProvider = {
 
     console.log("\n  🚀 Deploying to Google Cloud Run...\n");
 
-    const deployCode = execLive(
-      `gcloud run deploy raxd-${agentName} --source . --region ${region} --port ${DEPLOY_DEFAULTS.port} --memory ${DEPLOY_DEFAULTS.resources.memory.replace("m", "Mi")} --timeout 300 --allow-unauthenticated`,
-      cwd,
-    );
+    const deployCode = execLive(cloudRunDeployArgv(ctx, region), cwd);
 
     if (deployCode === 0) {
       console.log("\n  ✅ Deployed to Cloud Run!");
@@ -184,7 +218,7 @@ export const cloudrunProvider: DeployProvider = {
 
     console.log("\n🛑 Deleting Cloud Run service...\n");
     const code = execLive(
-      `gcloud run services delete raxd-${agentName} --region ${region} --quiet`,
+      ["gcloud", "run", "services", "delete", `raxd-${agentName}`, "--region", region, "--quiet"],
       ctx.cwd,
     );
     if (code === 0) {
@@ -205,10 +239,7 @@ export const cloudrunProvider: DeployProvider = {
     }
 
     console.log("\n📊 Cloud Run Service Status\n");
-    execLive(
-      `gcloud run services describe raxd-${agentName} --region ${region}`,
-      cwd,
-    );
+    execLive(["gcloud", "run", "services", "describe", `raxd-${agentName}`, "--region", region], cwd);
   },
 
   logs(ctx) {
@@ -220,9 +251,6 @@ export const cloudrunProvider: DeployProvider = {
       process.exit(1);
     }
 
-    execLive(
-      `gcloud run services logs read raxd-${agentName} --region ${region}`,
-      cwd,
-    );
+    execLive(["gcloud", "run", "services", "logs", "read", `raxd-${agentName}`, "--region", region], cwd);
   },
 };

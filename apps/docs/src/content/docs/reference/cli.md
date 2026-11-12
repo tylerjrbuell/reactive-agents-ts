@@ -226,6 +226,7 @@ rax deploy up [--target local|fly|railway|render|cloudrun|digitalocean]
               [--dry-run]
               [--scaffold-only]
               [--name <agent-name>]
+              [--allow-unauthenticated]   # cloudrun only
 
 rax deploy down [--target <target>]
 rax deploy status [--target <target>]
@@ -241,7 +242,8 @@ rax deploy init   # legacy alias for `deploy up --scaffold-only`
 | `--mode` | `daemon` | `daemon` for full agent loop, `sdk` for HTTP API mode |
 | `--dry-run` | off | Run provider `preflight()` checks and print execution plan |
 | `--scaffold-only` | off | Generate config files only, do not deploy |
-| `--name` | auto-detected from `package.json` | Agent/app identifier |
+| `--name` | auto-detected from `package.json` (slugified) | Agent/app identifier. Must match `/^[a-z0-9][a-z0-9-]{0,40}$/`; anything else is rejected. Provider commands run as argument arrays, never through a shell |
+| `--allow-unauthenticated` | off | Cloud Run only. By default the service requires IAM auth (`--no-allow-unauthenticated`); this makes it public. The agent API has no auth of its own |
 | `--follow`, `-f` | off | Follow logs for `deploy logs` |
 
 **Provider CLI Contracts:**
@@ -253,8 +255,10 @@ These commands and flags are validated by `apps/cli/tests/cli-contracts.test.ts`
 | local | Docker + Compose | Docker `>= 20`, Compose `>= 2`, supports `compose build/up/down/ps/logs`, `up -d`, `logs --tail/--follow`, `ps --format` |
 | fly | `flyctl` / `fly` | supports `auth whoami`, `launch --copy-config --name --no-deploy`, `deploy`, `status`, `logs`, `apps destroy --yes` |
 | railway | `railway` | supports `whoami`, `link`, `up`, `down --yes`, `status`, `logs`, `variables` |
-| render | `render` | supports `blueprint launch`, `services list` |
-| cloudrun | `gcloud` | SDK `>= 380`, supports `config get-value project`, `auth list --filter --format`, `run deploy --source --region --port --memory --timeout --allow-unauthenticated`, `run services describe/delete/update` |
+| render | `render` | supports `blueprints validate`, `services list`, `logs`. There is no CLI command that creates services from a blueprint: connect the Git repo at `dashboard.render.com/blueprints` |
+| cloudrun | `gcloud` | SDK `>= 380`, supports `config get-value project`, `auth list --filter --format`, `run deploy --source --region --port --memory --timeout --no-allow-unauthenticated\|--allow-unauthenticated --min-instances --no-cpu-throttling`, `run services describe/delete/update` |
+
+**Always-on daemon settings.** `--mode daemon` runs cron, heartbeat and channels, so the scaffolds keep an instance running: Fly sets `auto_stop_machines = "off"` with one health check; Cloud Run deploys with `--min-instances=1 --no-cpu-throttling`; Render needs a paid (non-free) plan, which the scaffold uses. `--mode sdk` is request-driven and may scale to zero.
 | digitalocean | `doctl` | `>= 1.72`, supports `account get --format --no-header`, `apps create/list/update/delete/logs`, `--spec`, `--format` |
 
 **Containerized CLI fallback:**

@@ -7,6 +7,7 @@ import { VALID_TARGETS, VALID_MODES } from "./types.js";
 import { scaffoldSdkServer, detectAgentName, detectMonorepoRoot } from "./scaffold.js";
 import { getProvider, detectTarget, printPreflightReport } from "./registry.js";
 import { banner, kv, info, fail, box } from "../../ui.js";
+import { assertValidAgentName, slugifyAgentName } from "./exec.js";
 
 const HELP = `
   Usage: rax deploy <command> [options]
@@ -37,7 +38,9 @@ const HELP = `
     --mode <mode>       Deploy mode: daemon (default) or sdk
     --dry-run           Validate prerequisites without deploying
     --scaffold-only     Generate config files without deploying
-    --name <name>       Agent name (default: auto-detect from package.json)
+    --name <name>       Agent name: [a-z0-9-], max 41 chars (default: auto-detect from package.json)
+    --allow-unauthenticated
+                        cloudrun: make the service public (default: IAM-authenticated)
     --topology <type>   Deployment topology: single (default)
     --gpu               Include GPU compose for local models (digitalocean)
     --build             Force rebuild before deploying
@@ -139,6 +142,9 @@ function parseOptions(argv: string[]): DeployOptions {
       case "--dry-run":
         opts.dryRun = true;
         break;
+      case "--allow-unauthenticated":
+        opts.allowUnauthenticated = true;
+        break;
       case "--follow":
       case "-f":
         opts.follow = true;
@@ -168,11 +174,25 @@ function parseOptions(argv: string[]): DeployOptions {
     process.exit(1);
   }
 
-  if (!opts.name) {
-    opts.name = detectAgentName(process.cwd());
+  try {
+    opts.name = resolveDeployName(opts.name, process.cwd());
+  } catch (e) {
+    console.error(fail(e instanceof Error ? e.message : String(e)));
+    process.exit(1);
   }
 
   return opts;
+}
+
+/**
+ * Resolve the agent name used in provider commands and generated files.
+ * An explicit `--name` must already be a safe slug (rejected, not rewritten); a name
+ * auto-detected from package.json / directory is slugified so it can never carry
+ * shell metacharacters into a command or template.
+ */
+export function resolveDeployName(explicit: string, cwd: string): string {
+  if (explicit) return assertValidAgentName(explicit);
+  return slugifyAgentName(detectAgentName(cwd));
 }
 
 /** Build the DeployContext from parsed options */

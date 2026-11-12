@@ -300,3 +300,129 @@ describe("Deploy — preflight", () => {
     expect(report.filesToCreate.some((f) => f.includes("Dockerfile") || f.includes("docker-compose"))).toBe(true);
   });
 });
+
+// ─── Quick fixes: D1 name validation / argv, D3 + D2 Cloud Run + Fly, Render ──
+
+describe("Deploy — agent name validation (D1)", () => {
+  it("accepts safe slugs and rejects shell metacharacters", async () => {
+    const { isValidAgentName, assertValidAgentName } = await import("../src/commands/deploy/exec.js");
+    expect(isValidAgentName("my-agent-2")).toBe(true);
+    for (const bad of ["x; touch /tmp/pwn", "$(id)", "a b", "-lead", "UPPER", "", "a".repeat(42), "x`id`", "a/b", "a\nb"]) {
+      expect(isValidAgentName(bad)).toBe(false);
+    }
+    expect(() => assertValidAgentName("x; touch /tmp/pwn")).toThrow(/Invalid agent name/);
+  });
+
+  it("resolveDeployName rejects a hostile --name and slugifies a detected one", async () => {
+    const { resolveDeployName } = await import("../src/commands/deploy/index.js");
+    expect(() => resolveDeployName("x; touch /tmp/pwn", TEST_DIR)).toThrow(/Invalid agent name/);
+    expect(resolveDeployName("ok-name", TEST_DIR)).toBe("ok-name");
+    writeFileSync(join(TEST_DIR, "package.json"), JSON.stringify({ name: "@org/My_Cool Agent!" }));
+    expect(resolveDeployName("", TEST_DIR)).toBe("my-cool-agent");
+  });
+
+  it("exec with an argv array never shell-parses its arguments", async () => {
+    const { exec, execLive } = await import("../src/commands/deploy/exec.js");
+    const marker = join(TEST_DIR, "pwned");
+    const hostile = `x; touch ${marker}`;
+    expect(exec(["echo", hostile])).toBe(hostile);
+    expect(execLive(["true", hostile], TEST_DIR)).toBe(0);
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it("no provider builds a command by interpolating into a shell string", () => {
+    const dir = join(import.meta.dir, "../src/commands/deploy");
+    for (const f of ["target-fly", "target-railway", "target-render", "target-cloudrun", "target-digitalocean", "target-local"]) {
+      const src = readFileSync(join(dir, `${f}.ts`), "utf-8");
+      expect(src).not.toMatch(/(?:exec|execLive)\(\s*[`"]/);
+    }
+  });
+});
+
+describe("Deploy — Cloud Run auth + daemon (D3/D2)", () => {
+  const ctx = (mode: "daemon" | "sdk", allow?: boolean): DeployContext => ({
+    cwd: TEST_DIR,
+    opts: {
+      target: "cloudrun", mode, name: "a", topology: "single", scaffoldOnly: false, follow: false,
+      build: false, detach: true, gpu: false, dryRun: true, allowUnauthenticated: allow,
+    },
+    agentName: "a",
+    monorepoRoot: null,
+  });
+
+  it("is authenticated by default and keeps an instance warm in daemon mode", async () => {
+    const { cloudRunDeployArgv } = await import("../src/commands/deploy/target-cloudrun.js");
+    const argv = cloudRunDeployArgv(ctx("daemon"), "us-central1");
+    expect(argv).toContain("--no-allow-unauthenticated");
+    expect(argv).not.toContain("--allow-unauthenticated");
+    expect(argv).toContain("--min-instances=1");
+    expect(argv).toContain("--no-cpu-throttling");
+  });
+
+  it("--allow-unauthenticated is an explicit opt-in; sdk mode may scale to zero", async () => {
+    const { cloudRunDeployArgv } = await import("../src/commands/deploy/target-cloudrun.js");
+    const argv = cloudRunDeployArgv(ctx("sdk", true), "us-central1");
+    expect(argv).toContain("--allow-unauthenticated");
+    expect(argv).not.toContain("--no-allow-unauthenticated");
+    expect(argv).not.toContain("--min-instances=1");
+  });
+
+  it("a hostile name stays one argv element", async () => {
+    const { cloudRunDeployArgv } = await import("../src/commands/deploy/target-cloudrun.js");
+    const c = ctx("daemon");
+    const argv = cloudRunDeployArgv({ ...c, agentName: "x; touch /tmp/pwn" }, "r");
+    expect(argv[3]).toBe("raxd-x; touch /tmp/pwn");
+  });
+
+  it("cloudbuild.yaml follows the same auth and daemon flags", async () => {
+    const { cloudRunYamlTemplate } = await import("../src/templates/cloudrun.js");
+    const secure = cloudRunYamlTemplate("a", "p", "r", { daemon: true });
+    expect(secure).toContain('"--no-allow-unauthenticated"');
+    expect(secure).toContain('"--min-instances=1"');
+    expect(secure).toContain('"--no-cpu-throttling"');
+    expect(secure).not.toMatch(/"--allow-unauthenticated"/);
+    expect(cloudRunYamlTemplate("a", "p", "r", { allowUnauthenticated: true })).toContain('"--allow-unauthenticated"');
+  });
+});
+
+describe("Deploy — Fly daemon settings (D2)", () => {
+  it("daemon mode never auto-stops and defines exactly one health check", () => {
+    const toml = flyTomlTemplate("a", false, undefined, "daemon");
+    expect(toml).toContain('auto_stop_machines = "off"');
+    expect(toml).toContain("min_machines_running = 1");
+    expect((toml.match(/path = "\/health"/g) ?? []).length).toBe(1);
+    expect(toml).not.toContain("[[services]]");
+    expect(toml).not.toContain("[checks]");
+  });
+
+  it("sdk mode may scale to zero", () => {
+    const toml = flyTomlTemplate("a", false, undefined, "sdk");
+    expect(toml).toContain('auto_stop_machines = "stop"');
+    expect(toml).toContain("min_machines_running = 0");
+  });
+});
+
+describe("Deploy — Render + Railway templates", () => {
+  it("render.yaml has no empty command strings", async () => {
+    const { renderYamlTemplate, renderYamlSdkTemplate } = await import("../src/templates/render.js");
+    for (const y of [renderYamlTemplate("a"), renderYamlSdkTemplate("a")]) {
+      expect(y).not.toMatch(/(dockerCommand|startCommand):\s*""/);
+    }
+    expect(railwayJsonTemplate("a")).not.toContain('"startCommand"');
+  });
+
+  it("render plan validates the blueprint instead of the non-existent 'blueprint launch'", () => {
+    const report = getProvider("render").preflight({
+      cwd: TEST_DIR,
+      opts: {
+        target: "render", mode: "daemon", name: "a", topology: "single", scaffoldOnly: false,
+        follow: false, build: false, detach: true, gpu: false, dryRun: true,
+      },
+      agentName: "a",
+      monorepoRoot: null,
+    });
+    const plan = report.plan.join("\n");
+    expect(plan).not.toContain("blueprint launch");
+    expect(plan).toContain("git push");
+  });
+});

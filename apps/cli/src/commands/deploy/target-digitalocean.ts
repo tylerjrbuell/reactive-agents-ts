@@ -9,7 +9,7 @@ import { hasCommand, execLive, exec } from "./exec.js";
 /** Check if doctl is authenticated */
 function isAuthenticated(): boolean {
   try {
-    const out = exec("doctl account get --format Email --no-header 2>/dev/null");
+    const out = exec(["doctl", "account", "get", "--format", "Email", "--no-header"]);
     return out.trim().length > 0;
   } catch {
     return false;
@@ -151,7 +151,7 @@ export const digitaloceanProvider: DeployProvider = {
 
     const appSpecPath = join(cwd, ".do", "app.yaml");
     const createCode = execLive(
-      `doctl apps create --spec ${appSpecPath} --format ID --no-header`,
+      ["doctl", "apps", "create", "--spec", appSpecPath, "--format", "ID", "--no-header"],
       cwd,
     );
 
@@ -184,7 +184,7 @@ export const digitaloceanProvider: DeployProvider = {
     console.log("     doctl apps delete <app-id>\n");
 
     // List apps for convenience
-    execLive("doctl apps list --format ID,DefaultIngress,ActiveDeployment.Phase --no-header", ctx.cwd);
+    execLive(["doctl", "apps", "list", "--format", "ID,DefaultIngress,ActiveDeployment.Phase", "--no-header"], ctx.cwd);
   },
 
   status(ctx) {
@@ -194,7 +194,7 @@ export const digitaloceanProvider: DeployProvider = {
     }
 
     console.log("\n📊 DigitalOcean App Status\n");
-    execLive("doctl apps list --format ID,Spec.Name,DefaultIngress,ActiveDeployment.Phase", ctx.cwd);
+    execLive(["doctl", "apps", "list", "--format", "ID,Spec.Name,DefaultIngress,ActiveDeployment.Phase"], ctx.cwd);
   },
 
   logs(ctx) {
@@ -206,7 +206,7 @@ export const digitaloceanProvider: DeployProvider = {
     console.log("\n  To view logs, you need the app ID:");
     console.log("     doctl apps list");
     console.log("     doctl apps logs <app-id>\n");
-    execLive("doctl apps list --format ID,Spec.Name --no-header", ctx.cwd);
+    execLive(["doctl", "apps", "list", "--format", "ID,Spec.Name", "--no-header"], ctx.cwd);
   },
 };
 

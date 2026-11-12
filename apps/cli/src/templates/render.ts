@@ -26,7 +26,6 @@ services:
       - key: LLM_MODEL
         value: claude-sonnet-4-20250514
     autoDeploy: true
-    dockerCommand: ""
     disk:
       name: agent-data
       mountPath: /app/data

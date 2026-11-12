@@ -231,10 +231,12 @@ import { createAccessControlPolicy } from "@reactive-agents/gateway";
 
 const accessPolicy = createAccessControlPolicy({
   policy: "allowlist",
-  allowedSenders: ["alice@example.com", "bob@example.com"],
+  allowedSenders: ["email:alice@example.com", "signal:+15551234567"], // platform:userId
   unknownSenderAction: "escalate", // or "skip" (default)
 });
 ```
+
+Sender keys are namespaced `platform:userId` (taken from the event's `metadata.platform` and `metadata.sender`), so identical ids on different platforms never collide. A channel event with an empty sender is always denied.
 
 **Critical priority events bypass** cost budget and rate limit policies.
 
@@ -415,10 +417,10 @@ interface GatewayConfig {
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `accessPolicy` | `"allowlist" \| "blocklist" \| "open"` | `"allowlist"` | Who can send messages |
-| `allowedSenders` | `string[]` | — | Phone numbers / user IDs allowed (allowlist mode) |
-| `blockedSenders` | `string[]` | — | Phone numbers / user IDs blocked (blocklist mode) |
+| `allowedSenders` | `string[]` | — | `platform:userId` entries allowed (allowlist mode), e.g. `signal:+15551234567` |
+| `blockedSenders` | `string[]` | — | `platform:userId` entries blocked (blocklist mode) |
 | `unknownSenderAction` | `"skip" \| "escalate"` | `"skip"` | What to do with unauthorized senders |
-| `replyToUnknown` | `string` | — | Auto-reply text for unknown senders |
+| `replyToUnknown` | `string` | — | Fixed reply to allowlist-denied senders. Sent only by the `@reactive-agents/channels` `ChannelService`; the MCP-push path (Signal/Telegram) does not send it |
 | `mode` | `"chat" \| "task"` | `"chat"` | `"chat"` maintains per-sender conversation history; `"task"` sends one-shot instructions |
 | `sessionTtlDays` | `number` | `30` | Days of inactivity before a chat session is pruned |
 
@@ -456,7 +458,7 @@ See the [Messaging Channels guide](/guides/messaging-channels/) for setup instru
 ```typescript
 accessControl: {
   accessPolicy: "allowlist",           // "allowlist" | "blocklist" | "open"
-  allowedSenders: ["+15551234567"],
+  allowedSenders: ["signal:+15551234567"], // platform:userId
   unknownSenderAction: "skip",         // "skip" | "escalate"
   replyToUnknown: "Sorry, I only respond to authorized contacts.",
 }
@@ -470,7 +472,7 @@ By default (`accessControl.mode: "chat"`), each incoming channel message starts 
 ```typescript
 accessControl: {
   accessPolicy: "allowlist",
-  allowedSenders: ["+15551234567"],
+  allowedSenders: ["signal:+15551234567"],
   mode: "chat",          // default — persistent per-sender history
   sessionTtlDays: 30,    // prune inactive sessions after 30 days
 }

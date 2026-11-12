@@ -16,6 +16,12 @@ export interface ChannelServiceDeps {
    */
   readonly evaluatePolicy: (event: GatewayEvent) => Effect.Effect<PolicyDecision, never>;
   readonly taskId: () => string;
+  /**
+   * Fixed reply sent (via the same adapter) to a sender the access policy denied as an
+   * unknown sender (`code: "unknown-sender"`). Never run through the agent. Blocklisted
+   * senders and empty-sender events get no reply.
+   */
+  readonly replyToUnknown?: string;
   readonly eventBus?: { publish: (e: AgentEvent) => Effect.Effect<void, never> };
 }
 
@@ -70,7 +76,24 @@ export class ChannelService {
       const taskId = self.deps.taskId();
       const gwEvent = toGatewayEvent(adapterId, msg, taskId);
       const decision = yield* self.deps.evaluatePolicy(gwEvent);
-      if (decision.action !== "execute") return;
+      if (decision.action !== "execute") {
+        const replyText = self.deps.replyToUnknown;
+        const denied =
+          (decision.action === "skip" || decision.action === "escalate") &&
+          decision.code === "unknown-sender";
+        const adapter = self.adapters.get(adapterId);
+        if (replyText && denied && adapter) {
+          yield* adapter
+            .sendMessage(
+              { channelId: msg.channelId, replyToMessageId: msg.replyTo },
+              { text: replyText },
+            )
+            .pipe(Effect.catchAll((err) =>
+              emitErrorSwallowed({ site: "channels/src/services/channel-service.ts:replyToUnknown", tag: errorTag(err) }),
+            ));
+        }
+        return;
+      }
 
       const trigger = self.deps.triggers.evaluate(msg);
       const agentConfig = resolveAgentConfig(self.deps.triggers, trigger, msg);

@@ -256,12 +256,12 @@ describe("CLI Contracts — render", () => {
     expect(stdout.length).toBeGreaterThan(0);
   });
 
-  it.skipIf(!available)("blueprint subcommand exists", () => {
-    const { stdout, stderr } = probe("render blueprint --help");
+  it.skipIf(!available)("blueprints subcommand exists", () => {
+    const { stdout, stderr } = probe("render blueprints --help");
     const combined = stdout + stderr;
     expect(combined.toLowerCase()).not.toContain("unknown command");
-    // Our adapter calls `render blueprint launch`
-    expect(combined.toLowerCase()).toContain("launch");
+    // Our adapter calls `render blueprints validate render.yaml`
+    expect(combined.toLowerCase()).toContain("validate");
   });
 
   it.skipIf(!available)("services subcommand exists", () => {
