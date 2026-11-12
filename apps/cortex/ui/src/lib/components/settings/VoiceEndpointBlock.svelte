@@ -11,7 +11,7 @@
   import Input from "$lib/components/kit/Input.svelte";
   import Select from "$lib/components/kit/Select.svelte";
   import { modelInstallHelp, presetFor, leavesThisMachine, STT_PRESETS, TTS_PRESETS, type SttPreset, type TtsPreset } from "$lib/voice/voice-presets.js";
-  import { endpointKeyLine } from "$lib/voice/voice-status.js";
+  import { endpointKeyLine, reconcileVoice, voiceWarning } from "$lib/voice/voice-status.js";
   import { STT_KEY_ID, TTS_KEY_ID, type ServerVoiceOption } from "$lib/voice/voice-api.js";
 
   interface Props {
@@ -35,6 +35,7 @@
   let busy = $state(false);
   let result = $state<{ tone: "ok" | "bad"; text: string; help?: { hint: string; curl: string } } | null>(null);
   let voices = $state<readonly ServerVoiceOption[]>([]);
+  let voicesListed = $state(false);
 
   // Drafts follow the saved settings (after a save, a preset-free reload, or an engine switch).
   $effect(() => {
@@ -45,6 +46,8 @@
 
   const dirty = $derived(url.trim().replace(/\/+$/, "") !== cfg.baseUrl || model.trim() !== cfg.model || ("voice" in cfg && voiceName.trim() !== cfg.voice));
   const preset = $derived(presetFor(presets, url, model));
+  const listedIds = $derived(voicesListed ? voices.map((o) => o.id) : []);
+  const voiceProblem = $derived(direction === "tts" ? voiceWarning(voiceName, listedIds) : null);
   const cloud = $derived(url.trim() !== "" && leavesThisMachine(url));
 
   function applyPreset(id: string) {
@@ -54,6 +57,9 @@
     model = p.model;
     if ("voice" in p) voiceName = p.voice;
     result = null;
+    // A different model has different voices: forget the old list until it is listed again.
+    voices = [];
+    voicesListed = false;
   }
 
   async function saveEndpoint() {
@@ -67,6 +73,7 @@
     }
     result = null;
     toast.success("Voice endpoint saved");
+    if (direction === "tts") void loadVoices(true);
   }
 
   async function saveKey() {
@@ -95,11 +102,31 @@
     await v.load();
   }
 
-  async function loadVoices() {
+  /** Lists the voices of the SAVED endpoint and model. `quiet` (automatic) never toasts on failure. */
+  async function loadVoices(quiet = false) {
     const r = await v.api.voices();
-    if (r.ok) voices = r.value.voices;
-    else toast.error("Voices unavailable", r.error);
+    if (r.ok) {
+      voices = r.value.voices;
+      voicesListed = r.value.listed;
+      // The OpenAI-name fallback is not a real list: only a listed answer may reset the voice.
+      if (r.value.listed && "voice" in cfg) {
+        const next = reconcileVoice(voiceName, r.value.voices.map((o) => o.id), preset && "voice" in preset ? preset.voice : undefined);
+        if (next !== voiceName) {
+          voiceName = next;
+          if (next !== cfg.voice) void v.save({ tts: { baseUrl: url, model, voice: next } });
+        }
+      }
+    } else if (!quiet) toast.error("Voices unavailable", r.error);
   }
+
+  // Once per mount: an endpoint that is already saved and answers fills the Voice options.
+  let autoListed = false;
+  $effect(() => {
+    if (direction === "tts" && cfg.baseUrl !== "" && !autoListed) {
+      autoListed = true;
+      void loadVoices(true);
+    }
+  });
 
   async function test() {
     busy = true;
@@ -144,17 +171,21 @@
       <div class="vb-row">
         <Input id="vb-voice" mono autocomplete="off" spellcheck={false} list="vb-voices" bind:value={voiceName} />
         <datalist id="vb-voices">{#each voices as o (o.id)}<option value={o.id}>{o.label}</option>{/each}</datalist>
-        <Button size="sm" variant="ghost" disabled={cfg.baseUrl === ""} onclick={loadVoices}>List voices</Button>
+        <Button size="sm" variant="ghost" disabled={cfg.baseUrl === ""} onclick={() => void loadVoices()}>List voices</Button>
       </div>
+      {#if voiceProblem}<p class="vb-help vb-warn" role="alert" data-testid="voice-not-offered">{voiceProblem}</p>{/if}
     {/if}
   </div>
 
+  {#if direction === "tts" && voicesListed}
+    <p class="vb-help">{voices.length} voices listed by this server for the saved model. Pick one in the Voice field.</p>
+  {/if}
   {#if preset}<p class="vb-help">{preset.hint}</p>{/if}
   {#if cloud}<p class="vb-help vb-warn">{direction === "stt" ? "Your recordings are sent to this server." : "The text to be read is sent to this server."}</p>{/if}
 
   <div class="vb-row">
     <Button size="sm" variant="primary" disabled={!dirty || busy} onclick={saveEndpoint}>Save endpoint</Button>
-    <Button size="sm" variant="ghost" disabled={busy || cfg.baseUrl === "" || dirty} onclick={test}>Test</Button>
+    <Button size="sm" variant="ghost" disabled={busy || cfg.baseUrl === "" || dirty || voiceProblem !== null} onclick={test}>Test</Button>
     {#if dirty}<span class="vb-help">Save before testing.</span>{/if}
   </div>
   {#if result}<p class="vb-result" class:vb-ok={result.tone === "ok"} class:vb-bad={result.tone === "bad"} role="status">{result.text}</p>

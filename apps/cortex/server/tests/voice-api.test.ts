@@ -25,7 +25,7 @@ interface Seen {
   json?: Record<string, unknown>;
 }
 let seen: Seen[] = [];
-let mode: "ok" | "unauthorized" | "hang" | "voices" | "novoices" = "ok";
+let mode: "ok" | "unauthorized" | "hang" | "voices" | "novoices" | "speaches" | "badvoice" | "badbody" = "ok";
 let upstreamAborted = false;
 
 let stub: ReturnType<typeof Bun.serve>;
@@ -61,12 +61,22 @@ beforeAll(() => {
         });
         return Response.json({ text: "  hello from the stub  " });
       }
-      if (url.pathname === "/v1/audio/speech") {
+      if (url.pathname === "/v1/audio/speech" && mode !== "badvoice" && mode !== "badbody") {
         seen.push({ path: url.pathname, auth, json: (await req.json()) as Record<string, unknown> });
         return new Response(new Uint8Array([0xff, 0xfb, 0x90, 0x00, 1, 2, 3]), { headers: { "content-type": "audio/mpeg" } });
       }
       if (url.pathname === "/v1/audio/voices") {
         return mode === "voices" ? Response.json({ voices: ["af_bella", "am_adam"] }) : new Response("nope", { status: 404 });
+      }
+      if (url.pathname === "/v1/audio/speech" && mode === "badvoice") {
+        return Response.json({ detail: "Voice 'nova' is not supported. Supported voices: ['af_heart', 'secret-list']" }, { status: 422 });
+      }
+      if (url.pathname === "/v1/audio/speech" && mode === "badbody") {
+        return Response.json({ detail: [{ msg: "attacker text" }] }, { status: 422 });
+      }
+      if (url.pathname.startsWith("/v1/models/") && mode === "speaches") {
+        seen.push({ path: url.pathname, auth });
+        return Response.json({ voices: [{ name: "af_heart", language: "en-us", gender: "female" }, { name: "am_adam", language: "en-us", gender: "male" }], task: "text-to-speech" });
       }
       return new Response("not found", { status: 404 });
     },
@@ -292,6 +302,27 @@ describe("speech", () => {
     const fallback = (await (await call("/api/voice/voices")).json()) as { voices: Array<{ id: string }>; listed: boolean };
     expect(fallback.listed).toBe(false);
     expect(fallback.voices.map((v) => v.id)).toContain("alloy");
+  });
+
+  it("maps a 422 voice rejection to its first sentence, without the supported list", async () => {
+    await configure();
+    mode = "badvoice";
+    const r = (await (await call("/api/voice/test/tts", { method: "POST" })).json()) as { ok: boolean; message: string };
+    expect(r.ok).toBe(false);
+    expect(r.message).toBe("Voice 'nova' is not supported.");
+    expect(r.message).not.toContain("secret-list");
+    mode = "badbody";
+    const g = (await (await call("/api/voice/test/tts", { method: "POST" })).json()) as { message: string };
+    expect(g.message).toBe("The speech server rejected the request (HTTP 422).");
+  });
+
+  it("reads Speaches' per-model voice list at /models/<model> with labels", async () => {
+    await configure();
+    mode = "speaches";
+    const r = (await (await call("/api/voice/voices")).json()) as { voices: Array<{ id: string; label: string }>; listed: boolean };
+    expect(r.listed).toBe(true);
+    expect(r.voices[0]).toEqual({ id: "af_heart", label: "af_heart (en-us, female)" });
+    expect(seen.some((s) => s.path.startsWith("/v1/models/"))).toBe(true);
   });
 });
 

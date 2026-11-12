@@ -329,6 +329,7 @@ export function createRemoteTts(deps: RemoteTtsDeps): TtsEngine {
       let cancelled = false;
       let audio: AudioLike | null = null;
       let url: string | null = null;
+      let paused = false;
       const cleanup = (): void => {
         if (url !== null) deps.revokeObjectURL(url);
         url = null;
@@ -360,13 +361,26 @@ export function createRemoteTts(deps: RemoteTtsDeps): TtsEngine {
         } catch (cause) {
           if (cancelled) return;
           const name = typeof cause === "object" && cause !== null && "name" in cause ? String((cause as { name: unknown }).name) : "";
+          // play() was interrupted (pause(), element removed, source swapped): a normal stop, not a failure.
+          // A user pause stays paused; any other interruption ends the utterance so a queue moves on.
+          if (name === "AbortError") {
+            cleanup();
+            if (!paused) h.onEnd();
+            return;
+          }
           if (name === "NotAllowedError") return fail({ kind: "playback", message: "The browser blocked audio until you interact with the page. Press play again." });
+          // Anything else thrown once the audio exists is a playback problem, not an unreachable server.
+          if (audio !== null) return fail({ kind: "playback", message: "The audio could not be played." });
           fail({ kind: "network", message: `Could not reach Cortex for speech${causeMessage(cause) ? `: ${causeMessage(cause)}` : "."}` });
         }
       })();
       return {
-        pause: () => audio?.pause(),
+        pause: () => {
+          paused = true;
+          audio?.pause();
+        },
         resume: () => {
+          paused = false;
           void audio?.play().catch(() => undefined);
         },
         cancel: () => {

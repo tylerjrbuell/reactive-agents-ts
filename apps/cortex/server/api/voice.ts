@@ -73,7 +73,7 @@ export function voiceRouter(deps: VoiceRouterDeps) {
     const s = deps.settings.get()[dir];
     if (s.baseUrl === "") return null;
     const apiKey = voiceKey(deps.keys, dir === "stt" ? VOICE_STT_KEY_ID : VOICE_TTS_KEY_ID);
-    return { baseUrl: s.baseUrl, apiKey, fetch: deps.fetch, signal };
+    return { baseUrl: s.baseUrl, apiKey, model: s.model, fetch: deps.fetch, signal };
   };
   const keyView = (id: typeof VOICE_STT_KEY_ID | typeof VOICE_TTS_KEY_ID): ProviderKeyStatus | null => {
     const r = deps.keys.status(id);

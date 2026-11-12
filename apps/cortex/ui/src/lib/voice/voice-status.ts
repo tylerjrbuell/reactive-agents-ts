@@ -103,3 +103,19 @@ export function endpointKeyLine(status: VoiceSettingsView["keys"]["stt"], envNam
   if (status?.envSet) return `Using ${envName} from the server's environment.`;
   return `No key saved. A server that needs none works as is, or set ${envName} where Cortex runs.`;
 }
+
+/**
+ * The voice to use given what the server lists. With no known list the current voice stands.
+ * A voice the list lacks is replaced by `preferred` (a preset's voice) when listed, else the
+ * first listed voice, so a stale name such as OpenAI's `nova` never goes to a Kokoro model.
+ */
+export function reconcileVoice(current: string, listed: readonly string[], preferred?: string): string {
+  if (listed.length === 0 || listed.includes(current)) return current;
+  return preferred !== undefined && listed.includes(preferred) ? preferred : (listed[0] ?? current);
+}
+
+/** Inline warning for the Voice field: set only when a list is known and lacks the voice. */
+export function voiceWarning(voice: string, listed: readonly string[]): string | null {
+  const v = voice.trim();
+  return listed.length > 0 && v !== "" && !listed.includes(v) ? `${v} is not offered by this model.` : null;
+}

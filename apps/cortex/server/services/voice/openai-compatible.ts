@@ -16,6 +16,8 @@ import { isBlockedAddress, noRedirect } from "../../outbound-url.js";
 export interface AudioEndpoint {
   readonly baseUrl: string;
   readonly apiKey?: string | undefined;
+  /** The configured model; `listVoices` uses it for servers that list voices per model. */
+  readonly model?: string | undefined;
   readonly fetch?: typeof fetch | undefined;
   readonly signal?: AbortSignal | undefined;
 }
@@ -71,11 +73,35 @@ function headers(ep: AudioEndpoint, extra: Record<string, string> = {}): Record<
 }
 
 /**
+ * The one sentence a server gives for a rejected voice (Speaches: `{"detail":"Voice 'nova' is not
+ * supported. Supported voices: [...]"}`), or `undefined`. Only a string `detail` starting with
+ * "Voice " qualifies; anything after "Supported voices" is dropped and the sentence is capped, so an
+ * arbitrary upstream body is never echoed.
+ */
+export async function rejectedVoiceSentence(res: Response): Promise<string | undefined> {
+  try {
+    const j: unknown = JSON.parse((await res.text()).slice(0, 4_000));
+    const detail = typeof j === "object" && j !== null ? (j as { detail?: unknown }).detail : undefined;
+    if (typeof detail !== "string" || !detail.startsWith("Voice ")) return undefined;
+    const cut = detail.split(/Supported voices/i)[0] ?? detail;
+    // eslint-disable-next-line no-control-regex
+    const clean = cut.replace(/[\u0000-\u001f]/g, " ").trim();
+    return clean === "" ? undefined : clean.slice(0, 160);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * The failure for a non-2xx answer. The upstream body is never echoed: the status says what
  * went wrong, and a response body is attacker-shaped text when the base URL is not a server
  * the operator trusts.
  */
 async function failureOf(res: Response, _ep: AudioEndpoint, what: string): Promise<AudioFailure> {
+  if (res.status === 422 || res.status === 400) {
+    const reason = await rejectedVoiceSentence(res);
+    return { ok: false, status: 400, message: reason ?? `The ${what} server rejected the request (HTTP ${res.status}).` };
+  }
   await res.body?.cancel().catch(() => undefined);
   if (res.status === 401 || res.status === 403) return { ok: false, status: 401, message: `The ${what} server rejected the API key.` };
   if (res.status === 404) return { ok: false, status: 404, message: `The ${what} server has no such route or model (HTTP 404). Check the base URL ends with /v1 and the model name.` };
@@ -205,35 +231,49 @@ export interface ServerVoice {
   readonly label: string;
 }
 
-/**
- * The voices the speech server lists at `<base>/audio/voices` (Kokoro-FastAPI,
- * openedai-speech and others), else OpenAI's built-in names. Never fails: an
- * unreachable server yields the built-in names.
- */
-export async function listVoices(ep: AudioEndpoint): Promise<{ readonly voices: readonly ServerVoice[]; readonly listed: boolean }> {
-  const fallback = { voices: OPENAI_VOICES.map((id) => ({ id, label: id })), listed: false };
+const voiceFrom = (v: unknown): ServerVoice | null => {
+  if (typeof v === "string" && v !== "") return { id: v, label: v };
+  if (typeof v === "object" && v !== null) {
+    const o = v as { id?: unknown; name?: unknown; voice_id?: unknown; language?: unknown; gender?: unknown };
+    const id = [o.id, o.voice_id, o.name].find((x): x is string => typeof x === "string" && x !== "");
+    if (id === undefined) return null;
+    const name = typeof o.name === "string" && o.name !== "" ? o.name : id;
+    const meta = [o.language, o.gender].filter((x): x is string => typeof x === "string" && x !== "");
+    return { id, label: meta.length > 0 ? `${name} (${meta.join(", ")})` : name };
+  }
+  return null;
+};
+
+async function fetchVoiceList(ep: AudioEndpoint, path: string): Promise<readonly ServerVoice[]> {
   try {
-    const res = await noRedirect(ep.fetch ?? fetch)(audioUrl(ep.baseUrl, "audio/voices"), { headers: headers(ep), signal: AbortSignal.timeout(5_000) });
-    if (!res.ok) return fallback;
+    const res = await noRedirect(ep.fetch ?? fetch)(audioUrl(ep.baseUrl, path), { headers: headers(ep), signal: AbortSignal.timeout(5_000) });
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => undefined);
+      return [];
+    }
     const j: unknown = await res.json();
     const list = typeof j === "object" && j !== null ? (j as { voices?: unknown }).voices : j;
-    if (!Array.isArray(list)) return fallback;
-    const voices = list
-      .map((v): ServerVoice | null => {
-        if (typeof v === "string" && v !== "") return { id: v, label: v };
-        if (typeof v === "object" && v !== null) {
-          const o = v as { id?: unknown; name?: unknown; voice_id?: unknown };
-          const id = [o.id, o.voice_id, o.name].find((x): x is string => typeof x === "string" && x !== "");
-          const label = typeof o.name === "string" && o.name !== "" ? o.name : id;
-          return id !== undefined ? { id, label: label ?? id } : null;
-        }
-        return null;
-      })
-      .filter((v): v is ServerVoice => v !== null);
-    return voices.length > 0 ? { voices, listed: true } : fallback;
+    return Array.isArray(list) ? list.map(voiceFrom).filter((v): v is ServerVoice => v !== null) : [];
   } catch {
-    return fallback;
+    return [];
   }
+}
+
+/**
+ * The voices the speech server lists: `<base>/audio/voices` (Kokoro-FastAPI, openedai-speech),
+ * else the model object at `<base>/models/<model>` (Speaches lists voices per model), else
+ * OpenAI's built-in names with `listed: false`. Never fails: an unreachable server yields
+ * the built-in names. Error bodies are never echoed.
+ */
+export async function listVoices(ep: AudioEndpoint): Promise<{ readonly voices: readonly ServerVoice[]; readonly listed: boolean }> {
+  const direct = await fetchVoiceList(ep, "audio/voices");
+  if (direct.length > 0) return { voices: direct, listed: true };
+  if (ep.model !== undefined && ep.model.trim() !== "") {
+    const modelPath = `models/${ep.model.trim().split("/").map(encodeURIComponent).join("/")}`;
+    const perModel = await fetchVoiceList(ep, modelPath);
+    if (perModel.length > 0) return { voices: perModel, listed: true };
+  }
+  return { voices: OPENAI_VOICES.map((id) => ({ id, label: id })), listed: false };
 }
 
 /** One second of 16 kHz mono silence as a WAV file, used to test a transcription endpoint. */

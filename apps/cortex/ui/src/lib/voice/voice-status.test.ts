@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { endpointKeyLine, sttReadiness, sttStatus, ttsReadiness, ttsStatus } from "./voice-status.js";
+import { endpointKeyLine, reconcileVoice, sttReadiness, sttStatus, ttsReadiness, ttsStatus, voiceWarning } from "./voice-status.js";
+import { TTS_PRESETS } from "./voice-presets.js";
 import { EMPTY_VOICE_SETTINGS, parseVoiceSettings, voiceApi, type VoiceSettingsView } from "./voice-api.js";
 import type { BrowserVoiceCaps } from "./engines.js";
 import { parseKeyStatus } from "../provider-keys.js";
@@ -99,5 +100,26 @@ describe("voice api client", () => {
     expect(calls.filter((c) => c.url === "http://c/api/settings/keys/voice-tts").map((c) => c.method)).toEqual(["PUT", "DELETE"]);
     const down = await voiceApi("http://c", async () => { throw new Error("offline"); }).settings();
     expect(down).toEqual({ ok: false, error: "offline" });
+  });
+});
+
+describe("voice reconciliation", () => {
+  const listed = ["af_heart", "af_bella"];
+  test("a stale OpenAI voice resets to the preset voice, else the first listed", () => {
+    expect(reconcileVoice("nova", listed, "af_heart")).toBe("af_heart");
+    expect(reconcileVoice("nova", listed, "zzz")).toBe("af_heart");
+    expect(reconcileVoice("nova", ["am_adam"], "af_heart")).toBe("am_adam");
+  });
+  test("a listed voice, or no known list, is kept", () => {
+    expect(reconcileVoice("af_bella", listed, "af_heart")).toBe("af_bella");
+    expect(reconcileVoice("nova", [], "af_heart")).toBe("nova");
+  });
+  test("warns only when a list is known and lacks the voice", () => {
+    expect(voiceWarning("nova", listed)).toBe("nova is not offered by this model.");
+    expect(voiceWarning("af_heart", listed)).toBeNull();
+    expect(voiceWarning("nova", [])).toBeNull();
+  });
+  test("the Speaches preset carries a Kokoro voice", () => {
+    expect(TTS_PRESETS.find((x) => x.id === "speaches")?.voice).toBe("af_heart");
   });
 });

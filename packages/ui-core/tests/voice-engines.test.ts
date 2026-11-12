@@ -311,7 +311,10 @@ describe("remote STT", () => {
 });
 
 describe("remote TTS", () => {
-  function setup(res: () => Response = () => new Response(new Blob(["audio"], { type: "audio/mpeg" }), { status: 200 })) {
+  function setup(
+    res: () => Response = () => new Response(new Blob(["audio"], { type: "audio/mpeg" }), { status: 200 }),
+    playError?: () => unknown,
+  ) {
     const audios: FakeAudio[] = [];
     const requests: Array<{ url: string; body: unknown }> = [];
     const revoked: string[] = [];
@@ -324,6 +327,7 @@ describe("remote TTS", () => {
         audios.push(this);
       }
       async play() {
+        if (playError !== undefined) throw playError();
         this.playing = true;
         this.onplaying?.();
       }
@@ -386,6 +390,72 @@ describe("remote TTS", () => {
     await tick();
     expect(audios.length).toBe(0);
     expect(events).toEqual([]);
+  });
+
+  const domError = (name: string, message: string): Error => Object.assign(new Error(message), { name });
+
+  test("an interrupted play() (AbortError) is a normal stop: no error, the utterance ends", async () => {
+    const { engine } = setup(undefined, () => domError("AbortError", "The play() request was interrupted because the media was removed from the document."));
+    const events: string[] = [];
+    engine.speak("x", {}, { onEnd: () => events.push("end"), onError: (e) => events.push(`error:${e.message}`) });
+    await tick();
+    await tick();
+    expect(events).toEqual(["end"]);
+  });
+
+  test("an AbortError caused by a user pause stays silent and does not end the utterance", async () => {
+    let handle: { pause(): void } | undefined;
+    const { engine } = setup(undefined, () => {
+      handle?.pause();
+      return domError("AbortError", "interrupted by a call to pause()");
+    });
+    const events: string[] = [];
+    handle = engine.speak("x", {}, { onEnd: () => events.push("end"), onError: (e) => events.push(`error:${e.message}`) });
+    await tick();
+    await tick();
+    expect(events).toEqual([]);
+  });
+
+  test("an AbortError after cancel stays silent", async () => {
+    let handle: { cancel(): void } | undefined;
+    const { engine } = setup(undefined, () => {
+      handle?.cancel();
+      return domError("AbortError", "interrupted");
+    });
+    const events: string[] = [];
+    handle = engine.speak("x", {}, { onEnd: () => events.push("end"), onError: (e) => events.push(`error:${e.message}`) });
+    await tick();
+    await tick();
+    expect(events).toEqual([]);
+  });
+
+  test("a blocked autoplay is a specific playback error", async () => {
+    const { engine } = setup(undefined, () => domError("NotAllowedError", "blocked"));
+    const errs: string[] = [];
+    engine.speak("x", {}, { onEnd: () => undefined, onError: (e) => errs.push(`${e.kind}:${e.message}`) });
+    await tick();
+    await tick();
+    expect(errs).toEqual(["playback:The browser blocked audio until you interact with the page. Press play again."]);
+  });
+
+  test("another play() failure is a playback error, not 'could not reach Cortex'", async () => {
+    const { engine } = setup(undefined, () => domError("NotSupportedError", "no supported source"));
+    const errs: string[] = [];
+    engine.speak("x", {}, { onEnd: () => undefined, onError: (e) => errs.push(`${e.kind}:${e.message}`) });
+    await tick();
+    await tick();
+    expect(errs).toEqual(["playback:The audio could not be played."]);
+  });
+
+  test("a network failure still says Cortex could not be reached", async () => {
+    const { engine } = setup(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    const errs: string[] = [];
+    engine.speak("x", {}, { onEnd: () => undefined, onError: (e) => errs.push(`${e.kind}:${e.message}`) });
+    await tick();
+    await tick();
+    expect(errs[0]).toStartWith("network:Could not reach Cortex for speech");
   });
 
   test("pause and resume drive the audio element; lists voices", async () => {
