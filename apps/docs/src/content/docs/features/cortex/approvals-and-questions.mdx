@@ -26,6 +26,8 @@ One approval shows in one place at a time. Where its chat or run is on screen, i
 
 With **Durable execution** on (in **Execution**), the wait also survives a restart: the run checkpoints and pauses, the paused chat turn is held with an approval card (**Approve**, **Deny**, or **Dismiss** to hide the card), new messages wait until you decide, and the resumed reply lands in the thread. Configs saved before this kept the gate under **Durable execution** (`durableRuns.approvalTools`); they are read as the same policy.
 
+An agent can also ask **several typed questions at once**: pick one, pick many, yes or no, a number, or free text. Cortex shows them as one form wherever a question appears (the streaming chat turn, a paused chat turn, and **Waiting on you**). Required questions are marked and optional ones say so; a problem shows under the question it belongs to, and **Send answers** sends every answer together. If an answer breaks a rule the agent set (a number out of range, a choice that is not offered, a missing required answer), Cortex tells you what to fix and the agent keeps waiting. A question that offers "something else" also takes a typed value. In the thread your answers read as one line per question. Questions that use the older single-question form work as before.
+
 With durable execution on, the agent can also stop and ask you something (`request_user_input`). In chat, the question appears in the thread with a reply box: **Yes** / **No** for a confirmation, one button per option for a choice, fields for a form, or a text box. Your answer resumes the run, and the question, your answer and the agent's reply land in the thread. **Dismiss** drops the paused turn. New messages wait until you answer.
 
 ## Agent-proposed approval changes

@@ -43,7 +43,7 @@
     {#if busy}
       <p class="busy" aria-live="polite"><Status tone="running" label="Sending your answer…" /></p>
     {:else}
-      <InteractionReply kind={question.kind} schema={question.schema} onSend={(v) => void send(v)} onInvalid={(m) => (error = m)} />
+      <InteractionReply kind={question.kind} schema={question.schema} questions={question.questions} onSend={(v) => void send(v)} onInvalid={(m) => (error = m)} />
       <div class="acts">
         <Button size="sm" variant="ghost" onclick={() => (dismissed = true)}>Dismiss</Button>
         <span class="note">The run is paused here until you answer.</span>

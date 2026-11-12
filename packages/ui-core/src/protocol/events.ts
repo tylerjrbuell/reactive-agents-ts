@@ -259,12 +259,51 @@ export interface StructuredOutputReported {
 }
 
 // ── New tags (this kit) ───────────────────────────────────────────────────
+/** One selectable option of a choice {@link InteractionQuestionWire}. */
+export interface InteractionQuestionOptionWire {
+  /** Text shown to the person. */
+  readonly label: string;
+  /** Value reported back in the answer map when this option is picked. */
+  readonly value: string;
+  /** Extra explanation shown under the label. */
+  readonly description?: string;
+}
+
+/**
+ * One question of a structured `request_user_input` (structural copy of the runtime
+ * wire shape; ui-core imports no runtime types). Answer the interaction with an
+ * id-keyed map: `{ [question.id]: value }` (string, number, boolean, or string[] for
+ * `multi-choice`).
+ */
+export interface InteractionQuestionWire {
+  /** Unique within the request; the key of this question's answer. */
+  readonly id: string;
+  readonly prompt: string;
+  readonly type: "text" | "single-choice" | "multi-choice" | "boolean" | "number";
+  /** Present for the two choice types. */
+  readonly options?: readonly InteractionQuestionOptionWire[];
+  /** Absent means required. */
+  readonly required?: boolean;
+  /** Used when a non-required question is skipped. */
+  readonly default?: unknown;
+  /** `number`: inclusive lower bound. `multi-choice`: fewest picks. */
+  readonly min?: number;
+  /** `number`: inclusive upper bound. `multi-choice`: most picks. */
+  readonly max?: number;
+  /** `text`: longest accepted answer. */
+  readonly maxLength?: number;
+  /** Choice questions: a free-text value outside `options` is accepted. */
+  readonly allowOther?: boolean;
+}
+
 export interface PendingInteractionWire {
   readonly runId: string;
   readonly interactionId: string;
   readonly kind: "form" | "choice" | "confirmation";
   readonly prompt: string;
   readonly schema: unknown;
+  /** Typed questions of a structured call; absent for a legacy `kind` + `schema` request. */
+  readonly questions?: readonly InteractionQuestionWire[];
 }
 export interface RunAttached {
   readonly _tag: "RunAttached";

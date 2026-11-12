@@ -11,7 +11,7 @@
  * Framework gap (reported): the event carries no `timeoutMs`, so the card cannot
  * show how long the question waits.
  */
-import type { UiStreamEvent } from "@reactive-agents/ui-core";
+import type { InteractionQuestionWire, UiStreamEvent } from "@reactive-agents/ui-core";
 import { CORTEX_SERVER_URL } from "./constants.js";
 
 /** The question a streaming chat turn is waiting on. */
@@ -22,6 +22,8 @@ export interface LiveInteraction {
   readonly kind: string;
   readonly prompt: string;
   readonly schema: unknown;
+  /** Typed questions of a structured ask (`lib/structured-questions.ts`); absent for a legacy one. */
+  readonly questions?: readonly InteractionQuestionWire[];
 }
 
 /** Events that mean the run moved past its wait (answered, or ended). */
@@ -41,7 +43,14 @@ const MOVED_ON: ReadonlySet<UiStreamEvent["_tag"]> = new Set([
  */
 export function liveInteractionAfter(current: LiveInteraction | undefined, event: UiStreamEvent): LiveInteraction | undefined {
   if (event._tag === "InteractionRequested") {
-    return { runId: event.runId, interactionId: event.interactionId, kind: event.kind, prompt: event.prompt, schema: event.schema };
+    return {
+      runId: event.runId,
+      interactionId: event.interactionId,
+      kind: event.kind,
+      prompt: event.prompt,
+      schema: event.schema,
+      ...(event.questions !== undefined ? { questions: event.questions } : {}),
+    };
   }
   return current !== undefined && MOVED_ON.has(event._tag) ? undefined : current;
 }

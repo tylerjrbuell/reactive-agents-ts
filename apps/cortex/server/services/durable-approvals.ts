@@ -27,6 +27,7 @@
  * the source that holds the wait. The run's own caller still owns its result.
  */
 import type { ReactiveAgent } from "@reactive-agents/runtime";
+import type { InteractionQuestion } from "@reactive-agents/core";
 import { cortexLog } from "../cortex-log.js";
 
 /** The paused gate as the framework reports it (`AgentResult.pendingApproval`). */
@@ -97,6 +98,8 @@ export interface LiveInteractionRow {
   readonly kind: string;
   readonly prompt: string;
   readonly schema: unknown;
+  /** Typed questions of a structured ask; absent for a legacy `kind` + `schema` one. */
+  readonly questions?: readonly InteractionQuestion[];
   readonly agentId: string;
   readonly chatSessionId?: string;
 }
@@ -283,6 +286,7 @@ export const durableApprovals = {
           kind: r.kind,
           prompt: r.prompt,
           schema: r.schema,
+          ...(r.questions !== undefined ? { questions: r.questions } : {}),
           agentId: source.agentId,
           ...(source.chatSessionId !== undefined ? { chatSessionId: source.chatSessionId } : {}),
         });

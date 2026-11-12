@@ -59,6 +59,7 @@
           <InteractionReply
             kind={p.kind}
             schema={p.schema}
+            questions={p.questions}
             onSend={(value) => void send(p, { value })}
             onInvalid={(message) => (errors = { ...errors, [p.runId]: message })}
           />

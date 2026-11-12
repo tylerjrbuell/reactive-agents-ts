@@ -1,3 +1,4 @@
+import type { InteractionQuestionWire } from "@reactive-agents/ui-core";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 
 /**
@@ -14,6 +15,8 @@ export interface ChatPendingInteractionWire {
   readonly kind: string;
   readonly prompt: string;
   readonly schema: unknown;
+  /** Typed questions of a structured ask; the server derives them from the persisted schema. */
+  readonly questions?: readonly InteractionQuestionWire[];
   readonly createdAt: number;
 }
 

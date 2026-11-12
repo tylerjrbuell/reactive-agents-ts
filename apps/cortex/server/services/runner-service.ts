@@ -5,7 +5,7 @@
  * so the UI can navigate immediately without polling for the first EventBus event.
  */
 import { Effect, Context, Layer, Ref } from "effect";
-import { generateTaskId } from "@reactive-agents/core";
+import { generateTaskId, type InteractionQuestion } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
@@ -285,6 +285,8 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
         kind: string;
         prompt: string;
         schema: unknown;
+        /** Typed questions of a structured ask; absent for a legacy `kind` + `schema` one. Answer with an id-keyed map. */
+        questions?: readonly InteractionQuestion[];
         task: string;
         updatedAt: number;
         /** Set on a live question (no durable runs): the agent asking and, for a chat, its session. */
@@ -766,6 +768,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
             kind: string;
             prompt: string;
             schema: unknown;
+            questions?: readonly InteractionQuestion[];
             task: string;
             updatedAt: number;
             agentId?: string;
@@ -784,6 +787,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
               kind?: string;
               prompt?: string;
               schema?: unknown;
+              questions?: readonly InteractionQuestion[];
               task?: string;
               updatedAt?: number;
             }[]) {
@@ -793,6 +797,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
                 kind: p.kind ?? "",
                 prompt: p.prompt ?? "",
                 schema: p.schema ?? null,
+                ...(p.questions !== undefined ? { questions: p.questions } : {}),
                 task: p.task ?? "",
                 updatedAt: p.updatedAt ?? entry.startedAt,
               });
@@ -808,6 +813,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
               kind: r.kind,
               prompt: r.prompt,
               schema: r.schema,
+              ...(r.questions !== undefined ? { questions: r.questions } : {}),
               task: "",
               updatedAt: Date.now(),
               ...(r.chatSessionId !== undefined ? { chatSessionId: r.chatSessionId } : {}),

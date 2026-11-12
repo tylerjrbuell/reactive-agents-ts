@@ -16,6 +16,7 @@ import type { RunId } from "../types.js";
 import { readRunTraceFile } from "../services/run-trace-file.js";
 import { makeRunCauseReader, type RunCauseReader } from "../services/run-cause.js";
 import { checkWorkspaceDir } from "../services/workspace-dir.js";
+import { checkInteractionAnswer, questionsOfPending } from "../services/interaction-answers.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
 import { effectiveApprovalPolicy } from "../services/approval-policy.js";
 
@@ -322,6 +323,13 @@ export const runsRouter = (
       async ({ params, body, set }) => {
         const program = Effect.gen(function* () {
           const runner = yield* CortexRunnerService;
+          // A structured ask: the id-keyed map is checked against its questions first, so the
+          // person can fix a bad answer instead of it failing inside the waiting run.
+          const asked = (yield* runner.listPendingInteractions()).find(
+            (p) => p.runId === params.runId && p.interactionId === body.interactionId,
+          );
+          const checked = checkInteractionAnswer(questionsOfPending(asked ?? {}), body.value);
+          if (!checked.ok) return { rejected: checked.error } as const;
           return yield* runner.respondToInteraction(
             params.runId as RunId,
             body.interactionId,
@@ -329,7 +337,12 @@ export const runsRouter = (
           );
         });
         try {
-          return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+          const out = await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
+          if ("rejected" in out) {
+            set.status = 422;
+            return { error: out.rejected };
+          }
+          return out;
         } catch (e) {
           set.status = 500;
           return { error: String(e) };

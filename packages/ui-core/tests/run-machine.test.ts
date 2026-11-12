@@ -38,6 +38,26 @@ describe("reduceRunState", () => {
     expect(s.pendingInteraction?.interactionId).toBe("i1");
   });
 
+  test("a structured interaction pause keeps its typed questions", () => {
+    const s = feed([
+      {
+        _tag: "InteractionRequested",
+        runId: "r1",
+        interactionId: "i1",
+        kind: "form",
+        prompt: "Deploy details",
+        schema: {},
+        questions: [
+          { id: "env", prompt: "Where?", type: "single-choice", options: [{ label: "Staging", value: "stg" }] },
+          { id: "n", prompt: "How many?", type: "number", min: 1 },
+        ],
+        seq: 1,
+      },
+    ]);
+    expect(s.pendingInteraction?.questions?.map((q) => q.id)).toEqual(["env", "n"]);
+    expect(s.pendingInteraction?.questions?.[0]?.options?.[0]?.value).toBe("stg");
+  });
+
   test("approval pause via ApprovalRequested", () => {
     const s = feed([
       { _tag: "ApprovalRequested", runId: "r1", gateId: "g1", toolName: "shell", args: { cmd: "rm" }, seq: 1 },

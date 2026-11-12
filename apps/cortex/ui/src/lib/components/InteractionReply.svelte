@@ -4,18 +4,23 @@
   // Shared by the live chat card (ChatLiveInteraction) and the held-turn card
   // (ChatInteractionCards). Rules: lib/chat-interactions.ts.
   import Button from "$lib/components/kit/Button.svelte";
+  import StructuredQuestionForm from "$lib/components/StructuredQuestionForm.svelte";
   import { choiceOptions, formFields, formValue, replyControl } from "$lib/chat-interactions.js";
+  import { questionsOf } from "$lib/structured-questions.js";
 
   interface Props {
     kind: string;
     schema: unknown;
+    /** Typed questions of a structured ask; they replace the kind's own control and send an id-keyed map. */
+    questions?: unknown;
     /** Called with the answer value; the caller sends it. */
     onSend: (value: unknown) => void;
     /** Reports a required form field left blank. */
     onInvalid?: (message: string) => void;
   }
-  const { kind, schema, onSend, onInvalid }: Props = $props();
+  const { kind, schema, questions, onSend, onInvalid }: Props = $props();
 
+  const structured = $derived(questionsOf({ questions, schema }));
   const control = $derived(replyControl({ kind, schema }));
   let text = $state("");
   let draft = $state<Record<string, string | boolean>>({});
@@ -35,7 +40,9 @@
   }
 </script>
 
-{#if control === "confirmation"}
+{#if structured.length > 0}
+  <StructuredQuestionForm questions={structured} {onSend} />
+{:else if control === "confirmation"}
   <div class="acts">
     <Button size="sm" variant="primary" onclick={() => onSend(true)}>Yes</Button>
     <Button size="sm" onclick={() => onSend(false)}>No</Button>
@@ -66,7 +73,7 @@
     <div><Button type="submit" size="sm" variant="primary">Send answer</Button></div>
   </form>
 {/if}
-{#if control !== "form"}
+{#if structured.length === 0 && control !== "form"}
   <form class="acts" onsubmit={(e) => { e.preventDefault(); sendText(); }}>
     <input
       type="text"

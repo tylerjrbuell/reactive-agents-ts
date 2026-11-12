@@ -11,6 +11,8 @@
   import type { PendingInteractionWire } from "@reactive-agents/ui-core";
   import Button from "$lib/components/kit/Button.svelte";
   import Status from "$lib/components/kit/Status.svelte";
+  import StructuredQuestionForm from "$lib/components/StructuredQuestionForm.svelte";
+  import { questionsOf } from "$lib/structured-questions.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
   import { toast } from "$lib/stores/toast-store.js";
@@ -48,7 +50,10 @@
     busy = key;
     try {
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      if (!res.ok) {
+        const reason = ((await res.json().catch(() => ({}))) as { error?: string }).error;
+        throw new Error(reason ?? `Server returned ${res.status}`);
+      }
       return true;
     } catch (e) {
       toast.error(failTitle, e instanceof Error ? e.message : String(e));
@@ -109,6 +114,8 @@
               {:else if item.openRunId}
                 <Button size="sm" variant="ghost" href="/run/{encodeURIComponent(item.openRunId)}">Open run</Button>
               {/if}
+            {:else if questionsOf(item.interaction).length > 0}
+              <Button size="sm" aria-expanded={openForm === item.key} onclick={() => (openForm = openForm === item.key ? null : item.key)}>Answer</Button>
             {:else if item.interaction.kind === "choice"}
               {#each choiceOptions(item.interaction.schema) as option (option)}
                 <Button size="sm" disabled={busy === item.key} onclick={() => respond(item.key, item.interaction, option)}>{option}</Button>
@@ -124,7 +131,12 @@
             {/if}
           </div>
         </div>
-        {#if item.kind === "question" && item.interaction.kind === "form" && openForm === item.key}
+        {#if item.kind === "question" && questionsOf(item.interaction).length > 0 && openForm === item.key}
+          {@const asked = item.interaction}
+          <div class="form">
+            <StructuredQuestionForm questions={questionsOf(asked)} disabled={busy === item.key} onSend={(answers) => void respond(item.key, asked, answers)} />
+          </div>
+        {:else if item.kind === "question" && item.interaction.kind === "form" && openForm === item.key}
           {@const id = item.interaction.interactionId}
           <form class="form" onsubmit={(e) => { e.preventDefault(); void respond(item.key, item.interaction, drafts[id] ?? {}); }}>
             {#each formFields(item.interaction.schema) as field (field.name)}

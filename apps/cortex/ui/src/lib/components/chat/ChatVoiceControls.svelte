@@ -15,7 +15,8 @@
   import Icon from "$lib/components/kit/Icon.svelte";
   import { createComposerDictation } from "$lib/voice/composer-dictation.js";
   import { sttReadiness, ttsReadiness } from "$lib/voice/voice-status.js";
-  import { replyEventOf, voiceQuestionOf, waitingOf, type ChatSnapshot } from "$lib/voice/voice-text.js";
+  import { liveQuestionOpen, replyEventOf, voiceQuestionOf, waitingOf, type ChatSnapshot } from "$lib/voice/voice-text.js";
+  import { createStructuredVoiceAnswers, deliverPartAnswer } from "$lib/voice/voice-structured.js";
   import { answerLiveInteraction, type LiveInteraction } from "$lib/chat-live-interaction.js";
   import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
   import type { DictationState, VoiceWaitingOn } from "@reactive-agents/ui-core";
@@ -107,23 +108,39 @@
     send: (text) => chatStore.sendMessageStream(text),
     stopRun: () => chatStore.stop(),
     answerQuestion: async (question, value) => {
-      const live = [...latestTurns].reverse().map((t) => t.liveInteraction as LiveInteraction | undefined).find((q) => q?.interactionId === question.id);
+      const interactionId = question.part?.interactionId ?? question.id;
+      const live = [...latestTurns].reverse().map((t) => t.liveInteraction as LiveInteraction | undefined).find((q) => q?.interactionId === interactionId);
       if (live === undefined) return { ok: false, error: "The agent is no longer waiting for an answer." };
-      const out = await answerLiveInteraction(live, value);
-      if (out.ok) pendingInteractions.update((list) => list.filter((p) => !(p.runId === live.runId && p.interactionId === live.interactionId)));
-      return out;
+      const settle = <T extends { readonly ok: boolean }>(out: T): T => {
+        if (out.ok) pendingInteractions.update((list) => list.filter((p) => !(p.runId === live.runId && p.interactionId === live.interactionId)));
+        return out;
+      };
+      // One question of a structured ask: collected until every required one has an answer.
+      if (question.part !== undefined) {
+        const out = await deliverPartAnswer({ question, value, interaction: live, collected: structuredAnswers, send: (answers) => answerLiveInteraction(live, answers) });
+        if (!out.ok) return out;
+        if (out.done) return settle(out);
+        syncQuestion(latestTurns, true); // ask the next one
+        return out;
+      }
+      return settle(await answerLiveInteraction(live, value));
     },
   });
 
   // A question the agent asks while voice mode waits is read aloud and answered by voice.
+  // A structured ask is read one question at a time (answers collected in `structuredAnswers`).
   let askedId: string | null = null;
+  const structuredAnswers = createStructuredVoiceAnswers();
   function syncQuestion(turns: ChatSnapshot["turns"], sending: boolean) {
-    const q = host.get().phase === "thinking" && sending ? voiceQuestionOf(turns) : null;
+    const q = host.get().phase === "thinking" && sending ? voiceQuestionOf(turns, structuredAnswers.get) : null;
     if (q !== null && q.id !== askedId) {
       askedId = q.id;
       v.askQuestion(q);
     } else if (q === null && askedId !== null) {
+      // The answers are all in and the run has not moved on yet: leave the sending step alone.
+      if (sending && liveQuestionOpen(turns)) return;
       askedId = null;
+      structuredAnswers.clear();
       v.dispatchQuestion({ type: "cancel" });
     }
   }

@@ -24,7 +24,9 @@
  */
 import type { Database } from "bun:sqlite";
 import type { AgentResult, ReactiveAgent } from "@reactive-agents/runtime";
+import type { InteractionQuestion } from "@reactive-agents/core";
 import { durableApprovals, type ApprovalDecision, type PendingGate } from "./durable-approvals.js";
+import { checkInteractionAnswer, questionsOfPending } from "./interaction-answers.js";
 
 /** A paused chat turn, as the REST API returns it. */
 export interface ChatPendingApproval {
@@ -48,6 +50,8 @@ export interface ChatPendingInteraction {
   readonly kind: string;
   readonly prompt: string;
   readonly schema: unknown;
+  /** Typed questions of a structured ask (from the persisted schema); absent for a legacy `kind` + `schema` one. Answer with an id-keyed map. */
+  readonly questions?: readonly InteractionQuestion[];
   readonly createdAt: number;
 }
 
@@ -133,6 +137,7 @@ const rowToInteraction = (r: InteractionRow): ChatPendingInteraction => {
   } catch {
     schema = {};
   }
+  const questions = questionsOfPending({ schema });
   return {
     runId: r.run_id,
     sessionId: r.session_id,
@@ -141,6 +146,7 @@ const rowToInteraction = (r: InteractionRow): ChatPendingInteraction => {
     kind: r.kind,
     prompt: r.prompt,
     schema,
+    ...(questions.length > 0 ? { questions } : {}),
     createdAt: r.created_at,
   };
 };
@@ -160,10 +166,23 @@ const showValue = (v: unknown): string => {
 /**
  * The user's answer to a `request_user_input` question as it lands in the thread:
  * text as typed, a confirmation as Yes / No, form values one `name: value` per line.
+ * A structured answer map reads as `question: answer` per line (a choice shows its
+ * option label), in the order the questions were asked.
  */
-export function answerText(value: unknown): string {
+export function answerText(value: unknown, questions?: readonly InteractionQuestion[]): string {
   if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-    return Object.entries(value as Record<string, unknown>)
+    const map = value as Record<string, unknown>;
+    if (questions !== undefined && questions.length > 0) {
+      return questions
+        .filter((q) => map[q.id] !== undefined)
+        .map((q) => {
+          const labelOf = (v: unknown): string => (typeof v === "string" ? (q.options?.find((o) => o.value === v)?.label ?? v) : showValue(v));
+          const a = map[q.id];
+          return `${q.prompt}: ${Array.isArray(a) ? a.map(labelOf).join(", ") : labelOf(a)}`;
+        })
+        .join("\n");
+    }
+    return Object.entries(map)
       .map(([k, v]) => `${k}: ${showValue(v)}`)
       .join("\n");
   }
@@ -351,6 +370,9 @@ export class ChatApprovals {
   async respond(sessionId: string, runId: string, value: unknown): Promise<ChatApprovalOutcome> {
     const pending = this.getInteraction(sessionId, runId);
     if (!pending) return { ok: false, code: "not-found", message: `No turn ${runId} waiting for a reply in session ${sessionId}` };
+    // A structured ask is answered with an id-keyed map; a bad one goes back to the person to fix.
+    const checked = checkInteractionAnswer(pending.questions ?? [], value);
+    if (!checked.ok) return { ok: false, code: "failed", message: checked.error };
     let release: () => void;
     try {
       release = this.host.acquireTurn(sessionId);
@@ -365,7 +387,7 @@ export class ChatApprovals {
       } catch (e) {
         return { ok: false, code: "failed", message: errorMessage(e) };
       }
-      return await this.settle(sessionId, runId, pending.userMessage, result, [], { question: pending.prompt, answer: answerText(value) });
+      return await this.settle(sessionId, runId, pending.userMessage, result, [], { question: pending.prompt, answer: answerText(value, pending.questions) });
     } finally {
       release();
     }

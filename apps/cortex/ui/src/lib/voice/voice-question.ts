@@ -23,6 +23,12 @@ export interface VoiceQuestion {
   readonly id: string;
   readonly prompt: string;
   readonly spec: VoiceQuestionSpec;
+  /**
+   * Set when this is one question of a structured ask (`voice-structured.ts`): which
+   * interaction it belongs to and which of its questions. The answer is collected, not
+   * sent, until every required question has one.
+   */
+  readonly part?: { readonly interactionId: string; readonly questionId: string };
 }
 
 /** An answer waiting for the person's confirmation. */
