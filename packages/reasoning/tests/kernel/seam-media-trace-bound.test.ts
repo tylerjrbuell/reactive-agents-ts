@@ -221,13 +221,13 @@ describe("stage F: part-summary helpers", () => {
     const facts = degradedParts([
       { role: "user", content: [{ type: "text", text: "x" }, IMAGE] },
       { role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/tiff", data: "AAAA" } }] },
-      { role: "user", content: [{ type: "file", ref: { uri: "ws://r.csv", media_type: "text/csv" } }] },
+      // User-turn audio/file go to the provider unchanged: not kernel-degraded.
+      { role: "user", content: [{ type: "file", ref: { uri: "ws://r.csv", media_type: "text/csv" } }, AUDIO] },
       { role: "tool_result", toolCallId: "c1", content: [{ type: "text", text: "ok" }, IMAGE] },
       { role: "assistant", content: "plain" },
     ]);
     expect(facts.map((f) => [f.role, f.part.type, f.part.media_type, f.reason])).toEqual([
       ["user", "image", "image/tiff", "unsupported image type"],
-      ["user", "file", "text/csv", "no provider input for this part yet"],
     ]);
     // Tool results follow the same rule: a supported image maps, audio stubs.
     expect(degradedParts([{ role: "tool_result", toolCallId: "c2", content: [IMAGE, AUDIO] }]).map((f) => [f.role, f.part.type])).toEqual([

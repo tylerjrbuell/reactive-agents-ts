@@ -87,6 +87,34 @@ describe("D1: an image user turn reaches the provider as an image block", () => 
     expect(JSON.stringify(first)).not.toContain("[object Object]");
   });
 
+  it("scripted run: audio and file parts reach LLMRequest.messages unchanged (no kernel text stub)", async () => {
+    const seen: LLMMessage[][] = [];
+    const audio: ContentPart = {
+      type: "audio",
+      source: { type: "base64", media_type: "audio/wav", data: "UklGRg==" },
+      transcript: "hello",
+    };
+    const file: ContentPart = {
+      type: "file",
+      ref: { uri: "file:///w/report.pdf", media_type: "application/pdf", name: "report.pdf" },
+    };
+    const program = executeReactive({
+      taskDescription: "Summarize.",
+      taskType: "query",
+      memoryContext: "",
+      availableTools: [],
+      config: defaultReasoningConfig,
+      initialMessages: [{ role: "user", content: [{ type: "text", text: "Summarize." }, audio, file] }],
+    });
+    await Effect.runPromise(provideTestEnvelope(program.pipe(Effect.provide(capturingLayer(seen)))));
+
+    const first = seen[0]!;
+    const blocks = first.flatMap((m) => (m.role === "user" && typeof m.content !== "string" ? m.content : []));
+    expect(blocks.filter((b) => b.type === "audio")).toEqual([audio]);
+    expect(blocks.filter((b) => b.type === "file")).toEqual([file]);
+    expect(JSON.stringify(first)).not.toContain("omitted");
+  });
+
   // End-to-end canonical form: seed normalization (pass-seed) and goal
   // normalization (from-kernel-state) both enforce it, so this goes red only
   // when both are cut; the seedPassState unit pin below isolates the seed layer.
@@ -161,11 +189,9 @@ describe("D1: an image user turn reaches the provider as an image block", () => 
         { type: "text", text: "look" },
         IMAGE_PART,
         { type: "text", text: "[image omitted: image/tiff, 1 KB; unsupported image type]" },
-        { type: "text", text: "[audio omitted: audio/wav, 1 KB; no provider input for this part yet; transcript: hello]" },
-        {
-          type: "text",
-          text: "[file omitted: application/pdf, report.pdf at file:///w/report.pdf; no provider input for this part yet]",
-        },
+        // Audio and file pass through unchanged: the provider decides (wire, stub, degrade).
+        { type: "audio", source: { type: "base64", media_type: "audio/wav", data: "AAAA" }, transcript: "hello" },
+        { type: "file", ref: { uri: "file:///w/report.pdf", media_type: "application/pdf", name: "report.pdf" } },
       ],
     });
     // Provider stage E: a tool result with a non-text part goes as text/image

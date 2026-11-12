@@ -12,14 +12,14 @@
  * Content parts (Plan 9 Phase 4 stage D1): string content passes through
  * unchanged (text-only content is canonically one string, so text runs keep
  * their exact bytes). Part arrays map to ContentBlocks: text and supported
- * images become blocks; audio, file and unsupported-image parts become a
- * deterministic text stub, because the provider ContentBlock has no audio/file
- * shape yet (provider stage C adds per-provider mapping and the
- * `content-part-degraded` fact). Tool-result content stays one string when it
- * is text only and goes as text/image blocks otherwise (provider stage E maps
- * tool-result images per provider). `degradedParts` lists every
- * stub this conversion makes; think.ts records each as a
- * `content-part-degraded` trace fact (stage F).
+ * images become blocks; audio and file parts in user/assistant turns pass
+ * through unchanged (the provider wires them, stubs them with a transcript, or
+ * degrades them itself). Unsupported-image parts become a deterministic text
+ * stub. Tool-result content stays one string when it is text only and goes as
+ * text/image blocks otherwise (the tool-message block has no audio/file shape,
+ * so audio/file there are stubbed here). `degradedParts` lists every stub this
+ * conversion makes; think.ts records each as a `content-part-degraded` trace
+ * fact (stage F).
  */
 import type { LLMMessage, ContentBlock, ImageSource, ToolMessageBlock } from "@reactive-agents/llm-provider";
 import {
@@ -47,12 +47,19 @@ const NO_PROVIDER_INPUT = "no provider input for this part yet";
  * the recorded facts can never disagree with what the provider received. Same
  * rule for every role: tool results carry image blocks too (provider stage E).
  */
-function stubReason(part: Exclude<ContentPart, { type: "text" }>): string | undefined {
+function stubReason(part: Exclude<ContentPart, { type: "text" }>, inTool: boolean): string | undefined {
   if (part.type === "image") return isProviderImageType(part.source.media_type) ? undefined : "unsupported image type";
-  return NO_PROVIDER_INPUT;
+  // Audio/file: the provider owns them in user/assistant turns; the tool-message block cannot carry them.
+  return inTool ? NO_PROVIDER_INPUT : undefined;
 }
 
-function partToBlock(part: ContentPart): ToolMessageBlock {
+function partToBlock(part: ContentPart): ContentBlock {
+  // Audio and file ride as the core part itself; the provider decides.
+  if (part.type === "audio" || part.type === "file") return part;
+  return toolPartToBlock(part);
+}
+
+function toolPartToBlock(part: ContentPart): ToolMessageBlock {
   if (part.type === "text") return { type: "text", text: part.text };
   if (part.type === "image") {
     const { media_type } = part.source;
@@ -60,8 +67,8 @@ function partToBlock(part: ContentPart): ToolMessageBlock {
       return { type: "image", source: { type: part.source.type, media_type, data: part.source.data } };
     }
   }
-  // The deterministic text stand-in for a part the provider wire cannot carry.
-  return { type: "text", text: mediaPartLabel(part, stubReason(part) ?? NO_PROVIDER_INPUT) };
+  // The deterministic text stand-in for a part the tool-result wire cannot carry.
+  return { type: "text", text: mediaPartLabel(part, stubReason(part, true) ?? NO_PROVIDER_INPUT) };
 }
 
 function toBlocks(content: MessageContent): string | readonly ContentBlock[] {
@@ -77,7 +84,7 @@ function toBlocks(content: MessageContent): string | readonly ContentBlock[] {
 function toToolContent(content: MessageContent): string | readonly ToolMessageBlock[] {
   return typeof content === "string" || content.every((p) => p.type === "text")
     ? contentText(content)
-    : content.map(partToBlock);
+    : content.map(toolPartToBlock);
 }
 
 /** One part {@link toLLMMessages} replaced with a text stub. Summary only, never bytes. */
@@ -89,7 +96,8 @@ export interface DegradedKernelPart {
 
 /**
  * The parts {@link toLLMMessages} stubs for these messages (Plan 9 Phase 4
- * stage F): audio and file parts and unsupported image types, in any role.
+ * stage F): unsupported image types in any role, plus audio and file parts in
+ * tool results (user/assistant audio and file go to the provider unchanged).
  * The caller records each as a `content-part-degraded` trace fact. Empty for
  * text-only messages.
  */
@@ -100,7 +108,7 @@ export function degradedParts(messages: ProviderRequest["messages"]): readonly D
     const role = m.role === "tool_result" ? "tool" : m.role === "assistant" ? "assistant" : "user";
     for (const p of m.content) {
       if (p.type === "text") continue;
-      const reason = stubReason(p);
+      const reason = stubReason(p, m.role === "tool_result");
       if (reason !== undefined) out.push({ part: summarizePart(p), role, reason });
     }
   }
