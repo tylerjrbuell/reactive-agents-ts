@@ -51,5 +51,6 @@ export type RunAbortCause = "failure" | "defect" | "interrupt";
  * - `"user-stop"` — a graceful `stop()` was honored at a phase boundary.
  * - `"terminate"` — the kill switch / `terminate()` ended the run.
  * - `"abort"` — an external interrupt (abort signal, consumer cancel) with no other known cause.
+ * - `"guardrail"` — the run ended because a guardrail or output screen blocked it.
  */
-export type RunAbortReason = "timeout" | "user-stop" | "terminate" | "abort";
+export type RunAbortReason = "timeout" | "user-stop" | "terminate" | "abort" | "guardrail";

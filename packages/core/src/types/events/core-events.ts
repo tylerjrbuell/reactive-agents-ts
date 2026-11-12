@@ -113,6 +113,34 @@ export type CoreAgentEvent =
       /** Agent identifier */
       readonly agentId: string;
     }
+  | {
+      /**
+       * Memories were recalled into a run's context.
+       * Fired when a run retrieves memory items (bootstrap, search, or tool recall).
+       */
+      readonly _tag: "MemoryRecalled";
+      /** Unique task identifier of the run that recalled the items */
+      readonly taskId: string;
+      /** Agent identifier; absent when the recall is not attributable to one agent */
+      readonly agentId?: string;
+      /** Memory tier recalled from: "working", "semantic", "episodic", "procedural" */
+      readonly tier: string;
+      /** Recalled items, in rank order. Empty when the recall matched nothing. */
+      readonly items: readonly {
+        /** Stable identifier of the memory item */
+        readonly id: string;
+        /** Tier the item lives in */
+        readonly tier: string;
+        /** Short human-readable summary (truncated by the producer, not the full content) */
+        readonly summary: string;
+        /** Relevance score from the recall query; absent when the tier does not rank */
+        readonly score?: number;
+        /** Stored importance of the item; absent when the tier does not track it */
+        readonly importance?: number;
+      }[];
+      /** The recall query as text; absent for non-query recalls such as bootstrap */
+      readonly query?: string;
+    }
   // ─── LLM events (from @reactive-agents/llm-provider) ───
   | {
       /**

@@ -1,7 +1,7 @@
 // packages/trace/src/events.ts
 
 import type { Rationale } from "./rationale.js"
-import type { RunContext, LlmCallPurpose, ContentPartSummary, StructuredAttemptReport, StructuredOutputReport } from "@reactive-agents/core"
+import type { RunContext, LlmCallPurpose, ContentPartSummary, StructuredAttemptReport, StructuredOutputReport, RunAbortReason } from "@reactive-agents/core"
 
 // NOTE: LifecyclePhase lives in @reactive-agents/runtime, not @reactive-agents/core.
 // To avoid a circular dependency (runtime → trace → runtime), we use string here.
@@ -129,7 +129,7 @@ export interface RunAbortedEvent extends TraceEventBase {
   /** `"failure"` (typed error) | `"defect"` (crash) | `"interrupt"` (fiber interrupted). */
   readonly causeClass: "failure" | "defect" | "interrupt"
   /** Why the runtime knows the run ended: timeout | user-stop | terminate | abort. Additive optional. */
-  readonly reason?: "timeout" | "user-stop" | "terminate" | "abort"
+  readonly reason?: RunAbortReason
   /** Short error description (tag/message), never a stack or payload. */
   readonly error?: string
   readonly durationMs: number

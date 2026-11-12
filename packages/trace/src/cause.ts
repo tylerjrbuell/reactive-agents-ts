@@ -349,7 +349,8 @@ const ruleIncomplete: Rule = (f) => {
       return { cause: ABORT_CAUSES[a.reason], subCause: a.causeClass, evidence: [ev1(a, detail)], needs: [] };
     }
     if (a.reason !== undefined) {
-      return { cause: "aborted", subCause: a.reason, evidence: [ev1(a, detail)], needs: [] };
+      // A stamped "guardrail" reason is the same fact the GuardrailViolationError tag derives below.
+      return { cause: "aborted", subCause: a.reason === "guardrail" ? "guardrail-block" : a.reason, evidence: [ev1(a, detail)], needs: [] };
     }
     // No reason stamped, but the run-aborted sentinel exists: the run DID end,
     // so it is an abort, never `incomplete-trace`. The error tag names it when

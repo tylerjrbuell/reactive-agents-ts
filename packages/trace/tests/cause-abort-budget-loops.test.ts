@@ -73,6 +73,19 @@ describe("run-aborted without a reason", () => {
     expect(attributeFailure(trace(guardrailBlocked()))).toMatchObject({ reason: "environment:run-aborted", cause: "aborted/guardrail-block" });
   });
 
+  it("a stamped reason=guardrail classifies as aborted/guardrail-block, same as the tag path", () => {
+    const stamped = analyzeCause(trace([started(), abortedEv("failure", "GuardrailViolationError: pii", "guardrail")]));
+    const tagged = analyzeCause(trace(guardrailBlocked()));
+    expect(stamped).toMatchObject({ cause: "aborted", subCause: "guardrail-block", confidence: "decisive" });
+    expect(stamped.cause).toBe(tagged.cause);
+    expect(stamped.subCause).toBe(tagged.subCause);
+    expect(causeDescription(stamped.cause, stamped.subCause)).toMatch(/guardrail/i);
+    // reason stamped without an error tag still maps
+    expect(analyzeCause(trace([started(), abortedEv("failure", undefined, "guardrail")]))).toMatchObject({ subCause: "guardrail-block" });
+    // other reasons unchanged
+    expect(analyzeCause(trace([started(), abortedEv("failure", undefined, "terminate")]))).toMatchObject({ subCause: "terminate" });
+  });
+
   it("an unidentified abort is aborted/<causeClass>, probable, naming run-aborted.reason as missing", () => {
     const c = analyzeCause(trace([started(), abortedEv("failure", "SomeOtherError: boom")]));
     expect(c).toMatchObject({ cause: "aborted", subCause: "failure", confidence: "probable" });
