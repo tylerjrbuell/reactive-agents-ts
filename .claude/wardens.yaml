@@ -131,6 +131,28 @@ wardens:
       - git status
       - find
 
+  gateway-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bun test packages/gateway
+      - bun test packages/channels
+      - bun test packages/a2a
+      - bun test apps/cli/tests/deploy.test.ts
+      - bunx turbo run typecheck --filter=@reactive-agents/gateway
+      - bunx turbo run typecheck --filter=@reactive-agents/channels
+      - bunx turbo run typecheck --filter=@reactive-agents/a2a
+      - bun run --cwd apps/cli
+      - bun run --cwd apps/docs metrics
+      - docker compose config
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - find
+
   harness-warden:
     kind: specialist
     owns:

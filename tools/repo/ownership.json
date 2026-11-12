@@ -131,8 +131,7 @@
     },
     {
       "glob": "packages/a2a/**",
-      "owner": null,
-      "reason": "no domain warden for packages/a2a in the AGENTS.md ownership table",
+      "owner": "gateway-warden",
       "checks": [],
       "docs": []
     },
@@ -144,8 +143,7 @@
     },
     {
       "glob": "packages/channels/**",
-      "owner": null,
-      "reason": "no domain warden for packages/channels in the AGENTS.md ownership table",
+      "owner": "gateway-warden",
       "checks": [],
       "docs": []
     },
@@ -176,8 +174,27 @@
     },
     {
       "glob": "packages/gateway/**",
-      "owner": null,
-      "reason": "no domain warden for packages/gateway in the AGENTS.md ownership table",
+      "owner": "gateway-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "docker/**",
+      "owner": "gateway-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "apps/cli/src/commands/deploy/**",
+      "owner": "gateway-warden",
+      "checks": [],
+      "docs": [
+        "apps/docs/src/content/docs/reference/cli.md"
+      ]
+    },
+    {
+      "glob": "apps/cli/tests/deploy.test.ts",
+      "owner": "gateway-warden",
       "checks": [],
       "docs": []
     },
