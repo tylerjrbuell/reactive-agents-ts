@@ -1,0 +1,55 @@
+---
+title: Cortex Studio
+description: >-
+  A local companion web app for Reactive Agents: watch reasoning traces live, inspect run history, chat with agents and build them without writing code.
+sidebar:
+  order: 2
+---
+
+import { Tabs, TabItem, Aside, Card, CardGrid } from "@astrojs/starlight/components";
+
+**Cortex** is the official local-first companion studio for Reactive Agents. Fire it up alongside any agent run and get an instant GUI — live reasoning traces, entropy signal charts, token/cost vitals, debrief summaries, a full trace panel, and an interactive chat interface — all persisted to SQLite so you can replay any run at any time.
+
+![Cortex Beacon before any agent connects. Connect an agent with `rax run --cortex` or `.withCortex()` and it appears instantly.](../../../../assets/cortex-beacon-landing.png)
+
+## Quick start
+
+```bash
+# Terminal 1 — install Cortex once, then launch the studio
+bun add @reactive-agents/cortex
+rax cortex
+# → API + UI on http://127.0.0.1:4321 (opens in your browser automatically)
+
+# Terminal 2 — run an agent that streams to Cortex
+rax run "Research the top 5 TypeScript testing frameworks" \
+ --provider anthropic \
+ --reasoning \
+ --tools \
+ --cortex
+```
+
+Cortex opens your browser at `http://127.0.0.1:4321`. From a source checkout, `bun cortex` serves the API on `:4321` and the hot-reloading Vite UI on `http://localhost:5173`; connect agents with `.withCortex()` ([Connect your app](/features/cortex/connect-your-app/)).
+
+## In this section
+
+<CardGrid>
+  <Card title="Tour" icon="rocket">Beacon, Runs, Chat and the Lab. [Cortex tour](/features/cortex/tour/)</Card>
+  <Card title="Chat and composer" icon="comment">Slash commands, `@` files, attachments, Config, to-do dock. [Open](/features/cortex/chat-and-composer/)</Card>
+  <Card title="Goals, plans, loops" icon="approve-check">Supervised goals and schedules. [Open](/features/cortex/goals-plans-loops/)</Card>
+  <Card title="Run view and traces" icon="magnifier">Why it ended, trace, Context, Safety. [Open](/features/cortex/run-view-and-traces/)</Card>
+  <Card title="Lab builder" icon="setting">Build, save and export agents. [Open](/features/cortex/lab-builder/)</Card>
+  <Card title="Memory and skills" icon="open-book">Studios and what a run used. [Open](/features/cortex/memory-and-skills/)</Card>
+  <Card title="Judgments and evals" icon="random">Jev, Ollama, rubric graders. [Open](/features/cortex/judgments-and-evals/)</Card>
+  <Card title="Approvals and questions" icon="warning">Gate calls, answer agents. [Open](/features/cortex/approvals-and-questions/)</Card>
+  <Card title="Voice" icon="seti:audio">Dictation, read aloud, voice mode. [Open](/features/cortex/voice/)</Card>
+  <Card title="Settings and keys" icon="seti:config">Provider keys and the request guard. [Open](/features/cortex/settings-and-keys/)</Card>
+  <Card title="Local setup recipes" icon="laptop">Ollama, Ollama Cloud, Speaches. [Open](/features/cortex/local-setup-recipes/)</Card>
+  <Card title="Connect your app" icon="puzzle">`.withCortex()`, events, architecture. [Open](/features/cortex/connect-your-app/)</Card>
+</CardGrid>
+
+## Related
+
+-   [Observability](/features/observability/) — terminal-based metrics and tracing that Cortex complements
+-   [Reactive Intelligence](/features/reactive-intelligence/) — the entropy signals visualized in the Signal Monitor
+-   [Rax CLI Reference](/reference/cli/#cortex-companion-studio) — `rax cortex` command reference
+-   [Builder API Reference](/reference/builder-api/#optional-features) — `.withCortex(url?)` signature

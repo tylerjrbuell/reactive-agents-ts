@@ -325,7 +325,7 @@
       "checks": [],
       "docs": [
         "apps/cortex/AGENTS.md",
-        "apps/docs/src/content/docs/features/cortex.mdx"
+        "apps/docs/src/content/docs/features/cortex/index.mdx"
       ]
     },
     {

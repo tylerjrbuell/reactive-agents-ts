@@ -1,0 +1,27 @@
+---
+title: Memory and skills
+description: >-
+  Browse and edit an agent memory, watch skills evolve, and see which skills and memories each run used.
+sidebar:
+  order: 9
+---
+
+Cortex shows memory and skills in three places: the Lab (the studios), the run view and chat inspector (what one run used), and the chat composer (which skills a turn may load).
+
+## Memory studio (Lab, Memory)
+
+An agent's stored memory, read and edited through the framework's `agent.memory()`: pick an agent (any with a memory database under `~/.reactive-agents/memory`), search facts (full text; words of 4 or more characters), browse **Facts** (semantic), **Workflows** (procedural) and **Log** (episodic). Each entry shows where it came from (the run that wrote it, with a link to that run) and its importance, tags and dates. Edit or delete facts and workflows (delete asks first). `?agent=<id>&run=<runId>` opens it narrowed to what one run wrote.
+
+## Skills (Lab, Skills)
+
+Two views. **Agent skills**: the skills an agent learned or loaded, kept with its memory. Pick an agent to see each skill's confidence (Tentative, Trusted, Expert), how often it was used, its success rate and when it was last used; its versions (current, on trial) with a line-by-line comparison to the version before; and a history of the skill events its runs reported (used, refined, rolled back, promoted), each linked to the run, plus the refinements and rollbacks you started in Cortex (marked "in Cortex"). **Refine now** runs one refinement pass on the agent's last model and reports how many skills were refined, unchanged, skipped (too little new evidence) or failed; **Lock** keeps a skill as it is (refinement, promotion and automatic rollback skip it) and **Unlock** lets runs evolve it again, with its versions kept either way; **Roll back** restores the previous version (`agent.rollbackSkill`); **Export to SKILL.md** writes the skill into the Builder's workspace under `.agents/skills/<name>/`. **Skill files**: the `SKILL.md` skills an agent built from the Builder can load: the framework's own search at the Builder's workspace (the server's launch folder when none is set), with each folder it looks in and whether it exists. Below them, the **Cortex library** (skills saved in Cortex's database) is deprecated: agents never see it, and **Move into agent skills** loads a row into the agent picked under Agent skills (you choose whether it evolves from runs, waits for review, or stays locked) and removes it from the library. When the agent already has a skill with that name, **Update existing** loads the row as that skill's next version and keeps its history, so you can roll it back. Pin skills by name, add extra folders and turn on home-folder skills in the Builder's **Skills** section.
+
+## What one run used
+
+The run view and chat inspector **Context** tab opens with the run's knowledge sources: the skills it had active and why (pinned, matched the task, loaded by the agent), the memories it recalled (tier, summary, relevance, importance, the query that surfaced each, linked to the Memory studio), and the memories it wrote. The run view's **Memory** tab shows the tiers a run loaded and flushed. The framework writes a debrief and working memory only when memory is on (Builder, Memory, **Debrief after each run**).
+
+## Skills in chat
+
+Every chat agent gets `.withSkills()`, so it finds the `SKILL.md` skills in its workspace (`.agents/skills`, `.claude/skills`, `.<agentId>/skills`, plus any extra folders and, only when turned on, `~/.agents/skills`) the same way a run does, and can load one itself with `activate-skill`. Without a workspace the server's launch folder is searched. The chat lists exactly those skills: a **3 skills** chip in the quick bar, and `/skill` or `/` rows with each description and the folder it came from. `/skill <name>` uses a skill for your **next message only**; `/skills <name>` pins it for every turn of the chat. You can also name a skill anywhere in a message, for example `summarize this repo /codebase-health-sweep`: a skill name the chat recognizes is highlighted as you type, and on send it is used for that message and left out of the text the agent receives (`/skill <name>` mid-message does the same, `/skills <name>` mid-message pins it). Typing `/` after a space opens the skill list at the cursor; Tab or Enter completes it. Paths such as `/usr/bin`, links, `/words` that are not skills, and anything inside backticks stay as typed; write `\/name` to send a skill name literally. Picking a skill from the menu or the skills chip puts its `/name` at the cursor and never replaces what you wrote; prompts from the prompt library also go in at the cursor. Pins are skill names, so they keep working when you change the workspace. Under each finished reply a **Skills** row shows which skills the run had loaded and why: **pinned**, **matched the task** (the framework's relevance pick) or **loaded by the agent**, with the version and a short hash of the skill body on hover, plus how many more were available. The run view shows the same row. A one-message skill is passed to that turn only; the chat keeps its agent.
+
+See also [Run view and traces](/features/cortex/run-view-and-traces/) and the consumer guide [Agent skills](/guides/agent-skills/).

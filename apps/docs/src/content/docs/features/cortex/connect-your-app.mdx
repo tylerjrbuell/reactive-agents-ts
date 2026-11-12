@@ -1,0 +1,127 @@
+---
+title: Connect your app
+description: >-
+  Stream any agent to Cortex with withCortex() or rax run --cortex, what gets streamed, and how the server is built.
+sidebar:
+  order: 13
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+## `.withCortex()` builder method
+
+```typescript
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withModel('claude-sonnet-4-6')
+    .withReasoning({ defaultStrategy: 'plan-execute-reflect' })
+    .withTools({ builtins: true })
+    .withCortex() // ← connects to http://localhost:4321
+    .withCortex('http://my-cortex:4321') // ← or explicit URL
+    .build()
+```
+
+**URL resolution priority:**
+
+1. Explicit URL passed to `.withCortex(url)`
+2. `CORTEX_URL` environment variable
+3. Default: `http://localhost:4321`
+
+The connection is **best-effort** — if Cortex is not running or the WebSocket drops, the agent continues executing normally and logs a single warning. Cortex never blocks or slows down agent execution.
+
+## What gets streamed
+
+Every `AgentEvent` emitted on the internal EventBus is forwarded to Cortex over WebSocket at `/ws/ingest`. This includes:
+
+| Event                            | What It Represents                                    |
+| -------------------------------- | ----------------------------------------------------- |
+| `AgentStarted`                   | Run begins — registers the agent in Beacon            |
+| `AgentCompleted` / `AgentFailed` | Run ends — final status + cost                        |
+| `ReasoningStepCompleted`         | One thought/action/observation triplet                |
+| `ToolCallCompleted`              | Individual tool result with success/failure           |
+| `FinalAnswerProduced`            | The agent's answer                                    |
+| `LLMRequestCompleted`            | Token usage + cost per LLM call                       |
+| `DebriefCompleted`               | Post-run structured summary                           |
+| `EntropyScored`                  | Reactive Intelligence entropy measurement             |
+| `ControllerDecision`             | Reactive Intelligence intervention (early-stop, etc.) |
+| `ChatTurn`                       | Chat session message                                  |
+| `MemoryRead` / `MemoryWrite`     | Memory layer activity                                 |
+| `ProviderFallbackActivated`      | Provider fallback triggered                           |
+
+## From the CLI
+
+```bash
+# Connect a one-off run to a running Cortex
+rax run "Summarize the top AI news" --provider anthropic --reasoning --tools --cortex
+
+# A Cortex on another host (add the name to CORTEX_ALLOWED_HOSTS on that server)
+CORTEX_URL=http://cortex.internal:4321 rax run "Task" --cortex --provider anthropic
+```
+
+Start the studio with `rax cortex` (npm install) or `bun cortex` (source checkout). Change the port with `CORTEX_PORT` and suppress the browser auto-open with `CORTEX_NO_OPEN=1`.
+
+## Listen address and session cache
+
+Cortex binds `127.0.0.1` by default. Change it with `rax cortex --host <addr>` or the `CORTEX_HOST` environment variable. Only expose it on a network you trust.
+
+Cached chat agents are kept in an LRU, sized by `CORTEX_CHAT_MAX_SESSIONS` (default `8`). Builds for the same agent are single-flighted, and the cache is disposed on shutdown.
+
+## Architecture
+
+Cortex is a standalone application that runs alongside your agent process. It has no dependencies on the agent's runtime — communication is purely over WebSocket.
+
+```
+Your Agent Process                   Cortex Server (port 4321)
+─────────────────────                ────────────────────────────
+ReactiveAgentBuilder                 server/index.ts
+  .withCortex()                        ├── /ws/ingest   ← receives events
+      │                                │     └── CortexIngestService
+      │  WebSocket (best-effort)        │           └── persists to SQLite
+      └────────────────────────────────►│     └── EventBridge.broadcast()
+                                       │                │
+                                       ├── /ws/live/:agentId  ← fans out to UI
+                                       │         ▲
+                                       │         └── Browser (SvelteKit UI)
+                                       │                http://localhost:5173  ← dev server URL
+                                       └── /api/runs   ← REST history
+```
+
+**Server stack:** Bun + Elysia + `bun:sqlite`  
+**UI stack:** SvelteKit 2, Svelte 5 (runes), Tailwind CSS, D3 for signal charts  
+**Persistence:** SQLite at `.cortex/cortex.db` relative to the server process cwd
+
+The live WebSocket at `/ws/live/:agentId` supports **replay**: on connection, the server immediately replays all persisted events for the requested `runId`, so the UI refreshes correctly even after a page reload.
+
+## Svelte, React and Vue hooks
+
+Cortex dogfoods `@reactive-agents/svelte`, you can use the same primitives in your own Svelte app:
+
+```typescript
+import { createRun } from '@reactive-agents/svelte'
+
+const agentRun = createRun({
+    endpoint: 'http://localhost:4321/api/agent/my-agent',
+})
+
+// Reactive Svelte store: $agentRun.status, $agentRun.output, $agentRun.iterations
+```
+
+The same pattern is available for React (`@reactive-agents/react`) and Vue (`@reactive-agents/vue`).
+
+## Production use
+
+Cortex is designed for local development and internal tooling. For production deployments:
+
+-   Run `bun run build:ui` inside `apps/cortex` to build the static SvelteKit bundle into `ui/build`
+-   The Cortex server serves the static bundle when `CORTEX_STATIC_PATH` points to `ui/build`
+-   Secure the WebSocket endpoints and REST API behind your internal network — Cortex has no authentication by default
+
+```bash
+# Build the UI for self-hosted deployment
+cd apps/cortex
+bun run build:ui
+bun run dev:server
+# → Serves static UI + API on http://localhost:4321
+```
+
+Security and keys: [Settings and keys](/features/cortex/settings-and-keys/).

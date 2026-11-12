@@ -1,0 +1,45 @@
+---
+title: Local setup recipes
+description: >-
+  Run Cortex with Ollama, Ollama Cloud, and the Speaches container for local speech.
+sidebar:
+  order: 12
+---
+
+Cortex runs on your machine, so the whole loop can be local. Three recipes.
+
+## Ollama (local models)
+
+1. Install Ollama and pull a model that supports tools: `ollama pull qwen3:8b`.
+2. Start Cortex (`rax cortex`). In **Settings, Providers** the Ollama endpoint defaults to `http://localhost:11434`.
+3. In **Settings, Defaults** pick provider `ollama` and the model. Model pickers list what Ollama serves right now.
+
+Ollama loads models on demand and serves one request per model at a time, so a turn can read **Waiting for Ollama (loading the model or queued)** before its first token. In the Lab Builder, **Model, Context length (`numCtx`)** pins Ollama's `num_ctx`.
+
+## Ollama Cloud
+
+1. **Settings, Providers**: press the **Ollama Cloud** preset beside the endpoint (it fills `https://ollama.com`) and **Apply**.
+2. Add your Ollama API key on the **Ollama Cloud (API key)** row, or set `OLLAMA_API_KEY` in the server environment. Press **Test** to list the models.
+3. Pick a cloud model in the model picker.
+
+The key is sent only to a non-local endpoint, never to `localhost`. A rejected key reads "Ollama Cloud key missing or invalid". Judgments cannot use Ollama Cloud.
+
+## Speaches (local speech to text and text to speech)
+
+Speaches serves the OpenAI audio API, so one container covers listening and reading. Run it (CPU image shown; use the `latest-cuda` tag and `--gpus=all` for a GPU; see the Speaches docs for the current image tags):
+
+```bash
+docker run --rm --detach --name speaches --publish 8000:8000 \
+  --volume hf-hub-cache:/home/ubuntu/.cache/huggingface/hub \
+  ghcr.io/speaches-ai/speaches:latest-cpu
+```
+
+Download the models, because Speaches preloads none:
+
+```bash
+curl -X POST http://127.0.0.1:8000/v1/models/Systran/faster-whisper-small
+curl -X POST http://127.0.0.1:8000/v1/models/speaches-ai/Kokoro-82M-v1.0-ONNX
+curl http://127.0.0.1:8000/v1/models   # lists what is installed
+```
+
+Then in **Settings, Voice** set **Listening engine** and **Reading engine** to the server engine, pick the **Speaches (local)** and **Speaches (local, Kokoro)** presets (`http://localhost:8000/v1`, models `Systran/faster-whisper-small` and `speaches-ai/Kokoro-82M-v1.0-ONNX`, voice `af_heart`), press **Save endpoint** and **Test**. If Test answers 404 "Model ... is not installed locally", Settings shows a copyable `curl` for the model you set. More engines and the browser option: [Voice](/features/cortex/voice/).

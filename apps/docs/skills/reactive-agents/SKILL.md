@@ -80,6 +80,7 @@ const agent = await ReactiveAgents.create()
 | Agent with output quality guarantees | `reasoning-strategy-selection`, `quality-assurance` |
 | Agent-to-agent networking | `a2a-agent-networking` |
 | Custom provider behavior or local models | `provider-patterns` |
+| Local studio: watch runs, chat, build agents without code | `cortex-studio` |
 
 ## Recipe skills — complete reference implementations
 

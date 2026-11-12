@@ -1,0 +1,78 @@
+---
+title: Run view and traces
+description: >-
+  Inspect a run: vitals, the Why it ended diagnosis, loop and timeline traces, and the Context, Memory and Safety tabs.
+sidebar:
+  order: 5
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+![Cortex run view.](../../../../assets/cortex-run-details.png)
+
+Open any run from the Runs list, a chat turn or Beacon. The header names the run, shows its status and links back to the chat that started it; its actions are the live controls (Pause, Stop, Terminate) while it runs, **Continue in chat**, **Edit and rerun**, **Export** (run JSON, raw trace JSONL, copy the trace or the answer) and a More menu (Replay, Rerun as is, Rename, Copy run id, Delete).
+
+## Vitals
+
+One wrapping line: duration, tokens (input / output on hover), cost, steps, a loop meter (`Loops 2 of 3`), entropy as `η 0.25` with a small entropy line and its trend, then the provider and model, strategy and tool-disclosure chips. The strategy is the one the run's resolved config names (else the one its loop reported), with `→ next` after a mid-run switch; the Runs list stores the same name.
+
+## Answer and Trace
+
+The **Answer** panel shows the final answer as prose (long answers open as a preview with **Show all**). While the run streams it shows the output so far. A run that did not succeed opens with a banner that says how it ended: failed with its cause, abstained with its reason and what was missing, or unfinished with what was left.
+
+**Why it ended** runs the framework's trace diagnosis over the finished run, the same engine as `rax-diagnose cause` (`analyzeCause` and `attributeFailure` from `@reactive-agents/trace`). It shows the cause in plain words with its id (`tool-failure/all-calls-failed`) and how sure the trace is, who the trace says is at fault (harness, model, environment, or cannot tell), **What to try** (the framework's next steps for that cause, the same lines `rax-diagnose cause` prints; none for a healthy run or a user stop), and the decisive steps. A step in a recorded loop opens that loop's row in the trace below. When the verdict is not decisive, the card lists the trace signals that would settle it. The card opens by itself for a failed, abstained, partial or stopped run and stays collapsed on a success. A run with no trace file (tracing off) says so.
+
+The **Trace** panel is a step-debugger for the agent's reasoning, with two tabs:
+
+-   **Loops** — one row per kernel loop (its reasoning, the tools it called, tokens, time and η), then the final answer. A row expands to the reasoning, action, tool result, raw model response and message thread.
+-   **Timeline** — a fine-grained, chronological event stream grouped by
+    kernel loop. Every discrete event is its own inspectable, expandable row:
+    reasoning steps (thought / action / observation), **LLM exchanges** (system
+    prompt, full message thread, native tool calls, token counts, and Anthropic
+    prompt-cache hit %), tool calls, **strategy switches**, **verifier verdicts**,
+    and guard firings. Filter chips (`Reasoning`, `Model calls`, `Tools`, `Control`,
+    `Internal`) mute or reveal categories — internal calls (intent
+    classifier, structured plan-gen) are hidden by default and one click away.
+    The timeline reuses the same `TraceEvent` model as the `rax diagnose` CLI.
+
+Both views replay from the SQLite event log; the timeline also follows replay scrub.
+
+## Inspector
+
+Beside the trace on wide windows (under it below 1360px), a tab list:
+
+| Tab           | Content                                                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Summary**   | The run's configuration, its entropy line, the tools it called, the debrief (outcome, findings, lessons, rationale, metrics, markdown) and the launch config. The framework writes a debrief only when the agent has memory on (Memory · **Debrief after each run** turns working memory on); without one the panel says why and links the run's config in the Lab |
+| **Safety**    | Every time something stepped in, in plain words and in order: a guardrail blocked or flagged input or the answer, the verifier or the result check passed or rejected the answer, the run neared or went over its budget (or the budget stopped it), the context window filled up, the model drifted from its calibration, or the controller adapted the run. Each entry names its loop (a link that opens that loop's trace row), "before the first loop" or "after the last loop". When anything fired, the header shows the count (a passed check is listed but not counted) and each affected loop row in the trace carries a badge |
+| **Decisions** | Controller decision log — each Reactive Intelligence intervention: early-stop, strategy-switch, context-compress, etc. |
+| **Signal**    | A D3 chart of entropy η per step (the signal gradient), tokens per loop and model latency, plus the tool calls; click a point to select its loop |
+| **Context**   | The latest context-window reading                                                                                      |
+| **Memory**    | The memory tiers the run loaded and flushed, then the memories this run wrote (facts, workflows, log), with links to edit them in the Lab **Memory** studio |
+| **Messages**  | The full thread sent to the model, per kernel pass, with copy and JSON download                                        |
+| **Events**    | All persisted `AgentEvent` objects with a readable preview each, type chips and a filter: the ground truth log        |
+
+## Continue in chat
+
+There is no chat inside the run view. **Continue in chat** opens the chat that started the run, or, for any other run, creates a chat session with the run's recorded settings (provider, model, strategy, tools, workspace and the rest of its launch config), the run as context, and the run's task and answer as the first exchange. A run that recorded no settings opens with its model and your chat defaults, and a toast says so.
+
+<Aside type="tip">
+Cortex supports **replay**: close the run, reopen it later, and the trace and signal re-populate from the SQLite event log. Live streaming resumes automatically if the agent is still running. **More → Replay** steps through the stored kernel loops; the trace, signal and inspector show that slice.
+</Aside>
+
+## Knowledge sources in the Context tab
+
+The run view's **Context** tab and the chat inspector's Context tab open with the run's knowledge sources: the skills it had active and why (pinned, matched the task, loaded by the agent; a link to Lab Skills) the memories it *recalled* into its context (from the run's `MemoryRecalled` events: tier, summary, relevance, importance and the query that surfaced each one, linking to that entry in the Memory studio; a run that reported none says so instead of showing an empty list) and the memories it wrote (facts, workflows and log entries from the agent's memory, filtered to that run, with a link to the Memory studio). Below them, the context-window gauge as before.
+
+## Compare runs
+
+**Compare runs** (`/runs/compare?a=&b=`) answers "what changed between these two runs", for example after you change a model, a strategy or a harness setting. Select exactly two runs in Runs and press **Compare**, or open a run and choose **Compare with…** in its More menu (runs with the same name are listed first; the open run is A).
+
+- **Summary** — outcome, model, strategy, loops, tokens, cost, duration, output speed and time to first token for both runs, with B minus A where a number moved.
+- **Config** — the settings whose resolved values differ (harness mechanisms, builder options, environment, as the run reported them on start), and how many match.
+- **Steps** — when both runs recorded a trace, the framework's replay diff (`diffTraces` from `@reactive-agents/replay`) laid out by loop: loops where both runs made the same tool calls collapse into one row, a loop that differs lists each run's calls side by side, and the step where the tool sequences first part is marked.
+- **Answer** — a line diff of the two final answers.
+
+A run without a trace file (tracing off) is compared on its summary and config only, and the page says which run is missing one.
+
+See also [Memory and skills](/features/cortex/memory-and-skills/) and [Judgments and evals](/features/cortex/judgments-and-evals/).

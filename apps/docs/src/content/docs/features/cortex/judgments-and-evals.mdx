@@ -1,0 +1,27 @@
+---
+title: Judgments and evals
+description: >-
+  Typed judgments with TypeSafe Jev or Ollama, the run Judgments ledger, and the rubric graders behind goal checks.
+sidebar:
+  order: 8
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+The Lab builder has a **Judgment** section (`.withJudgment()`): turn on a backend for typed judgments (Noul probabilities, Scores, Choices), pick **TypeSafe Jev** (calibrated; needs a TypeSafe key from Settings · Providers or `TYPESAFE_API_KEY`), an **Ollama System One** model (default `nimble`, with a timeout and `keep_alive`), or the agent's own model (uncalibrated). With no backend chosen the framework uses Jev when a key exists and otherwise the agent's own model; the section says which is active. Cortex lists no Ollama models for this because the framework does not say which installed models can score; type the model id.
+
+A run's **Judgments** tab is the ledger of what the run asked: each answer with its question id and kind, the answer (a probability, a score or the choice), confidence, whether it is calibrated, the backend and latency, plus failures (with the error tag and message) and shadow comparisons. Low-confidence and uncalibrated answers are flagged, and the run header shows a badge such as "4 judgments, 1 failed or degraded". The events carry no question text, so rows name the question by id. With Ollama running on your machine the framework may sample observation-only shadow judgments even when the section is off (set `REACTIVE_AGENTS_NO_AUTO_SHADOW=1` to stop that).
+
+## Keys
+
+- **TypeSafe Jev** needs a key saved in Settings, Providers (**TypeSafe (Jev judgment)**), or `TYPESAFE_API_KEY` in the server environment. **Test** lists the key's model catalog and asks no judgment, so nothing is billed.
+- **Ollama System One** runs on local weights only. An **Ollama Cloud** endpoint and key serve runs, chats and the model list, but cannot be used for judgments.
+- With neither, the framework judges with the agent's own model (uncalibrated), and the section says which backend is active.
+
+## Rubric graders
+
+A chat goal (`/goal`) turns its objective into criteria. Regex and must-include criteria are checked deterministically. A criterion that only a reader can decide is a **rubric** criterion: Cortex runs one tool-less, single-shot checker call on the chat's own provider and model per segment, and that call's cost and tokens count in the goal's spend. When the checker cannot decide, the verdict is "not yet decided", never a guess. See [Goals, plans and loops](/features/cortex/goals-plans-loops/).
+
+<Aside type="note">
+Cortex has no eval-suite screen of its own. Suites, graders and regression checks live in the framework: see [Eval](/features/eval/) and [Judgment layer](/features/judgment-layer/). To compare two runs after a change, use [Compare runs](/features/cortex/run-view-and-traces/#compare-runs).
+</Aside>

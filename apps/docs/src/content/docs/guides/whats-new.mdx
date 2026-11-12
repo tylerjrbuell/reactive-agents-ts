@@ -153,7 +153,7 @@ Thank you to everyone who contributed to v0.18.0. External contributions in this
 - A `read` builtin preset (`file-read`, `list-directory`, `grep`) for read-only filesystem access: `.withTools({ builtins: "read", workspace })`.
 - `.withTools({ riskLevels })` overrides a tool's risk level by name, including built-ins. Low-risk tools are the only ones the text parser binds from prose.
 - `rax eval gate --activations <n>`, `rax cortex --host <addr>` (or `CORTEX_HOST`), and `rax serve` accepts `groq` and `xai`. See [CLI](/reference/cli/).
-- Cortex chat: `/goal`, `/plan`, `/loop`, `/schedule`, `/agent on`, approval cards and reply boxes in the thread, a context meter, and a tool disclosure picker. See [Cortex](/features/cortex/#chat-commands-goals-plans-loops-and-schedules).
+- Cortex chat: `/goal`, `/plan`, `/loop`, `/schedule`, `/agent on`, approval cards and reply boxes in the thread, a context meter, and a tool disclosure picker. See [Cortex](/features/cortex/goals-plans-loops/).
 - `rax init` delegates project generation to `create-reactive-agent`. Its `with-approval-gates` template prompts through `node:readline` and denies when there is no TTY.
 
 **Changed (check these after upgrading)**
