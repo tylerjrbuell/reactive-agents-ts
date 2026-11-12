@@ -29,7 +29,7 @@
 import { Context, Deferred, Effect, Exit, Layer, Option } from "effect";
 import type { AskUserRail, BlockApprovalDecider } from "@reactive-agents/reasoning";
 import { currentRunContext, getRunSlot, runControllerSlot } from "@reactive-agents/core/internal/run-scope";
-import type { RunControllerLike } from "@reactive-agents/core";
+import type { InteractionQuestion, RunControllerLike } from "@reactive-agents/core";
 import type { AgentResult } from "../builder/agent-result.js";
 import type { AgentStreamEvent } from "../stream-types.js";
 import { ExecutionError } from "../errors.js";
@@ -60,9 +60,24 @@ export type HumanGateRequest =
       readonly interactionKind: string;
       readonly prompt: string;
       readonly schema: unknown;
+      /**
+       * Typed questions of a structured `request_user_input` call. Absent for a
+       * legacy `kind` + `schema` request. Answer with an id-keyed map.
+       */
+      readonly questions?: readonly InteractionQuestion[];
       readonly task?: string;
       readonly requestedAt: number;
     };
+
+/**
+ * The typed questions a durable pause persisted: a structured call stores
+ * `{ questions }` as its schema. Absent (undefined) for a legacy schema.
+ */
+export const questionsOfSchema = (schema: unknown): readonly InteractionQuestion[] | undefined => {
+  if (typeof schema !== "object" || schema === null) return undefined;
+  const questions = (schema as { questions?: unknown }).questions;
+  return Array.isArray(questions) ? (questions as readonly InteractionQuestion[]) : undefined;
+};
 
 /** A person's answer to one request. */
 export type HumanGateAnswer =
@@ -76,7 +91,14 @@ export type HumanGateAnswer =
   | { readonly kind: "interaction"; readonly interactionId: string; readonly value: unknown };
 
 /** How a wait ended: the answer, or abandoned (timeout, terminate, stop). */
-export type HumanGateOutcome = HumanGateAnswer | { readonly kind: "abandoned"; readonly reason: string };
+export type HumanGateOutcome =
+  | HumanGateAnswer
+  | {
+      readonly kind: "abandoned";
+      readonly reason: string;
+      /** True when the wait ended because the timeout elapsed (not terminate/stop). */
+      readonly timedOut?: boolean;
+    };
 
 /** Projects a new request onto the run's consumer (e.g. its stream). Must not fail. */
 export type HumanGateListener = (request: HumanGateRequest) => Effect.Effect<void>;
@@ -214,6 +236,7 @@ export const makeHumanGate = (defaults: HumanGateDefaults = {}): HumanGateServic
                 Effect.as<HumanGateOutcome>({
                   kind: "abandoned",
                   reason: `no answer within ${timeoutMs}ms`,
+                  timedOut: true,
                 }),
               ),
             ]
@@ -349,11 +372,19 @@ export const liveAskUser =
         interactionKind: request.kind,
         prompt: request.prompt,
         schema: request.schema,
+        // Structured call: the typed questions ride the request; legacy stays unchanged.
+        ...(request.structured ? { questions: request.questions } : {}),
         ...(options.task !== undefined ? { task: options.task } : {}),
         requestedAt: Date.now(),
       });
       if (outcome.kind === "interaction") return { answered: true, value: outcome.value } as const;
-      if (outcome.kind === "abandoned") return { answered: false, reason: outcome.reason } as const;
+      if (outcome.kind === "abandoned") {
+        return {
+          answered: false,
+          reason: outcome.reason,
+          ...(outcome.timedOut === true ? { timedOut: true } : {}),
+        } as const;
+      }
       return { answered: false, reason: "an approval decision cannot answer a question" } as const;
     });
 
@@ -511,6 +542,7 @@ export const watchLiveGate = (
               kind: request.interactionKind,
               prompt: request.prompt,
               schema: request.schema,
+              ...(request.questions !== undefined ? { questions: request.questions } : {}),
             },
       ),
     );

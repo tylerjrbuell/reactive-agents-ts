@@ -50,7 +50,7 @@ import type { TrustReceipt } from "@reactive-agents/core";
 import { readPosture } from "../chat/todo-seed.js";
 import { resolveWorkspaceDir, startRun } from "./start-run.js";
 import { watchRunTerminal } from "./stream-abort-terminal.js";
-import { watchLiveGate } from "./human-gate.js";
+import { questionsOfSchema, watchLiveGate } from "./human-gate.js";
 import { holdTextUntilScreened, outputScreenActive } from "./answer-release-gate.js";
 
 /** The StreamCompleted member of the event union — narrowed so the receipt
@@ -75,6 +75,12 @@ const safeParseSchema = (schemaJson: string): unknown => {
   } catch {
     return {};
   }
+};
+
+/** `{ questions }` when the persisted schema is a structured call's; `{}` for a legacy schema. */
+const questionsField = (schemaJson: string) => {
+  const questions = questionsOfSchema(safeParseSchema(schemaJson));
+  return questions !== undefined ? { questions } : {};
 };
 
 /** Persist a paused run: status → awaiting-approval + a pending approval row. */
@@ -607,6 +613,7 @@ export const makeExecuteStream =
                     kind: interaction!.kind,
                     prompt: interaction!.prompt,
                     schema: safeParseSchema(interaction!.schemaJson),
+                    ...questionsField(interaction!.schemaJson),
                   },
                 }
               : {}),

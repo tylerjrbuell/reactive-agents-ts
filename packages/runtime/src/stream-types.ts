@@ -1,4 +1,4 @@
-import type { TrustReceipt, TerminatedBy, ChecklistSnapshot, StructuredOutputReport } from "@reactive-agents/core";
+import type { TrustReceipt, TerminatedBy, ChecklistSnapshot, StructuredOutputReport, InteractionQuestion } from "@reactive-agents/core";
 import type { AgentResultMetadata } from "./builder.js";
 import type { AgentOutcome } from "./builder/agent-result.js";
 
@@ -45,6 +45,8 @@ export type AgentStreamEvent =
         readonly kind: string;
         readonly prompt: string;
         readonly schema: unknown;
+        /** Typed questions of a structured call (from the persisted schema); absent for legacy. */
+        readonly questions?: readonly InteractionQuestion[];
       };
       /** Run-level abstention surface, present when the run abstained (terminatedBy === "abstained"). */
       readonly abstention?: {
@@ -119,9 +121,7 @@ export type AgentStreamEvent =
        * The run is waiting, in process, for a person's answer to a
        * `request_user_input` call. Answer with
        * `agent.respondToInteraction(runId, interactionId, value)`; the same
-       * stream then continues. Reserved: the live gate projects interaction
-       * waits here, but the kernel does not yet ask the gate for
-       * `request_user_input` (it pauses durably instead), so nothing emits it today.
+       * stream then continues. A structured call also carries `questions`.
        */
       readonly _tag: "InteractionRequested";
       readonly runId: string;
@@ -129,6 +129,8 @@ export type AgentStreamEvent =
       readonly kind: string;
       readonly prompt: string;
       readonly schema: unknown;
+      /** Typed questions of a structured call; absent for a legacy kind+schema request. Answer with an id-keyed map. */
+      readonly questions?: readonly InteractionQuestion[];
     }
   | {
       /** Emitted when the stream is cancelled via AbortSignal. Last event when cancelled. */

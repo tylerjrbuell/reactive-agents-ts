@@ -195,8 +195,9 @@ GIANT_BAR=1000
 # 2026-11-11 multimodal task input: reactive-agent.ts 2025->2017 (withHistoryBlock moved to agent/history-block.ts, widened to TaskInput; run()/runStream() preflight modality check +4), chat/engine.ts 673->670 (turn/streamTurn take TaskInput; one JSDoc condensed).
 # 2026-11-11 live ask-user rail: act.ts 1124->1098 (request_user_input handling moved to act/user-interaction.ts handleUserInteraction, which also answers inline via RunEnvelope.rails.askUser; the pause terminate() stays in act.ts).
 # 2026-11-12 channelStatus(): reactive-agent.ts 2016->2012 (+channelStatus delegate and import; gatewayStatus JSDoc condensed to one line).
+# 2026-11-12 structured questions: reactive-agent.ts 2012->2002 (listPendingInteractions inline row type replaced by the shared PendingInteraction from agent/durable-facade.ts).
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2012"
+  "runtime/src/reactive-agent.ts:2002"
   "runtime/src/chat/engine.ts:670"
   "runtime/src/builder.ts:2200"
   "runtime/src/execution-engine.ts:955"

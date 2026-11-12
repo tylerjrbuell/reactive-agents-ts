@@ -109,6 +109,11 @@ Each has `id`, `prompt`, `type` (`text`, `single-choice`, `multi-choice`,
 `required` (default true), `default`, `min`/`max`, `maxLength` and `allowOther`
 (free text for a choice). The old `kind`/`prompt`/`schema` call still works.
 
+A structured call puts the same list on `event.questions` (`InteractionRequested`)
+and on each `listPendingInteractions()` entry; answer with an id-keyed map via
+`respondToInteraction(runId, interactionId, { [questionId]: value })`. A
+legacy call has no `questions`.
+
 `@reactive-agents/tools` exports the pure helpers a host uses with it:
 `parseRequest(args)` normalizes either shape, and `validateAnswers(request,
 answers)` checks an answer map keyed by question id. It returns a typed result

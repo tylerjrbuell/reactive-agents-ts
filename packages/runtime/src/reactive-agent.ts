@@ -30,7 +30,7 @@ import { makeSkillsFacade } from './agent/skills-facade.js'
 import { makeSchedulesApi, type SchedulesApi } from './agent/schedules-facade.js'
 import { makeMemoryHandle, type AgentMemoryHandle } from './agent/memory-facade.js'
 import { runFacadeEffect } from './agent/run-facade-effect.js'
-import { makeDurableFacade, type RunDurableParams } from './agent/durable-facade.js'
+import { makeDurableFacade, type PendingInteraction, type RunDurableParams } from './agent/durable-facade.js'
 import { buildRunTaskEffect, type RunTaskDeps, type RunTaskEffectOptions } from './agent/run-task-effect.js'
 import { makeSessionHistoryStore } from './agent/session-store.js'
 import { startStreamPump } from './agent/stream-pump.js'
@@ -1004,17 +1004,7 @@ export class ReactiveAgent<TOut = unknown> {
      *
      * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
-    async listPendingInteractions(): Promise<
-        readonly {
-            runId: string
-            interactionId: string
-            kind: string
-            prompt: string
-            schema: unknown
-            task: string
-            updatedAt: number
-        }[]
-    > {
+    async listPendingInteractions(): Promise<readonly PendingInteraction[]> {
         return runFacadeEffect(this.runtime, this._durable().listPendingInteractions())
     }
 

@@ -61,7 +61,7 @@ import { Effect, Option } from 'effect'
 import type { TaskInput } from './task-input.js'
 import { ManagedRuntime } from 'effect'
 import { toolEffectIdentityKey } from '@reactive-agents/core'
-import type { EffectReceiptRecord, ToolEffectRecord } from '@reactive-agents/core'
+import type { EffectReceiptRecord, InteractionQuestion, ToolEffectRecord } from '@reactive-agents/core'
 import { join } from 'node:path'
 import type { ToolEffectRow } from '../services/run-store.js'
 import {
@@ -75,7 +75,7 @@ import {
     getPendingInteractionAt,
 } from '../engine/durable-resume.js'
 import { ApprovalStateError, InteractionStateError, unwrapErrorWithSuggestion } from '../errors.js'
-import { HumanGate, type HumanGateAnswer, type HumanGateRequest } from '../engine/human-gate.js'
+import { HumanGate, questionsOfSchema, type HumanGateAnswer, type HumanGateRequest } from '../engine/human-gate.js'
 import { captureCallerFileRoot, workspaceCarry, type RunStateSpec } from '../engine/start-run.js'
 import type { AgentResult } from '../builder/types.js'
 import type { RunRecord, RunStatus } from '../services/run-store.js'
@@ -183,7 +183,20 @@ const livePending = <K extends HumanGateRequest['kind']>(
         Effect.map((all) => all.filter((r): r is Extract<HumanGateRequest, { kind: K }> => r.kind === kind)),
     )
 
-const NOT_WAITING_HERE = (what: string): string =>
+/** One run waiting on a person's answer to `request_user_input` (live or durable). */
+export interface PendingInteraction {
+    runId: string
+    interactionId: string
+    kind: string
+    prompt: string
+    schema: unknown
+    /** Typed questions of a structured call; absent for a legacy kind+schema request. */
+    questions?: readonly InteractionQuestion[]
+    task: string
+    updatedAt: number
+}
+
+const NOT_WAITING_HERE =(what: string): string =>
     `no run with this id is waiting for ${what} in this process, and this agent has no durable run store ` +
     '(.withDurableRuns()) to resume one from'
 
@@ -727,26 +740,16 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          * Effect-typed (Task 10): same boundary policy as
          * `listPendingApprovals` (guard-only `E`, preserved store reads).
          */
-        listPendingInteractions(): Effect.Effect<
-            readonly {
-                runId: string
-                interactionId: string
-                kind: string
-                prompt: string
-                schema: unknown
-                task: string
-                updatedAt: number
-            }[],
-            Error
-        > {
+        listPendingInteractions(): Effect.Effect<readonly PendingInteraction[], Error> {
             return Effect.gen(function* () {
                 // Live waits (this process) first, oldest first; then the durable store.
-                const live = (yield* livePending('interaction')).map((r) => ({
+                const live: PendingInteraction[] = (yield* livePending('interaction')).map((r) => ({
                     runId: r.runId,
                     interactionId: r.interactionId,
                     kind: r.interactionKind,
                     prompt: r.prompt,
                     schema: r.schema,
+                    ...(r.questions !== undefined ? { questions: r.questions } : {}),
                     task: r.task ?? '',
                     updatedAt: r.requestedAt,
                 }))
@@ -757,15 +760,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                         listDurableRuns({ dbPath, status: 'awaiting-interaction' }),
                     ),
                 )
-                const out: {
-                    runId: string
-                    interactionId: string
-                    kind: string
-                    prompt: string
-                    schema: unknown
-                    task: string
-                    updatedAt: number
-                }[] = [...live]
+                const out: PendingInteraction[] = [...live]
                 for (const run of runs) {
                     const pending = yield* Effect.promise(() =>
                         Effect.runPromise(
@@ -773,12 +768,15 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                         ),
                     )
                     if (pending) {
+                        const schema = safeParseJson(pending.schemaJson)
+                        const questions = questionsOfSchema(schema)
                         out.push({
                             runId: run.runId,
                             interactionId: pending.interactionId,
                             kind: pending.kind,
                             prompt: pending.prompt,
-                            schema: safeParseJson(pending.schemaJson),
+                            schema,
+                            ...(questions !== undefined ? { questions } : {}),
                             task: run.task,
                             updatedAt: run.updatedAt,
                         })
