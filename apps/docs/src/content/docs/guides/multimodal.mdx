@@ -1,0 +1,89 @@
+---
+title: Multimodal Input
+description: >-
+  Send images, audio, and files to an agent with TaskInput content parts, ask
+  what a model accepts before you send, and know what happens when it cannot.
+sidebar:
+  order: 28
+---
+
+`agent.run()`, `agent.runStream()`, `agent.runEffect()` and `agent.chat()` take a `TaskInput`: a plain string, or an array of typed content parts.
+
+```typescript
+import type { ContentPart } from "@reactive-agents/core";
+
+type TaskInput = string | readonly ContentPart[];
+```
+
+`ContentPart` comes from `@reactive-agents/core`. There are four kinds:
+
+| Part | Shape | Notes |
+| --- | --- | --- |
+| `text` | `{ type: "text", text }` | A text-only array behaves exactly like the string. |
+| `image` | `{ type: "image", source }` | `source` is `{ type: "base64" \| "url", media_type, data }`. |
+| `audio` | `{ type: "audio", source, transcript? }` | Same `source` shape. `transcript` is optional text for models that cannot hear audio. |
+| `file` | `{ type: "file", ref }` | `ref` is `{ uri, media_type, name?, bytes?, sha256? }`. |
+
+## Send a picture
+
+```typescript
+import { ReactiveAgents, modelInputCapabilities } from "reactive-agents";
+
+const agent = await ReactiveAgents.create().withProvider("anthropic").build();
+const pngBase64 = "iVBORw0KGgo="; // your image bytes, base64-encoded
+
+// Ask before you send, for example to enable or disable an attach button.
+const caps = modelInputCapabilities("anthropic", "claude-sonnet-4-6");
+console.log(caps.vision, caps.audioIn, caps.authoritative);
+
+const result = await agent.run([
+  { type: "text", text: "What is in this picture?" },
+  { type: "image", source: { type: "base64", media_type: "image/png", data: pngBase64 } },
+]);
+console.log(result.output);
+```
+
+`modelInputCapabilities(provider, model)` returns `{ vision, audioIn?, authoritative }`. `authoritative` is true when the answer comes from a probe or the static capability table, and false when the framework is guessing.
+
+## When the model cannot take a part
+
+The check runs before any model call and never drops a part silently:
+
+- An image part with a model that is authoritatively not vision-capable fails with `UnsupportedModalityError { partType: "image", model }`.
+- An audio part fails the same way only when the model's `supportsAudioIn` is explicitly `false`.
+- For a model the framework only guesses about (`authoritative: false`), the part is sent and a real provider refusal surfaces as an error.
+- File parts are not checked here. The provider layer decides what to do with them (see below).
+
+`UnsupportedModalityError` is a typed tagged error, so you can handle it with `Effect.catchTag` or check `error._tag` after a rejected `run()`.
+
+## What each provider does
+
+Provider adapters turn parts into the wire format, or into a deterministic text placeholder when the wire has no slot for them.
+
+| Provider | Images | Audio | Files |
+| --- | --- | --- | --- |
+| Anthropic | Sent | Placeholder text | Text inlined or placeholder |
+| OpenAI | Sent | Sent as `input_audio` (wav or mp3, base64) on audio models such as `gpt-4o-audio-preview` and `gpt-audio` | Text inlined or placeholder |
+| Gemini | Sent | Sent (wav, mp3, aiff, aac, ogg, flac) | Text inlined or placeholder |
+| Ollama | Sent | Placeholder text | Text inlined or placeholder |
+| LiteLLM | Sent | Placeholder text (it proxies arbitrary hosts) | Text inlined or placeholder |
+
+Files are never sent as bytes. A text-like file whose bytes are inline (a `data:...;base64,` `uri`) is decoded into the prompt behind its label, up to 32 KB, and longer files end with a visible truncation marker. Any other file, or a path or remote URI, becomes a placeholder.
+
+Your own audio and file parts reach the provider unchanged, and the provider decides: send them, or replace them with a placeholder. The provider's placeholder is written to the provider's log channel with the part type and reason. The kernel replaces media that comes back inside tool results and unsupported image types itself, and publishes a `ContentPartDegraded` event carrying a summary of the part (never raw bytes) and the reason; the trace records it as `content-part-degraded`.
+
+## Sessions, streaming, and durable runs
+
+`AgentSession.chat()` and `AgentSession.runStream()` accept `TaskInput` too. `chat()` with media goes through the agentic path, because the direct chat path is text-only.
+
+Durable runs store the text projection of the task only. A resumed run does not re-send the media.
+
+## Cortex
+
+The [Cortex](/features/cortex/) chat composer builds these parts for you: attached pictures and audio become `image` and `audio` parts, and the attach menu reads `modelInputCapabilities` to disable kinds the model cannot take.
+
+## Related
+
+- [Typed Structured Output](/guides/structured-output/)
+- [Providers](/features/llm-providers/)
+- [Builder API reference](/reference/builder-api/)

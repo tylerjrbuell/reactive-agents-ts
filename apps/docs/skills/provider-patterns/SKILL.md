@@ -72,6 +72,23 @@ const agent = await ReactiveAgents.create()
 // Model name format: "provider/model-name" as per LiteLLM docs
 ```
 
+### Ollama Cloud and per-agent endpoints
+
+Pass the endpoint and key on the provider; a `baseUrl` here is per agent, so two agents can target different Ollama servers:
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withProvider("ollama", { baseUrl: "https://ollama.com", apiKey: process.env.OLLAMA_API_KEY })
+  .withModel("gpt-oss:120b")
+  .build();
+```
+
+An explicit `apiKey` is always sent (as a Bearer token, only to that endpoint). An `OLLAMA_API_KEY` from the environment is attached only when the endpoint is `https`, never to loopback or plain `http` hosts. A rejected key fails with a typed `OllamaAuthError`. Judgment models are not available on Ollama Cloud.
+
+### Input modalities
+
+Ask what a model accepts before sending images or audio: `modelInputCapabilities(provider, model)` returns `{ vision, audioIn?, authoritative }`. `audioIn` mirrors the capability's `supportsAudioIn`. An image or audio part for a model that authoritatively cannot take it fails with `UnsupportedModalityError`; otherwise audio on providers with no audio slot (Anthropic, Ollama, LiteLLM) becomes a text placeholder. See the Multimodal Input guide on the docs site.
+
 ### Circuit breaker for unreliable providers
 
 ```ts

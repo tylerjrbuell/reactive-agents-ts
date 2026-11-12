@@ -265,7 +265,7 @@ Same agent code, different model. Provider fallback chains and dynamic pricing a
 
 ## Cortex — the companion studio
 
-[`@reactive-agents/cortex`](https://www.npmjs.com/package/@reactive-agents/cortex) is the optional live studio: real-time agent canvas, entropy charts, per-step token usage, AI-generated debrief summaries, and an interactive agent builder.
+[`@reactive-agents/cortex`](https://www.npmjs.com/package/@reactive-agents/cortex) is the optional live studio: chat with a multimodal composer and voice, run traces, the Lab agent builder, judgments, memory and skills, and approvals.
 
 ```bash
 bun add @reactive-agents/cortex

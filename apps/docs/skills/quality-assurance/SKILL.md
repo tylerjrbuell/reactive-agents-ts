@@ -118,6 +118,22 @@ await Effect.runPromise(
 );
 ```
 
+### Rubric graders and inconclusive grades
+
+When data cannot decide a case, an `EvalCase` can carry a `rubric`: one judgment question answered by the `JudgmentService`, compared to a pass condition.
+
+```ts
+const rubric = {
+  question: { type: "noul", instructions: "Does the answer cite a source for each claim?" },
+  passWhen: { minProbability: 0.7 },
+  minConfidence: 0.6, // optional, default 0.6
+};
+```
+
+- Structured checks (`FieldCheck`s) run first; the rubric is asked only if they pass or are absent, so a failed deterministic check never spends a judgment call.
+- A grader that cannot decide abstains: the verdict is `"inconclusive"` (low confidence, a judgment error, an invalid rubric, or no `JudgmentService` wired). An inconclusive case is never a pass and is not a failure; it is excluded from `passed`, `failed` and the averages, and counted in `EvalRunSummary.inconclusive`.
+- `checkRegression` computes the pass rate over decided cases only; a rise in inconclusive never counts as a regression.
+
 ### 5 eval scoring dimensions
 
 | Dimension | Scorer | What it measures |
@@ -144,6 +160,7 @@ await Effect.runPromise(
 
 ## Pitfalls
 
+- `.withOutputSchema()` accepts a JSON Schema as well as an Effect Schema; the run reports how the object was obtained (structured output report events). Never treat a missing `result.object` as a pass.
 - `withVerification()` adds LLM calls — each verification check costs additional tokens; `multiSource` is the most expensive option (disabled by default)
 - `withVerificationStep()` is separate from `withVerification()` — one adds a reasoning phase, the other adds runtime output checks; they can be used together
 - `passThreshold: 0.7` is conservative — lower it (e.g., 0.6) for creative tasks where strict factual grounding is not required

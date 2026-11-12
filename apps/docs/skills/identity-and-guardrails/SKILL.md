@@ -66,6 +66,10 @@ const agent = await ReactiveAgents.create()
 
 Guardrail violations abort the turn and return a structured error — the agent never processes the blocked content.
 
+**Answer-release gate.** The output check runs once on the final answer, and a blocked answer is never published: the run fails with `GuardrailViolationError` (`direction: "output"`), `GuardrailViolationDetected` is emitted, and `FinalAnswerProduced` is held until the screen passes, so it never carries blocked text. On `runStream()` the `TextDelta` tokens are held the same way and delivered only when the run succeeds.
+
+**Abort reason.** A run ended by a guardrail or output screen publishes `AgentAborted` with `reason: "guardrail"` (`RunAbortReason`, alongside `"timeout"`, `"user-stop"`, `"terminate"`, `"abort"`). Branch on it to tell a blocked run from a cancelled one.
+
 ### Behavioral contracts
 
 Full field reference for `.withBehavioralContracts(contract)`:

@@ -176,6 +176,16 @@ const { events } = useAgentStream("/api/agent");
 // StreamCancelled — { type: "StreamCancelled" }
 ```
 
+### Multimodal input (server route)
+
+The server route can pass content parts to `agent.runStream()` or `session.chat()` instead of a string: `[{ type: "text", text }, { type: "image", source: { type: "base64", media_type, data } }]`. Check `modelInputCapabilities(provider, model)` first to enable or disable an attach control; an image or audio part for a model that cannot take it fails with `UnsupportedModalityError` before any model call.
+
+### Approvals, sub-agents, and recalled memory in the stream
+
+- `ApprovalRequested` carries `runId` and `gateId`. Answer one gate with `agent.approveRun(runId, { gateId })` or `agent.denyRun(runId, reason, { gateId })`; parallel sub-agents ask under the root run id, so without `gateId` only the oldest wait is answered.
+- Pending approvals from `agent.listPendingApprovals()` carry a `subAgent` label (the asking sub-agent's name) when a sub-agent asked. Show it so the user knows who is asking.
+- `MemoryRecalled` events (one per non-empty memory tier at bootstrap) list what memory put into context; render them as a "context sources" view if useful.
+
 ## Packages
 
 | Package | Exports |

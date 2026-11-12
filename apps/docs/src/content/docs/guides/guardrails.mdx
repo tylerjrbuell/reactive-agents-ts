@@ -273,6 +273,8 @@ Each check returns a `GuardrailResult`:
 
 The output check runs once on the final answer. A blocked answer is never published: the run fails with `GuardrailViolationError` (`direction: "output"`), `GuardrailViolationDetected` is emitted, and `FinalAnswerProduced` is held until the screen passes, so it never carries blocked text. On `runStream()` the `TextDelta` tokens are held the same way and delivered only when the run succeeds.
 
+When a guardrail or output screen blocks a run, the `AgentAborted` event carries `reason: "guardrail"` (a `RunAbortReason` from `@reactive-agents/core`), so consumers can tell a blocked run from a `"timeout"`, `"user-stop"`, `"terminate"` or `"abort"`.
+
 ## Lifecycle Hooks
 
 Monitor guardrail decisions with hooks. Hook handlers are functions, so `withHook` is builder-only (no declarative equivalent):

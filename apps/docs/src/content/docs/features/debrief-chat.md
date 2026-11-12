@@ -46,7 +46,7 @@ The tool appears once the agent has:
 
 ## AgentDebrief
 
-Automatically synthesized after each run when both `.withMemory()` and `.withReasoning()` are enabled:
+Automatically synthesized after each run when both `.withMemory()` and `.withReasoning()` are enabled. The debrief has its own switch, `.withDebrief(enabled?)`, independent of memory. Unset, it follows `.withMemory()`. `.withDebrief()` turns it on with memory off (only the debrief table is written, to the memory database path) and `.withDebrief(false)` turns it off with memory on:
 
 ```typescript
 interface AgentDebrief {

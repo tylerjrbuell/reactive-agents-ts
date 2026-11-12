@@ -16,6 +16,40 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 ---
 
+## Unreleased (next minor)
+
+Not tagged yet. These are on `dev` and may still change before release.
+
+<Aside type="caution" title="Breaking: namespaced sender keys">
+`allowedSenders` and `blockedSenders` entries must now carry the platform prefix. A bare `+1555...` no longer matches a platform-tagged sender, so an unmigrated allowlist silently blocks everyone. Migrate each entry: `+15551234567` becomes `signal:+15551234567`, and a Telegram user id `123456789` becomes `telegram:123456789`. See [Messaging Channels](/guides/messaging-channels/) and [Gateway](/features/gateway/).
+
+`rax deploy --target cloudrun` now requires IAM authentication by default. Pass `--allow-unauthenticated` to make the service public; the agent API has no auth of its own. See [`rax deploy`](/reference/cli/#rax-deploy).
+</Aside>
+
+### Framework
+
+- **Multimodal input.** `run()`, `runStream()` and `chat()` take `TaskInput` (a string or image, audio and file parts). Unsupported parts fail with a typed `UnsupportedModalityError`; others degrade to a visible placeholder. See [Multimodal Input](/guides/multimodal/).
+- **Ollama Cloud auth.** `.withProvider("ollama", { apiKey })` plus a per-agent `baseUrl`; the env key is only sent to https (cloud) endpoints. See [Local Models](/guides/local-models/).
+- **Typed sub-agent parameters.** `withAgentTool` takes `parameters` so the parent model passes structured arguments. See [Sub-Agents](/guides/sub-agents/#structured-input-parameters-typed-per-call-arguments).
+- **`withDebrief()`.** The post-run debrief has its own switch, independent of memory (it defaults to following `withMemory()`). See [Debrief and Chat](/features/debrief-chat/).
+- **Approve and deny by gate id.** Several approvals under one run are answered one by one; sub-agent approvals name the asking sub-agent. See [Durable HITL](/guides/durable-hitl/).
+- **`MemoryRecalled` event and `"guardrail"` abort reason.** Recalled memories are visible on the bus; a guardrail-blocked run aborts with `reason: "guardrail"`. See [Memory](/guides/memory/) and [Guardrails](/guides/guardrails/).
+- **JSON Schema `outputSchema` and structured output reports.** See [Typed Structured Output](/guides/structured-output/).
+- **Eval rubric graders.** A case can carry a judgment `rubric`; a grader that cannot decide grades `inconclusive`, never a pass. See [Eval](/features/eval/).
+- **To-do wrap-up turn.** If the model answers with open `todo` items, the harness holds the answer for one turn and names them. See [Tools](/guides/tools/).
+
+### Gateway and channels
+
+- **Durable schedules, ingress server and inbound queue.** `agent.schedules()`, restart catch-up for cron, a webhook and channel ingress server, and a queue so overlapping events are not dropped. See [Gateway](/features/gateway/).
+- **Canonical `ChannelAdapter` contract** with native Signal and Telegram bot adapters. See [Messaging Channels](/guides/messaging-channels/).
+- **Deploy hardening.** Validated agent names, always-on daemon settings per target, and the Cloud Run auth default above. See [`rax deploy`](/reference/cli/#rax-deploy).
+
+### Cortex
+
+Chat composer with a Config popover, `/mcp` and `/btw` commands, a Context tab (active skills and recalled memories), judgments, rich answers, `@` file tags, attachments, and voice (dictation, read aloud, voice mode). See [Cortex](/features/cortex/).
+
+---
+
 ## v0.18.0 - Workspaces, skills, and a single run scope (November 2026)
 
 <Aside type="note" title="Breaking changes">

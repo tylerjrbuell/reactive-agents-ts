@@ -92,6 +92,14 @@ Auto-checkpoint captures successful non-meta tool observations. It is a safety n
 // find — exact lookup by memory key
 ```
 
+### Seeing what memory recalled
+
+Each bootstrap that recalls something publishes a `MemoryRecalled` event on the EventBus: one per non-empty tier (`semantic`, `episodic`, `procedural`) with the `taskId`, `agentId` and up to 20 items (`id`, `tier`, a summary truncated to 160 characters, plus `importance` or `score`). A bootstrap that recalls nothing publishes nothing.
+
+### Post-run debrief with `.withDebrief()`
+
+The debrief has its own switch, independent of memory. Unset, it follows `.withMemory()`. `.withDebrief()` turns it on with memory off (only the debrief table is written); `.withDebrief(false)` turns it off with memory on.
+
 ### Reducing context pressure on long tasks
 
 ```ts

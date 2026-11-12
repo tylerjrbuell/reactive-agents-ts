@@ -209,6 +209,10 @@ export default defineConfig({
                             link: 'guides/structured-output/',
                         },
                         {
+                            label: 'Multimodal Input',
+                            link: 'guides/multimodal/',
+                        },
+                        {
                             label: 'Streaming Responses',
                             link: 'features/streaming/',
                         },

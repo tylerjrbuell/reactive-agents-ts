@@ -111,6 +111,20 @@ const result = await agent.run("Refactor and save utils.ts", {
 });
 ```
 
+#### Live waits, gate ids, and timeouts
+
+Without `.withDurableRuns()`, a `detach` policy waits live in the process; a stream shows `ApprovalRequested` and `agent.listPendingApprovals()` lists it. Parallel sub-agents ask under the root run id, so each pending item carries `gateId` and `subAgent` (the asking sub-agent's name). Answer exactly one gate:
+
+```ts
+for (const p of await agent.listPendingApprovals()) {
+  // p = { runId, gateId, subAgent?, toolName, args, ... }
+  await agent.approveRun(p.runId, { gateId: p.gateId });
+  // or: await agent.denyRun(p.runId, "not now", { gateId: p.gateId });
+}
+```
+
+`approveRun(runId)` with no `gateId` answers the oldest wait. Bound the wait with `timeoutMs` in the policy: `.withApprovalPolicy({ tools: ["file-write"], mode: "detach", timeoutMs: 60_000 })`. No decision in time denies the call and the model reads why. A live wait is gone if the process exits; use durable runs when that matters.
+
 ### Agent-initiated user input
 
 `.withUserInteraction()` lets the model call the `request_user_input` tool to ask the human for a form, choice, or confirmation.

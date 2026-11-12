@@ -1,6 +1,6 @@
 # Cortex
 
-Local desk for Reactive Agents: Bun + Elysia API, SQLite store, WebSocket ingest/live fan-out, and a SvelteKit UI (Beacon / Chat / Runs / Lab).
+Local desk for Reactive Agents: Bun + Elysia API, SQLite store, WebSocket ingest/live fan-out, and a SvelteKit UI: Beacon, Chat (multimodal composer, voice), Runs and run traces, Lab builder, Judgments, memory and skills, and approvals. User docs: https://docs.reactiveagents.dev/features/cortex/
 
 **Contributors & AI agents:** see **[`AGENTS.md`](./AGENTS.md)** in this folder for architecture, WS contracts, store map, pitfalls, and plan index.
 
@@ -83,10 +83,12 @@ bun run check   # svelte-kit sync + svelte-check
 bun run build
 ```
 
-## Plans
+## Features
 
-Implementation tracks `docs/superpowers/plans/2026-03-31-cortex-app-phase*.md`:
+- **Beacon** — live board and field of running agents, with a prompt bar.
+- **Chat** — multimodal composer (pictures, audio, files, `@` file tags), slash commands such as `/mcp` and `/btw`, rich answers with deliverables, live approvals and questions, and voice (dictation, read aloud, voice mode).
+- **Runs and run view** — run table, trace, "Why it ended", and an inspector with Context (skills and recalled memories), Memory, Safety and Judgments tabs. Compare two runs.
+- **Lab** — agent builder (with TypeScript export), saved agents, memory studio, agent skills, tools and prompts.
+- **Settings** — provider keys (including Ollama Cloud), judgment backends, voice engines.
 
-- **Phase 3** — Beacon (agent grid, bottom input, WS desk).
-- **Phase 4** — Run detail at `/run/[runId]` (header with Continue in chat, vitals line, Answer and Trace, an inspector with Summary / Decisions / Signal / Context / Memory / Messages / Events). Live + replay via `/ws/live/:agentId?runId=` after REST loads the run row. `/run` redirects to the Runs list.
-- **Phase 5+** — Lab, command palette commands, replay scrubber, etc.
+Architecture, routes and contracts for contributors are in [`AGENTS.md`](./AGENTS.md). Earlier phase plans are archived under `wiki/Planning/Implementation-Plans/Superpowers/archive/`.

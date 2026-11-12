@@ -139,10 +139,11 @@ const agent = await ReactiveAgents.create()
 
 | Method | Params | Notes |
 |--------|--------|-------|
-| `.withGateway(opts?)` | `GatewayOptions` | Persistent agent with heartbeats/crons/webhooks |
+| `.withGateway(opts?)` | `GatewayOptions` | Persistent agent with heartbeats/crons/webhooks. `queue: { capacity?, overflow?: "drop-oldest" \| "drop-newest" }` bounds the inbound queue so overlapping events are queued, not dropped. Crons are durable: list them with `agent.schedules()` |
 | `.withA2A(opts?)` | `{ port?, basePath? }` | A2A server (JSON-RPC 2.0 + SSE) |
 | `.withStreaming(opts?)` | `{ density?: "tokens"\|"full" }` | Streaming output |
-| `.withAgentTool(name, cfg)` | name + `{ agent }` | Local agent registered as a tool |
+| `.withAgentTool(name, cfg)` | name + `{ agent }` | Local agent registered as a tool. `parameters` (an array of tool parameters, or a JSON Schema) gives the parent model typed per-call arguments instead of one free-form `input` string |
+| `.withDebrief(enabled?)` | `boolean` (default `true`) | Post-run debrief, independent of memory. Unset it follows `.withMemory()`; `.withDebrief(false)` turns it off with memory on |
 | `.withDynamicSubAgents(opts?)` | `{ maxIterations? }` | Dynamic sub-agent spawning |
 | `.withRemoteAgent(name, url)` | name + A2A URL | Remote A2A agent as callable tool |
 | `.withCortex(url?)` | optional URL | Cortex desk server integration |
@@ -161,6 +162,10 @@ const agent = await ReactiveAgents.create()
 | `ReactiveAgents.fromConfig(cfg)` | `Promise<ReactiveAgentBuilder>` | From `AgentConfig` object |
 | `ReactiveAgents.fromJSON(json)` | `Promise<ReactiveAgentBuilder>` | From JSON string |
 | `ReactiveAgents.runOnce(task, builder)` | `Promise<AgentResult>` | Build + run + dispose |
+
+## Run input
+
+`agent.run()`, `runStream()`, `runEffect()` and `chat()` take a `TaskInput`: a string, or an array of content parts (`text`, `image`, `audio`, `file`) from `@reactive-agents/core`. `modelInputCapabilities(provider, model)` says what a model accepts; an unsupported image or audio part fails with `UnsupportedModalityError`.
 
 ## Pitfalls
 
