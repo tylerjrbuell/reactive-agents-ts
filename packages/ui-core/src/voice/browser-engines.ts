@@ -215,12 +215,17 @@ function createBrowserTtsUnguarded(
       u.onstart = () => {
         if (!cancelled) h.onStart?.();
       };
+      // `end` and `error` can both fire for one utterance: only the first settles it.
+      let settled = false;
       u.onend = () => {
-        if (!cancelled) h.onEnd();
+        if (cancelled || settled) return;
+        settled = true;
+        h.onEnd();
       };
       u.onerror = (e) => {
         // `interrupted` and `canceled` are our own cancel(), not a failure.
-        if (cancelled || e.error === "interrupted" || e.error === "canceled") return;
+        if (cancelled || settled || e.error === "interrupted" || e.error === "canceled") return;
+        settled = true;
         h.onError({ kind: "playback", message: `The browser could not speak this${e.error ? ` (${e.error})` : ""}.` });
       };
       synth.speak(u);

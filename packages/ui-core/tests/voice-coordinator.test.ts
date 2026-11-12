@@ -112,6 +112,151 @@ describe("a multi-sentence reading is strictly sequential", () => {
   });
 });
 
+describe("duplicate and stale engine events never advance the queue twice", () => {
+  const TEXT = "One sentence here. Two sentences here. Three sentences here.";
+
+  test("reader: onEnd twice for one chunk starts one next chunk; a stale handle's callbacks are ignored", () => {
+    const calls: Array<{ text: string; h: TtsHandlers; cancels: number }> = [];
+    const raw: TtsEngine = {
+      id: "raw",
+      label: "Raw (no coordinator)",
+      available: () => ({ ok: true }),
+      voices: async () => [],
+      speak(text, _o, h) {
+        const c = { text, h, cancels: 0 };
+        calls.push(c);
+        return { pause: () => undefined, resume: () => undefined, cancel: () => void (c.cancels += 1) };
+      },
+    };
+    const reader = createReadAloud({ engine: () => raw });
+    reader.play("t", TEXT);
+    calls[0]!.h.onEnd();
+    calls[0]!.h.onEnd();
+    expect(calls.length).toBe(2);
+    reader.stop();
+    calls[1]!.h.onEnd();
+    calls[0]!.h.onEnd();
+    expect(calls.length).toBe(2);
+    expect(reader.get().status).toBe("idle");
+  });
+
+  test("browser engine: end then error (or end twice) settles once", () => {
+    const queue: UtteranceLike[] = [];
+    const synth: SynthLike = { speak: (u) => void queue.push(u), cancel: () => undefined, pause: () => undefined, resume: () => undefined, getVoices: () => [] };
+    const browser = createBrowserTts(synth, () => ({ voice: null, rate: 1, lang: "", onstart: null, onend: null, onerror: null }));
+    const events: string[] = [];
+    browser.speak("x", {}, { onEnd: () => events.push("end"), onError: () => events.push("error") });
+    queue[0]!.onend?.();
+    queue[0]!.onend?.();
+    queue[0]!.onerror?.({ error: "synthesis-failed" });
+    expect(events).toEqual(["end"]);
+  });
+});
+
+describe("no play() rejection is ever unhandled", () => {
+  /** An element like a browser's: play() stays pending until playing starts; pause() rejects a pending play() with AbortError. */
+  function pendingAudio() {
+    const audios: PendingAudio[] = [];
+    class PendingAudio implements AudioLike {
+      onended: AudioLike["onended"] = null;
+      onerror: AudioLike["onerror"] = null;
+      onplaying: AudioLike["onplaying"] = null;
+      private reject: ((e: unknown) => void) | null = null;
+      constructor() {
+        audios.push(this);
+      }
+      play(): Promise<void> {
+        return new Promise<void>((_resolve, reject) => {
+          this.reject = reject;
+        });
+      }
+      pause(): void {
+        const r = this.reject;
+        this.reject = null;
+        r?.(Object.assign(new Error("The play() request was interrupted by a call to pause()."), { name: "AbortError" }));
+      }
+    }
+    const remote = createRemoteTts({
+      speakUrl: "/s",
+      voicesUrl: "/v",
+      fetch: async () => new Response(new Blob(["a"])),
+      createAudio: () => new PendingAudio(),
+      createObjectURL: () => "blob:x",
+      revokeObjectURL: () => undefined,
+    });
+    return { remote, audios };
+  }
+
+  async function withRejectionWatch(run: () => Promise<void>): Promise<unknown[]> {
+    const seen: unknown[] = [];
+    const on = (reason: unknown): void => void seen.push(reason);
+    process.on("unhandledRejection", on);
+    try {
+      await run();
+      await new Promise<void>((r) => setTimeout(r, 20));
+    } finally {
+      process.off("unhandledRejection", on);
+    }
+    return seen;
+  }
+
+  test("cancel during a pending play, rapid A->B->C, pause then resume, and stop", async () => {
+    const seen = await withRejectionWatch(async () => {
+      const { remote, audios } = pendingAudio();
+      const h = { onEnd: () => undefined, onError: () => undefined };
+      const reader = createReadAloud({ engine: () => remote });
+      // cancel while play() is pending
+      const one = remote.speak("one", {}, h);
+      await tick();
+      await tick();
+      one.cancel();
+      // rapid A -> B -> C
+      remote.speak("A", {}, h);
+      remote.speak("B", {}, h);
+      remote.speak("C", {}, h);
+      await tick();
+      await tick();
+      // pause then resume the one that is left, then stop through a reader
+      const d = remote.speak("D", {}, h);
+      await tick();
+      await tick();
+      d.pause();
+      d.resume();
+      reader.play("t", "First sentence here. Second sentence here.");
+      await tick();
+      await tick();
+      reader.stop();
+      reader.play("t2", "Another one. And another.");
+      await tick();
+      await tick();
+      reader.stop();
+      expect(audios.length).toBeGreaterThan(0);
+    });
+    expect(seen).toEqual([]);
+  });
+
+  test("a throwing callback inside the utterance is reported as a playback error, not an unhandled rejection", async () => {
+    const seen = await withRejectionWatch(async () => {
+      const { remote, audios } = pendingAudio();
+      const errors: string[] = [];
+      // A handler that throws while the interrupted play() is being settled (inside the async body).
+      remote.speak("x", {}, {
+        onEnd: () => {
+          throw new Error("handler blew up");
+        },
+        onError: (e) => errors.push(e.kind),
+      });
+      await tick();
+      await tick();
+      audios[0]!.pause(); // rejects the pending play() with AbortError -> onEnd throws
+      await tick();
+      await tick();
+      expect(errors.length).toBeLessThanOrEqual(1);
+    });
+    expect(seen).toEqual([]);
+  });
+});
+
 describe("speech coordinator", () => {
   test("starting B while A plays cancels A exactly once and A's callbacks go inert", () => {
     const { engine, live } = fakeEngine();

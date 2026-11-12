@@ -266,6 +266,9 @@ export interface RemoteTtsDeps {
 
 const CACHE_LIMIT = 6;
 
+const isAbortError = (cause: unknown): boolean =>
+  typeof cause === "object" && cause !== null && "name" in cause && (cause as { name: unknown }).name === "AbortError";
+
 /** Speaking through a server route: the server synthesizes, the browser plays. */
 export function createRemoteTts(deps: RemoteTtsDeps): TtsEngine {
   return exclusive(createRemoteTtsUnguarded(deps));
@@ -335,12 +338,24 @@ function createRemoteTtsUnguarded(deps: RemoteTtsDeps): TtsEngine {
       let audio: AudioLike | null = null;
       let url: string | null = null;
       let paused = false;
-      const cleanup = (): void => {
+      // One utterance settles once. Settling silences the element for good (pause + handlers
+      // dropped), so a rejected or late-ended play() can never keep sounding or call back again.
+      let settled = false;
+      const settle = (): boolean => {
+        if (settled) return false;
+        settled = true;
+        if (audio !== null) {
+          audio.onended = null;
+          audio.onerror = null;
+          audio.onplaying = null;
+          audio.pause();
+        }
         if (url !== null) deps.revokeObjectURL(url);
         url = null;
+        return true;
       };
       const fail = (error: TtsError): void => {
-        if (!cancelled) h.onError(error);
+        if (settle() && !cancelled) h.onError(error);
       };
       void (async () => {
         try {
@@ -355,13 +370,9 @@ function createRemoteTtsUnguarded(deps: RemoteTtsDeps): TtsEngine {
             if (!cancelled) h.onStart?.();
           };
           a.onended = () => {
-            cleanup();
-            if (!cancelled) h.onEnd();
+            if (settle() && !cancelled) h.onEnd();
           };
-          a.onerror = () => {
-            cleanup();
-            fail({ kind: "playback", message: "The audio could not be played." });
-          };
+          a.onerror = () => fail({ kind: "playback", message: "The audio could not be played." });
           await a.play();
         } catch (cause) {
           if (cancelled) return;
@@ -369,8 +380,7 @@ function createRemoteTtsUnguarded(deps: RemoteTtsDeps): TtsEngine {
           // play() was interrupted (pause(), element removed, source swapped): a normal stop, not a failure.
           // A user pause stays paused; any other interruption ends the utterance so a queue moves on.
           if (name === "AbortError") {
-            cleanup();
-            if (!paused) h.onEnd();
+            if (!paused && settle()) h.onEnd();
             return;
           }
           if (name === "NotAllowedError") return fail({ kind: "playback", message: "The browser blocked audio until you interact with the page. Press play again." });
@@ -378,7 +388,11 @@ function createRemoteTtsUnguarded(deps: RemoteTtsDeps): TtsEngine {
           if (audio !== null) return fail({ kind: "playback", message: "The audio could not be played." });
           fail({ kind: "network", message: `Could not reach Cortex for speech${causeMessage(cause) ? `: ${causeMessage(cause)}` : "."}` });
         }
-      })();
+      })().catch((cause: unknown) => {
+        // Safety net: nothing thrown in here (a handler, a fake, the browser) is ever an unhandled
+        // rejection. An interruption is a normal stop; anything else reports once as a playback problem.
+        if (!isAbortError(cause)) fail({ kind: "playback", message: "The audio could not be played." });
+      });
       return {
         pause: () => {
           paused = true;
@@ -386,12 +400,15 @@ function createRemoteTtsUnguarded(deps: RemoteTtsDeps): TtsEngine {
         },
         resume: () => {
           paused = false;
-          void audio?.play().catch(() => undefined);
+          if (settled) return;
+          // A pending play() rejects with AbortError when pause() or a swap interrupts it: always handled.
+          void audio?.play().catch((cause: unknown) => {
+            if (!isAbortError(cause)) fail({ kind: "playback", message: "The audio could not be played." });
+          });
         },
         cancel: () => {
           cancelled = true;
-          audio?.pause();
-          cleanup();
+          if (!settle()) audio?.pause();
         },
       };
     },

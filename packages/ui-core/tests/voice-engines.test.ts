@@ -331,7 +331,9 @@ describe("remote TTS", () => {
         this.playing = true;
         this.onplaying?.();
       }
+      pauses = 0;
       pause() {
+        this.pauses += 1;
         this.playing = false;
       }
     }
@@ -390,6 +392,39 @@ describe("remote TTS", () => {
     await tick();
     expect(audios.length).toBe(0);
     expect(events).toEqual([]);
+  });
+
+  test("an AbortError from a play() that is still sounding pauses the element and ends once, even if it later fires 'ended'", async () => {
+    const { engine, audios } = setup(undefined, () => domError("AbortError", "interrupted"));
+    const events: string[] = [];
+    engine.speak("x", {}, { onEnd: () => events.push("end"), onError: (e) => events.push(`error:${e.message}`) });
+    await tick();
+    await tick();
+    const a = audios[0]!;
+    a.playing = true; // the element kept sounding despite the rejection
+    expect(events).toEqual(["end"]);
+    // The utterance is settled: it paused the element and dropped its handlers.
+    expect(a.onended).toBeNull();
+    a.onended?.();
+    a.onerror?.();
+    expect(events).toEqual(["end"]);
+    expect(a.pauses).toBeGreaterThan(0);
+  });
+
+  test("ended then a stray error fire a single callback, and the element is silenced", async () => {
+    const { engine, audios } = setup();
+    const events: string[] = [];
+    engine.speak("x", {}, { onEnd: () => events.push("end"), onError: () => events.push("error") });
+    await tick();
+    await tick();
+    const a = audios[0]!;
+    const ended = a.onended;
+    const failed = a.onerror;
+    ended?.();
+    ended?.();
+    failed?.();
+    expect(events).toEqual(["end"]);
+    expect(a.pauses).toBeGreaterThan(0);
   });
 
   const domError = (name: string, message: string): Error => Object.assign(new Error(message), { name });
