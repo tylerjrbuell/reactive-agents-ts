@@ -64,12 +64,16 @@ export const createGitHubAdapter = (): WebhookAdapter => {
     }),
 
   transform: (req: WebhookRequest) =>
-    Effect.try({
+    isReplay(req.headers["x-github-delivery"])
+      ? Effect.fail(
+          new WebhookTransformError({
+            message: `GitHub transform failed: replayed delivery ${req.headers["x-github-delivery"]}`,
+            source: "github",
+            payload: req.body,
+          }),
+        )
+      : Effect.try({
       try: () => {
-        const deliveryId = req.headers["x-github-delivery"];
-        if (isReplay(deliveryId)) {
-          throw new Error(`replayed delivery ${deliveryId}`);
-        }
         const payload = JSON.parse(req.body);
         const githubEvent = req.headers["x-github-event"] ?? "unknown";
         const action =
