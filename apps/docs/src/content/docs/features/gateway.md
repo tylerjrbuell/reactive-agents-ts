@@ -443,6 +443,7 @@ interface GatewayConfig {
   accessControl?: GatewayAccessControlConfig;
   policies?: PolicyConfig;
   port?: number;                    // Default: 3000
+  queue?: { capacity?: number; overflow?: "drop-oldest" | "drop-newest" };
   persistMemoryAcrossRuns?: boolean; // Share agent ID across ticks for memory continuity
   timezone?: string;                // IANA timezone for cron evaluation (default: "UTC")
 }
@@ -475,9 +476,29 @@ interface GatewayConfig {
 | `allowedSenders` | `string[]` | — | `platform:userId` entries allowed (allowlist mode), e.g. `signal:+15551234567` |
 | `blockedSenders` | `string[]` | — | `platform:userId` entries blocked (blocklist mode) |
 | `unknownSenderAction` | `"skip" \| "escalate"` | `"skip"` | What to do with unauthorized senders |
-| `replyToUnknown` | `string` | — | Fixed reply to allowlist-denied senders. Sent only by the `@reactive-agents/channels` `ChannelService`; the MCP-push path (Signal/Telegram) does not send it |
+| `replyToUnknown` | `string` | — | Fixed reply to allowlist-denied senders. Sent only by the `@reactive-agents/channels` `ChannelService` (native adapters); the legacy MCP-push path does not send it |
 | `mode` | `"chat" \| "task"` | `"chat"` | `"chat"` maintains per-sender conversation history; `"task"` sends one-shot instructions |
 | `sessionTtlDays` | `number` | `30` | Days of inactivity before a chat session is pruned |
+
+### Inbound queue (`queue`)
+
+Events that arrive while the agent is busy, and events the policy engine defers (rate limit, token budget), wait in a bounded in-memory queue. One worker drains it in order, one agent run at a time.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `capacity` | `number` | `100` | Maximum waiting events per list (ready and deferred) |
+| `overflow` | `"drop-oldest" \| "drop-newest"` | `"drop-oldest"` | What to discard when a full queue receives another event |
+
+Every queued, deferred and dropped event is published as a `ProactiveActionSuppressed` event whose `policy` is `inbound-queue:queued`, `inbound-queue:deferred` or `inbound-queue:dropped`. The queue is in memory only: waiting events are lost on restart. Cron fires survive because they replay through the schedule registry.
+
+```typescript
+import { ReactiveAgents } from "@reactive-agents/runtime";
+
+const builder = ReactiveAgents.create()
+  .withName("busy-agent")
+  .withProvider("test")
+  .withGateway({ queue: { capacity: 50, overflow: "drop-newest" } });
+```
 
 ### `GatewaySummary`
 
@@ -503,7 +524,9 @@ Returned by `handle.stop()`:
 
 ## Messaging Channels
 
-The gateway enables agents to communicate via **Signal** and **Telegram** using existing MCP servers in Docker containers. No custom adapter code needed — the framework's `.withMCP()` connects to the messaging servers, and the gateway heartbeat drives message polling.
+Agents talk to **Signal** and **Telegram** through native channel adapters from `@reactive-agents/channels`: `SignalChannelAdapter` (signal-cli JSON-RPC) and `TelegramChannelAdapter` (Bot API, long polling or webhook). Each implements the `ChannelAdapter` contract, so `ChannelService` sends replies itself and gets real delivery receipts instead of relying on the model to call a send tool. Register adapters with `.withChannels({ adapters: [...] })`. The older MCP-server setups (Docker Signal image, Telethon Telegram) still work, but they are the legacy path: no receipts, and the model does the sending.
+
+Webhook-capable adapters (for example Telegram in webhook mode) mount on the gateway ingress server; see [Serving webhooks (ingress)](#serving-webhooks-ingress). To write your own adapter, see the [Channel Adapters guide](/guides/channel-adapters/).
 
 See the [Messaging Channels guide](/guides/messaging-channels/) for setup instructions.
 
@@ -518,6 +541,10 @@ accessControl: {
   replyToUnknown: "Sorry, I only respond to authorized contacts.",
 }
 ```
+
+:::caution[Breaking: senders are `platform:userId`]
+`allowedSenders` and `blockedSenders` entries must carry the platform prefix (`signal:+15551234567`, `telegram:123456789`). A bare `+15551234567` no longer matches a platform-tagged sender, so an old allowlist denies everyone and an old blocklist blocks no one. Prefix every existing entry when you upgrade. A channel event with an empty sender is always denied.
+:::
 
 ### Gateway Chat Mode
 
@@ -563,13 +590,13 @@ const agent = await ReactiveAgents.create()
   .withName("signal-agent")
   .withAgentId("signal-agent")      // stable ID for memory continuity across restarts
   .withProvider("ollama")
-  .withMCP([{ name: "signal", transport: "stdio", command: "docker", args: [...] }])
+  .withChannels({ adapters: [signal] }) // a SignalChannelAdapter, see the Messaging Channels guide
   .withMemory({ tier: "enhanced", dbPath: "./memory.sqlite" })
   .withGateway({
     persistMemoryAcrossRuns: true,
     accessControl: {
       accessPolicy: "allowlist",
-      allowedSenders: [process.env.RECIPIENT ?? ""],
+      allowedSenders: [`signal:${process.env.RECIPIENT ?? ""}`], // platform:userId, not a bare number
       mode: "chat",
       sessionTtlDays: 30,
     },

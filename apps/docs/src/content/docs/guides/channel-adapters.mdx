@@ -1,0 +1,151 @@
+---
+title: Channel Adapters
+description: >-
+  The ChannelAdapter contract every messaging platform implements, the shared
+  building blocks (reconnect, rate limiting, dedupe), and the conformance suite.
+sidebar:
+  order: 30
+---
+
+A channel adapter connects one messaging platform (Signal, Telegram, a webhook, or your own) to an agent. The adapter owns the platform: inbound, outbound, sender identity, receipts and reconnect. The gateway and `ChannelService` only see the normalized shapes below, so no platform-specific code lives in the runtime.
+
+Signal, Telegram and webhook adapters ship in `@reactive-agents/channels`. See [Messaging Channels](/guides/messaging-channels/) to use them. This guide is for writing a new one.
+
+## The contract
+
+```text
+interface ChannelAdapter {
+  id, platform, capabilities
+  inbound:  Stream<InboundEnvelope, ChannelError>   // backpressured
+  state:    Stream<ConnectionState>
+  currentState: Effect<ConnectionState>
+  deliveryUpdates?: Stream<DeliveryUpdate>           // when capabilities.receipts
+  start(): Effect<void, ChannelError, Scope>         // closing the scope disconnects
+  send(message: OutboundMessage): Effect<DeliveryReceipt, ChannelError>
+}
+```
+
+Rules the contract enforces:
+
+- **`inbound` is backpressured.** A slow consumer slows the adapter; messages are not dropped.
+- **`InboundEnvelope.id` is an idempotency key.** The adapter never emits the same id twice. Echoes of the bot's own sends set `isEcho: true`, and `ChannelService` drops them.
+- **Identity is namespaced.** `sender` is `{ platform, userId }`. Access control keys on `platform:userId`, so ids on different platforms never collide.
+- **`send` returns a real receipt** (the platform's message id, with `status` of `sent`, `queued` or `delivered`) or fails with a typed `ChannelError`. Never fabricate an id.
+- **Errors are typed.** `ChannelError.kind` is one of `auth`, `rate_limited`, `not_found`, `forbidden`, `too_large`, `unsupported`, `network`, `unknown`. `rate_limited` and `network` are retryable. The message is generic by design: the raw platform error goes in `cause` and is never logged or published, because it can contain URLs and tokens.
+- **Secrets are `Redacted`** (or read from env or a key store) and never appear in errors, receipts, state or logs.
+- **`capabilities` are honest.** Declare `threads`, `attachments`, `markdown`, `receipts`, `groups` and the size limits so callers degrade instead of guessing.
+
+## Shared building blocks
+
+Do not re-invent these. They are exported from `@reactive-agents/channels`.
+
+| Helper | What it gives you |
+|--------|-------------------|
+| `makeConnectionState()` | An observable `ConnectionState` (`state`, `current`, `set`), `disconnected` until you set it |
+| `withReconnect(adapterId, open, conn, schedule?)` | Turns "open a connection and stream from it" into a stream that survives drops. A retryable error sets `reconnecting` and reopens with backoff (default: exponential from 500 ms, capped at 30 s). A non-retryable error such as `auth` sets `failed` and stops, because retrying a bad credential only hammers the platform. `open` must resume from your cursor so a reconnect neither loses nor repeats messages |
+| `makeOutboundRateLimiter(max, window)` | Wraps an effect so at most `max` run per sliding `window`. Excess sends wait; they are never dropped |
+| `makeInboundDedupe(capacity?)` | A bounded "seen this id" check (default 1024, oldest evicted). Returns `true` the first time, `false` on a repeat |
+| `classifyChannelFailure(adapter, cause)` | Maps a thrown error (network codes and so on) to a `ChannelError` |
+
+## A minimal adapter
+
+This in-memory adapter has no real platform behind it. It shows where each piece goes.
+
+```typescript
+import { Effect, Queue, Stream } from "effect";
+import {
+  channelError,
+  makeConnectionState,
+  makeInboundDedupe,
+  makeOutboundRateLimiter,
+  type ChannelAdapter,
+  type DeliveryReceipt,
+  type InboundEnvelope,
+  type OutboundMessage,
+} from "@reactive-agents/channels";
+
+export interface MemoryAdapter extends ChannelAdapter {
+  /** Test hook: pretend the platform delivered a message. */
+  readonly receive: (id: string, userId: string, text: string) => Effect.Effect<void>;
+  readonly sent: () => readonly OutboundMessage[];
+}
+
+export const makeMemoryAdapter = (id = "memory"): MemoryAdapter => {
+  const inboundQueue = Effect.runSync(Queue.bounded<InboundEnvelope>(256));
+  const conn = Effect.runSync(makeConnectionState());
+  const limited = Effect.runSync(makeOutboundRateLimiter(10, "1 second"));
+  const firstSeen = makeInboundDedupe();
+  const outbox: OutboundMessage[] = [];
+  let counter = 0;
+
+  return {
+    id,
+    platform: "memory",
+    capabilities: {
+      threads: false,
+      attachments: false,
+      markdown: false,
+      receipts: false,
+      groups: false,
+    },
+    inbound: Stream.fromQueue(inboundQueue),
+    state: conn.state,
+    currentState: conn.current,
+    start: () => conn.set({ status: "connected" }),
+    send: (message: OutboundMessage) =>
+      message.text.length === 0
+        ? Effect.fail(channelError(id, "unsupported", { message: "empty message" }))
+        : limited(
+            Effect.sync((): DeliveryReceipt => {
+              outbox.push(message);
+              counter += 1;
+              return {
+                messageId: `${id}-${counter}`,
+                adapterId: id,
+                platform: "memory",
+                status: "sent",
+                sentAt: Date.now(),
+              };
+            }),
+          ),
+    receive: (msgId, userId, text) =>
+      firstSeen(msgId)
+        ? Queue.offer(inboundQueue, {
+            id: msgId,
+            conversation: { channelId: userId, isGroup: false },
+            sender: { platform: "memory", userId },
+            text,
+            attachments: [],
+            mentionsSelf: true,
+            isEcho: false,
+            receivedAt: Date.now(),
+          }).pipe(Effect.asVoid)
+        : Effect.void,
+    sent: () => outbox,
+  };
+};
+```
+
+A real adapter replaces `receive` with a platform connection. Wrap the connection in `withReconnect` so drops reconnect and a bad credential stops cleanly:
+
+```text
+inbound = withReconnect(id, openPlatformStream(cursor), conn)
+```
+
+Register an adapter with `.withChannels({ adapters: [adapter] })`. `ChannelService` consumes `inbound`, applies access control, runs the agent and sends the reply through `adapter.send`.
+
+## Conformance suite
+
+Every shipped adapter passes one shared suite, `runAdapterConformance`, in `packages/channels/tests/conformance/` of the Reactive Agents repository. It is test code in the repo, not a published export. If you contribute an adapter, add a harness (a fake platform with no network and no tokens) and call:
+
+```text
+runAdapterConformance("MyAdapter", makeMyHarness)
+```
+
+The suite checks inbound normalization, idempotency, echo handling, group and thread identity, attachments, receipts, typed errors, secret redaction, namespaced identity, honest connection state, backpressure, outbound rate limiting and reconnect. A case that cannot apply (a stateless webhook has no connection to drop) is skipped by name with a stated reason, so skips show in the test output. If you keep an adapter outside the repo, copy the cases you can and treat the list above as your checklist.
+
+## What's Next
+
+- [Messaging Channels](/guides/messaging-channels/): the shipped Signal and Telegram adapters
+- [Agent Gateway](/features/gateway/): access control, ingress and the inbound queue
+- [Deploying Agents](/guides/deploying-agents/): run the adapter-backed agent unattended

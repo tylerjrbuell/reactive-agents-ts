@@ -147,10 +147,18 @@ const summary = await handle.stop();
 // summary.cronChecks       — number of cron-triggered runs
 ```
 
+### Durability and delivery
+
+- Cron fires are durable: the schedule registry catches up after downtime (default `fire-once`) and re-offers a fire that was mid-run when the process died, so the report instruction above must be safe to run twice.
+- Waiting webhook or channel events sit in a bounded in-memory queue. Tune it with `queue: { capacity, overflow }` in `.withGateway()`; its contents are lost on restart.
+- Webhook ingress listens on `127.0.0.1:3000` by default. Put a TLS reverse proxy in front of it.
+- To alert through Signal or Telegram, register a native adapter with `.withChannels({ adapters: [...] })` and allowlist senders as `platform:userId` (for example `telegram:123456789`).
+- To run it unattended, `rax deploy up --target fly` (daemon mode keeps the machine always on). See the Deploying Agents guide.
+
 ## Pitfalls
 
 - `.start()` returns a handle — you must call `handle.stop()` before `process.exit()` or the Node process will not exit cleanly
-- Webhook `secret` mismatch causes all webhook events to be silently rejected — verify the secret matches what the external service sends
+- Webhook `secret` mismatch (or a missing secret) rejects every request with 401 — verify the secret matches what the external service sends
 - `policy: "adaptive"` skips when the agent decides there's nothing to do — the agent itself determines this, so system prompt guidance matters
 - `dailyTokenBudget` resets at midnight in the configured `timezone` — ensure timezone is set correctly for your use case
 - `maxConcurrentSkips` is a safety net — without it, an adaptive agent can skip indefinitely if the monitored service is always healthy

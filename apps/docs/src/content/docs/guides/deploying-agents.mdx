@@ -1,0 +1,91 @@
+---
+title: Deploying Agents
+description: >-
+  Ship an agent to Fly.io, Railway, Render or Google Cloud Run with `rax deploy`:
+  daemon and SDK modes, name rules, the authenticated Cloud Run default, and the
+  Render blueprint steps.
+sidebar:
+  order: 29
+---
+
+`rax deploy` scaffolds a Dockerfile and the provider's config file, then runs the provider's CLI. It does not run your tests or guess your secrets: you set API keys in the provider after the first deploy.
+
+```bash
+rax deploy up --target fly --dry-run   # check prerequisites, change nothing
+rax deploy up --target fly             # scaffold + deploy
+rax deploy status                      # target is auto-detected from config files
+rax deploy logs -f
+rax deploy down
+```
+
+## Targets
+
+| Target | Config file | How it deploys |
+|--------|-------------|----------------|
+| `local` (default) | `docker-compose.yml` | Docker Compose on this machine |
+| `fly` | `fly.toml` | `flyctl` |
+| `railway` | `railway.json` | `railway up` (links the project first if needed) |
+| `render` | `render.yaml` | Git push to a connected repo; the CLI only validates the blueprint |
+| `cloudrun` | `cloudbuild.yaml` | `gcloud run deploy --source .` |
+| `digitalocean` | App Platform spec | `doctl` (`--gpu` adds a GPU Droplet with Ollama) |
+
+`--scaffold-only` writes the files and prints the next steps without deploying. If you omit `--target`, the command detects it from files already in the directory.
+
+## Modes
+
+| Mode | What runs | Use for |
+|------|-----------|---------|
+| `daemon` (default) | The full agent with the gateway loop: heartbeat, cron, channels | Always-on agents |
+| `sdk` | A light HTTP server: `POST /chat` and SSE `/chat/stream` | Request-driven agents |
+
+Both expose a health endpoint on port 3000 (`HEALTH_PORT`). The provider settings follow the mode, because a daemon that is stopped between requests misses its cron fires:
+
+- **Fly.io.** Daemon sets `auto_stop_machines = "off"` and `min_machines_running = 1`. SDK mode may scale to zero.
+- **Cloud Run.** Daemon adds `--min-instances=1` and `--no-cpu-throttling` so CPU stays allocated between requests.
+- **Render.** Daemon needs an always-on instance. Use the `starter` plan or higher; free web services spin down when idle.
+
+## Naming
+
+`--name` becomes the app or service name (`raxd-<name>`) and appears in generated files, so it is validated, not rewritten:
+
+```text
+/^[a-z0-9][a-z0-9-]{0,40}$/
+```
+
+Lowercase letters, digits and `-`, starting with a letter or digit, at most 41 characters. An invalid `--name` stops the command with an error. When you omit `--name`, the name comes from `package.json` (or the directory) and is slugified to fit.
+
+## Google Cloud Run: authenticated by default
+
+The deployed service uses `--no-allow-unauthenticated`. Callers need an IAM identity:
+
+```bash
+curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" https://<service-url>/health
+```
+
+To make the API public, opt out explicitly:
+
+```bash
+rax deploy up --target cloudrun --allow-unauthenticated
+```
+
+That flag makes the whole agent API reachable by anyone with the URL. Do it only when something else (your own auth, a gateway) protects the agent.
+
+Set secrets after the deploy, for example with `gcloud run services update raxd-<name> --set-secrets ANTHROPIC_API_KEY=anthropic-key:latest`.
+
+## Render: blueprint steps
+
+Render has no CLI command that creates a service from a blueprint. `rax deploy up --target render` scaffolds `render.yaml` and the Dockerfile, validates the blueprint if the `render` CLI is installed, and prints these steps:
+
+1. Commit `render.yaml` and the Dockerfile, and push to GitHub, GitLab or Bitbucket.
+2. Open the Render dashboard Blueprints page and choose **New Blueprint Instance**.
+3. Connect the repo. Render reads `render.yaml` and creates the service.
+4. Set `ANTHROPIC_API_KEY` (and `TAVILY_API_KEY` if you use web search) in the dashboard.
+
+Later pushes to the tracked branch deploy automatically (`autoDeploy: true`). `rax deploy down` cannot delete a Render service; delete it in the dashboard.
+
+## Before you deploy a gateway agent
+
+- Read the [Production Checklist](/guides/production-checklist/).
+- Put sender allowlists on any channel the agent listens to, as `platform:userId` entries. See [Agent Gateway](/features/gateway/).
+- Gateway webhook ingress binds `127.0.0.1` by default and is meant to sit behind a reverse proxy that terminates TLS. See [Serving webhooks](/features/gateway/#serving-webhooks-ingress).
+- Waiting events in the gateway's inbound queue are in memory and lost on restart; scheduled fires are replayed by the schedule registry. Make scheduled instructions safe to repeat.

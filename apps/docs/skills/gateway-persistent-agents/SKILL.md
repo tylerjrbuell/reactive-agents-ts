@@ -110,9 +110,44 @@ webhooks: [
     events: ["push", "pull_request"],
   },
 ]
-// Gateway starts an HTTP server on gateway.port (default: varies — check builder docs)
+// Gateway starts an HTTP ingress server on gateway.port (default 3000), bound to 127.0.0.1
 // Incoming webhooks are normalized and passed as tasks to the agent
 ```
+
+Ingress is fail-closed: POST only (405), bodies over 1 MiB get 413, a sender that stalls the body for 10 s gets 408, more than 64 in-flight requests get 503, a webhook with no secret refuses every request, and a bad signature is 401. Put a reverse proxy with TLS in front of a public URL.
+
+### Durable schedules
+
+Every `crons` entry lives in a `ScheduleRegistry` (stable id, `nextFireAt`, `lastRun`, per-fire history of the last 20 runs). Give the registry a SQLite `path` and schedules survive restarts:
+
+- Catch-up after downtime follows each schedule's `catchUp` policy: `skip`, `fire-once` (default, runs the most recent missed fire once) or `fire-all` (oldest first, at most `maxFires`).
+- A fire is saved as `running` before it executes. If the process dies mid-run, the next start re-offers it under the same `fireId`, so delivery is at-least-once: write scheduled instructions that are safe to repeat.
+- On every start, config-declared schedules take `priority` from the config again; a runtime pause survives unless the config's `enabled` changed.
+
+### Inbound queue
+
+Events that arrive while the agent is busy, or that the policy engine defers, wait in a bounded in-memory queue:
+
+```ts
+.withGateway({
+  queue: { capacity: 100, overflow: "drop-oldest" },  // or "drop-newest"
+})
+```
+
+Waiting events are lost on restart (cron fires replay through the registry). Drops are published as `ProactiveActionSuppressed` with `policy: "inbound-queue:dropped"`.
+
+### Messaging channels
+
+Signal and Telegram use native adapters from `@reactive-agents/channels` (`SignalChannelAdapter`, `TelegramChannelAdapter`), registered with `.withChannels({ adapters: [...] })`, not MCP servers. Restrict who can talk to the agent with `accessControl`, and prefix every sender with its platform:
+
+```ts
+accessControl: {
+  accessPolicy: "allowlist",
+  allowedSenders: ["signal:+15551234567", "telegram:123456789"],  // platform:userId
+}
+```
+
+A bare `+15551234567` no longer matches, so an unprefixed allowlist denies everyone.
 
 ### Policy engine
 
@@ -158,7 +193,10 @@ When `persistMemoryAcrossRuns: true`, the agent reuses the same stable `agentId`
 | `policies.dailyTokenBudget` | `number` | Hard token cap per day |
 | `policies.maxActionsPerHour` | `number` | Rate limit for proactive actions |
 | `policies.requireApprovalFor` | `string[]` | Tools requiring human approval |
-| `port` | `number` | HTTP port for webhook server |
+| `port` | `number` | HTTP port for webhook ingress (default 3000, binds 127.0.0.1) |
+| `queue.capacity` | `number` | Waiting events per list in the inbound queue (default 100) |
+| `queue.overflow` | `"drop-oldest"\|"drop-newest"` | What to discard when the queue is full (default `drop-oldest`) |
+| `accessControl.allowedSenders` / `blockedSenders` | `string[]` | `platform:userId` entries, e.g. `signal:+15551234567` |
 
 ## GatewaySummary (from `handle.stop()`)
 
@@ -184,7 +222,7 @@ type GatewayState = {
 
 Inspect state at runtime: `const status = await agent.gatewayStatus()`
 
-For a complete guide to state tracking, policy evaluation, and how state drives decisions, see the [Gateway State Tracking Reference](../../../../docs/gateway-state-tracking.md).
+For policy evaluation, ingress, schedules and channels in depth, see the [Agent Gateway guide](https://docs.reactiveagents.dev/features/gateway/).
 
 ## Pitfalls
 
@@ -193,6 +231,7 @@ For a complete guide to state tracking, policy evaluation, and how state drives 
 - Heartbeat `intervalMs` default is 60,000ms (1 min) — set a longer interval for agents that don't need frequent checks
 - Cron expressions follow standard 5-field format (`min hour dom month dow`) — verify with a cron parser before deploying
 - `policies.dailyTokenBudget` resets at midnight in the `timezone` specified — ensure timezone is set correctly
-- Webhook secrets must match what the external service sends — mismatch causes all webhook events to be rejected silently
+- Webhook secrets must match what the external service sends — a mismatch (or a missing secret) rejects every request with 401 and never reaches the agent
+- `allowedSenders` / `blockedSenders` entries need the `platform:` prefix; bare ids silently match nobody
 - `persistMemoryAcrossRuns: true` requires `.withMemory()` with a persistent database (e.g., SQLite) to be useful — otherwise memory tiers default to in-memory and still get wiped between runs
 - `consecutiveHeartbeatSkips` is adaptive-mode only — "always" and "conservative" modes don't use it (no skipping to reset)

@@ -1,17 +1,52 @@
 ---
 title: Messaging Channels
 description: >-
-  Connect agents to Signal (Docker MCP in this repo) and Telegram (upstream MCP
-  via uv or your own runner).
+  Connect agents to Signal and Telegram with native channel adapters (delivery
+  receipts, typed errors, reconnect), or the legacy MCP-server setups.
 sidebar:
   order: 19
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
-Reactive Agents can send and receive messages on **Signal** and **Telegram** using MCP servers wired through `.withMCP()` and `.withGateway()`. **Signal** ships as a hardened **Docker image** in this repo because there is no maintained third-party MCP with the same behavior. **Telegram** uses the community **[chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)** project — run it with **`uvx`**, a local clone, or your own container; we do **not** publish a Telegram image from this monorepo.
+Reactive Agents sends and receives messages on **Signal** and **Telegram** through **native channel adapters** from `@reactive-agents/channels`. An adapter owns its platform: inbound messages, outbound sends, sender identity, delivery receipts and reconnect. `ChannelService` consumes it, applies access control, runs the agent and sends the reply itself, so every reply has a real platform message id (or a typed `ChannelError`) instead of depending on the model to call a send tool.
 
-## How It Works
+| Platform | Native adapter | Transport |
+|----------|----------------|-----------|
+| Signal | `SignalChannelAdapter` | `signal-cli` JSON-RPC (daemon socket or spawned process) |
+| Telegram | `TelegramChannelAdapter` | Bot API with a BotFather token (long polling or webhook) |
+| HTTP | `WebhookChannelAdapter` | HMAC-signed webhook requests |
+
+See [Signal (native)](#signal-native) and [Telegram (bot)](#telegram-bot) for setup, then register the adapters:
+
+```typescript
+import { Redacted } from "effect";
+import { ReactiveAgents } from "@reactive-agents/runtime";
+import { TelegramChannelAdapter } from "@reactive-agents/channels";
+
+const telegram = new TelegramChannelAdapter({
+  token: Redacted.make(process.env.TELEGRAM_BOT_TOKEN ?? ""),
+});
+
+const builder = ReactiveAgents.create()
+  .withName("telegram-agent")
+  .withProvider("anthropic")
+  .withChannels({ adapters: [telegram] })
+  .withGateway({
+    accessControl: {
+      accessPolicy: "allowlist",
+      allowedSenders: ["telegram:123456789"], // platform:userId
+    },
+  });
+```
+
+To write an adapter for another platform, see the [Channel Adapters guide](/guides/channel-adapters/). To run the agent unattended, see [Deploying Agents](/guides/deploying-agents/).
+
+## Legacy: MCP servers
+
+The two MCP setups below predate the adapters. They still work, but the agent reads and replies by calling MCP tools, so there are no delivery receipts, and Signal echoes are detected by message text. **Signal** ships as a Docker image in this repo (`docker/signal-mcp/`). **Telegram** uses the community **[chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)** personal-account client, run with `uvx`, a local clone or your own container; this monorepo publishes no Telegram image. Prefer the native adapters for new work.
+
+### How the MCP path works
 
 ```
 Gateway heartbeat fires every N seconds
@@ -20,13 +55,11 @@ Gateway heartbeat fires every N seconds
   → Responds via send_message MCP tool
 ```
 
-The **Signal** MCP server is a custom TypeScript implementation (`docker/signal-mcp/server/`) that spawns signal-cli in persistent `jsonRpc` mode — a single JVM boot with instant command execution (no cold starts per message). It is the supported way to attach Signal to the gateway.
+The **Signal** MCP server is a TypeScript implementation (`docker/signal-mcp/server/`) that spawns signal-cli in persistent `jsonRpc` mode (one JVM boot, no cold start per message). Signal can also push `notifications/message` for faster inbound handling.
 
-**Telegram:** use **[chigwell/telegram-mcp](https://github.com/chigwell/telegram-mcp)** directly. Plain `pip install telegram-mcp` / `uvx telegram-mcp` **without** `--from` pointing at chigwell’s sources often resolves to a **different** PyPI project (hosted relay) that expects `TELEGRAM_CHAT_ID` — not the Telethon user MCP described here.
+**Telegram:** plain `pip install telegram-mcp` / `uvx telegram-mcp` **without** `--from` pointing at chigwell’s sources often resolves to a **different** PyPI project (hosted relay) that expects `TELEGRAM_CHAT_ID`, not the Telethon user MCP described here. Telegram on this path relies on polling tools.
 
-The gateway heartbeat (or webhooks) drives when the agent runs; the agent uses MCP tools to read and respond. Signal can also push `notifications/message` for faster inbound handling; Telegram typically relies on polling tools unless you add a separate relay.
-
-## Signal Setup
+## Signal Setup (legacy MCP path)
 
 ### 1. Build the Docker Image
 
@@ -289,7 +322,7 @@ const accessControl = {
 - Entries **must** carry the platform prefix (`signal:+1555...`). A bare `+1555...` no longer matches a platform-tagged sender; update existing allow/block lists when you upgrade.
 - A channel event with an **empty sender** is always denied (fail closed), even under `"open"`.
 - `unknownSenderAction: "escalate"` surfaces the denied sender instead of silently skipping.
-- `replyToUnknown` (a fixed text sent to an allowlist-denied sender) is only delivered by the `@reactive-agents/channels` `ChannelService` (`deps.replyToUnknown`). The MCP-push path used by the Signal and Telegram setups above has no deterministic send step, so it does **not** send that reply today.
+- `replyToUnknown` (a fixed text sent to an allowlist-denied sender) is only delivered by the `@reactive-agents/channels` `ChannelService` (`deps.replyToUnknown`), which the native adapters use. The legacy MCP-push path has no deterministic send step, so it does **not** send that reply.
 
 ### Guardrails
 

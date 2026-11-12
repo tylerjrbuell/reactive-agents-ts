@@ -240,6 +240,10 @@ export default defineConfig({
                             label: 'Messaging Channels',
                             link: 'guides/messaging-channels/',
                         },
+                        {
+                            label: 'Channel Adapters',
+                            link: 'guides/channel-adapters/',
+                        },
                         { label: 'Gateway', link: 'features/gateway/' },
                         {
                             label: 'A2A Protocol',
@@ -261,6 +265,10 @@ export default defineConfig({
                         {
                             label: 'Production Checklist',
                             link: 'guides/production-checklist/',
+                        },
+                        {
+                            label: 'Deploying Agents',
+                            link: 'guides/deploying-agents/',
                         },
                         {
                             label: 'Durable Execution',
@@ -352,7 +360,25 @@ export default defineConfig({
                             label: 'Verification',
                             link: 'features/verification/',
                         },
-                        { label: 'Cortex Studio', link: 'features/cortex/' },
+                        {
+                            label: 'Cortex Studio',
+                            collapsed: true,
+                            items: [
+                                { label: 'Overview', link: 'features/cortex/' },
+                                { label: 'Tour', link: 'features/cortex/tour/' },
+                                { label: 'Chat and composer', link: 'features/cortex/chat-and-composer/' },
+                                { label: 'Goals, plans and loops', link: 'features/cortex/goals-plans-loops/' },
+                                { label: 'Run view and traces', link: 'features/cortex/run-view-and-traces/' },
+                                { label: 'Lab builder', link: 'features/cortex/lab-builder/' },
+                                { label: 'Memory and skills', link: 'features/cortex/memory-and-skills/' },
+                                { label: 'Judgments and evals', link: 'features/cortex/judgments-and-evals/' },
+                                { label: 'Approvals and questions', link: 'features/cortex/approvals-and-questions/' },
+                                { label: 'Voice', link: 'features/cortex/voice/' },
+                                { label: 'Settings and keys', link: 'features/cortex/settings-and-keys/' },
+                                { label: 'Local setup recipes', link: 'features/cortex/local-setup-recipes/' },
+                                { label: 'Connect your app', link: 'features/cortex/connect-your-app/' },
+                            ],
+                        },
                         {
                             label: 'Debrief Chat',
                             link: 'features/debrief-chat/',
