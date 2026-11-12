@@ -18,6 +18,7 @@ import type { AgentStreamEvent } from "../stream-types.js";
 import { toOutputSchemaContract, type AnyOutputSchema } from "../engine/finalize/json-schema-contract.js";
 import { deriveObjectFromAnswer } from "../engine/finalize/extract-object.js";
 import { buildSchemaSteering } from "./schema-steering.js";
+import { appendTaskText, type TaskInput } from "./task-input.js";
 
 /** Options-bag mixin: a structured-output schema for one `runStream()` turn. */
 export interface OutputSchemaRunOption {
@@ -43,9 +44,9 @@ export interface OutputSchemaRunOption {
  */
 export async function* runTurnWithSchema(
   schema: AnyOutputSchema | undefined,
-  input: string,
+  input: TaskInput,
   runtime: ManagedRuntime.ManagedRuntime<unknown, never>,
-  start: (input: string) => AsyncGenerator<AgentStreamEvent>,
+  start: (input: TaskInput) => AsyncGenerator<AgentStreamEvent>,
 ): AsyncGenerator<AgentStreamEvent> {
   if (schema === undefined) {
     yield* start(input);
@@ -58,7 +59,7 @@ export async function* runTurnWithSchema(
     yield { _tag: "StreamError", cause: String((e as { message?: unknown }).message ?? e) };
     return;
   }
-  for await (const event of start(`${input}${buildSchemaSteering(contract)}`)) {
+  for await (const event of start(appendTaskText(input, buildSchemaSteering(contract)))) {
     // A paused or failed run has no final answer to type.
     if (event._tag !== "StreamCompleted" || event.status !== undefined || event.success === false) {
       yield event;

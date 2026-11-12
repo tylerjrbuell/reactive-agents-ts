@@ -73,6 +73,7 @@ import {
 import { deriveTaskOutcome, deriveMetadataToolCalls, terminalOutcomeFields } from '../engine/finalize/derive-outcome.js'
 import { isPausedResult } from '../engine/finalize/run-finalize.js'
 import { deriveReceiptModelId } from '../builder/helpers.js'
+import { appendTaskText, preflightTaskInput, taskInputText, toTaskInputPayload, type TaskInput } from './task-input.js'
 import { resolveReceiptSigningKey, signReceipt } from '../receipt-signing.js'
 import { projectAbstention } from '../engine/abstention-projection.js'
 import { extractObjectFromAnswer, parseJsonLoose } from '../engine/finalize/extract-object.js'
@@ -186,16 +187,17 @@ export interface RunTaskDeps {
  */
 export const buildRunTaskEffect = (
     deps: RunTaskDeps,
-    input: string,
+    input: TaskInput,
     options?: RunTaskEffectOptions
 ): Effect.Effect<AgentResult, Error> => {
+    const inputText = taskInputText(input)
     // Per-run workspace: refuse a bad directory before the run starts.
     const workspace = options?.workspace !== undefined ? resolveWorkspaceDir(options.workspace, 'run({ workspace })') : undefined
     if (workspace !== undefined && Either.isLeft(workspace)) return Effect.fail(workspace.left)
 
     // Pre-set the task description so sub-agents spawned on the first iteration
     // have access to the full user prompt (including phone numbers, URLs, etc.)
-    deps.setTaskDescription?.(input.slice(0, 500))
+    deps.setTaskDescription?.(inputText.slice(0, 500))
 
     const taskId = options?.taskId
         ? Schema.decodeSync(TaskId)(options.taskId)
@@ -205,14 +207,14 @@ export const buildRunTaskEffect = (
     // This lets parse-first (below) skip the extra LLM extraction call on the
     // happy path — same pattern used by streamObject.
     const steeredInput = deps.outputSchemaConfig
-        ? `${input}${deps.buildSchemaSteering(deps.outputSchemaConfig.contract)}`
+        ? appendTaskText(input, deps.buildSchemaSteering(deps.outputSchemaConfig.contract))
         : input
 
     const task: Task = {
         id: taskId,
         agentId: Schema.decodeSync(AgentId)(deps.agentId),
         type: 'query' as const,
-        input: { question: steeredInput },
+        input: toTaskInputPayload(steeredInput),
         priority: 'medium' as const,
         status: 'pending' as const,
         metadata: {
@@ -232,7 +234,7 @@ export const buildRunTaskEffect = (
         createdAt: new Date(),
     }
 
-    return deps.engine.execute(task).pipe(
+    return Effect.zipRight(preflightTaskInput(input, deps.config.provider, deps.config.model), deps.engine.execute(task)).pipe(
         Effect.flatMap((result: TaskResult) => {
             const r = result as TaskResult & {
                 format?: OutputFormat
@@ -293,7 +295,7 @@ export const buildRunTaskEffect = (
             // reported on paused runs, matching prior behavior (it falls
             // back to the terminatedBy-only heuristic).
             const outcome = deriveTaskOutcome(r, {
-                task: input,
+                task: inputText,
                 ...((deps.config['requiredTools'] as { tools?: readonly string[] } | undefined)?.tools
                     ? { requiredTools: (deps.config['requiredTools'] as { tools?: readonly string[] }).tools }
                     : {}),

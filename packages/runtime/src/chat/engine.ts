@@ -9,6 +9,7 @@ import { applyHistoryWindow, applyHistoryWindowWithOverflow, type HistoryOverflo
 import { workspaceCarry, type WorkspaceOption } from "../engine/start-run.js";
 import { assistantTurnOf, healShapedAssistantTurns, recordedTurnPair, type AssistantTurn } from "./history-hygiene.js";
 import { assembleToolReply } from "./tool-reply.js";
+import { prependTaskText, taskInputHasMedia, taskInputText, type TaskInput } from "../agent/task-input.js";
 import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TodoCarry, planPosture, originCarry, type OriginOption, type PostureOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
@@ -71,7 +72,7 @@ export interface ChatEngineCapabilities {
    * `ReactiveAgent.run()`. Absent plus a tool request ⇒ typed capability rejection
    * (Task 2 pins the rejection; never a silent fallback to the direct path).
    */
-  readonly runTask?: (input: string, opts: {
+  readonly runTask?: (input: TaskInput, opts: {
     history: readonly ChatMessage[];
     maxIterations?: number;
   } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption & Pick<ChatOptions, "skills">) => Promise<AgentResult>;
@@ -79,7 +80,7 @@ export interface ChatEngineCapabilities {
    * Agentic streaming. Backed by the host's `ReactiveAgent.runStream()`. Required by
    * `streamTurn()`; absent ⇒ typed capability rejection (Task 4).
    */
-  readonly runStreamTask?: (input: string, opts: {
+  readonly runStreamTask?: (input: TaskInput, opts: {
     history: readonly ChatMessage[];
     density?: StreamDensity;
     signal?: AbortSignal;
@@ -350,10 +351,11 @@ export class ChatEngine {
    * recording, publishing payloads, and persistence always run on the FULL
    * unwindowed state.
    */
-  async turn(message: string, options?: TurnOptions): Promise<ChatReply> {
+  async turn(input: TaskInput, options?: TurnOptions): Promise<ChatReply> {
+    const message = taskInputText(input);
     await this.#resolveLoadedHistory();
     const environmentUpdate = await this.#env.begin();
-    if (options?.useTools === true) {
+    if (options?.useTools === true || taskInputHasMedia(input)) {
       if (!this.#deps.runTask) {
         throw new ChatEngineCapabilityError({
           message:
@@ -362,16 +364,16 @@ export class ChatEngine {
         });
       }
       const contextSummary = this.#deps.contextSummary?.(message);
-      const input = [contextSummary ?? "", message].filter(isNonEmpty).join(TURN_INPUT_SEPARATOR);
+      const taskIn = prependTaskText(input, (t) => [contextSummary ?? "", t].filter(isNonEmpty).join(TURN_INPUT_SEPARATOR));
       const history = await this.#historyForPath();
-      const result = await this.#deps.runTask(input, {
+      const result = await this.#deps.runTask(taskIn, {
         history,
         maxIterations: options?.maxIterations,
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? this.#origin),
         ...workspaceCarry(options?.workspace), ...(options?.skills ? { skills: options.skills } : {}),
       });
-      const reply = assembleToolReply(result, options, this.#deps.scratchpadEntries?.() ?? {});
-      const userText = options.recordUserText ?? message, assistant = assistantTurnOf(result);
+      const reply = assembleToolReply(result, options ?? {}, this.#deps.scratchpadEntries?.() ?? {});
+      const userText = options?.recordUserText ?? message, assistant = assistantTurnOf(result);
       this.#recordBothTurns(userText, assistant);
       await this.#publishTurns(result.taskId, "react-loop", userText, assistant, result.metadata.tokensUsed);
       await this.#persistHistory();
@@ -448,13 +450,8 @@ export class ChatEngine {
    *   recording/persistence side effects captured at the terminal event.
    * @throws ChatEngineCapabilityError when `runStreamTask` is not wired.
    */
-  streamTurn(message: string, options?: TurnOptions): RunHandle {
-    /**
-     * `runStreamTask` re-bound to the narrowed (required) capability shape after
-     * the guard: TypeScript does not carry union narrowing of an optional
-     * capability into the nested generator closure below, so the closure reads
-     * this explicitly-typed binding instead.
-     */
+  streamTurn(input: TaskInput, options?: TurnOptions): RunHandle {
+    /** `runStreamTask` re-bound after the guard (TS drops optional-capability narrowing inside the generator closure below). */
     const runStreamTask: NonNullable<ChatEngineCapabilities["runStreamTask"]> | undefined =
       this.#deps.runStreamTask;
     if (!runStreamTask) {
@@ -466,7 +463,7 @@ export class ChatEngine {
     }
     const streamTask = runStreamTask;
     const engine = this;
-    const userText = options?.recordUserText ?? message;
+    const userText = options?.recordUserText ?? taskInputText(input);
     /**
      * Lazily-bound inner handle. Created when the wrapper generator starts
      * iterating (history resolution is async, so `runStreamTask` cannot be
@@ -477,7 +474,7 @@ export class ChatEngine {
       await engine.#resolveLoadedHistory();
       const history = await engine.#historyForPath();
       const environmentUpdate = await engine.#env.begin();
-      const handle = streamTask(message, {
+      const handle = streamTask(input, {
         history,
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? engine.#origin),
         density: options?.density,

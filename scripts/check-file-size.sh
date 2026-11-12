@@ -189,10 +189,11 @@ GIANT_BAR=1000
 # 2026-11-11 skill control API: reactive-agent.ts 2029->2025 (skills delegates condensed to one-line JSDoc, full JSDoc lives in agent/skills-facade.ts; +rollbackSkill/setSkillMode delegates).
 # 2026-11-11 budget event: arbitrator.ts 823->797 (run-meter-aware BudgetSignal derivation moved to decide/budget-signal.ts budgetSignalOfState, shared with the terminal BudgetExhausted publish).
 # 2026-11-11 ollama cloud auth: llm-provider local.ts 1149->1139 (endpoint/key/header resolution delegated to ollama-endpoint.ts resolveOllamaTarget).
+# 2026-11-11 multimodal task input: reactive-agent.ts 2025->2017 (withHistoryBlock moved to agent/history-block.ts, widened to TaskInput; run()/runStream() preflight modality check +4), chat/engine.ts 673->670 (turn/streamTurn take TaskInput; one JSDoc condensed).
 # 2026-11-11 live ask-user rail: act.ts 1124->1098 (request_user_input handling moved to act/user-interaction.ts handleUserInteraction, which also answers inline via RunEnvelope.rails.askUser; the pause terminate() stays in act.ts).
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:2025"
-  "runtime/src/chat/engine.ts:673"
+  "runtime/src/reactive-agent.ts:2017"
+  "runtime/src/chat/engine.ts:670"
   "runtime/src/builder.ts:2200"
   "runtime/src/execution-engine.ts:955"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:797"

@@ -769,6 +769,30 @@ console.log(result.output)
 
 The facade returned by `build()`.
 
+### Multimodal task input
+
+`run()`, `runStream()`, `runEffect()` and `chat()` accept a `TaskInput`: a plain string, or an array of typed content parts (`text`, `image`, `audio`, `file`). A text-only array behaves exactly like the string.
+
+```typescript
+import { ReactiveAgents, modelInputCapabilities } from "reactive-agents";
+
+const agent = await ReactiveAgents.create().withProvider("anthropic").build();
+const pngBase64 = "iVBORw0KGgo="; // your image bytes, base64-encoded
+
+const result = await agent.run([
+  { type: "text", text: "What is in this picture?" },
+  { type: "image", source: { type: "base64", media_type: "image/png", data: pngBase64 } },
+]);
+
+// Ask before you send (Cortex-style attachment pickers):
+const caps = modelInputCapabilities("anthropic", "claude-sonnet-4-6"); // { vision, audioIn?, authoritative }
+```
+
+- Image parts reach the provider request. If the model is known (a probe or the static capability table) not to accept images, the run fails before any model call with `UnsupportedModalityError { partType, model }`. For models the framework only guesses about, the part is sent and a real provider refusal surfaces as an error.
+- Audio fails fast only when `supportsAudioIn` is explicitly `false` for a known model; otherwise the provider layer decides (a stub or the part's `transcript`).
+- `file` parts pass through to the provider layer. Durable runs store the text projection of the task, so a resumed run does not re-send media.
+- `chat()` with media routes the turn through the agentic path (the direct path is text-only).
+
 ### Resource Management
 
 Agents that use MCP servers (stdio transport) or other subprocess-based resources **must be disposed** after use, otherwise the process will hang on open pipes. Three patterns are available:

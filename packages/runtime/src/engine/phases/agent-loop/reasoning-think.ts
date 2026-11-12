@@ -15,7 +15,8 @@ import { describeStrategyCause } from "../../strategy-failure.js";
 import { Effect, FiberRef } from "effect";
 import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
 import { approvalDecisionSlot, getRunSlot, interactionResponseSlot, resumeStateSlot } from "@reactive-agents/core/internal/run-scope";
-import type { Task } from "@reactive-agents/core";
+import type { MessageContent, Task } from "@reactive-agents/core";
+import { taskOriginalContent } from "../../../agent/task-input.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
@@ -221,8 +222,10 @@ export const runReasoningThink = (
     // (Prior chat history is folded into the task text as a labeled reference
     // block by ReactiveAgent.run/runStream — gateway-style — to keep the native
     // FC tool thread clean. It is NOT seeded as separate assistant turns here.)
-    const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[] = [
-      { role: "user", content: extractTaskText(task.input) },
+    // Multimodal: when the task carries non-text parts the seed message is built
+    // from them (agent/task-input.ts); text-only stays a plain string.
+    const initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: MessageContent }[] = [
+      { role: "user", content: taskOriginalContent(task.input, extractTaskText(task.input)) },
     ];
     const effectiveStrategyName = c.selectedStrategy ?? "reactive";
     const effectiveStrategy =

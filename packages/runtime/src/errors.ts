@@ -209,6 +209,19 @@ export class ToolsOptionError extends Data.TaggedError("ToolsOptionError")<{
 }> {}
 
 /**
+ * Raised before any model call when a task carries a part (image, audio) the
+ * resolved model authoritatively cannot take. Never a silent drop.
+ */
+export class UnsupportedModalityError extends Data.TaggedError("UnsupportedModalityError")<{
+  /** Human-readable description. */
+  readonly message: string;
+  /** The offending part kind. */
+  readonly partType: "image" | "audio";
+  /** The model that cannot take it. */
+  readonly model: string;
+}> {}
+
+/**
  * Union of all runtime error types that can be thrown by `agent.run()`.
  *
  * Use this as the error type in Effect pipelines or when calling `agent.run()`
@@ -332,6 +345,12 @@ export function errorContext(error: unknown): ErrorContext {
           details: { option: e.option },
         };
       }
+      case "UnsupportedModalityError": {
+        return {
+          suggestion: `Use a model that accepts ${e.partType} input, or remove the ${e.partType} part (see modelInputCapabilities(provider, model)).`,
+          details: { partType: e.partType, model: e.model },
+        };
+      }
       case "ExecutionError": {
         const rootCause = e.cause instanceof Error ? e.cause.message : String(e.cause ?? "");
         return {
@@ -360,6 +379,7 @@ const KNOWN_TAGS = new Set([
   "BudgetExceededError",
   "ToolDefinitionError",
   "ToolsOptionError",
+  "UnsupportedModalityError",
   "StructuredOutputError",
 ]);
 

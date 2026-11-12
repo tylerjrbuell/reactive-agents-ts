@@ -17,7 +17,8 @@
  */
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import type { Task } from "@reactive-agents/core";
+import type { MessageContent, Task } from "@reactive-agents/core";
+import { taskSeedContent } from "../../../agent/task-input.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -133,7 +134,7 @@ export const runReasoningHarnessHooks = (
 
     // Common request builder for the three "continue working" style hooks.
     const buildExecuteRequest = (
-      initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: string }[],
+      initialMessages: readonly { readonly role: "user" | "assistant"; readonly content: MessageContent }[],
     ): ReasoningExecuteRequest => {
       const request = {
       taskDescription: extractTaskText(task.input),
@@ -195,7 +196,7 @@ export const runReasoningHarnessHooks = (
         customRetries++;
         const retryOutcome = yield* Effect.exit(
           reasoningOpt.value.execute(buildExecuteRequest([
-            { role: "user" as const, content: continuationGoal(extractTaskText(task.input), currentOutput, "Continue working towards the goal.") },
+            { role: "user" as const, content: taskSeedContent(task.input, continuationGoal(extractTaskText(task.input), currentOutput, "Continue working towards the goal.")) },
           ])),
         );
         if (retryOutcome._tag === "Success") {
@@ -230,7 +231,7 @@ export const runReasoningHarnessHooks = (
         if (isEnforcedAbstention(ctx.metadata.reasoningResult)) break;
         const continuationOutcome = yield* Effect.exit(
           reasoningOpt.value.execute(buildExecuteRequest([
-            { role: "user" as const, content: continuationGoal(extractTaskText(task.input), String(ctx.metadata.lastResponse ?? ""), "Continue — ensure thoroughness before finalizing, then give the complete final answer.") },
+            { role: "user" as const, content: taskSeedContent(task.input, continuationGoal(extractTaskText(task.input), String(ctx.metadata.lastResponse ?? ""), "Continue — ensure thoroughness before finalizing, then give the complete final answer.")) },
           ])),
         );
         if (continuationOutcome._tag !== "Success") break;
@@ -327,7 +328,7 @@ export const runReasoningHarnessHooks = (
           // tokens) would change nothing.
           if (needsRevision) {
             const req = buildExecuteRequest([
-              { role: "user" as const, content: continuationGoal(extractTaskText(task.input), outputToVerify, `A reviewer found a gap. Revise the answer to address it:\n${verifyContent}`) },
+              { role: "user" as const, content: taskSeedContent(task.input, continuationGoal(extractTaskText(task.input), outputToVerify, `A reviewer found a gap. Revise the answer to address it:\n${verifyContent}`)) },
             ]);
             delete (req as Record<string, unknown>).calibration;
             const reviseOutcome = yield* Effect.exit(reasoningOpt.value.execute(req));
@@ -365,7 +366,7 @@ export const runReasoningHarnessHooks = (
         validatorRetries++;
         const feedback = validation.feedback ?? "The previous response did not meet requirements. Please revise.";
         const req = buildExecuteRequest([
-          { role: "user" as const, content: continuationGoal(extractTaskText(task.input), currentOutput, feedback) },
+          { role: "user" as const, content: taskSeedContent(task.input, continuationGoal(extractTaskText(task.input), currentOutput, feedback)) },
         ]);
         // Output-validator path historically omits `calibration` from the request.
         delete (req as Record<string, unknown>).calibration;

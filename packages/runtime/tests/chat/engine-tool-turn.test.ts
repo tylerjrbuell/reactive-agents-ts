@@ -36,7 +36,7 @@ describe("ChatEngine tool path (engine plan Task 2)", () => {
       {
         complete: async () => ({ message: "unused" }),
         runTask: async (input, opts) => {
-          seen.push({ input, history: opts.history });
+          seen.push({ input: input as string, history: opts.history });
           return toolResult("did it");
         },
         publishTurn: async (t) => {

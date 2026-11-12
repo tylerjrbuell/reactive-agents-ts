@@ -3,6 +3,7 @@ import { healShapedAssistantTurns } from "./chat/history-hygiene.js";
 import type { AgentResult } from "./builder/types.js";
 import type { ChatTurnEvent } from "@reactive-agents/core";
 import type { ChatEngine } from "./chat/engine.js";
+import { taskInputText, type TaskInput } from "./agent/task-input.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -211,14 +212,14 @@ export class GatewayChatManager {
       return legacy?.messages ?? [];
     };
     const runTask = async (
-      input: string,
+      input: TaskInput,
       _opts: { history: readonly ChatMessage[]; maxIterations?: number },
     ): Promise<AgentResult> => {
       const gwEvent = this.currentEvents.get(sender);
       const platform = this.currentPlatforms.get(sender) ?? "";
       let runOutput: string;
       try {
-        const output = await this.deps.executeEvent(gwEvent, "channel", input);
+        const output = await this.deps.executeEvent(gwEvent, "channel", taskInputText(input));
         runOutput = output ?? `(reply sent via ${platform})`;
       } catch (err) {
         runOutput = `(error: ${err instanceof Error ? err.message : String(err)})`;

@@ -75,6 +75,12 @@ export {
   DurableRunNotFoundError,
   DurableConfigMismatchError,
 
+  // Multimodal task input (`agent.run([textPart, imagePart])`)
+  UnsupportedModalityError,
+  modelInputCapabilities,
+  taskInputText,
+  taskInputParts,
+
   // Structured output
   StructuredOutputError,
   OutputSchemaError,
@@ -88,6 +94,8 @@ export {
 
 export type {
   AgentResult,
+  TaskInput,
+  ModelInputCapabilities,
   AgentResultMetadata,
   AgentOutcome,
   StrategySwitchRecord,

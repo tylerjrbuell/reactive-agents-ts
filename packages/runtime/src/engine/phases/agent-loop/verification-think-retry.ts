@@ -16,7 +16,7 @@
  */
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import type { Task } from "@reactive-agents/core";
+import type { MessageContent, Task } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { absorbedLedgerMetadata } from "../../run-ledger-scope.js";
@@ -114,7 +114,7 @@ export const runVerificationThinkRetry = (
         temperature: (config.temperature ??
           config.contextProfile?.temperature) as number | undefined,
         environmentContext: config.environmentContext as Record<string, string> | undefined,
-        initialMessages: c.messages as readonly { readonly role: "user" | "assistant"; readonly content: string }[],
+        initialMessages: c.messages as readonly { readonly role: "user" | "assistant"; readonly content: MessageContent }[],
         calibration: resolvedCalibration,
         // Cross-cutting cascade (2026-07-22) — this retry re-runs the REAL task
         // (`taskDescription` is the task, the verifier feedback rides

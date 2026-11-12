@@ -58,6 +58,7 @@
  */
 
 import { Effect, Option } from 'effect'
+import type { TaskInput } from './task-input.js'
 import { ManagedRuntime } from 'effect'
 import { toolEffectIdentityKey } from '@reactive-agents/core'
 import type { EffectReceiptRecord, ToolEffectRecord } from '@reactive-agents/core'
@@ -191,7 +192,7 @@ const NOT_WAITING_HERE = (what: string): string =>
  * `reactive-agent.ts` because `run()` shares it; it takes this type).
  */
 export interface RunDurableParams {
-    readonly input: string
+    readonly input: TaskInput
     readonly taskId?: string
     readonly runId: string
     readonly task: string
@@ -225,7 +226,7 @@ export interface DurableFacadeDeps {
      * view here is `never`.
      */
     readonly runtime: ManagedRuntime.ManagedRuntime<never, never>
-    readonly buildRunTaskEffect: (input: string, options?: {
+    readonly buildRunTaskEffect: (input: TaskInput, options?: {
         readonly taskId?: string
         readonly durableRunId?: string
         readonly forkedFrom?: string

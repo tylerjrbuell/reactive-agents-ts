@@ -21,6 +21,7 @@ import type { ChatEngineCapabilities, ChatEngineOptions } from '../chat/engine.j
 import type { ChatMessage, SessionOptions } from '../chat.js'
 import type { AgentResult } from '../builder/types.js'
 import { runFacadeEffect } from './run-facade-effect.js'
+import type { TaskInput } from './task-input.js'
 
 /** The services the chat capabilities run against (contravariant: any richer runtime fits). */
 type ChatRuntime = ManagedRuntime.ManagedRuntime<LLMService | EventBus, never>
@@ -168,7 +169,7 @@ const turnRunOptions = (opts: TurnRunOptions | undefined): TurnRunOptions => ({
  */
 export const makeSessionRunTask =
     (
-        run: (input: string, o: { history?: ChatMessage[]; maxIterations?: number } & TurnRunOptions) => Promise<AgentResult>,
+        run: (input: TaskInput, o: { history?: ChatMessage[]; maxIterations?: number } & TurnRunOptions) => Promise<AgentResult>,
     ): NonNullable<ChatEngineCapabilities['runTask']> =>
     (input, opts) =>
         run(input, {
@@ -181,7 +182,7 @@ export const makeSessionRunTask =
 export const makeSessionRunStreamTask =
     (
         runStream: (
-            input: string,
+            input: TaskInput,
             o: { history?: ChatMessage[]; density?: StreamDensity; signal?: AbortSignal; initialTodo?: readonly TodoSeedItem[] } & TurnRunOptions,
         ) => RunHandle,
     ): NonNullable<ChatEngineCapabilities['runStreamTask']> =>

@@ -73,22 +73,10 @@ import {
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
 import { RunController, installDurableCheckpointing, type RunHandle } from './run-controller.js'
 import { RunStoreLive } from './services/run-store.js'
-import { applyHistoryWindow, formatHistoryBlock } from './gateway-context-formatting.js'
-
-/**
- * Fold prior conversation turns into the task as a labeled reference block —
- * the same presentation the gateway uses (gateway-context-formatting.ts). This
- * keeps the kernel's native-FC tool thread clean: seeding plain-text prior
- * "assistant" final-answers directly into `state.messages` made the model treat
- * them as its own tool-orchestration turns and re-run tools / conflate context.
- * History as labeled text in the task avoids that while staying history-aware.
- */
-export const withHistoryBlock = (input: string, history?: readonly ChatMessage[]): string => {
-    if (!history || history.length === 0) return input
-    const block = formatHistoryBlock(applyHistoryWindow(history))
-    if (!block) return input
-    return `${block}\n\n--- Current message ---\n${input}`
-}
+import { checkTaskInputModality, taskInputText, toTaskInputPayload, type TaskInput } from './agent/task-input.js'
+import { withHistoryBlock } from './agent/history-block.js'
+// withHistoryBlock lives in agent/history-block.ts (multimodal-aware); re-exported for existing importers.
+export { withHistoryBlock }
 // The abstention projection moved to `engine/abstention-projection.ts` so the
 // STREAMING path can share it. It used to live only here, which is why
 // `StreamCompleted.abstention` was declared and never written.
@@ -718,7 +706,7 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     async run(
-        input: string,
+        input: TaskInput,
         options?: {
             readonly taskId?: string
             readonly history?: readonly ChatMessage[]
@@ -745,6 +733,8 @@ export class ReactiveAgent<TOut = unknown> {
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
         // ("All fibers interrupted without errors") on first execution (e.g. with Cortex + reasoning).
+        const unsupported = checkTaskInputModality(input, this.config.provider, this.config.model)
+        if (unsupported) throw unsupported // typed, before any run state exists
         const taskInput = withHistoryBlock(input, options?.history)
         const taskIdOpt = {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
@@ -768,7 +758,7 @@ export class ReactiveAgent<TOut = unknown> {
                 ? await this.runDurable({
                       input: taskInput,
                       runId: crypto.randomUUID(),
-                      task: taskInput,
+                      task: taskInputText(taskInput),
                       ...(options?.taskId ? { taskId: options.taskId } : {}), ...workspaceCarry(options?.workspace),
                   })
                 : await this.runtime.runPromise(
@@ -1058,7 +1048,7 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     runEffect(
-        input: string,
+        input: TaskInput,
         options?: { readonly taskId?: string } & WorkspaceOption
     ): Effect.Effect<AgentResult, Error> {
         const pipeline = this.buildRunTaskEffect(input, options)
@@ -1205,7 +1195,7 @@ export class ReactiveAgent<TOut = unknown> {
      * This thin delegate remains because `runDurable`, `runEffect`, and
      * `resumeRun` (via the durable facade) call it.
      */
-    private buildRunTaskEffect(input: string, options?: RunTaskEffectOptions): Effect.Effect<AgentResult, Error> {
+    private buildRunTaskEffect(input: TaskInput, options?: RunTaskEffectOptions): Effect.Effect<AgentResult, Error> {
         return buildRunTaskEffect(this._runTaskDeps(), input, options)
     }
 
@@ -1243,7 +1233,7 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     runStream(
-        input: string,
+        input: TaskInput,
         options?: {
             density?: StreamDensity
             signal?: AbortSignal
@@ -1283,7 +1273,7 @@ export class ReactiveAgent<TOut = unknown> {
     }
 
     private async *_runStreamImpl(
-        input: string,
+        input: TaskInput,
         options: {
             density?: StreamDensity
             signal?: AbortSignal
@@ -1306,13 +1296,15 @@ export class ReactiveAgent<TOut = unknown> {
         }
 
         // Pre-set the task description for parent context forwarding.
-        this._setTaskDescription?.(input.slice(0, 500))
+        const unsupported = checkTaskInputModality(input, this.config.provider, this.config.model)
+        if (unsupported) throw unsupported
+        this._setTaskDescription?.(taskInputText(input).slice(0, 500))
 
         const task: Task = {
             id: generateTaskId(),
             agentId: Schema.decodeSync(AgentId)(this.agentId),
             type: 'query' as const,
-            input: { question: input },
+            input: toTaskInputPayload(input),
             priority: 'medium' as const,
             status: 'pending' as const,
             metadata: { tags: [], ...turnCarryMetadata(options) },
@@ -1549,7 +1541,7 @@ export class ReactiveAgent<TOut = unknown> {
      * ```
      */
     async chat(
-        message: string,
+        message: TaskInput,
         options?: ChatOptions,
         _history?: ChatMessage[],
         _sessionId?: string
@@ -1599,8 +1591,8 @@ export class ReactiveAgent<TOut = unknown> {
      * Whether a chat turn should run with tools: explicit `options.useTools`
      * wins, then the `.withToolIntent()` classifier, then default `requiresTools()`.
      */
-    private _resolveUseTools(message: string, options?: ChatOptions): boolean {
-        return options?.useTools ?? (this._config?.toolIntentClassifier ?? requiresTools)(message)
+    private _resolveUseTools(message: TaskInput, options?: ChatOptions): boolean {
+        return options?.useTools ?? (this._config?.toolIntentClassifier ?? requiresTools)(taskInputText(message))
     }
 
     /**
@@ -1609,7 +1601,7 @@ export class ReactiveAgent<TOut = unknown> {
      * canonical engine instead.
      */
     private async _chatLegacy(
-        message: string,
+        message: TaskInput,
         options?: ChatOptions,
         _history?: ChatMessage[],
         _sessionId?: string,

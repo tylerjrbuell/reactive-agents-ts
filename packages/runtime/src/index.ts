@@ -52,6 +52,7 @@ export {
   DurableRunNotFoundError,
   DurableConfigMismatchError,
   ToolsOptionError,
+  UnsupportedModalityError,
   unwrapError,
   unwrapErrorWithSuggestion,
   errorContext,
@@ -94,6 +95,9 @@ export {
   deriveGoalAchieved,
 } from "./builder.js";
 export { ReactiveAgent } from "./reactive-agent.js";
+// Multimodal task input: `agent.run([{ type: "text", ... }, { type: "image", ... }])`.
+export { modelInputCapabilities, taskInputText, taskInputParts } from "./agent/task-input.js";
+export type { TaskInput, ModelInputCapabilities } from "./agent/task-input.js";
 
 // ─── Declarative front door (dual API — spec 2026-07-11) ───
 export { createAgent } from "./create-agent.js";
