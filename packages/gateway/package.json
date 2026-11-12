@@ -26,7 +26,8 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.18.0"
+    "@reactive-agents/core": "0.18.0",
+    "@reactive-agents/runtime-shim": "0.18.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

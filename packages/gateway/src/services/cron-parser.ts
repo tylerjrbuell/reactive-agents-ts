@@ -139,6 +139,9 @@ export const parseCron = (expression: string): CronExpression | null => {
   return { minutes, hours, daysOfMonth, months, daysOfWeek };
 };
 
+/** One formatter per timezone: constructing `Intl.DateTimeFormat` dominates the cost of a minute scan. */
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+
 /**
  * Convert a UTC date to a specific timezone (IANA timezone string).
  * Returns date components (minute, hour, day, month, day-of-week) in that timezone.
@@ -155,16 +158,20 @@ export const getDateInTimezone = (
 } => {
   try {
     // Get all date parts in the target timezone
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      weekday: "long",
-      hour12: false,
-    });
+    let formatter = formatterCache.get(timezone);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        weekday: "long",
+        hour12: false,
+      });
+      formatterCache.set(timezone, formatter);
+    }
 
     const parts = formatter.formatToParts(date);
     const partMap: Record<string, string> = {};

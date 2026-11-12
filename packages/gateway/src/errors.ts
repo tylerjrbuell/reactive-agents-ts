@@ -37,3 +37,27 @@ export class ChannelConnectionError extends Data.TaggedError("ChannelConnectionE
   readonly message: string;
   readonly platform: string;
 }> {}
+
+/** No schedule with this id exists in the {@link import("./schedule/registry.js").ScheduleRegistry}. */
+export class ScheduleNotFoundError extends Data.TaggedError("ScheduleNotFoundError")<{
+  readonly message: string;
+  readonly scheduleId: string;
+}> {}
+
+/** A schedule definition was rejected (bad cron expression, missing runAt, empty instruction). */
+export class ScheduleInvalidError extends Data.TaggedError("ScheduleInvalidError")<{
+  readonly message: string;
+  readonly field?: string;
+}> {}
+
+/** The schedule store could not be read or written. The cause is kept, never printed into `message`. */
+export class ScheduleStoreError extends Data.TaggedError("ScheduleStoreError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/** The ingress HTTP server could not be started (bad config, port in use). */
+export class IngressStartError extends Data.TaggedError("IngressStartError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}

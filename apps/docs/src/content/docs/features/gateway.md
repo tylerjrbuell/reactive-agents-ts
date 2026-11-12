@@ -142,6 +142,33 @@ crons: [
 
 **Supported syntax:** `*`, specific values, ranges (`8-17`), steps (`*/15`), comma lists (`MON,WED,FRI`), day names (`MON`-`SUN`).
 
+#### Durable schedules (`ScheduleRegistry`)
+
+Every cron entry lives in a `ScheduleRegistry`: a stable id, `enabled`, `nextFireAt`, `lastRun`, `runCount`. Entries from `crons` are seeded with an id derived from their definition (`cfg-<hash>`), so an entry keeps its id and history across restarts and reordering. Schedules can also be created through the registry (cron or one-shot `runAt`) and survive a restart when you give the registry a SQLite `path`. Without a `path` the registry is in-memory.
+
+```typescript
+import { Effect } from "effect";
+import { ScheduleRegistry, ScheduleRegistryLive } from "@reactive-agents/gateway";
+
+const program = Effect.gen(function* () {
+  const schedules = yield* ScheduleRegistry;
+  const s = yield* schedules.create({
+    cron: "0 9 * * *",
+    timezone: "Europe/Berlin",
+    instruction: "Summarise overnight alerts",
+    catchUp: { mode: "fire-once" },
+    delivery: { adapterId: "telegram", conversationId: "1001" },
+  });
+  yield* schedules.pause(s.id); // resume(id), remove(id), update(id, patch)
+  yield* schedules.runNow(s.id); // works while paused
+  return yield* schedules.lastResult(s.id); // { runId, firedAt, status, outputRef?, error?, delivery? }
+}).pipe(Effect.provide(ScheduleRegistryLive({ path: ".reactive-agents/gateway.db" })));
+```
+
+**Restart catch-up.** The registry stores `lastCheckedAt`. After downtime, fires that were due more than 5 minutes ago are "missed" and follow the schedule's `catchUp` policy: `skip` drops them, `fire-once` (default) runs the most recent one once, `fire-all` runs them oldest first, at most `maxFires` (default 10) of the newest. Time spent paused is never caught up. A skipped one-shot leaves a `skipped` receipt in `lastRun`.
+
+**Reporting results.** A fired schedule starts with `lastRun.status: "running"`. The executor reports the outcome with `completeRun(id, fireId, { runId, status, outputRef?, error? })`. The `scheduleId` and `fireId` travel in the `GatewayEvent.metadata` of the cron event. `recordDelivery` stores the typed delivery outcome; `deliverScheduleResult` in `@reactive-agents/channels` sends the result through `ChannelService.deliver` and records the real message id or the error kind.
+
 ### Webhooks
 
 HTTP POST endpoints with pluggable adapters for signature validation and payload transformation.
@@ -168,6 +195,30 @@ webhooks: [
 |---------|-----------|---------------|
 | `"github"` | HMAC-SHA256 via `X-Hub-Signature-256` | `"push"`, `"pull_request.opened"`, etc. |
 | `"generic"` | Configurable HMAC header and algorithm | Extracted from payload or `"webhook.received"` |
+
+#### Serving webhooks (ingress)
+
+`startGatewayIngress(config, { onEvent })` opens one small HTTP server for `GatewayConfig.webhooks` on `GatewayConfig.port`, bound to `127.0.0.1` unless you pass another `hostname`. It opens no socket when nothing is configured. Channel webhooks (for example Telegram) mount on the same server through `channelRoutes`.
+
+```typescript
+import { Effect, Redacted } from "effect";
+import { WebhookServiceLive, startIngress } from "@reactive-agents/gateway";
+import { TelegramChannelAdapter, channelWebhookRoute } from "@reactive-agents/channels";
+
+const telegram = new TelegramChannelAdapter({
+  token: Redacted.make(process.env.TELEGRAM_BOT_TOKEN ?? ""),
+  webhook: { secretToken: process.env.TELEGRAM_WEBHOOK_SECRET ?? "" },
+});
+
+const serve = startIngress({
+  port: 3000,
+  maxBodyBytes: 256 * 1024,
+  channelRoutes: [channelWebhookRoute("/channels/telegram", telegram)],
+  onEvent: () => Effect.void, // must enqueue the event, not run the agent
+}).pipe(Effect.provide(WebhookServiceLive()), Effect.scoped);
+```
+
+Fail-closed by design: POST only (405 otherwise), bodies over `maxBodyBytes` (default 1 MiB) get 413 before any parsing, unknown paths 404, a webhook route with no secret refuses every request, and a bad or missing signature is 401. Error bodies are generic; adapter messages never leave the process. Behind a public URL, terminate TLS in a reverse proxy.
 
 #### Custom Webhook Adapters
 
