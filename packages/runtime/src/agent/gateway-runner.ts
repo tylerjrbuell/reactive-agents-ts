@@ -19,8 +19,10 @@ import {
 import { makeExecuteEvent } from "./execute-event.js";
 import {
   makeGatewayInboundQueue,
+  type GatewayInboundQueue,
   type InboundQueueOverflow,
 } from "./gateway-inbound-queue.js";
+import type { ChannelService } from "@reactive-agents/channels";
 import { makeScheduleReporter } from "./gateway-schedule-report.js";
 import { startRuntimeIngress } from "./gateway-ingress.js";
 import type { GatewayEvent } from "@reactive-agents/gateway";
@@ -61,17 +63,6 @@ export interface ReactiveAgentGatewayView {
   readonly _hasCustomHeartbeatInstruction?: boolean;
   readonly _gatewayPersistMemory?: boolean;
   readonly _sessionPersist?: boolean;
-  readonly _gatewayOptions?: {
-    accessControl?: { mode?: "chat" | "task"; sessionTtlDays?: number };
-    port?: number;
-    webhooks?: readonly {
-      path: string;
-      adapter: string;
-      secret?: string;
-      events?: readonly string[];
-    }[];
-    queue?: { capacity?: number; overflow?: InboundQueueOverflow };
-  };
   session: (
     options?: SessionOptions & {
       persist?: boolean;
@@ -90,19 +81,64 @@ export const queryGatewayStatus = async (
   self: ReactiveAgentGatewayView,
 ): Promise<import("@reactive-agents/gateway").GatewayStatus | null> => {
   try {
-    return await self.runtime.runPromise(
-      Effect.gen(function* () {
-        const gwMod = yield* Effect.promise(
-          () => import("@reactive-agents/gateway"),
-        );
-        const gw = yield* gwMod.GatewayService;
-        return yield* gw.status();
-      }) as Effect.Effect<any>,
-    );
+    const gwMod = await import("@reactive-agents/gateway");
+    const status: import("@reactive-agents/gateway").GatewayStatus =
+      await self.runtime.runPromise(
+        Effect.gen(function* () {
+          const gw = yield* gwMod.GatewayService;
+          return yield* gw.status();
+        }) as Effect.Effect<any>,
+      );
+    const live = liveGateway.get(self);
+    return live ? gwMod.withInboundQueue(status, live.queue.stats()) : status;
   } catch {
     return null;
   }
 };
+
+/** The `.withGateway()` options the runner reads (queue, ingress, chat mode). */
+export interface RunnerGatewayOptions {
+  accessControl?: { mode?: "chat" | "task"; sessionTtlDays?: number };
+  port?: number;
+  webhooks?: readonly {
+    path: string;
+    adapter: string;
+    secret?: string;
+    events?: readonly string[];
+  }[];
+  queue?: { capacity?: number; overflow?: InboundQueueOverflow };
+}
+
+const gatewayOptionsByAgent = new WeakMap<object, RunnerGatewayOptions>();
+
+/**
+ * Hand an agent's `.withGateway()` options to the runner. The agent class never
+ * carried them, so queue/port/webhooks/chat-mode config silently fell back to defaults.
+ */
+export const bindGatewayOptions = (
+  agent: object,
+  options: RunnerGatewayOptions,
+): void => {
+  gatewayOptionsByAgent.set(agent, options);
+};
+
+/** Runtime-owned pieces of a started gateway, keyed by agent (set by `startGateway`). */
+const liveGateway = new WeakMap<
+  object,
+  {
+    readonly queue: GatewayInboundQueue;
+    readonly channels: Pick<ChannelService, "status"> | null;
+  }
+>();
+
+/**
+ * Channel snapshot (adapters, sessions, message counters) once the gateway has started with
+ * `.withChannels()`. `null` before start or when no channels are configured.
+ */
+export const queryChannelStatus = (
+  self: object,
+): import("@reactive-agents/channels").ChannelStatus | null =>
+  liveGateway.get(self)?.channels?.status() ?? null;
 
 /**
  * Start the persistent gateway loop (heartbeats + crons + channel handlers).
@@ -195,7 +231,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     // Inbound queue: one worker runs events in order, so overlapping events
     // wait instead of being dropped; policy `queue` decisions are held here
     // and re-evaluated once a limit window rolls (gateway-inbound-queue.ts).
-    const gwOpts = self._gatewayOptions;
+    const gwOpts = gatewayOptionsByAgent.get(self);
     const reportSchedule =
       bootstrap.registry === null
         ? undefined
@@ -222,6 +258,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
         return `${state.hourWindowStart.getTime()}:${state.dayWindowStart.getTime()}`;
       },
     });
+    liveGateway.set(self, { queue, channels: bootstrap.channelService });
     const executeEvent = queue.submit;
 
     // ─── Gateway chat mode ────────────────────────────────────────

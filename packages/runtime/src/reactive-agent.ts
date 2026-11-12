@@ -23,6 +23,7 @@ import {
 import {
     startGateway,
     queryGatewayStatus,
+    queryChannelStatus,
 } from './agent/gateway-runner.js'
 import { makeJudgmentFacade } from './agent/judgment-facade.js'
 import { makeSkillsFacade } from './agent/skills-facade.js'
@@ -1966,19 +1967,14 @@ export class ReactiveAgent<TOut = unknown> {
         return this.subscribe(tag, callback)
     }
 
-    /**
-     * Query the current gateway status (stats, uptime, state).
-     *
-     * Returns the `GatewayStatus` snapshot from GatewayService, or `null` if the gateway
-     * is not configured. Safe to call at any time — does not start the loop.
-     *
-     * @returns Promise resolving to GatewayStatus or null
-     * @example `const status = await agent.gatewayStatus(); status?.stats.heartbeatsFired`
-     */
-    async gatewayStatus(): Promise<
-        import('@reactive-agents/gateway').GatewayStatus | null
-    > {
+    /** Gateway status (stats, uptime, state; `inboundQueue` once started), or `null` if not configured. Does not start the loop. */
+    async gatewayStatus(): Promise<import('@reactive-agents/gateway').GatewayStatus | null> {
         return queryGatewayStatus(this)
+    }
+
+    /** Channel snapshot (adapters, sessions, counters) after a `.withChannels()` gateway starts; `null` before. */
+    channelStatus(): import('@reactive-agents/channels').ChannelStatus | null {
+        return queryChannelStatus(this)
     }
 
     /** Durable gateway schedules (list/create/pause/resume/runNow/lastResult); requires `.withGateway()`. */

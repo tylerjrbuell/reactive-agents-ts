@@ -88,7 +88,7 @@ export interface GatewayBootstrapSuccess {
     /** Durable schedule registry (null if the runtime carries none). */
     readonly registry: ScheduleRegistryService | null
     /** Channel service when `.withChannels()` is configured, for schedule result delivery. */
-    readonly channelService: Pick<ChannelService, 'deliver'> | null
+    readonly channelService: Pick<ChannelService, 'deliver' | 'status'> | null
 }
 
 export interface GatewayBootstrapFailure {
@@ -195,7 +195,7 @@ export const bootstrapGateway = async (
     glog('info', `started (interval=${gatewayIntervalMs}ms)`)
 
     let channelAdaptersCleanup: (() => Promise<void>) | null = null
-    let channelService: Pick<ChannelService, 'deliver'> | null = null
+    let channelService: Pick<ChannelService, 'deliver' | 'status'> | null = null
 
     if (channelsConfig?.adapters && channelsConfig.adapters.length > 0) {
         try {

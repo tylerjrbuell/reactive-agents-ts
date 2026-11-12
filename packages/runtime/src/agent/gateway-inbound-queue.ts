@@ -24,6 +24,7 @@
  */
 
 import type { AgentEvent } from '@reactive-agents/core'
+import type { InboundQueueStatus } from '@reactive-agents/gateway'
 import type { GLog } from './gateway-bootstrap.js'
 
 /** What to discard when a full queue receives another event. */
@@ -93,6 +94,8 @@ export interface GatewayInboundQueue {
     /** Re-evaluate deferred events if a window rolled since they were held. */
     readonly retryDeferred: () => Promise<void>
     readonly depth: () => { readonly ready: number; readonly deferred: number }
+    /** Live snapshot: depth plus configured capacity/overflow and events dropped since start. */
+    readonly stats: () => InboundQueueStatus
     /** Resolves once the ready list is empty and no run is in flight. */
     readonly idle: () => Promise<void>
 }
@@ -127,6 +130,7 @@ export const makeGatewayInboundQueue = (
     const deferred: Job[] = []
     let draining: Promise<void> | null = null
     let seq = 0
+    let dropped = 0
 
     const suppress = (job: Job, kind: 'queued' | 'deferred' | 'dropped', reason: string) =>
         deps.publish({
@@ -149,6 +153,7 @@ export const makeGatewayInboundQueue = (
     }
 
     const drop = async (job: Job, why: string): Promise<void> => {
+        dropped++
         deps.glog('warn', `${job.source} → dropped (${why})`)
         job.settle(undefined)
         await suppress(job, 'dropped', why)
@@ -275,6 +280,7 @@ export const makeGatewayInboundQueue = (
             wake()
         },
         depth: () => ({ ready: ready.length, deferred: deferred.length }),
+        stats: () => ({ ready: ready.length, deferred: deferred.length, capacity, overflow, dropped }),
         idle: async () => {
             while (draining || ready.length > 0) {
                 await (draining ?? new Promise<void>((r) => setTimeout(r, 0)))

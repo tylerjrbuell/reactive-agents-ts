@@ -210,3 +210,34 @@ describe("gateway inbound queue (seam)", () => {
     expect(queue.depth()).toEqual({ ready: 0, deferred: 0 });
   });
 });
+
+describe("gateway inbound queue stats (seam)", () => {
+  it.each(["drop-oldest", "drop-newest"] as const)(
+    "stats() counts drops past capacity (%s)",
+    async (overflow) => {
+      const g = gatedRun();
+      const { queue } = mkQueue({ run: g.run, capacity: 2, overflow });
+      expect(queue.stats()).toEqual({ ready: 0, deferred: 0, capacity: 2, overflow, dropped: 0 });
+      // e1 starts running (leaves ready); e2,e3 fill the list; e4,e5 overflow.
+      queue.enqueue({ id: "e1" }, "channel", "m1");
+      await tick();
+      for (const n of [2, 3, 4, 5]) queue.enqueue({ id: `e${n}` }, "channel", `m${n}`);
+      await tick();
+      expect(queue.stats()).toEqual({ ready: 2, deferred: 0, capacity: 2, overflow, dropped: 2 });
+      for (let i = 0; i < 5; i++) {
+        g.release();
+        await tick();
+      }
+      expect(queue.stats().ready).toBe(0);
+      expect(queue.stats().dropped).toBe(2);
+    },
+  );
+
+  it("dropped counts deferred-list overflow too", async () => {
+    const g = gatedRun();
+    const { queue } = mkQueue({ run: g.run, capacity: 1 });
+    await queue.defer({ id: "d1" }, "cron", "one", "rate limit");
+    await queue.defer({ id: "d2" }, "cron", "two", "rate limit");
+    expect(queue.stats()).toMatchObject({ deferred: 1, dropped: 1 });
+  });
+});

@@ -9,6 +9,7 @@
  */
 import { Layer, ManagedRuntime, type Effect } from "effect";
 import { ReactiveAgent } from "../../reactive-agent.js";
+import { bindGatewayOptions } from "../../agent/gateway-runner.js";
 import type { ExecutionContext } from "../../types.js";
 import type { StreamDensity } from "../../stream-types.js";
 import type { ExecuteStreamFn } from "../../engine/execute-stream.js";
@@ -159,7 +160,7 @@ export const instantiateAgent = (deps: AgentInstantiationDeps): ReactiveAgent =>
       }
     : undefined;
 
-  return new ReactiveAgent(
+  const agent = new ReactiveAgent(
     deps.engine,
     deps.agentId,
     managedRuntime,
@@ -187,4 +188,6 @@ export const instantiateAgent = (deps: AgentInstantiationDeps): ReactiveAgent =>
     deps.a2aDefaultBasePath,
     deps.judgmentAutoShadow ?? false,
   );
+  if (deps.gatewayOptions) bindGatewayOptions(agent, deps.gatewayOptions);
+  return agent;
 };
