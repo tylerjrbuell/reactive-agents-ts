@@ -303,6 +303,7 @@ describe("todoTool definition is pinned", () => {
       riskLevel: "low",
       timeoutMs: 5_000,
       requiresApproval: false,
+      mutatesExternalState: false,
       source: "function",
       category: "data",
     };

@@ -7,6 +7,8 @@ import { ToolExecutionError } from "../errors.js";
 
 export const scratchpadWriteTool: ToolDefinition = {
   name: "scratchpad-write",
+  // Per-run scratchpad store; not persistent.
+  mutatesExternalState: false,
   description:
     "Write a note to working memory. Alias for recall(key, content). Prefer recall() for new code.",
   parameters: [
@@ -32,6 +34,7 @@ export const scratchpadWriteTool: ToolDefinition = {
 
 export const scratchpadReadTool: ToolDefinition = {
   name: "scratchpad-read",
+  mutatesExternalState: false,
   description:
     "Read a note from working memory. Alias for recall(key, full: true). Prefer recall() for new code.",
   parameters: [

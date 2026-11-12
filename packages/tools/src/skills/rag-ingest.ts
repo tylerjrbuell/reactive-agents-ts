@@ -57,6 +57,8 @@ export const ragIngestTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 30_000,
   requiresApproval: false,
+  // Writes the shared document store, which outlives the run and is retrievable by other senders/sessions.
+  mutatesExternalState: true,
   source: "builtin",
 };
 

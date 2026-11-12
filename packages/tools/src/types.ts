@@ -217,6 +217,18 @@ export const ToolDefinitionSchema = Schema.Struct({
    */
   requiresApproval: Schema.Boolean,
   /**
+   * Whether a call can change state outside the agent run (files, network
+   * writes, processes, messages sent). This is the typed basis for "read-only"
+   * tool exposure (see {@link isReadOnlyTool}).
+   *
+   * - `false` — declared safe: reads, or touches only run-scoped internal state.
+   * - `true` — can mutate external state.
+   * - omitted — unknown; treated as NOT read-only (fail closed).
+   *
+   * @default undefined
+   */
+  mutatesExternalState: Schema.optional(Schema.Boolean),
+  /**
    * Sprint 3.4 (Synthesis Scaffold 1) — Call-vs-result cardinality declaration.
    *
    * Tells the framework's required-tools classifier how to interpret the

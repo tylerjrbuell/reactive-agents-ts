@@ -469,6 +469,7 @@ export const webSearchTool: ToolDefinition = {
   /** Tavily + Brave + DuckDuckGo can run sequentially; keep headroom so the chain is not cut off. */
   timeoutMs: 30_000,
   requiresApproval: false,
+  mutatesExternalState: false,
   source: "builtin",
   produces: "data",
   // Sprint 3.4 Scaffold 1 — web-search returns N results in one call.

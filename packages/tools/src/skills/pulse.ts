@@ -42,6 +42,7 @@ export const pulseTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 5_000,
   requiresApproval: false,
+  mutatesExternalState: false,
   source: "function",
   category: "data",
 };

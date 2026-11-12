@@ -68,6 +68,8 @@ export const recallTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 5_000,
   requiresApproval: false,
+  // Write mode targets the per-run scratchpad (runToolStoresSlot, fresh per run), not persistent memory.
+  mutatesExternalState: false,
   source: "builtin",
   category: "data",
 };

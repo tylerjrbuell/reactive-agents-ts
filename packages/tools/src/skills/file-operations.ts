@@ -133,6 +133,7 @@ export const fileReadTool: ToolDefinition = {
   timeoutMs: 5_000,
   requiresApproval: false,
   source: "builtin",
+  mutatesExternalState: false,
   // Read-only — never produces a durable artifact (audit 01-F1 / C2).
   produces: "none",
   // Sprint 3.4 Scaffold 1 — file-read reads ONE file per call. When a task
@@ -240,6 +241,7 @@ export const listDirectoryTool: ToolDefinition = {
   timeoutMs: 5_000,
   requiresApproval: false,
   source: "builtin",
+  mutatesExternalState: false,
   produces: "none",
 };
 
@@ -309,6 +311,7 @@ export const fileWriteTool: ToolDefinition = {
   timeoutMs: 5_000,
   requiresApproval: true,
   source: "builtin",
+  mutatesExternalState: true,
   // Produces a file artifact — path extracted from the path arg (audit 01-F1 / C2).
   produces: "file",
 };
@@ -527,6 +530,7 @@ export const fileEditTool: ToolDefinition = {
   // agent mutate an approval-gated file by editing it instead of writing it.
   requiresApproval: true,
   source: "builtin",
+  mutatesExternalState: true,
   produces: "file",
 };
 

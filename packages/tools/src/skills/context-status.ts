@@ -14,6 +14,7 @@ export const contextStatusTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 1_000,
   requiresApproval: false,
+  mutatesExternalState: false,
   source: "function",
 };
 

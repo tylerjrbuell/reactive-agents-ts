@@ -111,6 +111,8 @@ export const relateTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 10_000,
   requiresApproval: false,
+  // link mode writes the persistent memory graph (outlives the run); read mode alone would be safe.
+  mutatesExternalState: true,
   source: "builtin",
   produces: "none",
 };

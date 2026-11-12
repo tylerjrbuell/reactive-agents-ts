@@ -34,6 +34,8 @@ export const checkpointTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 5_000,
   requiresApproval: false,
+  // Per-run checkpoint store (runToolStoresSlot); discarded with the run.
+  mutatesExternalState: false,
   source: "builtin",
   category: "data",
 };

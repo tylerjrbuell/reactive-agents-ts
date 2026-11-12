@@ -87,6 +87,8 @@ export const httpGetTool: ToolDefinition = {
   riskLevel: "medium",
   timeoutMs: 15_000,
   requiresApproval: false,
+  // GET only; SSRF-guarded in the handler (private/loopback hosts refused).
+  mutatesExternalState: false,
   source: "builtin",
   produces: "data",
   // Sprint 3.4 Scaffold 1 — http-get fetches ONE URL per call. When a

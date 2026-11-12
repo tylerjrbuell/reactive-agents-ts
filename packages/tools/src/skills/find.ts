@@ -157,6 +157,7 @@ export const findToolFor = (options: FindDescriptionOptions = {}): ToolDefinitio
   riskLevel: "low",
   timeoutMs: 30_000,
   requiresApproval: false,
+  mutatesExternalState: false,
   source: "builtin",
   category: "search",
   };

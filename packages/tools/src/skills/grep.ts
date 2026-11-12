@@ -82,6 +82,7 @@ export const grepTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 15_000,
   requiresApproval: false,
+  mutatesExternalState: false,
   source: "builtin",
   // Read-only — never produces a durable artifact.
   produces: "none",

@@ -238,6 +238,7 @@ export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition =
   // Handler kills at the resolved timeout; the outer ToolService race runs just after it.
   timeoutMs: resolveCodeTimeout(config) + HANDLER_TIMEOUT_GRACE_MS,
   requiresApproval: true,
+  mutatesExternalState: true,
   source: "builtin",
   // CAN write files via fs/Bun calls in the code — recognized as a file
   // producer so those writes become visible artifacts (audit 01-F1 / C2).

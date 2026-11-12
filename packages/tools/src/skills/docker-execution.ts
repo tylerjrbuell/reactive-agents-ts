@@ -59,6 +59,7 @@ export const dockerExecuteToolFor = (config?: Partial<DockerSandboxConfig>): Too
   // Sandbox kill + grace, so the handler's own timeout result wins the race.
   timeoutMs: resolved.timeoutMs + HANDLER_TIMEOUT_GRACE_MS,
   requiresApproval: true,
+  mutatesExternalState: true,
   source: "builtin",
   produces: "file",
   };

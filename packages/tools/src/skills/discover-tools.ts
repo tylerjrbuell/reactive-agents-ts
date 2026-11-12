@@ -128,6 +128,7 @@ export const discoverToolsTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 2_000,
   requiresApproval: false,
+  mutatesExternalState: false,
   source: "builtin",
   category: "data",
 };

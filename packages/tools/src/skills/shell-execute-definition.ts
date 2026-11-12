@@ -149,6 +149,7 @@ export function shellExecuteToolFor(
     // plus a grace margin, so a configured timeout is not capped by ToolService.
     timeoutMs: (config?.timeoutMs ?? 30_000) + SHELL_TIMEOUT_GRACE_MS,
     requiresApproval: true,
+    mutatesExternalState: true,
     source: "builtin",
     // CAN write files via redirects / commands — file producer (audit 01-F1 / C2).
     produces: "file",

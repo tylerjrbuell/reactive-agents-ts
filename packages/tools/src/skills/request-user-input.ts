@@ -48,5 +48,6 @@ export const requestUserInputTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 2_000,
   requiresApproval: false,
+  mutatesExternalState: false,
   source: "function",
 };

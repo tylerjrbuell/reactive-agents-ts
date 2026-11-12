@@ -172,6 +172,7 @@ export const cryptoPriceTool: ToolDefinition = {
   riskLevel: "low",
   timeoutMs: 10_000,
   requiresApproval: false,
+  mutatesExternalState: false,
   source: "builtin",
   produces: "data",
 };
