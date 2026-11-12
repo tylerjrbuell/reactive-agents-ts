@@ -72,7 +72,7 @@ export type StrategyFn = (input: {
   readonly briefResolvedSkills?: readonly { readonly name: string; readonly purpose: string }[];
   readonly skillsContext?: SkillsContext;
   /** Initial messages to seed the kernel conversation thread (e.g. task as user message). */
-  readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
+  readonly initialMessages?: readonly { readonly role: "user" | "assistant"; readonly content: import("@reactive-agents/core").MessageContent }[];
   readonly synthesisConfig?: import("../context/synthesis-types.js").SynthesisConfig;
   /** LLM-based observation extraction: true=always, false=never, "auto"=local/mid tiers only */
   readonly observationSummary?: boolean | "auto";
