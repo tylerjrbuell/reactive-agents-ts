@@ -73,9 +73,33 @@ describe("/agent panel", () => {
     const patches: Patch[] = [];
     const p = picker("/agent ", { cfg: { agentControl: true }, apply: (_w, patch) => void patches.push(patch) });
     const rows = pickerItems(p.ctx);
-    expect(rows.map((r) => [r.key, r.active])).toEqual([["on", true], ["off", false]]);
+    expect(rows.slice(0, 2).map((r) => [r.key, r.active])).toEqual([["on", true], ["off", false]]);
     void rows[1]!.run();
     expect(patches).toEqual([{ agentControl: false }]);
+  });
+
+  test("with control off only On / Off show: no capability switch is reachable", () => {
+    const rows = pickerItems(picker("/agent ", { cfg: {} }).ctx);
+    expect(rows.map((r) => r.key)).toEqual(["on", "off"]);
+  });
+
+  test("with control on, each capability group is a 'Let the agent change' switch, off by default", () => {
+    const rows = pickerItems(picker("/agent ", { cfg: { agentControl: true } }).ctx);
+    const groups = rows.filter((r) => r.key.startsWith("group:"));
+    expect(groups.map((r) => r.key)).toEqual(["group:tools", "group:limits", "group:memory", "group:prompt", "group:approvals", "group:workspace", "group:conversation"]);
+    expect(groups.every((r) => r.active === false && r.label.startsWith("Let the agent change: "))).toBe(true);
+    expect(rows.some((r) => r.key.startsWith("auto:"))).toBe(false); // auto-apply is offered only for an enabled group
+  });
+
+  test("ticking a group patches agentControlGroups; an enabled group offers 'stricter changes automatically'", () => {
+    const first = picker("/agent ", { cfg: { agentControl: true } });
+    void pickerItems(first.ctx).find((r) => r.key === "group:tools")!.run();
+    expect(first.calls.at(-1)).toBe(`toggle:Tools proposals:${JSON.stringify({ agentControlGroups: ["tools"], agentControlAutoApply: [] })}`);
+    const second = picker("/agent ", { cfg: { agentControl: true, agentControlGroups: ["tools", "prompt"] } });
+    const rows = pickerItems(second.ctx);
+    expect(rows.filter((r) => r.key.startsWith("auto:")).map((r) => r.key)).toEqual(["auto:tools"]); // prompt has nothing to tighten
+    void rows.find((r) => r.key === "auto:tools")!.run();
+    expect(second.calls.at(-1)).toBe(`toggle:Auto-apply stricter tools:${JSON.stringify({ agentControlAutoApply: ["tools"] })}`);
   });
 });
 

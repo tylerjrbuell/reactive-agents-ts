@@ -396,7 +396,7 @@ export function rewindChatTurns(
   db: Database,
   sessionId: string,
   turnId: number,
-): { removed: number; userMessage: string } | undefined {
+): { removed: number; userMessage: string; /** `ts` of the last surviving row (0 when none): session records made after it (proposals) belonged to the removed turns. */ afterTs: number } | undefined {
   const rows = turnRefs(db, sessionId);
   const idx = rows.findIndex((r) => r.id === turnId);
   if (idx < 0) return undefined;
@@ -404,8 +404,13 @@ export function rewindChatTurns(
   while (start > 0 && rows[start]!.role !== "user") start--;
   const userMessage = rows[start]!.role === "user" ? rows[start]!.content : "";
   const cutoff = rows[start]!.id;
+  // A turn's rows are written when it ends, so a proposal made DURING a removed turn predates that
+  // turn's own row: the boundary is the last row that survives.
+  const prev = db
+    .prepare(`SELECT MAX(ts) AS ts FROM cortex_chat_turns WHERE session_id = ? AND id < ?`)
+    .get(sessionId, cutoff) as { ts: number | null };
   const res = db.prepare(`DELETE FROM cortex_chat_turns WHERE session_id = ? AND id >= ?`).run(sessionId, cutoff);
-  return { removed: res.changes, userMessage };
+  return { removed: res.changes, userMessage, afterTs: prev.ts ?? 0 };
 }
 
 /** One persisted to-do row (the conversation-level list; mirrors the runtime's `TodoSeedItem`). */

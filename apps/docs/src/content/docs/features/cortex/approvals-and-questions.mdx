@@ -28,6 +28,10 @@ With **Durable execution** on (in **Execution**), the wait also survives a resta
 
 With durable execution on, the agent can also stop and ask you something (`request_user_input`). In chat, the question appears in the thread with a reply box: **Yes** / **No** for a confirmation, one button per option for a choice, fields for a form, or a text box. Your answer resumes the run, and the question, your answer and the agent's reply land in the thread. **Dismiss** drops the paused turn. New messages wait until you answer.
 
+## Agent-proposed approval changes
+
+With Agent control on and the **Approvals** switch ticked (`/agent`), the agent can propose turning **Ask before risky tools** on or off. Turning it on (stricter) can apply by itself if you also allow automatic stricter approvals; turning it off (looser) always waits for your Apply, and the card says it gives the agent more reach.
+
 ## Sub-agents
 
 When sub-agents run in parallel and several ask at once, each request is listed on its own with the sub-agent's name and answered individually. A sub-agent's own transcript opens from its card in the chat (a side drawer), and each sub-agent run has its own page in the run view.

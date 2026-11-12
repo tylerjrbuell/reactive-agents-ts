@@ -3,6 +3,7 @@
  * setting, each opening its slash picker. Pure, so ChatQuickBar and tests share it.
  */
 import { agentControlEnabled } from "./proposal-view.js";
+import { enabledControlGroups } from "./agent-control.js";
 import { effectiveIterations, selectedTools, terminalChoice, terminalLabel, toolsetSummary } from "./chat-quickbar.js";
 import { workspaceLabel } from "./workspace-api.js";
 import { shellOffLabel, shellPickReason, shellState, type ShellPresets } from "./shell-from-picks.js";
@@ -80,7 +81,7 @@ export function quickBarChips(cfg: Record<string, unknown>, ctx: QuickBarChipCon
         ? [{ text: plural(ctx.availableSkillCount ?? 0, "skill"), icon: "bolt", cmd: "/skill ", title: "Workspace skills the agent can load; pick one to use it for your next message" } satisfies QuickBarChip]
         : []),
     ...(agentControlEnabled(cfg)
-      ? [{ text: "Agent control", icon: "agents", cmd: "/agent ", title: "The agent may propose changes to this chat; nothing applies until you click Apply", on: true } satisfies QuickBarChip]
+      ? [{ text: enabledControlGroups(cfg).length > 0 ? `Agent control +${enabledControlGroups(cfg).length}` : "Agent control", icon: "agents", cmd: "/agent ", title: "The agent may propose changes to this chat; nothing applies until you click Apply", on: true } satisfies QuickBarChip]
       : []),
     ...(ctx.documentCount > 0 ? [{ text: plural(ctx.documentCount, "document"), icon: "book", cmd: "/docs ", on: true } satisfies QuickBarChip] : []),
   ];

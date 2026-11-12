@@ -711,3 +711,31 @@ describe("chatStore — a turn that pauses for durable approval", () => {
     expect(state.activePendingInteractions).toEqual([pending]);
   });
 });
+
+describe("chatStore history-change listeners", () => {
+  it("tells listeners after clear, compact and rewind succeed, and not when the request fails", async () => {
+    let fail = false;
+    globalThis.fetch = (async (url: string) => {
+      const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
+      if (url.endsWith("/api/chat/sessions")) return json([{ sessionId: "s9", name: "S9", agentConfig: {}, createdAt: 1, lastUsedAt: 1 }]);
+      if (url.endsWith("/api/chat/sessions/s9")) return json({ sessionId: "s9", name: "S9", agentConfig: {}, createdAt: 1, lastUsedAt: 1, turns: [], pendingApprovals: [], pendingInteractions: [] });
+      if (url.endsWith("/clear") || url.endsWith("/compact") || url.endsWith("/rewind")) return fail ? json({ error: "busy" }, 409) : json({ removed: 1, compacted: 1, userMessage: "" });
+      return json({}, 500);
+    }) as FetchFn;
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s9");
+    const seen: string[] = [];
+    const off = chatStore.onHistoryChange((sid) => void seen.push(sid));
+    await chatStore.clearContext();
+    await chatStore.compact();
+    await chatStore.rewind(3);
+    expect(seen).toEqual(["s9", "s9", "s9"]);
+    fail = true;
+    await chatStore.clearContext().catch(() => {});
+    expect(seen).toHaveLength(3);
+    off();
+    fail = false;
+    await chatStore.clearContext();
+    expect(seen).toHaveLength(3);
+  });
+});

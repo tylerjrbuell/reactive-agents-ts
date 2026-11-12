@@ -16,10 +16,28 @@ import {
   MAX_SCHEDULES_PER_SESSION,
   countLiveSchedules,
   validateScheduleFields,
-  type ChatSchedule,
 } from "./chat-schedule-service.js";
-import { DEFAULT_GOAL_BUDGET, validateGoalBudget, type ChatGoalRecord } from "./chat-goal-service.js";
+import { DEFAULT_GOAL_BUDGET, validateGoalBudget } from "./chat-goal-service.js";
 import { parseDocumentSpecs } from "./cortex-agent-config.js";
+import {
+  bad,
+  clip,
+  good,
+  matchOne,
+  num,
+  text,
+  type ActionContext,
+  type ActionValidation,
+  type ProposalArgs,
+} from "./session-action-kit.js";
+import {
+  CAPABILITY_ACTIONS,
+  CAPABILITY_ACTION_ALIASES,
+  CAPABILITY_PARAM_ALIASES,
+  validateCapability,
+} from "./session-capabilities.js";
+
+export type { ActionContext, ActionValidation, ProposalArgs, ProposalDiffRow, ProposalDirection, ValidatedAction } from "./session-action-kit.js";
 
 /** Actions that propose a change (persisted as proposals, applied only by the user). */
 export const MUTATING_ACTIONS = [
@@ -33,10 +51,11 @@ export const MUTATING_ACTIONS = [
   "set-schedule",
   "stop-loop",
   "cancel-goal",
+  ...CAPABILITY_ACTIONS,
 ] as const;
 
 /** Read-only actions: answered immediately, never persisted. */
-export const READ_ONLY_ACTIONS = ["status", "list-schedules"] as const;
+export const READ_ONLY_ACTIONS = ["status", "list-schedules", "describe-session"] as const;
 
 /** Every action name the `session-control` tool accepts. */
 export const SESSION_ACTIONS = [...READ_ONLY_ACTIONS, ...MUTATING_ACTIONS] as const;
@@ -45,9 +64,6 @@ export const SESSION_ACTIONS = [...READ_ONLY_ACTIONS, ...MUTATING_ACTIONS] as co
 export type MutatingAction = (typeof MUTATING_ACTIONS)[number];
 /** Any `session-control` action. */
 export type SessionAction = (typeof SESSION_ACTIONS)[number];
-
-/** Flat, JSON-safe action arguments (the persisted and wire shape). */
-export type ProposalArgs = Record<string, string | number | boolean>;
 
 /** Most documents a session may carry; the agent cannot grow context without bound. */
 export const MAX_SESSION_DOCS = 10;
@@ -82,6 +98,9 @@ const ACTION_ALIASES: Readonly<Record<string, string>> = {
   "list-loops": "list-schedules",
   config: "status",
   info: "status",
+  describe_session: "describe-session",
+  describe: "describe-session",
+  ...CAPABILITY_ACTION_ALIASES,
 };
 
 /** Per action: canonical argument -> accepted alternates. */
@@ -101,43 +120,14 @@ const PARAM_ALIASES: Readonly<Record<string, Readonly<Record<string, readonly st
     prompt: ["task", "message", "command", "text"],
   },
   "stop-loop": { id: ["schedule", "scheduleId", "schedule_id", "value"] },
+  ...CAPABILITY_PARAM_ALIASES,
 };
-
-/** Enough of the session for validation; resolved by the caller (never cached here). */
-export interface ActionContext {
-  readonly config: Readonly<Record<string, unknown>>;
-  readonly schedules: readonly ChatSchedule[];
-  readonly goal: ChatGoalRecord | null;
-  readonly now: number;
-  /** Provider ids Cortex can run. */
-  readonly providers: readonly string[];
-  /** Model ids for a provider (live discovery merged with presets), or `[]` when none are known. */
-  readonly models: (provider: string) => Promise<readonly string[]>;
-  /** Names of the skills Cortex can find on disk. */
-  readonly skillNames: readonly string[];
-}
-
-/** A validated, normalized action ready to persist and later apply. */
-export interface ValidatedAction {
-  readonly action: MutatingAction;
-  readonly args: ProposalArgs;
-  /** One line shown on the proposal card and in the tool result. */
-  readonly summary: string;
-}
-
-/** Outcome of {@link validateSessionAction}; `message` names valid options on failure. */
-export type ActionValidation =
-  | { readonly ok: true; readonly value: ValidatedAction }
-  | { readonly ok: false; readonly message: string };
-
-const bad = (message: string): ActionValidation => ({ ok: false, message });
-const good = (action: MutatingAction, args: ProposalArgs, summary: string): ActionValidation => ({
-  ok: true,
-  value: { action, args, summary },
-});
 
 /** True for a state-changing action. */
 export const isMutating = (a: SessionAction): a is MutatingAction => (MUTATING_ACTIONS as readonly string[]).includes(a);
+
+/** `name` as a {@link MutatingAction}, or null when it is not one. */
+export const asMutating = (name: string): MutatingAction | null => ((MUTATING_ACTIONS as readonly string[]).includes(name) ? (name as MutatingAction) : null);
 
 /** Healed action name, or the failure naming the valid actions. */
 export function healAction(raw: string): { readonly ok: true; readonly action: SessionAction } | { readonly ok: false; readonly message: string } {
@@ -155,34 +145,15 @@ export function healActionArgs(action: string, args: Readonly<Record<string, unk
   return healParamNames(args, PARAM_ALIASES[action] ?? {}).args;
 }
 
-const text = (v: unknown): string => (typeof v === "string" ? v.trim() : typeof v === "number" || typeof v === "boolean" ? String(v) : "");
-
-/** Positive finite number from a number or numeric string; `undefined` when absent, `NaN` when unusable. */
-const num = (v: unknown): number | undefined => {
-  if (v === undefined || v === null || v === "") return undefined;
-  const n = typeof v === "number" ? v : Number(String(v).trim());
-  return Number.isFinite(n) ? n : Number.NaN;
-};
-
 const THINKING_VALUES: Readonly<Record<string, boolean | "auto">> = {
   on: true, true: true, yes: true, enable: true, enabled: true, "1": true,
   off: false, false: false, no: false, disable: false, disabled: false, "0": false,
   auto: "auto", default: "auto", reset: "auto",
 };
 
-const clip = (s: string, n = 60): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-
 const fmtDuration = (ms: number): string => {
   const h = ms / 3_600_000;
   return h >= 24 ? `${Math.round(h / 24)}d` : `${Math.round(h)}h`;
-};
-
-const matchOne = (raw: string, valid: readonly string[], noun: string): { ok: true; value: string } | { ok: false; message: string } => {
-  const hit = healEnumArg(raw, valid).value;
-  if (valid.includes(hit)) return { ok: true, value: hit };
-  const shown = valid.slice(0, 12).join(", ") + (valid.length > 12 ? `, … (${valid.length} total)` : "");
-  const hint = raw && valid.length > 0 ? ` Closest: "${closestValid(raw, valid)}".` : "";
-  return { ok: false, message: `unknown ${noun} "${raw}".${hint} Valid: ${shown || "(none known)"}` };
 };
 
 /**
@@ -315,6 +286,9 @@ export async function validateSessionAction(
       }
       return good("cancel-goal", {}, `cancel goal "${clip(g.objective)}"`);
     }
+    default:
+      // The capability registry owns every other action (tools, limits, prompt, approvals, ...).
+      return validateCapability(action, a, ctx);
   }
 }
 

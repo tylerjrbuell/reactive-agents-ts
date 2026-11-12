@@ -484,11 +484,21 @@ function createChatStore() {
 
   const activeId = (): string | null => get({ subscribe }).activeSessionId;
 
+  /**
+   * Listeners told after the transcript of a session was rewound, cleared or compacted.
+   * Records tied to the thread (agent proposals) re-read themselves from the server then.
+   */
+  const historyListeners = new Set<(sessionId: string) => void>();
+  const historyChanged = (sessionId: string): void => {
+    for (const fn of historyListeners) fn(sessionId);
+  };
+
   /** Rewind to before `turnId`'s exchange; returns the removed user message (to edit or resend). */
   async function rewind(turnId: number): Promise<string> {
     const sid = activeId();
     if (!sid) return "";
     const { userMessage } = await utility<{ userMessage: string }>(sid, "rewind", { turnId });
+    historyChanged(sid);
     await refreshTurns(sid);
     return userMessage;
   }
@@ -505,6 +515,7 @@ function createChatStore() {
     const sid = activeId();
     if (!sid) return;
     await utility(sid, "clear");
+    historyChanged(sid);
     await refreshTurns(sid);
   }
 
@@ -513,6 +524,7 @@ function createChatStore() {
     const sid = activeId();
     if (!sid) return 0;
     const { compacted } = await utility<{ compacted: number }>(sid, "compact", keepLast === undefined ? {} : { keepLast });
+    historyChanged(sid);
     // The server's reading (the estimate on the summary row) is what the meter shows; no old reading rides along.
     await refreshTurns(sid, { afterCompaction: true });
     return compacted;
@@ -803,6 +815,11 @@ function createChatStore() {
     },
     compact,
     fork,
+    /** Subscribe to rewind / clear / compact of a session; returns the unsubscribe. */
+    onHistoryChange: (fn: (sessionId: string) => void): (() => void) => {
+      historyListeners.add(fn);
+      return () => void historyListeners.delete(fn);
+    },
   };
 }
 

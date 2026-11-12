@@ -11,6 +11,7 @@ import { isLiveConfigCommand } from "./chat-live-config.js";
 import { matchEntries, type EntryState } from "./config-menu-nav.js";
 import type { MenuItem } from "./chat-menu.js";
 import { agentControlEnabled } from "./proposal-view.js";
+import { AGENT_CONTROL_GROUPS, autoApplyControlGroups, enabledControlGroups, toggleAutoApplyPatch, toggleControlGroupPatch } from "./agent-control.js";
 import type { InlineTrigger } from "./chat-inline-commands.js";
 import type { IconName } from "./icons.js";
 import {
@@ -218,9 +219,23 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
     }
     case "agent": {
       const on = agentControlEnabled(cfg);
-      return ([[true, "On", "The agent proposes changes to this chat; you approve each one", "Agent may propose changes (you approve each)"], [false, "Off", "The agent cannot change this chat (default)", "Agent control off"]] as const)
+      const base = ([[true, "On", "The agent proposes changes to this chat; you approve each one", "Agent may propose changes (you approve each)"], [false, "Off", "The agent cannot change this chat (default)", "Agent control off"]] as const)
         .filter(([, label]) => has(label))
         .map(([want, label, detail, what]) => configRow(want ? "on" : "off", "agents", label, () => ctx.apply(what, { agentControl: want }), { active: want === on, detail }));
+      if (!on) return base;
+      // "Let the agent change ..." switches: each group is off until ticked; tightening may auto-apply per group.
+      const groups = enabledControlGroups(cfg);
+      const autos = autoApplyControlGroups(cfg);
+      const extra: MenuItem[] = [];
+      for (const g of AGENT_CONTROL_GROUPS) {
+        if (has(g.label, "let the agent change", g.id)) {
+          extra.push(multiRow(`group:${g.id}`, "agents", `Let the agent change: ${g.label}`, `${g.label} proposals`, () => toggleControlGroupPatch(ctx.cfg, g.id), { active: groups.includes(g.id), detail: g.detail }));
+        }
+        if (g.canAutoApply && groups.includes(g.id) && has(g.label, "automatically", "auto", g.id)) {
+          extra.push(multiRow(`auto:${g.id}`, "agents", `Apply stricter ${g.label.toLowerCase()} changes automatically`, `Auto-apply stricter ${g.label.toLowerCase()}`, () => toggleAutoApplyPatch(ctx.cfg, g.id), { active: autos.includes(g.id), detail: "Only changes that reduce what the agent can do; anything looser still needs your Apply" }));
+        }
+      }
+      return [...base, ...extra];
     }
     case "approvals":
       return approvalRows(ctx, q, multiRow);

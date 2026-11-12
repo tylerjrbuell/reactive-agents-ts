@@ -8,6 +8,7 @@ import type { DocumentSpec } from "@reactive-agents/runtime";
 import { migrateLegacyCliToolNames } from "./legacy-cli-tools.js";
 import { approvalPolicyOf } from "./approval-policy.js";
 import { parseCortexJudgmentConfig } from "./cortex-judgment.js";
+import { CAPABILITY_GROUP_IDS } from "./session-capabilities.js";
 
 function asFiniteNumber(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -162,6 +163,16 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   // Agent self-control is strictly opt-in: only a literal `true` keeps it on.
   if (raw.agentControl === true) out.agentControl = true;
   else delete out.agentControl;
+
+  // Which extra capability groups the agent may propose in, and which of them may apply a TIGHTENING
+  // change without a click. Both default off; unknown group ids are dropped, and auto-apply only
+  // survives for a group that is itself enabled (session-capabilities.ts owns the group table).
+  const groups = asStringArray(raw.agentControlGroups)?.filter((g) => CAPABILITY_GROUP_IDS.includes(g) && g !== "basics");
+  if (raw.agentControl === true && groups && groups.length > 0) out.agentControlGroups = [...new Set(groups)];
+  else delete out.agentControlGroups;
+  const autoApply = asStringArray(raw.agentControlAutoApply)?.filter((g) => (out.agentControlGroups as string[] | undefined)?.includes(g) === true);
+  if (raw.agentControl === true && autoApply && autoApply.length > 0) out.agentControlAutoApply = [...new Set(autoApply)];
+  else delete out.agentControlAutoApply;
 
   // Removed gh-cli / git-cli / gws-cli names map to the shell toolsets (legacy-cli-tools.ts).
   const tools = asStringArray(raw.tools);

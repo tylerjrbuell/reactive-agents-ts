@@ -26,6 +26,29 @@ describe("chat proposals store", () => {
     expect(s.snapshot().proposals).toEqual([]);
   });
 
+  test("remove DELETEs the proposal and drops it locally; an already-gone one (404) is fine", async () => {
+    const { f, calls } = mock((u, init) => (init?.method === "DELETE" ? json({}, u.includes("/gone") ? 404 : 200) : json({ proposals: [P, { ...P, id: "gone" }] })));
+    const s = createChatProposalsStore(f);
+    s.reset("a");
+    await s.load("a");
+    await s.remove("a", "p1");
+    expect(calls.at(-1)).toEqual({ url: expect.stringContaining("/api/chat/sessions/a/proposals/p1"), method: "DELETE" });
+    expect(s.snapshot().proposals.map((p) => p.id)).toEqual(["gone"]);
+    await s.remove("a", "gone");
+    expect(s.snapshot().proposals).toEqual([]);
+    expect(s.snapshot().busy).toEqual([]);
+  });
+
+  test("remove surfaces a server refusal and keeps the proposal", async () => {
+    const { f } = mock((_u, init) => (init?.method === "DELETE" ? json({ error: "nope" }, 500) : json({ proposals: [P] })));
+    const s = createChatProposalsStore(f);
+    s.reset("a");
+    await s.load("a");
+    const err = await s.remove("a", "p1").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProposalApplyError);
+    expect(s.snapshot().proposals).toHaveLength(1);
+  });
+
   test("apply merges the result and refreshes by effect", async () => {
     const seen: string[] = [];
     const { f, calls } = mock((u) => (u.endsWith("/apply") ? json({ proposal: { ...P, status: "applied" } }) : json({ proposals: [P] })));

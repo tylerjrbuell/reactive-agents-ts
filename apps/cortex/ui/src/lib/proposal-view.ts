@@ -16,10 +16,24 @@ export interface ProposalWire {
   readonly createdAt: number;
   /** Set when an Apply failed; the status stays `proposed` so the user can retry or dismiss. */
   readonly error?: string;
+  /** Before -> after rows for config changes. */
+  readonly diff?: readonly ProposalDiffRow[];
+  readonly direction?: "tighten" | "loosen" | "neutral";
+  /** Outside content may have steered this proposal. */
+  readonly flag?: string;
+  /** `auto` when a tightening change the user allowed applied without a click. */
+  readonly appliedBy?: "user" | "auto";
+}
+
+/** One before -> after row. */
+export interface ProposalDiffRow {
+  readonly label: string;
+  readonly before: string;
+  readonly after: string;
 }
 
 /** Which UI stores an applied action can change and so must re-read. */
-export type ProposalEffect = "goal" | "schedules" | "config";
+export type ProposalEffect = "goal" | "schedules" | "config" | "history";
 
 export interface ProposalChip {
   readonly key: string;
@@ -33,6 +47,15 @@ export interface ProposalView {
   readonly statusLabel: string | null;
   readonly tone: "pending" | "ok" | "muted" | "error";
   readonly error: string | null;
+  readonly diff: readonly ProposalDiffRow[];
+  /** Warning shown above Apply, or null. */
+  readonly flag: string | null;
+  /** Applied or dismissed: drawn as a one-line row with a remove control. */
+  readonly settled: boolean;
+  /** Short note on how it settled ("Applied automatically" etc.), or null. */
+  readonly note: string | null;
+  /** Loosening changes get an explicit marker on the card. */
+  readonly loosens: boolean;
 }
 
 const MAX_VALUE = 40;
@@ -61,23 +84,38 @@ export function argChips(args: Readonly<Record<string, unknown>>): readonly Prop
 }
 
 export function proposalView(p: ProposalWire): ProposalView {
-  const chips = argChips(p.args);
+  // A diff row already says what the arg chips would, so chips only show without one.
+  const diff = p.diff ?? [];
+  const chips = diff.length > 0 ? [] : argChips(p.args);
   const error = p.status === "proposed" && p.error ? p.error : null;
+  const base = { summary: p.summary, chips, diff, loosens: p.direction === "loosen" };
   switch (p.status) {
     case "applied":
-      return { summary: p.summary, chips, pending: false, statusLabel: "Applied", tone: "ok", error: null };
+      return { ...base, pending: false, statusLabel: "Applied", tone: "ok", error: null, flag: null, settled: true, note: p.appliedBy === "auto" ? "Applied automatically (a stricter change you allowed)" : null };
     case "dismissed":
-      return { summary: p.summary, chips, pending: false, statusLabel: "Dismissed", tone: "muted", error: null };
+      return { ...base, pending: false, statusLabel: "Dismissed", tone: "muted", error: null, flag: null, settled: true, note: null };
     case "proposed":
       return {
-        summary: p.summary,
-        chips,
+        ...base,
         pending: true,
         statusLabel: error ? "Apply failed" : null,
         tone: error ? "error" : "pending",
         error,
+        flag: p.flag ?? null,
+        settled: false,
+        note: null,
       };
   }
+}
+
+/**
+ * The banners to draw: identical proposals (same action, args and status) collapse to the newest,
+ * so a repeated tool call never stacks duplicate cards. Order is kept.
+ */
+export function visibleProposals(list: readonly ProposalWire[]): readonly ProposalWire[] {
+  const newest = new Map<string, string>();
+  for (const p of list) newest.set(`${p.status}|${p.action}|${JSON.stringify(p.args)}`, p.id);
+  return list.filter((p) => newest.get(`${p.status}|${p.action}|${JSON.stringify(p.args)}`) === p.id);
 }
 
 /**
@@ -93,7 +131,9 @@ export function effectsOf(action: string): readonly ProposalEffect[] {
   const a = action.toLowerCase();
   if (a.includes("goal")) return ["goal"];
   if (a.includes("loop") || a.includes("schedule") || a.includes("cron")) return ["schedules"];
+  if (a === "compact" || a === "fork" || a === "rewind" || a === "set-todo") return ["history", "config"];
   if (a.includes("model") || a.includes("provider") || a.includes("config") || a.includes("thinking") || a.includes("skill") || a.includes("doc")) return ["config"];
+  if (["add-tool", "remove-tool", "enable-mcp-server", "set-max-iterations", "set-strategy", "set-context-budget", "set-memory", "set-system-prompt", "set-approval-policy", "set-workspace"].includes(a)) return ["config"];
   return ["goal", "schedules", "config"];
 }
 

@@ -28,6 +28,8 @@ const CHAT_ONLY = new Set([
   "traceRuns",
   "seedTurns",
   "agentControl",
+  "agentControlGroups",
+  "agentControlAutoApply",
 ]);
 
 const keysOf = (schema: { properties: Record<string, unknown> }): string[] =>

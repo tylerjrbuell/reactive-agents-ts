@@ -38,6 +38,10 @@ export const ChatSessionConfigBody = t.Object({
   ),
   /** Let the chat agent propose session changes (model, goals, loops...) via the `session-control` tool. Default off. */
   agentControl: t.Optional(t.Boolean()),
+  /** Extra capability groups the agent may propose in (`session-capabilities.ts`); needs `agentControl`. Default none. */
+  agentControlGroups: t.Optional(t.Array(t.String())),
+  /** Groups whose TIGHTENING proposals apply without a click. A loosening change always needs Apply. Default none. */
+  agentControlAutoApply: t.Optional(t.Array(t.String())),
   ...AgentConfigBodyFields,
 });
 
@@ -172,6 +176,8 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
                 ? { taskContext: body.taskContext }
                 : {}),
               ...(body.agentControl === true ? { agentControl: true } : {}),
+              ...(body.agentControlGroups ? { agentControlGroups: body.agentControlGroups } : {}),
+              ...(body.agentControlAutoApply ? { agentControlAutoApply: body.agentControlAutoApply } : {}),
               ...(body.healthCheck === true ? { healthCheck: true } : {}),
               ...(typeof body.timeout === "number" && body.timeout > 0 ? { timeout: body.timeout } : {}),
               ...(body.retryPolicy?.enabled === true ? { retryPolicy: body.retryPolicy } : {}),
@@ -335,6 +341,14 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         return { error: "Proposals are not enabled" };
       }
       return proposalResponse(proposals.dismiss(params.sessionId, params.proposalId), set);
+    })
+    // Remove a banner from the thread (a settled one the user is done with; a pending one is dropped unapplied).
+    .delete("/sessions/:sessionId/proposals/:proposalId", ({ params, set }) => {
+      if (!proposals) {
+        set.status = 501;
+        return { error: "Proposals are not enabled" };
+      }
+      return proposalResponse(proposals.remove(params.sessionId, params.proposalId), set);
     })
     .post(
       "/sessions/:sessionId/schedules",

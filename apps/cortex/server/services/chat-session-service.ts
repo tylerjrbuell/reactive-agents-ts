@@ -34,6 +34,7 @@ import {
   setChatTodo,
   type StoredTodoItem,
 } from "../db/chat-queries.js";
+import { clearProposals, deleteProposalsAfter, deleteSettledProposals } from "../db/chat-proposal-queries.js";
 import {
   mergeCortexAllowedTools,
   coerceTaskContextRecord,
@@ -508,7 +509,12 @@ export class ChatSessionService {
 
   /** Delete the exchange containing `turnId` and everything after it. Returns the removed user message (for edit / rerun). */
   async rewind(sessionId: string, turnId: number): Promise<{ removed: number; userMessage: string }> {
-    const out = await this.mutateHistory(sessionId, () => rewindChatTurns(this.db, sessionId, turnId));
+    const out = await this.mutateHistory(sessionId, () => {
+      const r = rewindChatTurns(this.db, sessionId, turnId);
+      // Proposals belong to the thread: the ones the removed turns made go with them.
+      if (r) deleteProposalsAfter(this.db, sessionId, r.afterTs);
+      return r;
+    });
     if (!out) throw new Error(`Turn ${turnId} not found in session ${sessionId}`);
     updateSessionLastUsed(this.db, sessionId);
     return out;
@@ -524,6 +530,8 @@ export class ChatSessionService {
     const removed = await this.mutateHistory(sessionId, () => {
       rotateStableAgentId(this.db, sessionId, generateTaskId());
       setChatTodo(this.db, sessionId, []);
+      // A cleared chat keeps no banners of the conversation it dropped (pending ones included).
+      clearProposals(this.db, sessionId);
       return clearChatTurns(this.db, sessionId);
     });
     return { removed };
@@ -572,6 +580,8 @@ export class ChatSessionService {
     const { collapsed, context } = await this.mutateHistory(sessionId, () => {
       const window = latestWindowedContext(this.db, sessionId);
       const context = compactionContextEstimate(compactedTranscript(this.db, sessionId, keepLast, summary), window?.windowTokens);
+      // Settled banners belonged to the folded turns; pending ones still need an answer.
+      deleteSettledProposals(this.db, sessionId);
       return { collapsed: compactChatTurns(this.db, sessionId, keepLast, summary, context), context };
     });
     return { collapsed, compacted: old.length, summary, context };

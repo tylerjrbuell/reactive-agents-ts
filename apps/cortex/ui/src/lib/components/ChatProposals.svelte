@@ -2,7 +2,7 @@
   import ChatProposalCard from "$lib/components/ChatProposalCard.svelte";
   import { chatProposalsStore } from "$lib/stores/chat-proposals.js";
   import { toast } from "$lib/stores/toast-store.js";
-  import { shouldPollProposals } from "$lib/proposal-view.js";
+  import { shouldPollProposals, visibleProposals } from "$lib/proposal-view.js";
 
   interface Props {
     sessionId: string;
@@ -42,21 +42,30 @@
     wasStreaming = streaming;
   });
 
-  async function run(verb: "apply" | "dismiss", id: string) {
+  // Identical proposals collapse to one card; settled ones are one-line rows.
+  const shown = $derived(visibleProposals(proposals));
+
+  async function run(verb: "apply" | "dismiss" | "remove", id: string) {
     try {
       await chatProposalsStore[verb](sessionId, id);
       if (verb === "apply") toast.success("Applied");
     } catch (e) {
       // 422 leaves the error on the card itself; surface it once here too.
-      toast.error(`${verb === "apply" ? "Apply" : "Dismiss"} failed`, e instanceof Error ? e.message : String(e));
+      toast.error(`${verb === "apply" ? "Apply" : verb === "remove" ? "Remove" : "Dismiss"} failed`, e instanceof Error ? e.message : String(e));
     }
   }
 </script>
 
-{#if proposals.length > 0}
+{#if shown.length > 0}
   <div class="flex flex-col gap-2 px-4 pb-3" data-testid="chat-proposals">
-    {#each proposals as p (p.id)}
-      <ChatProposalCard proposal={p} busy={busy.includes(p.id)} onApply={() => void run("apply", p.id)} onDismiss={() => void run("dismiss", p.id)} />
+    {#each shown as p (p.id)}
+      <ChatProposalCard
+        proposal={p}
+        busy={busy.includes(p.id)}
+        onApply={() => void run("apply", p.id)}
+        onDismiss={() => void run("dismiss", p.id)}
+        onRemove={() => void run("remove", p.id)}
+      />
     {/each}
   </div>
 {/if}

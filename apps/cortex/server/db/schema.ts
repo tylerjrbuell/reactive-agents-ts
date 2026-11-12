@@ -254,6 +254,12 @@ export function applySchema(db: Database): void {
   `);
 
   // Migrations — safe to run on existing DBs (ALTER TABLE IF NOT EXISTS column)
+  const proposalCols = (db.prepare("PRAGMA table_info(chat_proposals)").all() as Array<{ name: string }>).map((c) => c.name);
+  // Before -> after diff (JSON), tighten / loosen / neutral, an injection-risk flag, and who applied it.
+  if (!proposalCols.includes("diff_json")) db.exec("ALTER TABLE chat_proposals ADD COLUMN diff_json TEXT");
+  if (!proposalCols.includes("direction")) db.exec("ALTER TABLE chat_proposals ADD COLUMN direction TEXT");
+  if (!proposalCols.includes("flag")) db.exec("ALTER TABLE chat_proposals ADD COLUMN flag TEXT");
+  if (!proposalCols.includes("applied_by")) db.exec("ALTER TABLE chat_proposals ADD COLUMN applied_by TEXT");
   const runCols = (db.prepare("PRAGMA table_info(cortex_runs)").all() as Array<{ name: string }>)
     .map((c) => c.name);
   if (!runCols.includes("provider")) db.exec("ALTER TABLE cortex_runs ADD COLUMN provider TEXT");

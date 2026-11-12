@@ -30,6 +30,11 @@ describe("quickBarChips", () => {
     expect(chips.map((c) => c.text)).toEqual(["1 skill pinned", "Agent control", "2 documents"]);
   });
 
+  test("the Agent control chip counts the extra capability groups switched on", () => {
+    const chips = quickBarChips({ agentControl: true, agentControlGroups: ["tools", "limits"] }, ctx({ provider: "" }));
+    expect(chips.map((c) => c.text)).toContain("Agent control +2");
+  });
+
   test("model without thinking mode; no model ⇒ no thinking chip; no workspace label", () => {
     expect(quickBarChips({}, ctx({ modelThinking: false })).find((c) => c.cmd === "/thinking ")?.text).toBe("No thinking mode");
     const noModel = quickBarChips({}, ctx({ model: "" }));

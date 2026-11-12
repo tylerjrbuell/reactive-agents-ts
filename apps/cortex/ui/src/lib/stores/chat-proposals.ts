@@ -73,11 +73,27 @@ export function createChatProposalsStore(fetchFn: Fetch = (url, init) => fetch(u
     }
   }
 
+  /** Remove a banner from the thread (settled ones the user is done with). A missing one is already gone. */
+  async function remove(sid: string, id: string): Promise<void> {
+    setBusy(id, true);
+    try {
+      const res = await fetchFn(`${base(sid)}/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 404) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new ProposalApplyError(body.error ?? `Request failed (${res.status})`, res.status);
+      }
+      if (current(sid)) store.update((s) => ({ ...s, proposals: s.proposals.filter((p) => p.id !== id) }));
+    } finally {
+      setBusy(id, false);
+    }
+  }
+
   return {
     subscribe: store.subscribe,
     snapshot: () => get(store),
     reset,
     load,
+    remove,
     apply: (sid: string, id: string) => act(sid, id, "apply"),
     dismiss: (sid: string, id: string) => act(sid, id, "dismiss"),
   };
@@ -89,5 +105,12 @@ export const chatProposalsStore = createChatProposalsStore(undefined, async (sid
   if (effects.includes("goal")) jobs.push(chatGoalStore.loadGoal(sid));
   if (effects.includes("schedules")) jobs.push(chatGoalStore.loadSchedules(sid));
   if (effects.includes("config")) jobs.push(chatStore.loadSessions());
+  if (effects.includes("history")) jobs.push(chatStore.refreshActive());
   await Promise.allSettled(jobs);
+});
+
+// The banners belong to the thread: when it is rewound, cleared or compacted, re-read them (the
+// server already removed the ones that went with it) instead of leaving stale cards on screen.
+chatStore.onHistoryChange((sid) => {
+  if (chatProposalsStore.snapshot().sessionId === sid) void chatProposalsStore.load(sid).catch(() => {});
 });

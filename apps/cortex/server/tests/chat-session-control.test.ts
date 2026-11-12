@@ -336,7 +336,7 @@ describe("session control", () => {
       await call({ action: "set-thinking", value: "off" });
       const list = (await (await req("GET", "/proposals")).json()) as { proposals: Array<{ id: string; action: string; args: Record<string, unknown>; summary: string; status: string; createdAt: number }> };
       expect(list.proposals).toHaveLength(2);
-      expect(Object.keys(list.proposals[0]!).sort()).toEqual(["action", "args", "createdAt", "id", "status", "summary"]);
+      expect(Object.keys(list.proposals[0]!).sort()).toEqual(["action", "args", "createdAt", "direction", "id", "status", "summary"]);
       const [a, b] = list.proposals;
       const ok = await req("POST", `/proposals/${a!.id}/apply`);
       expect(ok.status).toBe(200);
