@@ -20,6 +20,28 @@ describe("PiiDetector", () => {
     expect(result.message).toContain("Email");
   });
 
+  it("email scan is linear-time on adversarial 80 KB input (ReDoS pin)", async () => {
+    const inputs = [
+      "a".repeat(80_000), // long local-part run, no @
+      "a@" + "a.".repeat(40_000), // long domain run, no TLD
+      "a@a".repeat(26_000), // many @ starts
+      "a.".repeat(40_000) + "@", // dotted local run
+    ];
+    for (const input of inputs) {
+      const start = performance.now();
+      await Effect.runPromise(detectPii(input));
+      expect(performance.now() - start).toBeLessThan(50);
+    }
+  });
+
+  it("still detects emails with plus tags, dots, subdomains", async () => {
+    for (const text of ["a.b+tag@mail.example.co.uk", "x_y%z@sub.example.org!"]) {
+      const result = await Effect.runPromise(detectPii(`write ${text} now`));
+      expect(result.detected).toBe(true);
+      expect(result.message).toContain("Email");
+    }
+  });
+
   it("should detect credit card numbers", async () => {
     const result = await Effect.runPromise(
       detectPii("Card number: 4111 1111 1111 1111"),

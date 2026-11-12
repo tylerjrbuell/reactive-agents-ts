@@ -39,7 +39,14 @@ const PII_PATTERNS: ReadonlyArray<PiiPattern> = [
     label: "SSN (no dashes)",
     severity: "high",
   },
-  { pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, label: "Email", severity: "medium" },
+  // Linear-time: every quantifier is bounded (RFC 5321 lengths, so a scan from any
+  // start costs O(1), not O(n) rescans of a long run) and domain labels are
+  // dot-free so they cannot backtrack across overlapping classes.
+  {
+    pattern: /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){0,10}\.[A-Za-z]{2,24}\b/g,
+    label: "Email",
+    severity: "medium",
+  },
   // 16-digit cards (4-4-4-4) and Amex (34/37, 4-6-5); a Luhn check rejects
   // arbitrary digit runs of the same shape.
   {

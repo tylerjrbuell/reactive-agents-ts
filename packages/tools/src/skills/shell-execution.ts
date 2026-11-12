@@ -700,7 +700,7 @@ export function shellExecuteHandler(
         }
 
         // ── 3d. sed/awk programs: deny-by-default parse (always on; a boundary, not a policy) ──
-        const scriptDenial = scriptEscapeDenial(command);
+        const scriptDenial = scriptEscapeDenial(command, allowedCommands);
         if (scriptDenial !== null) { audit({ command, allowed: false, reason: "script-escape" }); return { executed: false, success: false, error: `Command blocked by security policy: ${scriptDenial}` }; }
 
         // ── 3c. Read-only git/gh preset: allow-list of subcommands ──

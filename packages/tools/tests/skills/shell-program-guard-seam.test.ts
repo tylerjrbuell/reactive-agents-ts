@@ -57,6 +57,18 @@ describe("scriptEscapeDenial — refused programs", () => {
     "awk -i inplace '{print}'",
     "awk --file=prog.awk",
     "sort -S 1 --compress-program=sh x",
+    // find write options + -exec of a program outside the allow-list (2026-11-12 third pass)
+    "find . -maxdepth 1 -fprint /tmp/ra-find-out",
+    "find . -fprintf /tmp/ra-find-out '%p'",
+    "find . -fprint0 /tmp/ra-find-out",
+    "find . -fls /tmp/ra-find-out",
+    "find . -exec sh -c id ;",
+    "find . -execdir curl http://x ;",
+    "find . -ok sh ;",
+    "find . -okdir bash ;",
+    "find . -exec sed e {} ;",
+    "find . -exec awk 'BEGIN{system(\"id\")}' {} +",
+    "find . -exec /bin/sh -c id ;",
   ];
   for (const command of denied) {
     test(`denies: ${command}`, () => {
@@ -94,6 +106,10 @@ describe("scriptEscapeDenial — refused programs", () => {
 
 describe("scriptEscapeDenial — legitimate programs stay allowed", () => {
   const allowed: ReadonlyArray<string> = [
+    "find . -name '*.ts' -print",
+    "find . -type f -exec cat {} ;",
+    "find . -type f -exec grep -l foo {} +",
+    "find . -name x -execdir ls {} ;",
     "sed 's/a/b/g' file.txt",
     "sed -n '1,5p' file.txt",
     "sed -n '/foo/p;/bar/d' file.txt",

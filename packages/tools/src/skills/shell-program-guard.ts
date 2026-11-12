@@ -18,6 +18,7 @@
  * `shellExecuteHandler` (skills/shell-execution.ts); runs regardless of a
  * caller-supplied `blockedPatterns`, because it is a boundary, not a policy.
  */
+import { DEFAULT_ALLOWED_COMMANDS } from "./shell-command-catalog.js";
 import { shellWords, splitCommandSegments } from "./shell-command-segments.js";
 
 /** One labelled block-list rule (structurally `BlockedCommandRule`). */
@@ -52,7 +53,10 @@ const base = (word: string): string => word.slice(word.lastIndexOf("/") + 1);
  * with a program that can execute commands or write files; `null` otherwise.
  * Expects the already-sanitized command string.
  */
-export function scriptEscapeDenial(command: string): string | null {
+export function scriptEscapeDenial(
+  command: string,
+  allowedCommands: ReadonlyArray<string> = DEFAULT_ALLOWED_COMMANDS,
+): string | null {
   for (const segment of splitCommandSegments(command)) {
     // Redirect words (`> out`, `2>&1`) are not arguments of the program.
     const words = shellWords(segment).filter((w) => !/^[0-9&]*[<>]/.test(w));
@@ -60,6 +64,11 @@ export function scriptEscapeDenial(command: string): string | null {
     while (at < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[at]!)) at++; // VAR=val prefix
     const first = words[at];
     if (first === undefined) continue;
+    if (base(first) === "find") {
+      const denial = findDenial(words.slice(at + 1), allowedCommands);
+      if (denial !== null) return denial;
+      continue;
+    }
     let start = at;
     if (WRAPPERS.has(base(first))) {
       // `xargs -I {} sed …`, `env X=1 awk …`, `timeout 5 sed …`: find the program anywhere after.
@@ -75,6 +84,40 @@ export function scriptEscapeDenial(command: string): string | null {
       const denial = awkDenial(args);
       if (denial !== null) return denial;
     }
+  }
+  return null;
+}
+
+// ── find ──────────────────────────────────────────────────────────────
+
+const FIND_WRITE_ACTIONS: ReadonlySet<string> = new Set(["-fprint", "-fprint0", "-fprintf", "-fls"]);
+const FIND_EXEC_ACTIONS: ReadonlySet<string> = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
+
+/**
+ * `find` writes files with `-fprint*` / `-fls` and runs programs with
+ * `-exec*` / `-ok*`. Write actions are refused; the program of an exec action
+ * must itself be allow-listed, not a wrapper, and (for sed/awk) pass its own
+ * program check.
+ */
+function findDenial(args: ReadonlyArray<string>, allowedCommands: ReadonlyArray<string>): string | null {
+  for (let k = 0; k < args.length; k++) {
+    const arg = args[k]!;
+    if (FIND_WRITE_ACTIONS.has(arg)) return `find ${arg} (writes a file) is blocked`;
+    if (!FIND_EXEC_ACTIONS.has(arg)) continue;
+    const sub: string[] = [];
+    for (k++; k < args.length; k++) {
+      const w = args[k]!;
+      if (w === ";" || w === "\\" || w === "\\;" || (w === "+" && args[k - 1] === "{}")) break;
+      sub.push(w);
+    }
+    const program = sub[0];
+    if (program === undefined) continue;
+    const name = base(program);
+    if (!allowedCommands.includes(name) || WRAPPERS.has(name) || name === "find") {
+      return `find ${arg} of '${name}' (program not allowed there) is blocked`;
+    }
+    const denial = name === "sed" ? sedDenial(sub.slice(1)) : name === "awk" ? awkDenial(sub.slice(1)) : null;
+    if (denial !== null) return denial;
   }
   return null;
 }
