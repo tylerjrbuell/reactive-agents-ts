@@ -152,6 +152,45 @@ export interface ApprovalDecision {
   readonly reason?: string;
 }
 
+/** One selectable option of a choice {@link InteractionQuestion}. */
+export interface InteractionQuestionOption {
+  /** Text shown to the human. */
+  readonly label: string;
+  /** Value reported back in the answer when this option is picked. */
+  readonly value: string;
+  /** Optional extra explanation shown under the label. Absent when the label is enough. */
+  readonly description?: string;
+}
+
+/**
+ * One question of a structured `request_user_input` interaction. Structural
+ * mirror of the `Question` type in `@reactive-agents/tools` (core cannot import
+ * it); that type must stay assignable to this one. A host answers a structured
+ * interaction with an id-keyed map carried in {@link InteractionResponse.valueJson}.
+ */
+export interface InteractionQuestion {
+  /** Unique within the request; the key of this question's answer. */
+  readonly id: string;
+  /** The question text shown to the human. */
+  readonly prompt: string;
+  /** The answer type asked for. */
+  readonly type: "text" | "single-choice" | "multi-choice" | "boolean" | "number";
+  /** Selectable options. Present for `single-choice` / `multi-choice`; absent otherwise. */
+  readonly options?: readonly InteractionQuestionOption[];
+  /** Whether an answer is required. Absent means required (true). */
+  readonly required?: boolean;
+  /** Value used when a non-required question is skipped. Absent means no default. */
+  readonly default?: unknown;
+  /** `number`: inclusive lower bound. `multi-choice`: fewest options to pick. */
+  readonly min?: number;
+  /** `number`: inclusive upper bound. `multi-choice`: most options to pick. */
+  readonly max?: number;
+  /** `text`: longest accepted answer. */
+  readonly maxLength?: number;
+  /** Choice questions: also accept a free-text value outside `options`. */
+  readonly allowOther?: boolean;
+}
+
 /**
  * A human's response to a paused durable `request_user_input` interaction,
  * carried into a resumed run by `ReactiveAgent.respondToInteraction` (run slot
@@ -161,6 +200,10 @@ export interface ApprovalDecision {
  */
 export interface InteractionResponse {
   readonly interactionId: string;
-  /** JSON-serialized user value (JSON.stringify of whatever the human answered). */
+  /**
+   * JSON-serialized user value (JSON.stringify of whatever the human answered).
+   * For a structured interaction (questions present) this is an id-keyed map of
+   * answers, one entry per {@link InteractionQuestion.id}.
+   */
   readonly valueJson: string;
 }

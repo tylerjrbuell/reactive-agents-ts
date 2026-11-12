@@ -12,9 +12,10 @@
  * unchanged (zero consumer edits). Bodies are byte-identical to the originals
  * modulo the destructured params (Task 4 rule: explicit deps, live instances).
  */
-import { Effect } from "effect";
+import { Effect, Either } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { interactionExchange } from "../capabilities/act/user-interaction.js";
+import { parseRequest, type StructuredRequest } from "@reactive-agents/tools";
+import { interactionExchange, structuredObservation } from "../capabilities/act/user-interaction.js";
 import {
   transitionState,
   type KernelState,
@@ -162,6 +163,16 @@ export function runApprovalResumeReentry(args: {
   });
 }
 
+/** Read a structured pause's stored questions back into a typed request; undefined if unreadable. */
+function storedRequest(schemaJson: string): StructuredRequest | undefined {
+  try {
+    const parsed = parseRequest(JSON.parse(schemaJson));
+    return Either.isRight(parsed) ? parsed.right : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function runInteractionResumeReentry(args: {
   readonly state: KernelState;
   readonly effectiveInput: KernelInput;
@@ -193,10 +204,18 @@ export function runInteractionResumeReentry(args: {
         // renders the human's answer as the pending call's result. A plain
         // observation step alone would be invisible to the LLM prompt.
         // Same pair the live ask-user path writes (act/user-interaction.ts).
-        const observation = `The user responded: ${response.valueJson}`;
+        // A structured pause stored its typed questions in `schemaJson`: validate
+        // the id-keyed answer map against them; invalid answers become an error
+        // the model can act on (re-ask) instead of a silently wrong answer.
+        const stored = pending.kind === "structured" ? storedRequest(pending.schemaJson) : undefined;
+        const observation = stored
+          ? structuredObservation(stored, response.valueJson).observation
+          : `The user responded: ${response.valueJson}`;
         const exchange = interactionExchange(
           pending.interactionId,
-          { kind: pending.kind, prompt: pending.prompt },
+          stored
+            ? { questions: stored.questions }
+            : { kind: pending.kind, prompt: pending.prompt },
           observation,
         );
         state = transitionState(state, {

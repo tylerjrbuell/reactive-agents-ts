@@ -101,6 +101,22 @@ for await (const event of agent.runStream("help me pick a plan")) {
 - With `.withDurableRuns()` the run instead pauses `awaiting-interaction` and
   `respondToInteraction` resumes it from any process (no wait bound applies).
 
+### Multi-part questions
+
+The model can also pass `questions`: a list of typed questions in one call.
+Each has `id`, `prompt`, `type` (`text`, `single-choice`, `multi-choice`,
+`boolean`, `number`) and optional `options` (`{ label, value, description }`),
+`required` (default true), `default`, `min`/`max`, `maxLength` and `allowOther`
+(free text for a choice). The old `kind`/`prompt`/`schema` call still works.
+
+`@reactive-agents/tools` exports the pure helpers a host uses with it:
+`parseRequest(args)` normalizes either shape, and `validateAnswers(request,
+answers)` checks an answer map keyed by question id. It returns a typed result
+(`status` of `answered`, `partial`, `skipped` or `timeout`, plus a per-question
+status and value), or per-question errors (`RequiredMissing`, `NotInOptions`,
+`OutOfRange`, `TooLong`, `WrongType`, `UnknownQuestion`) that the model reads to
+correct itself. `timeoutAnswer(request)` builds the timeout result.
+
 ## Enabling it
 
 `.withApprovalPolicy()` names which tool calls require approval. `mode: "detach"`

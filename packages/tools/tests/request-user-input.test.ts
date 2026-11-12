@@ -25,4 +25,10 @@ describe("request_user_input tool definition", () => {
     expect(json).toContain("prompt");
     expect(json).toContain("schema");
   });
+
+  test("declares the questions param and keeps description short", () => {
+    expect(requestUserInputTool.parameters.map((p) => p.name)).toContain("questions");
+    expect(requestUserInputTool.parameters.every((p) => p.required === false)).toBe(true);
+    expect(requestUserInputTool.description.length).toBeLessThan(900);
+  });
 });

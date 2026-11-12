@@ -539,3 +539,25 @@ export {
   buildPulseResponse,
   type PulseInput,
 } from "./skills/pulse.js";
+
+// ─── Structured request_user_input questions ───
+export {
+  QUESTION_TYPES,
+  QuestionSchema,
+  QuestionOptionSchema,
+  parseRequest,
+  validateAnswers,
+  timeoutAnswer,
+  formatAnswerErrors,
+} from "./skills/user-input-questions.js";
+export type {
+  Question,
+  QuestionType,
+  QuestionOption,
+  StructuredRequest,
+  StructuredAnswer,
+  QuestionAnswer,
+  AnswerStatus,
+  OverallStatus,
+  AnswerError,
+} from "./skills/user-input-questions.js";

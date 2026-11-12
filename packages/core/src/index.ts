@@ -342,7 +342,7 @@ export type { RunContext } from "./run-context.js";
 
 // ─── Streaming / durable shapes (per-run values live in run slots) ───
 export { toolEffectIdentityKey, canonicalToolArgsJson } from "./streaming.js";
-export type { InteractionResponse, ToolEffectSpec, ToolEffectOutcome, ToolEffectRecord } from "./streaming.js";
+export type { InteractionResponse, InteractionQuestion, InteractionQuestionOption, ToolEffectSpec, ToolEffectOutcome, ToolEffectRecord } from "./streaming.js";
 export type { RunControllerLike, ApprovalDecision } from "./streaming.js";
 
 // ─── AgentMemory port (NS §3.1 — FIX-34) ───

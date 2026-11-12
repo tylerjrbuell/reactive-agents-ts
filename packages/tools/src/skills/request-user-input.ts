@@ -15,33 +15,39 @@ export const requestUserInputTool: ToolDefinition = {
   name: REQUEST_USER_INPUT_TOOL_NAME,
   description:
     "Pause this run and ask the human user for input. Use ONLY when you cannot proceed without " +
-    "information or a decision that the user must provide (a choice between options, a confirmation, " +
-    "or structured form values). The run waits until the user responds; their response " +
-    "arrives as this tool's result. Do not use it for information you can obtain with other tools.",
+    "information or a decision that the user must provide. The run waits until the user responds; their response " +
+    "arrives as this tool's result. Do not use it for information you can obtain with other tools. " +
+    "Prefer `questions`: several typed questions in one call. Use single-choice/multi-choice when the answers are " +
+    "a known set, boolean for yes/no, number for amounts, text only for open answers. " +
+    "Each question: { id, prompt, type: text|single-choice|multi-choice|boolean|number, options?: [{label, value}], " +
+    "required?, default?, min?, max?, maxLength?, allowOther? }. The result maps each id to its answer.",
   parameters: [
     {
-      name: "kind",
-      type: "string",
-      description:
-        "The shape of input being requested: 'form' (structured fields), 'choice' (pick one of a " +
-        "list of options), or 'confirmation' (yes/no approval).",
-      required: true,
-      enum: ["form", "choice", "confirmation"],
+      name: "questions",
+      type: "array",
+      description: "Typed questions to ask in one call (see tool description). Preferred over kind/schema.",
+      required: false,
+      items: { type: "object" },
     },
     {
       name: "prompt",
       type: "string",
-      description: "What to ask the user — the question or instruction shown to them.",
-      required: true,
+      description: "Heading or instruction shown to the user. Required when not using `questions`.",
+      required: false,
+    },
+    {
+      name: "kind",
+      type: "string",
+      description: "Legacy single-question shape: 'form', 'choice' or 'confirmation'. Omit when using `questions`.",
+      required: false,
+      enum: ["form", "choice", "confirmation"],
     },
     {
       name: "schema",
       type: "object",
       description:
-        "Kind-specific structured payload describing the requested input. " +
-        "For kind 'form': { fields: [{ name, label, type: 'text'|'number'|'boolean', required? }] }. " +
-        "For kind 'choice': { options: string[] }. For kind 'confirmation': {} (empty object).",
-      required: true,
+        "Legacy payload for `kind`: form { fields: [{ name, label, type, required? }] }, choice { options: string[] }.",
+      required: false,
     },
   ],
   returnType: "object",
