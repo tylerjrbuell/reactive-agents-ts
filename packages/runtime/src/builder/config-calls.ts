@@ -47,6 +47,7 @@ export type BuilderMethod =
   | "withRetryPolicy"
   | "withStrictValidation"
   | "withGateway"
+  | "withChannels"
   | "withMCP"
   | "withReactiveIntelligence"
   | "withLogging"
@@ -349,6 +350,10 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
   if (exec?.llmTimeoutMs !== undefined) push(call("withLlmTimeout", exec.llmTimeoutMs));
 
   if (config.gateway) push(call("withGateway", config.gateway));
+  // Routes only: adapters and agent factories are code, supplied by a later `.withChannels({ adapters, routes, agents })`.
+  if (config.channelRoutes && config.channelRoutes.length > 0) {
+    push(call("withChannels", { adapters: [], routes: config.channelRoutes }));
+  }
   if (config.mcpServers && config.mcpServers.length > 0) push(call("withMCP", config.mcpServers));
   // Reactive intelligence is on by default, so an explicit `false` must call
   // withReactiveIntelligence(false); leaving it out would turn RI back on.

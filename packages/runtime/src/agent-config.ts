@@ -8,6 +8,7 @@
 import { Schema } from "effect";
 import { ReasoningStrategy } from "@reactive-agents/core";
 import { LLMProviderType } from "@reactive-agents/llm-provider";
+import { RouteSpec } from "@reactive-agents/channels";
 import type { ReactiveAgentBuilder } from "./builder.js";
 import type { AuthoredApprovalPolicy } from "@reactive-agents/reasoning";
 import { HarnessConfigSchema } from "./harness-schema.js";
@@ -755,6 +756,8 @@ export const AgentConfigSchema = Schema.Struct({
   execution: Schema.optional(ExecutionConfigSchema),
   /** Gateway configuration. */
   gateway: Schema.optional(GatewayConfigSchema),
+  /** Channel routes (who may reach which agent through a shared channel); see `.withChannels({ routes })`. */
+  channelRoutes: Schema.optional(Schema.Array(RouteSpec)),
   /** MCP server configurations. */
   mcpServers: Schema.optional(Schema.Array(MCPServerConfigSchema)),
   /** Reactive intelligence configuration. */

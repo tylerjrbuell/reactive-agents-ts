@@ -24,6 +24,7 @@ import {
     startGateway,
     queryGatewayStatus,
     queryChannelStatus,
+    queryChannelRouterStatus,
 } from './agent/gateway-runner.js'
 import { makeJudgmentFacade } from './agent/judgment-facade.js'
 import { makeSkillsFacade } from './agent/skills-facade.js'
@@ -1967,6 +1968,11 @@ export class ReactiveAgent<TOut = unknown> {
         return queryChannelStatus(this)
     }
 
+    /** Router status (channels, routes, drops, sessions) after a `.withChannels({ routes })` gateway starts; `null` before. */
+    channelRouterStatus(): Promise<import('@reactive-agents/channels').RouterStatus | null> {
+        return queryChannelRouterStatus(this)
+    }
+
     /** Durable gateway schedules (list/create/pause/resume/runNow/lastResult); requires `.withGateway()`. */
     schedules(): SchedulesApi {
         return makeSchedulesApi(this.runtime, this._gatewayEnabled)
@@ -1988,13 +1994,7 @@ export class ReactiveAgent<TOut = unknown> {
      *
      * @throws Error if gateway is not configured (no `.withGateway()` call)
      * @returns GatewayHandle with stop() and done promise
-     * @example
-     * ```typescript
-     * const handle = agent.start();
-     * // ... later
-     * const summary = await handle.stop();
-     * console.log(`${summary.totalRuns} runs, ${summary.heartbeatsFired} heartbeats`);
-     * ```
+     * @example `const handle = agent.start(); const summary = await handle.stop();`
      */
     start(): GatewayHandle {
         return startGateway(this)

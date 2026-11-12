@@ -73,7 +73,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withBehavioralContracts` | _overlay — behavioral-contract overlay (folds into withContract)_ | overlay | Behavioral contracts. |
 | `withBudget` | `budget` | config | Declarative token/cost budget caps. |
 | `withCalibration` | _overlay — runtime-probed calibration (not static data)_ | overlay | Model calibration mode. |
-| `withChannels` | _overlay — messaging transport wiring (not data)_ | overlay | Messaging channels. |
+| `withChannels` | `channelRoutes` | config | Messaging channels and routes. |
 | `withCircuitBreaker` | `circuitBreaker` | config | Circuit-breaker thresholds (false disables). |
 | `withContextProfile` | _overlay — cross-field side-effect profile (not orthogonal data)_ | overlay | Context window profile. |
 | `withContract` | _overlay — behavioral-contract overlay (not JSON data)_ | overlay | Behavioral contract. |

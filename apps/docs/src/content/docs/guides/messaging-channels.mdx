@@ -469,6 +469,57 @@ runAdapterConformance("MyAdapter", makeMyHarness)
 
 You supply a fake platform (`AdapterHarness`) with no network and no tokens. The suite checks inbound normalization, idempotency, echo handling, group and thread identity, attachments, receipts, typed errors, secret redaction, namespaced identity, honest state, backpressure, outbound rate limiting and reconnect.
 
+## Routes: One Connection, Many Agents
+
+`.withChannels({ adapters, routes, agents })` starts a channel router. Each adapter is opened once. A **route** matches inbound conversations, names a target agent, and says who may talk and what a stranger may do.
+
+```typescript
+import { Redacted } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+import { TelegramChannelAdapter } from "@reactive-agents/channels";
+
+const telegram = new TelegramChannelAdapter({
+  token: Redacted.make(process.env.TELEGRAM_BOT_TOKEN ?? ""),
+});
+
+const host = await ReactiveAgents.create()
+  .withName("channel-host")
+  .withProvider("anthropic")
+  .withGateway()
+  .withChannels({
+    adapters: [telegram], // canonical ChannelAdapters only
+    routes: [
+      {
+        id: "support",
+        match: { channelId: telegram.id, conversation: "dm" },
+        target: { agentId: "support" },
+        owners: ["telegram:1001"], // set from code only, never from a message
+        allow: ["telegram:2002"],
+        // senderTools defaults to { _tag: "ReadOnly" } for non-owners
+      },
+    ],
+    agents: {
+      // a fresh builder per (route, role); the router narrows its tools before build()
+      support: () => ReactiveAgents.create().withProvider("anthropic").withTools({ builtins: ["web-search", "file-write"] }),
+    },
+    meter: { reserveUsd: 0.05, maxMessagesPerDay: 500 }, // optional per-route cost and message caps
+  })
+  .build();
+
+const handle = host.start(); // the router starts and stops with the gateway handle
+await host.channelRouterStatus(); // { channels, routes, unrouted, dropped, activeSessions, durableStore }
+```
+
+How access works:
+
+- **Fail closed.** A message no route claims is dropped and counted as unrouted. A denied sender never reaches an agent.
+- **Owners run the agent's own tools. Everyone else gets `senderTools`**, which defaults to `ReadOnly`: only tools that declare `mutatesExternalState: false` and need no approval. Unclassified tools (custom, MCP, sub-agent) are removed. `Allowlist` keeps only named tools the agent already had.
+- **The tool surface is decided when the agent is built**, not per turn and not by prompt. The router builds one agent per (route, role), so a sender never shares history or tools with an owner. Sender text reaches the model only as the user message; persona and instructions stay in the agent's own configuration.
+- **State is in memory by default.** Message dedupe and turn caps reset on restart, and the router logs a warning at startup. Pass a durable `store` to keep them.
+- This limits what an injected message can do. It does not make a model immune to injection, and read-only tools can still leak data they can read.
+
+Routes (not adapters or agent factories) serialize with the rest of the agent as `channelRoutes` in `AgentConfig`. `.withChannels({ adapters, triggers })` keeps working for the single-agent path.
+
 ## Troubleshooting
 
 ### Signal registration fails

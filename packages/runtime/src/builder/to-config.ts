@@ -66,6 +66,8 @@ export interface BuilderStateForSerialization {
   _retryPolicy?: { maxRetries: number; backoffMs: number };
   _strictValidation: boolean;
   _gatewayOptions?: unknown;
+  /** Only the serializable part of `.withChannels()`: the routes (adapters are live objects). */
+  _channelsConfig?: { readonly routes?: readonly unknown[] };
   _mcpServers: unknown[];
   _enableReactiveIntelligence: boolean;
   _reactiveIntelligenceOptions?: unknown;
@@ -319,6 +321,10 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
 
   // Gateway
   if (state._gatewayOptions) config["gateway"] = state._gatewayOptions;
+
+  // Channel routes (data); the adapters and agent factories of `.withChannels()` stay code-only.
+  const channelRoutes = state._channelsConfig?.routes;
+  if (channelRoutes && channelRoutes.length > 0) config["channelRoutes"] = [...channelRoutes];
 
   // MCP servers
   if (state._mcpServers.length > 0) config["mcpServers"] = [...state._mcpServers];

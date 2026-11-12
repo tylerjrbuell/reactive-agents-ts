@@ -22,7 +22,8 @@ import {
   type GatewayInboundQueue,
   type InboundQueueOverflow,
 } from "./gateway-inbound-queue.js";
-import type { ChannelService } from "@reactive-agents/channels";
+import type { ChannelService, RouterStatus } from "@reactive-agents/channels";
+import { startChannelRouterHost, type ChannelRouterHost } from "./channel-router-host.js";
 import { makeScheduleReporter } from "./gateway-schedule-report.js";
 import { startRuntimeIngress } from "./gateway-ingress.js";
 import type { GatewayEvent } from "@reactive-agents/gateway";
@@ -132,6 +133,15 @@ const liveGateway = new WeakMap<
   }
 >();
 
+/** Channel routers started by `startGateway`, keyed by agent. */
+const routerHosts = new WeakMap<object, ChannelRouterHost>();
+
+/** Router status (channels, route and drop counts, active sessions); `null` when no router is running. */
+export const queryChannelRouterStatus = async (self: object): Promise<RouterStatus | null> => {
+  const host = routerHosts.get(self);
+  return host ? Effect.runPromise(host.router.status) : null;
+};
+
 /**
  * Channel snapshot (adapters, sessions, message counters) once the gateway has started with
  * `.withChannels()`. `null` before start or when no channels are configured.
@@ -178,7 +188,8 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     const channelsCfg = self._channelsConfig;
     const bootstrap = await bootstrapGateway({
       runtime: self.runtime,
-      channelsConfig: channelsCfg,
+      // Routed channels run through the router host, never the legacy trigger path.
+      channelsConfig: channelsCfg?.routes?.length ? undefined : channelsCfg,
       gatewayIntervalMs,
       createSession: (sessionId) =>
         self.session({
@@ -201,6 +212,22 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
 
     const { gw, sched, eb, glog } = bootstrap;
     channelAdaptersCleanup = bootstrap.channelAdaptersCleanup;
+    if (channelsCfg?.routes && channelsCfg.routes.length > 0) {
+      try {
+        const host = await startChannelRouterHost({
+          config: channelsCfg,
+          log: glog,
+          ...(eb !== null ? { eventBus: { publish: (e: AgentEvent) => eb.publish(e) as Effect.Effect<void, never> } } : {}),
+        });
+        routerHosts.set(self, host);
+        channelAdaptersCleanup = async () => {
+          routerHosts.delete(self);
+          await host.stop();
+        };
+      } catch (err) {
+        glog("error", `channel router failed to start: ${String(err)}`);
+      }
+    }
 
     // Helper to publish events safely
     const publish = async (event: AgentEvent) => {

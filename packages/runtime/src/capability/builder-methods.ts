@@ -147,7 +147,8 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
 
   // ── Overlays: secrets / integrations / registries ──
   withEnvironment: { kind: "overlay", overlayReason: "carries secrets/env (never serialized)", description: "Environment secrets." },
-  withChannels: { kind: "overlay", overlayReason: "messaging transport wiring (not data)", description: "Messaging channels." },
+  // Routes are data; adapters, agent factories, store and meter are code-only.
+  withChannels: { kind: "config", configKeys: ["channelRoutes"], description: "Messaging channels and routes." },
   withCortex: { kind: "overlay", overlayReason: "Cortex desk integration — observability alias (see withObservability({cortex}))", description: "Emit events to a Cortex desk." },
   withTracing: { kind: "overlay", overlayReason: "trace persistence — observability alias (see withObservability({tracing}))", description: "JSONL trace persistence." },
   withEvents: { kind: "overlay", overlayReason: "carries an event stream/callback (folds into withObservability)", description: "Event stream sink." },
