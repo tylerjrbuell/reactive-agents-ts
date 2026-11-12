@@ -5,7 +5,8 @@ import { CortexIngestServiceLive, CortexIngestService } from "./services/ingest-
 import { CortexEventBridge, CortexEventBridgeLive } from "./services/event-bridge.js";
 import { CortexStoreServiceLive } from "./services/store-service.js";
 import { CortexRunnerServiceLive, CortexRunnerService } from "./services/runner-service.js";
-import { GatewayProcessManager } from "./services/gateway-process-manager.js";
+import { GatewayProcessManager, gatewayConfigToBuildParams } from "./services/gateway-process-manager.js";
+import { ChannelHub } from "./services/channel-hub.js";
 import type { CortexConfig } from "./types.js";
 
 export interface CortexRuntime {
@@ -18,6 +19,8 @@ export interface CortexRuntime {
   readonly rawDb: Database;
   /** Gateway process manager — owns lifecycle of all scheduled agents */
   readonly gateway: GatewayProcessManager;
+  /** The channel hub: one framework channel router for every configured channel */
+  readonly hub: ChannelHub;
 }
 
 export function createCortexRuntime(config: CortexConfig): CortexRuntime {
@@ -49,6 +52,8 @@ export function createCortexRuntime(config: CortexConfig): CortexRuntime {
   const runnerLayer = Layer.succeed(CortexRunnerService, runnerService);
 
   const gateway = new GatewayProcessManager(db, ingestLayer);
+  // Not started here: `startCortexServer` attaches it to the gateway and starts it (a bare runtime in a test hosts nothing).
+  const hub = new ChannelHub({ db, ingestLayer, toBuildParams: gatewayConfigToBuildParams });
 
-  return { db, ingestLayer, bridgeLayer, storeLayer, runnerLayer, rawDb: db, gateway };
+  return { db, ingestLayer, bridgeLayer, storeLayer, runnerLayer, rawDb: db, gateway, hub };
 }

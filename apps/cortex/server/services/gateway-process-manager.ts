@@ -182,6 +182,31 @@ export class GatewayProcessManager {
   /** Long-lived agents that keep a gateway agent's messaging channels connected. */
   readonly channels: GatewayChannelHost;
 
+  /** Called when an agent is saved, activated, paused or removed; the channel hub re-derives the rows migrated from it. */
+  private agentHook: ((agentId: string) => Promise<void>) | null = null;
+
+  /**
+   * Hand channel hosting to the hub: `owns` is the single-poller rule (a channel the hub hosts is never
+   * also built by {@link GatewayChannelHost}); `onAgentChanged` keeps the hub's migrated rows in step with
+   * the saved agent. Called once at server start, before {@link hydrate}.
+   */
+  attachChannelHub(hub: { owns: (channelId: string) => boolean; agentChanged: (agentId: string) => Promise<void> }): void {
+    this.channels.setHubOwnership((id) => hub.owns(id));
+    this.agentHook = (agentId) => hub.agentChanged(agentId);
+  }
+
+  /** The agent row was deleted (after the delete): the hub drops the channels and routes migrated from it. */
+  agentRemoved(agentId: string): void {
+    this.notifyHub(agentId);
+  }
+
+  private notifyHub(agentId: string): void {
+    // The row update inside the hook is synchronous, so it lands before the legacy host's `sync` below.
+    void this.agentHook?.(agentId).catch((e) => {
+      cortexLog("warn", "gateway", "Channel hub could not follow an agent change", { agentId, ...formatErrorDetails(e) });
+    });
+  }
+
   constructor(db: Database, ingestLayer: Layer.Layer<CortexIngestService>) {
     this.db = db;
     this.ingestLayer = ingestLayer;
@@ -207,6 +232,8 @@ export class GatewayProcessManager {
   startProcess(agentId: string, name: string, schedule: string | null, config: Record<string, unknown>): void {
     // Drop the existing tick entry; the channel host restarts itself in `sync` below.
     this.dropProcess(agentId);
+    // First: the hub claims this agent's channels (a newly added one included) before the legacy host looks.
+    this.notifyHub(agentId);
 
     const proc: AgentProcess = {
       agentId,
@@ -234,6 +261,7 @@ export class GatewayProcessManager {
 
   /** Stop and remove a gateway agent process. */
   stopProcess(agentId: string): void {
+    this.notifyHub(agentId);
     void this.channels.stop(agentId);
     this.dropProcess(agentId);
   }
@@ -481,6 +509,7 @@ export class GatewayProcessManager {
   }
 
   destroy() {
+    this.agentHook = null; // shutdown is not an agent change
     if (this.masterTick) clearInterval(this.masterTick);
     this.masterTick = null;
     for (const [id] of this.processes) this.stopProcess(id);

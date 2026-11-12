@@ -139,6 +139,7 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
       if (row && creds) for (const c of parseCortexChannels(parseConfig(row.config).channels)) creds.removeAll(c.id);
       const deleted = deleteGatewayAgent(db, params.agentId);
       if (!deleted) { set.status = 404; return { error: "Not found" }; }
+      gateway.agentRemoved(params.agentId);
       return { deleted: true };
     })
 

@@ -1,0 +1,5 @@
+---
+"@reactive-agents/cortex": minor
+---
+
+Cortex now runs one channel router for all messaging channels (the channel hub). Channels and routes are stored in the Cortex database; any saved agent, gateway or not, can be a route target, built per (route, role) on the first message. On startup each gateway agent's `channels` and `gateway.accessControl` are imported (the agent config is untouched, webhook channels stay on the agent): senders from the old allowlist become route owners and keep full tools, everyone else the old policy let through runs a read-only, memory-free build, and the Gateway overview explains each route's roles. One bot token is never polled twice: a database lease per account and a guard in the per-agent host. Dedupe, turn caps and spend caps are durable. New `/api/channels` endpoints manage channels, routes, explain and simulate; adding an owner, `open` or full tools for non-owners needs an audited confirm. `CORTEX_CHANNEL_HUB=off` restores per-agent hosting. `GET /api/gateway/status` gains a `hub` block.

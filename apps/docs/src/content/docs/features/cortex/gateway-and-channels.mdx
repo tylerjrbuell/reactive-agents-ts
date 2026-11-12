@@ -58,6 +58,19 @@ The **Gateway** tab in the Lab lists every saved gateway agent. It is read-only 
 
 A summary at the top counts agents listening, channels connected and agents that need attention. The data comes from `GET /api/gateway/status`.
 
+## The channel hub (server)
+
+Cortex runs one channel router for every configured channel. A **channel** is a connection to one account (a Telegram bot, a Signal number). A **route** says which saved agent answers which conversation on it, and who may talk. The agent does not have to be a gateway agent: any saved agent can be a route target. Each (route, role) gets its own agent, built when the first message arrives.
+
+- **Existing setups keep working.** When the server starts, a gateway agent's `channels` and `gateway.accessControl` are imported into channels and routes. The agent's config is not changed. A migrated route follows that agent's config until you edit it in the hub. Webhook channels stay on the agent.
+- **Who runs what.** Senders you listed in the old allowlist become the route's **owners** and run the agent exactly as before. Anyone else the old policy let through (open or blocklist) runs a **read-only** build: only built-in tools the framework marks read-only, no MCP servers, no meta-tools, no sub-agents and no memory. A route with no owner says so and how to add one. The overview shows this per route.
+- **Fail-closed.** A sender nobody listed is refused and never reaches an agent. An open route needs a daily cost cap and per-hour turn caps; a migrated open route gets 25 USD per day, 120 turns per hour and 60 per sender per hour. Dedupe, turn counts and spend are stored in the Cortex database, so a restart does not reopen the budget.
+- **One poller per bot token.** The hub holds a lease per account in the database, so a second Cortex on the same database cannot open the same bot. The per-agent host skips any channel the hub owns.
+- **Editing.** `GET/POST/PATCH/DELETE /api/channels` and `/api/channels/routes` (same loopback or token gate as the rest of the API). Adding an owner, turning on `open` or giving non-owners the agent's full tools needs `confirm` naming the change and is recorded in the audit trail (`GET /api/channels/audit`). `POST /api/channels/explain` and `/simulate` show why a message would or would not be answered. Nothing a sender writes can change a route.
+- **Rollback.** Start the server with `CORTEX_CHANNEL_HUB=off` and every channel goes back to the per-agent host; nothing is migrated.
+
+The Gateway overview (`GET /api/gateway/status`) has a `hub` block: per channel state, per route counters and the reason behind each role, and the recent router activity. The Channels and Routes editor in the Lab UI comes next.
+
 ## Session lifecycle and route budgets (framework, builder code)
 
 These two controls live in `@reactive-agents/channels`. Cortex does not expose them yet.

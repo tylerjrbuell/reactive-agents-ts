@@ -251,6 +251,81 @@ export function applySchema(db: Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_prompts_created
       ON cortex_prompts(created_at DESC);
+
+    -- Channel hub (services/channel-hub.ts). Credentials are NOT here: they stay sealed in the key
+    -- store under channel:<id>:<field>. migrated_from names the gateway agent whose per-agent
+    -- config.channels produced the row (null = created in the hub).
+    CREATE TABLE IF NOT EXISTS cortex_channels (
+      id            TEXT    PRIMARY KEY,
+      platform      TEXT    NOT NULL,
+      label         TEXT,
+      settings_json TEXT    NOT NULL DEFAULT '{}',
+      enabled       INTEGER NOT NULL DEFAULT 1,
+      migrated_from TEXT,
+      created_at    INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
+      updated_at    INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
+    );
+
+    -- One RouteSpec per row. target_kind/target_id: 'agent' = a saved agent id; 'session' is reserved
+    -- for chat-session targets (next slice). spec_json holds match, session, allow, deny, owners, open,
+    -- senderTools, deniedReply, groups and the limits.
+    CREATE TABLE IF NOT EXISTS cortex_routes (
+      id            TEXT    PRIMARY KEY,
+      channel_id    TEXT    NOT NULL,
+      enabled       INTEGER NOT NULL DEFAULT 1,
+      priority      INTEGER NOT NULL DEFAULT 100,
+      target_kind   TEXT    NOT NULL DEFAULT 'agent',
+      target_id     TEXT    NOT NULL,
+      spec_json     TEXT    NOT NULL DEFAULT '{}',
+      migrated_from TEXT,
+      created_at    INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
+      updated_at    INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_routes_channel
+      ON cortex_routes(channel_id);
+
+    -- Durable RouterStore state: seen platform message ids (seq orders eviction), sliding-window
+    -- turn counters, settled spend per route, and the per-account lease with a heartbeat.
+    CREATE TABLE IF NOT EXISTS cortex_router_seen (
+      seq     INTEGER PRIMARY KEY AUTOINCREMENT,
+      key     TEXT    NOT NULL UNIQUE,
+      seen_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS cortex_router_turns (
+      bucket TEXT    NOT NULL,
+      at     INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_router_turns_bucket
+      ON cortex_router_turns(bucket, at);
+
+    CREATE TABLE IF NOT EXISTS cortex_router_spend (
+      route_id TEXT NOT NULL,
+      at       INTEGER NOT NULL,
+      usd      REAL NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_router_spend_route
+      ON cortex_router_spend(route_id, at);
+
+    CREATE TABLE IF NOT EXISTS cortex_router_leases (
+      fingerprint TEXT    PRIMARY KEY,
+      channel_id  TEXT    NOT NULL,
+      pid         INTEGER NOT NULL,
+      host        TEXT    NOT NULL,
+      since       INTEGER NOT NULL,
+      heartbeat   INTEGER NOT NULL
+    );
+
+    -- Who changed which route and when (owners added, open, AgentDefault). No message text, no secrets.
+    CREATE TABLE IF NOT EXISTS cortex_channel_audit (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      at          INTEGER NOT NULL,
+      actor       TEXT    NOT NULL,
+      action      TEXT    NOT NULL,
+      subject     TEXT    NOT NULL,
+      detail_json TEXT    NOT NULL DEFAULT '{}'
+    );
   `);
 
   // Migrations — safe to run on existing DBs (ALTER TABLE IF NOT EXISTS column)

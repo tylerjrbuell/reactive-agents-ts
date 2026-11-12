@@ -26,6 +26,7 @@ import {
   type ChannelKind,
 } from "../services/channel-config.js";
 import type { ChannelCredentials } from "../services/channel-credentials.js";
+import type { ChannelHub } from "../services/channel-hub.js";
 
 const Kind = t.Union([t.Literal("telegram"), t.Literal("signal"), t.Literal("webhook")]);
 
@@ -42,6 +43,8 @@ const parseJson = (raw: string): Record<string, unknown> => {
 
 /** Test seams: the network and socket calls of the connection probe. */
 export interface GatewayRouterDeps {
+  /** The channel hub; its status is the overview's `hub` block and a credential change restarts its channel. */
+  readonly hub?: ChannelHub;
   readonly fetchTelegram?: TelegramFetch;
   readonly probeSocket?: SocketProbe;
 }
@@ -77,7 +80,8 @@ export const gatewayRouter = (db: Database, gateway: GatewayProcessManager, cred
           };
         }),
       );
-      return { agents };
+      // The hub block: channels and routes the channel hub runs (phase "disabled" under `CORTEX_CHANNEL_HUB=off`; null without a hub).
+      return { agents, hub: deps.hub ? await deps.hub.status() : null };
     })
     .get("/channels/:channelId/credentials", ({ params, query, set }) => {
       if (!creds) return unavailable(set);
@@ -95,6 +99,8 @@ export const gatewayRouter = (db: Database, gateway: GatewayProcessManager, cred
         set.status = r.error.reason === "io" || r.error.reason === "corrupt" ? 500 : 400;
         return { error: r.error.message };
       }
+      // A hub channel restarts with the new credential (the router only restarts when the saved value changed).
+      if (deps.hub?.owns(params.channelId)) void deps.hub.refresh();
       return r.value;
     }, { body: t.Object({ kind: Kind, value: t.String({ maxLength: 4096 }) }) })
     .delete("/channels/:channelId/credentials/:field", ({ params, query, set }) => {

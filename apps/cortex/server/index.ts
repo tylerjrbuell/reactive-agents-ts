@@ -31,6 +31,7 @@ import { createSpeechSupervisor, execDockerRunner } from "./services/voice/speec
 import { installOllamaEndpointStore, OllamaEndpointStore } from "./services/ollama-cloud.js";
 import { installProviderKeyStore, ProviderKeyStore } from "./services/provider-key-store.js";
 import { gatewayRouter } from "./api/gateway.js";
+import { channelHubRouter } from "./api/channel-hub.js";
 import { ChannelCredentials } from "./services/channel-credentials.js";
 import { dirname } from "node:path";
 import { capabilitiesRouter } from "./api/capabilities.js";
@@ -112,6 +113,14 @@ export async function startCortexServer(
     CortexEventBridge.pipe(Effect.provide(runtime.bridgeLayer)),
   );
 
+  // The channel hub hosts every messaging channel (`CORTEX_CHANNEL_HUB=off` hands them back to the
+  // per-agent host). `start()` imports per-agent config synchronously, so it must run before `hydrate`:
+  // from then on the legacy host skips the channels the hub owns (one poller per bot token).
+  if (runtime.hub.isEnabled) {
+    runtime.gateway.attachChannelHub(runtime.hub);
+    void runtime.hub.start();
+  }
+
   // Hydrate gateway agents — starts persistent processes for all active agents
   void runtime.gateway.hydrate();
 
@@ -157,7 +166,7 @@ export async function startCortexServer(
     process.once(sig, () => {
       chatScheduleService.dispose();
       chatGoalService.dispose();
-      void Promise.allSettled([chatSessionService.disposeAll(), memoryInspector.disposeAll()]).finally(() =>
+      void Promise.allSettled([chatSessionService.disposeAll(), memoryInspector.disposeAll(), runtime.hub.stop()]).finally(() =>
         process.exit(0),
       );
     });
@@ -181,7 +190,8 @@ export async function startCortexServer(
     .use(agentConfigSourceRouter(runtime.storeLayer))
     .use(messagesRouter(runtime.rawDb))
     .use(agentsRouter(runtime.rawDb, runtime.gateway))
-    .use(gatewayRouter(runtime.rawDb, runtime.gateway, new ChannelCredentials(providerKeys)))
+    .use(gatewayRouter(runtime.rawDb, runtime.gateway, new ChannelCredentials(providerKeys), { hub: runtime.hub }))
+    .use(channelHubRouter(runtime.rawDb, runtime.hub, new ChannelCredentials(providerKeys)))
     .use(toolsRouter(runtime.storeLayer, runtime.rawDb))
     .use(mcpServersRouter(runtime.rawDb))
     .use(skillsRouter(runtime.storeLayer, runtime.rawDb))
@@ -304,6 +314,7 @@ export async function startCortexServer(
       chatGoalService.dispose();
       await chatSessionService.disposeAll();
       await memoryInspector.disposeAll();
+      await runtime.hub.stop();
       await app.stop(true);
       installOllamaEndpointStore(null); // restores the env the server started with
     },

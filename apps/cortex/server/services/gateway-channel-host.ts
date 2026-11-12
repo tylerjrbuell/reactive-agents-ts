@@ -19,14 +19,14 @@
 import { Effect, Exit, Scope } from "effect";
 import type { Database } from "bun:sqlite";
 import type { Layer } from "effect";
-import { startGatewayIngress } from "@reactive-agents/gateway";
 import type { AdapterInfo, ChannelAdapter, ConnectionState } from "@reactive-agents/channels";
 import { emitErrorSwallowed, errorTag, type AgentEvent } from "@reactive-agents/core";
 import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
-import { buildChannelAdapters, type BuiltChannels, type WebhookMount } from "./channel-adapters.js";
-import { enabledChannels, parseCortexChannels, type CortexChannelEntry, type CortexGatewayConfig } from "./channel-config.js";
+import { buildChannelAdapters, type BuiltChannels } from "./channel-adapters.js";
+import { mountWebhookIngress } from "./channel-ingress.js";
+import { enabledChannels, parseCortexChannels, parseCortexGatewayConfig, type CortexChannelEntry, type CortexGatewayConfig } from "./channel-config.js";
 import { installedChannelCredentials } from "./channel-credentials.js";
 import { normalizeCortexAgentConfig } from "./cortex-agent-config.js";
 import { GatewayEventTracker, type GatewayTrackerSnapshot } from "./gateway-status.js";
@@ -134,7 +134,14 @@ export class GatewayChannelHost {
     private readonly toBuildParams: ToBuildParams,
     /** How adapters are made from saved channels; tests inject scripted ones (no network). */
     private readonly makeAdapters: (entries: readonly CortexChannelEntry[]) => BuiltChannels = defaultMakeAdapters,
+    /** Whether the channel hub hosts this channel id (set by the process manager once the hub runs). */
+    private hubOwns: (channelId: string) => boolean = () => false,
   ) {}
+
+  /** Install the hub's ownership predicate. Channels it claims are skipped by {@link sync}. */
+  setHubOwnership(owns: (channelId: string) => boolean): void {
+    this.hubOwns = owns;
+  }
 
   /** Whether the saved config has channels worth hosting. */
   static hasChannels(config: Record<string, unknown>): boolean {
@@ -145,9 +152,15 @@ export class GatewayChannelHost {
   sync(agentId: string, name: string, configRaw: Record<string, unknown>): Promise<void> {
     const previous = this.teardown(agentId);
     const config = normalizeCortexAgentConfig(configRaw);
-    const entries = parseCortexChannels(config.channels);
-    if (enabledChannels(entries).length === 0) return previous;
-    return previous.then(() => this.start(agentId, name, config, entries));
+    const all = parseCortexChannels(config.channels);
+    // The single-poller guard: a channel the hub hosts is never also built here, or two pollers
+    // would fight over one bot token. Removing this filter fails `channel-hub-single-poller.test.ts`.
+    const entries = all.filter((e) => !this.hubOwns(e.id));
+    const handedToHub = enabledChannels(all).length - enabledChannels(entries).length;
+    // Framework crons live on this agent's gateway loop: keep hosting it (without the hub's channels) when it has any.
+    const cronsOnly = handedToHub > 0 && (parseCortexGatewayConfig(config.gateway)?.crons?.length ?? 0) > 0;
+    if (enabledChannels(entries).length === 0 && !cronsOnly) return previous;
+    return previous.then(() => this.start(agentId, name, config, entries, cronsOnly));
   }
 
   /** Stop hosting (no-op when not hosted). */
@@ -209,6 +222,7 @@ export class GatewayChannelHost {
       lastSentAt: info?.lastSentAt ?? null,
       lastFailure: info?.lastError?.kind ?? null,
     };
+    if (this.hubOwns(e.id)) return { ...base, state: "skipped", error: null, reason: "Hosted by the channel hub. Its state is under Routes." };
     const skipReason = h?.skipped.get(e.id);
     if (skipReason) return { ...base, state: "skipped", error: null, reason: skipReason };
     const adapter = h?.adapters.find((a) => a.id === e.id);
@@ -255,6 +269,7 @@ export class GatewayChannelHost {
     name: string,
     config: Record<string, unknown>,
     entries: readonly CortexChannelEntry[],
+    cronsOnly = false,
   ): Promise<void> {
     const built = this.makeAdapters(entries);
     // A platform name is a channel kind (telegram, signal, webhook): events that carry only the platform map to its channel.
@@ -270,7 +285,7 @@ export class GatewayChannelHost {
     };
     this.hosted.set(agentId, h);
 
-    if (built.adapters.length === 0) {
+    if (built.adapters.length === 0 && !cronsOnly) {
       h.phase = "failed";
       h.error = "No channel could be started. Fix the ones marked below.";
       return;
@@ -282,6 +297,7 @@ export class GatewayChannelHost {
       const params = this.toBuildParams({ agentId, name, config, mcpConfigs });
       h.gateway = params.gateway;
       const agent = await buildCortexAgent({ ...params, gateway: params.gateway ?? {}, channelAdapters: built.adapters });
+      // (an empty adapter list leaves `.withChannels` off: only the gateway loop and its crons run)
       h.agent = agent;
 
       const ingest = await Effect.runPromise(CortexIngestService.pipe(Effect.provide(this.ingestLayer)));
@@ -296,7 +312,7 @@ export class GatewayChannelHost {
         );
       });
 
-      if (built.webhooks.length > 0) h.ingress = await this.mountWebhooks(built.webhooks);
+      if (built.webhooks.length > 0) h.ingress = await mountWebhookIngress(built.webhooks);
 
       if (this.hosted.get(agentId) !== h) {
         await this.release(h);
@@ -318,29 +334,6 @@ export class GatewayChannelHost {
       h.error = e instanceof Error ? e.message : String(e);
       cortexLog("warn", "gateway", `Could not host channels for "${name}"`, { agentId, ...formatErrorDetails(e) });
       await this.release(h);
-    }
-  }
-
-  /** One loopback ingress server per port, mounting that port's webhook adapters. */
-  private async mountWebhooks(mounts: readonly WebhookMount[]): Promise<Scope.CloseableScope> {
-    const scope = await Effect.runPromise(Scope.make());
-    try {
-      const ports = [...new Set(mounts.map((m) => m.port))];
-      for (const port of ports) {
-        const routes = mounts.filter((m) => m.port === port).map((m) => ({
-          path: m.route,
-          id: m.adapter.id,
-          // The adapter's own ingress handler: verification, enqueue and a typed ChannelError.
-          handle: (req: { readonly body: string; readonly headers: Readonly<Record<string, string>> }) => m.adapter.handleWebhook(req),
-        }));
-        await Effect.runPromise(
-          startGatewayIngress({ port }, { channelRoutes: routes, onEvent: () => Effect.void }).pipe(Effect.provideService(Scope.Scope, scope)),
-        );
-      }
-      return scope;
-    } catch (e) {
-      await Effect.runPromise(Scope.close(scope, Exit.void));
-      throw e;
     }
   }
 
