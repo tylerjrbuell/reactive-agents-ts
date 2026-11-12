@@ -10,7 +10,7 @@
   import Button from "$lib/components/kit/Button.svelte";
   import Input from "$lib/components/kit/Input.svelte";
   import Select from "$lib/components/kit/Select.svelte";
-  import { presetFor, leavesThisMachine, STT_PRESETS, TTS_PRESETS, type SttPreset, type TtsPreset } from "$lib/voice/voice-presets.js";
+  import { modelInstallHelp, presetFor, leavesThisMachine, STT_PRESETS, TTS_PRESETS, type SttPreset, type TtsPreset } from "$lib/voice/voice-presets.js";
   import { endpointKeyLine } from "$lib/voice/voice-status.js";
   import { STT_KEY_ID, TTS_KEY_ID, type ServerVoiceOption } from "$lib/voice/voice-api.js";
 
@@ -33,7 +33,7 @@
   let keyDraft = $state("");
   let editingKey = $state(false);
   let busy = $state(false);
-  let result = $state<{ tone: "ok" | "bad"; text: string } | null>(null);
+  let result = $state<{ tone: "ok" | "bad"; text: string; help?: { hint: string; curl: string } } | null>(null);
   let voices = $state<readonly ServerVoiceOption[]>([]);
 
   // Drafts follow the saved settings (after a save, a preset-free reload, or an engine switch).
@@ -44,7 +44,7 @@
   });
 
   const dirty = $derived(url.trim().replace(/\/+$/, "") !== cfg.baseUrl || model.trim() !== cfg.model || ("voice" in cfg && voiceName.trim() !== cfg.voice));
-  const preset = $derived(presetFor(presets, url));
+  const preset = $derived(presetFor(presets, url, model));
   const cloud = $derived(url.trim() !== "" && leavesThisMachine(url));
 
   function applyPreset(id: string) {
@@ -106,11 +106,18 @@
     result = null;
     const r = await v.api.test(direction);
     busy = false;
+    const failure = r.ok ? (r.value.ok ? "" : `${r.value.message} ${r.value.detail ?? ""}`) : r.error;
+    // A local server that has not downloaded the model answers "not installed locally": say how to fix it.
+    const help = modelInstallHelp(failure, cfg.baseUrl, cfg.model, preset?.model === cfg.model ? preset.hint : undefined);
     if (!r.ok) {
-      result = { tone: "bad", text: r.error };
+      result = { tone: "bad", text: r.error, ...(help ? { help } : {}) };
       return;
     }
-    result = { tone: r.value.ok ? "ok" : "bad", text: r.value.detail ? `${r.value.message} (${r.value.detail})` : r.value.message };
+    result = {
+      tone: r.value.ok ? "ok" : "bad",
+      text: r.value.detail ? `${r.value.message} (${r.value.detail})` : r.value.message,
+      ...(help ? { help } : {}),
+    };
     // Hearing it is the real test of a voice.
     if (r.value.ok && direction === "tts") v.reader.play("voice-test", "Cortex voice test. This is how replies will sound.");
   }
@@ -150,7 +157,15 @@
     <Button size="sm" variant="ghost" disabled={busy || cfg.baseUrl === "" || dirty} onclick={test}>Test</Button>
     {#if dirty}<span class="vb-help">Save before testing.</span>{/if}
   </div>
-  {#if result}<p class="vb-result" class:vb-ok={result.tone === "ok"} class:vb-bad={result.tone === "bad"} role="status">{result.text}</p>{/if}
+  {#if result}<p class="vb-result" class:vb-ok={result.tone === "ok"} class:vb-bad={result.tone === "bad"} role="status">{result.text}</p>
+    {#if result.help}
+      <p class="vb-help" data-testid="voice-install-help">{result.help.hint}</p>
+      <div class="vb-row">
+        <code class="vb-curl">{result.help.curl}</code>
+        <Button size="sm" variant="ghost" onclick={() => void navigator.clipboard?.writeText(result?.help?.curl ?? "")}>Copy command</Button>
+      </div>
+    {/if}
+  {/if}
 
   <div class="vb-key">
     <span class="vb-l">API key</span>
@@ -180,6 +195,7 @@
   .vb-help { margin: 0; font-size: var(--cortex-t-xs); line-height: var(--cortex-lh-ui); color: var(--cortex-text-2); }
   .vb-warn { color: var(--cortex-warn); }
   .vb-result { margin: 0; font-size: var(--cortex-t-xs); }
+  .vb-curl { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); overflow-wrap: anywhere; color: var(--cortex-text); }
   .vb-ok { color: var(--cortex-ok); }
   .vb-bad { color: var(--cortex-bad); }
   .vb-key { display: grid; gap: 4px; }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { clampRate, DEFAULT_VOICE_PREFS, isLanguageTag, loadPrefs, parsePrefs, savePrefs, VOICE_PREFS_KEY, type PrefsStorage } from "./voice-prefs.js";
-import { leavesThisMachine, presetFor, STT_PRESETS, TTS_PRESETS } from "./voice-presets.js";
+import { leavesThisMachine, modelInstallHelp, presetFor, STT_PRESETS, TTS_PRESETS } from "./voice-presets.js";
 
 const memory = (): PrefsStorage & { data: Map<string, string> } => {
   const data = new Map<string, string>();
@@ -51,6 +51,32 @@ describe("voice presets", () => {
   test("presetFor matches by URL ignoring trailing slashes; custom is undefined", () => {
     expect(presetFor(TTS_PRESETS, "http://localhost:8880/v1/")?.id).toBe("kokoro");
     expect(presetFor(STT_PRESETS, "http://elsewhere:9/v1")).toBeUndefined();
+  });
+
+  test("Speaches: the listening preset is relabeled, a Kokoro speech preset exists, and a shared :8000 URL resolves by model", () => {
+    const stt = STT_PRESETS.find((p) => p.id === "faster-whisper")!;
+    expect(stt).toMatchObject({ label: "Speaches (local)", baseUrl: "http://localhost:8000/v1", model: "Systran/faster-whisper-small" });
+    const tts = TTS_PRESETS.find((p) => p.id === "speaches")!;
+    expect(tts).toMatchObject({
+      label: "Speaches (local, Kokoro)",
+      baseUrl: "http://localhost:8000/v1",
+      model: "speaches-ai/Kokoro-82M-v1.0-ONNX",
+      voice: "af_heart",
+      hint: "Run the speaches container, then download the model: POST /v1/models/speaches-ai/Kokoro-82M-v1.0-ONNX",
+    });
+    expect(presetFor(TTS_PRESETS, "http://localhost:8000/v1", "tts-1")?.id).toBe("openedai-speech");
+    expect(presetFor(TTS_PRESETS, "http://localhost:8000/v1", "speaches-ai/Kokoro-82M-v1.0-ONNX")?.id).toBe("speaches");
+  });
+
+  test("modelInstallHelp: only a 'not installed locally' failure gets the hint and a copyable curl", () => {
+    const msg = "The speech server has no such route or model (HTTP 404): Model 'speaches-ai/Kokoro-82M-v1.0-ONNX' is not installed locally.";
+    const tts = TTS_PRESETS.find((p) => p.id === "speaches")!;
+    expect(modelInstallHelp(msg, "http://localhost:8000/v1/", tts.model, tts.hint)).toEqual({
+      hint: tts.hint,
+      curl: "curl -X POST http://localhost:8000/v1/models/speaches-ai/Kokoro-82M-v1.0-ONNX",
+    });
+    expect(modelInstallHelp(msg, "http://localhost:8000/v1", "m")?.hint).toBe("Download the model on the server: POST http://localhost:8000/v1/models/m");
+    expect(modelInstallHelp("HTTP 401 key rejected", "http://localhost:8000/v1", "m")).toBeUndefined();
   });
 
   test("leavesThisMachine: loopback stays, anything else leaves", () => {
