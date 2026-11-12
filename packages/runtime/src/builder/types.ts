@@ -918,11 +918,11 @@ export interface GatewayOptions {
         readonly unknownSenderAction?: 'skip' | 'escalate'
         /** Optional auto-reply message for unknown senders. */
         readonly replyToUnknown?: string
-        /** How incoming channel messages are handled. Default: 'chat'. */
-        readonly mode?: 'chat' | 'task'
-        /** Days of inactivity before a persisted chat session is pruned. Default: 30. */
-        readonly sessionTtlDays?: number
+        readonly mode?: 'chat' | 'task' // how incoming channel messages are handled; default 'chat'
+        readonly sessionTtlDays?: number // days of inactivity before a persisted chat session is pruned; default 30
     }
+    /** Framework ingress for channel adapters with `handleWebhook`. Default serves all at `/channels/<id>`; `false` serves none, an id list only those. Use when the host mounts the adapter itself. */
+    readonly ingress?: { readonly channels?: false | readonly string[] }
 }
 
 /**

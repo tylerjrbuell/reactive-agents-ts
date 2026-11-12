@@ -107,6 +107,7 @@ export interface RunnerGatewayOptions {
     events?: readonly string[];
   }[];
   queue?: { capacity?: number; overflow?: InboundQueueOverflow };
+  ingress?: { channels?: false | readonly string[] };
 }
 
 const gatewayOptionsByAgent = new WeakMap<object, RunnerGatewayOptions>();
@@ -314,7 +315,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     // Serve GatewayConfig.port/webhooks (+ webhook-capable channel adapters).
     // Verified events enter the bounded queue; stop() closes the server first.
     const ingress = await startRuntimeIngress({
-      config: { port: gwOpts?.port, webhooks: gwOpts?.webhooks },
+      config: { port: gwOpts?.port, webhooks: gwOpts?.webhooks, channels: gwOpts?.ingress?.channels },
       adapters: self._channelsConfig?.adapters ?? [],
       queue,
       processEvent: (event) => self.runtime.runPromise(gw.processEvent(event)),

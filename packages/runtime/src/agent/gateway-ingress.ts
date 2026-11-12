@@ -18,6 +18,11 @@ export interface GatewayIngressConfig {
     /** Listen port; the gateway default is 3000. */
     readonly port?: number
     readonly webhooks?: GatewayConfig['webhooks']
+    /**
+     * Which webhook-capable channel adapters the ingress serves. Omitted serves all;
+     * `false` serves none (host mounts them itself); a list serves only those adapter ids.
+     */
+    readonly channels?: false | readonly string[]
 }
 
 const DEFAULT_GATEWAY_PORT = 3000
@@ -57,7 +62,11 @@ export const startRuntimeIngress = async (
     deps: StartIngressDeps
 ): Promise<{ readonly server: IngressServer; readonly stop: () => Promise<void> } | null> => {
     const { startGatewayIngress } = await import('@reactive-agents/gateway')
-    const channelRoutes = deps.adapters.filter(hasWebhook).map((adapter) => ({
+    const { channels, ...gatewayConfig } = deps.config
+    const channelRoutes = deps.adapters
+        .filter(hasWebhook)
+        .filter((a) => channels === undefined || (channels !== false && channels.includes(a.id)))
+        .map((adapter) => ({
         path: `/channels/${adapter.id}`,
         id: adapter.id,
         handle: (req: { body: string; headers: Record<string, string> }) =>
@@ -87,7 +96,7 @@ export const startRuntimeIngress = async (
     try {
         const server = await Effect.runPromise(
             Scope.extend(
-                startGatewayIngress({ ...deps.config, port: deps.config.port ?? DEFAULT_GATEWAY_PORT }, { onEvent, channelRoutes }),
+                startGatewayIngress({ ...gatewayConfig, port: gatewayConfig.port ?? DEFAULT_GATEWAY_PORT }, { onEvent, channelRoutes }),
                 scope
             )
         )
@@ -101,7 +110,7 @@ export const startRuntimeIngress = async (
             stop: () => Effect.runPromise(Scope.close(scope, Exit.void)),
         }
     } catch (err) {
-        deps.glog('error', `ingress failed to start: ${String(err)}`)
+        deps.glog('warn', `ingress failed to start on port ${deps.config.port ?? DEFAULT_GATEWAY_PORT}: ${String(err)}`)
         return null
     }
 }
