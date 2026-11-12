@@ -17,6 +17,9 @@ import { createRateLimitPolicy } from "../policies/rate-limit.js";
 import { createEventMergingPolicy } from "../policies/event-merging.js";
 import { createAccessControlPolicy } from "../policies/access-control.js";
 
+const DEFAULT_DENY_HINT =
+  'To allow senders set accessControl.allowedSenders (["telegram:123", "signal:+1555..."]); to allow everyone set accessControl.accessPolicy: "open".';
+
 // ─── Status Snapshot ────────────────────────────────────────────────────────
 
 export interface GatewayStatus {
@@ -101,7 +104,21 @@ export const GatewayServiceLive = (config: Partial<GatewayConfig>, bus?: EventBu
       }
 
       // Access control for channel messages (highest priority)
-      if (config.accessControl) {
+      // Fail closed: with no accessControl configured, every channel sender is unknown and
+      // denied. Allowing everyone needs an explicit `accessControl: { accessPolicy: "open" }`.
+      if (!config.accessControl) {
+        policies.push(
+          createAccessControlPolicy({
+            policy: "allowlist",
+            allowedSenders: [],
+            unknownSenderAction: "skip",
+            reasonHint: DEFAULT_DENY_HINT,
+          }),
+        );
+        yield* Effect.logWarning(
+          `GatewayService: no accessControl configured; inbound channel messages are denied. ${DEFAULT_DENY_HINT}`,
+        );
+      } else {
         policies.push(
           createAccessControlPolicy({
             policy: config.accessControl.accessPolicy ?? "allowlist",

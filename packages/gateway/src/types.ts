@@ -127,6 +127,8 @@ export interface ChannelAccessConfig {
   readonly blockedSenders?: readonly string[];
   readonly unknownSenderAction?: "skip" | "escalate";
   readonly replyToUnknown?: string;
+  /** Appended to the deny reason so operators see how to allow a sender. */
+  readonly reasonHint?: string;
 }
 
 export const GatewayConfigSchema = Schema.Struct({

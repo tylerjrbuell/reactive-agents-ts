@@ -6,7 +6,31 @@ import type { WebhookAdapter, WebhookRequest } from "./webhook-adapter.js";
 
 // ─── GitHub Webhook Adapter ──────────────────────────────────────────────────
 
-export const createGitHubAdapter = (): WebhookAdapter => ({
+/** Delivery ids remembered per adapter instance; oldest evicted first. */
+export const GITHUB_DELIVERY_CACHE_SIZE = 1024;
+
+/**
+ * GitHub adapter. Replayed `x-github-delivery` ids are rejected in `transform` (a signed request
+ * captured on the wire cannot be re-run). The seen-id cache is closure-held and bounded.
+ */
+export const createGitHubAdapter = (): WebhookAdapter => {
+  const seen = new Set<string>();
+  const isReplay = (deliveryId: string | undefined): boolean => {
+    if (!deliveryId) return false;
+    if (seen.has(deliveryId)) {
+      // refresh recency
+      seen.delete(deliveryId);
+      seen.add(deliveryId);
+      return true;
+    }
+    seen.add(deliveryId);
+    if (seen.size > GITHUB_DELIVERY_CACHE_SIZE) {
+      const oldest = seen.values().next().value;
+      if (oldest !== undefined) seen.delete(oldest);
+    }
+    return false;
+  };
+  return {
   source: "github",
 
   validateSignature: (req: WebhookRequest, secret: string) =>
@@ -42,6 +66,10 @@ export const createGitHubAdapter = (): WebhookAdapter => ({
   transform: (req: WebhookRequest) =>
     Effect.try({
       try: () => {
+        const deliveryId = req.headers["x-github-delivery"];
+        if (isReplay(deliveryId)) {
+          throw new Error(`replayed delivery ${deliveryId}`);
+        }
         const payload = JSON.parse(req.body);
         const githubEvent = req.headers["x-github-event"] ?? "unknown";
         const action =
@@ -84,4 +112,5 @@ export const createGitHubAdapter = (): WebhookAdapter => ({
     }
     return githubEvent ?? "unknown";
   },
-});
+  };
+};

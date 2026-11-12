@@ -10,7 +10,12 @@ import type {
   AgentCard,
 } from "../types.js";
 import { A2AError } from "../errors.js";
-import { Effect, Context, Layer } from "effect";
+import { Effect, Context, Layer, Schema, Either, ParseResult } from "effect";
+import {
+  SendMessageParamsSchema,
+  TaskQueryParamsSchema,
+  TaskCancelParamsSchema,
+} from "../types.js";
 import { secureServe } from "@reactive-agents/runtime-shim";
 import type { ServerLike } from "@reactive-agents/runtime-shim";
 import { A2AServer } from "./a2a-server.js";
@@ -48,6 +53,22 @@ export interface A2AHttpServerOptions {
 }
 
 const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
+
+const PARAMS_SCHEMAS: Readonly<Record<string, Schema.Schema.AnyNoContext>> = {
+  "message/send": SendMessageParamsSchema,
+  "message/stream": SendMessageParamsSchema,
+  "tasks/get": TaskQueryParamsSchema,
+  "tasks/cancel": TaskCancelParamsSchema,
+};
+
+/** Returns a short description of why `params` is invalid for `method`, or `null` when valid / method takes no params. */
+const validateMethodParams = (method: unknown, params: unknown): string | null => {
+  if (typeof method !== "string" || !Object.hasOwn(PARAMS_SCHEMAS, method)) return null;
+  const schema = PARAMS_SCHEMAS[method];
+  if (!schema) return null;
+  const result = Schema.decodeUnknownEither(schema)(params);
+  return Either.isLeft(result) ? ParseResult.TreeFormatter.formatErrorSync(result.left) : null;
+};
 
 /**
  * Read a request body as text, counting bytes as they stream. Returns `null` (and cancels the
@@ -265,6 +286,19 @@ export const createA2AHttpServer = (
                   }
                   try {
                     const body = JSON.parse(raw) as JsonRpcRequest;
+
+                    // Params are untrusted: validate against the method's schema before dispatch.
+                    const paramsError = validateMethodParams(body.method, body.params);
+                    if (paramsError !== null) {
+                      return new Response(
+                        JSON.stringify({
+                          jsonrpc: JSONRPC_VERSION,
+                          id: body.id ?? null,
+                          error: { code: -32602, message: `Invalid params: ${paramsError}` },
+                        }),
+                        { headers: { "Content-Type": "application/json" } },
+                      );
+                    }
 
                     // Handle message/stream — return SSE, or a JSON-RPC error
                     // if the task never started (e.g. no executor configured)

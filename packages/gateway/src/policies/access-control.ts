@@ -24,7 +24,8 @@ export const channelSenderKey = (platform: unknown, sender: string): string => {
  * Modes:
  * - "allowlist" — only listed senders pass through
  * - "blocklist" — listed senders are blocked, all others pass
- * - "open"      — all senders pass (existing guardrails still apply)
+ * - "open"      — all senders pass (existing guardrails still apply); must be chosen
+ *                 explicitly: a gateway with no accessControl denies every channel sender
  */
 export const createAccessControlPolicy = (
   config: ChannelAccessConfig,
@@ -54,7 +55,7 @@ export const createAccessControlPolicy = (
           const allowed = config.allowedSenders ?? [];
           if (allowed.includes(sender)) return null;
           const action = config.unknownSenderAction ?? "skip";
-          const reason = `Sender ${sender} not in allowlist`;
+          const reason = `Sender ${sender} not in allowlist${config.reasonHint ? `. ${config.reasonHint}` : ""}`;
           return action === "escalate"
             ? { action: "escalate", reason, code: "unknown-sender" }
             : { action: "skip", reason, code: "unknown-sender" };

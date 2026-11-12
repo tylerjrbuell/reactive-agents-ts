@@ -1,6 +1,14 @@
 import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
 
+// An unconfigured gateway denies channel senders; these tests exercise other policies.
+const OPEN_ACCESS = {
+  accessPolicy: "open",
+  unknownSenderAction: "skip",
+  mode: "chat",
+  sessionTtlDays: 30,
+} as const;
+
 // ─── MCP Config Types (mirrors what Docker MCP servers expect) ───────────────
 
 interface MCPServerConfig {
@@ -117,13 +125,14 @@ describe("Messaging MCP Integration", () => {
           timestamp: new Date(),
           priority: "normal",
           payload: { channel: "signal", from: "+15551234567", body: "Hello agent" },
-          metadata: { adapter: "signal-mcp" },
+          metadata: { adapter: "signal-mcp", sender: "+15551234567", platform: "signal" },
         });
         const status = yield* gw.status();
         return { decision, stats: status.stats };
       }).pipe(
         Effect.provide(
           GatewayServiceLive({
+            accessControl: OPEN_ACCESS,
             policies: {
               dailyTokenBudget: 100000,
               maxActionsPerHour: 50,
@@ -154,11 +163,12 @@ describe("Messaging MCP Integration", () => {
           timestamp: new Date(),
           priority: "normal",
           payload: { channel: "telegram", chatId: 12345, body: "Hi" },
-          metadata: { adapter: "telegram-mcp" },
+          metadata: { adapter: "telegram-mcp", sender: "42", platform: "telegram" },
         });
       }).pipe(
         Effect.provide(
           GatewayServiceLive({
+            accessControl: OPEN_ACCESS,
             policies: { dailyTokenBudget: 50000 },
           }),
         ),
@@ -187,11 +197,12 @@ describe("Messaging MCP Integration", () => {
           timestamp: new Date(),
           priority: "critical",
           payload: { channel: "signal", from: "+15559999999", body: "URGENT: server down" },
-          metadata: { adapter: "signal-mcp", escalation: true },
+          metadata: { adapter: "signal-mcp", escalation: true, sender: "+15559999999", platform: "signal" },
         });
       }).pipe(
         Effect.provide(
           GatewayServiceLive({
+            accessControl: OPEN_ACCESS,
             policies: { dailyTokenBudget: 50000 },
           }),
         ),
