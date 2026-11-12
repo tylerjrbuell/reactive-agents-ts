@@ -7,6 +7,7 @@ import type {
   MemoryLLM,
   SemanticEntry,
   DailyLogEntry,
+  ProceduralEntry,
   WorkingMemoryItem,
   MemoryId,
   SessionSnapshot,
@@ -19,6 +20,7 @@ import { ProceduralMemoryService } from "./procedural-memory.js";
 import { MemoryFileSystem } from "../fs/memory-file-system.js";
 import { ZettelkastenService } from "../indexing/zettelkasten.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { buildBootstrapRecallEvents } from "./recall-event.js";
 
 // ─── Service Tag ───
 //
@@ -37,10 +39,13 @@ export class MemoryService extends Context.Tag("MemoryService")<
   {
     /**
      * Bootstrap: load semantic context + recent episodes for agent.
-     * Called by ExecutionEngine at Phase 1 (BOOTSTRAP).
+     * Called by ExecutionEngine at Phase 1 (BOOTSTRAP). When `taskId` is
+     * given, publishes one `MemoryRecalled` event per non-empty recalled tier
+     * (bounded items). Without it a recall is not attributable, so none fires.
      */
     readonly bootstrap: (
       agentId: string,
+      taskId?: string,
     ) => Effect.Effect<MemoryBootstrapResult, MemoryError | DatabaseError>;
 
     /**
@@ -133,7 +138,7 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
             : path.dirname(config.dbPath);
 
       return {
-        bootstrap: (agentId) =>
+        bootstrap: (agentId, taskId) =>
           Effect.gen(function* () {
             // Ensure directory exists
             yield* fileSystem
@@ -153,7 +158,7 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
             // Get active workflows
             const activeWorkflows = yield* _procedural
               .listActive(agentId)
-              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:122", tag: errorTag(err) }).pipe(Effect.as([] as never[]))));
+              .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:122", tag: errorTag(err) }).pipe(Effect.as([] as ProceduralEntry[]))));
 
             // Get current working memory
             const workingMemory = yield* working.get();
@@ -172,6 +177,24 @@ export const MemoryServiceLive = (config: MemoryConfig, memoryLLM?: MemoryLLM) =
             if (eb) {
               yield* eb.publish({ _tag: "MemoryBootstrapped", agentId, tier: config.tier })
                 .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:140", tag: errorTag(err) })));
+            }
+
+            if (eb && taskId) {
+              const recalledSemantic: SemanticEntry[] = semanticContext
+                ? yield* semantic
+                    .listByAgent(agentId, 20)
+                    .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:recall-list", tag: errorTag(err) }).pipe(Effect.as([] as SemanticEntry[]))))
+                : [];
+              for (const event of buildBootstrapRecallEvents({
+                taskId,
+                agentId,
+                semantic: recalledSemantic,
+                episodes: recentEpisodes,
+                workflows: activeWorkflows,
+              })) {
+                yield* eb.publish(event)
+                  .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "memory/src/services/memory-service.ts:recall-publish", tag: errorTag(err) })));
+              }
             }
 
             return result;

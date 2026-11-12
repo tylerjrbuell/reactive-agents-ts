@@ -132,6 +132,8 @@ At the start of each task, the memory layer bootstraps context:
 
 This gives agents continuity across conversations without explicit context management.
 
+Each bootstrap that recalls something publishes a `MemoryRecalled` event on the EventBus: one per non-empty tier (`semantic`, `episodic`, `procedural`), carrying the `taskId`, `agentId`, and up to 20 items (`id`, `tier`, a summary truncated to 160 characters, plus `importance` or `score` where the tier has one). A bootstrap that recalls nothing publishes nothing. Cortex's run Context tab reads these events.
+
 ## ExperienceStore — Cross-Agent Learning
 
 The ExperienceStore records tool usage patterns and error recovery hints across all runs, then injects relevant tips at bootstrap time. This lets agents benefit from what previous agents (or previous runs of the same agent) learned.
