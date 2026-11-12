@@ -197,6 +197,20 @@ export const applyWithSkillPersistence = (state: BuilderState, enabled: boolean 
     state._skillPersistence = enabled
 }
 
+/**
+ * Apply `.withDebrief(enabled)` — synthesize and store a post-run debrief.
+ *
+ * Unset, a debrief follows memory: on with `.withMemory()`, off without it.
+ * `true` turns it on with memory off (the debrief is written to the debrief
+ * store, a small SQLite table, without the rest of the memory stack);
+ * `false` turns it off with memory on.
+ *
+ * @param enabled - `true` (default) or `false`
+ */
+export const applyWithDebrief = (state: BuilderState, enabled: boolean = true) => {
+    state._debrief = enabled
+}
+
 
 /**
  * Enable Living Skills. Skills are discovered PER RUN at the run's file root

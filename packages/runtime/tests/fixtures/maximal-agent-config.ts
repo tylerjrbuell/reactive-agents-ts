@@ -280,6 +280,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
     pulseConfig: { useLLMRecommendation: true, includeControllerDecisions: true, includeBehavior: true },
     recallConfig: { previewLength: 200, autoFullThreshold: 1_000, maxEntries: 50, maxTotalBytes: 65_536 },
   },
+  debrief: true,
   agentTools: [
     {
       name: "researcher",
@@ -292,6 +293,14 @@ export const MAXIMAL_CONFIG: AgentConfig = {
         maxIterations: 4,
         systemPrompt: "Cite every source.",
         persona: { role: "researcher", tone: "precise" },
+        parameters: {
+          type: "object",
+          properties: {
+            topic: { type: "string", description: "What to research" },
+            depth: { type: "integer", minimum: 1, maximum: 5 },
+          },
+          required: ["topic"],
+        },
         requiresApproval: false,
         timeoutMs: 30_000,
         maxCallsPerTool: { "web-search": 3 },

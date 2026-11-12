@@ -5,6 +5,14 @@ import type { FinalAnswerCapture } from "@reactive-agents/tools";
 import type { TerminatedBy } from "@reactive-agents/core";
 import { deriveRunOutcome, foldRuntimeVeto } from "./engine/util.js";
 
+/**
+ * Whether a run synthesizes and stores a debrief. An explicit `debrief` wins;
+ * unset, a debrief follows memory. The one rule the engine gate and the
+ * debrief-store layer both read.
+ */
+export const isDebriefEnabled = (c: { readonly debrief?: boolean; readonly enableMemory?: boolean }): boolean =>
+  c.debrief ?? c.enableMemory === true;
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 /**

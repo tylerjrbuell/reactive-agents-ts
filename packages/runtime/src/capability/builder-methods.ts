@@ -79,6 +79,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withExperienceLearning: { kind: "config", configKeys: ["memory.experienceLearning"], description: "Learn from prior-run experience summaries." },
   withMemoryConsolidation: { kind: "config", configKeys: ["memory.memoryConsolidation"], description: "Background memory consolidation/decay/prune." },
   withSkillPersistence: { kind: "config", configKeys: ["skillPersistence"], description: "Persist evolved skills across runs." },
+  withDebrief: { kind: "config", configKeys: ["debrief"], description: "Synthesize and store a post-run debrief (default: follows memory)." },
   withLearning: { kind: "config", configKeys: ["memory", "skillPersistence"], description: "Compounding-intelligence bundle (memory + skill persistence)." },
 
   // ── Verification / grounding / guardrails ──
@@ -155,7 +156,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withDocuments: { kind: "config", configKeys: ["documents"], description: "RAG document ingestion." },
   withMetaTools: { kind: "config", configKeys: ["metaTools"], description: "Conductor's-suite meta-tools." },
   withSkills: { kind: "config", configKeys: ["skills"], description: "Living SKILL.md directories." },
-  // `agent.parameters` (ToolParameter list) stays code-only.
+  // `agent.parameters` is stored as a JSON Schema object (a ToolParameter list is converted).
   withAgentTool: { kind: "config", configKeys: ["agentTools"], description: "Register a sub-agent as a tool." },
   withDynamicSubAgents: { kind: "config", configKeys: ["dynamicSubAgents"], description: "Dynamic sub-agent spawning." },
   withRemoteAgent: { kind: "config", configKeys: ["agentTools"], description: "Register a remote agent." },

@@ -70,10 +70,13 @@ const TURN1 = [
   { toolCall: { name: "todo", args: { action: "add", items: ["step one", "step two", "step three"] } } },
   { toolCall: { name: "todo", args: { action: "done", id: 1 } } },
   { text: "FINAL ANSWER: turn one" },
+  // Own rows are still open, so the harness holds the first final answer for one turn.
+  { text: "FINAL ANSWER: turn one" },
 ];
 const TURN2 = [
   { toolCall: { name: "todo", args: { action: "done", id: 2 } } },
   { toolCall: { name: "todo", args: { action: "add", items: ["step four"] } } },
+  { text: "FINAL ANSWER: turn two" },
   { text: "FINAL ANSWER: turn two" },
 ];
 

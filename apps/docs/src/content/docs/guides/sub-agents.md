@@ -229,6 +229,27 @@ toolCall("review-pr", { repo: "owner/repo", prNumber: 42, focus: "security" });
 - Duplicate parameter names are not allowed — the schema deduplicates.
 - `parameters` is optional; omitting it preserves the previous single-`input` behavior exactly.
 
+**Parameters as a JSON Schema.** `parameters` also accepts a JSON Schema object. A schema is plain data, so it is saved with the agent in `AgentConfig` (`agentTools[].agent.parameters`) and can be edited in a UI. A `ToolParameter` list is stored as the equivalent object schema in `toConfig()`.
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const builder = ReactiveAgents.create().withProvider("anthropic").withAgentTool("review-pr", {
+  name: "PR Reviewer",
+  parameters: {
+    type: "object",
+    properties: {
+      repo: { type: "string", description: "owner/repo" },
+      prNumber: { type: "integer", minimum: 1 },
+    },
+    required: ["repo", "prNumber"],
+    additionalProperties: false,
+  },
+});
+```
+
+The parent model sees each top-level property as a tool parameter. A JSON Schema is also checked on every call: arguments that break it fail the tool call with a `SubAgentInputError` that names each violation (`$.prNumber: expected integer, got string`), and no sub-agent runs. `input`, `message` and `tools` stay available as catch-all arguments even with `additionalProperties: false`. A schema the validator cannot check (an unsupported keyword, or a non-object `type`) throws a `SubAgentParametersError` when you call `.withAgentTool()`. It supports the same JSON Schema subset as `.withOutputSchema()`.
+
 ### Dynamic Persona via `spawn-agent`
 
 ## Performance Considerations

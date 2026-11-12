@@ -29,6 +29,7 @@ import { LLMService } from "@reactive-agents/llm-provider";
 import {
   synthesizeDebrief,
   buildFallbackDebrief,
+  isDebriefEnabled,
   type DebriefInput,
   type AgentDebrief,
 } from "../../debrief.js";
@@ -247,12 +248,12 @@ export const prepareDebrief = (
     // the LLM call entirely. Mid/large tiers retain full synthesis.
     const isLocalTier = config.contextProfile?.tier === "local";
 
-    // Gated on BOTH: rr !== undefined (reasoning path was used) AND
-    // config.enableMemory (user opted in with .withMemory()). Skipped otherwise
-    // to avoid injecting extra LLM calls in direct-LLM path tests and non-memory
-    // configurations.
+    // Gated on BOTH: rr !== undefined (reasoning path was used) AND the debrief
+    // setting (`.withDebrief()`; unset it follows `.withMemory()`, see
+    // `isDebriefEnabled`). Skipped otherwise to avoid extra LLM calls in
+    // direct-LLM path tests and configurations that did not ask for a debrief.
     // A paused run has not ended: no debrief until the resumed run ends.
-    const shouldFinalize = rr !== undefined && config.enableMemory === true && !paused;
+    const shouldFinalize = rr !== undefined && isDebriefEnabled(config) && !paused;
     const shouldSynthesizeLLM = shouldFinalize && !isTrivialForDebrief && !isLocalTier;
 
     const fallbackDebrief = shouldFinalize ? buildFallbackDebrief(debriefInput) : undefined;

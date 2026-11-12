@@ -44,7 +44,13 @@ import { ReactiveAgents } from "../src/index.js";
 // same new-capability justification as `.withJudgment()` above (no existing
 // wither composes the OpenInference tracer layer into the runtime).
 // CEILING raised to 87.
-const WITHER_CEILING = 87;
+// 2026-11-11: `.withDebrief()` added on the owner's explicit directive (mission
+// `debrief-independent-and-subagent-params`: a debrief must be its own setting,
+// on with memory off). No existing wither's domain covers "a post-run debrief
+// independent of memory", and `.withMemory({ debrief })` cannot turn it on
+// without turning memory on. CEILING raised to 88; the parent may instead
+// ratify folding it into an existing wither's options.
+const WITHER_CEILING = 88;
 
 function witherNames(): string[] {
   const proto = Object.getPrototypeOf(ReactiveAgents.create());

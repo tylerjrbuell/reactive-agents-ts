@@ -84,7 +84,7 @@ describe(".withAgentTool sub-agents inherit the parent's safety rails", () => {
     const ran = await runChild({
       parentApprovalPolicy: {
         tools: ["file-read"],
-        mode: "detach",
+        mode: "block",
         onApprove: () => {
           asked += 1;
           return { approve: false, reason: "parent says no" };
@@ -120,8 +120,14 @@ describe(".withAgentTool sub-agents inherit the parent's safety rails", () => {
     expect(config.taskContract).toBe(contract);
     expect(config.fabricationGuard).toBe("block");
     expect(config.grounding).toEqual({ mode: "block", tolerance: 0.02 });
-    expect(config.approvalPolicy?.mode).toBe("block");
+    // Parent `detach` stays `detach`: the child waits on the parent's live gate
+    // (subagent/approval-live-gate.test.ts). Any other mode is coerced to block.
+    expect(config.approvalPolicy?.mode).toBe("detach");
     expect(config.approvalPolicy?.tools).toContain("file-read");
+    const blocked = buildLightRuntimeConfig(
+      localAgentRuntimeOptions(subAgent, { parentApprovalPolicy: { tools: ["file-read"] } }, call),
+    );
+    expect(blocked.approvalPolicy?.mode).toBe("block");
   });
 
   it("a parent with no rails gives the child none", () => {

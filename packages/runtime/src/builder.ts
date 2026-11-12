@@ -128,6 +128,7 @@ import {
     applyWithCustomTermination,
     applyWithToolIntent,
     applyWithSkillPersistence,
+    applyWithDebrief,
     applyWithSkills,
 } from './builder/withers/capability-progress.js'
 import {
@@ -582,6 +583,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _sessionPersist: boolean = false
     private _sessionMaxAgeDays?: number
     private _skillPersistence?: boolean = undefined
+    private _debrief?: boolean = undefined
     private _documents: DocumentSpec[] = []
     private _documentStore?: WithDocumentsOptions['store']
     private _pricingRegistry: Record<
@@ -919,23 +921,25 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
+     * Synthesize and store a post-run debrief. Default follows `.withMemory()`;
+     * `withDebrief()` turns it on with memory off, `withDebrief(false)` off
+     * with memory on. Delegates to `applyWithDebrief`.
+     */
+    withDebrief(enabled: boolean = true): this {
+        applyWithDebrief(asBuilderState(this), enabled)
+        return this
+    }
+
+    /**
      * Explicit opt-out from default-on memory + cross-session skill persistence
      * (GH #122 control surface).
      *
-     * As of v0.12, agent builds include lightweight SQLite memory + skill
-     * persistence by default — the compounding-intelligence promise activates
-     * without explicit `.withMemory()`. Call `.withoutMemory()` to disable
-     * the full memory stack (memory layer, skill persistence, session store,
-     * experience learning, memory consolidation) and prevent the runtime
-     * from touching the OS-default memory database.
-     *
-     * Common reasons to call this:
-     *   - stateless agents (chat-only, no learning needed)
-     *   - tests that mock LLMs and don't want SQLite side effects
-     *   - environments without a writable home directory
-     *   - workloads where the ~100ms-per-task memory overhead matters
-     *
-     * Composes cleanly with `.withLeanHarness()` — both force memory off.
+     * Disables the full memory stack (memory layer, skill persistence, session
+     * store, experience learning, memory consolidation) so the runtime never
+     * touches the OS-default memory database. Use it for stateless agents,
+     * mock-LLM tests and environments without a writable home. Clears a memory
+     * opt-in from a profile or `.withMemory()`. Composes with
+     * `.withLeanHarness()`; both force memory off.
      *
      * @returns `this` for chaining
      */
@@ -945,21 +949,12 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Bundle helper: enable the full compounding-intelligence stack — memory
-     * + skill persistence + reactive intelligence — with sensible defaults
-     * (GH #122 recommended path).
-     *
-     * Equivalent to:
-     * ```typescript
-     *   .withMemory({ tier: 'standard' })
-     *   .withSkillPersistence(true)
-     *   .withReactiveIntelligence()  // already on by default
-     * ```
-     *
-     * The OS-default dbPath (`~/.reactive-agents/memory/<agentId>/memory.db`)
-     * applies when no explicit `opts.dbPath` is provided. Useful as a
-     * single-line opt-in to make `agent.skills()` cross-session by default
-     * even when the user wants to be explicit about it.
+     * Bundle helper: enable the compounding-intelligence stack (memory + skill
+     * persistence + reactive intelligence). Equivalent to
+     * `.withMemory({ tier: 'standard' }).withSkillPersistence(true)`; reactive
+     * intelligence is already on by default. The OS-default dbPath
+     * (`~/.reactive-agents/memory/<agentId>/memory.db`) applies when no
+     * `opts.dbPath` is given, which makes `agent.skills()` cross-session.
      *
      * @param opts - Memory tier + path overrides
      * @param opts.tier - `"standard"` (FTS5 keyword search) or `"enhanced"` (FTS5 + vector search). Default: `"standard"`
@@ -2186,6 +2181,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         _sessionMaxAgeDays: self._sessionMaxAgeDays,
         _sessionPersist: self._sessionPersist,
         _skillPersistence: self._skillPersistence,
+        _debrief: self._debrief,
         _skillsConfig: self._skillsConfig,
         _stallPolicy: self._stallPolicy,
         _taskContext: self._taskContext,

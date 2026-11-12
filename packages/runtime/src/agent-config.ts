@@ -182,7 +182,7 @@ export const MetaToolsConfigSchema = Schema.Struct({
 /**
  * One sub-agent tool: a local agent (`.withAgentTool(name, agent)`) or a remote
  * A2A agent (`.withRemoteAgent(name, remoteUrl)`). Mirrors `AgentToolOptions`
- * (builder/types.ts) minus the code-only `agent.parameters`.
+ * (builder/types.ts); `agent.parameters` is stored as a JSON Schema object.
  */
 export const AgentToolConfigSchema = Schema.Struct({
   /** Tool name the parent model calls. */
@@ -198,6 +198,12 @@ export const AgentToolConfigSchema = Schema.Struct({
       maxIterations: Schema.optional(Schema.Number),
       systemPrompt: Schema.optional(Schema.String),
       persona: Schema.optional(PersonaConfigSchema),
+      /**
+       * Typed input for the tool as a JSON Schema object (`{ type: "object",
+       * properties, required }`). The parent model passes these as arguments;
+       * a call whose arguments violate the schema fails with a typed error.
+       */
+      parameters: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
       requiresApproval: Schema.optional(Schema.Boolean),
       timeoutMs: Schema.optional(Schema.Number),
       maxCallsPerTool: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Number })),
@@ -782,6 +788,8 @@ export const AgentConfigSchema = Schema.Struct({
   rateLimiting: Schema.optional(RateLimitingConfigSchema),
   /** Persist evolved skills across runs. */
   skillPersistence: Schema.optional(Schema.Boolean),
+  /** Synthesize and store a post-run debrief. Default: follows memory (on with `.withMemory()`, off otherwise); set it to override either way. */
+  debrief: Schema.optional(Schema.Boolean),
   /** Durable run persistence (crash-resume) configuration. */
   durableRuns: Schema.optional(DurableRunsConfigSchema),
   /** Approval policy: mode, gated tool names and shell command rules. */

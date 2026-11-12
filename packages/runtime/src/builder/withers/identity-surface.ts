@@ -11,6 +11,8 @@ import type { ChannelsConfig } from '@reactive-agents/channels'
 import { ToolsOptionError } from '../../errors.js'
 import type { BuilderState } from './_state.js'
 import { invalidMaxCallsPerTool } from './tools.js'
+import { compileSubAgentInputCheck } from '../build-effect/sub-agent-parameters.js'
+import type { JsonSchemaObject } from '../../engine/finalize/json-schema-contract.js'
 
 /**
  * Set the agent's name — used for identification and logging.
@@ -200,6 +202,9 @@ export const applyWithAgentTool = (
                 `${badCaps.map((n) => `'${n}'`).join(", ")}.`,
         })
     }
+    // A JSON Schema `parameters` is refused here when the validator cannot
+    // check it, not on the first call.
+    if (agent.parameters && !Array.isArray(agent.parameters)) compileSubAgentInputCheck(name, agent.parameters as JsonSchemaObject)
     state._agentTools.push({ name, agent })
 }
 

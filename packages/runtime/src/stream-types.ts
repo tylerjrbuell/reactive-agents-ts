@@ -111,6 +111,8 @@ export type AgentStreamEvent =
       readonly gateId: string;
       readonly toolName: string;
       readonly args: unknown;
+      /** The sub-agent asking (its name) when the gated call runs inside one; absent for the agent's own calls. */
+      readonly subAgent?: string;
     }
   | {
       /**

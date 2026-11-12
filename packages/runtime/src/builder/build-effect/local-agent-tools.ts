@@ -46,6 +46,12 @@ import {
   type SpawnHandlers,
 } from "./spawn-handlers.js";
 import { foldChildMeter, spendOfChildResult } from "./child-spend-probe.js";
+import {
+  compileSubAgentInputCheck,
+  toToolParameters,
+  validateSubAgentInput,
+} from "./sub-agent-parameters.js";
+import type { JsonSchemaObject } from "../../engine/finalize/json-schema-contract.js";
 import type { ParentSafetyRails, SubAgentTaskArgs } from "./sub-agent-executor.js";
 import {
   childCompletionEnvelope,
@@ -198,11 +204,19 @@ export const createLocalAgentToolRegistration = (
   // Merge declared custom parameters into the tool schema so the parent LLM
   // sees them as typed, dynamic arguments per invocation (GH: structured
   // input for withAgentTool). `input` remains as a catch-all free-form arg.
-  const customParams = agentTool.agent?.parameters ?? [];
+  // `parameters` is a ToolParameter list or a JSON Schema; a JSON Schema is also
+  // checked on every call (sub-agent-parameters.ts).
+  const declared = agentTool.agent?.parameters;
+  const customParams = toToolParameters(declared);
+  const checkInput =
+    declared !== undefined && !Array.isArray(declared)
+      ? compileSubAgentInputCheck(agentTool.name, declared as JsonSchemaObject)
+      : undefined;
+  const customNames = new Set(customParams.map((p) => p.name));
   const toolDef: ToolDefinition = {
     ...baseDef,
     ...(customParams.length > 0
-      ? { parameters: [...baseDef.parameters, ...customParams] }
+      ? { parameters: [...baseDef.parameters.filter((p) => !customNames.has(p.name)), ...customParams] }
       : {}),
     ...(agentTool.agent?.requiresApproval !== undefined
       ? { requiresApproval: agentTool.agent.requiresApproval }
@@ -219,6 +233,7 @@ export const createLocalAgentToolRegistration = (
   const handler = (args: Record<string, unknown>) =>
     Effect.scoped(
       Effect.gen(function* () {
+        if (checkInput) yield* validateSubAgentInput(agentTool.name, checkInput, args);
         // Build the task string from the caller's args. `input`/`message` are
         // the catch-all free-form task text; any additional declared parameters
         // (e.g. `repo`, `prNumber`, `focus`) are appended as structured context

@@ -755,12 +755,10 @@ export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCa
    */
   toolDisclosure?: import("./engine/tool-disclosure.js").ToolDisclosure;
 
-  /**
-   * Enable ExperienceStore cross-agent learning.
-   * Records tool-use patterns and queries them at bootstrap to surface tips from prior runs.
-   *
-   * Default: false
-   */
+  /** Synthesize and store a post-run debrief. Default: follows `enableMemory`; `true` with memory off writes only the debrief store. */
+  debrief?: boolean;
+
+  /** Enable ExperienceStore cross-agent learning (records tool-use patterns, surfaces tips from prior runs at bootstrap). Default: false */
   enableExperienceLearning?: boolean;
 
   /**

@@ -609,11 +609,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   logPrefix: Schema.optional(Schema.String),
   /** Maximum retries when verification rejects the response (default: 1). Only used when enableVerification is true. */
   maxVerificationRetries: Schema.optional(Schema.Number),
-  /**
-   * What to do when verification still rejects after retries (F10). Default
-   * "proceed" (ship the answer — telemetry only). "block" withholds the answer
-   * and fails the run; "annotate" ships it unchanged + `metadata.verificationNote`.
-   */
+  /** After retries still reject (F10): "proceed" (default) ships the answer; "block" fails the run; "annotate" ships it with `metadata.verificationNote`. */
   verificationOnReject: Schema.optional(
     Schema.Literal("block", "annotate", "proceed"),
   ),
@@ -641,8 +637,10 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
       maxRetries: Schema.optional(Schema.Number),
     })
   ),
-  /** Enable memory layer — set to true when .withMemory() is called. Controls debrief synthesis. */
+  /** Enable memory layer — set to true when .withMemory() is called. */
   enableMemory: Schema.optional(Schema.Boolean),
+  /** Synthesize and store a post-run debrief. Unset = follows `enableMemory`. */
+  debrief: Schema.optional(Schema.Boolean),
   /** Enable ExperienceStore cross-agent learning (records and queries tool-use patterns). */
   enableExperienceLearning: Schema.optional(Schema.Boolean),
   /** Enable MemoryConsolidatorService background memory intelligence. */

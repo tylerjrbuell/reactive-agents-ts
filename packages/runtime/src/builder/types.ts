@@ -995,22 +995,22 @@ export interface AgentToolOptions {
         /** Persona to steer the sub-agent's behavior (composed into system prompt). Default: undefined */
         readonly persona?: AgentPersona
         /**
-         * Custom input parameters for the sub-agent tool, declared as typed
-         * `ToolParameter` definitions. These are merged into the tool's JSON
-         * Schema so the parent LLM can pass structured, dynamic arguments
-         * per invocation (e.g. `{ repo: "owner/repo", prNumber: 42 }`)
-         * instead of a free-form `input` string. The `input` parameter
+         * Custom input parameters for the sub-agent tool: a `ToolParameter` list,
+         * or a JSON Schema object (`{ type: "object", properties, required }`),
+         * which is plain data and so round-trips through `AgentConfig`. They are
+         * merged into the tool's input schema so the parent LLM can pass
+         * structured arguments per invocation (e.g. `{ repo: "owner/repo",
+         * prNumber: 42 }`) instead of a free-form `input` string. `input`
          * remains available as a catch-all free-form argument.
          *
-         * Declared parameters can be interpolated into `systemPrompt`,
-         * `persona.role`, `persona.instructions`, and
-         * `persona.background` using `{{paramName}}` placeholders — they are
-         * substituted at call time with the values the parent LLM supplies.
+         * A JSON Schema is also checked per call: a violation fails the call with
+         * a `SubAgentInputError`, no sub-agent runs. An unsupported schema throws.
          *
-         * Reuses `@reactive-agents/tools` `ToolParameter` — the same type
-         * used by `createAgentTool` and `withTools()` custom tool schemas.
+         * Declared parameters can be interpolated into `systemPrompt`,
+         * `persona.role`, `persona.instructions` and `persona.background` with
+         * `{{paramName}}` placeholders, substituted at call time.
          */
-        readonly parameters?: ReadonlyArray<ToolParameter>
+        readonly parameters?: ReadonlyArray<ToolParameter> | import('../engine/finalize/json-schema-contract.js').JsonSchemaObject
         /**
          * Whether the parent must approve each invocation of this sub-agent
          * tool. Default: `true` (matches `createAgentTool`'s historical

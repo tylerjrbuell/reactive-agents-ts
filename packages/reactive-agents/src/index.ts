@@ -78,6 +78,8 @@ export {
   // Structured output
   StructuredOutputError,
   OutputSchemaError,
+  SubAgentInputError,
+  SubAgentParametersError,
   isJsonSchemaObject,
 
   // Memory inspection (`agent.memory()`)

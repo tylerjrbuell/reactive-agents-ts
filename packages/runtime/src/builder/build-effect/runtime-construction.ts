@@ -210,6 +210,7 @@ export interface BuilderRuntimeStateView {
   readonly _sessionPersist: boolean;
   readonly _sessionMaxAgeDays?: number;
   readonly _skillPersistence?: boolean;
+  readonly _debrief?: boolean;
   readonly _loggingConfig?: {
     level?: string;
     format?: string;
@@ -586,6 +587,7 @@ export const buildBaseRuntimeAndEngine = (
       sessionPersist: state._sessionPersist,
       sessionMaxAgeDays: state._sessionMaxAgeDays,
       skillPersistence: state._skillPersistence,
+      debrief: state._debrief,
       loggingConfig: state._loggingConfig as
         | import("@reactive-agents/observability").LoggingConfig
         | undefined,

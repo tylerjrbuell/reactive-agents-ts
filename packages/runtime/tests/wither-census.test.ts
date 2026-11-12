@@ -88,6 +88,7 @@ export const WITHER_PROOF: Readonly<Record<string, Proof>> = {
   withProfile: { status: "PROVEN", test: "harness-profile.test.ts" },
   withReceiptSigning: { status: "PROVEN", test: "trust-event-stream.test.ts" },
   withSkillPersistence: { status: "PROVEN", test: "../src/__tests__/builder-with-skill-persistence.test.ts" },
+  withDebrief: { status: "PROVEN", test: "debrief-independent.test.ts" },
   withSkills: { status: "PROVEN", test: "skills-system-prompt-separation.test.ts" },
   withStrictValidation: { status: "PROVEN", test: "build-validation.test.ts" },
   withSystemPrompt: { status: "PROVEN", test: "../test/compose-desugar.test.ts" },

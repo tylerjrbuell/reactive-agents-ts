@@ -1,8 +1,15 @@
 import { Layer, Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { EventBus } from "@reactive-agents/core";
-import { createMemoryLayer } from "@reactive-agents/memory";
-import type { MemoryLLM } from "@reactive-agents/memory";
+import {
+  createMemoryLayer,
+  DebriefStoreLive,
+  defaultMemoryConfig,
+  defaultUserMemoryPath,
+  MemoryDatabaseLive,
+} from "@reactive-agents/memory";
+import type { MemoryDatabase, MemoryLLM } from "@reactive-agents/memory";
+import { isDebriefEnabled } from "./debrief.js";
 import { withMemoryGuardrails } from "./memory-guardrails.js";
 import type { ReactiveAgentsConfig } from "./types.js";
 import type { RuntimeOptions } from "./runtime-types.js";
@@ -80,4 +87,30 @@ export function buildMemoryLayer(
     }),
   ).pipe(Layer.provide(Layer.merge(observableLlmLayer, eventBusLayer)));
   return memoryLayer;
+}
+
+/**
+ * The debrief store (`DebriefStoreService`) for a run that has a debrief
+ * (`isDebriefEnabled`). Nothing else provided it, so a synthesized debrief
+ * reached the DebriefCompleted event and `result.debrief` but was never saved.
+ *
+ * With memory on the store shares the memory layer's database. With memory off
+ * it opens only the debrief table in the memory database path, without the rest
+ * of the memory stack: the explicit `memoryOptions.dbPath`, else an in-process
+ * `:memory:` db for test runs, else the agent's user-scope memory path.
+ */
+export function buildDebriefStoreLayer(
+  options: RuntimeOptions,
+  memoryLayer: Layer.Layer<never, unknown, never>,
+): Layer.Layer<never, unknown, MemoryDatabase> {
+  if (!isDebriefEnabled(options)) return Layer.empty;
+  if (options.enableMemory) return DebriefStoreLive.pipe(Layer.provide(memoryLayer));
+  const dbPath =
+    options.memoryOptions?.dbPath ??
+    (options.provider === "test" || process.env.NODE_ENV === "test"
+      ? ":memory:"
+      : defaultUserMemoryPath(options.agentId));
+  return DebriefStoreLive.pipe(
+    Layer.provide(MemoryDatabaseLive({ ...defaultMemoryConfig(options.agentId), dbPath })),
+  );
 }

@@ -55,6 +55,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `costTracking.monthly` | `number` | no |  |
 | `costTracking.perRequest` | `number` | no |  |
 | `costTracking.perSession` | `number` | no |  |
+| `debrief` | `boolean` | no |  |
 | `documents` | `array` | no |  |
 | `durableRuns.checkpointEvery` | `number` | no |  |
 | `durableRuns.dir` | `string` | no |  |
@@ -346,6 +347,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `.withMemory(options?)` | disabled | Enable memory. No args = standard tier. Options: `{ tier: "standard" \| "enhanced" }` |
 | `.withMemoryConsolidation(config?)` | disabled | Background memory intelligence: `{ threshold?, decayFactor?, pruneThreshold? }` |
 | `.withExperienceLearning()` | disabled | Cross-agent tool-use pattern learning |
+| `.withDebrief(enabled?)` | follows `.withMemory()` | Synthesize and store a post-run debrief. `.withDebrief()` turns it on with memory off (only the debrief table is opened); `.withDebrief(false)` turns it off with memory on. Config key `debrief` |
 
 ### Safety & control
 
@@ -387,7 +389,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | Method | Default | Description |
 |--------|---------|-------------|
 | `.withA2A(options?)` | `{ port: 3000 }` | Configures A2A server defaults (`port`, `basePath`); call `agent.serveA2A()` to serve |
-| `.withAgentTool(name, config)` | none | Register a static sub-agent as a tool. Optional `agent.parameters` array of typed `ToolParameter` entries lets the parent LLM pass structured per-invocation arguments (e.g. `repo`, `prNumber`) alongside the free-form `input`. |
+| `.withAgentTool(name, config)` | none | Register a static sub-agent as a tool. Optional `agent.parameters` (a `ToolParameter` array, or a JSON Schema object that is saved in `AgentConfig` as `agentTools[].agent.parameters`) lets the parent LLM pass structured per-invocation arguments (e.g. `repo`, `prNumber`) alongside the free-form `input`. A JSON Schema is checked on every call; a violation fails the call with `SubAgentInputError`. |
 | `.withDynamicSubAgents(options?)` | disabled | Allow LLM to spawn sub-agents at runtime |
 | `.withRemoteAgent(name, url)` | none | Connect to a remote agent via A2A protocol |
 

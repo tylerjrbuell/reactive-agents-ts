@@ -63,6 +63,7 @@ export type BuilderMethod =
   | "withCircuitBreaker"
   | "withRateLimiting"
   | "withSkillPersistence"
+  | "withDebrief"
   | "withDurableRuns"
   | "withApprovalPolicy"
   | "withUserInteraction"
@@ -391,6 +392,7 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
 
   if (config.rateLimiting) push(call("withRateLimiting", config.rateLimiting));
   if (config.skillPersistence !== undefined) push(call("withSkillPersistence", config.skillPersistence));
+  if (config.debrief !== undefined) push(call("withDebrief", config.debrief));
   if (config.durableRuns) push(call("withDurableRuns", config.durableRuns));
 
   // Approval policy (data half; requireFor / onApprove are code-only)

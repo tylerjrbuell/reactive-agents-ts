@@ -630,6 +630,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 args: unknown
                 task: string
                 updatedAt: number
+                subAgent?: string
             }[],
             Error
         > {
@@ -640,6 +641,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                     gateId: r.gateId,
                     toolName: r.toolName,
                     args: r.args,
+                    ...(r.subAgent !== undefined ? { subAgent: r.subAgent } : {}),
                     task: r.task ?? '',
                     updatedAt: r.requestedAt,
                 }))

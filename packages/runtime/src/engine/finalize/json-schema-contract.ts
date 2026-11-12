@@ -286,6 +286,23 @@ export function jsonSchemaValidator(schema: JsonSchemaObject): StandardSchemaV1<
 }
 
 /**
+ * Compile a JSON Schema into a synchronous checker that lists every violation
+ * of a value as `$.path: message` (empty when the value conforms). The same
+ * validator `.withOutputSchema()` uses, for callers that need the problems as
+ * text (sub-agent tool input).
+ *
+ * @throws OutputSchemaError for a JSON Schema the validator cannot check faithfully.
+ */
+export function jsonSchemaIssues(schema: JsonSchemaObject): (value: unknown) => ReadonlyArray<string> {
+  const std = jsonSchemaValidator(schema)["~standard"];
+  return (value) => {
+    const result = std.validate(value);
+    if (!("issues" in result) || result.issues === undefined) return [];
+    return result.issues.map((i) => `${["$", ...(i.path ?? []).map((p) => String(typeof p === "object" ? p.key : p))].join(".")}: ${i.message}`);
+  };
+}
+
+/**
  * The schema contract for any accepted output schema: a JSON Schema object is
  * wrapped by {@link jsonSchemaValidator}; Effect and Standard Schemas go to
  * `toSchemaContract()` unchanged.

@@ -42,6 +42,12 @@ export type HumanGateRequest =
       readonly gateId: string;
       readonly toolName: string;
       readonly args: unknown;
+      /**
+       * The sub-agent asking, when the gated call runs inside one (its name).
+       * Absent for the agent's own calls. A sub-agent asks under its ROOT run's
+       * `runId`, so `approveRun(runId)` and the run's stream reach it.
+       */
+      readonly subAgent?: string;
       /** The run's task text, when the asking site knows it. */
       readonly task?: string;
       readonly requestedAt: number;
@@ -277,13 +283,18 @@ export const liveApprovalDecider =
       const gate = yield* Effect.serviceOption(HumanGate);
       const ctx = yield* currentRunContext;
       if (Option.isNone(gate) || ctx === null) return { approve: false, reason: NO_LIVE_GATE_REASON };
+      // A sub-agent (depth > 0) asks under the ROOT run's id: the person
+      // answers `approveRun(rootRunId)` and sees the request on the root run's
+      // stream, labelled with the sub-agent's name. The root's stop/terminate
+      // signal is inherited by the child scope, so it abandons this wait.
       const outcome = yield* gate.value.ask(
         {
           kind: "approval",
-          runId: ctx.runId,
+          runId: ctx.depth > 0 ? ctx.rootRunId : ctx.runId,
           gateId: crypto.randomUUID(),
           toolName: pending.toolName,
           args: pending.args,
+          ...(ctx.depth > 0 ? { subAgent: ctx.agentId } : {}),
           ...(options.task !== undefined ? { task: options.task } : {}),
           requestedAt: Date.now(),
         },
@@ -479,6 +490,7 @@ export const watchLiveGate = (
               gateId: request.gateId,
               toolName: request.toolName,
               args: request.args,
+              ...(request.subAgent !== undefined ? { subAgent: request.subAgent } : {}),
             }
           : {
               _tag: "InteractionRequested",

@@ -83,6 +83,8 @@ export interface BuilderState {
   _enableMemory: boolean;
   _memoryOptions?: MemoryOptions;
   _skillPersistence?: boolean;
+  /** Debrief on/off; undefined follows `_enableMemory`. */
+  _debrief?: boolean;
   _sessionPersist: boolean;
   _sessionMaxAgeDays?: number;
   _enableExperienceLearning: boolean;
@@ -308,6 +310,7 @@ const _assertBuilderStateViewShape = (
   _enableMemory: self['_enableMemory'],
   _memoryOptions: self['_memoryOptions'],
   _skillPersistence: self['_skillPersistence'],
+  _debrief: self['_debrief'],
   _sessionPersist: self['_sessionPersist'],
   _sessionMaxAgeDays: self['_sessionMaxAgeDays'],
   _enableExperienceLearning: self['_enableExperienceLearning'],

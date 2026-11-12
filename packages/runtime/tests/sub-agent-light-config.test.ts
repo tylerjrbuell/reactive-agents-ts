@@ -43,15 +43,25 @@ describe("buildLightRuntimeConfig — cross-cutting inheritance", () => {
     expect(config.approvalPolicy).toBeUndefined();
   });
 
-  it("COERCES an inherited approval policy to block mode (a child cannot detach)", () => {
-    // The parent may be detach; the child has no durable store, so detach would
-    // strand it. Coercion to block is the whole safety story.
+  it("keeps an inherited detach policy detach (it waits on the parent's live gate, see subagent/approval-live-gate.test.ts)", () => {
+    // The child has no durableRuns, so `detach` here is the LIVE wait, not a pause.
     const config = buildLightRuntimeConfig({
       ...baseOpts,
       approvalPolicy: { tools: ["danger_tool"], mode: "detach" },
     });
-    expect(config.approvalPolicy?.mode).toBe("block");
+    expect(config.approvalPolicy?.mode).toBe("detach");
     expect(config.approvalPolicy?.tools).toContain("danger_tool");
+  });
+
+  it("COERCES a detach policy that carries onApprove, and any other mode, to block", () => {
+    // `onApprove` decides in process; block never pauses and denies by default.
+    const withDecider = buildLightRuntimeConfig({
+      ...baseOpts,
+      approvalPolicy: { tools: ["danger_tool"], mode: "detach", onApprove: () => true },
+    });
+    expect(withDecider.approvalPolicy?.mode).toBe("block");
+    const unset = buildLightRuntimeConfig({ ...baseOpts, approvalPolicy: { tools: ["danger_tool"] } });
+    expect(unset.approvalPolicy?.mode).toBe("block");
   });
 
   it("runs the F2 autofeed so requiresApproval built-ins gate in the child too", () => {

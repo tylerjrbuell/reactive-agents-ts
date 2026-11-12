@@ -4,7 +4,7 @@ import { contextProfileEngineField } from "./context-profile-engine-field.js";
 import { applyRetryToLlmService } from "./llm-retry.js";
 import { buildToolsLayer } from "./runtime-tools-layer.js";
 import { buildEffectiveLlmLayer } from "./runtime-llm-fallback.js";
-import { buildMemoryLayer } from "./runtime-memory-layer.js";
+import { buildMemoryLayer, buildDebriefStoreLayer } from "./runtime-memory-layer.js";
 import { buildLoggerTapLayer } from "./runtime-logger-tap-layer.js";
 import { buildGatewayLayer } from "./runtime-gateway-layer.js";
 import { LifecycleHookRegistryLive } from "./hooks.js";
@@ -326,6 +326,7 @@ export const createRuntime = (options: RuntimeOptions) => {
     // `.withTools({ maxCallsPerTool })` → reasoning-think → KernelInput.maxCallsPerTool.
     maxCallsPerTool: options.maxCallsPerTool,
     enableMemory: options.enableMemory ?? false,
+    debrief: options.debrief,
     enableExperienceLearning: options.enableExperienceLearning,
     enableMemoryConsolidation: options.enableMemoryConsolidation,
     consolidationConfig: options.consolidationConfig,
@@ -761,14 +762,11 @@ export const createRuntime = (options: RuntimeOptions) => {
       coreLayer,
       eventBusLayer,
       observableLlmLayer,
-      // Memory is DEFAULT-OFF, but this merge was unconditional — so every
-      // run still built the full memory stack, and the memory-flush phase
-      // (which gates on serviceOption presence, not on the option) ran a
-      // "memory extraction assistant" LLM call per non-trivial run. Wire-
-      // captured 2026-07-10: request #7 of a 6-iteration memory-off run was
-      // a 2,252-char extraction prompt. Feature-dependent layers below
-      // (experience/consolidation/session/skill) provide memoryLayer to
-      // THEMSELVES, so they are unaffected by gating the ambient merge.
+      // Memory is DEFAULT-OFF: merging it unconditionally built the full stack on
+      // every run, and the memory-flush phase (gated on serviceOption presence)
+      // ran an extraction LLM call per non-trivial run (wire-captured 2026-07-10).
+      // Feature layers below (experience/consolidation/session/skill/debrief)
+      // provide memoryLayer to THEMSELVES, so gating the ambient merge is safe.
       memoryStackNeeded ? memoryLayer : Layer.empty,
       hookLayer,
       engineLayer,
@@ -786,6 +784,7 @@ export const createRuntime = (options: RuntimeOptions) => {
       memoryConsolidationOptLayer,
       sessionStoreOptLayer,
       skillStoreOptLayer,
+      buildDebriefStoreLayer(options, memoryLayer),
       reasoningOptLayer,
       observabilityOptLayer,
       childDashboardRegistryOptLayer,
@@ -886,15 +885,15 @@ export const buildLightRuntimeConfig = (options: LightRuntimeOptions): ReactiveA
     taskContract: options.taskContract,
     fabricationGuard: options.fabricationGuard,
     grounding: options.grounding,
-    // Approval: COERCE to block. A light runtime has no durable store, so detach
-    // (pause + checkpoint) would strand the child. Block decides in process and
-    // denies by default — the child gates or refuses a gated tool, never pauses,
-    // never executes one unattended. The same F2 autofeed the parent runs folds
-    // the child's `requiresApproval` built-ins (shell/docker/code-execute/
-    // file-write) into the gated set, so robustness does not depend on the
-    // parent having named them. Shell command rules (`commands`) carry over.
+    // Approval: a light runtime has no durable store, so a child never pauses.
+    // Parent `detach` without `onApprove` stays `detach` (no durableRuns here, so it
+    // waits LIVE on the parent's human gate: same gate, same stream, labelled with
+    // this sub-agent); anything else is coerced to block, which decides in process (`onApprove`)
+    // and denies by default, never running a gated tool unattended. The F2
+    // autofeed folds the child's `requiresApproval` built-ins into the gated
+    // set; shell command rules (`commands`) carry over. See human-gate.ts.
     approvalPolicy: options.approvalPolicy
-      ? configureApprovalPolicy(options.approvalPolicy, "block", builtinTools.map((t) => t.definition))
+      ? configureApprovalPolicy(options.approvalPolicy, options.approvalPolicy.mode === "detach" && !options.approvalPolicy.onApprove ? "detach" : "block", builtinTools.map((t) => t.definition))
       : undefined,
   };
   return config;
@@ -964,7 +963,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
           return withMemoryGuardrails(createMemoryLayer("1", { agentId: options.agentId }, bridgedLLM));
         }),
       ).pipe(Layer.provide(llmLayer))
-    : withMemoryGuardrails(createMemoryLayer("1", { agentId: options.agentId }));
+    : withMemoryGuardrails(createMemoryLayer("1", { agentId: options.agentId, dbPath: ":memory:" })); // memory off: in-process db, never a folder under ~/.reactive-agents/memory
 
   // Minimal hooks layer (required by ExecutionEngine)
   const hookLayer = LifecycleHookRegistryLive;

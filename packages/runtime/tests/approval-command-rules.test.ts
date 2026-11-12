@@ -137,7 +137,7 @@ describe("approval command rules: one list for the gate and the shell (pure)", (
       provider: "test",
       approvalPolicy: { mode: "detach", commands: ["git push"] },
     } as Parameters<typeof buildLightRuntimeConfig>[0]);
-    expect(child.approvalPolicy?.mode).toBe("block");
+    expect(child.approvalPolicy?.mode).toBe("detach");
     expect(child.approvalPolicy?.commands).toEqual(["git push"]);
   });
 

@@ -14,6 +14,7 @@
  * structurally satisfies this interface.
  */
 import type { AgentConfig } from "../agent-config.js";
+import { parametersToJsonSchema } from "./build-effect/sub-agent-parameters.js";
 import type { ReasoningOptions } from "../types.js";
 import type {
   ToolsOptions,
@@ -100,6 +101,7 @@ export interface BuilderStateForSerialization {
     | false;
   _rateLimiterConfig?: { requestsPerMinute?: number; tokensPerMinute?: number; maxConcurrent?: number };
   _skillPersistence?: boolean;
+  _debrief?: boolean;
   _durableRuns?: { dir?: string; checkpointEvery?: number };
   _approvalPolicy?: import("@reactive-agents/reasoning").AuthoredApprovalPolicy;
   _userInteraction?: false | { readonly timeoutMs?: number };
@@ -141,12 +143,19 @@ const shellData = (t: ShellConfig): Record<string, unknown> =>
     sandbox: t.sandbox,
   });
 
-/** One sub-agent tool as config data; `agent.parameters` is code-only. */
+/** One sub-agent tool as config data; `agent.parameters` is stored as a JSON Schema object. */
 const agentToolData = (t: import("./types.js").AgentToolOptions): Record<string, unknown> => {
   if (t.remoteUrl !== undefined) return { name: t.name, remoteUrl: t.remoteUrl };
   if (!t.agent) return { name: t.name };
-  const { parameters: _codeOnly, ...agent } = t.agent;
-  return { name: t.name, agent: defined({ ...agent, tools: agent.tools ? [...agent.tools] : undefined }) };
+  const { parameters, ...agent } = t.agent;
+  return {
+    name: t.name,
+    agent: defined({
+      ...agent,
+      tools: agent.tools ? [...agent.tools] : undefined,
+      parameters: parameters ? parametersToJsonSchema(parameters) : undefined,
+    }),
+  };
 };
 
 /**
@@ -422,6 +431,7 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
 
   // Skill persistence
   if (state._skillPersistence !== undefined) config["skillPersistence"] = state._skillPersistence;
+  if (state._debrief !== undefined) config["debrief"] = state._debrief;
 
   // Durable runs (crash-resume)
   if (state._durableRuns) config["durableRuns"] = { ...state._durableRuns };
