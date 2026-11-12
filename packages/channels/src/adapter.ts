@@ -67,6 +67,19 @@ export interface DeliveryReceipt {
   readonly sentAt: number;
 }
 
+/**
+ * A later delivery confirmation for a message the adapter sent (Signal delivery and read receipts).
+ * `messageId` is the {@link DeliveryReceipt.messageId} that `send` returned.
+ */
+export interface DeliveryUpdate {
+  readonly messageId: string;
+  readonly adapterId: string;
+  readonly platform: string;
+  readonly status: "delivered" | "read";
+  /** Epoch milliseconds the platform reported. */
+  readonly at: number;
+}
+
 /** What an adapter can do, so callers degrade instead of guessing. */
 export interface ChannelCapabilities {
   readonly threads: boolean;
@@ -105,6 +118,8 @@ export interface ChannelAdapter {
   readonly state: Stream.Stream<ConnectionState>;
   /** Snapshot of the current connection state. */
   readonly currentState: Effect.Effect<ConnectionState>;
+  /** Present when `capabilities.receipts`: delivered/read confirmations for earlier sends. */
+  readonly deliveryUpdates?: Stream.Stream<DeliveryUpdate>;
   start(): Effect.Effect<void, ChannelError, Scope.Scope>;
   send(message: OutboundMessage): Effect.Effect<DeliveryReceipt, ChannelError>;
 }

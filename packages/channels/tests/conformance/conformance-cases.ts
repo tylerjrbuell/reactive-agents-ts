@@ -3,6 +3,7 @@ import { Chunk, Effect, Exit, Fiber, Option, Scope, Stream, TestClock } from "ef
 import { channelSenderKey } from "@reactive-agents/gateway";
 import type { InboundEnvelope, OutboundMessage } from "../../src/adapter.js";
 import { ChannelError, type ChannelErrorKind } from "../../src/errors.js";
+import type { Attachment } from "../../src/types.js";
 import type { AdapterHarness, MakeHarness, PlatformInbound } from "./harness.js";
 
 /** Everything a case may use. `make` builds a fresh started harness inside the case's scope. */
@@ -27,11 +28,15 @@ const out = (text: string, over: Partial<OutboundMessage> = {}): OutboundMessage
   ...over,
 });
 
-/** Start collecting inbound envelopes until the one with `lastId` arrives (inclusive). */
-const collectThrough = (h: AdapterHarness, lastId: string) =>
+/** The envelope identifiers a pushed message must produce (identity unless the harness says otherwise). */
+const ex = (h: AdapterHarness, m: PlatformInbound): { id: string; channelId: string } =>
+  h.expected?.(m) ?? { id: m.id, channelId: m.channelId ?? "chan-1" };
+
+/** Start collecting inbound envelopes until the one for `last` arrives (inclusive). */
+const collectThrough = (h: AdapterHarness, last: PlatformInbound) =>
   Effect.fork(
     h.adapter.inbound.pipe(
-      Stream.takeUntil((e: InboundEnvelope) => e.id === lastId),
+      Stream.takeUntil((e: InboundEnvelope) => e.id === ex(h, last).id),
       Stream.runCollect,
       Effect.map(Chunk.toReadonlyArray),
     ),
@@ -56,14 +61,15 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
   "inbound is normalized into an InboundEnvelope": ({ make }) =>
     Effect.gen(function* () {
       const h = yield* make();
-      const fiber = yield* collectThrough(h, "m1");
-      yield* h.pushInbound(msg({ id: "m1", text: "hello", displayName: "Ann" }));
+      const m = msg({ id: "m1", text: "hello", displayName: "Ann" });
+      const fiber = yield* collectThrough(h, m);
+      yield* h.pushInbound(m);
       const [env] = yield* Fiber.join(fiber);
-      expect(env?.id).toBe("m1");
+      expect(env?.id).toBe(ex(h, m).id);
       expect(env?.text).toBe("hello");
       expect(env?.sender.userId).toBe("user-1");
       expect(env?.sender.displayName).toBe("Ann");
-      expect(env?.conversation.channelId).toBe("chan-1");
+      expect(env?.conversation.channelId).toBe(ex(h, m).channelId);
       expect(env?.conversation.isGroup).toBe(false);
       expect(env?.attachments).toEqual([]);
       expect(typeof env?.receivedAt).toBe("number");
@@ -74,36 +80,46 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
   "a platform message id is delivered at most once (idempotency)": ({ make }) =>
     Effect.gen(function* () {
       const h = yield* make();
-      const fiber = yield* collectThrough(h, "last");
-      yield* h.pushInbound(msg({ id: "dup" }));
-      yield* h.pushInbound(msg({ id: "dup" }));
-      yield* h.pushInbound(msg({ id: "last" }));
+      const dup = msg({ id: "dup" });
+      const last = msg({ id: "last" });
+      const fiber = yield* collectThrough(h, last);
+      yield* h.pushInbound(dup);
+      yield* h.pushInbound(dup);
+      yield* h.pushInbound(last);
       const ids = (yield* Fiber.join(fiber)).map((e) => e.id);
-      expect(ids).toEqual(["dup", "last"]);
+      expect(ids).toEqual([ex(h, dup).id, ex(h, last).id]);
     }),
 
   "echoes of the bot's own messages are never presented as user input": ({ make }) =>
     Effect.gen(function* () {
       const h = yield* make();
-      const fiber = yield* collectThrough(h, "real");
-      yield* h.pushInbound(msg({ id: "echo-1", echo: true }));
-      yield* h.pushInbound(msg({ id: "real" }));
+      const echo = msg({ id: "echo-1", echo: true });
+      const real = msg({ id: "real" });
+      const fiber = yield* collectThrough(h, real);
+      yield* h.pushInbound(echo);
+      yield* h.pushInbound(real);
       const envs = yield* Fiber.join(fiber);
       for (const e of envs) {
-        if (e.id === "echo-1") expect(e.isEcho).toBe(true);
+        if (e.id === ex(h, echo).id) expect(e.isEcho).toBe(true);
         else expect(e.isEcho).toBe(false);
       }
-      expect(envs.some((e) => e.id === "real")).toBe(true);
+      expect(envs.some((e) => e.id === ex(h, real).id)).toBe(true);
     }),
 
   "group messages keep the individual sender and thread (group vs DM)": ({ make }) =>
     Effect.gen(function* () {
       const h = yield* make();
-      const fiber = yield* collectThrough(h, "g2");
-      yield* h.pushInbound(msg({ id: "g1", channelId: "group-9", isGroup: true, threadId: "t-3", senderId: "alice", mentionsSelf: true }));
-      yield* h.pushInbound(msg({ id: "g2", channelId: "dm-alice", senderId: "alice" }));
+      const g1 = msg({ id: "g1", channelId: "group-9", isGroup: true, threadId: "t-3", senderId: "alice", mentionsSelf: true });
+      const g2 = msg({ id: "g2", channelId: "dm-alice", senderId: "alice" });
+      const fiber = yield* collectThrough(h, g2);
+      yield* h.pushInbound(g1);
+      yield* h.pushInbound(g2);
       const [group, dm] = yield* Fiber.join(fiber);
-      expect(group?.conversation).toEqual({ channelId: "group-9", threadId: "t-3", isGroup: true });
+      expect(group?.conversation).toEqual({
+        channelId: ex(h, g1).channelId,
+        isGroup: true,
+        ...(h.adapter.capabilities.threads ? { threadId: "t-3" } : {}),
+      });
       expect(group?.sender.userId).toBe("alice");
       expect(group?.mentionsSelf).toBe(true);
       expect(dm?.conversation.isGroup).toBe(false);
@@ -113,21 +129,22 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
   "attachments are normalized (Uint8Array bytes, urls) and replyTo is kept": ({ make }) =>
     Effect.gen(function* () {
       const h = yield* make();
-      const fiber = yield* collectThrough(h, "a1");
-      yield* h.pushInbound(
-        msg({
-          id: "a1",
-          replyTo: "m-prev",
-          attachments: [
-            { type: "url", filename: "a.png", contentType: "image/png", url: "https://example.test/a.png" },
-            { type: "binary", filename: "b.bin", contentType: "application/octet-stream", data: new Uint8Array([1, 2, 3]) },
-          ],
-        }),
-      );
+      const kinds = h.attachmentKinds ?? ["url", "binary"];
+      const replyTo = h.replyToRef ?? "m-prev";
+      const all: Attachment[] = [
+        { type: "url", filename: "a.png", contentType: "image/png", url: "https://example.test/a.png" },
+        { type: "binary", filename: "b.bin", contentType: "application/octet-stream", data: new Uint8Array([1, 2, 3]) },
+      ];
+      const sent = all.filter((a) => kinds.includes(a.type));
+      const m = msg({ id: "a1", replyTo, attachments: sent });
+      const fiber = yield* collectThrough(h, m);
+      yield* h.pushInbound(m);
       const [env] = yield* Fiber.join(fiber);
-      expect(env?.replyTo).toBe("m-prev");
-      expect(env?.attachments[0]).toEqual({ type: "url", filename: "a.png", contentType: "image/png", url: "https://example.test/a.png" });
-      const bin = env?.attachments[1];
+      expect(env?.replyTo).toBe(replyTo);
+      expect(env?.attachments.length).toBe(sent.length);
+      const url = env?.attachments.find((a) => a.type === "url");
+      if (kinds.includes("url")) expect(url).toEqual(all[0]);
+      const bin = env?.attachments.find((a) => a.type === "binary");
       expect(bin?.type).toBe("binary");
       if (bin?.type === "binary") {
         expect(bin.data instanceof Uint8Array).toBe(true);
@@ -138,15 +155,17 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
   "send returns a real DeliveryReceipt and the platform got the message": ({ make }) =>
     Effect.gen(function* () {
       const h = yield* make();
+      const threads = h.adapter.capabilities.threads;
+      const replyTo = h.replyToRef ?? "m-0";
       const receipt = yield* h.adapter.send(
-        out("hi there", { conversation: { channelId: "chan-1", threadId: "t-1" }, replyTo: "m-0" }),
+        out("hi there", { conversation: { channelId: "chan-1", ...(threads ? { threadId: "t-1" } : {}) }, replyTo }),
       );
       expect(receipt.messageId.length).toBeGreaterThan(0);
       expect(receipt.adapterId).toBe(h.adapter.id);
       expect(receipt.platform).toBe(h.adapter.platform);
       expect(["sent", "queued", "delivered"]).toContain(receipt.status);
       const sent = yield* h.platformSent;
-      expect(sent).toEqual([{ channelId: "chan-1", threadId: "t-1", text: "hi there", replyTo: "m-0" }]);
+      expect(sent).toEqual([{ channelId: "chan-1", ...(threads ? { threadId: "t-1" } : {}), text: "hi there", replyTo }]);
     }),
 
   "receipts are unique and their timestamps never go backwards": ({ make }) =>
@@ -186,8 +205,9 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
       const h = yield* make();
       const secret = h.secret;
       if (!secret) return;
-      const fiber = yield* collectThrough(h, "s1");
-      yield* h.pushInbound(msg({ id: "s1" }));
+      const m = msg({ id: "s1" });
+      const fiber = yield* collectThrough(h, m);
+      yield* h.pushInbound(m);
       const envs = yield* Fiber.join(fiber);
       const error = yield* sendFailure(h, "auth");
       const receipt = yield* h.adapter.send(out("ok"));
@@ -205,8 +225,9 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
   "sender identity namespaces as platform:userId for access control": ({ make }) =>
     Effect.gen(function* () {
       const h = yield* make();
-      const fiber = yield* collectThrough(h, "n1");
-      yield* h.pushInbound(msg({ id: "n1", senderId: "12345" }));
+      const m = msg({ id: "n1", senderId: "12345" });
+      const fiber = yield* collectThrough(h, m);
+      yield* h.pushInbound(m);
       const [env] = yield* Fiber.join(fiber);
       expect(env?.sender.platform).toBe(h.adapter.platform);
       expect(env?.sender.userId.length).toBeGreaterThan(0);
@@ -225,13 +246,14 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
   "a full inbound buffer applies backpressure instead of dropping": ({ make }) =>
     Effect.gen(function* () {
       const h = yield* make({ inboundCapacity: 2 });
-      const pushes = yield* Effect.forEach(["b1", "b2", "b3"], (id) => Effect.fork(h.pushInbound(msg({ id }))));
+      const ms = ["b1", "b2", "b3"].map((id) => msg({ id }));
+      const pushes = yield* Effect.forEach(ms, (m) => Effect.fork(h.pushInbound(m)));
       yield* settle;
       const states = yield* Effect.forEach(pushes, (f) => Fiber.poll(f));
       expect(states.filter(Option.isSome).length).toBe(2);
-      const fiber = yield* collectThrough(h, "b3");
+      const fiber = yield* collectThrough(h, ms[2]!);
       yield* settle;
-      expect((yield* Fiber.join(fiber)).map((e) => e.id)).toEqual(["b1", "b2", "b3"]);
+      expect((yield* Fiber.join(fiber)).map((e) => e.id)).toEqual(ms.map((m) => ex(h, m).id));
     }),
 
   "outbound sends respect the rate limit (delayed, not dropped)": ({ make }) =>
@@ -251,13 +273,15 @@ export const conformanceCases: Readonly<Record<string, ConformanceCase>> = {
       const h = yield* make();
       const drop = h.dropConnection;
       if (!drop) return;
-      const fiber = yield* collectThrough(h, "after");
-      yield* h.pushInbound(msg({ id: "before" }));
+      const before = msg({ id: "before" });
+      const after = msg({ id: "after" });
+      const fiber = yield* collectThrough(h, after);
+      yield* h.pushInbound(before);
       yield* drop;
       yield* TestClock.adjust("2 minutes");
       yield* settle;
       expect((yield* h.adapter.currentState).status).toBe("connected");
-      yield* h.pushInbound(msg({ id: "after" }));
-      expect((yield* Fiber.join(fiber)).map((e) => e.id)).toEqual(["before", "after"]);
+      yield* h.pushInbound(after);
+      expect((yield* Fiber.join(fiber)).map((e) => e.id)).toEqual([ex(h, before).id, ex(h, after).id]);
     }),
 };

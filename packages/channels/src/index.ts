@@ -12,3 +12,6 @@ export * from "./services/trigger-registry.js";
 export * from "./services/session-bridge.js";
 export * from "./services/channel-service.js";
 export * from "./adapters/webhook.js";
+export * from "./adapters/signal.js";
+export * from "./adapters/signal-protocol.js";
+export * from "./adapters/signal-transport.js";

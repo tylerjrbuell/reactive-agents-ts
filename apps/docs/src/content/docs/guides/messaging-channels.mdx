@@ -299,7 +299,7 @@ Always enable `.withKillSwitch()` for autonomous messaging agents. This provides
 
 ## The Channel Adapter Contract
 
-The Signal and Telegram setups above are MCP servers: the agent reads and replies by calling tools, so delivery is whatever the model decides to do. `@reactive-agents/channels` defines the replacement: one `ChannelAdapter` contract every platform implements. A native Signal adapter and a Telegram Bot API adapter are being built against it; today only the webhook adapter ships on the new contract.
+The Signal and Telegram setups above are MCP servers: the agent reads and replies by calling tools, so delivery is whatever the model decides to do. `@reactive-agents/channels` defines the replacement: one `ChannelAdapter` contract every platform implements. The webhook adapter and the native Signal adapter ship on the new contract today; a Telegram Bot API adapter is next.
 
 An adapter owns its platform (inbound, outbound, identity, receipts, reconnect). The gateway only sees these shapes:
 
@@ -327,6 +327,47 @@ x-channels-signature: hex(HMAC-SHA256(secret, "<timestamp>.<body>"))
 ```
 
 A timestamp outside `replayWindowMs` (default 5 minutes) is rejected, and a repeated message id is delivered once. With no `secret`, every request is rejected (`missing_secret`) unless you pass `allowUnsigned: true`, which is for local development only. `secret` accepts a plain string or an Effect `Redacted`. Before anything consumes inbound (`start()` or a legacy `onMessage` handler), a request fails with `not_started` instead of being dropped.
+
+### Signal (native)
+
+`SignalChannelAdapter` talks to `signal-cli` in `jsonRpc` mode directly. There is no MCP container and no model-in-the-loop send step: `ChannelService` sends the reply itself and gets a receipt.
+
+The Docker MCP setup above (`docker/signal-mcp`) is the **legacy** path. It keeps working, but it has no receipts, detects echoes by message text, and replies through a single "last sender", so concurrent senders can be cross-wired. New setups should use the native adapter.
+
+**Setup**
+
+1. Register or link the account with `signal-cli` (`signal-cli -a +15551234567 register` then `verify`, or `link` for a secondary device). The registration helper `./docker/signal-mcp/register.sh` still works for this.
+2. Pick a transport:
+   - **Daemon socket (recommended on shared hosts).** Run `signal-cli -a +15551234567 daemon --tcp 127.0.0.1:7583` yourself, then use `makeSignalSocketTransport({ port: 7583 })` (or `{ path }` for a unix socket).
+   - **Spawned process.** `makeSignalProcessTransport({ account })` starts `signal-cli -a <account> --output=json jsonRpc`. The account number is a command-line argument, so it shows up in the host's process list.
+3. Create the adapter and register it with the channel service:
+
+```typescript
+import { Redacted } from "effect";
+import { SignalChannelAdapter, makeSignalSocketTransport } from "@reactive-agents/channels";
+
+const signal = new SignalChannelAdapter({
+  account: Redacted.make(process.env.SIGNAL_PHONE_NUMBER ?? ""),
+  transport: makeSignalSocketTransport({ port: 7583 }),
+});
+```
+
+**Behaviour**
+
+| Concern | What the adapter does |
+|---------|-----------------------|
+| Identity | `signal:<number>` (or `signal:<uuid>` when the sender hides their number). Allowlist entries use that key, e.g. `signal:+15551234567`. |
+| Conversations | A DM's `channelId` is the sender; a group's is the group id, and the individual sender is kept on every message. Signal has no threads (`capabilities.threads` is `false`). |
+| `mentionsSelf` | `true` in a DM, in a group only when the bot is mentioned or its message is quoted. |
+| Echoes | Messages sent from this account are echoes only when their timestamp is one this adapter sent. Matching is by message id, never by text. |
+| Replies | `replyTo` is `<author>:<timestamp>`, the same format as an inbound envelope `id`. |
+| Receipts | `send` returns the message timestamp as `messageId`. Delivery and read confirmations arrive on `adapter.deliveryUpdates`. |
+| Errors | Typed `ChannelError`: `not_found` (unregistered recipient, unknown group), `auth` (account not registered or authorization failed), `rate_limited` with `retryAfterMs`, `forbidden` (untrusted identity), `too_large`, `network`. |
+| Reconnect | Connection loss reconnects with exponential backoff. An `auth` failure stops retrying and sets the state to `failed`. |
+| Attachments | Inbound bytes arrive as `Uint8Array` (fetched with `getAttachment`; failures are counted in `metadata.attachmentsUnavailable`). Outbound accepts bytes only, not urls. |
+| Secrets | The account is `Redacted`, kept out of errors, receipts, state and logs. Raw `signal-cli` text lives only in `ChannelError.cause`. |
+
+The adapter's `deliveryUpdates` stream is not yet published as an EventBus event by `ChannelService`; read it directly if you need receipts today.
 
 ### Writing an adapter
 

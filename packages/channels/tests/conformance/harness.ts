@@ -53,6 +53,16 @@ export interface AdapterHarness {
    */
   readonly failNextSend: (failure: { readonly kind: ChannelErrorKind; readonly retryAfterMs?: number }) => Effect.Effect<void>;
   readonly platformSent: Effect.Effect<readonly PlatformSent[]>;
+  /**
+   * The identifiers the envelope for a pushed message must carry. Default: the pushed `id` and
+   * `channelId`. Platforms whose message ids are structured (Signal: `<author>:<timestamp>`) or whose
+   * DM conversation is the sender's address supply this.
+   */
+  readonly expected?: (message: PlatformInbound) => { readonly id: string; readonly channelId: string };
+  /** A reply reference this platform can parse (inbound `replyTo` and outbound `replyTo`). Default: opaque strings. */
+  readonly replyToRef?: string;
+  /** Attachment kinds the platform carries. Default: both. */
+  readonly attachmentKinds?: ReadonlyArray<"url" | "binary">;
   /** Simulate a socket drop. Omit for adapters without a long-lived connection (webhook). */
   readonly dropConnection?: Effect.Effect<void>;
 }

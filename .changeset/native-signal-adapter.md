@@ -1,0 +1,5 @@
+---
+"@reactive-agents/channels": minor
+---
+
+Add `SignalChannelAdapter`, a native Signal adapter on the canonical `ChannelAdapter` contract. It speaks `signal-cli` JSON-RPC over a spawned process (`makeSignalProcessTransport`) or a daemon socket (`makeSignalSocketTransport`), or any injected `SignalTransport`. Inbound messages carry a `signal:<number-or-uuid>` identity with the group as conversation and the individual sender preserved. Echoes are recognised by message id, not text. `send` returns the message timestamp as a real receipt or a typed `ChannelError` (`not_found`, `auth`, `rate_limited` with `retryAfterMs`, `forbidden`, `too_large`, `network`), and delivery and read receipts stream on the new optional `ChannelAdapter.deliveryUpdates`. The account number is `Redacted` and never appears in errors, receipts or logs. The Docker MCP path (`docker/signal-mcp`) still works and is documented as legacy. The shared conformance suite now lets an adapter declare structured message ids, parseable reply references and attachment kinds, and checks thread handling against `capabilities.threads`.
