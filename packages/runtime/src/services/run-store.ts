@@ -18,7 +18,7 @@
  */
 import { Context, Effect, Layer } from "effect";
 import { Database, hash, type DatabaseLike } from "@reactive-agents/runtime-shim";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -41,7 +41,23 @@ import { dirname, join } from "node:path";
  * ```
  */
 export const defaultDurableRunsDir = (agentId: string, home: string = homedir()): string =>
-  join(home, ".reactive-agents", agentId);
+  join(home, ".reactive-agents", safeAgentPathSegment(agentId));
+
+/**
+ * Contain an agent id to a single inert path segment so it can never escape
+ * the base directory it is joined into (`../x`, absolute paths, backslashes).
+ * Percent-encodes separators; `.`, `..` and empty are neutralised. Ordinary
+ * ids (letters, digits, `-`, `_`) pass through unchanged.
+ *
+ * @param agentId - Untrusted agent id.
+ * @returns A single path segment safe to `join` under a base directory.
+ */
+export const safeAgentPathSegment = (agentId: string): string => {
+  const seg = encodeURIComponent(agentId);
+  if (seg === "") return "_";
+  if (seg === "." || seg === "..") return seg.replace(/\./g, "%2E");
+  return seg;
+};
 
 /**
  * Canonical durable config hash (Phase C config-hash guard).
@@ -407,9 +423,16 @@ function openRunStoreDb(dbPath: string): DatabaseLike {
     // approveRun) opens the same db on a fresh agent that has never persisted a
     // run — without this, SQLite fails with "unable to open database file".
     if (dbPath !== ":memory:") {
-      mkdirSync(dirname(dbPath), { recursive: true });
+      mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
     }
     const db = new Database(dbPath);
+    if (dbPath !== ":memory:") {
+      try {
+        chmodSync(dbPath, 0o600); // run state holds task text + checkpoints: owner-only
+      } catch {
+        // best effort: filesystems without POSIX modes (e.g. Windows) ignore chmod
+      }
+    }
     db.exec(
       `CREATE TABLE IF NOT EXISTS runs (
         run_id      TEXT PRIMARY KEY,

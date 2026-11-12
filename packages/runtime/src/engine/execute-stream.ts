@@ -434,7 +434,7 @@ export const makeExecuteStream =
       if (config.durableRuns && options?.runController) {
         const agentId = config.agentId;
         const dir = config.durableRuns.dir ?? defaultDurableRunsDir(agentId);
-        mkdirSync(dir, { recursive: true });
+        mkdirSync(dir, { recursive: true, mode: 0o700 });
         const dbPath = join(dir, "runs.db");
         const checkpointEvery = config.durableRuns.checkpointEvery ?? 1;
         const runStoreLayer = RunStoreLive(dbPath);
