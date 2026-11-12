@@ -27,6 +27,7 @@ import { judgmentRouter } from "./api/judgment.js";
 import { ollamaSettingsRouter } from "./api/ollama-settings.js";
 import { voiceRouter } from "./api/voice.js";
 import { VoiceSettingsStore } from "./services/voice/voice-settings.js";
+import { createSpeechSupervisor, execDockerRunner } from "./services/voice/speech-supervisor.js";
 import { installOllamaEndpointStore, OllamaEndpointStore } from "./services/ollama-cloud.js";
 import { installProviderKeyStore, ProviderKeyStore } from "./services/provider-key-store.js";
 import { gatewayRouter } from "./api/gateway.js";
@@ -165,13 +166,16 @@ export async function startCortexServer(
   // DNS-rebinding wall, cross-site check and access token for /api/* and /ws/* (request-guard.ts);
   // runs before routing, WS upgrades included.
   const guard = { ...guardConfigFromEnv(process.env), ...(token ? { token } : {}) };
+  // Opt-in supervisor for a local Speaches container (services/voice/speech-supervisor.ts); inert until the user turns it on.
+  const voiceSettings = new VoiceSettingsStore(dirname(resolvedConfig.dbPath));
+  const speechSupervisor = createSpeechSupervisor({ settings: voiceSettings, docker: execDockerRunner });
   const app = new Elysia()
     .onRequest(({ request }) => guardRequest(request, guard))
     .use(healthRouter)
     .use(providerKeysRouter(providerKeys))
     .use(judgmentRouter(providerKeys))
     .use(ollamaSettingsRouter(ollamaEndpoint))
-    .use(voiceRouter({ settings: new VoiceSettingsStore(dirname(resolvedConfig.dbPath)), keys: providerKeys }))
+    .use(voiceRouter({ settings: voiceSettings, keys: providerKeys, supervisor: speechSupervisor, allowDocker: isLoopbackHost(resolveCortexHostname(config.hostname, process.env)) || token !== undefined }))
     .use(capabilitiesRouter)
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
     .use(agentConfigSourceRouter(runtime.storeLayer))
@@ -280,6 +284,8 @@ export async function startCortexServer(
     },
   );
 
+  speechSupervisor.start();
+
   if (resolvedConfig.openBrowser) {
     // argv, never a shell string: `displayUrl` derives from CORTEX_URL.
     const { execFile } = await import("node:child_process");
@@ -293,6 +299,7 @@ export async function startCortexServer(
     hostname: app.server?.hostname ?? hostname,
     port: app.server?.port ?? resolvedConfig.port,
     stop: async () => {
+      speechSupervisor.stop();
       chatScheduleService.dispose();
       chatGoalService.dispose();
       await chatSessionService.disposeAll();

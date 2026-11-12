@@ -28,6 +28,8 @@ export interface AudioFailure {
   /** 400 bad request, 401 key rejected, 404 route missing, 413 too large, 502 server error, 504 timeout. */
   readonly status: 400 | 401 | 404 | 413 | 502 | 504;
   readonly message: string;
+  /** True when the server could not be reached at all (connection refused, DNS, reset), so a supervisor may bring it back. */
+  readonly unreachable?: true;
 }
 
 /** Largest recording a transcription takes (OpenAI's limit; local servers are looser). */
@@ -120,7 +122,7 @@ function networkFailure(cause: unknown, ep: AudioEndpoint, what: string): AudioF
   } catch {
     /* keep the raw value */
   }
-  return { ok: false, status: 502, message: `Could not reach the ${what} server at ${host}: ${replaceAll(msg, ep.apiKey)}` };
+  return { ok: false, status: 502, message: `Could not reach the ${what} server at ${host}: ${replaceAll(msg, ep.apiKey)}`, ...(name === "AbortError" ? {} : { unreachable: true as const }) };
 }
 
 const withTimeout = (ep: AudioEndpoint): AbortSignal =>

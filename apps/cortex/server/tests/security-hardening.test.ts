@@ -16,6 +16,7 @@ import { mcpServersRouter } from "../api/mcp-servers.js";
 import { ollamaSettingsRouter } from "../api/ollama-settings.js";
 import { toolsRouter } from "../api/tools.js";
 import { voiceRouter } from "../api/voice.js";
+import { createSpeechSupervisor, execDockerRunner } from "../services/voice/speech-supervisor.js";
 import { applySchema, openDatabase } from "../db/schema.js";
 import { checkOutboundUrl, isBlockedAddress, noRedirect, type HostResolver } from "../outbound-url.js";
 import { bindRefusal, guardConfigFromEnv, guardRequest, presentedToken, tokensEqual } from "../request-guard.js";
@@ -210,7 +211,8 @@ describe("Ollama endpoint reaches the network only after validation", () => {
   it("PUT /api/voice/settings refuses a base URL that resolves to a metadata address", async () => {
     const dir = mkdtempSync(join(tmpdir(), "cortex-voice-"));
     try {
-      const app = new Elysia().use(voiceRouter({ settings: new VoiceSettingsStore(dir), keys: new ProviderKeyStore({ dir }), resolveHost: metadataDns }));
+      const store = new VoiceSettingsStore(dir);
+      const app = new Elysia().use(voiceRouter({ settings: store, keys: new ProviderKeyStore({ dir }), resolveHost: metadataDns, supervisor: createSpeechSupervisor({ settings: store, docker: execDockerRunner }), allowDocker: true }));
       const put = (baseUrl: string) =>
         app.handle(new Request("http://localhost/api/voice/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ stt: { baseUrl } }) }));
       const bad = await put("http://rebind.example:8000/v1");
@@ -231,7 +233,7 @@ describe("Ollama endpoint reaches the network only after validation", () => {
         return new Response("INTERNAL-SECRET-PAGE", { status: 500 });
       }) as typeof fetch;
       const settings = new VoiceSettingsStore(dir);
-      const app = new Elysia().use(voiceRouter({ settings, keys: new ProviderKeyStore({ dir }), fetch: fetchStub, resolveHost: metadataDns }));
+      const app = new Elysia().use(voiceRouter({ settings, keys: new ProviderKeyStore({ dir }), fetch: fetchStub, resolveHost: metadataDns, supervisor: createSpeechSupervisor({ settings, docker: execDockerRunner }), allowDocker: true }));
       await app.handle(new Request("http://localhost/api/voice/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ tts: { engine: "server", baseUrl: "http://localhost:8000/v1" } }) }));
       const res = await app.handle(new Request("http://localhost/api/voice/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "Hi." }) }));
       expect(res.status).toBe(502);

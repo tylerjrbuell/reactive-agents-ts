@@ -7,6 +7,10 @@
  * - POST /speak               { text, voice?, speed? } -> audio bytes (mp3)
  * - GET  /voices              { voices: [{ id, label }], listed }  (the speech server's list, else OpenAI's names)
  * - POST /test/:direction     stt | tts -> { ok, ... } using the saved settings (a short silent clip / a short phrase)
+ * - GET  /local/status        the local speech server supervisor's state (`speech-supervisor.ts`)
+ * - POST /local/ensure        retry now (Retry button); answers at once with the state, the work continues
+ * - POST /local/keep-running  { enabled } the opt-in to let Cortex run docker for the local Speaches server
+ *   When the server is unreachable and the opt-in covers it, /transcribe, /speak and /test bring it back and retry once.
  *
  * The browser never sees an endpoint key: keys are saved through `/api/settings/keys/voice-stt|voice-tts`
  * (the encrypted provider-key store) and read here, on the server. Audio is relayed and never stored.
@@ -25,6 +29,7 @@ import {
   type AudioEndpoint,
 } from "../services/voice/openai-compatible.js";
 import { readCappedBytes } from "../services/voice/capped-body.js";
+import type { SpeechSupervisor } from "../services/voice/speech-supervisor.js";
 import { mergeVoiceSettings, type VoiceSettings, type VoiceSettingsStore } from "../services/voice/voice-settings.js";
 import { VOICE_STT_KEY_ID, VOICE_TTS_KEY_ID, type ProviderKeyStatus, type ProviderKeyStore } from "../services/provider-key-store.js";
 
@@ -51,6 +56,13 @@ export interface VoiceRouterDeps {
   readonly fetch?: typeof fetch;
   /** DNS resolver for the base-URL check (default: the system resolver); tests inject one. */
   readonly resolveHost?: HostResolver;
+  /** Keeps the local Speaches container up (opt-in; runs docker). */
+  readonly supervisor: SpeechSupervisor;
+  /**
+   * Whether this Cortex may run docker for the supervisor: it listens on loopback, or it has an access
+   * token. Defense in depth behind `bindRefusal` + the request guard; the two mutating routes answer 403 when false.
+   */
+  readonly allowDocker: boolean;
 }
 
 /** The key used for an endpoint: the saved one, else the environment variable. */
@@ -85,8 +97,46 @@ export function voiceRouter(deps: VoiceRouterDeps) {
     caps: { maxAudioBytes: MAX_AUDIO_BYTES, maxSpeechChars: MAX_SPEECH_CHARS },
   });
 
+  /** Run `attempt`; when the supervised server was unreachable, bring it back and run it once more. */
+  const withRecovery = async <R extends { readonly ok: boolean }>(dir: "stt" | "tts", attempt: () => Promise<R>): Promise<R> => {
+    const first = await attempt();
+    if (first.ok || !("unreachable" in first) || first.unreachable !== true || !deps.supervisor.supervises(dir)) return first;
+    const st = await deps.supervisor.ensure("use");
+    return st.phase === "ready" ? attempt() : first;
+  };
+  const dockerRefusal = { error: "Cortex is reachable from other machines without an access token, so it will not run docker. Set CORTEX_TOKEN." } as const;
+
   return new Elysia({ prefix: "/api/voice" })
-    .get("/settings", () => view())
+    .get("/settings", () => {
+      deps.supervisor.touch();
+      return view();
+    })
+    .get("/local/status", () => deps.supervisor.status())
+    .post("/local/ensure", ({ set }) => {
+      if (!deps.allowDocker) {
+        set.status = 403;
+        return dockerRefusal;
+      }
+      const pending = deps.supervisor.retry();
+      void pending.catch(() => undefined);
+      return deps.supervisor.status();
+    })
+    .post(
+      "/local/keep-running",
+      ({ body, set }) => {
+        if (!deps.allowDocker) {
+          set.status = 403;
+          return dockerRefusal;
+        }
+        const r = deps.supervisor.setKeepRunning(body.enabled);
+        if (!r.ok) {
+          set.status = 400;
+          return { error: r.error };
+        }
+        return r.status;
+      },
+      { body: t.Object({ enabled: t.Boolean() }) },
+    )
     .put(
       "/settings",
       async ({ body, set }) => {
@@ -145,12 +195,14 @@ export function voiceRouter(deps: VoiceRouterDeps) {
           set.status = 413;
           return { error: "The recording is too large to transcribe (25 MB limit)." };
         }
-        const r = await transcribe(ep, {
-          audio,
-          mediaType: request.headers.get("content-type") ?? "audio/webm",
-          model: deps.settings.get().stt.model,
-          language: query.language,
-        });
+        const r = await withRecovery("stt", () =>
+          transcribe(ep, {
+            audio,
+            mediaType: request.headers.get("content-type") ?? "audio/webm",
+            model: deps.settings.get().stt.model,
+            language: query.language,
+          }),
+        );
         if (!r.ok) {
           set.status = r.status;
           return { error: r.message };
@@ -169,7 +221,7 @@ export function voiceRouter(deps: VoiceRouterDeps) {
           return { error: NOT_SET_UP.tts };
         }
         const s = deps.settings.get().tts;
-        const r = await speak(ep, { text: body.text, model: s.model, voice: body.voice && body.voice !== "" ? body.voice : s.voice, speed: body.speed });
+        const r = await withRecovery("tts", () => speak(ep, { text: body.text, model: s.model, voice: body.voice && body.voice !== "" ? body.voice : s.voice, speed: body.speed }));
         if (!r.ok) {
           set.status = r.status;
           return { error: r.message };
@@ -203,12 +255,12 @@ export function voiceRouter(deps: VoiceRouterDeps) {
         if (ep === null) return { ok: false, message: NOT_SET_UP[params.direction] };
         const s = deps.settings.get();
         if (params.direction === "stt") {
-          const r = await transcribe(ep, { audio: silentWav(1), mediaType: "audio/wav", model: s.stt.model });
+          const r = await withRecovery("stt", () => transcribe(ep, { audio: silentWav(1), mediaType: "audio/wav", model: s.stt.model }));
           return r.ok
             ? { ok: true, message: `Reached the transcription server and model ${s.stt.model}.`, detail: r.text }
             : { ok: false, message: r.message };
         }
-        const r = await speak(ep, { text: "Cortex voice test.", model: s.tts.model, voice: s.tts.voice });
+        const r = await withRecovery("tts", () => speak(ep, { text: "Cortex voice test.", model: s.tts.model, voice: s.tts.voice }));
         if (!r.ok) return { ok: false, message: r.message };
         const bytes = (await new Response(r.body).arrayBuffer()).byteLength;
         return bytes > 0

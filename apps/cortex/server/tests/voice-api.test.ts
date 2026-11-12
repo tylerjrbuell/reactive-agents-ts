@@ -12,6 +12,7 @@ import { voiceKey, voiceRouter } from "../api/voice.js";
 import { providerKeysRouter } from "../api/provider-keys.js";
 import { ProviderKeyStore, VOICE_STT_KEY_ID, VOICE_TTS_KEY_ID } from "../services/provider-key-store.js";
 import { DEFAULT_VOICE_SETTINGS, mergeVoiceSettings, VoiceSettingsStore } from "../services/voice/voice-settings.js";
+import { createSpeechSupervisor, execDockerRunner } from "../services/voice/speech-supervisor.js";
 import { audioFileName, audioUrl, friendlyVoice, listVoices, normalizeAudioBaseUrl, silentWav, speak, transcribe } from "../services/voice/openai-compatible.js";
 
 const STT_KEY = "sk-stt-secret-0123456789ABCD";
@@ -92,7 +93,7 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "cortex-voice-"));
   keys = new ProviderKeyStore({ dir, env: {} });
   settings = new VoiceSettingsStore(dir);
-  app = new Elysia().use(voiceRouter({ settings, keys })).use(providerKeysRouter(keys));
+  app = new Elysia().use(voiceRouter({ settings, keys, supervisor: createSpeechSupervisor({ settings, docker: execDockerRunner }), allowDocker: true })).use(providerKeysRouter(keys));
   seen = [];
   mode = "ok";
   upstreamAborted = false;

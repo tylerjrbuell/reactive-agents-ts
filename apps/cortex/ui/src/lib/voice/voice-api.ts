@@ -5,6 +5,7 @@
  */
 import { causeMessage, type VoiceFetch } from "@reactive-agents/ui-core";
 import { parseKeyStatus, type ProviderKeyStatus } from "../provider-keys.js";
+import { parseLocalSpeechStatus } from "./local-speech.js";
 
 /** `browser` = the browser's engine; `server` = the OpenAI-compatible endpoint. */
 export type EngineChoice = "browser" | "server";
@@ -127,6 +128,9 @@ export function voiceApi(base: string, doFetch: VoiceFetch = (input, init) => fe
           listed: isRecord(b) && b.listed === true,
         };
       }),
+    localStatus: () => call(doFetch, v("/local/status"), { method: "GET" }, parseLocalSpeechStatus),
+    localEnsure: () => call(doFetch, v("/local/ensure"), jsonInit("POST"), parseLocalSpeechStatus),
+    setKeepRunning: (enabled: boolean) => call(doFetch, v("/local/keep-running"), jsonInit("POST", { enabled }), parseLocalSpeechStatus),
     saveKey: (id: string, apiKey: string) => call(doFetch, key(id), jsonInit("PUT", { apiKey }), parseKeyStatus),
     removeKey: (id: string) => call(doFetch, key(id), jsonInit("DELETE"), parseKeyStatus),
   };

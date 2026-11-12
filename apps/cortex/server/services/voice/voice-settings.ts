@@ -33,16 +33,24 @@ export interface TtsSettings {
   readonly voice: string;
 }
 
+/** The opt-in for `speech-supervisor.ts`; changed only through `POST /api/voice/local/keep-running`, never by the settings PUT. */
+export interface LocalSpeechSettings {
+  /** Cortex keeps a local Speaches container running for the loopback endpoint (runs `docker` on this machine). Default off. */
+  readonly keepRunning: boolean;
+}
+
 /** All voice settings. */
 export interface VoiceSettings {
   readonly stt: SttSettings;
   readonly tts: TtsSettings;
+  readonly localSpeech: LocalSpeechSettings;
 }
 
 /** Defaults: browser engines, OpenAI's model names ready for an endpoint to be filled in. */
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   stt: { engine: "browser", baseUrl: "", model: "whisper-1" },
   tts: { engine: "browser", baseUrl: "", model: "tts-1", voice: "alloy" },
+  localSpeech: { keepRunning: false },
 };
 
 const str = (v: unknown, fallback: string, max = 200): string => (typeof v === "string" ? v.trim().slice(0, max) : fallback);
@@ -88,6 +96,7 @@ export function mergeVoiceSettings(base: VoiceSettings, patch: VoiceSettingsPatc
         model: t?.model !== undefined ? str(t.model, base.tts.model) || DEFAULT_VOICE_SETTINGS.tts.model : base.tts.model,
         voice: t?.voice !== undefined ? str(t.voice, base.tts.voice) || DEFAULT_VOICE_SETTINGS.tts.voice : base.tts.voice,
       },
+      localSpeech: base.localSpeech,
     },
   };
 }
@@ -105,12 +114,19 @@ export class VoiceSettingsStore {
     try {
       const v: unknown = JSON.parse(readFileSync(this.file, "utf8"));
       if (typeof v !== "object" || v === null) return DEFAULT_VOICE_SETTINGS;
-      const o = v as { stt?: Partial<SttSettings>; tts?: Partial<TtsSettings> };
+      const o = v as { stt?: Partial<SttSettings>; tts?: Partial<TtsSettings>; localSpeech?: { keepRunning?: unknown } };
       const merged = mergeVoiceSettings(DEFAULT_VOICE_SETTINGS, { ...(o.stt ? { stt: o.stt } : {}), ...(o.tts ? { tts: o.tts } : {}) });
-      return merged.ok ? merged.settings : DEFAULT_VOICE_SETTINGS;
+      if (!merged.ok) return DEFAULT_VOICE_SETTINGS;
+      // Only a literal `true` opts in; anything else stays off.
+      return { ...merged.settings, localSpeech: { keepRunning: o.localSpeech?.keepRunning === true } };
     } catch {
       return DEFAULT_VOICE_SETTINGS;
     }
+  }
+
+  /** Turn `localSpeech.keepRunning` on or off, leaving the rest. `false` on an I/O failure. */
+  setKeepRunning(keepRunning: boolean): boolean {
+    return this.set({ ...this.get(), localSpeech: { keepRunning } });
   }
 
   /** Save `settings`; atomic write. `false` on an I/O failure. */

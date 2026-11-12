@@ -17,6 +17,7 @@
   import Input from "$lib/components/kit/Input.svelte";
   import SettingsRow from "$lib/components/settings/SettingsRow.svelte";
   import VoiceEndpointBlock from "$lib/components/settings/VoiceEndpointBlock.svelte";
+  import LocalSpeechBlock from "$lib/components/settings/LocalSpeechBlock.svelte";
   import { VOICE_TEST_TEXT } from "$lib/voice/voice-text.js";
   import { ttsFor } from "$lib/voice/engines.js";
   import { sttStatus, ttsStatus, type VoiceStatusLine } from "$lib/voice/voice-status.js";
@@ -119,6 +120,7 @@
 </SettingsRow>
 <div class="vp">{@render lines(tts)}</div>
 {#if $settings.tts.engine === "server"}<VoiceEndpointBlock direction="tts" />{/if}
+{#if $settings.stt.engine === "server" || $settings.tts.engine === "server"}<LocalSpeechBlock />{/if}
 
 <SettingsRow label="Reading speed" for="voice-rate" description="Applies at once, also to a reading in progress.">
   {#snippet control()}
