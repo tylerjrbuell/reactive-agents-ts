@@ -189,6 +189,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
     persistMemoryAcrossRuns: true,
     queue: { capacity: 50, overflow: "drop-newest" },
     port: 8787,
+    ingress: { channels: ["telegram"] },
     accessControl: {
       accessPolicy: "allowlist",
       allowedSenders: ["+15550001111"],

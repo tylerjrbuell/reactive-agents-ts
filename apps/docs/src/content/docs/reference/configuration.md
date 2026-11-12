@@ -96,6 +96,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `gateway.heartbeat.intervalMs` | `number` | no |  |
 | `gateway.heartbeat.maxConsecutiveSkips` | `number` | no |  |
 | `gateway.heartbeat.policy` | `always` \| `adaptive` \| `conservative` | no |  |
+| `gateway.ingress.channels` | `false` \| `string[]` | no |  |
 | `gateway.persistMemoryAcrossRuns` | `boolean` | no |  |
 | `gateway.policies.dailyTokenBudget` | `number` | no |  |
 | `gateway.policies.heartbeatPolicy` | `always` \| `adaptive` \| `conservative` | no |  |

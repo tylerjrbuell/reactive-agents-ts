@@ -425,6 +425,14 @@ export const GatewayConfigSchema = Schema.Struct({
     }),
   ),
   port: Schema.optional(Schema.Number),
+  /** Framework ingress for channel adapters (see GatewayOptions.ingress). */
+  ingress: Schema.optional(
+    Schema.Struct({
+      channels: Schema.optional(
+        Schema.Union(Schema.Literal(false), Schema.Array(Schema.String)),
+      ),
+    }),
+  ),
   /**
    * Channel access control (messaging platforms). Mirrors
    * `GatewayOptions.accessControl` (builder/types.ts) so gateway config gets
