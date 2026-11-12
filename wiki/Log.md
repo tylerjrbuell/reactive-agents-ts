@@ -1,3 +1,9 @@
+# 2026-11-12 — Cortex and gateway overhaul, review and hardening
+
+Multimodal input, Cortex voice/judgment/rich answer/composer, canonical ChannelAdapter with native Signal and Telegram, durable ScheduleRegistry, ingress, inbound queue, deploy hardening, Ollama Cloud key scoping. Specs: `wiki/Architecture/Design-Specs/2026-11-12-cortex-workflows.md`, `...-plugin-system.md`. Decisions: `wiki/Decisions/2026-11-12-*.md`. Audit: `wiki/Research/Audit-Reports-2026-11-12/gateway-channels-deploy-audit.md`. New warden: `gateway-warden`. Breaking: `platform:` prefix on `allowedSenders`/`blockedSenders`. Follow-up: docs sweep, security audit.
+
+---
+
 # 2026-11-05 — Wardens: open-source plugin, one-file team, hook enforcement (warn mode)
 
 Design: wiki/Architecture/Design-Specs/2026-11-05-wardens-pack-design.md. Decision: wiki/Decisions/2026-11-05-wardens-one-file-hook-enforced.md.

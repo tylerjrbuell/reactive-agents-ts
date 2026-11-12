@@ -28,6 +28,7 @@ Use this table to find the authoritative file for each question. Do not browse `
 | Decisions | `wiki/Decisions/` |
 | Failure modes | `wiki/Failure-Modes/` |
 | Experiments | `wiki/Experiments/` |
+| Cortex server/UI detail (routes, theme tokens, per-feature contracts, pitfalls 6-12) | `wiki/Development/Cortex-Reference.md` (index in `apps/cortex/AGENTS.md`) |
 | Cross-session agent memory | `.agents/MEMORY.md` (index); details in `wiki/Research/Agent-Memory-Archive.md` |
 
 ## Repo tool: `bun run repo <command>` (decided names; guess these)
