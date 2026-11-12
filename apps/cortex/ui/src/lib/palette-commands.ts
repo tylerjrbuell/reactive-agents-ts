@@ -24,6 +24,7 @@ export interface PaletteDeps {
 const LAB_TAB_META: Record<LabTab, { icon: IconName; description: string; keywords: string[] }> = {
   builder: { icon: "edit", description: "Configure and run a new agent", keywords: ["builder", "create", "configure", "agent"] },
   agents: { icon: "agents", description: "Saved and gateway agents", keywords: ["saved", "gateway", "scheduled", "persistent"] },
+  status: { icon: "signal", description: "Gateway agents, channel connections and schedules", keywords: ["gateway", "channels", "telegram", "signal", "webhook", "messaging", "status", "health"] },
   skills: { icon: "think", description: "Agent skills and skill files", keywords: ["skills", "living"] },
   memory: { icon: "server", description: "What an agent remembers", keywords: ["memory", "facts", "workflows", "studio"] },
   tools: { icon: "tool", description: "Tool registry and MCP servers", keywords: ["tools", "mcp", "registry"] },

@@ -69,6 +69,7 @@
       "name": "@reactive-agents/cortex",
       "version": "0.10.6",
       "dependencies": {
+        "@reactive-agents/channels": "workspace:*",
         "@reactive-agents/core": "workspace:*",
         "@reactive-agents/gateway": "workspace:*",
         "@reactive-agents/llm-provider": "workspace:*",

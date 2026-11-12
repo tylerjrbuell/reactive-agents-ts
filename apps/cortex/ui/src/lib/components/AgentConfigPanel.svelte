@@ -36,6 +36,7 @@
   import ExecutionSection from "$lib/components/agent-config/sections/ExecutionSection.svelte";
   import JudgmentSection from "$lib/components/agent-config/sections/JudgmentSection.svelte";
   import OutputSchemaSection from "$lib/components/agent-config/sections/OutputSchemaSection.svelte";
+  import ChannelsSection from "$lib/components/agent-config/sections/ChannelsSection.svelte";
   import MetaToolsSection from "$lib/components/agent-config/sections/MetaToolsSection.svelte";
   import ReliabilitySection from "$lib/components/agent-config/sections/ReliabilitySection.svelte";
   import ObservabilitySection from "$lib/components/agent-config/sections/ObservabilitySection.svelte";
@@ -378,6 +379,10 @@
 
   {#if shows("execution")}
     <ExecutionSection bind:config open={isOpen("execution")} onToggle={() => toggle("execution")} />
+  {/if}
+
+  {#if !compact && shows("channels")}
+    <ChannelsSection bind:config open={isOpen("channels")} onToggle={() => toggle("channels")} />
   {/if}
 
   {#if shows("outputschema")}

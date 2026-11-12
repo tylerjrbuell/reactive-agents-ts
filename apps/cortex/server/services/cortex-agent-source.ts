@@ -55,6 +55,7 @@ export const CORTEX_OVERLAY_CALLS: readonly string[] = [
   "withTools",
   "withTracing",
   "withJudgment",
+  "withChannels",
 ];
 
 const list = (xs: readonly string[]): string => xs.join(", ");
@@ -86,6 +87,13 @@ export function cortexOnlySettings(
     add("Host tools", "withTools", list((params.extraTools ?? []).map((t) => t.definition.name)));
   }
   if (params.tracing) add("Run traces", "withTracing", params.tracing.dir);
+  if ((params.channelAdapters?.length ?? 0) > 0) {
+    add(
+      "Messaging channels",
+      "withChannels",
+      `${(params.channelAdapters ?? []).map((a) => a.platform).join(", ")}. Credentials are not exported; build the adapters in code.`,
+    );
+  }
   const judgment = parseCortexJudgmentConfig(params.judgment);
   if (judgment) {
     const keyed = providerKeyForAgent(TYPESAFE_KEY_ID) !== undefined;

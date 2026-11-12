@@ -432,6 +432,13 @@ export function cortexParamsToAgentConfig(
     };
   }
 
+  // Gateway (access control, inbound queue, crons): the framework's own shape, passed as is.
+  // Absent access control is the framework's fail-closed default (nobody may message the agent);
+  // Cortex adds no default of its own. `.withChannels` needs the gateway, so channel adapters
+  // imply at least an empty gateway block.
+  if (params.gateway) draft.gateway = params.gateway;
+  else if ((params.channelAdapters?.length ?? 0) > 0) draft.gateway = {};
+
   // Generic framework-config overrides (type-introspected renderer): layer the
   // curated `draft` OVER rawConfig so curated cortex controls win, while
   // advanced framework-only fields the UI doesn't curate still flow through.

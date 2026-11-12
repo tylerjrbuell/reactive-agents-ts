@@ -47,6 +47,7 @@ const PARAM_KEYS: Record<keyof BuildCortexAgentParams, true> = {
   testScenario: true, streaming: true, outputSchema: true, outputSchemaOnParseFail: true,
   documents: true, budget: true, grounding: true, fabricationGuard: true, modelRouting: true,
   rawConfig: true, durableRuns: true, approvalPolicy: true, judgment: true,
+  gateway: true, channelAdapters: true,
 };
 
 /**
@@ -73,6 +74,14 @@ const PATH_SPECIFIC: Partial<Record<keyof BuildCortexAgentParams, { readonly pat
   testScenario: {
     paths: ["chat"],
     why: "chat seeds a scripted reply for provider 'test'; the runner takes one only from test code, gateway never",
+  },
+  gateway: {
+    paths: ["gateway"],
+    why: "access control, queue and crons belong to a gateway agent's long-lived channel host; a desk run or chat turn never starts the gateway loop",
+  },
+  channelAdapters: {
+    paths: [],
+    why: "live adapters are built by the channel host from the saved channels and credentials (channel-adapters.ts); not part of the shared config",
   },
 };
 
@@ -131,6 +140,7 @@ const fixture = (): Record<string, unknown> => ({
   rawConfig: { profile: "lean" },
   durableRuns: { enabled: true },
   approvalPolicy: { mode: "block", tools: ["file-write"], commands: ["git push"] },
+  gateway: { accessControl: { accessPolicy: "allowlist", allowedSenders: ["telegram:123"] }, queue: { capacity: 5, overflow: "drop-newest" } },
 });
 
 function captureRunnerLayer(captured: { params: LaunchParams | null }) {

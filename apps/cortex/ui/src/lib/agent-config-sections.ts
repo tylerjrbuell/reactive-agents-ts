@@ -101,6 +101,15 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     configPaths: ["execution.timeoutMs", "execution.retryPolicy", "budget.tokenLimit", "budget.costLimit", "userInteraction"],
   },
   {
+    id: "channels",
+    label: "Channels",
+    icon: "chat",
+    keywords: "channels messaging telegram signal webhook bot chat gateway allowlist allow everyone access senders cron schedule queue token credentials",
+    // Access control, the inbound queue and cron schedules of a saved gateway agent. The channel
+    // list itself is not an AgentConfig path (live adapters; credentials are never in a config).
+    configPaths: ["gateway.accessControl", "gateway.queue", "gateway.crons"],
+  },
+  {
     id: "outputschema",
     label: "Output schema",
     icon: "data_object",
@@ -146,7 +155,7 @@ export function isCuratedConfigPath(path: string): boolean {
 }
 
 /** Sections hidden in the compact panel (chat quick config). */
-const COMPACT_HIDDEN = new Set(["variables", "tools", "subagents", "skills"]);
+const COMPACT_HIDDEN = new Set(["variables", "tools", "subagents", "skills", "channels"]);
 
 /** Section ids the panel shows, in order. */
 export function activeSectionIds(compact: boolean): string[] {
@@ -202,6 +211,7 @@ export const BUILDER_NAV: readonly BuilderNavEntry[] = [
   { id: "memory", label: "Memory", icon: "folder", description: "What the agent remembers within a run and across runs, and the documents it can search.", sections: ["memory"], keywords: "" },
   { id: "guardrails", label: "Guardrails", icon: "alert", description: "Checks on what goes in and comes out: injection, PII and toxicity.", sections: ["guardrails"], keywords: "" },
   { id: "execution", label: "Execution", icon: "steps", description: "How a run is carried out: limits, retries, durable runs, questions to you and webhooks.", sections: ["execution"], keywords: "durable runs" },
+  { id: "channels", label: "Channels", icon: "chat", description: "Messaging a saved Gateway process agent answers on (Telegram, Signal, webhook), who may message it, and its schedules.", sections: ["channels"], keywords: "messaging telegram signal webhook bot access control allowlist" },
   { id: "outputschema", label: "Output schema", icon: "goal", description: "The typed object the agent returns: its fields, as a table in the run and the chat.", sections: ["outputschema"], keywords: "structured output json schema typed result" },
   { id: "judgment", label: "Judgment", icon: "goal", description: "The backend that answers typed judgments (TypeSafe Jev, an Ollama System One model, or the agent's own model), and how it is reached.", sections: ["judgment"], keywords: "judge typesafe jev noul score choice calibrated shadow nimble" },
   { id: "reliability", label: "Reliability", icon: "goal", description: "Fallback providers for when a call fails.", sections: ["reliability"], keywords: "" },

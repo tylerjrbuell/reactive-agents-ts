@@ -31,6 +31,8 @@ import {
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
 import { providerKeyForAgent } from "./provider-key-store.js";
+import type { ChannelAdapter } from "@reactive-agents/channels";
+import type { CortexGatewayConfig } from "./channel-config.js";
 import {
   judgmentBuilderOptionsOf,
   parseCortexJudgmentConfig,
@@ -207,6 +209,18 @@ export interface BuildCortexAgentParams {
    * overlay, not an AgentConfig field (the framework has no config form for it).
    */
   readonly judgment?: CortexJudgmentConfig;
+  /**
+   * Gateway options (`AgentConfig.gateway`): access control, inbound queue, crons. Set only for a
+   * gateway agent's long-lived host (`gateway-channel-host.ts`); a desk run or chat turn never starts
+   * the gateway loop, so those paths leave it unset (`build-path-parity.test.ts` PATH_SPECIFIC).
+   */
+  readonly gateway?: CortexGatewayConfig;
+  /**
+   * Live channel adapters (`.withChannels({ adapters })`), built by `channel-adapters.ts` from the
+   * agent's saved channels and credentials. Code, not data (adapters hold open connections and a
+   * secret), so an overlay with no AgentConfig form. Needs `gateway` to be set.
+   */
+  readonly channelAdapters?: readonly ChannelAdapter[];
 }
 
 export {
@@ -276,6 +290,11 @@ export async function cortexAgentBuilder(
   // so it rides here and not in a config; without one the framework reads TYPESAFE_API_KEY.
   const judgment = parseCortexJudgmentConfig(params.judgment);
   if (judgment) b = b.withJudgment(judgmentBuilderOptionsOf(judgment, providerKeyForAgent(TYPESAFE_KEY_ID)));
+
+  // Messaging channels: live adapters, so an overlay. `.withChannels` needs the gateway, which
+  // the AgentConfig carries (`gateway`, set by the host even when only defaults apply).
+  const channelAdapters = params.channelAdapters ?? [];
+  if (channelAdapters.length > 0) b = b.withChannels({ adapters: [...channelAdapters] });
 
   // The output schema (JSON Schema, `outputSchemaOptions`) and the agentic-UI
   // interaction rail (`userInteraction`) ride the AgentConfig

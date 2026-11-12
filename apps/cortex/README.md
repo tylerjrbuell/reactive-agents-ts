@@ -89,7 +89,7 @@ bun run build
 - **Beacon** — live board and field of running agents, with a prompt bar.
 - **Chat** — multimodal composer (pictures, audio, files, `@` file tags), slash commands such as `/mcp` and `/btw`, rich answers with deliverables, live approvals and questions (agents ask before risky tools such as writing files or running the shell by default; switch it off per agent), one command list shared by `/` and the Config button, and voice (dictation, read aloud, voice mode).
 - **Runs and run view** — run table, trace, "Why it ended", and an inspector with Context (skills and recalled memories), Memory, Safety and Judgments tabs. Compare two runs.
-- **Lab** — agent builder (with TypeScript export), saved agents, memory studio, agent skills, tools and prompts.
+- **Lab** — agent builder (with TypeScript export), saved agents, memory studio, agent skills, tools and prompts. A **Channels** builder section connects a saved Gateway process agent to Telegram, Signal or a signed webhook: credentials are saved encrypted and never shown again, a connection test checks them, and the access list is fail-closed (an empty list means nobody can message the agent; "Allow everyone" is an explicit switch). The **Gateway** tab shows each gateway agent's live channel connections, schedules (next fire and recent runs), inbound queue activity and recent messages and refusals.
 - **Settings** — provider keys (including Ollama Cloud), judgment backends, voice engines.
 
 Architecture, routes and contracts for contributors are in [`AGENTS.md`](./AGENTS.md). Earlier phase plans are archived under `wiki/Planning/Implementation-Plans/Superpowers/archive/`.

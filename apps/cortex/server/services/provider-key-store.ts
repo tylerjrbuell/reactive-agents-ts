@@ -213,21 +213,55 @@ export class ProviderKeyStore {
     if (!secret.ok) return secret;
     const file = this.readFile();
     if (!file.ok) return file;
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", secret.value, iv);
-    cipher.setAAD(Buffer.from(provider, "utf8"));
-    const data = Buffer.concat([cipher.update(key, "utf8"), cipher.final()]);
-    const entry: SealedEntry = {
-      iv: iv.toString("base64"),
-      tag: cipher.getAuthTag().toString("base64"),
-      data: data.toString("base64"),
-      kid: kidOf(secret.value),
-      updatedAt: this.now(),
-      preferStored: preferStored ?? file.value.keys[provider]?.preferStored ?? false,
-    };
+    const entry = this.seal(provider, key, secret.value, preferStored ?? file.value.keys[provider]?.preferStored ?? false);
     const written = this.writeFile({ v: 1, keys: { ...file.value.keys, [provider]: entry } });
     if (!written.ok) return written;
     return this.status(provider);
+  }
+
+  // ─── generic secrets (channel credentials) ───
+  // Same sealing, files and permissions as provider keys, but ids are not providers: they never
+  // appear in `list()` / `status()` and never reach `keyForAgent`. Callers namespace the id
+  // (`channel:<channelId>:<field>`, see `channel-credentials.ts`).
+
+  /** Seal `value` under `id` (replacing any earlier value). Returns the mask and save time, never the value. */
+  putSecret(id: string, value: string): StoreResult<{ readonly masked: string; readonly updatedAt: number }> {
+    const plain = value.trim();
+    if (!plain) return err("empty-key", "value is empty");
+    const secret = this.secretKey(true);
+    if (!secret.ok) return secret;
+    const file = this.readFile();
+    if (!file.ok) return file;
+    const entry = this.seal(id, plain, secret.value, false);
+    const written = this.writeFile({ v: 1, keys: { ...file.value.keys, [id]: entry } });
+    if (!written.ok) return written;
+    return ok({ masked: maskKey(plain), updatedAt: entry.updatedAt });
+  }
+
+  /** The decrypted secret under `id`, or undefined when none is stored or it cannot be read. */
+  getSecret(id: string): string | undefined {
+    const file = this.readFile();
+    if (!file.ok) return undefined;
+    const entry = file.value.keys[id];
+    return entry ? this.open(id, entry) : undefined;
+  }
+
+  /** Mask and save time of the secret under `id` (never the value), or null when none is readable. */
+  secretMeta(id: string): { readonly masked: string; readonly updatedAt: number } | null {
+    const file = this.readFile();
+    if (!file.ok) return null;
+    const entry = file.value.keys[id];
+    const plain = entry ? this.open(id, entry) : undefined;
+    return entry && plain !== undefined ? { masked: maskKey(plain), updatedAt: entry.updatedAt } : null;
+  }
+
+  /** Remove the secret under `id` (no-op when none is stored). */
+  removeSecret(id: string): StoreResult<void> {
+    const file = this.readFile();
+    if (!file.ok) return file;
+    if (!file.value.keys[id]) return ok(undefined);
+    const { [id]: _removed, ...rest } = file.value.keys;
+    return this.writeFile({ v: 1, keys: rest });
   }
 
   /** Change whether the stored key wins over an env key. */
@@ -303,6 +337,21 @@ export class ProviderKeyStore {
       unreadable: entry !== undefined && plain === undefined,
       source,
       appliesToAgents: storedKeyAppliesToAgents(provider),
+    };
+  }
+
+  private seal(id: string, plain: string, secret: Buffer, preferStored: boolean): SealedEntry {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", secret, iv);
+    cipher.setAAD(Buffer.from(id, "utf8"));
+    const data = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+    return {
+      iv: iv.toString("base64"),
+      tag: cipher.getAuthTag().toString("base64"),
+      data: data.toString("base64"),
+      kid: kidOf(secret),
+      updatedAt: this.now(),
+      preferStored,
     };
   }
 

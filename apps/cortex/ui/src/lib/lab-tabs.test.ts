@@ -6,6 +6,7 @@ describe("lab tabs", () => {
     expect(LAB_TABS.map((t) => `${t.id}:${t.label}`)).toEqual([
       "builder:Builder",
       "agents:Saved agents",
+      "status:Gateway",
       "skills:Skills",
       "memory:Memory",
       "tools:Tools",
@@ -15,6 +16,7 @@ describe("lab tabs", () => {
   test("hash opens a tab; #gateway is an alias of #agents; anything else keeps the default", () => {
     expect(labTabFromHash("#agents")).toBe("agents");
     expect(labTabFromHash("#gateway")).toBe("agents");
+    expect(labTabFromHash("#status")).toBe("status");
     expect(labTabFromHash("#skills")).toBe("skills");
     expect(labTabFromHash("#memory")).toBe("memory");
     expect(labTabFromHash("#tools")).toBe("tools");

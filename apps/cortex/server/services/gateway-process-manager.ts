@@ -36,6 +36,8 @@ import { parseCortexJudgmentConfig } from "./cortex-judgment.js";
 import { waitsLive, durableApprovals } from "./durable-approvals.js";
 import { effectiveApprovalPolicy } from "./approval-policy.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
+import { parseCortexGatewayConfig } from "./channel-config.js";
+import { GatewayChannelHost } from "./gateway-channel-host.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 /**
@@ -89,6 +91,7 @@ export function gatewayConfigToBuildParams(input: {
   const shellAdditional = str(config.terminalShellAdditionalCommands);
   const shellAllowed = str(config.terminalShellAllowedCommands);
   const workspace = str(config.workspace);
+  const gateway = parseCortexGatewayConfig(config.gateway);
   const maxTokens = posNum(config.maxTokens);
   const numCtx = posNum(config.numCtx);
   const maxIterations = posNum(config.maxIterations);
@@ -155,6 +158,7 @@ export function gatewayConfigToBuildParams(input: {
     ...(approvalPolicy ? { approvalPolicy } : {}),
     ...(workspace ? { workspace } : {}),
     ...(terminalShellOptions ? { terminalShellOptions } : {}),
+    ...(gateway ? { gateway } : {}),
   };
 }
 
@@ -175,9 +179,13 @@ export class GatewayProcessManager {
   // Master tick — checks every minute whether any process should fire
   private masterTick: ReturnType<typeof setInterval> | null = null;
 
+  /** Long-lived agents that keep a gateway agent's messaging channels connected. */
+  readonly channels: GatewayChannelHost;
+
   constructor(db: Database, ingestLayer: Layer.Layer<CortexIngestService>) {
     this.db = db;
     this.ingestLayer = ingestLayer;
+    this.channels = new GatewayChannelHost(db, ingestLayer, gatewayConfigToBuildParams);
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
@@ -197,8 +205,8 @@ export class GatewayProcessManager {
 
   /** Start or restart a gateway agent process. */
   startProcess(agentId: string, name: string, schedule: string | null, config: Record<string, unknown>): void {
-    // Stop existing process if any
-    this.stopProcess(agentId);
+    // Drop the existing tick entry; the channel host restarts itself in `sync` below.
+    this.dropProcess(agentId);
 
     const proc: AgentProcess = {
       agentId,
@@ -210,6 +218,12 @@ export class GatewayProcessManager {
     };
     this.processes.set(agentId, proc);
 
+    // Messaging channels run in their own long-lived agent; failures show in the gateway
+    // overview (`channels.status`), never here.
+    void this.channels.sync(agentId, name, config).catch((e) => {
+      cortexLog("warn", "gateway", `Channel host failed for "${name}"`, { agentId, ...formatErrorDetails(e) });
+    });
+
     cortexLog("info", "gateway", `Started process for "${name}"`, {
       agentId,
       schedule: schedule ?? "manual",
@@ -220,6 +234,11 @@ export class GatewayProcessManager {
 
   /** Stop and remove a gateway agent process. */
   stopProcess(agentId: string): void {
+    void this.channels.stop(agentId);
+    this.dropProcess(agentId);
+  }
+
+  private dropProcess(agentId: string): void {
     const proc = this.processes.get(agentId);
     if (!proc) return;
     if (proc.tickInterval) clearInterval(proc.tickInterval);
@@ -359,7 +378,9 @@ export class GatewayProcessManager {
         config,
       });
 
-      const buildParams = gatewayConfigToBuildParams({ agentId, name, config, mcpConfigs });
+      // A cron fire is a one-shot `agent.run()`: it never starts the gateway loop, so it builds
+      // without the gateway block (access control and queue belong to the channel host's agent).
+      const { gateway: _gatewayLoopOnly, ...buildParams } = gatewayConfigToBuildParams({ agentId, name, config, mcpConfigs });
       const agent = await buildCortexAgent(buildParams);
       const agentId_ = agent.agentId;
 
@@ -463,5 +484,6 @@ export class GatewayProcessManager {
     if (this.masterTick) clearInterval(this.masterTick);
     this.masterTick = null;
     for (const [id] of this.processes) this.stopProcess(id);
+    void this.channels.destroy();
   }
 }

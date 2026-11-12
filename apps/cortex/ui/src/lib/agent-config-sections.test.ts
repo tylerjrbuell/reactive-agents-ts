@@ -12,15 +12,15 @@ import {
 } from "./agent-config-sections.js";
 
 describe("agent config section registry", () => {
-  test("15 sections in panel order", () => {
+  test("16 sections in panel order", () => {
     expect(AGENT_CONFIG_SECTIONS.map((s) => s.id)).toEqual([
       "inference", "persona", "strategy", "variables", "tools", "subagents", "skills",
-      "memory", "guardrails", "execution", "outputschema", "judgment", "metatools", "reliability", "observability",
+      "memory", "guardrails", "execution", "channels", "outputschema", "judgment", "metatools", "reliability", "observability",
     ]);
   });
-  test("compact hides variables, tools, sub-agents and skills", () => {
+  test("compact hides variables, tools, sub-agents, skills and channels", () => {
     expect(activeSectionIds(true)).toEqual(["inference", "persona", "strategy", "memory", "guardrails", "execution", "outputschema", "judgment", "metatools", "reliability", "observability"]);
-    expect(activeSectionIds(false)).toHaveLength(15);
+    expect(activeSectionIds(false)).toHaveLength(16);
   });
   test("copy falls back to the id", () => {
     expect(sectionCopy("strategy").label).toBe("Reasoning");
@@ -38,10 +38,10 @@ describe("agent config section registry", () => {
 });
 
 describe("Lab builder section nav (registry-driven)", () => {
-  test("16 entries: 15 grouped from the panel's 15 sections and Shell, plus All framework options", () => {
+  test("17 entries: 16 grouped from the panel's 16 sections and Shell, plus All framework options", () => {
     expect(BUILDER_NAV.map((e) => e.label)).toEqual([
       "Model", "Persona", "Variables", "Reasoning", "Tools", "Shell and workspace", "Sub-agents", "Skills",
-      "Memory", "Guardrails", "Execution", "Output schema", "Judgment", "Reliability", "Observability", "All framework options",
+      "Memory", "Guardrails", "Execution", "Channels", "Output schema", "Judgment", "Reliability", "Observability", "All framework options",
     ]);
   });
   test("every panel section is reachable from exactly one entry", () => {
@@ -53,7 +53,7 @@ describe("Lab builder section nav (registry-driven)", () => {
     expect(builderNavEntry("nope").id).toBe("model");
   });
   test("Find a setting matches titles, member keywords and the entry's own words", () => {
-    expect(filterBuilderNav("").length).toBe(16);
+    expect(filterBuilderNav("").length).toBe(17);
     expect(filterBuilderNav("typesafe").map((e) => e.id)).toEqual(["judgment"]);
     expect(filterBuilderNav("temperature").map((e) => e.id)).toEqual(["model"]);
     expect(filterBuilderNav("template").map((e) => e.id)).toEqual(["variables"]);
@@ -69,7 +69,10 @@ describe("Lab builder section nav (registry-driven)", () => {
     expect(filterBuilderNav("dynamic").map((e) => e.id)).toEqual(["subagents"]);
     expect(filterBuilderNav("recursion").map((e) => e.id)).toEqual(["subagents"]);
     expect(filterBuilderNav("durable").map((e) => e.id)).toEqual(["execution"]);
-    expect(filterBuilderNav("webhook").map((e) => e.id)).toEqual(["execution"]);
+    // Two different things: lifecycle webhooks (Execution) and a webhook messaging channel (Channels).
+    expect(filterBuilderNav("webhook").map((e) => e.id)).toEqual(["execution", "channels"]);
+    expect(filterBuilderNav("telegram").map((e) => e.id)).toEqual(["channels"]);
+    expect(filterBuilderNav("senders").map((e) => e.id)).toEqual(["channels"]);
     expect(filterBuilderNav("output schema").map((e) => e.id)).toEqual(["outputschema"]);
     expect(filterBuilderNav("request_user_input").map((e) => e.id)).toEqual(["execution"]);
     expect(filterBuilderNav("budget").map((e) => e.id)).toEqual(["execution"]);
@@ -86,6 +89,9 @@ describe("Lab builder section nav (registry-driven)", () => {
     expect(owner("userInteraction")).toBe("execution");
     expect(owner("modelRouting.minTier")).toBe("inference");
     expect(owner("documents")).toBe("memory");
+    expect(owner("gateway.accessControl")).toBe("channels");
+    expect(owner("gateway.queue")).toBe("channels");
+    expect(owner("gateway.crons")).toBe("channels");
     const reasoning = AGENT_CONFIG_SECTIONS.find((s) => s.id === "strategy")!;
     expect(reasoning.configPaths.filter((p) => !/^(reasoning|execution\.(max|min)Iterations|verificationStep|features\.verification|grounding|fabricationGuard)/.test(p))).toEqual([]);
   });

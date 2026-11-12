@@ -1,6 +1,8 @@
 /** Shared AgentConfig type and defaults used across Cortex UI */
 import { approvalPolicyFrom, asksBeforeRiskyToolsFrom, defaultApprovalPolicy, type ApprovalPolicyConfig } from "../approval-policy.js";
 import { defaultJudgment, judgmentFrom, type JudgmentFormConfig } from "../judgment-config.js";
+import type { ChannelEntry } from "../channels.js";
+import type { GatewayBlock } from "../channel-access.js";
 
 /** Matches server `CortexAgentToolEntry` for POST /api/runs and saved gateway config. */
 export type CortexAgentToolConfig =
@@ -196,6 +198,17 @@ export interface AgentConfig {
    * own default stays off); sent as `askBeforeRiskyTools`.
    */
   askBeforeRiskyTools: boolean;
+  /**
+   * Messaging channels (Lab · Channels): Telegram, Signal and webhook adapters a saved gateway
+   * agent keeps connected. Non-secret settings only; credentials are saved separately
+   * (`lib/gateway-api.ts`). Gateway agents only: a desk run or chat turn never connects them.
+   */
+  channels?: ChannelEntry[];
+  /**
+   * The gateway block Cortex curates (`gateway.accessControl`, `gateway.queue`, `gateway.crons`).
+   * Absent access control is the framework's fail-closed default: nobody may message the agent.
+   */
+  gateway?: GatewayBlock;
   /**
    * Typed structured output (v0.12): a JSON Schema (as text) the run's answer is
    * extracted into. Empty = off. Sent as `outputSchema` → `.withOutputSchema()`;

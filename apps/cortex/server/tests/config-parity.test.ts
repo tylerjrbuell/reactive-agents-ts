@@ -262,6 +262,9 @@ const WIRED = new Set([
   "withProvider", "withReasoning", "withRemoteAgent", "withSkills", "withStreaming", "withTaskContext",
   "withTestScenario", "withTools", "withTracing", "withUserInteraction", "withVerification",
   "withVerificationStep",
+  // withChannels: a gateway agent's live adapters (overlay, built from saved channels + credentials);
+  // withGateway: access control, queue and crons ride the AgentConfig (`gateway`). Lab · Channels.
+  "withChannels", "withGateway",
 ]);
 
 // Explicitly not applicable to the cortex desk (builder primitives wired via the
@@ -272,10 +275,10 @@ const WIRED = new Set([
 const NOT_APPLICABLE = new Set([
   "withAdaptiveHarness", "withAudit", "withBehavioralContracts", "withCalibration",
   // withDebrief (runtime, `debrief`): an AgentConfig path, set from All framework options (rawConfig).
-  "withChannels", "withCircuitBreaker", "withDebrief", "withContextProfile", "withContract", "withCortex",
+  "withCircuitBreaker", "withDebrief", "withContextProfile", "withContract", "withCortex",
   "withCostTracking", "withCustomTermination", "withDynamicPricing",
   "withEnvironment", "withErrorHandler", "withEvents", "withExperienceLearning",
-  "withFallbacks", "withGateway", "withGuardrails", "withHealthCheck",
+  "withFallbacks", "withGuardrails", "withHealthCheck",
   "withHook", "withLayers", "withLazyValidation", "withLeanHarness",
   "withLearning", "withLlmTimeout", "withLogging", "withLongHorizon", "withMCP",
   "withMaxIterations", "withMemoryConsolidation", "withModel", "withModelPricing",

@@ -64,6 +64,7 @@
     "@reactive-agents/ui-core": "workspace:*",
     "@reactive-agents/observability": "workspace:*",
     "@reactive-agents/gateway": "workspace:*",
+    "@reactive-agents/channels": "workspace:*",
     "@reactive-agents/llm-provider": "workspace:*",
     "@reactive-agents/tools": "workspace:*",
     "@reactive-agents/trace": "workspace:*",

@@ -29,6 +29,8 @@ import { voiceRouter } from "./api/voice.js";
 import { VoiceSettingsStore } from "./services/voice/voice-settings.js";
 import { installOllamaEndpointStore, OllamaEndpointStore } from "./services/ollama-cloud.js";
 import { installProviderKeyStore, ProviderKeyStore } from "./services/provider-key-store.js";
+import { gatewayRouter } from "./api/gateway.js";
+import { ChannelCredentials } from "./services/channel-credentials.js";
 import { dirname } from "node:path";
 import { capabilitiesRouter } from "./api/capabilities.js";
 import { workspaceRouter } from "./api/workspace.js";
@@ -175,6 +177,7 @@ export async function startCortexServer(
     .use(agentConfigSourceRouter(runtime.storeLayer))
     .use(messagesRouter(runtime.rawDb))
     .use(agentsRouter(runtime.rawDb, runtime.gateway))
+    .use(gatewayRouter(runtime.rawDb, runtime.gateway, new ChannelCredentials(providerKeys)))
     .use(toolsRouter(runtime.storeLayer, runtime.rawDb))
     .use(mcpServersRouter(runtime.rawDb))
     .use(skillsRouter(runtime.storeLayer, runtime.rawDb))

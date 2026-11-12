@@ -10,6 +10,8 @@ import {
 } from "../db/queries.js";
 import type { GatewayProcessManager } from "../services/gateway-process-manager.js";
 import { migrateLegacyCliToolsInConfig } from "../services/legacy-cli-tools.js";
+import { parseCortexChannels } from "../services/channel-config.js";
+import { installedChannelCredentials } from "../services/channel-credentials.js";
 
 function parseConfig(raw: string): Record<string, unknown> {
   // Saved agents may still name the removed gh-cli / git-cli / gws-cli tools.
@@ -131,6 +133,10 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
     // ── Delete ─────────────────────────────────────────────────────────────
     .delete("/:agentId", ({ params, set }) => {
       gateway.stopProcess(params.agentId);
+      // The agent's channel credentials go with it: nothing else can use or show them.
+      const row = getGatewayAgent(db, params.agentId);
+      const creds = installedChannelCredentials();
+      if (row && creds) for (const c of parseCortexChannels(parseConfig(row.config).channels)) creds.removeAll(c.id);
       const deleted = deleteGatewayAgent(db, params.agentId);
       if (!deleted) { set.status = 404; return { error: "Not found" }; }
       return { deleted: true };
