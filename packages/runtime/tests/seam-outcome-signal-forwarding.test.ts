@@ -214,7 +214,7 @@ describe("(e) gateway executeEvent stamps origin on the task it runs", () => {
       runtime: rt as never,
       gw: {} as never,
       agentId: "a", persistMemory: true,
-      getIsExecuting: () => false, setIsExecuting: () => {}, incrementTotalRuns: () => {},
+      incrementTotalRuns: () => {},
     });
     await exec({}, "heartbeat", "tick");
     await exec({}, "channel", "msg");

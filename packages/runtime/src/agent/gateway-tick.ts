@@ -24,7 +24,7 @@ import type {
 } from '@reactive-agents/gateway'
 import type { GatewayChatManager } from '../gateway-context-formatting.js'
 import type { GLog } from './gateway-bootstrap.js'
-import type { makeExecuteEvent } from './execute-event.js'
+import type { GatewayInboundQueue } from './gateway-inbound-queue.js'
 
 type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
 type SchedulerService = Context.Tag.Service<typeof SchedulerServiceTag>
@@ -41,7 +41,8 @@ export interface GatewayTickDeps {
     readonly gw: GatewayService
     readonly sched: SchedulerService
     readonly glog: GLog
-    readonly executeEvent: ReturnType<typeof makeExecuteEvent>
+    /** Tick never runs agent work inline: it enqueues, the queue's worker runs. */
+    readonly queue: GatewayInboundQueue
     readonly chatManager: GatewayChatManager
     readonly getStopped: () => boolean
     readonly incrementHeartbeats: () => number
@@ -65,7 +66,7 @@ export const makeGatewayTick = (
         gw,
         sched,
         glog,
-        executeEvent,
+        queue,
         chatManager,
         getStopped,
         incrementHeartbeats,
@@ -77,6 +78,9 @@ export const makeGatewayTick = (
     return async () => {
         if (getStopped()) return
         try {
+            // 0. Release policy-deferred events whose limit window has rolled
+            await queue.retryDeferred()
+
             // 1. Emit heartbeat and check policy — only run agent if a custom instruction was configured
             const hbEvent = await runtime.runPromise(sched.emitHeartbeat())
             const decision = await runtime.runPromise(gw.processEvent(hbEvent))
@@ -100,7 +104,21 @@ export const makeGatewayTick = (
                         instruction: instruction.slice(0, 80),
                     }
                 )
-                await executeEvent(hbEvent, 'heartbeat', instruction)
+                // A heartbeat is idle polling: never stack it behind waiting work.
+                if (queue.depth().ready === 0) {
+                    queue.enqueue(hbEvent, 'heartbeat', instruction)
+                } else {
+                    glog('debug', `heartbeat #${heartbeatCount} → coalesced (work already queued)`)
+                }
+            } else if (decision.action === 'queue') {
+                await queue.defer(
+                    hbEvent,
+                    'heartbeat',
+                    typeof hbEvent.metadata?.instruction === 'string'
+                        ? hbEvent.metadata.instruction
+                        : 'Check for work',
+                    decision.reason
+                )
             } else {
                 glog(
                     'debug',
@@ -110,8 +128,16 @@ export const makeGatewayTick = (
             }
 
             // 2. Check crons
+            // A schedule-store failure must never crash the tick: log and carry on.
             const cronEvents = await runtime.runPromise(
-                sched.checkCrons(new Date())
+                sched.checkCrons(new Date()).pipe(
+                    Effect.catchAll((err) =>
+                        Effect.sync(() => {
+                            glog('error', `cron check failed: ${errorTag(err)}`)
+                            return []
+                        })
+                    )
+                )
             )
             const cronCheckCount = incrementCronChecks()
             if (cronEvents.length > 0) {
@@ -134,18 +160,27 @@ export const makeGatewayTick = (
                     glog('info', `cron → execute`, {
                         instruction: cronInstruction.slice(0, 80),
                     })
-                    await executeEvent(
+                    queue.enqueue(cronEvent, 'cron', cronInstruction)
+                } else if (cronDecision.action === 'queue') {
+                    await queue.defer(
                         cronEvent,
                         'cron',
-                        cronInstruction
+                        typeof cronEvent.metadata?.instruction === 'string'
+                            ? cronEvent.metadata.instruction
+                            : 'Cron task',
+                        cronDecision.reason
                     )
                 } else {
+                    const cronReason =
+                        'reason' in cronDecision ? cronDecision.reason : undefined
                     glog('debug', `cron → ${cronDecision.action}`, {
-                        reason:
-                            'reason' in cronDecision
-                                ? cronDecision.reason
-                                : undefined,
+                        reason: cronReason,
                     })
+                    await queue.skip(
+                        cronEvent,
+                        'cron',
+                        cronReason ?? `policy: ${cronDecision.action}`
+                    )
                 }
             }
 

@@ -26,6 +26,7 @@ import {
 } from './agent/gateway-runner.js'
 import { makeJudgmentFacade } from './agent/judgment-facade.js'
 import { makeSkillsFacade } from './agent/skills-facade.js'
+import { makeSchedulesApi, type SchedulesApi } from './agent/schedules-facade.js'
 import { makeMemoryHandle, type AgentMemoryHandle } from './agent/memory-facade.js'
 import { runFacadeEffect } from './agent/run-facade-effect.js'
 import { makeDurableFacade, type RunDurableParams } from './agent/durable-facade.js'
@@ -1972,19 +1973,17 @@ export class ReactiveAgent<TOut = unknown> {
      * is not configured. Safe to call at any time — does not start the loop.
      *
      * @returns Promise resolving to GatewayStatus or null
-     * @example
-     * ```typescript
-     * const status = await agent.gatewayStatus();
-     * if (status) {
-     *   console.log(`Heartbeats: ${status.stats.heartbeatsFired}`);
-     *   console.log(`Uptime: ${status.uptime}ms`);
-     * }
-     * ```
+     * @example `const status = await agent.gatewayStatus(); status?.stats.heartbeatsFired`
      */
     async gatewayStatus(): Promise<
         import('@reactive-agents/gateway').GatewayStatus | null
     > {
         return queryGatewayStatus(this)
+    }
+
+    /** Durable gateway schedules (list/create/pause/resume/runNow/lastResult); requires `.withGateway()`. */
+    schedules(): SchedulesApi {
+        return makeSchedulesApi(this.runtime, this._gatewayEnabled)
     }
 
     /**

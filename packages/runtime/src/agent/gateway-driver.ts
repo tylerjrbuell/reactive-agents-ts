@@ -22,7 +22,7 @@ import type {
     GatewaySummary,
 } from '../builder/types.js'
 import type { GLog } from './gateway-bootstrap.js'
-import type { makeExecuteEvent } from './execute-event.js'
+import type { GatewayInboundQueue } from './gateway-inbound-queue.js'
 
 type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
 type EventBusService = Context.Tag.Service<typeof EventBus>
@@ -39,7 +39,7 @@ export interface SubscribeChannelHandlerDeps {
         mcpServer: string
         sender: string
     }) => string
-    readonly executeEvent: ReturnType<typeof makeExecuteEvent>
+    readonly queue: GatewayInboundQueue
     readonly chatManager: GatewayChatManager
     // The only effect run through `runtime` is `eb.on(...)` (and its
     // service-instance handler gen), all typed `R = never`.
@@ -63,7 +63,7 @@ export const subscribeChannelHandler = async (
         glog,
         channelMode,
         channelOutboundToolGuidance,
-        executeEvent,
+        queue,
         chatManager,
         runtime,
         agentId,
@@ -121,6 +121,26 @@ export const subscribeChannelHandler = async (
 
                     const channelDecision = yield* gw.processEvent(gwEvent)
 
+                    const mcpServer = String(event.mcpServer ?? '').trim()
+                    const taskInstruction =
+                        `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". ` +
+                        channelOutboundToolGuidance({
+                            mcpServer,
+                            sender: String(event.sender ?? ''),
+                        })
+                    // Chat turns submit their run to the queue themselves
+                    // (chatManager -> executeEvent), so this resolves per turn.
+                    const runChatTurn = async () => {
+                        await chatManager.handleMessage(
+                            event.sender,
+                            event.message,
+                            event.platform ?? 'unknown',
+                            mcpServer,
+                            gwEvent
+                        )
+                        incrementChatTurns()
+                    }
+
                     if (channelDecision.action === 'execute') {
                         glog(
                             'info',
@@ -131,34 +151,20 @@ export const subscribeChannelHandler = async (
                             }
                         )
                         if (channelMode === 'task') {
-                            const mcpServer = String(
-                                event.mcpServer ?? ''
-                            ).trim()
-                            const instruction =
-                                `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". ` +
-                                channelOutboundToolGuidance({
-                                    mcpServer,
-                                    sender: String(event.sender ?? ''),
-                                })
-                            yield* Effect.promise(() =>
-                                executeEvent(
-                                    gwEvent,
-                                    'channel',
-                                    instruction
-                                )
-                            )
+                            queue.enqueue(gwEvent, 'channel', taskInstruction)
                         } else {
-                            yield* Effect.promise(() =>
-                                chatManager.handleMessage(
-                                    event.sender,
-                                    event.message,
-                                    event.platform ?? 'unknown',
-                                    String(event.mcpServer ?? '').trim(),
-                                    gwEvent
-                                )
-                            )
-                            incrementChatTurns()
+                            yield* Effect.promise(runChatTurn)
                         }
+                    } else if (channelDecision.action === 'queue') {
+                        yield* Effect.promise(() =>
+                            queue.defer(
+                                gwEvent,
+                                'channel',
+                                channelMode === 'task' ? taskInstruction : event.message,
+                                channelDecision.reason,
+                                channelMode === 'chat' ? runChatTurn : undefined
+                            )
+                        )
                     } else {
                         glog(
                             'debug',

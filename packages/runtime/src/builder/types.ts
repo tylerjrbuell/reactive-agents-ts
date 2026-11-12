@@ -901,11 +901,10 @@ export interface GatewayOptions {
         readonly mergeWindowMs?: number
         readonly requireApprovalFor?: readonly string[]
     }
-    /**
-     * When true, heartbeat and cron executions use the stable agent id (same as `agent.run()`)
-     * so memory layers can span gateway ticks. Default false: each gateway run used a unique id.
-     */
+    /** Reuse the stable agent id across gateway runs so memory spans ticks. Default false. */
     readonly persistMemoryAcrossRuns?: boolean
+    /** Inbound event queue: `capacity` waiting events (default 100); `overflow` drops 'drop-oldest' (default) or 'drop-newest'. */
+    readonly queue?: { readonly capacity?: number; readonly overflow?: 'drop-oldest' | 'drop-newest' }
     readonly port?: number
     /** Channel access control configuration for messaging platforms (allowlist / chat mode). */
     readonly accessControl?: {

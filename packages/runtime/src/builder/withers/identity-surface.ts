@@ -111,6 +111,7 @@ export const applyWithA2A = (state: BuilderState, options?: A2AOptions) => {
  * @param options.persistMemoryAcrossRuns - Share stable agent id across gateway runs for memory continuity
  * @param options.port - Gateway HTTP server port
  * @param options.accessControl - Channel access control: { accessPolicy?, allowedSenders?, blockedSenders?, mode?, sessionTtlDays? }
+ * @param options.queue - Inbound event queue: { capacity? (default 100), overflow? ('drop-oldest' default | 'drop-newest') }; events that arrive while the agent is busy wait here instead of being dropped
  * @returns `this` for chaining
  */
 export const applyWithGateway = (state: BuilderState, options?: GatewayOptions) => {

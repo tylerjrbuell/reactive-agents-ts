@@ -417,6 +417,13 @@ export const GatewayConfigSchema = Schema.Struct({
     }),
   ),
   persistMemoryAcrossRuns: Schema.optional(Schema.Boolean),
+  /** Inbound event queue bounds (see GatewayOptions.queue). */
+  queue: Schema.optional(
+    Schema.Struct({
+      capacity: Schema.optional(Schema.Number),
+      overflow: Schema.optional(Schema.Literal("drop-oldest", "drop-newest")),
+    }),
+  ),
   port: Schema.optional(Schema.Number),
   /**
    * Channel access control (messaging platforms). Mirrors

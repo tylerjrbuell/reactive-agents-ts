@@ -17,6 +17,8 @@
 import { Effect, type Context, type ManagedRuntime } from 'effect'
 import type { AgentEvent, EventBus } from '@reactive-agents/core'
 import { generateTaskId } from '@reactive-agents/core'
+import type { ChannelService } from '@reactive-agents/channels'
+import type { ScheduleRegistryService } from '@reactive-agents/gateway'
 import type {
     GatewayService as GatewayServiceTag,
     SchedulerService as SchedulerServiceTag,
@@ -83,6 +85,10 @@ export interface GatewayBootstrapSuccess {
     readonly obs: ObservabilityServiceImpl | null
     readonly glog: GLog
     readonly channelAdaptersCleanup: (() => Promise<void>) | null
+    /** Durable schedule registry (null if the runtime carries none). */
+    readonly registry: ScheduleRegistryService | null
+    /** Channel service when `.withChannels()` is configured, for schedule result delivery. */
+    readonly channelService: Pick<ChannelService, 'deliver'> | null
 }
 
 export interface GatewayBootstrapFailure {
@@ -132,6 +138,22 @@ export const bootstrapGateway = async (
         }
     }
 
+    // Resolve the durable schedule registry (optional: absent only in stripped test runtimes)
+    let registry: ScheduleRegistryService | null = null
+    try {
+        registry = await runtime.runPromise(
+            Effect.gen(function* () {
+                const gwMod = yield* Effect.promise(
+                    () => import('@reactive-agents/gateway')
+                )
+                const opt = yield* Effect.serviceOption(gwMod.ScheduleRegistry)
+                return opt._tag === 'Some' ? opt.value : null
+            })
+        )
+    } catch {
+        /* no registry: schedule outcomes are not recorded */
+    }
+
     // Resolve EventBus for observability (optional)
     try {
         eb = await runtime.runPromise(
@@ -173,6 +195,7 @@ export const bootstrapGateway = async (
     glog('info', `started (interval=${gatewayIntervalMs}ms)`)
 
     let channelAdaptersCleanup: (() => Promise<void>) | null = null
+    let channelService: Pick<ChannelService, 'deliver'> | null = null
 
     if (channelsConfig?.adapters && channelsConfig.adapters.length > 0) {
         try {
@@ -232,6 +255,7 @@ export const bootstrapGateway = async (
                     channelSvc.registerAdapter(adapter)
                 )
             }
+            channelService = channelSvc
             glog(
                 'info',
                 `channels: started ${channelsConfig.adapters.length} adapter(s)`
@@ -270,5 +294,7 @@ export const bootstrapGateway = async (
         obs,
         glog,
         channelAdaptersCleanup,
+        registry,
+        channelService,
     }
 }

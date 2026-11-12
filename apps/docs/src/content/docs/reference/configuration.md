@@ -103,6 +103,8 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `gateway.policies.mergeWindowMs` | `number` | no |  |
 | `gateway.policies.requireApprovalFor` | `array` | no |  |
 | `gateway.port` | `number` | no |  |
+| `gateway.queue.capacity` | `number` | no |  |
+| `gateway.queue.overflow` | `drop-oldest` \| `drop-newest` | no |  |
 | `gateway.timezone` | `string` | no |  |
 | `gateway.webhooks` | `array` | no |  |
 | `grounding.maxRetries` | `number` | no |  |

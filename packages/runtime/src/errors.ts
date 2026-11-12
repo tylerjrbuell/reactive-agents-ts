@@ -208,6 +208,11 @@ export class ToolsOptionError extends Data.TaggedError("ToolsOptionError")<{
   readonly message: string;
 }> {}
 
+/** `agent.schedules()` was used on an agent built without `.withGateway()`. */
+export class ScheduleUnavailableError extends Data.TaggedError("ScheduleUnavailableError")<{
+  readonly message: string;
+}> {}
+
 /**
  * Raised before any model call when a task carries a part (image, audio) the
  * resolved model authoritatively cannot take. Never a silent drop.

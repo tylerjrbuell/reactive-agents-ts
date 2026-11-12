@@ -6,9 +6,8 @@
  * tokens used, publishes ProactiveActionInitiated/Completed events,
  * and updates gateway counters.
  *
- * Concurrency-guarded by isExecuting flag — overlapping calls are
- * skipped with a debug log. The flag is read/written via getter+setter
- * deps so the caller's mutable bool stays the source of truth.
+ * Not concurrency-guarded: serialization is owned by the gateway inbound
+ * queue (gateway-inbound-queue.ts), which runs events one at a time in order.
  *
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
@@ -50,8 +49,6 @@ export interface ExecuteEventDeps {
     readonly gw: GatewayService
     readonly agentId: string
     readonly persistMemory: boolean
-    readonly getIsExecuting: () => boolean
-    readonly setIsExecuting: (v: boolean) => void
     readonly incrementTotalRuns: () => void
 }
 
@@ -76,14 +73,6 @@ export const makeExecuteEvent = (
         source: string,
         instruction: string
     ): Promise<string | undefined> => {
-        if (deps.getIsExecuting()) {
-            deps.glog(
-                'debug',
-                `${source} → skipped (another execution in progress)`
-            )
-            return
-        }
-        deps.setIsExecuting(true)
         await deps.publish({
             _tag: 'ProactiveActionInitiated',
             agentId: deps.agentId,
@@ -176,8 +165,6 @@ export const makeExecuteEvent = (
                 timestamp: Date.now(),
             } as AgentEvent)
             return undefined
-        } finally {
-            deps.setIsExecuting(false)
         }
     }
 }

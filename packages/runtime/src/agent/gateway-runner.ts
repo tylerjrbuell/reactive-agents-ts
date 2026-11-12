@@ -17,6 +17,13 @@ import {
   type BootstrapRuntimeR,
 } from "./gateway-bootstrap.js";
 import { makeExecuteEvent } from "./execute-event.js";
+import {
+  makeGatewayInboundQueue,
+  type InboundQueueOverflow,
+} from "./gateway-inbound-queue.js";
+import { makeScheduleReporter } from "./gateway-schedule-report.js";
+import { startRuntimeIngress } from "./gateway-ingress.js";
+import type { GatewayEvent } from "@reactive-agents/gateway";
 import { makeGatewayTick } from "./gateway-tick.js";
 import {
   subscribeChannelHandler,
@@ -56,6 +63,14 @@ export interface ReactiveAgentGatewayView {
   readonly _sessionPersist?: boolean;
   readonly _gatewayOptions?: {
     accessControl?: { mode?: "chat" | "task"; sessionTtlDays?: number };
+    port?: number;
+    webhooks?: readonly {
+      path: string;
+      adapter: string;
+      secret?: string;
+      events?: readonly string[];
+    }[];
+    queue?: { capacity?: number; overflow?: InboundQueueOverflow };
   };
   session: (
     options?: SessionOptions & {
@@ -104,7 +119,6 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
   }
 
   let stopped = false;
-  let isExecuting = false; // concurrency guard — prevents overlapping agent runs
   let timer: ReturnType<typeof setInterval> | null = null;
   let heartbeatsFired = 0;
   let totalRuns = 0;
@@ -165,7 +179,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     // Guarded by `isExecuting` to prevent overlapping agent runs.
     // Each execution uses a unique agentId suffix so it bootstraps with empty
     // memory — gateway runs are stateless and don't carry context from prior runs.
-    const executeEvent = makeExecuteEvent({
+    const runEvent = makeExecuteEvent({
       publish,
       glog,
       engine: self.engine,
@@ -173,17 +187,44 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
       gw,
       agentId: self.agentId ?? "unknown",
       persistMemory: self._gatewayPersistMemory ?? false,
-      getIsExecuting: () => isExecuting,
-      setIsExecuting: (v) => {
-        isExecuting = v;
-      },
       incrementTotalRuns: () => {
         totalRuns++;
       },
     });
 
-    // ─── Gateway chat mode ────────────────────────────────────────
+    // Inbound queue: one worker runs events in order, so overlapping events
+    // wait instead of being dropped; policy `queue` decisions are held here
+    // and re-evaluated once a limit window rolls (gateway-inbound-queue.ts).
     const gwOpts = self._gatewayOptions;
+    const reportSchedule =
+      bootstrap.registry === null
+        ? undefined
+        : makeScheduleReporter({
+            runtime: self.runtime,
+            registry: bootstrap.registry,
+            channels: bootstrap.channelService,
+            deliver: (await import("@reactive-agents/channels")).deliverScheduleResult,
+            glog,
+          });
+    const queue = makeGatewayInboundQueue({
+      onSettled: reportSchedule,
+      run: runEvent,
+      publish,
+      glog,
+      agentId: self.agentId ?? "unknown",
+      getStopped: () => stopped,
+      capacity: gwOpts?.queue?.capacity,
+      overflow: gwOpts?.queue?.overflow,
+      reevaluate: (event) =>
+        self.runtime.runPromise(gw.processEvent(event as GatewayEvent)),
+      windowStamp: async () => {
+        const { state } = await self.runtime.runPromise(gw.status());
+        return `${state.hourWindowStart.getTime()}:${state.dayWindowStart.getTime()}`;
+      },
+    });
+    const executeEvent = queue.submit;
+
+    // ─── Gateway chat mode ────────────────────────────────────────
     const channelMode = gwOpts?.accessControl?.mode ?? "chat";
     const sessionTtlDays: number =
       gwOpts?.accessControl?.sessionTtlDays ?? 30;
@@ -205,7 +246,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
       gw,
       sched,
       glog,
-      executeEvent,
+      queue,
       chatManager,
       getStopped: () => stopped,
       incrementHeartbeats: () => ++heartbeatsFired,
@@ -223,7 +264,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
       glog,
       channelMode,
       channelOutboundToolGuidance,
-      executeEvent,
+      queue,
       chatManager,
       runtime: self.runtime,
       agentId: self.agentId ?? "unknown",
@@ -232,6 +273,23 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
         chatTurns++;
       },
     });
+
+    // Serve GatewayConfig.port/webhooks (+ webhook-capable channel adapters).
+    // Verified events enter the bounded queue; stop() closes the server first.
+    const ingress = await startRuntimeIngress({
+      config: { port: gwOpts?.port, webhooks: gwOpts?.webhooks },
+      adapters: self._channelsConfig?.adapters ?? [],
+      queue,
+      processEvent: (event) => self.runtime.runPromise(gw.processEvent(event)),
+      glog,
+    });
+    if (ingress) {
+      const adaptersCleanup = channelAdaptersCleanup;
+      channelAdaptersCleanup = async () => {
+        await ingress.stop();
+        await adaptersCleanup?.();
+      };
+    }
 
     timer = setInterval(tick, gatewayIntervalMs);
 

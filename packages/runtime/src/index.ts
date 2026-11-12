@@ -131,6 +131,7 @@ export type {
   AgentToolOptions,
 } from "./builder.js";
 
+export type { SchedulesApi, ScheduleRunRequest } from "./agent/schedules-facade.js";
 export { toolBuilderToEntry } from "./builder/withers/tools.js";
 export type { AgentOutcome, StrategySwitchRecord } from "./builder/agent-result.js";
 export type { SkillsOptions, SkillsRunOption } from "./runtime-skills-layer.js";

@@ -187,6 +187,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
       requireApprovalFor: ["deploy"],
     },
     persistMemoryAcrossRuns: true,
+    queue: { capacity: 50, overflow: "drop-newest" },
     port: 8787,
     accessControl: {
       accessPolicy: "allowlist",
