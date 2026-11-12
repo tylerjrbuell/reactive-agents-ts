@@ -962,7 +962,7 @@ export class ReactiveAgent<TOut = unknown> {
      *
      * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
-    async approveRun(runId: string, opts?: { reason?: string }): Promise<AgentResult> {
+    async approveRun(runId: string, opts?: { reason?: string; gateId?: string }): Promise<AgentResult> {
         return runFacadeEffect(this.runtime, this._durable().approveRun(runId, opts))
     }
 
@@ -972,8 +972,8 @@ export class ReactiveAgent<TOut = unknown> {
      *
      * Delegates to `agent/durable-facade.ts` via `runFacadeEffect`: this shell is the family's single Promise boundary (Task 10 / D1 bridge).
      */
-    async denyRun(runId: string, reason: string): Promise<AgentResult> {
-        return runFacadeEffect(this.runtime, this._durable().denyRun(runId, reason))
+    async denyRun(runId: string, reason: string, opts?: { gateId?: string }): Promise<AgentResult> {
+        return runFacadeEffect(this.runtime, this._durable().denyRun(runId, reason, opts))
     }
 
     /**

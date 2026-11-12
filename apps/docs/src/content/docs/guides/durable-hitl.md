@@ -56,6 +56,10 @@ for await (const event of agent.runStream("clean up the temp files")) {
 - `ApprovalRequested` arrives at both stream densities.
 - `agent.listPendingApprovals()` lists live waits too, so a `run()` caller (no
   stream) can find them. `run(task, { onApproval })` answers them for you.
+- Parallel sub-agents ask under the root run's id, so `approveRun(runId)` alone
+  answers the oldest wait. Each pending item carries `gateId`, `subAgent`,
+  `toolName` and `args`; pass `{ gateId }` to answer exactly one:
+  `agent.approveRun(runId, { gateId })` / `agent.denyRun(runId, reason, { gateId })`.
 - `handle.stop()` while waiting denies the call (the run then finishes);
   `handle.terminate()` cancels the run. Nothing stays pending either way.
 - A live wait lives in the agent object: it is gone if the process exits. Use

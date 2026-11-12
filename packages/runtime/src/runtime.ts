@@ -960,10 +960,10 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
               ),
             embed: (texts, model) => llm.embed(texts, model),
           };
-          return withMemoryGuardrails(createMemoryLayer("1", { agentId: options.agentId }, bridgedLLM));
+          return withMemoryGuardrails(createMemoryLayer("1", { agentId: options.memoryAgentId ?? options.agentId }, bridgedLLM));
         }),
       ).pipe(Layer.provide(llmLayer))
-    : withMemoryGuardrails(createMemoryLayer("1", { agentId: options.agentId, dbPath: ":memory:" })); // memory off: in-process db, never a folder under ~/.reactive-agents/memory
+    : withMemoryGuardrails(createMemoryLayer("1", { agentId: options.memoryAgentId ?? options.agentId, dbPath: ":memory:" })); // memory off: in-process db, never a folder under ~/.reactive-agents/memory
 
   // Minimal hooks layer (required by ExecutionEngine)
   const hookLayer = LifecycleHookRegistryLive;

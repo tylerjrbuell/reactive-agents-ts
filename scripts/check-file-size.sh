@@ -185,8 +185,10 @@ GIANT_BAR=1000
 # 2026-11-11 stop mid-loop: reactive-agent.ts 2049->2029 (emitAgentTerminated moved verbatim to agent/run-contract.ts publishAgentTerminated; run() arms armAbortTerminal so AgentTerminated lands before terminate() resolves).
 # 2026-11-11 approval command rules: runtime.ts 1114->1106 (light-runtime approval policy literal replaced by configureApprovalPolicy in builder/build-effect/approval-autofeed.ts, shared with runtime-construction).
 # 2026-11-11 independent debrief + sub-agent parameters: builder.ts 2204->2200 (withDebrief delegate added; withoutMemory/withLearning JSDoc condensed), runtime.ts 1106->1105 (debrief store layer in runtime-memory-layer.ts; mergeAll comment condensed), runtime-types.ts 1073->1071, types.ts 1051->1049 (new `debrief` field; neighbouring JSDoc condensed); builder/types.ts unchanged at 1063 (agent.parameters JSDoc rewritten in place).
+# 2026-11-11 sub-agent memoryAgentId: runtime-types.ts 1071->1065 (agentDisplayName JSDoc condensed; +memoryAgentId field; runtime.ts unchanged at 1105, in-place edits).
 # 2026-11-11 skill control API: reactive-agent.ts 2029->2025 (skills delegates condensed to one-line JSDoc, full JSDoc lives in agent/skills-facade.ts; +rollbackSkill/setSkillMode delegates).
 # 2026-11-11 budget event: arbitrator.ts 823->797 (run-meter-aware BudgetSignal derivation moved to decide/budget-signal.ts budgetSignalOfState, shared with the terminal BudgetExhausted publish).
+# 2026-11-11 ollama cloud auth: llm-provider local.ts 1149->1139 (endpoint/key/header resolution delegated to ollama-endpoint.ts resolveOllamaTarget).
 # 2026-11-11 live ask-user rail: act.ts 1124->1098 (request_user_input handling moved to act/user-interaction.ts handleUserInteraction, which also answers inline via RunEnvelope.rails.askUser; the pause terminate() stays in act.ts).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:2025"
@@ -202,14 +204,14 @@ SIZE_BASELINE=(
   "runtime/src/runtime.ts:1105"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1299"
-  "llm-provider/src/providers/local.ts:1149"
+  "llm-provider/src/providers/local.ts:1139"
   "runtime/src/builder/types.ts:1063"
   "llm-provider/src/types.ts:978"
   "reasoning/src/kernel/capabilities/act/act.ts:1098"
   "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1120"
   "reasoning/src/strategies/tree-of-thought.ts:904"
-  "runtime/src/runtime-types.ts:1071"
+  "runtime/src/runtime-types.ts:1065"
   "tools/src/skills/shell-execution.ts:839"
   "runtime/src/types.ts:1049"
   "observability/src/exporters/console-exporter.ts:1042"

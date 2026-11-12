@@ -39,6 +39,7 @@ import {
   unresolvedSubAgentToolsResult,
   withSubAgentToolNote,
 } from "./sub-agent-tool-names.js";
+import { subAgentMemoryId } from "./sub-agent-memory-id.js";
 export { buildSubAgentLogPrefix };
 
 /** Per-execution shared handles resolved from the parent's ambient context. */
@@ -517,6 +518,8 @@ export const buildSubAgentTask = (
         // renderer's collapsed sub-agent line — without this the line showed the
         // raw id. Pinned by tests/subagent/child-observability.test.ts.
         agentDisplayName: t.name,
+        // Memory identity is stable per (parent, name); `agentId` stays unique.
+        memoryAgentId: subAgentMemoryId(parentAgentId, t.name),
         provider: parentProvider ?? "test",
         model: parentModel,
         maxIterations: defaultMaxIter,

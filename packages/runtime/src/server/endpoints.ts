@@ -312,9 +312,9 @@ export const createApprovalEndpoint = (
 ) => {
   return async (req: Request): Promise<Response> => {
     if (req.method === "GET") return json(await agent.listPendingApprovals());
-    let body: { runId?: string; decision?: string; reason?: string };
+    let body: { runId?: string; decision?: string; reason?: string; gateId?: string };
     try {
-      body = (await req.json()) as { runId?: string; decision?: string; reason?: string };
+      body = (await req.json()) as { runId?: string; decision?: string; reason?: string; gateId?: string };
     } catch {
       return json({ error: "invalid JSON body" }, 400);
     }
@@ -325,8 +325,8 @@ export const createApprovalEndpoint = (
     if (!guard.ok) return guard.response;
     const result =
       body.decision === "approve"
-        ? await agent.approveRun(body.runId, { reason: body.reason })
-        : await agent.denyRun(body.runId, body.reason ?? "denied via endpoint");
+        ? await agent.approveRun(body.runId, { reason: body.reason, gateId: body.gateId })
+        : await agent.denyRun(body.runId, body.reason ?? "denied via endpoint", { gateId: body.gateId });
     return json({ success: result.success, output: result.output, runId: body.runId });
   };
 };

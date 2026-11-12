@@ -1,4 +1,4 @@
-import { resolveCanonical, resolveOllamaEndpoint } from "@reactive-agents/llm-provider";
+import { checkOllamaConnection, resolveCanonical } from "@reactive-agents/llm-provider";
 import { capabilitySourcePreflight } from "@reactive-agents/core";
 import type {
   ContractCapability as Capability,
@@ -326,23 +326,14 @@ export function validateBuild(
 export async function validateProviderConnection(
   provider: ProviderName,
   ollamaEndpoint?: string,
+  ollamaApiKey?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (provider === "ollama") {
-    // Same resolution the provider and the capability probe use, so a failed
-    // pre-flight names the endpoint the run would actually have used.
-    const endpoint = resolveOllamaEndpoint(ollamaEndpoint);
-    try {
-      const res = await fetch(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(3000) });
-      if (!res.ok) {
-        return { ok: false, error: `Ollama returned HTTP ${res.status}. Is the service running at ${endpoint}?` };
-      }
-      return { ok: true };
-    } catch {
-      return {
-        ok: false,
-        error: `Cannot connect to Ollama at ${endpoint}. Is the Ollama service running?\n  Start it with: ollama serve`,
-      };
-    }
+    // Same endpoint + key resolution the provider and the capability probe use
+    // (Ollama Cloud rejects unauthenticated requests). The message never
+    // contains the key.
+    const check = await checkOllamaConnection({ baseUrl: ollamaEndpoint, apiKey: ollamaApiKey });
+    return check.ok ? { ok: true } : { ok: false, error: check.message };
   }
   return { ok: true };
 }

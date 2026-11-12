@@ -132,6 +132,22 @@ export class ModelDiscoveryError extends Data.TaggedError("ModelDiscoveryError")
 }> {}
 
 /**
+ * Ollama (typically Ollama Cloud) refused the credentials: HTTP 401/403.
+ * Raised by the connection pre-flight (`checkOllamaConnection`); like
+ * {@link ModelDiscoveryError} it is deliberately NOT part of {@link LLMErrors}.
+ * `message` never contains the key.
+ */
+export class OllamaAuthError extends Data.TaggedError("OllamaAuthError")<{
+  readonly message: string;
+  /** HTTP status: 401 or 403. */
+  readonly status: number;
+  /** Endpoint that refused the request. */
+  readonly endpoint: string;
+  /** True when a key was sent (invalid key), false when none was configured. */
+  readonly keyProvided: boolean;
+}> {}
+
+/**
  * Union of all LLM error types.
  */
 export type LLMErrors =

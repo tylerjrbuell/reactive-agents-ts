@@ -521,8 +521,8 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          * Effect-typed (Task 10): forwards the {@link decideAndResumeRun}
          * Effect; all rejection identity lives there.
          */
-        approveRun(runId: string, opts?: { reason?: string }): Effect.Effect<AgentResult, Error> {
-            return facade.decideAndResumeRun(runId, { status: 'approved', reason: opts?.reason })
+        approveRun(runId: string, opts?: { reason?: string; gateId?: string }): Effect.Effect<AgentResult, Error> {
+            return facade.decideAndResumeRun(runId, { status: 'approved', reason: opts?.reason, gateId: opts?.gateId })
         },
 
         /**
@@ -532,8 +532,8 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          * Effect-typed (Task 10): forwards the {@link decideAndResumeRun}
          * Effect; all rejection identity lives there.
          */
-        denyRun(runId: string, reason: string): Effect.Effect<AgentResult, Error> {
-            return facade.decideAndResumeRun(runId, { status: 'denied', reason })
+        denyRun(runId: string, reason: string, opts?: { gateId?: string }): Effect.Effect<AgentResult, Error> {
+            return facade.decideAndResumeRun(runId, { status: 'denied', reason, gateId: opts?.gateId })
         },
 
         /**
@@ -548,15 +548,17 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          */
         decideAndResumeRun(
             runId: string,
-            decision: { status: 'approved' | 'denied'; reason?: string },
+            decision: { status: 'approved' | 'denied'; reason?: string; gateId?: string },
         ): Effect.Effect<AgentResult, Error> {
             return Effect.gen(function* () {
                 // 0. A run waiting LIVE in this process (engine/human-gate.ts)
                 //    takes the decision first; the result is that same run's.
+                //    `gateId` targets ONE request (parallel sub-agents share the run id).
                 const live = yield* answerLive(runId, {
                     kind: 'approval',
                     approve: decision.status === 'approved',
                     ...(decision.reason !== undefined ? { reason: decision.reason } : {}),
+                    ...(decision.gateId !== undefined ? { gateId: decision.gateId } : {}),
                 })
                 if (live !== undefined) return yield* live
                 if (!deps.durableResume) {
@@ -566,6 +568,18 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                 }
                 const { dir, configHash } = deps.durableResume
                 const dbPath = join(dir, 'runs.db')
+
+                // A targeted decision must not land on a different durable gate.
+                if (decision.gateId !== undefined) {
+                    const waiting = yield* Effect.promise(() =>
+                        Effect.runPromise(getPendingApprovalAt({ dbPath, runId })),
+                    )
+                    if (waiting && waiting.gateId !== decision.gateId) {
+                        return yield* Effect.fail(
+                            new ApprovalStateError({ runId, detail: `gate ${decision.gateId} is not the pending approval` }),
+                        )
+                    }
+                }
 
                 // 1. Record the human decision (fails ApprovalStateError if not pending).
                 //    PRESERVED INNER BOUNDARY: today callers see this global

@@ -144,7 +144,10 @@ export const buildAgent = async <TOut>(
         const { primeCapability, registerUserSuppliedCapability } = await import(
             '@reactive-agents/llm-provider'
         )
-        await primeCapability(state._provider, state._model)
+        await primeCapability(state._provider, state._model, {
+            endpoint: state._providerConfig?.baseUrl,
+            apiKey: state._providerConfig?.apiKey,
+        })
         // Developer-declared window via `.withModel({ numCtx })` wins over the
         // probe/table AND must reach the profile too — so it has to register
         // BEFORE the profile resolve below (one knob moves both budget + wire).
@@ -270,7 +273,7 @@ export const buildAgent = async <TOut>(
         }
 
         // Pre-flight connection check for local providers
-        const conn = await validateProviderConnection(state._provider)
+        const conn = await validateProviderConnection(state._provider, state._providerConfig?.baseUrl, state._providerConfig?.apiKey)
         if (!conn.ok) {
             throw new Error(`Provider connection failed: ${conn.error}`)
         }

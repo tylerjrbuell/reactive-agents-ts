@@ -21,6 +21,8 @@
 //   4. `OLLAMA_BASE` — the calibration runner's original name
 //   5. `http://localhost:11434`
 
+import { OllamaAuthError } from "./errors.js";
+
 const DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434";
 
 function firstNonBlank(...values: (string | undefined)[]): string | undefined {
@@ -48,4 +50,73 @@ export function resolveOllamaEndpoint(explicit?: string): string {
     ) ?? DEFAULT_OLLAMA_ENDPOINT;
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`;
   return withScheme.replace(/\/+$/, "");
+}
+
+/** Where an Ollama call goes and how it authenticates. */
+export interface OllamaTarget {
+  /** Resolved base URL (no trailing slash). */
+  readonly endpoint: string;
+  /** Bearer key: explicit value, else `OLLAMA_API_KEY`; absent for local Ollama. */
+  readonly apiKey: string | undefined;
+  /** Request headers carrying the key. Empty when there is no key. */
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+/**
+ * Resolve `{ endpoint, apiKey, headers }` for one Ollama call site.
+ *
+ * Endpoint: `resolveOllamaEndpoint` (explicit `baseUrl` first, then env).
+ * Key: explicit `apiKey` (`.withProvider("ollama", { apiKey })`), else
+ * `OLLAMA_API_KEY`. Ollama Cloud rejects unauthenticated requests, so every
+ * call (pre-flight, /api/show, /api/tags, /api/chat) must use this one
+ * result. The key is only ever attached to the resolved endpoint.
+ */
+export function resolveOllamaTarget(opts: { readonly baseUrl?: string; readonly apiKey?: string } = {}): OllamaTarget {
+  const apiKey = firstNonBlank(opts.apiKey, process.env.OLLAMA_API_KEY);
+  return {
+    endpoint: resolveOllamaEndpoint(opts.baseUrl),
+    apiKey,
+    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+  };
+}
+
+/** Outcome of {@link checkOllamaConnection}. `message` never contains the key. */
+export type OllamaConnectionCheck =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly message: string; readonly error?: OllamaAuthError };
+
+/**
+ * Pre-flight reachability + auth check (`GET {endpoint}/api/tags`, 3s bound).
+ * Sends the Bearer key from {@link resolveOllamaTarget}. 401/403 yields a typed
+ * {@link OllamaAuthError} (with `status`) alongside the message.
+ */
+export async function checkOllamaConnection(
+  opts: { readonly baseUrl?: string; readonly apiKey?: string } = {},
+): Promise<OllamaConnectionCheck> {
+  const { endpoint, headers, apiKey } = resolveOllamaTarget(opts);
+  try {
+    const res = await fetch(`${endpoint}/api/tags`, {
+      headers,
+      redirect: "error",
+      signal: AbortSignal.timeout(3000),
+    });
+    if (res.ok) return { ok: true };
+    if (res.status === 401 || res.status === 403) {
+      const error = new OllamaAuthError({
+        message: apiKey
+          ? `Ollama at ${endpoint} rejected the API key (HTTP ${res.status}).`
+          : `Ollama at ${endpoint} requires an API key (HTTP ${res.status}). Set OLLAMA_API_KEY or pass apiKey to .withProvider("ollama", { apiKey }).`,
+        status: res.status,
+        endpoint,
+        keyProvided: apiKey !== undefined,
+      });
+      return { ok: false, message: error.message, error };
+    }
+    return { ok: false, message: `Ollama returned HTTP ${res.status}. Is the service running at ${endpoint}?` };
+  } catch {
+    return {
+      ok: false,
+      message: `Cannot connect to Ollama at ${endpoint}. Is the Ollama service running?\n  Start it with: ollama serve`,
+    };
+  }
 }

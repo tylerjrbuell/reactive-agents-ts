@@ -78,6 +78,22 @@ const agent = await ReactiveAgents.create()
 
 `.withTimeout(ms)` remains a separate wall-clock limit for the whole agent run. See [Builder API](/reference/builder-api/).
 
+## Ollama Cloud
+
+Point the Ollama provider at Ollama Cloud with an endpoint and a key:
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withName("cloud-agent")
+  .withProvider("ollama", { baseUrl: "https://ollama.com", apiKey: process.env.OLLAMA_API_KEY })
+  .withModel("gpt-oss:120b")
+  .build();
+```
+
+Or set `OLLAMA_API_KEY` (and `OLLAMA_ENDPOINT`) in the environment. The key is sent as a Bearer token, only to that endpoint, for chat, the capability probe, model discovery and the build-time connection check. A rejected key fails with a typed `OllamaAuthError`. Cloud-hosted judgment models are not available; judgment runs on a local Ollama.
+
 ## Model Recommendations
 
 ### By Task Type

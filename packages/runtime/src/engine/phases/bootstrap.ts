@@ -28,7 +28,7 @@ export const bootstrap: Phase = {
       const memoryContext = yield* Effect.serviceOption(MemoryServiceTag).pipe(
         Effect.flatMap((opt) =>
           opt._tag === "Some"
-            ? opt.value.bootstrap(ctx.agentId).pipe(Effect.map((mc) => mc))
+            ? opt.value.bootstrap(ctx.agentId, ctx.taskId).pipe(Effect.map((mc) => mc))
             : Effect.succeed(undefined),
         ),
         Effect.catchAll(() => Effect.succeed(undefined)),

@@ -66,7 +66,13 @@ export type HumanGateRequest =
 
 /** A person's answer to one request. */
 export type HumanGateAnswer =
-  | { readonly kind: "approval"; readonly approve: boolean; readonly reason?: string }
+  | {
+      readonly kind: "approval";
+      readonly approve: boolean;
+      readonly reason?: string;
+      /** Target ONE waiting request (parallel sub-agents share the root run id). Absent: the oldest. */
+      readonly gateId?: string;
+    }
   | { readonly kind: "interaction"; readonly interactionId: string; readonly value: unknown };
 
 /** How a wait ended: the answer, or abandoned (timeout, terminate, stop). */
@@ -145,10 +151,16 @@ const runEnded = (ctl: RunControllerLike | null): Effect.Effect<string> | undefi
   });
 };
 
-const matches = (request: HumanGateRequest, answer: HumanGateAnswer): boolean =>
-  request.kind === answer.kind &&
-  (answer.kind !== "interaction" ||
-    (request.kind === "interaction" && request.interactionId === answer.interactionId));
+const matches = (request: HumanGateRequest, answer: HumanGateAnswer): boolean => {
+  if (request.kind === "approval" && answer.kind === "approval") {
+    return answer.gateId === undefined || request.gateId === answer.gateId;
+  }
+  return (
+    request.kind === answer.kind &&
+    (answer.kind !== "interaction" ||
+      (request.kind === "interaction" && request.interactionId === answer.interactionId))
+  );
+};
 
 /**
  * Per-agent wait defaults. `interactionTimeoutMs` bounds a live

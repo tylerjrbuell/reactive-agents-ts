@@ -19,7 +19,7 @@
 
 import { registerProbedCapability } from "./capability-resolver.js";
 import { probeOllamaCapability } from "./providers/local-probe.js";
-import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
+import { resolveOllamaTarget } from "./ollama-endpoint.js";
 
 export interface PrimeCapabilityOptions {
   /** Provider base URL. Falls back to the OLLAMA_* env vars, then localhost. */
@@ -51,7 +51,7 @@ export async function primeCapability(
   opts: PrimeCapabilityOptions = {},
 ): Promise<void> {
   if (provider !== "ollama" || !model) return;
-  const endpoint = resolveOllamaEndpoint(opts.endpoint);
-  const cap = await probeOllamaCapability(model, endpoint, opts.apiKey);
+  const { endpoint, apiKey } = resolveOllamaTarget({ baseUrl: opts.endpoint, apiKey: opts.apiKey });
+  const cap = await probeOllamaCapability(model, endpoint, apiKey);
   if (cap) registerProbedCapability(cap);
 }

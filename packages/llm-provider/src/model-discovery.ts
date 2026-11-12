@@ -88,6 +88,7 @@ const KEY_ENV: Readonly<Record<string, string>> = {
   groq: "GROQ_API_KEY",
   xai: "XAI_API_KEY",
   litellm: "LITELLM_API_KEY",
+  ollama: "OLLAMA_API_KEY",
 };
 
 // ─── Chat-capable filter ───
@@ -320,7 +321,7 @@ function planFor(provider: string, apiKey: string | undefined, opts: ListProvide
       return { firstUrl: `${base}/v1/models`, headers: bearer, parse: (b) => parseOpenAIStyle(provider, b) };
     }
     case "ollama":
-      return { firstUrl: `${resolveOllamaEndpoint(opts.baseUrl)}/api/tags`, headers: {}, parse: (b) => parseOllama(provider, b) };
+      return { firstUrl: `${resolveOllamaEndpoint(opts.baseUrl)}/api/tags`, headers: bearer, parse: (b) => parseOllama(provider, b) };
     default:
       return fail(provider, "unreachable", `no model listing endpoint for provider "${provider}"`);
   }
@@ -414,10 +415,12 @@ export function listProviderModels(
     // Env credentials only go to the endpoint the operator configured: for litellm a
     // caller-named baseUrl gets the env key only when it equals LITELLM_BASE_URL.
     const envBase = envOf("LITELLM_BASE_URL");
+    // Same rule for ollama: OLLAMA_API_KEY goes only to the env-resolved endpoint.
     const envKeyAllowed =
-      provider !== "litellm" ||
       opts.baseUrl === undefined ||
-      (envBase !== undefined && trimSlash(opts.baseUrl) === trimSlash(envBase));
+      (provider === "litellm" && envBase !== undefined && trimSlash(opts.baseUrl) === trimSlash(envBase)) ||
+      (provider === "ollama" && resolveOllamaEndpoint(opts.baseUrl) === resolveOllamaEndpoint()) ||
+      (provider !== "litellm" && provider !== "ollama");
     const apiKey = opts.apiKey?.trim() || (envName && envKeyAllowed ? envOf(envName) : undefined);
     const keyRequired = provider !== "litellm" && provider !== "ollama";
     if (keyRequired && !apiKey && KEY_ENV[provider] !== undefined) {

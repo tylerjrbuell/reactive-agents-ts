@@ -85,7 +85,8 @@ export type { CapabilityCache, ResolveCapabilityOptions } from "./capability-res
 // Ollama base-URL resolution — honours OLLAMA_ENDPOINT, Ollama's own
 // OLLAMA_HOST, then OLLAMA_BASE. Exported so apps that surface an
 // "Ollama host" setting can resolve it the same way the framework does.
-export { resolveOllamaEndpoint } from "./ollama-endpoint.js";
+export { resolveOllamaEndpoint, resolveOllamaTarget, checkOllamaConnection } from "./ollama-endpoint.js";
+export type { OllamaTarget, OllamaConnectionCheck } from "./ollama-endpoint.js";
 
 // Canonical capability resolver (Sprint-1 B3β). The single function consumers
 // should call when they need model-capability info; returns the canonical
@@ -245,7 +246,7 @@ export {
   type ListProviderModelsOptions,
   type ResolvedProviderModels,
 } from "./model-discovery.js";
-export { ModelDiscoveryError } from "./errors.js";
+export { ModelDiscoveryError, OllamaAuthError } from "./errors.js";
 
 // ─── Runtime ───
 export {

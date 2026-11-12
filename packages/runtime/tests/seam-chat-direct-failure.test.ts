@@ -25,6 +25,8 @@
 // `Effect.mapError((e) => Error(String(e)))` + bare `runPromise` fails (a)
 // and (c).
 import { describe, expect, it } from "bun:test";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { EventBusLive } from "@reactive-agents/core";
 import { LLMError, LLMService } from "@reactive-agents/llm-provider";
@@ -77,9 +79,24 @@ describe("tools-off chat failure cause", () => {
   }, 20000);
 
   it("(c) a real provider's typed failure (unreachable Ollama) reaches chat() unprefixed", async () => {
+    // The build pre-flight now checks the CONFIGURED endpoint (it used to probe
+    // the default localhost, so this passed only where a dev Ollama ran). A stub
+    // answers the pre-flight (/api/tags) and fails every model call, so the typed
+    // provider failure still arises at chat(), not at build().
+    const stub = createServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/api/tags") {
+        res.end(JSON.stringify({ models: [] }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end(JSON.stringify({ error: MISSING }));
+    });
+    await new Promise<void>((r) => stub.listen(0, "127.0.0.1", r));
+    const baseUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
     const agent = await ReactiveAgents.create()
       .withName("chat-direct-provider-failure")
-      .withProvider("ollama", { baseUrl: "http://127.0.0.1:9" })
+      .withProvider("ollama", { baseUrl })
       .withModel("qwen-missing:7b")
       .build();
     try {
@@ -89,6 +106,7 @@ describe("tools-off chat failure cause", () => {
       expect(message.startsWith("Error:")).toBe(false);
     } finally {
       await agent.dispose();
+      await new Promise<void>((r) => stub.close(() => r()));
     }
   }, 20000);
 });

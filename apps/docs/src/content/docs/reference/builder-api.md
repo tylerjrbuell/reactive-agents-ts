@@ -887,11 +887,11 @@ List runs waiting for a human decision, each with the pending action (`runId`, `
 
 ### `approveRun(runId, opts?): Promise<AgentResult>`
 
-Approve the run's gated call — the agent executes it and continues. A run waiting live in this process takes the decision first, and the promise resolves with that run's final result (the same one its `run()` / `runStream()` caller gets). Otherwise, with `.withDurableRuns()`, the paused run resumes from its checkpoint (callable from any process). Throws `ApprovalStateError` if no run is waiting for a decision.
+`opts`: `{ reason?, gateId? }`. `gateId` (from `listPendingApprovals()` / `ApprovalRequested`) answers exactly one waiting request; parallel sub-agents share the root run id, and without it the oldest wait takes the decision. Approve the run's gated call — the agent executes it and continues. A run waiting live in this process takes the decision first, and the promise resolves with that run's final result (the same one its `run()` / `runStream()` caller gets). Otherwise, with `.withDurableRuns()`, the paused run resumes from its checkpoint (callable from any process). Throws `ApprovalStateError` if no run is waiting for a decision.
 
-### `denyRun(runId, reason): Promise<AgentResult>`
+### `denyRun(runId, reason, opts?): Promise<AgentResult>`
 
-Deny the run's gated call — the agent observes the denial and continues without running it. Same live-then-durable order as `approveRun`.
+`opts`: `{ gateId? }`, same targeting as `approveRun`. Deny the run's gated call — the agent observes the denial and continues without running it. Same live-then-durable order as `approveRun`.
 
 ### Dynamic tools & RAG (runtime)
 

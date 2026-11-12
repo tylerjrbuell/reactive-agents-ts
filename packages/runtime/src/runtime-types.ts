@@ -962,16 +962,10 @@ export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCa
  */
 export interface LightRuntimeOptions extends Pick<ToolsOptions, "maxCallsPerTool"> {
   agentId: string;
-  /**
-   * Human-facing name for this runtime's agent, surfaced on its `AgentStarted`
-   * event (`agentDisplayName`) and thence to any UI that renders a run tree.
-   *
-   * A sub-agent's `agentId` is uniquified for correlation (`sub-<name>-<epoch>`,
-   * see `sub-agent-executor.ts`), so without this the status renderer showed the
-   * raw id — "sub-researcher-1753469999999" instead of "researcher". Set it to
-   * the sub-agent's given name (`spawn-agent`'s `name` argument).
-   */
+  /** Human-facing name surfaced on `AgentStarted.agentDisplayName` (a sub-agent's `agentId` is unique per spawn, so set the given name). */
   agentDisplayName?: string;
+  /** Stable id naming this runtime's memory store; defaults to `agentId`. Sub-agents set it so repeat spawns share one store. */
+  memoryAgentId?: string;
   provider?: "anthropic" | "openai" | "ollama" | "gemini" | "litellm" | "groq" | "xai" | "test";
   /** OpenAI-compatible endpoint override (openai/groq/xai/litellm). See `RuntimeOptions.providerConfig`. */
   providerConfig?: { baseUrl?: string; apiKey?: string; headers?: Record<string, string> };

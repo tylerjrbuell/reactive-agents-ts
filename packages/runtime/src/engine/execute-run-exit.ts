@@ -49,6 +49,7 @@ export function classifyAbortReason(
     return ctx.timeoutMs !== undefined && ctx.durationMs >= ctx.timeoutMs ? "timeout" : "abort";
   }
   const failure = Cause.failureOption(cause);
+  if (Option.isSome(failure) && errorTag(failure.value) === "GuardrailViolationError") return "guardrail";
   if (Option.isSome(failure) && errorTag(failure.value) === "KillSwitchTriggeredError") {
     const reason = (failure.value as { reason?: unknown }).reason;
     return reason === "stop() requested" ? "user-stop" : "terminate";

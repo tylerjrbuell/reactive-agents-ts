@@ -64,6 +64,7 @@ import {
   unresolvedSubAgentToolsResult,
   withSubAgentToolNote,
 } from "./sub-agent-tool-names.js";
+import { subAgentMemoryId } from "./sub-agent-memory-id.js";
 
 /** Registration entry produced by both helpers — `(toolDef, handler)` pair. */
 export interface LocalAgentToolRegistration {
@@ -125,6 +126,8 @@ export const subAgentMaxCallsPerTool = (
 export interface LocalAgentCall {
   /** Uniquified child id (`sub-<name>-<epoch>`). */
   readonly childAgentId: string;
+  /** Stable parent-scoped memory id (`sub-<parent>-<name>`), see sub-agent-memory-id.ts. */
+  readonly memoryAgentId?: string;
   /** Composed system prompt (persona + directive, params interpolated). */
   readonly systemPrompt?: string;
   /** Per-call `tools` arg (like spawn-agent's). Absent: the static `agent.tools` allowlist applies. */
@@ -158,6 +161,7 @@ export const localAgentRuntimeOptions = (
     // run tree). Without it `AgentStarted.agentDisplayName` falls back to
     // "sub-<name>-<epoch>".
     agentDisplayName: agentCfg.name,
+    ...(call.memoryAgentId !== undefined ? { memoryAgentId: call.memoryAgentId } : {}),
     provider: (agentCfg.provider ?? "test") as ProviderName,
     model: agentCfg.model,
     maxIterations: agentCfg.maxIterations,
@@ -318,6 +322,7 @@ export const createLocalAgentToolRegistration = (
         const subRuntime = createLightRuntime(
           localAgentRuntimeOptions(agentCfg, deps, {
             childAgentId,
+            memoryAgentId: subAgentMemoryId(agentId, subName),
             systemPrompt: composedSystemPrompt,
             ...(perCallTools !== undefined ? { perCallTools } : {}),
             sharedEventBus,

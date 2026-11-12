@@ -19,6 +19,7 @@ import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from '../retry.js
 import { getProviderDefaultModel } from '../provider-defaults.js'
 import { resolveCapability, registerProbedCapability } from '../capability-resolver.js'
 import { probeOllamaCapability } from './local-probe.js'
+import { resolveOllamaTarget } from '../ollama-endpoint.js'
 import { warnCapabilityFallback } from '../capability-resolver.js'
 import { getCapabilityStore } from '../capability-store.js'
 import { loadDialectPriorClaim } from '../calibration.js'
@@ -306,7 +307,10 @@ export const LocalProviderLive = Layer.effect(
     LLMService,
     Effect.gen(function* () {
         const config = yield* LLMConfig
-        const endpoint = config.ollamaEndpoint ?? 'http://localhost:11434'
+        const { endpoint, apiKey: ollamaKey, headers: authHeaders } = resolveOllamaTarget({
+            baseUrl: config.providerConfig?.baseUrl ?? config.ollamaEndpoint,
+            apiKey: config.providerConfig?.apiKey ?? config.ollamaApiKey,
+        })
         const defaultModel =
             config.defaultModel.startsWith('claude') ||
             config.defaultModel.startsWith('gpt')
@@ -335,13 +339,7 @@ export const LocalProviderLive = Layer.effect(
             return new Ollama({
                 host: endpoint,
                 ...(signal ? { fetch: fetchWithSignal } : {}),
-                ...((config.providerConfig?.apiKey ?? config.ollamaApiKey)
-                    ? {
-                          headers: {
-                              Authorization: `Bearer ${config.providerConfig?.apiKey ?? config.ollamaApiKey}`,
-                          },
-                      }
-                    : {}),
+                headers: authHeaders,
             })
         }
 
@@ -364,11 +362,7 @@ export const LocalProviderLive = Layer.effect(
                     // adapter selection (M12 Hook 1/7) and num_ctx wiring.
                     const capability = yield* Effect.tryPromise({
                         try: () =>
-                            resolveOllamaCapability(
-                                model,
-                                endpoint,
-                                config.providerConfig?.apiKey ?? config.ollamaApiKey
-                            ),
+                            resolveOllamaCapability(model, endpoint, ollamaKey),
                         catch: () =>
                             new Error('capability resolution failed'),
                     }).pipe(
@@ -654,11 +648,7 @@ export const LocalProviderLive = Layer.effect(
                                 const wantLogprobs = request.logprobs ?? false
                                 // Phase 1 S2.4 — probe-aware capability (see complete() path)
                                 const capability =
-                                    await resolveOllamaCapability(
-                                        model,
-                                        endpoint,
-                                        config.providerConfig?.apiKey ?? config.ollamaApiKey
-                                    )
+                                    await resolveOllamaCapability(model, endpoint, ollamaKey)
                                 const numCtx = resolveOllamaNumCtx(request, config, capability)
                                 // Inside async: emit on the default runtime (same channel as tool-schema-repaired).
                                 const wire = toOllamaMessages(request.messages, ollamaContentPolicy(capability))
