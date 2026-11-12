@@ -5,12 +5,14 @@
 // gateway agent (scripted adapter, no network), and the gateway block reaches the built agent.
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Database } from "bun:sqlite";
-import { Effect, Layer, Ref, Stream } from "effect";
+import { Effect, Layer, PubSub, Ref, Stream } from "effect";
 import { Elysia } from "elysia";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { channelError, type ChannelAdapter, type ConnectionState } from "@reactive-agents/channels";
+import { createHmac } from "node:crypto";
+import { Redacted } from "effect";
+import { WebhookChannelAdapter, channelError, type ChannelAdapter, type ConnectionState, type InboundEnvelope } from "@reactive-agents/channels";
 import { applySchema } from "../db/schema.js";
 import { createGatewayAgent, getGatewayAgent } from "../db/queries.js";
 import { gatewayRouter } from "../api/gateway.js";
@@ -67,19 +69,40 @@ const call = <T = unknown>(app: { handle: (r: Request) => Promise<Response> }, m
   app.handle(new Request(`http://localhost${path}`, { method, headers: { "content-type": "application/json" }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) })) as Promise<Reply<T>>;
 
 /** A channel adapter driven by the test: no network, state set from outside. */
-function scriptedAdapter(id: string): { adapter: ChannelAdapter; set: (s: ConnectionState) => void } {
+function scriptedAdapter(id: string): { adapter: ChannelAdapter; set: (s: ConnectionState) => void; receive: (userId: string, text: string) => void } {
   const state = Effect.runSync(Ref.make<ConnectionState>({ status: "connected" }));
+  const states = Effect.runSync(PubSub.unbounded<ConnectionState>());
+  const inbound = Effect.runSync(PubSub.unbounded<InboundEnvelope>());
+  let n = 0;
   const adapter: ChannelAdapter = {
     id,
     platform: "telegram",
     capabilities: { threads: false, attachments: false, markdown: false, receipts: false, groups: true },
-    inbound: Stream.never,
-    state: Stream.never,
+    inbound: Stream.fromPubSub(inbound),
+    state: Stream.fromPubSub(states),
     currentState: Ref.get(state),
     start: () => Effect.void,
     send: () => Effect.fail(channelError(id, "unsupported")),
   };
-  return { adapter, set: (s) => Effect.runSync(Ref.set(state, s)) };
+  return {
+    adapter,
+    set: (s) => Effect.runSync(Effect.zipRight(Ref.set(state, s), PubSub.publish(states, s))),
+    receive: (userId, text) =>
+      Effect.runSync(PubSub.publish(inbound, {
+        id: `m${++n}`, conversation: { channelId: userId, isGroup: false }, sender: { platform: "telegram", userId },
+        text, attachments: [], mentionsSelf: true, isEcho: false, receivedAt: Date.now(),
+      })),
+  };
+}
+
+/** Polls `read` until `ok` holds (the framework folds inbound traffic on its own fibers). */
+async function until<T>(read: () => Promise<T>, ok: (v: T) => boolean): Promise<T> {
+  for (let i = 0; i < 100; i++) {
+    const v = await read();
+    if (ok(v)) return v;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return read();
 }
 
 describe("credential routes", () => {
@@ -241,14 +264,16 @@ describe("GET /api/gateway/status", () => {
       let s = await host.status("gateway-1", config());
       expect(s.phase).toBe("running");
       expect(s.channels[0]).toMatchObject({ id: CH, state: "connected", error: null });
-      expect(s.queue).toMatchObject({ capacity: 7, overflow: "drop-newest", dropped: 0 });
+      // Capacity and overflow come from the running gateway's inbound queue, so they also prove
+      // `.withGateway({ queue })` reaches the runner (it silently did not before the framework fix).
+      expect(s.queue).toEqual({ ready: 0, deferred: 0, dropped: 0, capacity: 7, overflow: "drop-newest" });
       expect(s.schedules).toHaveLength(1);
       expect(s.schedules[0]).toMatchObject({ cron: "0 9 * * 1", instruction: "Weekly digest", enabled: true });
       expect(typeof s.schedules[0]?.nextFireAt).toBe("number");
 
       creds.set(CH, "telegram", "token", TOKEN);
       scripted.set({ status: "failed", error: channelError(CH, "auth", { message: `Unauthorized for bot${TOKEN}` }) });
-      s = await host.status("gateway-1", config());
+      s = await until(() => host.status("gateway-1", config()), (v) => v.channels[0]?.state === "failed");
       expect(s.channels[0]?.state).toBe("failed");
       expect(s.channels[0]?.error?.kind).toBe("auth");
       expect(JSON.stringify(s)).not.toContain(TOKEN);
@@ -256,6 +281,57 @@ describe("GET /api/gateway/status", () => {
       await host.stop("gateway-1");
       expect(host.isHosted("gateway-1")).toBe(false);
       expect((await host.status("gateway-1", config())).channels[0]?.state).toBe("not-started");
+    } finally {
+      await host.destroy();
+    }
+  }, 30_000);
+
+  it("message counts and last-inbound time are the framework's channelStatus, not folded events; a refused sender still counts as received", async () => {
+    const scripted = scriptedAdapter(CH);
+    const host = new GatewayChannelHost(db, ingestLayer(db), gatewayConfigToBuildParams, () => ({ adapters: [scripted.adapter], webhooks: [], skipped: [] }));
+    try {
+      await host.sync("gateway-1", "Bot", config());
+      const before = await host.status("gateway-1", config());
+      expect(before.channels[0]).toMatchObject({ received: 0, sent: 0, failed: 0, lastInboundAt: null, lastSentAt: null, lastFailure: null });
+
+      // The adapter's stream is subscribed on the gateway loop's own fiber, so resend until the first lands.
+      const s = await until(async () => {
+        scripted.receive("99", "my password is hunter2"); // not on the allowlist
+        await new Promise((r) => setTimeout(r, 100));
+        return host.status("gateway-1", config());
+      }, (v) => (v.channels[0]?.received ?? 0) >= 1);
+      expect(s.channels[0]?.received).toBeGreaterThanOrEqual(1);
+      expect(typeof s.channels[0]?.lastInboundAt).toBe("number");
+      expect(JSON.stringify(s)).not.toContain("hunter2");
+    } finally {
+      await host.destroy();
+    }
+  }, 30_000);
+
+  it("a webhook channel is mounted through the adapter's own ingress handler: bad signatures are refused, signed posts are counted", async () => {
+    const WH = "ch-bbbb2222";
+    const SECRET = "whsec_test_secret_value";
+    const port = 41_000 + Math.floor(Math.random() * 1_000);
+    const webhook = new WebhookChannelAdapter({ id: WH, secret: Redacted.make(SECRET) });
+    const entry = { id: WH, kind: "webhook" as const, enabled: true, settings: { ingressPort: port } };
+    const cfg = { provider: "test", model: "test-model", channels: [{ id: WH, kind: "webhook", settings: { ingressPort: port } }], gateway: { accessControl: { accessPolicy: "allowlist", allowedSenders: ["webhook:42"] } } };
+    const host = new GatewayChannelHost(db, ingestLayer(db), gatewayConfigToBuildParams, () => ({ adapters: [webhook], webhooks: [{ entry, adapter: webhook, route: "/hook", port }], skipped: [] }));
+    const url = `http://127.0.0.1:${port}/hook`;
+    try {
+      await host.sync("gateway-1", "Bot", cfg);
+      expect((await host.status("gateway-1", cfg)).phase).toBe("running");
+
+      const body = JSON.stringify({ id: "w1", senderId: "99", content: "hello" });
+      const bad = await fetch(url, { method: "POST", body, headers: { "content-type": "application/json", "x-channels-signature": "nope", "x-channels-timestamp": String(Date.now()) } });
+      expect(bad.status).toBeGreaterThanOrEqual(400);
+      expect((await host.status("gateway-1", cfg)).channels[0]?.received).toBe(0);
+
+      const ts = String(Date.now());
+      const sig = createHmac("sha256", SECRET).update(`${ts}.${body}`).digest("hex");
+      const ok = await fetch(url, { method: "POST", body, headers: { "content-type": "application/json", "x-channels-signature": sig, "x-channels-timestamp": ts } });
+      expect(ok.status).toBeLessThan(300);
+      const s = await until(() => host.status("gateway-1", cfg), (v) => (v.channels[0]?.received ?? 0) >= 1);
+      expect(s.channels[0]).toMatchObject({ received: 1 });
     } finally {
       await host.destroy();
     }

@@ -2,9 +2,10 @@
   /**
    * Lab · Gateway: every saved gateway agent with its live channel connections, access
    * rule, schedules (next fire and recent runs), inbound queue activity and recent
-   * deliveries and refusals. Read-only; refreshes every few seconds while open. The server
-   * folds the framework's events (`server/services/gateway-status.ts`); the words come from
-   * `lib/gateway-overview.ts`.
+   * deliveries and refusals. Read-only; refreshes every few seconds while open. Counts and
+   * queue depth are the framework's own (`agent.channelStatus()`, `gatewayStatus().inboundQueue`);
+   * the activity list is folded from events (`server/services/gateway-status.ts`); the words come
+   * from `lib/gateway-overview.ts`.
    */
   import { onMount } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
@@ -92,7 +93,7 @@
   {:else}
     {#each agents as a (a.agentId)}
       {@const host = hostView(a.gateway.phase)}
-      {@const queue = queueSentence(a.gateway.queue)}
+      {@const queue = queueSentence(a.gateway.queue, a.gateway.phase === "running")}
       {@const limit = queueLimit(a.gateway.queue)}
       <section class="gw-card" aria-labelledby="gw-{a.agentId}">
         <div class="gw-card-h">
@@ -110,7 +111,7 @@
         {:else}
           <table class="gw-table">
             <caption class="gw-sr">Channels of {a.name}</caption>
-            <thead><tr><th scope="col">Channel</th><th scope="col">Connection</th><th scope="col">Messages in</th><th scope="col">Replies sent</th><th scope="col">Send failures</th><th scope="col">Last activity</th></tr></thead>
+            <thead><tr><th scope="col">Channel</th><th scope="col">Connection</th><th scope="col">Messages in</th><th scope="col">Replies sent</th><th scope="col">Send failures</th><th scope="col">Last message in</th><th scope="col">Last reply</th></tr></thead>
             <tbody>
               {#each a.gateway.channels as c (c.id)}
                 {@const v = connectionView(c)}
@@ -127,7 +128,8 @@
                   <td class="gw-num">{c.received}</td>
                   <td class="gw-num">{c.sent}</td>
                   <td class="gw-num" class:gw-bad={c.failed > 0}>{c.failed}{c.lastFailure ? ` (${c.lastFailure})` : ""}</td>
-                  <td>{when(c.lastEventAt, now)}</td>
+                  <td>{when(c.lastInboundAt, now)}</td>
+                  <td>{when(c.lastSentAt, now)}</td>
                 </tr>
               {/each}
             </tbody>
@@ -165,7 +167,7 @@
 
           <div>
             <h4>Inbound queue</h4>
-            <p class="gw-line">{queue ?? "Nothing has queued."}</p>
+            <p class="gw-line">{queue ?? "Shown once the agent is listening."}</p>
             <p class="gw-muted">{limit ?? "Framework default bounds."} {#if a.gateway.denied > 0}· {a.gateway.denied} refused sender{a.gateway.denied === 1 ? "" : "s"}{/if}</p>
             {#if a.gateway.queue.dropped > 0}<p class="gw-bad">Messages were dropped because the queue was full.</p>{/if}
           </div>

@@ -1,7 +1,8 @@
 // Run: bun run repo test apps/cortex/server/tests/gateway-status.test.ts
 //
-// The event tracker behind the Gateway overview: scripted framework events in, per-channel
-// counters, queue counts and a bounded activity list out. Message text is never kept.
+// The event tracker behind the Gateway overview's activity feed: scripted framework events in, a
+// bounded activity list and a refused-sender count out. Counters and queue depth are the
+// framework's accessors (pinned in api-gateway.test.ts), not folded here. Message text is never kept.
 import { describe, expect, it } from "bun:test";
 import type { AgentEvent } from "@reactive-agents/core";
 import { GatewayEventTracker } from "../services/gateway-status.js";
@@ -16,39 +17,41 @@ const suppressed = (policy: string, reason = "queued"): AgentEvent => ({
 });
 
 describe("GatewayEventTracker", () => {
-  it("counts received, sent and failed per channel", () => {
+  it("notes received, sent and failed lines with the channel they belong to", () => {
     const t = tracker();
-    t.observe(received());
     t.observe(received());
     t.observe({ _tag: "ChannelMessageSent", taskId: "t", platform: "telegram", messageId: "1:1", channelId: "42", timestamp: 30 });
     t.observe({ _tag: "ChannelDeliveryFailed", adapterId: "ch-tg", kind: "rate_limited", retryable: true });
-    const snap = t.snapshot();
-    expect(snap.channels["ch-tg"]).toEqual({ received: 2, sent: 1, failed: 1, lastEventAt: 1_000, lastFailure: "rate_limited" });
+    expect(t.snapshot().activity).toEqual([
+      { at: 1_000, kind: "failed", channelId: "ch-tg", detail: "rate_limited, retryable" },
+      { at: 30, kind: "sent", channelId: "ch-tg", detail: "reply delivered (telegram)" },
+      { at: 10, kind: "received", channelId: "ch-tg", detail: "from telegram:42" },
+    ]);
   });
 
-  it("attributes a platform-only event through the lookup and ignores an unknown platform", () => {
+  it("attributes a platform-only event through the lookup and leaves an unknown platform unattributed", () => {
     const t = tracker();
     t.observe({ _tag: "ChannelMessageSent", taskId: "t", platform: "signal", messageId: "1", channelId: "c", timestamp: 1 });
-    expect(Object.keys(t.snapshot().channels)).toEqual([]);
-    t.observe({ _tag: "ChannelMessageSent", taskId: "t", platform: "telegram", messageId: "1", channelId: "c", timestamp: 1 });
-    expect(t.snapshot().channels["ch-tg"]?.sent).toBe(1);
+    t.observe({ _tag: "ChannelMessageSent", taskId: "t", platform: "telegram", messageId: "1", channelId: "c", timestamp: 2 });
+    const [telegram, signal] = t.snapshot().activity;
+    expect(telegram?.channelId).toBe("ch-tg");
+    expect(signal && "channelId" in signal).toBe(false);
   });
 
-  it("counts queue activity from ProactiveActionSuppressed by policy", () => {
+  it("notes queue activity by policy without counting it (the framework reports depth)", () => {
     const t = tracker();
-    t.observe(suppressed("inbound-queue:queued"));
     t.observe(suppressed("inbound-queue:queued"));
     t.observe(suppressed("inbound-queue:deferred"));
     t.observe(suppressed("inbound-queue:dropped", "queue full"));
-    expect(t.snapshot().queue).toEqual({ queued: 2, deferred: 1, dropped: 1 });
+    expect(t.snapshot().activity.map((a) => a.kind)).toEqual(["dropped", "deferred", "queued"]);
     expect(t.snapshot().denied).toBe(0);
+    expect(Object.keys(t.snapshot()).sort()).toEqual(["activity", "denied"]);
   });
 
   it("any other suppression policy is a denied sender, not queue traffic", () => {
     const t = tracker();
     t.observe(suppressed("access-control", "sender not allowed"));
     expect(t.snapshot().denied).toBe(1);
-    expect(t.snapshot().queue).toEqual({ queued: 0, deferred: 0, dropped: 0 });
     expect(t.snapshot().activity[0]).toMatchObject({ kind: "denied", detail: "channel: sender not allowed" });
   });
 

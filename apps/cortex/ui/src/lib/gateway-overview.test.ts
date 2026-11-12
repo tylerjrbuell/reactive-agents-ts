@@ -16,13 +16,13 @@ import {
 
 const row = (over: Partial<ChannelStatusRow> = {}): ChannelStatusRow => ({
   id: "ch-1", kind: "telegram", label: null, enabled: true, state: "connected", error: null, reason: null,
-  received: 0, sent: 0, failed: 0, lastEventAt: null, lastFailure: null, ...over,
+  received: 0, sent: 0, failed: 0, lastInboundAt: null, lastSentAt: null, lastFailure: null, ...over,
 });
 
 const agent = (channels: ChannelStatusRow[], phase: GatewayAgentStatus["gateway"]["phase"] = "running"): GatewayAgentStatus => ({
   agentId: "gateway-1", name: "Bot", status: "active", schedule: null, runCount: 0, lastRunAt: null, processRunning: false, lastFiredAt: null,
   access: { mode: "deny-all", allowed: 0, blocked: 0 },
-  gateway: { phase, error: null, startedAt: null, channels, schedules: [], queue: { queued: 0, deferred: 0, dropped: 0, capacity: null, overflow: null }, denied: 0, activity: [], stats: null },
+  gateway: { phase, error: null, startedAt: null, channels, schedules: [], queue: { ready: 0, deferred: 0, dropped: 0, capacity: null, overflow: null }, denied: 0, activity: [], stats: null },
 });
 
 describe("connectionView", () => {
@@ -71,14 +71,18 @@ describe("nextFireLabel", () => {
 });
 
 describe("queue text", () => {
-  it("is null until something queued, and lists only non-zero counts", () => {
-    const q = { queued: 0, deferred: 0, dropped: 0, capacity: null, overflow: null };
-    expect(queueSentence(q)).toBeNull();
-    expect(queueSentence({ ...q, queued: 3, dropped: 1 })).toBe("3 queued, 1 dropped");
+  const q = { ready: 0, deferred: 0, dropped: 0, capacity: null, overflow: null };
+  it("is null while the gateway is not running", () => {
+    expect(queueSentence({ ...q, ready: 2 }, false)).toBeNull();
   });
-  it("states a configured limit, and nothing when Cortex set none", () => {
-    expect(queueLimit({ queued: 0, deferred: 0, dropped: 0, capacity: null, overflow: null })).toBeNull();
-    expect(queueLimit({ queued: 0, deferred: 0, dropped: 0, capacity: 7, overflow: "drop-newest" })).toBe("holds 7, drops the newest when full");
+  it("shows live depth (ready + deferred) against capacity, and drops only when there are some", () => {
+    expect(queueSentence({ ...q, capacity: 7 }, true)).toBe("0 of 7 waiting");
+    expect(queueSentence({ ...q, ready: 1, deferred: 1, capacity: 7, dropped: 3 }, true)).toBe("2 of 7 waiting (1 ready, 1 deferred), 3 dropped");
+    expect(queueSentence({ ...q, deferred: 4 }, true)).toBe("4 waiting (4 deferred)");
+  });
+  it("states a known limit, and nothing when none is known", () => {
+    expect(queueLimit(q)).toBeNull();
+    expect(queueLimit({ ...q, capacity: 7, overflow: "drop-newest" })).toBe("holds 7, drops the newest when full");
   });
 });
 

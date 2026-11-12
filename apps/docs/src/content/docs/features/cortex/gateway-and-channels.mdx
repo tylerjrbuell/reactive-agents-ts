@@ -51,16 +51,17 @@ The **Gateway** tab in the Lab lists every saved gateway agent. It is read-only 
 
 - the host state (Listening, Starting, Failed or No channels running) and whether the agent is paused;
 - the access rule in one line, with a warning for deny-all and open;
-- per channel: the live connection state, messages in, replies sent, send failures (with the last failure) and last activity;
+- per channel: the live connection state, messages in, replies sent, send failures (with the last failure), and when the last message came in and the last reply went out;
 - schedules with the next fire and recent runs;
-- queue activity: queued, deferred and dropped;
+- the inbound queue right now: how many messages are waiting (ready and deferred) out of its capacity, and how many were dropped because it was full;
 - recent activity, including deliveries and refusals.
 
 A summary at the top counts agents listening, channels connected and agents that need attention. The data comes from `GET /api/gateway/status`.
 
 ### Current limits
 
-- **Counts need traffic.** Cortex folds the framework's events into the counters, because the framework has no channel-status or queue-depth accessor. Messages in, replies sent and send failures read zero until a message arrives, and they count from when the gateway host started.
-- **The queue shows cumulative activity, not live depth.** Queued, deferred and dropped are running totals of events. The tab does not show how many messages are waiting right now.
+- **Counts start when the agent starts listening.** The counts and the queue come from the framework (`agent.channelStatus()` and `agent.gatewayStatus().inboundQueue`). They read zero until a message arrives and restart each time the gateway host restarts. A refused sender still counts as a message in.
+- **The queue and counts show nothing while the agent is not listening.** Only the saved capacity and overflow rule are known then.
+- **Recent activity is a short history, not a log.** It keeps the newest 50 lines, folded from the agent's events, and never stores message text.
 
 Related: [Lab builder](/features/cortex/lab-builder/), [Approvals and questions](/features/cortex/approvals-and-questions/) (gateway agents refuse gated tools) and [Gateway](/features/gateway/).

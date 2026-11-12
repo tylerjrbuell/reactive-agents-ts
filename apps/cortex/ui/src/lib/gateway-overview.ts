@@ -23,7 +23,8 @@ export interface ChannelStatusRow {
   readonly received: number;
   readonly sent: number;
   readonly failed: number;
-  readonly lastEventAt: number | null;
+  readonly lastInboundAt: number | null;
+  readonly lastSentAt: number | null;
   readonly lastFailure: string | null;
 }
 
@@ -47,6 +48,18 @@ export interface ActivityRow {
   readonly detail: string;
 }
 
+/** The framework's live inbound queue. Bounds are null when neither the running gateway nor the saved config states them. */
+export interface QueueStatus {
+  /** Events cleared to run, waiting for the single worker. */
+  readonly ready: number;
+  /** Events held by the policy until a limit window rolls. */
+  readonly deferred: number;
+  /** Events discarded because a list was full, since the gateway started. */
+  readonly dropped: number;
+  readonly capacity: number | null;
+  readonly overflow: string | null;
+}
+
 /** One gateway agent in the overview. */
 export interface GatewayAgentStatus {
   readonly agentId: string;
@@ -64,7 +77,7 @@ export interface GatewayAgentStatus {
     readonly startedAt: number | null;
     readonly channels: readonly ChannelStatusRow[];
     readonly schedules: readonly ScheduleStatusRow[];
-    readonly queue: { readonly queued: number; readonly deferred: number; readonly dropped: number; readonly capacity: number | null; readonly overflow: string | null };
+    readonly queue: QueueStatus;
     readonly denied: number;
     readonly activity: readonly ActivityRow[];
     readonly stats: Readonly<Record<string, number>> | null;
@@ -136,17 +149,22 @@ export function runView(status: string): { tone: StatusTone; label: string } {
 /** The access line for an agent. */
 export const accessLine = (a: GatewayAgentStatus["access"]): string => accessSentence(a.mode, a.allowed);
 
-/** Queue activity as one sentence, or null when nothing has queued or dropped yet. */
-export function queueSentence(q: GatewayAgentStatus["gateway"]["queue"]): string | null {
-  const parts: string[] = [];
-  if (q.queued > 0) parts.push(`${q.queued} queued`);
-  if (q.deferred > 0) parts.push(`${q.deferred} deferred`);
-  if (q.dropped > 0) parts.push(`${q.dropped} dropped`);
-  return parts.length > 0 ? parts.join(", ") : null;
+/**
+ * The queue right now as one sentence: "2 of 7 waiting (1 ready, 1 deferred), 3 dropped".
+ * Depth is ready + deferred, shown against the capacity of one list when it is known. Null while
+ * the gateway is not running (nothing to report yet).
+ */
+export function queueSentence(q: QueueStatus, running: boolean): string | null {
+  if (!running) return null;
+  const waiting = q.ready + q.deferred;
+  const of = q.capacity !== null ? ` of ${q.capacity}` : "";
+  const detail = waiting > 0 ? ` (${[q.ready > 0 ? `${q.ready} ready` : "", q.deferred > 0 ? `${q.deferred} deferred` : ""].filter(Boolean).join(", ")})` : "";
+  const drops = q.dropped > 0 ? `, ${q.dropped} dropped` : "";
+  return `${waiting}${of} waiting${detail}${drops}`;
 }
 
-/** The queue limit as text ("holds 7, drops the newest when full"), or null when Cortex did not set one. */
-export function queueLimit(q: GatewayAgentStatus["gateway"]["queue"]): string | null {
+/** The queue limit as text ("holds 7, drops the newest when full"), or null when no bound is known. */
+export function queueLimit(q: QueueStatus): string | null {
   if (q.capacity === null && q.overflow === null) return null;
   const cap = q.capacity !== null ? `holds ${q.capacity}` : "default capacity";
   const over = q.overflow === "drop-newest" ? ", drops the newest when full" : q.overflow === "drop-oldest" ? ", drops the oldest when full" : "";

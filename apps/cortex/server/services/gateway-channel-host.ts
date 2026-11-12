@@ -8,8 +8,10 @@
  * `buildCortexAgent`, so a channel reply and a scheduled fire run the same configured agent.
  *
  * One entry per gateway agent: `sync` (re)starts it from the saved config, `stop` tears it down
- * (loop, subscription, webhook listeners, agent resources). `status` reads live adapter
- * connection state, the schedule registry and the event tracker (`gateway-status.ts`).
+ * (loop, subscription, webhook listeners, agent resources). `status` reads the framework's own
+ * accessors (`agent.channelStatus()`: adapter state and message counters; `agent.gatewayStatus()`:
+ * run stats and the live inbound queue), the schedule registry and the activity feed folded from
+ * events (`gateway-status.ts`).
  *
  * Failure is data: a channel that cannot start is reported in `status()`, never thrown into the
  * process manager's caller.
@@ -18,7 +20,7 @@ import { Effect, Exit, Scope } from "effect";
 import type { Database } from "bun:sqlite";
 import type { Layer } from "effect";
 import { startGatewayIngress } from "@reactive-agents/gateway";
-import type { ChannelAdapter, ConnectionState } from "@reactive-agents/channels";
+import type { AdapterInfo, ChannelAdapter, ConnectionState } from "@reactive-agents/channels";
 import { emitErrorSwallowed, errorTag, type AgentEvent } from "@reactive-agents/core";
 import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
@@ -43,10 +45,13 @@ export interface ChannelLiveState {
   /** Failure class and a credential-free message, when the connection failed or is retrying. */
   readonly error: { readonly kind: string; readonly message: string } | null;
   readonly reason: string | null;
+  /** The framework's per-adapter counters (`agent.channelStatus()`); zero until the host runs. */
   readonly received: number;
   readonly sent: number;
   readonly failed: number;
-  readonly lastEventAt: number | null;
+  readonly lastInboundAt: number | null;
+  readonly lastSentAt: number | null;
+  /** Failure class of the latest failed delivery (`auth`, `rate_limited`, ...). */
   readonly lastFailure: string | null;
 }
 
@@ -70,7 +75,17 @@ export interface HostedGatewayStatus {
   readonly startedAt: number | null;
   readonly channels: readonly ChannelLiveState[];
   readonly schedules: readonly ScheduleView[];
-  readonly queue: GatewayTrackerSnapshot["queue"] & { readonly capacity: number | null; readonly overflow: string | null };
+  /** The framework's live inbound queue (`gatewayStatus().inboundQueue`); before it runs, zero depth and the saved bounds. */
+  readonly queue: {
+    /** Cleared to run, waiting for the single worker. */
+    readonly ready: number;
+    /** Held by the policy until a limit window rolls. */
+    readonly deferred: number;
+    /** Discarded because a list was full, since the gateway started. */
+    readonly dropped: number;
+    readonly capacity: number | null;
+    readonly overflow: string | null;
+  };
   readonly denied: number;
   readonly activity: GatewayTrackerSnapshot["activity"];
   readonly stats: Readonly<Record<string, number>> | null;
@@ -154,8 +169,12 @@ export class GatewayChannelHost {
     const entries = parseCortexChannels(configRaw.channels);
     const h = this.hosted.get(agentId);
     const snap = this.trackers.get(agentId)?.snapshot();
-    const channels = await Promise.all(entries.map((e) => this.channelState(e, h, snap)));
-    const gateway = h?.gateway;
+    const running = h?.agent && h.phase === "running" ? h.agent : null;
+    // The framework's own accessors: per-adapter state and counters, the live queue and the run stats.
+    const adapterInfo = new Map((running?.channelStatus()?.adapters ?? []).map((a) => [a.id, a] as const));
+    const gw = running ? await running.gatewayStatus() : null;
+    const channels = await Promise.all(entries.map((e) => this.channelState(e, h, adapterInfo.get(e.id))));
+    const q = gw?.inboundQueue;
     return {
       phase: h?.phase ?? "idle",
       error: h?.error ?? null,
@@ -163,38 +182,38 @@ export class GatewayChannelHost {
       channels,
       schedules: await this.schedules(h),
       queue: {
-        queued: snap?.queue.queued ?? 0,
-        deferred: snap?.queue.deferred ?? 0,
-        dropped: snap?.queue.dropped ?? 0,
-        capacity: gateway?.queue?.capacity ?? null,
-        overflow: gateway?.queue?.overflow ?? null,
+        ready: q?.ready ?? 0,
+        deferred: q?.deferred ?? 0,
+        dropped: q?.dropped ?? 0,
+        capacity: q?.capacity ?? h?.gateway?.queue?.capacity ?? null,
+        overflow: q?.overflow ?? h?.gateway?.queue?.overflow ?? null,
       },
       denied: snap?.denied ?? 0,
       activity: snap?.activity ?? [],
-      stats: await this.stats(h),
+      stats: gw ? { ...gw.stats } : null,
     };
   }
 
   // ── internals ──
 
-  private async channelState(e: CortexChannelEntry, h: Hosted | undefined, snap: GatewayTrackerSnapshot | undefined): Promise<ChannelLiveState> {
-    const counters = snap?.channels[e.id];
+  private async channelState(e: CortexChannelEntry, h: Hosted | undefined, info: AdapterInfo | undefined): Promise<ChannelLiveState> {
     const base = {
       id: e.id,
       kind: e.kind,
       label: e.label ?? null,
       enabled: e.enabled,
-      received: counters?.received ?? 0,
-      sent: counters?.sent ?? 0,
-      failed: counters?.failed ?? 0,
-      lastEventAt: counters?.lastEventAt ?? null,
-      lastFailure: counters?.lastFailure ?? null,
+      received: info?.messagesReceived ?? 0,
+      sent: info?.messagesSent ?? 0,
+      failed: info?.deliveryFailures ?? 0,
+      lastInboundAt: info?.lastInboundAt ?? null,
+      lastSentAt: info?.lastSentAt ?? null,
+      lastFailure: info?.lastError?.kind ?? null,
     };
     const skipReason = h?.skipped.get(e.id);
     if (skipReason) return { ...base, state: "skipped", error: null, reason: skipReason };
     const adapter = h?.adapters.find((a) => a.id === e.id);
     if (!adapter || h?.phase !== "running") return { ...base, state: "not-started", error: null, reason: e.enabled ? null : "Disabled." };
-    const st = await Effect.runPromise(adapter.currentState);
+    const st = info?.state ?? (await Effect.runPromise(adapter.currentState));
     const secrets = this.secretsOf(e);
     const scrub = (m: string) => secrets.reduce((acc, s) => (s.length >= 4 ? acc.split(s).join("••••") : acc), m);
     const error = st.status === "failed" || st.status === "reconnecting" ? { kind: st.error.kind, message: scrub(st.error.message) } : null;
@@ -229,12 +248,6 @@ export class GatewayChannelHost {
     } catch {
       return [];
     }
-  }
-
-  private async stats(h: Hosted | undefined): Promise<Record<string, number> | null> {
-    if (!h?.agent || h.phase !== "running") return null;
-    const s = await h.agent.gatewayStatus();
-    return s ? { ...s.stats } : null;
   }
 
   private async start(
@@ -317,10 +330,8 @@ export class GatewayChannelHost {
         const routes = mounts.filter((m) => m.port === port).map((m) => ({
           path: m.route,
           id: m.adapter.id,
-          handle: (req: { readonly body: string; readonly headers: Record<string, string> }) =>
-            m.adapter.handleRequest({ body: req.body, headers: { ...req.headers } }).pipe(
-              Effect.mapError((e) => ({ kind: "auth", message: e.reason })),
-            ),
+          // The adapter's own ingress handler: verification, enqueue and a typed ChannelError.
+          handle: (req: { readonly body: string; readonly headers: Readonly<Record<string, string>> }) => m.adapter.handleWebhook(req),
         }));
         await Effect.runPromise(
           startGatewayIngress({ port }, { channelRoutes: routes, onEvent: () => Effect.void }).pipe(Effect.provideService(Scope.Scope, scope)),
