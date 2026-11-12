@@ -146,7 +146,9 @@ export const makeExecuteEvent = (
                 durationMs,
                 timestamp: Date.now(),
             } as AgentEvent)
-            return result.output
+            // A failed run's text (reasoning, an abstention note) is not a reply: `undefined` is
+            // this function's "the run failed" signal, so callers never mistake it for output.
+            return result.success ? result.output : undefined
         } catch (err) {
             const durationMs = Date.now() - runStart
             deps.glog(

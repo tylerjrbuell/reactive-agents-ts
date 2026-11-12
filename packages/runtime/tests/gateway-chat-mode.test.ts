@@ -35,7 +35,7 @@ describe("GatewayChatManager multi-turn history", () => {
     const deps = {
       agentId: "test",
       sessionTtlDays: 30,
-      executeEvent: async () => undefined,
+      executeEvent: async () => "ok",
       logEpisode: async () => {},
       saveSession: async () => {},
       findById: async () => null,

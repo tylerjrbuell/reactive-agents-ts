@@ -38,6 +38,7 @@ export interface SubscribeChannelHandlerDeps {
     readonly channelOutboundToolGuidance: (args: {
         mcpServer: string
         sender: string
+        adapterBacked?: boolean
     }) => string
     readonly queue: GatewayInboundQueue
     readonly chatManager: GatewayChatManager
@@ -47,7 +48,28 @@ export interface SubscribeChannelHandlerDeps {
     readonly agentId: string
     readonly getStopped: () => boolean
     readonly incrementChatTurns: () => void
+    /**
+     * Adapters the channel router owns (`withChannels({ routes })`). The router has already
+     * decided access, metered and started the run for their messages, so this legacy subscriber
+     * must not start a second one. Default: none.
+     */
+    readonly routerOwnedAdapterIds?: ReadonlySet<string>
 }
+
+/**
+ * Adapter ids the channel router owns: every adapter when `routes` is set (the router replaces the
+ * legacy trigger path for the whole config), none otherwise.
+ */
+export const routerOwnedAdapterIds = (
+    cfg: { readonly routes?: readonly unknown[]; readonly adapters: readonly object[] } | undefined
+): ReadonlySet<string> =>
+    new Set(
+        cfg?.routes?.length
+            ? cfg.adapters.flatMap((a) =>
+                  'id' in a && typeof a.id === 'string' ? [a.id] : []
+              )
+            : []
+    )
 
 /**
  * Subscribe to ChannelMessageReceived events on the EventBus and
@@ -69,6 +91,7 @@ export const subscribeChannelHandler = async (
         agentId,
         getStopped,
         incrementChatTurns,
+        routerOwnedAdapterIds: routerOwned = new Set<string>(),
     } = deps
 
     if (!eb) return () => {}
@@ -83,6 +106,18 @@ export const subscribeChannelHandler = async (
             eb.on('ChannelMessageReceived', (event) =>
                 Effect.gen(function* () {
                     if (getStopped()) return
+
+                    // Single consumer: the router owns its adapters' messages end to end.
+                    if (
+                        event.adapterId !== undefined &&
+                        routerOwned.has(event.adapterId)
+                    ) {
+                        glog(
+                            'debug',
+                            `channel → ${event.adapterId} is router-owned; legacy handler skipped`
+                        )
+                        return
+                    }
 
                     // Dedup: skip if we've seen this exact sender+message recently
                     const msgHash = `${event.sender}:${event.message}`
@@ -122,12 +157,18 @@ export const subscribeChannelHandler = async (
                     const channelDecision = yield* gw.processEvent(gwEvent)
 
                     const mcpServer = String(event.mcpServer ?? '').trim()
-                    const taskInstruction =
-                        `Respond to this ${event.platform} message from ${event.sender}: "${event.message}". ` +
+                    // A native adapter exposes no MCP send tool; only MCP channels get that guidance.
+                    const adapterBacked = event.adapterId !== undefined
+                    const taskInstruction = [
+                        `Respond to this ${event.platform} message from ${event.sender}: "${event.message}".`,
                         channelOutboundToolGuidance({
                             mcpServer,
                             sender: String(event.sender ?? ''),
-                        })
+                            adapterBacked,
+                        }),
+                    ]
+                        .filter((p) => p !== '')
+                        .join(' ')
                     // Chat turns submit their run to the queue themselves
                     // (chatManager -> executeEvent), so this resolves per turn.
                     const runChatTurn = async () => {
@@ -136,7 +177,8 @@ export const subscribeChannelHandler = async (
                             event.message,
                             event.platform ?? 'unknown',
                             mcpServer,
-                            gwEvent
+                            gwEvent,
+                            adapterBacked
                         )
                         incrementChatTurns()
                     }

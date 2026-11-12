@@ -33,7 +33,7 @@ function makeStubDeps(overrides: Partial<{
     deps: {
       agentId: overrides.agentId ?? "test-agent",
       sessionTtlDays: 30,
-      executeEvent: overrides.executeEvent ?? (async (_e: unknown, s: string, i: string) => { calls.push({ method: "executeEvent", args: [s, i] }); return undefined; }),
+      executeEvent: overrides.executeEvent ?? (async (_e: unknown, s: string, i: string) => { calls.push({ method: "executeEvent", args: [s, i] }); return "ok"; }),
       logEpisode: overrides.logEpisode ?? (async (entry: unknown) => { calls.push({ method: "logEpisode", args: [entry] }); }),
       saveSession: overrides.saveSession ?? (async (input: unknown) => { calls.push({ method: "saveSession", args: [input] }); }),
       findById: overrides.findById ?? (async (_id: string) => null),

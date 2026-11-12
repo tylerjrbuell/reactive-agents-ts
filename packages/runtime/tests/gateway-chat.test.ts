@@ -220,7 +220,7 @@ function makeStubDeps(overrides: Partial<{
     deps: {
       agentId: "test-agent",
       sessionTtlDays: 30,
-      executeEvent: overrides.executeEvent ?? (async (_e: unknown, s: string, i: string) => { calls.push({ method: "executeEvent", args: [s, i] }); return undefined; }),
+      executeEvent: overrides.executeEvent ?? (async (_e: unknown, s: string, i: string) => { calls.push({ method: "executeEvent", args: [s, i] }); return "ok"; }),
       logEpisode: overrides.logEpisode ?? (async (entry: unknown) => { calls.push({ method: "logEpisode", args: [entry] }); }),
       saveSession: overrides.saveSession ?? (async (input: unknown) => { calls.push({ method: "saveSession", args: [input] }); }),
       findById: overrides.findById ?? (async (_id: string) => null),
@@ -367,19 +367,16 @@ describe("GatewayChatManager", () => {
     expect(instruction).toContain("morning brief sent");
   });
 
-  test("handleMessage catches executeEvent errors and still persists history and logs episode", async () => {
+  test("handleMessage catches executeEvent errors and stores nothing (no error text as a reply)", async () => {
     const { deps, calls } = makeStubDeps({
       executeEvent: async () => { throw new Error("Signal unavailable"); },
     });
     const mgr = new GatewayChatManager(deps);
     await mgr.handleMessage("+155", "test error path", "signal", "signal", {});
 
-    const history = await mgr.getOrLoadHistory("+155");
-    expect(history.length).toBe(2);
-    expect(history[1]!.content).toContain("error");
-
-    expect(calls.some((c) => c.method === "saveSession")).toBe(true);
-    expect(calls.some((c) => c.method === "logEpisode")).toBe(true);
+    expect(await mgr.getOrLoadHistory("+155")).toEqual([]);
+    expect(calls.some((c) => c.method === "saveSession")).toBe(false);
+    expect(calls.some((c) => c.method === "logEpisode")).toBe(false);
   });
 
   test("pruneStaleSessions is a no-op when called twice within 24h", async () => {

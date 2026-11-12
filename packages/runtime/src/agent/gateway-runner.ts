@@ -31,6 +31,7 @@ import { makeGatewayTick } from "./gateway-tick.js";
 import {
   subscribeChannelHandler,
   buildGatewayHandle,
+  routerOwnedAdapterIds,
 } from "./gateway-driver.js";
 import { createChatManager } from "./chat-manager-factory.js";
 import {
@@ -333,6 +334,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
       chatManager,
       runtime: self.runtime,
       agentId: self.agentId ?? "unknown",
+      routerOwnedAdapterIds: routerOwnedAdapterIds(channelsCfg),
       getStopped: () => stopped,
       incrementChatTurns: () => {
         chatTurns++;

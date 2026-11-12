@@ -515,6 +515,7 @@ How access works:
 - **Fail closed.** A message no route claims is dropped and counted as unrouted. A denied sender never reaches an agent.
 - **Owners run the agent's own tools. Everyone else gets `senderTools`**, which defaults to `ReadOnly`: only tools that declare `mutatesExternalState: false` and need no approval. Unclassified tools (custom, MCP, sub-agent) are removed. `Allowlist` keeps only named tools the agent already had.
 - **The tool surface is decided when the agent is built**, not per turn and not by prompt. The router builds one agent per (route, role), so a sender never shares history or tools with an owner. Sender text reaches the model only as the user message; persona and instructions stay in the agent's own configuration.
+- **The router is the only consumer of its adapters.** The gateway's legacy chat handler skips messages from adapters a router owns, so a routed message runs once, under the route's access decision.
 - **State is in memory by default.** Message dedupe and turn caps reset on restart, and the router logs a warning at startup. Pass a durable `store` to keep them.
 - This limits what an injected message can do. It does not make a model immune to injection, and read-only tools can still leak data they can read.
 

@@ -19,3 +19,19 @@ export class ChatEngineCapabilityError extends Data.TaggedError("ChatEngineCapab
   /** The name of the missing capability (e.g. `"runTask"`, `"runStreamTask"`). */
   readonly capability: string;
 }> {}
+
+/**
+ * A gateway chat turn's run produced no deliverable reply (failed, abstained, aborted or dropped).
+ * Raised from the manager's `runTask` so the engine records neither turn: a failed run's text must
+ * never become an assistant turn that later runs read back.
+ */
+export class GatewayTurnNotDelivered extends Data.TaggedError("GatewayTurnNotDelivered")<{
+  /** Platform the turn arrived on. */
+  readonly platform: string;
+  /** Human-readable reason. */
+  readonly message: string;
+}> {}
+
+/** Tag check for {@link GatewayTurnNotDelivered}. */
+export const isGatewayTurnNotDelivered = (e: unknown): e is GatewayTurnNotDelivered =>
+  typeof e === "object" && e !== null && "_tag" in e && e._tag === "GatewayTurnNotDelivered";

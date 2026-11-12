@@ -76,7 +76,9 @@ STRING_ERRORS_BASELINE=255
 # makeActivateSkillHandler (refusals are values); its identity check is gone.
 # 2026-11-10 124->121: gh/git/gws-cli wrappers deleted (folded into a scoped
 # shell-execute preset); their 3 identity checks are gone.
-INSTANCEOF_BASELINE=121
+# 2026-11-12 121->120: gateway runTask catch no longer identity-checks; an
+# undelivered turn throws GatewayTurnNotDelivered (typed) so history stays clean.
+INSTANCEOF_BASELINE=120
 
 # SCAN-EMPTY guard.
 COUNTED="$(find "$SCAN_DIR" -path '*/src/*' -name '*.ts' ! -name '*.test.ts' \

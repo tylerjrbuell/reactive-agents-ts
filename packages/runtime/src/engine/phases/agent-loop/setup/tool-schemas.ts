@@ -53,6 +53,12 @@ export type ToolSchema = {
    * (`const x = fileRead("/abs")`) may be bound (Plan 9).
    */
   riskLevel?: ToolDefinition["riskLevel"];
+  /**
+   * From `ToolDefinition.mutatesExternalState`: `false` = declared read-only, `true` = can change
+   * state outside the run, absent = unknown. Carried so the kernel's iteration-0 satisfiability
+   * preflight can tell "only read-only tools are visible" from "an action tool is visible".
+   */
+  mutatesExternalState?: boolean;
 };
 
 /**
@@ -67,6 +73,7 @@ export const toKernelToolSchema = (t: ToolDefinition): ToolSchema => ({
   description: t.description,
   ...(t.returnType !== undefined ? { returnType: t.returnType } : {}),
   ...(t.riskLevel !== undefined ? { riskLevel: t.riskLevel } : {}),
+  ...(t.mutatesExternalState !== undefined ? { mutatesExternalState: t.mutatesExternalState } : {}),
   parameters: [...(t.parameters ?? [])],
 });
 

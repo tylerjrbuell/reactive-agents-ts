@@ -4,6 +4,7 @@ import type { AgentResult } from "./builder/types.js";
 import type { ChatTurnEvent } from "@reactive-agents/core";
 import type { ChatEngine } from "./chat/engine.js";
 import { taskInputText, type TaskInput } from "./agent/task-input.js";
+import { GatewayTurnNotDelivered, isGatewayTurnNotDelivered } from "./chat/engine-errors.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -119,7 +120,14 @@ export function formatEpisodicContext(
 export function channelOutboundToolGuidance(params: {
   readonly mcpServer: string;
   readonly sender: string;
+  /**
+   * The message came from a native `ChannelAdapter` (event carries `adapterId`), not an MCP server.
+   * Such an adapter exposes no outbound tool, so the "call a send tool" instruction would only make
+   * the model hunt for one that does not exist; the guidance is empty.
+   */
+  readonly adapterBacked?: boolean;
 }): string {
+  if (params.adapterBacked === true) return "";
   const server = params.mcpServer.trim() || "messaging";
   const prefix = `${server}/`;
   return (
@@ -142,18 +150,22 @@ export function buildEnrichedInstruction(params: {
   message: string;
   historyBlock: string;
   episodicBlock: string;
+  /** See {@link channelOutboundToolGuidance}. */
+  adapterBacked?: boolean;
 }): string {
   const parts: string[] = [];
   if (params.episodicBlock) parts.push(params.episodicBlock);
   if (params.historyBlock) parts.push(params.historyBlock);
 
+  const guidance = channelOutboundToolGuidance({
+    mcpServer: params.mcpServer,
+    sender: params.sender,
+    ...(params.adapterBacked === true ? { adapterBacked: true } : {}),
+  });
   parts.push(
     `You are in a live conversation with ${params.sender} on ${params.platform}.\n\n` +
-      `User: ${params.message}\n\n` +
-      channelOutboundToolGuidance({
-        mcpServer: params.mcpServer,
-        sender: params.sender,
-      }),
+      `User: ${params.message}` +
+      (guidance === "" ? "" : `\n\n${guidance}`),
   );
   return parts.join("\n\n");
 }
@@ -217,15 +229,20 @@ export class GatewayChatManager {
     ): Promise<AgentResult> => {
       const gwEvent = this.currentEvents.get(sender);
       const platform = this.currentPlatforms.get(sender) ?? "";
-      let runOutput: string;
+      let output: string | undefined;
       try {
-        const output = await this.deps.executeEvent(gwEvent, "channel", taskInputText(input));
-        runOutput = output ?? `(reply sent via ${platform})`;
-      } catch (err) {
-        runOutput = `(error: ${err instanceof Error ? err.message : String(err)})`;
+        output = await this.deps.executeEvent(gwEvent, "channel", taskInputText(input));
+      } catch {
+        output = undefined;
+      }
+      // `undefined` is the executeEvent contract for "the run failed / was dropped": its text
+      // (a failed run's reasoning, a placeholder, an error string) is never a reply, so it must
+      // not reach the stored history. The throw ends `engine.turn` before it records anything.
+      if (output === undefined || output.trim() === "") {
+        throw new GatewayTurnNotDelivered({ platform, message: "the run produced no deliverable reply" });
       }
       return {
-        output: runOutput,
+        output,
         success: true,
         taskId: "gateway",
         agentId: this.deps.agentId,
@@ -289,6 +306,7 @@ export class GatewayChatManager {
     platform: string,
     mcpServer: string,
     gwEvent: unknown,
+    adapterBacked = false,
   ): Promise<void> {
     const history = await this.getOrLoadHistory(sender);
     const engine = await this.ensureEngine(sender);
@@ -306,15 +324,23 @@ export class GatewayChatManager {
       message,
       historyBlock,
       episodicBlock,
+      adapterBacked,
     });
 
     this.currentEvents.set(sender, gwEvent);
     this.currentPlatforms.set(sender, platform);
 
-    const reply = await engine.turn(instruction, {
-      useTools: true,
-      recordUserText: message,
-    });
+    let reply: Awaited<ReturnType<ChatEngine["turn"]>>;
+    try {
+      reply = await engine.turn(instruction, {
+        useTools: true,
+        recordUserText: message,
+      });
+    } catch (err) {
+      // A failed turn leaves the stored conversation exactly as it was (and logs no episode).
+      if (isGatewayTurnNotDelivered(err)) return;
+      throw err;
+    }
 
     this.histories.set(sender, engine.history());
 
