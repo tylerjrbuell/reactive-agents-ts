@@ -114,6 +114,29 @@ export function reconcileVoice(current: string, listed: readonly string[], prefe
   return preferred !== undefined && listed.includes(preferred) ? preferred : (listed[0] ?? current);
 }
 
+/** Select value that means "type an id yourself". */
+export const CUSTOM_VOICE = "__custom__";
+
+/**
+ * The Voice picker's options: every listed voice (friendly label, grouped by language), the
+ * current voice when the list lacks it (so it still shows), and a final "Custom voice id..." entry.
+ */
+export function voiceSelectOptions(
+  voices: readonly { readonly id: string; readonly label: string; readonly group?: string | undefined }[],
+  current: string,
+): { value: string; label: string; description?: string; group?: string }[] {
+  const out: { value: string; label: string; description?: string; group?: string }[] = voices.map((v) => ({
+    value: v.id,
+    label: v.label,
+    description: v.id,
+    ...(v.group !== undefined ? { group: v.group } : {}),
+  }));
+  const c = current.trim();
+  if (c !== "" && !voices.some((v) => v.id === c)) out.unshift({ value: c, label: c, description: "current voice" });
+  out.push({ value: CUSTOM_VOICE, label: "Custom voice id...", description: "type an id the server accepts" });
+  return out;
+}
+
 /** Inline warning for the Voice field: set only when a list is known and lacks the voice. */
 export function voiceWarning(voice: string, listed: readonly string[]): string | null {
   const v = voice.trim();

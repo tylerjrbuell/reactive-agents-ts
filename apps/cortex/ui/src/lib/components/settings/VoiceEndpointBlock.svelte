@@ -11,7 +11,8 @@
   import Input from "$lib/components/kit/Input.svelte";
   import Select from "$lib/components/kit/Select.svelte";
   import { modelInstallHelp, presetFor, leavesThisMachine, STT_PRESETS, TTS_PRESETS, type SttPreset, type TtsPreset } from "$lib/voice/voice-presets.js";
-  import { endpointKeyLine, reconcileVoice, voiceWarning } from "$lib/voice/voice-status.js";
+  import { VOICE_TEST_TEXT } from "$lib/voice/voice-text.js";
+  import { CUSTOM_VOICE,endpointKeyLine, reconcileVoice, voiceSelectOptions, voiceWarning } from "$lib/voice/voice-status.js";
   import { STT_KEY_ID, TTS_KEY_ID, type ServerVoiceOption } from "$lib/voice/voice-api.js";
 
   interface Props {
@@ -47,7 +48,9 @@
   const dirty = $derived(url.trim().replace(/\/+$/, "") !== cfg.baseUrl || model.trim() !== cfg.model || ("voice" in cfg && voiceName.trim() !== cfg.voice));
   const preset = $derived(presetFor(presets, url, model));
   const listedIds = $derived(voicesListed ? voices.map((o) => o.id) : []);
-  const voiceProblem = $derived(direction === "tts" ? voiceWarning(voiceName, listedIds) : null);
+  let customVoice = $state(false);
+  const voiceOptions = $derived(voiceSelectOptions(voices, voiceName));
+  const voiceProblem =$derived(direction === "tts" ? voiceWarning(voiceName, listedIds) : null);
   const cloud = $derived(url.trim() !== "" && leavesThisMachine(url));
 
   function applyPreset(id: string) {
@@ -146,7 +149,7 @@
       ...(help ? { help } : {}),
     };
     // Hearing it is the real test of a voice.
-    if (r.value.ok && direction === "tts") v.reader.play("voice-test", "Cortex voice test. This is how replies will sound.");
+    if (r.value.ok && direction === "tts") v.toggleRead("voice-test", VOICE_TEST_TEXT);
   }
 </script>
 
@@ -169,8 +172,18 @@
     {#if direction === "tts"}
       <label class="vb-l" for="vb-voice">Voice</label>
       <div class="vb-row">
-        <Input id="vb-voice" mono autocomplete="off" spellcheck={false} list="vb-voices" bind:value={voiceName} />
-        <datalist id="vb-voices">{#each voices as o (o.id)}<option value={o.id}>{o.label}</option>{/each}</datalist>
+        {#if customVoice}
+          <Input id="vb-voice" mono autocomplete="off" spellcheck={false} placeholder="voice id" bind:value={voiceName} />
+        {:else}
+          <Select
+            id="vb-voice"
+            value={voiceName}
+            options={voiceOptions}
+            searchable={true}
+            placeholder="Pick a voice"
+            onchange={(x) => (x === CUSTOM_VOICE ? (customVoice = true) : (voiceName = x))}
+          />
+        {/if}
         <Button size="sm" variant="ghost" disabled={cfg.baseUrl === ""} onclick={() => void loadVoices()}>List voices</Button>
       </div>
       {#if voiceProblem}<p class="vb-help vb-warn" role="alert" data-testid="voice-not-offered">{voiceProblem}</p>{/if}
@@ -178,7 +191,7 @@
   </div>
 
   {#if direction === "tts" && voicesListed}
-    <p class="vb-help">{voices.length} voices listed by this server for the saved model. Pick one in the Voice field.</p>
+    <p class="vb-help">{voices.length} voices for {cfg.model}. Search by name or language in the Voice field.</p>
   {/if}
   {#if preset}<p class="vb-help">{preset.hint}</p>{/if}
   {#if cloud}<p class="vb-help vb-warn">{direction === "stt" ? "Your recordings are sent to this server." : "The text to be read is sent to this server."}</p>{/if}

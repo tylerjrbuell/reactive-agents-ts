@@ -12,7 +12,7 @@ import { voiceKey, voiceRouter } from "../api/voice.js";
 import { providerKeysRouter } from "../api/provider-keys.js";
 import { ProviderKeyStore, VOICE_STT_KEY_ID, VOICE_TTS_KEY_ID } from "../services/provider-key-store.js";
 import { DEFAULT_VOICE_SETTINGS, mergeVoiceSettings, VoiceSettingsStore } from "../services/voice/voice-settings.js";
-import { audioFileName, audioUrl, listVoices, normalizeAudioBaseUrl, silentWav, speak, transcribe } from "../services/voice/openai-compatible.js";
+import { audioFileName, audioUrl, friendlyVoice, listVoices, normalizeAudioBaseUrl, silentWav, speak, transcribe } from "../services/voice/openai-compatible.js";
 
 const STT_KEY = "sk-stt-secret-0123456789ABCD";
 const TTS_KEY = "sk-tts-secret-9876543210WXYZ";
@@ -319,9 +319,9 @@ describe("speech", () => {
   it("reads Speaches' per-model voice list at /models/<model> with labels", async () => {
     await configure();
     mode = "speaches";
-    const r = (await (await call("/api/voice/voices")).json()) as { voices: Array<{ id: string; label: string }>; listed: boolean };
+    const r = (await (await call("/api/voice/voices")).json()) as { voices: Array<{ id: string; label: string; group?: string }>; listed: boolean };
     expect(r.listed).toBe(true);
-    expect(r.voices[0]).toEqual({ id: "af_heart", label: "af_heart (en-us, female)" });
+    expect(r.voices[0]).toEqual({ id: "af_heart", label: "Heart (American English, female)", group: "American English" });
     expect(seen.some((s) => s.path.startsWith("/v1/models/"))).toBe(true);
   });
 });
@@ -382,5 +382,19 @@ describe("adapter helpers", () => {
     expect(called).toBe("http://x/v1/audio/transcriptions");
     expect((await speak({ baseUrl: "http://x/v1", fetch: fetchStub }, { text: "", model: "m", voice: "v" })).ok).toBe(false);
     expect((await listVoices({ baseUrl: "http://x/v1", fetch: fetchStub })).listed).toBe(false);
+  });
+});
+
+describe("friendly voice names", () => {
+  it("decodes Kokoro-style ids and title-cases the rest", () => {
+    expect(friendlyVoice("af_heart")).toEqual({ id: "af_heart", label: "Heart (American English, female)", group: "American English" });
+    expect(friendlyVoice("bm_george").label).toBe("George (British English, male)");
+    expect(friendlyVoice("zf_xiaobei").label).toBe("Xiaobei (Mandarin Chinese, female)");
+    expect(friendlyVoice("jf_alpha").label).toBe("Alpha (Japanese, female)");
+    expect(friendlyVoice("nova")).toEqual({ id: "nova", label: "Nova", group: undefined });
+    expect(friendlyVoice("My_Custom-1.voice").label).toBe("My_Custom-1.voice");
+  });
+  it("prefers the server's language and gender", () => {
+    expect(friendlyVoice("x", { language: "en-gb", gender: "Male" }).label).toBe("X (British English, male)");
   });
 });

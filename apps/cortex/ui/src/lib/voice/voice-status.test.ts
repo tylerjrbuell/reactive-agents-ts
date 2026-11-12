@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { endpointKeyLine, reconcileVoice, sttReadiness, sttStatus, ttsReadiness, ttsStatus, voiceWarning } from "./voice-status.js";
+import { endpointKeyLine, CUSTOM_VOICE, reconcileVoice, sttReadiness, sttStatus, ttsReadiness, ttsStatus, voiceSelectOptions, voiceWarning } from "./voice-status.js";
 import { TTS_PRESETS } from "./voice-presets.js";
 import { EMPTY_VOICE_SETTINGS, parseVoiceSettings, voiceApi, type VoiceSettingsView } from "./voice-api.js";
 import type { BrowserVoiceCaps } from "./engines.js";
@@ -118,6 +118,12 @@ describe("voice reconciliation", () => {
     expect(voiceWarning("nova", listed)).toBe("nova is not offered by this model.");
     expect(voiceWarning("af_heart", listed)).toBeNull();
     expect(voiceWarning("nova", [])).toBeNull();
+  });
+  test("voice select options: grouped labels, current voice kept, custom entry last", () => {
+    const opts = voiceSelectOptions([{ id: "af_heart", label: "Heart (American English, female)", group: "American English" }], "nova");
+    expect(opts.map((o) => o.value)).toEqual(["nova", "af_heart", CUSTOM_VOICE]);
+    expect(opts[1]).toMatchObject({ label: "Heart (American English, female)", group: "American English", description: "af_heart" });
+    expect(voiceSelectOptions([{ id: "a", label: "A" }], "a").map((o) => o.value)).toEqual(["a", CUSTOM_VOICE]);
   });
   test("the Speaches preset carries a Kokoro voice", () => {
     expect(TTS_PRESETS.find((x) => x.id === "speaches")?.voice).toBe("af_heart");

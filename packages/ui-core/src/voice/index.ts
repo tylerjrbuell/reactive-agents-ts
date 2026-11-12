@@ -10,3 +10,4 @@ export * from "./read-aloud.js";
 export * from "./voice-mode.js";
 export * from "./browser-engines.js";
 export * from "./remote-engines.js";
+export * from "./speech-coordinator.js";

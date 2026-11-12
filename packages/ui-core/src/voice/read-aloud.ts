@@ -117,6 +117,13 @@ export function createReadAloud(opts: ReadAloudOptions): ReadAloud {
         set(IDLE);
         done?.();
       },
+      // Another reading (any controller) took the speaker: this one is over, silently.
+      onInterrupted: () => {
+        if (mine !== token) return;
+        token += 1;
+        handle = null;
+        set(IDLE);
+      },
       onError: (error) => {
         if (mine !== token) return;
         handle = null;

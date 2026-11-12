@@ -4,6 +4,9 @@
  */
 import type { VoiceModeEvent, VoiceWaitingOn } from "@reactive-agents/ui-core";
 
+/** What the Settings Test buttons read aloud. */
+export const VOICE_TEST_TEXT = "Cortex voice test. This is how replies will sound.";
+
 /** The slice of a chat turn these rules read. */
 export interface VoiceTurnLike {
   readonly role: "user" | "assistant";

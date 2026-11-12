@@ -6,6 +6,7 @@
  * the engines run (and are tested) without a DOM.
  */
 import { causeMessage, type SttEngine, SttError, SttHandle, SttHandlers, SttStartOptions, TtsEngine, TtsHandle, TtsHandlers, TtsSpeakOptions, VoiceInfo } from "./types.js";
+import { exclusive } from "./speech-coordinator.js";
 
 /** The slice of a `SpeechRecognition` result list the engine reads. */
 export interface RecognitionResultLike {
@@ -156,6 +157,14 @@ export function createBrowserTts(
   synth: SynthLike | undefined,
   makeUtterance: ((text: string) => UtteranceLike) | undefined,
   opts: { readonly voicesTimeoutMs?: number } = {},
+): TtsEngine {
+  return exclusive(createBrowserTtsUnguarded(synth, makeUtterance, opts));
+}
+
+function createBrowserTtsUnguarded(
+  synth: SynthLike | undefined,
+  makeUtterance: ((text: string) => UtteranceLike) | undefined,
+  opts: { readonly voicesTimeoutMs?: number },
 ): TtsEngine {
   const toInfo = (v: SynthVoiceLike): VoiceInfo => ({
     id: v.name,

@@ -12,6 +12,7 @@
  * without a DOM.
  */
 import { causeMessage, type VoiceFetch, type SttEngine, SttError, SttHandle, SttHandlers, SttStartOptions, TtsEngine, TtsError, TtsHandle, TtsHandlers, TtsSpeakOptions, VoiceInfo } from "./types.js";
+import { exclusive } from "./speech-coordinator.js";
 
 /** Root-mean-square level (0 to 1) of unsigned-byte time-domain samples (128 = silence). */
 export function rmsOf(bytes: ArrayLike<number>): number {
@@ -267,6 +268,10 @@ const CACHE_LIMIT = 6;
 
 /** Speaking through a server route: the server synthesizes, the browser plays. */
 export function createRemoteTts(deps: RemoteTtsDeps): TtsEngine {
+  return exclusive(createRemoteTtsUnguarded(deps));
+}
+
+function createRemoteTtsUnguarded(deps: RemoteTtsDeps): TtsEngine {
   type Fetched = { readonly ok: true; readonly blob: Blob } | { readonly ok: false; readonly error: TtsError };
   const cache = new Map<string, { promise: Promise<Fetched>; ctl: AbortController }>();
 

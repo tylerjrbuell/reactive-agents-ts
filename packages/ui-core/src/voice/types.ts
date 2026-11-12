@@ -86,6 +86,8 @@ export interface TtsHandlers {
   onStart?(): void;
   onEnd(): void;
   onError(error: TtsError): void;
+  /** Another utterance started and cancelled this one (only one reading speaks at a time). */
+  onInterrupted?(): void;
 }
 
 /** One utterance in flight. */

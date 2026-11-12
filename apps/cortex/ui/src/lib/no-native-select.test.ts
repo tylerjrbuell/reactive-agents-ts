@@ -42,6 +42,22 @@ describe("no native select", () => {
     expect(offenders).toEqual([]);
   });
 
+  test("no .svelte file renders a native <datalist> (it filters by the typed value and has no labels)", () => {
+    // Free-text suggestion fields that predate this guard; each should move to the kit Select
+    // (or a combobox) the way the Voice field did. The list may only shrink.
+    const legacy = [
+      "lib/components/ListField.svelte",
+      "lib/components/WorkspaceField.svelte",
+      "lib/components/agent-config/sections/JudgmentSection.svelte",
+      "lib/components/settings/VoiceSettingsPanel.svelte",
+    ];
+    const offenders = svelteFiles(SRC)
+      .filter((f) => /<datalist[\s>]/.test(markupOf(readFileSync(f, "utf8"))))
+      .map((f) => relative(SRC, f))
+      .filter((f) => !legacy.includes(f));
+    expect(offenders).toEqual([]);
+  });
+
   test("the kit Select is in place for the guard to protect", () => {
     expect(statSync(join(SRC, "lib/components/kit/Select.svelte")).isFile()).toBe(true);
   });

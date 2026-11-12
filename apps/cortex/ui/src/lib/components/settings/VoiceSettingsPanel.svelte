@@ -17,6 +17,7 @@
   import Input from "$lib/components/kit/Input.svelte";
   import SettingsRow from "$lib/components/settings/SettingsRow.svelte";
   import VoiceEndpointBlock from "$lib/components/settings/VoiceEndpointBlock.svelte";
+  import { VOICE_TEST_TEXT } from "$lib/voice/voice-text.js";
   import { ttsFor } from "$lib/voice/engines.js";
   import { sttStatus, ttsStatus, type VoiceStatusLine } from "$lib/voice/voice-status.js";
   import { isLanguageTag, LANGUAGES, RATE_STEPS, SILENCE_STEPS } from "$lib/voice/voice-prefs.js";
@@ -57,7 +58,7 @@
   }
 
   function testBrowserVoice() {
-    v.reader.play("voice-test", "Cortex voice test. This is how replies will sound.");
+    v.toggleRead("voice-test", VOICE_TEST_TEXT);
   }
   const testing = $derived($readerState.sourceId === "voice-test" && ($readerState.status === "loading" || $readerState.status === "playing"));
 </script>

@@ -228,18 +228,67 @@ export async function speak(ep: AudioEndpoint, req: SpeakRequest): Promise<Spoke
 /** One voice a server offers. */
 export interface ServerVoice {
   readonly id: string;
+  /** A friendly name, e.g. `Heart (American English, female)`. */
   readonly label: string;
+  /** The language, used to group the picker; absent when unknown. */
+  readonly group?: string | undefined;
+}
+
+/** Kokoro-style id prefixes: first letter = language, second = gender. */
+const KOKORO_LANGUAGES: Readonly<Record<string, string>> = {
+  a: "American English",
+  b: "British English",
+  e: "Spanish",
+  f: "French",
+  h: "Hindi",
+  i: "Italian",
+  j: "Japanese",
+  p: "Brazilian Portuguese",
+  z: "Mandarin Chinese",
+};
+
+const titleCase = (s: string): string =>
+  s
+    .split(/[\s_-]+/)
+    .filter((w) => w !== "")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+
+/** A language tag such as `en-us` as a name (`American English`); the tag itself when unknown. */
+function languageName(tag: string): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(tag) ?? tag;
+  } catch {
+    return tag;
+  }
+}
+
+/**
+ * The one place a voice gets its friendly name. The server's own `language` / `gender` win;
+ * otherwise a Kokoro-style id (`af_heart`: `<language><gender>_<name>`) is decoded; an
+ * unknown shape keeps its raw id (OpenAI's built-in names are just title-cased).
+ */
+export function friendlyVoice(id: string, meta: { readonly language?: string | undefined; readonly gender?: string | undefined } = {}): ServerVoice {
+  const kokoro = /^([a-z])([fm])_(.+)$/.exec(id);
+  const lang = meta.language !== undefined && meta.language !== "" ? languageName(meta.language) : kokoro ? KOKORO_LANGUAGES[kokoro[1] ?? ""] : undefined;
+  const gender = meta.gender !== undefined && meta.gender !== "" ? meta.gender.toLowerCase() : kokoro ? (kokoro[2] === "f" ? "female" : "male") : undefined;
+  const known = kokoro !== null && KOKORO_LANGUAGES[kokoro[1] ?? ""] !== undefined;
+  const base = known && kokoro ? titleCase(kokoro[3] ?? id) : /^[a-z]+$/.test(id) ? titleCase(id) : id;
+  const detail = [lang, gender].filter((x): x is string => x !== undefined && x !== "");
+  return { id, label: detail.length > 0 ? `${base} (${detail.join(", ")})` : base, group: lang };
 }
 
 const voiceFrom = (v: unknown): ServerVoice | null => {
-  if (typeof v === "string" && v !== "") return { id: v, label: v };
+  if (typeof v === "string" && v !== "") return friendlyVoice(v);
   if (typeof v === "object" && v !== null) {
     const o = v as { id?: unknown; name?: unknown; voice_id?: unknown; language?: unknown; gender?: unknown };
     const id = [o.id, o.voice_id, o.name].find((x): x is string => typeof x === "string" && x !== "");
     if (id === undefined) return null;
-    const name = typeof o.name === "string" && o.name !== "" ? o.name : id;
-    const meta = [o.language, o.gender].filter((x): x is string => typeof x === "string" && x !== "");
-    return { id, label: meta.length > 0 ? `${name} (${meta.join(", ")})` : name };
+    const str = (x: unknown): string | undefined => (typeof x === "string" && x !== "" ? x : undefined);
+    const f = friendlyVoice(id, { language: str(o.language), gender: str(o.gender) });
+    // A display name the server gives that differs from the id wins over the decoded one.
+    const given = str(o.name);
+    return given !== undefined && given !== id ? { ...f, label: f.label.replace(/^[^(]*/, `${titleCase(given)} `).trim() } : f;
   }
   return null;
 };
@@ -273,7 +322,7 @@ export async function listVoices(ep: AudioEndpoint): Promise<{ readonly voices: 
     const perModel = await fetchVoiceList(ep, modelPath);
     if (perModel.length > 0) return { voices: perModel, listed: true };
   }
-  return { voices: OPENAI_VOICES.map((id) => ({ id, label: id })), listed: false };
+  return { voices: OPENAI_VOICES.map((id) => friendlyVoice(id)), listed: false };
 }
 
 /** One second of 16 kHz mono silence as a WAV file, used to test a transcription endpoint. */

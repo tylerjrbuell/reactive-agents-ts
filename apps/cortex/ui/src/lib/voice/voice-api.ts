@@ -85,6 +85,8 @@ export interface VoiceTestResult {
 export interface ServerVoiceOption {
   readonly id: string;
   readonly label: string;
+  /** The language, used to group the picker. */
+  readonly group?: string | undefined;
 }
 
 /** Tagged result of a call. */
@@ -121,7 +123,7 @@ export function voiceApi(base: string, doFetch: VoiceFetch = (input, init) => fe
       call(doFetch, v("/voices"), { method: "GET" }, (b): { voices: ServerVoiceOption[]; listed: boolean } => {
         const list = isRecord(b) && Array.isArray(b.voices) ? b.voices : [];
         return {
-          voices: list.filter(isRecord).map((x) => ({ id: str(x.id, ""), label: str(x.label, str(x.id, "")) })).filter((x) => x.id !== ""),
+          voices: list.filter(isRecord).map((x) => ({ id: str(x.id, ""), label: str(x.label, str(x.id, "")), group: str(x.group, "") || undefined })).filter((x) => x.id !== ""),
           listed: isRecord(b) && b.listed === true,
         };
       }),
