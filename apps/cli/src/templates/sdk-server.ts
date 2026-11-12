@@ -4,7 +4,7 @@
  * Light SDK server template — generates a Bun.serve HTTP wrapper for any reactive agent.
  *
  * Endpoints:
- *   POST /chat           — send message, get JSON response
+ *   POST /chat           — send message, get JSON response (bearer RAX_API_KEY)
  *   POST /chat/stream    — send message, get SSE stream
  *   GET  /health         — health check (container probes)
  *   GET  /ready          — readiness check (returns 503 if not ready)
@@ -67,6 +67,32 @@ const agentCard = {
   defaultOutputModes: ["text/plain", "application/json"],
   skills: [],
 };
+
+// ─── Authentication ─────────────────────────────────────────────────────────
+// /chat and /chat/stream run your agent (and its tools), so they require a
+// bearer token. Set RAX_API_KEY; if it is unset a random key is generated at
+// startup and printed once to the server log. /health, /ready and the agent
+// card stay open for probes and discovery.
+
+import { randomBytes, timingSafeEqual } from "node:crypto";
+
+const API_KEY = process.env.RAX_API_KEY?.trim() || randomBytes(24).toString("hex");
+const API_KEY_GENERATED = !process.env.RAX_API_KEY?.trim();
+
+function isAuthorized(req: Request): boolean {
+  const header = req.headers.get("authorization") ?? "";
+  const presented = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  const a = Buffer.from(presented);
+  const b = Buffer.from(API_KEY);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function unauthorized(): Response {
+  return Response.json(
+    { error: "Unauthorized: send 'Authorization: Bearer <RAX_API_KEY>'" },
+    { status: 401, headers: { "www-authenticate": "Bearer" } },
+  );
+}
 
 // ─── Request Handlers ───────────────────────────────────────────────────────
 
@@ -189,22 +215,23 @@ function handleReady(): Response {
 
 const server = Bun.serve({
   port: PORT,
+  // Request bodies over 1 MiB are rejected before they are buffered.
+  maxRequestBodySize: 1024 * 1024,
   async fetch(req) {
     const url = new URL(req.url);
     const method = req.method;
 
-    // CORS preflight
-    if (method === "OPTIONS") {
-      return new Response(null, {
-        headers: {
-          "access-control-allow-origin": "*",
-          "access-control-allow-methods": "GET, POST, OPTIONS",
-          "access-control-allow-headers": "content-type, authorization",
-        },
-      });
-    }
+    // No CORS headers are sent: browsers on other origins cannot call this API.
+    // Put a gateway in front of it if a browser app must reach it.
 
     // Route
+    if (
+      method === "POST" &&
+      (url.pathname === "/chat" || url.pathname === "/chat/stream") &&
+      !isAuthorized(req)
+    ) {
+      return unauthorized();
+    }
     if (method === "GET" && url.pathname === "/health") return handleHealth();
     if (method === "GET" && url.pathname === "/ready") return handleReady();
     if (method === "GET" && url.pathname === "/.well-known/agent.json") {
@@ -229,6 +256,12 @@ try {
   console.log(\`   POST http://localhost:\${PORT}/chat/stream\`);
   console.log(\`   GET  http://localhost:\${PORT}/health\`);
   console.log(\`   GET  http://localhost:\${PORT}/.well-known/agent.json\`);
+  if (API_KEY_GENERATED) {
+    console.log("   RAX_API_KEY was not set. Generated key for this process (shown once):");
+    console.log(\`   \${API_KEY}\`);
+  } else {
+    console.log("   /chat endpoints require 'Authorization: Bearer <RAX_API_KEY>'.");
+  }
 } catch (err) {
   console.error("❌ Failed to build agent:", err);
   process.exit(1);

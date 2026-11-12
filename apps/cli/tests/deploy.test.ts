@@ -470,3 +470,14 @@ describe("Deploy — SDK scaffold keeps secrets out of the image (security M5)",
     expect(readFileSync(join(root, ".dockerignore"), "utf-8").split("\n")).toContain("**/.env*");
   });
 });
+
+describe("sdk server template security defaults", () => {
+  it("requires a bearer key on /chat routes, caps bodies and sends no wildcard CORS", async () => {
+    const { sdkServerTemplate } = await import("../src/templates/sdk-server.js");
+    const src = sdkServerTemplate("demo");
+    expect(src).toContain("isAuthorized(req)");
+    expect(src).toContain("timingSafeEqual");
+    expect(src).toContain("maxRequestBodySize");
+    expect(src).not.toContain("access-control-allow-origin");
+  });
+});

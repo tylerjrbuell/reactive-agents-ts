@@ -40,6 +40,7 @@ rax deploy down
 
 Both expose a health endpoint on port 3000 (`HEALTH_PORT`). The provider settings follow the mode, because a daemon that is stopped between requests misses its cron fires:
 
+- **SDK server security.** `/chat` and `/chat/stream` require `Authorization: Bearer <RAX_API_KEY>`. Set `RAX_API_KEY` as a secret on your platform; if it is unset the server generates a key and prints it once in its log. Request bodies are capped at 1 MiB and no CORS headers are sent. `/health`, `/ready` and the agent card stay open for probes. `rax deploy` also writes a `.dockerignore` that excludes `.git` and `.env*` from the image.
 - **Fly.io.** Daemon sets `auto_stop_machines = "off"` and `min_machines_running = 1`. SDK mode may scale to zero.
 - **Cloud Run.** Daemon adds `--min-instances=1` and `--no-cpu-throttling` so CPU stays allocated between requests.
 - **Render.** Daemon needs an always-on instance. Use the `starter` plan or higher; free web services spin down when idle.
