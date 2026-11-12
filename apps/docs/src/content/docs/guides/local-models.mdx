@@ -192,6 +192,22 @@ ignore the field. `numCtx` is also a first-class `AgentConfig` field, so it
 survives `toConfig()` / `fromJSON()` and is settable from the Cortex Studio
 agent builder.
 
+## Images, Audio and Files
+
+Ollama models take images (when `/api/show` lists `vision`). Audio and file
+parts have no Ollama wire path, so they never reach the model as media and are
+never dropped. Each becomes a text stub in place, for example
+`[audio omitted: audio/wav, 120 KB; provider has no audio input]`, and the
+provider logs one `content-part-degraded` fact with `partType` `audio` or
+`file`. An audio part that carries a `transcript` keeps it in the stub. A
+text-like file whose bytes are inline (a `data:...;base64,` uri) is inlined as
+text up to 32 KB behind a `[file: ...]` label, with a visible truncation
+marker; a binary file or a path/remote uri becomes a stub, because the
+provider layer does no storage I/O. Cloud providers map audio natively when
+the resolved model supports it (`Capability.supportsAudioIn`: Gemini and the
+OpenAI audio models); a model that is not confirmed to accept audio degrades
+the same way.
+
 ## Strategy Recommendations for Local Models
 
 Not all reasoning strategies work well on small models:

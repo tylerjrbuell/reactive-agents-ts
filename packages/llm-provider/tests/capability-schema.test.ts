@@ -48,6 +48,9 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       // Optional (2026-11-05): model API rejects `temperature` (400) — the
       // adapter omits it (claude-haiku-5-5).
       "rejectsTemperature",
+      // Optional (2026-11-12): model accepts audio input (Gemini, OpenAI audio
+      // models, Ollama probe `audio` capability).
+      "supportsAudioIn",
     ]);
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count

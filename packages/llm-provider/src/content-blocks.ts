@@ -3,6 +3,8 @@ import {
   ImagePartSchema,
   MediaSourceSchema,
   TextPartSchema,
+  type AudioPart,
+  type FilePart,
   type ImagePart,
   type MediaSource,
   type TextPart,
@@ -182,6 +184,10 @@ export type ContentBlock =
   | (TextPart & { readonly cache_control?: CacheControl })
   /** Image content */
   | (ImagePart & { readonly source: ImageSource })
+  /** Audio content (core `AudioPart`; mapped or degraded at the provider boundary) */
+  | AudioPart
+  /** File reference (core `FilePart`; inlined as text or stubbed, never sent as bytes) */
+  | FilePart
   | {
       /** Model invoking a tool */
       readonly type: "tool_use";

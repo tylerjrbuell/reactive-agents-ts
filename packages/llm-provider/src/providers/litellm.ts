@@ -23,7 +23,7 @@ import {
   type DegradedPart,
 } from "../content-parts.js";
 import {
-  OPENAI_INPUT_MODALITIES,
+  LITELLM_INPUT_MODALITIES,
   mapOpenAIMessages,
   type OpenAIMessage,
 } from "./openai-messages.js";
@@ -307,7 +307,7 @@ export const LiteLLMProviderLive = Layer.effect(
           const cap = resolveCapability("litellm", model);
           const { messages, degraded } = toLiteLLMMessages(
             request.messages,
-            resolveContentPolicy(OPENAI_INPUT_MODALITIES, cap),
+            resolveContentPolicy(LITELLM_INPUT_MODALITIES, cap),
           );
           yield* emitContentDegradations("litellm", model, degraded);
           if (request.systemPrompt) {
@@ -399,7 +399,7 @@ export const LiteLLMProviderLive = Layer.effect(
           const streamTokenField = buildTokenField(streamCap, streamAnswerBudget, streamReserve, config.thinkingOptions?.effort ?? "medium", streamHasTools);
           const streamMapped = toLiteLLMMessages(
             request.messages,
-            resolveContentPolicy(OPENAI_INPUT_MODALITIES, streamCap),
+            resolveContentPolicy(LITELLM_INPUT_MODALITIES, streamCap),
           );
           yield* emitContentDegradations("litellm", model, streamMapped.degraded);
 
@@ -651,7 +651,7 @@ export const LiteLLMProviderLive = Layer.effect(
                         },
                       ];
 
-                const wire = toLiteLLMMessages(msgs, resolveContentPolicy(OPENAI_INPUT_MODALITIES, structuredCap));
+                const wire = toLiteLLMMessages(msgs, resolveContentPolicy(LITELLM_INPUT_MODALITIES, structuredCap));
                 yield* emitContentDegradations("litellm", model, wire.degraded);
                 const completeResult = yield* Effect.tryPromise({
                   try: () =>
@@ -748,7 +748,7 @@ export const LiteLLMProviderLive = Layer.effect(
           supportsStreaming: true,
           supportsStructuredOutput: true,
           supportsLogprobs: false,
-          inputModalities: OPENAI_INPUT_MODALITIES,
+          inputModalities: LITELLM_INPUT_MODALITIES,
         } satisfies ProviderCapabilities),
     });
   }),

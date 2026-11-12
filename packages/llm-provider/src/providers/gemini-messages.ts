@@ -5,7 +5,8 @@ import {
   joinText,
   resolveContentPolicy,
   resolveParts,
-  routeImage,
+  routeMedia,
+  type AudioCapableRules,
   type ContentPolicy,
   type DegradedPart,
   type ImageWireRules,
@@ -15,15 +16,36 @@ import { relocateToolImages } from "../tool-result-images.js";
 // Gemini message conversion (moved out of gemini.ts, Plan 9 Phase 4 stage C).
 
 /** Input modalities of the Gemini generateContent wire format. */
-export const GEMINI_INPUT_MODALITIES: readonly InputModality[] = ["text", "image"];
+export const GEMINI_INPUT_MODALITIES: readonly InputModality[] = ["text", "image", "audio"];
 
 /**
  * Images ride `inlineData` parts on user and model turns. URL sources are not
  * fetched (Gemini `fileData` takes uploaded-file URIs, not arbitrary URLs), so
  * they become stubs. Images inside tool results move to a follow-up user
  * content (`relocateToolImages`), not `functionResponse.parts`.
+ *
+ * Audio rides `inlineData` on user turns: base64 only, in the formats the
+ * Gemini audio-understanding docs list (WAV, MP3, AIFF, AAC, OGG, FLAC).
  */
-export const GEMINI_IMAGE_RULES: ImageWireRules = { url: false, roles: ["user", "assistant"] };
+export const GEMINI_IMAGE_RULES: AudioCapableRules = {
+  url: false,
+  roles: ["user", "assistant"],
+  audio: {
+    roles: ["user"],
+    mediaTypes: [
+      "audio/wav",
+      "audio/x-wav",
+      "audio/mp3",
+      "audio/mpeg",
+      "audio/aiff",
+      "audio/x-aiff",
+      "audio/aac",
+      "audio/ogg",
+      "audio/flac",
+      "audio/x-flac",
+    ],
+  },
+};
 
 /**
  * Per-request content policy for a Gemini model (provider declaration plus the
@@ -108,13 +130,14 @@ export const toGeminiContents = (
               response: { content: block.content },
             },
           });
-        } else if (block.type === "image") {
-          const route = routeImage(block.source, msg.role, policy, GEMINI_IMAGE_RULES);
-          if (route.kind === "send") {
-            parts.push({ inlineData: { mimeType: route.source.media_type, data: route.source.data } });
-          } else {
+        } else {
+          // image, audio and file blocks
+          const route = routeMedia(block, msg.role, policy, GEMINI_IMAGE_RULES);
+          if (route.kind === "text") {
             parts.push({ text: route.text });
-            degraded.push(route.degraded);
+            if (route.degraded !== undefined) degraded.push(route.degraded);
+          } else {
+            parts.push({ inlineData: { mimeType: route.source.media_type, data: route.source.data } });
           }
         }
       }

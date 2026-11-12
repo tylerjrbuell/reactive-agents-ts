@@ -2,6 +2,7 @@ import type { InputModality } from "../capabilities.js";
 import type { ContentBlock, LLMMessage } from "../types.js";
 import {
   IMAGES_ALLOWED,
+  type AudioCapableRules,
   joinText,
   resolveParts,
   type ContentPolicy,
@@ -16,10 +17,32 @@ import { relocateToolImages } from "../tool-result-images.js";
 // `mapOpenAIMessages` whole, assistant `tool_calls` included.
 
 /** Input modalities of the OpenAI-compatible Chat Completions wire format. */
-export const OPENAI_INPUT_MODALITIES: readonly InputModality[] = ["text", "image"];
+export const OPENAI_INPUT_MODALITIES: readonly InputModality[] = ["text", "image", "audio"];
 
-/** Images ride `image_url` parts on user messages; URLs and data URLs both work. */
-export const OPENAI_IMAGE_RULES: ImageWireRules = { url: true, roles: ["user"] };
+/**
+ * Input modalities LiteLLM declares. It proxies arbitrary hosts behind one
+ * model string, so audio is not declared: audio parts degrade deterministically
+ * rather than risk a proxied model that rejects `input_audio`.
+ */
+export const LITELLM_INPUT_MODALITIES: readonly InputModality[] = ["text", "image"];
+
+/**
+ * Images ride `image_url` parts on user messages; URLs and data URLs both work.
+ * Audio rides `input_audio` parts on user messages: base64 only, wav or mp3
+ * only. Whether a model takes it is the capability's `supportsAudioIn`.
+ */
+export const OPENAI_IMAGE_RULES: AudioCapableRules = {
+  url: true,
+  roles: ["user"],
+  audio: {
+    roles: ["user"],
+    mediaTypes: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave", "audio/mpeg", "audio/mp3"],
+  },
+};
+
+/** OpenAI `input_audio.format` for an accepted audio MIME type. */
+const openAIAudioFormat = (mediaType: string): "wav" | "mp3" =>
+  /mpeg|mp3/i.test(mediaType) ? "mp3" : "wav";
 
 type OpenAIToolCallParam = {
   id: string;
@@ -30,7 +53,8 @@ type OpenAIToolCallParam = {
 /** One part of a multimodal OpenAI user message. */
 export type OpenAIUserPart =
   | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
+  | { type: "image_url"; image_url: { url: string } }
+  | { type: "input_audio"; input_audio: { data: string; format: "wav" | "mp3" } };
 
 export type OpenAIMessage =
   | { role: "system"; content: string }
@@ -45,16 +69,18 @@ export type OpenAIMessage =
  * @param parts — routed parts of one user message
  */
 export const toOpenAIUserContent = (parts: readonly ResolvedPart[]): string | OpenAIUserPart[] =>
-  parts.some((p) => p.kind === "image")
+  parts.some((p) => p.kind !== "text")
     ? parts.map((p): OpenAIUserPart =>
         p.kind === "text"
           ? { type: "text", text: p.text }
-          : {
-              type: "image_url",
-              image_url: {
-                url: p.source.type === "url" ? p.source.data : `data:${p.source.media_type};base64,${p.source.data}`,
+          : p.kind === "audio"
+            ? { type: "input_audio", input_audio: { data: p.source.data, format: openAIAudioFormat(p.source.media_type) } }
+            : {
+                type: "image_url",
+                image_url: {
+                  url: p.source.type === "url" ? p.source.data : `data:${p.source.media_type};base64,${p.source.data}`,
+                },
               },
-            },
       )
     : joinText(parts);
 

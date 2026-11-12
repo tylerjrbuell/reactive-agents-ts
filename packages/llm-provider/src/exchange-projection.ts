@@ -48,19 +48,24 @@ export function messageContentToString(content: LLMMessage["content"]): string {
             text?: string;
             name?: string;
             source?: { media_type?: unknown; data?: unknown };
+            ref?: { media_type?: unknown; uri?: unknown };
           };
           if (blk.type === "text" && typeof blk.text === "string") return blk.text;
           if (blk.type === "tool_use") return `[tool_use:${blk.name ?? "?"}]`;
           if (blk.type === "tool_result") return `[tool_result]`;
           if (
-            blk.type === "image" &&
+            (blk.type === "image" || blk.type === "audio") &&
             typeof blk.source?.media_type === "string" &&
             typeof blk.source.data === "string"
           ) {
-            return mediaPlaceholder("image", {
+            return mediaPlaceholder(blk.type, {
               media_type: blk.source.media_type,
               data: blk.source.data,
             });
+          }
+          // A file part is keyed by its uri (never inline bytes in the record).
+          if (blk.type === "file" && typeof blk.ref?.media_type === "string" && typeof blk.ref.uri === "string") {
+            return mediaPlaceholder("file", { media_type: blk.ref.media_type, data: blk.ref.uri });
           }
         }
         return "";

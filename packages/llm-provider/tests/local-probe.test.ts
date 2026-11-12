@@ -68,6 +68,8 @@ describe("Ollama capability probe (S2.4)", () => {
       // (local GPU memory is the real constraint; users override per-request).
       expect(cap!.recommendedNumCtx).toBe(32_768);
       expect(cap!.supportsVision).toBe(true);
+      // /api/show lists "audio" for gemma4: the probe row carries it.
+      expect(cap!.supportsAudioIn).toBe(true);
       expect(cap!.supportsThinkingMode).toBe(true);
       expect(cap!.supportsStreamingToolCalls).toBe(true);
       expect(cap!.toolCallDialect).toBe("native-fc");

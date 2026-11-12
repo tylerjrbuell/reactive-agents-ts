@@ -192,6 +192,7 @@ function showResponseToCapability(
     tokenizerFamily: tokenizerFamilyFromGgufFamily(show.details?.family),
     supportsPromptCaching: false,
     supportsVision: caps.has("vision"),
+    supportsAudioIn: caps.has("audio"),
     supportsThinkingMode: caps.has("thinking"),
     supportsStreamingToolCalls: caps.has("tools"),
     toolCallDialect: caps.has("tools") ? "native-fc" : "none",

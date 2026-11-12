@@ -1,6 +1,6 @@
 import type { InputModality } from "../capabilities.js";
 import type { CacheControl, ContentBlock, ImageSource, LLMMessage } from "../types.js";
-import { routeImage, type ContentPolicy, type DegradedPart, type ImageWireRules } from "../content-parts.js";
+import { routeMedia, type ContentPolicy, type DegradedPart, type ImageWireRules, type MediaBlock } from "../content-parts.js";
 
 // Anthropic Messages API conversion (moved out of anthropic.ts, Plan 9 Phase 4
 // stage E provider side).
@@ -52,18 +52,18 @@ export const toAnthropicMessages = (
   policy: ContentPolicy,
 ): { readonly messages: AnthropicMessage[]; readonly degraded: readonly DegradedPart[] } => {
   const degraded: DegradedPart[] = [];
-  const image = (
-    block: Extract<ContentBlock, { readonly type: "image" }>,
-    role: LLMMessage["role"],
-  ): AnthropicTextBlock | AnthropicImageBlock => {
-    const route = routeImage(block.source, role, policy, ANTHROPIC_IMAGE_RULES);
-    if (route.kind === "stub") {
-      degraded.push(route.degraded);
+  // Images map natively; audio and file blocks have no Anthropic wire slot
+  // (rules carry no audio slot), so they always come back as text.
+  const image = (block: MediaBlock, role: LLMMessage["role"]): AnthropicTextBlock | AnthropicImageBlock => {
+    const route = routeMedia(block, role, policy, ANTHROPIC_IMAGE_RULES);
+    if (route.kind === "text") {
+      if (route.degraded !== undefined) degraded.push(route.degraded);
       return { type: "text", text: route.text };
     }
     // ANTHROPIC_IMAGE_RULES.url is false, so a sent source is always base64.
     return { type: "image", source: { type: "base64", media_type: route.source.media_type, data: route.source.data } };
   };
+  const isMedia = (b: ContentBlock): b is MediaBlock => b.type === "image" || b.type === "audio" || b.type === "file";
 
   const out = messages.flatMap((m): AnthropicMessage[] => {
     if (m.role === "system") return [];
@@ -71,12 +71,12 @@ export const toAnthropicMessages = (
       const content =
         typeof m.content === "string"
           ? m.content
-          : m.content.map((b) => (b.type === "image" ? image(b, "tool") : b));
+          : m.content.map((b) => (isMedia(b) ? image(b, "tool") : b));
       return [{ role: "user", content: [{ type: "tool_result", tool_use_id: m.toolCallId, content }] }];
     }
     if (typeof m.content === "string") return [{ role: m.role, content: m.content }];
     const role = m.role;
-    return [{ role, content: m.content.map((b): AnthropicContentBlock => (b.type === "image" ? image(b, role) : b)) }];
+    return [{ role, content: m.content.map((b): AnthropicContentBlock => (isMedia(b) ? image(b, role) : b)) }];
   });
   return { messages: out, degraded };
 };

@@ -144,6 +144,14 @@ export const CapabilitySchema = Schema.Struct({
   /** True when the model accepts image inputs in addition to text. */
   supportsVision: Schema.Boolean,
 
+  /**
+   * True when the model accepts audio inputs. Optional: absent means "not
+   * known to accept audio". Audio is sent only when the row is authoritative
+   * (`probe` or `static-table`) AND this is true; every other case degrades
+   * the audio part to a stub or its transcript (content-parts.ts).
+   */
+  supportsAudioIn: Schema.optional(Schema.Boolean),
+
   /** True when the model exposes a "thinking" / reasoning mode (e.g. Claude). */
   supportsThinkingMode: Schema.Boolean,
 
@@ -349,6 +357,39 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // Audio-input chat models (input_audio parts; wav/mp3). No image input.
+  "openai/gpt-4o-audio-preview": {
+    provider: "openai",
+    model: "gpt-4o-audio-preview",
+    tier: "large",
+    maxContextTokens: 128_000,
+    recommendedNumCtx: 128_000,
+    maxOutputTokens: 16_384,
+    tokenizerFamily: "tiktoken-cl100k",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsAudioIn: true,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "openai/gpt-audio": {
+    provider: "openai",
+    model: "gpt-audio",
+    tier: "large",
+    maxContextTokens: 128_000,
+    recommendedNumCtx: 128_000,
+    maxOutputTokens: 16_384,
+    tokenizerFamily: "tiktoken-cl100k",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsAudioIn: true,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
   "openai/gpt-4o": {
     provider: "openai",
     model: "gpt-4o",
@@ -405,6 +446,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
   "gemini/gemini-2.5-pro": {
     provider: "gemini",
     model: "gemini-2.5-pro",
+    supportsAudioIn: true,
     tier: "frontier",
     maxContextTokens: 1_000_000,
     recommendedNumCtx: 1_000_000,
@@ -420,6 +462,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
   "gemini/gemini-3.5-flash": {
     provider: "gemini",
     model: "gemini-3.5-flash",
+    supportsAudioIn: true,
     tier: "large",
     maxContextTokens: 1_000_000,
     recommendedNumCtx: 1_000_000,
@@ -435,6 +478,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
   "gemini/gemini-2.5-flash": {
     provider: "gemini",
     model: "gemini-2.5-flash",
+    supportsAudioIn: true,
     tier: "mid",
     maxContextTokens: 1_000_000,
     recommendedNumCtx: 1_000_000,
@@ -450,6 +494,7 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
   "gemini/gemini-2.5-flash-lite": {
     provider: "gemini",
     model: "gemini-2.5-flash-lite",
+    supportsAudioIn: true,
     tier: "mid",
     maxContextTokens: 1_000_000,
     recommendedNumCtx: 1_000_000,
