@@ -6,7 +6,7 @@
 // loopback / link-local / private / metadata targets — including hostnames that
 // RESOLVE to a private address (DNS rebinding) — and non-http schemes.
 import { describe, test, expect } from "bun:test";
-import { assertPublicUrl, isPrivateOrReservedIp } from "../src/assert-public-url.js";
+import { assertPublicUrl, isMetadataOrLinkLocalIp, isPrivateOrReservedIp } from "../src/assert-public-url.js";
 
 // Deterministic resolver so tests never touch real DNS.
 const resolveTo = (addrs: string[]) => async () => addrs;
@@ -32,6 +32,80 @@ describe("F6 — isPrivateOrReservedIp", () => {
   ])("%s → %p", (ip, expected) => {
     expect(isPrivateOrReservedIp(ip as string)).toBe(expected);
   });
+});
+
+describe("H3 — IPv6 embedded-IPv4 forms", () => {
+  test.each([
+    ["::ffff:a9fe:a9fe", true], // hex-normalised mapped metadata
+    ["::ffff:7f00:1", true],
+    ["::ffff:a00:1", true],
+    ["::127.0.0.1", true],
+    ["::7f00:1", true],
+    ["64:ff9b::a9fe:a9fe", true],
+    ["64:ff9b::7f00:1", true],
+    ["2002:a9fe:a9fe::1", true], // 6to4 of 169.254.169.254
+    ["ff02::1", true],
+    ["fe90::1", true], // fe80::/10 beyond fe80
+    ["not:an:ip", true], // fail closed
+    ["::ffff:808:808", false], // mapped 8.8.8.8
+    ["64:ff9b::808:808", false],
+    ["2606:4700::1111", false],
+  ])("isPrivateOrReservedIp(%s) -> %p", (ip, expected) => {
+    expect(isPrivateOrReservedIp(ip as string)).toBe(expected);
+  });
+
+  test.each([
+    ["::ffff:a9fe:a9fe", true],
+    ["::ffff:169.254.169.254", true],
+    ["64:ff9b::a9fe:a9fe", true],
+    ["::a9fe:a9fe", true],
+    ["fe80::1", true],
+    ["febf::1", true],
+    ["fd00:ec2::254", true],
+    ["100.100.100.200", true],
+    ["::ffff:7f00:1", false], // loopback is private, not metadata
+    ["8.8.8.8", false],
+  ])("isMetadataOrLinkLocalIp(%s) -> %p", (ip, expected) => {
+    expect(isMetadataOrLinkLocalIp(ip as string)).toBe(expected);
+  });
+
+  test.each([
+    "http://[::ffff:169.254.169.254]/",
+    "http://[::ffff:127.0.0.1]/",
+    "http://[::ffff:10.0.0.1]/",
+    "http://[::127.0.0.1]/",
+    "http://[64:ff9b::a9fe:a9fe]/",
+    "http://localhost./",
+    "http://foo.localhost/",
+    "http://metadata.google.internal./",
+  ])("assertPublicUrl blocks %s", async (u) => {
+    await expect(assertPublicUrl(u as string, { resolve: resolveTo(["93.184.216.34"]) })).rejects.toThrow();
+  }, 15000);
+
+  test.each([
+    "http://[::ffff:169.254.169.254]/",
+    "http://[64:ff9b::a9fe:a9fe]/",
+    "http://[::a9fe:a9fe]/",
+    "http://[fd00:ec2::254]/",
+    "http://100.100.100.200/",
+  ])("assertPublicUrl blocks metadata %s even with allowPrivate", async (u) => {
+    await expect(assertPublicUrl(u as string, { allowPrivate: true })).rejects.toThrow(/metadata|link-local/i);
+  }, 15000);
+
+  test("allowPrivate still permits mapped loopback", async () => {
+    const url = await assertPublicUrl("http://[::ffff:127.0.0.1]:8080/", { allowPrivate: true });
+    expect(url.port).toBe("8080");
+  }, 15000);
+
+  test("allows public mapped IPv6 literal", async () => {
+    await assertPublicUrl("http://[::ffff:8.8.8.8]/");
+  }, 15000);
+
+  test("blocks hostname resolving to a mapped private address", async () => {
+    await expect(
+      assertPublicUrl("http://evil.example.com/", { resolve: resolveTo(["::ffff:a00:1"]) }),
+    ).rejects.toThrow();
+  }, 15000);
 });
 
 describe("F6 — assertPublicUrl", () => {
