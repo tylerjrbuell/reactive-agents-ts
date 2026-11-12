@@ -225,6 +225,8 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     if (to?.maxCallsPerTool !== undefined) t["maxCallsPerTool"] = { ...to.maxCallsPerTool };
     if (to?.workspace !== undefined) t["workspace"] = to.workspace;
     if (to?.disclosure !== undefined) t["disclosure"] = to.disclosure;
+    // Providers only: API keys are runtime-only and never serialized.
+    if (to?.webSearch?.providers !== undefined) t["webSearch"] = { providers: [...to.webSearch.providers] };
     config["tools"] = t;
   }
 

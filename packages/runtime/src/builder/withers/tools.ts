@@ -75,6 +75,7 @@ const TOOLS_OPTION_KEYS: Readonly<Record<keyof ToolsOptions, true>> = {
   riskLevels: true,
   maxCallsPerTool: true,
   workspace: true,
+  webSearch: true,
 };
 
 /**

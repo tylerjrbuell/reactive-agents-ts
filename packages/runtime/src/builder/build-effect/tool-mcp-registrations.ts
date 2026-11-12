@@ -40,6 +40,7 @@ import {
 } from "./local-agent-tools.js";
 import { buildToolInitLayer } from "./tool-init-layer.js";
 import { approvalCommandsOf } from "./approval-autofeed.js";
+import { webSearchRegistration } from "./web-search-registration.js";
 import type { ProviderName } from "../types.js";
 
 /**
@@ -99,8 +100,11 @@ export const buildToolMcpRegistrations = (
     const shellPrograms = builtinSelectionFor(deps.toolsOptions, deps.requiredTools, own).shellPrograms;
     // An allow-list naming a preset but not shell-execute narrows the shell to it.
     const allowedPrograms = allowedShellPrograms(deps.toolsOptions, own);
+    // Per-agent web-search keys/providers replace the default handler.
+    const webSearchReg = webSearchRegistration(deps.toolsOptions, deps.requiredTools);
 
     if (
+      webSearchReg !== undefined ||
       deps.agentTools.length > 0 ||
       deps.allowDynamicSubAgents ||
       deps.mcpServers.length > 0 ||
@@ -126,6 +130,7 @@ export const buildToolMcpRegistrations = (
         ) => Effect.Effect<unknown, Error>;
       };
       const registrations: RegEntry[] = [];
+      if (webSearchReg !== undefined) registrations.push(webSearchReg);
 
       // The parent's safety rails, built once and handed to both sub-agent kinds.
       const parentRails: ParentSafetyRails = {

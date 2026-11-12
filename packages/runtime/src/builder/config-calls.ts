@@ -225,6 +225,7 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
           maxCallsPerTool: t?.maxCallsPerTool,
           workspace: t?.workspace,
           disclosure: t?.disclosure,
+          webSearch: t?.webSearch,
         }),
       ),
     );

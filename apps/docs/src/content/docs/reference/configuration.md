@@ -282,6 +282,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `tools.maxCallsPerTool` | `object` | no |  |
 | `tools.riskLevels` | `object` | no |  |
 | `tools.terminal` | `boolean` \| `object` | no |  |
+| `tools.webSearch.providers` | `array` | no |  |
 | `tools.workspace` | `string` | no |  |
 | `userInteraction` | `boolean` \| `object` | no |  |
 | `verification.factDecomposition` | `boolean` | no |  |

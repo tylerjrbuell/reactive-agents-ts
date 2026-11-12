@@ -6,6 +6,7 @@
  * via agentConfigToBuilder.
  */
 import { Schema } from "effect";
+import type { WebSearchConfig } from "@reactive-agents/tools";
 import { ReasoningStrategy } from "@reactive-agents/core";
 import { LLMProviderType } from "@reactive-agents/llm-provider";
 import { RouteSpec } from "@reactive-agents/channels";
@@ -321,6 +322,27 @@ export const ToolsConfigSchema = Schema.Struct({
    * Default: undefined (file tools use `process.cwd()`; `shell-execute` uses a fresh /tmp sandbox dir).
    */
   workspace: Schema.optional(Schema.String),
+  /**
+   * Web-search backend order for the `web-search` built-in: an ordered subset
+   * of `tavily`, `brave`, `serper`, `keenable`, `duckduckgo`. A provider left
+   * out is never tried. API keys are NOT part of the serialized config: pass
+   * them in code with `.withTools({ webSearch: { apiKeys } })` (see
+   * `WebSearchOptionField`).
+   *
+   * @example
+   * ```typescript
+   * agent.withTools({ builtins: ["web-search"], webSearch: { providers: ["tavily", "duckduckgo"] } })
+   * ```
+   *
+   * Default: undefined (full chain: tavily, brave, serper, keenable, duckduckgo; keys from env vars).
+   */
+  webSearch: Schema.optional(
+    Schema.Struct({
+      providers: Schema.optional(
+        Schema.Array(Schema.Literal("tavily", "brave", "serper", "keenable", "duckduckgo")),
+      ),
+    }),
+  ),
 });
 
 export const GuardrailsConfigSchema = Schema.Struct({
@@ -887,6 +909,16 @@ export type AgentConfig = Schema.Schema.Type<typeof AgentConfigSchema>;
 // drop. Code-only option fields (functions/streams/secrets) are appended to the
 // `XOptions` interface and descriptor-marked `overlay`.
 export type ToolsConfig = Schema.Schema.Type<typeof ToolsConfigSchema>;
+
+/**
+ * The `webSearch` option of `.withTools()` in code: the serializable
+ * `providers` order plus runtime-only `apiKeys` (plain strings or `Redacted`).
+ * Keys are per agent and win over environment variables; they are never
+ * written to `toConfig()`, JSON, traces or tool results.
+ */
+export interface WebSearchOptionField {
+  readonly webSearch?: WebSearchConfig;
+}
 export type MemoryConfig = Schema.Schema.Type<typeof MemoryConfigSchema>;
 export type VerificationConfig = Schema.Schema.Type<typeof VerificationConfigSchema>;
 export type ObservabilityConfig = Schema.Schema.Type<typeof ObservabilityConfigSchema>;

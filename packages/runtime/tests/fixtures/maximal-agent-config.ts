@@ -116,6 +116,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
     disclosure: "discover",
     // Must name an existing directory (validated by .withTools()); stored absolute.
     workspace: tmpdir(),
+    webSearch: { providers: ["tavily", "duckduckgo"] },
   },
   guardrails: {
     injection: true,
