@@ -44,7 +44,8 @@ export class TriggerRegistry {
       case "slash_command":
         return msg.content.startsWith(`/${match.command}`);
       case "mention":
-        return /(@bot|@agent)/i.test(msg.content);
+        // `mentionsSelf` is resolved by the adapter (true platform mention); the regex is the legacy fallback.
+        return msg.metadata["mentionsSelf"] === true || /(@bot|@agent)/i.test(msg.content);
       case "reaction":
         return false;
       case "webhook":

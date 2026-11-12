@@ -14,6 +14,7 @@ describe("channels integration (package-local)", () => {
     const outbound: string[] = [];
     const webhook = new WebhookChannelAdapter({
       id: "int-hook",
+      allowUnsigned: true,
       platform: "telegram-bot",
       onResponse: async (_t, c) => {
         outbound.push(c.text);
@@ -44,6 +45,9 @@ describe("channels integration (package-local)", () => {
         headers: {},
       }),
     );
+    // Ingress is acknowledged once queued; the reply is produced by the inbound consumer.
+    for (let i = 0; i < 200 && outbound.length === 0; i++) await new Promise((r) => setTimeout(r, 5));
     expect(outbound).toEqual(["ACK:hello world"]);
+    await Effect.runPromise(svc.shutdown());
   });
 });

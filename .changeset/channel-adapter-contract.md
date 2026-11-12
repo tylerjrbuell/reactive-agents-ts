@@ -1,0 +1,7 @@
+---
+"@reactive-agents/channels": minor
+---
+
+`@reactive-agents/channels` now defines one canonical `ChannelAdapter` contract (`InboundEnvelope`, `OutboundMessage`, `DeliveryReceipt`, typed `ChannelError` kinds, `ChannelCapabilities`, `ConnectionState`) with shared `withReconnect`, `makeOutboundRateLimiter` and `makeInboundDedupe` combinators and a conformance suite every adapter must pass. `ChannelService` consumes adapters through it: replies are sent by the service itself, `ChannelMessageSent` carries the platform's real message id and is no longer published when the send fails, failed sends are counted in `status()` and published as a `ChannelDeliveryFailed` event, `deliver()` returns a receipt or a typed error, echoes are dropped, and `status().adapters[].connected` reflects the adapter's real connection state. The legacy `MessageChannel` shape is deprecated but still accepted.
+
+`WebhookChannelAdapter` is now fail-closed: with no `secret` every request is rejected unless you pass `allowUnsigned: true` (local development only). Signed requests need an `x-channels-timestamp` header and the signature is `HMAC-SHA256(secret, "<timestamp>.<body>")`, with a 5 minute replay window; repeated message ids are delivered once; attachments and `replyTo` are normalized; `secret` accepts `Redacted`. A request before the adapter is started now fails with `not_started` instead of being dropped. `Attachment.binary.data` is now a `Uint8Array`.

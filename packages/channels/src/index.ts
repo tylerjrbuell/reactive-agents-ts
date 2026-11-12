@@ -5,6 +5,8 @@
  */
 
 export * from "./errors.js";
+export * from "./adapter.js";
+export * from "./combinators.js";
 export * from "./types.js";
 export * from "./services/trigger-registry.js";
 export * from "./services/session-bridge.js";

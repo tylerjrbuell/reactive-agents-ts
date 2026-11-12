@@ -32,9 +32,12 @@ transports — they are **not** the default path this package optimizes for.
 
 ## What this package provides
 
-- **`MessageChannel` interface** — transport contract (`connect`, `disconnect`, `sendMessage`,
-  `onMessage`).
-- **`WebhookChannelAdapter`** — drop-in HTTPS webhook adapter with optional HMAC verification.
+- **`ChannelAdapter` contract** — one interface for every platform: backpressured `inbound`
+  stream of `InboundEnvelope`, `send` returning a `DeliveryReceipt`, typed `ChannelError`s,
+  `ConnectionState`. Shared combinators: `withReconnect`, `makeOutboundRateLimiter`,
+  `makeInboundDedupe`. Conformance suite: `tests/conformance/`.
+- **`MessageChannel` interface** — legacy transport contract (deprecated; still accepted).
+- **`WebhookChannelAdapter`** — HTTPS webhook adapter (fail-closed HMAC with replay window).
 - **`TriggerRegistry`** — match inbound messages against `TriggerDefinition`s (regex, prefix,
   predicate) and pick which agent + system prompt to run.
 - **`SessionBridge`** — owns the `(platform, senderId)` → `Session` mapping and merges trigger
@@ -145,14 +148,18 @@ import { WebhookChannelAdapter } from "@reactive-agents/channels";
 const adapter = new WebhookChannelAdapter({
   id: "github-issues",
   platform: "github",
-  port: 3002,
-  path: "/github",
-  secret: process.env.GITHUB_WEBHOOK_SECRET, // HMAC-SHA256
-  parse: (body, headers) => {
-    // return InboundMessage | null
+  secret: process.env.GITHUB_WEBHOOK_SECRET, // required: HMAC-SHA256 over "<timestamp>.<body>"
+  onResponse: async (target, content) => {
+    // deliver the reply; throw an error with `status` / `retryAfterMs` for typed failures
   },
 });
+
+// Your HTTP server calls adapter.handleRequest({ body, headers }).
 ```
+
+It implements the canonical `ChannelAdapter` contract (see `src/adapter.ts`) and the legacy
+`MessageChannel` shape. Requests without a valid `x-channels-signature` + `x-channels-timestamp`
+are rejected; set `allowUnsigned: true` only for local development.
 
 For full GitHub event semantics (signature verification, action filtering), prefer
 `createGitHubAdapter` from `@reactive-agents/gateway`.

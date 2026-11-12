@@ -91,6 +91,11 @@ export class SessionBridge {
     });
   }
 
+  /** Number of live chat sessions held. */
+  size(): number {
+    return this.chatByKey.size;
+  }
+
   release(identity: ExternalIdentity, channelId: string): Effect.Effect<void, never> {
     const key = this.compositeKey(identity, channelId);
     this.chatByKey.delete(key);

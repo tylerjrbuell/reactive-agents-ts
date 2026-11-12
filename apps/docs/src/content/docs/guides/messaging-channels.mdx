@@ -297,6 +297,47 @@ Always enable `.withKillSwitch()` for autonomous messaging agents. This provides
 - `agent.stop(reason)` — graceful shutdown at next phase boundary
 - `agent.terminate(reason)` — immediate halt
 
+## The Channel Adapter Contract
+
+The Signal and Telegram setups above are MCP servers: the agent reads and replies by calling tools, so delivery is whatever the model decides to do. `@reactive-agents/channels` defines the replacement: one `ChannelAdapter` contract every platform implements. A native Signal adapter and a Telegram Bot API adapter are being built against it; today only the webhook adapter ships on the new contract.
+
+An adapter owns its platform (inbound, outbound, identity, receipts, reconnect). The gateway only sees these shapes:
+
+| Shape | What it carries |
+|-------|-----------------|
+| `InboundEnvelope` | platform message `id` (idempotency key), `conversation` (`channelId`, `threadId?`, `isGroup`), `sender` (`platform`, `userId`), `text`, `attachments` (`Uint8Array` or url), `replyTo`, `mentionsSelf`, `isEcho`, `receivedAt` |
+| `OutboundMessage` | `conversation`, `text`, `format?`, `attachments?`, `replyTo?` |
+| `DeliveryReceipt` | the platform's real `messageId`, `status` (`sent`, `queued`, `delivered`), `sentAt` |
+| `ChannelError` | `kind` (`auth`, `rate_limited`, `not_found`, `forbidden`, `too_large`, `unsupported`, `network`, `unknown`), `retryable`, `retryAfterMs?` |
+| `ConnectionState` | `connecting`, `connected`, `reconnecting`, `disconnected`, `failed` |
+
+`ChannelService` consumes the adapter's backpressured `inbound` stream, drops echoes, applies access control keyed on `platform:userId`, runs the trigger and session, and sends the reply itself through `adapter.send`. That changes three things compared with the MCP path:
+
+- **Receipts.** `ChannelMessageSent` is published only after a successful send and carries the platform's real message id.
+- **Typed failures.** A failed send is counted in `status()` (`deliveryFailures`, `lastError`) and published as a `ChannelDeliveryFailed` event (currently a `Custom` event with that `type` until a dedicated core event lands). `channelService.deliver(adapterId, message)` returns the receipt or fails with a `ChannelError`, so a workflow can branch on `rate_limited` or `auth`. The raw platform error is kept in `cause` and never published, because it can contain URLs and tokens.
+- **Honest status.** `status().adapters[].connected` reflects the adapter's reported `ConnectionState`.
+
+### WebhookChannelAdapter is fail-closed
+
+Requests are accepted only when signed:
+
+```text
+x-channels-timestamp: <epoch seconds or milliseconds>
+x-channels-signature: hex(HMAC-SHA256(secret, "<timestamp>.<body>"))
+```
+
+A timestamp outside `replayWindowMs` (default 5 minutes) is rejected, and a repeated message id is delivered once. With no `secret`, every request is rejected (`missing_secret`) unless you pass `allowUnsigned: true`, which is for local development only. `secret` accepts a plain string or an Effect `Redacted`. Before anything consumes inbound (`start()` or a legacy `onMessage` handler), a request fails with `not_started` instead of being dropped.
+
+### Writing an adapter
+
+Implement `ChannelAdapter`, reuse the shared combinators (`withReconnect`, `makeOutboundRateLimiter`, `makeInboundDedupe`, `makeConnectionState`, `classifyChannelFailure`), and run the conformance suite from `packages/channels/tests/conformance/`:
+
+```text
+runAdapterConformance("MyAdapter", makeMyHarness)
+```
+
+You supply a fake platform (`AdapterHarness`) with no network and no tokens. The suite checks inbound normalization, idempotency, echo handling, group and thread identity, attachments, receipts, typed errors, secret redaction, namespaced identity, honest state, backpressure, outbound rate limiting and reconnect.
+
 ## Troubleshooting
 
 ### Signal registration fails

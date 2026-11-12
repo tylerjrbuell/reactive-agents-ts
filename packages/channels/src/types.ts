@@ -1,5 +1,6 @@
 import type { Effect } from "effect";
-import type { ChannelConnectionError, ChannelSendError } from "./errors.js";
+import type { ConnectionState } from "./adapter.js";
+import type { ChannelConnectionError, ChannelError, ChannelSendError } from "./errors.js";
 
 /**
  * External messaging and webhook types for the channels layer.
@@ -12,6 +13,12 @@ import type { ChannelConnectionError, ChannelSendError } from "./errors.js";
 
 // ── MessageChannel — Bi-Directional Transport ─────────────────────────────
 
+/**
+ * Legacy bi-directional transport.
+ * @deprecated New adapters implement `ChannelAdapter` (see `./adapter.ts`), which adds typed
+ * delivery receipts, honest connection state and a backpressured inbound stream.
+ * `ChannelService.registerAdapter` still accepts this shape.
+ */
 export interface MessageChannel {
   readonly id: string;
   connect(): Effect.Effect<void, ChannelConnectionError>;
@@ -26,6 +33,10 @@ export interface ChannelSubscription {
 
 // ── Inbound Message ───────────────────────────────────────────────────────
 
+/**
+ * Normalized inbound message as read by triggers and the session bridge.
+ * Adapters emit `InboundEnvelope`; `ChannelService` converts it to this shape.
+ */
 export interface InboundMessage {
   readonly id: string;
   /**
@@ -82,9 +93,10 @@ export type Attachment =
       readonly type: "binary";
       readonly filename: string;
       readonly contentType: string;
-      readonly data: Buffer;
+      readonly data: Uint8Array;
     };
 
+/** @deprecated Use `DeliveryReceipt`. */
 export interface SendResult {
   readonly messageId: string;
   readonly timestamp: Date;
@@ -167,12 +179,21 @@ export interface ActiveSession {
 
 export interface AdapterInfo {
   readonly id: string;
+  /** True only when the adapter reports `ConnectionState.status === "connected"`. */
   readonly connected: boolean;
+  /** @deprecated Always 0; use {@link ChannelStatus.activeSessions}. */
   readonly sessionsActive: number;
+  /** Latest reported connection state. */
+  readonly state: ConnectionState;
+  /** Outbound sends that failed since registration (each also published as a delivery-failed event). */
+  readonly deliveryFailures: number;
+  /** Most recent delivery failure, if any. */
+  readonly lastError?: ChannelError;
 }
 
 export interface ChannelStatus {
   readonly adapters: readonly AdapterInfo[];
+  /** Live chat sessions held by the session bridge. */
   readonly activeSessions: number;
   readonly totalMessagesProcessed: number;
 }
