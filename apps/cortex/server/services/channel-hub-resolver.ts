@@ -24,6 +24,7 @@ import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import { getGatewayAgent } from "../db/queries.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { parseRouteTarget } from "../db/channel-hub-queries.js";
+import { resolveEnableTools } from "./chat-tool-params.js";
 import { cortexAgentBuilder, type BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { narrowCortexParams, surfaceViolations } from "./channel-tool-surface.js";
 import { normalizeCortexAgentConfig } from "./cortex-agent-config.js";
@@ -60,7 +61,25 @@ interface Built {
   readonly agentId: string;
   readonly agent: Promise<HubAgent>;
   unsubscribe: (() => void) | null;
+  /** Set when the build starts: whether session turns take the tool loop (`paramsUseTools`). */
+  useTools: boolean;
 }
+
+/**
+ * Whether a (narrowed) build has any tool to offer, so a session turn must take the tool loop.
+ * `session.chat` otherwise guesses from the message wording (`requiresTools`), and "bitcoin price?"
+ * fails the guess: the agent answers from the model alone and says it has no tools. Same rule the
+ * Cortex chat uses (`resolveEnableTools`), applied to the params the agent was actually built from.
+ */
+export const paramsUseTools = (p: BuildCortexAgentParams): boolean =>
+  resolveEnableTools({
+    tools: p.tools,
+    mcpServerIds: p.mcpConfigs,
+    agentTools: p.agentTools,
+    dynamicSubAgents: p.dynamicSubAgents,
+    terminalTools: p.terminalTools,
+    additionalToolNames: p.additionalToolNames,
+  });
 
 const resolveFailed = (req: OpenSessionRequest, message: string, cause?: unknown): RoutingError =>
   new RoutingError({ reason: "resolve_failed", message, routeId: req.routeId, ...(cause !== undefined ? { cause } : {}) });
@@ -83,7 +102,11 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
     // The agent is not a gateway host here: the router owns access, queueing and channels.
     const { gateway: _gateway, channelAdapters: _adapters, ...base } = deps.toBuildParams({ agentId, name: row.name, config, mcpConfigs });
     const prepared = deps.prepare ? deps.prepare(base, { agentId, role: req.role }) : base;
-    const builder = await cortexAgentBuilder(narrowCortexParams(prepared, req.toolExposure));
+    const narrowed = narrowCortexParams(prepared, req.toolExposure);
+    const builder = await cortexAgentBuilder(narrowed);
+    // (the cache entry exists by now: `agentFor` sets it right after this async function starts)
+    const pending = built.get(`${req.routeId}:${req.role}`);
+    if (pending) pending.useTools = paramsUseTools(narrowed);
     const violations = surfaceViolations(builder.toConfig(), req.toolExposure);
     if (violations.length > 0) {
       throw new Error(`the built agent exceeds the ${req.toolExposure._tag} surface: ${violations.join(", ")}`);
@@ -116,7 +139,7 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
         const cached = built.get(key);
         if (cached) return cached.agent;
         const pending = buildAgent(req, target.agentId);
-        built.set(key, { agentId: target.agentId, agent: pending, unsubscribe: null });
+        built.set(key, { agentId: target.agentId, agent: pending, unsubscribe: null, useTools: false });
         pending.catch((e) => {
           built.delete(key);
           cortexLog("warn", "channels", `Could not build the agent for route ${req.routeId}`, { routeId: req.routeId, role: req.role, ...formatErrorDetails(e) });
@@ -130,6 +153,7 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
   const open: AgentResolver["open"] = (req) =>
     Effect.gen(function* () {
       const agent = yield* agentFor(req);
+      const useTools = built.get(`${req.routeId}:${req.role}`)?.useTools ?? false;
       const sessionId = `${req.routeId}:${req.role}:${req.conversationKey}`;
       const session = req.stateless ? undefined : agent.session({ id: sessionId, persist: deps.persistSessions ?? true });
       yield* Effect.addFinalizer(() => Effect.promise(() => session?.end() ?? Promise.resolve()).pipe(Effect.ignore));
@@ -140,7 +164,7 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
           Effect.tryPromise({
             try: async (): Promise<RoutedReply> => {
               if (session) {
-                const r = await session.chat(turn.text);
+                const r = await session.chat(turn.text, { useTools });
                 return {
                   text: r.message,
                   agentId: agent.agentId,
