@@ -45,3 +45,20 @@ if (!process.env.REACTIVE_AGENTS_TRACE_DIR) {
     }
   });
 }
+
+/**
+ * Hermetic provider keys (owner decision 2026-11-12): unit tests must never
+ * reach a live model by accident because a developer's `.env` holds keys.
+ * Strip every provider/service credential unless the run opts in with
+ * `REACTIVE_AGENTS_TEST_LIVE=1`. CI has no keys, so this makes local runs
+ * match CI. Keep the name list in step with apps/cortex/server/tests/hermetic-env.ts.
+ */
+if (process.env.REACTIVE_AGENTS_TEST_LIVE !== "1") {
+  const isSecretEnvName = (name: string): boolean =>
+    /(^|_)(API_KEY|API_TOKEN|AUTH_TOKEN|ACCESS_TOKEN|SECRET_KEY)$/i.test(name) ||
+    (/^(ANTHROPIC|OPENAI|GEMINI|GOOGLE|OPENROUTER|LITELLM|ELEVENLABS|GROQ|MISTRAL|COHERE|XAI|TOGETHER|DEEPSEEK)_/i.test(name) &&
+      /KEY|TOKEN/i.test(name));
+  for (const name of Object.keys(process.env)) {
+    if (isSecretEnvName(name)) delete process.env[name];
+  }
+}
