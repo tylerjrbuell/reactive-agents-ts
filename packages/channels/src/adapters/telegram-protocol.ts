@@ -349,7 +349,7 @@ export const parseTelegramFailure = (httpStatus: number, body: unknown): Telegra
  * 401 `auth`; 403 `forbidden` (bot blocked, kicked, or may not message this user); 404 and
  * 400 "chat/user not found" `not_found`; 400 "too long" and 413 `too_large`; 429 `rate_limited` with
  * `retry_after`; 5xx `network`; 409 (another `getUpdates` consumer or an active webhook) is
- * non-retryable `unknown` with an explicit message. `message` is generic text, never Telegram's;
+ * non-retryable `conflict` with an explicit message. `message` is generic text, never Telegram's;
  * the scrubbed description lives in `cause.telegram`.
  */
 export const mapTelegramFailure = (
@@ -376,7 +376,7 @@ export const mapTelegramFailure = (
     });
   }
   if (code === 409) {
-    return channelError(adapter, "unknown", {
+    return channelError(adapter, "conflict", {
       message: `channel ${adapter}: telegram conflict (409): another getUpdates consumer or an active webhook owns this bot; stop it or call deleteWebhook`,
       cause,
     });

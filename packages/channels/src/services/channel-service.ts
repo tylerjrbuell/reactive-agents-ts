@@ -1,24 +1,19 @@
-import { Effect, Exit, Scope, Stream } from "effect";
+import { Effect } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { GatewayEvent, PolicyDecision } from "@reactive-agents/gateway";
-import {
-  envelopeToInboundMessage,
-  isChannelAdapter,
-  type ChannelAdapter,
-  type ConnectionState,
-  type DeliveryReceipt,
-  type InboundEnvelope,
-  type OutboundMessage,
-} from "../adapter.js";
-import {
-  channelError,
-  classifyChannelFailure,
-  type ChannelConnectionError,
-  type ChannelError,
-} from "../errors.js";
 import type {
-  AdapterInfo,
+  ChannelAdapter,
+  DeliveryReceipt,
+  InboundEnvelope,
+  OutboundMessage,
+} from "../adapter.js";
+import type { ChannelConnectionError, ChannelError } from "../errors.js";
+import { RouterEngine } from "../routing/engine.js";
+import type { AccessVerdict } from "../routing/match.js";
+import { makeMemoryRouterStore } from "../routing/store.js";
+import type { AgentResolver, RouteSpec, RoutedSession, RoutedTurn } from "../routing/types.js";
+import type {
   ChannelStatus,
   InboundMessage,
   MessageChannel,
@@ -54,21 +49,26 @@ export interface ChannelServiceDeps {
   readonly inboundConcurrency?: number;
 }
 
-/** How the service talks to one registered adapter, new contract or legacy. */
-interface RegisteredAdapter {
-  readonly id: string;
-  readonly platform: string;
-  readonly send: (m: OutboundMessage) => Effect.Effect<DeliveryReceipt, ChannelError>;
-  readonly state: ConnectionState;
-  /** Re-read state from the adapter (canonical adapters only). */
-  readonly readState?: Effect.Effect<ConnectionState>;
-  readonly deliveryFailures: number;
-  readonly lastError?: ChannelError;
-  readonly messagesReceived: number;
-  readonly messagesSent: number;
-  readonly lastInboundAt?: number;
-  readonly lastSentAt?: number;
-}
+/**
+ * The one implicit route a {@link ChannelService} runs: it matches every channel, and the gateway
+ * policy (not the route's own lists) decides who may talk, so `open` here only means "defer to
+ * the injected policy". Its caps are never enforced because the engine runs non-strict.
+ */
+const IMPLICIT_ROUTE: RouteSpec = {
+  id: "implicit",
+  enabled: true,
+  priority: 100,
+  match: { channelId: "*" },
+  target: { agentId: "default" },
+  session: "per-conversation",
+  allow: [],
+  deny: [],
+  owners: [],
+  open: true,
+  senderTools: { _tag: "AgentDefault" },
+  groups: "mention-only",
+  turnTimeoutMs: 120_000,
+};
 
 function toGatewayEvent(adapterId: string, msg: InboundMessage): GatewayEvent {
   return {
@@ -103,246 +103,75 @@ function resolveAgentConfig(
  * Orchestrates adapters -> policy -> triggers -> {@link SessionBridge}, and delivers replies
  * itself through `adapter.send` (no dependence on the LLM calling a tool).
  *
- * Accepts the canonical {@link ChannelAdapter} and, for compatibility, the legacy
+ * It is a one-route router: a {@link RouterEngine} with a single implicit route, the gateway
+ * policy as the access decision and the trigger registry plus session bridge as the agent
+ * resolver. Accepts the canonical {@link ChannelAdapter} and, for compatibility, the legacy
  * {@link MessageChannel}. Call {@link ChannelService#shutdown} to stop consuming and disconnect
  * canonical adapters.
  */
 export class ChannelService {
-  private readonly adapters = new Map<string, RegisteredAdapter>();
-  private scope?: Scope.CloseableScope;
-  private totalProcessed = 0;
+  private readonly engine: RouterEngine;
 
-  constructor(private readonly deps: ChannelServiceDeps) {}
-
-  registerAdapter(adapter: MessageChannel | ChannelAdapter): Effect.Effect<void, ChannelConnectionError | ChannelError> {
-    return isChannelAdapter(adapter) ? this.registerCanonical(adapter) : this.registerLegacy(adapter);
-  }
-
-  private update(id: string, patch: Partial<RegisteredAdapter>): void {
-    const cur = this.adapters.get(id);
-    if (cur) this.adapters.set(id, { ...cur, ...patch });
-  }
-
-  private registerLegacy(adapter: MessageChannel): Effect.Effect<void, ChannelConnectionError> {
-    const self = this;
-    return Effect.gen(function* () {
-      yield* adapter.connect();
-      yield* adapter.onMessage((msg) => self.handleInbound(adapter.id, msg));
-      self.adapters.set(adapter.id, {
-        id: adapter.id,
-        platform: adapter.id,
-        state: { status: "connected" },
-        deliveryFailures: 0,
-        messagesReceived: 0,
-        messagesSent: 0,
-        send: (m) =>
-          adapter
-            .sendMessage(
-              {
-                channelId: m.conversation.channelId,
-                ...(m.conversation.threadId !== undefined ? { threadId: m.conversation.threadId } : {}),
-                ...(m.replyTo !== undefined ? { replyToMessageId: m.replyTo } : {}),
-              },
-              { text: m.text, ...(m.format !== undefined ? { format: m.format } : {}) },
-            )
-            .pipe(
-              Effect.map((r): DeliveryReceipt => ({
-                messageId: r.messageId,
-                adapterId: adapter.id,
-                platform: adapter.id,
-                status: "sent",
-                sentAt: r.timestamp.getTime(),
-              })),
-              Effect.mapError((e) => classifyChannelFailure(adapter.id, e)),
-            ),
-      });
+  constructor(private readonly deps: ChannelServiceDeps) {
+    const store = makeMemoryRouterStore([IMPLICIT_ROUTE]);
+    const agents: AgentResolver = {
+      open: () => Effect.succeed<RoutedSession>({ send: (turn) => this.runTurn(turn), close: Effect.void }),
+    };
+    this.engine = new RouterEngine({
+      store,
+      agents,
+      taskId: deps.taskId,
+      ...(deps.eventBus ? { eventBus: deps.eventBus } : {}),
+      ...(deps.inboundConcurrency !== undefined ? { inboundConcurrency: deps.inboundConcurrency } : {}),
+      strict: false,
+      access: (_route, _platform, msg, adapterId) => this.access(adapterId, msg),
+      senderGate: (adapterId, sender) => this.allowSender(adapterId, sender),
     });
   }
 
-  private registerCanonical(adapter: ChannelAdapter): Effect.Effect<void, ChannelError> {
-    const self = this;
-    return Effect.gen(function* () {
-      const scope = self.scope ?? (self.scope = yield* Scope.make());
-      // Adapters must ask before downloading a stranger's attachments. Prefer the side-effect-free
-      // `allowSender`; otherwise fall back to the policy decision (counts one extra policy pass).
-      adapter.setSenderGate?.((sender) => {
-        if (self.deps.allowSender) return self.deps.allowSender(sender);
-        return self.deps
-          .evaluatePolicy({
-            id: `${adapter.id}:attachment-gate`,
-            source: "channel",
-            timestamp: new Date(),
-            priority: "normal",
-            payload: "",
-            metadata: { sender: sender.userId, platform: sender.platform, adapterId: adapter.id },
-          })
-          .pipe(Effect.map((d) => d.action === "execute"));
-      });
-      self.adapters.set(adapter.id, {
-        id: adapter.id,
-        platform: adapter.platform,
-        send: adapter.send.bind(adapter),
-        state: yield* adapter.currentState,
-        readState: adapter.currentState,
-        deliveryFailures: 0,
-        messagesReceived: 0,
-        messagesSent: 0,
-      });
-      yield* Scope.extend(adapter.start(), scope);
-      self.update(adapter.id, { state: yield* adapter.currentState });
-      yield* Effect.forkIn(
-        Stream.runForEach(adapter.state, (s) => Effect.sync(() => self.update(adapter.id, { state: s }))),
-        scope,
-      );
-      const concurrency = self.deps.inboundConcurrency ?? 4;
-      yield* Effect.forkIn(
-        adapter.inbound.pipe(
-          Stream.mapEffect((env) => self.handleEnvelope(adapter.id, env), { concurrency }),
-          Stream.runDrain,
-          Effect.catchAll((error) => Effect.sync(() => self.update(adapter.id, { state: { status: "failed", error } }))),
-        ),
-        scope,
-      );
-    });
+  /** The gateway policy decides; an unknown-sender denial may get the fixed reply. */
+  private access(adapterId: string, msg: InboundMessage): Effect.Effect<AccessVerdict> {
+    return this.deps.evaluatePolicy(toGatewayEvent(adapterId, msg)).pipe(
+      Effect.map((decision): AccessVerdict => {
+        if (decision.action === "execute") return { allowed: true, role: "owner" };
+        const replyText = this.deps.replyToUnknown;
+        const unknown =
+          (decision.action === "skip" || decision.action === "escalate") && decision.code === "unknown-sender";
+        return {
+          allowed: false,
+          reason: "reason" in decision ? decision.reason : decision.action,
+          ...(replyText && unknown ? { reply: replyText } : {}),
+        };
+      }),
+    );
   }
 
-  /** Stop consuming inbound and disconnect every canonical adapter. Idempotent. */
-  shutdown(): Effect.Effect<void> {
-    const scope = this.scope;
-    this.scope = undefined;
-    if (!scope) return Effect.void;
-    const self = this;
-    return Effect.gen(function* () {
-      yield* Scope.close(scope, Exit.void);
-      // The state-tracking fiber is interrupted with the scope; re-read the final states.
-      for (const reg of [...self.adapters.values()]) {
-        if (reg.readState) self.update(reg.id, { state: yield* reg.readState });
-      }
-    });
-  }
-
-  /**
-   * Send a message through a registered adapter and return its real {@link DeliveryReceipt}.
-   * Publishes `ChannelMessageSent` (with the receipt's message id) only on success. On failure it
-   * records the failure in `status()`, publishes a `ChannelDeliveryFailed` event and fails with the
-   * typed {@link ChannelError}. Workflow Deliver nodes call this.
-   */
-  deliver(
+  /** Adapters must ask before downloading a stranger's attachments. */
+  private allowSender(
     adapterId: string,
-    message: OutboundMessage,
-    taskId: string = this.deps.taskId(),
-  ): Effect.Effect<DeliveryReceipt, ChannelError> {
-    const self = this;
-    return Effect.gen(function* () {
-      const reg = self.adapters.get(adapterId);
-      if (!reg) {
-        return yield* Effect.fail(
-          channelError(adapterId, "not_found", { message: `channel ${adapterId}: adapter not registered` }),
-        );
-      }
-      const bus = self.deps.eventBus;
-      return yield* reg.send(message).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            const cur = self.adapters.get(adapterId);
-            if (cur) self.update(adapterId, { messagesSent: cur.messagesSent + 1, lastSentAt: Date.now() });
-          }),
-        ),
-        Effect.tap((receipt) =>
-          bus
-            ? bus.publish({
-                _tag: "ChannelMessageSent",
-                taskId,
-                platform: receipt.platform,
-                messageId: receipt.messageId,
-                channelId: message.conversation.channelId,
-                timestamp: Date.now(),
-              })
-            : Effect.void,
-        ),
-        Effect.tapError((error) =>
-          Effect.suspend(() => {
-            const failures = (self.adapters.get(adapterId)?.deliveryFailures ?? 0) + 1;
-            self.update(adapterId, { deliveryFailures: failures, lastError: error });
-            // Classification and ids only; never the cause, which may carry secrets.
-            return bus
-              ? bus.publish({
-                  _tag: "ChannelDeliveryFailed",
-                  taskId,
-                  adapterId,
-                  kind: error.kind,
-                  retryable: error.retryable,
-                  ...(error.retryAfterMs !== undefined ? { retryAfterMs: error.retryAfterMs } : {}),
-                  conversationId: message.conversation.channelId,
-                })
-              : Effect.void;
-          }),
-        ),
-      );
-    });
+    sender: { readonly platform: string; readonly userId: string },
+  ): Effect.Effect<boolean> {
+    if (this.deps.allowSender) return this.deps.allowSender(sender);
+    // Fallback to the policy decision (counts one extra policy pass).
+    return this.deps
+      .evaluatePolicy({
+        id: `${adapterId}:attachment-gate`,
+        source: "channel",
+        timestamp: new Date(),
+        priority: "normal",
+        payload: "",
+        metadata: { sender: sender.userId, platform: sender.platform, adapterId },
+      })
+      .pipe(Effect.map((d) => d.action === "execute"));
   }
 
-  /** Process one canonical inbound envelope: echoes are dropped, the rest follow {@link handleInbound}. */
-  handleEnvelope(adapterId: string, env: InboundEnvelope): Effect.Effect<void, never> {
-    if (env.isEcho) return Effect.void;
-    const bus = this.deps.eventBus;
-    const received = bus
-      ? bus.publish({
-          _tag: "ChannelMessageReceived",
-          sender: env.sender.userId,
-          platform: env.sender.platform,
-          message: env.text,
-          timestamp: env.receivedAt,
-          mcpServer: adapterId,
-          ...(env.conversation.isGroup ? { groupId: env.conversation.channelId } : {}),
-          adapterId,
-          conversation: {
-            channelId: env.conversation.channelId,
-            ...(env.conversation.threadId !== undefined ? { threadId: env.conversation.threadId } : {}),
-            isGroup: env.conversation.isGroup,
-          },
-        })
-      : Effect.void;
-    return Effect.zipRight(received, this.handleInbound(adapterId, envelopeToInboundMessage(env)));
-  }
-
-  handleInbound(adapterId: string, msg: InboundMessage): Effect.Effect<void, never> {
-    const self = this;
-    // A failed reply is already counted in status() and published as ChannelDeliveryFailed by
-    // `deliver`; the inbound pipeline must carry on, so the typed error ends here.
-    const reply = (text: string, taskId: string) =>
-      self
-        .deliver(
-          adapterId,
-          {
-            conversation: {
-              channelId: msg.channelId,
-              ...(typeof msg.metadata["threadId"] === "string" ? { threadId: msg.metadata["threadId"] } : {}),
-            },
-            text,
-            ...(msg.replyTo !== undefined ? { replyTo: msg.replyTo } : {}),
-          },
-          taskId,
-        )
-        .pipe(Effect.ignore);
-
+  /** Trigger match, then one chat turn on the sender's session. A failed turn yields an empty reply. */
+  private runTurn(turn: RoutedTurn): Effect.Effect<{ readonly text: string }> {
+    const { triggers, sessions, eventBus } = this.deps;
+    const msg = turn.message;
     return Effect.gen(function* () {
-      const reg = self.adapters.get(adapterId);
-      if (reg) self.update(adapterId, { messagesReceived: reg.messagesReceived + 1, lastInboundAt: Date.now() });
-      const taskId = self.deps.taskId();
-      const decision = yield* self.deps.evaluatePolicy(toGatewayEvent(adapterId, msg));
-      if (decision.action !== "execute") {
-        const replyText = self.deps.replyToUnknown;
-        const denied =
-          (decision.action === "skip" || decision.action === "escalate") &&
-          decision.code === "unknown-sender";
-        if (replyText && denied && self.adapters.has(adapterId)) yield* reply(replyText, taskId);
-        return;
-      }
-
-      const trigger = self.deps.triggers.evaluate(msg);
-      const agentConfig = resolveAgentConfig(self.deps.triggers, trigger, msg);
-
+      const trigger = triggers.evaluate(msg);
+      const agentConfig = resolveAgentConfig(triggers, trigger, msg);
       const params = {
         identity: {
           platform: msg.platform,
@@ -354,22 +183,17 @@ export class ChannelService {
         agentConfig,
         lifecycle: trigger?.lifecycle,
       };
-
-      const { sessionId, reply: answer } = yield* self.deps.sessions.runChatTurn(params, msg.content).pipe(
+      const { sessionId, reply } = yield* sessions.runChatTurn(params, msg.content).pipe(
         Effect.catchAll((err) =>
           emitErrorSwallowed({ site: "channels/src/services/channel-service.ts:runChatTurn", tag: errorTag(err) }).pipe(
             Effect.as({ sessionId: "", reply: "" }),
           ),
         ),
       );
-
-      self.totalProcessed += 1;
-
-      const bus = self.deps.eventBus;
-      if (bus && trigger) {
-        yield* bus.publish({
+      if (eventBus && trigger) {
+        yield* eventBus.publish({
           _tag: "TriggerFired",
-          taskId,
+          taskId: turn.taskId,
           triggerId: trigger.id,
           triggerName: trigger.name,
           platform: msg.platform,
@@ -377,32 +201,48 @@ export class ChannelService {
           timestamp: Date.now(),
         });
       }
+      return { text: reply };
+    });
+  }
 
-      if (answer && self.adapters.has(adapterId)) yield* reply(answer, taskId);
-    }).pipe(Effect.catchAll((err) =>
-      emitErrorSwallowed({ site: "channels/src/services/channel-service.ts:processMessage", tag: errorTag(err) }),
-    ));
+  registerAdapter(adapter: MessageChannel | ChannelAdapter): Effect.Effect<void, ChannelConnectionError | ChannelError> {
+    return this.engine.hub.register(adapter);
+  }
+
+  /** Stop consuming inbound and disconnect every canonical adapter. Idempotent. */
+  shutdown(): Effect.Effect<void> {
+    return this.engine.shutdown();
+  }
+
+  /**
+   * Send a message through a registered adapter and return its real {@link DeliveryReceipt}.
+   * Publishes `ChannelMessageSent` (with the receipt's message id) only on success. On failure it
+   * records the failure in `status()`, publishes a `ChannelDeliveryFailed` event and fails with the
+   * typed {@link ChannelError}. Workflow Deliver nodes call this.
+   */
+  deliver(
+    adapterId: string,
+    message: OutboundMessage,
+    taskId?: string,
+  ): Effect.Effect<DeliveryReceipt, ChannelError> {
+    return this.engine.hub.deliver(adapterId, message, taskId);
+  }
+
+  /** Process one canonical inbound envelope: echoes are dropped, the rest follow {@link handleInbound}. */
+  handleEnvelope(adapterId: string, env: InboundEnvelope): Effect.Effect<void, never> {
+    return this.engine.handleEnvelope(adapterId, env);
+  }
+
+  handleInbound(adapterId: string, msg: InboundMessage): Effect.Effect<void, never> {
+    return this.engine.handleInbound(adapterId, msg);
   }
 
   /** Honest status: `connected` mirrors each adapter's reported connection state. */
   status(): ChannelStatus {
-    const adapters: AdapterInfo[] = [...this.adapters.values()].map((a) => ({
-      id: a.id,
-      platform: a.platform,
-      connected: a.state.status === "connected",
-      sessionsActive: 0,
-      state: a.state,
-      deliveryFailures: a.deliveryFailures,
-      messagesReceived: a.messagesReceived,
-      messagesSent: a.messagesSent,
-      ...(a.lastInboundAt !== undefined ? { lastInboundAt: a.lastInboundAt } : {}),
-      ...(a.lastSentAt !== undefined ? { lastSentAt: a.lastSentAt } : {}),
-      ...(a.lastError ? { lastError: a.lastError } : {}),
-    }));
     return {
-      adapters,
+      adapters: this.engine.hub.info(),
       activeSessions: this.deps.sessions.size(),
-      totalMessagesProcessed: this.totalProcessed,
+      totalMessagesProcessed: this.engine.processed,
     };
   }
 }

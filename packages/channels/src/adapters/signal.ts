@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Clock, Deferred, Duration, Effect, Exit, Queue, Redacted, Schedule, Scope, Stream } from "effect";
 import type {
   ChannelAdapter,
@@ -71,6 +72,8 @@ export class SignalChannelAdapter implements ChannelAdapter {
   readonly id: string;
   readonly platform = "signal";
   readonly capabilities = SIGNAL_CAPABILITIES;
+  /** Hash of the Signal account number (never the number): the channel router leases the account by it. */
+  readonly accountFingerprint: string;
   readonly inbound: Stream.Stream<InboundEnvelope, ChannelError>;
   readonly deliveryUpdates: Stream.Stream<DeliveryUpdate>;
   readonly state: Stream.Stream<ConnectionState>;
@@ -100,6 +103,7 @@ export class SignalChannelAdapter implements ChannelAdapter {
     this.id = config.id ?? "signal";
     this.account = typeof config.account === "string" ? Redacted.make(config.account) : config.account;
     this.accountUuid = config.accountUuid;
+    this.accountFingerprint = `signal:${createHash("sha256").update(Redacted.value(this.account)).digest("hex").slice(0, 16)}`;
     this.transport = config.transport;
     this.reconnectSchedule = config.reconnectSchedule;
     this.maxInboundAttachmentBytes = config.maxInboundAttachmentBytes ?? 25 * 1024 * 1024;

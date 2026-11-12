@@ -36,6 +36,7 @@ export type ScheduleDeliveryErrorKind =
   | "too_large"
   | "unsupported"
   | "network"
+  | "conflict"
   | "unknown";
 
 /**

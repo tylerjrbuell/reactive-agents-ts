@@ -1,0 +1,237 @@
+import { Data, Schema } from "effect";
+import type { Effect, Scope } from "effect";
+import type { ChannelIdentity, DeliveryReceipt } from "../adapter.js";
+import type { ChannelError } from "../errors.js";
+import type { Attachment, InboundMessage } from "../types.js";
+
+/**
+ * Channel routing types: a Route is one flat rule (match an inbound conversation, pick a target
+ * agent, say who may talk and what a stranger may do). Spec:
+ * `wiki/Architecture/Design-Specs/2026-11-12-channel-routing.md`.
+ */
+
+// ── Schemas ───────────────────────────────────────────────────────────────
+
+/** What a non-owner sender's agent may do. Decided when the agent is BUILT, never per turn. */
+export const ToolExposure = Schema.Union(
+  Schema.TaggedStruct("ReadOnly", {}),
+  Schema.TaggedStruct("AgentDefault", {}),
+  Schema.TaggedStruct("Allowlist", { tools: Schema.Array(Schema.String) }),
+);
+/** See {@link ToolExposure}. */
+export type ToolExposure = Schema.Schema.Type<typeof ToolExposure>;
+
+/** Which inbound conversations a route claims. */
+export const RouteMatch = Schema.Struct({
+  /** Adapter id the route listens on; `"*"` matches every channel. */
+  channelId: Schema.String,
+  conversation: Schema.optional(Schema.Literal("dm", "group")),
+  /** Platform conversation ids (chat ids). */
+  conversationIds: Schema.optional(Schema.Array(Schema.String)),
+  when: Schema.optional(
+    Schema.Union(
+      Schema.TaggedStruct("Mention", {}),
+      Schema.TaggedStruct("Command", { name: Schema.String }),
+      Schema.TaggedStruct("Keyword", { patterns: Schema.Array(Schema.String) }),
+    ),
+  ),
+});
+/** See {@link RouteMatch}. */
+export type RouteMatch = Schema.Schema.Type<typeof RouteMatch>;
+
+/**
+ * One route. Access is flat and fail-closed: `allow` / `deny` / `owners` hold `platform:userId`
+ * keys, `open` lets anyone talk (and requires cost and turn caps, see `validateRoutes`).
+ */
+export const RouteSpec = Schema.Struct({
+  id: Schema.String,
+  enabled: Schema.optionalWith(Schema.Boolean, { default: () => true }),
+  /** Lower runs first; ties keep declaration order. */
+  priority: Schema.optionalWith(Schema.Number, { default: () => 100 }),
+  match: RouteMatch,
+  target: Schema.Struct({ agentId: Schema.String }),
+  /** `per-conversation` keeps history per (route, role, conversation); `stateless` is a fresh run per message. */
+  session: Schema.optionalWith(Schema.Literal("per-conversation", "stateless"), {
+    default: () => "per-conversation" as const,
+  }),
+  allow: Schema.optionalWith(Schema.Array(Schema.String), { default: () => [] }),
+  deny: Schema.optionalWith(Schema.Array(Schema.String), { default: () => [] }),
+  owners: Schema.optionalWith(Schema.Array(Schema.String), { default: () => [] }),
+  open: Schema.optionalWith(Schema.Boolean, { default: () => false }),
+  senderTools: Schema.optionalWith(ToolExposure, { default: () => ({ _tag: "ReadOnly" as const }) }),
+  /** Fixed text sent to a sender the allowlist denied. Never agent output. */
+  deniedReply: Schema.optional(Schema.String),
+  groups: Schema.optionalWith(Schema.Literal("mention-only", "off"), { default: () => "mention-only" as const }),
+  maxIterations: Schema.optional(Schema.Number),
+  turnTimeoutMs: Schema.optionalWith(Schema.Number, { default: () => 120_000 }),
+  maxTurnsPerSenderPerHour: Schema.optional(Schema.Number),
+  maxTurnsPerHour: Schema.optional(Schema.Number),
+  maxCostPerDayUsd: Schema.optional(Schema.Number),
+});
+/** A validated route (defaults applied). */
+export type RouteSpec = Schema.Schema.Type<typeof RouteSpec>;
+/** What callers write: defaults may be omitted. */
+export type RouteSpecInput = Schema.Schema.Encoded<typeof RouteSpec>;
+
+/** Per-sender turn cap for routes that do not set one (conversational pace, shown in status). */
+export const DEFAULT_MAX_TURNS_PER_SENDER_PER_HOUR = 6;
+/** Pending turns (running + waiting) allowed per (route, role, conversation) before overflow. */
+export const DEFAULT_CONVERSATION_QUEUE = 5;
+
+// ── Errors ────────────────────────────────────────────────────────────────
+
+/** Why a routing operation failed. */
+export type RoutingErrorReason =
+  | "invalid_route"
+  | "unknown_channel"
+  | "channel_start_failed"
+  | "confirmation_required"
+  | "resolve_failed"
+  | "turn_failed"
+  | "turn_timeout";
+
+/** Typed routing failure. `message` carries classification only, never message text or secrets. */
+export class RoutingError extends Data.TaggedError("RoutingError")<{
+  readonly reason: RoutingErrorReason;
+  readonly message: string;
+  readonly routeId?: string;
+  readonly channelId?: string;
+  readonly cause?: unknown;
+}> {}
+
+/** A second owner tried to open an account that is already open. Fails closed, never shares. */
+export class ChannelAlreadyOwned extends Data.TaggedError("ChannelAlreadyOwned")<{
+  readonly channelId: string;
+  readonly ownerPid: number;
+  /** Epoch ms the current owner took the lease. */
+  readonly since: number;
+}> {}
+
+// ── Agent resolution port ─────────────────────────────────────────────────
+
+/** Modality-neutral turn content. */
+export type ContentPart =
+  | { readonly type: "text"; readonly text: string }
+  | { readonly type: "attachment"; readonly attachment: Attachment };
+
+/**
+ * Approval of a risky tool call over a channel. This slice ships a fail-closed port: nothing is
+ * approvable until the approval phase lands.
+ */
+export interface ApprovalPort {
+  readonly request: (summary: string) => Effect.Effect<"approved" | "denied">;
+}
+
+/** One inbound turn handed to a routed session. Sender text is user-role content only. */
+export interface RoutedTurn {
+  /** Sender text: user role only, never concatenated into a system prompt. */
+  readonly text: string;
+  readonly parts: ReadonlyArray<ContentPart>;
+  readonly sender: ChannelIdentity;
+  readonly approval: ApprovalPort;
+  /** The normalized inbound message (conversation, thread, reply-to, metadata). */
+  readonly message: InboundMessage;
+  readonly taskId: string;
+}
+
+/** The agent's answer to one turn. */
+export interface RoutedReply {
+  readonly text: string;
+  readonly tokens?: number;
+  readonly costUsd?: number;
+  readonly runId?: string;
+}
+
+/** A live conversation with one (route, role) agent. */
+export interface RoutedSession {
+  readonly send: (turn: RoutedTurn) => Effect.Effect<RoutedReply, RoutingError>;
+  readonly close: Effect.Effect<void>;
+}
+
+/** What the resolver needs to build the right agent. */
+export interface OpenSessionRequest {
+  readonly routeId: string;
+  readonly role: "owner" | "sender";
+  readonly target: RouteSpec["target"];
+  readonly toolExposure: ToolExposure;
+  readonly conversationKey: string;
+  readonly stateless: boolean;
+}
+
+/**
+ * Port 1: turns a route target into a session.
+ *
+ * Build a DISTINCT agent per (routeId, role) with that role's tool surface applied at
+ * construction (for example `.withTools({ allowedTools })`). Histories are never shared across
+ * roles. The router resolves the role from `owners` membership before calling `open`.
+ */
+export interface AgentResolver {
+  readonly open: (req: OpenSessionRequest) => Effect.Effect<RoutedSession, RoutingError, Scope.Scope>;
+}
+
+// ── Store port ────────────────────────────────────────────────────────────
+
+/** Port 2: routes, seen message ids and rate counters. In-memory by default. */
+export interface RouterStore {
+  /** True when counters and seen ids survive a restart (this slice only ships in-memory). */
+  readonly durable: boolean;
+  readonly getRoutes: Effect.Effect<ReadonlyArray<RouteSpec>>;
+  readonly setRoutes: (routes: ReadonlyArray<RouteSpec>) => Effect.Effect<void>;
+  /** Record a platform message id. True the first time, false on every repeat. */
+  readonly markSeen: (key: string) => Effect.Effect<boolean>;
+  /** Count one turn in a sliding window. True when it fits under `limit`, false when refused. */
+  readonly takeTurn: (bucket: string, limit: number, windowMs: number) => Effect.Effect<boolean>;
+}
+
+// ── Outcomes ──────────────────────────────────────────────────────────────
+
+/** Role of a sender on a route. */
+export type RouteRole = "owner" | "sender";
+
+/** Why a message was dropped before reaching an agent. */
+export type DropReason = "echo" | "group" | "rate" | "backpressure" | "disabled-channel";
+
+/** What happened to one inbound message. */
+export type RouteOutcome =
+  | {
+      readonly _tag: "Answered";
+      readonly routeId: string;
+      readonly role: RouteRole;
+      readonly reply: RoutedReply;
+      readonly receipt?: DeliveryReceipt;
+      readonly deliveryError?: ChannelError;
+    }
+  | { readonly _tag: "Failed"; readonly routeId: string; readonly role: RouteRole; readonly error: RoutingError }
+  | { readonly _tag: "Unrouted" }
+  | { readonly _tag: "Denied"; readonly routeId: string; readonly reason: string }
+  | { readonly _tag: "Duplicate" }
+  | { readonly _tag: "Dropped"; readonly reason: DropReason; readonly routeId?: string };
+
+/** Pure answer to "why did / didn't it answer", without running anything. */
+export interface RouteExplanation {
+  readonly decision: "unrouted" | "denied" | "dropped-group" | "allowed";
+  readonly routeId?: string;
+  readonly role?: RouteRole;
+  readonly toolExposure?: ToolExposure;
+  readonly reason: string;
+}
+
+/** Live router state for UIs and tests. */
+export interface RouterStatus {
+  readonly channels: ReadonlyArray<{
+    readonly id: string;
+    readonly platform: string;
+    readonly connected: boolean;
+    /** True when the platform reported another consumer owns the account; the channel was stopped. */
+    readonly conflict: boolean;
+    readonly messagesReceived: number;
+    readonly messagesSent: number;
+    readonly deliveryFailures: number;
+  }>;
+  readonly routes: number;
+  readonly unrouted: number;
+  readonly dropped: Readonly<Record<DropReason, number>>;
+  readonly activeSessions: number;
+  /** False means dedupe and rate counters reset on restart. */
+  readonly durableStore: boolean;
+}

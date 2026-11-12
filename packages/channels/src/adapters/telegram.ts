@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { Clock, Deferred, Duration, Effect, Queue, Redacted, Schedule, Stream, type Scope } from "effect";
 import type {
   ChannelAdapter,
@@ -103,12 +103,15 @@ const asRecord = (u: unknown): Record<string, unknown> | undefined =>
  * - `send` splits text at 4096 units, converts `format: "markdown"` to MarkdownV2 (falling back to
  *   plain text if Telegram rejects the entities), and returns the real `message_id` as the receipt.
  * - Telegram sends no delivery or typing signals to bots: `capabilities.receipts` is `false`.
- * - `409 Conflict` (another poller or a webhook owns the bot) stops the adapter with a clear error.
+ * - `409 Conflict` (another poller or a webhook owns the bot) stops the adapter with a typed,
+ *   non-retryable `conflict` error.
  */
 export class TelegramChannelAdapter implements ChannelAdapter {
   readonly id: string;
   readonly platform = "telegram";
   readonly capabilities = TELEGRAM_CAPABILITIES;
+  /** Hash of the bot token (never the token): the channel router leases the bot by it. */
+  readonly accountFingerprint: string;
   readonly inbound: Stream.Stream<InboundEnvelope, ChannelError>;
   readonly state: Stream.Stream<ConnectionState>;
   readonly currentState: Effect.Effect<ConnectionState>;
@@ -139,6 +142,7 @@ export class TelegramChannelAdapter implements ChannelAdapter {
     this.config = config;
     this.id = config.id ?? "telegram";
     const token = typeof config.token === "string" ? Redacted.make(config.token) : config.token;
+    this.accountFingerprint = `telegram:${createHash("sha256").update(Redacted.value(token)).digest("hex").slice(0, 16)}`;
     this.api = makeTelegramApi({
       adapterId: this.id,
       token,

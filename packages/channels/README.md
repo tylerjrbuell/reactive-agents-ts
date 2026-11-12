@@ -164,6 +164,27 @@ are rejected; set `allowUnsigned: true` only for local development.
 For full GitHub event semantics (signature verification, action filtering), prefer
 `createGitHubAdapter` from `@reactive-agents/gateway`.
 
+## Channel routing
+
+`createChannelRouter` decouples the connection from the agent: a channel is one connection, a
+route is one rule (match a conversation, pick a target agent, say who may talk), and the agent is
+anything your `AgentResolver` can build.
+
+```ts
+const router = yield* createChannelRouter({
+  channels: [telegram],
+  routes: [{ id: "support", match: { channelId: "telegram" }, target: { agentId: "support" }, allow: ["telegram:1001"] }],
+  agents: resolver, // builds a distinct agent per (routeId, role): owners get full tools, others the senderTools surface
+});
+yield* router.explain(envelope, "telegram"); // why would it answer, as whom, with which tools
+```
+
+Defaults are fail-closed: unknown senders are denied (the resolver is never called), non-owners
+get `ReadOnly`, unmatched messages are dropped and counted, `open` routes need cost and turn caps,
+and a second owner of the same account fails with `ChannelAlreadyOwned`. Dedupe and turn caps are
+in memory (reset on restart) in this release. `ChannelService` is unchanged and runs on the same
+engine as one implicit route.
+
 ## Naming note
 
 The gateway's messaging configuration lives under

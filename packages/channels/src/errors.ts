@@ -15,6 +15,8 @@ export type ChannelErrorKind =
   | "too_large"
   | "unsupported"
   | "network"
+  /** Another consumer owns the account (Telegram 409). Non-retryable: the channel is stopped, never retried in a loop. */
+  | "conflict"
   | "unknown";
 
 /**

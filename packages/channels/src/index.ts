@@ -12,6 +12,21 @@ export * from "./services/trigger-registry.js";
 export * from "./services/session-bridge.js";
 export * from "./services/channel-service.js";
 export * from "./services/gateway-bridge.js";
+export * from "./routing/types.js";
+export { validateRoutes, validateRoute, wideningChanges } from "./routing/validate.js";
+export {
+  matchRoute,
+  routeMatches,
+  groupAllowed,
+  decideRouteAccess,
+  explainRoute,
+  toolExposureFor,
+  type AccessVerdict,
+  type MatchInput,
+} from "./routing/match.js";
+export { makeMemoryRouterStore } from "./routing/store.js";
+export { makeFileLeases, makeMemoryLeases, defaultLeaseDir, type AccountLeases } from "./routing/lease.js";
+export { createChannelRouter, type ChannelRouter, type ChannelRouterOptions } from "./routing/router.js";
 export * from "./adapters/webhook.js";
 export * from "./adapters/signal.js";
 export * from "./adapters/signal-protocol.js";

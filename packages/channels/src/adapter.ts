@@ -113,6 +113,12 @@ export interface ChannelAdapter {
   readonly id: string;
   readonly platform: string;
   readonly capabilities: ChannelCapabilities;
+  /**
+   * Optional non-secret identity of the account this adapter connects as (a hash of the token or
+   * number, never the credential). The channel router takes one lease per fingerprint so two
+   * channels cannot poll the same account. Absent: the router falls back to `platform:id`.
+   */
+  readonly accountFingerprint?: string;
   readonly inbound: Stream.Stream<InboundEnvelope, ChannelError>;
   /** Connection-state changes (starts with the current value). */
   readonly state: Stream.Stream<ConnectionState>;
