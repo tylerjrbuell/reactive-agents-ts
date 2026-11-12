@@ -10,6 +10,7 @@ import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sa
 import { sandboxDockerEnabled } from "../flags.js";
 import { capShellOutput, runHostShell, timeoutMarker } from "./shell-host-process.js";
 import { GIT_BLOCKED_RULES } from "./shell-git-guard.js";
+import { SCRIPT_BLOCKED_RULES, scriptEscapeDenial } from "./shell-program-guard.js";
 import { readOnlyGitDenial, type ShellGitReadOnlyConfig } from "./shell-git-readonly.js";
 import { isRedirectAmpersand, pathCandidateTokens, splitCommandSegments, withoutNullRedirects } from "./shell-command-segments.js";
 import {
@@ -105,16 +106,10 @@ export const DEFAULT_BLOCKED_RULES: ReadonlyArray<BlockedCommandRule> = [
   { pattern: /(?:^|\s|[;&|])\s*disown\b/i, reason: "disown (persistent background process) is blocked" },
   // Crontab
   { pattern: /(?:^|\s|[;&|])\s*crontab\b/i, reason: "crontab is blocked" },
-  // awk shell escape — system() executes arbitrary commands
-  { pattern: /\bawk\b.*\bsystem\s*\(/i, reason: "awk system() enables shell injection" },
-  // awk getline — reads from an arbitrary file or command (`getline < "file"`, `"cmd" | getline`)
-  { pattern: /\bawk\b.*\bgetline\b/i, reason: "awk getline (arbitrary file/command read) is blocked" },
-  // awk print-pipe — `print ... | "cmd"` pipes awk output to a shell command
-  { pattern: /\bawk\b.*\|\s*"/i, reason: "awk print-pipe to a command is blocked (shell injection)" },
+  // awk/sed shell escapes + sort --compress-program (legacy labels; the parsed boundary is scriptEscapeDenial)
+  ...SCRIPT_BLOCKED_RULES,
   // Process substitution `<(...)` / `>(...)` — the inner command executes on the host (RCE)
   { pattern: /[<>]\(/, reason: "process substitution <(...)/>(...) is blocked (shell injection)" },
-  // sed execute flag — runs replacement as shell command (s/pat/repl/e)
-  { pattern: /\bsed\b.*\/e\b/i, reason: "sed /e flag enables shell injection" },
   // find -exec/-execdir/-ok — arbitrary command execution through find (CWE-78)
   { pattern: /\bfind\b.*\s-exec\b/i, reason: "find -exec is blocked (CWE-78) — pipe to xargs instead, e.g. `find . -name '*.ts' | xargs wc -l`" },
   { pattern: /\bfind\b.*\s-execdir\b/i, reason: "find -execdir is blocked (CWE-78) — pipe to xargs instead" },
@@ -703,6 +698,10 @@ export function shellExecuteHandler(
             error: `Command blocked by security policy: ${expansionIssue}`,
           };
         }
+
+        // ── 3d. sed/awk programs: deny-by-default parse (always on; a boundary, not a policy) ──
+        const scriptDenial = scriptEscapeDenial(command);
+        if (scriptDenial !== null) { audit({ command, allowed: false, reason: "script-escape" }); return { executed: false, success: false, error: `Command blocked by security policy: ${scriptDenial}` }; }
 
         // ── 3c. Read-only git/gh preset: allow-list of subcommands ──
         const gitDenial = config?.gitReadOnly === true ? readOnlyGitDenial(command, config.approvalCommands) : null;

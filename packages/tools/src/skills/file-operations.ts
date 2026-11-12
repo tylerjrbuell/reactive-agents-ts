@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
-import { getFileRoot } from "./file-root.js";
+import { getFileRoot, isRealpathWithinRoot, isWithinRoot } from "./file-root.js";
 import { JSON_FILE_EXTENSIONS } from "../healing/json-repair.js";
 import {
   DIRECTORY_READ_NOTE,
@@ -29,14 +29,6 @@ export { withFileRoot, getFileRoot } from "./file-root.js";
 // the root, states the relative-path rule, and when a suffix of the rejected
 // path actually exists under the root, names that path outright, so the next
 // call can be the right one.
-
-function isWithinRoot(base: string, candidate: string): boolean {
-  const relative = path.relative(base, candidate);
-  return (
-    relative === "" ||
-    (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
-  );
-}
 
 /** Longest suffix of `rejected`'s components that exists under `base`, as a
  * "./"-prefixed relative path — or undefined. Probes at most `maxProbes`
@@ -76,17 +68,18 @@ export async function confinePath(filePath: string): Promise<string> {
   const resolved = path.isAbsolute(filePath)
     ? path.resolve(filePath)
     : path.resolve(allowedBase, filePath);
-  if (isWithinRoot(allowedBase, resolved)) {
-    return resolved;
-  }
-  const suggestion = await existingSuffixUnder(allowedBase, filePath);
+  const lexicallyInside = isWithinRoot(allowedBase, resolved);
+  // Lexically inside: a symlink on the way (or as the leaf) may still lead out.
+  if (lexicallyInside && (await isRealpathWithinRoot(allowedBase, resolved))) return resolved;
+  const suggestion = lexicallyInside ? undefined : await existingSuffixUnder(allowedBase, filePath);
   const basename = path.basename(filePath) || "output.txt";
-  const correction =
-    suggestion !== undefined
+  const correction = lexicallyInside
+    ? "Use a path that does not cross a symbolic link leaving the root."
+    : suggestion !== undefined
       ? `"${suggestion}" exists under the root — retry with that exact path.`
       : `Use a relative path instead, e.g. "./${basename}".`;
   throw new Error(
-    `Path traversal detected: ${filePath} resolves to ${resolved}, outside the ` +
+    `Path traversal detected: ${filePath} resolves ${lexicallyInside ? "through a symbolic link to a location" : `to ${resolved},`} outside the ` +
       `working root ${allowedBase}. Relative paths resolve relative to the working root; ` +
       `an absolute path must be inside it. ${correction}`,
   );

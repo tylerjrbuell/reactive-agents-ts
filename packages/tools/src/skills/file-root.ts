@@ -26,6 +26,7 @@
 import { Effect } from "effect";
 import { getRunSlot, getRunSlotSync, runSlot, type RunSlot } from "@reactive-agents/core/internal/run-scope";
 import { AsyncLocalStorage } from "node:async_hooks";
+import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 
 const fileRootStore = new AsyncLocalStorage<string>();
@@ -67,3 +68,48 @@ export const currentFileRoot: Effect.Effect<string> = Effect.map(
   getRunSlot(fileRootSlot),
   (bound) => bound ?? fileRootStore.getStore() ?? process.cwd(),
 );
+
+/**
+ * Separator-aware containment: `candidate` is `base` itself or nested inside
+ * it. A sibling that merely shares a string prefix (`/work-secret` vs `/work`)
+ * is NOT within.
+ */
+export function isWithinRoot(base: string, candidate: string): boolean {
+  const relative = path.relative(base, candidate);
+  return (
+    relative === "" ||
+    (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
+  );
+}
+
+/**
+ * `realpath` of `target`, or, when `target` does not exist yet (a write
+ * target), the realpath of its nearest existing ancestor with the missing tail
+ * re-appended. Symlinks anywhere in the existing part are resolved, so the
+ * result is where the OS would really put the file.
+ */
+export async function realpathOfNearestAncestor(target: string): Promise<string> {
+  const tail: string[] = [];
+  let current = target;
+  for (;;) {
+    try {
+      const real = await fsp.realpath(current);
+      return tail.length === 0 ? real : path.join(real, ...tail.reverse());
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return target;
+      tail.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+/**
+ * True when `target` stays inside `root` after resolving symlinks on both
+ * sides (the root itself may be a symlink, e.g. `/tmp` on macOS).
+ */
+export async function isRealpathWithinRoot(root: string, target: string): Promise<boolean> {
+  const realRoot = await realpathOfNearestAncestor(root);
+  const realTarget = await realpathOfNearestAncestor(target);
+  return isWithinRoot(realRoot, realTarget);
+}

@@ -14,9 +14,9 @@
  * so the map itself is what gets durably checkpointed either way, unchanged
  * in shape, but bounded in size.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 
 /** Marker prefix distinguishing a spilled reference from real stored content. */
 const SPILL_MARKER_PREFIX = "[SPILLED_TO_DISK:";
@@ -25,10 +25,13 @@ const SPILL_MARKER_RE = /^\[SPILLED_TO_DISK:(.+)\]$/;
 /** Aggregate scratchpad size (bytes, UTF-8) past which new writes spill to disk. Default: 5 MB. */
 export const DEFAULT_SCRATCHPAD_SPILL_THRESHOLD_BYTES = 5 * 1024 * 1024;
 
-function spillDir(namespace: string): string {
+function spillBase(): string {
   const home = homedir();
-  const base = home ? join(home, ".reactive-agents", "spill") : join(".reactive-agents", "spill");
-  return join(base, namespace);
+  return home ? join(home, ".reactive-agents", "spill") : join(".reactive-agents", "spill");
+}
+
+function spillDir(namespace: string): string {
+  return join(spillBase(), namespace);
 }
 
 function spillPath(namespace: string, key: string): string {
@@ -92,6 +95,25 @@ export function resolveScratchpadValue(raw: string): string {
   const match = SPILL_MARKER_RE.exec(raw);
   if (!match) return raw;
   const path = match[1]!;
-  if (!existsSync(path)) return raw;
-  return readFileSync(path, "utf8");
+  // The marker is plain text in a map the model can write to, so its path is
+  // untrusted: only files that resolve (symlinks included) inside the spill
+  // directory are ever read. Anything else stays an inert string.
+  try {
+    if (!existsSync(path)) return raw;
+    if (!isWithinSpillBase(realpathSync(path))) return raw;
+    return readFileSync(path, "utf8");
+  } catch {
+    return raw;
+  }
+}
+
+/** True when `value` is shaped like a spill marker (never legitimate model-authored content). */
+export function looksLikeSpillMarker(value: string): boolean {
+  return value.trimStart().startsWith(SPILL_MARKER_PREFIX);
+}
+
+function isWithinSpillBase(realFile: string): boolean {
+  const base = realpathSync(spillBase());
+  const rel = relative(base, realFile);
+  return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }

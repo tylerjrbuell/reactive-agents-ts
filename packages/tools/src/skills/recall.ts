@@ -1,7 +1,7 @@
 import { Effect, Ref } from "effect";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
-import { resolveScratchpadValue } from "../scratchpad-spill.js";
+import { looksLikeSpillMarker, resolveScratchpadValue } from "../scratchpad-spill.js";
 import { currentScratchpadStore, resolveStore } from "./run-tool-stores.js";
 
 export interface RecallConfig {
@@ -107,6 +107,10 @@ export const makeRecallHandler =
 
       // ── Write mode
       if (key !== undefined && content !== undefined) {
+        // Spill markers are harness-authored; a model-written one would point reads at arbitrary files.
+        if (looksLikeSpillMarker(content)) {
+          return { saved: false, key, error: "content may not begin with the reserved spill marker prefix" };
+        }
         yield* Ref.update(storeRef, (m) => {
           const next = new Map(m);
           next.set(key, content);

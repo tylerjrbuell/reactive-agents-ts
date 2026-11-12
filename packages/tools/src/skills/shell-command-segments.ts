@@ -137,7 +137,21 @@ export function isRedirectAmpersand(command: string, i: number): boolean {
  * Splitting more than sh does only adds words to check.
  */
 export function pathCandidateTokens(command: string): string[] {
-  return command.split(/[\s<>&|;]+/).filter((token) => token !== "");
+  const tokens: string[] = [];
+  for (const token of command.split(/[\s<>&|;]+/)) {
+    if (token === "") continue;
+    tokens.push(token);
+    // An option can carry its path glued on: `--output=/tmp/x`, `-o/tmp/x`, `-o=../x`.
+    // Check the value too, or the path rule only sees tokens that start with `/`.
+    const option = token.replace(/^["']/, "");
+    if (!option.startsWith("-")) continue;
+    const eq = option.indexOf("=");
+    const slash = option.indexOf("/");
+    // A lone `/` is a delimiter (`cut -d/`, `sort -t/`), not a path.
+    if (eq !== -1 && option.length - eq > 2) tokens.push(option.slice(eq + 1));
+    if (slash !== -1 && option.length - slash > 1) tokens.push(option.slice(slash));
+  }
+  return tokens;
 }
 
 /** Characters that end an unquoted shell word. */

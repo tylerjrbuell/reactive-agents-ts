@@ -5,6 +5,7 @@ import * as path from "node:path";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
 import { getFileRoot } from "./file-operations.js";
+import { isRealpathWithinRoot, isWithinRoot } from "./file-root.js";
 
 // Directories no grep should ever descend into by default — build output,
 // dependency trees, and VCS internals are noise for a content search and can
@@ -109,12 +110,17 @@ export const grepHandler = (
       const resolvedScope = path.isAbsolute(scopePath)
         ? path.resolve(scopePath)
         : path.resolve(allowedBase, scopePath);
-      const normalizedBase = path.normalize(allowedBase);
-      if (!path.normalize(resolvedScope).startsWith(normalizedBase)) {
-        throw new Error(
-          `Path traversal detected: ${scopePath} resolves to ${resolvedScope} outside of ${allowedBase}`,
-        );
-      }
+      // Separator-aware (a sibling `/work-secret` is not inside `/work`) and
+      // symlink-aware (a link leaving the root is refused).
+      // The glob is matched under the scope; it must not climb out of it or name an absolute path.
+      const escape =
+        !isWithinRoot(allowedBase, resolvedScope) ||
+        !(await isRealpathWithinRoot(allowedBase, resolvedScope))
+          ? `${scopePath} resolves to ${resolvedScope} outside of ${allowedBase}`
+          : path.isAbsolute(globPattern) || globPattern.split(/[\\/]+/).includes("..")
+            ? `glob "${globPattern}" must stay inside the search path (no ".." segments, no absolute paths)`
+            : null;
+      if (escape !== null) throw new Error(`Path traversal detected: ${escape}`);
 
       const flags = caseSensitive ? "" : "i";
       const scan = (regex: RegExp) =>
@@ -191,6 +197,8 @@ async function scanFiles(
     filesScanned++;
 
     const abs = path.join(resolvedScope, rel);
+    // A symlink inside the root may point outside it: skip such hits.
+    if (!(await isRealpathWithinRoot(allowedBase, abs))) continue;
     let stat: Awaited<ReturnType<typeof fs.stat>>;
     try {
       stat = await fs.stat(abs);
