@@ -30,9 +30,11 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   docker build -t "$IMAGE" docker/signal-mcp/
 fi
 
-# Ensure data dir exists and is writable by container UID 1000
+# The data dir holds the Signal identity keys: owner-only. Registration below runs the
+# container as the invoking user (--user), so no wider mode is needed. Run the messaging
+# compose service as the same uid (SIGNAL_UID / SIGNAL_GID, default 1000).
 mkdir -p "$DATA_DIR"
-chmod 777 "$DATA_DIR"
+chmod 700 "$DATA_DIR"
 
 REAL_DATA_DIR="$(realpath "$DATA_DIR")"
 

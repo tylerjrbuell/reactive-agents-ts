@@ -43,7 +43,33 @@ export interface A2AHttpServerOptions {
   readonly hostname?: string;
   /** Bearer token required on every request. Defaults to `RA_A2A_TOKEN` env. */
   readonly token?: string;
+  /** Maximum JSON-RPC request body in bytes, counted on the stream. Default 1 MiB. */
+  readonly maxBodyBytes?: number;
 }
+
+const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
+
+/**
+ * Read a request body as text, counting bytes as they stream. Returns `null` (and cancels the
+ * stream) as soon as `max` is exceeded, so an oversized or chunked body is never buffered whole.
+ */
+const readCappedText = async (req: Request, max: number): Promise<string | null> => {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const next = await reader.read();
+    if (next.done) break;
+    total += next.value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(next.value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+};
 
 export const createA2AHttpServer = (
   port: number = 3000,
@@ -56,6 +82,7 @@ export const createA2AHttpServer = (
     Effect.gen(function* () {
       const server = yield* A2AServer;
       const base = normalizeBasePath(basePath);
+      const maxBodyBytes = serverOptions?.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
       // All three routes live under `base` (default `""`, i.e. root) — the
       // JSON-RPC endpoint at `base` itself (or `/` when there is no base),
       // the fallback card at `base/agent/card`, and A2A standard discovery
@@ -210,6 +237,7 @@ export const createA2AHttpServer = (
               port,
               hostname: serverOptions?.hostname ?? process.env.RA_A2A_HOST,
               token: serverOptions?.token ?? process.env.RA_A2A_TOKEN,
+              maxBodyBytes,
               fetch: async (req) => {
                 const url = new URL(req.url);
 
@@ -229,8 +257,14 @@ export const createA2AHttpServer = (
 
                 // POST {base} (default "/") — JSON-RPC endpoint
                 if (req.method === "POST" && url.pathname === rpcPath) {
+                  // Stream-counted cap: chunked bodies carry no Content-Length, so
+                  // secureServe's header check alone cannot bound them.
+                  const raw = await readCappedText(req, maxBodyBytes);
+                  if (raw === null) {
+                    return new Response(`Request body exceeds ${maxBodyBytes} bytes`, { status: 413 });
+                  }
                   try {
-                    const body = (await req.json()) as JsonRpcRequest;
+                    const body = JSON.parse(raw) as JsonRpcRequest;
 
                     // Handle message/stream — return SSE, or a JSON-RPC error
                     // if the task never started (e.g. no executor configured)

@@ -44,6 +44,11 @@ export interface ChannelServiceDeps {
    * senders and empty-sender events get no reply.
    */
   readonly replyToUnknown?: string;
+  /**
+   * Side-effect-free sender check used to gate attachment downloads before any bytes are fetched.
+   * Defaults to evaluating `evaluatePolicy` with an attachment-gate probe event.
+   */
+  readonly allowSender?: (sender: { readonly platform: string; readonly userId: string }) => Effect.Effect<boolean>;
   readonly eventBus?: { publish: (e: AgentEvent) => Effect.Effect<void, never> };
   /** Inbound envelopes processed in parallel per adapter (turns for one sender stay FIFO). Default 4. */
   readonly inboundConcurrency?: number;
@@ -68,11 +73,13 @@ function toGatewayEvent(adapterId: string, msg: InboundMessage): GatewayEvent {
     timestamp: msg.timestamp,
     priority: "normal",
     payload: msg.content,
+    // Adapter-supplied metadata may be attacker-influenced (webhook bodies); identity fields
+    // that access control keys on must come last so they cannot be overridden.
     metadata: {
+      ...msg.metadata,
       sender: msg.senderId,
       platform: msg.platform,
       adapterId,
-      ...msg.metadata,
     },
   };
 }
@@ -150,6 +157,21 @@ export class ChannelService {
     const self = this;
     return Effect.gen(function* () {
       const scope = self.scope ?? (self.scope = yield* Scope.make());
+      // Adapters must ask before downloading a stranger's attachments. Prefer the side-effect-free
+      // `allowSender`; otherwise fall back to the policy decision (counts one extra policy pass).
+      adapter.setSenderGate?.((sender) => {
+        if (self.deps.allowSender) return self.deps.allowSender(sender);
+        return self.deps
+          .evaluatePolicy({
+            id: `${adapter.id}:attachment-gate`,
+            source: "channel",
+            timestamp: new Date(),
+            priority: "normal",
+            payload: "",
+            metadata: { sender: sender.userId, platform: sender.platform, adapterId: adapter.id },
+          })
+          .pipe(Effect.map((d) => d.action === "execute"));
+      });
       self.adapters.set(adapter.id, {
         id: adapter.id,
         platform: adapter.platform,

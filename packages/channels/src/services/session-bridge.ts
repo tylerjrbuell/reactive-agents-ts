@@ -9,7 +9,12 @@ import type {
 
 export interface SessionBridgeDeps {
   readonly agentFactory: AgentSessionFactory;
+  /** Maximum live sessions; the least recently used is evicted beyond it. Default 500. */
+  readonly maxSessions?: number;
 }
+
+/** Default bound on live per-sender sessions (each holds an agent). */
+export const DEFAULT_MAX_SESSIONS = 500;
 
 /**
  * Maps external identities to agent chat sessions (bot DM keys, webhook sender ids, etc.).
@@ -23,8 +28,23 @@ export class SessionBridge {
   >();
   private readonly chainByKey = new Map<string, Promise<unknown>>();
 
+  private readonly maxSessions: number;
+
   constructor(deps: SessionBridgeDeps) {
     this.agentFactory = deps.agentFactory;
+    this.maxSessions = Math.max(1, deps.maxSessions ?? DEFAULT_MAX_SESSIONS);
+  }
+
+  /** Insert as most-recent, evicting least-recently-used sessions beyond the bound. */
+  private remember(key: string, value: { sessionId: string; chat: (message: string) => Promise<{ message: string; tokens?: number }> }): void {
+    this.chatByKey.delete(key);
+    this.chatByKey.set(key, value);
+    while (this.chatByKey.size > this.maxSessions) {
+      const oldest = this.chatByKey.keys().next().value;
+      if (oldest === undefined) break;
+      this.chatByKey.delete(oldest);
+      this.chainByKey.delete(oldest);
+    }
   }
 
   private compositeKey(identity: ExternalIdentity, channelId: string): string {
@@ -45,13 +65,14 @@ export class SessionBridge {
     const key = this.compositeKey(params.identity, params.channelId);
     const existing = this.chatByKey.get(key);
     if (existing) {
+      this.remember(key, existing); // touch: most recently used
       return Effect.succeed({ sessionId: existing.sessionId, chat: existing.chat });
     }
     const sessionId = this.makeSessionId(key);
     return Effect.tryPromise({
       try: async () => {
         const session = await this.agentFactory(params.agentConfig, sessionId);
-        this.chatByKey.set(key, { sessionId, chat: session.chat });
+        this.remember(key, { sessionId, chat: session.chat });
         return { sessionId, chat: session.chat };
       },
       catch: (cause) =>

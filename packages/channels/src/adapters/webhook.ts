@@ -99,8 +99,11 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
   constructor(config: WebhookChannelAdapterConfig) {
     this.id = config.id ?? "webhook";
     this.platform = config.platform ?? "webhook";
+    // An empty/whitespace secret (e.g. `process.env.X ?? ""`) is "no secret": HMAC with an empty
+    // key is forgeable by anyone, so it must fail closed (missing_secret) like an unset one.
+    const rawSecret = typeof config.secret === "string" ? config.secret : config.secret && Redacted.value(config.secret);
     this.secret =
-      config.secret === undefined
+      config.secret === undefined || !rawSecret || rawSecret.trim() === ""
         ? undefined
         : typeof config.secret === "string"
           ? Redacted.make(config.secret)

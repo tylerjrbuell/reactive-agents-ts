@@ -1,6 +1,8 @@
 import type { AgentCard, A2AMessage, A2ATask, SendMessageParams, TaskQueryParams, TaskCancelParams, JsonRpcRequest } from "../types.js";
 import { A2AError, TransportError, DiscoveryError } from "../errors.js";
 import { Effect, Context, Layer, Ref } from "effect";
+import { assertPublicUrl } from "@reactive-agents/runtime-shim";
+import { agentEgressGuard, type AgentEgressConfig } from "./discovery.js";
 
 export class A2AClient extends Context.Tag("A2AClient")<
   A2AClient,
@@ -14,6 +16,8 @@ export class A2AClient extends Context.Tag("A2AClient")<
 
 export interface ClientConfig {
   baseUrl: string;
+  /** Egress policy for `getAgentCard` (metadata/link-local always blocked; `strictEgress` also blocks private). */
+  egress?: AgentEgressConfig;
   auth?: {
     type: "bearer" | "apiKey";
     token?: string;
@@ -76,7 +80,9 @@ export const createA2AClient = (config: ClientConfig) =>
         getAgentCard: (url) =>
           Effect.tryPromise({
             try: async () => {
-              const response = await fetch(`${url}/agent/card`);
+              const cardUrl = `${url.replace(/\/$/, "")}/agent/card`;
+              await assertPublicUrl(cardUrl, agentEgressGuard(config.egress));
+              const response = await fetch(cardUrl, { redirect: "error" });
               const data = await response.json();
               return data as AgentCard;
             },

@@ -18,10 +18,32 @@ interface TaskStore {
 
 const now = () => new Date().toISOString();
 
-export const createA2AServer = (agentCard: AgentCard) =>
+/** Default cap on retained tasks; the oldest are evicted first once exceeded. */
+export const DEFAULT_MAX_TASKS = 1000;
+
+export interface A2AServerOptions {
+  /** Maximum tasks held in the in-memory store. Oldest are evicted. Default {@link DEFAULT_MAX_TASKS}. */
+  readonly maxTasks?: number;
+}
+
+/** Insert `task`, evicting oldest entries (Map insertion order) beyond `max`. */
+const putBounded = (tasks: Map<string, A2ATask>, task: A2ATask, max: number): Map<string, A2ATask> => {
+  const next = new Map(tasks);
+  next.delete(task.id); // re-insert so an updated task counts as newest
+  next.set(task.id, task);
+  while (next.size > max) {
+    const oldest = next.keys().next().value;
+    if (oldest === undefined) break;
+    next.delete(oldest);
+  }
+  return next;
+};
+
+export const createA2AServer = (agentCard: AgentCard, options?: A2AServerOptions) =>
   Layer.effect(
     A2AServer,
     Effect.gen(function* () {
+      const maxTasks = Math.max(1, options?.maxTasks ?? DEFAULT_MAX_TASKS);
       const store = yield* Ref.make<TaskStore>({ tasks: new Map() });
 
       return {
@@ -37,7 +59,7 @@ export const createA2AServer = (agentCard: AgentCard) =>
 
         setTask: (task) =>
           Ref.update(store, (s) => ({
-            tasks: new Map(s.tasks).set(task.id, task),
+            tasks: putBounded(s.tasks, task, maxTasks),
           })),
 
         cancelTask: (id) =>
@@ -67,7 +89,7 @@ export const createA2AServer = (agentCard: AgentCard) =>
               updatedAt: now(),
             };
             yield* Ref.update(store, (s) => ({
-              tasks: new Map(s.tasks).set(id, updatedTask),
+              tasks: putBounded(s.tasks, updatedTask, maxTasks),
             }));
             return updatedTask;
           }),

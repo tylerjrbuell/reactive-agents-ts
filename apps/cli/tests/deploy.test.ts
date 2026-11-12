@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach, beforeEach } from "bun:test";
-import { rmSync, existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { rmSync, existsSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scaffoldDocker, detectAgentName, detectMonorepoRoot, checkEnvFile } from "../src/commands/deploy/scaffold.js";
+import { scaffoldDocker, scaffoldSdkServer, ensureDockerIgnore, detectAgentName, detectMonorepoRoot, checkEnvFile } from "../src/commands/deploy/scaffold.js";
 import { flyTomlTemplate } from "../src/templates/fly-toml.js";
 import { railwayJsonTemplate } from "../src/templates/railway.js";
 import { hasCommand } from "../src/commands/deploy/exec.js";
@@ -424,5 +425,48 @@ describe("Deploy — Render + Railway templates", () => {
     const plan = report.plan.join("\n");
     expect(plan).not.toContain("blueprint launch");
     expect(plan).toContain("git push");
+  });
+});
+
+describe("Deploy — SDK scaffold keeps secrets out of the image (security M5)", () => {
+  // Outside the repo so detectMonorepoRoot does not find (and edit) the real workspace root.
+  const makeTmp = (): string => mkdtempSync(join(tmpdir(), "rax-sdk-scaffold-"));
+  const tmps: string[] = [];
+  afterEach(() => {
+    for (const d of tmps.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  it("RED-ON-CUT: single-package SDK scaffold writes a .dockerignore excluding .env* and .git", () => {
+    const dir = makeTmp();
+    tmps.push(dir);
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "a" }));
+    scaffoldSdkServer(dir, "a");
+    const lines = readFileSync(join(dir, ".dockerignore"), "utf-8").split("\n");
+    expect(lines).toContain(".env*");
+    expect(lines).toContain(".git");
+  });
+
+  it("RED-ON-CUT: an existing .dockerignore is extended, never rewritten", () => {
+    const dir = makeTmp();
+    tmps.push(dir);
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "a" }));
+    writeFileSync(join(dir, ".dockerignore"), "my-own-line\n");
+    scaffoldSdkServer(dir, "a");
+    const text = readFileSync(join(dir, ".dockerignore"), "utf-8");
+    expect(text).toContain("my-own-line");
+    expect(text.split("\n")).toContain(".env*");
+    // Idempotent
+    expect(ensureDockerIgnore(join(dir, ".dockerignore"), "")).toBe("ok");
+  });
+
+  it("RED-ON-CUT: monorepo SDK scaffold fixes the workspace-root .dockerignore", () => {
+    const root = makeTmp();
+    tmps.push(root);
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "ws", workspaces: ["apps/*"] }));
+    const app = join(root, "apps", "a");
+    mkdirSync(app, { recursive: true });
+    writeFileSync(join(app, "package.json"), JSON.stringify({ name: "a" }));
+    scaffoldSdkServer(app, "a");
+    expect(readFileSync(join(root, ".dockerignore"), "utf-8").split("\n")).toContain("**/.env*");
   });
 });

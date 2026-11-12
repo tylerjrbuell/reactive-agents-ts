@@ -7,6 +7,7 @@ import type {
   DeliveryUpdate,
   InboundEnvelope,
   OutboundMessage,
+  SenderGate,
 } from "../adapter.js";
 import {
   makeConnectionState,
@@ -88,6 +89,12 @@ export class SignalChannelAdapter implements ChannelAdapter {
   private readonly maxInboundAttachmentBytes: number;
   private connection?: SignalConnection;
   private lastSentAt = 0;
+  private senderGate?: SenderGate;
+
+  /** Installed by `ChannelService`: only gated-in senders may cause attachment downloads. */
+  setSenderGate(gate: SenderGate): void {
+    this.senderGate = gate;
+  }
 
   constructor(config: SignalChannelAdapterConfig) {
     this.id = config.id ?? "signal";
@@ -222,6 +229,11 @@ export class SignalChannelAdapter implements ChannelAdapter {
     return Effect.gen(function* () {
       const attachments: Attachment[] = [];
       let unavailable = 0;
+      // Policy before bytes: an unknown sender must not make us fetch anything.
+      if (event.attachments.length > 0 && self.senderGate) {
+        const allowed = yield* self.senderGate({ platform: self.platform, userId: event.userId });
+        if (!allowed) return { attachments, unavailable: event.attachments.length };
+      }
       for (const ref of event.attachments) {
         const bytes = yield* self.downloadAttachment(ref, event);
         if (bytes) attachments.push({ type: "binary", filename: ref.filename, contentType: ref.contentType, data: bytes });

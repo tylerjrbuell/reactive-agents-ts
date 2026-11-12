@@ -5,13 +5,17 @@
 # signal-cli requires glibc — Alpine does NOT work
 # Runtime: Bun (TypeScript MCP server)
 
+# Pinned Bun (matches CI); bump deliberately, never track "latest".
+ARG BUN_VERSION=1.3.10
+
 # ── Stage 1: Build ───────────────────────────────────────────────────────────
 FROM eclipse-temurin:25-jre-noble AS build
+ARG BUN_VERSION
 
 # Install Bun
 RUN apt-get update -qq && \
     apt-get install -y -qq --no-install-recommends curl unzip && \
-    curl -fsSL https://bun.sh/install | bash && \
+    curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
     rm -rf /var/lib/apt/lists/*
 ENV PATH="/root/.bun/bin:$PATH"
 
@@ -30,6 +34,10 @@ FROM eclipse-temurin:25-jre-noble
 
 # Bump when Signal returns DeprecatedVersionException (499) on register/send.
 ARG SIGNAL_CLI_VERSION=0.14.9
+# SHA-256 of signal-cli-${SIGNAL_CLI_VERSION}.tar.gz. Bump together with SIGNAL_CLI_VERSION
+# (`sha256sum` the release tarball); the build fails on mismatch.
+ARG SIGNAL_CLI_SHA256=c32b87f587198cbd277c9d71228716ee6047ee2b63e8e88728e8280d9407d65a
+ARG BUN_VERSION
 
 # Install signal-cli + Bun
 RUN apt-get update -qq && \
@@ -40,11 +48,12 @@ RUN apt-get update -qq && \
       qrencode && \
     curl -fsSL -o /tmp/signal-cli.tar.gz \
       "https://github.com/AsamK/signal-cli/releases/download/v${SIGNAL_CLI_VERSION}/signal-cli-${SIGNAL_CLI_VERSION}.tar.gz" && \
+    echo "${SIGNAL_CLI_SHA256}  /tmp/signal-cli.tar.gz" | sha256sum -c - && \
     mkdir -p /opt/signal-cli && \
     tar xzf /tmp/signal-cli.tar.gz -C /opt/signal-cli --strip-components=1 && \
     rm /tmp/signal-cli.tar.gz && \
     ln -s /opt/signal-cli/bin/signal-cli /usr/local/bin/signal-cli && \
-    curl -fsSL https://bun.sh/install | bash && \
+    curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" && \
     mv /root/.bun /opt/bun && \
     apt-get purge -y curl unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 

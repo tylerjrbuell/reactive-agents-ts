@@ -102,6 +102,31 @@ const SINGLE_DOCKERIGNORE = [
   "drafts",
 ].join("\n") + "\n";
 
+/** Patterns every generated image context must exclude so secrets and history never reach a layer. */
+export const REQUIRED_DOCKERIGNORE_PATTERNS = [".git", ".env*"] as const;
+
+/**
+ * Make sure the `.dockerignore` at `path` exists and excludes {@link REQUIRED_DOCKERIGNORE_PATTERNS}
+ * (plus `**` forms for a monorepo context). Creates it from `base`, or appends only the missing
+ * patterns to an existing file (never rewrites the user's own lines). Returns what changed.
+ */
+export function ensureDockerIgnore(path: string, base: string): "created" | "updated" | "ok" {
+  const required = base.includes("**/") ? [...REQUIRED_DOCKERIGNORE_PATTERNS, "**/.env*"] : [...REQUIRED_DOCKERIGNORE_PATTERNS];
+  if (!existsSync(path)) {
+    const lines = base.split("\n").filter((l) => l !== "");
+    const merged = [...lines, ...required.filter((p) => !lines.includes(p))];
+    writeFileSync(path, merged.join("\n") + "\n", "utf-8");
+    return "created";
+  }
+  const existing = readFileSync(path, "utf-8");
+  const have = new Set(existing.split("\n").map((l) => l.trim()));
+  const missing = required.filter((p) => !have.has(p));
+  if (missing.length === 0) return "ok";
+  const sep = existing.endsWith("\n") || existing === "" ? "" : "\n";
+  writeFileSync(path, `${existing}${sep}${missing.join("\n")}\n`, "utf-8");
+  return "updated";
+}
+
 /** Scaffold Docker deployment files. Returns what was created/skipped. */
 export function scaffoldDocker(
   cwd: string,
@@ -202,11 +227,17 @@ export function scaffoldSdkServer(
       path: "Dockerfile.sdk",
       content: sdkDockerfileMonorepoTemplate(name, appPath),
     });
+    // Build context is the workspace root; `COPY . .`-style layers must never carry .env*/.git.
+    const rootResult = ensureDockerIgnore(join(monorepoRoot, ".dockerignore"), MONOREPO_DOCKERIGNORE);
+    if (rootResult !== "ok") console.log(success(`${rootResult === "created" ? "create" : "update"} .dockerignore (build context root)`));
   } else {
     files.push({
       path: "Dockerfile.sdk",
       content: sdkDockerfileTemplate(name),
     });
+    // Dockerfile.sdk does `COPY . .`; without this, .env.production and .git bake into image layers.
+    const result = ensureDockerIgnore(join(cwd, ".dockerignore"), SINGLE_DOCKERIGNORE);
+    if (result !== "ok") console.log(success(`${result === "created" ? "create" : "update"} .dockerignore`));
   }
 
   // Also create .env.production.example if missing

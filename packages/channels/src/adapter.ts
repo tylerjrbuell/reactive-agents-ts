@@ -120,9 +120,23 @@ export interface ChannelAdapter {
   readonly currentState: Effect.Effect<ConnectionState>;
   /** Present when `capabilities.receipts`: delivered/read confirmations for earlier sends. */
   readonly deliveryUpdates?: Stream.Stream<DeliveryUpdate>;
+  /**
+   * Optional: receive the sender gate before `start`. Adapters that download inbound attachments
+   * MUST consult it first and count a denied sender's files as unavailable, never fetch them.
+   */
+  setSenderGate?(gate: SenderGate): void;
   start(): Effect.Effect<void, ChannelError, Scope.Scope>;
   send(message: OutboundMessage): Effect.Effect<DeliveryReceipt, ChannelError>;
 }
+
+/**
+ * Decides whether a sender may cause the adapter to spend resources on their behalf (download
+ * attachments). `ChannelService` installs it from the gateway access policy on registration.
+ */
+export type SenderGate = (sender: {
+  readonly platform: string;
+  readonly userId: string;
+}) => Effect.Effect<boolean>;
 
 /** Structural check used by `ChannelService.registerAdapter` to tell new adapters from legacy `MessageChannel`s. */
 export const isChannelAdapter = (x: unknown): x is ChannelAdapter => {

@@ -29,13 +29,13 @@ export const discoverAgent = (
       // Try .well-known/agent.json first (A2A standard)
       const wellKnownUrl = `${baseUrl.replace(/\/$/, "")}/.well-known/agent.json`;
       await assertPublicUrl(wellKnownUrl, guard);
-      let response = await fetch(wellKnownUrl);
+      let response = await fetch(wellKnownUrl, { redirect: "error" });
 
       if (!response.ok) {
         // Fallback to /agent/card
         const fallbackUrl = `${baseUrl.replace(/\/$/, "")}/agent/card`;
         await assertPublicUrl(fallbackUrl, guard);
-        response = await fetch(fallbackUrl);
+        response = await fetch(fallbackUrl, { redirect: "error" });
       }
 
       if (!response.ok) {

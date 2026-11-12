@@ -7,6 +7,7 @@ import type {
   DeliveryReceipt,
   InboundEnvelope,
   OutboundMessage,
+  SenderGate,
 } from "../adapter.js";
 import {
   makeConnectionState,
@@ -124,6 +125,12 @@ export class TelegramChannelAdapter implements ChannelAdapter {
   private readonly chatLimits: { readonly dm?: Limit; readonly group?: Limit };
   private readonly chatLimiters = new Map<string, Limiter>();
   private me?: TelegramSelf;
+  private senderGate?: SenderGate;
+
+  /** Installed by `ChannelService`: only gated-in senders may cause attachment downloads. */
+  setSenderGate(gate: SenderGate): void {
+    this.senderGate = gate;
+  }
   private offset: number;
   private accepting = false;
   private lastSentAt = 0;
@@ -138,11 +145,19 @@ export class TelegramChannelAdapter implements ChannelAdapter {
       ...(config.fetch ? { fetch: config.fetch } : {}),
       ...(config.apiBaseUrl ? { apiBaseUrl: config.apiBaseUrl } : {}),
     });
-    this.webhookSecret = config.webhook
+    // An empty/whitespace secretToken is "no secret": it would match a missing header, so it
+    // must fail closed like an unset one.
+    const rawToken = config.webhook
       ? typeof config.webhook.secretToken === "string"
-        ? Redacted.make(config.webhook.secretToken)
-        : config.webhook.secretToken
-      : undefined;
+        ? config.webhook.secretToken
+        : Redacted.value(config.webhook.secretToken)
+      : "";
+    this.webhookSecret =
+      config.webhook && rawToken.trim() !== ""
+        ? typeof config.webhook.secretToken === "string"
+          ? Redacted.make(config.webhook.secretToken)
+          : config.webhook.secretToken
+        : undefined;
     this.offset = config.initialOffset ?? 0;
     this.inboundQueue = Effect.runSync(Queue.bounded<InboundEnvelope | ChannelError>(config.inboundCapacity ?? 256));
     this.conn = Effect.runSync(makeConnectionState());
@@ -352,6 +367,11 @@ export class TelegramChannelAdapter implements ChannelAdapter {
     return Effect.gen(function* () {
       const attachments: Attachment[] = [];
       let unavailable = 0;
+      // Policy before bytes: an unknown sender must not make us fetch anything.
+      if (event.files.length > 0 && self.senderGate) {
+        const allowed = yield* self.senderGate({ platform: self.platform, userId: event.userId });
+        if (!allowed) return { attachments, unavailable: event.files.length };
+      }
       for (const file of event.files) {
         const bytes =
           file.size !== undefined && file.size > limit
