@@ -8,7 +8,9 @@ import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import { turnModelOf } from "../chat-live-config.js";
 import type { ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent } from "@reactive-agents/ui-core";
-import type { RecalledMemoryView, RunSkillsView, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
+import type { AttachmentMeta, RecalledMemoryView, RunSkillsView, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
+import { metaOf, requestOf, type DraftAttachment } from "../composer-attachments.js";
+import { keepThumbs } from "./composer-attachments.js";
 import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
 import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
 import type { ChatPendingApprovalWire } from "../chat-approvals.js";
@@ -177,6 +179,8 @@ export type ChatTurn = {
   skills?: RunSkillsView;
   /** Memories the turn's run recalled into its context (stored by the server); absent when it reported none. */
   recalled?: readonly RecalledMemoryView[];
+  /** What the user attached to this (user) message: names and sizes, never bytes. */
+  attachments?: readonly AttachmentMeta[];
 };
 
 /** Server-persisted thinking + tool-call detail for a finished assistant turn. */
@@ -201,6 +205,8 @@ type PersistedTrace = {
   recalled?: readonly RecalledMemoryView[];
   /** The typed object and how it was obtained, for a turn run with an output schema. */
   structured?: TurnStructured;
+  /** Attachments of a user message (names and sizes). */
+  attachments?: readonly AttachmentMeta[];
 };
 
 /** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
@@ -236,6 +242,7 @@ export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTur
     ...(trace.skills && trace.skills.activations.length > 0 ? { skills: trace.skills } : {}),
     ...(trace.recalled ? { recalled: trace.recalled } : {}),
     ...(trace.structured ? { structured: trace.structured } : {}),
+    ...(trace.attachments && trace.attachments.length > 0 ? { attachments: trace.attachments } : {}),
   };
 }
 
@@ -599,7 +606,7 @@ function createChatStore() {
   }
 
   /** `skills`: skill names pinned for this message only (`/skill`); the session config is not changed. */
-  async function sendMessageStream(message: string, opts: { readonly posture?: "execute" | "plan"; readonly skills?: readonly string[] } = {}): Promise<void> {
+  async function sendMessageStream(message: string, opts: { readonly posture?: "execute" | "plan"; readonly skills?: readonly string[]; readonly attachments?: readonly DraftAttachment[] } = {}): Promise<void> {
     let sessionId: string | null = null;
     let structuredOutput = false;
     let runModel: { provider?: string; model?: string } = {};
@@ -611,12 +618,15 @@ function createChatStore() {
     });
     if (!sessionId) return;
 
+    const attached = opts.attachments ?? [];
+    keepThumbs(attached);
     const optimisticUserTurn: ChatTurn = {
       id: Date.now(),
       role: "user",
       content: message,
       tokensUsed: 0,
       ts: Date.now(),
+      ...(attached.length > 0 ? { attachments: metaOf(attached) } : {}),
     };
 
     const assistantTurnId = Date.now() + 1;
@@ -646,6 +656,7 @@ function createChatStore() {
         message,
         ...(opts.posture !== undefined ? { posture: opts.posture } : {}),
         ...(opts.skills && opts.skills.length > 0 ? { skills: [...opts.skills] } : {}),
+        ...(requestOf(attached) ? { attachments: requestOf(attached) } : {}),
       },
     });
   }

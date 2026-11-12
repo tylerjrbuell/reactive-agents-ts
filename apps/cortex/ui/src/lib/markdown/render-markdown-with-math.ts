@@ -1,3 +1,5 @@
+import { EXTERNAL_LINK_ATTRS, linkPolicy } from "./safe-links.js";
+
 /**
  * Split markdown so `$$...$$` display math can be rendered with KaTeX while the rest
  * goes through marked + DOMPurify. Fenced ``` code blocks are not scanned for `$$`.
@@ -68,9 +70,34 @@ const PURIFY_TAGS = [
   "a", "hr",
   "table", "thead", "tbody", "tr", "th", "td",
   "del", "ins", "span",
+  // GFM task lists: only disabled checkboxes survive (see the hook below).
+  "input",
 ] as const;
 
-const PURIFY_ATTR = ["href", "title", "colspan", "rowspan", "class"] as const;
+const PURIFY_ATTR = ["href", "title", "colspan", "rowspan", "class", "type", "checked", "disabled"] as const;
+
+let hooked = false;
+
+/** Links and task-list inputs from untrusted markdown, made safe after DOMPurify's own pass. */
+function installHooks(purify: { addHook: (name: "afterSanitizeAttributes", fn: (node: Element) => void) => void }): void {
+  if (hooked) return;
+  hooked = true;
+  purify.addHook("afterSanitizeAttributes", (node) => {
+    if (node.nodeName === "A") {
+      const policy = linkPolicy(node.getAttribute("href"));
+      if (policy.href === null) node.removeAttribute("href");
+      else node.setAttribute("href", policy.href);
+      if (policy.external) {
+        node.setAttribute("target", EXTERNAL_LINK_ATTRS.target);
+        node.setAttribute("rel", EXTERNAL_LINK_ATTRS.rel);
+      }
+    } else if (node.nodeName === "INPUT") {
+      // Only the checkbox GFM emits for `- [x]`; any other input is removed, and it is never editable.
+      if (node.getAttribute("type") !== "checkbox") node.remove();
+      else node.setAttribute("disabled", "");
+    }
+  });
+}
 
 /**
  * Renders markdown + `$$` display math to a safe HTML string (KaTeX blocks are not re-sanitized;
@@ -83,6 +110,7 @@ export async function renderMarkdownWithMath(markdown: string): Promise<string> 
     import("katex"),
   ]);
   const katex = katexMod.default;
+  installHooks(DOMPurify);
 
   const segments = splitMarkdownAndDisplayMath(markdown);
   const parts: string[] = [];

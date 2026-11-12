@@ -3,6 +3,7 @@
   import { tooltip } from "$lib/actions/tooltip.js";
   import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
+  import ChatSentAttachments from "$lib/components/chat/ChatSentAttachments.svelte";
   import { endingBadge } from "$lib/turn-ending.js";
   import { fade } from "svelte/transition";
 
@@ -39,6 +40,7 @@
       {/if}
     </div>
   {/if}
+  {#if turn.attachments && turn.attachments.length > 0}<ChatSentAttachments attachments={turn.attachments} />{/if}
   <div class="bubble">{turn.content}</div>
   <ChatTurnActions
     {turn}

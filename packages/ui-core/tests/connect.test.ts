@@ -111,4 +111,19 @@ describe("connectRunStream", () => {
     }
     expect(got.at(-1)?._tag).toBe("StreamError");
   });
+
+  test("a refused request carries the server's own reason", async () => {
+    const fetchImpl: typeof fetch = async () =>
+      new Response(JSON.stringify({ error: "qwen3:4b does not accept pictures." }), { status: 422, statusText: "Unprocessable Entity", headers: { "content-type": "application/json" } });
+    const got: UiStreamEvent[] = [];
+    for await (const e of connectRunStream({ endpoint: "/api/agent", body: { prompt: "hi" }, fetchImpl })) got.push(e);
+    expect(got).toEqual([{ _tag: "StreamError", cause: "HTTP 422: qwen3:4b does not accept pictures." }]);
+  });
+
+  test("a refusal without a JSON reason keeps the status text", async () => {
+    const fetchImpl: typeof fetch = async () => new Response("nope", { status: 502, statusText: "Bad Gateway" });
+    const got: UiStreamEvent[] = [];
+    for await (const e of connectRunStream({ endpoint: "/api/agent", body: {}, fetchImpl })) got.push(e);
+    expect(got).toEqual([{ _tag: "StreamError", cause: "HTTP 502: Bad Gateway" }]);
+  });
 });

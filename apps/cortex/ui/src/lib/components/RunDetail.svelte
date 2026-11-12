@@ -51,7 +51,7 @@
     type InspectorTabId,
   } from "$lib/run-view.js";
   import { runToChatSession } from "$lib/run-to-chat-session.js";
-  import { foldJudgments, judgmentBadgeOf, safetyEntriesOf, safetySummaryOf } from "@reactive-agents/ui-core";
+  import { deliverableCallsOf, foldJudgments, judgmentBadgeOf, safetyEntriesOf, safetySummaryOf } from "@reactive-agents/ui-core";
   import { safetyBadgeTone } from "$lib/run-safety.js";
   import { judgmentBadgeTone } from "$lib/run-judgments.js";
   import { loadCapabilities, strategyOptions } from "$lib/capabilities.js";
@@ -109,6 +109,12 @@
 
   // ── Derived run facts ──────────────────────────────────────────────────
   const finalTraceFrame = $derived($traceStore.findLast((f) => f.kind === "final") ?? null);
+  // Files the run wrote or edited, from its tool-call events (settled runs only: a live run changes every event).
+  const deliverableCalls = $derived(
+    $runStore.status === "live" || $runStore.status === "loading"
+      ? []
+      : deliverableCallsOf($runStore.events.filter((e) => e.type === "ToolCallStarted" || e.type === "ToolCallCompleted").map((e) => ({ ...(typeof e.payload === "object" && e.payload !== null ? e.payload : {}), _tag: e.type }))),
+  );
   const finalDeliverableText = $derived.by(() => {
     // An answer the output guardrail withheld is not the run's answer.
     if (answerWithheld($runStore.events)) return "";
@@ -490,6 +496,7 @@
         structuredError={$runStore.structuredError}
         structuredReport={$runStore.structuredReport}
         structuredSchema={$runStore.launchParams?.outputSchema}
+        calls={deliverableCalls}
       />
       <RunCauseCard
         {runId}

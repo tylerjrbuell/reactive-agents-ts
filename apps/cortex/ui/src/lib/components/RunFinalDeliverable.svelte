@@ -7,7 +7,8 @@
    * ending banner for it). Structured output renders as JSON below.
    */
   import type { RunStatus } from "$lib/stores/run-store.js";
-  import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
+  import RichAnswer from "$lib/components/answer/RichAnswer.svelte";
+  import type { DeliverableCallLike } from "@reactive-agents/ui-core";
   import BoundedText from "$lib/components/BoundedText.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
@@ -32,8 +33,10 @@
     structuredReport?: StructuredOutputReportWire | null;
     /** The output JSON Schema, for field descriptions. */
     structuredSchema?: unknown;
+    /** The run's tool calls: files it wrote or edited are listed as deliverables. */
+    calls?: readonly DeliverableCallLike[];
   }
-  let { status, deliverableText, streamText, failureMessage, abstained = false, meta, structuredObject, structuredError, structuredReport = null, structuredSchema }: Props = $props();
+  let { status, deliverableText, streamText, failureMessage, abstained = false, meta, structuredObject, structuredError, structuredReport = null, structuredSchema, calls = [] }: Props = $props();
 
   const showStructured = $derived(
     (structuredObject !== undefined && structuredObject !== null) || !!structuredError || structuredReport !== null,
@@ -90,7 +93,7 @@
 
     {#if showDeliverable}
       {#if expanded}
-        <div class="prose"><GuardedMarkdown markdown={deliverableText} showCopy={false} /></div>
+        <div class="prose"><RichAnswer markdown={deliverableText} {calls} toolbar="always" hostCopies /></div>
       {:else}
         <p class="prose preview">{previewText}</p>
       {/if}

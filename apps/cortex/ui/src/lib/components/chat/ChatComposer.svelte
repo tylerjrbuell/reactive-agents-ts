@@ -26,6 +26,12 @@
     sending: boolean;
     /** The quick bar, rendered at the top of the panel. */
     quickBar?: Snippet;
+    /** Attachment chips and the `@` file menu (ChatAttachmentBar, ChatMentionMenu), above the text. */
+    attachBar?: Snippet;
+    /** Extra controls in the footer, before the prompt library (the paperclip). */
+    footerTools?: Snippet;
+    /** Files dropped on the composer or pasted into it. */
+    onFiles?: (files: File[]) => void | Promise<void>;
     /** The harness restricts this turn to planning. */
     planning: boolean;
     queued: QueuedMessage;
@@ -37,9 +43,31 @@
     onClearQueued: () => void;
   }
   let {
-    message = $bindable(""), caret = $bindable(0), skills = [], inputEl = $bindable(null), sending, quickBar, planning, queued, sendAction, hasText,
+    message = $bindable(""), caret = $bindable(0), skills = [], inputEl = $bindable(null), sending, quickBar, attachBar, footerTools, onFiles, planning, queued, sendAction, hasText,
     onKeydown, onSendButton, onSendQueuedNow, onClearQueued,
   }: Props = $props();
+
+  // Drop and paste: files go to the attachment checks, text drops and pastes stay the browser's.
+  let dropping = $state(false);
+  const hasFiles = (dt: DataTransfer | null) => dt !== null && Array.from(dt.types).includes("Files");
+  function onDragOver(e: DragEvent) {
+    if (!onFiles || !hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    dropping = true;
+  }
+  function onDrop(e: DragEvent) {
+    dropping = false;
+    if (!onFiles || !hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    void onFiles(Array.from(e.dataTransfer?.files ?? []));
+  }
+  function onPaste(e: ClipboardEvent) {
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (!onFiles || files.length === 0) return;
+    // A copied file or screenshot has no text worth pasting; keep any text the clipboard also carries.
+    if (!e.clipboardData?.getData("text/plain")) e.preventDefault();
+    void onFiles(files);
+  }
 
   const sendLabel = $derived(sendAction === "stop" ? "Stop reply" : sendAction === "queue" ? "Queue message" : "Send message");
 
@@ -78,8 +106,10 @@
   {#if queued !== null}
     <ChatQueuedRow text={queued} {sending} onSendNow={onSendQueuedNow} onClear={onClearQueued} />
   {/if}
-  <div class="composer" data-slash-menu-keep>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="composer" class:dropping data-slash-menu-keep ondragover={onDragOver} ondragleave={() => (dropping = false)} ondrop={onDrop}>
     {#if quickBar}{@render quickBar()}{/if}
+    {#if attachBar}{@render attachBar()}{/if}
     {#if planning}
       <p data-testid="planning-badge" class="planning" use:tooltip={"The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out."}>
         <Icon name="checklist" size="sm" />Planning mode. Send /go to carry the plan out.
@@ -103,6 +133,7 @@
         onselect={syncCaret}
         onfocus={syncCaret}
         onscroll={syncScroll}
+        onpaste={onPaste}
         data-slash-menu-keep
       ></textarea>
     </div>
@@ -114,6 +145,7 @@
         <kbd>/</kbd> commands
         {#if sending}<kbd>Enter</kbd> queue <kbd>Esc</kbd> clear{:else}<kbd>Enter</kbd> send <kbd>Shift Enter</kbd> new line{/if}
       </span>
+      {#if footerTools}{@render footerTools()}{/if}
       <PromptPickerButton
         types={["task", "snippet"]}
         defaultSaveType="task"
@@ -144,11 +176,13 @@
 <style>
   .composer-wrap { flex-shrink: 0; width: 100%; max-width: var(--cortex-chat-col); margin: 0 auto; }
   .composer {
+    position: relative;
     border: 1px solid var(--cortex-line-strong);
     border-radius: var(--cortex-r-panel);
     background: var(--cortex-surface-1);
     transition: border-color var(--cortex-d-fast), box-shadow var(--cortex-d-fast);
   }
+  .composer.dropping { border-color: var(--cortex-accent); box-shadow: 0 0 0 3px var(--cortex-accent-tint); }
   .composer:focus-within { border-color: var(--cortex-accent); box-shadow: 0 0 0 3px var(--cortex-accent-tint); }
   .planning { display: flex; align-items: center; gap: 6px; margin: 8px 14px 0; font-size: var(--cortex-t-xs); color: var(--cortex-accent); }
   .field { position: relative; }

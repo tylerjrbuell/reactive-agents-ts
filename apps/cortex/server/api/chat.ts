@@ -8,6 +8,8 @@ import type { ChatBtwService } from "../services/chat-btw.js";
 import type { ChatProposalService, ProposalResult } from "../services/chat-proposal-service.js";
 import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
 import { withCheckedWorkspace } from "../services/workspace-dir.js";
+import { buildTurnInput, inputCapabilitiesOf } from "../services/chat-attachments.js";
+import { readWorkspaceText, searchWorkspaceFiles } from "../services/workspace-files.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
 import { parseCortexSkillsConfig } from "../services/cortex-agent-config.js";
 
@@ -722,6 +724,23 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
           set.status = 409;
           return { error: "A turn in this session is already running: reattach to it" };
         }
+        // Pictures, audio, text files and tagged workspace files become the turn's input; a refusal
+        // (type, size, count, a model that cannot take it, a path outside the workspace) is a plain
+        // 4xx before any run starts.
+        const hasAttachments = (body.attachments?.uploads?.length ?? 0) + (body.attachments?.files?.length ?? 0) > 0;
+        // The session (all its turns) is read only when there is something attached.
+        const cfg = hasAttachments ? (svc.sessionConfig(params.sessionId) ?? {}) : {};
+        const built = buildTurnInput({
+          message: body.message,
+          attachments: body.attachments,
+          workspaceRoot: typeof cfg["workspace"] === "string" ? cfg["workspace"] : undefined,
+          provider: typeof cfg["provider"] === "string" ? cfg["provider"] : "",
+          model: typeof cfg["model"] === "string" ? cfg["model"] : "",
+        });
+        if (!built.ok) {
+          set.status = built.status;
+          return { error: built.error, code: built.code, ...(built.partType ? { partType: built.partType } : {}) };
+        }
         try {
           // The turn runs to its end whether or not this connection stays open (chat-detached-turn.ts):
           // closing or reloading the page no longer aborts it, so a wait on an approval or a question
@@ -731,6 +750,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
             body.message,
             svc.chatStream(params.sessionId, body.message, undefined, posture, {
               ...(body.skills ? { skills: body.skills } : {}),
+              ...(built.meta.length > 0 ? { input: built.input, attachments: built.meta } : {}),
             }),
           );
           return sseResponse(turn, 0);
@@ -742,7 +762,70 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
       },
       {
         // `skills`: skill names pinned for this turn only (`/skill <name>`).
-        body: t.Object({ message: t.String(), posture: t.Optional(t.String()), skills: t.Optional(t.Array(t.String())) }),
+        // `attachments`: uploads (base64) and tagged workspace files, see chat-attachments.ts.
+        body: t.Object({
+          message: t.String(),
+          posture: t.Optional(t.String()),
+          skills: t.Optional(t.Array(t.String())),
+          attachments: t.Optional(
+            t.Object({
+              uploads: t.Optional(t.Array(t.Object({ name: t.String(), mediaType: t.String(), dataBase64: t.String() }))),
+              files: t.Optional(t.Array(t.String())),
+            }),
+          ),
+        }),
       },
+    )
+    // The model's input capabilities for this chat (vision, audio in): the composer disables what it cannot take.
+    .get("/sessions/:sessionId/input-capabilities", ({ params, set }) => {
+      const cfg = svc.sessionConfig(params.sessionId);
+      if (!cfg) {
+        set.status = 404;
+        return { error: "Session not found" };
+      }
+      const provider = typeof cfg["provider"] === "string" ? cfg["provider"] : "";
+      const model = typeof cfg["model"] === "string" ? cfg["model"] : "";
+      return { capabilities: inputCapabilitiesOf(provider, model) };
+    })
+    // `@` picker: fuzzy search over the session's workspace files (confined, secrets and build output excluded).
+    .get(
+      "/sessions/:sessionId/files",
+      ({ params, query, set }) => {
+        const root = workspaceRootOf(svc, params.sessionId);
+        if (root === null) {
+          set.status = 404;
+          return { error: "Session not found" };
+        }
+        if (root === "") return { workspace: null, files: [], truncated: false };
+        const limit = query.limit !== undefined ? Number(query.limit) : 30;
+        return { workspace: root, ...searchWorkspaceFiles(root, query.q ?? "", Number.isFinite(limit) ? limit : 30) };
+      },
+      { query: t.Object({ q: t.Optional(t.String()), limit: t.Optional(t.String()) }) },
+    )
+    // Preview of one tagged file (bounded; binary refused), shown before send.
+    .get(
+      "/sessions/:sessionId/files/preview",
+      ({ params, query, set }) => {
+        const root = workspaceRootOf(svc, params.sessionId);
+        if (root === null || root === "") {
+          set.status = root === null ? 404 : 400;
+          return { error: root === null ? "Session not found" : "This chat has no workspace" };
+        }
+        const read = readWorkspaceText(root, query.path);
+        if (!read.ok) {
+          set.status = read.code === "not-found" ? 404 : 400;
+          return { error: read.error, code: read.code };
+        }
+        return read;
+      },
+      { query: t.Object({ path: t.String() }) },
     );
 };
+
+/** The session's workspace root: `null` when the session is unknown, `""` when it has none. */
+function workspaceRootOf(svc: ChatSessionService, sessionId: string): string | null {
+  const cfg = svc.sessionConfig(sessionId);
+  if (!cfg) return null;
+  const ws = cfg["workspace"];
+  return typeof ws === "string" ? ws : "";
+}

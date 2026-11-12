@@ -4,7 +4,7 @@
   import { previewArgs, turnSteps, turnSummary, turnTranscript } from "$lib/stores/chat-timeline.js";
   import ChatLiveApproval from "$lib/components/ChatLiveApproval.svelte";
   import { groupToolNames } from "$lib/tool-groups.js";
-  import { toolBadgesOf, type TranscriptTools } from "@reactive-agents/ui-core";
+  import { deliverablesOf, toolBadgesOf, type TranscriptTools } from "@reactive-agents/ui-core";
   import ChatModelWait from "$lib/components/ChatModelWait.svelte";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import ChatSubAgentCards from "$lib/components/ChatSubAgentCards.svelte";
@@ -16,6 +16,7 @@
   import ChatLiveInteraction from "$lib/components/ChatLiveInteraction.svelte";
   import StructuredResult from "$lib/components/StructuredResult.svelte";
   import GuardedMarkdown from "$lib/components/GuardedMarkdown.svelte";
+  import RichAnswer from "$lib/components/answer/RichAnswer.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import Status from "$lib/components/kit/Status.svelte";
 
@@ -148,9 +149,14 @@
       <p class="prose live-text">{answer.text}<span class="caret"></span></p>
     {:else}
       <div class="prose" data-testid="transcript-answer">
-        <GuardedMarkdown markdown={answer.text} showCopy={answerCopy} />
+        <RichAnswer markdown={answer.text} calls={turn.toolCalls ?? []} declared={turn.deliverables ?? []} structured={turn.structured?.object} hostCopies={!answerCopy} inlineCopy={answerCopy} />
       </div>
     {/if}
+  {:else if !turn.streaming && deliverablesOf({ toolCalls: turn.toolCalls ?? [] }).length > 0}
+    <!-- A run that wrote files and said nothing: its deliverables are the answer. -->
+    <div class="prose" data-testid="transcript-deliverables">
+      <RichAnswer markdown="" calls={turn.toolCalls ?? []} declared={turn.deliverables ?? []} structured={turn.structured?.object} />
+    </div>
   {/if}
   {#if ending && !turn.streaming}
     <ChatRunEndingNote outcome={ending.outcome} reasonInAnswer={abstentionInAnswer(answer?.text, ending.outcome)} {onRetry} />

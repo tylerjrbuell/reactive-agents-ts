@@ -67,6 +67,23 @@ async function* readSse(
 }
 
 /**
+ * The message for a refused request: `HTTP <status>: <reason>`, where the reason is the
+ * server's own `{ error }` JSON text when it sent one (so a 422 "this model does not
+ * accept pictures" reaches the user), else the status text.
+ */
+async function refusalText(res: Response): Promise<string> {
+  let reason = res.statusText;
+  try {
+    const body: unknown = await res.json();
+    const error = body !== null && typeof body === "object" ? (body as { error?: unknown }).error : undefined;
+    if (typeof error === "string" && error !== "") reason = error;
+  } catch {
+    /* not JSON: keep the status text */
+  }
+  return `HTTP ${res.status}: ${reason}`;
+}
+
+/**
  * Connect to an agent run stream with automatic cursor-based resume.
  * New-run mode: POST { ...body } to endpoint.
  * Attach mode (or reconnect): GET endpoint/:runId?cursor=N.
@@ -96,7 +113,7 @@ export async function* connectRunStream(
               attachUrl(opts.endpoint, opts.attach?.runId ?? "", lastSeq),
               { method: "GET", signal: opts.signal },
             );
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      if (!res.ok) throw new Error(await refusalText(res));
       firstConnection = false;
       attempt = 0; // successful connection resets the retry budget
 

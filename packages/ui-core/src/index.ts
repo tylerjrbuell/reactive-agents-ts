@@ -215,3 +215,37 @@ export {
   respondToInteraction,
   decideApproval,
 } from "./interaction/controller.js";
+export {
+  DELIVERABLE_CONTENT_CAP,
+  baseNameOf,
+  deliverableFileName,
+  deliverableText,
+  deliverablesOf,
+  mediaTypeOfPath,
+  type DeclaredDeliverableLike,
+  type DeliverableCallLike,
+  type DeliverableInputs,
+  type DeliverableItem,
+  type DeliverableKind,
+} from "./state/deliverables.js";
+export { calloutKindOf, outlineOf, slugOf, type CalloutKind, type OutlineEntry } from "./state/answer-outline.js";
+export {
+  ATTACHMENT_CAPS,
+  AUDIO_MIME_TYPES,
+  IMAGE_MIME_TYPES,
+  TEXT_EXTENSIONS,
+  classifyAttachment,
+  cutToBytes,
+  fileContextBlock,
+  formatBytes,
+  gateAttachmentKind,
+  modalityMessage,
+  type AttachmentCandidate,
+  type AttachmentClass,
+  type AttachmentGate,
+  type AttachmentKind,
+  type AttachmentMeta,
+  type InputCapabilitiesLike,
+} from "./state/attachments.js";
+export { rankPaths, scorePath, type PathMatch } from "./state/path-match.js";
+export { deliverableCallsOf, type ToolCallEventLike } from "./state/deliverables.js";

@@ -5,6 +5,7 @@ import {
   foldTurnTrace,
   initialTurnTrace,
   turnOutcomeOf as readTurnOutcome,
+  type AttachmentMeta,
   type InterruptedBy,
   type RunCompletionLike,
   type RecalledMemoryView,
@@ -86,6 +87,8 @@ export type StoredTurnTrace = Omit<TurnTrace, "outcome"> & {
   readonly skills?: RunSkillsView;
   /** Memories the run recalled into its context (ui-core `foldRecalledMemories`, `chat-turn-recall.ts`); absent when it reported none. */
   readonly recalled?: readonly RecalledMemoryView[];
+  /** What the user attached to the message (a user row only): names and sizes, never bytes. */
+  readonly attachments?: readonly AttachmentMeta[];
 };
 
 /**
@@ -225,4 +228,33 @@ export class TurnTraceRecorder {
     const { outcome, ...rest } = trace;
     return { ...rest, ...(outcome?.deliverables ? { deliverables: outcome.deliverables } : {}) };
   }
+}
+
+/** A user row's trace carrying only the message's attachment metadata. */
+export function withTurnAttachments(attachments: readonly AttachmentMeta[]): StoredTurnTrace {
+  return { reasoningSteps: [], toolCalls: [], attachments: [...attachments] };
+}
+
+const ATTACHMENT_KINDS: ReadonlySet<string> = new Set(["image", "audio", "text", "workspace-file"]);
+
+/** Stored attachment metadata read back from JSON (well-formed entries only). */
+export function readStoredAttachments(raw: unknown): readonly AttachmentMeta[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const list = raw.flatMap((a): AttachmentMeta[] => {
+    if (a === null || typeof a !== "object") return [];
+    const o = a as Readonly<Record<string, unknown>>;
+    const kind = o["kind"];
+    const name = o["name"];
+    const bytes = o["bytes"];
+    if (typeof kind !== "string" || !ATTACHMENT_KINDS.has(kind) || !str(name) || typeof bytes !== "number") return [];
+    return [{
+      kind: kind as AttachmentMeta["kind"],
+      name,
+      bytes,
+      ...(str(o["mediaType"]) ? { mediaType: o["mediaType"] } : {}),
+      ...(str(o["path"]) ? { path: o["path"] } : {}),
+      ...(typeof o["shownBytes"] === "number" ? { shownBytes: o["shownBytes"] } : {}),
+    }];
+  });
+  return list.length > 0 ? list : undefined;
 }

@@ -47,6 +47,10 @@ import { migrateChatSkillsConfig, skillRootOf } from "./workspace-skills.js";
 import { recordRecallActivity, withTurnRecall, type RecallActivityLog } from "./chat-turn-recall.js";
 import { recordSkillActivity,turnSkillPinsOf, turnSkillsOption, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
 import { detectToolCallShape } from "@reactive-agents/tools";
+import type { AttachmentMeta } from "@reactive-agents/ui-core";
+import type { TaskInput } from "@reactive-agents/runtime";
+import { asMultimodal } from "./chat-attachments.js";
+import { withTurnAttachments } from "./chat-turn-trace.js";
 import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
 import { cortexLog } from "../cortex-log.js";
@@ -324,6 +328,8 @@ export class ChatSessionService {
   private readonly envBaselines = new Map<string, EnvironmentSnapshotInput>();
   /** Per-session cumulative USER to-do edits (agent edits never pass through `setTodo`). */
   private readonly todoEdits = new Map<string, { added: number; removed: number }>();
+  /** Attachment metadata of the turn in flight per session, stored on its user row (chat-attachments.ts). */
+  private readonly turnAttachments = new Map<string, readonly AttachmentMeta[]>();
   private goalSource: ((sessionId: string) => { status: string; objective?: string } | null) | undefined;
 
   /** Goal-status port for environment notices; set once at startup (the goal service needs this service). */
@@ -414,6 +420,11 @@ export class ChatSessionService {
 
   listSessions(): ChatSessionRow[] {
     return listChatSessions(this.db);
+  }
+
+  /** The stored agent config of a session without reading its turns; `null` for an unknown id. */
+  sessionConfig(sessionId: string): Record<string, unknown> | null {
+    return getChatSession(this.db, sessionId)?.agentConfig ?? null;
   }
 
   getSession(
@@ -686,7 +697,7 @@ export class ChatSessionService {
     message: string,
     signal?: AbortSignal,
     posture?: RunPosture,
-    opts: { readonly skills?: readonly string[] } = {},
+    opts: { readonly skills?: readonly string[]; readonly input?: TaskInput; readonly attachments?: readonly AttachmentMeta[] } = {},
   ): AsyncGenerator<AgentStreamEvent> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
@@ -699,6 +710,9 @@ export class ChatSessionService {
     if (this.approvals.hasPending(sessionId)) throw new ChatApprovalPendingError(sessionId);
 
     const release = this.acquireTurn(sessionId);
+    if (opts.attachments && opts.attachments.length > 0) this.turnAttachments.set(sessionId, opts.attachments);
+    // What the run receives: the message plus any attachments (a plain string when there are none).
+    const turnInput = opts.input ?? message;
     // Stop (stopTurn) and the client's signal both abort the run; the handle says which.
     const stop = this.turnStops.begin(sessionId, signal);
     // A turn that fails before its run reports (the agent cannot be built, or the run throws
@@ -724,7 +738,7 @@ export class ChatSessionService {
       // wrapped in the SSE event shape so Run Chat and the main Chat panel behave consistently.
       if (!enableTools && !streamReasoningSteps) {
         try {
-          const chatReply = await entry.session.chat(message, {
+          const chatReply = await asMultimodal(entry.session).chat(turnInput, {
             useTools: false,
             ...(posture !== undefined ? { posture } : {}),
             ...turnSkillsOption(turnPins),
@@ -787,7 +801,7 @@ let tokensUsed = 0;
       const recorder = new TurnTraceRecorder();
 
       try {
-        for await (const streamed of entry.session.runStream(message, {
+        for await (const streamed of asMultimodal(entry.session).runStream(turnInput, {
           density: "full",
           signal: stop.signal,
           ...(posture !== undefined ? { posture } : {}),
@@ -896,6 +910,7 @@ let tokensUsed = 0;
         }
       }
     } finally {
+      this.turnAttachments.delete(sessionId);
       stop.end();
       release();
     }
@@ -924,7 +939,8 @@ let tokensUsed = 0;
     // A failed tool call emitted as text is not a conversation turn: persisting it would
     // re-poison the rebuilt history. Skip the whole exchange so alternation stays sane.
     if (isShapedAssistantReply(reply)) return;
-    appendChatTurn(this.db, { sessionId, role: "user", content: userMessage, tokensUsed: 0 });
+    const attached = this.turnAttachments.get(sessionId);
+    appendChatTurn(this.db, { sessionId, role: "user", content: userMessage, tokensUsed: 0, ...(attached ? { trace: withTurnAttachments(attached) } : {}) });
     appendChatTurn(this.db, {
       sessionId,
       role: "assistant",

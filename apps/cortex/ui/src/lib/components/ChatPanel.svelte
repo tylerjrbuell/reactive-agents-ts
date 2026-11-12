@@ -46,6 +46,13 @@
   import { closeMenu as closedMenu, createToggleQueue, keepsMenuOpen, NO_CHIP_MENU, pickChip as chipPicked, syncChipMenu, type ChipMenu, type MenuUi } from "$lib/chat-menu.js";
   import { commandMenuItems, inlineMenuItems, pickerItems } from "$lib/chat-menu-items.js";
   import WorkspacePickerDialog from "$lib/components/WorkspacePickerDialog.svelte";
+  import ChatAttachmentBar from "$lib/components/chat/ChatAttachmentBar.svelte";
+  import ChatAttachMenu from "$lib/components/chat/ChatAttachMenu.svelte";
+  import ChatMentionMenu from "$lib/components/chat/ChatMentionMenu.svelte";
+  import { createAttachController } from "$lib/stores/composer-attachments.js";
+  import { mentionTrigger, removeMention } from "$lib/mention-trigger.js";
+  import { fetchInputCapabilities, type WorkspaceFileHit } from "$lib/chat-files.js";
+  import type { InputCapabilitiesLike } from "@reactive-agents/ui-core";
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
   $effect(() => {
     void loadProviders().then((list) => { providerList = list; });
@@ -268,7 +275,44 @@
 
   /** Send one message with `skills` (its `/skill` tokens) pinned for it only; the session config is untouched. */
   async function sendWith(text: string, skills: readonly string[], posture?: "execute" | "plan") {
-    await chatStore.sendMessageStream(text, { ...(posture ? { posture } : {}), skills: [...skills] });
+    // The chips ride this message only (composer-attachments.ts); the typed text is sent as written.
+    const attachments = attach.take();
+    await chatStore.sendMessageStream(text, { ...(posture ? { posture } : {}), skills: [...skills], ...(attachments.length > 0 ? { attachments } : {}) });
+  }
+
+  // ── Attachments and the `@` file picker ───────────────────────────────────
+  let inputCaps = $state<InputCapabilitiesLike | undefined>(undefined);
+  const attach = createAttachController({
+    caps: () => inputCaps,
+    model: () => model,
+    refuse: (title, msg) => toast.error(title, msg),
+  });
+  const attachItems = attach.items;
+  // The model decides which kinds the paperclip offers; reload when the chat or its model changes.
+  $effect(() => {
+    void activeSession;
+    attach.clear();
+  });
+  $effect(() => {
+    const id = activeSession;
+    void model;
+    void provider;
+    void fetchInputCapabilities(CORTEX_SERVER_URL, id).then((c) => {
+      if (id === untrack(() => sessionId)) inputCaps = c;
+    });
+  });
+  // `@partial` at the caret opens the file menu; Escape on it keeps it closed for that `@`.
+  let mentionDismissedAt = $state<number | null>(null);
+  const mention = $derived.by(() => {
+    const t = slash ? null : mentionTrigger(message, caret);
+    return t !== null && t.start !== mentionDismissedAt ? t : null;
+  });
+  function pickMention(file: WorkspaceFileHit) {
+    if (!mention) return;
+    const r = removeMention(message, mention);
+    attach.addWorkspaceFile(file);
+    mentionDismissedAt = null;
+    void setComposer(r.text, r.caret);
   }
 
   /** Put text in the composer with the caret at `at` (after a pick that inserted at the caret). */
@@ -782,7 +826,17 @@
     {onSendButton}
     onSendQueuedNow={sendQueuedNow}
     onClearQueued={clearQueued}
+    onFiles={(files) => attach.addFiles(files)}
   >
+    {#snippet attachBar()}
+      {#if mention}
+        <ChatMentionMenu trigger={mention} {sessionId} onPick={pickMention} onClose={() => (mentionDismissedAt = mention.start)} />
+      {/if}
+      <ChatAttachmentBar items={$attachItems} {sessionId} onRemove={(id) => attach.remove(id)} />
+    {/snippet}
+    {#snippet footerTools()}
+      <ChatAttachMenu caps={inputCaps} {model} onFiles={(files) => attach.addFiles(files)} />
+    {/snippet}
     {#snippet quickBar()}
       {#if provider || draftSkillList.length > 0}
         <ChatQuickBar

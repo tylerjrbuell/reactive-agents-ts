@@ -8,6 +8,8 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { renderMarkdownWithMath } from "$lib/markdown/render-markdown-with-math.js";
+  import { decorateRendered } from "$lib/markdown/decorate.js";
+  import { outlineOf } from "@reactive-agents/ui-core";
   import { ICON_PATHS } from "$lib/icons.js";
   import Icon from "$lib/components/kit/Icon.svelte";
   import "katex/dist/katex.min.css";
@@ -58,6 +60,8 @@
   // Add copy buttons to code blocks after rendering
   $effect(() => {
     if (!browser || !containerRef || !html) return;
+    // Callouts, code language labels and outline anchors (markdown/decorate.ts).
+    decorateRendered(containerRef, outlineOf(markdown, { minEntries: 0 }));
 
     const preElements = containerRef.querySelectorAll("pre");
     preElements.forEach((pre, index) => {
@@ -297,6 +301,48 @@
     color: var(--cortex-md-th-text);
     font-weight: 600;
   }
+
+  /* Code block language label (set by decorateRendered); the Copy button sits at the opposite corner. */
+  .markdown-deliverable :global(pre[data-lang]) { padding-top: 26px; }
+  .markdown-deliverable :global(pre[data-lang]::before) {
+    content: attr(data-lang);
+    position: absolute;
+    top: 5px;
+    left: 12px;
+    font: 500 var(--cortex-t-2xs) var(--cortex-font-data);
+    color: var(--cortex-text-3);
+  }
+  /* Callouts: `> [!NOTE]` and its kin. Colour comes from the outcome tokens; the title is text, never colour alone. */
+  .markdown-deliverable :global(blockquote.callout) {
+    padding: 0.55rem 0.8rem;
+    border-left-width: 3px;
+    border-radius: var(--cortex-r-ctl);
+    background: var(--cortex-surface-2);
+    color: var(--cortex-md-text);
+    font-size: 1em;
+  }
+  .markdown-deliverable :global(blockquote.callout::before) {
+    content: attr(data-callout);
+    display: block;
+    margin-bottom: 0.2em;
+    font: 600 var(--cortex-t-xs) var(--cortex-font-ui);
+  }
+  .markdown-deliverable :global(blockquote.callout-note),
+  .markdown-deliverable :global(blockquote.callout-tip) { border-left-color: var(--cortex-io); }
+  .markdown-deliverable :global(blockquote.callout-note::before),
+  .markdown-deliverable :global(blockquote.callout-tip::before) { color: var(--cortex-io); }
+  .markdown-deliverable :global(blockquote.callout-important) { border-left-color: var(--cortex-accent); }
+  .markdown-deliverable :global(blockquote.callout-important::before) { color: var(--cortex-accent); }
+  .markdown-deliverable :global(blockquote.callout-warning) { border-left-color: var(--cortex-warn); }
+  .markdown-deliverable :global(blockquote.callout-warning::before) { color: var(--cortex-warn); }
+  .markdown-deliverable :global(blockquote.callout-caution) { border-left-color: var(--cortex-bad); }
+  .markdown-deliverable :global(blockquote.callout-caution::before) { color: var(--cortex-bad); }
+  /* Task lists: the disabled checkbox GFM emits, aligned with its text. */
+  .markdown-deliverable :global(li:has(> input[type="checkbox"])) { list-style: none; margin-left: -1.1rem; }
+  .markdown-deliverable :global(input[type="checkbox"]) { margin: 0 0.5em 0 0; vertical-align: -1px; accent-color: var(--cortex-accent-fill); }
+  .markdown-deliverable :global(h1[id]),
+  .markdown-deliverable :global(h2[id]),
+  .markdown-deliverable :global(h3[id]) { scroll-margin-top: 12px; }
 
   .markdown-deliverable :global(.katex-display-shell) {
     text-align: center;
