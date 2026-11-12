@@ -13,6 +13,10 @@ on:
     - cron: "0 4 * * *"
   workflow_dispatch:
 
+# Least privilege: the eval lane only reads the repo.
+permissions:
+  contents: read
+
 # T1.1 — Concurrency cancellation for the same workflow + ref.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

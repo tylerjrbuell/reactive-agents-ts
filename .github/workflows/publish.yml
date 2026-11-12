@@ -28,8 +28,6 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,9 +58,12 @@ jobs:
       # `release.ts` requires an explicit semver — this is its single source.
       - name: Resolve release version
         id: ver
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
           else
             VERSION="${GITHUB_REF_NAME#v}"
           fi
@@ -94,27 +95,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # release.ts shells `bun publish`. Write the literal token (NOT a
-      # ${VAR} placeholder — bun does not interpolate .npmrc the way npm
-      # does) to whatever config path is in effect: NPM_CONFIG_USERCONFIG
-      # if some action still set it, else $HOME/.npmrc. Fail fast if any
-      # placeholder slipped through. This is the v0.11.0 auth fix (#3).
-      - name: Authenticate bun + npm to registry
-        run: |
-          set -euo pipefail
-          AUTHFILE="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
-          printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$AUTHFILE"
-          echo "auth written to: $AUTHFILE"
-          if grep -qE '\$\{[A-Z_]+\}' "$AUTHFILE"; then
-            echo "::error::placeholder unexpanded in $AUTHFILE"; exit 1
-          fi
-          echo "NPM_CONFIG_USERCONFIG=${NPM_CONFIG_USERCONFIG:-<unset>}"
-          echo "config lines (redacted):"
-          sed 's/_authToken=.*/_authToken=<redacted>/' "$AUTHFILE"
-          echo "npm identity check:"; npm whoami || echo "(npm whoami failed — bun publish may still succeed via .npmrc)"
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - name: Build
         run: bun run build
 
@@ -141,10 +121,36 @@ jobs:
       - name: Release plan (dry-run gate)
         run: bun scripts/release.ts ${{ steps.ver.outputs.version }} --dry-run
 
+      # release.ts shells `bun publish`. Write the literal token (NOT a
+      # ${VAR} placeholder — bun does not interpolate .npmrc the way npm
+      # does) to whatever config path is in effect: NPM_CONFIG_USERCONFIG
+      # if some action still set it, else $HOME/.npmrc. Fail fast if any
+      # placeholder slipped through. This is the v0.11.0 auth fix (#3).
+      # Runs only after install, build, typecheck and tests, so dependency
+      # install scripts and test code never see the token (security audit
+      # 2026-11-12).
+      - name: Authenticate bun + npm to registry
+        run: |
+          set -euo pipefail
+          AUTHFILE="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$AUTHFILE"
+          echo "auth written to: $AUTHFILE"
+          if grep -qE '\$\{[A-Z_]+\}' "$AUTHFILE"; then
+            echo "::error::placeholder unexpanded in $AUTHFILE"; exit 1
+          fi
+          echo "NPM_CONFIG_USERCONFIG=${NPM_CONFIG_USERCONFIG:-<unset>}"
+          echo "config lines (redacted):"
+          sed 's/_authToken=.*/_authToken=<redacted>/' "$AUTHFILE"
+          echo "npm identity check:"; npm whoami || echo "(npm whoami failed — bun publish may still succeed via .npmrc)"
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       # Real release: aggregate CHANGELOG, consume changesets, stamp all
       # public packages + root to the single version, build, publish in
       # dependency order. Fail-fast; re-runnable (already-published skipped).
       - name: Release
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: bun scripts/release.ts ${{ steps.ver.outputs.version }}
 
       # Sync the release artifacts back to main: VERSION (so `cat VERSION` ==

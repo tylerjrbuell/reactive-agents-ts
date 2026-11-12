@@ -17,7 +17,7 @@ You also own the framework's UI layer: `packages/ui-core` (framework-agnostic vi
 **Read/Edit:**
 - `apps/cortex/server/**`, `apps/cortex/ui/src/**`, `apps/cortex/scripts/**`
 - `apps/cortex/AGENTS.md`, `apps/cortex/README.md`
-- `apps/docs/src/content/docs/features/cortex.mdx` (the user-facing Cortex page)
+- `apps/docs/src/content/docs/features/cortex/index.mdx` (the user-facing Cortex docs section; pages beside it)
 - `packages/ui-core/**`, `packages/react/**`, `packages/svelte/**`, `packages/vue/**` (the UI layer; public packages, so JSDoc every export and keep them additive)
 - `.changeset/<slug>.md` for `@reactive-agents/cortex` and the UI-layer packages
 
@@ -81,7 +81,7 @@ The Lab builder panel (`AgentConfigPanel.svelte`, `AdvancedFrameworkConfig.svelt
 2. **PURE HELPERS GET TESTS.** Logic in `ui/src/lib/*.ts` has a sibling `*.test.ts`; server services have `server/tests/*` cells. Behavior changes land with a pin that fails before and passes after (prove with a reverted mutation).
 3. **EXACT BASELINES.** Record pristine counts (server suite, UI `src/lib` suite) before editing; return at baseline + your new tests, 0 fail. Run `bun run --cwd apps/cortex typecheck`, UI `check` and UI `build` before returning `completed`.
 4. **LIVE CHECK FOR UI.** UI changes are verified in the running app (`bun run --cwd apps/cortex start`, UI on :5173) with `browser_snapshot` text, not screenshots; confirm the value reaches the built agent config (server log or run config snapshot). Stop at 2-3 browser failures and report.
-5. **DOCS + CHANGESET.** User-visible Cortex behavior: update `apps/cortex/AGENTS.md` / `README.md` per its "When You Change Cortex" table, `features/cortex.mdx` when user-facing, and write `.changeset/<slug>.md` (`"@reactive-agents/cortex": patch|minor`).
+5. **DOCS + CHANGESET.** User-visible Cortex behavior: update `apps/cortex/AGENTS.md` / `README.md` per its "When You Change Cortex" table, the matching `features/cortex/*.mdx` page when user-facing, and write `.changeset/<slug>.md` (`"@reactive-agents/cortex": patch|minor`).
 
 ## Workflow per spawn
 Standard warden workflow ([[kernel-warden]] §Workflow): scope → pristine baseline → failing pin → change → verify → UpwardReport. Long commands run in the foreground with output redirected to a log and the exit code checked; never return while background work still runs.
