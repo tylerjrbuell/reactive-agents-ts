@@ -306,6 +306,8 @@ When connecting to MCP (Model Context Protocol) tool servers, Reactive Agents su
 | `tasks/cancel` | Cancel an in-progress task | `{ id: string }` |
 | `agent/card` | Get the agent's card via RPC | — |
 
+`message/send`, `message/stream`, `tasks/get` and `tasks/cancel` validate their `params` against a schema. Malformed params get a JSON-RPC `-32602` (invalid params) error instead of reaching the handler.
+
 **`tasks/cancel` limitation:** canceling a task marks it `canceled` in the
 task store immediately, but does not yet interrupt the underlying agent run
 — the run keeps executing in the background to completion regardless. Full

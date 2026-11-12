@@ -200,6 +200,8 @@ webhooks: [
 | `"github"` | HMAC-SHA256 via `X-Hub-Signature-256` | `"push"`, `"pull_request.opened"`, etc. |
 | `"generic"` | Configurable HMAC header and algorithm | Extracted from payload or `"webhook.received"` |
 
+The `"github"` adapter rejects a replayed `x-github-delivery` id (a bounded per-adapter cache of the last 1024 ids), so a redelivered event does not run twice.
+
 #### Serving webhooks (ingress)
 
 `startGatewayIngress(config, { onEvent })` opens one small HTTP server for `GatewayConfig.webhooks` on `GatewayConfig.port`, bound to `127.0.0.1` unless you pass another `hostname`. It opens no socket when nothing is configured. Channel webhooks (for example Telegram) mount on the same server through `channelRoutes`.
@@ -541,6 +543,10 @@ accessControl: {
   replyToUnknown: "Sorry, I only respond to authorized contacts.",
 }
 ```
+
+:::caution[Breaking: channels reject unknown senders by default]
+A gateway with **no `accessControl`** now denies every inbound channel sender (Telegram, Signal, webhook-channel) instead of letting them drive the agent. The deny reason names the sender (`telegram:123`) and how to allow it, and the gateway logs a warning at start. Set `accessControl.allowedSenders`, or opt in to the old behavior explicitly with `accessControl: { accessPolicy: "open" }`. An `accessControl` block with no `accessPolicy` still defaults to `allowlist`.
+:::
 
 :::caution[Breaking: senders are `platform:userId`]
 `allowedSenders` and `blockedSenders` entries must carry the platform prefix (`signal:+15551234567`, `telegram:123456789`). A bare `+15551234567` no longer matches a platform-tagged sender, so an old allowlist denies everyone and an old blocklist blocks no one. Prefix every existing entry when you upgrade. A channel event with an empty sender is always denied.

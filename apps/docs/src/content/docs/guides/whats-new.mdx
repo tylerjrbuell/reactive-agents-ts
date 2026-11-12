@@ -20,6 +20,10 @@ A quick-scan guide to what has landed in each major release. Start here when ret
 
 Not tagged yet. These are on `dev` and may still change before release.
 
+<Aside type="caution" title="Breaking: channels reject unknown senders by default">
+A gateway with no `accessControl` now denies every inbound channel sender (Telegram, Signal, webhook-channel) instead of letting them drive the agent. The deny reason names the sender (`telegram:123`) and how to allow it, and the gateway logs a warning at start. Set `accessControl.allowedSenders`, or keep the old behavior with an explicit opt-in: `accessControl: { accessPolicy: "open" }`. An `accessControl` block with no `accessPolicy` still defaults to `allowlist`. See [Messaging Channels](/guides/messaging-channels/) and [Gateway](/features/gateway/).
+</Aside>
+
 <Aside type="caution" title="Breaking: namespaced sender keys">
 `allowedSenders` and `blockedSenders` entries must now carry the platform prefix. A bare `+1555...` no longer matches a platform-tagged sender, so an unmigrated allowlist silently blocks everyone. Migrate each entry: `+15551234567` becomes `signal:+15551234567`, and a Telegram user id `123456789` becomes `telegram:123456789`. See [Messaging Channels](/guides/messaging-channels/) and [Gateway](/features/gateway/).
 
@@ -42,6 +46,7 @@ Not tagged yet. These are on `dev` and may still change before release.
 
 - **Durable schedules, ingress server and inbound queue.** `agent.schedules()`, restart catch-up for cron, a webhook and channel ingress server, and a queue so overlapping events are not dropped. See [Gateway](/features/gateway/).
 - **Canonical `ChannelAdapter` contract** with native Signal and Telegram bot adapters. See [Messaging Channels](/guides/messaging-channels/).
+- **GitHub webhook replay dedupe and A2A params validation.** The GitHub adapter rejects a replayed `x-github-delivery` id, and the A2A server answers malformed `message/send`, `message/stream`, `tasks/get` and `tasks/cancel` params with JSON-RPC `-32602`. See [A2A Protocol](/features/a2a-protocol/).
 - **Deploy hardening.** Validated agent names, always-on daemon settings per target, and the Cloud Run auth default above. See [`rax deploy`](/reference/cli/#rax-deploy).
 
 ### Security hardening
@@ -63,6 +68,12 @@ Behavior changes first. Each one can break an existing setup. See [Security Hard
 ### Cortex
 
 Chat composer with a Config popover, `/mcp` and `/btw` commands, a Context tab (active skills and recalled memories), judgments, rich answers, `@` file tags, attachments, and voice (dictation, read aloud, voice mode). See [Cortex](/features/cortex/).
+
+- **Asks before risky tools by default.** Writing files, running code and the full shell wait for your approval in chat and desk runs; gateway agents refuse them. Turn it off with **Ask before risky tools** in Lab Tools or `/approvals` in chat. The framework's own default is unchanged. See [Approvals and questions](/features/cortex/approvals-and-questions/).
+- **One command surface.** Typing `/` and the Config button open the same anchored list, with each setting beside its slash command and current value. Esc goes back one level, then closes. See [Chat and composer](/features/cortex/chat-and-composer/).
+- **One styled `Select`.** Every pick list uses it: search from nine options, grouped options, keyboard support. The Beacon settings panel closes on an outside click or Esc.
+- **Live goal output.** Goal segments, schedule fires and loop ticks stream into the open chat like a typed turn, and a reload reattaches. A picked file the browser can no longer read shows a "Not attached" toast. See [Goals, plans and loops](/features/cortex/goals-plans-loops/).
+- **Channels and a Gateway tab.** The Lab connects a saved Gateway process agent to Telegram, Signal or a signed webhook with encrypted write-only credentials, an access-control editor and **Test connection**, and a Gateway tab shows connection state and activity. See [Gateway and channels](/features/cortex/gateway-and-channels/).
 
 ---
 

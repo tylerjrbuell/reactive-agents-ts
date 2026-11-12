@@ -45,6 +45,8 @@ Chat shows what each turn did and what it cost:
 
 ## The quick bar and Config popover
 
+The composer has **one command surface**. Typing `/` and pressing the **Config** button open the same list, anchored to the composer. Every setting appears there next to its slash alias (`/model`, `/tools`, `/agent`, `/approvals`, ...) and its current value, so you can learn the command while you click. A command with options opens in place under a **Back** row. **Esc** goes back one level, then closes the list. `/agent` has an On/Off panel.
+
 ![The Config popover: five groups, Model, Reasoning, Tools, Workspace and Limits.](../../../../assets/cortex-chat-config-popover.png)
 
 The row above the input shows the model and only the settings that differ from the defaults: a thinking choice, a strategy other than ReAct, a step cap other than 16, tools, the shell, a workspace, pinned skills, documents, agent control. At most four chips show; the **Config** button (with `+N` for changed settings that did not fit) opens a popover anchored to the button. It starts on a menu of the five groups, each with a one-line summary: Model (provider, model, thinking), Reasoning (strategy, skills, agent control), Tools (tools, shell, MCP servers, tool disclosure, approvals), Workspace (directory, documents) and Limits (steps). Choose a group to see its rows with their current values; a header row holds **Back** and the group's name. A row opens the same picker as its slash command, with its own Back row; Back or Escape returns to the group, Back or Escape again to the menu, and once more closes (a click outside closes at once). Click a chip or row, or type the slash command, to pick a new value; the change is saved to the session and the next turn uses it. This also works while a reply runs: the change is saved straight away (not queued as a message), the running turn keeps the settings it started with, and a toast says the change applies to the next turn.
@@ -81,7 +83,7 @@ While a picker is open, clicking another chip switches straight to that picker, 
 ## Tagging files and attaching media
 
 - **Tag workspace files with `@`** — type `@` in the composer to search the chat's workspace by file name (fuzzy, arrow keys, Enter or Tab to pick, Escape to close). A pick becomes a removable chip; click the chip to preview exactly what will be sent. Text is placed in the prompt (up to 64 KB per file and 192 KB per message; a longer file says `64 KB of 340 KB, cut` in the chip and the prompt). The list is confined to the workspace folder: `.git`, `node_modules`, build output, `.env` and key files are never listed or read, symlinks that leave the folder are refused, and binary files are rejected with the reason. A chat with no workspace shows how to set one. Your typed text is never replaced.
-- **Pictures, audio and files** — the paperclip (or drag and drop, or paste a screenshot) attaches pictures (up to 10 MB), audio (up to 25 MB) and text files (up to 1 MB), eight per message. Pictures and audio go to the model as typed content parts; the paperclip asks the framework's `modelInputCapabilities` for the chat's model and disables a kind it cannot take, with the reason in its tooltip. A guessed capability does not block: the provider decides. A refusal from the server (type, size, a model that cannot take it) is shown as a plain message and nothing runs. The transcript keeps each message's attachment names and sizes (never the bytes), shows a thumbnail for pictures sent in the current page session and a chip after a reload.
+- **Pictures, audio and files** — the paperclip (or drag and drop, or paste a screenshot) attaches pictures (up to 10 MB), audio (up to 25 MB) and text files (up to 1 MB), eight per message. Pictures and audio go to the model as typed content parts; the paperclip asks the framework's `modelInputCapabilities` for the chat's model and disables a kind it cannot take, with the reason in its tooltip. A guessed capability does not block: the provider decides. A refusal from the server (type, size, a model that cannot take it) is shown as a plain message and nothing runs. If the browser can no longer read a file you picked, a "Not attached" toast says so and the rest of the batch still attaches. The transcript keeps each message's attachment names and sizes (never the bytes), shows a thumbnail for pictures sent in the current page session and a chip after a reload.
 
 ## Environment changes between turns
 
@@ -91,7 +93,7 @@ A chat session can change under the model: you switch the model or thinking, add
 
 In a chat, these slash commands drive longer work:
 
-- `/goal`, `/plan`, `/go`, `/loop`, `/schedule`: see [Goals, plans and loops](/features/cortex/goals-plans-loops/).
+- `/goal`, `/plan`, `/go`, `/loop`, `/schedule`: see [Goals, plans and loops](/features/cortex/goals-plans-loops/). Goal segments, schedule fires and loop ticks stream live into the open chat (tokens, tool chips, to-do updates) like a turn you typed, and reloading the page mid-segment reattaches to it.
 - `/agent on` — opt the chat into agent session control ("let the agent manage this chat"). Off by default.
 - `/tools` — the tool disclosure picker (`all`, `index`, `discover`, or tier).
 - `/mcp` — turn an MCP server on for this chat, or `/mcp add <command or URL>`.

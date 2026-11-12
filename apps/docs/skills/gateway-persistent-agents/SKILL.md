@@ -149,6 +149,8 @@ accessControl: {
 
 A bare `+15551234567` no longer matches, so an unprefixed allowlist denies everyone.
 
+Channels reject unknown senders by default: with no `accessControl`, every inbound channel sender is denied (and the gateway logs a warning at start). Allow specific senders as above, or accept anyone explicitly with `accessControl: { accessPolicy: "open" }`. The GitHub webhook adapter also drops a replayed `x-github-delivery` id.
+
 ### Policy engine
 
 ```ts

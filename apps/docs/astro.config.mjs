@@ -370,6 +370,7 @@ export default defineConfig({
                                 { label: 'Goals, plans and loops', link: 'features/cortex/goals-plans-loops/' },
                                 { label: 'Run view and traces', link: 'features/cortex/run-view-and-traces/' },
                                 { label: 'Lab builder', link: 'features/cortex/lab-builder/' },
+                                { label: 'Gateway and channels', link: 'features/cortex/gateway-and-channels/' },
                                 { label: 'Memory and skills', link: 'features/cortex/memory-and-skills/' },
                                 { label: 'Judgments and evals', link: 'features/cortex/judgments-and-evals/' },
                                 { label: 'Approvals and questions', link: 'features/cortex/approvals-and-questions/' },

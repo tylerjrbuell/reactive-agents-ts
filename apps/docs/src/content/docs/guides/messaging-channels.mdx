@@ -319,6 +319,7 @@ const accessControl = {
 // pass as the `accessControl` field of .withGateway({ ... })
 ```
 
+- **Channels reject unknown senders by default.** A gateway with no `accessControl` denies every inbound sender (Telegram, Signal, webhook-channel); the deny reason names the sender (`telegram:123`) and the gateway logs a warning at start. Set `allowedSenders`, or accept anyone on purpose with `accessControl: { accessPolicy: "open" }`. A block with no `accessPolicy` still defaults to `allowlist`, so an empty `allowedSenders` also denies everyone.
 - Entries **must** carry the platform prefix (`signal:+1555...`). A bare `+1555...` no longer matches a platform-tagged sender; update existing allow/block lists when you upgrade.
 - A channel event with an **empty sender** is always denied (fail closed), even under `"open"`.
 - `unknownSenderAction: "escalate"` surfaces the denied sender instead of silently skipping.

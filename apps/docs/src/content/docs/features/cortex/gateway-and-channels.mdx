@@ -1,0 +1,66 @@
+---
+title: Gateway and channels
+description: >-
+  Connect a saved Gateway process agent to Telegram, Signal or a signed webhook from the Lab, control who may message it, and watch it in the Gateway tab.
+sidebar:
+  order: 7
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+A **Gateway process** agent is a saved agent that stays running without a browser. In the Lab you can connect it to messaging and see how it is doing. Channels apply to the gateway path only: desk runs and chat turns are built exactly as before.
+
+## Channels
+
+The **Channels** section of the Lab builder adds Telegram, Signal and signed-webhook channels to a saved Gateway process agent. They start when the agent is saved and active. On-demand runs ignore them. Under the hood Cortex builds a long-lived agent with the framework's `.withGateway` and `.withChannels`, so the channels behave as described in [Messaging channels](/guides/messaging-channels/).
+
+Each channel card holds its non-secret settings. Its credential (a bot token, a Signal account, a webhook secret) is different:
+
+- It is saved **encrypted on the server** and is **write-only**. Cortex never returns or logs it; the UI shows only a mask such as `••••Rq6p`.
+- Deleting a channel deletes its stored credentials.
+- Exports and saved agent configs carry no credential.
+
+### Test connection
+
+**Test connection** checks a channel without sending a message to anyone:
+
+| Channel | What the check does |
+| ------- | ------------------- |
+| Telegram | Calls `getMe` with the saved bot token. |
+| Signal | Checks that the `signal-cli` daemon is reachable. |
+| Webhook | Checks the secret, the port and the reply URL. The reply URL goes through the same outbound-URL guard as Cortex's other fetches. |
+
+## Who may message the agent
+
+Access control is the framework's own `gateway.accessControl`, edited in the Channels section. Cortex adds no default of its own, so the framework's fail-closed rule applies:
+
+- An **empty allowlist denies everyone**. The editor says so in one sentence ("Nobody can message this agent yet").
+- **Allow everyone** is an explicit switch with a warning. It sets `accessPolicy: "open"`.
+- Sender entries are `platform:userId`, for example `telegram:123456789` or `signal:+15551234567`. A bare id does not match a platform-tagged sender, so the editor refuses it and shows the fix.
+- A blocklist policy lets anyone through except the blocked senders.
+
+<Aside type="caution">
+Before channels failed closed, a gateway with no `accessControl` let any sender drive the agent. Now it refuses them all. See [Messaging channels](/guides/messaging-channels/#sender-access-control) for the framework side and the migration.
+</Aside>
+
+The same section edits the agent's schedules (`gateway.crons`) and its inbound queue bounds (`gateway.queue`).
+
+## The Gateway tab
+
+The **Gateway** tab in the Lab lists every saved gateway agent. It is read-only and refreshes every few seconds. For each agent it shows:
+
+- the host state (Listening, Starting, Failed or No channels running) and whether the agent is paused;
+- the access rule in one line, with a warning for deny-all and open;
+- per channel: the live connection state, messages in, replies sent, send failures (with the last failure) and last activity;
+- schedules with the next fire and recent runs;
+- queue activity: queued, deferred and dropped;
+- recent activity, including deliveries and refusals.
+
+A summary at the top counts agents listening, channels connected and agents that need attention. The data comes from `GET /api/gateway/status`.
+
+### Current limits
+
+- **Counts need traffic.** Cortex folds the framework's events into the counters, because the framework has no channel-status or queue-depth accessor. Messages in, replies sent and send failures read zero until a message arrives, and they count from when the gateway host started.
+- **The queue shows cumulative activity, not live depth.** Queued, deferred and dropped are running totals of events. The tab does not show how many messages are waiting right now.
+
+Related: [Lab builder](/features/cortex/lab-builder/), [Approvals and questions](/features/cortex/approvals-and-questions/) (gateway agents refuse gated tools) and [Gateway](/features/gateway/).
