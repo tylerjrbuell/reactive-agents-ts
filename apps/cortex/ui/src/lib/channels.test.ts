@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  channelsSurface,
   addChannel,
   channelIssues,
   channelKindInfo,
@@ -85,5 +86,16 @@ describe("kind info and routes", () => {
   it("a webhook's route defaults to /channels/<id>", () => {
     expect(webhookRoute(newChannel("webhook", "ch-cccc3333"))).toBe("/channels/ch-cccc3333");
     expect(webhookRoute({ ...newChannel("webhook", "ch-cccc3333"), settings: { route: "/in" } })).toBe("/in");
+  });
+});
+
+describe("channelsSurface", () => {
+  it("the Lab builder edits channels", () => {
+    expect(channelsSurface(false)).toEqual({ editable: true, note: null });
+  });
+  it("a chat session does not, and says why", () => {
+    const s = channelsSurface(true);
+    expect(s.editable).toBe(false);
+    expect(s.note).toContain("saved Gateway agent");
   });
 });

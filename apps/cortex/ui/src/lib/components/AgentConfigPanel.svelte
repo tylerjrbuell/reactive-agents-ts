@@ -382,7 +382,7 @@
   {/if}
 
   {#if !compact && shows("channels")}
-    <ChannelsSection bind:config open={isOpen("channels")} onToggle={() => toggle("channels")} />
+    <ChannelsSection bind:config inChatSession={toolsToggle !== undefined} open={isOpen("channels")} onToggle={() => toggle("channels")} />
   {/if}
 
   {#if shows("outputschema")}

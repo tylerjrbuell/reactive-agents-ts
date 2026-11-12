@@ -153,3 +153,19 @@ export function channelIssues(c: ChannelEntry, credentialSaved: boolean): string
 
 /** The URL path a webhook channel serves (its route, else `/channels/<id>`). */
 export const webhookRoute = (c: ChannelEntry): string => c.settings.route?.trim() || `/channels/${c.id}`;
+
+/**
+ * Whether the Channels editor applies where it is shown. Channels (and the gateway block:
+ * access control, queue, schedules) run only inside a saved Gateway process agent
+ * (`GatewayChannelHost`). A chat session is an in-process conversation with no channel host, and its
+ * config endpoint does not store `channels` or `gateway`, so the editor must say so instead of
+ * accepting input that the save would drop.
+ */
+export function channelsSurface(inChatSession: boolean): { readonly editable: boolean; readonly note: string | null } {
+  return inChatSession
+    ? {
+        editable: false,
+        note: "Channels run only on a saved Gateway agent, not in a chat session. Set them up in Lab: save the agent as a Gateway process, add the channel there, and it answers on Telegram, Signal or a webhook without a browser open.",
+      }
+    : { editable: true, note: null };
+}

@@ -50,6 +50,19 @@ describe("chat ⇄ runs agent-config schema parity", () => {
     expect(keysOf(ChatSessionConfigBody as never).filter((k) => !shared.has(k) && !CHAT_ONLY.has(k))).toEqual([]);
   });
 
+  // `channels` and `gateway` belong to a saved Gateway process agent (api/agents.ts stores the raw
+  // config; GatewayChannelHost runs it). A chat session has no channel host, so neither body takes
+  // them and the chat panel's Channels section says so (ui `channelsSurface`). Adding them to the
+  // shared fragment without a host would save settings that do nothing: change this test and the
+  // section copy together.
+  it("channels and gateway are gateway-agent-only: no chat or run body stores them", () => {
+    for (const body of [ChatSessionConfigBody, RunConfigBody]) {
+      const keys = new Set(keysOf(body as never));
+      expect(keys.has("channels")).toBe(false);
+      expect(keys.has("gateway")).toBe(false);
+    }
+  });
+
   it("pins the specific fields that were previously dropped", () => {
     const chatKeys = new Set(keysOf(ChatSessionConfigBody as never));
     for (const k of [

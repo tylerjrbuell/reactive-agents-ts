@@ -13,7 +13,7 @@
   import Button from "$lib/components/kit/Button.svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { toast } from "$lib/stores/toast-store.js";
-  import { addChannel, channelsOf, CHANNEL_KINDS, newChannel, removeChannel, updateChannel } from "$lib/channels.js";
+  import { addChannel, channelsOf, channelsSurface, CHANNEL_KINDS, newChannel, removeChannel, updateChannel } from "$lib/channels.js";
   import { deleteChannelCredentials } from "$lib/gateway-api.js";
   import type { GatewayBlock } from "$lib/channel-access.js";
   import { accessModeOf } from "$lib/channel-access.js";
@@ -23,9 +23,12 @@
     config: PanelAgentConfig;
     open: boolean;
     onToggle: () => void;
+    /** Shown inside a chat session's config: there is no channel host, so the editor gives way to a note. */
+    inChatSession?: boolean;
   }
-  let { config = $bindable(), open, onToggle }: Props = $props();
+  let { config = $bindable(), open, onToggle, inChatSession = false }: Props = $props();
 
+  const surface = $derived(channelsSurface(inChatSession));
   const channels = $derived(channelsOf(config));
   const mode = $derived(accessModeOf(config.gateway));
 
@@ -49,9 +52,12 @@
 
 <ConfigSection id="channels" icon="chat" title="Channels" {open} {onToggle}>
   {#snippet head()}
-    <span class="truncate">{channels.length === 0 ? "none" : `${channels.length} channel${channels.length === 1 ? "" : "s"}`}{channels.length > 0 && mode === "deny-all" ? " · nobody allowed" : ""}</span>
+    <span class="truncate">{!surface.editable ? "gateway agents only" : channels.length === 0 ? "none" : `${channels.length} channel${channels.length === 1 ? "" : "s"}`}{channels.length > 0 && mode === "deny-all" ? " · nobody allowed" : ""}</span>
   {/snippet}
 
+  {#if !surface.editable}
+    <p class="acp-hint">{surface.note}</p>
+  {:else}
   <div class="acp-stack">
     <p class="acp-hint">
       Channels connect a <strong>saved Gateway process</strong> agent to messaging. They start when the agent is saved and active, and keep running without a browser. On-demand runs ignore them. Save the agent, then watch it in the Gateway tab.
@@ -80,6 +86,7 @@
     <AccessControlEditor gateway={config.gateway} onChange={setGateway} />
     <GatewayLoopEditor gateway={config.gateway} onChange={setGateway} />
   </div>
+  {/if}
 </ConfigSection>
 
 <style>

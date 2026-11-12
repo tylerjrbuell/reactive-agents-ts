@@ -12,7 +12,7 @@ A **Gateway process** agent is a saved agent that stays running without a browse
 
 ## Channels
 
-The **Channels** section of the Lab builder adds Telegram, Signal and signed-webhook channels to a saved Gateway process agent. They start when the agent is saved and active. On-demand runs ignore them. Under the hood Cortex builds a long-lived agent with the framework's `.withGateway` and `.withChannels`, so the channels behave as described in [Messaging channels](/guides/messaging-channels/).
+The **Channels** section of the Lab builder adds Telegram, Signal and signed-webhook channels to a saved Gateway process agent. They start when the agent is saved and active. On-demand runs ignore them, and so do chat sessions: a chat session's config panel shows the Channels section with a note instead of an editor, because a chat has no channel host to run them. Under the hood Cortex builds a long-lived agent with the framework's `.withGateway` and `.withChannels`, so the channels behave as described in [Messaging channels](/guides/messaging-channels/).
 
 Each channel card holds its non-secret settings. Its credential (a bot token, a Signal account, a webhook secret) is different:
 
