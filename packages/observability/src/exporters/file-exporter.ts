@@ -85,7 +85,7 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
 
   const ensureDir = async (fp: string): Promise<void> => {
     try {
-      await mkdir(dirname(fp), { recursive: true });
+      await mkdir(dirname(fp), { recursive: true, mode: 0o700 });
     } catch {
       // Directory already exists or not writable — suppress
     }
@@ -97,10 +97,10 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
     try {
       await ensureDir(filePath);
       if (mode === "overwrite" && firstFlush) {
-        await writeFile(filePath, content, "utf-8");
+        await writeFile(filePath, content, { encoding: "utf-8", mode: 0o600 });
         firstFlush = false;
       } else {
-        await appendFile(filePath, content, "utf-8");
+        await appendFile(filePath, content, { encoding: "utf-8", mode: 0o600 });
       }
     } catch {
       // File system errors are non-fatal for observability

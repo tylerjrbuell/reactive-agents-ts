@@ -7,8 +7,7 @@ import { pruneTraceDir } from "./retention.js"
 import type { TraceEvent } from "./events.js"
 import { TraceStorageError } from "./errors.js"
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { applyRedactors } from "@reactive-agents/observability";
-import { traceRedactors } from "./redaction.js";
+import { applyRedactors, defaultRedactors } from "@reactive-agents/observability";
 
 // ─── Service Interface ───
 
@@ -104,7 +103,7 @@ export function TraceRecorderServiceLive(rawOpts: TraceRecorderOptions): Layer.L
           const rawBody = events.map((e) => JSON.stringify(e)).join("\n") + "\n"
           // F8: redact secrets (API keys, bearer tokens) before they reach disk.
           // The in-memory snapshot (same-process debugging) keeps full fidelity.
-          const body = yield* applyRedactors(rawBody, traceRedactors)
+          const body = yield* applyRedactors(rawBody, defaultRedactors)
           yield* Effect.tryPromise({
             try: () => appendFile(path, body, { mode: 0o600 }),
             catch: (e) => new TraceStorageError({ message: String(e), cause: e }),

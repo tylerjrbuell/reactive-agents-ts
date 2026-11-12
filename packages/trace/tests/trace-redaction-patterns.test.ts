@@ -7,9 +7,8 @@ import { Effect } from "effect";
 import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { redactSecrets } from "@reactive-agents/observability";
+import { defaultRedactors, redactSecrets } from "@reactive-agents/observability";
 
-import { traceRedactors } from "../src/redaction.js";
 import { TraceRecorderService, TraceRecorderServiceLive } from "../src/recorder.js";
 import type { TraceEvent } from "../src/events.js";
 
@@ -22,7 +21,7 @@ interface Case {
 }
 
 const CASES: readonly Case[] = [
-  { redactor: "openai-project-key", secret: `sk-proj-${A(30)}-${A(30)}_${A(20)}`, label: "sk-proj with - and _" },
+  { redactor: "openai-project", secret: `sk-proj-${A(30)}-${A(30)}_${A(20)}`, label: "sk-proj with - and _" },
   { redactor: "github-fine-grained-pat", secret: `github_pat_${A(22)}_${A(40)}`, label: "github_pat_" },
   { redactor: "github-token", secret: `gho_${A(36)}`, label: "gho_" },
   { redactor: "github-token", secret: `ghp_${A(36)}`, label: "ghp_" },
@@ -52,11 +51,6 @@ const CASES: readonly Case[] = [
   { redactor: "secret-assignment", secret: "tok3nvalue99", label: "token=" },
 ];
 
-const OVERLAP: Readonly<Record<string, readonly string[]>> = {
-  "ghp_": ["github-pat"],
-  "ghs_": ["github-actions"],
-};
-
 const ASSIGN: Readonly<Record<string, string>> = {
   "password=": "password=",
   "secret=": "secret=",
@@ -72,23 +66,21 @@ const secretCore = (c: Case): string =>
 describe("trace redaction patterns", () => {
   for (const c of CASES) {
     test(`redacts ${c.label}`, () => {
-      const out = redactSecrets(wrap(c), traceRedactors);
+      const out = redactSecrets(wrap(c), defaultRedactors);
       expect(out).not.toContain(secretCore(c));
       expect(out).toContain("[redacted");
     });
 
     test(`cutting ${c.redactor} lets ${c.label} through`, () => {
-      // ghp_/ghs_ are also covered by the shared defaults: cut those too.
-      const names = new Set([c.redactor, ...(OVERLAP[c.label] ?? [])]);
-      const cut = traceRedactors.filter((r) => !names.has(r.name));
-      expect(cut.length).toBe(traceRedactors.length - names.size);
+      const cut = defaultRedactors.filter((r) => r.name !== c.redactor);
+      expect(cut.length).toBe(defaultRedactors.length - 1);
       const out = redactSecrets(wrap(c), cut);
       expect(out).toContain(secretCore(c));
     });
   }
 
   test("redacted names are unique", () => {
-    const names = traceRedactors.map((r) => r.name);
+    const names = defaultRedactors.map((r) => r.name);
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -97,7 +89,7 @@ describe("trace redaction patterns", () => {
       "Basic understanding of the task-runner; the sk-learn skeleton, ask_user tool, risk_level=3, " +
       "maxTokens=100, xaid-less, Bearer of bad news, password policy, token budget, " +
       "ghost_writer, github_page, gsk_short, sk_live_x";
-    expect(redactSecrets(text, traceRedactors)).toBe(text);
+    expect(redactSecrets(text, defaultRedactors)).toBe(text);
   });
 
   test("scans adversarial input in linear-ish time", () => {
@@ -111,7 +103,7 @@ describe("trace redaction patterns", () => {
     ];
     for (const i of inputs) {
       const t = performance.now();
-      redactSecrets(i, traceRedactors);
+      redactSecrets(i, defaultRedactors);
       expect(performance.now() - t).toBeLessThan(2000);
     }
   });

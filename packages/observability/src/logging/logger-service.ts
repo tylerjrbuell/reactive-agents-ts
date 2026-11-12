@@ -39,7 +39,7 @@ export function makeLoggerService(config: LoggingConfig): LoggerService {
     const dir = path.dirname(filePath);
     if (!dir || dir === "." || dir === path.parse(filePath).root) return;
     try {
-      fs.mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     } catch {
       // Non-fatal; appendFileSync will surface permission errors
     }
@@ -74,7 +74,7 @@ export function makeLoggerService(config: LoggingConfig): LoggerService {
         currentFileSize = 0;
       }
       ensureDirForFile(currentFilePath!);
-      fs.appendFileSync(currentFilePath!, line + "\n");
+      fs.appendFileSync(currentFilePath!, line + "\n", { mode: 0o600 });
       currentFileSize += line.length + 1;
     } else if (typeof config.output === "object" && config.output instanceof WritableStream) {
       const writer = config.output.getWriter();
