@@ -6,12 +6,14 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { WEB_SEARCH_PROVIDERS as FRAMEWORK_PROVIDERS } from "@reactive-agents/tools";
+import { WEB_SEARCH_CHOICES } from "../../ui/src/lib/web-search-providers.js";
 import { providerKeysRouter, type ListModelsWithKey } from "../api/provider-keys.js";
 import { ProviderKeyStore, PROVIDER_KEYS_FILE } from "../services/provider-key-store.js";
 import {
   isWebSearchKeyId,
   probeWebSearchKey,
-  WEB_SEARCH_PROVIDERS,
+  WEB_SEARCH_KEY_PROVIDERS as WEB_SEARCH_PROVIDERS,
   type WebSearchProbe,
 } from "../services/web-search-keys.js";
 
@@ -41,6 +43,17 @@ describe("web-search provider table", () => {
     expect(env).toEqual(["TAVILY_API_KEY", "BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY", "SERPER_API_KEY", "KEENABLE_API_KEY"]);
     expect(WEB_SEARCH_PROVIDERS.every((p) => isWebSearchKeyId(p.id))).toBe(true);
   });
+
+  it("is built from the framework's own list, so a new framework provider shows up here", () => {
+    const keyed = FRAMEWORK_PROVIDERS.filter((p) => p.envVars.length > 0);
+    expect(WEB_SEARCH_PROVIDERS.map((p) => p.provider)).toEqual(keyed.map((p) => p.id));
+    expect(WEB_SEARCH_PROVIDERS.map((p) => p.env)).toEqual(keyed.map((p) => [...p.envVars]));
+  });
+
+  it("the Lab provider-order control offers exactly the framework's providers, in its order", () => {
+    expect(WEB_SEARCH_CHOICES.map((c) => c.id)).toEqual(FRAMEWORK_PROVIDERS.map((p) => p.id));
+    expect(WEB_SEARCH_CHOICES.map((c) => c.keyed)).toEqual(FRAMEWORK_PROVIDERS.map((p) => p.envVars.length > 0));
+  });
 });
 
 describe("web-search keys in the store and API", () => {
@@ -57,8 +70,8 @@ describe("web-search keys in the store and API", () => {
     for (const p of WEB_SEARCH_PROVIDERS) {
       const row = list.providers.find((x) => x.provider === p.id);
       expect(row?.stored?.masked).toBe("••••WXYZ");
-      // The framework reads web-search keys from the environment only (reported gap).
-      expect(row?.appliesToAgents).toBe(false);
+      // Saved keys reach agents as `.withTools({ webSearch: { apiKeys } })` (web-search-agent.test.ts).
+      expect(row?.appliesToAgents).toBe(true);
     }
     const del = (await (await call(passing, "DELETE", "/websearch-keenable")).json()) as { stored: unknown };
     expect(del.stored).toBeNull();

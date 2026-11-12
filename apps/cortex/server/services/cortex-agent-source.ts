@@ -24,6 +24,7 @@ import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 import { KEYED_PROVIDER_ENV, providerKeyForAgent } from "./provider-key-store.js";
 import { parseCortexJudgmentConfig, TYPESAFE_KEY_ID } from "./cortex-judgment.js";
+import { WEB_SEARCH_KEY_PROVIDERS } from "./web-search-keys.js";
 
 /** A setting the agent runs with in Cortex that the exported code does not contain. */
 export interface CortexOnlySetting {
@@ -82,6 +83,16 @@ export function cortexOnlySettings(
       "withProvider",
       envName ? `Not exported. Set ${envName} where the code runs.` : "Not exported.",
     );
+  }
+  if (config.features?.tools || config.tools) {
+    const keyed = WEB_SEARCH_KEY_PROVIDERS.filter((p) => providerKeyForAgent(p.id) !== undefined);
+    if (keyed.length > 0) {
+      add(
+        "Web-search keys saved in Settings",
+        "withTools",
+        `Not exported. Set ${list(keyed.map((p) => p.env[0] ?? p.id))} where the code runs, or pass webSearch.apiKeys.`,
+      );
+    }
   }
   if (params.testScenario && params.testScenario.length > 0) add("Scripted test turns", "withTestScenario");
   if ((params.extraTools?.length ?? 0) > 0) {

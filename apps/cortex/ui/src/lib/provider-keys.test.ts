@@ -45,14 +45,18 @@ describe("web-search key rows", () => {
     expect(keysInScope(list, "llm").map((p) => p.provider)).toEqual(["openai"]);
     expect(keysInScope(list, "web-search").map((p) => p.provider)).toEqual(["websearch-keenable", "websearch-tavily"]);
   });
-  test("named, and never claims agents use a saved key", () => {
+  test("named, and a saved key is one agents use", () => {
     expect(keyRowLabelOf("websearch-keenable")).toBe("Keenable");
-    const row = keyRowOf({ ...ws, stored: saved, source: "stored" });
-    expect(row.badge.text).toBe("Saved, not used yet");
-    expect(row.summary).toContain("KEENABLE_API_KEY");
-    expect(row.summary).not.toContain("Agents use the saved");
-    expect(row.showPrefer).toBe(false);
-    expect(keyRowHintOf("websearch-keenable")).toContain("environment only");
+    const row = keyRowOf({ ...ws, appliesToAgents: true, stored: saved, source: "stored" });
+    expect(row.badge).toEqual({ tone: "ok", text: "Saved key" });
+    expect(row.summary).toBe("Agents use the saved key ••••WXYZ.");
+    expect(row.summary).not.toContain("not used");
+    expect(keyRowHintOf("websearch-keenable")).toContain("uses a saved key");
+  });
+  test("with the env variable set too, the user can prefer the saved key", () => {
+    const row = keyRowOf({ ...ws, appliesToAgents: true, stored: saved, envSet: true, source: "env" });
+    expect(row.badge.text).toBe("Environment");
+    expect(row.showPrefer).toBe(true);
   });
   test("a web-search Test line has no model count", () => {
     expect(testResultLine({ ok: true, tried: "stored" }).text).toBe("The saved key works: a test search succeeded.");

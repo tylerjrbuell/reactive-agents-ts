@@ -7,6 +7,7 @@
   import Tooltip from "$lib/components/Tooltip.svelte";
   import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
   import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
+  import WebSearchProvidersField from "$lib/components/WebSearchProvidersField.svelte";
   import ApprovalPolicyFields from "../ApprovalPolicyFields.svelte";
   import { toggleServerTools } from "$lib/tool-selection.js";
   import { disclosureChoice, unlistedTools } from "$lib/chat-quickbar.js";
@@ -130,6 +131,7 @@
         <div class="acp-stack transition-opacity {toolsToggle && !toolsToggle.enabled ? 'pointer-events-none opacity-45' : ''}" aria-disabled={toolsToggle ? !toolsToggle.enabled : undefined}>
         {#if !splitShell}<ShellWorkspaceFields bind:config {shellPresets} />{/if}
         <ToolDisclosureField bind:rawConfig={config.rawConfig} tools={config.tools} />
+        <WebSearchProvidersField bind:rawConfig={config.rawConfig} />
         <div class="acp-field">
         <span class="config-label">Quick picks</span>
         <div class="acp-chips" role="group" aria-label="Built-in tools and shell toolsets">

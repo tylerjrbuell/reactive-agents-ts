@@ -128,7 +128,7 @@ const ROW_HINTS: Readonly<Record<string, string>> = {
   ...Object.fromEntries(
     ["websearch-tavily", "websearch-brave", "websearch-serper", "websearch-keenable"].map((id) => [
       id,
-      "Agents' web-search tool reads this key from the server's environment only, so a saved key is stored and testable here but is not yet passed to agents. Set the variable where Cortex runs.",
+      "Agents' web-search tool uses a saved key here, or the variable in the server's environment. Choose which providers an agent tries, and in what order, under Lab · Tools.",
     ]),
   ),
   typesafe: "Used by Lab · Judgment when the TypeSafe backend runs. Test reads your model list; it asks no judgment, so nothing is billed.",
@@ -142,22 +142,10 @@ export function keyRowHintOf(provider: string): string | null {
 /** The row text for one provider. */
 export function keyRowOf(s: ProviderKeyStatus): KeyRowView {
   const envName = s.env[0] ?? `${s.provider.toUpperCase()}_API_KEY`;
-  const showPrefer = s.stored !== null && s.envSet && !isWebSearchKey(s.provider);
+  const showPrefer = s.stored !== null && s.envSet;
   let note: string | null = null;
   if (s.unreadable) {
     note = "A saved key could not be decrypted (the key file was replaced). Save the key again.";
-  }
-  if (isWebSearchKey(s.provider) && s.source !== "env") {
-    // Web-search keys do not reach agents yet, so never say agents use a saved one.
-    return {
-      envName,
-      badge: s.stored ? { tone: "neutral", text: "Saved, not used yet" } : { tone: "bad", text: "No key" },
-      summary: s.stored
-        ? `Saved key ${s.stored.masked}. Agents still read ${envName} from the server's environment.`
-        : `Set ${envName} in the server's environment, or save a key here to keep it and test it.`,
-      note,
-      showPrefer: false,
-    };
   }
   if (s.source === "stored" && s.stored) {
     return {

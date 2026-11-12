@@ -3,18 +3,19 @@
  *
  * They share the encrypted provider key store (`provider-key-store.ts`) under ids
  * `websearch-<provider>`; the Providers panel lists LLM providers only and the Web search
- * panel lists these. The provider set and env names mirror the framework's web-search chain
- * (`packages/tools/src/skills/web-search.ts`): Tavily, Brave, Serper, Keenable, then
- * DuckDuckGo instant answers (no key). The framework exports no provider list, so this table
- * is a Cortex-side copy; the docs-sync rule `web-search-providers` is the drift guard.
+ * panel lists these. The provider set and env names come from the framework's own chain
+ * (`WEB_SEARCH_PROVIDERS` in `@reactive-agents/tools`), so a provider the framework adds
+ * appears here without a table edit; only its display label is Cortex copy.
  *
- * Reach: the framework's `web-search` handler reads these keys from `process.env` at call
- * time and has no builder option for them, so a stored key does NOT reach agents yet
- * (`appliesToAgents` stays false for these ids; see `AGENT_APPLIES`). Cortex does not write
- * `process.env`: shell and code-execute tools would inherit it.
+ * Reach: `cortexAgentBuilder` passes the saved keys as `.withTools({ webSearch: { apiKeys } })`
+ * (see {@link webSearchOptionOf}). Keys are runtime-only in the framework (never in
+ * `AgentConfig` JSON, traces or tool results) and Cortex never writes `process.env`: shell and
+ * code-execute tools would inherit it. Precedence is the provider-key rule: an env key wins
+ * unless the user chose "use stored key".
  *
  * Nothing here throws; the probe returns a tagged result and never echoes a key.
  */
+import { WEB_SEARCH_PROVIDERS, type WebSearchProvider } from "@reactive-agents/tools";
 
 /** Key-store id prefix of the web-search provider keys. */
 export const WEB_SEARCH_KEY_PREFIX = "websearch-";
@@ -23,24 +24,64 @@ export const WEB_SEARCH_KEY_PREFIX = "websearch-";
 export interface WebSearchProviderInfo {
   /** Key-store id (`websearch-<name>`). */
   readonly id: string;
+  /** The framework's provider id (`tavily`, `brave`, ...). */
+  readonly provider: WebSearchProvider;
   /** Name shown in Settings. */
   readonly label: string;
   /** Env variables the framework reads for it (first is the canonical name). */
   readonly env: readonly string[];
 }
 
-/** Keyed web-search providers, in the framework's fallback order. */
-export const WEB_SEARCH_PROVIDERS: readonly WebSearchProviderInfo[] = [
-  { id: "websearch-tavily", label: "Tavily", env: ["TAVILY_API_KEY"] },
-  { id: "websearch-brave", label: "Brave Search", env: ["BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY"] },
-  { id: "websearch-serper", label: "Serper (Google)", env: ["SERPER_API_KEY"] },
-  { id: "websearch-keenable", label: "Keenable", env: ["KEENABLE_API_KEY"] },
-];
+/** Display names; a provider the framework adds without an entry shows its id. */
+const LABELS: Readonly<Record<string, string>> = {
+  tavily: "Tavily",
+  brave: "Brave Search",
+  serper: "Serper (Google)",
+  keenable: "Keenable",
+};
+
+/** Keyed web-search providers, in the framework's fallback order (DuckDuckGo takes no key). */
+export const WEB_SEARCH_KEY_PROVIDERS: readonly WebSearchProviderInfo[] = WEB_SEARCH_PROVIDERS.filter(
+  (p) => p.envVars.length > 0,
+).map((p) => ({
+  id: `${WEB_SEARCH_KEY_PREFIX}${p.id}`,
+  provider: p.id,
+  label: LABELS[p.id] ?? p.id,
+  env: p.envVars,
+}));
 
 /** Entries for `KEYED_PROVIDER_ENV`. */
 export const WEB_SEARCH_KEYED_ENV: Readonly<Record<string, readonly string[]>> = Object.fromEntries(
-  WEB_SEARCH_PROVIDERS.map((p) => [p.id, p.env]),
+  WEB_SEARCH_KEY_PROVIDERS.map((p) => [p.id, p.env]),
 );
+
+/** Key-store ids of the web-search keys that reach agents (all of them). */
+export const WEB_SEARCH_KEY_IDS: readonly string[] = WEB_SEARCH_KEY_PROVIDERS.map((p) => p.id);
+
+/** The `webSearch` value of `.withTools()`: runtime-only keys plus the serialized provider order. */
+export interface WebSearchOption {
+  readonly apiKeys: Partial<Record<Exclude<WebSearchProvider, "duckduckgo">, string>>;
+  readonly providers?: readonly WebSearchProvider[];
+}
+
+/**
+ * The `.withTools({ webSearch })` value for an agent: every saved key that wins its precedence
+ * (`keyFor` is `providerKeyForAgent`), plus the provider order the agent's config already
+ * carries (`withTools` replaces `webSearch` whole, so the order must be passed again).
+ * Undefined when no saved key applies: the config's own `webSearch` is then left alone.
+ */
+export const webSearchOptionOf = (
+  providers: readonly WebSearchProvider[] | undefined,
+  keyFor: (id: string) => string | undefined,
+): WebSearchOption | undefined => {
+  const apiKeys: { -readonly [K in keyof WebSearchOption["apiKeys"]]: string } = {};
+  for (const p of WEB_SEARCH_KEY_PROVIDERS) {
+    const key = keyFor(p.id);
+    if (key && p.provider !== "duckduckgo") apiKeys[p.provider] = key;
+  }
+  if (Object.keys(apiKeys).length === 0) return undefined;
+  return providers ? { apiKeys, providers } : { apiKeys };
+};
 
 /** True for a web-search provider key id. */
 export const isWebSearchKeyId = (id: string): boolean => id.startsWith(WEB_SEARCH_KEY_PREFIX);

@@ -62,7 +62,7 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     keywords: "web search file read write code mcp registry construction shell terminal host execute risk allowlist approval approve deny gate pause",
     // Shell and workspace (split out as its own Lab entry) are Tools fields in the panel.
     // Approvals gate tool calls, so they live here.
-    configPaths: ["tools.allowedTools", "tools.disclosure", "tools.terminal", "tools.workspace", "mcpServers", "approvalPolicy"],
+    configPaths: ["tools.allowedTools", "tools.disclosure", "tools.terminal", "tools.workspace", "tools.webSearch", "mcpServers", "approvalPolicy"],
   },
   {
     id: "subagents",

@@ -21,7 +21,6 @@ import {
 } from "../services/provider-key-store.js";
 import { providerKeysRouter, type ListModelsWithKey } from "../api/provider-keys.js";
 import { buildCortexAgent } from "../services/build-cortex-agent.js";
-import { isWebSearchKeyId } from "../services/web-search-keys.js";
 import { checkProviders } from "../api/health.js";
 import { createModelsRouter } from "../api/models.js";
 
@@ -125,8 +124,8 @@ describe("ProviderKeyStore", () => {
     // anthropic and gemini included.
     for (const p of Object.keys(KEYED_PROVIDER_ENV)) {
       // The Settings · Voice endpoint keys are not for agents at all.
-      // Web-search keys neither: the framework's web-search tool reads only the process env.
-      expect(unwrap(store.status(p)).appliesToAgents).toBe(p !== VOICE_STT_KEY_ID && p !== VOICE_TTS_KEY_ID && !isWebSearchKeyId(p));
+      // Web-search keys do (as `.withTools({ webSearch: { apiKeys } })`).
+      expect(unwrap(store.status(p)).appliesToAgents).toBe(p !== VOICE_STT_KEY_ID && p !== VOICE_TTS_KEY_ID);
     }
   });
 

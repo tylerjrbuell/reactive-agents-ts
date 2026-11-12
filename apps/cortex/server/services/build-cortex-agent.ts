@@ -32,6 +32,7 @@ import {
 import { cortexParamsToAgentConfig } from "./cortex-to-agent-config.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
 import { providerKeyForAgent } from "./provider-key-store.js";
+import { webSearchOptionOf } from "./web-search-keys.js";
 import type { ChannelAdapter } from "@reactive-agents/channels";
 import type { CortexGatewayConfig } from "./channel-config.js";
 import {
@@ -280,6 +281,15 @@ export async function cortexAgentBuilder(
   // the AgentConfig allow-list (cortexParamsToAgentConfig); the functions are code-only.
   const extraTools = params.extraTools ?? [];
   if (extraTools.length > 0) b = b.withTools({ tools: extraTools });
+
+  // Web-search keys saved in Settings · Web search. Runtime-only in the framework (never in an
+  // AgentConfig), so an overlay; one funnel, so chat, desk runs and gateway agents all get them.
+  // `withTools` replaces `webSearch` whole, so the config's provider order is passed again. Only
+  // when the config already enables tools: this call must not switch the tools layer on.
+  if (agentConfig.features?.tools || agentConfig.tools) {
+    const webSearch = webSearchOptionOf(agentConfig.tools?.webSearch?.providers, providerKeyForAgent);
+    if (webSearch) b = b.withTools({ webSearch });
+  }
 
   // Cortex's trace dir. Kept out of the AgentConfig: its only config form,
   // `observability.tracing: { dir }`, also turns the observability layer on, which a

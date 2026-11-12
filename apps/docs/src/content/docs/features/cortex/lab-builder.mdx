@@ -63,6 +63,8 @@ Desk runs, chat sessions and saved gateway agents build their agents from the sa
 
 **Advanced — framework config** (in **Reasoning**) fields that are lists or maps (toolset names, focused tools, per-tool call caps, tool risk levels, required tools) use list editors: type a value and press Enter. The toolset-name suggestions for `tools.builtins` (`read`, `research`, `file`, ...) come from the framework, and `tools.disclosure` sets how permitted tools are shown.
 
+**Web search providers** (in **Tools**, in the builder and the chat config panel) pick which search backends the `web-search` tool tries and in what order: click Tavily, Brave Search, Serper, Keenable or DuckDuckGo in the order you want; the number on a chip is its place, and a provider you leave out is never tried. With none picked the framework's default chain applies (every provider that has a key, then DuckDuckGo). It is saved as `tools.webSearch.providers`. The keys themselves come from Settings · Web search or the server's environment.
+
 <Aside type="caution">
 **Use host shell only at your own risk.** Allowlists limit which executables may run; blocklists catch many dangerous patterns, but this is still real command execution on your host. Prefer `code-execute` or a Docker sandbox from your application when exposing agents to untrusted prompts. See [Security hardening](/guides/security-hardening/) and the shell execution docs / consumer skill for configuration details.
 </Aside>
