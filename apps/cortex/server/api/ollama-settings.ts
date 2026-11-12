@@ -9,6 +9,7 @@
  * key is a separate setting (`/api/settings/keys/ollama`) and is never returned here.
  */
 import { Elysia, t } from "elysia";
+import { checkOutboundUrl, type HostResolver } from "../outbound-url.js";
 import {
   applyOllamaEndpoint,
   effectiveOllamaEndpoint,
@@ -34,7 +35,7 @@ export interface OllamaSettingsView {
 }
 
 /** Build the router over the endpoint store. */
-export function ollamaSettingsRouter(store: OllamaEndpointStore) {
+export function ollamaSettingsRouter(store: OllamaEndpointStore, resolveHost?: HostResolver) {
   const view = (): OllamaSettingsView => {
     const effective = effectiveOllamaEndpoint();
     return {
@@ -49,12 +50,21 @@ export function ollamaSettingsRouter(store: OllamaEndpointStore) {
     .get("/", () => view())
     .put(
       "/",
-      ({ body, set }) => {
+      async ({ body, set }) => {
         const raw = body.endpoint;
         const endpoint = raw === null || raw.trim() === "" ? undefined : normalizeOllamaEndpoint(raw);
         if (raw !== null && raw.trim() !== "" && endpoint === undefined) {
           set.status = 400;
           return { error: "Endpoint must be an http(s) URL such as http://localhost:11434 or https://ollama.com." };
+        }
+        // The saved endpoint receives the Ollama key and every model call: refuse link-local /
+        // cloud-metadata hosts, credentials in the URL, and names that resolve to such an address.
+        if (endpoint !== undefined) {
+          const checked = await checkOutboundUrl(endpoint, resolveHost);
+          if (!checked.ok) {
+            set.status = 400;
+            return { error: `That endpoint is not allowed: ${checked.reason}.` };
+          }
         }
         if (!store.set(endpoint)) {
           set.status = 500;

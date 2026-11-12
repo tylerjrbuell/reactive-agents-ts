@@ -54,10 +54,10 @@ export const toolsRouter = (storeLayer: Layer.Layer<CortexStoreService>, db: Dat
     .post(
       "/invoke",
       async ({ body, set }) => {
-        const res = await invokeCatalogTool(db, body.toolId, body.arguments as Record<string, unknown>);
+        const res = await invokeCatalogTool(db, body.toolId, body.arguments as Record<string, unknown>, body.approved === true);
         if (!res.ok) {
           set.status = res.httpStatus;
-          return { error: res.error };
+          return { error: res.error, ...(res.approvalRequired ? { approvalRequired: true as const } : {}) };
         }
         return {
           ok: true as const,
@@ -71,6 +71,8 @@ export const toolsRouter = (storeLayer: Layer.Layer<CortexStoreService>, db: Dat
         body: t.Object({
           toolId: t.String(),
           arguments: t.Record(t.String(), t.Unknown()),
+          /** A person approved this call; required for tools the framework gates (`requiresApproval`). */
+          approved: t.Optional(t.Boolean()),
         }),
       },
     )

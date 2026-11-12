@@ -40,7 +40,8 @@ This runs:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `CORTEX_PORT` | `4321` | HTTP + WS listen port |
-| `CORTEX_HOST` | `127.0.0.1` | Interface the server binds. Loopback only by default; set `0.0.0.0` to expose Cortex to your network (it has no authentication) |
+| `CORTEX_HOST` | `127.0.0.1` | Interface the server binds. Loopback only by default; set `0.0.0.0` to expose Cortex to your network (this requires `CORTEX_TOKEN`; the server refuses to start without it) |
+| `CORTEX_TOKEN` | unset | Access token for `/api/*` and `/ws/*`. Not needed on loopback. Required for a non-loopback `CORTEX_HOST`. Clients send `Authorization: Bearer <token>`; in a browser open `/?token=<token>` once (sets an HttpOnly cookie); sockets also accept `?token=` |
 | `CORTEX_NO_OPEN` | unset | Set to `1` to disable opening a browser when running **`dev:server`** alone |
 
 SQLite path comes from `defaultCortexConfig` in `server/types.ts` (default `.cortex/cortex.db` under the current working directory — usually `apps/cortex`).

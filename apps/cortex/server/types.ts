@@ -16,6 +16,11 @@ export interface CortexConfig {
    * Cortex has no authentication). Set `0.0.0.0` to expose it to the network.
    */
   readonly hostname?: string;
+  /**
+   * Access token for `/api/*` and `/ws/*` (default: `CORTEX_TOKEN`). Required when `hostname`
+   * is not loopback; the server refuses to start without it. Loopback needs none.
+   */
+  readonly token?: string;
   readonly dbPath: string;
   readonly staticAssetsPath?: string;
   readonly openBrowser: boolean;

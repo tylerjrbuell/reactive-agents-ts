@@ -1,11 +1,33 @@
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { backfillRunEndings, deleteRun } from "./queries.js";
 
+/**
+ * Make the data directory and database file private to the current user. The database holds
+ * MCP credentials, chat history and traces, and `secret.key` (which decrypts the provider keys)
+ * lives beside it. A directory is tightened only when this call made it or it is named
+ * `.cortex`; a database placed in a shared directory (the cwd, `/tmp`) leaves that directory alone.
+ */
+export function securePrivateStorage(dbPath: string, dirCreated: boolean): void {
+  if (dbPath === ":memory:" || dbPath === "") return;
+  const dir = path.dirname(dbPath);
+  try {
+    if (dirCreated || path.basename(dir) === ".cortex") chmodSync(dir, 0o700);
+    chmodSync(dbPath, 0o600);
+    for (const side of [`${dbPath}-wal`, `${dbPath}-shm`]) if (existsSync(side)) chmodSync(side, 0o600);
+  } catch {
+    /* a filesystem without POSIX modes (Windows, some mounts): nothing to tighten */
+  }
+}
+
 export function openDatabase(dbPath: string): Database {
-  mkdirSync(path.dirname(dbPath), { recursive: true });
+  const dir = path.dirname(dbPath);
+  const dirCreated = dbPath !== ":memory:" && !existsSync(dir);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
   const db = new Database(dbPath, { create: true });
+  // Before WAL mode creates the -wal / -shm files: SQLite gives them the database file's mode.
+  securePrivateStorage(dbPath, dirCreated);
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA foreign_keys = ON");
   applySchema(db);

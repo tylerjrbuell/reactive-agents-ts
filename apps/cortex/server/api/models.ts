@@ -17,9 +17,11 @@ import { Elysia } from "elysia";
 import {
   bearerFetch,
   effectiveOllamaEndpoint,
+  normalizeOllamaEndpoint,
   OLLAMA_AUTH_MESSAGE,
   ollamaListKey,
 } from "../services/ollama-cloud.js";
+import { checkOutboundUrl, noRedirect, type HostResolver } from "../outbound-url.js";
 import {
   installedProviderKeyStore,
   providerKeyForAgent,
@@ -50,6 +52,8 @@ export interface ModelsResponse {
 export interface ModelsDeps {
   readonly resolve: (provider: string, opts: ListProviderModelsOptions) => Promise<ResolvedProviderModels>;
   readonly fetch: typeof fetch;
+  /** DNS resolver for the endpoint check (default: the system resolver); tests inject one. */
+  readonly resolveHost?: HostResolver;
   /** Environment used to report whether a provider key is set (defaults to `process.env`). */
   readonly env?: Readonly<Record<string, string | undefined>>;
   /**
@@ -217,8 +221,10 @@ export async function buildModelsResponse(
   const apiKey = deps.storedKeys?.forAgent(provider);
   // Ollama Cloud: the framework's Ollama model listing sends no auth header (gap, reported), so the
   // bearer rides a fetch that adds it for the configured host only (`ollamaListKey`).
+  // Discovery never follows a redirect: a 3xx must not move the request (or the bearer) to another host.
+  const plainFetch = noRedirect(deps.fetch);
   const ollamaKey = provider === "ollama" && baseUrl ? ollamaListKey(baseUrl, apiKey) : undefined;
-  const listFetch = ollamaKey && baseUrl ? bearerFetch(baseUrl, ollamaKey, deps.fetch) : deps.fetch;
+  const listFetch = ollamaKey && baseUrl ? bearerFetch(baseUrl, ollamaKey, plainFetch) : plainFetch;
   const resolved = await deps.resolve(provider, {
     ...(baseUrl ? { baseUrl } : {}),
     ...(apiKey ? { apiKey } : {}),
@@ -262,6 +268,17 @@ export function createModelsRouter(deps: ModelsDeps = defaultDeps) {
     if (provider === "litellm" && ep !== undefined && !isAllowedLitellmEndpoint(ep)) {
       set.status = 400;
       return BAD_ENDPOINT;
+    }
+    // A caller-supplied Ollama endpoint is fetched server-side: same rule as the saved setting
+    // (http(s), no credentials, no link-local / metadata host, including via DNS).
+    if (provider === "ollama" && ep !== undefined) {
+      const normalized = normalizeOllamaEndpoint(ep);
+      const checked = normalized === undefined ? undefined : await checkOutboundUrl(normalized, deps.resolveHost);
+      if (normalized === undefined || checked === undefined || !checked.ok) {
+        set.status = 400;
+        return BAD_ENDPOINT;
+      }
+      return buildModelsResponse(provider, normalized, deps);
     }
     return buildModelsResponse(provider, ep, deps);
   };

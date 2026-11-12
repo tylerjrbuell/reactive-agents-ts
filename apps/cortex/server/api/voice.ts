@@ -14,6 +14,7 @@
  * The adapter is `services/voice/openai-compatible.ts`.
  */
 import { Elysia, t } from "elysia";
+import { checkOutboundUrl, type HostResolver } from "../outbound-url.js";
 import {
   listVoices,
   MAX_AUDIO_BYTES,
@@ -48,6 +49,8 @@ export interface VoiceRouterDeps {
   readonly settings: VoiceSettingsStore;
   readonly keys: ProviderKeyStore;
   readonly fetch?: typeof fetch;
+  /** DNS resolver for the base-URL check (default: the system resolver); tests inject one. */
+  readonly resolveHost?: HostResolver;
 }
 
 /** The key used for an endpoint: the saved one, else the environment variable. */
@@ -86,11 +89,21 @@ export function voiceRouter(deps: VoiceRouterDeps) {
     .get("/settings", () => view())
     .put(
       "/settings",
-      ({ body, set }) => {
+      async ({ body, set }) => {
         const merged = mergeVoiceSettings(deps.settings.get(), body);
         if (!merged.ok) {
           set.status = 400;
           return { error: merged.refusal.message, field: merged.refusal.field };
+        }
+        // A name that resolves to a link-local / metadata address is refused too (outbound-url.ts).
+        for (const dir of ["stt", "tts"] as const) {
+          const raw = body[dir]?.baseUrl;
+          if (raw === undefined || raw.trim() === "") continue;
+          const checked = await checkOutboundUrl(raw, deps.resolveHost);
+          if (!checked.ok) {
+            set.status = 400;
+            return { error: `The ${dir === "stt" ? "transcription" : "speech"} URL is not allowed: ${checked.reason}.`, field: `${dir}.baseUrl` };
+          }
         }
         if (!deps.settings.set(merged.settings)) {
           set.status = 500;

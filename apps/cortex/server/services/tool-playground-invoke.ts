@@ -3,7 +3,7 @@ import type { Database } from "bun:sqlite";
 import { ToolService, createToolsLayer, type ToolOutput } from "@reactive-agents/tools";
 import { getMcpServer, parseMcpConfig } from "../db/mcp-queries.js";
 import { getLabCustomTool } from "../db/lab-custom-tools-queries.js";
-import { labCustomToDefinition, parseCatalogToolId } from "./tool-catalog.js";
+import { approvalRequiredToolNames, labCustomToDefinition, parseCatalogToolId } from "./tool-catalog.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 
 const PLAYGROUND_AGENT = "cortex-lab";
@@ -11,7 +11,25 @@ const PLAYGROUND_SESSION = "tool-playground";
 
 export type PlaygroundInvokeResult =
   | { ok: true; output: ToolOutput }
-  | { ok: false; error: string; httpStatus: number };
+  | { ok: false; error: string; httpStatus: number; approvalRequired?: true };
+
+/**
+ * The playground calls `ToolService.execute` directly, which has no approval gate. A tool
+ * the framework flags `requiresApproval` (code-execute, file-write, file-edit, docker, the
+ * full shell) therefore runs only when the caller says a person approved this call
+ * (`approved: true`; the Workshop asks first). Without it the answer is 409 and nothing runs.
+ */
+export function playgroundApprovalGate(catalogId: string, approved: boolean): PlaygroundInvokeResult | undefined {
+  const ref = parseCatalogToolId(catalogId);
+  if (!ref || ref.tag !== "builtin" || approved) return undefined;
+  if (!approvalRequiredToolNames().includes(ref.registryName)) return undefined;
+  return {
+    ok: false,
+    httpStatus: 409,
+    approvalRequired: true,
+    error: `${ref.registryName} runs code or changes files on this machine and needs approval. Confirm to run it.`,
+  };
+}
 
 function formatToolError(e: unknown): string {
   if (e && typeof e === "object" && "_tag" in e) {
@@ -26,7 +44,10 @@ export function invokeCatalogTool(
   db: Database,
   catalogId: string,
   args: Record<string, unknown>,
+  approved = false,
 ): Promise<PlaygroundInvokeResult> {
+  const gated = playgroundApprovalGate(catalogId, approved);
+  if (gated) return Promise.resolve(gated);
   const ref = parseCatalogToolId(catalogId);
   if (!ref) {
     return Promise.resolve({ ok: false, error: "Invalid tool id", httpStatus: 400 });

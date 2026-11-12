@@ -1,3 +1,4 @@
+import type { DOMPurify } from "dompurify";
 import { EXTERNAL_LINK_ATTRS, linkPolicy } from "./safe-links.js";
 
 /**
@@ -74,14 +75,27 @@ const PURIFY_TAGS = [
   "input",
 ] as const;
 
-const PURIFY_ATTR = ["href", "title", "colspan", "rowspan", "class", "type", "checked", "disabled"] as const;
+/**
+ * Attributes untrusted markdown may carry. `class` is not one of them: a class from model
+ * output could select any app style (a fixed-position overlay, a "running now" glow). The one
+ * class kept is the fence language marker, see {@link isCodeLanguageClass}.
+ */
+export const PURIFY_ATTR = ["href", "title", "colspan", "rowspan", "type", "checked", "disabled"] as const;
+
+/** True for the `language-ts` class marked puts on a fenced block's `<code>`, which the code label reads. */
+export function isCodeLanguageClass(tagName: string, value: string): boolean {
+  return tagName.toUpperCase() === "CODE" && /^language-[A-Za-z0-9_+#-]{1,40}$/.test(value);
+}
 
 let hooked = false;
 
 /** Links and task-list inputs from untrusted markdown, made safe after DOMPurify's own pass. */
-function installHooks(purify: { addHook: (name: "afterSanitizeAttributes", fn: (node: Element) => void) => void }): void {
+function installHooks(purify: DOMPurify): void {
   if (hooked) return;
   hooked = true;
+  purify.addHook("uponSanitizeAttribute", (node, event) => {
+    if (event.attrName === "class" && isCodeLanguageClass(node.nodeName, event.attrValue)) event.forceKeepAttr = true;
+  });
   purify.addHook("afterSanitizeAttributes", (node) => {
     if (node.nodeName === "A") {
       const policy = linkPolicy(node.getAttribute("href"));

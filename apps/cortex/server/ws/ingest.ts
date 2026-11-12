@@ -10,8 +10,16 @@ function rawPreview(raw: string | Buffer): string {
   return text.replace(/\s+/g, " ").slice(0, 120);
 }
 
+/**
+ * Largest ingest frame accepted (bytes). One event is far smaller (tool results are capped
+ * upstream); the cap stops a client from making the server buffer and parse unbounded JSON.
+ * Applied twice: as the socket's `maxPayloadLength` (Bun closes an oversize frame) and in
+ * {@link handleIngestMessage} for adapters that deliver whole messages.
+ */
+export const INGEST_MAX_BYTES = 4 * 1024 * 1024;
+
 function rawByteLength(raw: unknown): number {
-  if (typeof raw === "string") return raw.length;
+  if (typeof raw === "string") return Buffer.byteLength(raw);
   if (raw instanceof Buffer || raw instanceof Uint8Array) return raw.byteLength;
   return 0;
 }
@@ -41,6 +49,10 @@ export function handleIngestMessage(
   raw: unknown,
   ingestLayer: Layer.Layer<CortexIngestService>,
 ): void {
+  if (rawByteLength(raw) > INGEST_MAX_BYTES) {
+    cortexLog("warn", "ingest", "dropped: frame over the size cap", { bytes: rawByteLength(raw), cap: INGEST_MAX_BYTES });
+    return;
+  }
   let parsed: unknown;
   try {
     if (typeof raw === "string") {

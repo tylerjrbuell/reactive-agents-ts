@@ -37,7 +37,7 @@ import { ChatScheduleService } from "./services/chat-schedule-service.js";
 import { ChatGoalService } from "./services/chat-goal-service.js";
 import { ChatProposalService } from "./services/chat-proposal-service.js";
 import { createProposalHost } from "./services/proposal-host.js";
-import { handleIngestMessage } from "./ws/ingest.js";
+import { handleIngestMessage, INGEST_MAX_BYTES } from "./ws/ingest.js";
 import {
   handleLiveOpen,
   handleLiveClose,
@@ -51,7 +51,7 @@ import { defaultCortexConfig } from "./types.js";
 import { cortexLog } from "./cortex-log.js";
 import { closeOrphanedChatRuns } from "./db/queries.js";
 import { isLoopbackHost, resolveCortexHostname } from "./listen-host.js";
-import { guardConfigFromEnv, guardRequest } from "./request-guard.js";
+import { bindRefusal, guardConfigFromEnv, guardRequest } from "./request-guard.js";
 
 /** Base URL for startup log and “open browser” (aligns with CORTEX_URL when set). */
 function cortexListenDisplayUrl(port: number): string {
@@ -86,6 +86,11 @@ export async function startCortexServer(
       defaultCortexConfig.staticAssetsPath ??
       new URL("../ui/build", import.meta.url).pathname,
   };
+
+  // Off loopback the API needs an access token; refuse to start before anything is opened or bound.
+  const token = (config.token ?? process.env.CORTEX_TOKEN)?.trim() || undefined;
+  const refusal = bindRefusal(resolveCortexHostname(config.hostname, process.env), token);
+  if (refusal !== undefined) throw new Error(refusal);
 
   const runtime = createCortexRuntime(resolvedConfig);
 
@@ -148,8 +153,9 @@ export async function startCortexServer(
     });
   }
 
-  // DNS-rebinding wall for /api/* and /ws/* (request-guard.ts); runs before routing, WS upgrades included.
-  const guard = guardConfigFromEnv(process.env);
+  // DNS-rebinding wall, cross-site check and access token for /api/* and /ws/* (request-guard.ts);
+  // runs before routing, WS upgrades included.
+  const guard = { ...guardConfigFromEnv(process.env), ...(token ? { token } : {}) };
   const app = new Elysia()
     .onRequest(({ request }) => guardRequest(request, guard))
     .use(healthRouter)
@@ -183,6 +189,7 @@ export async function startCortexServer(
     .use(templateResolveRouter())
     .use(workspaceRouter(runtime.rawDb))
     .ws("/ws/ingest", {
+      maxPayloadLength: INGEST_MAX_BYTES,
       open() {
         cortexLog("info", "ingest-ws", "ingest client connected");
       },
@@ -257,17 +264,19 @@ export async function startCortexServer(
         cortexLog(
           "warn",
           "server",
-          `listening on ${hostname}: other machines can reach this Cortex, and it has no authentication`,
+          `listening on ${hostname}: other machines can reach this Cortex; every request needs the access token (CORTEX_TOKEN)`,
         );
       }
     },
   );
 
   if (resolvedConfig.openBrowser) {
-    const { exec } = await import("node:child_process");
+    // argv, never a shell string: `displayUrl` derives from CORTEX_URL.
+    const { execFile } = await import("node:child_process");
     const platform = process.platform;
-    const cmd = platform === "darwin" ? "open" : platform === "win32" ? "start" : "xdg-open";
-    exec(`${cmd} ${displayUrl}`);
+    const [file, args]: [string, string[]] =
+      platform === "darwin" ? ["open", [displayUrl]] : platform === "win32" ? ["cmd", ["/c", "start", "", displayUrl]] : ["xdg-open", [displayUrl]];
+    execFile(file, args, () => undefined);
   }
 
   return {

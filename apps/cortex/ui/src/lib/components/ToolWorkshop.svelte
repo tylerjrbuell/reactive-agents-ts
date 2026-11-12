@@ -280,18 +280,28 @@
     responseJson = "";
     responseMs = null;
     try {
-      const res = await fetch(`${serverUrl}/api/tools/invoke`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toolId: selected.id, arguments: args }),
-      });
-      const j = (await res.json()) as {
+      type InvokeReply = {
         ok?: boolean;
         error?: string;
+        approvalRequired?: boolean;
         success?: boolean;
         result?: unknown;
         executionTimeMs?: number;
       };
+      const send = async (approved: boolean): Promise<{ res: Response; j: InvokeReply }> => {
+        const r = await fetch(`${serverUrl}/api/tools/invoke`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toolId: selected!.id, arguments: args, ...(approved ? { approved: true } : {}) }),
+        });
+        return { res: r, j: (await r.json()) as InvokeReply };
+      };
+      let reply = await send(false);
+      // Tools that run code or change files ask first: the server answers 409 until a person confirms.
+      if (reply.res.status === 409 && reply.j.approvalRequired && window.confirm(reply.j.error ?? "Run this tool?")) {
+        reply = await send(true);
+      }
+      const { res, j } = reply;
       if (!res.ok || j.error) {
         responseOk = false;
         responseJson = JSON.stringify({ error: j.error ?? `HTTP ${res.status}` }, null, 2);

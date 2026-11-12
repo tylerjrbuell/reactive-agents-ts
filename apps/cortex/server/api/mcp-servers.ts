@@ -15,6 +15,7 @@ import { discoverMcpTools } from "../services/mcp-discovery.js";
 import { parseConfigBody } from "../services/mcp-config-import.js";
 import { executeMcpJsonImport } from "../services/mcp-json-import-apply.js";
 import { cleanupMcpTransport } from "@reactive-agents/tools";
+import { maskMcpConfig, restoreMaskedMcpConfig } from "../services/mcp-secrets.js";
 
 export const mcpServersRouter = (db: Database) =>
   new Elysia({ prefix: "/api/mcp-servers" })
@@ -31,7 +32,8 @@ export const mcpServersRouter = (db: Database) =>
       return servers.map((s) => ({
         serverId: s.server_id,
         name: s.name,
-        config: parseMcpConfig(s),
+        // Credentials (env / header values, OAuth secrets) are write-only: masked here, kept on save.
+        config: maskMcpConfig(parseMcpConfig(s)),
         tools: (toolsByServer.get(s.server_id) ?? []).map((r) => ({
           toolName: r.tool_name,
           description: r.description ?? undefined,
@@ -78,7 +80,7 @@ export const mcpServersRouter = (db: Database) =>
           set.status = 400;
           return { error: "Invalid MCP server config" };
         }
-        if (!updateMcpServer(db, params.serverId, cfg)) {
+        if (!updateMcpServer(db, params.serverId, restoreMaskedMcpConfig(cfg, parseMcpConfig(row)))) {
           set.status = 404;
           return { error: "MCP server not found" };
         }
@@ -115,7 +117,8 @@ export const mcpServersRouter = (db: Database) =>
           return { error: "MCP server not found" };
         }
         const cfg = parseMcpConfig(row);
-        console.log(`[MCP refresh-tools] "${cfg.name}" transport=${cfg.transport}${cfg.endpoint ? ` endpoint=${cfg.endpoint}` : ""}${cfg.command ? ` command=${cfg.command}` : ""}`);
+        // Name and transport only: endpoints and command lines often carry tokens in the query string or args.
+        console.log(`[MCP refresh-tools] "${cfg.name}" transport=${cfg.transport}`);
 
         // 10-minute hard cap — covers the worst-case first `docker pull` of a large image.
         // On expiry the subprocess is killed so the server process does not leak.

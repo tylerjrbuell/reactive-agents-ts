@@ -10,6 +10,8 @@
  * has the key redacted before it leaves this module.
  */
 
+import { isBlockedAddress, noRedirect } from "../../outbound-url.js";
+
 /** A configured audio endpoint. `baseUrl` includes the version segment, such as `http://localhost:8000/v1`. */
 export interface AudioEndpoint {
   readonly baseUrl: string;
@@ -45,19 +47,10 @@ export function audioUrl(baseUrl: string, path: string): string {
 }
 
 /**
- * Link-local and cloud-metadata hosts: 169.254.0.0/16 (AWS/GCP/Azure metadata at
- * 169.254.169.254), fe80::/10, IPv4-mapped forms of those, and the GCP metadata name.
- * Loopback and private LAN stay allowed: a local speech server is the point. `URL` has
- * already folded decimal/hex/octal IPv4 spellings into dotted form by the time this runs.
+ * Link-local and cloud-metadata hosts (the shared rule lives in `outbound-url.ts`).
+ * Loopback and private LAN stay allowed: a local speech server is the point.
  */
-export function isBlockedAudioHost(hostname: string): boolean {
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  if (h === "metadata.google.internal" || h === "metadata") return true;
-  if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
-  if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
-  // ::ffff:a9fe:xxxx (the URL parser's compressed form of ::ffff:169.254.x.x)
-  return /^::ffff:(169\.254\.|a9fe:)/.test(h);
-}
+export const isBlockedAudioHost = isBlockedAddress;
 
 /** `http` or `https` URL without embedded credentials, trailing slashes removed; `undefined` otherwise (or for a link-local / metadata host). */
 export function normalizeAudioBaseUrl(raw: string): string | undefined {
@@ -77,27 +70,18 @@ function headers(ep: AudioEndpoint, extra: Record<string, string> = {}): Record<
   return { ...(ep.apiKey ? { authorization: `Bearer ${ep.apiKey}` } : {}), ...extra };
 }
 
-async function failureOf(res: Response, ep: AudioEndpoint, what: string): Promise<AudioFailure> {
-  let detail = "";
-  try {
-    const raw = (await res.text()).slice(0, 400);
-    try {
-      const j: unknown = JSON.parse(raw);
-      const err = typeof j === "object" && j !== null ? (j as { error?: unknown; detail?: unknown; message?: unknown }) : {};
-      const e = err.error;
-      detail =
-        typeof e === "string" ? e : typeof e === "object" && e !== null && typeof (e as { message?: unknown }).message === "string" ? (e as { message: string }).message : typeof err.detail === "string" ? err.detail : typeof err.message === "string" ? err.message : raw;
-    } catch {
-      detail = raw;
-    }
-  } catch {
-    /* no body */
-  }
-  const tail = detail.trim() !== "" ? `: ${replaceAll(detail.trim(), ep.apiKey)}` : "";
-  if (res.status === 401 || res.status === 403) return { ok: false, status: 401, message: `The ${what} server rejected the API key${tail}` };
-  if (res.status === 404) return { ok: false, status: 404, message: `The ${what} server has no such route or model (HTTP 404)${tail}. Check the base URL ends with /v1 and the model name.` };
-  if (res.status === 413) return { ok: false, status: 413, message: `The ${what} server refused the size of the request${tail}` };
-  return { ok: false, status: 502, message: `The ${what} server answered HTTP ${res.status}${tail}` };
+/**
+ * The failure for a non-2xx answer. The upstream body is never echoed: the status says what
+ * went wrong, and a response body is attacker-shaped text when the base URL is not a server
+ * the operator trusts.
+ */
+async function failureOf(res: Response, _ep: AudioEndpoint, what: string): Promise<AudioFailure> {
+  await res.body?.cancel().catch(() => undefined);
+  if (res.status === 401 || res.status === 403) return { ok: false, status: 401, message: `The ${what} server rejected the API key.` };
+  if (res.status === 404) return { ok: false, status: 404, message: `The ${what} server has no such route or model (HTTP 404). Check the base URL ends with /v1 and the model name.` };
+  if (res.status === 413) return { ok: false, status: 413, message: `The ${what} server refused the size of the request.` };
+  if (res.status >= 300 && res.status < 400) return { ok: false, status: 502, message: `The ${what} server answered with a redirect (HTTP ${res.status}); redirects are not followed, so use its final URL.` };
+  return { ok: false, status: 502, message: `The ${what} server answered HTTP ${res.status}.` };
 }
 
 function networkFailure(cause: unknown, ep: AudioEndpoint, what: string): AudioFailure {
@@ -154,7 +138,7 @@ export async function transcribe(ep: AudioEndpoint, req: TranscribeRequest): Pro
   form.set("response_format", "json");
   if (req.language !== undefined && req.language !== "") form.set("language", req.language.split("-")[0] ?? req.language);
   try {
-    const res = await (ep.fetch ?? fetch)(audioUrl(ep.baseUrl, "audio/transcriptions"), {
+    const res = await noRedirect(ep.fetch ?? fetch)(audioUrl(ep.baseUrl, "audio/transcriptions"), {
       method: "POST",
       headers: headers(ep),
       body: form,
@@ -200,7 +184,7 @@ export async function speak(ep: AudioEndpoint, req: SpeakRequest): Promise<Spoke
   const format = req.format ?? "mp3";
   const speed = Math.min(Math.max(req.speed ?? 1, 0.25), 4);
   try {
-    const res = await (ep.fetch ?? fetch)(audioUrl(ep.baseUrl, "audio/speech"), {
+    const res = await noRedirect(ep.fetch ?? fetch)(audioUrl(ep.baseUrl, "audio/speech"), {
       method: "POST",
       headers: headers(ep, { "content-type": "application/json" }),
       body: JSON.stringify({ model: req.model, input: req.text, voice: req.voice, response_format: format, speed }),
@@ -229,7 +213,7 @@ export interface ServerVoice {
 export async function listVoices(ep: AudioEndpoint): Promise<{ readonly voices: readonly ServerVoice[]; readonly listed: boolean }> {
   const fallback = { voices: OPENAI_VOICES.map((id) => ({ id, label: id })), listed: false };
   try {
-    const res = await (ep.fetch ?? fetch)(audioUrl(ep.baseUrl, "audio/voices"), { headers: headers(ep), signal: AbortSignal.timeout(5_000) });
+    const res = await noRedirect(ep.fetch ?? fetch)(audioUrl(ep.baseUrl, "audio/voices"), { headers: headers(ep), signal: AbortSignal.timeout(5_000) });
     if (!res.ok) return fallback;
     const j: unknown = await res.json();
     const list = typeof j === "object" && j !== null ? (j as { voices?: unknown }).voices : j;
