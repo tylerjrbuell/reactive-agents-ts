@@ -27,6 +27,16 @@ describe("attach controller", () => {
     expect(refused[0]).toContain("m does not accept pictures");
   });
 
+  test("a file the browser cannot read is refused once, adds nothing, and later files still attach", async () => {
+    const { c, refused } = make();
+    const gone = new File(["x"], "shot.png", { type: "image/png" });
+    gone.arrayBuffer = () => Promise.reject(new DOMException("A requested file or directory could not be found", "NotFoundError"));
+    const ok = new File(["hello"], "n.txt", { type: "text/plain" });
+    await c.addFiles([gone, ok]);
+    expect(refused).toEqual(["shot.png could not be read (the file may have moved or be unreadable)"]);
+    expect(get(c.items).map((i) => i.name)).toEqual(["n.txt"]);
+  });
+
   test("tag, remove, clear", () => {
     const { c } = make();
     c.addWorkspaceFile({ path: "src/a.ts", bytes: 9 });

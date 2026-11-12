@@ -788,6 +788,8 @@ function createChatStore() {
     rerun,
     clearContext,
     setTodo,
+    /** Attach to a turn the server started (goal segment, schedule fire) when one is running and this page is not streaming. */
+    resumeActiveTurn,
     /** Re-read the active session's turns (a goal segment or schedule fire added turns server-side). */
     refreshActive: (): Promise<void> => {
       const sid = activeId();

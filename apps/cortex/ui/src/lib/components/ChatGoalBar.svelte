@@ -47,7 +47,11 @@
   $effect(() => {
     if (schedules.length === 0) return;
     const sid = sessionId;
-    const t = setInterval(() => void chatGoalStore.loadSchedules(sid).catch(() => {}), SCHEDULE_POLL_MS);
+    const t = setInterval(() => {
+      void chatGoalStore.loadSchedules(sid).catch(() => {});
+      // A fire streams live like a user turn: attach while it runs (no-op when none runs).
+      void chatStore.resumeActiveTurn(sid);
+    }, SCHEDULE_POLL_MS);
     return () => clearInterval(t);
   });
   // Per-schedule run counts: only an already-known schedule whose counter rose is a fire, so the list being
@@ -63,7 +67,11 @@
   $effect(() => {
     if (!shouldPoll(goal?.status)) return;
     const sid = sessionId;
-    const t = setInterval(() => void chatGoalStore.loadGoal(sid).catch(() => {}), POLL_MS);
+    const t = setInterval(() => {
+      void chatGoalStore.loadGoal(sid).catch(() => {});
+      // A goal segment streams live like a user turn: attach while it runs (no-op when none runs).
+      void chatStore.resumeActiveTurn(sid);
+    }, POLL_MS);
     return () => clearInterval(t);
   });
 

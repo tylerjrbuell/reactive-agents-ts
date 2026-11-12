@@ -50,11 +50,22 @@ export class DetachedTurn {
   private base = 0;
   private done = false;
   private readonly wake = new Set<() => void>();
+  private readonly settle: Promise<void>;
+  private resolveSettle: () => void = () => {};
 
   constructor(
     readonly sessionId: string,
     readonly message: string,
-  ) {}
+  ) {
+    this.settle = new Promise<void>((r) => {
+      this.resolveSettle = r;
+    });
+  }
+
+  /** Resolves once the source stream has fully ended (the producer's cleanup, e.g. persisting the turn, has run). */
+  whenEnded(): Promise<void> {
+    return this.settle;
+  }
 
   /** True until the turn's stream ended. */
   get active(): boolean {
@@ -80,6 +91,7 @@ export class DetachedTurn {
   /** Mark the stream ended; readers drain what is buffered, then finish. */
   end(): void {
     this.done = true;
+    this.resolveSettle();
     this.notify();
   }
 

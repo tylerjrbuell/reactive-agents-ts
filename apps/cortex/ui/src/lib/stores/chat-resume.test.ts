@@ -83,6 +83,41 @@ describe("chatStore: a turn that kept running while the page was away", () => {
     expect(assistant?.streaming).toBe(false);
   });
 
+  it("a server-started turn (goal segment) that begins after the session opened is attached on the poll tick, then replaced by the stored turn", async () => {
+    let running = false;
+    let stored = false;
+    globalThis.fetch = (async (url: string) => {
+      if (url.endsWith("/api/chat/sessions")) return json([{ sessionId: "s3", name: "S3", agentConfig: {}, createdAt: 1, lastUsedAt: 1 }]);
+      if (url.endsWith("/api/chat/sessions/s3")) {
+        const turns = stored
+          ? [
+              { id: 1, role: "user", content: "segment prompt", tokensUsed: 0, ts: 1 },
+              { id: 2, role: "assistant", content: "done it", tokensUsed: 3, ts: 2 },
+            ]
+          : [];
+        return json({ sessionId: "s3", name: "S3", agentConfig: {}, createdAt: 1, lastUsedAt: 1, turns });
+      }
+      if (url.endsWith("/chat/active")) return json(running ? { active: true, message: "segment prompt", startedAt: 7 } : { active: false });
+      if (url.includes("/chat/stream/active")) {
+        stored = true;
+        return sse(['id: 0\ndata: {"_tag":"TextDelta","text":"done it"}\n\n', 'id: 1\ndata: {"_tag":"StreamCompleted","output":"done it","metadata":{"tokensUsed":3}}\n\n']);
+      }
+      return json({ error: "unexpected url" }, 500);
+    }) as unknown as FetchFn;
+    await chatStore.loadSessions();
+    await chatStore.selectSession("s3");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(get(chatStore).activeTurns).toEqual([]);
+
+    running = true;
+    expect(await chatStore.resumeActiveTurn("s3")).toBe(true);
+    for (let i = 0; i < 100 && get(chatStore).sending; i++) await new Promise((r) => setTimeout(r, 10));
+    const turns = get(chatStore).activeTurns;
+    // One user and one assistant bubble: the live pair was replaced by the stored one, not duplicated.
+    expect(turns.map((t) => t.role)).toEqual(["user", "assistant"]);
+    expect(turns[1]?.content).toBe("done it");
+  });
+
   it("nothing running: the session opens as before, with no attach", async () => {
     let attached = false;
     globalThis.fetch = (async (url: string) => {

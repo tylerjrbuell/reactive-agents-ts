@@ -43,6 +43,15 @@ export interface AttachController {
   clear(): void;
 }
 
+/** Why a picked file could not be read, in words for the toast. */
+function readFailure(name: string, e: unknown): string {
+  const errName = e instanceof Error ? e.name : "";
+  if (errName === "NotFoundError" || errName === "NotReadableError" || errName === "SecurityError") {
+    return `${name} could not be read (the file may have moved or be unreadable)`;
+  }
+  return `${name} could not be read: ${e instanceof Error ? e.message : String(e)}`;
+}
+
 let seq = 0;
 const nextId = () => `att-${Date.now().toString(36)}-${++seq}`;
 
@@ -58,7 +67,15 @@ export function createAttachController(deps: AttachDeps): AttachController {
           deps.refuse("Not attached", verdict.reason);
           continue;
         }
-        const dataBase64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+        // The browser rejects a picked file that vanished or is unreadable (moved temp file, cloud
+        // placeholder, permission): refuse that one and keep going, so addFiles never rejects.
+        let dataBase64: string;
+        try {
+          dataBase64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+        } catch (e) {
+          deps.refuse("Not attached", readFailure(file.name || "pasted", e));
+          continue;
+        }
         const item: DraftAttachment = {
           id: nextId(),
           kind: verdict.kind,

@@ -88,8 +88,7 @@ function sseResponse(turn: DetachedTurn, fromId: number): Response {
   });
 }
 
-export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService, goals?: ChatGoalService, proposals?: ChatProposalService, btw?: ChatBtwService) => {
-  const detachedTurns = new DetachedTurns();
+export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleService, goals?: ChatGoalService, proposals?: ChatProposalService, btw?: ChatBtwService, detachedTurns: DetachedTurns = new DetachedTurns()) => {
   return new Elysia({ prefix: "/api/chat" })
     .get("/sessions", () => svc.listSessions())
     .post(

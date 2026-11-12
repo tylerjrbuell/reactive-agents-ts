@@ -35,6 +35,8 @@ import { workspaceRouter } from "./api/workspace.js";
 import { ChatSessionBusyError, ChatSessionService } from "./services/chat-session-service.js";
 import { ChatScheduleService } from "./services/chat-schedule-service.js";
 import { ChatGoalService } from "./services/chat-goal-service.js";
+import { DetachedTurns } from "./services/chat-detached-turn.js";
+import { makeDetachedRunner } from "./services/chat-detached-run.js";
 import { ChatProposalService } from "./services/chat-proposal-service.js";
 import { createProposalHost } from "./services/proposal-host.js";
 import { handleIngestMessage, INGEST_MAX_BYTES } from "./ws/ingest.js";
@@ -118,7 +120,12 @@ export async function startCortexServer(
   // Chat turns paused on a durable approval gate before a restart: list them again (desk + chat).
   chatSessionService.approvals.restore();
 
-  const chatGoalService = new ChatGoalService(runtime.rawDb, (id, msg) => chatSessionService.chat(id, msg));
+  // Goal segments, schedule fires and loop ticks run as detached streamed turns in this shared buffer,
+  // so the open chat shows them live and a reload re-attaches (chat-detached-run.ts).
+  const detachedTurns = new DetachedTurns();
+  const runDetached = makeDetachedRunner(chatSessionService, detachedTurns);
+
+  const chatGoalService = new ChatGoalService(runtime.rawDb, runDetached);
   chatGoalService.recoverOnBoot();
   chatSessionService.attachGoalSource((id) => {
     const g = chatGoalService.get(id)?.goal;
@@ -128,7 +135,7 @@ export async function startCortexServer(
   // A goal owns its session: scheduled fires skip (recorded as skipped:busy) instead of racing it.
   const chatScheduleService = new ChatScheduleService(runtime.rawDb, (id, msg) => {
     if (chatGoalService.activeGoal(id)) throw new ChatSessionBusyError(id);
-    return chatSessionService.chat(id, msg);
+    return runDetached(id, msg);
   });
   chatScheduleService.start();
 
@@ -175,7 +182,7 @@ export async function startCortexServer(
     .use(modelThroughputRouter(runtime.rawDb))
     .use(modelInsightsRouter(runtime.rawDb))
     .use(crashedRunsRouter(runtime.rawDb, runtime.runnerLayer))
-    .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService, new ChatBtwService(runtime.rawDb)))
+    .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService, new ChatBtwService(runtime.rawDb), detachedTurns))
     .use(memoryRouter(memoryInspector, runtime.rawDb))
     .use(
       agentSkillsRouter(

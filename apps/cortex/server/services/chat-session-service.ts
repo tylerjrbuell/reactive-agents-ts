@@ -349,6 +349,16 @@ export class ChatSessionService {
     return this.inFlight.has(sessionId);
   }
 
+  /** Start collecting the cached agent's root-run assessments for one turn (no-op before the agent is built). */
+  beginTurnAssessments(sessionId: string): void {
+    this.sessions.get(sessionId)?.assessments?.begin();
+  }
+
+  /** The root-run assessments recorded since `beginTurnAssessments` (a goal segment's progress evidence). */
+  drainTurnAssessments(sessionId: string): GoalRunEventSlice[] {
+    return this.sessions.get(sessionId)?.assessments?.drain() ?? [];
+  }
+
   /** True while a built agent is cached for the session (the next turn reuses it). */
   hasCachedAgent(sessionId: string): boolean {
     return this.sessions.has(sessionId);
