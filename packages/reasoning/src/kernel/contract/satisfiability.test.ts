@@ -170,6 +170,52 @@ describe("GH #244 — satisfiability assessment (contract × tool surface)", () 
     expect(verdict).toBeNull();
   });
 
+  describe("read-only tool surface (Telegram trace shape)", () => {
+    const TASK = "Send a slack message to Alice with the report";
+    const readOnly = (name: string, description: string): ToolSchema => ({
+      ...schema(name, description),
+      mutatesExternalState: false,
+    });
+    const assess = (availableSchemas: readonly ToolSchema[]) =>
+      assessActionSatisfiability({
+        contract: compileRunContract(TASK, {}),
+        task: TASK,
+        availableSchemas,
+        requiredTools: [],
+        nominatedNames: [],
+      });
+
+    it("every domain tool flagged read-only (even if 'relevant') → abstains with named capability", () => {
+      const verdict = assess([
+        readOnly("web-search", "search the web for how to send a slack message"),
+        readOnly("recall", "recall stored notes"),
+      ]);
+      expect(verdict).not.toBeNull();
+      expect(verdict!.missing).toEqual(["capability:send-message"]);
+      expect(verdict!.reason).toContain("read-only");
+    });
+
+    it("meta tools do not count as domain tools", () => {
+      const verdict = assess([
+        readOnly("web-search", "search the web"),
+        schema("final-answer", "finish"),
+      ]);
+      expect(verdict).not.toBeNull();
+    });
+
+    it("unflagged (unknown) tool keeps old behavior → relevant tool means satisfiable", () => {
+      expect(assess([schema("slack-post", "Send messages to Slack channels")])).toBeNull();
+    });
+
+    it("one mutating tool among read-only ones → not abstained by this rule", () => {
+      const verdict = assess([
+        readOnly("web-search", "search the web"),
+        { ...schema("slack-post", "Send messages to Slack channels"), mutatesExternalState: true },
+      ]);
+      expect(verdict).toBeNull();
+    });
+  });
+
   it("reasoning-only question with an impoverished surface → null (unaffected)", () => {
     const task = "What is the capital of France?";
     const verdict = assessActionSatisfiability({

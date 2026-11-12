@@ -74,8 +74,15 @@ export function assessActionSatisfiability(
   // Meta tools (final-answer, recall, ...) cannot perform external actions —
   // judge relevance over domain tools only.
   const domain = input.availableSchemas.filter((s) => !META_TOOLS.has(s.name));
-  const { primary } = filterToolsByRelevance(input.task, domain);
-  if (primary.length > 0) return null;
+  // Every visible domain tool provably read-only (`=== false`; undefined stays
+  // unknown): relevance is moot — a search tool matching the task's words
+  // still cannot perform the action.
+  const allReadOnly =
+    domain.length > 0 && domain.every((s) => s.mutatesExternalState === false);
+  if (!allReadOnly) {
+    const { primary } = filterToolsByRelevance(input.task, domain);
+    if (primary.length > 0) return null;
+  }
 
   const capabilities: string[] = [];
   for (const a of actions) {
@@ -87,7 +94,9 @@ export function assessActionSatisfiability(
   return {
     reason:
       `missing capability: the task requires a ${capabilities.map((c) => `"${c}"`).join(", ")} action (${detail}) ` +
-      `but no available tool is relevant to it. ` +
+      (allReadOnly
+        ? `but every available tool is read-only and cannot perform it. `
+        : `but no available tool is relevant to it. `) +
       `available=[${available.length > 0 ? available.join(", ") : "(none)"}]. ` +
       `Abstaining without spending model iterations on an impossible task.`,
     missing: capabilities.map((c) => `capability:${c}`),

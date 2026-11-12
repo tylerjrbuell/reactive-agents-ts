@@ -80,6 +80,14 @@ export interface ToolSchema {
    * `"low"`; absent counts as not-low (the call reprompts instead).
    */
   readonly riskLevel?: "low" | "medium" | "high" | "critical";
+  /**
+   * Whether calling this tool can change state outside the agent (send a
+   * message, write a record). `false` = provably read-only; `undefined` =
+   * unknown, which every consumer must treat as "may mutate". The
+   * satisfiability preflight abstains an action-required task only when EVERY
+   * visible domain tool is flagged `false`.
+   */
+  readonly mutatesExternalState?: boolean;
 }
 
 /** Format tool schemas for LLM consumption.
