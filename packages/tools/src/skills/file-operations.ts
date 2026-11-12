@@ -4,7 +4,7 @@ import * as path from "node:path";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
-import { getFileRoot, isRealpathWithinRoot, isWithinRoot } from "./file-root.js";
+import { getFileRoot, isRealpathWithinRoot, isSecretPathReal, isWithinRoot } from "./file-root.js";
 import { JSON_FILE_EXTENSIONS } from "../healing/json-repair.js";
 import {
   DIRECTORY_READ_NOTE,
@@ -70,7 +70,8 @@ export async function confinePath(filePath: string): Promise<string> {
     : path.resolve(allowedBase, filePath);
   const lexicallyInside = isWithinRoot(allowedBase, resolved);
   // Lexically inside: a symlink on the way (or as the leaf) may still lead out.
-  if (lexicallyInside && (await isRealpathWithinRoot(allowedBase, resolved))) return resolved;
+  const secret = lexicallyInside && (await isSecretPathReal(allowedBase, resolved));
+  if (!secret && lexicallyInside && (await isRealpathWithinRoot(allowedBase, resolved))) return resolved;
   const suggestion = lexicallyInside ? undefined : await existingSuffixUnder(allowedBase, filePath);
   const basename = path.basename(filePath) || "output.txt";
   const correction = lexicallyInside
@@ -78,8 +79,10 @@ export async function confinePath(filePath: string): Promise<string> {
     : suggestion !== undefined
       ? `"${suggestion}" exists under the root — retry with that exact path.`
       : `Use a relative path instead, e.g. "./${basename}".`;
-  throw new Error(
-    `Path traversal detected: ${filePath} resolves ${lexicallyInside ? "through a symbolic link to a location" : `to ${resolved},`} outside the ` +
+  throw new Error(secret
+    ? `Access denied: ${filePath} is a credential path (.env, .ssh, .cortex, secret.key, provider-keys.json, ...) ` +
+      `and file tools do not read or write these.`
+    : `Path traversal detected: ${filePath} resolves ${lexicallyInside ? "through a symbolic link to a location" : `to ${resolved},`} outside the ` +
       `working root ${allowedBase}. Relative paths resolve relative to the working root; ` +
       `an absolute path must be inside it. ${correction}`,
   );

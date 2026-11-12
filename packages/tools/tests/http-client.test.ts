@@ -49,7 +49,8 @@ describe("httpGetHandler body handling", () => {
     const body = result.body as string;
     expect(body.length).toBeLessThan(2_000_300); // 2M cap + truncation-message prefix, well short of the 2.5M raw body
     expect(body).toContain("Response body truncated");
-    expect(body).toContain("2500000 chars");
+    // The body is cut while streaming, so the raw length is no longer known; the cap is named.
+    expect(body).toContain("2000000-char");
   });
 
   it("falls back to raw text when content-type claims JSON but the body doesn't parse", async () => {

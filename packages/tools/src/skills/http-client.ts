@@ -19,6 +19,38 @@ const MAX_REDIRECTS = 5;
  */
 const MAX_BODY_CHARS = 2_000_000;
 
+const CREDENTIAL_HEADER = /^(authorization|proxy-authorization|cookie|x-api-key)$|token|secret|api-?key/i;
+
+/** Headers minus the ones that carry credentials. */
+export function withoutCredentialHeaders(headers: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(headers).filter(([name]) => !CREDENTIAL_HEADER.test(name)));
+}
+
+/**
+ * Read a response body as text, stopping once more than `maxChars` have arrived
+ * so an oversized body is never held in memory in full. `truncated` is true
+ * when the cap cut it off.
+ */
+export async function readCappedText(
+  response: Response,
+  maxChars: number,
+): Promise<{ readonly text: string; readonly truncated: boolean }> {
+  if (!response.body) return { text: "", truncated: false };
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+    if (text.length > maxChars) {
+      await reader.cancel();
+      return { text: text.slice(0, maxChars), truncated: true };
+    }
+  }
+  return { text: text + decoder.decode(), truncated: false };
+}
+
 export const httpGetTool: ToolDefinition = {
   name: "http-get",
   description:
@@ -83,27 +115,30 @@ export const httpGetHandler = (
       // or override per-agent via config.
       const guard = { allowPrivate: config?.allowPrivate ?? httpAllowPrivateEnabled() };
       let current = (await assertPublicUrl(url, guard)).toString();
-      let response = await fetch(current, { method: "GET", headers, redirect: "manual" });
+      let hopHeaders = headers;
+      let response = await fetch(current, { method: "GET", headers: hopHeaders, redirect: "manual" });
       for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
         if (response.status < 300 || response.status >= 400) break;
         const location = response.headers.get("location");
         if (!location) break;
-        current = (await assertPublicUrl(new URL(location, current).toString(), guard)).toString();
-        response = await fetch(current, { method: "GET", headers, redirect: "manual" });
+        const next = new URL(location, current);
+        // Credentials the model supplied belong to the origin it named: a
+        // redirect to another origin must not receive them (and stays without).
+        if (next.origin !== new URL(current).origin) hopHeaders = withoutCredentialHeaders(hopHeaders);
+        current = (await assertPublicUrl(next.toString(), guard)).toString();
+        response = await fetch(current, { method: "GET", headers: hopHeaders, redirect: "manual" });
       }
       const contentType = response.headers.get("content-type") ?? "";
 
       // Read as text first (regardless of content-type) so the size cap
       // applies before any JSON parse — `response.json()` on an oversized
       // body would otherwise materialize the whole thing in memory first.
-      const rawText = await response.text();
-      const truncated = rawText.length > MAX_BODY_CHARS;
-      const boundedText = truncated ? rawText.slice(0, MAX_BODY_CHARS) : rawText;
+      const { text: boundedText, truncated } = await readCappedText(response, MAX_BODY_CHARS);
 
       let body: unknown;
       if (truncated) {
         body =
-          `[Response body truncated: ${rawText.length} chars exceeds the ${MAX_BODY_CHARS}-char ` +
+          `[Response body truncated: exceeds the ${MAX_BODY_CHARS}-char ` +
           `safety cap — showing the first ${MAX_BODY_CHARS}]\n${boundedText}`;
       } else if (contentType.includes("application/json")) {
         try {

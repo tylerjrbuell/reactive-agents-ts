@@ -82,6 +82,46 @@ export function isWithinRoot(base: string, candidate: string): boolean {
   );
 }
 
+const secretAccessStore = new AsyncLocalStorage<true>();
+
+/**
+ * Run `fn` with the secret-path denylist ({@link isSecretPath}) off. The only
+ * way to lift it: an explicit, scoped opt-in by the host application.
+ */
+export function withSecretPathAccess<T>(fn: () => T): T {
+  return secretAccessStore.run(true, fn);
+}
+
+/** Path segments (exact names) that hold credentials. */
+const SECRET_SEGMENTS: ReadonlySet<string> = new Set([
+  ".ssh", ".cortex", ".aws", ".gnupg", "secret.key", "provider-keys.json", "id_rsa", "id_ed25519",
+]);
+
+const isSecretSegment = (segment: string): boolean =>
+  SECRET_SEGMENTS.has(segment) ||
+  segment === ".env" ||
+  (segment.startsWith(".env.") && !/\.(example|sample|template)$/.test(segment));
+
+/**
+ * True when any segment of `target` (relative to `root` when inside it) names
+ * a credential file or directory: `.env`, `.env.*`, `.ssh`, `.cortex`,
+ * `secret.key`, `provider-keys.json`, ... File tools refuse these inside the
+ * file root so a prompt-injected agent cannot read an app's own secrets.
+ */
+export function isSecretPath(root: string, target: string): boolean {
+  if (secretAccessStore.getStore() === true) return false;
+  const rel = path.relative(root, target);
+  const shown = isWithinRoot(root, target) ? rel : target;
+  return shown.split(/[\\/]+/).some(isSecretSegment);
+}
+
+/** {@link isSecretPath} on the lexical path and on where symlinks really lead. */
+export async function isSecretPathReal(root: string, target: string): Promise<boolean> {
+  if (isSecretPath(root, target)) return true;
+  const realRoot = await realpathOfNearestAncestor(root);
+  return isSecretPath(realRoot, await realpathOfNearestAncestor(target));
+}
+
 /**
  * `realpath` of `target`, or, when `target` does not exist yet (a write
  * target), the realpath of its nearest existing ancestor with the missing tail

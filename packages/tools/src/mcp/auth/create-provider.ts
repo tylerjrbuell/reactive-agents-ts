@@ -159,6 +159,7 @@ export function createAuthProvider(
         clientId: config.clientId,
         clientSecret: config.clientSecret,
         scope: config.scope,
+        expectedIssuer: config.expectedIssuer,
       });
       // Hardened per Task 5 — closes Task 0's issuer-mix-up / HTTPS-downgrade
       // gaps and provides the error-message redactor `mcp-client.ts` uses.
@@ -174,6 +175,7 @@ export function createAuthProvider(
         privateKey: config.privateKey,
         algorithm: config.algorithm,
         scope: config.scope,
+        expectedIssuer: config.expectedIssuer,
       });
       return hardenProvider(withPersistence(inner, store, requireEndpoint(server)), {
         serverName: server.name,

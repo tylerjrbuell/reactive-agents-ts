@@ -57,7 +57,7 @@ describe("MCP client OAuth — final-review C1: default token store is the file 
     const tmpHome = await makeTmpHome();
 
     const proc = Bun.spawn({
-      cmd: ["bun", "run", CHILD_SCRIPT, f.resourceUrl, CLIENT_ID, CLIENT_SECRET],
+      cmd: ["bun", "run", CHILD_SCRIPT, f.resourceUrl, CLIENT_ID, CLIENT_SECRET, f.issuer],
       env: { ...process.env, HOME: tmpHome },
       stdout: "pipe",
       stderr: "pipe",

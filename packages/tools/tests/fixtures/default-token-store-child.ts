@@ -19,7 +19,7 @@
 import { Effect } from "effect";
 import { makeMCPClient } from "../../src/mcp/mcp-client.js";
 
-const [, , resourceUrl, clientId, clientSecret] = process.argv;
+const [, , resourceUrl, clientId, clientSecret, expectedIssuer] = process.argv;
 
 if (!resourceUrl || !clientId || !clientSecret) {
   console.error("usage: default-token-store-child.ts <resourceUrl> <clientId> <clientSecret>");
@@ -32,7 +32,7 @@ const program = Effect.gen(function* () {
     name: "default-store-child",
     transport: "streamable-http",
     endpoint: resourceUrl,
-    auth: { type: "client_credentials", clientId, clientSecret },
+    auth: { type: "client_credentials", clientId, clientSecret, expectedIssuer },
     // Deliberately no `tokenStore` — this is the exact case final-review C1 covers.
   });
 });

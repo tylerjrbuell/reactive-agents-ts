@@ -245,7 +245,7 @@ describe("docker arg shaping", () => {
     );
     expect(out).toContain("-p");
     const pIdx = out.indexOf("-p");
-    expect(out[pIdx + 1]).toBe("54321:8080");
+    expect(out[pIdx + 1]).toBe("127.0.0.1:54321:8080"); // loopback only (2026-11-12 audit M5)
     // mapping inserted before the image name
     expect(out.indexOf("-p")).toBeLessThan(out.indexOf("mcp/context7"));
   });
@@ -257,7 +257,7 @@ describe("docker arg shaping", () => {
       3000,
     );
     expect(out).toEqual([
-      "run", "--rm", "-e", "FOO=bar", "-p", "40000:3000", "ghcr.io/example/server",
+      "run", "--rm", "-e", "FOO=bar", "-p", "127.0.0.1:40000:3000", "ghcr.io/example/server",
     ]);
   });
 

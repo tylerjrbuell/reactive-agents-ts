@@ -213,7 +213,7 @@ export {
   withFileRoot,
   getFileRoot,
 } from "./skills/file-operations.js";
-export { currentFileRoot } from "./skills/file-root.js";
+export { currentFileRoot, withSecretPathAccess, isSecretPath } from "./skills/file-root.js";
 // Run slots (fileRootSlot, documentStoreSlot, runToolStoresSlot, ...) are
 // internal: `@reactive-agents/tools/internal/run-slots`.
 export { httpGetTool, httpGetHandler, type HttpGetConfig } from "./skills/http-client.js";

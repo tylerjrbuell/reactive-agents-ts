@@ -70,6 +70,8 @@ export interface HostShellRequest {
    * repository's own config.
    */
   readonly gitReadOnly?: boolean;
+  /** Commands the shell may run; gh / gws credentials are forwarded only if granted. */
+  readonly granted?: ReadonlyArray<string>;
 }
 
 /** Raw process outcome, before truncation. */
@@ -93,6 +95,9 @@ export interface HostShellResult {
  * GOOGLE_WORKSPACE_CLI_CONFIG_DIR). This gives the CLI
  * access to its own credential store without exposing $HOME to shell expansion.
  *
+ * `granted` is the set of commands the shell may run: gh and gws credentials
+ * (tokens, config dirs) are forwarded only when `gh` / `gws` is in it.
+ *
  * `git` is set only when git config is inherited ({@link HostShellRequest.gitConfig}):
  * `globalConfig` is the per-call minimal config git reads as its global
  * config; `hooksPath` (read-only preset) adds {@link readOnlyGitEnv}.
@@ -101,18 +106,23 @@ export function buildHostShellEnv(
   path: string,
   home: string,
   git?: { readonly globalConfig?: string; readonly hooksPath?: string },
+  granted: ReadonlyArray<string> = [],
 ): Record<string, string> {
   const inheritedEnv: Record<string, string> = {};
+  const grantsGh = granted.includes("gh");
+  const grantsGws = granted.includes("gws");
 
   // Pass auth tokens directly — these are scalars with no path-traversal risk.
-  for (const key of ["GH_TOKEN", "GITHUB_TOKEN", "GH_HOST"] as const) {
+  // Only to a shell that was granted `gh`: any allow-listed command (`jq env`,
+  // `awk ENVIRON`) can print the environment, so an ungranted token stays out.
+  for (const key of grantsGh ? (["GH_TOKEN", "GITHUB_TOKEN", "GH_HOST"] as const) : []) {
     const val = process.env[key];
     if (val !== undefined) inheritedEnv[key] = val;
   }
 
   // Resolve the real gh config dir and inject it as GH_CONFIG_DIR so the
   // CLI can read stored credentials while HOME stays confined.
-  if (!process.env.GH_TOKEN && !process.env.GITHUB_TOKEN) {
+  if (grantsGh && !process.env.GH_TOKEN && !process.env.GITHUB_TOKEN) {
     const realGhConfigDir =
       process.env.GH_CONFIG_DIR ??
       (process.env.XDG_CONFIG_HOME ? `${process.env.XDG_CONFIG_HOME}/gh` : null) ??
@@ -124,12 +134,14 @@ export function buildHostShellEnv(
 
   // Google Workspace CLI (gws): same pattern. Its store defaults to
   // ~/.config/gws, which the confined HOME hides (calls fail 401 without it).
-  for (const key of [
-    "GOOGLE_WORKSPACE_CLI_TOKEN",
-    "GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
-    "GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND",
-    "GOOGLE_WORKSPACE_PROJECT_ID",
-  ] as const) {
+  for (const key of grantsGws
+    ? ([
+        "GOOGLE_WORKSPACE_CLI_TOKEN",
+        "GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
+        "GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND",
+        "GOOGLE_WORKSPACE_PROJECT_ID",
+      ] as const)
+    : []) {
     const val = process.env[key];
     if (val !== undefined) inheritedEnv[key] = val;
   }
@@ -137,7 +149,7 @@ export function buildHostShellEnv(
     process.env.GOOGLE_WORKSPACE_CLI_CONFIG_DIR ??
     (process.env.XDG_CONFIG_HOME ? `${process.env.XDG_CONFIG_HOME}/gws` : null) ??
     (process.env.HOME ? `${process.env.HOME}/.config/gws` : null);
-  if (realGwsConfigDir) inheritedEnv["GOOGLE_WORKSPACE_CLI_CONFIG_DIR"] = realGwsConfigDir;
+  if (grantsGws && realGwsConfigDir) inheritedEnv["GOOGLE_WORKSPACE_CLI_CONFIG_DIR"] = realGwsConfigDir;
 
   // git (only when inherited): the per-call minimal global config, explicit
   // commit identity variables and, for the read-only preset, hooks/fsmonitor off.
@@ -184,7 +196,7 @@ export async function runHostShell(req: HostShellRequest): Promise<HostShellResu
     return await runProcessGroup({
       argv: ["sh", "-c", req.command],
       cwd: req.cwd,
-      env: buildHostShellEnv(req.path, home, git),
+      env: buildHostShellEnv(req.path, home, git, req.granted),
       timeoutMs: req.timeoutMs,
     });
   } finally {

@@ -367,11 +367,11 @@ describe("host env: authenticated CLIs keep their credential store", () => {
       delete process.env.GH_CONFIG_DIR;
       delete process.env.XDG_CONFIG_HOME;
       process.env.HOME = "/home/someone";
-      expect(buildHostShellEnv("/usr/bin", "/tmp/scratch").GH_CONFIG_DIR).toBe("/home/someone/.config/gh");
+      expect(buildHostShellEnv("/usr/bin", "/tmp/scratch", undefined, ["gh"]).GH_CONFIG_DIR).toBe("/home/someone/.config/gh");
       process.env.XDG_CONFIG_HOME = "/xdg";
-      expect(buildHostShellEnv("/usr/bin", "/tmp/scratch").GH_CONFIG_DIR).toBe("/xdg/gh");
+      expect(buildHostShellEnv("/usr/bin", "/tmp/scratch", undefined, ["gh"]).GH_CONFIG_DIR).toBe("/xdg/gh");
       process.env.GH_CONFIG_DIR = "/srv/gh";
-      expect(buildHostShellEnv("/usr/bin", "/tmp/scratch").GH_CONFIG_DIR).toBe("/srv/gh");
+      expect(buildHostShellEnv("/usr/bin", "/tmp/scratch", undefined, ["gh"]).GH_CONFIG_DIR).toBe("/srv/gh");
     } finally {
       process.env = saved;
     }
@@ -381,7 +381,7 @@ describe("host env: authenticated CLIs keep their credential store", () => {
     const saved = { ...process.env };
     try {
       process.env.GH_TOKEN = "tok";
-      const env = buildHostShellEnv("/usr/bin", "/tmp/scratch");
+      const env = buildHostShellEnv("/usr/bin", "/tmp/scratch", undefined, ["gh"]);
       expect(env.GH_TOKEN).toBe("tok");
       expect(env.GH_CONFIG_DIR).toBeUndefined();
     } finally {
@@ -395,7 +395,7 @@ describe("host env: authenticated CLIs keep their credential store", () => {
       delete process.env.GOOGLE_WORKSPACE_CLI_CONFIG_DIR;
       delete process.env.XDG_CONFIG_HOME;
       process.env.HOME = "/home/someone";
-      const env = buildHostShellEnv("/usr/bin", "/tmp/scratch");
+      const env = buildHostShellEnv("/usr/bin", "/tmp/scratch", undefined, ["gws"]);
       expect(env.HOME).toBe("/tmp/scratch");
       expect(env.GOOGLE_WORKSPACE_CLI_CONFIG_DIR).toBe("/home/someone/.config/gws");
     } finally {
@@ -408,7 +408,7 @@ describe("host env: authenticated CLIs keep their credential store", () => {
     try {
       process.env.GOOGLE_WORKSPACE_CLI_CONFIG_DIR = "/srv/gws";
       process.env.GOOGLE_WORKSPACE_CLI_TOKEN = "tok";
-      const env = buildHostShellEnv("/usr/bin", "/tmp/scratch");
+      const env = buildHostShellEnv("/usr/bin", "/tmp/scratch", undefined, ["gws"]);
       expect(env.GOOGLE_WORKSPACE_CLI_CONFIG_DIR).toBe("/srv/gws");
       expect(env.GOOGLE_WORKSPACE_CLI_TOKEN).toBe("tok");
     } finally {

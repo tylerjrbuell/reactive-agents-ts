@@ -14,7 +14,7 @@
  * so the map itself is what gets durably checkpointed either way, unchanged
  * in shape, but bounded in size.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
 
@@ -76,8 +76,11 @@ export function setScratchpadBounded(
   }
   try {
     const path = spillPath(namespace, key);
-    mkdirSync(spillDir(namespace), { recursive: true });
-    writeFileSync(path, value, "utf8");
+    // Spilled tool output is unredacted: owner-only dir and file.
+    mkdirSync(spillDir(namespace), { recursive: true, mode: 0o700 });
+    writeFileSync(path, value, { encoding: "utf8", mode: 0o600 });
+    chmodSync(spillDir(namespace), 0o700); // tighten dirs/files left by older versions
+    chmodSync(path, 0o600);
     scratchpad.set(key, `${SPILL_MARKER_PREFIX}${path}]`);
   } catch {
     scratchpad.set(key, value);

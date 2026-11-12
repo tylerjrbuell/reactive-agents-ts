@@ -55,6 +55,12 @@ export type MCPAuthConfig =
       readonly clientId: string;
       readonly clientSecret: string;
       readonly scope?: string;
+      /**
+       * Issuer URL of the authorization server these credentials belong to. When set, they
+       * are sent only there (SDK >= 1.31 advisory GHSA-6qxp-vccf-f47h); omitted, the MCP
+       * server chooses the receiver, which the SDK now warns about.
+       */
+      readonly expectedIssuer?: string;
     }
   | {
       readonly type: "private_key_jwt";
@@ -63,6 +69,8 @@ export type MCPAuthConfig =
       readonly privateKey: string;
       readonly algorithm: string;
       readonly scope?: string;
+      /** Issuer URL the client assertion may be sent to; see `client_credentials`. */
+      readonly expectedIssuer?: string;
     }
   | {
       readonly type: "authorization_code";

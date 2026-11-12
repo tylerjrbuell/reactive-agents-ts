@@ -808,7 +808,7 @@ export function shellExecuteHandler(
           timeoutMs,
           homeInCwd: config?.cwd === undefined,
           gitConfig: config?.inheritGitConfig === true,
-          gitReadOnly: config?.gitReadOnly === true,
+          gitReadOnly: config?.gitReadOnly === true, granted: allowedCommands,
         });
 
         // ── 8. Truncation (stdout + stderr): shell-host-process.ts ──

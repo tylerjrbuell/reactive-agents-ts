@@ -351,7 +351,7 @@ function detectHttpStartupUrl(line: string): string | undefined {
 }
 
 /**
- * Insert `-p hostPort:containerPort` into `docker run` args immediately before the
+ * Insert `-p 127.0.0.1:hostPort:containerPort` (loopback only) into `docker run` args immediately before the
  * image name. Host and container ports are kept distinct so a unique, free host
  * port can front a container whose internal port might already be taken on the host.
  */
@@ -378,7 +378,7 @@ export function addDockerPortMapping(args: readonly string[], hostPort: number, 
     const arg = result[i]!;
     if (arg === "--") break;
     if (!arg.startsWith("-")) {
-      result.splice(i, 0, "-p", `${hostPort}:${containerPort}`);
+      result.splice(i, 0, "-p", `127.0.0.1:${hostPort}:${containerPort}`);
       return result;
     }
     if (arg.startsWith("--") && arg.includes("=")) { i++; continue; }
@@ -635,7 +635,7 @@ async function reconnectViaHttp(
     // 405 / wrong content-type). A unique host port eliminates the collision.
     const hostPort = await getFreeHostPort();
     const u = new URL(resolvedUrl);
-    u.port = String(hostPort);
+    u.port = String(hostPort); u.hostname = "127.0.0.1"; // the port is published on loopback only
     connectUrl = u.toString();
 
     // Unique name: rax-mcp-<server>-<pid>. Pre-remove any stale container with
@@ -654,7 +654,7 @@ async function reconnectViaHttp(
 
     mcpDebug(`[MCP http-mode] "${config.name}" — spawning "${dockerContainerName}" with -p ${hostPort}:${containerPort}`);
 
-    const spawnEnv = config.env ? { ...process.env, ...config.env } : { ...process.env };
+    const spawnEnv = buildMcpSubprocessEnv(config.env); // allow-listed, not the parent env
     const subprocess = nodeSpawn(config.command!, portMappedArgs, {
       stdio: ["ignore", "ignore", "pipe"],
       cwd: config.cwd,

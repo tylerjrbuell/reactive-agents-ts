@@ -5,7 +5,7 @@ import * as path from "node:path";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
 import { getFileRoot } from "./file-operations.js";
-import { isRealpathWithinRoot, isWithinRoot } from "./file-root.js";
+import { isRealpathWithinRoot, isSecretPathReal, isWithinRoot } from "./file-root.js";
 
 // Directories no grep should ever descend into by default — build output,
 // dependency trees, and VCS internals are noise for a content search and can
@@ -117,6 +117,8 @@ export const grepHandler = (
         !isWithinRoot(allowedBase, resolvedScope) ||
         !(await isRealpathWithinRoot(allowedBase, resolvedScope))
           ? `${scopePath} resolves to ${resolvedScope} outside of ${allowedBase}`
+          : (await isSecretPathReal(allowedBase, resolvedScope))
+            ? `${scopePath} is a credential path and is not searched`
           : path.isAbsolute(globPattern) || globPattern.split(/[\\/]+/).includes("..")
             ? `glob "${globPattern}" must stay inside the search path (no ".." segments, no absolute paths)`
             : null;
@@ -199,6 +201,7 @@ async function scanFiles(
     const abs = path.join(resolvedScope, rel);
     // A symlink inside the root may point outside it: skip such hits.
     if (!(await isRealpathWithinRoot(allowedBase, abs))) continue;
+    if (await isSecretPathReal(allowedBase, abs)) continue; // credential files are never searched
     let stat: Awaited<ReturnType<typeof fs.stat>>;
     try {
       stat = await fs.stat(abs);

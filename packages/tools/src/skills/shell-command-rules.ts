@@ -62,12 +62,51 @@ function ruleWords(rule: string): string[] {
   return words;
 }
 
+/** Programs that run another program given as an argument. */
+const RUNNER_PROGRAMS: ReadonlySet<string> = new Set([
+  ...WRAPPERS, "xargs", "timeout", "nice", "time", "stdbuf", "ionice", "setsid",
+]);
+
+/** git global options that consume the next word (`-C dir`, `-c k=v`, ...). */
+const GIT_VALUE_OPTIONS: ReadonlySet<string> = new Set([
+  "-C", "-c", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--config-env", "--attr-source",
+]);
+
+/** `git -C dir --no-pager push` is `git push`: drop git's global options before the subcommand. */
+function withoutGitGlobalOptions(words: string[]): string[] {
+  if (words[0] !== "git") return words;
+  let i = 1;
+  while (i < words.length && words[i]!.startsWith("-")) i += GIT_VALUE_OPTIONS.has(words[i]!) ? 2 : 1;
+  return ["git", ...words.slice(i)];
+}
+
+/**
+ * The command starts a rule can match in one segment. Normally one. A runner
+ * (`xargs`, `timeout 5`, `sudo -u x`, `env -i`) takes options we do not model,
+ * so every later word is a candidate start (fail closed: more approvals, never
+ * fewer). Each candidate has its program reduced to a base name and git's
+ * global options removed.
+ */
+function commandCandidates(segment: string): string[][] {
+  const words = commandWords(segment);
+  if (words.length === 0) return [];
+  const starts = RUNNER_PROGRAMS.has(words[0]!) ? words.map((_, i) => i) : [0];
+  return starts.map((i) => {
+    const rest = words.slice(i);
+    rest[0] = rest[0]!.split("/").pop()!;
+    return withoutGitGlobalOptions(rest);
+  });
+}
+
 /** True when the words of `segment` start with the words of one of `rules`. */
 export function segmentMatchesCommandRules(segment: string, rules: readonly string[]): boolean {
-  const words = commandWords(segment);
+  const candidates = commandCandidates(segment);
   return rules.some((rule) => {
     const want = ruleWords(rule);
-    return want.length > 0 && want.length <= words.length && want.every((w, i) => words[i] === w);
+    return (
+      want.length > 0 &&
+      candidates.some((words) => want.length <= words.length && want.every((w, i) => words[i] === w))
+    );
   });
 }
 
