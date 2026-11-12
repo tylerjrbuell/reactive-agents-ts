@@ -1,6 +1,21 @@
 import { mkdir, appendFile, writeFile } from "node:fs/promises";
 import { dirname } from "path";
 import type { LogEntry, Span, Metric } from "../types.js";
+import { redactSecrets, type Redactor } from "../redaction/redactor.js";
+import { defaultRedactors } from "../redaction/default-patterns.js";
+
+const MAX_REDACT_DEPTH = 8;
+
+/** Redact every string leaf of a JSON-like value; non-strings pass through. Depth-capped. */
+const redactValue = (value: unknown, redactors: readonly Redactor[], depth = 0): unknown => {
+  if (typeof value === "string") return redactSecrets(value, redactors);
+  if (depth >= MAX_REDACT_DEPTH || value === null || typeof value !== "object") return value;
+  if (value instanceof Date) return value;
+  if (Array.isArray(value)) return value.map((v) => redactValue(v, redactors, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) out[k] = redactValue(v, redactors, depth + 1);
+  return out;
+};
 
 // ─── File Exporter ───
 // Writes log entries, spans, and metrics as JSONL (newline-delimited JSON)
@@ -46,6 +61,15 @@ export interface FileExporterOptions {
    * and subsequent calls append. This is useful for starting a clean log per agent run.
    */
   readonly mode?: "append" | "overwrite";
+
+  /**
+   * Redactors applied to log messages, and to every string leaf of log metadata,
+   * span attributes, span event attributes and metric labels before writing.
+   * Pass `[]` to disable redaction.
+   *
+   * @default defaultRedactors
+   */
+  readonly redactors?: readonly Redactor[];
 }
 
 /**
@@ -79,7 +103,10 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
   const {
     filePath = "./reactive-agents-obs.jsonl",
     mode = "append",
+    redactors = defaultRedactors,
   } = options;
+  const rs = (v: string): string => redactSecrets(v, redactors);
+  const rv = (v: unknown): unknown => redactValue(v, redactors);
 
   let firstFlush = true;
 
@@ -115,11 +142,11 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
           _type: "log",
           timestamp: l.timestamp.toISOString(),
           level: l.level,
-          message: l.message,
+          message: rs(l.message),
           ...(l.agentId ? { agentId: l.agentId } : {}),
           ...(l.traceId ? { traceId: l.traceId } : {}),
           ...(l.spanId ? { spanId: l.spanId } : {}),
-          ...(l.metadata ? { metadata: l.metadata } : {}),
+          ...(l.metadata ? { metadata: rv(l.metadata) } : {}),
         }),
       ),
     );
@@ -138,11 +165,11 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
           startTime: s.startTime.toISOString(),
           ...(s.endTime ? { endTime: s.endTime.toISOString() } : {}),
           status: s.status,
-          attributes: s.attributes,
+          attributes: rv(s.attributes),
           events: s.events.map((e) => ({
             name: e.name,
             timestamp: e.timestamp.toISOString(),
-            attributes: e.attributes,
+            attributes: rv(e.attributes),
           })),
         }),
       ),
@@ -159,7 +186,7 @@ export const makeFileExporter = (options: FileExporterOptions = {}) => {
           type: m.type,
           value: m.value,
           timestamp: m.timestamp.toISOString(),
-          labels: m.labels,
+          labels: rv(m.labels),
           ...(m.unit ? { unit: m.unit } : {}),
         }),
       ),
