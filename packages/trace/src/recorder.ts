@@ -7,7 +7,8 @@ import { pruneTraceDir } from "./retention.js"
 import type { TraceEvent } from "./events.js"
 import { TraceStorageError } from "./errors.js"
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import { applyRedactors, defaultRedactors } from "@reactive-agents/observability";
+import { applyRedactors } from "@reactive-agents/observability";
+import { traceRedactors } from "./redaction.js";
 
 // ─── Service Interface ───
 
@@ -96,16 +97,16 @@ export function TraceRecorderServiceLive(rawOpts: TraceRecorderOptions): Layer.L
           })
           if (events.length === 0) return
           yield* Effect.tryPromise({
-            try: () => mkdir(dir, { recursive: true }),
+            try: () => mkdir(dir, { recursive: true, mode: 0o700 }),
             catch: (e) => new TraceStorageError({ message: String(e), cause: e }),
           }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "trace/src/recorder.ts:75", tag: errorTag(err) })))
           const path = join(dir, `${runId}.jsonl`)
           const rawBody = events.map((e) => JSON.stringify(e)).join("\n") + "\n"
           // F8: redact secrets (API keys, bearer tokens) before they reach disk.
           // The in-memory snapshot (same-process debugging) keeps full fidelity.
-          const body = yield* applyRedactors(rawBody, defaultRedactors)
+          const body = yield* applyRedactors(rawBody, traceRedactors)
           yield* Effect.tryPromise({
-            try: () => appendFile(path, body),
+            try: () => appendFile(path, body, { mode: 0o600 }),
             catch: (e) => new TraceStorageError({ message: String(e), cause: e }),
           }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "trace/src/recorder.ts:81", tag: errorTag(err) })))
         }).pipe(Effect.uninterruptible)
