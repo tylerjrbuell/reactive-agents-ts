@@ -181,18 +181,32 @@ describe("gateway inbound queue (seam)", () => {
     expect(await Promise.all([first, a])).toEqual(["out:running", "out:a"]);
   });
 
-  it("persist hook sees the waiting set", async () => {
-    const g = gatedRun();
-    const snaps: number[] = [];
-    const { queue } = mkQueue({ run: g.run, persist: (p) => void snaps.push(p.length) });
-    const x = queue.submit({}, "channel", "x");
-    const y = queue.submit({}, "channel", "y");
-    await tick();
-    expect(Math.max(...snaps)).toBeGreaterThanOrEqual(1);
-    g.release();
-    await tick();
-    g.release();
-    await Promise.all([x, y]);
-    expect(snaps.at(-1)).toBe(0);
+  it("reevaluate rejecting for one deferred job does not lose the rest of the batch", async () => {
+    const ran: string[] = [];
+    const settledSeen: string[] = [];
+    let failFor = "";
+    const { queue, events, rollWindow } = mkQueue({
+      run: async (_e, _s, i) => (ran.push(i), "ok"),
+      reevaluate: async (e) => {
+        if ((e as { id: string }).id === failFor) throw new Error("policy backend down");
+        return { action: "execute" };
+      },
+      onSettled: async (s) => {
+        settledSeen.push(`${s.outcome}:${(s.event as { id: string }).id}`);
+      },
+    });
+    await queue.defer({ id: "j1" }, "cron", "one", "rate limit");
+    await queue.defer({ id: "j2" }, "cron", "two", "rate limit");
+    await queue.defer({ id: "j3" }, "cron", "three", "rate limit");
+    failFor = "j2";
+    rollWindow();
+    await queue.retryDeferred();
+    await queue.idle();
+    expect(ran).toEqual(["one", "three"]);
+    expect(settledSeen).toContain("skipped:j2");
+    expect(settledSeen).toContain("ran:j1");
+    expect(settledSeen).toContain("ran:j3");
+    expect(policies(events)).toContain("inbound-queue:dropped");
+    expect(queue.depth()).toEqual({ ready: 0, deferred: 0 });
   });
 });

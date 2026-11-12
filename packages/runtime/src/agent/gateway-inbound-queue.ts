@@ -16,6 +16,9 @@
  * `policy` is `inbound-queue:<queued|deferred|dropped>`; a run that proceeds
  * emits the usual `ProactiveActionInitiated/Completed` pair (execute-event.ts).
  *
+ * In memory only: waiting events are lost on restart. Durable cron fires replay
+ * through the schedule registry (restart catch-up), not through this queue.
+ *
  * Independent of `@reactive-agents/gateway`: it needs only `reevaluate` (the
  * policy engine) and `windowStamp` (rolls when a limit window rolls).
  */
@@ -28,15 +31,6 @@ export type InboundQueueOverflow = 'drop-oldest' | 'drop-newest'
 
 /** Default maximum waiting events per list. */
 export const DEFAULT_INBOUND_QUEUE_CAPACITY = 100
-
-/** Serializable view of a waiting event, handed to the `persist` hook. */
-export interface QueuedEventRecord {
-    readonly id: string
-    readonly source: string
-    readonly instruction: string
-    readonly enqueuedAt: number
-    readonly state: 'ready' | 'deferred'
-}
 
 /** Subset of a policy decision the queue needs. */
 export type InboundQueueDecision =
@@ -71,8 +65,6 @@ export interface GatewayInboundQueueDeps {
      * failed), or it was dropped/skipped without running. Used to report schedule outcomes.
      */
     readonly onSettled?: (settled: InboundQueueSettled) => Promise<void>
-    /** Persistence hook: called with the waiting set after every change. */
-    readonly persist?: (pending: readonly QueuedEventRecord[]) => void | Promise<void>
 }
 
 export interface GatewayInboundQueue {
@@ -147,25 +139,6 @@ export const makeGatewayInboundQueue = (
             timestamp: Date.now(),
         } as AgentEvent)
 
-    const persist = async (): Promise<void> => {
-        if (!deps.persist) return
-        const rec = (j: Job, state: QueuedEventRecord['state']): QueuedEventRecord => ({
-            id: eventIdOf(j.event, j.id),
-            source: j.source,
-            instruction: j.instruction,
-            enqueuedAt: j.enqueuedAt,
-            state,
-        })
-        try {
-            await deps.persist([
-                ...ready.map((j) => rec(j, 'ready')),
-                ...deferred.map((j) => rec(j, 'deferred')),
-            ])
-        } catch (err) {
-            deps.glog('warn', `inbound-queue persist failed: ${String(err)}`)
-        }
-    }
-
     const settled = async (s: InboundQueueSettled): Promise<void> => {
         if (!deps.onSettled) return
         try {
@@ -215,7 +188,6 @@ export const makeGatewayInboundQueue = (
             }
             job.settle(out)
             await settled({ outcome: 'ran', event: job.event, source: job.source, output: out })
-            await persist()
         }
     }
 
@@ -245,7 +217,6 @@ export const makeGatewayInboundQueue = (
                     deps.glog('debug', `${source} → queued behind ${ready.length - 1} event(s)`)
                     await suppress(job, 'queued', `agent busy; position ${ready.length}`)
                 }
-                await persist()
                 wake()
             })()
         })
@@ -270,7 +241,6 @@ export const makeGatewayInboundQueue = (
             if (!deferred.includes(job)) return
             deps.glog('info', `${source} → deferred (${reason})`)
             await suppress(job, 'deferred', reason)
-            await persist()
         },
         skip: (event, source, reason) =>
             settled({ outcome: 'skipped', event, source, reason }),
@@ -280,7 +250,13 @@ export const makeGatewayInboundQueue = (
             if (deferred.every((j) => j.stamp === stamp)) return
             const batch = deferred.splice(0, deferred.length)
             for (const job of batch) {
-                const decision = await deps.reevaluate(job.event)
+                let decision: InboundQueueDecision
+                try {
+                    decision = await deps.reevaluate(job.event)
+                } catch (err) {                    // One failing policy check must not lose the rest of the batch.
+                    await drop(job, `policy re-evaluation failed on retry: ${String(err)}`)
+                    continue
+                }
                 if (decision.action === 'execute') {
                     if (job.release) {
                         void job.release().catch((err) =>
@@ -296,7 +272,6 @@ export const makeGatewayInboundQueue = (
                     await drop(job, `policy answered ${decision.action} on retry`)
                 }
             }
-            await persist()
             wake()
         },
         depth: () => ({ ready: ready.length, deferred: deferred.length }),
