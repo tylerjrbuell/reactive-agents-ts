@@ -51,6 +51,7 @@ import { defaultCortexConfig } from "./types.js";
 import { cortexLog } from "./cortex-log.js";
 import { closeOrphanedChatRuns } from "./db/queries.js";
 import { isLoopbackHost, resolveCortexHostname } from "./listen-host.js";
+import { guardConfigFromEnv, guardRequest } from "./request-guard.js";
 
 /** Base URL for startup log and “open browser” (aligns with CORTEX_URL when set). */
 function cortexListenDisplayUrl(port: number): string {
@@ -147,7 +148,10 @@ export async function startCortexServer(
     });
   }
 
+  // DNS-rebinding wall for /api/* and /ws/* (request-guard.ts); runs before routing, WS upgrades included.
+  const guard = guardConfigFromEnv(process.env);
   const app = new Elysia()
+    .onRequest(({ request }) => guardRequest(request, guard))
     .use(healthRouter)
     .use(providerKeysRouter(providerKeys))
     .use(judgmentRouter(providerKeys))

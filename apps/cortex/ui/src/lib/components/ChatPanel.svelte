@@ -43,6 +43,7 @@
   import { quickAddMcpToChat } from "$lib/mcp-quick-add.js";
   import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
   import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
+  import { CLOSED_NAV, type ConfigNav } from "$lib/config-menu-nav.js";
   import { closeMenu as closedMenu, createToggleQueue, keepsMenuOpen, NO_CHIP_MENU, pickChip as chipPicked, syncChipMenu, type ChipMenu, type MenuUi } from "$lib/chat-menu.js";
   import { commandMenuItems, inlineMenuItems, pickerItems } from "$lib/chat-menu-items.js";
   import WorkspacePickerDialog from "$lib/components/WorkspacePickerDialog.svelte";
@@ -410,6 +411,8 @@
   // Quick-bar chips open their picker; the draft they replace comes back when the picker closes.
   let chipMenu = $state<ChipMenu>(NO_CHIP_MENU);
   let workspaceDialog = $state(false);
+  // Where the Config popover is; a picker it opened shows a Back row (config-menu-nav.ts).
+  let configNav = $state<ConfigNav>(CLOSED_NAV);
   const menuUi = (): MenuUi => ({ chip: chipMenu, message, dismissed: menuDismissed });
   const setMenu = (u: MenuUi) => { chipMenu = u.chip; message = u.message; menuDismissed = u.dismissed; };
 
@@ -796,7 +799,7 @@
   {#if error}<ChatErrorBanner {error} onRetry={lastSent ? () => void retry() : undefined} />{/if}
   {#if showJumpToLatest({ atBottom, turnCount: turns.length, menuOpen })}<ChatJumpToLatest onJump={() => thread?.jumpToLatest()} live={sending} />{/if}
   {#if menuOpen}
-    <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} onDismiss={closeMenu} />
+    <ChatSlashMenu items={menuItems} selected={menuIndex} onHover={(i) => (menuRaw = i)} onDismiss={closeMenu} header={configNav.level === "item" && configNav.group ? { title: configNav.group, onBack: closeMenu } : undefined} />
   {/if}
   {#if workspaceDialog}
     <WorkspacePickerDialog
@@ -850,6 +853,8 @@
           hidden={bar.hidden}
           {groups}
           disclosure={disclosureSummary(cfg)}
+          bind:nav={configNav}
+          pickerOpen={menuOpen || workspaceDialog}
           onRemoveSkill={removeDraftSkill}
           onPick={pickChip}
         />

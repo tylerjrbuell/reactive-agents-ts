@@ -9,6 +9,7 @@ import type { ChatProposalService, ProposalResult } from "../services/chat-propo
 import { renderChatMarkdown, slugifyFilename } from "../services/chat-export.js";
 import { withCheckedWorkspace } from "../services/workspace-dir.js";
 import { buildTurnInput, inputCapabilitiesOf } from "../services/chat-attachments.js";
+import { attachmentsSchema } from "./chat-attachments-schema.js";
 import { readWorkspaceText, searchWorkspaceFiles } from "../services/workspace-files.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
 import { parseCortexSkillsConfig } from "../services/cortex-agent-config.js";
@@ -767,12 +768,8 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
           message: t.String(),
           posture: t.Optional(t.String()),
           skills: t.Optional(t.Array(t.String())),
-          attachments: t.Optional(
-            t.Object({
-              uploads: t.Optional(t.Array(t.Object({ name: t.String(), mediaType: t.String(), dataBase64: t.String() }))),
-              files: t.Optional(t.Array(t.String())),
-            }),
-          ),
+          // Item count and string lengths are limited in the schema (chat-attachments-schema.ts).
+          attachments: t.Optional(attachmentsSchema),
         }),
       },
     )

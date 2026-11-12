@@ -184,6 +184,8 @@
     min-height: 0;
     overflow-y: auto;
     padding: 24px var(--cortex-chat-gutter) 40px;
+    /* Sticky children offset by this scroller's top padding; RichAnswer's bar cancels it to sit flush. */
+    --cortex-stick-inset: 24px;
     /* Keeps the column centred like the composer below it whether or not a scrollbar shows. */
     scrollbar-gutter: stable both-edges;
     font-family: var(--cortex-font-ui);

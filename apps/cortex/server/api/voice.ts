@@ -23,6 +23,7 @@ import {
   transcribe,
   type AudioEndpoint,
 } from "../services/voice/openai-compatible.js";
+import { readCappedBytes } from "../services/voice/capped-body.js";
 import { mergeVoiceSettings, type VoiceSettings, type VoiceSettingsStore } from "../services/voice/voice-settings.js";
 import { VOICE_STT_KEY_ID, VOICE_TTS_KEY_ID, type ProviderKeyStatus, type ProviderKeyStore } from "../services/provider-key-store.js";
 
@@ -125,12 +126,12 @@ export function voiceRouter(deps: VoiceRouterDeps) {
           set.status = 400;
           return { error: NOT_SET_UP.stt };
         }
-        const declared = Number(request.headers.get("content-length") ?? "0");
-        if (declared > MAX_AUDIO_BYTES) {
+        // Streamed and counted: a chunked body has no content-length to trust.
+        const audio = await readCappedBytes(request, MAX_AUDIO_BYTES);
+        if (audio === null) {
           set.status = 413;
           return { error: "The recording is too large to transcribe (25 MB limit)." };
         }
-        const audio = new Uint8Array(await request.arrayBuffer());
         const r = await transcribe(ep, {
           audio,
           mediaType: request.headers.get("content-type") ?? "audio/webm",

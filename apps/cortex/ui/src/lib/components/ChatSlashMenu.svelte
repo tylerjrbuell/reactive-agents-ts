@@ -16,8 +16,10 @@
     selected: number;
     onHover: (index: number) => void;
     onDismiss: () => void;
+    /** Set when the Config popover opened this menu: a Back row naming the group the user came from. */
+    header?: { readonly title: string; readonly onBack: () => void };
   }
-  const { items, selected, onHover, onDismiss }: Props = $props();
+  const { items, selected, onHover, onDismiss, header }: Props = $props();
 
   let listEl = $state<HTMLUListElement | undefined>();
   const multi = $derived(items.some((i) => i.multi));
@@ -26,7 +28,7 @@
     const onPointer = (e: PointerEvent) => {
       const t = e.target;
       if (!(t instanceof Element)) return;
-      if (listEl?.contains(t) || t.closest("[data-slash-menu-keep]")) return;
+      if (listEl?.contains(t) || t.closest("[data-slash-menu-keep]") || t.closest("[data-config-keep]")) return;
       onDismiss();
     };
     document.addEventListener("pointerdown", onPointer, true);
@@ -44,7 +46,15 @@
   aria-multiselectable={multi ? true : undefined}
   data-testid="chat-slash-menu"
   class="chat-menu-in menu"
+  data-config-keep
 >
+  {#if header}
+    <li class="head" role="presentation">
+      <!-- tabindex -1 and no focus steal, like the rows: the composer keeps the keyboard (Esc does the same as Back). -->
+      <button type="button" tabindex="-1" class="back" aria-label="Back to {header.title}" onmousedown={(e) => e.preventDefault()} onclick={header.onBack}><Icon name="back" size="sm" />Back</button>
+      <span class="gtitle">{header.title}</span>
+    </li>
+  {/if}
   {#each items as item, i (item.key)}
     <li role="option" aria-selected={item.multi ? item.active === true : i === selected}>
       <button
@@ -68,6 +78,8 @@
   <li class="foot" aria-hidden="true">
     {#if multi}
       Click or Tab toggles. Enter toggles and closes. Esc or a click away when done.
+    {:else if header}
+      ↑↓ to move, Enter to choose, Esc to go back to {header.title}
     {:else}
       ↑↓ to move, Tab to complete, Enter to run, Esc to close
     {/if}
@@ -106,6 +118,10 @@
     text-align: left;
     cursor: pointer;
   }
+  .head { display: flex; align-items: center; gap: 8px; padding: 0 0 4px; margin-bottom: 2px; border-bottom: 1px solid var(--cortex-line); }
+  .back { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 6px; border: 0; border-radius: var(--cortex-r-ctl); background: none; color: var(--cortex-text-2); font: inherit; font-size: var(--cortex-t-sm); cursor: pointer; }
+  .back:hover { background: var(--cortex-surface-2); color: var(--cortex-text); }
+  .gtitle { font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-text); }
   .row.sel { background: var(--cortex-surface-2); color: var(--cortex-text); }
   .ico { display: inline-flex; color: var(--cortex-text-3); }
   .row.sel .ico, .row.active .ico, .badge { color: var(--cortex-accent); }

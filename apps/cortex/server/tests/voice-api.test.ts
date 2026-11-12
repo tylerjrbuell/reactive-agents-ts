@@ -207,6 +207,34 @@ describe("transcription", () => {
     expect(seen.length).toBe(0);
   });
 
+  it("caps a chunked body while streaming (no content-length to trust)", async () => {
+    await configure();
+    const chunk = new Uint8Array(1024 * 1024);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(ctl) {
+        if (sent >= 40) return ctl.close();
+        sent += 1;
+        ctl.enqueue(chunk);
+      },
+    });
+    const res = await call("/api/voice/transcribe", { method: "POST", headers: { "content-type": "audio/webm" }, body, duplex: "half" } as RequestInit);
+    expect(res.status).toBe(413);
+    expect(seen.length).toBe(0);
+    expect(sent).toBeLessThan(40);
+  });
+
+  it("refuses link-local and cloud-metadata endpoints but keeps loopback and LAN", async () => {
+    for (const bad of ["http://169.254.169.254/v1", "http://169.254.1.1:8000", "http://[fe80::1]/v1", "http://[::ffff:169.254.169.254]/v1", "http://2852039166/v1", "http://metadata.google.internal/v1"]) {
+      expect(normalizeAudioBaseUrl(bad)).toBeUndefined();
+    }
+    for (const ok of ["http://127.0.0.1:8000/v1", "http://localhost:8000/v1", "http://192.168.1.20:8000/v1", "http://10.0.0.4/v1", "http://[::1]:8000/v1", "https://api.openai.com/v1"]) {
+      expect(normalizeAudioBaseUrl(ok)).toBe(ok);
+    }
+    const res = await call("/api/voice/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ stt: { baseUrl: "http://169.254.169.254/v1" } }) });
+    expect(res.status).toBe(400);
+  });
+
   it("an unreachable server is a 502 naming the host, not a crash", async () => {
     await put({ stt: { baseUrl: "http://127.0.0.1:1/v1" } });
     const res = await call("/api/voice/transcribe", { method: "POST", headers: { "content-type": "audio/webm" }, body: AUDIO });

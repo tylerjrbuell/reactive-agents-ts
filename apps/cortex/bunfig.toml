@@ -1,0 +1,5 @@
+# Cortex package tests (`bun run --cwd apps/cortex test`): strip provider keys so no test can
+# make a billable call. A package bunfig replaces the root one, so the preload also pins what
+# the root preload pins. See server/tests/preload.ts.
+[test]
+preload = ["./server/tests/preload.ts"]

@@ -550,13 +550,14 @@
 <style>
   .run { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; background: var(--cortex-canvas); }
   .body { display: grid; grid-template-columns: minmax(0, 1fr) 420px; flex: 1; min-height: 0; }
-  .left { display: grid; grid-auto-rows: max-content; gap: 20px; align-content: start; min-height: 0; overflow-y: auto; padding: 20px 24px 40px; }
+  .left { display: grid; grid-auto-rows: max-content; gap: 20px; align-content: start; min-height: 0; overflow-y: auto; padding: 20px 24px 40px; --cortex-stick-inset: 20px; }
   .body > :global(.insp) { border-left: 1px solid var(--cortex-line); }
   /* Below 1360px the inspector stacks under the trace in one scroll. */
   @media (max-width: 1359px) {
     /* max-content rows: in a height-bounded grid, auto rows would shrink to fit and overlap. */
     .body { grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; overflow-y: auto; align-content: start; }
-    .left { overflow: visible; padding-bottom: 20px; }
+    /* Stacked, `.body` scrolls and has no padding, so nothing offsets sticky children. */
+    .left { overflow: visible; padding-bottom: 20px; --cortex-stick-inset: 0px; }
     .body > :global(.insp) { border-left: 0; border-top: 1px solid var(--cortex-line); }
     /* Stacked, the inspector spans the page: cap its content to a readable width so label and value stay together. */
     .body > :global(.insp .content) { overflow: visible; max-width: 720px; }

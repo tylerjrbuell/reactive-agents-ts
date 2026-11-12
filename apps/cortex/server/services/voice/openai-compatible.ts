@@ -44,13 +44,29 @@ export function audioUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 }
 
-/** `http` or `https` URL without embedded credentials, trailing slashes removed; `undefined` otherwise. */
+/**
+ * Link-local and cloud-metadata hosts: 169.254.0.0/16 (AWS/GCP/Azure metadata at
+ * 169.254.169.254), fe80::/10, IPv4-mapped forms of those, and the GCP metadata name.
+ * Loopback and private LAN stay allowed: a local speech server is the point. `URL` has
+ * already folded decimal/hex/octal IPv4 spellings into dotted form by the time this runs.
+ */
+export function isBlockedAudioHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "metadata.google.internal" || h === "metadata") return true;
+  if (/^169\.254\.\d{1,3}\.\d{1,3}$/.test(h)) return true;
+  if (/^fe[89ab][0-9a-f]?:/.test(h)) return true;
+  // ::ffff:a9fe:xxxx (the URL parser's compressed form of ::ffff:169.254.x.x)
+  return /^::ffff:(169\.254\.|a9fe:)/.test(h);
+}
+
+/** `http` or `https` URL without embedded credentials, trailing slashes removed; `undefined` otherwise (or for a link-local / metadata host). */
 export function normalizeAudioBaseUrl(raw: string): string | undefined {
   const s = raw.trim();
   if (s === "") return undefined;
   try {
     const u = new URL(s);
     if ((u.protocol !== "http:" && u.protocol !== "https:") || u.username !== "" || u.password !== "") return undefined;
+    if (isBlockedAudioHost(u.hostname)) return undefined;
     return s.replace(/\/+$/, "");
   } catch {
     return undefined;

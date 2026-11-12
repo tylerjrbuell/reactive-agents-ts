@@ -348,7 +348,8 @@ describe("POST /api/agents/:agentId/trigger", () => {
   it("returns triggered result or build error (not DB not-found) when agent exists", async () => {
     const db = new Database(":memory:");
     const { app, gateway } = makeApp(db);
-    createGatewayAgent(db, "trig-ag", "Trigger Agent", JSON.stringify({ prompt: "Go" }), null);
+    // provider "test": the default provider is a real one, and a keyed machine would bill for this run.
+    createGatewayAgent(db, "trig-ag", "Trigger Agent", JSON.stringify({ prompt: "Go", provider: "test" }), null);
 
     const res = await app.handle(
       new Request("http://localhost/api/agents/trig-ag/trigger", { method: "POST" }),

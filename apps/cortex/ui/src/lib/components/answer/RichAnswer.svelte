@@ -104,20 +104,20 @@
 <div class="rich" data-testid="rich-answer">
   {#if showToolbar}
     <div class="bar" role="toolbar" aria-label="Answer actions" data-answer-menu>
-      {#if !hostCopies}<Button size="sm" variant="ghost" icon="copy" onclick={() => void copyAnswer()}>Copy answer</Button>{/if}
-      <Button size="sm" variant="ghost" icon="code" onclick={() => void copyMarkdown()}>Copy as Markdown</Button>
+      {#if !hostCopies}<Button size="sm" variant="ghost" icon="copy" aria-label="Copy answer" onclick={() => void copyAnswer()}><span class="lbl">Copy answer</span></Button>{/if}
       <span class="menu-wrap">
-        <Button size="sm" variant="ghost" icon="download" aria-haspopup="menu" aria-expanded={menu === "save"} onclick={() => (menu = menu === "save" ? null : "save")}>Save as file</Button>
+        <Button size="sm" variant="ghost" icon="download" aria-label="Copy or save" aria-haspopup="menu" aria-expanded={menu === "save"} onclick={() => (menu = menu === "save" ? null : "save")}><span class="lbl">Copy or save</span></Button>
         {#if menu === "save"}
-          <div class="menu" role="menu" aria-label="Save as">
-            <button type="button" role="menuitem" onclick={saveMarkdown}><Icon name="file" size="sm" />Markdown (.md)</button>
-            <button type="button" role="menuitem" onclick={saveHtml}><Icon name="file" size="sm" />Web page (.html)</button>
+          <div class="menu" role="menu" aria-label="Copy or save">
+            <button type="button" role="menuitem" onclick={() => { menu = null; void copyMarkdown(); }}><Icon name="code" size="sm" />Copy as Markdown</button>
+            <button type="button" role="menuitem" onclick={saveMarkdown}><Icon name="file" size="sm" />Save Markdown (.md)</button>
+            <button type="button" role="menuitem" onclick={saveHtml}><Icon name="file" size="sm" />Save web page (.html)</button>
           </div>
         {/if}
       </span>
       {#if outline.length > 0}
         <span class="menu-wrap right">
-          <Button size="sm" variant="ghost" icon="list" aria-haspopup="menu" aria-expanded={menu === "outline"} onclick={() => (menu = menu === "outline" ? null : "outline")}>Outline</Button>
+          <Button size="sm" variant="ghost" icon="list" aria-label="Outline" aria-haspopup="menu" aria-expanded={menu === "outline"} onclick={() => (menu = menu === "outline" ? null : "outline")}><span class="lbl">Outline</span></Button>
           {#if menu === "outline"}
             <div class="menu wide" role="menu" aria-label="Outline">
               {#each outline as h (h.id)}
@@ -138,9 +138,23 @@
 </div>
 
 <style>
-  .rich { display: grid; gap: 12px; min-width: 0; }
-  /* Sticky so a long answer keeps its actions and outline in reach. */
-  .bar { position: sticky; top: 0; z-index: var(--cortex-z-sticky, 10); display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; padding: 4px 0; background: var(--cortex-canvas); border-bottom: 1px solid var(--cortex-line); }
+  /* A flex column, not a grid: a sticky child of a grid is bounded by its own grid row and would never stick. */
+  .rich { --answer-bar-h: 32px; display: flex; flex-direction: column; gap: 12px; min-width: 0; container-type: inline-size; }
+  .rich > :global(*) { min-width: 0; }
+  /*
+   * One slim row, stuck flush to the top of the scroll container while its answer is on
+   * screen (the sticky bound is this component, so it lets go at the answer's end). A
+   * scroll container with top padding offsets sticky by that padding, so it names the
+   * padding in --cortex-stick-inset (chat thread, run view) and we cancel it here.
+   */
+  .bar { position: sticky; top: calc(var(--cortex-stick-inset, 0px) * -1); z-index: var(--cortex-z-sticky, 10); box-sizing: border-box; height: var(--answer-bar-h); flex: none; display: flex; flex-wrap: nowrap; align-items: center; gap: 2px 4px; padding: 0; background: var(--cortex-canvas); border-bottom: 1px solid var(--cortex-line); }
+  .bar :global(.cx-btn) { white-space: nowrap; }
+  /* Headings an Outline jump lands on stop below the bar instead of under it. */
+  .rich :global(.markdown-deliverable [id]) { scroll-margin-top: calc(var(--answer-bar-h) + 8px); }
+  /* Narrow: the bar keeps icons only; every button still has its aria-label and menu. */
+  @container (max-width: 420px) {
+    .lbl { display: none; }
+  }
   .menu-wrap { position: relative; display: inline-flex; }
   .menu-wrap.right { margin-left: auto; }
   .menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: var(--cortex-z-drawer, 30); display: grid; min-width: 12rem; padding: 4px; border: 1px solid var(--cortex-line-strong); border-radius: var(--cortex-r-panel); background: var(--cortex-surface-1); box-shadow: 0 8px 28px rgb(0 0 0 / 0.18); }
