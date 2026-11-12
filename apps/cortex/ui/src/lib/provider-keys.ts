@@ -64,11 +64,19 @@ export function parseKeyStatus(v: unknown): ProviderKeyStatus | null {
   };
 }
 
-/** `GET /api/settings/keys` body from untrusted JSON. */
+/**
+ * Key-store ids of the Settings · Voice endpoint keys. They share the encrypted store
+ * but are not providers, so the Providers panel never lists them (Voice owns them).
+ */
+export const VOICE_KEY_IDS: readonly string[] = ["voice-stt", "voice-tts"];
+
+/** `GET /api/settings/keys` body from untrusted JSON (voice endpoint keys left out). */
 export function parseKeysResponse(v: unknown): ProviderKeysResponse {
   if (!isRecord(v) || !Array.isArray(v.providers)) return { providers: [], dir: "" };
   return {
-    providers: v.providers.map(parseKeyStatus).filter((p): p is ProviderKeyStatus => p !== null),
+    providers: v.providers
+      .map(parseKeyStatus)
+      .filter((p): p is ProviderKeyStatus => p !== null && !VOICE_KEY_IDS.includes(p.provider)),
     dir: typeof v.dir === "string" ? v.dir : "",
   };
 }

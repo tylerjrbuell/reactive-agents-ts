@@ -13,6 +13,7 @@
   import { railClassOf, strategyChip } from "$lib/chat-turn-meta.js";
   import { statusOfTurn } from "@reactive-agents/ui-core";
   import { fade } from "svelte/transition";
+  import { voice } from "$lib/stores/voice.js";
 
   interface Props {
     turn: ChatTurn;
@@ -43,6 +44,11 @@
   const shownModel = $derived(turn.model ?? (turn.streaming ? model : ""));
   const strategy = $derived(turn.streaming ? undefined : strategyChip(turn, strategyLabel));
   const canRetry = $derived(isLast && idle && !turn.streaming);
+  // Read aloud: the speaker action toggles this turn's reading (controls and highlight: ChatVoiceBar).
+  const v = voice();
+  const readerState = v.readerState;
+  const readId = $derived(String(turn.id));
+  const readingThis = $derived($readerState.sourceId === readId && $readerState.status !== "idle" && $readerState.status !== "error");
   const label = $derived(
     turn.streaming ? "Assistant reply, running" : status.tone === "failed" ? "Assistant reply, did not finish" : "Assistant reply",
   );
@@ -57,6 +63,7 @@
   aria-label={label}
   aria-busy={turn.streaming === true}
   data-testid="assistant-turn"
+  data-read-source={readId}
 >
   <header class="turn-h">
     <span class="who">Agent</span>
@@ -93,6 +100,7 @@
     actions={[
       // A turn that did not finish offers Retry in its ending note; the row keeps Rerun for the rest.
       ...(isLast && !turn.runFailed && !bareEnding(turn) ? [{ label: turn.incomplete ? "Retry" : "Rerun", icon: "retry" as const, run: () => onRerun() }] : []),
+      ...(turn.content.trim() !== "" ? [{ label: readingThis ? "Stop reading" : "Read aloud", icon: "speaker" as const, run: () => v.toggleRead(readId, turn.content) }] : []),
       { label: "Open trace", icon: "trace", run: () => onTrace(turn.id) },
       { label: "Fork from here", icon: "fork", run: () => onFork(turn.id) },
     ]}

@@ -25,6 +25,8 @@ import { listJudgmentCatalog, TYPESAFE_KEY_ID, type ListJudgmentCatalog } from "
 import {
   isKeyedProvider,
   redactKey,
+  VOICE_STT_KEY_ID,
+  VOICE_TTS_KEY_ID,
   type ProviderKeyStatus,
   type ProviderKeyStore,
   type ProviderKeyStoreError,
@@ -100,6 +102,10 @@ export function providerKeysRouter(
         if (!isKeyedProvider(provider)) {
           set.status = 400;
           return { error: `no stored key support for provider "${provider}"` };
+        }
+        // A voice endpoint's key is not an LLM provider's: its Test lives in Settings · Voice.
+        if (provider === VOICE_STT_KEY_ID || provider === VOICE_TTS_KEY_ID) {
+          return { ok: false, tried: "none", error: "Test voice keys with the Test button in Settings · Voice." };
         }
         const typed = body?.apiKey?.trim() || undefined;
         const status = store.status(provider);

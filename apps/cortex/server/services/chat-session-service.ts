@@ -49,7 +49,6 @@ import { recordSkillActivity,turnSkillPinsOf, turnSkillsOption, withTurnSkills, 
 import { detectToolCallShape } from "@reactive-agents/tools";
 import type { AttachmentMeta } from "@reactive-agents/ui-core";
 import type { TaskInput } from "@reactive-agents/runtime";
-import { asMultimodal } from "./chat-attachments.js";
 import { withTurnAttachments } from "./chat-turn-trace.js";
 import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
@@ -738,7 +737,7 @@ export class ChatSessionService {
       // wrapped in the SSE event shape so Run Chat and the main Chat panel behave consistently.
       if (!enableTools && !streamReasoningSteps) {
         try {
-          const chatReply = await asMultimodal(entry.session).chat(turnInput, {
+          const chatReply = await entry.session.chat(turnInput, {
             useTools: false,
             ...(posture !== undefined ? { posture } : {}),
             ...turnSkillsOption(turnPins),
@@ -801,7 +800,7 @@ let tokensUsed = 0;
       const recorder = new TurnTraceRecorder();
 
       try {
-        for await (const streamed of asMultimodal(entry.session).runStream(turnInput, {
+        for await (const streamed of entry.session.runStream(turnInput, {
           density: "full",
           signal: stop.signal,
           ...(posture !== undefined ? { posture } : {}),

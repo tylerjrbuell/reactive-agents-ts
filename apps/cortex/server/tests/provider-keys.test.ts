@@ -16,6 +16,8 @@ import {
   providerKeyForAgent,
   redactKey,
   SECRET_KEY_FILE,
+  VOICE_STT_KEY_ID,
+  VOICE_TTS_KEY_ID,
 } from "../services/provider-key-store.js";
 import { providerKeysRouter, type ListModelsWithKey } from "../api/provider-keys.js";
 import { buildCortexAgent } from "../services/build-cortex-agent.js";
@@ -121,7 +123,8 @@ describe("ProviderKeyStore", () => {
     // Every llm-provider adapter honours `.withProvider(p, { apiKey })` (d1955526c),
     // anthropic and gemini included.
     for (const p of Object.keys(KEYED_PROVIDER_ENV)) {
-      expect(unwrap(store.status(p)).appliesToAgents).toBe(true);
+      // The Settings · Voice endpoint keys are not for agents at all.
+      expect(unwrap(store.status(p)).appliesToAgents).toBe(p !== VOICE_STT_KEY_ID && p !== VOICE_TTS_KEY_ID);
     }
   });
 

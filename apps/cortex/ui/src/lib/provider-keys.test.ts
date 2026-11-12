@@ -79,6 +79,11 @@ describe("parsing and calls", () => {
     expect(parseKeysResponse(null)).toEqual({ providers: [], dir: "" });
   });
 
+  test("the Settings · Voice endpoint keys are not listed as providers", () => {
+    const r = parseKeysResponse({ providers: [{ provider: "openai" }, { provider: "voice-stt" }, { provider: "voice-tts" }], dir: "/d" });
+    expect(r.providers.map((p) => p.provider)).toEqual(["openai"]);
+  });
+
   test("testResultLine", () => {
     expect(testResultLine({ ok: true, tried: "typed", models: 1 })).toEqual({ tone: "ok", text: "This key works: 1 model listed." });
     expect(testResultLine({ ok: false, tried: "stored", error: "HTTP 401" })).toEqual({ tone: "bad", text: "HTTP 401" });

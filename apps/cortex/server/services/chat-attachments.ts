@@ -11,7 +11,7 @@
  *
  * The turn stores {@link AttachmentMeta} (name, kind, size), never bytes.
  */
-import { modelInputCapabilities, type AgentSession, type TaskInput } from "@reactive-agents/runtime";
+import { modelInputCapabilities, type TaskInput } from "@reactive-agents/runtime";
 import type { ContentPart } from "@reactive-agents/core";
 import {
   ATTACHMENT_CAPS,
@@ -166,18 +166,3 @@ function modelInputCapabilitiesOrUndefined(provider: string, model: string) {
   const c = modelInputCapabilities(provider, model);
   return { vision: c.vision, ...(c.audioIn !== undefined ? { audioIn: c.audioIn } : {}), authoritative: c.authoritative };
 }
-
-/**
- * A chat session as the runtime's engine really takes it: `chat` and `runStream`
- * accept {@link TaskInput} (text or typed parts), but `AgentSession`'s declared
- * signatures still say `string`. Method parameters are bivariant, so the session
- * assigns to this view without a cast; drop it once the runtime widens them
- * (framework gap, reported to runtime-warden).
- */
-export interface MultimodalSession {
-  chat(input: TaskInput, options?: Parameters<AgentSession["chat"]>[1]): ReturnType<AgentSession["chat"]>;
-  runStream(input: TaskInput, options?: Parameters<AgentSession["runStream"]>[1]): ReturnType<AgentSession["runStream"]>;
-}
-
-/** The session seen through its multimodal signatures. */
-export const asMultimodal = (session: AgentSession): MultimodalSession => session;

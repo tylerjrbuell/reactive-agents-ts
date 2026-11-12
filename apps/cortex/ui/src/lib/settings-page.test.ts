@@ -21,6 +21,7 @@ describe("settings page", () => {
     expect(SETTINGS_SECTIONS.map((s) => s.label)).toEqual([
       "Defaults",
       "Providers",
+      "Voice",
       "Notifications",
       "Appearance",
       "Storage",

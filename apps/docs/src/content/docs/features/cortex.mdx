@@ -365,6 +365,7 @@ Settings has a section nav on the left and one row per setting. **Save settings*
 
 -   **Defaults** — the provider and model that Beacon, new chats and the Lab Builder start with. A provider without its API key reads "(key missing)", and the help text names the variable to set.
 -   **Providers** — one row per cloud provider (Anthropic, OpenAI, Gemini, Groq, xAI, LiteLLM, Ollama Cloud) saying which key agents use, plus a **TypeSafe (Jev judgment)** row for the judgment backend, then the Ollama endpoint and whether the Cortex server is connected. For **Ollama Cloud**, press the **Ollama Cloud** preset beside the endpoint (it fills `https://ollama.com`), press **Apply**, and add your Ollama API key; the endpoint then applies to runs, chats, helper agents, the model list and capability checks, and the model picker lists the cloud models. The Ollama key is sent only to a non-local endpoint, never to `localhost`; a rejected key reads "Ollama Cloud key missing or invalid" with a link here. Judgments (below) cannot use Ollama Cloud: Ollama's scoring models run on local weights only. **Add key** / **Replace** saves a key on the Cortex server, **Test** lists the provider's models with it (a typed key is tested before you save it), **Remove** deletes it. Saved keys are encrypted (AES-256-GCM) in `.cortex/` beside the database, in files only your user can read, and the browser only ever sees `••••` plus the last four characters. A key in the server's environment (or `.env`) wins; when both exist, **Use the saved key instead** switches to the saved one. Agents get the saved key through `.withProvider(provider, { apiKey })`, for every provider listed.
+-   **Voice** — how the mic listens, how replies are read, and voice mode (see [Voice](#voice-talk-to-the-agent-and-hear-it-back) below). These apply at once and are not part of **Save settings**.
 -   **Notifications** — allow desktop notifications and pick which runs notify you.
 -   **Appearance** — **Theme** follows the system setting or pins dark or light (the top-bar switch pins the opposite of what is showing). **Motion** follows the system's reduced-motion setting or reduces motion in Cortex regardless: it stops the ambient drift, the logo twinkle and the live animations, and running work still shows in status text.
 -   **Storage** — how long to keep runs, and **Prune now** to delete older ones. Runs live in `.cortex/cortex.db` under the server's working directory.
@@ -372,6 +373,35 @@ Settings has a section nav on the left and one row per setting. **Save settings*
 -   **About** — the Cortex and framework versions. Run from a source checkout, Cortex reads the repo's `VERSION` file and shows the git commit; an installed package shows its released version.
 
 Both themes come from one set of design tokens, so every page reads the same in either. Fonts and icons are bundled with Cortex; nothing loads from a font CDN.
+
+### Voice: talk to the agent and hear it back
+
+Voice is for the chat and the run view's Answer. It has three parts, each usable on its own.
+
+- **Dictation (the mic button in the composer).** Click it to start and click again to stop, or switch it to push to talk in Settings · Voice and hold it while you speak. The words appear at the cursor as you say them, in the middle of whatever you already typed, and never replace it. Esc stops. A language setting picks what you speak. With **Send when I stop talking** on, the message is sent after a quiet moment (800 ms to 3 s, your choice); off, the words wait in the box for you to send.
+- **Read aloud.** Every agent reply has a speaker button; the run view's Answer has **Read aloud**; the chat header has **Read the conversation aloud**. A bar above the composer shows play/pause, stop, previous and next sentence, speed (0.75× to 2×), the voice, and the sentence being read, which is also highlighted in the answer in browsers that support the CSS Custom Highlight API. Long text is read a sentence at a time. Code blocks and tables are announced ("Code block in typescript, 12 lines.") and not read out; headings and lists get a pause; links read their label.
+- **Voice mode (the waveform button).** A hands-free loop: it listens, sends your message when you stop talking, waits for the reply, reads it aloud, and listens again. The bar above the composer always says where it is (Listening, Thinking, Speaking, Waiting for your approval or answer, Paused), shows the words heard so far, and has an always-visible **Stop voice mode** (Esc does the same). **Interrupt** cuts the voice or the running reply and listens again. Speaking over the voice stops it (barge-in). The voice's own sound can come back through speakers and the mic, so Cortex ignores heard words that are part of what it is saying; **headphones work best**, and you can switch barge-in off in Settings. Approvals and questions from the agent appear as cards in the thread and wait for a click: voice mode never answers them for you. After a quiet minute of nothing heard, it ends itself.
+
+**Engines.** Each direction has two:
+
+| | Browser (default) | Server (OpenAI-compatible) |
+| --- | --- | --- |
+| Listening | The browser's speech recognition. Nothing to install. Chrome and Edge send the audio to their vendor's recognition service; Firefox and Safari differ or lack it. | Cortex records in the browser and sends the audio to `POST <url>/audio/transcriptions` on a server you choose. |
+| Reading | `speechSynthesis`: the voices installed on the device. | Cortex sends each sentence to `POST <url>/audio/speech` and plays the audio. |
+
+The server engines work with anything that copies the OpenAI audio API, so one setting covers local and cloud. Set the endpoint under Settings · Voice (pick a preset or enter a URL that ends in `/v1`), then press **Save endpoint** and **Test**. The Test button for reading also plays a short phrase so you hear the voice. Recommended local setups:
+
+| For | Server | Endpoint | Model | Notes |
+| --- | --- | --- | --- | --- |
+| Listening | faster-whisper-server | `http://localhost:8000/v1` | `Systran/faster-whisper-small` (or larger) | Runs on CPU or GPU; audio stays on your machine. |
+| Listening | whisper.cpp `whisper-server` | `http://localhost:8080/v1` | the model it loaded | Start it with `--inference-path /v1/audio/transcriptions`. |
+| Reading | Kokoro-FastAPI | `http://localhost:8880/v1` | `kokoro` | Natural voices (`af_bella`, `am_adam`, …); **List voices** shows what it offers. |
+| Reading | openedai-speech (Piper) | `http://localhost:8000/v1` | `tts-1` | Maps the OpenAI voice names to Piper voices. |
+| Either | OpenAI | `https://api.openai.com/v1` | `whisper-1` / `tts-1` | Needs an API key; your audio or text leaves the machine. |
+
+An API key, when the endpoint needs one, is saved through the same encrypted store as the provider keys (`.cortex/`, files only your user can read) and used only by the Cortex server; the browser never receives it, and the settings page shows `••••` plus the last four characters. A key in the server's environment works too (`CORTEX_VOICE_STT_API_KEY`, `CORTEX_VOICE_TTS_API_KEY`). The status lines under each engine say what is available and, for a cloud endpoint, that audio or text is sent there. Cortex relays audio and never stores it: no recordings, no generated speech on disk. A recording is limited to 25 MB and one speech request to 4096 characters (longer text is split into sentences). Closing the page or pressing Stop cancels the call to the audio server.
+
+Language, speed, the browser voice and the mic mode are kept by the browser; the engines, endpoints, models and server voice are kept on the Cortex server. Microphone access needs a secure page: open Cortex on `localhost` or over https.
 
 The model link in a chat turn or under Defaults opens the **model page** (`/models/<provider>/<model>`): context window, max output, tool-call support and thinking, the remaining capability values, a note when the values are fallback defaults rather than measured ones (with what recorded runs on that model used), recent runs by name, and **Start a chat with this model**. Two more sections show what the model costs and how the harness adapts to it:
 

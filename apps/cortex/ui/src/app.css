@@ -404,6 +404,8 @@ html {
 
 /* ── Selection ────────────────────────────────────────────────── */
 ::selection { background: rgba(139,92,246,0.3); }
+/* The sentence read aloud right now (CSS Custom Highlight API, lib/voice/highlight.ts). Static: no motion. */
+::highlight(cortex-reading) { background-color: var(--cortex-accent-tint); color: var(--cortex-text); text-decoration: underline; text-decoration-color: var(--cortex-accent); text-decoration-thickness: 1px; }
 
 /* ── Code / mono content ─────────────────────────────────────── */
 code, pre, .font-mono {

@@ -48,6 +48,8 @@
   import WorkspacePickerDialog from "$lib/components/WorkspacePickerDialog.svelte";
   import ChatAttachmentBar from "$lib/components/chat/ChatAttachmentBar.svelte";
   import ChatAttachMenu from "$lib/components/chat/ChatAttachMenu.svelte";
+  import ChatVoiceControls from "$lib/components/chat/ChatVoiceControls.svelte";
+  import ChatVoiceBar from "$lib/components/chat/ChatVoiceBar.svelte";
   import ChatMentionMenu from "$lib/components/chat/ChatMentionMenu.svelte";
   import { createAttachController } from "$lib/stores/composer-attachments.js";
   import { mentionTrigger, removeMention } from "$lib/mention-trigger.js";
@@ -754,6 +756,7 @@
     onExport={exportConversation}
     onOpenContext={() => setTraceOpen(true, "context")}
     onToggleTrace={() => setTraceOpen(!traceOpen, traceOpen ? undefined : "steps")}
+    {turns}
   />
 
   <div class="relative flex min-h-0 flex-1" bind:clientWidth={rowW}>
@@ -812,6 +815,7 @@
     <ChatGoalBar {sessionId} turnCount={turns.length} />
     {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} inferred={dockInferred} turnComplete={dockTurnComplete} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
   </div>
+  <ChatVoiceBar />
   <ChatComposer
     bind:message
     bind:caret
@@ -836,6 +840,7 @@
     {/snippet}
     {#snippet footerTools()}
       <ChatAttachMenu caps={inputCaps} {model} onFiles={(files) => attach.addFiles(files)} />
+      <ChatVoiceControls bind:message bind:caret {inputEl} onSend={() => void submit()} />
     {/snippet}
     {#snippet quickBar()}
       {#if provider || draftSkillList.length > 0}

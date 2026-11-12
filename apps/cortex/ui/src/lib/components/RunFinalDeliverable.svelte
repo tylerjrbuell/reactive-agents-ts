@@ -13,6 +13,8 @@
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import { voice } from "$lib/stores/voice.js";
+  import ChatVoiceBar from "$lib/components/chat/ChatVoiceBar.svelte";
   import StructuredResult from "$lib/components/StructuredResult.svelte";
   import { formatCost, formatTurnDuration, type StructuredOutputReportWire } from "@reactive-agents/ui-core";
   import { formatSize } from "$lib/text-budget.js";
@@ -67,6 +69,12 @@
   const LIVE_TAIL = 4_000;
   const liveTail = $derived(streamText.length > LIVE_TAIL ? `…${streamText.slice(-LIVE_TAIL)}` : streamText);
 
+  // Read aloud: controls and the sentence highlight are the chat's voice bar's; here only the toggle.
+  const READ_ID = "run-answer";
+  const v = voice();
+  const readerState = v.readerState;
+  const readingAnswer = $derived($readerState.sourceId === READ_ID && $readerState.status !== "idle" && $readerState.status !== "error");
+
   async function copyDeliverable() {
     try {
       await navigator.clipboard.writeText(deliverableText);
@@ -87,13 +95,15 @@
         {#if (meta?.tokensUsed ?? 0) > 0}<span class="meta">{meta?.tokensUsed?.toLocaleString()} tok</span>{/if}
         {#if (meta?.estimatedCost ?? 0) > 0}<span class="meta">{formatCost(meta?.estimatedCost)}</span>{/if}
         {#if (meta?.durationMs ?? 0) > 0}<span class="meta">{formatTurnDuration(meta?.durationMs ?? 0)}</span>{/if}
-        <Button size="sm" variant="ghost" icon="copy" class="copy" onclick={copyDeliverable}>Copy</Button>
+        <Button size="sm" variant="ghost" icon="speaker" class="copy" aria-pressed={readingAnswer} onclick={() => v.toggleRead(READ_ID, deliverableText)}>{readingAnswer ? "Stop reading" : "Read aloud"}</Button>
+        <Button size="sm" variant="ghost" icon="copy" onclick={copyDeliverable}>Copy</Button>
       {/if}
     </header>
+    {#if readingAnswer}<div class="reader"><ChatVoiceBar /></div>{/if}
 
     {#if showDeliverable}
       {#if expanded}
-        <div class="prose"><RichAnswer markdown={deliverableText} {calls} toolbar="always" hostCopies /></div>
+        <div class="prose" data-read-source={READ_ID}><RichAnswer markdown={deliverableText} {calls} toolbar="always" hostCopies /></div>
       {:else}
         <p class="prose preview">{previewText}</p>
       {/if}
@@ -127,6 +137,8 @@
   .prose :global(:is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6, dl)) { max-width: var(--cortex-prose-measure); }
   .preview { color: var(--cortex-text-2); }
   .more { padding: 0 12px 10px; }
+  .reader { padding: 8px 12px 0; }
+  .reader :global(section.vbar) { margin: 0; max-width: none; }
   .live { margin: 0; max-height: 12rem; overflow-y: auto; padding: 12px 16px; font-size: var(--cortex-t-md); line-height: var(--cortex-lh-read); color: var(--cortex-text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
   .fail { padding: 12px 16px; color: var(--cortex-bad); font-size: var(--cortex-t-sm); }
   .fail.quiet { color: var(--cortex-text-2); }

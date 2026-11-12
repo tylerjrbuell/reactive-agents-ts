@@ -10,6 +10,9 @@
   import Button from "$lib/components/kit/Button.svelte";
   import type { ExportFormat } from "$lib/chat-export.js";
   import type { ComponentProps } from "svelte";
+  import { voice } from "$lib/stores/voice.js";
+  import type { VoiceTurnLike } from "$lib/voice/voice-text.js";
+  import IconButton from "$lib/components/kit/IconButton.svelte";
 
   interface Props {
     /** The chat's name. */
@@ -25,8 +28,15 @@
     /** Open the inspector on its Context tab. */
     onOpenContext: () => void;
     onToggleTrace: () => void;
+    /** The conversation, for Read aloud. */
+    turns: readonly VoiceTurnLike[];
   }
-  const { title, provider, model, meter, empty, traceOpen, onExport, onOpenContext, onToggleTrace }: Props = $props();
+  const { title, provider, model, meter, empty, traceOpen, onExport, onOpenContext, onToggleTrace, turns }: Props = $props();
+
+  // "Read transcript" speaks the whole conversation; pressing it again stops it.
+  const v = voice();
+  const readerState = v.readerState;
+  const readingAll = $derived($readerState.sourceId === "transcript" && $readerState.status !== "idle" && $readerState.status !== "error");
 </script>
 
 <header class="convo-h">
@@ -36,6 +46,7 @@
   {/if}
   <div class="ctx">
     <ChatContextMeter {...meter} onOpenPanel={onOpenContext} />
+    <IconButton icon="speaker" label={readingAll ? "Stop reading the conversation" : "Read the conversation aloud"} pressed={readingAll} disabled={empty} onclick={() => v.readTranscript(turns)} />
     <ChatExportMenu disabled={empty} {onExport} />
     <Button size="sm" icon="trace" aria-pressed={traceOpen} class={traceOpen ? "trace-on" : ""} onclick={onToggleTrace}>Trace</Button>
   </div>

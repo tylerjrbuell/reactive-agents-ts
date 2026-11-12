@@ -17,6 +17,7 @@
   import { aboutVersionsOf, keyEnvOf, savePatchOf, SETTINGS_SECTIONS, type AboutVersions } from "$lib/settings-page.js";
   import OllamaEndpointRow from "$lib/components/settings/OllamaEndpointRow.svelte";
   import ProviderKeysPanel from "$lib/components/settings/ProviderKeysPanel.svelte";
+  import VoiceSettingsPanel from "$lib/components/settings/VoiceSettingsPanel.svelte";
   import { modelHref } from "$lib/model-link.js";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import PageHeader from "$lib/components/kit/PageHeader.svelte";
@@ -304,6 +305,10 @@
               {/if}
             {/snippet}
           </SettingsRow>
+        </SettingsGroup>
+
+        <SettingsGroup id="voice" title="Voice" description="Talk to the agent and have it read aloud. Browser engines need nothing installed; a server engine uses any OpenAI-compatible speech endpoint, local or cloud.">
+          <VoiceSettingsPanel />
         </SettingsGroup>
 
         <SettingsGroup id="notifications" title="Notifications" description="Desktop notifications when agents finish or fail while Cortex is in the background.">

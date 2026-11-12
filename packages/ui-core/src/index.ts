@@ -249,3 +249,6 @@ export {
 } from "./state/attachments.js";
 export { rankPaths, scorePath, type PathMatch } from "./state/path-match.js";
 export { deliverableCallsOf, type ToolCallEventLike } from "./state/deliverables.js";
+
+// Voice: speech engines, dictation / read-aloud controllers, voice-mode reducer.
+export * from "./voice/index.js";

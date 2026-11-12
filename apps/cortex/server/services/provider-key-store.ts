@@ -41,6 +41,11 @@ export const SECRET_KEY_FILE = "secret.key";
 /** File holding the sealed provider keys. */
 export const PROVIDER_KEYS_FILE = "provider-keys.json";
 
+/** Key-store id of the speech-to-text endpoint's API key (Settings · Voice). */
+export const VOICE_STT_KEY_ID = "voice-stt";
+/** Key-store id of the text-to-speech endpoint's API key (Settings · Voice). */
+export const VOICE_TTS_KEY_ID = "voice-tts";
+
 /**
  * Providers whose key Settings can store, with the env variables Cortex treats as
  * that provider's key (first one is the name shown in the UI). Same names as the
@@ -60,6 +65,11 @@ export const KEYED_PROVIDER_ENV: Readonly<Record<string, readonly string[]>> = {
   // Not an LLM provider: the TypeSafe (Jev) judgment backend's key. It reaches the agent as
   // `.withJudgment({ apiKey })` (`cortexAgentBuilder`), never `.withProvider`.
   typesafe: ["TYPESAFE_API_KEY"],
+  // Not LLM providers: the API keys of the Settings · Voice endpoints (speech to text, text to
+  // speech). They never reach an agent (`AGENT_APPLIES` leaves them out) and are used only by
+  // `api/voice.ts`; the Providers panel hides them (`isVoiceKeyId`, UI `provider-keys.ts`).
+  [VOICE_STT_KEY_ID]: ["CORTEX_VOICE_STT_API_KEY"],
+  [VOICE_TTS_KEY_ID]: ["CORTEX_VOICE_TTS_API_KEY"],
 };
 
 /**

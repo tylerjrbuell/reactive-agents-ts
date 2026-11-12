@@ -82,15 +82,9 @@ export interface PendingApprovalRow {
 /** Row identity: a run can hold several gates at once (parallel sub-agents). */
 const rowKey = (runId: string, gateId: string): string => `${runId}|${gateId}`;
 
-/**
- * The sub-agent name a framework row carries. `ReactiveAgent.listPendingApprovals()`'s
- * declared type omits `subAgent` (framework gap: the runtime facade returns it), so it is
- * read off the row with a guard rather than a cast.
- */
-const subAgentOf = (row: object): string | undefined => {
-  const v = (row as { readonly subAgent?: unknown }).subAgent;
-  return typeof v === "string" && v !== "" ? v : undefined;
-};
+/** The sub-agent name a framework row carries, when it names one. */
+const subAgentOf = (row: { readonly subAgent?: string | undefined }): string | undefined =>
+  row.subAgent !== undefined && row.subAgent !== "" ? row.subAgent : undefined;
 
 /** The agent surface a live wait is read and answered through. */
 export type LiveApprovableAgent = Pick<ReactiveAgent, "listPendingApprovals" | "approveRun" | "denyRun"> &
@@ -150,7 +144,7 @@ const liveSources = new Set<LiveApprovalSource>();
 /** A source's live waits; an agent that cannot list them lists none. */
 const liveRowsOf = async (
   source: LiveApprovalSource,
-): Promise<readonly { runId: string; gateId: string; toolName: string; args: unknown }[]> => {
+): Promise<readonly { runId: string; gateId: string; toolName: string; args: unknown; subAgent?: string }[]> => {
   try {
     return await source.agent.listPendingApprovals();
   } catch {
@@ -190,7 +184,7 @@ export const durableApprovals = {
         });
         continue;
       }
-      let rows: readonly { runId?: string; gateId?: string; toolName?: string; args?: unknown }[] = [];
+      let rows: readonly { runId?: string; gateId?: string; toolName?: string; args?: unknown; subAgent?: string }[] = [];
       try {
         rows = await entry.agent.listPendingApprovals();
       } catch {

@@ -25,6 +25,8 @@ import { healthRouter } from "./api/health.js";
 import { providerKeysRouter } from "./api/provider-keys.js";
 import { judgmentRouter } from "./api/judgment.js";
 import { ollamaSettingsRouter } from "./api/ollama-settings.js";
+import { voiceRouter } from "./api/voice.js";
+import { VoiceSettingsStore } from "./services/voice/voice-settings.js";
 import { installOllamaEndpointStore, OllamaEndpointStore } from "./services/ollama-cloud.js";
 import { installProviderKeyStore, ProviderKeyStore } from "./services/provider-key-store.js";
 import { dirname } from "node:path";
@@ -150,6 +152,7 @@ export async function startCortexServer(
     .use(providerKeysRouter(providerKeys))
     .use(judgmentRouter(providerKeys))
     .use(ollamaSettingsRouter(ollamaEndpoint))
+    .use(voiceRouter({ settings: new VoiceSettingsStore(dirname(resolvedConfig.dbPath)), keys: providerKeys }))
     .use(capabilitiesRouter)
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
     .use(agentConfigSourceRouter(runtime.storeLayer))
