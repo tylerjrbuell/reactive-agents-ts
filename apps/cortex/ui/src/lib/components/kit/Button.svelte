@@ -16,7 +16,8 @@
     /** Tooltip text (the Cortex tooltip, not a native `title`). */
     title?: string;
     variant?: "default" | "primary" | "ghost" | "danger";
-    size?: "sm" | "md";
+    /** `field` matches the Input/Select height, for a Save/Add button sharing a row with one. */
+    size?: "sm" | "md" | "field";
     /** Leading icon. */
     icon?: IconName;
     /** Render an `<a>` with this href instead of a `<button>`. */
@@ -68,6 +69,7 @@
     transition: background-color var(--cortex-d-fast) var(--cortex-ease-out);
   }
   .cx-btn-md { height: 32px; padding: 0 12px; font-size: var(--cortex-t-sm); }
+  .cx-btn-field { height: var(--cortex-control-h); padding: 0 12px; font-size: var(--cortex-t-sm); }
   .cx-btn-sm { height: 26px; padding: 0 8px; font-size: var(--cortex-t-xs); }
   .cx-btn:hover { background: var(--cortex-surface-2); }
   .cx-btn-primary { background: var(--cortex-accent-fill); border-color: transparent; color: #fff; }

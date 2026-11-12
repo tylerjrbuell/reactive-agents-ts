@@ -30,7 +30,9 @@
 </div>
 
 <style>
-  .cx-field { display: grid; gap: 6px; }
+  /* align-content keeps rows at their natural height when a taller sibling stretches this cell,
+     so label, control and hint start at the same y across a row of fields. */
+  .cx-field { display: grid; gap: 6px; align-content: start; }
   label { font-size: var(--cortex-t-xs); font-weight: 500; color: var(--cortex-text-2); }
   p { margin: 0; font-size: var(--cortex-t-xs); }
   .cx-field-hint { color: var(--cortex-text-3); }

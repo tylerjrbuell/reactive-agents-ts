@@ -4,6 +4,7 @@
  * Pure logic lives in sibling `lib/*.ts` helpers with their own tests.
  */
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { htmlSnippet, renderComponent } from "./test-render.js";
 
@@ -167,6 +168,18 @@ describe("Field family", () => {
     const area = await renderComponent(kit("Textarea"), { id: "c", value: "hi", rows: 3 });
     expect(area).toContain('rows="3"');
     expect(area).toContain("cx-control");
+  });
+
+  test("Input, Select and the field-size Button share one control height; Field rows do not stretch", async () => {
+    const css = readFileSync(join(import.meta.dir, "../../../app.css"), "utf8");
+    expect(css).toMatch(/--cortex-control-h:\s*34px/);
+    expect(css).toMatch(/\.cx-control\s*\{[^}]*height:\s*var\(--cortex-control-h\)/);
+    // Input and Select both render `cx-control`; the inline button takes the same token.
+    expect(readFileSync(kit("Button"), "utf8")).toMatch(/\.cx-btn-field\s*\{\s*height:\s*var\(--cortex-control-h\)/);
+    const btn = await renderComponent(kit("Button"), { size: "field", children: kids("Save") });
+    expect(btn).toContain("cx-btn-field");
+    // A taller neighbour must not spread this field's rows (label, control, hint start at fixed y).
+    expect(readFileSync(kit("Field"), "utf8")).toMatch(/\.cx-field\s*\{[^}]*align-content:\s*start/);
   });
 
   test("Switch is a labelled role=switch", async () => {

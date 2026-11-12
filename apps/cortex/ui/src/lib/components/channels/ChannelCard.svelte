@@ -186,14 +186,14 @@
       <form class="chan-form" onsubmit={(e) => { e.preventDefault(); void save(); }}>
         <label class="chan-sr" for={fid("cred")}>{cred.label}</label>
         <Input id={fid("cred")} type="password" mono autocomplete="off" spellcheck={false} placeholder={cred.placeholder} bind:value={draft} describedBy="{fid('cred')}-hint" />
-        <Button size="sm" variant="primary" type="submit" disabled={!draft.trim() || busy}>Save</Button>
-        {#if editing}<Button size="sm" variant="ghost" onclick={() => { editing = false; draft = ""; }}>Cancel</Button>{/if}
+        <Button size="field" variant="primary" type="submit" disabled={!draft.trim() || busy}>Save</Button>
+        {#if editing}<Button size="field" variant="ghost" onclick={() => { editing = false; draft = ""; }}>Cancel</Button>{/if}
       </form>
       <p id="{fid('cred')}-hint" class="chan-hint">{cred.hint}</p>
     {:else}
       <div class="chan-form">
-        <Button size="sm" onclick={() => (editing = true)}>Replace</Button>
-        <Button size="sm" variant="ghost" disabled={busy} onclick={clearCredential}>Remove</Button>
+        <Button size="field" onclick={() => (editing = true)}>Replace</Button>
+        <Button size="field" variant="ghost" disabled={busy} onclick={clearCredential}>Remove</Button>
       </div>
     {/if}
   </div>
@@ -205,7 +205,7 @@
   {/if}
 
   <div class="chan-test">
-    <Button size="sm" disabled={busy || (!saved?.masked && !draft.trim())} onclick={test}>Test connection</Button>
+    <Button size="field" disabled={busy || (!saved?.masked && !draft.trim())} onclick={test}>Test connection</Button>
     {#if result}
       <p class="chan-result" class:chan-ok={result.tone === "ok"} class:chan-bad={result.tone === "bad"} role="status">{result.text}</p>
     {/if}

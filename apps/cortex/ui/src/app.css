@@ -139,6 +139,8 @@ html.dark {
   --cortex-chat-col: 58rem;
   --cortex-chat-gutter: 24px;
   /* Radius by hierarchy. */
+  /* One height for every form control (Input, Select) and the field-size button beside it. */
+  --cortex-control-h: 34px;
   --cortex-r-chip: 6px; --cortex-r-ctl: 8px; --cortex-r-panel: 12px;
   /* Layers. Tailwind: z-sticky … z-tooltip. */
   --cortex-z-sticky: 10; --cortex-z-nav: 20; --cortex-z-drawer: 30;
@@ -514,7 +516,7 @@ code, pre, .font-mono {
    fill, control edge, the one focus ring; no light-mode override. */
 .cx-control {
   width: 100%;
-  height: 34px;
+  height: var(--cortex-control-h);
   padding: 0 10px;
   border-radius: var(--cortex-r-ctl);
   border: 1px solid var(--cortex-line-strong);

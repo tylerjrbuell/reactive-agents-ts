@@ -13,6 +13,7 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { DefinedTool } from "@reactive-agents/tools";
 import {
   agentConfigToBuilder,
+  type GatewayOptions,
   type MCPServerConfig,
   type ReactiveAgentBuilder,
 } from "@reactive-agents/runtime";
@@ -294,7 +295,17 @@ export async function cortexAgentBuilder(
   // Messaging channels: live adapters, so an overlay. `.withChannels` needs the gateway, which
   // the AgentConfig carries (`gateway`, set by the host even when only defaults apply).
   const channelAdapters = params.channelAdapters ?? [];
-  if (channelAdapters.length > 0) b = b.withChannels({ adapters: [...channelAdapters] });
+  if (channelAdapters.length > 0) {
+    // Cortex mounts the webhook adapters on their own ingress port itself (`GatewayChannelHost`),
+    // so the framework's ingress must not serve the same adapter a second time at
+    // `/channels/<id>` on `gateway.port`. `AgentConfig.gateway` has no `ingress` field
+    // (framework gap, reported), so the gateway block is re-applied here with it added;
+    // `withGateway` replaces, hence the full decoded block is passed through.
+    // The decoded block and `GatewayOptions` differ only by explicit-undefined optionals.
+    const gateway = (agentConfig.gateway ?? {}) as GatewayOptions;
+    b = b.withGateway({ ...gateway, ingress: { channels: false } });
+    b = b.withChannels({ adapters: [...channelAdapters] });
+  }
 
   // The output schema (JSON Schema, `outputSchemaOptions`) and the agentic-UI
   // interaction rail (`userInteraction`) ride the AgentConfig

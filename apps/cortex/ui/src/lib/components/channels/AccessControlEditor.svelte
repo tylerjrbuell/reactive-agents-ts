@@ -61,7 +61,7 @@
     <form class="acc-add" onsubmit={(e) => { e.preventDefault(); add(); }}>
       <label class="acc-sr" for="acc-input">Add senders</label>
       <Input id="acc-input" mono bind:value={draft} placeholder="telegram:123456789" autocomplete="off" spellcheck={false} describedBy="acc-hint" invalid={problems.length > 0} />
-      <Button size="sm" variant="primary" type="submit" icon="plus" disabled={!draft.trim()}>Add</Button>
+      <Button size="field" variant="primary" type="submit" icon="plus" disabled={!draft.trim()}>Add</Button>
     </form>
     <p id="acc-hint" class="acc-hint">One <code>platform:id</code> per sender, for example {examples}. Paste several separated by spaces or new lines.</p>
     {#if problems.length > 0}
