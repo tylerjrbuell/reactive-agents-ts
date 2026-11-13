@@ -95,6 +95,11 @@ export const RouteSpec = Schema.Struct({
    * short message after `afterMs`. Absent or `false`: off (the default).
    */
   ack: Schema.optional(Schema.Union(RouteAck, Schema.Literal(false))),
+  /**
+   * Messages that, sent by a route owner as the whole text (for example `/new`), end the conversation's
+   * session and start a fresh one. Never forwarded to the agent. Default `["/new", "/reset"]`; `[]` disables.
+   */
+  resetCommands: Schema.optionalWith(Schema.Array(Schema.String), { default: () => ["/new", "/reset"] }),
 });
 /** A validated route (defaults applied). */
 export type RouteSpec = Schema.Schema.Type<typeof RouteSpec>;
@@ -189,6 +194,13 @@ export interface RoutedSession {
    * `ack.modelTimeoutMs` and falls back to the canned text.
    */
   readonly acknowledge?: (turn: RoutedTurn) => Effect.Effect<string, never>;
+  /**
+   * Optional. Called when a route owner sends a reset command (`/new`), before `close`. A resolver that
+   * keeps conversation history outside the session object (a chat store keyed by `conversationKey`)
+   * must clear it here, so the next `open` for the same key starts empty and a restart cannot bring the
+   * old history back. A failure is reported to the sender and the session is kept.
+   */
+  readonly reset?: Effect.Effect<void, RoutingError>;
   readonly close: Effect.Effect<void>;
 }
 

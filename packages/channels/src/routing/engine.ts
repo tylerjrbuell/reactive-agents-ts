@@ -40,6 +40,17 @@ import {
 const HOUR_MS = 3_600_000;
 const MAX_LIVE_SESSIONS = 500;
 const BACKPRESSURE_NOTICE = "Still working on your last message.";
+const RESET_CONFIRMATION = "Started a new conversation.";
+const RESET_FAILED_NOTICE = "Could not start a new conversation.";
+
+/** True when the whole message is one of the route's reset commands (`/new`, `/New@my_bot`). */
+const isResetCommand = (route: RouteSpec, text: string): boolean => {
+  if (route.resetCommands.length === 0) return false;
+  const token = text.trim();
+  if (token === "" || /\s/.test(token)) return false;
+  const name = token.toLowerCase().split("@")[0] ?? "";
+  return route.resetCommands.some((c) => c.toLowerCase() === name);
+};
 
 /** Approvals are not wired in this slice: nothing is approvable, so risky tools stay blocked. */
 export const failClosedApproval: ApprovalPort = { request: () => Effect.succeed("denied") };
@@ -235,10 +246,16 @@ export class RouterEngine {
 
       if (deps.strict) {
         if (!groupAllowed(route, input)) return yield* self.drop("group", route.id, simulated);
-        if (!(yield* self.withinRate(route, platform, msg))) return yield* self.drop("rate", route.id, simulated);
       }
 
       const key = `${route.id}:${role}:${conversationKeyOf(adapterId, msg)}`;
+      // Owner reset command: handled here, never forwarded to the agent, exempt from the turn-rate cap.
+      if (deps.strict && role === "owner" && isResetCommand(route, msg.content)) {
+        return yield* self.queued(key, true, () => self.resetConversation({ adapterId, msg, route, role, key, taskId, simulated }), {
+          onOverflow: () => self.drop("backpressure", route.id, simulated),
+        });
+      }
+      if (deps.strict && !(yield* self.withinRate(route, platform, msg))) return yield* self.drop("rate", route.id, simulated);
       return yield* self.queued(key, deps.strict, () => self.runTurn({ adapterId, msg, route, role, key, taskId, simulated }), {
         onOverflow: () =>
           Effect.gen(function* () {
@@ -350,6 +367,52 @@ export class RouterEngine {
         }
       }
       return entry;
+    });
+  }
+
+  /**
+   * Owner reset command: let the resolver clear its history (`reset`), close the live session and drop
+   * it from the cache, so the next message opens a new one. The command never reaches the agent.
+   * Runs inside the conversation queue, so it waits for any turn in flight.
+   */
+  private resetConversation(args: {
+    readonly adapterId: string;
+    readonly msg: InboundMessage;
+    readonly route: RouteSpec;
+    readonly role: RouteRole;
+    readonly key: string;
+    readonly taskId: string;
+    readonly simulated: boolean;
+  }): Effect.Effect<RouteOutcome> {
+    const self = this;
+    const { adapterId, msg, route, role, key, taskId, simulated } = args;
+    return Effect.gen(function* () {
+      const cleared: Either.Either<void, RoutingError> =
+        simulated || route.session === "stateless"
+          ? Either.right(undefined)
+          : yield* Effect.either(
+              Effect.gen(function* () {
+                const entry = yield* self.session(key, route, role, adapterId, msg);
+                if (entry.session.reset) yield* entry.session.reset;
+                self.sessions.delete(key);
+                yield* Scope.close(entry.scope, Exit.void);
+              }),
+            );
+      const ok = Either.isRight(cleared);
+      yield* self.emit({
+        _tag: "ChannelConversationReset",
+        routeId: route.id,
+        role,
+        ok,
+        ...(Either.isLeft(cleared) ? { reason: cleared.left.reason } : {}),
+        simulated,
+      });
+      const reply: RoutedReply = { text: ok ? RESET_CONFIRMATION : RESET_FAILED_NOTICE };
+      if (simulated || !self.hub.has(adapterId)) return { _tag: "Answered", routeId: route.id, role, reply } as const;
+      const sent = yield* Effect.either(self.reply(adapterId, msg, reply.text, taskId));
+      return Either.isRight(sent)
+        ? ({ _tag: "Answered", routeId: route.id, role, reply, receipt: sent.right } as const)
+        : ({ _tag: "Answered", routeId: route.id, role, reply, deliveryError: sent.left } as const);
     });
   }
 

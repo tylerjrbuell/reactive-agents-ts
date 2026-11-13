@@ -68,6 +68,7 @@ const IMPLICIT_ROUTE: RouteSpec = {
   senderTools: { _tag: "AgentDefault" },
   groups: "mention-only",
   turnTimeoutMs: 120_000,
+  resetCommands: [],
 };
 
 function toGatewayEvent(adapterId: string, msg: InboundMessage): GatewayEvent {

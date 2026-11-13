@@ -315,6 +315,20 @@ export type PlatformAgentEvent =
       readonly simulated?: boolean;
     }
   | {
+      /** A route owner sent a reset command (for example `/new`) and the conversation's session was restarted. Carries no text. */
+      readonly _tag: "ChannelConversationReset";
+      /** Id of the route whose conversation was reset. */
+      readonly routeId: string;
+      /** Role of the sender (always the owner role today). */
+      readonly role: string;
+      /** False when the resolver's reset failed; the session was kept. */
+      readonly ok: boolean;
+      /** Failure classification when `ok` is false. */
+      readonly reason?: string;
+      /** True when produced by a router simulation (dry run); nothing was reset. */
+      readonly simulated?: boolean;
+    }
+  | {
       /** A routed message was dropped before an agent turn ran. */
       readonly _tag: "ChannelTurnDropped";
       /** Id of the route that dropped the message. */

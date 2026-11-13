@@ -9,7 +9,10 @@ const invalid = (routeId: string, message: string): RoutingError =>
 
 const isPositive = (n: number | undefined): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
 
-const MAX_ACK_AFTER_MS = 120_000;
+const RESET_COMMAND = /^\/[A-Za-z0-9_-]{1,31}$/;
+const MAX_RESET_COMMANDS = 5;
+
+const MAX_ACK_AFTER_MS =120_000;
 const MAX_ACK_MODEL_TIMEOUT_MS = 10_000;
 const MAX_ACK_TEXT = 200;
 const MAX_ACK_TEXTS = 10;
@@ -75,6 +78,9 @@ export const validateRoute = (
     if (platform === "webhook") return invalid(route.id, "webhook routes reject ack (the reply is the HTTP response)");
     const problem = ackProblem(route.ack);
     if (problem) return invalid(route.id, problem);
+  }
+  if (route.resetCommands.length > MAX_RESET_COMMANDS || route.resetCommands.some((c) => !RESET_COMMAND.test(c))) {
+    return invalid(route.id, `resetCommands must hold at most ${MAX_RESET_COMMANDS} commands like "/new" (slash, then 1 to 31 letters, digits, _ or -)`);
   }
   for (const cap of [route.maxTurnsPerHour, route.maxTurnsPerSenderPerHour, route.maxCostPerDayUsd, route.maxIterations]) {
     if (cap !== undefined && !isPositive(cap)) return invalid(route.id, "limits must be positive numbers");
