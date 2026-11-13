@@ -11,7 +11,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 /** One line of the feed, newest first in a snapshot. */
 export interface HubActivity {
   readonly at: number;
-  readonly kind: "matched" | "denied" | "unrouted" | "answered" | "failed" | "dropped" | "conflict" | "edited";
+  readonly kind: "matched" | "denied" | "unrouted" | "answered" | "acknowledged" | "failed" | "dropped" | "conflict" | "edited";
   readonly channelId?: string;
   readonly routeId?: string;
   /** Plain-words detail: the role, the drop reason, the failure reason. */
@@ -95,6 +95,9 @@ export class HubActivityTracker {
           detail: event.ok ? `turn completed (${event.role})` : `${event.reason ?? "turn failed"}${cause ? `: ${cause}` : ""}`,
           simulated: event.simulated,
         });
+        return;
+      case "ChannelTurnAcknowledged":
+        this.note({ kind: "acknowledged", routeId: event.routeId, detail: `acknowledged (${event.source ?? "canned"}, ${event.role})`, simulated: event.simulated });
         return;
       case "ChannelTurnDropped":
         this.bump(event.routeId, { dropped: 1 });

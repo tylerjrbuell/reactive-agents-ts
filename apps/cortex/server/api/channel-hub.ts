@@ -49,6 +49,7 @@ import { CHANNEL_KINDS, parseCortexChannels, type ChannelKind } from "../service
 import type { ChannelCredentials } from "../services/channel-credentials.js";
 import type { ChannelHub } from "../services/channel-hub.js";
 import { loadValidRoutes } from "../services/channel-hub-store.js";
+import { withDefaultAck } from "../services/channel-ack-default.js";
 
 const Kind = t.Union([t.Literal("telegram"), t.Literal("signal"), t.Literal("webhook")]);
 const ACTOR = "cortex-admin";
@@ -188,11 +189,12 @@ export const channelHubRouter = (db: Database, hub: ChannelHub, creds: ChannelCr
 
     // ── Routes ──
     .post("/routes", async ({ body, set }) => {
-      const candidate = asRouteInput(body.route);
-      if (!candidate) {
+      const parsed = asRouteInput(body.route);
+      if (!parsed) {
         set.status = 400;
         return { error: "route does not match the RouteSpec schema" };
       }
+      const candidate = withDefaultAck(parsed, platformOf(parsed.match.channelId));
       if (getRoute(db, candidate.id)) {
         set.status = 409;
         return { error: "route_exists" };

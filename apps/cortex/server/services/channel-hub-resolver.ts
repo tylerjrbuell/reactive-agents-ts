@@ -11,12 +11,18 @@
  * Target kind `session` (a chat session) is the typed extension point for the next slice: it resolves
  * to a clear `resolve_failed` today.
  *
+ * Model-written acks (`ack.source: "model"`): a turn the router marked with `onProgress` is streamed and the
+ * text the agent wrote before its first tool call is forwarded (`drainWithNarration`); `acknowledge` is one
+ * tool-less side completion over the built agent's runtime (`makeAcknowledge`), outside the chat turn gate and
+ * never in history. Both fail soft (the router then uses the canned text).
+ *
  * Sender text goes to the agent as the user message only; the persona stays in the agent's own config.
  */
 import { Effect } from "effect";
 import type { Layer } from "effect";
 import type { Database } from "bun:sqlite";
 import { RoutingError } from "@reactive-agents/channels";
+import { drainWithNarration, makeAcknowledge, toChannelHandle } from "@reactive-agents/runtime";
 import type { AgentConfig } from "@reactive-agents/runtime";
 import type { AgentResolver, OpenSessionRequest, RoutedReply, RoutedSession } from "@reactive-agents/channels";
 import { emitErrorSwallowed, errorTag, type AgentEvent } from "@reactive-agents/core";
@@ -166,6 +172,10 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
           agentFor(req).pipe(Effect.flatMap((agent) => Effect.tryPromise({
             try: async (): Promise<RoutedReply> => {
               const { session } = sessionOn(agent);
+              if (session && turn.onProgress) {
+                const r = await drainWithNarration(session.runStream(turn.text, { density: "full" }), turn.onProgress);
+                return { text: r.text, agentId: agent.agentId, tokens: r.tokens, costUsd: r.cost };
+              }
               if (session) {
                 // No `useTools`: the framework takes the tool loop iff the (narrowed) build has capability tools.
                 const r = await session.chat(turn.text);
@@ -181,6 +191,14 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
             },
             catch: turnFailed,
           })) ),
+        acknowledge: (turn) =>
+          agentFor(req).pipe(
+            Effect.flatMap((agent) => {
+              const { complete } = toChannelHandle(agent);
+              return complete ? makeAcknowledge(complete)(turn) : Effect.succeed("");
+            }),
+            Effect.orElseSucceed(() => ""),
+          ),
         close: Effect.void,
       } satisfies RoutedSession;
     });

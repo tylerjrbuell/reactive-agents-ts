@@ -91,8 +91,13 @@ export interface RouteDraft {
   ackModelTimeoutMs: string;
 }
 
-/** A fresh draft: access closed, read-only senders, acknowledgement off. */
-export function newDraft(channelId = "", agentId = ""): RouteDraft {
+/**
+ * A fresh draft: access closed, read-only senders. Acknowledgement is off, except on a Telegram channel
+ * where it starts on with the model as the source (the server applies the same default to a route created
+ * without an `ack`: `services/channel-ack-default.ts`).
+ */
+export function newDraft(channelId = "", agentId = "", platform?: string): RouteDraft {
+  const telegram = platform === "telegram";
   return {
     id: "",
     enabled: true,
@@ -112,11 +117,11 @@ export function newDraft(channelId = "", agentId = ""): RouteDraft {
     maxTurnsPerHour: "",
     maxTurnsPerSenderPerHour: "",
     maxIterations: "",
-    ackOn: false,
+    ackOn: telegram,
     ackAfterMs: "",
     ackText: "",
     ackTyping: true,
-    ackSource: "canned",
+    ackSource: telegram ? "model" : "canned",
     ackModelTimeoutMs: "",
   };
 }

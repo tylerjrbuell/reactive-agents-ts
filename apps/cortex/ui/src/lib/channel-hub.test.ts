@@ -155,3 +155,13 @@ describe("routesToAgent", () => {
     expect(routesToAgent("a", rs).map((r) => r.id)).toEqual(["a", "b"]);
   });
 });
+
+describe("telegram acknowledgement default", () => {
+  it("a new Telegram draft starts with a model ack; other channels start off", () => {
+    const tg = newDraft("ch-1", "gw-1", "telegram");
+    expect([tg.ackOn, tg.ackSource]).toEqual([true, "model"]);
+    expect(routeFromDraft({ ...tg, id: "r" }).ack).toMatchObject({ source: "model" });
+    const sig = newDraft("ch-1", "gw-1", "signal");
+    expect([sig.ackOn, sig.ackSource]).toEqual([false, "canned"]);
+  });
+});

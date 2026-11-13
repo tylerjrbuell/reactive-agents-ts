@@ -39,6 +39,7 @@ import {
 import { mergeCortexUiToolNames } from "./cortex-agent-config.js";
 import { parseCortexChannels, parseCortexGatewayConfig, type CortexChannelEntry } from "./channel-config.js";
 import { shellExecuteRequested } from "./cortex-to-agent-config.js";
+import { withDefaultAck } from "./channel-ack-default.js";
 
 /** Caps a migrated `open` route gets (the framework refuses an open route without all three). */
 export const MIGRATED_OPEN_CAPS = { maxCostPerDayUsd: 25, maxTurnsPerHour: 120, maxTurnsPerSenderPerHour: 60 } as const;
@@ -147,7 +148,7 @@ const routeFor = (agent: MigrationAgent, entry: CortexChannelEntry): { spec: Rou
     maxTurnsPerSenderPerHour: open ? MIGRATED_OPEN_CAPS.maxTurnsPerSenderPerHour : MIGRATED_SENDER_TURNS_PER_HOUR,
     ...(open ? { maxTurnsPerHour: MIGRATED_OPEN_CAPS.maxTurnsPerHour, maxCostPerDayUsd: MIGRATED_OPEN_CAPS.maxCostPerDayUsd } : {}),
   };
-  return { spec, warnings };
+  return { spec: withDefaultAck(spec, entry.kind), warnings };
 };
 
 /** The plan for `agents`: pure, nothing is written. A re-run over unchanged agents yields the same plan. */

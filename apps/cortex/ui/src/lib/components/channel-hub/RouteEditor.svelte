@@ -50,7 +50,11 @@
   // The editor is keyed per route by its parent: props are read once, as the starting point of the edit.
   const creating = untrack(() => !saved);
   let draft = $state<RouteDraft>(
-    untrack(() => (saved ? draftFromRoute(saved) : newDraft(initial?.channelId ?? channels[0]?.id ?? "", initial?.agentId ?? agents[0]?.agentId ?? ""))),
+    untrack(() => {
+      if (saved) return draftFromRoute(saved);
+      const channelId = initial?.channelId ?? channels[0]?.id ?? "";
+      return newDraft(channelId, initial?.agentId ?? agents[0]?.agentId ?? "", channels.find((c) => c.id === channelId)?.platform);
+    }),
   );
   let busy = $state(false);
   let serverError = $state<string | null>(null);
