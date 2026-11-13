@@ -11,7 +11,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 /** One line of the feed, newest first in a snapshot. */
 export interface HubActivity {
   readonly at: number;
-  readonly kind: "matched" | "denied" | "unrouted" | "answered" | "acknowledged" | "failed" | "dropped" | "conflict" | "edited";
+  readonly kind: "matched" | "denied" | "unrouted" | "answered" | "acknowledged" | "failed" | "dropped" | "conflict" | "edited" | "reset";
   readonly channelId?: string;
   readonly routeId?: string;
   /** Plain-words detail: the role, the drop reason, the failure reason. */
@@ -102,6 +102,15 @@ export class HubActivityTracker {
       case "ChannelTurnDropped":
         this.bump(event.routeId, { dropped: 1 });
         this.note({ kind: "dropped", routeId: event.routeId, detail: event.reason, simulated: event.simulated });
+        return;
+      case "ChannelConversationReset":
+        // Classification only: the command text never reaches the event, and neither does any history.
+        this.note({
+          kind: "reset",
+          routeId: event.routeId,
+          detail: event.ok ? `conversation reset (${event.role})` : `conversation reset failed (${event.role})${event.reason ? `: ${event.reason}` : ""}`,
+          simulated: event.simulated,
+        });
         return;
       case "ChannelOwnershipChanged":
         this.note({ kind: "conflict", channelId: event.channelId, detail: "another consumer owns this account; the channel was stopped" });

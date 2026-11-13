@@ -72,6 +72,8 @@ export interface ChannelHubOptions {
   readonly prepare?: (params: BuildCortexAgentParams, ctx: { readonly agentId: string; readonly role: "owner" | "sender" }) => BuildCortexAgentParams;
   /** Test seam passed to the resolver: the built config of each (route, role) agent. */
   readonly onBuilt?: HubResolverDeps["onBuilt"];
+  /** Test seam passed to the resolver: each built agent (a test reads its persisted session history). */
+  readonly onAgent?: HubResolverDeps["onAgent"];
   /** Meter options (`maxMessagesPerDay`, `reserveUsd`); default none. */
   readonly meter?: Parameters<typeof makeDurableRouteMeter>[1];
 }
@@ -209,6 +211,7 @@ export class ChannelHub {
       toBuildParams: opts.toBuildParams,
       ...(opts.prepare ? { prepare: opts.prepare } : {}),
       ...(opts.onBuilt ? { onBuilt: opts.onBuilt } : {}),
+      ...(opts.onAgent ? { onAgent: opts.onAgent } : {}),
       onTurnFailed: (f) => this.tracker.noteCause(f.routeId, f.detail),
     });
     this.makeAdapters =

@@ -26,6 +26,7 @@
   } from "$lib/channel-hub.js";
   import { saveHubRoute, type AgentChoice, type HubChannelRow } from "$lib/channel-hub-api.js";
   import AckFields from "./AckFields.svelte";
+  import ResetFields from "./ResetFields.svelte";
   import SenderChips from "./SenderChips.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Field from "$lib/components/kit/Field.svelte";
@@ -178,6 +179,7 @@
     </fieldset>
 
     {#if !isWebhook}<AckFields bind:draft />{/if}
+    {#if !isWebhook && draft.session === "per-conversation"}<ResetFields bind:draft />{/if}
 
     {#if showProblems && problems.length > 0}
       <ul class="re-problems" role="alert">{#each problems as p (p)}<li>{p}</li>{/each}</ul>

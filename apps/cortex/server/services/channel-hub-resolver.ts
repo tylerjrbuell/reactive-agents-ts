@@ -16,6 +16,10 @@
  * tool-less side completion over the built agent's runtime (`makeAcknowledge`), outside the chat turn gate and
  * never in history. Both fail soft (the router then uses the canned text).
  *
+ * Owner `/new` (`RoutedSession.reset`): the session is ended (flushing, then dropping its in-memory history) and
+ * the persisted copy in the agent's memory db is emptied (`channel-hub-history.ts`), so a reopen starts empty even
+ * after a restart. A failure is a `turn_failed` with no text; the router then tells the owner it did not work.
+ *
  * Sender text goes to the agent as the user message only; the persona stays in the agent's own config.
  */
 import { Effect } from "effect";
@@ -32,6 +36,7 @@ import { HubAgentBuildError } from "../errors.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { parseRouteTarget } from "../db/channel-hub-queries.js";
 import { sanitizedCause } from "./channel-hub-failure.js";
+import { clearPersistedHistory } from "./channel-hub-history.js";
 import { cortexAgentBuilder, type BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { narrowCortexParams, surfaceViolations } from "./channel-tool-surface.js";
 import { normalizeCortexAgentConfig } from "./cortex-agent-config.js";
@@ -54,6 +59,8 @@ export interface HubResolverDeps {
   readonly persistSessions?: boolean;
   /** Called once per built (route, role) agent with the BUILT config: a diagnostic and test seam. */
   readonly onBuilt?: (info: { readonly routeId: string; readonly role: "owner" | "sender"; readonly agentId: string; readonly config: AgentConfig }) => void;
+  /** Called once per built agent, after the build: a test seam (a test reads the agent's persisted session history). */
+  readonly onAgent?: (agent: HubAgent) => void;
   /** Called when a turn or an agent build fails, with the sanitized cause (message only, no secrets): feeds the activity line. */
   readonly onTurnFailed?: (info: { readonly routeId: string; readonly role: "owner" | "sender"; readonly detail: string }) => void;
 }
@@ -101,6 +108,7 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
     }
     deps.onBuilt?.({ routeId: req.routeId, role: req.role, agentId, config: builder.toConfig() });
     const agent = await builder.build();
+    deps.onAgent?.(agent);
     const ingest = await Effect.runPromise(CortexIngestService.pipe(Effect.provide(deps.ingestLayer)));
     const entry = built.get(`${req.routeId}:${req.role}`);
     const unsubscribe = await agent.subscribe((event) => {
@@ -199,6 +207,27 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
             }),
             Effect.orElseSucceed(() => ""),
           ),
+        // Stateless routes keep no history, so there is nothing to reset (the router skips them too).
+        ...(req.stateless
+          ? {}
+          : {
+              reset: agentFor(req).pipe(
+                Effect.flatMap((agent) =>
+                  Effect.tryPromise({
+                    try: async () => {
+                      await sessionOn(agent).session?.end();
+                      if (deps.persistSessions ?? true) await clearPersistedHistory(agent, sessionId);
+                    },
+                    catch: (cause) => cause,
+                  }),
+                ),
+                Effect.mapError((cause) => {
+                  // Not `reportFailure`: its cause would wait in the tracker for the next failed turn's line.
+                  cortexLog("warn", "channels", `Route ${req.routeId} (${req.role}): conversation reset failed`, { routeId: req.routeId, role: req.role, detail: sanitizedCause(cause) });
+                  return new RoutingError({ reason: "turn_failed", message: `route ${req.routeId}: conversation reset failed`, routeId: req.routeId });
+                }),
+              ),
+            }),
         close: Effect.void,
       } satisfies RoutedSession;
     });

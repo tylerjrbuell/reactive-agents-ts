@@ -9,6 +9,7 @@
  * is left exactly as saved: `routeFromDraft(draft, saved)` starts from the saved route.
  */
 import { normalizeSender, senderProblem } from "./channel-access.js";
+import { resetDraftFromWire, resetProblems, resetWireFromDraft, type ResetDraft } from "./channel-reset-commands.js";
 
 /** What non-owner senders may do, as the framework's tagged union. */
 export type SenderToolsWire = { _tag: "ReadOnly" } | { _tag: "AgentDefault" } | { _tag: "Allowlist"; tools: string[] };
@@ -48,6 +49,8 @@ export interface HubRouteWire {
   maxTurnsPerHour?: number;
   maxCostPerDayUsd?: number;
   ack?: AckWire | false;
+  /** Owner messages that clear the conversation (default `/new`, `/reset`; `[]` = none). See `channel-reset-commands.ts`. */
+  resetCommands?: string[];
   /** Set by the server on a route imported from an agent's own channel config. */
   migratedFrom?: string | null;
 }
@@ -63,7 +66,7 @@ export const MODEL_TIMEOUT_RANGE = { min: 1, max: 10_000 } as const;
 export type MatchWhen = "any" | "mention" | "command" | "keyword";
 
 /** The editor's flat form of a route. Numbers are strings while typed. */
-export interface RouteDraft {
+export interface RouteDraft extends ResetDraft {
   id: string;
   enabled: boolean;
   channelId: string;
@@ -123,6 +126,7 @@ export function newDraft(channelId = "", agentId = "", platform?: string): Route
     ackTyping: true,
     ackSource: telegram ? "model" : "canned",
     ackModelTimeoutMs: "",
+    ...resetDraftFromWire(undefined),
   };
 }
 
@@ -158,6 +162,7 @@ export function draftFromRoute(r: HubRouteWire): RouteDraft {
     ackTyping: ack?.typing !== false,
     ackSource: ack?.source ?? "canned",
     ackModelTimeoutMs: num(ack?.modelTimeoutMs),
+    ...resetDraftFromWire(r.resetCommands),
   };
 }
 
@@ -213,8 +218,10 @@ function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
     maxTurnsPerHour: _t,
     maxTurnsPerSenderPerHour: _s,
     maxIterations: _i,
+    resetCommands: _r,
     ...rest
   } = base;
+  const resetCommands = resetWireFromDraft(d);
   return {
     ...rest,
     id: d.id.trim(),
@@ -232,6 +239,7 @@ function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
     ...opt("maxTurnsPerSenderPerHour", d.maxTurnsPerSenderPerHour),
     ...opt("maxIterations", d.maxIterations),
     ack,
+    ...(resetCommands ? { resetCommands } : {}),
   };
 }
 
@@ -260,6 +268,7 @@ export function draftProblems(d: RouteDraft, creating: boolean): string[] {
   positive("Turns per sender per hour", d.maxTurnsPerSenderPerHour, d.open);
   positive("Max iterations", d.maxIterations, false);
   if (d.senderTools === "AgentDefault" && d.owners.length === 0) out.push("Full agent tools for senders needs at least one owner, who approves risky tools.");
+  out.push(...resetProblems(d));
   if (d.ackOn) {
     const after = toNum(d.ackAfterMs);
     if (after !== undefined && !(after >= 0)) out.push("Acknowledge after must be zero or more milliseconds.");
