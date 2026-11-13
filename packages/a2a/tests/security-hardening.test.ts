@@ -127,3 +127,42 @@ describe("A2A discovery egress", () => {
     expect(exit._tag).toBe("Failure");
   });
 });
+
+describe("A2A client RPC does not follow redirects", () => {
+  it("RED-ON-CUT: a 302 from the RPC endpoint is not followed (X-API-Key must not leak to the target)", async () => {
+    let targetHit = false;
+    let leakedKey: string | null = null;
+    const target = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: (req) => {
+        targetHit = true;
+        leakedKey = req.headers.get("x-api-key");
+        return Response.json({ jsonrpc: "2.0", id: "x", result: {} });
+      },
+    });
+    const redirector = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () => new Response(null, { status: 302, headers: { Location: `http://127.0.0.1:${target.port}/` } }),
+    });
+    servers.push(target, redirector);
+
+    const exit = await Effect.runPromiseExit(
+      Effect.gen(function* () {
+        const client = yield* A2AClient;
+        return yield* client.getTask({ id: "t1" });
+      }).pipe(
+        Effect.provide(
+          createA2AClient({
+            baseUrl: `http://127.0.0.1:${redirector.port}/`,
+            auth: { type: "apiKey", apiKey: "secret-key" },
+          }),
+        ),
+      ),
+    );
+    expect(exit._tag).toBe("Failure");
+    expect(targetHit).toBe(false);
+    expect(leakedKey).toBeNull();
+  });
+});

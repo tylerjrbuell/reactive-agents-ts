@@ -36,6 +36,9 @@ export const createA2AClient = (config: ClientConfig) =>
           try: async () => {
             const response = await fetch(`${config.baseUrl}`, {
               method: "POST",
+              // A redirect would forward X-API-Key (and Bearer on same-origin hops) to a host the
+              // caller never configured; refuse it.
+              redirect: "error",
               headers: {
                 "Content-Type": "application/json",
                 ...(config.auth?.type === "bearer" && { Authorization: `Bearer ${config.auth.token}` }),
