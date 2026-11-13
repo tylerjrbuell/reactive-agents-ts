@@ -14,6 +14,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 import type { AgentSession, SessionOptions } from "../chat.js";
 import {
   bootstrapGateway,
+  type GLog,
   type BootstrapRuntimeR,
 } from "./gateway-bootstrap.js";
 import { makeExecuteEvent } from "./execute-event.js";
@@ -28,6 +29,7 @@ import { makeScheduleReporter } from "./gateway-schedule-report.js";
 import { startRuntimeIngress } from "./gateway-ingress.js";
 import type { GatewayEvent } from "@reactive-agents/gateway";
 import { makeGatewayTick } from "./gateway-tick.js";
+import { makeGatewayLifecycle } from "./gateway-lifecycle.js";
 import {
   subscribeChannelHandler,
   buildGatewayHandle,
@@ -35,7 +37,6 @@ import {
 } from "./gateway-driver.js";
 import { createChatManager } from "./chat-manager-factory.js";
 import {
-  GatewayChatManager,
   channelOutboundToolGuidance,
 } from "../gateway-context-formatting.js";
 import type { ChannelsConfig } from "../channels-config.js";
@@ -167,16 +168,18 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
   }
 
   let stopped = false;
-  let timer: ReturnType<typeof setInterval> | null = null;
   let heartbeatsFired = 0;
   let totalRuns = 0;
   let cronChecks = 0;
   let chatTurns = 0;
   let lastCompactionAt = 0;
   let resolveStop: ((summary: GatewaySummary) => void) | null = null;
-  let unsubChannel: (() => void) | null = null;
-  let chatManagerRef: GatewayChatManager | null = null;
-  let channelAdaptersCleanup: (() => Promise<void>) | null = null;
+  let startupLog: GLog | null = null;
+  // One scope for everything startup acquires: stop() closes it at any point, and a resource
+  // that lands after stop() is torn down on registration.
+  const lifecycle = makeGatewayLifecycle((label, err) =>
+    startupLog?.("warn", `gateway cleanup "${label}" failed: ${String(err)}`),
+  );
 
   const stopPromise = new Promise<GatewaySummary>((resolve) => {
     resolveStop = resolve;
@@ -212,7 +215,10 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     }
 
     const { gw, sched, eb, glog } = bootstrap;
-    channelAdaptersCleanup = bootstrap.channelAdaptersCleanup;
+    startupLog = glog;
+    const adaptersCleanup = bootstrap.channelAdaptersCleanup;
+    if (adaptersCleanup) await lifecycle.onClose("channel-adapters", adaptersCleanup);
+    if (stopped) return;
     if (channelsCfg?.routes && channelsCfg.routes.length > 0) {
       try {
         const host = await startChannelRouterHost({
@@ -221,14 +227,28 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
           ...(eb !== null ? { eventBus: { publish: (e: AgentEvent) => eb.publish(e) as Effect.Effect<void, never> } } : {}),
         });
         routerHosts.set(self, host);
-        channelAdaptersCleanup = async () => {
+        await lifecycle.onClose("channel-router", async () => {
           routerHosts.delete(self);
           await host.stop();
-        };
+        });
       } catch (err) {
-        glog("error", `channel router failed to start: ${String(err)}`);
+        // Routes are configured, so the router is the inbound path: a gateway without it would
+        // look healthy while receiving nothing. Fail closed and report why in the summary.
+        const message = `channel router failed to start: ${String(err)}`;
+        glog("error", message);
+        stopped = true;
+        await lifecycle.close();
+        (resolveStop as ((s: GatewaySummary) => void) | null)?.({
+          heartbeatsFired,
+          totalRuns,
+          cronChecks,
+          chatTurns,
+          error: message,
+        });
+        throw err;
       }
     }
+    if (stopped) return;
 
     // Helper to publish events safely
     const publish = async (event: AgentEvent) => {
@@ -301,7 +321,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
       runtime: self.runtime,
       executeEvent,
     });
-    chatManagerRef = chatManager;
+    await lifecycle.onClose("chat-manager", () => chatManager.dispose());
 
     const tick = makeGatewayTick({
       runtime: self.runtime,
@@ -324,7 +344,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     });
 
     // Subscribe to channel messages from MCP servers for push-based messaging
-    unsubChannel = await subscribeChannelHandler({
+    const unsubChannel = await subscribeChannelHandler({
       eb,
       gw,
       glog,
@@ -341,6 +361,9 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
       },
     });
 
+    await lifecycle.onClose("channel-subscription", unsubChannel);
+    if (stopped) return;
+
     // Serve GatewayConfig.port/webhooks (+ webhook-capable channel adapters).
     // Verified events enter the bounded queue; stop() closes the server first.
     const ingress = await startRuntimeIngress({
@@ -350,15 +373,11 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
       processEvent: (event) => self.runtime.runPromise(gw.processEvent(event)),
       glog,
     });
-    if (ingress) {
-      const adaptersCleanup = channelAdaptersCleanup;
-      channelAdaptersCleanup = async () => {
-        await ingress.stop();
-        await adaptersCleanup?.();
-      };
-    }
+    if (ingress) await lifecycle.onClose("ingress", ingress.stop);
+    if (stopped) return;
 
-    timer = setInterval(tick, gatewayIntervalMs);
+    const timer = setInterval(tick, gatewayIntervalMs);
+    await lifecycle.onClose("heartbeat-timer", () => clearInterval(timer));
 
     // Run first tick — skip immediate execution when using default heartbeat
     // instruction (avoids confused first run with no context)
@@ -379,10 +398,7 @@ export const startGateway = (self: ReactiveAgentGatewayView): GatewayHandle => {
     setStopped: (v) => {
       stopped = v;
     },
-    getTimer: () => timer,
-    getUnsubChannel: () => unsubChannel,
-    getChannelAdaptersCleanup: () => channelAdaptersCleanup,
-    getChatManager: () => chatManagerRef,
+    closeResources: lifecycle.close,
     resolveStop: (s) => {
       resolveStop?.(s);
     },

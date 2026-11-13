@@ -6,7 +6,8 @@
  * the agent's gateway handle. Router state lives in memory unless the config supplies a durable
  * store; the host warns at startup when it does not.
  */
-import { Effect, Exit, Scope } from "effect";
+import { Effect } from "effect";
+import { runTyped, startScoped, type Started } from "./start-scoped.js";
 import {
   createChannelRouter,
   isChannelAdapter,
@@ -56,27 +57,36 @@ export const startChannelRouterHost = async (deps: ChannelRouterHostDeps): Promi
     ...(config.persistSessions !== undefined ? { persist: config.persistSessions } : {}),
     ...(deps.build ? { build: deps.build } : {}),
   });
-  const scope = Effect.runSync(Scope.make());
-  const stop = async (): Promise<void> => {
-    await Effect.runPromise(Scope.close(scope, Exit.void));
-    await Effect.runPromise(resolver.disposeAll);
+  // disposeAll always runs, even when closing the router scope fails.
+  const disposeAfter = async (close: () => Promise<void>): Promise<void> => {
+    try {
+      await close();
+    } finally {
+      await Effect.runPromise(resolver.disposeAll);
+    }
   };
+  let started: Started<ChannelRouter>;
   try {
-    const router = await Effect.runPromise(
-      Scope.extend(
-        createChannelRouter({
-          channels: adapters,
-          routes: config.routes ?? [],
-          agents: resolver,
-          ...(config.store ? { store: config.store } : {}),
-          ...(config.leases ? { leases: config.leases } : {}),
-          ...(config.meter ? { meter: makeRouteMeter(config.meter) } : {}),
-          ...(deps.eventBus ? { eventBus: deps.eventBus } : {}),
-        }),
-        scope,
-      ),
+    started = await startScoped(
+      createChannelRouter({
+        channels: adapters,
+        routes: config.routes ?? [],
+        agents: resolver,
+        ...(config.store ? { store: config.store } : {}),
+        ...(config.leases ? { leases: config.leases } : {}),
+        ...(config.meter ? { meter: makeRouteMeter(config.meter) } : {}),
+        ...(deps.eventBus ? { eventBus: deps.eventBus } : {}),
+      }),
     );
-    const status = await Effect.runPromise(router.status);
+  } catch (error) {
+    // startScoped already closed the router scope; dispose any agents built before the failure.
+    await Effect.runPromise(resolver.disposeAll);
+    return Promise.reject(error);
+  }
+  const stop = (): Promise<void> => disposeAfter(started.stop);
+  const router = started.value;
+  try {
+    const status = await runTyped(router.status);
     if (!status.durableStore) {
       deps.log("warn", "channel router store is in-memory: message dedupe and turn budgets reset on restart");
     }
@@ -84,6 +94,6 @@ export const startChannelRouterHost = async (deps: ChannelRouterHostDeps): Promi
     return { router, stop };
   } catch (error) {
     await stop();
-    throw error;
+    return Promise.reject(error);
   }
 };

@@ -6,9 +6,8 @@
  * GatewayHandle that the caller uses to stop the loop and read
  * the final summary.
  *
- * The stop() handler runs the full cleanup chain in order:
- * stopped=true → clearInterval → unsubChannel → channelAdaptersCleanup
- * → chatManager.dispose → assemble summary → resolveStop.
+ * The stop() handler sets stopped=true, closes the gateway lifecycle scope
+ * (gateway-lifecycle.ts), assembles the summary and resolves `done`.
  *
  * Lifted from builder.ts pre-W25 (6,232-LOC checkpoint).
  */
@@ -17,6 +16,7 @@ import { Effect, type Context, type ManagedRuntime } from 'effect'
 import type { EventBus } from '@reactive-agents/core'
 import type { GatewayService as GatewayServiceTag } from '@reactive-agents/gateway'
 import type { GatewayChatManager } from '../gateway-context-formatting.js'
+import { deliveryKey, makeDeliveryDedup } from './channel-dedup.js'
 import type {
     GatewayHandle,
     GatewaySummary,
@@ -96,10 +96,9 @@ export const subscribeChannelHandler = async (
 
     if (!eb) return () => {}
 
-    // Dedup guard: track recently processed messages to prevent feedback loops
-    // (e.g., agent reply echo arriving as syncMessage before MCP-level filter)
-    const recentMessageHashes = new Set<string>()
-    const MESSAGE_DEDUP_TTL = 30_000 // 30s window
+    // Dedup guard: suppress the same delivery arriving twice (e.g., agent reply echo arriving as
+    // syncMessage before the MCP-level filter). Keyed by delivery identity, never message text alone.
+    const dedup = Effect.runSync(makeDeliveryDedup(30_000))
 
     try {
         const unsub = await runtime.runPromise(
@@ -119,20 +118,14 @@ export const subscribeChannelHandler = async (
                         return
                     }
 
-                    // Dedup: skip if we've seen this exact sender+message recently
-                    const msgHash = `${event.sender}:${event.message}`
-                    if (recentMessageHashes.has(msgHash)) {
+                    // Dedup: skip a delivery we have already seen
+                    if (yield* dedup.seen(deliveryKey(event))) {
                         glog(
                             'debug',
                             `channel → dedup skip from ${event.sender}`
                         )
                         return
                     }
-                    recentMessageHashes.add(msgHash)
-                    setTimeout(
-                        () => recentMessageHashes.delete(msgHash),
-                        MESSAGE_DEDUP_TTL
-                    )
 
                     const gwEvent = {
                         id: `ch-${Date.now()}-${Math.random()
@@ -238,12 +231,8 @@ export const subscribeChannelHandler = async (
  */
 export interface BuildGatewayHandleDeps {
     readonly setStopped: (v: boolean) => void
-    readonly getTimer: () => ReturnType<typeof setInterval> | null
-    readonly getUnsubChannel: () => (() => void) | null
-    readonly getChannelAdaptersCleanup: () =>
-        | (() => Promise<void>)
-        | null
-    readonly getChatManager: () => GatewayChatManager | null
+    /** Close the gateway's resource scope (timer, subscription, router, ingress, chat manager). */
+    readonly closeResources: () => Promise<void>
     readonly resolveStop: (summary: GatewaySummary) => void
     readonly stopPromise: Promise<GatewaySummary>
     readonly getCounters: () => {
@@ -255,33 +244,20 @@ export interface BuildGatewayHandleDeps {
 }
 
 /**
- * Build the GatewayHandle. Stop() runs the cleanup chain in order:
- * stopped=true → clearInterval → unsubChannel → channelAdaptersCleanup
- * → chatManager.dispose → assemble summary → resolveStop.
+ * Build the GatewayHandle. Stop() sets stopped=true, closes the resource scope (cleanups run
+ * newest first; a resource still being acquired is torn down as it lands), then assembles the
+ * summary and resolves `done`.
  */
 export const buildGatewayHandle = (
     deps: BuildGatewayHandleDeps
 ): GatewayHandle => {
-    const {
-        setStopped,
-        getTimer,
-        getUnsubChannel,
-        getChannelAdaptersCleanup,
-        getChatManager,
-        resolveStop,
-        stopPromise,
-        getCounters,
-    } = deps
+    const { setStopped, closeResources, resolveStop, stopPromise, getCounters } =
+        deps
 
     return {
         stop: async () => {
             setStopped(true)
-            const timer = getTimer()
-            if (timer) clearInterval(timer)
-            getUnsubChannel()?.()
-            await getChannelAdaptersCleanup()?.()
-            const chatManager = getChatManager()
-            if (chatManager) await chatManager.dispose()
+            await closeResources()
             const summary: GatewaySummary = getCounters()
             resolveStop(summary)
             return summary

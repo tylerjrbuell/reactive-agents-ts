@@ -8,8 +8,9 @@
  * the enqueue, never for the agent run.
  */
 
-import { Effect, Exit, Scope } from 'effect'
+import { Effect } from 'effect'
 import type { GatewayConfig, GatewayEvent, IngressServer } from '@reactive-agents/gateway'
+import { startScoped } from './start-scoped.js'
 import type { GLog } from './gateway-bootstrap.js'
 import type { GatewayInboundQueue } from './gateway-inbound-queue.js'
 
@@ -42,6 +43,12 @@ const hasWebhook = (a: unknown): a is WebhookCapableAdapter =>
     typeof (a as { handleWebhook?: unknown }).handleWebhook === 'function' &&
     typeof (a as { id?: unknown }).id === 'string'
 
+/** The webhook payload's `metadata.instruction` when it is a string; anything else is ignored. */
+export const instructionOf = (event: GatewayEvent): string | undefined => {
+    const instruction = event.metadata['instruction']
+    return typeof instruction === 'string' ? instruction : undefined
+}
+
 export interface StartIngressDeps {
     readonly config: GatewayIngressConfig
     readonly adapters: readonly unknown[]
@@ -72,21 +79,21 @@ export const startRuntimeIngress = async (
         handle: (req: { body: string; headers: Record<string, string> }) =>
             adapter.handleWebhook(req),
     }))
-    const scope = Effect.runSync(Scope.make())
     const onEvent = (event: GatewayEvent): Effect.Effect<void> =>
         Effect.promise(async () => {
             const decision = await deps.processEvent(event)
+            const instruction = instructionOf(event)
             if (decision.action === 'execute') {
-                const instruction =
-                    typeof event.metadata['instruction'] === 'string'
-                        ? event.metadata['instruction']
-                        : (decision as { taskDescription: string }).taskDescription
-                deps.queue.enqueue(event, event.source, instruction)
+                deps.queue.enqueue(
+                    event,
+                    event.source,
+                    instruction ?? (decision as { taskDescription: string }).taskDescription
+                )
             } else if (decision.action === 'queue') {
                 await deps.queue.defer(
                     event,
                     event.source,
-                    (event.metadata['instruction'] as string | undefined) ?? `${event.source} event ${event.id}`,
+                    instruction ?? `${event.source} event ${event.id}`,
                     (decision as { reason: string }).reason
                 )
             } else {
@@ -94,21 +101,15 @@ export const startRuntimeIngress = async (
             }
         })
     try {
-        const server = await Effect.runPromise(
-            Scope.extend(
-                startGatewayIngress({ ...gatewayConfig, port: gatewayConfig.port ?? DEFAULT_GATEWAY_PORT }, { onEvent, channelRoutes }),
-                scope
-            )
+        const { value: server, stop } = await startScoped(
+            startGatewayIngress({ ...gatewayConfig, port: gatewayConfig.port ?? DEFAULT_GATEWAY_PORT }, { onEvent, channelRoutes })
         )
         if (!server) {
-            await Effect.runPromise(Scope.close(scope, Exit.void))
+            await stop()
             return null
         }
         deps.glog('info', `ingress listening on ${server.url}`)
-        return {
-            server,
-            stop: () => Effect.runPromise(Scope.close(scope, Exit.void)),
-        }
+        return { server, stop }
     } catch (err) {
         deps.glog('warn', `ingress failed to start on port ${deps.config.port ?? DEFAULT_GATEWAY_PORT}: ${String(err)}`)
         return null

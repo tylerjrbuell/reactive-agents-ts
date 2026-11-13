@@ -8,7 +8,8 @@
  * deliberately does not reuse the gateway-bootstrap agent factory, which concatenates persona and
  * message into one user string.
  */
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
+import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { RoutingError } from "@reactive-agents/channels";
 import type { AgentResolver, OpenSessionRequest, RoutedReply, RoutedSession } from "@reactive-agents/channels";
 import type { ReactiveAgentBuilder } from "../builder.js";
@@ -83,7 +84,20 @@ export const makeChannelAgentResolver = (options: ChannelAgentResolverOptions): 
       const agent = yield* agentFor(req);
       const sessionId = `${req.routeId}:${req.role}:${req.conversationKey}`;
       const session = req.stateless ? undefined : agent.session({ id: sessionId, persist: options.persist ?? true });
-      yield* Effect.addFinalizer(() => Effect.promise(() => session?.end() ?? Promise.resolve()).pipe(Effect.ignore));
+      // A rejecting (or sync-throwing) `end()` is a swallowed, audible failure: it must not die the
+      // scope close and strand the remaining sessions.
+      yield* Effect.addFinalizer(() =>
+        session === undefined
+          ? Effect.void
+          : Effect.tryPromise({ try: async () => session.end(), catch: (cause) => cause }).pipe(
+              Effect.catchAllCause((cause) =>
+                emitErrorSwallowed({
+                  site: "runtime/src/agent/channel-router-resolver.ts:session.end",
+                  tag: errorTag(Cause.squash(cause)),
+                }),
+              ),
+            ),
+      );
       const turnFailed = (cause: unknown): RoutingError =>
         new RoutingError({ reason: "turn_failed", message: `route ${req.routeId}: turn failed`, routeId: req.routeId, cause });
       return {
