@@ -14,6 +14,8 @@ import { RoutingError } from "@reactive-agents/channels";
 import type { AgentResolver, OpenSessionRequest, RoutedReply, RoutedSession } from "@reactive-agents/channels";
 import type { ReactiveAgentBuilder } from "../builder.js";
 import { narrowToolSurface } from "./channel-tool-narrowing.js";
+import { drainWithNarration, makeAcknowledge, toChannelHandle } from "./channel-ack-ports.js";
+import type { AgentStreamEvent } from "../stream-types.js";
 
 /** Builds a fresh builder for a route target; called once per (routeId, role). */
 export type ChannelAgentFactory = () => ReactiveAgentBuilder;
@@ -25,7 +27,18 @@ export interface ChannelAgentHandle {
   readonly session: (options: { readonly id: string; readonly persist: boolean }) => {
     readonly chat: (text: string) => Promise<{ readonly message: string; readonly tokens?: number; readonly cost?: number }>;
     readonly end: () => Promise<void>;
+    /** Optional. Full-density stream of one turn; used to forward pre-tool narration. */
+    readonly runStream?: (text: string, options: { readonly density: "full" }) => AsyncIterable<AgentStreamEvent>;
   };
+  /**
+   * Optional side completion (no tools, no history, outside the session's turn gate). Present means
+   * the session offers `acknowledge` for `ack.source: "model"` routes.
+   */
+  readonly complete?: (params: {
+    readonly systemPrompt: string;
+    readonly messages: ReadonlyArray<{ readonly role: "user" | "assistant"; readonly content: string }>;
+    readonly budgetTokens: number;
+  }) => Promise<{ readonly message: string }>;
   readonly run: (text: string) => Promise<{
     readonly output: string;
     readonly agentId: string;
@@ -55,7 +68,7 @@ const resolveFailed = (req: OpenSessionRequest, message: string, cause?: unknown
 
 /** Create the runtime resolver. */
 export const makeChannelAgentResolver = (options: ChannelAgentResolverOptions): ChannelAgentResolver => {
-  const build = options.build ?? ((b: ReactiveAgentBuilder) => b.build());
+  const build = options.build ?? ((b: ReactiveAgentBuilder) => b.build().then(toChannelHandle));
   const built = new Map<string, Promise<ChannelAgentHandle>>();
 
   const agentFor = (req: OpenSessionRequest): Effect.Effect<ChannelAgentHandle, RoutingError> => {
@@ -104,6 +117,10 @@ export const makeChannelAgentResolver = (options: ChannelAgentResolverOptions): 
         send: (turn) =>
           Effect.tryPromise({
             try: async (): Promise<RoutedReply> => {
+              if (session && turn.onProgress && session.runStream) {
+                const r = await drainWithNarration(session.runStream(turn.text, { density: "full" }), turn.onProgress);
+                return { text: r.text, agentId: agent.agentId, tokens: r.tokens, costUsd: r.cost };
+              }
               if (session) {
                 const r = await session.chat(turn.text);
                 return {
@@ -124,6 +141,7 @@ export const makeChannelAgentResolver = (options: ChannelAgentResolverOptions): 
             },
             catch: turnFailed,
           }),
+        ...(agent.complete ? { acknowledge: makeAcknowledge(agent.complete) } : {}),
         close: Effect.void,
       } satisfies RoutedSession;
     });
