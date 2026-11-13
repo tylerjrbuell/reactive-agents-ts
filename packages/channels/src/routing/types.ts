@@ -50,6 +50,14 @@ export const RouteAck = Schema.Struct({
   text: Schema.optional(Schema.Union(Schema.String, Schema.Array(Schema.String))),
   /** Show a typing indicator from the start of the turn, when the adapter supports it. Default true. */
   typing: Schema.optional(Schema.Boolean),
+  /**
+   * Where the message comes from. `"canned"` (default): the fixed `text`. `"model"`: the agent's own
+   * pre-tool narration if the turn already produced some, else the session's optional `acknowledge`
+   * port, else the canned text. The router never calls a model itself.
+   */
+  source: Schema.optional(Schema.Literal("canned", "model")),
+  /** With `source: "model"`: ms the `acknowledge` port may take before the canned text is used. 1..10 000, default 3000. */
+  modelTimeoutMs: Schema.optional(Schema.Number),
 });
 /** See {@link RouteAck}. */
 export type RouteAck = Schema.Schema.Type<typeof RouteAck>;
@@ -152,6 +160,13 @@ export interface RoutedTurn {
   /** The normalized inbound message (conversation, thread, reply-to, metadata). */
   readonly message: InboundMessage;
   readonly taskId: string;
+  /**
+   * Present only on routes with `ack.source: "model"`. A resolver calls it with the agent's own
+   * pre-tool narration text (for example the text it wrote before its first tool call). The router
+   * uses the latest text pushed before the ack delay as the ack, sanitizes it, and drops anything
+   * pushed after the ack went out. Never throws; text is never recorded as history by the router.
+   */
+  readonly onProgress?: (text: string) => void;
 }
 
 /** The agent's answer to one turn. */
@@ -167,6 +182,13 @@ export interface RoutedReply {
 /** A live conversation with one (route, role) agent. */
 export interface RoutedSession {
   readonly send: (turn: RoutedTurn) => Effect.Effect<RoutedReply, RoutingError>;
+  /**
+   * Optional. With `ack.source: "model"` and no narration yet, the router calls this once while
+   * `send` is still running and sends the text as the acknowledgement. Text only, one short line,
+   * must not touch the session history of the running turn. The router bounds it by
+   * `ack.modelTimeoutMs` and falls back to the canned text.
+   */
+  readonly acknowledge?: (turn: RoutedTurn) => Effect.Effect<string, never>;
   readonly close: Effect.Effect<void>;
 }
 

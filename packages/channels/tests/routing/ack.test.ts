@@ -4,7 +4,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 import type { ChannelAdapter } from "../../src/adapter.js";
 import { TelegramChannelAdapter } from "../../src/adapters/telegram.js";
 import { channelError } from "../../src/errors.js";
-import { pickAckText, resolveAck } from "../../src/routing/ack.js";
+import { MAX_MODEL_ACK_CHARS, pickAckText, resolveAck, sanitizeAckText } from "../../src/routing/ack.js";
 import { makeMemoryLeases } from "../../src/routing/lease.js";
 import { makeRouteMeter } from "../../src/routing/meter.js";
 import { createChannelRouter, type ChannelRouterOptions } from "../../src/routing/router.js";
@@ -199,6 +199,237 @@ describe("route ack", () => {
   });
 });
 
+/** Agent that pushes narration `narrate` ms into a `ms` turn; `acknowledge` is the optional model port. */
+const modelAgent = (opts: {
+  ms: number;
+  narrate?: ReadonlyArray<{ at: number; text: string }>;
+  acknowledge?: () => Effect.Effect<string, never>;
+  calls?: { ack: number; history: string[] };
+}): AgentResolver => ({
+  open: () =>
+    Effect.succeed({
+      send: (turn) =>
+        Effect.gen(function* () {
+          let at = 0;
+          for (const n of opts.narrate ?? []) {
+            yield* Effect.sleep(n.at - at);
+            at = n.at;
+            turn.onProgress?.(n.text);
+          }
+          yield* Effect.sleep(opts.ms - at);
+          opts.calls?.history.push("final");
+          return { text: "final" };
+        }),
+      ...(opts.acknowledge
+        ? {
+            acknowledge: () => {
+              if (opts.calls) opts.calls.ack += 1;
+              return opts.acknowledge!();
+            },
+          }
+        : {}),
+      close: Effect.void,
+    }),
+});
+
+describe("route ack: source model", () => {
+  const modelRoute = (ack: object = {}) => route({ ack: { source: "model", ...ack } as RouteSpecInput["ack"] });
+  const ackEvents = (events: AgentEvent[]) =>
+    events.filter((e): e is Extract<AgentEvent, { _tag: "ChannelTurnAcknowledged" }> => e._tag === "ChannelTurnAcknowledged");
+
+  test("narration produced before afterMs is the ack, sent at afterMs, not earlier", async () => {
+    const t = withTyping();
+    const events: AgentEvent[] = [];
+    const calls = { ack: 0, history: [] as string[] };
+    await runRouter(
+      {
+        channels: [t.adapter],
+        routes: [modelRoute()],
+        agents: modelAgent({
+          ms: 10_000,
+          narrate: [{ at: 1000, text: "**Looking** up the *weather*" }],
+          acknowledge: () => Effect.succeed("port text"),
+          calls,
+        }),
+        eventBus: { publish: (e) => Effect.sync(() => void events.push(e)) },
+      },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(3999);
+        expect(t.texts()).toEqual([]);
+        yield* advance(1);
+        expect(t.texts()).toEqual(["Looking up the weather"]);
+        expect(calls.ack).toBe(0);
+        yield* advance(6000);
+        expect(t.texts()).toEqual(["Looking up the weather", "final"]);
+        expect(ackEvents(events).map((e) => e.source)).toEqual(["narration"]);
+      }),
+    );
+  });
+
+  test("no narration: the acknowledge port text is the ack", async () => {
+    const t = withTyping();
+    const events: AgentEvent[] = [];
+    await runRouter(
+      {
+        channels: [t.adapter],
+        routes: [modelRoute()],
+        agents: modelAgent({ ms: 10_000, acknowledge: () => Effect.succeed("One moment, checking.") }),
+        eventBus: { publish: (e) => Effect.sync(() => void events.push(e)) },
+      },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(4000);
+        expect(t.texts()).toEqual(["One moment, checking."]);
+        yield* advance(6000);
+        expect(t.texts()).toEqual(["One moment, checking.", "final"]);
+        expect(ackEvents(events).map((e) => e.source)).toEqual(["model"]);
+      }),
+    );
+  });
+
+  test("port slower than modelTimeoutMs falls back to canned", async () => {
+    const t = withTyping();
+    const events: AgentEvent[] = [];
+    await runRouter(
+      {
+        channels: [t.adapter],
+        routes: [modelRoute({ modelTimeoutMs: 500 })],
+        agents: modelAgent({ ms: 10_000, acknowledge: () => Effect.zipRight(Effect.sleep(5000), Effect.succeed("late")) }),
+        eventBus: { publish: (e) => Effect.sync(() => void events.push(e)) },
+      },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(4000);
+        expect(t.texts()).toEqual([]);
+        yield* advance(500);
+        expect(t.texts()).toEqual(["On it..."]);
+        yield* advance(6000);
+        expect(t.texts()).toEqual(["On it...", "final"]);
+        expect(ackEvents(events).map((e) => e.source)).toEqual(["canned"]);
+      }),
+    );
+  });
+
+  test("port defect or empty text falls back to canned", async () => {
+    for (const acknowledge of [() => Effect.die("boom") as Effect.Effect<string, never>, () => Effect.succeed("  **  ")]) {
+      const t = withTyping();
+      await runRouter(
+        { channels: [t.adapter], routes: [modelRoute()], agents: modelAgent({ ms: 8000, acknowledge }) },
+        Effect.gen(function* () {
+          t.inner.push(env());
+          yield* advance(4000);
+          expect(t.texts()).toEqual(["On it..."]);
+          yield* advance(4000);
+          expect(t.texts()).toEqual(["On it...", "final"]);
+        }),
+      );
+    }
+  });
+
+  test("no narration and no port: canned", async () => {
+    const t = withTyping();
+    await runRouter(
+      { channels: [t.adapter], routes: [modelRoute()], agents: slowAgent(8000) },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(4000);
+        expect(t.texts()).toEqual(["On it..."]);
+      }),
+    );
+  });
+
+  test("source canned ignores narration and the port", async () => {
+    const t = withTyping();
+    const calls = { ack: 0, history: [] as string[] };
+    await runRouter(
+      {
+        channels: [t.adapter],
+        routes: [route({ ack: {} })],
+        agents: modelAgent({ ms: 8000, narrate: [{ at: 100, text: "narrated" }], acknowledge: () => Effect.succeed("port"), calls }),
+      },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(4000);
+        expect(t.texts()).toEqual(["On it..."]);
+        expect(calls.ack).toBe(0);
+      }),
+    );
+  });
+
+  test("narration after the ack went out is dropped: still exactly one ack; quick turn gets none", async () => {
+    const t = withTyping();
+    const events: AgentEvent[] = [];
+    await runRouter(
+      {
+        channels: [t.adapter],
+        routes: [modelRoute()],
+        agents: modelAgent({ ms: 10_000, narrate: [{ at: 6000, text: "too late" }] }),
+        eventBus: { publish: (e) => Effect.sync(() => void events.push(e)) },
+      },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(4000);
+        yield* advance(6000);
+        expect(t.texts()).toEqual(["On it...", "final"]);
+        expect(ackEvents(events).length).toBe(1);
+      }),
+    );
+    const quick = withTyping();
+    await runRouter(
+      {
+        channels: [quick.adapter],
+        routes: [modelRoute()],
+        agents: modelAgent({ ms: 1000, narrate: [{ at: 500, text: "hi" }], acknowledge: () => Effect.succeed("port") }),
+      },
+      Effect.gen(function* () {
+        quick.inner.push(env());
+        yield* advance(20_000);
+        expect(quick.texts()).toEqual(["final"]);
+      }),
+    );
+  });
+
+  test("a port that outlives the turn is interrupted: no ack after the final reply", async () => {
+    const t = withTyping();
+    await runRouter(
+      {
+        channels: [t.adapter],
+        routes: [modelRoute({ modelTimeoutMs: 10_000 })],
+        agents: modelAgent({ ms: 5000, acknowledge: () => Effect.zipRight(Effect.sleep(8000), Effect.succeed("late")) }),
+      },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(5000);
+        yield* advance(20_000);
+        expect(t.texts()).toEqual(["final"]);
+      }),
+    );
+  });
+
+  test("the ack is not agent history: the router never writes it through the session", async () => {
+    const t = withTyping();
+    const sent: string[] = [];
+    const agents: AgentResolver = {
+      open: () =>
+        Effect.succeed({
+          send: (turn) => Effect.zipRight(Effect.sleep(8000), Effect.sync(() => (sent.push(turn.text), { text: "final" }))),
+          acknowledge: () => Effect.succeed("model ack"),
+          close: Effect.void,
+        }),
+    };
+    await runRouter(
+      { channels: [t.adapter], routes: [modelRoute()], agents },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(8000);
+        expect(t.texts()).toEqual(["model ack", "final"]);
+        expect(sent.length).toBe(1);
+      }),
+    );
+  });
+});
+
 describe("route ack: Telegram typing", () => {
   test("sendTyping calls sendChatAction typing in the chat, with the thread when numeric", async () => {
     const fake = makeFakeTelegram();
@@ -220,7 +451,7 @@ describe("route ack: config", () => {
   test("defaults and rotation are deterministic", () => {
     expect(resolveAck(undefined)).toBeUndefined();
     expect(resolveAck(false)).toBeUndefined();
-    expect(resolveAck({})).toEqual({ afterMs: 4000, texts: ["On it..."], typing: true });
+    expect(resolveAck({})).toEqual({ afterMs: 4000, texts: ["On it..."], typing: true, source: "canned", modelTimeoutMs: 3000 });
     expect(pickAckText(["a", "b", "c"], "m1")).toBe(pickAckText(["a", "b", "c"], "m1"));
   });
 
@@ -239,6 +470,22 @@ describe("route ack: config", () => {
     ]) {
       expect((await check(bad))._tag).toBe("Failure");
     }
+  });
+
+  test("source and modelTimeoutMs bounds", async () => {
+    expect((await check({ source: "model", modelTimeoutMs: 1 }))._tag).toBe("Success");
+    expect((await check({ source: "model", modelTimeoutMs: 10_000 }))._tag).toBe("Success");
+    for (const bad of [{ source: "llm" }, { modelTimeoutMs: 0 }, { modelTimeoutMs: 10_001 }, { modelTimeoutMs: 1.5 }]) {
+      expect((await check(bad))._tag).toBe("Failure");
+    }
+  });
+
+  test("sanitizeAckText strips markdown, flattens and caps", () => {
+    expect(sanitizeAckText("**Checking** the `repo`\n\n- see [docs](http://x.y)")).toBe("Checking the repo see docs");
+    expect(sanitizeAckText("```ts\ncode\n```")).toBeUndefined();
+    expect(sanitizeAckText("   ")).toBeUndefined();
+    const long = sanitizeAckText("a".repeat(500)) ?? "";
+    expect(long.length).toBe(MAX_MODEL_ACK_CHARS);
   });
 
   test("webhook routes reject ack", async () => {

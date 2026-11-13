@@ -6,7 +6,7 @@ import { envelopeToInboundMessage, type InboundEnvelope, type SenderGate } from 
 import type { ChannelError } from "../errors.js";
 import type { InboundMessage } from "../types.js";
 import { AdapterHub } from "./adapter-hub.js";
-import { pickAckText, resolveAck, withTurnAck } from "./ack.js";
+import { chooseAckText, pickAckText, resolveAck, withTurnAck } from "./ack.js";
 import type { RouteMeter } from "./meter.js";
 import {
   decideRouteAccess,
@@ -375,7 +375,7 @@ export class RouterEngine {
       const releaseHeld =
         meter && reservationId !== undefined ? meter.release(reservationId) : Effect.void;
       yield* self.emit({ _tag: "ChannelTurnStarted", routeId: route.id, role, simulated });
-      const turn: RoutedTurn = {
+      const baseTurn: RoutedTurn = {
         text: msg.content,
         parts: partsOf(msg),
         sender: {
@@ -388,8 +388,9 @@ export class RouterEngine {
         taskId,
       };
       const attempt = yield* Effect.either(
-        self.acknowledged(route, role, adapterId, msg, taskId, simulated, Effect.gen(function* () {
+        self.acknowledged(route, role, adapterId, msg, taskId, simulated, baseTurn, (turn, noteSession) => Effect.gen(function* () {
           const entry = yield* self.session(key, route, role, adapterId, msg);
+          noteSession(entry.session);
           const send = entry.session.send(turn);
           const bounded = self.deps.strict
             ? send.pipe(
@@ -452,20 +453,39 @@ export class RouterEngine {
     msg: InboundMessage,
     taskId: string,
     simulated: boolean,
-    turn: Effect.Effect<A, E>,
+    baseTurn: RoutedTurn,
+    run: (turn: RoutedTurn, noteSession: (session: RoutedSession) => void) => Effect.Effect<A, E>,
   ): Effect.Effect<A, E> {
     const ack = resolveAck(route.ack);
-    if (!ack || simulated || !this.hub.has(adapterId)) return turn;
+    if (!ack || simulated || !this.hub.has(adapterId)) return run(baseTurn, () => undefined);
+    // Per-turn closure state: the latest narration, the live session, and whether the ack already went out.
+    let narration: string | undefined;
+    let session: RoutedSession | undefined;
+    let sealed = false;
+    const turn: RoutedTurn =
+      ack.source === "model"
+        ? { ...baseTurn, onProgress: (text) => { if (!sealed && typeof text === "string") narration = text; } }
+        : baseTurn;
+    const turnEffect = run(turn, (s) => { session = s; });
     const conversation = {
       channelId: msg.channelId,
       ...(typeof msg.metadata["threadId"] === "string" ? { threadId: msg.metadata["threadId"] } : {}),
     };
     const pulse = this.hub.typingPulse(adapterId, conversation);
-    const sendAck = this.reply(adapterId, msg, pickAckText(ack.texts, msg.id), taskId).pipe(
-      Effect.zipRight(this.emit({ _tag: "ChannelTurnAcknowledged", routeId: route.id, role, simulated })),
+    const sendAck = Effect.gen(this, function* () {
+      sealed = true; // one ack only: narration pushed from here on is dropped
+      const chosen = yield* chooseAckText({
+        ack,
+        canned: pickAckText(ack.texts, msg.id),
+        narration: () => narration,
+        acknowledge: () => session?.acknowledge?.(turn),
+      });
+      yield* this.reply(adapterId, msg, chosen.text, taskId);
+      yield* this.emit({ _tag: "ChannelTurnAcknowledged", routeId: route.id, role, source: chosen.source, simulated });
+    }).pipe(
       Effect.catchAll((error) => emitErrorSwallowed({ site: "channels/src/routing/engine.ts:ack", tag: errorTag(error) })),
     );
-    return withTurnAck(turn, { ack, pulse: pulse?.pipe(Effect.ignore), sendAck });
+    return withTurnAck(turnEffect, { ack, pulse: pulse?.pipe(Effect.ignore), sendAck });
   }
 
   /** Reply through the same adapter. A failed delivery is already counted and published by `deliver`. */

@@ -309,6 +309,8 @@ export type PlatformAgentEvent =
       readonly routeId: string;
       /** Role the sender resolved to on this route. */
       readonly role: string;
+      /** Where the ack text came from: fixed config, the agent's pre-tool narration, or the model port. Absent on older emitters (canned). */
+      readonly source?: "canned" | "narration" | "model";
       /** True when produced by a router simulation (dry run). */
       readonly simulated?: boolean;
     }

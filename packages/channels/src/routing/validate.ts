@@ -10,6 +10,7 @@ const invalid = (routeId: string, message: string): RoutingError =>
 const isPositive = (n: number | undefined): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
 
 const MAX_ACK_AFTER_MS = 120_000;
+const MAX_ACK_MODEL_TIMEOUT_MS = 10_000;
 const MAX_ACK_TEXT = 200;
 const MAX_ACK_TEXTS = 10;
 
@@ -17,6 +18,9 @@ const MAX_ACK_TEXTS = 10;
 const ackProblem = (ack: RouteAck): string | undefined => {
   if (ack.afterMs !== undefined && !(Number.isInteger(ack.afterMs) && ack.afterMs >= 0 && ack.afterMs <= MAX_ACK_AFTER_MS)) {
     return `ack.afterMs must be an integer from 0 to ${MAX_ACK_AFTER_MS}`;
+  }
+  if (ack.modelTimeoutMs !== undefined && !(Number.isInteger(ack.modelTimeoutMs) && ack.modelTimeoutMs >= 1 && ack.modelTimeoutMs <= MAX_ACK_MODEL_TIMEOUT_MS)) {
+    return `ack.modelTimeoutMs must be an integer from 1 to ${MAX_ACK_MODEL_TIMEOUT_MS}`;
   }
   if (ack.text !== undefined) {
     const texts = typeof ack.text === "string" ? [ack.text] : ack.text;

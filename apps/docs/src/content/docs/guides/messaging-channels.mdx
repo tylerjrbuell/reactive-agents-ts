@@ -539,7 +539,32 @@ const route: RouteSpecInput = {
 - **Deterministic and zero-token.** The text is fixed config (1 to 10 entries of at most 200 characters; the same message id always picks the same entry). It is never built from sender text or written by the model.
 - **Not history.** The ack goes straight to the adapter. The agent never sees it, and it is not recorded as an assistant reply.
 - **Only for turns that run.** A turn that finishes before `afterMs`, a denied or dropped message and a turn the meter refuses get no ack. A failed ack is swallowed and reported as `ErrorSwallowed`; it never fails the turn. Acks go through the adapter's normal outbound rate limits, and each one publishes `ChannelTurnAcknowledged` (no text).
+- **Model-written acks (`source: "model"`).** `ack: { source: "model" }` swaps the fixed text for the agent's own words. At `afterMs` the router sends, in order: (1) the agent's latest pre-tool narration, if the turn already produced some; (2) a one-line text from the session's `acknowledge` port, bounded by `modelTimeoutMs` (1 to 10 000, default 3000); (3) the canned text. Narration pushed after the ack went out is dropped, so there is still exactly one ack. Model text is sanitized before sending: markdown stripped, one line, at most 300 characters. A port that fails, times out or returns nothing falls back to canned and never fails the turn. `ChannelTurnAcknowledged` carries `source: "canned" | "narration" | "model"`. The `channels` package never calls a model; the resolver owns that.
 - **Typing support is per adapter.** The optional `ChannelAdapter.sendTyping` is implemented by Telegram (`sendChatAction`, refreshed every 4 seconds until the reply). Adapters without it still send the ack message. Webhook routes reject `ack`.
+
+**For resolver authors.** Two optional ports back `source: "model"`. A resolver that implements neither still gets the canned text.
+
+```typescript
+import { Effect } from "effect";
+import type { AgentResolver } from "@reactive-agents/channels";
+
+const resolver: AgentResolver = {
+  open: () =>
+    Effect.succeed({
+      send: (turn) =>
+        Effect.sync(() => {
+          // 1. Narration: onProgress exists only on source:"model" routes. Call it with the
+          //    text the agent wrote before its first tool call.
+          turn.onProgress?.("Checking the repo");
+          return { text: "done" };
+        }),
+      // 2. Ack port: text only, never fails. Run a tiny side call (no tools, short max tokens)
+      //    and do not append it to the session history.
+      acknowledge: (turn) => Effect.succeed(`One moment, looking at: ${turn.text.slice(0, 40)}`),
+      close: Effect.void,
+    }),
+};
+```
 
 Read state from the agent: `agent.channelStatus()` gives the adapters and session counters (`null` before the gateway starts), `agent.channelRouterStatus()` the router view above (channels, routes, drops, sessions). `agent.gatewayStatus()` carries the inbound queue (`ready`, `deferred`, `capacity`, `overflow`, `dropped`).
 
