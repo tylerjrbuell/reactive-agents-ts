@@ -1,3 +1,17 @@
+# 2026-11-12 (evening) — Security hardening, channel routing, Cortex hub H1, capability chat intent
+
+Source: `git log --since="2026-11-12 00:00"` (77 commits on `dev`).
+
+- Security: shell sed/awk/find escapes, IPv6 SSRF forms, shared redaction, owner-only modes, SHA-pinned CI actions, Cortex ask-before-risky-tools default, channels fail closed, test preload strips provider keys (f3d96abc4).
+- Cortex UI: Config popover + slash menu, kit Select, live goal/loop output, channels and Gateway overview, speech coordinator, Speaches supervisor, notifications, 14 session-control actions, voice speed and spoken answers, structured `request_user_input` (core to UI), web-search keys.
+- Channels: router slice one (86eff8066), SessionBridge lifecycle and RouteMeter (d8c3978b3), `withChannels` routes (d47424258), single consumer and history hygiene (bec4b1a6e), Cortex hub H1 (5112dca74, 4e0ebd7fb). Specs: [[2026-11-12-channel-routing]], [[2026-11-12-chat-session-channels]]; diagnosis [[2026-11-12-telegram-gateway-trace-diagnosis]].
+- Kernel: retrieval tools not counted as landed side effects (795a51884); read-only satisfiability abstention (1521de3f2).
+- Runtime: chat tool intent is capability-based, `.withToolIntent` capability|message|classifier (b64f9855b).
+- In flight, uncommitted: kernel tool-visibility fix; Cortex dropping framework copies.
+- Open: hub UI H2 and chat-session targets (owner: owners-only, queue mid-turn, hold approvals for Cortex, full hub first); ablations pending for three default changes; framework gaps (defineTool `mutatesExternalState`, durable router store, self-target shorthand, sub-agent web-search key inheritance, RouterStatus per-channel error); security leftovers (DNS-rebinding pinning, MCP read-only marking, signal-mcp SDK bump, ra-test-traces leak); live browser checks unconfirmed (Playwright down); 229 pending changesets. Decisions: [[2026-11-12-open-owner-decisions]].
+
+---
+
 # 2026-11-12 — Cortex and gateway overhaul, review and hardening
 
 Multimodal input, Cortex voice/judgment/rich answer/composer, canonical ChannelAdapter with native Signal and Telegram, durable ScheduleRegistry, ingress, inbound queue, deploy hardening, Ollama Cloud key scoping. Specs: `wiki/Architecture/Design-Specs/2026-11-12-cortex-workflows.md`, `...-plugin-system.md`. Decisions: `wiki/Decisions/2026-11-12-*.md`. Audit: `wiki/Research/Audit-Reports-2026-11-12/gateway-channels-deploy-audit.md`. New warden: `gateway-warden`. Breaking: `platform:` prefix on `allowedSenders`/`blockedSenders`. Follow-up: docs sweep, security audit.

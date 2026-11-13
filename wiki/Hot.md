@@ -10,23 +10,31 @@ updated: 2026-11-12
 
 ---
 
-## 2026-11-12 — Cortex + gateway overhaul landed on `dev`
+## 2026-11-12 — on `dev` (77 commits today)
 
-- **Multimodal:** `TaskInput = string | ContentPart[]` (text/image/audio/file) through `run/runStream/chat/AgentSession`; `modelInputCapabilities()`; typed `UnsupportedModalityError`; providers send or placeholder. Guide: `guides/multimodal.mdx`.
-- **Cortex:** rich final answer + deliverables, `@` file tagging (realpath-confined), attachments, voice (browser or OpenAI-compatible STT/TTS; Speaches presets), composer redesign (`/mcp`, `/btw`, Config popover), judgment (Jev, Ollama Cloud keys; Lab Judgment; Judgments tab), eval rubric graders, Host/Origin request guard (`CORTEX_ALLOWED_HOSTS`).
-- **Gateway** (owner: `gateway-warden`, covers gateway/channels/a2a/docker/deploy): canonical `ChannelAdapter` + `runAdapterConformance`, native Signal and Telegram adapters, durable `ScheduleRegistry` (catch-up policy, crash-safe fires), ingress server, bounded inbound queue, deploy hardening. **BREAKING:** `allowedSenders`/`blockedSenders` need a `platform:` prefix.
-- **Ollama Cloud:** `resolveOllamaTarget` is the one place; ambient `OLLAMA_API_KEY` goes only to https / ollama.com.
-- **Design specs (not built):** `wiki/Architecture/Design-Specs/2026-11-12-cortex-workflows.md` (new `@reactive-agents/workflow`), `...-plugin-system.md` (`@reactive-agents/plugin`); decisions in `wiki/Decisions/2026-11-12-*.md`.
-- **Open owner decisions:** `wiki/Decisions/2026-11-12-open-owner-decisions.md`; workflows naming/Q7/Q8–Q11; whether the root test preload strips provider keys (only Cortex tests do now).
+- **Security pass:** shell sed/awk/find escapes closed, SSRF guard covers IPv6 mapped/NAT64/6to4 forms, one shared redaction list (exporter, logger, trace), owner-only file modes, CI actions pinned by SHA, Cortex asks before risky tools by default (opt-out), channels fail closed without `accessControl`, root test preload strips provider keys (`REACTIVE_AGENTS_TEST_LIVE=1` opts out).
+- **Cortex UI:** Config popover merged with the slash menu, kit `Select`, live goal/loop output, channels + Gateway overview, speech coordinator and voice fixes, Speaches supervisor, desktop notifications, session-control capabilities, voice speed and spoken answers, structured `request_user_input` end to end, web-search keys (Settings; reach agents via `withTools({ webSearch })`).
+- **Channel routing:** `ChannelRouter` slice one, SessionBridge lifecycle, RouteMeter, `withChannels` routes, single consumer, history hygiene, Cortex channel hub H1 (server slice). Owner reports real Telegram verified. Spec: [[2026-11-12-channel-routing]]; decisions [[2026-11-12-channel-routing-decisions]]; trace diagnosis [[2026-11-12-telegram-gateway-trace-diagnosis]].
+- **Kernel:** retrieval tools no longer count as landed side effects; iteration-0 satisfiability abstains when only read-only tools are visible.
+- **Chat tool intent** is capability-based (`b64f9855b`); `.withToolIntent` takes capability (default), message or a classifier; wording regex deprecated.
+- **In flight (uncommitted):** kernel tool-visibility fix; Cortex dropping its copies of framework code.
+
+## Open
+
+- **Hub H2 (UI) and chat-session targets:** [[2026-11-12-chat-session-channels]]. Owner chose owners-only, queue mid-turn, hold approvals for Cortex, full hub first.
+- **Ablations pending** for three default changes (`bun run gate:check` before pushing defaults).
+- **Framework gaps:** `defineTool` `mutatesExternalState` option, durable router store, self-target shorthand, sub-agent web-search key inheritance, `RouterStatus` per-channel error.
+- **Security leftovers:** DNS-rebinding pinning, MCP read-only marking, signal-mcp SDK bump, ra-test-traces leak.
+- **Unconfirmed:** live browser checks (Playwright was down). 229 changesets pending.
+- **Owner decisions:** [[2026-11-12-open-owner-decisions]]; design specs [[2026-11-12-cortex-workflows]], [[2026-11-12-plugin-system]].
 
 ## Standing traps
 
-- **Stale dist:** `bun rax cortex` loads `apps/cortex/dist`. Run `bun run build:apps` after source changes, or use dev mode.
-- **Build order:** channels type-checks against gateway's built output; rebuild gateway first.
+- **Stale dist:** `bun rax cortex` loads `apps/cortex/dist`; run `bun run build:apps` or use dev mode.
+- **Build order:** channels type-checks against gateway's built output.
 - **`packages/reasoning` exports `dist`:** rebuild after `src` edits.
-- **Cortex memory dirs:** unnamed sub-agent memory dirs piled up (26k); pruned 2026-11-12. Sub-agent ids are now `sub-<parent>-<name>`.
-- **Canonical sources:** sequencing `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md`; debt `wiki/Architecture/DEBT-REGISTER.md`; agent rules `AGENTS.md`; memory index `.agents/MEMORY.md`.
+- **Sources:** `wiki/Architecture/Specs/09-UNIFIED-PROGRAM.md`, `wiki/Architecture/DEBT-REGISTER.md`, `AGENTS.md`, `.agents/MEMORY.md`.
 
 ## Earlier
 
-- 2026-11-05: Plan 9 Phase 1 closed; per-run state on one FiberRef; strategy switching opt-in. Wardens became a plugin with a one-file team (`.claude/wardens.yaml`). See `wiki/Log.md`.
+- 2026-11-05: Plan 9 Phase 1 closed; wardens became a plugin. See `wiki/Log.md`.
