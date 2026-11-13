@@ -457,7 +457,7 @@ To serve the webhook, mount the adapter on the gateway ingress server instead of
 | Reconnect | Network loss and 429 on `getUpdates` back off exponentially and resume from the offset. `auth` stops retrying and sets the state to `failed`. |
 | Secrets | The token is `Redacted`, appears only in the request URL, and is scrubbed from every error, receipt, state and envelope. |
 
-**Limits.** Telegram does not report delivery or read receipts to bots, so `capabilities.receipts` is `false` and `send` returns `status: "sent"`. The adapter does not send typing indicators.
+**Limits.** Telegram does not report delivery or read receipts to bots, so `capabilities.receipts` is `false` and `send` returns `status: "sent"`. The adapter sends typing indicators (`sendChatAction`) only when a route with `ack` asks for one.
 
 ### Writing an adapter
 
@@ -536,7 +536,7 @@ const route: RouteSpecInput = {
 ```
 
 - **Off by default.** No `ack`, or `ack: false`, sends nothing extra. `ack: {}` means typing on, and `"On it..."` after 4000 ms.
-- **Deterministic and zero-token.** The text is fixed config (1 to 10 entries of at most 200 characters; the same message id always picks the same entry). It is never built from sender text or written by the model.
+- **Fixed text is deterministic and zero-token.** The text is config (1 to 10 entries of at most 200 characters; the same message id always picks the same entry) and is never built from sender text. With `source: "model"` (below) the message can come from the agent instead.
 - **Not history.** The ack goes straight to the adapter. The agent never sees it, and it is not recorded as an assistant reply.
 - **Only for turns that run.** A turn that finishes before `afterMs`, a denied or dropped message and a turn the meter refuses get no ack. A failed ack is swallowed and reported as `ErrorSwallowed`; it never fails the turn. Acks go through the adapter's normal outbound rate limits, and each one publishes `ChannelTurnAcknowledged` (no text).
 - **Model-written acks (`source: "model"`).** `ack: { source: "model" }` swaps the fixed text for the agent's own words. At `afterMs` the router sends, in order: (1) the agent's latest pre-tool narration, if the turn already produced some; (2) a one-line text from the session's `acknowledge` port, bounded by `modelTimeoutMs` (1 to 10 000, default 3000); (3) the canned text. Narration pushed after the ack went out is dropped, so there is still exactly one ack. Model text is sanitized before sending: markdown stripped, one line, at most 300 characters. A port that fails, times out or returns nothing falls back to canned and never fails the turn. `ChannelTurnAcknowledged` carries `source: "canned" | "narration" | "model"`. The `channels` package never calls a model; the resolver owns that.

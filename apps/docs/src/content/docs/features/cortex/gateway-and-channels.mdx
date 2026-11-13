@@ -69,11 +69,74 @@ Cortex runs one channel router for every configured channel. A **channel** is a 
 - **Editing.** `GET/POST/PATCH/DELETE /api/channels` and `/api/channels/routes` (same loopback or token gate as the rest of the API). Adding an owner, turning on `open` or giving non-owners the agent's full tools needs `confirm` naming the change and is recorded in the audit trail (`GET /api/channels/audit`). `POST /api/channels/explain` and `/simulate` show why a message would or would not be answered. Nothing a sender writes can change a route.
 - **Rollback.** Start the server with `CORTEX_CHANNEL_HUB=off` and every channel goes back to the per-agent host; nothing is migrated.
 
-The Gateway overview (`GET /api/gateway/status`) has a `hub` block: per channel state, per route counters and the reason behind each role, and the recent router activity. The Channels and Routes editor in the Lab UI comes next.
+The Gateway overview (`GET /api/gateway/status`) has a `hub` block: per channel state, per route counters and the reason behind each role, and the recent router activity.
+
+## The Channels tab
+
+The **Channels** tab in the Lab edits the channel hub. It refreshes live state every few seconds and has four parts.
+
+**Channels.** Add Telegram, Signal or webhook accounts. Each card shows:
+
+- the live state (Connected, Connecting, Reconnecting, Failed, Off, or "Account in use elsewhere" when another program polls the same bot);
+- messages in and out, the route count and the account lease ("Holds its account" with the process id, or "No account lease");
+- the channel's non-secret settings and its credential. The credential is write-only and saved encrypted; only a mask comes back, as in the per-agent Channels section above;
+- a connection test, and delete. Deleting a channel that has routes asks first and removes the routes and the saved credential too.
+
+If a channel is saved for an account the hub already holds, the page says so and links to the card that holds it.
+
+**Routes.** Each row reads channel, match, agent, with badges for who can talk and what non-owners can do. A switch turns a route on or off. Edit opens the route editor, a drawer with these fields:
+
+| Field | Meaning |
+| ----- | ------- |
+| Route id | A short name such as `support-dm`. Fixed after creation. |
+| Channel, Agent | The account the message arrives on, and the saved agent that answers. |
+| Conversation, Only when | Direct messages, groups or both; every message, a mention, a command or keywords. |
+| Memory between messages | `per-conversation` keeps each conversation's history; `stateless` is a fresh run per message. |
+| Owners | Run the agent with all its tools and approve risky ones. |
+| Allowed senders, Blocked senders | `platform:userId` entries. Blocked senders are never answered. |
+| Open to anyone | Any sender on the channel can talk. Requires all three caps. |
+| Sender tools | What non-owners get: Read-only (the default), Only these tools, or The agent's full tools. |
+| Caps | Cost per day in USD, turns per hour for the route, turns per sender per hour (default 6 when empty) and max iterations per turn. |
+| Acknowledge slow turns | Off by default; see below. |
+
+Webhook routes are authorised by the channel's signing secret, so the editor hides owners, allow and deny lists, open access, sender tools and acknowledgements for them.
+
+Adding an owner, turning on **Open to anyone** or choosing **The agent's full tools** widens access. The editor asks through a confirm dialog that names the change, sends the matching `confirm` tokens, and the server records the change in the audit trail. If the server finds a widening change the editor did not predict, it answers 409 and the same dialog opens. The server refuses to save an open route without caps. Nothing a sender writes can add an owner or change a route.
+
+**Acknowledgements.** With **Acknowledge** on, the route shows a typing indicator where the platform supports it (Telegram does) and sends one short message if the turn is still running after the delay (default 4000 ms). **Message comes from** has two values:
+
+- Fixed text: your text, one entry per line to rotate. The default is "On it...".
+- Written by the model: the agent's own narration if it already said something before a tool call, otherwise a one-line model call (it may cost a few tokens), otherwise the fixed text. **Wait for the model** bounds that call (1 to 10000 ms, default 3000); when it runs out, the fixed text is sent.
+
+The acknowledgement is not part of the conversation history. See [Acknowledging slow turns](/guides/messaging-channels/#acknowledging-slow-turns) for the framework side.
+
+**Send test message.** Pick a channel, enter a sender such as `telegram:123456789` and a message, and optionally mark it as sent in a group or as mentioning the agent. The panel runs it through the real routing path and sends nothing to the platform:
+
+- Routing (explain) says which route takes the message, whether the sender runs as owner or non-owner, with which tools, or why it is refused. It is free.
+- **Also run the agent** (simulate) runs the real turn and shows the outcome. It can use tokens.
+
+Both need the channel to be running; otherwise the API answers that the hub is not running that channel.
+
+**Reachable via.** Each saved agent in the Saved agents list shows the channels whose routes point at it (marked "off" or "open" where that applies), with an **Add route** shortcut that opens the editor with that agent selected.
+
+### Chat with a Telegram bot
+
+1. In Telegram, message [@BotFather](https://t.me/BotFather), send `/newbot` and follow the prompts. BotFather gives you the bot token and the bot's username; the bot lives at `t.me/<username>`.
+2. In the Channels tab, add a Telegram channel and paste the token into **Bot token**. Use **Test connection** to confirm it.
+3. Add a route from that channel to a saved agent. Put your own sender (`telegram:<your numeric user id>`) in **Owners** and confirm the dialog. A sender nobody listed is refused.
+4. Open `t.me/<username>`, press **Start** (Telegram sends `/start`) and write a message. `/start` is an ordinary message to the route, so it is answered only if the sender is an owner or allowed. Use **Send test message** first to check the route.
+
+### Legacy allowed senders
+
+When the server starts, a gateway agent's `channels` and `gateway.accessControl` are imported into hub channels and routes. Senders in the old allowlist become the route's **owners**, so they keep the agent's full tools; anyone else the old policy admitted runs the read-only build. The import is idempotent and does not change the agent's config. `GET /api/channels/migration` previews it and `POST /api/channels/migrate` applies it now.
+
+### Rollback
+
+Start the server with `CORTEX_CHANNEL_HUB=off` and every channel returns to the per-agent host. Nothing is migrated, and the Channels tab says the hub is off: routes are saved but not served.
 
 ## Session lifecycle and route budgets (framework, builder code)
 
-These two controls live in `@reactive-agents/channels`. Cortex does not expose them yet.
+These two controls live in `@reactive-agents/channels`. The route editor exposes the cost and turn caps; session lifecycle settings are builder-code only for now.
 
 **Session lifecycle.** A trigger's `lifecycle` now decides when its agent is torn down. The agent is built on the first message and kept while the conversation is active:
 
