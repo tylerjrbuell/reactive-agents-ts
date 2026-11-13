@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import type { Database, SQLQueryBindings } from "bun:sqlite";
 import type { CortexIngestMessage, RunSummary } from "../types.js";
 import { deleteChatSessionsForRun } from "./chat-queries.js";
 import { runEndingOf } from "../services/run-ending.js";
@@ -661,7 +661,7 @@ export function updateGatewayAgent(
   patch: { name?: string; config?: string; type?: "gateway" | "ad-hoc"; status?: string; schedule?: string | null },
 ): void {
   const sets: string[] = ["updated_at = unixepoch('now','subsec')*1000"];
-  const values: unknown[] = [];
+  const values: SQLQueryBindings[] = [];
   if (patch.name !== undefined)   { sets.push("name = ?");     values.push(patch.name); }
   if (patch.config !== undefined) { sets.push("config = ?");   values.push(patch.config); }
   if (patch.type !== undefined)   { sets.push("agent_type = ?"); values.push(patch.type); }
@@ -669,8 +669,7 @@ export function updateGatewayAgent(
   if ("schedule" in patch)        { sets.push("schedule = ?"); values.push(patch.schedule ?? null); }
   if (sets.length === 1) return;
   values.push(agentId);
-  // bun:sqlite run() accepts SQLQueryBindings spread
-  (db.prepare(`UPDATE cortex_agents SET ${sets.join(", ")} WHERE agent_id = ?`) as any).run(...values);
+  db.prepare(`UPDATE cortex_agents SET ${sets.join(", ")} WHERE agent_id = ?`).run(...values);
 }
 
 export function deleteGatewayAgent(db: Database, agentId: string): boolean {

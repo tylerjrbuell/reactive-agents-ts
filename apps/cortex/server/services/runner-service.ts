@@ -27,6 +27,7 @@ import type { VariableDef } from "./resolve-template.js";
 import type { ReactiveAgent } from "@reactive-agents/runtime";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { CrashedRun } from "./crashed-runs.js";
+import { structuredOutputExtractedEvent } from "./structured-output-event.js";
 
 export interface LaunchParams {
   readonly prompt: string;
@@ -449,7 +450,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
             totalTokens: 0,
             durationMs: Date.now() - startedAt,
             error: err instanceof Error ? err.message : String(err),
-          } as any,
+          },
         })
         .pipe(Effect.catchAll((e) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:277", tag: errorTag(e) })));
 
@@ -638,15 +639,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
                       v: 1,
                       agentId,
                       runId,
-                      event: {
-                        _tag: "StructuredOutputExtracted" as const,
-                        taskId: runId,
-                        agentId,
-                        ...(ro.object !== undefined ? { object: ro.object } : {}),
-                        ...(ro.objectError !== undefined ? { objectError: ro.objectError } : {}),
-                        // How the pipeline got (or failed to get) the object; also live as StructuredOutputReported.
-                        ...(ro.objectReport !== undefined ? { objectReport: ro.objectReport } : {}),
-                      } as any,
+                      event: structuredOutputExtractedEvent(runId, agentId, ro),
                     })
                     .pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:structured-output", tag: errorTag(err) }))),
                 );

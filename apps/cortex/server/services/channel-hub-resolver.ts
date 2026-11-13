@@ -22,6 +22,7 @@ import type { AgentResolver, OpenSessionRequest, RoutedReply, RoutedSession } fr
 import { emitErrorSwallowed, errorTag, type AgentEvent } from "@reactive-agents/core";
 import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import { getGatewayAgent } from "../db/queries.js";
+import { HubAgentBuildError } from "../errors.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { parseRouteTarget } from "../db/channel-hub-queries.js";
 import { cortexAgentBuilder, type BuildCortexAgentParams } from "./build-cortex-agent.js";
@@ -76,7 +77,7 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
 
   const buildAgent = async (req: OpenSessionRequest, agentId: string): Promise<HubAgent> => {
     const row = getGatewayAgent(deps.db, agentId);
-    if (!row) throw new Error(`no saved agent "${agentId}"`);
+    if (!row) throw new HubAgentBuildError({ message: `no saved agent "${agentId}"` });
     const config = normalizeCortexAgentConfig(JSON.parse(row.config) as Record<string, unknown>);
     const mcpIds = (config.mcpServerIds as string[] | undefined)?.filter((x) => typeof x === "string" && x.length > 0) ?? [];
     const mcpConfigs = (mcpIds.length > 0 ? getMcpServersByIds(deps.db, mcpIds) : []).map(parseMcpConfig);
@@ -87,7 +88,7 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
     const builder = await cortexAgentBuilder(narrowed);
     const violations = surfaceViolations(builder.toConfig(), req.toolExposure);
     if (violations.length > 0) {
-      throw new Error(`the built agent exceeds the ${req.toolExposure._tag} surface: ${violations.join(", ")}`);
+      throw new HubAgentBuildError({ message: `the built agent exceeds the ${req.toolExposure._tag} surface: ${violations.join(", ")}` });
     }
     deps.onBuilt?.({ routeId: req.routeId, role: req.role, agentId, config: builder.toConfig() });
     const agent = await builder.build();

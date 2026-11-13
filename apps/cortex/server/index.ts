@@ -54,14 +54,16 @@ import type { ElysiaWS } from "elysia/ws";
 import { CortexEventBridge } from "./services/event-bridge.js";
 import type { CortexConfig } from "./types.js";
 import { defaultCortexConfig } from "./types.js";
-import { cortexLog } from "./cortex-log.js";
+import { cortexBanner, cortexLog } from "./cortex-log.js";
+import { cortexEnv } from "./env-config.js";
+import { CortexStartRefusedError } from "./errors.js";
 import { closeOrphanedChatRuns } from "./db/queries.js";
 import { isLoopbackHost, resolveCortexHostname } from "./listen-host.js";
 import { bindRefusal, guardConfigFromEnv, guardRequest } from "./request-guard.js";
 
 /** Base URL for startup log and “open browser” (aligns with CORTEX_URL when set). */
 function cortexListenDisplayUrl(port: number): string {
-  const raw = process.env.CORTEX_URL?.trim();
+  const raw = cortexEnv().url;
   if (raw) {
     try {
       const u = new URL(raw);
@@ -94,9 +96,10 @@ export async function startCortexServer(
   };
 
   // Off loopback the API needs an access token; refuse to start before anything is opened or bound.
-  const token = (config.token ?? process.env.CORTEX_TOKEN)?.trim() || undefined;
-  const refusal = bindRefusal(resolveCortexHostname(config.hostname, process.env), token);
-  if (refusal !== undefined) throw new Error(refusal);
+  const env = cortexEnv();
+  const token = (config.token ?? env.token)?.trim() || undefined;
+  const refusal = bindRefusal(resolveCortexHostname(config.hostname, env.raw), token);
+  if (refusal !== undefined) throw new CortexStartRefusedError({ message: refusal });
 
   const runtime = createCortexRuntime(resolvedConfig);
 
@@ -174,7 +177,7 @@ export async function startCortexServer(
 
   // DNS-rebinding wall, cross-site check and access token for /api/* and /ws/* (request-guard.ts);
   // runs before routing, WS upgrades included.
-  const guard = { ...guardConfigFromEnv(process.env), ...(token ? { token } : {}) };
+  const guard = { ...guardConfigFromEnv(env.raw), ...(token ? { token } : {}) };
   // Opt-in supervisor for a local Speaches container (services/voice/speech-supervisor.ts); inert until the user turns it on.
   const voiceSettings = new VoiceSettingsStore(dirname(resolvedConfig.dbPath));
   const speechSupervisor = createSpeechSupervisor({ settings: voiceSettings, docker: execDockerRunner });
@@ -184,7 +187,7 @@ export async function startCortexServer(
     .use(providerKeysRouter(providerKeys))
     .use(judgmentRouter(providerKeys))
     .use(ollamaSettingsRouter(ollamaEndpoint))
-    .use(voiceRouter({ settings: voiceSettings, keys: providerKeys, supervisor: speechSupervisor, allowDocker: isLoopbackHost(resolveCortexHostname(config.hostname, process.env)) || token !== undefined }))
+    .use(voiceRouter({ settings: voiceSettings, keys: providerKeys, supervisor: speechSupervisor, allowDocker: isLoopbackHost(resolveCortexHostname(config.hostname, env.raw)) || token !== undefined }))
     .use(capabilitiesRouter)
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
     .use(agentConfigSourceRouter(runtime.storeLayer))
@@ -269,15 +272,15 @@ export async function startCortexServer(
 
   const displayUrl = cortexListenDisplayUrl(resolvedConfig.port);
   // Loopback unless the caller opts in (listen-host.ts): the API has no authentication.
-  const hostname = resolveCortexHostname(config.hostname, process.env);
+  const hostname = resolveCortexHostname(config.hostname, env.raw);
 
   // Bun’s default idleTimeout (~10s) drops connections that send no response bytes yet — e.g. long MCP
   // `refresh-tools` (docker pull / handshake). Node’s Vite proxy then logs "socket hang up". 0 disables.
   app.listen(
     { port: resolvedConfig.port, hostname, idleTimeout: 0 },
     () => {
-      if (process.env.CORTEX_SPAWNED_BY_RAX !== "1") {
-        console.log(`\n◈ CORTEX running at ${displayUrl}\n`);
+      if (!env.spawnedByRax) {
+        cortexBanner(`\n◈ CORTEX running at ${displayUrl}\n`);
         cortexLog(
           "info",
           "server",
@@ -331,11 +334,12 @@ export interface StartedCortexServer {
 }
 
 if (import.meta.main) {
-  const staticFromEnv = process.env.CORTEX_STATIC_PATH?.trim();
+  const entryEnv = cortexEnv();
+  const staticFromEnv = entryEnv.staticPath;
   startCortexServer({
     ...defaultCortexConfig,
-    port: parseInt(process.env.CORTEX_PORT ?? "4321", 10),
-    openBrowser: process.env.CORTEX_NO_OPEN !== "1",
+    port: entryEnv.port,
+    openBrowser: entryEnv.openBrowser,
     // Honor explicit env override; otherwise startCortexServer auto-resolves to ../ui/build.
     ...(staticFromEnv ? { staticAssetsPath: staticFromEnv } : {}),
   });

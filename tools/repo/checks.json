@@ -59,6 +59,22 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "check-cortex-compliance",
+      "script": "scripts/check-cortex-compliance.sh",
+      "scope": [
+        "apps/cortex/server/**",
+        "apps/cortex/ui/src/**",
+        "scripts/check-cortex-compliance.sh",
+        "tools/repo/checks.json"
+      ],
+      "stages": [
+        "pre-commit",
+        "ci"
+      ],
+      "owner": "cortex-warden",
+      "reviewBy": "2027-02-03"
+    },
+    {
       "id": "check-cost-accounting",
       "script": "scripts/check-cost-accounting.sh",
       "scope": [

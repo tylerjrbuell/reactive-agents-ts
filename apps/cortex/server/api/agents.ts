@@ -13,6 +13,15 @@ import { migrateLegacyCliToolsInConfig } from "../services/legacy-cli-tools.js";
 import { parseCortexChannels } from "../services/channel-config.js";
 import { installedChannelCredentials } from "../services/channel-credentials.js";
 
+/** The `PATCH /:agentId` body: every field optional, an absent key leaves the stored value alone. */
+interface AgentPatchBody {
+  readonly name?: string;
+  readonly config?: Record<string, unknown>;
+  readonly type?: "gateway" | "ad-hoc";
+  readonly status?: string;
+  readonly schedule?: string | null;
+}
+
 function parseConfig(raw: string): Record<string, unknown> {
   // Saved agents may still name the removed gh-cli / git-cli / gws-cli tools.
   try { return migrateLegacyCliToolsInConfig(JSON.parse(raw) as Record<string, unknown>); }
@@ -66,7 +75,7 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
 
     // ── Create ─────────────────────────────────────────────────────────────
     .post("/", async ({ body, set }) => {
-      const b = body as any;
+      const b = body;
       const type = (b.type === "ad-hoc" ? "ad-hoc" : "gateway") as "gateway" | "ad-hoc";
       const agentIdPrefix = type === "gateway" ? "gateway" : "agent";
       const agentId = `${agentIdPrefix}-${crypto.randomUUID().slice(0, 8)}`;
@@ -107,7 +116,7 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
 
     // ── Update ─────────────────────────────────────────────────────────────
     .patch("/:agentId", ({ params, body, set }) => {
-      const b = body as any;
+      const b = (body ?? {}) as AgentPatchBody;
       const patch: Parameters<typeof updateGatewayAgent>[2] = {};
       if (b.name !== undefined)     patch.name     = b.name;
       if (b.config !== undefined)   patch.config   = JSON.stringify(b.config);

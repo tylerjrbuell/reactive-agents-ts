@@ -17,6 +17,7 @@ import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import type { Database } from "bun:sqlite";
 import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun, updateRunStats } from "../db/queries.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
+import { structuredOutputExtractedEvent } from "./structured-output-event.js";
 import {
   coerceTaskContextRecord,
   normalizeCortexAgentConfig,
@@ -450,11 +451,7 @@ export class GatewayProcessManager {
             Effect.runFork(
               ingest.handleEvent(agentId_, runId, {
                 v: 1, agentId: agentId_, runId,
-                event: {
-                  _tag: "StructuredOutputExtracted" as const, taskId: runId, agentId: agentId_,
-                  ...(r.object !== undefined ? { object: r.object } : {}),
-                  ...(r.objectError !== undefined ? { objectError: r.objectError } : {}),
-                } as any,
+                event: structuredOutputExtractedEvent(runId, agentId_, { object: r.object, objectError: r.objectError }),
               }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/gateway-process-manager.ts:structured-output", tag: errorTag(err) }))),
             );
           }

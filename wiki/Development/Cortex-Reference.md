@@ -143,6 +143,7 @@ Owner: `cortex-warden` (`.claude/agents/cortex-warden.md`). Domain edits go thro
 - Prefer **scoped** tests: `bun test apps/cortex/server/tests/<file>.ts --timeout 15000`, `cd apps/cortex/ui && bun test src/lib --timeout 15000`.
 - After UI changes: `cd apps/cortex/ui && bun run build`.
 - Do not run the full monorepo test suite unless the task requires it (see root `AGENTS.md` terminal rules).
+- **Compliance gate**: `bash scripts/check-cortex-compliance.sh` (registered as `check-cortex-compliance`, so `bun run repo check` runs it on pre-commit and CI) ratchets `any`, `as unknown as`, string `new Error(`, `instanceof *Error`, `console.*`, `process.env`, `bun:sqlite` imports and file size over `apps/cortex/server` and `ui/src`. Counts may only shrink: growth fails, and a shrink fails until the baseline in the script is lowered. Rules and the fix for each: `apps/cortex/AGENTS.md` "Compliance gates". Red-on-cut pin: `server/tests/check-cortex-compliance.test.ts`.
 
 ## Pitfalls (Cortex-Specific), detail
 

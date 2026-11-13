@@ -24,6 +24,9 @@ import { CortexError } from "../errors.js";
 import { runEndingOf } from "./run-ending.js";
 import { strategyClaimsOf } from "@reactive-agents/ui-core";
 
+/** An `AgentEvent` as the loose record the run-fold helpers and wire payloads read (the one cast, in one place). */
+const eventRecord = (event: AgentEvent): Record<string, unknown> => event as unknown as Record<string, unknown>;
+
 export class CortexIngestService extends Context.Tag("CortexIngestService")<
   CortexIngestService,
   {
@@ -42,7 +45,7 @@ export class CortexIngestService extends Context.Tag("CortexIngestService")<
  * event). `updateRunStats` keeps the highest-ranked claim.
  */
 const strategyPatchOf = (event: AgentEvent): { strategy?: string; strategyRank?: number } => {
-  const started = strategyClaimsOf(event._tag, event as unknown as Record<string, unknown>).started;
+  const started = strategyClaimsOf(event._tag, eventRecord(event)).started;
   return started ? { strategy: started.strategy, strategyRank: started.rank } : {};
 };
 
@@ -111,7 +114,7 @@ const deriveRunStats = (
     return {
       status,
       // How it ended (abstained / partial / failed): an abstention is `failed` by status.
-      ending: runEndingOf(event as unknown as Record<string, unknown>),
+      ending: runEndingOf(eventRecord(event)),
       completedAt: Date.now(),
       // totalTokens is the authoritative count — persisted via MAX so it doesn't
       // overcount when added to per-call accumulated values.
@@ -221,7 +224,7 @@ export const CortexIngestServiceLive = (db: Database) =>
                   ...(msg.sessionId ? { sessionId: msg.sessionId } : {}),
                   source: "eventbus",
                   type: msg.event._tag,
-                  payload: msg.event as unknown as Record<string, unknown>,
+                  payload: eventRecord(msg.event),
                 };
                 return Effect.all([
                   bridge.broadcast(normalizedAgentId, liveMsg),
@@ -257,7 +260,7 @@ export const CortexIngestServiceLive = (db: Database) =>
                         agentId: canonicalAgentId,
                         runId,
                         eventTag: msg.event._tag,
-                        event: msg.event as unknown as Record<string, unknown>,
+                        event: eventRecord(msg.event),
                       }),
                     );
                   }

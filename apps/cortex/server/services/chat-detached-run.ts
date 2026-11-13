@@ -6,6 +6,7 @@
  */
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
 import type { DetachedTurns } from "./chat-detached-turn.js";
+import { ChatTurnFailedError } from "../errors.js";
 import {
   ChatApprovalPendingError,
   ChatSessionBusyError,
@@ -45,9 +46,9 @@ export function makeDetachedRunner(
     // The stored turn is written after the last event: wait for the producer's cleanup.
     await turn.whenEnded();
 
-    if (failure !== undefined) throw new Error(failure);
-    if (done === undefined) throw new Error("The turn ended without a result");
-    if (done.success === false && done.status === undefined && done.error) throw new Error(done.error);
+    if (failure !== undefined) throw new ChatTurnFailedError({ message: failure });
+    if (done === undefined) throw new ChatTurnFailedError({ message: "The turn ended without a result" });
+    if (done.success === false && done.status === undefined && done.error) throw new ChatTurnFailedError({ message: done.error });
 
     const assessed = host.drainTurnAssessments(sessionId);
     const turnEvents =

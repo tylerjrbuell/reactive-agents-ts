@@ -45,6 +45,7 @@ import { applyMigration, planMigration, type MigrationAgent, type MigrationPlan,
 import { makeHubResolver, type HubResolver, type HubResolverDeps } from "./channel-hub-resolver.js";
 import { loadValidRoutes, makeDbLeases, makeDurableRouteMeter, makeDurableRouterStore, type DurableRouterStore, type RejectedRoute } from "./channel-hub-store.js";
 import { mountWebhookIngress } from "./channel-ingress.js";
+import { ChannelHubStartError } from "../errors.js";
 import type { ToBuildParams } from "./gateway-channel-host.js";
 import type { CortexIngestService } from "./ingest-service.js";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
@@ -389,7 +390,7 @@ export class ChannelHub {
           scope,
         ),
       );
-      if (Exit.isFailure(exit)) throw new Error(describeFailure(exit.cause));
+      if (Exit.isFailure(exit)) throw new ChannelHubStartError({ message: describeFailure(exit.cause) });
       this.running = { router: exit.value, scope, ingress, adapters, signature };
       this.phase = "running";
       this.startedAt = Date.now();

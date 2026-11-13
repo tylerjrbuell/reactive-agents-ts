@@ -5,11 +5,13 @@
 import { Effect } from "effect";
 import { makeMCPClient } from "@reactive-agents/tools";
 import type { MCPServerConfig } from "@reactive-agents/runtime";
+import { cortexLog } from "../cortex-log.js";
 
 export type DiscoveredMcpTool = { toolName: string; description?: string };
 
 export function discoverMcpTools(config: MCPServerConfig): Promise<DiscoveredMcpTool[]> {
-  console.log(`[MCP discover] "${config.name}" transport=${config.transport}${config.endpoint ? ` endpoint=${config.endpoint}` : ""}${config.command ? ` command=${config.command}` : ""}`);
+  // Name and transport only: endpoints and command lines often carry tokens in the query string or args.
+  cortexLog("info", "mcp", `discover "${config.name}" transport=${config.transport}`);
   return Effect.runPromise(
     Effect.gen(function* () {
       const client = yield* makeMCPClient;
@@ -40,7 +42,7 @@ export function discoverMcpTools(config: MCPServerConfig): Promise<DiscoveredMcp
       return out;
     }),
   ).catch((err: unknown) => {
-    console.error(`[MCP discover] "${config.name}" FAILED:`, err instanceof Error ? err.message : String(err));
+    cortexLog("error", "mcp", `discover "${config.name}" FAILED: ${err instanceof Error ? err.message : String(err)}`);
     throw err;
   });
 }

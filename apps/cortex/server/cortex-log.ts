@@ -65,6 +65,11 @@ export function cortexLog(
   else console.log(line);
 }
 
+/** The startup banner: always printed (even when CORTEX_LOG=off), it is the answer to "where is it". */
+export function cortexBanner(text: string): void {
+  console.log(text);
+}
+
 /** Always warn (even when CORTEX_LOG=off) — use for agent execution failures. */
 export function cortexLogRunnerExecution(message: string, extra?: Record<string, unknown>): void {
   const suffix = extra && Object.keys(extra).length > 0 ? ` ${JSON.stringify(extra)}` : "";

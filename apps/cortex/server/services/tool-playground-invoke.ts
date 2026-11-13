@@ -5,6 +5,7 @@ import { getMcpServer, parseMcpConfig } from "../db/mcp-queries.js";
 import { getLabCustomTool } from "../db/lab-custom-tools-queries.js";
 import { approvalRequiredToolNames, labCustomToDefinition, parseCatalogToolId } from "./tool-catalog.js";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { inferHttpMcpTransport } from "./mcp-config-import.js";
 
 const PLAYGROUND_AGENT = "cortex-lab";
 const PLAYGROUND_SESSION = "tool-playground";
@@ -120,19 +121,28 @@ export function invokeCatalogTool(
     return Promise.resolve({ ok: false, error: "MCP server not found", httpStatus: 404 });
   }
   const cfg = parseMcpConfig(row);
+  // `ToolService.connectMCPServer` types `transport` as required; the stored config may omit it.
+  const transport = cfg.transport ?? (cfg.command ? "stdio" : cfg.endpoint ? inferHttpMcpTransport(cfg.endpoint) : undefined);
+  if (transport === undefined) {
+    return Promise.resolve({
+      ok: false,
+      error: `MCP server "${cfg.name}": cannot infer transport. Give it a command or an endpoint.`,
+      httpStatus: 500,
+    });
+  }
 
   const program = Effect.gen(function* () {
     const tools = yield* ToolService;
     yield* tools.connectMCPServer({
       name: cfg.name,
-      ...(cfg.transport !== undefined ? { transport: cfg.transport } : {}),
+      transport,
       ...(cfg.endpoint !== undefined ? { endpoint: cfg.endpoint } : {}),
       ...(cfg.command !== undefined ? { command: cfg.command } : {}),
       ...(cfg.args !== undefined ? { args: cfg.args } : {}),
       ...(cfg.cwd !== undefined ? { cwd: cfg.cwd } : {}),
       ...(cfg.env !== undefined ? { env: cfg.env } : {}),
       ...(cfg.headers !== undefined ? { headers: cfg.headers } : {}),
-    } as any);
+    });
     const exec = tools.execute({
       toolName: ref.registryName,
       arguments: args,

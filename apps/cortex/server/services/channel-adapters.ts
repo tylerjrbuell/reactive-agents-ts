@@ -17,6 +17,7 @@ import {
   type ChannelAdapter,
 } from "@reactive-agents/channels";
 import { checkOutboundUrl } from "../outbound-url.js";
+import { ChannelReplyError } from "../errors.js";
 import { enabledChannels, type CortexChannelEntry } from "./channel-config.js";
 import type { ChannelCredentials } from "./channel-credentials.js";
 
@@ -48,7 +49,7 @@ const replyToUrl = (url: string, signal?: AbortSignal) => async (
   content: { readonly text: string },
 ): Promise<void> => {
   const checked = await checkOutboundUrl(url);
-  if (!checked.ok) throw new Error(`reply URL refused: ${checked.reason}`);
+  if (!checked.ok) throw new ChannelReplyError({ message: `reply URL refused: ${checked.reason}` });
   const res = await fetch(checked.url, {
     method: "POST",
     redirect: "manual",
@@ -56,7 +57,7 @@ const replyToUrl = (url: string, signal?: AbortSignal) => async (
     body: JSON.stringify({ channelId: target.channelId, ...(target.threadId ? { threadId: target.threadId } : {}), text: content.text }),
     ...(signal ? { signal } : {}),
   });
-  if (!res.ok) throw Object.assign(new Error(`reply endpoint answered ${res.status}`), { status: res.status });
+  if (!res.ok) throw new ChannelReplyError({ message: `reply endpoint answered ${res.status}`, status: res.status });
 };
 
 /**

@@ -76,7 +76,7 @@ function safeMessages(raw: unknown): readonly ConvMessage[] | undefined {
   if (!Array.isArray(raw)) return undefined;
   const msgs = raw
     .filter((m): m is { role: string; content: string } =>
-      m && typeof m === "object" && typeof (m as any).role === "string",
+      m && typeof m === "object" && typeof (m as { role?: unknown }).role === "string",
     )
     .map((m) => ({
       role: m.role as string,

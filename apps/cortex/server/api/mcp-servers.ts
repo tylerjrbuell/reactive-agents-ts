@@ -11,6 +11,7 @@ import {
   replaceMcpCachedTools,
   updateMcpServer,
 } from "../db/mcp-queries.js";
+import { cortexLog } from "../cortex-log.js";
 import { discoverMcpTools } from "../services/mcp-discovery.js";
 import { parseConfigBody } from "../services/mcp-config-import.js";
 import { executeMcpJsonImport } from "../services/mcp-json-import-apply.js";
@@ -103,7 +104,7 @@ export const mcpServersRouter = (db: Database) =>
           set.status = 404;
           return { error: "MCP server not found" };
         }
-        console.log(`[MCP delete] "${row.name}" (${params.serverId}) removed and transport cleaned up`);
+        cortexLog("info", "mcp", `delete "${row.name}" (${params.serverId}) removed and transport cleaned up`);
         return { ok: true as const };
       },
       { params: t.Object({ serverId: t.String() }) },
@@ -118,7 +119,7 @@ export const mcpServersRouter = (db: Database) =>
         }
         const cfg = parseMcpConfig(row);
         // Name and transport only: endpoints and command lines often carry tokens in the query string or args.
-        console.log(`[MCP refresh-tools] "${cfg.name}" transport=${cfg.transport}`);
+        cortexLog("info", "mcp", `refresh-tools "${cfg.name}" transport=${cfg.transport}`);
 
         // 10-minute hard cap — covers the worst-case first `docker pull` of a large image.
         // On expiry the subprocess is killed so the server process does not leak.
@@ -139,11 +140,11 @@ export const mcpServersRouter = (db: Database) =>
         try {
           const discovered = await Promise.race([discoveryPromise, timeoutPromise]);
           replaceMcpCachedTools(db, params.serverId, discovered);
-          console.log(`[MCP refresh-tools] "${cfg.name}" stored ${discovered.length} tool(s) in DB`);
+          cortexLog("info", "mcp", `refresh-tools "${cfg.name}" stored ${discovered.length} tool(s) in DB`);
           return { ok: true as const, tools: discovered };
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          console.error(`[MCP refresh-tools] "${cfg.name}" FAILED: ${msg}`);
+          cortexLog("error", "mcp", `refresh-tools "${cfg.name}" FAILED: ${msg}`);
           set.status = 502;
           return { error: msg };
         } finally {
