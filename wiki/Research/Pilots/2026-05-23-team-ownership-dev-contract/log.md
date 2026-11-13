@@ -2101,3 +2101,17 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   spend-usd: 0
   files: [wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation.md, wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation/, wiki/Research/Harness-Reports/improvement-ledger.json]
 ```
+
+```yaml
+- date: 2026-11-13
+  warden: ablation-warden
+  task: verify-sideeffect-fix-live-h3 (re-measure 5abfa34e3 at HEAD fc0136042 on H3, both local tiers, status gate)
+  state: completed
+  confidence: 0.85
+  verdicts: {fix-5abfa34e3: REWORK-incomplete, status-guard-fc0136042: works-on-slice-misses-at-suite-level, bundle: REWORK-open}
+  evidence: {h3-cells: 72 (k=3, qwen3:4b+cogito:8b), target-success-at-HEAD: 0/12 (BASE 12/12), false-veto: 12, gate-target-slice: REJECT (qwen 0/6->6/6 x2.48, cogito 0/6->6/6 x2.22), a-only: REJECT, suite-level-gate: UNDERPOWERED (guard silent), probe-runs: 4}
+  root-cause: "builtins-floor file-write on the surface makes surfaceCanLandSideEffect true; SideEffectLanded derived from MUTATION_VERB(reply/add)+EXTERNAL_RESOURCE_NOUN(task, from bench preamble run-internal.ts:336)"
+  spend-usd: 0
+  tmp-before-after: 2.3G / 2.3G
+  files: [wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation.md, wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation/, wiki/Research/Harness-Reports/improvement-ledger.json]
+```
