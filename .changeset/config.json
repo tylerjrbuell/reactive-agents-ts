@@ -16,7 +16,6 @@
       "@reactive-agents/observability",
       "@reactive-agents/interaction",
       "@reactive-agents/judgment",
-      "@reactive-agents/orchestration",
       "@reactive-agents/prompts",
       "@reactive-agents/eval",
       "@reactive-agents/a2a",
