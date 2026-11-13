@@ -119,6 +119,17 @@ export const registeredToolNames = (runtime: ChatRuntime): string[] => {
     }
 }
 
+/**
+ * Default tool-loop routing for a chat turn, from the agent's capability (not the
+ * message wording). Precedence per turn, applied by the engine: explicit
+ * `useTools` > `.withToolIntent()` classifier > this: tool loop iff the agent
+ * has capability tools. A tools agent still answers a trivial message in one
+ * iteration via `final-answer`; a tool-less agent stays on the direct path.
+ */
+export const makeChatToolIntent =
+    (config: { toolIntentClassifier?: (message: string) => boolean; hasCapabilityTools?: boolean } | undefined): ChatEngineCapabilities['toolIntent'] =>
+    (message) => (config?.toolIntentClassifier ?? (() => config?.hasCapabilityTools === true))(message)
+
 /** Fill `toolNames` from the runtime's real tool registry when the host omitted it. */
 const withRuntimeTools = (runtime: ChatRuntime, input: EnvironmentSnapshotInput): EnvironmentSnapshotInput =>
     input.toolNames !== undefined ? input : { ...input, toolNames: registeredToolNames(runtime) }

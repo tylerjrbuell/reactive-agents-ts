@@ -139,16 +139,15 @@ export interface ChatReply {
 /**
  * Options for `agent.chat()` — override automatic routing behavior.
  *
- * By default, the agent auto-detects whether tools are needed based on
- * the message content. Use these options to force a specific path.
+ * By default, an agent with capability tools takes the tool loop and one
+ * without stays on the direct path. Use these options to force a specific path.
  */
 export interface ChatOptions extends WorkspaceOption, SkillsRunOption {
   /**
-   * Override automatic tool-need detection for this call.
+   * Override the tool-loop decision for this call.
    *
-   * Precedence: this explicit `useTools` > the agent-level classifier set via
-   * `.withToolIntent()` on the builder (if any) > the default `requiresTools()`
-   * heuristic. Default: auto-detected via heuristic.
+   * Precedence: this explicit `useTools` > `.withToolIntent()` on the builder (if any)
+   * > the capability default (tool loop iff the agent has capability tools).
    */
   useTools?: boolean;
   /** Maximum iterations for the tool-capable path. Default: 5 */
@@ -280,6 +279,11 @@ const CHAT_OVERRIDE_PATTERNS = [
   /\b(in the last run|earlier|previous|before)\b/i,
 ];
 
+/**
+ * @deprecated Not the default routing any more: `chat()` takes the tool loop when the
+ * agent has capability tools, whatever the wording. This wording heuristic is kept
+ * for compatibility and as the opt-in `.withToolIntent("message")`.
+ */
 export function requiresTools(message: string): boolean {
   // Conversational overrides take priority — these are about past actions, not new ones
   if (CHAT_OVERRIDE_PATTERNS.some((p) => p.test(message))) return false;

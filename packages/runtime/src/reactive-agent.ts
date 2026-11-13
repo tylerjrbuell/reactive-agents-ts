@@ -88,7 +88,6 @@ export { projectAbstention }
 
 import {
     AgentSession,
-    requiresTools,
     buildChatSystemContext,
     type ChatMessage,
     type ChatOptions,
@@ -99,7 +98,7 @@ import {
 import { ChatEngine, nextSessionId } from './chat/engine.js'
 import { turnCarryMetadata, planPosture, originCarry, type TurnCarryOption, type PostureOption, type OriginOption } from './chat/todo-seed.js'
 import type { EnvironmentUpdateOption } from './chat/environment-snapshot.js'
-import { makeChatComplete, makeChatPublishTurn, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
+import { makeChatComplete, makeChatPublishTurn, makeChatToolIntent, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
@@ -217,6 +216,8 @@ export class ReactiveAgent<TOut = unknown> {
             modelRouting?: { tierModels?: Partial<Record<'haiku' | 'sonnet' | 'opus', string>>; minTier?: 'haiku' | 'sonnet' | 'opus' }
             /** Per-agent override for chat()'s tool-need auto-detection, from `.withToolIntent()`. */
             toolIntentClassifier?: (message: string) => boolean
+            /** Default chat() routing: the agent has capability tools, so the tool loop is the default. */
+            hasCapabilityTools?: boolean
             /** Composed persona/system prompt from the builder (reaches the direct path). */
             systemPrompt?: string
         },
@@ -1512,14 +1513,13 @@ export class ReactiveAgent<TOut = unknown> {
     /**
      * Send a conversational message to the agent.
      *
-     * Automatically routes between two paths based on message intent:
-     * - **Direct LLM path** (fast, no tools): conversational/factual questions, simple queries
-     * - **Tool-capable path**: messages requiring search, file ops, computation, etc.
+     * Routes by the agent's capability, not the message wording:
+     * - **Tool-capable path** (default when the agent has capability tools): the model can
+     *   still answer directly via `final-answer` in one iteration.
+     * - **Direct LLM path** (fast, no tools): agents with no capability tools.
      *
-     * Use `options.useTools` to override the automatic routing for a single call,
-     * or `.withToolIntent(classifier)` (on the builder) to override the default
-     * classifier for every call on this agent. Precedence: `options.useTools` >
-     * agent-level classifier from `.withToolIntent()` > default `requiresTools()`.
+     * Precedence: `options.useTools` > `.withToolIntent()` (a classifier, or `"message"`
+     * for the legacy wording heuristic) > capability default.
      *
      * @param message - The user's conversational message
      * @param options - Optional routing overrides and iteration limits
@@ -1565,27 +1565,13 @@ export class ReactiveAgent<TOut = unknown> {
                             self._lastDebrief,
                             self._lastRunObservations,
                         ),
-                    scratchpadEntries: () => Object.fromEntries(self._scratchpad),
+                    scratchpadEntries: () => Object.fromEntries(self._scratchpad), toolIntent: makeChatToolIntent(self._config),
                 },
                 { sessionId },
             );
         }
 
-        const useTools = this._resolveUseTools(message, options)
-
-        return this._defaultChatEngine.turn(message, {
-            ...options,
-            useTools,
-            maxIterations: options?.maxIterations,
-        });
-    }
-
-    /**
-     * Whether a chat turn should run with tools: explicit `options.useTools`
-     * wins, then the `.withToolIntent()` classifier, then default `requiresTools()`.
-     */
-    private _resolveUseTools(message: TaskInput, options?: ChatOptions): boolean {
-        return options?.useTools ?? (this._config?.toolIntentClassifier ?? requiresTools)(taskInputText(message))
+        return this._defaultChatEngine.turn(message, options);
     }
 
     /**
@@ -1599,7 +1585,6 @@ export class ReactiveAgent<TOut = unknown> {
         _history?: ChatMessage[],
         _sessionId?: string,
     ): Promise<ChatReply> {
-        const useTools = this._resolveUseTools(message, options)
         const contextSummary = buildChatSystemContext(
             this._config?.taskContext,
             this._lastDebrief,
@@ -1622,12 +1607,12 @@ export class ReactiveAgent<TOut = unknown> {
                     ? () => self._config!.systemPrompt!
                     : undefined,
                 contextSummary: () => contextSummary,
-                scratchpadEntries: () => Object.fromEntries(self._scratchpad),
+                scratchpadEntries: () => Object.fromEntries(self._scratchpad), toolIntent: makeChatToolIntent(self._config),
                 loadHistory: async () => _history ?? [],
             },
             { sessionId, maxDirectTokens: 4096 },
         );
-        return engine.turn(message, { ...options, useTools });
+        return engine.turn(message, options);
     }
 
     /**
@@ -1689,7 +1674,7 @@ export class ReactiveAgent<TOut = unknown> {
                         self._lastDebrief,
                         self._lastRunObservations,
                     ),
-                scratchpadEntries: () => Object.fromEntries(self._scratchpad),
+                scratchpadEntries: () => Object.fromEntries(self._scratchpad), toolIntent: makeChatToolIntent(self._config),
                 ...sessionEnvironmentPorts(self.runtime, options),
             },
             {

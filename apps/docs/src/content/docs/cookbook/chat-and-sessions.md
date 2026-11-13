@@ -7,7 +7,7 @@ sidebar:
   order: 9
 ---
 
-`agent.chat()` enables multi-turn conversation with automatic routing — simple questions go directly to the LLM, complex tasks spin up the full ReAct loop. `agent.session()` wraps a conversation with persistent context. When **`.withTools()`** is on, the **`recall`** meta-tool (Conductor's Suite) is the supported way for the model to read/write working notes across turns — not legacy note builtins.
+`agent.chat()` enables multi-turn conversation with capability-based routing — an agent with tools runs the ReAct loop for each message (and can answer directly in one iteration), an agent without tools goes straight to the LLM. `agent.session()` wraps a conversation with persistent context. When **`.withTools()`** is on, the **`recall`** meta-tool (Conductor's Suite) is the supported way for the model to read/write working notes across turns — not legacy note builtins.
 
 ## Single-Turn Chat
 
@@ -48,42 +48,48 @@ console.log(session.history());
 
 ## Routing: Direct vs. Tool Path
 
-The session automatically routes each message. Messages with action keywords ("search for", "fetch", "create a", etc.) route to the full ReAct loop with tools; conversational messages go directly to the LLM:
+Routing follows the agent's **capability**, not the message wording. An agent with any capability tool (a custom tool, an MCP server, a sub-agent, the terminal, an opted-in built-in, or documents) sends every message through the tool loop, so "what is the price of bitcoin?" reaches the price tool. The model can still answer a plain message directly via `final-answer` in one iteration. An agent with no capability tools stays on the direct LLM path.
 
 ```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ builtins: ["web-search"] })
+  .build();
 const session = agent.session();
 
-// Conversational — goes directly to the LLM (fast, cheap)
-const r1 = await session.chat("What's 2 + 2?");
-console.log(r1.message); // "4"
-
-// Action keyword — routes to the tool path
-const r2 = await session.chat("Search the web for today's top AI news");
-console.log(r2.toolsUsed); // ["web-search"]
+const r1 = await session.chat("What's the latest AI news?");
+console.log(r1.toolsUsed); // ["web-search"]
 ```
 
 Override routing explicitly with `useTools`:
 
 ```typescript
-const reply = await session.chat("Summarize the README", { useTools: true });
+const reply = await session.chat("Summarize the README", { useTools: false }); // direct path
 ```
 
-### Overriding the Default Classifier
+### Overriding the Default
 
-The built-in routing heuristic is domain-agnostic and can misclassify phrasing that's ambiguous in general but unambiguous for a specific agent — e.g. it treats "tell me about X" as recall of a past run and routes to the direct-LLM path, which is wrong for an agent whose "X" is always a live lookup. Use `.withToolIntent()` on the builder to replace the default classifier for every call on that agent:
+`.withToolIntent()` replaces the capability default for every call on that agent:
 
 ```typescript
-const agent = await ReactiveAgents.create()
+// Your own classifier: return true to take the tool loop.
+const custom = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withTools({ builtins: true })
   .withToolIntent((message) => !/\b(joke|opinion|what if)\b/i.test(message))
   .build();
 
-const session = agent.session();
-await session.chat("Tell me about the Roman Empire"); // routes to tools now
+// Legacy wording heuristic (requiresTools): only action phrasing such as
+// "search for" or "fetch" takes the tool loop. Misroutes "what is the price of bitcoin?".
+//   .withToolIntent("message")
+
+// The default, spelled out:
+//   .withToolIntent("capability")
 ```
 
-Precedence: `chat(msg, { useTools })` (explicit, per call) > `.withToolIntent()` (agent-level) > the default `requiresTools()` heuristic.
+Precedence: `chat(msg, { useTools })` (explicit, per call) > `.withToolIntent()` (agent-level) > capability default.
+
+**Cost note.** A tools agent runs a kernel iteration even for "hi": still one LLM call and no tool call, but with the tool schemas and harness prompt in the request, so the prompt is larger than on the direct path. Use `{ useTools: false }` or `.withToolIntent(...)` for latency-critical small talk.
 
 ## Persisted Sessions
 

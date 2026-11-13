@@ -321,7 +321,7 @@ describe("ChatOptions.useTools override", () => {
 // ─── Integration tests: .withToolIntent() agent-level classifier override ────
 
 describe(".withToolIntent() classifier override", () => {
-  it("without an override, chat() falls back to the default requiresTools() heuristic (regression)", async () => {
+  it('withToolIntent("message") keeps the legacy requiresTools() heuristic (opt-in)', async () => {
     const agent = await ReactiveAgents.create()
       .withName("chat-toolintent-default-fallback")
       .withTestScenario([{ text: "It was great" }])
@@ -330,11 +330,12 @@ describe(".withToolIntent() classifier override", () => {
           { definition: makeToolDef("noop"), handler: makeToolHandler("noop") },
         ],
       })
+      .withToolIntent("message")
       .build();
 
     let reply;
     try {
-      // "tell me about" is a CHAT_OVERRIDE_PATTERN — default requiresTools() -> false
+      // "tell me about" is a CHAT_OVERRIDE_PATTERN — requiresTools() -> false
       reply = await agent.chat("tell me about the weather");
     } finally {
       await agent.dispose();

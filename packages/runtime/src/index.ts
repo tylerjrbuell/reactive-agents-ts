@@ -237,6 +237,7 @@ export {
   type ChatOptions,
   type SessionOptions,
 } from "./chat.js";
+export type { ToolIntent } from "./builder/withers/capability-progress.js";
 
 // ─── Calibration Resolver ───
 export {

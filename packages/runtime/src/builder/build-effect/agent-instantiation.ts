@@ -87,12 +87,16 @@ export interface AgentInstantiationDeps {
     customTermination?: (state: { output: string }) => boolean;
     modelRouting?: ModelRoutingOptions;
     /**
-     * Optional per-agent override for `agent.chat()`'s tool-need auto-detection,
+     * Optional per-agent override for `agent.chat()`'s tool-need detection,
      * set via `.withToolIntent()`. When present, `chat()` uses this instead of
-     * the default `requiresTools()` heuristic (still overridable per-call via
-     * `ChatOptions.useTools`).
+     * the capability default (still overridable per-call via `ChatOptions.useTools`).
      */
     toolIntentClassifier?: (message: string) => boolean;
+    /**
+     * Whether the built agent has any capability tool (see `hasCapabilityTools`).
+     * The default `chat()` routing: true takes the tool loop, false stays direct.
+     */
+    hasCapabilityTools?: boolean;
   };
   /**
    * Durable resume context (Phase C). Present only when `.withDurableRuns()`

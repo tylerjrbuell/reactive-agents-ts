@@ -20,7 +20,7 @@ import {
 import { fetchAndMergePricing } from '../build-effect/pricing-fetch.js'
 import { setupParentContext } from '../build-effect/parent-context.js'
 import { buildToolMcpRegistrations } from '../build-effect/tool-mcp-registrations.js'
-import { mergeContractRequiredTools } from '../contract-tool-set.js'
+import { hasCapabilityTools, mergeContractRequiredTools } from '../contract-tool-set.js'
 import { documentStoreLayer, ingestRagDocuments } from '../build-effect/rag-ingestion.js'
 import { agentWorkspaceLayer } from '../../engine/start-run.js'
 import { HumanGateLive, humanGateLayer } from '../../engine/human-gate.js'
@@ -321,6 +321,16 @@ export const runBuilderBuildEffect = <TOut>(
                 customTermination: state._customTermination,
                 modelRouting: state._modelRouting,
                 toolIntentClassifier: state._toolIntentClassifier,
+                // chat()'s default routing: an agent with capability tools takes the tool loop.
+                hasCapabilityTools:
+                    state._enableTools &&
+                    hasCapabilityTools({
+                        toolsOptions: state._toolsOptions,
+                        requiredTools: mergeContractRequiredTools(state._requiredToolsConfig, state._taskContract)?.tools,
+                        hasMcpServers: state._mcpServers.length > 0,
+                        hasAgentTools: state._agentTools.length > 0 || state._allowDynamicSubAgents,
+                        hasDocuments: state._documents.length > 0,
+                    }),
             },
             // Phase C: when durable runs are enabled, resolve the same
             // checkpoint dir + identity configHash execute-stream computes

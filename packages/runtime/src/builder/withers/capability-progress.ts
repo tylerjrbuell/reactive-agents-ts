@@ -8,6 +8,7 @@
 import type { CostTrackingOptions } from '../types.js'
 import type { BuilderState } from './_state.js'
 import type { SkillsOptions } from '../../runtime-skills-layer.js'
+import { requiresTools } from '../../chat.js'
 
 /**
  * Enable cost tracking to monitor token consumption and estimate USD costs.
@@ -150,26 +151,32 @@ export const applyWithCustomTermination = (state: BuilderState, fn: (state: { ou
 }
 
 
+/** How `chat()` picks the tool loop: by capability (default), by message wording, or a custom classifier. */
+export type ToolIntent = "capability" | "message" | ((message: string) => boolean)
+
 /**
- * Override `agent.chat()`'s automatic tool-need detection for this agent.
+ * Override how `agent.chat()` / `session.chat()` choose between the direct-LLM
+ * path and the tool loop for this agent.
  *
- * By default, `chat()` routes each message through the built-in
- * `requiresTools()` heuristic (`chat.ts`) to decide between the direct-LLM
- * path and the tool-capable path. That heuristic is domain-agnostic and can
- * misclassify messages whose phrasing is common in one agent's domain but
- * ambiguous in general (e.g. "tell me about X" defaults to chat-only, but
- * for an agent whose "X" is always a live lookup, that's a false negative).
- * Use this to replace the default classifier for every `chat()` call on
- * this agent, without having to reimplement or fork the whole heuristic.
+ * Default (no call, or `"capability"`): an agent with any capability tool
+ * (custom, MCP, sub-agent, terminal, opted-in built-in, documents) takes the
+ * tool loop for every message, and the model can still answer directly via
+ * `final-answer` in one iteration; an agent with none stays on the direct path.
+ * The decision comes from what the agent can do, never from the message wording.
  *
- * Precedence per call: explicit `chat(msg, { useTools })` always wins,
- * then this agent-level classifier (if set), then the default
- * `requiresTools()`.
- * @param classifier - Receives the raw chat message; return true to route to the tool-capable path
+ * - `"message"`: opt back in to the legacy wording heuristic (`requiresTools()`):
+ *   only messages phrased like an action ("search for ...", "fetch ...") take the
+ *   tool loop. Misroutes ordinary phrasings ("what is the price of bitcoin?").
+ * - function: your own classifier; receives the raw message, return true for the tool loop.
+ *
+ * Precedence per call: explicit `chat(msg, { useTools })` always wins, then this
+ * setting, then the capability default.
+ * @param intent - `"capability"` | `"message"` | a `(message) => boolean` classifier
  * @returns `this` for chaining
  */
-export const applyWithToolIntent = (state: BuilderState, classifier: (message: string) => boolean) => {
-    state._toolIntentClassifier = classifier
+export const applyWithToolIntent = (state: BuilderState, intent: ToolIntent) => {
+    state._toolIntentClassifier =
+        intent === "capability" ? undefined : intent === "message" ? requiresTools : intent
 }
 
 

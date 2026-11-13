@@ -121,6 +121,18 @@ export interface CapabilitySurfaceInput {
 }
 
 /**
+ * Whether the agent has at least one capability tool (custom, MCP, sub-agent,
+ * terminal, permitted built-in, or documents via `find`). The one definition
+ * shared by the no-capability-tools build notice and `chat()`'s default
+ * tool-loop routing. MCP servers count without inspection (names are known only
+ * after connect). Pure.
+ */
+export function hasCapabilityTools(input: CapabilitySurfaceInput): boolean {
+  if (input.hasMcpServers || input.hasAgentTools || input.hasDocuments) return true;
+  return computeExposedToolNames(input.toolsOptions, input.requiredTools).length > 0;
+}
+
+/**
  * The one build notice for a tools-enabled agent whose resolved surface has
  * zero capability tools: no custom, MCP, sub-agent, terminal or permitted
  * built-in tool (skills-and-extension-model spec §12.8 Q1). Documents count,
@@ -132,8 +144,7 @@ export interface CapabilitySurfaceInput {
  * (runtime-only, `tool-schemas.ts`) is deliberately not counted.
  */
 export function noCapabilityToolsNotice(input: CapabilitySurfaceInput): string | undefined {
-  if (input.hasMcpServers || input.hasAgentTools || input.hasDocuments) return undefined;
-  if (computeExposedToolNames(input.toolsOptions, input.requiredTools).length > 0) return undefined;
+  if (hasCapabilityTools(input)) return undefined;
   return (
     `withTools: this agent has no capability tools, so the model can only answer from ` +
     `its own knowledge. Built-ins are off unless opted in. Add one: ${builtinsFixHint()}. ` +

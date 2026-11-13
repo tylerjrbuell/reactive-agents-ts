@@ -126,7 +126,7 @@ import {
     applyWithTaskContext,
     applyWithOutputValidator,
     applyWithCustomTermination,
-    applyWithToolIntent,
+    applyWithToolIntent, type ToolIntent,
     applyWithSkillPersistence,
     applyWithDebrief,
     applyWithSkills,
@@ -1905,8 +1905,8 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Delegates to `applyWithToolIntent` in `builder/withers/capability-progress.ts` (#218 decomp) —
      * full public-contract JSDoc moved verbatim there.
      */
-    withToolIntent(classifier: (message: string) => boolean): this {
-        applyWithToolIntent(asBuilderState(this), classifier)
+    withToolIntent(intent: ToolIntent): this {
+        applyWithToolIntent(asBuilderState(this), intent)
         return this
     }
 

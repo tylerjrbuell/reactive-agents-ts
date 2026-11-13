@@ -138,6 +138,8 @@ export interface ChatEngineCapabilities {
    */
   readonly contextSummary?: (message: string) => string;
   readonly scratchpadEntries?: () => Readonly<Record<string, string>>;
+  /** Default routing when a turn's `useTools` is unset: true takes the tool path. Absent ⇒ direct. */
+  readonly toolIntent?: (message: string) => boolean;
   /** Live environment facts (model, tools, skills, docs, goal...). Absent ⇒ no environment updates. */
   readonly environment?: () => EnvironmentSnapshotInput;
   /** `EnvironmentChanged` publication port (swallow-site). */
@@ -311,11 +313,8 @@ export class ChatEngine {
    * Buffered conversational turn — the single entry point for `agent.chat`,
    * `session.chat`, and the gateway chat surface.
    *
-   * Routing: `options.useTools ?? false`. Hosts that own a tool-intent
-   * classifier (e.g. `agent.chat`'s `toolIntentClassifier` / `requiresTools`)
-   * resolve it FIRST and pass the resolved boolean; the engine itself never
-   * classifies (no classification capability exists in the locked shape, and
-   * the engine must not depend on the reasoning package's heuristics).
+   * Routing: `options.useTools ?? toolIntent(message) ?? false`; `toolIntent` is the
+   * host's capability (the engine itself never classifies).
    *
    * Direct path (Task 1 shape): composes the system prompt from the host's
    * `systemPrompt` / `contextSummary` capabilities plus the turn's `extraContext`
@@ -355,7 +354,7 @@ export class ChatEngine {
     const message = taskInputText(input);
     await this.#resolveLoadedHistory();
     const environmentUpdate = await this.#env.begin();
-    if (options?.useTools === true || taskInputHasMedia(input)) {
+    if ((options?.useTools ?? this.#deps.toolIntent?.(message)) === true || taskInputHasMedia(input)) {
       if (!this.#deps.runTask) {
         throw new ChatEngineCapabilityError({
           message:
