@@ -14,6 +14,8 @@ import {
   DEFAULT_PROMOTION_SIGNIFICANCE_K,
   DEFAULT_STATUS_REGRESSION_PP,
   DEFAULT_STATUS_REGRESSION_RUNS,
+  DEFAULT_TASK_STATUS_MIN_RUNS,
+  DEFAULT_TASK_STATUS_REGRESSION_RATE,
   type ClassVerdict,
   type GateDecision,
   type GateVerdict,
@@ -154,6 +156,36 @@ function endStatusCounts(cells: readonly TaskVariantReport[]): { observed: numbe
   return { observed, nonSuccess };
 }
 
+/**
+ * Per-task run-status read: tasks whose candidate runs end non-success in
+ * (nearly) all runs while the same task's baseline did not. Compared against
+ * each task's OWN baseline, so abstention tasks (non-success is correct) stay quiet.
+ */
+function taskStatusRegressions(
+  pairs: readonly { id: string; b: TaskVariantReport; c: TaskVariantReport }[],
+  policy: LiftPolicy,
+): NonNullable<TierEvidence["taskStatusRegressions"]> {
+  const rate = policy.taskStatusRegressionRate ?? DEFAULT_TASK_STATUS_REGRESSION_RATE;
+  const minRuns = policy.minTaskStatusRuns ?? DEFAULT_TASK_STATUS_MIN_RUNS;
+  const out: Array<NonNullable<TierEvidence["taskStatusRegressions"]>[number]> = [];
+  for (const { id, b, c } of pairs) {
+    const bs = endStatusCounts([b]);
+    const cs = endStatusCounts([c]);
+    if (bs.observed < minRuns || cs.observed < minRuns) continue;
+    const delta = cs.nonSuccess / cs.observed - bs.nonSuccess / bs.observed;
+    if (cs.nonSuccess >= Math.ceil(rate * cs.observed) && delta >= rate) {
+      out.push({
+        taskId: id,
+        baselineNonSuccess: bs.nonSuccess,
+        baselineRuns: bs.observed,
+        candidateNonSuccess: cs.nonSuccess,
+        candidateRuns: cs.observed,
+      });
+    }
+  }
+  return out;
+}
+
 function computeEvidence(
   model: string,
   base: readonly TaskVariantReport[],
@@ -270,6 +302,12 @@ function computeEvidence(
       deltaPp >= (policy.maxStatusRegressionPp ?? DEFAULT_STATUS_REGRESSION_PP) &&
       excessRuns >= (policy.minStatusRegressionRuns ?? DEFAULT_STATUS_REGRESSION_RUNS);
   }
+  // Per-task read: the pooled rate dilutes a task that flipped wholesale. Like
+  // the pooled read it needs no accuracy power; unlike it, it also speaks on an
+  // accuracy-INCONCLUSIVE tier (judge outage): `endStatus` comes from the trace,
+  // not the judge (the real qwen tier was inconclusive and hid its regression).
+  const taskRegs = taskStatusRegressions(pairs, policy);
+  if (taskRegs.length > 0) statusRegresses = true;
 
   const variance = maxOf(pairedCells.map((r) => r.variance));
 
@@ -380,7 +418,7 @@ function computeEvidence(
     tokenOverheadPct,
     billedTokenOverheadPct,
     billedTokenRatio,
-    ...(runStatus !== undefined ? { runStatus } : {}),
+    ...(runStatus !== undefined ? { runStatus, taskStatusRegressions: taskRegs } : {}),
     statusRegresses,
     cacheHitRate,
     variance,

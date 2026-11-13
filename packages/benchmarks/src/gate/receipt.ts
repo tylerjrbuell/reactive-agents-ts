@@ -54,6 +54,11 @@ function tierDetailLines(t: TierEvidence): string[] {
       `    · run status non-success ${pct(r.baselineNonSuccess, r.baselineRuns)} → ${pct(r.candidateNonSuccess, r.candidateRuns)}` +
         (t.statusRegresses ? " (STATUS REGRESSION — accuracy does not see this)" : ""),
     );
+    for (const x of t.taskStatusRegressions ?? []) {
+      lines.push(
+        `    · STATUS REGRESSION task ${x.taskId}: non-success ${x.baselineNonSuccess}/${x.baselineRuns} → ${x.candidateNonSuccess}/${x.candidateRuns}`,
+      );
+    }
   }
   if (!t.inconclusive) {
     lines.push(

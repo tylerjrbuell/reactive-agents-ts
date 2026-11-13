@@ -135,6 +135,17 @@ export interface LiftPolicy {
   readonly maxStatusRegressionPp?: number;
   /** Excess non-success runs (over the baseline rate) the guard needs. Default {@link DEFAULT_STATUS_REGRESSION_RUNS}. */
   readonly minStatusRegressionRuns?: number;
+  /**
+   * Per-task status read (same guard, finer granularity). A task regresses when
+   * its candidate non-success rate is at least this fraction AND exceeds that
+   * task's OWN baseline rate by at least this fraction (so a task already
+   * non-success at base, e.g. an abstention task, never trips). One regressed
+   * task rejects the tier, independent of the pooled rate. Default
+   * {@link DEFAULT_TASK_STATUS_REGRESSION_RATE}.
+   */
+  readonly taskStatusRegressionRate?: number;
+  /** Runs per arm a task needs before the per-task read speaks. Default {@link DEFAULT_TASK_STATUS_MIN_RUNS}. */
+  readonly minTaskStatusRuns?: number;
 }
 
 /**
@@ -146,6 +157,17 @@ export interface LiftPolicy {
  */
 export const DEFAULT_STATUS_REGRESSION_PP = 25;
 export const DEFAULT_STATUS_REGRESSION_RUNS = 2;
+
+/**
+ * Per-task status thresholds (2026-11-13). The pooled read above dilutes: on
+ * the full 12-task H3 suite two tasks went 0/3 -> 3/3 `failure` on both tiers
+ * while the pooled delta was +8..+22pp (< 25pp) and the guard stayed silent.
+ * 0.67 = "all or nearly all runs" (3/3 at k=3, 4/5 at k=5, 2/3 is not enough);
+ * k >= 3 keeps one flaky run from deciding a task. The baseline is compared
+ * per task, so tasks where non-success is correct stay quiet.
+ */
+export const DEFAULT_TASK_STATUS_REGRESSION_RATE = 0.67;
+export const DEFAULT_TASK_STATUS_MIN_RUNS = 3;
 
 export const DEFAULT_LIFT_POLICY: LiftPolicy = {
   metric: "accuracy",
@@ -249,7 +271,15 @@ export interface TierEvidence {
     /** Candidate non-success runs above what the baseline rate predicts. */
     readonly excessRuns: number;
   };
-  /** The status guard fired: this tier regresses on run status whatever its accuracy says. */
+  /** Tasks the per-task status read flagged (0/k -> ~k/k non-success); empty when none. Absent without `endStatus`. */
+  readonly taskStatusRegressions?: readonly {
+    readonly taskId: string;
+    readonly baselineNonSuccess: number;
+    readonly baselineRuns: number;
+    readonly candidateNonSuccess: number;
+    readonly candidateRuns: number;
+  }[];
+  /** The status guard fired (pooled OR per-task): this tier regresses on run status whatever its accuracy says. */
   readonly statusRegresses: boolean;
   /** Fewest runs observed in any contributing cell of this tier. */
   readonly minRunsObserved: number;

@@ -6,6 +6,7 @@
 // (run-completed.status) and rejects on a non-success-rate jump.
 
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { SessionReport, TaskVariantReport } from "../src/types.js";
 import { evaluateLiftGate, projectTierEvidence } from "../src/gate/gate.js";
 import { formatGateReceipt } from "../src/gate/receipt.js";
@@ -13,6 +14,8 @@ import {
   DEFAULT_LIFT_POLICY,
   DEFAULT_STATUS_REGRESSION_PP,
   DEFAULT_STATUS_REGRESSION_RUNS,
+  DEFAULT_TASK_STATUS_MIN_RUNS,
+  DEFAULT_TASK_STATUS_REGRESSION_RATE,
 } from "../src/gate/types.js";
 
 /** n runs, all accuracy 1; the first `failures` end with status `failure`. endStatus omitted when `withStatus` is false. */
@@ -146,6 +149,7 @@ describe("run-status regression guard", () => {
     const [t] = projectTierEvidence(twoTierReport({ baseFailures: 0, headFailures: 3 }), "base", "head", {
       ...DEFAULT_LIFT_POLICY,
       maxStatusRegressionPp: 101,
+      taskStatusRegressionRate: 1.01,
     });
     expect(t?.statusRegresses).toBe(false);
   });
@@ -157,5 +161,101 @@ describe("run-status regression guard", () => {
     expect(receipt).toContain("billed x2.80/run");
     expect(receipt).toContain("STATUS REGRESSION");
     expect(receipt).toContain("6/6 (100%)");
+  });
+});
+
+describe("per-task run-status regression guard", () => {
+  /** n runs of one task, the first `failures` end `failure`. */
+  const taskPair = (taskId: string, n: number, baseFail: number, headFail: number, model = "m"): TaskVariantReport[] => [
+    cell({ taskId, modelVariantId: model, variantId: "base", n, failures: baseFail }),
+    cell({ taskId, modelVariantId: model, variantId: "head", n, failures: headFail }),
+  ];
+  /** Two flipped tasks hidden among eight clean ones: pooled delta = 6/30 = 20pp < 25pp. */
+  const diluted = (): SessionReport =>
+    report([
+      ...taskPair("flip-1", 3, 0, 3),
+      ...taskPair("flip-2", 3, 0, 3),
+      ...["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"].flatMap((id) => taskPair(id, 3, 0, 0)),
+    ]);
+
+  it("documents defaults (0.67, k>=3)", () => {
+    expect(DEFAULT_TASK_STATUS_REGRESSION_RATE).toBe(0.67);
+    expect(DEFAULT_TASK_STATUS_MIN_RUNS).toBe(3);
+  });
+
+  it("0/3 -> 3/3 on two tasks while the pooled rate is under threshold -> reject, receipt names the tasks", () => {
+    const [t] = projectTierEvidence(diluted(), "base", "head");
+    expect(t?.runStatus?.deltaPp).toBeLessThan(DEFAULT_STATUS_REGRESSION_PP);
+    expect(t?.taskStatusRegressions?.map((x) => x.taskId)).toEqual(["flip-1", "flip-2"]);
+    const v = evaluateLiftGate(diluted(), "base", "head");
+    expect(v.decision).toBe("reject");
+    const receipt = formatGateReceipt(v);
+    expect(receipt).toContain("task flip-1");
+    expect(receipt).toContain("task flip-2");
+  });
+
+  it("task already non-success at base (abstention) does not trip", () => {
+    const [t] = projectTierEvidence(report(taskPair("trap", 3, 3, 3)), "base", "head");
+    expect(t?.taskStatusRegressions).toEqual([]);
+    expect(t?.statusRegresses).toBe(false);
+  });
+
+  it("2/3 non-success from 0/3 is not 'all or nearly all' -> silent", () => {
+    const [t] = projectTierEvidence(report([...taskPair("a", 3, 0, 2), ...taskPair("b", 3, 0, 0)]), "base", "head");
+    expect(t?.taskStatusRegressions).toEqual([]);
+  });
+
+  it("k<3 per arm -> per-task read silent", () => {
+    const [t] = projectTierEvidence(report([...taskPair("a", 2, 0, 2), ...taskPair("b", 2, 0, 0)]), "base", "head");
+    expect(t?.taskStatusRegressions).toEqual([]);
+  });
+
+  it("k=5: 4/5 from 0/5 trips, 3/5 does not; thresholds overridable", () => {
+    const at = (fails: number, policy = DEFAULT_LIFT_POLICY) =>
+      projectTierEvidence(report(taskPair("a", 5, 0, fails)), "base", "head", policy)[0]?.taskStatusRegressions?.length;
+    expect(at(4)).toBe(1);
+    expect(at(3)).toBe(0);
+    expect(at(3, { ...DEFAULT_LIFT_POLICY, taskStatusRegressionRate: 0.5 })).toBe(1);
+    expect(at(5, { ...DEFAULT_LIFT_POLICY, minTaskStatusRuns: 6 })).toBe(0);
+  });
+
+  const SESSION = new URL(
+    "../../../wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation/session-v2.json",
+    import.meta.url,
+  );
+  const real = (): SessionReport => JSON.parse(readFileSync(SESSION, "utf8")) as SessionReport;
+
+  it("real 12-task H3 data: base vs fixhead (h3-continuation/h3-exact-value 0/3 -> 3/3 failure) -> reject via per-task read", () => {
+    const v = evaluateLiftGate(real(), "base", "fixhead");
+    expect(v.decision).toBe("reject");
+    const flagged = v.perTier.flatMap((t) => (t.taskStatusRegressions ?? []).map((x) => x.taskId));
+    expect(flagged.sort()).toEqual(
+      ["h3-continuation", "h3-continuation", "h3-exact-value", "h3-exact-value"].sort(),
+    );
+    // The pooled read alone stayed silent on the full suite (the gap this guard closes).
+    const pooledOnly = projectTierEvidence(real(), "base", "fixhead", {
+      ...DEFAULT_LIFT_POLICY,
+      taskStatusRegressionRate: 1.01,
+    });
+    expect(pooledOnly.every((t) => !t.statusRegresses)).toBe(true);
+  });
+
+  it("real data sanity: pre-fix head vs fixhead (both broken the same way) and base vs itself -> no per-task regression", () => {
+    const r = real();
+    const sameTwice: SessionReport = {
+      ...r,
+      taskReports: [
+        ...r.taskReports.filter((c) => c.variantId === "base"),
+        ...r.taskReports.filter((c) => c.variantId === "base").map((c) => ({ ...c, variantId: "base-copy" })),
+      ],
+    };
+    for (const [rep, a, b] of [
+      [sameTwice, "base", "base-copy"],
+      [r, "head795", "fixhead"],
+    ] as const) {
+      const ev = projectTierEvidence(rep, a, b);
+      expect(ev.length).toBeGreaterThan(0);
+      expect(ev.every((t) => (t.taskStatusRegressions ?? []).length === 0 && !t.statusRegresses)).toBe(true);
+    }
   });
 });
