@@ -209,7 +209,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
   "reasoning/src/strategies/plan-execute.ts:817"
   "benchmarks/src/runner.ts:964"
-  "core/src/services/event-bus.ts:190"
+  "core/src/services/event-bus.ts:188" # 2026-11-12: handler isolation moved to event-handler-isolation.ts
   "runtime/src/runtime.ts:1105"
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1299"

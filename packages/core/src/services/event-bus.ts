@@ -1,5 +1,6 @@
-import { Cause, Effect, Context, Layer, Ref } from "effect";
+import { Effect, Context, Layer, Ref } from "effect";
 import type { AgentEvent, AgentEventTag, EventHandler, TypedEventHandler } from "../types/agent-event.js";
+import { publishIsolated } from "./event-handler-isolation.js";
 
 // Event type definitions live in `types/agent-event.ts`; re-exported here so existing
 // `services/event-bus` importers keep working.
@@ -132,53 +133,16 @@ export const EventBusLive = Layer.effect(
 
     return {
       /**
-       * Publish implementation — broadcasts event to all registered handlers concurrently.
-       * Each handler runs isolated: a failure or defect in one neither interrupts
-       * siblings nor fails the publisher. The failure is reported as an
-       * `ErrorSwallowed` event (site `core/src/services/event-bus.ts:publish`).
-       * A handler failing on an `ErrorSwallowed` event is dropped silently, so
-       * reporting cannot recurse.
+       * Publish implementation — broadcasts event to all registered handlers
+       * concurrently, each isolated (see `publishIsolated`).
        *
        * @internal
        */
-      publish: (event: AgentEvent) => {
-        const deliver = (
-          hs: ReadonlyArray<EventHandler>,
-          ev: AgentEvent,
-          onFailure: (cause: Cause.Cause<never>) => Effect.Effect<void>,
-        ) =>
-          Effect.all(
-            hs.map((h) =>
-              Effect.suspend(() => h(ev)).pipe(
-                Effect.catchAllCause((cause) =>
-                  // Interrupts propagate: only failures and defects are isolated.
-                  Cause.isInterruptedOnly(cause)
-                    ? Effect.failCause(cause)
-                    : onFailure(cause),
-                ),
-              ),
-            ),
-            { concurrency: "unbounded", discard: true },
-          );
-        return Effect.gen(function* () {
+      publish: (event: AgentEvent) =>
+        Effect.gen(function* () {
           const hs = yield* Ref.get(handlers);
-          yield* deliver(hs, event, (cause) =>
-            event._tag === "ErrorSwallowed"
-              ? Effect.void
-              : deliver(
-                  hs,
-                  {
-                    _tag: "ErrorSwallowed",
-                    site: "core/src/services/event-bus.ts:publish",
-                    tag: `EventHandlerFailed:${event._tag}`,
-                    message: Cause.pretty(cause).split("\n")[0],
-                    timestamp: Date.now(),
-                  },
-                  () => Effect.void,
-                ),
-          );
-        });
-      },
+          yield* publishIsolated(hs, event);
+        }),
 
       /**
        * Subscribe implementation — registers a catch-all handler.
