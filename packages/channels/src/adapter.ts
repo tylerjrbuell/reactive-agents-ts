@@ -131,6 +131,12 @@ export interface ChannelAdapter {
    * MUST consult it first and count a denied sender's files as unavailable, never fetch them.
    */
   setSenderGate?(gate: SenderGate): void;
+  /**
+   * Optional: show a "typing" indicator in a conversation (one pulse). Platforms expire the
+   * indicator after a few seconds, so the router repeats the call while a turn runs. Adapters
+   * whose platform has no such signal omit it; callers must treat absence as "not supported".
+   */
+  sendTyping?(conversation: { readonly channelId: string; readonly threadId?: string }): Effect.Effect<void, ChannelError>;
   start(): Effect.Effect<void, ChannelError, Scope.Scope>;
   send(message: OutboundMessage): Effect.Effect<DeliveryReceipt, ChannelError>;
 }

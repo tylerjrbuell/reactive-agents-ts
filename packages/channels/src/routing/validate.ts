@@ -1,5 +1,5 @@
 import { Effect, Either, Schema } from "effect";
-import { RouteSpec, RoutingError, type RouteSpecInput } from "./types.js";
+import { RouteSpec, RoutingError, type RouteAck, type RouteSpecInput } from "./types.js";
 
 /** `platform:userId` with a non-empty platform and id. */
 const SENDER_KEY = /^[^:\s]+:\S+$/;
@@ -8,6 +8,25 @@ const invalid = (routeId: string, message: string): RoutingError =>
   new RoutingError({ reason: "invalid_route", message: `route ${routeId}: ${message}`, routeId });
 
 const isPositive = (n: number | undefined): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
+
+const MAX_ACK_AFTER_MS = 120_000;
+const MAX_ACK_TEXT = 200;
+const MAX_ACK_TEXTS = 10;
+
+/** Bounds for `ack`: a sane delay and short fixed texts. The text is never templated, so there is nothing to inject into. */
+const ackProblem = (ack: RouteAck): string | undefined => {
+  if (ack.afterMs !== undefined && !(Number.isInteger(ack.afterMs) && ack.afterMs >= 0 && ack.afterMs <= MAX_ACK_AFTER_MS)) {
+    return `ack.afterMs must be an integer from 0 to ${MAX_ACK_AFTER_MS}`;
+  }
+  if (ack.text !== undefined) {
+    const texts = typeof ack.text === "string" ? [ack.text] : ack.text;
+    if (texts.length === 0 || texts.length > MAX_ACK_TEXTS) return `ack.text must hold 1 to ${MAX_ACK_TEXTS} messages`;
+    if (texts.some((t) => t.trim() === "" || t.length > MAX_ACK_TEXT)) {
+      return `ack.text entries must be non-empty and at most ${MAX_ACK_TEXT} characters`;
+    }
+  }
+  return undefined;
+};
 
 /**
  * Check one decoded route. Rules are unconditional (no "strict mode"):
@@ -47,6 +66,11 @@ export const validateRoute = (
     if (route.allow.length > 0 || route.deny.length > 0 || route.owners.length > 0 || route.open || rawSenderTools) {
       return invalid(route.id, "webhook routes reject allow, deny, owners, open and senderTools (access is the signing secret)");
     }
+  }
+  if (route.ack) {
+    if (platform === "webhook") return invalid(route.id, "webhook routes reject ack (the reply is the HTTP response)");
+    const problem = ackProblem(route.ack);
+    if (problem) return invalid(route.id, problem);
   }
   for (const cap of [route.maxTurnsPerHour, route.maxTurnsPerSenderPerHour, route.maxCostPerDayUsd, route.maxIterations]) {
     if (cap !== undefined && !isPositive(cap)) return invalid(route.id, "limits must be positive numbers");

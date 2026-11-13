@@ -303,6 +303,16 @@ export type PlatformAgentEvent =
       readonly simulated?: boolean;
     }
   | {
+      /** The router sent a route's acknowledgement message while a slow turn was still running. Carries no text. */
+      readonly _tag: "ChannelTurnAcknowledged";
+      /** Id of the route whose turn was acknowledged. */
+      readonly routeId: string;
+      /** Role the sender resolved to on this route. */
+      readonly role: string;
+      /** True when produced by a router simulation (dry run). */
+      readonly simulated?: boolean;
+    }
+  | {
       /** A routed message was dropped before an agent turn ran. */
       readonly _tag: "ChannelTurnDropped";
       /** Id of the route that dropped the message. */

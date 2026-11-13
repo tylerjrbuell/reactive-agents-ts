@@ -40,6 +40,21 @@ export const RouteMatch = Schema.Struct({
 export type RouteMatch = Schema.Schema.Type<typeof RouteMatch>;
 
 /**
+ * Turn acknowledgement: what the router does while a slow turn runs. Deterministic and zero-token;
+ * the text is fixed config, never agent output and never built from sender text.
+ */
+export const RouteAck = Schema.Struct({
+  /** Ms a turn must still be running before the acknowledgement message is sent. Default 4000. */
+  afterMs: Schema.optional(Schema.Number),
+  /** The acknowledgement text, or several to rotate through. Default `"On it..."`. */
+  text: Schema.optional(Schema.Union(Schema.String, Schema.Array(Schema.String))),
+  /** Show a typing indicator from the start of the turn, when the adapter supports it. Default true. */
+  typing: Schema.optional(Schema.Boolean),
+});
+/** See {@link RouteAck}. */
+export type RouteAck = Schema.Schema.Type<typeof RouteAck>;
+
+/**
  * One route. Access is flat and fail-closed: `allow` / `deny` / `owners` hold `platform:userId`
  * keys, `open` lets anyone talk (and requires cost and turn caps, see `validateRoutes`).
  */
@@ -67,6 +82,11 @@ export const RouteSpec = Schema.Struct({
   maxTurnsPerSenderPerHour: Schema.optional(Schema.Number),
   maxTurnsPerHour: Schema.optional(Schema.Number),
   maxCostPerDayUsd: Schema.optional(Schema.Number),
+  /**
+   * Acknowledge a slow turn before the final reply, like a chat: a typing indicator at once and one
+   * short message after `afterMs`. Absent or `false`: off (the default).
+   */
+  ack: Schema.optional(Schema.Union(RouteAck, Schema.Literal(false))),
 });
 /** A validated route (defaults applied). */
 export type RouteSpec = Schema.Schema.Type<typeof RouteSpec>;

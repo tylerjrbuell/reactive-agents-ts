@@ -24,6 +24,8 @@ export interface FakeTelegram {
   readonly push: (update: Record<string, unknown>) => { readonly updateId: number; readonly confirmed: Promise<void> };
   /** Successful `send*` calls, in order. */
   readonly sends: FakeSend[];
+  /** `sendChatAction` calls (typing indicators), in order. */
+  readonly actions: FakeSend[];
   /** Every Bot API method called, in order (including polls). */
   readonly methods: string[];
   /** The `offset` of each `getUpdates` call. */
@@ -51,6 +53,7 @@ export const makeFakeTelegram = (options: { readonly batchSize?: number } = {}):
   const batchSize = options.batchSize ?? 1;
   const queue: Queued[] = [];
   const sends: FakeSend[] = [];
+  const actions: FakeSend[] = [];
   const methods: string[] = [];
   const pollOffsets: number[] = [];
   const urls: string[] = [];
@@ -153,6 +156,9 @@ export const makeFakeTelegram = (options: { readonly batchSize?: number } = {}):
           ? ok({ file_id: fileId, file_path: `files/${fileId}`, file_size: data.length })
           : json(400, { ok: false, error_code: 400, description: "Bad Request: wrong file_id" });
       }
+      case "sendChatAction":
+        actions.push({ method, params, files: {} });
+        return ok(true);
       case "setWebhook":
         sends.push({ method, params, files: {} });
         return ok(true);
@@ -182,6 +188,7 @@ export const makeFakeTelegram = (options: { readonly batchSize?: number } = {}):
     fetch: fetchImpl,
     push,
     sends,
+    actions,
     methods,
     pollOffsets,
     urls,

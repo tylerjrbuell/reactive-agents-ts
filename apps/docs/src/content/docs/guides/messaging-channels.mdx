@@ -519,6 +519,28 @@ How access works:
 - **State is in memory by default.** Message dedupe and turn caps reset on restart, and the router logs a warning at startup. Pass a durable `store` to keep them.
 - This limits what an injected message can do. It does not make a model immune to injection, and read-only tools can still leak data they can read.
 
+### Acknowledging slow turns
+
+A tool turn can take 15 to 40 seconds, and the chat is silent until the final answer. Set `ack` on a route and the router behaves like a chat partner: it shows a typing indicator as soon as the turn starts and, if the turn is still running after `afterMs`, sends one short message, then the final reply.
+
+```typescript
+import type { RouteSpecInput } from "@reactive-agents/channels";
+
+const route: RouteSpecInput = {
+  id: "support",
+  match: { channelId: "telegram", conversation: "dm" },
+  target: { agentId: "support" },
+  allow: ["telegram:2002"],
+  ack: { afterMs: 4000, text: ["On it...", "Working on that..."], typing: true }, // all fields optional
+};
+```
+
+- **Off by default.** No `ack`, or `ack: false`, sends nothing extra. `ack: {}` means typing on, and `"On it..."` after 4000 ms.
+- **Deterministic and zero-token.** The text is fixed config (1 to 10 entries of at most 200 characters; the same message id always picks the same entry). It is never built from sender text or written by the model.
+- **Not history.** The ack goes straight to the adapter. The agent never sees it, and it is not recorded as an assistant reply.
+- **Only for turns that run.** A turn that finishes before `afterMs`, a denied or dropped message and a turn the meter refuses get no ack. A failed ack is swallowed and reported as `ErrorSwallowed`; it never fails the turn. Acks go through the adapter's normal outbound rate limits, and each one publishes `ChannelTurnAcknowledged` (no text).
+- **Typing support is per adapter.** The optional `ChannelAdapter.sendTyping` is implemented by Telegram (`sendChatAction`, refreshed every 4 seconds until the reply). Adapters without it still send the ack message. Webhook routes reject `ack`.
+
 Read state from the agent: `agent.channelStatus()` gives the adapters and session counters (`null` before the gateway starts), `agent.channelRouterStatus()` the router view above (channels, routes, drops, sessions). `agent.gatewayStatus()` carries the inbound queue (`ready`, `deferred`, `capacity`, `overflow`, `dropped`).
 
 If the router cannot start (for example a route names a channel that is not configured), the gateway stops instead of running with no inbound channels: `handle.done` resolves with a summary whose `error` explains why.

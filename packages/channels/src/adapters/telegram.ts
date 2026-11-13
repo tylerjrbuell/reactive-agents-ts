@@ -105,7 +105,8 @@ const asRecord = (u: unknown): Record<string, unknown> | undefined =>
  *   conversation and the individual sender is kept. Ids are `<chatId>:<messageId>`.
  * - `send` splits text at 4096 units, converts `format: "markdown"` to MarkdownV2 (falling back to
  *   plain text if Telegram rejects the entities), and returns the real `message_id` as the receipt.
- * - Telegram sends no delivery or typing signals to bots: `capabilities.receipts` is `false`.
+ * - Telegram sends no delivery signals to bots: `capabilities.receipts` is `false`. The adapter can
+ *   show a typing indicator (`sendTyping`, `sendChatAction`), which a route's `ack` option drives.
  * - `409 Conflict` (another poller or a webhook owns the bot) stops the adapter with a typed,
  *   non-retryable `conflict` error.
  */
@@ -220,6 +221,18 @@ export class TelegramChannelAdapter implements ChannelAdapter {
 
   send(message: OutboundMessage): Effect.Effect<DeliveryReceipt, ChannelError> {
     return this.sendRaw(message);
+  }
+
+  /** One `sendChatAction` "typing" pulse (Telegram shows it for about 5 seconds). Not rate limited: it is not a message. */
+  sendTyping(conversation: { readonly channelId: string; readonly threadId?: string }): Effect.Effect<void, ChannelError> {
+    const threadId = conversation.threadId;
+    return this.api
+      .call("sendChatAction", {
+        chat_id: chatParam(conversation.channelId),
+        action: "typing",
+        ...(threadId !== undefined && /^\d+$/.test(threadId) ? { message_thread_id: Number(threadId) } : {}),
+      })
+      .pipe(Effect.asVoid);
   }
 
   /**

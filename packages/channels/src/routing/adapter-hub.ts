@@ -25,6 +25,8 @@ interface RegisteredAdapter {
   readonly state: ConnectionState;
   /** Re-read state from the adapter (canonical adapters only). */
   readonly readState?: Effect.Effect<ConnectionState>;
+  /** One typing pulse; present only when the adapter supports it. */
+  readonly sendTyping?: NonNullable<ChannelAdapter["sendTyping"]>;
   /** The platform reported another consumer owns the account; the channel was stopped. */
   readonly conflict: boolean;
   readonly deliveryFailures: number;
@@ -150,6 +152,7 @@ export class AdapterHub {
         send: adapter.send.bind(adapter),
         state: yield* adapter.currentState,
         readState: adapter.currentState,
+        ...(adapter.sendTyping ? { sendTyping: adapter.sendTyping.bind(adapter) } : {}),
         conflict: false,
         deliveryFailures: 0,
         messagesReceived: 0,
@@ -274,6 +277,14 @@ export class AdapterHub {
         ),
       );
     });
+  }
+
+  /** One typing pulse for a conversation, or `undefined` when the adapter does not support it. */
+  typingPulse(
+    adapterId: string,
+    conversation: { readonly channelId: string; readonly threadId?: string },
+  ): Effect.Effect<void, ChannelError> | undefined {
+    return this.adapters.get(adapterId)?.sendTyping?.(conversation);
   }
 
   /** Per-adapter status rows. */

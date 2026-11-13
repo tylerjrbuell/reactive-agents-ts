@@ -6,6 +6,7 @@ import { envelopeToInboundMessage, type InboundEnvelope, type SenderGate } from 
 import type { ChannelError } from "../errors.js";
 import type { InboundMessage } from "../types.js";
 import { AdapterHub } from "./adapter-hub.js";
+import { pickAckText, resolveAck, withTurnAck } from "./ack.js";
 import type { RouteMeter } from "./meter.js";
 import {
   decideRouteAccess,
@@ -387,7 +388,7 @@ export class RouterEngine {
         taskId,
       };
       const attempt = yield* Effect.either(
-        Effect.gen(function* () {
+        self.acknowledged(route, role, adapterId, msg, taskId, simulated, Effect.gen(function* () {
           const entry = yield* self.session(key, route, role, adapterId, msg);
           const send = entry.session.send(turn);
           const bounded = self.deps.strict
@@ -402,7 +403,7 @@ export class RouterEngine {
           return yield* route.session === "stateless"
             ? bounded.pipe(Effect.ensuring(Scope.close(entry.scope, Exit.void)))
             : bounded;
-        }),
+        })),
       ).pipe(
         Effect.tap((result) =>
           meter && reservationId !== undefined && Either.isRight(result)
@@ -436,6 +437,35 @@ export class RouterEngine {
         ? ({ _tag: "Answered", routeId: route.id, role, reply, receipt: sent.right } as const)
         : ({ _tag: "Answered", routeId: route.id, role, reply, deliveryError: sent.left } as const);
     });
+  }
+
+  /**
+   * Wrap a running turn with the route's acknowledgement (typing pulse, then one message after
+   * `ack.afterMs`). Off for simulations, `ack: false`/absent, and unregistered adapters. The ack goes
+   * straight to the adapter, never through the session, so it is not agent history; a failed ack
+   * is swallowed (`ErrorSwallowed`) and never fails the turn.
+   */
+  private acknowledged<A, E>(
+    route: RouteSpec,
+    role: RouteRole,
+    adapterId: string,
+    msg: InboundMessage,
+    taskId: string,
+    simulated: boolean,
+    turn: Effect.Effect<A, E>,
+  ): Effect.Effect<A, E> {
+    const ack = resolveAck(route.ack);
+    if (!ack || simulated || !this.hub.has(adapterId)) return turn;
+    const conversation = {
+      channelId: msg.channelId,
+      ...(typeof msg.metadata["threadId"] === "string" ? { threadId: msg.metadata["threadId"] } : {}),
+    };
+    const pulse = this.hub.typingPulse(adapterId, conversation);
+    const sendAck = this.reply(adapterId, msg, pickAckText(ack.texts, msg.id), taskId).pipe(
+      Effect.zipRight(this.emit({ _tag: "ChannelTurnAcknowledged", routeId: route.id, role, simulated })),
+      Effect.catchAll((error) => emitErrorSwallowed({ site: "channels/src/routing/engine.ts:ack", tag: errorTag(error) })),
+    );
+    return withTurnAck(turn, { ack, pulse: pulse?.pipe(Effect.ignore), sendAck });
   }
 
   /** Reply through the same adapter. A failed delivery is already counted and published by `deliver`. */
