@@ -57,6 +57,26 @@ export class InvalidTaskStateError extends Data.TaggedError("InvalidTaskStateErr
   readonly attemptedTransition: string;
 }> {}
 
+/** Client request exceeded its time budget (headers or body did not complete in `timeoutMs`). */
+export class RequestTimeoutError extends Data.TaggedError("RequestTimeoutError")<{
+  readonly message: string;
+  readonly url: string;
+  readonly timeoutMs: number;
+}> {}
+
+/** Client response body exceeded `maxResponseBytes`; the read was aborted. */
+export class ResponseTooLargeError extends Data.TaggedError("ResponseTooLargeError")<{
+  readonly message: string;
+  readonly url: string;
+  readonly maxBytes: number;
+}> {}
+
+/** Client egress policy refused the target (private/loopback/metadata, or a redirect). */
+export class EgressDeniedError extends Data.TaggedError("EgressDeniedError")<{
+  readonly message: string;
+  readonly url: string;
+}> {}
+
 export class AuthenticationError extends Data.TaggedError("AuthenticationError")<{
   readonly message: string;
   readonly scheme?: string;

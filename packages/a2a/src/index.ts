@@ -5,7 +5,7 @@ export { A2AHttpServer, createA2AHttpServer, type A2AHttpServerOptions } from ".
 export { createTaskHandler, type TaskExecutor } from "./server/task-handler.js";
 export { formatSSEEvent, type StreamEvent } from "./server/streaming.js";
 export { A2AClient, createA2AClient } from "./client/a2a-client.js";
-export type { ClientConfig } from "./client/a2a-client.js";
+export type { ClientConfig, ClientRequestError } from "./client/a2a-client.js";
 export {
   discoverAgent,
   discoverMultipleAgents,

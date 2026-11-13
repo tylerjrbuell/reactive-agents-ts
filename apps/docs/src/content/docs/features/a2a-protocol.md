@@ -196,6 +196,25 @@ const layer2 = createA2AClient({
 });
 ```
 
+The server accepts only `Authorization: Bearer <token>` (set via `RA_A2A_TOKEN` or the server options); the client's `apiKey` type sends `X-API-Key`, which the built-in server does not accept, so use `bearer` against it.
+
+### Timeout, size cap and egress policy
+
+`sendMessage`, `getTask` and `cancelTask` are bounded so a hostile or hung endpoint cannot stall a run or exhaust memory:
+
+```typescript
+import { createA2AClient } from "@reactive-agents/a2a";
+
+const layer = createA2AClient({
+  baseUrl: "https://agent.example.com",
+  timeoutMs: 30_000,              // default 30s, covers connect + headers + body -> RequestTimeoutError
+  maxResponseBytes: 5 * 1024 * 1024, // default 5 MiB, streamed read aborts past it -> ResponseTooLargeError
+  allowPrivateNetwork: false,     // explicit: refuse loopback/RFC-1918 targets -> EgressDeniedError
+});
+```
+
+Requests connect through the SSRF-safe pinned fetch: DNS is resolved once, every answer is validated, and the socket goes to the validated address. Cloud-metadata and link-local targets are always refused. Redirects are refused (`EgressDeniedError`) because they would forward credentials. When `allowPrivateNetwork` is unset the shared agent policy applies: private peers are allowed unless `egress: { strictEgress: true }` or `RA_AGENT_STRICT_EGRESS=1`. Set `allowPrivateNetwork: true` to permit private peers even under strict egress.
+
 ## Capability Matching
 
 Find the best agent for a task based on skills and capabilities:
@@ -324,6 +343,9 @@ cancellation (interrupting the in-flight run) is a planned follow-up.
 | `TaskCanceledError` | Task was already canceled |
 | `InvalidTaskStateError` | Invalid state transition |
 | `AuthenticationError` | Auth credentials invalid |
+| `RequestTimeoutError` | Client RPC exceeded `timeoutMs` |
+| `ResponseTooLargeError` | Client RPC response body exceeded `maxResponseBytes` |
+| `EgressDeniedError` | Client RPC target refused by the egress policy, or the server redirected |
 
 ## What's Next
 
