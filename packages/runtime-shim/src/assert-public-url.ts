@@ -144,27 +144,45 @@ export interface AssertPublicUrlOptions {
   readonly allowPrivate?: boolean;
 }
 
+/** Tagged error for every egress-guard refusal (blocked target, bad URL, unresolvable host, redirect cap). */
+export class PublicUrlError extends Error {
+  /** Discriminant for `Effect.catchTag` / `Effect.tryPromise` mapping. */
+  readonly _tag = "PublicUrlError" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "PublicUrlError";
+  }
+}
+
+/** A URL validated as public, with the single address the caller must connect to. */
+export interface ResolvedPublicUrl {
+  /** Parsed, validated URL (hostname unchanged, so Host header and TLS SNI stay correct). */
+  readonly url: URL;
+  /** The validated IP to connect to (first resolver answer; every answer was checked). */
+  readonly address: string;
+  /** IP family of `address`. */
+  readonly family: 4 | 6;
+}
+
 /**
- * Egress guard (F6). Validates that `rawUrl` points at a public destination and
- * returns the parsed URL, or throws. Blocks non-http(s) schemes, loopback /
- * link-local / private / CGNAT / metadata targets by IP literal or hostname,
- * and hostnames that *resolve* to such an address (DNS-rebinding). Apply at
- * every fetch site; re-validate each redirect hop via `redirect: "manual"`.
+ * Validate `rawUrl` like {@link assertPublicUrl} but also return the resolved,
+ * validated address so the caller can connect to it instead of re-resolving.
+ * Throws {@link PublicUrlError} when the target is not allowed.
  */
-export async function assertPublicUrl(
+export async function resolvePublicUrl(
   rawUrl: string,
   opts: AssertPublicUrlOptions = {},
-): Promise<URL> {
+): Promise<ResolvedPublicUrl> {
   let url: URL;
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new Error(`assertPublicUrl: invalid URL "${rawUrl}"`);
+    throw new PublicUrlError(`assertPublicUrl: invalid URL "${rawUrl}"`);
   }
 
   const schemes = opts.allowedSchemes ?? ["http:", "https:"];
   if (!schemes.includes(url.protocol)) {
-    throw new Error(`assertPublicUrl: blocked URL scheme "${url.protocol}"`);
+    throw new PublicUrlError(`assertPublicUrl: blocked URL scheme "${url.protocol}"`);
   }
 
   const allowPrivate = opts.allowPrivate === true;
@@ -175,42 +193,59 @@ export async function assertPublicUrl(
 
   // Cloud-metadata hostnames are never legitimate — blocked even under allowPrivate.
   if (METADATA_HOSTNAMES.has(host) || host.endsWith(".internal")) {
-    throw new Error(`assertPublicUrl: blocked metadata host "${host}"`);
+    throw new PublicUrlError(`assertPublicUrl: blocked metadata host "${host}"`);
   }
 
   if (isIpLiteral(host)) {
     if (isMetadataOrLinkLocalIp(host)) {
-      throw new Error(`assertPublicUrl: blocked metadata/link-local address "${host}"`);
+      throw new PublicUrlError(`assertPublicUrl: blocked metadata/link-local address "${host}"`);
     }
     if (!allowPrivate && isPrivateOrReservedIp(host)) {
-      throw new Error(`assertPublicUrl: blocked private/reserved address "${host}"`);
+      throw new PublicUrlError(`assertPublicUrl: blocked private/reserved address "${host}"`);
     }
-    return url;
+    return { url, address: host, family: host.includes(":") ? 6 : 4 };
   }
 
   // localhost is a valid local peer only when private targets are allowed.
   if (!allowPrivate && (host === "localhost" || host.endsWith(".localhost"))) {
-    throw new Error(`assertPublicUrl: blocked loopback host "${host}"`);
+    throw new PublicUrlError(`assertPublicUrl: blocked loopback host "${host}"`);
   }
 
-  // Residual risk (DNS rebinding / TOCTOU): DNS is resolved here, then the caller's
-  // fetch() resolves the hostname again independently. A rebinding server can
-  // answer public now and private later. This guard does not pin the address;
-  // callers needing a hard guarantee must connect to a validated IP themselves.
+  // DNS is resolved exactly once here and EVERY answer is validated. The returned
+  // `address` is the one the caller must connect to (see fetchPinned): a second
+  // resolution by a plain fetch() could otherwise get a different (rebound) answer.
   const resolve =
     opts.resolve ?? (async (h: string) => (await lookup(h, { all: true })).map((a) => a.address));
   const addresses = await resolve(host);
   if (addresses.length === 0) {
-    throw new Error(`assertPublicUrl: could not resolve host "${host}"`);
+    throw new PublicUrlError(`assertPublicUrl: could not resolve host "${host}"`);
   }
   for (const addr of addresses) {
     if (isMetadataOrLinkLocalIp(addr)) {
-      throw new Error(`assertPublicUrl: host "${host}" resolves to metadata/link-local "${addr}"`);
+      throw new PublicUrlError(`assertPublicUrl: host "${host}" resolves to metadata/link-local "${addr}"`);
     }
     if (!allowPrivate && isPrivateOrReservedIp(addr)) {
-      throw new Error(`assertPublicUrl: host "${host}" resolves to private address "${addr}"`);
+      throw new PublicUrlError(`assertPublicUrl: host "${host}" resolves to private address "${addr}"`);
     }
   }
 
-  return url;
+  const address = addresses[0]!;
+  return { url, address, family: address.includes(":") ? 6 : 4 };
+}
+
+/**
+ * Egress guard (F6). Validates that `rawUrl` points at a public destination and
+ * returns the parsed URL, or throws {@link PublicUrlError}. Blocks non-http(s)
+ * schemes, loopback / link-local / private / CGNAT / metadata targets by IP
+ * literal or hostname, and hostnames that *resolve* to such an address.
+ *
+ * This check alone does NOT stop DNS rebinding: the caller's own `fetch()`
+ * resolves the hostname a second time. To connect to the validated address, use
+ * {@link fetchPinned} (or {@link resolvePublicUrl} and connect to `address`).
+ */
+export async function assertPublicUrl(
+  rawUrl: string,
+  opts: AssertPublicUrlOptions = {},
+): Promise<URL> {
+  return (await resolvePublicUrl(rawUrl, opts)).url;
 }
