@@ -94,3 +94,50 @@ describe("EventBus", () => {
     expect(counts.c2).toBe(1);
   });
 });
+
+describe("EventBus handler isolation", () => {
+  const run = <A, E>(effect: Effect.Effect<A, E, EventBus>) =>
+    Effect.runPromise(effect.pipe(Effect.provide(EventBusLive)));
+
+  it("a defecting handler does not stop siblings or fail publish, and is reported as ErrorSwallowed", async () => {
+    const { ran, swallowed } = await run(
+      Effect.gen(function* () {
+        const bus = yield* EventBus;
+        const ranRef = yield* Ref.make(0);
+        const swallowedRef = yield* Ref.make<AgentEvent[]>([]);
+
+        yield* bus.subscribe((event) =>
+          event._tag === "TaskCreated"
+            ? Effect.die(new Error("boom"))
+            : Effect.void,
+        );
+        yield* bus.subscribe((event) =>
+          event._tag === "TaskCreated"
+            ? Ref.update(ranRef, (n) => n + 1)
+            : Effect.void,
+        );
+        yield* bus.on("ErrorSwallowed", (e) =>
+          Ref.update(swallowedRef, (es) => [...es, e]),
+        );
+
+        yield* bus.publish({ _tag: "TaskCreated", taskId: "t1" });
+        return {
+          ran: yield* Ref.get(ranRef),
+          swallowed: yield* Ref.get(swallowedRef),
+        };
+      }),
+    );
+    expect(ran).toBe(1);
+    expect(swallowed.length).toBe(1);
+  });
+
+  it("a defecting ErrorSwallowed handler does not recurse", async () => {
+    await run(
+      Effect.gen(function* () {
+        const bus = yield* EventBus;
+        yield* bus.subscribe(() => Effect.die(new Error("always")));
+        yield* bus.publish({ _tag: "TaskCreated", taskId: "t1" });
+      }),
+    );
+  });
+});

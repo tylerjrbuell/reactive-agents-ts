@@ -1,4 +1,4 @@
-import { Effect, Option } from "effect";
+import { Cause, Effect, Option } from "effect";
 import { EventBus } from "./event-bus.js";
 
 /**
@@ -100,6 +100,34 @@ export function errorTag(err: unknown): string {
   return "UnknownError";
 }
 
+/**
+ * Canonical human-readable message for any caught value. Replaces the
+ * `x instanceof Error ? x.message : String(x)` idiom.
+ *
+ * Precedence: a string is returned as-is; an object (Error, tagged error)
+ * with a non-empty string `message` returns it; an Effect `Cause` pretty-prints;
+ * anything else is `String(value)`. Duck-typed (no `instanceof`) so it works
+ * across realms and adds nothing to the instanceof ledger. Never throws.
+ *
+ * @param err — Any caught value.
+ * @returns A printable message.
+ */
+export function errorMessage(err: unknown): string {
+  if (typeof err === "string") return err;
+  if (err !== null && typeof err === "object") {
+    if ("message" in err) {
+      const m = (err as { readonly message: unknown }).message;
+      if (typeof m === "string" && m.length > 0) return m;
+    }
+    if (Cause.isCause(err)) return Cause.pretty(err);
+  }
+  try {
+    return String(err);
+  } catch {
+    return "Unprintable error";
+  }
+}
+
 // ── Load-bearing failures (HS-cleanup-3) ─────────────────────────────────────
 
 /**
@@ -154,7 +182,7 @@ export interface LoadBearingFailurePayload {
  *     site: "reactive-intelligence/learning-engine.ts:165",
  *     tag: errorTag(err),
  *     entityId: entry.name,
- *     message: err instanceof Error ? err.message : String(err),
+ *     message: errorMessage(err),
  *   }),
  * );
  * ```

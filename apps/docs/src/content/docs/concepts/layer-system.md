@@ -38,7 +38,7 @@ Internally, this produces:
 
 ```
 CoreServicesLive          → provides EventBus, AgentService, TaskService
-  + EventBusLive          → provides EventBus (for optional layers)
+  + EventBusLive          → provides EventBus (for optional layers; a failing subscriber never breaks siblings or the publisher, it surfaces as an `ErrorSwallowed` event)
   + LLMProviderLayer      → provides LLMService
   + MemoryLayer           → provides MemoryService
   + HookRegistryLive      → provides LifecycleHookRegistry

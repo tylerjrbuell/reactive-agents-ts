@@ -259,6 +259,7 @@ export {
   emitErrorSwallowed,
   emitLoadBearingFailure,
   errorTag,
+  errorMessage,
 } from "./services/error-swallowed.js";
 export type { ErrorSwallowedPayload, LoadBearingFailurePayload } from "./services/error-swallowed.js";
 export {

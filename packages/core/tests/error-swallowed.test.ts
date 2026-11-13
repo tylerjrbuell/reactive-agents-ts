@@ -6,8 +6,21 @@ import {
   emitErrorSwallowed,
   emitLoadBearingFailure,
   errorTag,
+  errorMessage,
   type AgentEvent,
 } from "../src/index.js";
+import { Cause } from "effect";
+
+describe("errorMessage", () => {
+  it("handles Error, string, message object, Cause, and other values", () => {
+    expect(errorMessage(new Error("e1"))).toBe("e1");
+    expect(errorMessage("plain")).toBe("plain");
+    expect(errorMessage({ message: "obj" })).toBe("obj");
+    expect(errorMessage(Cause.fail("cf"))).toContain("cf");
+    expect(errorMessage(42)).toBe("42");
+    expect(errorMessage(null)).toBe("null");
+  });
+});
 
 describe("ErrorSwallowed event", () => {
   it("emits when emitErrorSwallowed is called inside a layer that provides EventBus", async () => {
