@@ -11,6 +11,7 @@
 import { Effect } from "effect";
 import type { RoutedSession, RoutedTurn } from "@reactive-agents/channels";
 import { makeChatComplete } from "./chat-capabilities.js";
+import { makeSessionHistoryStore } from "./session-store.js";
 import type { AgentStreamEvent } from "../stream-types.js";
 import type { ReactiveAgentBuilder } from "../builder.js";
 import type { ChannelAgentHandle } from "./channel-router-resolver.js";
@@ -90,4 +91,5 @@ export const toChannelHandle = (agent: Awaited<ReturnType<ReactiveAgentBuilder["
   session: (options) => agent.session(options),
   run: (text) => agent.run(text),
   complete: makeChatComplete(agent.runtime),
+  clearSessionHistory: makeSessionHistoryStore(agent.runtime, agent.agentId).clear,
 });

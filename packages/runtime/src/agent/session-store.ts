@@ -14,6 +14,12 @@ import type { ChatMessage } from '../chat.js'
 export interface SessionHistoryStore {
     readonly save: (sessionId: string, messages: readonly ChatMessage[]) => Promise<void>
     readonly load: (sessionId: string) => Promise<readonly ChatMessage[]>
+    /**
+     * Empty the persisted history so a later `load` returns `[]`. Unlike `save`, a store failure
+     * REJECTS (the caller must know the history was not cleared). No store wired is a no-op.
+     * SessionStoreService has no delete, so this upserts an empty message list.
+     */
+    readonly clear: (sessionId: string) => Promise<void>
 }
 
 export const makeSessionHistoryStore = (
@@ -35,6 +41,16 @@ export const makeSessionHistoryStore = (
                     }),
                 ),
             ),
+        )
+    },
+    clear: async (sid) => {
+        await runtime.runPromise(
+            Effect.gen(function* () {
+                const memMod = yield* Effect.promise(() => import('@reactive-agents/memory'))
+                const storeOpt = yield* Effect.serviceOption(memMod.SessionStoreService)
+                if (storeOpt._tag !== 'Some') return
+                yield* storeOpt.value.save({ sessionId: sid, agentId, messages: [] })
+            }),
         )
     },
     load: (sid) =>

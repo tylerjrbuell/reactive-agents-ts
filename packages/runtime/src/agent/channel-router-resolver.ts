@@ -39,6 +39,11 @@ export interface ChannelAgentHandle {
     readonly messages: ReadonlyArray<{ readonly role: "user" | "assistant"; readonly content: string }>;
     readonly budgetTokens: number;
   }) => Promise<{ readonly message: string }>;
+  /**
+   * Optional. Empties the PERSISTED history of one session id (rejects when the store fails).
+   * Without it, `reset` only clears the in-memory session.
+   */
+  readonly clearSessionHistory?: (sessionId: string) => Promise<void>;
   readonly run: (text: string) => Promise<{
     readonly output: string;
     readonly agentId: string;
@@ -142,6 +147,20 @@ export const makeChannelAgentResolver = (options: ChannelAgentResolverOptions): 
             catch: turnFailed,
           }),
         ...(agent.complete ? { acknowledge: makeAcknowledge(agent.complete) } : {}),
+        // Per-conversation only (stateless has no history). `end()` flushes then clears the in-memory
+        // history; the persisted copy is then emptied so a reopen, even after a restart, starts empty.
+        // The close-time `end()` then saves the (now empty) history, which stays empty.
+        ...(session
+          ? {
+              reset: Effect.tryPromise({
+                try: async () => {
+                  await session.end();
+                  if (options.persist ?? true) await agent.clearSessionHistory?.(sessionId);
+                },
+                catch: turnFailed,
+              }),
+            }
+          : {}),
         close: Effect.void,
       } satisfies RoutedSession;
     });

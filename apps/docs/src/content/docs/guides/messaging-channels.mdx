@@ -587,6 +587,8 @@ const main: RouteSpecInput = {
 - **Receipt.** Each reset publishes `ChannelConversationReset` (`routeId`, `role`, `ok`, `reason?`; no text). If the resolver's `reset` fails, the sender gets `Could not start a new conversation.`, `ok` is `false` and the session is kept.
 - **Strict router only.** Applies to `createChannelRouter`; the `ChannelService` pipeline is unchanged.
 
+**With `.withChannels()` routes.** The built-in resolver implements `reset` for per-conversation sessions: it flushes and clears the live session, then empties the stored chat history for that conversation (when the memory layer persists sessions), so a restart does not bring it back. A store failure is reported to the sender as `Could not start a new conversation.` and the session is kept.
+
 **For resolver authors.** If your history lives outside the session object (a chat store keyed by `conversationKey`), implement the optional `reset` on the `RoutedSession` and clear that store there. Otherwise the next `open` for the same key reads the old history back, including after a restart.
 
 ```typescript

@@ -217,6 +217,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
       allow: ["telegram:2002"],
       deny: ["telegram:3003"],
       owners: ["telegram:1001"],
+      resetCommands: ["/new", "/reset"],
       open: false,
       senderTools: { _tag: "Allowlist", tools: ["web-search"] },
       deniedReply: "Not available.",
