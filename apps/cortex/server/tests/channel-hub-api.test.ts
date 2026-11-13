@@ -113,6 +113,18 @@ describe("routes", () => {
     expect(audit.body.entries.some((e) => e.action === "route-updated" && e.detail.confirmed?.includes("open:r1"))).toBe(true);
   });
 
+  it("the acknowledgement round-trips, and a null in a patch clears a field a merge could never remove", async () => {
+    const id = await makeChannel();
+    const ack = { afterMs: 2500, text: "Working on it", typing: false, source: "model", modelTimeoutMs: 2000 };
+    expect((await call("POST", "/api/channels/routes", { route: route(id, { ack, maxCostPerDayUsd: 2 }) })).status).toBe(201);
+    const listed = await call<{ routes: { id: string; ack?: unknown; maxCostPerDayUsd?: number }[] }>("GET", "/api/channels");
+    expect(listed.body.routes[0]?.ack).toEqual(ack);
+    expect((await call("PATCH", "/api/channels/routes/r1", { route: { ack: null, maxCostPerDayUsd: null } })).status).toBe(200);
+    const after = await call<{ routes: { id: string; ack?: unknown; maxCostPerDayUsd?: number }[] }>("GET", "/api/channels");
+    expect(after.body.routes[0]?.maxCostPerDayUsd).toBeUndefined();
+    expect(after.body.routes[0]?.ack ?? false).toBe(false);
+  });
+
   it("an edit detaches a migrated route from the agent config", async () => {
     createGatewayAgent(db, "gw-2", "Bot2", JSON.stringify({ provider: "test", channels: [{ id: "ch-cccc3333", kind: "telegram" }], gateway: { accessControl: { accessPolicy: "allowlist", allowedSenders: ["telegram:9"] } } }), null, "gateway");
     await hub.migrateNow();
@@ -144,5 +156,15 @@ describe("gateway overview", () => {
     const s = await call<{ hub: { enabled: boolean; phase: string; routes: { roleNote: string }[] } }>("GET", "/api/gateway/status");
     expect(s.body.hub.enabled).toBe(true);
     expect(s.body.hub.routes[0]?.roleNote).toContain("No owner");
+  });
+
+  it("status lists who holds an account (channel, pid) and never a credential or its hash", async () => {
+    const id = await makeChannel();
+    creds.set(id, "telegram", "token", TOKEN);
+    db.prepare("INSERT INTO cortex_router_leases (fingerprint, channel_id, pid, host, since, heartbeat) VALUES (?, ?, ?, ?, ?, ?)").run("fp-secret-hash", id, 4242, "h", Date.now(), Date.now());
+    const s = await call<{ leases: { channelId: string; pid: number; since: number }[] }>("GET", "/api/channels/status");
+    expect(s.body.leases.map((l) => [l.channelId, l.pid])).toEqual([[id, 4242]]);
+    expect(s.text).not.toContain("fp-secret-hash");
+    expect(s.text).not.toContain(TOKEN);
   });
 });

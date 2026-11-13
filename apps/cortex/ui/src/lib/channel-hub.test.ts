@@ -1,0 +1,157 @@
+import { describe, expect, it } from "bun:test";
+import {
+  addSenderChips,
+  draftFromRoute,
+  draftProblems,
+  explainView,
+  newDraft,
+  routeFromDraft,
+  routesToAgent,
+  simulateView,
+  widenConfirmCopy,
+  wideningTokens,
+  type HubRouteWire,
+} from "./channel-hub.js";
+
+const saved: HubRouteWire = {
+  id: "r1",
+  match: { channelId: "ch-1" },
+  target: { agentId: "gw-1" },
+  priority: 40,
+  groups: "off",
+  deniedReply: "No.",
+  owners: ["telegram:1"],
+  allow: ["telegram:2"],
+  maxCostPerDayUsd: 3,
+};
+
+describe("draft <-> route", () => {
+  it("keeps the fields the editor does not own", () => {
+    const next = routeFromDraft(draftFromRoute(saved), saved);
+    expect(next.priority).toBe(40);
+    expect(next.groups).toBe("off");
+    expect(next.deniedReply).toBe("No.");
+    expect(next.owners).toEqual(["telegram:1"]);
+    expect(next.maxCostPerDayUsd).toBe(3);
+    expect(next.ack).toBe(false);
+  });
+  it("a cleared cap leaves the route (so a patch can null it)", () => {
+    const d = draftFromRoute(saved);
+    d.maxCostPerDayUsd = "";
+    expect("maxCostPerDayUsd" in routeFromDraft(d, saved)).toBe(false);
+  });
+  it("writes the acknowledgement fields", () => {
+    const d = newDraft("ch-1", "gw-1");
+    d.id = "r2";
+    d.ackOn = true;
+    d.ackAfterMs = "2500";
+    d.ackText = "Working on it";
+    d.ackSource = "model";
+    d.ackModelTimeoutMs = "2000";
+    d.ackTyping = false;
+    expect(routeFromDraft(d).ack).toEqual({ afterMs: 2500, text: "Working on it", typing: false, source: "model", modelTimeoutMs: 2000 });
+    expect(draftFromRoute(routeFromDraft(d)).ackOn).toBe(true);
+  });
+  it("ack off is the explicit false, several lines rotate", () => {
+    const d = newDraft("ch-1", "gw-1");
+    d.id = "r2";
+    expect(routeFromDraft(d).ack).toBe(false);
+    d.ackOn = true;
+    d.ackText = "One\nTwo";
+    expect(routeFromDraft(d).ack).toMatchObject({ text: ["One", "Two"] });
+  });
+  it("a webhook route leaves out senderTools and ack (the framework refuses the keys, not only non-defaults)", () => {
+    const d = { ...newDraft("ch-w", "gw-1"), id: "hook", ackOn: true };
+    const r = routeFromDraft(d, undefined, "webhook");
+    expect("senderTools" in r).toBe(false);
+    expect("ack" in r).toBe(false);
+    expect(r).toMatchObject({ owners: [], allow: [], deny: [], open: false });
+    expect("senderTools" in routeFromDraft(d)).toBe(true);
+  });
+  it("a new route is closed: read-only senders, nobody allowed", () => {
+    const r = routeFromDraft({ ...newDraft("ch-1", "gw-1"), id: "x" });
+    expect(r).toMatchObject({ open: false, senderTools: { _tag: "ReadOnly" }, owners: [], allow: [] });
+  });
+});
+
+describe("draftProblems", () => {
+  const ok = () => ({ ...newDraft("ch-1", "gw-1"), id: "r2" });
+  it("a closed route is savable", () => expect(draftProblems(ok(), true)).toEqual([]));
+  it("open needs every cap", () => {
+    const d = { ...ok(), open: true };
+    expect(draftProblems(d, true).length).toBe(3);
+    expect(draftProblems({ ...d, maxCostPerDayUsd: "5", maxTurnsPerHour: "20", maxTurnsPerSenderPerHour: "3" }, true)).toEqual([]);
+    expect(draftProblems({ ...d, maxCostPerDayUsd: "0", maxTurnsPerHour: "20", maxTurnsPerSenderPerHour: "3" }, true)).toHaveLength(1);
+  });
+  it("full agent tools needs an owner", () => {
+    expect(draftProblems({ ...ok(), senderTools: "AgentDefault" }, true)).toHaveLength(1);
+    expect(draftProblems({ ...ok(), senderTools: "AgentDefault", owners: ["telegram:1"] }, true)).toEqual([]);
+  });
+  it("sender keys need a platform prefix", () => expect(draftProblems({ ...ok(), allow: ["12345"] }, true)).toHaveLength(1));
+  it("the model wait stays inside 1..10000", () => {
+    const d = { ...ok(), ackOn: true, ackSource: "model" as const };
+    expect(draftProblems({ ...d, ackModelTimeoutMs: "0" }, true)).toHaveLength(1);
+    expect(draftProblems({ ...d, ackModelTimeoutMs: "10001" }, true)).toHaveLength(1);
+    expect(draftProblems({ ...d, ackModelTimeoutMs: "10000" }, true)).toEqual([]);
+  });
+  it("an id is needed only when creating", () => {
+    expect(draftProblems({ ...ok(), id: "" }, true)).toHaveLength(1);
+    expect(draftProblems({ ...ok(), id: "" }, false)).toEqual([]);
+  });
+});
+
+describe("addSenderChips", () => {
+  it("normalises, dedupes, reports the bad ones", () => {
+    const r = addSenderChips(["telegram:1"], "Telegram:1, signal:+155 oops");
+    expect(r.list).toEqual(["telegram:1", "signal:+155"]);
+    expect(r.problems).toHaveLength(1);
+  });
+});
+
+describe("widening (mirrors the framework's wideningChanges)", () => {
+  it("a new route that is closed widens nothing", () => expect(wideningTokens(undefined, { id: "r", match: { channelId: "c" }, target: { agentId: "a" } })).toEqual([]));
+  it("an added owner, open and AgentDefault each need a token", () => {
+    const next: HubRouteWire = { ...saved, owners: ["telegram:1", "telegram:9"], open: true, senderTools: { _tag: "AgentDefault" } };
+    expect(wideningTokens(saved, next)).toEqual(["owners:r1", "open:r1", "agent-default:r1"]);
+  });
+  it("removing an owner, or keeping open, needs none", () => {
+    const wide: HubRouteWire = { ...saved, open: true, senderTools: { _tag: "AgentDefault" } };
+    expect(wideningTokens(wide, { ...wide, owners: [] })).toEqual([]);
+  });
+  it("the confirm copy names each risk", () => {
+    const c = widenConfirmCopy("r1", ["open:r1", "owners:r1"]);
+    expect(c.title).toContain("r1");
+    expect(c.message).toContain("anyone");
+    expect(c.message).toContain("Owners");
+  });
+});
+
+describe("probe views", () => {
+  it("explain: route, role, tools and why", () => {
+    const v = explainView({ decision: "allowed", routeId: "r1", role: "owner", toolExposure: { _tag: "AgentDefault" }, reason: "listed owner" });
+    expect(v.tone).toBe("ok");
+    expect(v.lines).toEqual(["Route: r1", "Role: owner", "Tools: the agent's full tools", "Why: listed owner"]);
+  });
+  it("explain: a denial says why", () => {
+    const v = explainView({ decision: "denied", routeId: "r1", reason: "not on the allow list" });
+    expect(v.tone).toBe("bad");
+    expect(v.lines).toContain("Why: not on the allow list");
+  });
+  it("simulate outcomes", () => {
+    expect(simulateView({ outcome: "answered", text: "hi" }).lines).toEqual(["hi"]);
+    expect(simulateView({ outcome: "failed", reason: "turn_failed", detail: "no key" }).tone).toBe("bad");
+    expect(simulateView({ outcome: "unrouted" }).tone).toBe("warn");
+    expect(simulateView(null).headline).toBe("No answer");
+  });
+});
+
+describe("routesToAgent", () => {
+  it("lists a agent's routes by priority", () => {
+    const rs: HubRouteWire[] = [
+      { id: "b", match: { channelId: "c" }, target: { agentId: "a" }, priority: 200 },
+      { id: "a", match: { channelId: "c" }, target: { agentId: "a" } },
+      { id: "z", match: { channelId: "c" }, target: { agentId: "other" } },
+    ];
+    expect(routesToAgent("a", rs).map((r) => r.id)).toEqual(["a", "b"]);
+  });
+});

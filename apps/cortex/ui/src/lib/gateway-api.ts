@@ -24,9 +24,9 @@ export interface ChannelProbe {
   readonly detail: string;
 }
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+export const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-async function call<T>(fetcher: Fetcher, url: string, init: RequestInit | undefined, parse: (v: unknown) => T | null): Promise<ApiResult<T>> {
+export async function call<T>(fetcher: Fetcher, url: string, init: RequestInit | undefined, parse: (v: unknown) => T | null): Promise<ApiResult<T>> {
   try {
     const res = await fetcher(url, init);
     const body: unknown = await res.json().catch(() => undefined);
@@ -46,7 +46,7 @@ const parseField = (v: unknown): CredentialField | null =>
 const parseFields = (v: unknown): CredentialField[] | null =>
   isRecord(v) && Array.isArray(v.fields) ? v.fields.map(parseField).filter((f): f is CredentialField => f !== null) : null;
 
-const json = (body: unknown): RequestInit => ({ headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+export const json = (body: unknown): RequestInit => ({ headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
 /** Saved credential fields of a channel (masks only). */
 export const fetchCredentials = (base: string, fetcher: Fetcher, channelId: string, kind: ChannelKind) =>

@@ -1,0 +1,5 @@
+---
+"@reactive-agents/cortex": minor
+---
+
+Cortex gets a Channels tab in the Lab for the channel hub. Add Telegram, Signal and webhook channels with live state, counters, last error and account lease (a credential is saved write-only and only a mask is shown), and route each channel to a saved agent. The route editor covers the match, owners, allowed and blocked senders, what non-owners can do (read-only by default), cost and turn caps, and the turn acknowledgement (fixed text or model-written, typing indicator, delay). Widening access (adding an owner, opening a route to anyone, giving senders the agent's full tools) asks through a confirm dialog that names the risk, and is recorded in the audit trail. "Send test message" shows which route takes a message, as which role, with which tools, or why a sender is refused, and can run the real turn without sending anything. Saved agents show "Reachable via" with an "Add route" shortcut. A duplicate account is linked to the channel that holds it. Route patches accept `null` to clear a field.

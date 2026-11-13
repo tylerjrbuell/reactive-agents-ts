@@ -148,6 +148,19 @@ const defaultPidAlive = (pid: number): boolean => {
 
 const fingerprintKey = (fingerprint: string): string => createHash("sha256").update(fingerprint).digest("hex").slice(0, 32);
 
+/** Who holds an account right now: the channel, the process and when it took it. Never the account or its hash. */
+export interface LeaseHolder {
+  readonly channelId: string;
+  readonly pid: number;
+  readonly since: number;
+}
+
+/** The live leases (a stale one is not listed), for the Channels page's "who owns this account". */
+export const listLeaseHolders = (db: Database, staleAfterMs = 30_000, now: () => number = Date.now): readonly LeaseHolder[] =>
+  (db.prepare("SELECT channel_id, pid, since FROM cortex_router_leases WHERE heartbeat > ? ORDER BY since").all(now() - staleAfterMs) as { channel_id: string; pid: number; since: number }[]).map(
+    (r) => ({ channelId: r.channel_id, pid: r.pid, since: r.since }),
+  );
+
 /**
  * One owner per account, enforced in the Cortex database: a row per credential fingerprint (a
  * hash, never the secret) with a heartbeat. A second owner (another process on the same DB, or a

@@ -21,6 +21,7 @@
   import SavedAgentsTab from "$lib/components/lab/SavedAgentsTab.svelte";
   import SkillsTab from "$lib/components/lab/SkillsTab.svelte";
   import GatewayOverview from "$lib/components/gateway/GatewayOverview.svelte";
+  import ChannelsHub from "$lib/components/channel-hub/ChannelsHub.svelte";
   import MemoryStudio from "$lib/components/memory/MemoryStudio.svelte";
   import { cortexRunsPostBody } from "$lib/cortex-runs-post-body.js";
   import { syncVariables } from "$lib/template/sync-variables.js";
@@ -420,6 +421,7 @@
       onNewAgent={openCreate}
       onTrigger={triggerAgent}
       onUseInBuilder={useConfigInBuilder}
+      onOpenChannels={() => selectTab("channels")}
       onExport={(target) => (exportTarget = target)}
       onDelete={(agent) => (deleteConfirmAgent = agent)}
       onDeleteMany={(agents) => (deleteConfirmBulk = agents)}
@@ -428,6 +430,10 @@
   <!-- ── GATEWAY (#status: running gateway agents, channels, schedules) ── -->
   {:else if activeTab === "status"}
     <GatewayOverview onOpenAgents={() => selectTab("agents")} onOpenBuilder={() => selectTab("builder")} />
+
+  <!-- ── CHANNELS (#channels: accounts, routes to agents, test message) ── -->
+  {:else if activeTab === "channels"}
+    <ChannelsHub />
 
   <!-- ── SKILLS (workshop layout: catalog | document | meta) ─────────── -->
   {:else if activeTab === "skills"}

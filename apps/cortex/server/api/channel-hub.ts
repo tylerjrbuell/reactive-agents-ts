@@ -9,7 +9,7 @@
  * - PATCH  /:channelId            { label?, settings?, enabled? }
  * - DELETE /:channelId?force=1    remove a channel (routes on it need force) and its credentials
  * - POST   /routes                { route, confirm? } create a route
- * - PATCH  /routes/:routeId       { route, confirm? } change a route (the patch merges over the saved one)
+ * - PATCH  /routes/:routeId       { route, confirm? } change a route (the patch merges over the saved one; a `null` value clears that field)
  * - DELETE /routes/:routeId
  * - POST   /explain, /simulate    { channelId, userId, text, isGroup?, mentionsSelf? }
  * - GET    /audit                 who changed which route and when
@@ -217,7 +217,10 @@ export const channelHubRouter = (db: Database, hub: ChannelHub, creds: ChannelCr
         return { error: "Not found" };
       }
       const patch = body.route;
-      const candidate = asRouteInput({ ...routeToSpecInput(cur), ...patch, id: cur.id });
+      // A `null` value clears a field (a merge alone could never remove a cap or an acknowledgement).
+      const merged: Record<string, unknown> = { ...routeToSpecInput(cur), ...patch, id: cur.id };
+      for (const key of Object.keys(merged)) if (merged[key] === null) delete merged[key];
+      const candidate = asRouteInput(merged);
       if (!candidate) {
         set.status = 400;
         return { error: "route does not match the RouteSpec schema" };

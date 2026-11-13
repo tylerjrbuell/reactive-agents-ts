@@ -1,4 +1,9 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { CORTEX_SERVER_URL } from "$lib/constants.js";
+  import { fetchHub, type HubSnapshot } from "$lib/channel-hub-api.js";
+  import { requestNewRoute } from "$lib/stores/channels-intent.js";
+  import ReachableVia from "$lib/components/channel-hub/ReachableVia.svelte";
   import AgentConfigPanel from "$lib/components/AgentConfigPanel.svelte";
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import HighlightedField from "$lib/components/HighlightedField.svelte";
@@ -27,11 +32,24 @@
     onNewAgent: () => void;
     onTrigger: (agent: GatewayRow) => void;
     onUseInBuilder: (agent: GatewayRow) => void;
+    /** Open the Channels tab (after the "Add route" shortcut has asked it for a new route). */
+    onOpenChannels: () => void;
     onExport: (target: { config: AgentConfig; name: string }) => void;
     onDelete: (agent: GatewayRow) => void;
     onDeleteMany: (agents: GatewayRow[]) => void;
   }
-  let { store, ui = $bindable(), defaults, onReload, onNewAgent, onTrigger, onUseInBuilder, onExport, onDelete, onDeleteMany }: Props = $props();
+  let { store, ui = $bindable(), defaults, onReload, onNewAgent, onTrigger, onUseInBuilder, onOpenChannels, onExport, onDelete, onDeleteMany }: Props = $props();
+
+  // "Reachable via": the hub's routes, read once when the list opens.
+  let hub = $state<HubSnapshot | null>(null);
+  onMount(async () => {
+    const r = await fetchHub(CORTEX_SERVER_URL, fetch);
+    if (r.ok) hub = r.value;
+  });
+  function addRoute(agentId: string) {
+    requestNewRoute(agentId);
+    onOpenChannels();
+  }
 
   const gatewayAgents = $derived($store.agents);
   const gatewayLoading = $derived($store.loading);
@@ -235,6 +253,9 @@
                 {#if s.totalCostUsd > 0}<span>{formatCost(s.totalCostUsd)} total</span>{/if}
               {/if}
             </div>
+            {#if agent.agentType === "gateway" && hub}
+              <ReachableVia agentId={agent.agentId} routes={hub.routes} channels={hub.channels} onAddRoute={addRoute} />
+            {/if}
           </div>
           <div class="actions">
             <Button size="sm" icon="play"

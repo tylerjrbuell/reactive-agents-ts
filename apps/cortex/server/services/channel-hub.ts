@@ -44,7 +44,7 @@ import { sanitizedCause } from "./channel-hub-failure.js";
 import { HubActivityTracker, type HubActivity, type RouteCounters } from "./channel-hub-activity.js";
 import { applyMigration, planMigration, type MigrationAgent, type MigrationPlan, type MigrationResult, type MigrationWarning } from "./channel-hub-migration.js";
 import { makeHubResolver, type HubResolver, type HubResolverDeps } from "./channel-hub-resolver.js";
-import { loadValidRoutes, makeDbLeases, makeDurableRouteMeter, makeDurableRouterStore, type DurableRouterStore, type RejectedRoute } from "./channel-hub-store.js";
+import { listLeaseHolders, loadValidRoutes, makeDbLeases, makeDurableRouteMeter, makeDurableRouterStore, type DurableRouterStore, type LeaseHolder, type RejectedRoute } from "./channel-hub-store.js";
 import { mountWebhookIngress } from "./channel-ingress.js";
 import { ChannelHubStartError } from "../errors.js";
 import type { ToBuildParams } from "./gateway-channel-host.js";
@@ -126,6 +126,8 @@ export interface HubStatus {
   readonly routes: readonly HubRouteView[];
   /** Route rows the store refused to load (invalid), with the plain reason. */
   readonly rejected: readonly RejectedRoute[];
+  /** Who holds each account right now (channel, pid): the page links a duplicate to its owner. */
+  readonly leases: readonly LeaseHolder[];
   readonly router: Pick<RouterStatus, "unrouted" | "dropped" | "activeSessions"> | null;
   readonly activity: readonly HubActivity[];
   readonly migration: { readonly warnings: readonly MigrationWarning[]; readonly legacy: MigrationPlan["legacy"] };
@@ -523,6 +525,7 @@ export class ChannelHub {
       channels,
       routes,
       rejected: loaded.rejected,
+      leases: listLeaseHolders(db),
       router: router ? { unrouted: router.unrouted, dropped: router.dropped, activeSessions: router.activeSessions } : null,
       activity: this.tracker.snapshot(),
       migration: { warnings: this.lastPlan.warnings, legacy: this.lastPlan.legacy },
