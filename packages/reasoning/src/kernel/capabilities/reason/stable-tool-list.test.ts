@@ -65,7 +65,9 @@ const surfaceInputs = (over: Partial<ToolSurfaceInputs> = {}): ToolSurfaceInputs
   discovered: [],
   gateBlockedTools: [],
   missingRequiredTools: [],
-  pruneMinTools: 15,
+  // Below the 4 domain tools so the default lazy prune (the control arms) stays
+  // in force; the within-budget rule has its own pins (tool-surface-small-set).
+  pruneMinTools: 3,
   catalog: [...DOMAIN, schema("web-search")],
   taskText: "Do the job.",
   harness: STABLE,
@@ -227,10 +229,29 @@ const afterAct = (s: KernelState, tool: string): KernelState =>
   transitionState(s, { toolsUsed: new Set([...s.toolsUsed, tool]), iteration: s.iteration + 1, status: "thinking" });
 
 describe("WIRING: one pass, several turns", () => {
-  it("control (default): the FC array changes after the first tool runs", async () => {
-    const t0 = await turn(freshState(), passInput(DEFAULT));
-    const t1 = await turn(afterAct(t0.state, "alpha"), passInput(DEFAULT));
+  it("control (default, LARGE set): the FC array changes after the first tool runs", async () => {
+    // A set within the disclosure budget (<= 15 domain tools) is fully
+    // visible on every turn (tool-surface.ts within-budget rule), so the
+    // churn this control demonstrates only exists above the budget.
+    const big = (): KernelInput => {
+      const extra = Array.from({ length: 16 }, (_, i) => ({ name: `extra-${i}`, description: `zzq${i}`, parameters: [] }));
+      const base = passInput(DEFAULT);
+      return {
+        ...base,
+        availableToolSchemas: [...DOMAIN_INPUT, ...extra],
+        allToolSchemas: [...(base.allToolSchemas ?? []), ...extra],
+      };
+    };
+    const t0 = await turn(freshState(), big());
+    const t1 = await turn(afterAct(t0.state, "alpha"), big());
     expect(t1.fc).not.toEqual(t0.fc);
+  });
+
+  it("default, SMALL set: the FC array is already stable across turns", async () => {
+    const t0 = await turn(freshState(), passInput(DEFAULT));
+    expect(t0.fc).toEqual(expect.arrayContaining(["alpha", "beta", "gamma"]));
+    const t1 = await turn(afterAct(t0.state, "alpha"), passInput(DEFAULT));
+    expect(t1.fc).toEqual(expect.arrayContaining(["alpha", "beta", "gamma"]));
   });
 
   it("stable: the FC array is identical across turns", async () => {

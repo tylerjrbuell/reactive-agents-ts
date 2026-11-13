@@ -23,6 +23,8 @@ The tools layer lets agents call external functions, APIs, and MCP servers. Tool
 - `"index"` sends a compact index of permitted tools.
 - `"discover"` lets the agent find permitted tools on demand with `discover-tools`.
 
+Visibility follows the size of the configured set, never keyword overlap between the task and a tool description. With 15 or fewer domain tools (custom tools and opted-in built-ins; meta-tools are not counted) and no classifier narrowing, every one is shown from turn 1, so "what is bitcoin worth" cannot hide a `crypto-price` tool. Above 15, lazy disclosure shows the tools the task names or matches plus what the run has used, and the rest stay reachable through `discover-tools`. A call to a registered tool that was not shown still resolves and runs. `disclosure: "discover"` stays strict at any size.
+
 Left unset, the model tier picks the mode. An explicit `.withTools({ disclosure })` wins over the deprecated `.withHarness` switches, the `RA_*` environment flags and `contextProfile.toolDisclosureMode`. Each run records the winning mode and its source in `run-started.config.disclosure`.
 
 ### Using Built-in Tools

@@ -409,6 +409,7 @@ function visibleReason(
   discoveredSet: ReadonlySet<string>,
   heuristicSet: ReadonlySet<string>,
   strictDiscover: boolean,
+  withinBudget: boolean,
 ): string {
   if (inputs.requiredTools.includes(name)) return "required";
   if (META_TOOL_SET.has(name)) return "meta-floor";
@@ -422,6 +423,7 @@ function visibleReason(
   if (heuristicSet.has(name)) return "heuristic-relevant (unclassified run)";
   if (usedSet.has(name)) return "already-used";
   if (discoveredSet.has(name)) return "discovered";
+  if (withinBudget) return `within-budget (at most ${inputs.pruneMinTools} domain tools: all disclosed)`;
   return inputs.lazyMode ? "lazy-fallback (never-prune-to-meta-only)" : "unpruned";
 }
 
@@ -484,17 +486,36 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
   // discover-tools is the floor.
   const strictDiscover = inputs.lazyMode && inputs.harness.disclosureMode === "discover";
 
+  // Within-budget rule (2026-11-12): visibility comes from the configured tool
+  // SET, not from prose similarity. Lazy disclosure saves tokens only on a
+  // large set; with at most `pruneMinTools` domain tools every one is shown, so
+  // "what is bitcoin worth" can never hide `crypto-price`. Explicit
+  // `disclosure: "discover"` stays strict at any size. Deterministic, no LLM.
+  const domainCount = effectiveSchemas.filter((ts) => !META_TOOL_SET.has(ts.name)).length;
+  // A live classification or declared required tools are explicit narrowing
+  // intent and keep the prune (their pins are unchanged); the default,
+  // unclassified surface is what this rule governs. An enabled tool index
+  // (`harness.toolIndex`, opt-in) is itself the disclosure mechanism: it lists
+  // every hidden tool by name, so it keeps the prune.
+  const withinBudget =
+    inputs.lazyMode &&
+    !strictDiscover &&
+    inputs.harness.toolIndex !== true &&
+    !inputs.hasClassification &&
+    domainCount <= inputs.pruneMinTools;
+
   // Free keyword relevance over the SAME schema set the prune runs on. Computed
   // only when it can be used (no classification, lazy mode, task text present)
   // so the classified path pays nothing for it.
   const heuristicRelevant: readonly string[] =
-    !strictDiscover && !inputs.hasClassification && inputs.lazyMode && inputs.taskText
+    !strictDiscover && !withinBudget && !inputs.hasClassification && inputs.lazyMode && inputs.taskText
       ? filterToolsByRelevance(inputs.taskText, effectiveSchemas).primary.map((ts) => ts.name)
       : [];
   const heuristicSet = new Set(heuristicRelevant);
 
   // Stage 2 — lazy disclosure / classification pruning (+ floors + guard).
-  const pruned = computePromptSchemas({
+  // Skipped when the domain set is within budget (see above).
+  const pruned = withinBudget ? effectiveSchemas : computePromptSchemas({
     effectiveSchemas,
     lazyMode: inputs.lazyMode,
     pressureCritical,
@@ -621,7 +642,7 @@ export function resolveToolSurface(inputs: ToolSurfaceInputs): ResolvedToolSurfa
     } else {
       reasons.set(
         name,
-        `visible: ${visibleReason(name, inputs, usedSet, discoveredSet, heuristicSet, strictDiscover)}`,
+        `visible: ${visibleReason(name, inputs, usedSet, discoveredSet, heuristicSet, strictDiscover, withinBudget)}`,
       );
     }
   }

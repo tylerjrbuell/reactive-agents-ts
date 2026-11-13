@@ -66,7 +66,10 @@ const base = {
   discovered: [] as readonly string[],
   gateBlockedTools: [] as readonly string[],
   missingRequiredTools: [] as readonly string[],
-  pruneMinTools: 15,
+  // Budget below the 4 domain tools: the heuristic only matters once lazy
+  // disclosure is actually pruning (a set within budget is fully visible; see
+  // tool-surface-small-set.test.ts).
+  pruneMinTools: 3,
   harness: resolveHarnessConfig(),
 };
 
