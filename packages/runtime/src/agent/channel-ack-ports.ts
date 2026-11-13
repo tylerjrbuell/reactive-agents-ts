@@ -80,7 +80,10 @@ export const makeAcknowledge =
       Effect.orElseSucceed(() => ""),
     );
 
-/** Adapt a built agent to the channel handle, adding the side-completion port. */
+/**
+ * Adapt a built agent to a `ChannelAgentHandle`, adding the side-completion port
+ * (`complete`) that `makeAcknowledge` needs. Use when wiring a custom channel resolver.
+ */
 export const toChannelHandle = (agent: Awaited<ReturnType<ReactiveAgentBuilder["build"]>>): ChannelAgentHandle => ({
   agentId: agent.agentId,
   dispose: () => agent.dispose(),

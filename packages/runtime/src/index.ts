@@ -155,7 +155,9 @@ export type {
 export type { ToolDisclosure, ResolvedDisclosure, DisclosureSource } from "./engine/tool-disclosure.js";
 
 export type { ChannelsConfig } from "./channels-config.js";
-export type { ChannelAgentFactory } from "./agent/channel-router-resolver.js";
+export type { ChannelAgentFactory, ChannelAgentHandle } from "./agent/channel-router-resolver.js";
+export { toChannelHandle, makeAcknowledge, drainWithNarration } from "./agent/channel-ack-ports.js";
+export type { StreamedTurn } from "./agent/channel-ack-ports.js";
 
 // ─── Streaming ───
 export type { AgentStreamEvent, StreamDensity } from "./stream-types.js";
