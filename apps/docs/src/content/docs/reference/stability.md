@@ -1,8 +1,8 @@
 ---
 title: API Stability & Versioning
 description: >-
-  SemVer commitments, stability tiers, what's stable vs experimental in v0.12,
-  and the deprecation policy.
+  SemVer commitments, stability tiers, what's stable vs experimental as of
+  v0.18, and the deprecation policy.
 ---
 
 This page is the honest answer to "is this safe to depend on?"
@@ -19,12 +19,12 @@ Every public surface falls into one of three tiers. Tier is declared by JSDoc ta
 | **Unstable** (`@unstable`) | API may change between minor versions with a CHANGELOG note. Suitable for production if you pin exactly. | Yes, between minors, with a migration note. |
 | **Experimental** (`@experimental`) | Active R&D. May change shape between any release. Use at your own risk; expect to update code on each upgrade. | Anytime, including patch. |
 
-## What's stable in v0.12
+## What's stable as of v0.18
 
 The following surfaces are tier-1 stable. We will not break these without a major bump.
 
 - **Entry points** — `createAgent(config)` (declarative front door) and `ReactiveAgents.create()` + the `.with*()` chain syntax. Both are the same API in two syntaxes, generated from and validated against `AgentConfigSchema` (the single source of truth); anything expressible in one is expressible in the other.
-- **Provider selection** — `.withProvider("anthropic" | "openai" | "google" | "groq" | "xai" | "ollama" | "litellm" | "local")`, `.withModel(model)` (string) / `.withModel({ provider, model, numCtx? })` (object), and the `LLMProvider` interface
+- **Provider selection** — `.withProvider("anthropic" | "openai" | "gemini" | "groq" | "xai" | "ollama" | "litellm" | "test")`, `.withModel(model)` (string) / `.withModel({ provider, model, numCtx? })` (object), and the `LLMProvider` interface
 - **Reasoning core** — `.withReasoning()` with the documented `ReasoningOptions` shape; the canonical strategies — `reactive` (ReAct), `reflexion`, `plan-execute-reflect`, `tree-of-thought`, and `adaptive` (auto-routes among them). `direct` (single-shot) is the no-reasoning fallback. `blueprint` is also registered (aliases: `react` → `reactive`, `rewoo` → `blueprint`; full registry in [Choosing a Reasoning Strategy](/guides/choosing-strategies/)); `code-action` is `@experimental` — see below.
 - **Tool surface** — `.withTools()`, `defineTool()` / `tool()`, MCP attachment via `.withMCP()`, and the `Tool` interface
 - **Typed structured output** *(new in 0.12)* — `.withOutputSchema(schema, options?)` and the result fields `result.object` / `result.objectError`; `agent.streamObject(task)` yielding `{ object: DeepPartial<T> }`. Standard Schema (Zod / Valibot / ArkType) and Effect Schema are all accepted.
@@ -37,9 +37,15 @@ The following surfaces are tier-1 stable. We will not break these without a majo
 - **AgentResult shape** — `.run()` and `.runStream()` return values
 - **Raw provider clients** — `AnthropicProviderLive`, `OpenAIProviderLive`, `LocalProviderLive`, `GeminiProviderLive`, `GroqProviderLive`, `XAIProviderLive`, `LiteLLMProviderLive` exported as standalone Effect Layers (you can skip the harness entirely)
 
-## What's `@unstable` in v0.12
+## What's `@unstable` as of v0.18
 
 These work, but the **shape may change** in a later minor. Pin exact versions if you depend on them.
+
+- **Channel router** — `.withChannels({ adapters, routes, agents })` and `createChannelRouter` (`@reactive-agents/channels`): flat `RouteSpec` rules, fail-closed access per route, one agent per (route, role), and a `senderTools` surface that defaults to `ReadOnly` for non-owners (mutating, MCP and unclassified tools are removed before the agent is built). The router events (`ChannelRouteMatched`, `ChannelRouteDenied`, `ChannelUnrouted`, `ChannelTurn*`, `ChannelOwnershipChanged`) and `agent.channelRouterStatus()` ship with it. Shipped as "slice one", so the route and adapter shapes are still growing.
+- **Structured `request_user_input`** — the `questions` form (text, single/multi-choice, boolean, number) with typed, id-keyed answers, validation errors the agent can retry on, and a typed timeout outcome; the legacy `kind` / `prompt` / `schema` call still works and is normalized to the same shape. Hosts must use `parseRequest` / `validateAnswers` / `timeoutAnswer` to take part.
+- **Read-only tool marking** — `mutatesExternalState` on `defineTool` / `ToolDefinition`, `isReadOnlyTool` / `readOnlyTools`, and the MCP server config `readOnly` / `trustAnnotations`. A tool counts as read-only only when it declares so and needs no approval; tools that omit the flag are treated as mutating.
+- **Web search explicit keys** — `makeWebSearchHandler({ apiKeys?, providers? })` and `WEB_SEARCH_PROVIDERS`. Explicit per-agent keys win over environment variables; default behavior is unchanged.
+- **Pinned fetch** — `fetchPinned` and `resolvePublicUrl` (`@reactive-agents/runtime-shim`): resolve once, validate against the egress blocklist, connect to the validated address, and re-pin every redirect hop (closes the DNS-rebinding gap). Refusals throw the tagged `PublicUrlError`.
 
 - **`KernelHooks` interface** — the inner-loop event taps (`onThought`, `onAction`, `onObservation`, etc.). The 12-phase outer hooks are stable; the inner kernel taps may consolidate.
 - **Healing pipeline stages** — `runHealingPipeline` and the 4 built-in stages are exported, but the stage list is not user-extensible yet (no builder for custom stages).
@@ -54,12 +60,13 @@ These work, but the **shape may change** in a later minor. Pin exact versions if
 - **Strategy switcher heuristic** — toggleable via `ReasoningOptions.strategySwitching` (stable); the heuristic itself is not yet replaceable.
 - **Calibration field schema** — fields are growing; consumer count is small. Expect additions and possible renames.
 
-## What's `@experimental` in v0.12
+## What's `@experimental` as of v0.18
 
 Use at your own risk. Will change.
 
 - **`code-action` strategy** — the LLM emits a TypeScript IIFE run in a Worker sandbox; sandbox contract and tool-binding shape may change
-- **A2A protocol surface** (`packages/a2a`) — wire format and JSON-RPC method names may change as the spec evolves
+- **A2A protocol surface** (`packages/a2a`) — serving is shipped (`.withA2A()`, `rax serve`) and hardened (request-size cap, bounded task store, egress-guarded discovery), but the wire format and JSON-RPC method names may change as the spec evolves
+- **Cortex channel hub** (`apps/cortex`) — one channel router for all messaging channels, with channels and routes stored in the Cortex database, `/api/channels` endpoints and `CORTEX_CHANNEL_HUB=off` to restore per-agent hosting. The storage schema and endpoints are not frozen.
 - **Sub-agent delegation API** — the delegation surface (`.withAgentTool()`, `.withRemoteAgent()`, `.withDynamicSubAgents()`) is functional but its shape is still under iteration
 - **Reactive observer / entropy scoring tunables** — thresholds, scoring functions
 - **Living Skills runtime in Cortex** — UI and persistence schema not finalized
@@ -80,8 +87,8 @@ We will **never** silently change the behavior of a stable API. If a bugfix chan
 
 | Risk tolerance | Recommendation |
 |---|---|
-| Production app, low-touch upgrades | Pin patch versions (`"reactive-agents": "0.11.2"`). Consume only `@stable` APIs. |
-| Active development, monthly upgrades | Pin minor (`"~0.11.0"`). Read the CHANGELOG before bumping. `@unstable` OK if covered by your tests. |
+| Production app, low-touch upgrades | Pin patch versions (`"reactive-agents": "0.18.0"`). Consume only `@stable` APIs. |
+| Active development, monthly upgrades | Pin minor (`"~0.18.0"`). Read the CHANGELOG before bumping. `@unstable` OK if covered by your tests. |
 | Following main, contributing | Pin to a commit SHA or use `workspace:*`. `@experimental` is fair game. |
 
 ## What we want feedback on

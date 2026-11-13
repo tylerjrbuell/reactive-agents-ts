@@ -2,7 +2,7 @@
 
 **The composable TypeScript AI agent framework — type-safe from prompt to production.**
 
-One install. Five reasoning strategies. Six LLM providers. A live local studio. Built on Effect-TS, with no `any`, no hidden coupling, and no model lock-in.
+One install. Eight reasoning strategies. Eight LLM providers. A live local studio. Built on Effect-TS, with no `any`, no hidden coupling, and no model lock-in.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/reactive-agents?logo=npm&color=CB3837)](https://www.npmjs.com/package/reactive-agents)
@@ -18,10 +18,10 @@ One install. Five reasoning strategies. Six LLM providers. A live local studio. 
 
 ## What you get in one install
 
-`reactive-agents` is the **umbrella package** that bundles the 17 most-used `@reactive-agents/*` modules behind a single fluent builder. One `bun add` gets you:
+`reactive-agents` is the **umbrella package** that bundles the 18 most-used `@reactive-agents/*` modules behind a single fluent builder. One `bun add` gets you:
 
-- **5 reasoning strategies** — ReAct, Reflexion, Plan-Execute, Tree-of-Thought, and an Adaptive meta-strategy that picks the right one per task.
-- **6 LLM providers** — Anthropic, OpenAI, Google Gemini, Ollama (local), LiteLLM (40+ models), and a deterministic Test provider.
+- **8 reasoning strategies** — ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Direct, Code-Action (experimental), and an Adaptive meta-strategy that picks the right one per task.
+- **8 LLM providers** — Anthropic, OpenAI, Google Gemini, Groq, xAI, Ollama (local), LiteLLM (40+ models), and a deterministic Test provider.
 - **4-tier memory** — working, episodic, semantic (FTS5 + vectors), and procedural — all on `bun:sqlite`.
 - **12-phase execution engine** — every phase is hookable (`before` / `after` / `on-error`).
 - **Production guardrails** — injection, PII, toxicity, kill switch, behavioral contracts.
@@ -143,9 +143,9 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-Hookable phases: `bootstrap`, `guardrail`, `cost-route`, `strategy`, `think`, `act`, `observe`, `verify`, `memory-flush`, `complete`. Each supports `before`, `after`, and `on-error` timing.
+Hookable phases: `bootstrap`, `guardrail`, `cost-route`, `strategy-select`, `think`, `act`, `observe`, `verify`, `memory-flush`, `cost-track`, `audit`, `complete`. Each supports `before`, `after`, and `on-error` timing.
 
-### 5 reasoning strategies — pick one, or let the framework pick
+### 8 reasoning strategies — pick one, or let the framework pick
 
 | Strategy | How it works | Best for |
 | --- | --- | --- |
@@ -153,7 +153,10 @@ Hookable phases: `bootstrap`, `guardrail`, `cost-route`, `strategy`, `think`, `a
 | **Reflexion** | Generate → Critique → Improve | Quality-critical output |
 | **Plan-Execute** | Plan → Execute → Reflect → Refine | Structured multi-step work |
 | **Tree-of-Thought** | Branch → Score → Prune → Synthesize | Creative, open-ended problems |
+| **Blueprint** | Plan once → execute steps in parallel (ReWOO-style) | Predictable multi-tool workflows |
 | **Adaptive** | Analyze task → auto-select | Mixed workloads |
+| **Direct** | Single LLM call, no loop | Simple Q&A |
+| **Code-Action** *(experimental)* | LLM emits TypeScript run in a sandbox | Compute-heavy or data-wrangling tasks |
 
 ```typescript
 .withReasoning({ defaultStrategy: "adaptive" })
@@ -242,6 +245,8 @@ Sub-agents get a clean context window, inherit the parent's provider/model, and 
 | **Anthropic** | `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, Opus | Yes | Yes |
 | **OpenAI** | `gpt-4o`, `gpt-4o-mini`, o1 | Yes | Yes |
 | **Google Gemini** | `gemini-2.5-pro`, Flash | Yes | Yes |
+| **Groq** | Groq-hosted open models (OpenAI-compatible) | Yes | Yes |
+| **xAI** | Grok models (OpenAI-compatible) | Yes | Yes |
 | **Ollama** | Any local model (qwen3, llama3, etc.) | Yes | Yes |
 | **LiteLLM** | 40+ models via LiteLLM proxy | Yes | Yes |
 | **Test** | Deterministic mock for unit tests | — | — |
@@ -299,15 +304,15 @@ rax cortex                                                # Launch Cortex studio
 
 ## What's bundled
 
-The umbrella re-exports these 17 packages. Sub-path imports are also available (e.g. `import { … } from "reactive-agents/memory"`).
+The umbrella re-exports these 18 packages. Sub-path imports are also available (e.g. `import { … } from "reactive-agents/memory"`).
 
 | Sub-package | Re-exports / Highlights |
 | --- | --- |
 | `@reactive-agents/runtime` | `ReactiveAgents`, `createRuntime`, `agentFn`, `pipe`, `parallel`, `race` |
 | `@reactive-agents/core` | `EventBus`, `AgentService`, `TaskService`, canonical types |
-| `@reactive-agents/llm-provider` | `createLLMLayer` — Anthropic, OpenAI, Gemini, Ollama, LiteLLM, Test |
+| `@reactive-agents/llm-provider` | `createLLMLayer` — Anthropic, OpenAI, Gemini, Groq, xAI, Ollama, LiteLLM, Test |
 | `@reactive-agents/memory` | `createMemoryLayer` — 4-layer SQLite memory + ExperienceStore |
-| `@reactive-agents/reasoning` | `createReasoningLayer` — 5 strategies, composable kernel |
+| `@reactive-agents/reasoning` | `createReasoningLayer` — 8 strategies, composable kernel |
 | `@reactive-agents/tools` | `createToolsLayer`, `ToolBuilder`, MCP client, sub-agent adapter |
 | `@reactive-agents/guardrails` | `createGuardrailsLayer` — injection, PII, toxicity, kill switch |
 | `@reactive-agents/verification` | `createVerificationLayer` — semantic entropy, NLI, fact decomposition |
@@ -318,6 +323,8 @@ The umbrella re-exports these 17 packages. Sub-path imports are also available (
 | `@reactive-agents/prompts` | `createPromptsLayer` — versioned templates |
 | `@reactive-agents/eval` | `createEvalLayer` — LLM-as-judge, EvalStore, comparison reports |
 | `@reactive-agents/a2a` | `A2AServer`, `A2AClient` — Agent Cards, JSON-RPC 2.0, SSE |
+| `@reactive-agents/observe` | OpenInference/OpenTelemetry tracing for the `AgentEvent` stream |
+| `@reactive-agents/judgment` | Calibrated typed judgment primitive (Choice/Score/Noul) |
 | `@reactive-agents/cli` | `rax` CLI binary |
 
 ### Available separately on npm
@@ -328,15 +335,15 @@ These packages are **not bundled** — install them directly when needed:
 | --- | --- |
 | [`@reactive-agents/cortex`](https://www.npmjs.com/package/@reactive-agents/cortex) | Live agent studio (Beacon, Thalamus, Lab, debrief UI) |
 | [`@reactive-agents/gateway`](https://www.npmjs.com/package/@reactive-agents/gateway) | Persistent autonomous harness (heartbeats, crons, webhooks, chat mode) |
-| [`@reactive-agents/channels`](https://www.npmjs.com/package/@reactive-agents/channels) | Sender access control + chat-mode policy for the gateway |
+| [`@reactive-agents/channels`](https://www.npmjs.com/package/@reactive-agents/channels) | Webhooks, bot transports, triggers and session bridging for the gateway (`.withChannels()`) |
 | [`@reactive-agents/reactive-intelligence`](https://www.npmjs.com/package/@reactive-agents/reactive-intelligence) | Metacognitive layer — entropy sensor, controller, calibration |
-| [`@reactive-agents/diagnose`](https://www.npmjs.com/package/@reactive-agents/diagnose) | Output-leak detector (PII, secrets, system prompts) — 100% TPR / 0% FPR |
+| [`@reactive-agents/diagnose`](https://www.npmjs.com/package/@reactive-agents/diagnose) | Forensic CLI for recorded traces: replay, grep, diff, debrief (`rax-diagnose`) |
 | [`@reactive-agents/health`](https://www.npmjs.com/package/@reactive-agents/health) | Health checks + readiness probes |
 | [`@reactive-agents/testing`](https://www.npmjs.com/package/@reactive-agents/testing) | Mock services + assertion helpers + scenario fixtures |
-| [`@reactive-agents/react`](https://www.npmjs.com/package/@reactive-agents/react) | React 18+ hooks (`useAgent`, `useAgentStream`) |
+| [`@reactive-agents/react`](https://www.npmjs.com/package/@reactive-agents/react) | React 18+ hooks and components (`useRun`, `useInteractions`, `useTaskInbox`, `AgentSurface`) |
 | [`@reactive-agents/vue`](https://www.npmjs.com/package/@reactive-agents/vue) | Vue 3 composables |
 | [`@reactive-agents/svelte`](https://www.npmjs.com/package/@reactive-agents/svelte) | Svelte 4/5 stores |
-| [`@reactive-agents/trace`](https://www.npmjs.com/package/@reactive-agents/trace) | Lightweight tracing utilities |
+| [`@reactive-agents/trace`](https://www.npmjs.com/package/@reactive-agents/trace) | Structured execution trace recording and inspection |
 
 ---
 
