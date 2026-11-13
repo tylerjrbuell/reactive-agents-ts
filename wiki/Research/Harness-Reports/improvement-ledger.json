@@ -1180,6 +1180,41 @@
       "tokenOverheadPct": 135.26235185024603,
       "rationale": "VOID: the mechanism fired in 0 candidate runs (A/A comparison). Gate said: REJECT · 2 tier(s) · 0.0pp lift · 135.3% billed tok — run-status regression on qwen3:4b, cogito:8b: runs end non-success far more often than baseline (accuracy cannot see this)",
       "status": "void"
+    },
+    {
+      "id": "a07bedf8-38df-4205-abc8-4e9aab22f4dc",
+      "createdAt": "2026-11-13T17:20:13.889Z",
+      "weakness": "fix2 vs base",
+      "hypothesis": "fix2",
+      "baselineVariantId": "base",
+      "candidateVariantId": "fix2",
+      "decision": "underpowered",
+      "liftPp": 6.944444444444444,
+      "tokenOverheadPct": 13.794263681501528,
+      "rationale": "UNDERPOWERED · 2 tier(s) · 6.9pp lift · 13.8% billed tok — too few runs to resolve ≥3pp; this is NOT evidence of no effect",
+      "regressionBaseline": {
+        "metric": "accuracy",
+        "baselineVariantId": "base",
+        "candidateVariantId": "fix2",
+        "liftPp": 6.944444444444444,
+        "tokenOverheadPct": 13.794263681501528,
+        "tiersCovered": 2,
+        "pinnedAt": "2026-11-13T17:20:13.889Z"
+      },
+      "status": "rejected"
+    },
+    {
+      "id": "4aa995b8-a28c-4f9f-aada-dc5ca8d1e0b2",
+      "createdAt": "2026-11-13T17:20:14.356Z",
+      "weakness": "fix2 vs base",
+      "hypothesis": "fix2",
+      "baselineVariantId": "base",
+      "candidateVariantId": "fix2",
+      "decision": "opt-in",
+      "liftPp": -8.333333333333334,
+      "tokenOverheadPct": -1.9938566161170082,
+      "rationale": "OPT-IN · 2 tier(s) · -8.3pp lift · -2.0% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)",
+      "status": "opt-in"
     }
   ]
 }

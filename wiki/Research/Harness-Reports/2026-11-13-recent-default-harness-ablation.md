@@ -185,3 +185,50 @@ Boundary hypothesis (kernel-warden, not edited): two terminal authorities disagr
 | bundle HEAD vs `cbc9a5414` | **REWORK** (unchanged) | open until the two target tasks end `success` at HEAD |
 
 Ledger: 6 entries appended by `rax eval gate --ledger` (3 full-suite, 3 target-slice; all `void`, 0 activations). They duplicate each other in intent; read the target-slice rows for the status regression.
+
+## Re-measurement after the clause fix
+
+Headline: the kernel fix `d1eb475e9` (clause-scoped `SideEffectLanded` derivation + unlanded-action exit-gate requirement) clears the regression. h3-continuation and h3-exact-value end `status=success` in **12/12** dedicated live runs (BASE 12/12, HEAD+`fc0136042` 0/12). No new regression class found. Verdict on the fix: PASS as a regression repair (not a lift claim; there is no lift to claim, the goal is parity with BASE).
+
+Setup: dev HEAD `d1eb475e9`, reasoning `dist` rebuilt (turbo cache hit; `dist/index.js` contains `namesMutationOfResource`). Same runner `h3/run-h3.ts`, k=3, qwen3:4b and cogito:8b, USD 0. Raw: `fix2-head.json` (full suite, 72 cells), session `session-v3.json` / `session-v3-targets.json` (BASE = `base.json` from the earlier run, traces read for `endStatus`). Targets-only runs (12 cells, `/home/tylerbuell/ablation-traces/fix2-targets-*.json`) were run first. `/tmp` 2.3 GB used before and after.
+
+### Target tasks (dedicated run, 12 cells)
+
+| task | tier | success / n | tokens/run BASE -> HEAD+clause fix (HEAD+`fc0136042`) |
+|---|---|---|---|
+| h3-continuation | qwen3:4b | 3/3 | 1.6k -> 1.7k (4.5k) |
+| h3-exact-value | qwen3:4b | 3/3 | 2.5k -> 2.6k (5.8k) |
+| h3-continuation | cogito:8b | 3/3 | 1.1k -> 1.4k (4.7k) |
+| h3-exact-value | cogito:8b | 3/3 | 3.5k -> 2.1k (5.6k) |
+
+Count `status=success` on the two target tasks: **12/12** (acc 1.00 in all 12). Tokens are back at BASE, not 2.5x.
+
+### Full 12-task suite, k=3, both tiers (72 cells), gate vs BASE (billed tokens, per-task status read)
+
+| tier | acc BASE -> fix | billed | status non-success | tier verdict |
+|---|---|---|---|---|
+| qwen3:4b | 86.2 -> 81.2 (-5.1pp) | +22.4% | 12/35 -> 11/36 | INCONCLUSIVE |
+| cogito:8b | 63.0 -> 69.9 (+6.9pp) | +13.8% | 13/36 -> 11/36 | BELOW (+6.9pp, not above 95% band) |
+
+Decision: **UNDERPOWERED** (6.9pp aggregate, 13.8% billed; at k=3 and ~33pp per-task SE it cannot resolve 3pp; not evidence of no effect). Target slice (`session-v3-targets.json`, 8 cells from the full run): OPT-IN, status non-success 0/6 -> 0/6 qwen, 0/6 -> 1/6 cogito. The status gate (`082d3420d` per-task read) did not fire; no task went 0/k -> k/k non-success. Ledger: 2 entries appended (`void`, 0 activations).
+
+Per-task non-success, BASE -> fix (n=3 each; all under the noise rule, none claimed): qwen rw-6 3->1, rw-7 1->0, h3-todo-heavy 0->1; cogito rw-6 3->2, rw-7 2->1, rw-9 1->0, h3-required-tools 1->0, h3-exact-value 0->1, h3-todo-heavy 0->1.
+Explained outliers: qwen rw-7 accuracy -66.7pp is a BASE artifact (BASE run 0 was a 0-token `error` scored 0; BASE runs 1-2 scored 1.0, fix runs 0.67/0.33/0; token cost 5.4k -> 22.5k/run, 3 cells, not resolvable). Billed excess (+22%/+14%) comes from qwen rw-7, qwen h3-todo-heavy (11k -> 19k) and cogito h3-plan-only (9.5k -> 15.5k); none is on the SideEffectLanded path.
+
+### The two non-success cells that touch the target area or the old signature
+
+1. cogito h3-exact-value run1 (full suite): `failure`, accuracy 0, 5.2k tokens. `rax-diagnose cause`: `dispatcher-early-stop`, attribution `harness:premature-stop` decisive. This is a wrong answer plus a premature stop, not the old false-veto (the exit gate there was not holding a correct answer). The same cell was 3/3 success in the dedicated run, so 1/6 across the two sets; n too small to call a rate. Watch item.
+2. `rax-diagnose attribute --all` on the 72 cells: `harness:false-veto` = 1 (was 12 at `fc0136042`): cogito h3-todo-heavy run1, `max_iterations` 14/14, exit gate `accept`, `outstanding: []`, verifier terminal-outcome. A cap cutoff on a 6-file task, different mechanism from SideEffectLanded.
+
+### act5 probe (qwen3:4b, 8 runs, `probe-act4-act5.ts`, traces `/home/tylerbuell/ablation-traces/probe4`)
+
+Result: 8/8 `abstained`, `success=false`, `claimsSent=false`. Fabricated success **0/8** (earlier at `fc0136042`: 1/4, run `01M7ATH6Q442GEZDMMVY01B251`). Consistent with the unlanded-action requirement now holding the exit open. Caveats: the instrument fault from before persists (all 8 runs `tools = {metaTools:[recall, staticBriefInfo]}`, the custom `web-search` never reached the surface), so this is still the meta-only/no-domain-tool shape; 0/8 vs 1/4 is not a significant difference (p ~0.3). The 3/4 earlier abstentions were already honest. The `verifier.ts:324` `action-success` last-result-of-any-kind path was not exercised here; if fabrication reappears, check that path (it reads `recall`'s own success).
+
+### Verdict update
+
+| item | verdict | basis |
+|---|---|---|
+| clause fix `d1eb475e9` | **PASS (regression repaired)** | 12/12 target success (BASE 12/12), tokens at BASE, false-veto 12 -> 1 (unrelated cap case), suite UNDERPOWERED with no per-task status regression |
+| status gate `082d3420d` | works | would have rejected target slice at `fc0136042`; silent here as it should be |
+| bundle HEAD vs `cbc9a5414` | REWORK closed for mechanism A; B stays INCONCLUSIVE, C/D not exercised | unchanged from earlier |
+| open | k=3 suite cannot resolve <~26pp per task; cogito h3-exact-value premature stop 1/6 and qwen rw-7 token growth are watch items | |

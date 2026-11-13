@@ -2115,3 +2115,16 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   tmp-before-after: 2.3G / 2.3G
   files: [wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation.md, wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation/, wiki/Research/Harness-Reports/improvement-ledger.json]
 ```
+
+```yaml
+- date: 2026-11-13
+  warden: ablation-warden
+  task: rerun-target-cells-after-clause-fix (HEAD d1eb475e9, H3 both local tiers + act5 probe)
+  state: completed
+  confidence: 0.85
+  verdicts: {clause-fix-d1eb475e9: PASS-regression-repaired, suite-gate: UNDERPOWERED, status-gate-082d3420d: works}
+  evidence: {target-success: 12/12 (BASE 12/12, prior HEAD 0/12), h3-cells: 72 full + 12 targets, false-veto: 12->1, lift-gate-suite: UNDERPOWERED +6.9pp cogito / -5.1pp qwen INCONCLUSIVE, billed +22.4%/+13.8% (target slice -12.5%/+8.6%), act5-fabricated-success: 0/8 (earlier 1/4)}
+  spend-usd: 0
+  tmp-before-after: 2.3G / 2.3G
+  files: [wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation.md, wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation/, wiki/Research/Harness-Reports/improvement-ledger.json]
+```
