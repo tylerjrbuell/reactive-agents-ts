@@ -102,7 +102,21 @@ export const createChannelRouter = (
     yield* Effect.addFinalizer(() => engine.shutdown());
 
     for (const adapter of options.channels) {
-      yield* leases.acquire(adapter.id, adapter.accountFingerprint ?? `${adapter.platform}:${adapter.id}`);
+      yield* leases.acquire(adapter.id, adapter.accountFingerprint ?? `${adapter.platform}:${adapter.id}`).pipe(
+        Effect.catchTag("ChannelLeaseError", (e) =>
+          Effect.fail(
+            new RoutingError({
+              reason: "channel_start_failed",
+              message: `channel ${adapter.id} failed to start (lease unavailable)`,
+              channelId: adapter.id,
+              cause: e,
+            }),
+          ),
+        ),
+      );
+      // Registered after the lease, so (LIFO) adapters stop before the lease is released: no window
+      // where a second process owns the account while this one still polls it. Idempotent.
+      yield* Effect.addFinalizer(() => engine.hub.shutdown());
       yield* engine.hub.register(adapter).pipe(
         Effect.mapError(
           (cause) =>

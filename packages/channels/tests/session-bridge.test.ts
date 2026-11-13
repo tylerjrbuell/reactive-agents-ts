@@ -60,3 +60,23 @@ describe("SessionBridge", () => {
     expect(creations).toBe(2);
   });
 });
+
+describe("SessionBridge failed turn", () => {
+  test("a rejected turn does not poison later turns on the same key", async () => {
+    const calls: string[] = [];
+    const factory = async () => ({
+      chat: async (message: string) => {
+        calls.push(message);
+        if (message === "boom") throw new Error("model down");
+        return { message: `ok:${message}` };
+      },
+    });
+    const bridge = new SessionBridge({ agentFactory: factory });
+    const params = { identity: { platform: "signal", userId: "u9" }, channelId: "c9" };
+    const first = await Effect.runPromise(Effect.either(bridge.runChatTurn(params, "boom")));
+    expect(first._tag).toBe("Left");
+    const second = await Effect.runPromise(bridge.runChatTurn(params, "again"));
+    expect(second.reply).toBe("ok:again");
+    expect(calls).toEqual(["boom", "again"]);
+  });
+});

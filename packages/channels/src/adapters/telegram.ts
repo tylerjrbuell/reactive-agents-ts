@@ -63,6 +63,8 @@ export interface TelegramChannelAdapterConfig {
   readonly chatRateLimit?: { readonly dm?: Limit; readonly group?: Limit } | false;
   /** Buffered inbound envelopes before polling is slowed. Default 256. */
   readonly inboundCapacity?: number;
+  /** Webhook ingest waits this long for room in a full buffer, then fails `rate_limited` (429). Default 5000. */
+  readonly enqueueTimeoutMs?: number;
   /** Reconnect backoff. Default: exponential from 500 ms, capped at 30 s. */
   readonly reconnectSchedule?: Schedule.Schedule<unknown, unknown>;
   /** Inbound files larger than this are not downloaded. Default 20 MiB (the Bot API `getFile` limit). */
@@ -82,6 +84,7 @@ const TELEGRAM_CAPABILITIES: ChannelCapabilities = {
 const DEFAULT_GLOBAL: Limit = { max: 30, window: "1 second" };
 const DEFAULT_DM: Limit = { max: 1, window: "1 second" };
 const DEFAULT_GROUP: Limit = { max: 20, window: "1 minute" };
+const DEFAULT_ENQUEUE_TIMEOUT_MS = 5_000;
 const MEMORY = 1024;
 const MAX_CHAT_LIMITERS = 1024;
 
@@ -249,7 +252,7 @@ export class TelegramChannelAdapter implements ChannelAdapter {
       } catch {
         return yield* Effect.fail(channelError(self.id, "unsupported", { message: `channel ${self.id}: webhook body is not JSON` }));
       }
-      yield* self.ingest(update);
+      yield* self.ingest(update, self.config.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS);
     });
   }
 
@@ -312,7 +315,7 @@ export class TelegramChannelAdapter implements ChannelAdapter {
   // ── Inbound ─────────────────────────────────────────────────────────────
 
   /** Hand the update to the inbound queue, then (only then) advance and publish the offset. */
-  private ingestAndAcknowledge(update: unknown): Effect.Effect<void> {
+  private ingestAndAcknowledge(update: unknown): Effect.Effect<void, ChannelError> {
     const self = this;
     return Effect.gen(function* () {
       yield* self.ingest(update);
@@ -323,7 +326,12 @@ export class TelegramChannelAdapter implements ChannelAdapter {
     });
   }
 
-  private ingest(update: unknown): Effect.Effect<void> {
+  /**
+   * Parse an update and queue it. Polling waits for room (backpressure slows polling); a webhook
+   * passes `enqueueTimeoutMs` so a stalled consumer fails the request as `rate_limited` instead of
+   * holding an ingress slot.
+   */
+  private ingest(update: unknown, enqueueTimeoutMs?: number): Effect.Effect<void, ChannelError> {
     const self = this;
     return Effect.gen(function* () {
       const me = self.me;
@@ -358,7 +366,15 @@ export class TelegramChannelAdapter implements ChannelAdapter {
       };
       // Marked seen only now, right before the hand-off: an interrupted attempt must stay retryable.
       if (!self.seenUpdates(String(event.updateId)) || !self.seenMessages(event.id)) return;
-      yield* Queue.offer(self.inboundQueue, envelope);
+      yield* enqueueTimeoutMs === undefined
+        ? Queue.offer(self.inboundQueue, envelope)
+        : Queue.offer(self.inboundQueue, envelope).pipe(
+            Effect.timeoutFail({
+              duration: Duration.millis(enqueueTimeoutMs),
+              onTimeout: () =>
+                channelError(self.id, "rate_limited", { message: `channel ${self.id}: inbound buffer full` }),
+            }),
+          );
     });
   }
 

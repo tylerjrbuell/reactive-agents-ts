@@ -55,7 +55,7 @@ interface Entry {
 export class SessionBridge {
   private readonly agentFactory: AgentSessionFactory;
   private readonly chatByKey = new Map<string, Entry>();
-  private readonly chainByKey = new Map<string, Promise<unknown>>();
+  private readonly chainByKey = new Map<string, Effect.Semaphore>();
   private readonly maxSessions: number;
   private readonly idleTimeoutMs: number;
   private readonly now: () => number;
@@ -82,6 +82,15 @@ export class SessionBridge {
       if (entry) evicted.push(entry);
     }
     return evicted;
+  }
+
+  private gateFor(key: string): Effect.Semaphore {
+    let gate = this.chainByKey.get(key);
+    if (!gate) {
+      gate = Effect.unsafeMakeSemaphore(1);
+      this.chainByKey.set(key, gate);
+    }
+    return gate;
   }
 
   private compositeKey(identity: ExternalIdentity, channelId: string): string {
@@ -195,18 +204,21 @@ export class SessionBridge {
         const lifecycle = params.lifecycle ?? entry.lifecycle;
         return lifecycle?.type === "single_response" && entry.inFlight === 0 ? self.drop(key, entry) : Effect.void;
       });
-      const prev = self.chainByKey.get(key) ?? Promise.resolve();
-      const run = prev.then(() => chat(content));
-      self.chainByKey.set(key, run);
-      const out = yield* Effect.tryPromise({
-        try: () => run,
-        catch: (cause) =>
-          new SessionResolutionError({
-            externalId: params.identity,
-            reason: "chat_failed",
-            cause,
+      // One permit per key: turns run FIFO and a failed turn releases it, so the next turn still runs.
+      const gate = self.gateFor(key);
+      const out = yield* gate
+        .withPermits(1)(
+          Effect.tryPromise({
+            try: () => chat(content),
+            catch: (cause) =>
+              new SessionResolutionError({
+                externalId: params.identity,
+                reason: "chat_failed",
+                cause,
+              }),
           }),
-      }).pipe(Effect.ensuring(finish));
+        )
+        .pipe(Effect.ensuring(finish));
       return { sessionId, reply: out.message };
     });
   }

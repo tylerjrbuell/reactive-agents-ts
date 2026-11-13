@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import type { Scope } from "effect";
 import { ChannelAlreadyOwned } from "./types.js";
+
+/** The lease file could not be read or written (permissions, full disk). Typed, never a defect. */
+export class ChannelLeaseError extends Data.TaggedError("ChannelLeaseError")<{
+  readonly channelId: string;
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
 
 /**
  * One owner per account. Taking the lease before an adapter starts makes a second owner (another
@@ -13,7 +20,10 @@ import { ChannelAlreadyOwned } from "./types.js";
  */
 export interface AccountLeases {
   /** Take the lease for `fingerprint` until the scope closes. Fails with {@link ChannelAlreadyOwned}. */
-  readonly acquire: (channelId: string, fingerprint: string) => Effect.Effect<void, ChannelAlreadyOwned, Scope.Scope>;
+  readonly acquire: (
+    channelId: string,
+    fingerprint: string,
+  ) => Effect.Effect<void, ChannelAlreadyOwned | ChannelLeaseError, Scope.Scope>;
 }
 
 interface LeaseFile {
@@ -61,21 +71,58 @@ export const makeFileLeases = (options: { readonly lockDir?: string } = {}): Acc
     acquire: (channelId, fingerprint) => {
       const path = join(dir, `${createHash("sha256").update(fingerprint).digest("hex").slice(0, 32)}.lock`);
       const mine: LeaseFile = { pid: process.pid, since: Date.now(), host };
-      const take = (): Effect.Effect<void, ChannelAlreadyOwned> =>
-        Effect.suspend(() => {
-          mkdirSync(dir, { recursive: true });
-          for (let attempt = 0; attempt < 2; attempt++) {
+      const leaseError = (cause: unknown) =>
+        Effect.fail(new ChannelLeaseError({ channelId, message: `channel ${channelId}: lease file unavailable`, cause }));
+      const take = (): Effect.Effect<void, ChannelAlreadyOwned | ChannelLeaseError> =>
+        Effect.suspend((): Effect.Effect<void, ChannelAlreadyOwned | ChannelLeaseError> => {
+          try {
+            mkdirSync(dir, { recursive: true });
+          } catch (e) {
+            return leaseError(e);
+          }
+          for (let attempt = 0; attempt < 3; attempt++) {
             try {
+              // Exclusive create is the one mutual-exclusion point: exactly one process wins it.
               writeFileSync(path, JSON.stringify(mine), { flag: "wx" });
               return Effect.void;
             } catch (e) {
-              if (!(typeof e === "object" && e !== null && "code" in e && e.code === "EEXIST")) return Effect.die(e);
+              if (!(typeof e === "object" && e !== null && "code" in e && e.code === "EEXIST")) return leaseError(e);
               const owner = readLease(path);
               const stale = owner === undefined || (owner.host === host && !pidAlive(owner.pid));
               if (!stale) {
                 return Effect.fail(new ChannelAlreadyOwned({ channelId, ownerPid: owner.pid, since: owner.since }));
               }
-              unlinkSync(path);
+              // Take the stale file out of the way by atomic rename to a unique name: only one
+              // contender moves it, and the loser gets ENOENT instead of unlinking a fresh lock.
+              const tomb = `${path}.stale-${process.pid}-${attempt}`;
+              try {
+                renameSync(path, tomb);
+              } catch (renameError) {
+                if (typeof renameError === "object" && renameError !== null && "code" in renameError && renameError.code === "ENOENT") continue;
+                return leaseError(renameError);
+              }
+              const moved = readLease(tomb);
+              const stillStale = moved === undefined || (moved.host === host && !pidAlive(moved.pid));
+              if (!stillStale) {
+                // Raced with a new owner: we moved a live lock. Put it back (link fails if the path
+                // was retaken) and fail closed.
+                try {
+                  linkSync(tomb, path);
+                } catch {
+                  // path already retaken by another owner; that owner holds the lease
+                }
+                try {
+                  unlinkSync(tomb);
+                } catch {
+                  // already gone
+                }
+                return Effect.fail(new ChannelAlreadyOwned({ channelId, ownerPid: moved.pid, since: moved.since }));
+              }
+              try {
+                unlinkSync(tomb);
+              } catch {
+                // already gone
+              }
             }
           }
           return Effect.fail(new ChannelAlreadyOwned({ channelId, ownerPid: -1, since: 0 }));

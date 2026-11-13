@@ -1,5 +1,5 @@
-import { Effect, Exit, Scope, Stream } from "effect";
-import type { AgentEvent } from "@reactive-agents/core";
+import { Cause, Effect, Exit, Scope, Stream } from "effect";
+import { emitErrorSwallowed, errorTag, type AgentEvent } from "@reactive-agents/core";
 import {
   isChannelAdapter,
   type ChannelAdapter,
@@ -61,6 +61,8 @@ export interface AdapterHubDeps {
 export class AdapterHub {
   private readonly adapters = new Map<string, RegisteredAdapter>();
   private scope?: Scope.CloseableScope;
+  /** Guards lazy creation of {@link scope} so concurrent registrations share one. */
+  private readonly scopeLock = Effect.unsafeMakeSemaphore(1);
 
   constructor(private readonly deps: AdapterHubDeps) {}
 
@@ -70,6 +72,17 @@ export class AdapterHub {
 
   platformOf(adapterId: string): string | undefined {
     return this.adapters.get(adapterId)?.platform;
+  }
+
+  private ensureScope(): Effect.Effect<Scope.CloseableScope> {
+    const self = this;
+    return self.scopeLock.withPermits(1)(
+      Effect.suspend(() => {
+        const existing = self.scope;
+        if (existing) return Effect.succeed(existing);
+        return Effect.map(Scope.make(), (made) => (self.scope = made));
+      }),
+    );
   }
 
   private update(id: string, patch: Partial<RegisteredAdapter>): void {
@@ -128,7 +141,7 @@ export class AdapterHub {
   private registerCanonical(adapter: ChannelAdapter): Effect.Effect<void, ChannelError> {
     const self = this;
     return Effect.gen(function* () {
-      const scope = self.scope ?? (self.scope = yield* Scope.make());
+      const scope = yield* self.ensureScope();
       const gate: SenderGate = (sender) => self.deps.senderGate(adapter.id, sender);
       adapter.setSenderGate?.(gate);
       self.adapters.set(adapter.id, {
@@ -142,7 +155,10 @@ export class AdapterHub {
         messagesReceived: 0,
         messagesSent: 0,
       });
-      yield* Scope.extend(adapter.start(), scope);
+      // A failed start must not leave a registration that `has()` reports and `deliver` would use.
+      yield* Scope.extend(adapter.start(), scope).pipe(
+        Effect.onError(() => Effect.sync(() => void self.adapters.delete(adapter.id))),
+      );
       self.update(adapter.id, { state: yield* adapter.currentState });
       yield* Effect.forkIn(
         Stream.runForEach(adapter.state, (s) => Effect.sync(() => self.update(adapter.id, { state: s }))),
@@ -153,15 +169,32 @@ export class AdapterHub {
         adapter.inbound.pipe(
           Stream.mapEffect((env) => self.deps.onEnvelope(adapter.id, env), { concurrency }),
           Stream.runDrain,
-          Effect.catchAll((error) =>
-            Effect.suspend(() => {
+          // catchAllCause: a handler defect must end as a failed channel, not a silent dead fiber.
+          Effect.catchAllCause((cause) => {
+            if (Cause.isInterruptedOnly(cause)) return Effect.void;
+            const failure = Cause.failureOption(cause);
+            const error: ChannelError =
+              failure._tag === "Some"
+                ? failure.value
+                : channelError(adapter.id, "unknown", {
+                    message: `channel ${adapter.id}: inbound handler defect`,
+                    cause: Cause.squash(cause),
+                  });
+            const report =
+              failure._tag === "Some"
+                ? Effect.void
+                : emitErrorSwallowed({
+                    site: "channels/src/routing/adapter-hub.ts:inbound",
+                    tag: errorTag(Cause.squash(cause)),
+                  });
+            return Effect.suspend(() => {
               self.update(adapter.id, {
                 state: { status: "failed", error },
                 ...(error.kind === "conflict" ? { conflict: true } : {}),
               });
-              return self.deps.onChannelFailed?.(adapter.id, error) ?? Effect.void;
-            }),
-          ),
+              return Effect.zipRight(report, self.deps.onChannelFailed?.(adapter.id, error) ?? Effect.void);
+            });
+          }),
         ),
         scope,
       );

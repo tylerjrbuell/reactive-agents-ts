@@ -54,7 +54,15 @@ export interface WebhookChannelAdapterConfig {
   readonly rateLimit?: { readonly max: number; readonly window: Duration.DurationInput };
   /** Buffered inbound envelopes before `handleRequest` waits for the consumer. Default 256. */
   readonly inboundCapacity?: number;
+  /**
+   * How long `handleRequest` waits for room in a full inbound buffer before failing with
+   * `rate_limited` (HTTP 429), so a stalled consumer cannot pin ingress slots. Default 5000.
+   */
+  readonly enqueueTimeoutMs?: number;
 }
+
+/** Default bound on waiting for room in a full inbound buffer. */
+const DEFAULT_ENQUEUE_TIMEOUT_MS = 5_000;
 
 const WEBHOOK_CAPABILITIES: ChannelCapabilities = {
   threads: true,
@@ -87,6 +95,7 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
   private readonly secret?: Redacted.Redacted<string>;
   private readonly allowUnsigned: boolean;
   private readonly replayWindowMs: number;
+  private readonly enqueueTimeoutMs: number;
   private readonly onResponse?: WebhookChannelAdapterConfig["onResponse"];
   private readonly queue: Queue.Queue<InboundEnvelope>;
   private readonly conn: ConnectionStateRef;
@@ -110,6 +119,7 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
           : config.secret;
     this.allowUnsigned = config.allowUnsigned === true;
     this.replayWindowMs = config.replayWindowMs ?? 300_000;
+    this.enqueueTimeoutMs = config.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
     this.onResponse = config.onResponse;
     this.queue = Effect.runSync(Queue.bounded<InboundEnvelope>(config.inboundCapacity ?? 256));
     this.conn = Effect.runSync(makeConnectionState());
@@ -192,8 +202,8 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
   /**
    * Verifies signature and replay window, normalizes the JSON body into an {@link InboundEnvelope},
    * drops repeats of the same message id, then delivers: to the legacy `onMessage` handler when one
-   * is registered, otherwise onto the backpressured `inbound` stream (this call waits while the
-   * stream is full).
+   * is registered, otherwise onto the backpressured `inbound` stream (this call waits up to
+   * `enqueueTimeoutMs` while the stream is full, then fails with `rate_limited`).
    */
   handleRequest(req: {
     body: string;
@@ -241,7 +251,13 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
         return;
       }
       if (!self.started) return yield* reject("not_started");
-      yield* Queue.offer(self.queue, env);
+      // Bounded wait: a stalled consumer must shed (429) instead of pinning an ingress slot.
+      yield* Queue.offer(self.queue, env).pipe(
+        Effect.timeoutFail({
+          duration: Duration.millis(self.enqueueTimeoutMs),
+          onTimeout: () => new ChannelConnectionError({ adapter: self.id, reason: "rate_limited" }),
+        }),
+      );
     });
   }
 
@@ -258,7 +274,7 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
     const id = this.id;
     return this.handleRequest({ body: req.body, headers: { ...req.headers } }).pipe(
       Effect.mapError((e) =>
-        channelError(id, e.reason === "invalid_json" || e.reason === "not_started" ? "unsupported" : "auth", {
+        channelError(id, e.reason === "rate_limited" ? "rate_limited" : e.reason === "invalid_json" || e.reason === "not_started" ? "unsupported" : "auth", {
           message: `channel ${id}: ${e.reason}`,
           cause: e,
         }),

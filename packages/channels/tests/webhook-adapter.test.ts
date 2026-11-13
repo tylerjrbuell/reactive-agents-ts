@@ -115,3 +115,19 @@ describe("WebhookChannelAdapter", () => {
     expect(Exit.isFailure(exit) && exit.cause._tag === "Fail" ? exit.cause.error.reason : "none").toBe("rate_limited");
   });
 });
+
+describe("WebhookChannelAdapter backpressure", () => {
+  test("a full inbound buffer fails handleWebhook as rate_limited instead of waiting forever", async () => {
+    const w = new WebhookChannelAdapter({
+      platform: "p",
+      allowUnsigned: true,
+      inboundCapacity: 1,
+      enqueueTimeoutMs: 20,
+    });
+    await Effect.runPromise(w.connect());
+    const req = (id: string) => ({ body: JSON.stringify({ id, content: "x", channelId: "c", senderId: "u" }), headers: {} });
+    await Effect.runPromise(w.handleWebhook(req("a")));
+    const exit = await Effect.runPromiseExit(w.handleWebhook(req("b")));
+    expect(Exit.isFailure(exit) && exit.cause._tag === "Fail" ? exit.cause.error.kind : undefined).toBe("rate_limited");
+  });
+});

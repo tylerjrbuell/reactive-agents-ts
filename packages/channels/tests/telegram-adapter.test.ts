@@ -387,3 +387,28 @@ describe("TelegramChannelAdapter webhook mode", () => {
       }),
     ));
 });
+
+describe("TelegramChannelAdapter webhook backpressure", () => {
+  const SECRET = "hook-secret-value";
+  const hook = (updateId: number, text: string) => ({
+    body: JSON.stringify({ update_id: updateId, ...message({ text }) }),
+    headers: { "X-Telegram-Bot-Api-Secret-Token": SECRET },
+  });
+
+  test("a full inbound buffer fails the webhook request as rate_limited after the enqueue timeout", () =>
+    run(
+      Effect.gen(function* () {
+        const { adapter } = yield* started({
+          webhook: { secretToken: SECRET },
+          inboundCapacity: 1,
+          enqueueTimeoutMs: 1000,
+        });
+        yield* adapter.handleWebhook(hook(11, "fills the buffer"));
+        const stalled = yield* Effect.fork(Effect.flip(adapter.handleWebhook(hook(12, "no room"))));
+        yield* Effect.yieldNow();
+        yield* TestClock.adjust("1 second");
+        const error = yield* Fiber.join(stalled);
+        expect(error.kind).toBe("rate_limited");
+      }),
+    ));
+});

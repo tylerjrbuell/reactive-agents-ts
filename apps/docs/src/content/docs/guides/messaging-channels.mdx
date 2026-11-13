@@ -435,7 +435,7 @@ const telegram = new TelegramChannelAdapter({
 
 A bot can use only one of the two. If another process polls the same bot, or a webhook is set while you poll, Telegram answers `409 Conflict`; the adapter stops with a `ChannelError` that says so instead of retrying. The adapter never deletes your webhook for you. In webhook mode `handleWebhook` checks `X-Telegram-Bot-Api-Secret-Token` in constant time and rejects every request when no secret is configured.
 
-To serve the webhook, mount the adapter on the gateway ingress server instead of writing your own route: `startIngress({ channelRoutes: [channelWebhookRoute("/channels/telegram", telegram)], onEvent })` (`channelWebhookRoute` is exported by `@reactive-agents/channels`, `startIngress` by `@reactive-agents/gateway`). It binds `127.0.0.1` by default, rejects non-POST requests and bodies over `maxBodyBytes` (default 1 MiB) before the adapter sees them, answers 408 to a sender that stalls the body past `bodyTimeoutMs` (default 10 s) and 503 beyond `maxInFlight` (default 64) concurrent requests, and maps adapter errors to generic status codes (a wrong secret is 401). See the gateway guide for the full list.
+To serve the webhook, mount the adapter on the gateway ingress server instead of writing your own route: `startIngress({ channelRoutes: [channelWebhookRoute("/channels/telegram", telegram)], onEvent })` (`channelWebhookRoute` is exported by `@reactive-agents/channels`, `startIngress` by `@reactive-agents/gateway`). It binds `127.0.0.1` by default, rejects non-POST requests and bodies over `maxBodyBytes` (default 1 MiB) before the adapter sees them, answers 408 to a sender that stalls the body past `bodyTimeoutMs` (default 10 s) and 503 beyond `maxInFlight` (default 64) concurrent requests, and maps adapter errors to generic status codes (a wrong secret is 401). When the agent cannot keep up and the adapter's inbound buffer stays full, a request waits at most `enqueueTimeoutMs` (default 5000, on `TelegramChannelAdapter` and `WebhookChannelAdapter`) and is then answered 429. See the gateway guide for the full list.
 
 **Schedule delivery records.** `lastRun.delivery` uses the channel vocabulary: `adapterId`, `receiptStatus` (`sent`, `queued`, `delivered`) on success, `errorKind` (the `ChannelError` kind) and `retryable` on failure. Waiting events in the in-memory inbound queue are lost on restart; cron fires replay via the schedule registry.
 
@@ -520,6 +520,8 @@ How access works:
 - This limits what an injected message can do. It does not make a model immune to injection, and read-only tools can still leak data they can read.
 
 Read state from the agent: `agent.channelStatus()` gives the adapters and session counters (`null` before the gateway starts), `agent.channelRouterStatus()` the router view above (channels, routes, drops, sessions). `agent.gatewayStatus()` carries the inbound queue (`ready`, `deferred`, `capacity`, `overflow`, `dropped`).
+
+If the router cannot start (for example a route names a channel that is not configured), the gateway stops instead of running with no inbound channels: `handle.done` resolves with a summary whose `error` explains why.
 
 Routes (not adapters or agent factories) serialize with the rest of the agent as `channelRoutes` in `AgentConfig`. `.withChannels({ adapters, triggers })` keeps working for the single-agent path.
 
