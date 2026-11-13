@@ -98,6 +98,7 @@ If a channel is saved for an account the hub already holds, the page says so and
 | Sender tools | What non-owners get: Read-only (the default), Only these tools, or The agent's full tools. |
 | Caps | Cost per day in USD, turns per hour for the route, turns per sender per hour (default 6 when empty) and max iterations per turn. |
 | Acknowledge slow turns | Off by default; see below. |
+| Start-over commands | `/new` and `/reset` by default. When a route owner sends one as the whole message, that conversation starts fresh and its saved history is cleared; the agent never sees the command. Leave blank for the default, list your own, or turn it off. Other senders' `/new` is ordinary text. |
 
 Webhook routes are authorised by the channel's signing secret, so the editor hides owners, allow and deny lists, open access, sender tools and acknowledgements for them.
 
