@@ -316,10 +316,10 @@ describe("/mcp rows", () => {
     expect(rows[1]).toMatchObject({ active: false, hint: "off", detail: "1 tool" });
   });
 
-  test("a server row toggles its id and its tools together", () => {
+  test("a server row attaches the server without naming its tools", () => {
     const { ctx, calls } = picker("/mcp git", { catalog });
     void pickerItems(ctx)[0]!.run();
-    expect(calls).toEqual([`toggle:git:${JSON.stringify({ tools: ["git/log"], mcpServerIds: ["s2"], enableTools: true })}`]);
+    expect(calls).toEqual([`toggle:git:${JSON.stringify({ tools: [], mcpServerIds: ["s2"], enableTools: true })}`]);
   });
 
   test("the add row puts `/mcp add ` in the composer", () => {

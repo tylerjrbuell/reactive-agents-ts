@@ -191,6 +191,18 @@ describe("cortexParamsToAgentConfig", () => {
     expect(config.fallbacks).toBeUndefined();
   });
 
+  it("carries MCP readOnly / trustAnnotations into AgentConfig.mcpServers and the schema accepts them", () => {
+    const config = cortexParamsToAgentConfig({
+      provider: "anthropic",
+      mcpConfigs: [{ name: "umami", transport: "stdio", command: "node", readOnly: ["get-stats"], trustAnnotations: true }],
+    });
+    expect(config.mcpServers?.[0]?.readOnly).toEqual(["get-stats"]);
+    expect(config.mcpServers?.[0]?.trustAnnotations).toBe(true);
+    const decoded = Schema.decodeUnknownSync(AgentConfigSchema)(config);
+    expect(decoded.mcpServers?.[0]?.readOnly).toEqual(["get-stats"]);
+    expect(decoded.mcpServers?.[0]?.trustAnnotations).toBe(true);
+  });
+
   it("maps mcpConfigs → mcpServers", () => {
     const config = cortexParamsToAgentConfig({
       provider: "anthropic",

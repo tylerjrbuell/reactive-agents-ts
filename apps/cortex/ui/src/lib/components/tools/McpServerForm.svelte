@@ -9,7 +9,14 @@
   import Select from "$lib/components/kit/Select.svelte";
   import type { McpDraft, McpListRow, McpTransport } from "$lib/tool-workshop.js";
 
+  import Switch from "$lib/components/kit/Switch.svelte";
+
   const TRANSPORTS: readonly McpTransport[] = ["stdio", "sse", "websocket", "streamable-http"];
+  const READ_ONLY_MODES: readonly { value: McpDraft["readOnlyMode"]; label: string }[] = [
+    { value: "off", label: "Not declared" },
+    { value: "all", label: "All tools are read-only" },
+    { value: "tools", label: "Only specific tools" },
+  ];
 
   interface Props {
     /** Manual setup form or JSON import. */
@@ -114,6 +121,27 @@
           <Textarea id="tw-mcp-auth" bind:value={draft.auth} rows={3} mono placeholder={'{ "type": "client_credentials", "clientId": "...", "clientSecret": "..." }'} describedBy="tw-mcp-auth-hint" />
         </Field>
       {/if}
+      <Field id="tw-mcp-readonly" label="Read-only tools" hint="Your promise that these tools only read. It keeps them available when a chat or channel is limited to read-only." class="wide">
+        <Select
+          id="tw-mcp-readonly"
+          value={draft.readOnlyMode}
+          options={READ_ONLY_MODES}
+          onchange={(v) => (draft.readOnlyMode = READ_ONLY_MODES.find((m) => m.value === v)?.value ?? draft.readOnlyMode)}
+        />
+      </Field>
+      {#if draft.readOnlyMode === "tools"}
+        <Field id="tw-mcp-readonly-tools" label="Read-only tool names" hint="Comma separated, without the server name prefix." class="wide">
+          <Input id="tw-mcp-readonly-tools" bind:value={draft.readOnlyTools} mono placeholder="get-stats, get-events" describedBy="tw-mcp-readonly-tools-hint" />
+        </Field>
+      {/if}
+      <div class="wide">
+        <Switch
+          id="tw-mcp-trust"
+          label="Trust the server's read-only hints"
+          bind:checked={draft.trustAnnotations}
+          hint="The server marks some tools as read-only itself. On: Cortex believes those marks. Off: only what you list above counts."
+        />
+      </div>
     </div>
     <div class="row-actions end">
       <Button variant="ghost" onclick={onDone}>Done</Button>

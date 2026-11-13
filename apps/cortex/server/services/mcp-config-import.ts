@@ -83,6 +83,14 @@ export function parseConfigBody(body: Record<string, unknown>): MCPServerConfig 
     }
     if (Object.keys(headers).length > 0) cfg.headers = headers;
   }
+  // Operator read-only promise (framework `MCPServerConfig.readOnly`): `true` = every tool, or the named tools.
+  // `false` / empty list is "not declared", so it is not stored.
+  if (b.readOnly === true) cfg.readOnly = true;
+  else if (Array.isArray(b.readOnly)) {
+    const names = b.readOnly.filter((n): n is string => typeof n === "string").map((n) => n.trim()).filter(Boolean);
+    if (names.length > 0) cfg.readOnly = names;
+  }
+  if (typeof b.trustAnnotations === "boolean") cfg.trustAnnotations = b.trustAnnotations;
   if (b.auth && typeof b.auth === "object" && !Array.isArray(b.auth)) {
     if (transport === "stdio") return null;
     cfg.auth = b.auth as NonNullable<MCPServerConfig["auth"]>;

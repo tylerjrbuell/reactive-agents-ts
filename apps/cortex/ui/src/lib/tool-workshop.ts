@@ -60,6 +60,12 @@ export type McpDraft = {
   headers: string;
   env: string;
   auth: string;
+  /** Read-only promise: `off` = not declared, `all` = every tool, `tools` = the names in `readOnlyTools`. */
+  readOnlyMode: "off" | "all" | "tools";
+  /** Tool names (no `server/` prefix), comma or newline separated; used when `readOnlyMode` is `tools`. */
+  readOnlyTools: string;
+  /** Honor the server's own `readOnlyHint` annotations. */
+  trustAnnotations: boolean;
 };
 
 /** An empty MCP server form. */
@@ -72,7 +78,12 @@ export const EMPTY_MCP_DRAFT: McpDraft = {
   headers: "",
   env: "",
   auth: "",
+  readOnlyMode: "off",
+  readOnlyTools: "",
+  trustAnnotations: false,
 };
+
+const splitNames = (s: string): string[] => s.split(/[\n,]/).map((n) => n.trim()).filter(Boolean);
 
 /** Badge text for a tool kind. */
 export function kindLabel(k: ToolKind): string {
@@ -134,6 +145,9 @@ export function mcpDraftFromRow(row: McpListRow): McpDraft {
     headers: c.headers && typeof c.headers === "object" ? JSON.stringify(c.headers, null, 2) : "",
     env: c.env && typeof c.env === "object" ? JSON.stringify(c.env, null, 2) : "",
     auth: auth && typeof auth === "object" ? JSON.stringify(auth, null, 2) : "",
+    readOnlyMode: c.readOnly === true ? "all" : Array.isArray(c.readOnly) && c.readOnly.length > 0 ? "tools" : "off",
+    readOnlyTools: Array.isArray(c.readOnly) ? (c.readOnly as string[]).join(", ") : "",
+    trustAnnotations: c.trustAnnotations === true,
   };
 }
 
@@ -173,6 +187,12 @@ export function buildMcpPayload(d: McpDraft): Record<string, unknown> {
   if (d.auth.trim() && transport !== "stdio") {
     body.auth = JSON.parse(d.auth);
   }
+  if (d.readOnlyMode === "all") body.readOnly = true;
+  else if (d.readOnlyMode === "tools") {
+    const names = splitNames(d.readOnlyTools);
+    if (names.length > 0) body.readOnly = names;
+  }
+  if (d.trustAnnotations) body.trustAnnotations = true;
   return body;
 }
 

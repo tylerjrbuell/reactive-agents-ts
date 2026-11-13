@@ -82,6 +82,20 @@ describe("MCP form", () => {
     expect(mcpDraftJsonError({ ...EMPTY_MCP_DRAFT, auth: "{}" })).not.toBeNull();
     expect(mcpDraftJsonError({ ...EMPTY_MCP_DRAFT, transport: "sse", auth: "{}" })).toBeNull();
   });
+  test("read-only: off sends nothing; all sends true; tools sends the trimmed names; trustAnnotations only when ticked", () => {
+    const base = { ...EMPTY_MCP_DRAFT, name: "umami", command: "x" };
+    expect(buildMcpPayload(base)).toEqual({ name: "umami", transport: "stdio", command: "x" });
+    expect(buildMcpPayload({ ...base, readOnlyMode: "all", trustAnnotations: true })).toMatchObject({ readOnly: true, trustAnnotations: true });
+    expect(buildMcpPayload({ ...base, readOnlyMode: "tools", readOnlyTools: " get-stats,\nget-events ,," }).readOnly).toEqual(["get-stats", "get-events"]);
+    // "specific tools" with no names is not a promise: nothing is sent
+    expect(buildMcpPayload({ ...base, readOnlyMode: "tools", readOnlyTools: " " })).not.toHaveProperty("readOnly");
+  });
+  test("read-only settings load back into the draft", () => {
+    const row = (config: Record<string, unknown>) => mcpDraftFromRow({ serverId: "s", name: "u", tools: [], config: { transport: "stdio", ...config } });
+    expect(row({})).toMatchObject({ readOnlyMode: "off", readOnlyTools: "", trustAnnotations: false });
+    expect(row({ readOnly: true, trustAnnotations: true })).toMatchObject({ readOnlyMode: "all", trustAnnotations: true });
+    expect(row({ readOnly: ["a", "b"] })).toMatchObject({ readOnlyMode: "tools", readOnlyTools: "a, b" });
+  });
   test("draft from a saved row round-trips the config", () => {
     const d = mcpDraftFromRow({ serverId: "s", name: "row", tools: [], config: { transport: "stdio", command: "docker", args: ["run", "-i"], env: { K: "v" } } });
     expect(d).toMatchObject({ name: "row", transport: "stdio", command: "docker", args: "run, -i" });

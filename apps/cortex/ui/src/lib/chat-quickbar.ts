@@ -4,7 +4,7 @@
  * session's stored agent config and returns a display value or a
  * `PATCH /api/chat/sessions/:id/config` body, so the panel and tests share them.
  */
-import { toggleServerTools } from "./tool-selection.js";
+import { toggleMcpServerAttached, toggleServerTools } from "./tool-selection.js";
 
 type Cfg = Record<string, unknown>;
 
@@ -109,16 +109,13 @@ export function unlistedTools(cfg: Cfg, listed: ListedTools): string[] {
   return strings(cfg.tools).filter((t) => !known.has(t));
 }
 
-/** Toggle an MCP server: its id in `mcpServerIds` and its tools in `tools` move together (allowedTools filters MCP tools too). */
+/**
+ * Toggle an MCP server. On attaches it with none of its tools named: the framework then makes
+ * every tool of an attached server visible, so no per-tool allowlisting. Off detaches it and
+ * drops any of its tool names (an older explicit list).
+ */
 export function toggleMcpServerPatch(cfg: Cfg, serverId: string, serverTools: readonly string[]): { tools: string[]; mcpServerIds: string[]; enableTools: true } {
-  const ids = strings(cfg.mcpServerIds);
-  const on = ids.includes(serverId);
-  const tools = strings(cfg.tools);
-  return {
-    tools: on ? tools.filter((t) => !serverTools.includes(t)) : [...new Set([...tools, ...serverTools])],
-    mcpServerIds: on ? ids.filter((i) => i !== serverId) : [...ids, serverId],
-    enableTools: true,
-  };
+  return { ...toggleMcpServerAttached({ tools: strings(cfg.tools), mcpServerIds: strings(cfg.mcpServerIds) }, { serverId, tools: serverTools }), enableTools: true };
 }
 
 /** Copy a saved agent's toolset (tools, MCP servers, host shell) onto the chat. */

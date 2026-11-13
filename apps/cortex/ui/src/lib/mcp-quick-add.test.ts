@@ -82,12 +82,12 @@ describe("quickAddMcpToChat", () => {
     return { log, deps };
   };
 
-  test("saves, reloads the catalog, then turns the server and its tools on", async () => {
+  test("saves, reloads the catalog, then turns the server on (its tools need no allowlisting)", async () => {
     const { log, deps } = harness({ serverId: "s1", name: "docs", tools: ["docs/search", "docs/read"] });
     await quickAddMcpToChat("https://a.dev/mcp", deps);
     expect(log).toEqual([
       "reload",
-      `patch:docs on (2 tools):${JSON.stringify({ tools: ["web-search", "docs/search", "docs/read"], mcpServerIds: ["s1"], enableTools: true })}`,
+      `patch:docs on (2 tools):${JSON.stringify({ tools: ["web-search"], mcpServerIds: ["s1"], enableTools: true })}`,
     ]);
   });
 

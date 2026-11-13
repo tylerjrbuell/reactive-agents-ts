@@ -50,10 +50,10 @@ describe("chat quick bar", () => {
     expect(toolsetChoice("constructor", ["x"], presets, []).tokens).toEqual(["x"]);
   });
 
-  test("MCP server id and its tools move together", () => {
+  test("turning an MCP server on attaches it without naming its tools; off removes it and any named tools", () => {
     const on = toggleMcpServerPatch({ tools: ["web-search"] }, "srv", ["srv/a", "srv/b"]);
-    expect(on).toEqual({ tools: ["web-search", "srv/a", "srv/b"], mcpServerIds: ["srv"], enableTools: true });
-    expect(toggleMcpServerPatch(on, "srv", ["srv/a", "srv/b"])).toEqual({ tools: ["web-search"], mcpServerIds: [], enableTools: true });
+    expect(on).toEqual({ tools: ["web-search"], mcpServerIds: ["srv"], enableTools: true });
+    expect(toggleMcpServerPatch({ ...on, tools: ["web-search", "srv/a"] }, "srv", ["srv/a", "srv/b"])).toEqual({ tools: ["web-search"], mcpServerIds: [], enableTools: true });
   });
 
   test("preset copies a saved agent's toolset", () => {

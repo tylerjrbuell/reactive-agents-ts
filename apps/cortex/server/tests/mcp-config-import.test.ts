@@ -167,3 +167,27 @@ describe("expandMcpConfigsFromJson", () => {
     expect(expandMcpConfigsFromJson(undefined)).toHaveLength(0);
   });
 });
+
+describe("parseConfigBody — readOnly / trustAnnotations", () => {
+  it("keeps readOnly: true and trustAnnotations", () => {
+    const cfg = parseConfigBody({ name: "umami", url: "http://localhost:3000/mcp", readOnly: true, trustAnnotations: true });
+    expect(cfg?.readOnly).toBe(true);
+    expect(cfg?.trustAnnotations).toBe(true);
+  });
+
+  it("keeps a readOnly tool-name list, trimmed, dropping blanks and non-strings", () => {
+    const cfg = parseConfigBody({ name: "umami", command: "x", readOnly: [" get-stats ", "", 7, "get-events"] });
+    expect(cfg?.readOnly).toEqual(["get-stats", "get-events"]);
+  });
+
+  it("drops readOnly: false, an empty list and a non-boolean trustAnnotations (framework default applies)", () => {
+    expect(parseConfigBody({ name: "a", command: "x", readOnly: false })).not.toHaveProperty("readOnly");
+    expect(parseConfigBody({ name: "a", command: "x", readOnly: [] })).not.toHaveProperty("readOnly");
+    expect(parseConfigBody({ name: "a", command: "x", trustAnnotations: "yes" })).not.toHaveProperty("trustAnnotations");
+  });
+
+  it("survives the Cursor-style JSON import", () => {
+    const [cfg] = expandMcpConfigsFromJson({ mcpServers: { umami: { command: "x", readOnly: true } } });
+    expect(cfg?.readOnly).toBe(true);
+  });
+});
