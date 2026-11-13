@@ -77,6 +77,7 @@ Sessions describe a full benchmark run (tasks × ablations × judges × drift ch
 - **Dimensional rubrics** — v2 sessions score on multiple judge dimensions, not just pass/fail
 - **Drift detection** — `computeDrift` compares to a saved baseline; `exceedsThreshold` gates CI
 - **CLI integration** — `rax bench` with provider, model, and tier filters
+- **Lift gate** — `evaluateLiftGate` (`rax eval gate`) scores accuracy lift and billed-token overhead per tier. It also reads how runs ENDED: `RunScore.endStatus` (trace `run-completed.status`, recorded by `runSession`). If a tier's non-success rate rises by at least `DEFAULT_STATUS_REGRESSION_PP` (25pp) and `DEFAULT_STATUS_REGRESSION_RUNS` (2) excess runs, the verdict is `reject` whatever the accuracy says (a correct answer ended as `failure` is invisible to accuracy; commit 795a51884 ended 12/12 H3 runs that way). Thresholds live in `src/gate/types.ts` and are overridable per `LiftPolicy`. Reports without `endStatus` skip the guard. Each tier also prints the billed-token ratio per run.
 
 ## Report Output
 

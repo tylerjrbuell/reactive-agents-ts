@@ -24,7 +24,7 @@ function tierRow(t: TierEvidence, policy: LiftPolicy): string {
   // differs from a pre-amendment one without re-running anything.
   const tokLine =
     `    · tokens raw ${fmtPct(t.tokenOverheadPct)} | billed ${fmtPct(t.billedTokenOverheadPct)}` +
-    ` (scored: ${policy.tokenLeg}) | cacheHit ${(t.cacheHitRate * 100).toFixed(1)}%`;
+    ` (scored: ${policy.tokenLeg}) | billed x${t.billedTokenRatio.toFixed(2)}/run | cacheHit ${(t.cacheHitRate * 100).toFixed(1)}%`;
   return `${row}\n${tokLine}`;
 }
 
@@ -45,6 +45,14 @@ function tierDetailLines(t: TierEvidence): string[] {
   if (t.unpairedTaskIds.length > 0) {
     lines.push(
       `    · unpaired (excluded from estimate): ${t.unpairedTaskIds.join(", ")}`,
+    );
+  }
+  if (t.runStatus !== undefined) {
+    const r = t.runStatus;
+    const pct = (n: number, d: number): string => `${n}/${d} (${((100 * n) / d).toFixed(0)}%)`;
+    lines.push(
+      `    · run status non-success ${pct(r.baselineNonSuccess, r.baselineRuns)} → ${pct(r.candidateNonSuccess, r.candidateRuns)}` +
+        (t.statusRegresses ? " (STATUS REGRESSION — accuracy does not see this)" : ""),
     );
   }
   if (!t.inconclusive) {

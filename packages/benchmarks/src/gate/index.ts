@@ -2,6 +2,8 @@
 export {
   DEFAULT_LIFT_POLICY,
   DEFAULT_PROMOTION_SIGNIFICANCE_K,
+  DEFAULT_STATUS_REGRESSION_PP,
+  DEFAULT_STATUS_REGRESSION_RUNS,
   type ClassVerdict,
   type GateDecision,
   type GateVerdict,

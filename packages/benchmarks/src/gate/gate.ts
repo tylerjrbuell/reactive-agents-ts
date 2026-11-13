@@ -12,6 +12,8 @@ import type { SessionReport, TaskVariantReport } from "../types.js";
 import {
   DEFAULT_LIFT_POLICY,
   DEFAULT_PROMOTION_SIGNIFICANCE_K,
+  DEFAULT_STATUS_REGRESSION_PP,
+  DEFAULT_STATUS_REGRESSION_RUNS,
   type ClassVerdict,
   type GateDecision,
   type GateVerdict,
@@ -138,6 +140,20 @@ function cellPass8(r: TaskVariantReport): number | undefined {
   return passKEstimate(runs.length, runs.filter(isSolved).length, 8);
 }
 
+/** Runs carrying a trace-derived end status, and how many of them did not end `success`. */
+function endStatusCounts(cells: readonly TaskVariantReport[]): { observed: number; nonSuccess: number } {
+  let observed = 0;
+  let nonSuccess = 0;
+  for (const cell of cells) {
+    for (const run of cell.runs ?? []) {
+      if (run.endStatus === undefined) continue;
+      observed++;
+      if (run.endStatus !== "success") nonSuccess++;
+    }
+  }
+  return { observed, nonSuccess };
+}
+
 function computeEvidence(
   model: string,
   base: readonly TaskVariantReport[],
@@ -225,6 +241,35 @@ function computeEvidence(
     baseBilled === 0 ? 0 : ((candBilled - baseBilled) / baseBilled) * 100;
   const candCacheRead = mean(pairedCand.map((r) => r.meanCacheReadTokens ?? 0));
   const cacheHitRate = candTokens === 0 ? 0 : candCacheRead / candTokens;
+
+  const billedTokenRatio = baseBilled === 0 ? 0 : candBilled / baseBilled;
+
+  // ── Run-status guard ───────────────────────────────────────────────────────
+  // Accuracy grades the answer; `run-completed.status` says how the run ended.
+  // A harness change that ends correct runs as `failure` is invisible to the
+  // metric. Both arms need status-bearing runs, else the guard stays silent.
+  const bStat = endStatusCounts(pairedBase);
+  const cStat = endStatusCounts(pairedCand);
+  let runStatus: TierEvidence["runStatus"];
+  let statusRegresses = false;
+  if (bStat.observed > 0 && cStat.observed > 0) {
+    const baseRate = bStat.nonSuccess / bStat.observed;
+    const candRate = cStat.nonSuccess / cStat.observed;
+    const deltaPp = (candRate - baseRate) * 100;
+    const excessRuns = cStat.nonSuccess - baseRate * cStat.observed;
+    runStatus = {
+      baselineRuns: bStat.observed,
+      candidateRuns: cStat.observed,
+      baselineNonSuccess: bStat.nonSuccess,
+      candidateNonSuccess: cStat.nonSuccess,
+      deltaPp,
+      excessRuns,
+    };
+    statusRegresses =
+      !inconclusive &&
+      deltaPp >= (policy.maxStatusRegressionPp ?? DEFAULT_STATUS_REGRESSION_PP) &&
+      excessRuns >= (policy.minStatusRegressionRuns ?? DEFAULT_STATUS_REGRESSION_RUNS);
+  }
 
   const variance = maxOf(pairedCells.map((r) => r.variance));
 
@@ -317,11 +362,14 @@ function computeEvidence(
   const passes =
     !inconclusive &&
     !underpowered &&
+    !statusRegresses &&
     promotable &&
     liftPp >= policy.minLiftPp &&
     costOk &&
     passKOk;
-  const regresses = !inconclusive && !underpowered && significant && liftPp < 0;
+  // The status guard needs no accuracy power: it reads run outcomes, not scores.
+  const regresses =
+    statusRegresses || (!inconclusive && !underpowered && significant && liftPp < 0);
 
   // NOTE: when `inconclusive` is true, the numeric fields below are not meaningful — consumers MUST gate on `inconclusive` before reading liftPp/tokenOverheadPct.
   return {
@@ -331,6 +379,9 @@ function computeEvidence(
     liftPp,
     tokenOverheadPct,
     billedTokenOverheadPct,
+    billedTokenRatio,
+    ...(runStatus !== undefined ? { runStatus } : {}),
+    statusRegresses,
     cacheHitRate,
     variance,
     noisePp,
@@ -448,6 +499,8 @@ function buildRationale(
   policy: LiftPolicy,
   /** True when at least one tier's |lift| cleared its noise bar. */
   anySignificant = true,
+  statusRegressed: readonly string[] = [],
+  accuracyRegressed = false,
 ): string {
   const lift = aggregate.liftPp.toFixed(1);
   // Print the leg the verdict was actually SCORED on, labeled. Printing the
@@ -459,7 +512,11 @@ function buildRationale(
     `${tok}% ${policy.tokenLeg} tok`;
   if (decision === "underpowered")
     return `${base} — too few runs to resolve ≥${policy.minLiftPp}pp; this is NOT evidence of no effect`;
-  if (decision === "reject") return `${base} — a tier significantly regresses`;
+  if (decision === "reject") {
+    return statusRegressed.length > 0 && !accuracyRegressed
+      ? `${base} — run-status regression on ${statusRegressed.join(", ")}: runs end non-success far more often than baseline (accuracy cannot see this)`
+      : `${base} — a tier significantly regresses`;
+  }
   if (decision === "default-on") return `${base} — clears ≥${policy.minLiftPp}pp ∧ ≤${policy.maxTokenOverheadPct}% on all tiers`;
   if (partial) return `${base} — inconclusive tier blocks promotion`;
   // A result inside the noise band measured NOTHING. Printing "below the
@@ -522,6 +579,8 @@ export function evaluateLiftGate(
       top.partial,
       policy,
       perTier.some((t) => t.significant),
+      perTier.filter((t) => t.statusRegresses).map((t) => t.tier),
+      perTier.some((t) => t.regresses && !t.statusRegresses),
     ),
     baselineVariantId,
     candidateVariantId,

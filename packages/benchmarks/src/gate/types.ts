@@ -124,7 +124,28 @@ export interface LiftPolicy {
    * hard enough" is reported as itself, not as "no effect".
    */
   readonly minRuns: number;
+  /**
+   * Run-status regression guard (2026-11-13). A tier REGRESSES, regardless of
+   * accuracy lift, when the candidate's non-success run-status rate
+   * (`run-completed.status !== "success"`) exceeds the baseline's by at least
+   * this many percentage points AND by at least `minStatusRegressionRuns`
+   * runs. Default: {@link DEFAULT_STATUS_REGRESSION_PP}. Only runs that carry
+   * `RunScore.endStatus` count; reports without it are unaffected.
+   */
+  readonly maxStatusRegressionPp?: number;
+  /** Excess non-success runs (over the baseline rate) the guard needs. Default {@link DEFAULT_STATUS_REGRESSION_RUNS}. */
+  readonly minStatusRegressionRuns?: number;
 }
+
+/**
+ * Status-regression thresholds, pre-declared (2026-11-13) after 795a51884
+ * ended 12/12 H3 runs `status=failure` at accuracy 1.00 and the accuracy-only
+ * gate returned UNDERPOWERED. Conservative on purpose: 25pp clears the
+ * Bernoulli noise of a small cell and 2 excess runs rules out a single flake.
+ * The single home of these numbers; `LiftPolicy` overrides them per call.
+ */
+export const DEFAULT_STATUS_REGRESSION_PP = 25;
+export const DEFAULT_STATUS_REGRESSION_RUNS = 2;
 
 export const DEFAULT_LIFT_POLICY: LiftPolicy = {
   metric: "accuracy",
@@ -207,6 +228,29 @@ export interface TierEvidence {
     readonly candidate: number;
     readonly nonRegression: boolean;
   };
+  /**
+   * Candidate mean billed tokens per run / baseline's (1.0 = equal). Reported
+   * beside the status read so a cost blow-up is visible; 0 when the baseline
+   * billed nothing. The scored leg is still `billedTokenOverheadPct`.
+   */
+  readonly billedTokenRatio: number;
+  /**
+   * Run-end status read (`run-completed.status`), present ONLY when both arms
+   * have runs carrying `RunScore.endStatus`. Accuracy cannot see a run that
+   * answers correctly and is then ended as `failure`.
+   */
+  readonly runStatus?: {
+    readonly baselineRuns: number;
+    readonly candidateRuns: number;
+    readonly baselineNonSuccess: number;
+    readonly candidateNonSuccess: number;
+    /** Candidate non-success rate minus baseline's, in points. */
+    readonly deltaPp: number;
+    /** Candidate non-success runs above what the baseline rate predicts. */
+    readonly excessRuns: number;
+  };
+  /** The status guard fired: this tier regresses on run status whatever its accuracy says. */
+  readonly statusRegresses: boolean;
   /** Fewest runs observed in any contributing cell of this tier. */
   readonly minRunsObserved: number;
   /** `minRunsObserved < policy.minRuns` → this tier cannot pass OR regress. */

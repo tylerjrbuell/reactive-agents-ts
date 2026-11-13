@@ -247,6 +247,13 @@ export interface RunScore {
   readonly cacheReadTokens?: number;
   readonly durationMs: number;
   readonly status: "pass" | "fail" | "error";
+  /**
+   * How the run ENDED per the trace's `run-completed.status` (`success`,
+   * `failure`, ...). `status` above is liveness ("the agent returned"), so a
+   * correct answer ended as `failure` still reads `pass` there. Absent when
+   * there is no trace; the lift gate's status guard counts only runs carrying it.
+   */
+  readonly endStatus?: string;
   readonly output: string;
   readonly traceId?: string;
   readonly diagnosis?: RunDiagnosis;

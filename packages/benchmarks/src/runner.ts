@@ -46,7 +46,7 @@ export { aggregateAbstention, aggregateRuns, aggregatePassKByVariant, computeAll
 export { withConfigEnv, shouldUseLongHorizon, billedTokenFields, writeFixtures, computeGroundingSet }
 
 import { scoreTask, scoreErrorCell, computeReliability, judgeUnreachable, DEFAULT_JUDGE_URL } from "./judge.js"
-import { formatDiagnosisLine, trustVerdict } from "./diagnose.js"
+import { formatDiagnosisLine, runEndStatusField, trustVerdict } from "./diagnose.js"
 import { gradeThenDiagnose } from "./eval-graded.js"
 
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
@@ -870,15 +870,14 @@ export async function runSession(
             // "unverified" and an overconfident wrong answer surfaces as
             // "claimed-but-wrong" (2026-06-26 sweep reframe).
             const accuracyScore = dimensions.find((d) => d.dimension === "accuracy")?.score
-            const trust = diagnosis
-              ? trustVerdict(diagnosis.honestyLabel, accuracyScore)
-              : undefined
+            const trust = diagnosis ? trustVerdict(diagnosis.honestyLabel, accuracyScore) : undefined
             runScores.push({
               runIndex: i,
               dimensions,
               tokensUsed: result.tokensUsed,
               durationMs: result.durationMs,
               status: result.status,
+              ...(await runEndStatusField(session.traceDir, result.traceId)),
               output: result.output,
               ...(result.traceId ? { traceId: result.traceId } : {}),
               ...(diagnosis ? { diagnosis } : {}),

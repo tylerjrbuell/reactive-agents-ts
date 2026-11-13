@@ -18,7 +18,9 @@
 // --budget-sec (cell wall = --cell-timeout-sec).
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { dirname, isAbsolute, join } from "node:path"
-import { spawnSync, execSync } from "node:child_process"
+import { execSync } from "node:child_process"
+import { errorMessage } from "@reactive-agents/core"
+import { analyzeCause, parseTrace } from "@reactive-agents/trace"
 import { runSession } from "../runner.js"
 import { isSolved } from "../report-format.js"
 import type { BenchmarkTask, HarnessVariant, ModelVariant } from "../types.js"
@@ -109,7 +111,9 @@ export interface H3Cell {
   /** Distinct kernel iterations seen in the trace (tool-surface-resolved events). */
   readonly iterations: number | null
   readonly terminatedBy: string | null
-  /** `rax diagnose cause` label (`none` = clean end), or `no-trace`/`parse-failed`. */
+  /** `run-completed.status` from the trace (absent in results recorded before 2026-11-13). */
+  readonly endStatus?: string | null
+  /** `analyzeCause` label (`none` = clean end), or `no-trace` / `cause-error:<why>`. */
   readonly causeLabel: string
   readonly causeAuthority: string | null
   readonly toolSurface: ReadonlyArray<string>
@@ -153,42 +157,49 @@ const persist = (out: string, r: H3Results): void => {
   renameSync(tmp, out)
 }
 
-/** Walk up from this file to the monorepo root (the dir holding turbo.json); this file always lives inside it. */
-function repoRoot(): string {
-  let d = dirname(new URL(import.meta.url).pathname)
-  while (d !== "/" && !existsSync(join(d, "turbo.json"))) d = dirname(d)
-  return d
-}
-
 interface TraceFacts {
   readonly iterations: number | null
   readonly terminatedBy: string | null
+  /** `run-completed.status` (`success`/`failure`...): how the run ENDED, which accuracy cannot see. */
+  readonly endStatus: string | null
   readonly toolSurface: ReadonlyArray<string>
   readonly causeLabel: string
   readonly causeAuthority: string | null
 }
 
-/** Read the trace once for iterations / tool surface / terminatedBy and ask `rax diagnose cause --json` for the label. */
+/**
+ * Read the trace once for iterations / tool surface / terminatedBy and label it
+ * with `analyzeCause`, IN PROCESS. This used to spawn `bun apps/cli/src/index.ts
+ * diagnose cause --json` from the repo root found by walking up from this file
+ * and swallow every failure as `parse-failed`: a run launched from a worktree
+ * (or any checkout whose CLI could not start) labelled perfectly good traces
+ * `parse-failed`, naming the instrument's fault as the run's cause. The label
+ * now comes from the same `@reactive-agents/trace` the run was recorded with,
+ * and a failure says why (`cause-error:<message>`).
+ */
 export function traceFactsOf(traceFile: string | null): TraceFacts {
   if (!traceFile || !existsSync(traceFile)) {
-    return { iterations: null, terminatedBy: null, toolSurface: [], causeLabel: "no-trace", causeAuthority: null }
+    return { iterations: null, terminatedBy: null, endStatus: null, toolSurface: [], causeLabel: "no-trace", causeAuthority: null }
   }
-  const events = readFileSync(traceFile, "utf8").trim().split("\n").map((l) => JSON.parse(l) as Record<string, unknown>)
+  // parseTrace skips torn lines (a cell cut by its timeout flushes a partial one); JSON.parse per line threw.
+  const trace = parseTrace(readFileSync(traceFile, "utf8"))
+  const events: ReadonlyArray<Record<string, unknown>> = trace.events.map((e) => ({ ...e }))
   const iters = new Set(events.filter((e) => e.kind === "tool-surface-resolved").map((e) => e.iter))
   const surface = events.find((e) => e.kind === "tool-surface-resolved")
   const done = events.find((e) => e.kind === "run-completed")
-  const cli = join(repoRoot(), "apps/cli/src/index.ts")
-  const r = spawnSync("bun", [cli, "diagnose", "cause", traceFile, "--json"], { encoding: "utf8", timeout: 60_000 })
-  let causeLabel = "parse-failed"
+  let causeLabel: string
   let causeAuthority: string | null = null
   try {
-    const c = JSON.parse(r.stdout) as { cause?: string; authority?: string }
-    causeLabel = c.cause ?? "parse-failed"
+    const c = analyzeCause(trace)
+    causeLabel = c.cause
     causeAuthority = c.authority ?? null
-  } catch { /* leave parse-failed */ }
+  } catch (e) {
+    causeLabel = `cause-error:${errorMessage(e)}`.slice(0, 120)
+  }
   return {
     iterations: iters.size,
     terminatedBy: typeof done?.terminatedBy === "string" ? done.terminatedBy : null,
+    endStatus: typeof done?.status === "string" ? done.status : null,
     toolSurface: Array.isArray(surface?.visible) ? (surface.visible as string[]) : [],
     causeLabel,
     causeAuthority,
@@ -277,7 +288,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
         status: run0?.status ?? "no-run", inconclusive: tr?.inconclusive !== undefined,
         tokens: run0?.tokensUsed ?? 0, billedTokens: run0?.billedTokens ?? null,
         durationMs: Math.round(run0?.durationMs ?? 0),
-        iterations: facts.iterations, terminatedBy: facts.terminatedBy,
+        iterations: facts.iterations, terminatedBy: facts.terminatedBy, endStatus: facts.endStatus,
         causeLabel: facts.causeLabel, causeAuthority: facts.causeAuthority, toolSurface: facts.toolSurface,
         traceFile, traceDir,
         failureModes: run0?.diagnosis?.failureModes.map((f) => f.mode) ?? [],

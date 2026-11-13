@@ -55,6 +55,35 @@ export async function diagnoseRun(
   }
 }
 
+/**
+ * How the run ended per its trace's last `run-completed.status` (`success`,
+ * `failure`, ...). `undefined` when tracing is off, the file is missing, or the
+ * run never completed — the lift gate's status guard counts only runs that
+ * carry a status, so absence is "not measured", never "success".
+ */
+export async function runEndStatusOf(
+  traceDir: string | undefined,
+  traceId: string | undefined,
+): Promise<string | undefined> {
+  if (!traceDir || !traceId) return undefined;
+  try {
+    const trace = await loadTrace(join(traceDir, `${traceId}.jsonl`));
+    const done = trace.events.filter((e) => e.kind === "run-completed").at(-1);
+    return done?.kind === "run-completed" ? done.status : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** `{ endStatus }` when the trace recorded one, else `{}` — spread into a RunScore. */
+export async function runEndStatusField(
+  traceDir: string | undefined,
+  traceId: string | undefined,
+): Promise<{ readonly endStatus?: string }> {
+  const endStatus = await runEndStatusOf(traceDir, traceId);
+  return endStatus === undefined ? {} : { endStatus };
+}
+
 /** A run is "flag-worthy" when honesty is not a clean honest-failure, OR any failure mode / blind spot exists. */
 export function formatDiagnosisLine(diag: RunDiagnosis): string | null {
   const honestySuspect = diag.honestyLabel !== "honest-failure";

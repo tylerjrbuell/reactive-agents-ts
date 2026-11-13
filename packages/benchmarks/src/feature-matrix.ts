@@ -72,6 +72,7 @@ export const FEATURE_MATRIX: Readonly<Record<string, FeatureEntry>> = {
   withCalibration: { featureClass: "capability", gapReason: "per-model calibration; needs a multi-run warmup arm" },
   withContract: { featureClass: "capability", gapReason: "RunContract deny-list/requirements; tasks carry no contract" },
   withCustomTermination: { featureClass: "capability", gapReason: "custom terminal oracle unmeasured" },
+  withDebrief: { featureClass: "plumbing" },
   withDocuments: { featureClass: "capability", gapReason: "RAG-style document grounding; no corpus task" },
   withDurableRuns: { featureClass: "capability", gapReason: "crash-resume; needs a kill-and-restart harness" },
   withExperienceLearning: { featureClass: "capability", gapReason: "cross-run learning; needs a repeated-task arm" },
