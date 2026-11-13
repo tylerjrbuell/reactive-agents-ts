@@ -14,6 +14,7 @@
 
 import { Schema } from "effect";
 import { ANTHROPIC_STATIC_CAPABILITIES } from "./capability-anthropic.js";
+import { OLLAMA_LOCAL_STATIC_CAPABILITIES } from "./capability-ollama-local.js";
 
 // ─── Literal unions ──────────────────────────────────────────────────────────
 
@@ -668,6 +669,10 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // ── Local-model campaign roster (2026-11-13) ───────────────────────────────
+  // Rows live in capability-ollama-local.ts (size ceiling); spread in place.
+  ...OLLAMA_LOCAL_STATIC_CAPABILITIES,
+
   // ── Groq (OpenAI-compatible LPU inference) ─────────────────────────────────
   // Windows/output per Groq model docs (2026-07). All native-fc. Unlisted Groq
   // models resolve via the provider-aware fallback below (native-fc, 128k),
