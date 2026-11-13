@@ -7,6 +7,7 @@
 //    "I have no tools" although the tool is registered (live, 2026-11-12)
 //  - a sender's narrowed build still has tools, so it takes the tool loop on its read-only subset;
 //    a build with no tool at all stays on the direct path
+//  Cortex passes no `useTools`: the framework's capability default decides (`agent.chat`).
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Database } from "bun:sqlite";
 import { Effect, Layer } from "effect";
@@ -15,8 +16,6 @@ import { applySchema } from "../db/schema.js";
 import { createGatewayAgent } from "../db/queries.js";
 import { ChannelHub } from "../services/channel-hub.js";
 import { cortexAgentBuilder } from "../services/build-cortex-agent.js";
-import { paramsUseTools } from "../services/channel-hub-resolver.js";
-import { narrowCortexParams } from "../services/channel-tool-surface.js";
 import { normalizeCortexAgentConfig } from "../services/cortex-agent-config.js";
 import { gatewayConfigToBuildParams } from "../services/gateway-process-manager.js";
 import { CortexEventBridge, CortexEventBridgeLive } from "../services/event-bridge.js";
@@ -108,13 +107,25 @@ describe("owner tool surface", () => {
     expect(toolEventsOf()).toBeGreaterThan(0);
   }, 60_000);
 
-  it("paramsUseTools: tools on for an owner and a read-only sender, off when nothing is selected", () => {
-    const config = normalizeCortexAgentConfig(savedConfig());
-    const params = gatewayConfigToBuildParams({ agentId: "g", name: "n", config, mcpConfigs: [] });
-    expect(paramsUseTools(params)).toBe(true);
-    expect(paramsUseTools(narrowCortexParams(params, { _tag: "ReadOnly" }))).toBe(true);
-    expect(paramsUseTools(narrowCortexParams(params, { _tag: "Allowlist", tools: ["code-execute"] }))).toBe(false);
-    const bare = gatewayConfigToBuildParams({ agentId: "g", name: "n", config: normalizeCortexAgentConfig({ provider: "test", model: "m" }), mcpConfigs: [] });
-    expect(paramsUseTools(bare)).toBe(false);
-  });
+  it("a stranger's read-only turn takes the tool loop on the framework default (Cortex passes no useTools)", async () => {
+    createGatewayAgent(db, "gateway-1", "Bot", JSON.stringify(savedConfig()), null, "gateway");
+    const ch = scriptedChannel(CH);
+    const { hub } = makeHub(ch, [
+      { toolCall: { name: "file-read", args: { path: "/definitely/not/here.txt" } } },
+      { text: "final answer" },
+    ]);
+    await hub.start();
+    await converse(ch, "2", "what is bitcoin worth?", "s1");
+    expect(toolEventsOf()).toBeGreaterThan(0);
+  }, 60_000);
+
+  it("an agent with no tool at all stays on the direct path", async () => {
+    createGatewayAgent(db, "gateway-1", "Bot", JSON.stringify({ provider: "test", model: "test-model", channels: [{ id: CH, kind: "telegram", label: "Support" }], gateway: { accessControl: { accessPolicy: "open", allowedSenders: [OWNER] } } }), null, "gateway");
+    const ch = scriptedChannel(CH);
+    const { hub } = makeHub(ch, [{ text: "direct answer" }]);
+    await hub.start();
+    const reply = await converse(ch, "1", "what is bitcoin worth?", "o1");
+    expect(reply?.text).toBe("direct answer");
+    expect(toolEventsOf()).toBe(0);
+  }, 60_000);
 });

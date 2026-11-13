@@ -663,9 +663,13 @@ export class ChatSessionService {
     try {
       const entry = await this.getOrBuildSession(sessionId, cfg, row.stableAgentId);
 
-      /** Playground-style explicit routing — avoids accidental tool runs when tools are off. */
+      /**
+       * Only the user's "tools off" switch is Cortex's own call (`useTools: false`, so the turn
+       * never reaches a tool). When tools are on, the framework decides from the agent's
+       * capability (tool loop iff it has capability tools), whatever the message wording.
+       */
       const chatOpts: ChatOptions = {
-        useTools: enableTools,
+        ...(enableTools ? {} : { useTools: false }),
         ...(opts.posture !== undefined ? { posture: opts.posture } : {}),
       };
 

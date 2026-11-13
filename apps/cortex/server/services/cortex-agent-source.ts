@@ -57,7 +57,6 @@ export const CORTEX_OVERLAY_CALLS: readonly string[] = [
   "withTracing",
   "withJudgment",
   "withChannels",
-  "withGateway",
 ];
 
 const list = (xs: readonly string[]): string => xs.join(", ");

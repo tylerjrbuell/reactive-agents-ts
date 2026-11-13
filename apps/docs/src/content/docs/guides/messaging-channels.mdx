@@ -519,6 +519,8 @@ How access works:
 - **State is in memory by default.** Message dedupe and turn caps reset on restart, and the router logs a warning at startup. Pass a durable `store` to keep them.
 - This limits what an injected message can do. It does not make a model immune to injection, and read-only tools can still leak data they can read.
 
+Read state from the agent: `agent.channelStatus()` gives the adapters and session counters (`null` before the gateway starts), `agent.channelRouterStatus()` the router view above (channels, routes, drops, sessions). `agent.gatewayStatus()` carries the inbound queue (`ready`, `deferred`, `capacity`, `overflow`, `dropped`).
+
 Routes (not adapters or agent factories) serialize with the rest of the agent as `channelRoutes` in `AgentConfig`. `.withChannels({ adapters, triggers })` keeps working for the single-agent path.
 
 ## Troubleshooting

@@ -369,17 +369,14 @@ describe("the gateway block reaches the built agent", () => {
   it("adapters without an explicit gateway still enable the gateway (withChannels needs it)", async () => {
     const { adapter } = scriptedAdapter(CH);
     const cfg = (await cortexAgentBuilder({ provider: "test", channelAdapters: [adapter] })).toConfig();
-    // `ingress` is a builder option the AgentConfig schema type does not name yet; read it untyped.
-    const gw: Record<string, unknown> = { ...cfg.gateway };
-    expect(gw).toEqual({ ingress: { channels: false } });
+    expect(cfg.gateway).toEqual({ ingress: { channels: false } });
   });
 
   it("Cortex mounts its own webhook adapters, so the framework channel ingress is off and the rest of the gateway block survives", async () => {
     const { adapter } = scriptedAdapter(CH);
     const params = { provider: "test", gateway: { queue: { capacity: 7 }, accessControl: { accessPolicy: "open" as const } }, channelAdapters: [adapter] };
     const cfg = (await cortexAgentBuilder(params)).toConfig();
-    const gw: Record<string, unknown> = { ...cfg.gateway };
-    expect(gw.ingress).toEqual({ channels: false });
+    expect(cfg.gateway?.ingress).toEqual({ channels: false });
     expect(cfg.gateway?.queue).toEqual({ capacity: 7 });
     expect(cfg.gateway?.accessControl).toEqual({ accessPolicy: "open" });
   });

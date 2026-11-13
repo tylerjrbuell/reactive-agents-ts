@@ -224,6 +224,8 @@ const serve = startIngress({
 }).pipe(Effect.provide(WebhookServiceLive()), Effect.scoped);
 ```
 
+The agent's own ingress serves every webhook-capable channel adapter at `/channels/<id>`. A host that mounts the adapter itself turns that off with `gateway.ingress` (builder `.withGateway({ ingress: { channels: false } })`, or the same key in `AgentConfig`): `false` serves none, a string list only those ids.
+
 Fail-closed by design: POST only (405 otherwise), bodies over `maxBodyBytes` (default 1 MiB) get 413 before any parsing, a sender that stalls longer than `bodyTimeoutMs` (default 10 s) gets 408, more than `maxInFlight` (default 64) simultaneous requests get 503 before any body is read, unknown paths 404, a webhook route with no secret refuses every request, and a bad or missing signature is 401. Error bodies are generic; adapter messages never leave the process. Behind a public URL, terminate TLS in a reverse proxy.
 
 #### Custom Webhook Adapters
