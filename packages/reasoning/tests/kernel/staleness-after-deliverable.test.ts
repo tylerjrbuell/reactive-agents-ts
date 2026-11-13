@@ -61,6 +61,8 @@ const opts: KernelRunOptions = {
   kernelType: "react",
   taskId: "staleness-after-deliverable",
   modelId: "llama3.2:3b",
+  // This file pins WHICH passes pattern (e) fires on; graduated guidance would defer the stop.
+  loopDetection: { guidanceCycles: 0 },
 };
 
 // gather lands substantive evidence; probe returns a no-op (non-progress), so the
@@ -98,10 +100,12 @@ async function run(turns: Parameters<typeof TestLLMServiceLayer>[0]) {
 const loopFires = (trace: readonly TraceEvent[]) =>
   trace.flatMap((e) => (e.kind === "guard-fired" && e.guard === "loop_resolution" ? [e] : []));
 
+// The todo add comes FIRST: it MOVES the list (state-delta progress, law #5), so placed
+// after the gather it would reset staleness and change what this file calibrates.
 const STALE_PREFIX = [
+  call("todo", { action: "add", items: ["gather", "write", "report"] }),
   call("gather", { q: "core metric" }),
   call("probe", { q: "source a" }),
-  call("todo", { action: "add", items: ["gather", "write", "report"] }),
   call("probe", { q: "source b" }),
 ];
 
@@ -122,6 +126,7 @@ describe("evidence staleness is read at the turn boundary (after act)", () => {
     const { trace } = await run([
       ...STALE_PREFIX,
       call("lookup", { q: "source c" }),
+      call("lookup", { q: "source d" }),
       { text: FINAL_TEXT },
     ]);
     const fired = loopFires(trace).map((e) => (e.metadata as Record<string, unknown>).pattern);
@@ -130,7 +135,9 @@ describe("evidence staleness is read at the turn boundary (after act)", () => {
     // pattern e at the SAME passes the pass-start + re-assess pair did
     // (measured on both: iterations 5 and 6).
     const eIters = loopFires(trace).flatMap((e) => ((e.metadata as Record<string, unknown>).pattern === "e" ? [e.iter] : []));
-    expect(eIters).toEqual([5, 6]);
+    // The gather now lands one iteration later (the state-moving todo add leads the
+    // prefix), so the same calibration sits one iteration later: [6, 7] (was [5, 6]).
+    expect(eIters).toEqual([6, 7]);
   });
 });
 

@@ -26,6 +26,16 @@ export const META_TOOLS = new Set([
 ]) as ReadonlySet<string>;
 
 /**
+ * META tools that MUTATE tracked run state (a plan checklist, a checkpoint
+ * note). A successful call whose result differs from the tool's previous result
+ * changed that state, and the progress arbiter credits it as progress (design
+ * law #5): bookkeeping that moves the plan forward is not thrash. Read-only
+ * META tools (brief, pulse, find, recall, ...) are NOT here. Data, not logic:
+ * add a state-mutating meta tool here and the arbiter follows.
+ */
+export const STATE_TRACKING_META_TOOLS = new Set(["todo", "checkpoint"]) as ReadonlySet<string>;
+
+/**
  * Pseudo tool names the HARNESS stamps on injected observation steps
  * (guard redirects, quality-check nudges, legitimacy verdicts) via
  * `makeObservationResult("<pseudo>", …)`. These are harness feedback, not

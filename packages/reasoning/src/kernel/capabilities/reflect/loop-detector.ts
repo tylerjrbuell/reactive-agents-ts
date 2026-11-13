@@ -22,6 +22,7 @@
  * Extracted from kernel-runner.ts to keep the main loop focused on control flow.
  */
 import { guardEvidence, type GuardEvidence } from "../../utils/guard-evidence.js";
+import { GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
 import { transitionState } from "../../../kernel/state/kernel-state.js";
 // Sprint 3.3 — Sole Termination Authority: loop detector emits a
 // "loop-detected" intent and lets the Arbitrator decide success/failure.
@@ -34,8 +35,10 @@ import {
 // progress, so the guards stop being blind to the varied-args thrash.
 import {
   actionToolName,
+  changesTrackedState,
   classifyActionStep,
   type ObservationLike,
+  type ProgressVerdict,
 } from "../../../kernel/assessment/progress-arbiter.js";
 import type { KernelState, KernelInput, KernelRunOptions } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
@@ -81,9 +84,16 @@ export interface LoopDetectorOptions {
   /**
    * Run posture. Under `"plan"` a repeated `todo` call is exempt from (a)/(d):
    * re-adding an already-recorded plan is idempotent ("Skipped N duplicate
-   * item(s)") and means the plan IS recorded, not that the run is stuck.
+   * item(s)") and means the plan IS recorded, not that the run is stuck. This is
+   * NOT subsumed by the state-delta rule (a duplicate add leaves state unchanged),
+   * so it stays as the one posture-scoped exemption.
    */
   readonly posture?: "plan" | "execute";
+}
+
+/** Plan posture + todo: a repeated add is "plan recorded", not a stall. */
+function planRecordedRepeat(opts: LoopDetectorOptions | undefined, toolName: string | undefined): boolean {
+  return opts?.posture === "plan" && toolName === "todo";
 }
 
 const DEFAULT_EVIDENCE_STALE_THRESHOLD = 3;
@@ -124,12 +134,67 @@ const PATTERN_D: LoopPatternId = { id: "d", name: "no-new-evidence" };
 const PATTERN_E: LoopPatternId = { id: "e", name: "evidence-staleness" };
 
 /**
+ * The observation that answered each ACTION step (joined by toolCallId), with
+ * the STATE DELTA computed in step order: `stateChanged` is true when a
+ * state-mutating META call's result differs from the tool's previous successful
+ * result (arbiter `changesTrackedState`). Shared by the detector and the
+ * graduated-response counter so both read ONE notion of progress.
+ */
+export function answeredActions(
+  steps: readonly ReasoningStep[],
+): ReadonlyMap<ReasoningStep, ObservationLike | undefined> {
+  const obsByCallId = new Map<string, ObservationLike>();
+  for (const s of steps) {
+    if (s.type !== "observation") continue;
+    const id = s.metadata?.toolCallId;
+    if (typeof id !== "string" || id.length === 0) continue;
+    const result = s.metadata?.observationResult as ObservationResultMeta | undefined;
+    obsByCallId.set(id, {
+      success: result?.success,
+      content: s.content,
+      harnessAuthored: s.metadata?.frameworkInstrumentation === GUARD_OBSERVATION_TAG,
+    });
+  }
+  const previousByTool = new Map<string, string>();
+  const out = new Map<ReasoningStep, ObservationLike | undefined>();
+  for (const a of steps) {
+    if (a.type !== "action") continue;
+    const id = (a.metadata?.toolCall as ToolCallMeta | undefined)?.id;
+    const obs = typeof id === "string" ? obsByCallId.get(id) : undefined;
+    const name = actionToolName(a);
+    if (obs === undefined || name === undefined) {
+      out.set(a, obs);
+      continue;
+    }
+    const stateChanged = changesTrackedState(name, obs.success ?? false, obs.content, previousByTool.get(name));
+    if (obs.success === true && obs.content !== undefined) previousByTool.set(name, obs.content);
+    out.set(a, { ...obs, stateChanged });
+  }
+  return out;
+}
+
+/**
+ * Law-#5 verdict per ANSWERED action step, state-delta aware. An action with no
+ * observation yet carries no verdict: it proves nothing either way (the
+ * graduated-response counter must not read an unanswered call as progress).
+ */
+export function classifyActions(steps: readonly ReasoningStep[]): ReadonlyMap<ReasoningStep, ProgressVerdict> {
+  const out = new Map<ReasoningStep, ProgressVerdict>();
+  for (const [a, obs] of answeredActions(steps)) {
+    if (obs !== undefined) out.set(a, classifyActionStep(a, obs));
+  }
+  return out;
+}
+
+/**
  * Detect loop patterns in the current step history.
  *
  * Every action step is classified through the ONE progress arbiter (design law
- * #5): a META / pseudo / no-op / failed call is NON-PROGRESS, so patterns
- * (a)/(c)/(d) stop being blind to the varied-args, success:true thrash that the
- * byte-shape guards missed. Pattern (e) fires on sustained `evidenceDelta == 0`.
+ * #5): a failed / no-op call or a META call that left tracked state unchanged is
+ * NON-PROGRESS, so patterns (a)/(c)/(d) stop being blind to the varied-args,
+ * success:true thrash the byte-shape guards missed — and a call that CHANGED
+ * state (a todo list moving, a read returning new content) is never thrash.
+ * Pattern (e) fires on sustained `evidenceDelta == 0`.
  *
  * Returns the message + the ACTUAL pattern id, or null if none.
  */
@@ -142,21 +207,11 @@ export function detectLoopPattern(
 ): LoopDetection | null {
   let loop: LoopDetection | null = null;
 
-  // Observation lookup by toolCallId — the arbiter classifies each ACTION step
-  // against the observation that answered it (law #5: one predicate).
-  const obsByCallId = new Map<string, ObservationLike>();
-  for (const s of steps) {
-    if (s.type !== "observation") continue;
-    const id = s.metadata?.toolCallId;
-    if (typeof id !== "string" || id.length === 0) continue;
-    const result = s.metadata?.observationResult as ObservationResultMeta | undefined;
-    obsByCallId.set(id, { success: result?.success, content: s.content });
-  }
-  const verdictOf = (a: ReasoningStep) => {
-    const id = (a.metadata?.toolCall as ToolCallMeta | undefined)?.id;
-    const obs = typeof id === "string" ? obsByCallId.get(id) : undefined;
-    return classifyActionStep(a, obs);
-  };
+  // Every ACTION step is classified against the observation that answered it
+  // (law #5: one predicate, state-delta aware).
+  const answered = answeredActions(steps);
+  const verdictOf = (a: ReasoningStep): ProgressVerdict =>
+    classifyActionStep(a, answered.get(a));
 
   // (a) Repeated tool calls: same tool + same args N times in a row
   //     Filter first, then take the last N — ensures we compare actual
@@ -168,7 +223,15 @@ export function detectLoopPattern(
     const recentActions = allActions.slice(-maxSameTool);
     const firstNorm = normalizeActionContent(recentActions[0]!.content);
     const allSame = recentActions.every((s) => normalizeActionContent(s.content) === firstNorm);
-    if (allSame && !(opts?.posture === "plan" && actionToolName(recentActions[0]!) === "todo")) {
+    // STATE DELTA: an identical call that keeps returning DIFFERENT successful
+    // results (polling a status, a list that moves) is observing change, not
+    // looping. Unanswered / failed / identical-result repeats still trip, and a
+    // harness guard's reply ("already wrote this") is not the tool's result.
+    const observed = recentActions.map((a) => answered.get(a));
+    const resultsVary =
+      observed.every((o) => o !== undefined && o.success === true && o.harnessAuthored !== true) &&
+      new Set(observed.map((o) => (o!.content ?? "").trim())).size > 1;
+    if (allSame && !resultsVary && !planRecordedRepeat(opts, actionToolName(recentActions[0]!))) {
       const metaRepeat = verdictOf(recentActions[0]!).reason === "meta-tool";
       loop = {
         pattern: PATTERN_A,
@@ -198,7 +261,7 @@ export function detectLoopPattern(
       const ids = recent.map((a) => (a.metadata?.toolCall as ToolCallMeta | undefined)?.id);
       const allLinkable = ids.every((id): id is string => typeof id === "string" && id.length > 0);
       const sameName = name0 !== undefined && recent.every((a) => actionToolName(a) === name0);
-      if (sameName && allLinkable && !(opts?.posture === "plan" && name0 === "todo")) {
+      if (sameName && allLinkable && !planRecordedRepeat(opts, name0)) {
         const anySubstantive = recent.some((a) => verdictOf(a).kind === "substantive");
         if (!anySubstantive) {
           loop = {

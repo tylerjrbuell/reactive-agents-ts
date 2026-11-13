@@ -61,6 +61,7 @@ const AUTHORITY_BY_ACTOR: Readonly<Record<string, AuthorityClass>> = {
   "recovery-steering": "deterministic", // unresolved tool failure the run must resolve
   "required-tool-nudge": "deterministic", // a contract-required tool was not called
   "loop-missing-tools": "deterministic", // loop detected with required tools still missing
+  "loop-guidance": "deterministic", // a loop pattern's counter tripped (graduated warning, runner-helpers/loop-guidance.ts)
   "tool-surface:forbidden-deny": "deterministic", // contract deny-list removed a tool
   "tool-surface:gate-narrow": "deterministic", // required-tools gate narrowed the FC surface
   "fabrication-guard": "deterministic", // fabricated-measurement check rejected the output

@@ -309,7 +309,7 @@ describe("runKernel", () => {
         maxIterations: 20,
         strategy: "test",
         kernelType: "test",
-        loopDetection: { maxSameToolCalls: 3 },
+        loopDetection: { maxSameToolCalls: 3, guidanceCycles: 0 },
       }).pipe(Effect.provide(testLayer)),
     );
 
@@ -345,7 +345,7 @@ describe("runKernel", () => {
         maxIterations: 20,
         strategy: "test",
         kernelType: "test",
-        loopDetection: { maxRepeatedThoughts: 3 },
+        loopDetection: { maxRepeatedThoughts: 3, guidanceCycles: 0 },
       }).pipe(Effect.provide(testLayer)),
     );
 
@@ -416,7 +416,8 @@ describe("runKernel", () => {
         maxIterations: 20,
         strategy: "test",
         kernelType: "test",
-        // No loopDetection config — uses defaults
+        // No thresholds — uses defaults; guidanceCycles 0 pins the detection point
+        loopDetection: { guidanceCycles: 0 },
       }).pipe(Effect.provide(testLayer)),
     );
 

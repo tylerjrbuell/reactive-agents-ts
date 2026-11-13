@@ -49,7 +49,7 @@ const run = (scenario: TestTurn[]) =>
       kernelType: "react",
       taskId: "switch-keeps-contract",
       horizonProfile: "long",
-      loopDetection: { maxSameToolCalls: 2 },
+      loopDetection: { maxSameToolCalls: 2, guidanceCycles: 0 },
       strategySwitching: { enabled: true, maxSwitches: 1, fallbackStrategy: "plan-execute-reflect" },
     }).pipe(Effect.provide(Layer.merge(TestLLMServiceLayer(scenario), succeedingToolLayer({ written: true }, PARAMS)))),
   );

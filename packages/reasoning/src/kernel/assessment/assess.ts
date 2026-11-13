@@ -31,7 +31,7 @@ import type { DeliverableSpec, RunContract, TaskRequirement } from "../contract/
 import { artifacts } from "../ledger/artifact-projection.js";
 import { entriesOfKind, executedToolResults, type RunLedger } from "../ledger/run-ledger.js";
 import { META_TOOLS } from "../state/kernel-constants.js";
-import { classifyToolResult } from "./progress-arbiter.js";
+import { changesTrackedState, classifyToolResult } from "./progress-arbiter.js";
 
 // ─── Output vocabulary ───────────────────────────────────────────────────────
 
@@ -325,9 +325,25 @@ export function assess(
   // "New" = identity (reusing C3's normalized (tool, args)) not seen in any
   // EARLIER iteration. Routing through the arbiter is why a success:true
   // discover-tools/final-answer/recall no-op can no longer defeat pattern (e).
+  // STATE DELTA (law #5): a state-mutating META result (todo) that differs from
+  // the tool's previous successful result moved tracked state — progress, not
+  // thrash. Walked in ledger order; the arbiter owns the predicate.
+  const stateChangedResults = new Set<(typeof results)[number]>();
+  {
+    const previousByTool = new Map<string, string>();
+    for (const r of results) {
+      if (typeof r.toolName !== "string" || r.refused === true || r.success !== true) continue;
+      if (changesTrackedState(r.toolName, r.success, r.preview, previousByTool.get(r.toolName))) {
+        stateChangedResults.add(r);
+      }
+      previousByTool.set(r.toolName, r.preview);
+    }
+  }
   const substantive = (r: (typeof results)[number]): r is typeof r & { toolName: string } =>
     typeof r.toolName === "string" &&
-    classifyToolResult(r.toolName, r.success, r.preview, r.harnessAuthored === true).kind === "substantive";
+    classifyToolResult(
+      r.toolName, r.success, r.preview, r.harnessAuthored === true, stateChangedResults.has(r),
+    ).kind === "substantive";
 
   const priorIdentities = new Set<string>();
   for (const r of results) {

@@ -1070,15 +1070,8 @@ export type ThoughtKernel = (
 
 // ── KernelRunOptions — Configuration for the kernel runner ───────────────────
 
-/** Loop detection configuration for kernel execution. */
-export interface LoopDetectionConfig {
-  /** Max consecutive calls to the same tool with the same args before aborting (default: 3) */
-  readonly maxSameToolCalls?: number;
-  /** Max identical thought strings in the last N steps before aborting (default: 3) */
-  readonly maxRepeatedThoughts?: number;
-  /** Max consecutive thought steps without any tool action before aborting (default: 3) */
-  readonly maxConsecutiveThoughts?: number;
-}
+import type { LoopDetectionConfig } from "./loop-detection-config.js";
+export type { LoopDetectionConfig } from "./loop-detection-config.js";
 
 export interface KernelRunOptions {
   readonly maxIterations: number;

@@ -346,7 +346,9 @@ describe("Ollama provider defaults to local tier — maxSameTool=2 (IC-3)", () =
           maxIterations: 20,
           strategy: "reactive",
           kernelType: "react",
-          // No explicit loopDetection — uses tier default (local=2, mid=3)
+          // No explicit thresholds — uses tier default (local=2, mid=3). guidanceCycles 0 pins
+          // the detection POINT (graduated guidance is pinned in loop-guidance tests).
+          loopDetection: { guidanceCycles: 0 },
         },
       ).pipe(Effect.provide(testLayer)),
     );

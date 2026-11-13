@@ -42,6 +42,7 @@ import {
   nextStalledCount,
 } from "../assessment/guard-adapters.js";
 import { resolveDetectedLoop } from "./runner-helpers/loop-resolution.js";
+import { applyLoopGuidance } from "./runner-helpers/loop-guidance.js";
 import { detectLoopPattern, lastDeliverableText } from "../capabilities/reflect/loop-detector.js";
 import { buildOracleNudge } from "../capabilities/decide/oracle-nudge.js";
 import { shouldInjectOracleNudge } from "../utils/lane-controller.js";
@@ -656,6 +657,20 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
           { evidenceStaleIterations: staleIterationsAtTurnBoundary(t.state.meta.assessment, t.pass.evidenceStaleIterations), posture: t.currentInput.posture },
         );
         const loopMsg = detection?.message ?? null;
+
+        // Graduated response: a detection is answered with guidance while the
+        // run's budget lasts; the switch / stop path below needs SUSTAINED
+        // zero-progress (runner-helpers/loop-guidance.ts).
+        const guided = detection === null ? null : yield* applyLoopGuidance({
+          state: t.state, detection, maxIterations: t.currentOptions.maxIterations ?? Number.MAX_SAFE_INTEGER,
+          longHorizon: horizon !== undefined || t.state.meta.runContract?.horizon === "long",
+          taskId: t.currentOptions.taskId ?? t.state.taskId,
+          budgetOverride: options.loopDetection?.guidanceCycles,
+        });
+        if (guided !== null) {
+          t.state = guided;
+          return "continue";
+        }
 
         // ── Strategy switching ────────────────────────────────────────────
         if (loopMsg !== null) {

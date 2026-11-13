@@ -33,7 +33,7 @@
 //   5. delegated children laundering a partial into a completed parent → out of
 //      scope here; owned by task 5.3 (`joinEnvelopes` worst-of)
 
-import { HARNESS_PSEUDO_TOOLS, META_TOOLS } from "../state/kernel-constants.js";
+import { HARNESS_PSEUDO_TOOLS, META_TOOLS, STATE_TRACKING_META_TOOLS } from "../state/kernel-constants.js";
 import type { ReasoningStep } from "../../types/index.js";
 
 /** The law-#5 classification. */
@@ -145,13 +145,36 @@ export function classifyToolResult(
   success: boolean,
   content: string | undefined,
   harnessAuthored = false,
+  stateChanged = false,
 ): ProgressVerdict {
   if (!success) return nonProgress("failed");
-  if (isMetaTool(toolName)) return nonProgress("meta-tool");
+  // STATE DELTA: a state-mutating META tool whose result moved the tracked state
+  // (see {@link changesTrackedState}) IS progress; every other META call is not.
+  if (isMetaTool(toolName)) return stateChanged ? SUBSTANTIVE : nonProgress("meta-tool");
   if (isPseudoTool(toolName)) return nonProgress("pseudo-tool");
   if (harnessAuthored) return nonProgress("harness-authored");
   if (contentIsNoOp(content)) return nonProgress("no-op");
   return SUBSTANTIVE;
+}
+
+/**
+ * STATE-DELTA predicate: did this call change tracked run state? True iff the
+ * tool is a state-mutating META tool ({@link STATE_TRACKING_META_TOOLS}), the
+ * call succeeded with a non-degenerate result, and the result differs from the
+ * tool's previous result (`previous === undefined` = first call). Progress is
+ * measured as state change, not as call classification: a todo list moving
+ * through 25 differently-argued calls changes state every time; the same call
+ * repeated against an unchanged list does not.
+ */
+export function changesTrackedState(
+  toolName: string | undefined,
+  success: boolean,
+  content: string | undefined,
+  previous: string | undefined,
+): boolean {
+  if (!success || toolName === undefined || !STATE_TRACKING_META_TOOLS.has(toolName)) return false;
+  if (contentIsNoOp(content)) return false;
+  return previous === undefined || (content ?? "").trim() !== previous.trim();
 }
 
 /** Convenience boolean: does this tool result CREDIT run progress/evidence? */
@@ -167,6 +190,10 @@ export function creditsEvidence(
 export interface ObservationLike {
   readonly success?: boolean;
   readonly content?: string;
+  /** The call changed tracked state ({@link changesTrackedState}); caller-computed from the prior result. */
+  readonly stateChanged?: boolean;
+  /** The content is a harness guard's reply, not the tool's output (GUARD_OBSERVATION_TAG). */
+  readonly harnessAuthored?: boolean;
 }
 
 /** The tool name stamped on an action step's `toolCall` metadata, if any. */
@@ -192,7 +219,7 @@ export function classifyActionStep(
   // The meta/pseudo rule lives in ONE place (classifyToolResult) — classify via
   // it so the two consumers cannot drift apart.
   if (isMetaTool(toolName) || isPseudoTool(toolName)) {
-    return classifyToolResult(toolName, true, undefined);
+    return classifyToolResult(toolName, true, undefined, false, observation?.stateChanged === true);
   }
   if (observation === undefined) return SUBSTANTIVE;
   return classifyToolResult(toolName, observation.success ?? false, observation.content);
