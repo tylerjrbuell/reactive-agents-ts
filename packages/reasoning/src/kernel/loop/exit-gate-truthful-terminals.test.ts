@@ -129,6 +129,20 @@ describe("K1: a tool-less direct run is never held to a side effect quoted in it
     expect(seedPostConditions([], [])).toBeUndefined();
   });
 
+  it("drops SideEffectLanded on a retrieval-only surface (H3 read-and-answer tasks), keeps it with a mutating tool", () => {
+    const readTask = "Working directory for this task: /tmp/x\n\na.json and b.json each have a numeric count field. Add the two counts together and reply with the sum.";
+    const derived = deriveConditions(readTask, []);
+    const readOnly = [{ name: "file-read" }, { name: "web-search" }, { name: "brief" }];
+    expect(derived).toContainEqual(sideEffectLanded());
+    expect(seedPostConditions(derived, readOnly, { task: readTask })).toEqual([]);
+    // A governed external action ("send a message") on a retrieval-only surface stays held.
+    const sendTask = "You MUST deliver your reply on this channel by calling a tool that sends an outbound message.";
+    expect(seedPostConditions(deriveConditions(sendTask, []), [{ name: "web-search" }], { task: sendTask }))
+      .toContainEqual(sideEffectLanded());
+    expect(seedPostConditions(derived, [{ name: "file-read" }, { name: "notes-create" }])).toContainEqual(sideEffectLanded());
+    expect(seedPostConditions(derived, [{ name: "file-write" }])).toContainEqual(sideEffectLanded());
+  });
+
   it("the side-effect steer never claims a tool call was made", () => {
     const text = describeUnmet([sideEffectLanded()]);
     expect(text).not.toContain("last tool call failed");

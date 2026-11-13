@@ -25,6 +25,7 @@ import {
   artifactProduced,
   outputContains,
   sideEffectLanded,
+  surfaceCanLandSideEffect,
   surfaceHasSubstantiveTool,
   toolCalled,
   WRITING_TOOL_NAMES,
@@ -52,6 +53,12 @@ import {
 // throwing on max_iterations (2026-08-13, B1). Keep both lists disjoint.
 const MUTATION_VERB =
   /\b(create|send|add|post|delete|remove|update|schedule|assign|upload|publish|rename|archive|move|share|invite|draft|reply|forward|submit|set)\b/i;
+// Subset of MUTATION_VERB that acts OUTWARD on the world. Used only to decide
+// whether a retrieval-only surface keeps SideEffectLanded (seedPostConditions);
+// the answer-shaped verbs ("add the counts", "reply with the value", "set") are
+// excluded because read-and-answer tasks use them.
+const OUTWARD_EFFECT_VERB =
+  /\b(send|sends|sent|post|publish|share|forward|invite|schedule|upload|submit|delete|archive|assign)\b/i;
 const EXTERNAL_RESOURCE_NOUN =
   /\b(note|email|e-mail|message|event|issue|pull[\s-]?request|pr|record|reminder|todo|task|label|calendar|comment|page|row|entry|ticket|memo|meeting|contact|folder|group|channel|list|thread)\b/i;
 
@@ -726,6 +733,8 @@ export function seedPostConditions(
   derived: readonly PostCondition[],
   surface: readonly { readonly name: string }[] | undefined,
   rails: {
+    /** The run's task text, for the retrieval-only-surface action check. */
+    readonly task?: string;
     readonly posture?: RunPosture;
     readonly deliveryScope?: DeliveryScope;
     readonly seedRunContract?: { readonly postConditions: readonly PostCondition[] };
@@ -739,7 +748,19 @@ export function seedPostConditions(
   // cannot re-derive from that prompt either.
   const conditions = rails.seedRunContract?.postConditions ?? derived;
   if (conditions.length === 0) return isStepScope(rails) || rails.seedRunContract !== undefined ? [] : undefined;
-  if (surfaceHasSubstantiveTool(surface)) return [...conditions];
+  if (surfaceCanLandSideEffect(surface)) return [...conditions];
+  // Retrieval-only surface (file-read, web-search, http-get): `isSideEffectLanded`
+  // skips its results, so the loose prose heuristic ("read X and tell me", "add
+  // the two counts") is unmeetable and vetoed correct answers. Keep the condition
+  // only when the task names an outward-effect verb (`OUTWARD_EFFECT_VERB`, not the answer-shaped
+  // "add"/"reply"/"set"): "send a message" with only web-search must stay an
+  // honest non-success, never a fabricated "sent".
+  if (
+    surfaceHasSubstantiveTool(surface) &&
+    (rails.task === undefined || OUTWARD_EFFECT_VERB.test(rails.task))
+  ) {
+    return [...conditions];
+  }
   return conditions.filter((c) => c.kind !== "SideEffectLanded");
 }
 
