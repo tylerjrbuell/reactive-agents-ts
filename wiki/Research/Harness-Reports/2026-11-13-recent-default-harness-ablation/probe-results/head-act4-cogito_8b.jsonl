@@ -1,0 +1,4 @@
+{"scenario":"act4","model":"cogito:8b","i":0,"ms":289,"success":false,"goalAchieved":false,"terminatedBy":"abstained","abstention":true,"runId":"01M7APPHHB88H0JYGCHHTAQSKV","tokens":0,"output":"","claimsSent":false}
+{"scenario":"act4","model":"cogito:8b","i":1,"ms":259,"success":false,"goalAchieved":false,"terminatedBy":"abstained","abstention":true,"runId":"01M7APPHST2MJARS67V85KCPCA","tokens":0,"output":"","claimsSent":false}
+{"scenario":"act4","model":"cogito:8b","i":2,"ms":187,"success":false,"goalAchieved":false,"terminatedBy":"abstained","abstention":true,"runId":"01M7APPJ13WCHJR4RKS9GS4Q66","tokens":0,"output":"","claimsSent":false}
+{"scenario":"act4","model":"cogito:8b","i":3,"ms":181,"success":false,"goalAchieved":false,"terminatedBy":"abstained","abstention":true,"runId":"01M7APPJ6FNE8CH0X12EVW7MJQ","tokens":0,"output":"","claimsSent":false}

@@ -2089,3 +2089,15 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   files: packages/runtime/src/goal/*, packages/runtime/tests/goal-supervisor.test.ts, packages/core/src/types/goal.ts, core index export
   tests: 20 pass / 0 fail
 ```
+
+```yaml
+- date: 2026-11-13
+  warden: ablation-warden
+  task: ablate-recent-default-harness-changes (A retrieval side-effect skip, B read-only abstention, C within-budget tool surface, D MCP visible) + HEAD vs cbc9a5414 regression
+  state: completed
+  confidence: 0.8
+  verdicts: {A-795a51884: REWORK, B-1521de3f2: INCONCLUSIVE-gate/behavior-favorable, C-00f927a78: INCONCLUSIVE-not-exercised, D-aa7a01bae: INCONCLUSIVE-not-exercised, bundle: REWORK-due-to-A}
+  evidence: {h3-cells: 144 (k=3, qwen3:4b+cogito:8b), a-only-cells: 6, probe-runs: 96, lift-gate: UNDERPOWERED +0.4pp/+2.8pp, run-status-regression: 12/12 vs 0/12 on h3-continuation+h3-exact-value, a-only: 6/6 failure vs 0/6}
+  spend-usd: 0
+  files: [wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation.md, wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation/, wiki/Research/Harness-Reports/improvement-ledger.json]
+```

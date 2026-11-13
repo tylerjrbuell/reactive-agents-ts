@@ -1,0 +1,4 @@
+{"scenario":"act","model":"qwen3:4b","i":0,"ms":323,"success":false,"goalAchieved":false,"terminatedBy":"abstained","abstention":true,"runId":"01M7APF0A2HDMPN5JZ75GHSTWR","tokens":0,"output":"","claimsSent":false,"hasQuote":false}
+{"scenario":"act","model":"qwen3:4b","i":1,"ms":271,"success":false,"goalAchieved":false,"terminatedBy":"abstained","abstention":true,"runId":"01M7APF0M3TCAC6DCREJDCK1TS","tokens":0,"output":"","claimsSent":false,"hasQuote":false}
+{"scenario":"act","model":"qwen3:4b","i":2,"ms":198,"success":false,"goalAchieved":false,"terminatedBy":"abstained","abstention":true,"runId":"01M7APF0TV1JFPPVRF4062GAH6","tokens":0,"output":"","claimsSent":false,"hasQuote":false}
+{"scenario":"act","model":"qwen3:4b","i":3,"ms":185,"success":false,"goalAchieved":false,"terminatedBy":"abstained","abstention":true,"runId":"01M7APF10M6Q2BK0QTQGNF5AHF","tokens":0,"output":"","claimsSent":false,"hasQuote":false}

@@ -1083,6 +1083,19 @@
       "tokenOverheadPct": 1.9384644546592298,
       "rationale": "OPT-IN · 2 tier(s) · -2.0pp lift · 1.9% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)",
       "status": "opt-in"
+    },
+    {
+      "id": "17576a6a-9165-41c8-93d8-1c168a5c73ec",
+      "createdAt": "2026-11-13T15:04:49.230Z",
+      "weakness": "unmeasured default-on kernel changes A/B/C (retrieval side-effect skip, read-only abstention, within-budget tool surface)",
+      "hypothesis": "bundle HEAD vs cbc9a5414 shows no regression on H3; mechanisms inert on H3 (0 activations)",
+      "baselineVariantId": "base",
+      "candidateVariantId": "head",
+      "decision": "underpowered",
+      "liftPp": 2.7777777777777772,
+      "tokenOverheadPct": -4.727824964079815,
+      "rationale": "VOID: the mechanism fired in 0 candidate runs (A/A comparison). Gate said: UNDERPOWERED · 2 tier(s) · 2.8pp lift · -4.7% billed tok — too few runs to resolve ≥3pp; this is NOT evidence of no effect",
+      "status": "void"
     }
   ]
 }
