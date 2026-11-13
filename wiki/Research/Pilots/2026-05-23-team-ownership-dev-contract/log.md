@@ -2128,3 +2128,16 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   tmp-before-after: 2.3G / 2.3G
   files: [wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation.md, wiki/Research/Harness-Reports/2026-11-13-recent-default-harness-ablation/, wiki/Research/Harness-Reports/improvement-ledger.json]
 ```
+
+```yaml
+- date: 2026-11-13
+  warden: harness-warden
+  task: local-model-campaign-phase1-roster-smoke
+  state: completed
+  confidence: 0.85
+  verdicts: {roster: 10 primary + 6 reserve, blocked: [gpt-oss (ollama GGUF load error), nimble (no tools/completion capability)], override: "RA_BENCH_ALLOW_FALLBACK=1 verified numCtx 32768 via probe"}
+  evidence: {smoke-cells: 21 (k=1 h3-exact-value) + 1 run.ts rw-2 probe, failures: [deepseek-r1:14b never-engaged, phi4-mini-reasoning budget-cap, llama3.1 once wrong-tool-arg then pass]}
+  spend-usd: 0
+  tmp-before-after: 2.3G / 2.3G
+  files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/PLAN.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest.jsonl]
+```
