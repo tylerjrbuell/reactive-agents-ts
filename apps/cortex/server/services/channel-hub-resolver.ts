@@ -25,6 +25,7 @@ import { getGatewayAgent } from "../db/queries.js";
 import { HubAgentBuildError } from "../errors.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { parseRouteTarget } from "../db/channel-hub-queries.js";
+import { sanitizedCause } from "./channel-hub-failure.js";
 import { cortexAgentBuilder, type BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { narrowCortexParams, surfaceViolations } from "./channel-tool-surface.js";
 import { normalizeCortexAgentConfig } from "./cortex-agent-config.js";
@@ -47,6 +48,8 @@ export interface HubResolverDeps {
   readonly persistSessions?: boolean;
   /** Called once per built (route, role) agent with the BUILT config: a diagnostic and test seam. */
   readonly onBuilt?: (info: { readonly routeId: string; readonly role: "owner" | "sender"; readonly agentId: string; readonly config: AgentConfig }) => void;
+  /** Called when a turn or an agent build fails, with the sanitized cause (message only, no secrets): feeds the activity line. */
+  readonly onTurnFailed?: (info: { readonly routeId: string; readonly role: "owner" | "sender"; readonly detail: string }) => void;
 }
 
 /** The resolver plus the teardown and eviction the hub needs. */
@@ -107,6 +110,13 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
     return agent;
   };
 
+  /** Log a failed turn or build with its sanitized cause and hand the cause to the activity feed. */
+  const reportFailure = (req: OpenSessionRequest, what: string, cause: unknown): void => {
+    const detail = sanitizedCause(cause);
+    cortexLog("warn", "channels", `Route ${req.routeId} (${req.role}): ${what}`, { routeId: req.routeId, role: req.role, detail });
+    deps.onTurnFailed?.({ routeId: req.routeId, role: req.role, detail });
+  };
+
   const agentFor = (req: OpenSessionRequest): Effect.Effect<HubAgent, RoutingError> => {
     const target = parseRouteTarget(req.target.agentId);
     if (target.kind === "session") {
@@ -125,22 +135,37 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
         });
         return pending;
       },
-      catch: (cause) => resolveFailed(req, `route ${req.routeId}: agent build failed`, cause),
+      catch: (cause) => {
+        deps.onTurnFailed?.({ routeId: req.routeId, role: req.role, detail: sanitizedCause(cause) });
+        return resolveFailed(req, `route ${req.routeId}: agent build failed`, cause);
+      },
     });
   };
 
   const open: AgentResolver["open"] = (req) =>
     Effect.gen(function* () {
-      const agent = yield* agentFor(req);
       const sessionId = `${req.routeId}:${req.role}:${req.conversationKey}`;
-      const session = req.stateless ? undefined : agent.session({ id: sessionId, persist: deps.persistSessions ?? true });
-      yield* Effect.addFinalizer(() => Effect.promise(() => session?.end() ?? Promise.resolve()).pipe(Effect.ignore));
-      const turnFailed = (cause: unknown): RoutingError =>
-        new RoutingError({ reason: "turn_failed", message: `route ${req.routeId}: turn failed`, routeId: req.routeId, cause });
+      // The router keeps this session open across turns, but the saved agent can change between them
+      // (`evictAgent` disposes the built agent). Each turn takes the CURRENT built agent and, when it is
+      // not the one the open session belongs to, opens a fresh session on it (same id: persisted history resumes).
+      let current: { readonly agent: HubAgent; readonly session: ReturnType<HubAgent["session"]> | undefined } | undefined;
+      const sessionOn = (agent: HubAgent) => {
+        if (current?.agent === agent) return current;
+        const stale = current;
+        if (stale?.session) void stale.session.end().catch(() => undefined);
+        current = { agent, session: req.stateless ? undefined : agent.session({ id: sessionId, persist: deps.persistSessions ?? true }) };
+        return current;
+      };
+      yield* Effect.addFinalizer(() => Effect.promise(() => current?.session?.end() ?? Promise.resolve()).pipe(Effect.ignore));
+      const turnFailed = (cause: unknown): RoutingError => {
+        reportFailure(req, "turn failed", cause);
+        return new RoutingError({ reason: "turn_failed", message: `route ${req.routeId}: turn failed`, routeId: req.routeId, cause });
+      };
       return {
         send: (turn) =>
-          Effect.tryPromise({
+          agentFor(req).pipe(Effect.flatMap((agent) => Effect.tryPromise({
             try: async (): Promise<RoutedReply> => {
+              const { session } = sessionOn(agent);
               if (session) {
                 // No `useTools`: the framework takes the tool loop iff the (narrowed) build has capability tools.
                 const r = await session.chat(turn.text);
@@ -155,7 +180,7 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
               return { text: r.output, agentId: r.agentId, tokens: r.metadata.tokensUsed, costUsd: r.metadata.cost, runId: r.taskId };
             },
             catch: turnFailed,
-          }),
+          })) ),
         close: Effect.void,
       } satisfies RoutedSession;
     });

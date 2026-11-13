@@ -37,6 +37,7 @@ const zero: RouteCounters = { matched: 0, denied: 0, answered: 0, failed: 0, dro
 export class HubActivityTracker {
   private feed: HubActivity[] = [];
   private readonly counters = new Map<string, RouteCounters>();
+  private readonly causes = new Map<string, string>();
 
   constructor(private readonly now: () => number = Date.now) {}
 
@@ -62,6 +63,14 @@ export class HubActivityTracker {
     this.note({ kind: "edited", routeId, detail });
   }
 
+  /**
+   * The sanitized cause of the turn that is failing on `routeId`. The resolver reports it before the router
+   * emits `ChannelTurnCompleted`, which then carries it into the feed line (the event itself has only a reason).
+   */
+  noteCause(routeId: string, detail: string): void {
+    this.causes.set(routeId, detail);
+  }
+
   /** Fold one router event; every other event is ignored. */
   observe(event: AgentEvent): void {
     switch (event._tag) {
@@ -78,10 +87,12 @@ export class HubActivityTracker {
         return;
       case "ChannelTurnCompleted":
         this.bump(event.routeId, event.ok ? { answered: 1, costUsd: event.costUsd ?? 0 } : { failed: 1 });
+        const cause = this.causes.get(event.routeId);
+        this.causes.delete(event.routeId);
         this.note({
           kind: event.ok ? "answered" : "failed",
           routeId: event.routeId,
-          detail: event.ok ? `turn completed (${event.role})` : (event.reason ?? "turn failed"),
+          detail: event.ok ? `turn completed (${event.role})` : `${event.reason ?? "turn failed"}${cause ? `: ${cause}` : ""}`,
           simulated: event.simulated,
         });
         return;

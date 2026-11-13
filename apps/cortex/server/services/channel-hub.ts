@@ -40,6 +40,7 @@ import { getChannel, listChannels, parseRouteTarget, type ChannelRecord } from "
 import { buildChannelAdapters, type BuiltChannels } from "./channel-adapters.js";
 import { CHANNEL_KINDS, parseCortexChannels, type CortexChannelEntry, type ChannelKind } from "./channel-config.js";
 import { installedChannelCredentials } from "./channel-credentials.js";
+import { sanitizedCause } from "./channel-hub-failure.js";
 import { HubActivityTracker, type HubActivity, type RouteCounters } from "./channel-hub-activity.js";
 import { applyMigration, planMigration, type MigrationAgent, type MigrationPlan, type MigrationResult, type MigrationWarning } from "./channel-hub-migration.js";
 import { makeHubResolver, type HubResolver, type HubResolverDeps } from "./channel-hub-resolver.js";
@@ -142,7 +143,7 @@ export interface HubProbeInput {
 /** What `simulate` returns: the outcome with error causes dropped. */
 export type HubSimulation =
   | { readonly outcome: "answered"; readonly routeId: string; readonly role: string; readonly text: string }
-  | { readonly outcome: "failed"; readonly routeId: string; readonly role: string; readonly reason: string }
+  | { readonly outcome: "failed"; readonly routeId: string; readonly role: string; readonly reason: string; readonly detail?: string }
   | { readonly outcome: "unrouted" | "duplicate" }
   | { readonly outcome: "denied"; readonly routeId: string; readonly reason: string }
   | { readonly outcome: "dropped"; readonly reason: string; readonly routeId?: string };
@@ -206,6 +207,7 @@ export class ChannelHub {
       toBuildParams: opts.toBuildParams,
       ...(opts.prepare ? { prepare: opts.prepare } : {}),
       ...(opts.onBuilt ? { onBuilt: opts.onBuilt } : {}),
+      onTurnFailed: (f) => this.tracker.noteCause(f.routeId, f.detail),
     });
     this.makeAdapters =
       opts.makeAdapters ??
@@ -446,7 +448,7 @@ export class ChannelHub {
     const out: RouteOutcome = await Effect.runPromise(this.running.router.simulate(this.envelopeOf(input, ch.platform), input.channelId));
     switch (out._tag) {
       case "Answered": return { outcome: "answered", routeId: out.routeId, role: out.role, text: out.reply.text };
-      case "Failed": return { outcome: "failed", routeId: out.routeId, role: out.role, reason: out.error.reason };
+      case "Failed": return { outcome: "failed", routeId: out.routeId, role: out.role, reason: out.error.reason, ...(out.error.cause !== undefined ? { detail: sanitizedCause(out.error.cause) } : {}) };
       case "Unrouted": return { outcome: "unrouted" };
       case "Duplicate": return { outcome: "duplicate" };
       case "Denied": return { outcome: "denied", routeId: out.routeId, reason: out.reason };
