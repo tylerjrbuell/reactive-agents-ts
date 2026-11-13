@@ -24,7 +24,7 @@ const withIngress = async (
     });
     yield* Effect.promise(() => f({ url: ingress.url, events, channelBodies }));
   }).pipe(
-    Effect.provide(WebhookServiceLive([{ path: "/hooks/generic", adapter: "generic", secret: "secret" in opts ? opts.secret : SECRET }])),
+    Effect.provide(WebhookServiceLive([{ path: "/hooks/generic", adapter: "generic", secret: "secret" in opts ? opts.secret : SECRET, replayProtection: false }])),
     Effect.scoped,
   );
   await Effect.runPromise(program);
@@ -206,10 +206,17 @@ describe("startGatewayIngress", () => {
         );
         expect(server?.port).toBe(probe);
         const body = "{}";
-        const res = yield* Effect.promise(() =>
+        // Default config: replay protection on. Signature covers "<ts>.<body>".
+        const ts = String(Math.floor(Date.now() / 1000));
+        const headers = { "x-webhook-signature": sign(`${ts}.${body}`), "x-webhook-timestamp": ts };
+        const res = yield* Effect.promise(() => post(`${server?.url}/hooks/g`, body, headers));
+        expect(res.status).toBe(202);
+        const replay = yield* Effect.promise(() => post(`${server?.url}/hooks/g`, body, headers));
+        expect(replay.status).toBe(401);
+        const bodyOnly = yield* Effect.promise(() =>
           post(`${server?.url}/hooks/g`, body, { "x-webhook-signature": sign(body) }),
         );
-        expect(res.status).toBe(202);
+        expect(bodyOnly.status).toBe(401);
       }),
     );
   });

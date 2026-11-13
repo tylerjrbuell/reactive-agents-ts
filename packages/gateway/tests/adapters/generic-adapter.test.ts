@@ -50,7 +50,9 @@ const makeRequest = (
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe("Generic Webhook Adapter", () => {
-  const adapter = createGenericAdapter();
+  // Body-only signing is the explicit legacy opt-out; replay protection is covered in
+  // generic-adapter-replay.test.ts.
+  const adapter = createGenericAdapter({ replayProtection: false });
 
   test("defaults source to 'generic'", () => {
     expect(adapter.source).toBe("generic");
@@ -102,7 +104,7 @@ describe("Generic Webhook Adapter", () => {
     test("honors a custom signature header (default header ignored)", async () => {
       const secret = "s";
       const body = "{}";
-      const custom = createGenericAdapter({ signatureHeader: "x-custom-sig" });
+      const custom = createGenericAdapter({ signatureHeader: "x-custom-sig", replayProtection: false });
 
       const defaultOnly: WebhookRequest = {
         body,
@@ -124,7 +126,7 @@ describe("Generic Webhook Adapter", () => {
     test("honors a custom HMAC algorithm", async () => {
       const secret = "s";
       const body = "{}";
-      const sha512 = createGenericAdapter({ algorithm: "sha512" });
+      const sha512 = createGenericAdapter({ algorithm: "sha512", replayProtection: false });
 
       const okSha512: WebhookRequest = {
         body,
@@ -146,6 +148,7 @@ describe("Generic Webhook Adapter", () => {
     test("surfaces WebhookValidationError when the algorithm is invalid", async () => {
       const badAlgorithm = createGenericAdapter({
         algorithm: "not-a-real-algorithm",
+        replayProtection: false,
       });
       const req: WebhookRequest = {
         body: "{}",

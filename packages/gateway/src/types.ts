@@ -107,6 +107,13 @@ export const WebhookConfigSchema = Schema.Struct({
   events: Schema.optional(Schema.Array(Schema.String)),
   /** When true (default), a route with no secret is refused (fail-closed, F11). */
   requireSignature: Schema.optional(Schema.Boolean),
+  /**
+   * Generic adapter only. Default true: signature covers `<timestamp>.<body>`, stale timestamps and
+   * repeated deliveries are rejected. False restores body-only signing (replayable, logs a warning).
+   */
+  replayProtection: Schema.optional(Schema.Boolean),
+  /** Generic adapter only. Timestamp tolerance in ms (default 300000). */
+  replayWindowMs: Schema.optional(Schema.Number),
 });
 export type WebhookConfig = typeof WebhookConfigSchema.Type;
 

@@ -22,7 +22,7 @@ const withIngress = async (
       });
       yield* Effect.promise(() => f({ url: ingress.url, port: ingress.port }));
     }).pipe(
-      Effect.provide(WebhookServiceLive([{ path: "/hooks/generic", adapter: "generic", secret: SECRET }])),
+      Effect.provide(WebhookServiceLive([{ path: "/hooks/generic", adapter: "generic", secret: SECRET, replayProtection: false }])),
       Effect.scoped,
     ),
   );

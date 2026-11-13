@@ -14,6 +14,8 @@ export class WebhookValidationError extends Data.TaggedError("WebhookValidationE
   readonly message: string;
   readonly source: string;
   readonly statusCode?: number;
+  /** Machine-readable rejection cause, e.g. `stale_timestamp`, `missing_timestamp`, `replayed_delivery`. */
+  readonly reason?: string;
 }> {}
 
 export class WebhookTransformError extends Data.TaggedError("WebhookTransformError")<{

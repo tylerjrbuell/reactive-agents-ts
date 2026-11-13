@@ -63,7 +63,13 @@ export const WebhookServiceLive = (configs?: readonly WebhookConfig[]) =>
           const factory = builtinAdapters[cfg.adapter];
           if (factory) {
             initial[cfg.path] = {
-              adapter: factory(),
+              adapter:
+                cfg.adapter === "generic"
+                  ? createGenericAdapter({
+                      ...(cfg.replayProtection !== undefined ? { replayProtection: cfg.replayProtection } : {}),
+                      ...(cfg.replayWindowMs !== undefined ? { replayWindowMs: cfg.replayWindowMs } : {}),
+                    })
+                  : factory(),
               secret: cfg.secret,
               requireSignature: cfg.requireSignature ?? true,
             };

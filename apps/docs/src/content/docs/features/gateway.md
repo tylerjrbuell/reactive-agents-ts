@@ -200,6 +200,15 @@ webhooks: [
 | `"github"` | HMAC-SHA256 via `X-Hub-Signature-256` | `"push"`, `"pull_request.opened"`, etc. |
 | `"generic"` | Configurable HMAC header and algorithm | Extracted from payload or `"webhook.received"` |
 
+**Replay protection (generic adapter, on by default).** The sender signs `<timestamp>.<body>` and sends the timestamp (epoch seconds or ms) in `x-webhook-timestamp`:
+
+```text
+x-webhook-timestamp: 1700000000
+x-webhook-signature: hex(HMAC-SHA256(secret, "1700000000.<body>"))
+```
+
+A timestamp more than 5 minutes from the gateway clock (`replayWindowMs` on the webhook entry) is rejected as `stale_timestamp`, a missing one as `missing_timestamp`, and a signature already accepted inside the window as `replayed_delivery`; each is a `WebhookValidationError` with `statusCode: 401` and a `reason`, and the HTTP caller sees a generic 401. The signature, not an unsigned delivery-id header, is the dedupe key, and it is recorded only after the signature verifies. The cache is bounded (4096 entries) and in memory, so it resets on restart; the timestamp window still bounds a replay across a restart. A legacy sender that signs the body alone can set `replayProtection: false` on the webhook entry; the route then logs a warning per request and a captured request stays replayable. Routes with no secret are refused unless `requireSignature: false`.
+
 The `"github"` adapter rejects a replayed `x-github-delivery` id (a bounded per-adapter cache of the last 1024 ids), so a redelivered event does not run twice.
 
 #### Serving webhooks (ingress)

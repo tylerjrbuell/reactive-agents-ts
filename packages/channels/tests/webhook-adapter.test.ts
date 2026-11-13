@@ -90,6 +90,18 @@ describe("WebhookChannelAdapter", () => {
     expect(received).toEqual([]);
   });
 
+  test("replay of an identical signed request inside the window is delivered once", async () => {
+    const secret = "s";
+    const body = JSON.stringify({ id: "m-1", content: "once", channelId: "c", senderId: "u" });
+    const ts = nowSec();
+    const headers = { "x-channels-signature": sign(secret, ts, body), "x-channels-timestamp": ts };
+    const w = new WebhookChannelAdapter({ secret });
+    const received = await collect(w);
+    await Effect.runPromise(w.handleRequest({ body, headers }));
+    await Effect.runPromise(w.handleRequest({ body, headers }));
+    expect(received).toEqual(["once"]);
+  });
+
   test("request before anything consumes inbound fails with not_started, not a silent drop", async () => {
     const w = new WebhookChannelAdapter({ allowUnsigned: true });
     expect(await reasonOf(w.handleRequest({ body: JSON.stringify({ id: "1" }), headers: {} }))).toBe("not_started");
