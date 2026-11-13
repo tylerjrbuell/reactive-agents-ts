@@ -173,6 +173,26 @@ export const OLLAMA_LOCAL_STATIC_CAPABILITIES: Readonly<Record<string, Capabilit
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // gpt-oss:latest (20.9B MoE, MXFP4, llamacpp runner). Card advertises
+  // completion+tools+thinking (levels low/medium/high, default medium). The
+  // template is the harmony format, but Ollama's template maps harmony tool
+  // calls to the standard message.tool_calls field, so the API-level dialect is
+  // native-fc. ADVERTISED, not behaviorally measured; no calibration file.
+  "ollama/gpt-oss:latest": {
+    provider: "ollama",
+    model: "gpt-oss:latest",
+    tier: "local",
+    maxContextTokens: 131_072,
+    recommendedNumCtx: 32_768,
+    maxOutputTokens: 4096,
+    tokenizerFamily: "unknown",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: true,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
   // phi4-mini-reasoning advertises `tools`; the 2026-11-13 smoke failed
   // (budget-cap). No thinking capability listed by the card.
   "ollama/phi4-mini-reasoning:latest": {

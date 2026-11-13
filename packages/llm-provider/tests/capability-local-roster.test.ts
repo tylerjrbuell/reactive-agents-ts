@@ -17,6 +17,7 @@ const ROSTER = [
   "mimo-v2.6:latest",
   "ornith:latest",
   "phi4-mini-reasoning:latest",
+  "gpt-oss:latest",
 ] as const;
 
 describe("local-model campaign roster capabilities", () => {
