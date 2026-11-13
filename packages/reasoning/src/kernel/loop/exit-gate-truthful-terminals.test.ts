@@ -129,18 +129,22 @@ describe("K1: a tool-less direct run is never held to a side effect quoted in it
     expect(seedPostConditions([], [])).toBeUndefined();
   });
 
-  it("drops SideEffectLanded on a retrieval-only surface (H3 read-and-answer tasks), keeps it with a mutating tool", () => {
-    const readTask = "Working directory for this task: /tmp/x\n\na.json and b.json each have a numeric count field. Add the two counts together and reply with the sum.";
-    const derived = deriveConditions(readTask, []);
-    const readOnly = [{ name: "file-read" }, { name: "web-search" }, { name: "brief" }];
-    expect(derived).toContainEqual(sideEffectLanded());
-    expect(seedPostConditions(derived, readOnly, { task: readTask })).toEqual([]);
-    // A governed external action ("send a message") on a retrieval-only surface stays held.
-    const sendTask = "You MUST deliver your reply on this channel by calling a tool that sends an outbound message.";
-    expect(seedPostConditions(deriveConditions(sendTask, []), [{ name: "web-search" }], { task: sendTask }))
-      .toContainEqual(sideEffectLanded());
-    expect(seedPostConditions(derived, [{ name: "file-read" }, { name: "notes-create" }])).toContainEqual(sideEffectLanded());
-    expect(seedPostConditions(derived, [{ name: "file-write" }])).toContainEqual(sideEffectLanded());
+  it("read-and-answer tasks never derive SideEffectLanded, bench preamble or not; outward-effect tasks still do", () => {
+    // Real h3 prompts as run (bench preamble line + task), real surface (file-read + file-write floor).
+    const surface = [{ name: "file-read" }, { name: "file-write" }];
+    const h3 = [
+      "Working directory for this task: /tmp/x\n\nRead /tmp/x/config.json in your working directory and tell me the value of build.releaseCode (the one under \"build\", not any other releaseCode). Reply with that value.",
+      "Working directory for this task: /tmp/x\n\na.json and b.json in your working directory each have a numeric \"count\" field. Add the two counts together and reply with the sum.",
+    ];
+    for (const task of h3) {
+      const derived = deriveConditions(task, ["file-read"], ["file-write"]);
+      expect(derived).not.toContainEqual(sideEffectLanded());
+      expect(seedPostConditions(derived, surface)).not.toContainEqual(sideEffectLanded());
+    }
+    // A governed external action stays derived, whatever the surface holds.
+    const sendTask = "Working directory for this task: /tmp/x\n\nSend an email to the team with the report.";
+    expect(deriveConditions(sendTask, [])).toContainEqual(sideEffectLanded());
+    expect(seedPostConditions(deriveConditions(sendTask, []), surface)).toContainEqual(sideEffectLanded());
   });
 
   it("the side-effect steer never claims a tool call was made", () => {

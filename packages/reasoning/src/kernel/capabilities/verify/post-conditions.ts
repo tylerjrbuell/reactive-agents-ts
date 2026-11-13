@@ -322,21 +322,6 @@ export function surfaceHasSubstantiveTool(
 }
 
 /**
- * Can this tool surface land a side effect? True iff it holds a substantive tool
- * that is NOT retrieval-category (`isSideEffectLanded` never credits a read, so
- * a surface of only file-read / web-search / http-get can never meet
- * `SideEffectLanded`). `undefined` (unknown surface) answers `true`.
- */
-export function surfaceCanLandSideEffect(
-  schemas: readonly { readonly name: string }[] | undefined,
-): boolean {
-  return (
-    schemas === undefined ||
-    schemas.some((s) => isSubstantiveToolName(s.name) && !isRetrievalToolName(s.name))
-  );
-}
-
-/**
  * SideEffectLanded is met iff the run's LATEST substantive (non-meta,
  * non-pseudo) tool result SUCCEEDED. For a mutation task the model does its
  * reads first and its write last, so the terminal substantive action IS the

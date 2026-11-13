@@ -80,6 +80,7 @@ import { describeUnmet } from "../capabilities/verify/post-conditions.js";
 import { describeUnbackedClaim, succeededToolNames, unbackedClaimedActions } from "../capabilities/verify/claimed-actions.js";
 import { resolveFabricationGuardMode } from "../capabilities/verify/evidence-grounding.js";
 import { deliveryConditions } from "../contract/declared-deliverables.js";
+import { unlandedActionRequirements } from "../contract/satisfiability.js";
 import { emitGuardFired } from "../utils/diagnostics.js";
 import { terminate, type TerminateOptions, type TerminateReason } from "./terminate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
@@ -315,6 +316,10 @@ export function contractOutstanding(
       ledger: state.ledger,
     });
     for (const c of unmet) add(itemOf(describeUnmet([c])));
+  }
+  // A declared external action nothing in the run landed (meta-only calls do not count).
+  for (const description of unlandedActionRequirements(state.meta.runContract, state.steps, state.ledger)) {
+    add(`perform the requested action: ${description}`);
   }
   // An action the answer claims that no successful tool call backs (claimed-actions.ts).
   // A required tool already named above is not repeated. Respects the fabrication-guard off switch.

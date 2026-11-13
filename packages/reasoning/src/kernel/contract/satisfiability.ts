@@ -24,6 +24,9 @@ import {
   filterToolsByRelevance,
   type ToolSchema,
 } from "../capabilities/attend/tool-formatting.js";
+import { isSideEffectLanded } from "../capabilities/verify/post-conditions.js";
+import type { ReasoningStep } from "../../types/index.js";
+import type { RunLedger } from "../ledger/run-ledger.js";
 import type { RunContract } from "./run-contract.js";
 
 export interface ActionSatisfiabilityInput {
@@ -101,4 +104,22 @@ export function assessActionSatisfiability(
       `Abstaining without spending model iterations on an impossible task.`,
     missing: capabilities.map((c) => `capability:${c}`),
   };
+}
+
+/**
+ * Descriptions of the contract's `action-required` requirements that nothing in
+ * the run backs: no successful substantive (non-meta, non-retrieval) tool result,
+ * the rule `isSideEffectLanded` applies. The requirement is checker-tier (no
+ * PostCondition), so without this the exit gate saw nothing outstanding when the
+ * only tool calls were meta (a `recall` save) and a fabricated "email sent" shipped
+ * as success. Empty when the contract holds no action requirement. Pure.
+ */
+export function unlandedActionRequirements(
+  contract: RunContract | undefined,
+  steps: readonly ReasoningStep[],
+  ledger?: RunLedger,
+): readonly string[] {
+  const actions = (contract?.requirements ?? []).filter((r) => r.kind === "action-required");
+  if (actions.length === 0 || isSideEffectLanded(steps, ledger)) return [];
+  return actions.map((a) => a.spec.description);
 }

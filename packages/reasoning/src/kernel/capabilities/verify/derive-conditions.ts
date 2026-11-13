@@ -25,7 +25,6 @@ import {
   artifactProduced,
   outputContains,
   sideEffectLanded,
-  surfaceCanLandSideEffect,
   surfaceHasSubstantiveTool,
   toolCalled,
   WRITING_TOOL_NAMES,
@@ -53,14 +52,23 @@ import {
 // throwing on max_iterations (2026-08-13, B1). Keep both lists disjoint.
 const MUTATION_VERB =
   /\b(create|send|add|post|delete|remove|update|schedule|assign|upload|publish|rename|archive|move|share|invite|draft|reply|forward|submit|set)\b/i;
-// Subset of MUTATION_VERB that acts OUTWARD on the world. Used only to decide
-// whether a retrieval-only surface keeps SideEffectLanded (seedPostConditions);
-// the answer-shaped verbs ("add the counts", "reply with the value", "set") are
-// excluded because read-and-answer tasks use them.
-const OUTWARD_EFFECT_VERB =
-  /\b(send|sends|sent|post|publish|share|forward|invite|schedule|upload|submit|delete|archive|assign)\b/i;
 const EXTERNAL_RESOURCE_NOUN =
   /\b(note|email|e-mail|message|event|issue|pull[\s-]?request|pr|record|reminder|todo|task|label|calendar|comment|page|row|entry|ticket|memo|meeting|contact|folder|group|channel|list|thread)\b/i;
+
+/**
+ * Does ONE clause pair a mutation verb with the resource it acts on? Verb and
+ * noun must share a sentence/line: a harness preamble ("Working directory for
+ * this task: ...", on its own line) supplies a noun with no verb, and an
+ * answer-shaped instruction ("Add the two counts ... reply with the sum.") a
+ * verb with no resource, so neither alone seeds SideEffectLanded (2026-11-13
+ * ablation: h3-continuation / h3-exact-value ended failure with right answers).
+ * Whole-text co-occurrence was the over-derivation.
+ */
+function namesMutationOfResource(text: string): boolean {
+  return text
+    .split(/[.!?]+(?:\s|$)|\n+/)
+    .some((clause) => MUTATION_VERB.test(clause) && EXTERNAL_RESOURCE_NOUN.test(clause));
+}
 
 // Tools that count as "writing" a file artifact — shared with post-conditions.ts
 // (WRITING_TOOL_NAMES) so derive/produce vocabularies stay in lockstep. If a
@@ -684,7 +692,7 @@ export function deriveConditions(
              availableWritingTools[0]);
       if (writer !== undefined) push(toolCalled(writer));
     }
-  } else if (MUTATION_VERB.test(scanTask) && EXTERNAL_RESOURCE_NOUN.test(scanTask)) {
+  } else if (namesMutationOfResource(scanTask)) {
     // 3. non-file mutation (create/send/… a note/email/event) -> the side-effect
     //    must LAND. Excluded when a file path derived above: ArtifactProduced's
     //    disk truth already grounds that case, and adding a terminal-success
@@ -733,8 +741,6 @@ export function seedPostConditions(
   derived: readonly PostCondition[],
   surface: readonly { readonly name: string }[] | undefined,
   rails: {
-    /** The run's task text, for the retrieval-only-surface action check. */
-    readonly task?: string;
     readonly posture?: RunPosture;
     readonly deliveryScope?: DeliveryScope;
     readonly seedRunContract?: { readonly postConditions: readonly PostCondition[] };
@@ -748,19 +754,7 @@ export function seedPostConditions(
   // cannot re-derive from that prompt either.
   const conditions = rails.seedRunContract?.postConditions ?? derived;
   if (conditions.length === 0) return isStepScope(rails) || rails.seedRunContract !== undefined ? [] : undefined;
-  if (surfaceCanLandSideEffect(surface)) return [...conditions];
-  // Retrieval-only surface (file-read, web-search, http-get): `isSideEffectLanded`
-  // skips its results, so the loose prose heuristic ("read X and tell me", "add
-  // the two counts") is unmeetable and vetoed correct answers. Keep the condition
-  // only when the task names an outward-effect verb (`OUTWARD_EFFECT_VERB`, not the answer-shaped
-  // "add"/"reply"/"set"): "send a message" with only web-search must stay an
-  // honest non-success, never a fabricated "sent".
-  if (
-    surfaceHasSubstantiveTool(surface) &&
-    (rails.task === undefined || OUTWARD_EFFECT_VERB.test(rails.task))
-  ) {
-    return [...conditions];
-  }
+  if (surfaceHasSubstantiveTool(surface)) return [...conditions];
   return conditions.filter((c) => c.kind !== "SideEffectLanded");
 }
 
