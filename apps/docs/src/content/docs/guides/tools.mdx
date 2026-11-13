@@ -398,6 +398,7 @@ agent.withTools({ focusedTools: ["crypto-price"] })
 ```
 
 - **`allowedTools`** is a hard allowlist. Anything outside it is pruned before the model sees it — use it to lock an agent to a known surface (and to give local-model tool selection a safety net).
+- **Attached MCP servers stay visible.** Tools of a server you attached with `.withMCP()` join the allowlist automatically, so you do not list each `server/tool` by hand. To limit a server to a subset, name its tools in `allowedTools` (`"umami/get-stats"`): once any of that server's tools is named, the list is authoritative for that server. A forbidden tool from `.withContract()` stays hidden.
 - **`focusedTools`** is soft guidance. The full toolset stays available, but the focused names are highlighted so the model gravitates to them without being blocked from others. Resolution order: `focusedTools` (soft guidance) → `allowedTools` (hard restriction) → all tools.
 
 ### Policy is enforced at execution, on every strategy
@@ -1042,6 +1043,8 @@ By default every MCP tool is unclassified, so it is dropped when an agent is nar
 
 - `readOnly: true` marks every tool on the server read-only; `readOnly: ["lookup", "search"]` marks only the named tools (names without the `server/` prefix).
 - `trustAnnotations: true` honors the server's own MCP `readOnlyHint` annotation. Without it, annotations are ignored, because a malicious or buggy server can lie.
+
+Both fields are part of the declarative agent config (`mcpServers[].readOnly`, `mcpServers[].trustAnnotations`), so they survive `toConfig()` / `agentConfigToBuilder()` round trips and JSON import/export.
 
 A tool the server annotates `destructiveHint: true` or `openWorldHint: true` is never marked read-only, even if listed. Both fields are a promise by you, the operator: a wrong declaration exposes a mutating tool to non-owner senders. Trust is never inferred.
 

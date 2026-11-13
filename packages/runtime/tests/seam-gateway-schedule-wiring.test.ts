@@ -253,17 +253,18 @@ describe("ingress feeds the bounded queue (seam)", () => {
     expect(ingress).not.toBeNull();
     const url = ingress!.server.url;
     const body = JSON.stringify({ n: 1 });
-    const sig = crypto.createHmac("sha256", "s3").update(body).digest("hex");
+    const ts = String(Math.floor(Date.now() / 1000));
+    const sig = crypto.createHmac("sha256", "s3").update(`${ts}.${body}`).digest("hex");
     const bad = await fetch(`${url}/hooks/generic`, {
       method: "POST",
       body,
-      headers: { "x-webhook-signature": "00" },
+      headers: { "x-webhook-signature": "00", "x-webhook-timestamp": ts },
     });
     expect(bad.status).toBe(401);
     const ok = await fetch(`${url}/hooks/generic`, {
       method: "POST",
       body,
-      headers: { "x-webhook-signature": sig },
+      headers: { "x-webhook-signature": sig, "x-webhook-timestamp": ts },
     });
     expect(ok.status).toBe(202);
     await q.idle();

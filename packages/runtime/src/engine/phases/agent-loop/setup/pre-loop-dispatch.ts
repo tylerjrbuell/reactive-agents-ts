@@ -30,6 +30,7 @@ import { runGuardedPhase } from "../../../pipeline.js";
 import type { Phase } from "../../../phase.js";
 import { fetchToolsRegistry } from "./tools-registry.js";
 import { classifyTools } from "./classifier.js";
+import { withAttachedMcpTools } from "./mcp-allowlist.js";
 
 export interface PreLoopDispatchDeps {
   /** Resolved execution context after BOOTSTRAP + skill post-processing. */
@@ -131,7 +132,11 @@ export const runPreLoopDispatch = (
     // own name stays literal. The builder already resolves this list; this
     // covers a config passed to createRuntime directly.
     const registeredNames: ReadonlySet<string> = new Set(cachedToolDefs.map((t) => t.name));
-    const effectiveAllowedTools = resolveToolNameList(config.allowedTools ?? [], registeredNames) ?? [];
+    const effectiveAllowedTools = withAttachedMcpTools(
+      resolveToolNameList(config.allowedTools ?? [], registeredNames) ?? [],
+      cachedToolDefs,
+      config.forbiddenTools,
+    );
     const effectiveFocusedTools = config.focusedTools ?? [];
 
     // ── LLM-based tool classification (required + relevant) ──

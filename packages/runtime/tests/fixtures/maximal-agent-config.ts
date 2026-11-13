@@ -229,7 +229,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
     },
   ],
   mcpServers: [
-    { name: "fs", transport: "stdio", command: "mcp-fs", args: ["--root", "/"] },
+    { name: "fs", transport: "stdio", command: "mcp-fs", args: ["--root", "/"], readOnly: ["read"], trustAnnotations: true },
   ],
   reactiveIntelligence: {
     enabled: true,

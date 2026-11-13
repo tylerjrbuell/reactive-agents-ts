@@ -112,19 +112,19 @@ export interface MCPServerConfig {
    */
   tokenStore?: MCPTokenStore;
   /**
-   * Risk tier this server's discovered tools should be tagged with, overriding
-   * `ToolService.connectMCPServer`'s hardcoded `"medium"` default. Primarily
-   * set by `MCPRegistry` implementations (e.g. `DockerHubMCPRegistry` sets
-   * `"high"` for toolkit-resolved servers per the design spec's "Risk-tier
-   * elevation" section) but hand-written configs can opt in too.
-   *
-   * NOTE: the `tool-service.ts` consumer that reads this field
-   * (`riskLevel: config.defaultRiskLevel ?? "medium"`) is a separate,
-   * parallel `@reactive-agents/tools` change — this field is a no-op on its
-   * own until that lands.
-   * See `wiki/Architecture/Design-Specs/2026-09-19-mcp-toolkit-scaffolding.md`.
+   * Risk tier this server's discovered tools are tagged with (default
+   * `"medium"`). `MCPRegistry` implementations set `"high"` for
+   * toolkit-resolved servers; hand-written configs can opt in too.
    */
   defaultRiskLevel?: "low" | "medium" | "high";
+  /**
+   * Operator promise these tools are read-only: `true` = all, `string[]` = those
+   * tool names (no `server/` prefix). Survives channel read-only narrowing.
+   * Destructive/open-world annotated tools are never marked.
+   */
+  readOnly?: boolean | readonly string[];
+  /** Honor this server's `readOnlyHint` annotations (ignored unless `true`). */
+  trustAnnotations?: boolean;
 }
 
 /**

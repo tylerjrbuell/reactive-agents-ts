@@ -485,6 +485,10 @@ export const MCPServerConfigSchema = Schema.Struct({
   cwd: Schema.optional(Schema.String),
   env: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
   headers: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),
+  /** Operator-declared read-only: `true` = all tools, or the listed tool names. */
+  readOnly: Schema.optional(Schema.Union(Schema.Boolean, Schema.Array(Schema.String))),
+  /** Honor this server's `readOnlyHint` annotations. */
+  trustAnnotations: Schema.optional(Schema.Boolean),
 });
 
 /**
