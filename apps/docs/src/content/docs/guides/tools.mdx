@@ -99,7 +99,9 @@ const addTool = defineTool({
 });
 ```
 
-Raw arguments are validated against the schema at runtime before the handler runs; validation failures surface as `ToolExecutionError`, never a crash. Optional config fields mirror the raw `ToolDefinition`: `riskLevel` (default `"low"`), `timeoutMs` (default `30_000`), `requiresApproval` (default `false`), `category`, `returnType`, `isCacheable`, `cacheTtlMs`.
+Raw arguments are validated against the schema at runtime before the handler runs; validation failures surface as `ToolExecutionError`, never a crash. Optional config fields mirror the raw `ToolDefinition`: `riskLevel` (default `"low"`), `timeoutMs` (default `30_000`), `requiresApproval` (default `false`), `mutatesExternalState` (set `false` to declare the tool read-only; see below), `category`, `returnType`, `isCacheable`, `cacheTtlMs`.
+
+**Read-only tools.** When an agent is narrowed to read-only tools (for example for non-owner channel senders), only tools that declare `mutatesExternalState: false` and do not require approval survive. A tool that omits the flag is treated as NOT read-only. Setting `mutatesExternalState: false` is your promise that the tool never changes state outside the run.
 
 `defineTool` also **fails fast on malformed options**: passing intuitive-but-wrong keys (`parameters` instead of `input`, `execute` instead of `handler`) throws a typed `ToolDefinitionError` naming the correct field — not a raw `TypeError`.
 
@@ -1031,6 +1033,15 @@ await using agent = await ReactiveAgents.create()
 ```
   </TabItem>
 </Tabs>
+
+### Marking MCP tools read-only
+
+By default every MCP tool is unclassified, so it is dropped when an agent is narrowed to read-only tools. Two operator-set fields on the server config change that:
+
+- `readOnly: true` marks every tool on the server read-only; `readOnly: ["lookup", "search"]` marks only the named tools (names without the `server/` prefix).
+- `trustAnnotations: true` honors the server's own MCP `readOnlyHint` annotation. Without it, annotations are ignored, because a malicious or buggy server can lie.
+
+A tool the server annotates `destructiveHint: true` or `openWorldHint: true` is never marked read-only, even if listed. Both fields are a promise by you, the operator: a wrong declaration exposes a mutating tool to non-owner senders. Trust is never inferred.
 
 ### Cleanup
 

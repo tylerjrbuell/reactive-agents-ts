@@ -36,6 +36,7 @@ import type { MCPServer } from "../types.js";
 import { MCPConnectionError, ToolExecutionError } from "../errors.js";
 import { createAuthProvider } from "./auth/create-provider.js";
 import { mapMcpToolResult } from "./mcp-result.js";
+import { toMCPToolSchemaEntry } from "./read-only-classification.js";
 import { hasRedactor, redactBearerTokens, LOOPBACK_HOSTS } from "./auth/hardened-provider.js";
 import { createFileTokenStore } from "./auth/token-store.js";
 import type { MCPTokenStore } from "./auth/types.js";
@@ -777,11 +778,7 @@ async function buildMCPServer(
     command: config.command,
     args: config.args,
     tools: toolNames,
-    toolSchemas: tools.map((t) => ({
-      name: t.name,
-      description: t.description,
-      inputSchema: t.inputSchema as Record<string, unknown> | undefined,
-    })),
+    toolSchemas: tools.map(toMCPToolSchemaEntry),
     status: "connected",
   };
 }

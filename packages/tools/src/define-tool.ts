@@ -64,6 +64,15 @@ export interface DefineToolOptions<A, O = unknown> {
   timeoutMs?: number;
   /** Whether a human must approve execution. Defaults to false. */
   requiresApproval?: boolean;
+  /**
+   * Whether a call can change state outside the agent run (files, network
+   * writes, messages sent). Set `false` to declare the tool read-only so it
+   * stays available when an agent is narrowed to read-only tools (e.g. for
+   * non-owner channel senders; see `isReadOnlyTool`). A tool with
+   * `requiresApproval: true` is never read-only. Omitted = unknown, treated as
+   * NOT read-only (fail closed). This is a promise by the tool author.
+   */
+  mutatesExternalState?: boolean;
   /** Functional category for discovery. */
   category?: ToolDefinition["category"];
   /**
@@ -619,6 +628,7 @@ export function defineTool<A, O = unknown>(options: DefineToolOptions<A, O>): De
     riskLevel = "low",
     timeoutMs = 30_000,
     requiresApproval = false,
+    mutatesExternalState,
     category,
     produces,
     returnType,
@@ -636,6 +646,7 @@ export function defineTool<A, O = unknown>(options: DefineToolOptions<A, O>): De
     timeoutMs,
     requiresApproval,
     source: "function",
+    ...(mutatesExternalState !== undefined ? { mutatesExternalState } : {}),
     ...(category !== undefined ? { category } : {}),
     ...(produces !== undefined ? { produces } : {}),
     ...(returnType !== undefined ? { returnType } : {}),

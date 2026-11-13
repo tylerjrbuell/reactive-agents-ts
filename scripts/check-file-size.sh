@@ -111,6 +111,8 @@ GIANT_BAR=1000
 #            (provider-warden): absent Ollama prompt/eval counts are undefined, not ?? 0.
 # 2026-11-06 tools/src/mcp/mcp-client.ts 1125->1120: SHRINK by Plan 9 Phase 4 stage E;
 #            MCP call-result mapping moved to mcp/mcp-result.ts (typed parts).
+# 2026-11-12 tools/src/mcp/mcp-client.ts 1120->1117: SHRINK by read-only marking;
+#            toolSchemas mapping moved to mcp/read-only-classification.ts.
 # 2026-11-05 benchmarks/src/runner.ts 1599->984: SHRINK by GH #268 decomposition;
 #            single-cell execution moved verbatim to run-internal.ts, result
 #            aggregation to aggregate.ts, ALL_TASKS to all-tasks.ts (re-exported).
@@ -216,7 +218,7 @@ SIZE_BASELINE=(
   "llm-provider/src/types.ts:978"
   "reasoning/src/kernel/capabilities/act/act.ts:1098"
   "reasoning/src/strategies/reflexion.ts:987"
-  "tools/src/mcp/mcp-client.ts:1120"
+  "tools/src/mcp/mcp-client.ts:1117"
   "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1065"
   "tools/src/skills/shell-execution.ts:838"

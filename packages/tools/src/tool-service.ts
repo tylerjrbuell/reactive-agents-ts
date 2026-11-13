@@ -24,6 +24,7 @@ import { builtinTools } from "./skills/builtin.js";
 import { ToolResultCache } from "./caching/tool-result-cache.js";
 import { ToolApprovalGate, definitionRequiresApproval } from "./governance/tool-approval-gate.js";
 import { annotateToolNameCorrection } from "./registry/resolve-tool-name.js";
+import { classifyMCPToolMutation } from "./mcp/read-only-classification.js";
 
 /**
  * Maps an MCP tool's raw JSON Schema `type` string onto `ToolParameter`'s
@@ -538,6 +539,8 @@ export const ToolServiceLive = Layer.effect(
         | "auth"
         | "tokenStore"
         | "defaultRiskLevel"
+        | "readOnly"
+        | "trustAnnotations"
       >,
     ): Effect.Effect<MCPServer, MCPConnectionError> =>
       Effect.gen(function* () {
@@ -568,6 +571,7 @@ export const ToolServiceLive = Layer.effect(
             }
           }
 
+          const mutates = classifyMCPToolMutation(config, toolName, schema?.annotations);
           yield* registry.register(
             {
               name: `${server.name}/${toolName}`,
@@ -580,6 +584,8 @@ export const ToolServiceLive = Layer.effect(
               // MCP tools return data into the run by default (audit 01-F1 / C2);
               // a server that writes files can declare `produces: "file"`.
               produces: "data",
+              // Operator-declared only; undefined = unclassified (not read-only).
+              ...(mutates === undefined ? {} : { mutatesExternalState: mutates }),
             },
             (args) =>
               mcpClient.callTool(server.name, toolName, args).pipe(

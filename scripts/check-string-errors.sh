@@ -57,7 +57,9 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # errors (5), structured-output pipeline throws StructuredOutputExtractionError (4).
 # 2026-11-11: 256 -> 255. withUserInteraction() no longer requires durable runs: the
 # durable-guard throw in build-agent.ts is gone.
-STRING_ERRORS_BASELINE=255
+# 2026-11-12 255->246: SHRINK from the day's typed-error work (typed Gateway/Channel/
+# runtime-shim errors replaced string throw sites); ledger lowered so it cannot regrow.
+STRING_ERRORS_BASELINE=246
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-

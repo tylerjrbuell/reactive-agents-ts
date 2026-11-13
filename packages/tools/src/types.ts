@@ -521,6 +521,21 @@ export const MCPToolSchemaEntry = Schema.Struct({
   inputSchema: Schema.optional(
     Schema.Record({ key: Schema.String, value: Schema.Unknown }),
   ),
+  /**
+   * MCP tool annotation hints as reported by the server. SERVER-SUPPLIED AND
+   * UNTRUSTED: used for read-only classification only when the operator sets
+   * `trustAnnotations` on the server config.
+   *
+   * @default undefined
+   */
+  annotations: Schema.optional(
+    Schema.Struct({
+      readOnlyHint: Schema.optional(Schema.Boolean),
+      destructiveHint: Schema.optional(Schema.Boolean),
+      openWorldHint: Schema.optional(Schema.Boolean),
+      idempotentHint: Schema.optional(Schema.Boolean),
+    }),
+  ),
 });
 
 /**
@@ -679,6 +694,25 @@ export type MCPServer = typeof MCPServerSchema.Type & {
    * @default undefined (registered tools get `riskLevel: "medium"`)
    */
   readonly defaultRiskLevel?: "low" | "medium" | "high";
+  /**
+   * Operator promise that tools from this server are read-only (they set
+   * `mutatesExternalState: false`, so channel read-only narrowing keeps them).
+   * `true` marks every tool; a `string[]` marks only those tool names (no
+   * `server/` prefix). A tool the server annotates `destructiveHint: true` or
+   * `openWorldHint: true` is never marked. This is a PROMISE by the operator;
+   * a wrong declaration exposes a mutating tool to non-owner senders.
+   *
+   * @default undefined (MCP tools stay unclassified, i.e. NOT read-only)
+   */
+  readonly readOnly?: boolean | readonly string[];
+  /**
+   * Operator trusts this server's MCP `readOnlyHint` annotations. Only then
+   * is `annotations.readOnlyHint: true` honored. Untrusted servers can lie,
+   * so annotations are ignored unless this is `true`.
+   *
+   * @default undefined (annotations ignored)
+   */
+  readonly trustAnnotations?: boolean;
 };
 
 /**
