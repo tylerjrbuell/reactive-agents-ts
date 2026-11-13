@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -135,7 +136,7 @@ export const grepHandler = (
       try {
         regex = new RegExp(patternStr, flags);
       } catch (e) {
-        const reason = e instanceof Error ? e.message : String(e);
+        const reason = errorMessage(e);
         return {
           ...(await scan(literalRegex(patternStr, flags))),
           note: `pattern is not a valid regex (${reason}); it was searched as a literal string`,

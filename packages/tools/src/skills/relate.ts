@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 
@@ -168,7 +169,7 @@ export const makeRelateHandler =
           Effect.catchAll((e) =>
             Effect.fail(
               new ToolExecutionError({
-                message: `Relate link failed ("${id}" -> "${targetId}"): ${e instanceof Error ? e.message : String(e)}`,
+                message: `Relate link failed ("${id}" -> "${targetId}"): ${errorMessage(e)}`,
                 toolName: "relate",
                 cause: e,
               }),
@@ -188,7 +189,7 @@ export const makeRelateHandler =
         Effect.catchAll((e) =>
           Effect.fail(
             new ToolExecutionError({
-              message: `Relate lookup failed for "${id}": ${e instanceof Error ? e.message : String(e)}`,
+              message: `Relate lookup failed for "${id}": ${errorMessage(e)}`,
               toolName: "relate",
               cause: e,
             }),

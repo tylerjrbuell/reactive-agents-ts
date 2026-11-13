@@ -12,6 +12,7 @@ import { assembleToolReply } from "./tool-reply.js";
 import { prependTaskText, taskInputHasMedia, taskInputText, type TaskInput } from "../agent/task-input.js";
 import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
+import { TurnGate } from "./turn-gate.js";
 import { TodoCarry, planPosture, originCarry, type OriginOption, type PostureOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
@@ -272,6 +273,8 @@ export class ChatEngine {
   #maxDirectTokens: number; readonly #origin: RunOrigin | undefined;
   /** In-memory session state, oldest first, symmetric user + assistant turns. */
   #history: ChatMessage[] = [];
+  /** Serializes turns: concurrent turn()/streamTurn() calls queue FIFO instead of interleaving history. */
+  readonly #gate = new TurnGate();
   /**
    * Load-once latch (Task 3): set after the first turn resolves `loadHistory` —
    * including when the loader resolves empty — so the loader is ever called
@@ -318,24 +321,21 @@ export class ChatEngine {
    *
    * Direct path (Task 1 shape): composes the system prompt from the host's
    * `systemPrompt` / `contextSummary` capabilities plus the turn's `extraContext`
-   * (persona, then context summary, then extra context; empty fragments skipped, joined
-   * by `---` separators); when no `systemPrompt` capability is wired, falls back to the
-   * same generic conversational prompt `direct path` hardcodes today (parity, never a
-   * blank system prompt). Sends full history + the incoming message to `complete`
-   * together with the engine-resolved `budgetTokens` (Task-1 ruling: the direct-budget
-   * mechanic lives engine-side), then records the user turn (`recordUserText ??
-   * message`) and the assistant turn.
+   * (persona, summary, extra; empty fragments skipped, joined by `---`); with no
+   * `systemPrompt` capability it falls back to a generic conversational prompt, never
+   * a blank one. Sends history + the message to `complete` with the engine-resolved
+   * `budgetTokens`, then records the user turn (`recordUserText ?? message`) and the
+   * assistant turn.
    *
    * Tool path (Task 2): requires `runTask` — typed {@link ChatEngineCapabilityError}
    * rejection otherwise, never a silent fallback onto the direct path. The input
    * handed to `runTask` composes the host's `contextSummary(message)` fragment with
-   * the raw message (`[summary, message].filter(Boolean).join("\n\n---\n\n")` — the
-   * "Context from prior run" / "New request" word strings belong to the host's
-   * contextSummary composition point, not the engine); the RAW prior turn list rides
-   * `opts.history` (run's own `withHistoryBlock` renders turn text). The reply is
-   * assembled with the exact field mapping `agent.chat()`'s tool path used
-   * (`toolsUsed` from `metadata.toolCalls` with debrief fallback, `tokens`, `steps`,
-   * `cost`, `reasoningSteps`, `scratchpad`, `citationCheck`).
+   * the raw message (joined by `---`); the RAW prior turn list rides `opts.history`.
+   * The reply keeps `agent.chat()`'s tool-path field mapping (`toolsUsed`, `tokens`,
+   * `steps`, `cost`, `reasoningSteps`, `scratchpad`, `citationCheck`).
+   *
+   * Serialized per engine: concurrent calls queue FIFO behind one gate, so history
+   * reads and the user+assistant append never interleave; a failed turn releases it.
    *
    * Both paths record symmetric turns, publish a user+assistant `ChatTurn` pair
    * via `publishTurn` when wired (`routedVia` reflects the path), and persist the
@@ -350,7 +350,11 @@ export class ChatEngine {
    * recording, publishing payloads, and persistence always run on the FULL
    * unwindowed state.
    */
-  async turn(input: TaskInput, options?: TurnOptions): Promise<ChatReply> {
+  turn(input: TaskInput, options?: TurnOptions): Promise<ChatReply> {
+    return this.#gate.run(() => this.#turn(input, options));
+  }
+
+  async #turn(input: TaskInput, options?: TurnOptions): Promise<ChatReply> {
     const message = taskInputText(input);
     await this.#resolveLoadedHistory();
     const environmentUpdate = await this.#env.begin();
@@ -410,43 +414,35 @@ export class ChatEngine {
    * before any stream is created. Streaming IS the streaming request (`useTools`
    * and density options ride `TurnOptions`); there is no direct-path fallback.
    *
-   * History resolution mirrors {@link turn()}: load-once seeding via
-   * {@link #resolveLoadedHistory}, then the windowed copy via {@link #historyForPath}
-   * is handed to `runStreamTask`; the engine's FULL unwindowed state owns recording,
-   * publishing payloads, and persistence.
+   * History resolution mirrors {@link turn()}: load-once seeding, then the windowed
+   * copy goes to `runStreamTask`; the FULL unwindowed state owns recording and persistence.
    *
    * Returns a wrapper {@link RunHandle} whose generator tees the inner handle's
    * {@link AgentStreamEvent}s unaltered while capturing the terminal event. Recording
    * happens at TERMINAL-EVENT OBSERVATION, inside the tee loop and BEFORE the terminal
    * event is yielded: when `StreamCompleted` is observed the symmetric user
    * (`recordUserText ?? message`) + assistant turns are recorded, the `ChatTurn` pair
-   * is published (`routedVia: "react-loop"`, same publish + observability mechanics
-   * as the tool path), and the FULL state is persisted — publish and persist are
-   * swallow-sites exactly as in `turn()`. Because recording precedes the yield, a
-   * consumer that closes the stream right after receiving `StreamCompleted` (tee-turn
-   * `return()` at the yield point, e.g. an SSE route) cannot drop the turn, and a
-   * consumer iterating past the terminal records exactly once. On `StreamError` (or
-   * a cancelled/aborted stream that never reaches `StreamCompleted`) NOTHING is
-   * recorded, published, or persisted — a failed stream leaves no trace in session
-   * history. A run that completes FAILED (`success: false`, not paused) is
+   * is published (`routedVia: "react-loop"`) and the FULL state persisted — swallow-sites
+   * exactly as in `turn()`. Because recording precedes the yield, a consumer that closes
+   * the stream right after `StreamCompleted` (e.g. an SSE route) cannot drop the turn,
+   * and one iterating past the terminal records once. On `StreamError` (or a
+   * cancelled stream that never reaches `StreamCompleted`) NOTHING is recorded,
+   * published, or persisted. A run that completes FAILED (`success: false`, not paused) is
    * recorded as a failed turn, here and in `turn()`: the assistant row is
    * `[previous run failed: <cause>; no answer was given]` with `failed: true` and
    * `error` (see `ChatMessage.failed`), never the run's output, so the next turn's
    * history tells the model no answer was given; the published ChatTurn carries
    * the same note plus `failed: true` and `error`.
    *
-   * The `RunHandle` verbs (`pause/resume/stop/terminate/status/inspect`) delegate to
-   * the inner handle returned by `runStreamTask`. They are lazily bound: the inner
-   * handle is created when the stream is first iterated (the engine resolves
-   * `loadHistory`/windowing before calling `runStreamTask`), so verbs called before
-   * the first iteration no-op (`status()` reports `"running"`, `inspect()` reports
+   * The `RunHandle` verbs delegate to the inner `runStreamTask` handle, lazily bound at
+   * first iteration: before that they no-op (`status()` is `"running"`, `inspect()` is
    * `undefined`).
    *
-   * @param message the incoming user message.
-   * @param options per-turn options; `recordUserText`, `density` and `signal` are
-   *   forwarded as in `turn()` / to `runStreamTask`.
-   * @returns a wrapper RunHandle streaming `AgentStreamEvent`s unaltered, with the
-   *   recording/persistence side effects captured at the terminal event.
+   * Serialized with `turn()` per engine: iteration takes the turn gate and holds it to
+   * stream end (or early `return()`), so a concurrent turn queues behind a live stream.
+   *
+   * @param options per-turn options; `recordUserText`, `density`, `signal` forward as in `turn()`.
+   * @returns a wrapper RunHandle streaming `AgentStreamEvent`s unaltered.
    * @throws ChatEngineCapabilityError when `runStreamTask` is not wired.
    */
   streamTurn(input: TaskInput, options?: TurnOptions): RunHandle {
@@ -470,6 +466,10 @@ export class ChatEngine {
      */
     const inner: { handle?: RunHandle } = {};
     async function* teeTurn(): AsyncGenerator<AgentStreamEvent> {
+      await engine.#gate.acquire(); // held to stream end: history read .. terminal record is one critical section
+      try { yield* locked(); } finally { engine.#gate.release(); }
+    }
+    async function* locked(): AsyncGenerator<AgentStreamEvent> {
       await engine.#resolveLoadedHistory();
       const history = await engine.#historyForPath();
       const environmentUpdate = await engine.#env.begin();

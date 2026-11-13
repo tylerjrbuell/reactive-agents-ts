@@ -14,7 +14,7 @@
 import { Effect } from "effect";
 import { extractStructuredOutput, parsePartial, stripThinking } from "@reactive-agents/reasoning";
 import type { SchemaContract } from "@reactive-agents/reasoning";
-import type { StructuredOutputReport } from "@reactive-agents/core";
+import { errorMessage, type StructuredOutputReport } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { StructuredOutputError } from "../../errors/structured-output-error.js";
 
@@ -108,12 +108,12 @@ export const extractObjectFromAnswer = <A>(
         ? Effect.fail(
             new StructuredOutputError({
               rawText: input.finalAnswer,
-              issues: [e instanceof Error ? e.message : String(e)],
+              issues: [errorMessage(e)],
               ...(report !== undefined ? { report } : {}),
             }),
           )
         : Effect.succeed<ExtractObjectOutput<A>>({
-            objectError: e instanceof Error ? e.message : String(e),
+            objectError: errorMessage(e),
             ...(report !== undefined ? { objectReport: report } : {}),
           });
     }),

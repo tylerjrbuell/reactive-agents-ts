@@ -24,6 +24,7 @@ import type {
     SchedulerService as SchedulerServiceTag,
 } from '@reactive-agents/gateway'
 import type { ObservabilityService as ObservabilityServiceTag } from '@reactive-agents/observability'
+import { errorMessage } from '@reactive-agents/core'
 import type { ChannelsConfig } from '../channels-config.js'
 import type { ChatReply } from '../chat.js'
 import { yieldService } from '../builder/helpers.js'
@@ -279,9 +280,7 @@ export const bootstrapGateway = async (
         } catch (err) {
             glog(
                 'error',
-                `channels: failed to start — ${
-                    err instanceof Error ? err.message : String(err)
-                }`
+                `channels: failed to start — ${errorMessage(err)}`
             )
         }
     }

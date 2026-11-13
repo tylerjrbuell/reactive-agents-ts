@@ -20,6 +20,7 @@
  *   `.withTools({ allowedTools })` — identical key, identical result.
  */
 import { ParseResult, Schema } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 import { AgentConfigSchema, agentConfigToBuilder, type AgentConfig } from "./agent-config.js";
 import type { ReactiveAgent } from "./reactive-agent.js";
 
@@ -86,7 +87,7 @@ export async function createAgent<TOut = string>(
         })
         .join("\n");
     } else {
-      detail = err instanceof Error ? err.message : String(err);
+      detail = errorMessage(err);
     }
     throw new Error(
       `createAgent: invalid config.\n${detail}\n` +

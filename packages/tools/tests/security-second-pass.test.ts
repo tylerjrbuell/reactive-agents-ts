@@ -17,7 +17,7 @@ import { buildHostShellEnv } from "../src/skills/shell-host-process.js";
 import { shellExecuteHandler } from "../src/skills/shell-execution.js";
 import { httpGetHandler, readCappedText, withoutCredentialHeaders } from "../src/skills/http-client.js";
 import { setScratchpadBounded } from "../src/scratchpad-spill.js";
-import { mockFetch } from "./helpers/fetch-stub.js";
+import type { PinnedTransport } from "@reactive-agents/runtime-shim";
 
 describe("M3 — approval command rules see through wrappers and git global options", () => {
   const rules = ["git push"];
@@ -96,46 +96,39 @@ describe("spill files are owner-only", () => {
 });
 
 describe("L1 — http-get credentials and body size", () => {
-  const redirectingFetch = (seen: Array<Record<string, string>>) =>
-    mockFetch(async (input, init) => {
-      seen.push({ ...(init?.headers as Record<string, string>) });
-      const url = String(input);
-      return url.includes(":1/")
-        ? new Response(null, { status: 302, headers: { location: "http://127.0.0.1:2/next" } })
-        : new Response("done", { status: 200 });
-    });
-  const original = global.fetch;
+  const transportOf =
+    (seen: Array<Record<string, string>>, respond: (url: URL, n: number) => Response): PinnedTransport =>
+    async (req) => {
+      seen.push({ ...req.headers });
+      return respond(req.url, seen.length);
+    };
   it("strips Authorization/Cookie on a cross-origin redirect", async () => {
     const seen: Array<Record<string, string>> = [];
-    global.fetch = redirectingFetch(seen);
-    try {
-      await Effect.runPromise(
-        httpGetHandler({ allowPrivate: true })({
-          url: "http://127.0.0.1:1/start",
-          headers: { Authorization: "Bearer s", Cookie: "a=b", Accept: "text/plain" },
-        }),
-      );
-    } finally {
-      global.fetch = original;
-    }
+    const transport = transportOf(seen, (url) =>
+      url.port === "1"
+        ? new Response(null, { status: 302, headers: { location: "http://127.0.0.1:2/next" } })
+        : new Response("done", { status: 200 }),
+    );
+    await Effect.runPromise(
+      httpGetHandler({ allowPrivate: true, network: { transport } })({
+        url: "http://127.0.0.1:1/start",
+        headers: { Authorization: "Bearer s", Cookie: "a=b", Accept: "text/plain" },
+      }),
+    );
     expect(seen[0]).toMatchObject({ Authorization: "Bearer s", Cookie: "a=b" });
     expect(seen[1]).toEqual({ Accept: "text/plain" });
   });
   it("keeps headers on a same-origin redirect", async () => {
     const seen: Array<Record<string, string>> = [];
-    global.fetch = mockFetch(async (_i, init) => {
-      seen.push({ ...(init?.headers as Record<string, string>) });
-      return seen.length === 1
-        ? new Response(null, { status: 302, headers: { location: "/next" } })
-        : new Response("ok", { status: 200 });
-    });
-    try {
-      await Effect.runPromise(
-        httpGetHandler({ allowPrivate: true })({ url: "http://127.0.0.1:1/a", headers: { Authorization: "Bearer s" } }),
-      );
-    } finally {
-      global.fetch = original;
-    }
+    const transport = transportOf(seen, (_u, n) =>
+      n === 1 ? new Response(null, { status: 302, headers: { location: "/next" } }) : new Response("ok", { status: 200 }),
+    );
+    await Effect.runPromise(
+      httpGetHandler({ allowPrivate: true, network: { transport } })({
+        url: "http://127.0.0.1:1/a",
+        headers: { Authorization: "Bearer s" },
+      }),
+    );
     expect(seen[1]).toEqual({ Authorization: "Bearer s" });
   });
   it("withoutCredentialHeaders drops auth-like names only", () => {

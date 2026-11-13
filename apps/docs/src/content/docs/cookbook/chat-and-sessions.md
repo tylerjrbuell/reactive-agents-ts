@@ -46,6 +46,8 @@ console.log(session.history());
 // ]
 ```
 
+Turns on one session are serialized. If you call `session.chat()` (or stream a turn) while another is in flight, it queues first-in-first-out, so each turn sees the previous turn's reply and history is never interleaved. A turn that fails releases the queue and the next one proceeds. A streaming turn holds its place until the stream ends, so close or finish streams you no longer need.
+
 ## Routing: Direct vs. Tool Path
 
 Routing follows the agent's **capability**, not the message wording. An agent with any capability tool (a custom tool, an MCP server, a sub-agent, the terminal, an opted-in built-in, or documents) sends every message through the tool loop, so "what is the price of bitcoin?" reaches the price tool. The model can still answer a plain message directly via `final-answer` in one iteration. An agent with no capability tools stays on the direct LLM path.

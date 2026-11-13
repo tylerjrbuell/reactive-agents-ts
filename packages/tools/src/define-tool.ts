@@ -1,4 +1,5 @@
 import { Effect, Schema, ParseResult, SchemaAST as AST } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 import type { ToolDefinition, ToolParameter } from "./types.js";
 import { ToolExecutionError, ToolDefinitionError, ToolOutputValidationError } from "./errors.js";
 import { type StandardSchemaV1, isStandardSchema } from "./standard-schema.js";
@@ -400,7 +401,7 @@ function decodeArgs(
       try: () => Promise.resolve(std.validate(rawArgs)),
       catch: (e) =>
         new ToolExecutionError({
-          message: `Validation threw for "${toolName}": ${e instanceof Error ? e.message : String(e)}`,
+          message: `Validation threw for "${toolName}": ${errorMessage(e)}`,
           toolName,
           input: rawArgs,
           cause: e,
@@ -449,7 +450,7 @@ function decodeOutput(
       try: () => Promise.resolve(std.validate(rawValue)),
       catch: (e) =>
         new ToolOutputValidationError({
-          message: `Output validation threw for "${toolName}": ${e instanceof Error ? e.message : String(e)}`,
+          message: `Output validation threw for "${toolName}": ${errorMessage(e)}`,
           toolName,
           rawOutput: rawValue,
         }),
@@ -498,7 +499,7 @@ function runHandler(
   } catch (e) {
     return Effect.fail(
       new ToolExecutionError({
-        message: `Tool "${toolName}" threw: ${e instanceof Error ? e.message : String(e)}`,
+        message: `Tool "${toolName}" threw: ${errorMessage(e)}`,
         toolName,
         input: rawArgs,
         cause: e,
@@ -515,7 +516,7 @@ function runHandler(
       e instanceof ToolExecutionError
         ? e
         : new ToolExecutionError({
-            message: `Tool "${toolName}" failed: ${e instanceof Error ? e.message : String(e)}`,
+            message: `Tool "${toolName}" failed: ${errorMessage(e)}`,
             toolName,
             input: rawArgs,
             cause: e,

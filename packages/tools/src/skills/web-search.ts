@@ -1,7 +1,13 @@
-import { Effect, Redacted } from "effect";
+import { Data, Duration, Effect, Redacted, Schedule } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 
 import type { ToolDefinition } from "../types.js";
-import { ToolExecutionError, WebSearchProviderError, toToolError } from "../errors.js";
+import {
+  ToolExecutionError,
+  WebSearchExhaustedError,
+  WebSearchProviderError,
+  toToolError,
+} from "../errors.js";
 
 /**
  * Ordered web-search provider chain with the env var(s) each one reads (first
@@ -66,8 +72,7 @@ function formatProviderAttemptError(
   e: unknown,
   secrets: ReadonlyArray<string>,
 ): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  return scrubSecrets(`${providerLabel}: ${msg}`, secrets);
+  return scrubSecrets(`${providerLabel}: ${errorMessage(e)}`, secrets);
 }
 
 const unwrapKey = (k: string | Redacted.Redacted<string> | undefined): string | undefined => {
@@ -102,32 +107,65 @@ const RETRYABLE_HTTP = new Set([429, 408, 500, 502, 503, 504]);
 const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 1_000;
 
-async function fetchWithRetry(
-  request: () => Promise<Response>,
+/** Internal retry signal: a retryable status whose response the caller gets if retries run out. */
+class RetryableHttpStatus extends Data.TaggedError("RetryableHttpStatus")<{
+  readonly response: Response;
+}> {}
+
+const isRetryableHttpStatus = (e: unknown): e is RetryableHttpStatus =>
+  typeof e === "object" && e !== null && "_tag" in e && e._tag === "RetryableHttpStatus";
+
+/**
+ * One request, retried on {@link RETRYABLE_HTTP} statuses with exponential
+ * backoff (Effect `Schedule`). The request receives the fiber's AbortSignal, so
+ * interrupting the handler cancels the in-flight fetch and the backoff sleep. A
+ * retried response's body is cancelled before the next attempt; the last
+ * response (retryable or not) is returned for the caller to read.
+ */
+const fetchWithRetry = (
+  request: (signal: AbortSignal) => Promise<Response>,
   maxAttempts = RETRY_MAX_ATTEMPTS,
   baseDelayMs = RETRY_BASE_DELAY_MS,
-): Promise<Response> {
-  let lastResponse: Response | undefined;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const response = await request();
-    if (!RETRYABLE_HTTP.has(response.status)) return response;
-    lastResponse = response;
-    if (attempt < maxAttempts - 1) {
-      await new Promise<void>((resolve) => setTimeout(resolve, baseDelayMs * Math.pow(2, attempt)));
-    }
-  }
-  return lastResponse!;
-}
+): Effect.Effect<Response, unknown> =>
+  Effect.suspend(() => {
+    let previous: Response | undefined;
+    const attempt = Effect.suspend(() => {
+      void previous?.body?.cancel().catch(() => undefined);
+      return Effect.tryPromise({
+        try: (signal) => request(signal),
+        catch: (e): unknown => e,
+      }).pipe(
+        Effect.flatMap((response) => {
+          previous = response;
+          return RETRYABLE_HTTP.has(response.status)
+            ? Effect.fail(new RetryableHttpStatus({ response }))
+            : Effect.succeed(response);
+        }),
+      );
+    });
+    return attempt.pipe(
+      Effect.retry({
+        schedule: Schedule.exponential(Duration.millis(baseDelayMs)).pipe(
+          Schedule.intersect(Schedule.recurs(maxAttempts - 1)),
+        ),
+        while: isRetryableHttpStatus,
+      }),
+      // Retries exhausted: hand the last (still unread) response to the caller.
+      Effect.catchIf(isRetryableHttpStatus, (e) => Effect.succeed(e.response)),
+    );
+  });
 
-async function readJsonBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text.trim()) return {};
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return { _unparsedBody: text.slice(0, 500) };
-  }
-}
+const readJsonBody = (response: Response): Effect.Effect<unknown, unknown> =>
+  Effect.tryPromise({ try: () => response.text(), catch: (e) => e }).pipe(
+    Effect.map((text): unknown => {
+      if (!text.trim()) return {};
+      try {
+        return JSON.parse(text) as unknown;
+      } catch {
+        return { _unparsedBody: text.slice(0, 500) };
+      }
+    }),
+  );
 
 function extractApiErrorMessage(body: unknown): string | undefined {
   if (!body || typeof body !== "object" || Array.isArray(body)) return undefined;
@@ -169,24 +207,49 @@ function formatProviderHttpRejection(
   return parts.join(" ");
 }
 
-async function searchTavily(
-  query: string,
-  maxResults: number,
-  apiKey: string,
-): Promise<ReadonlyArray<WebSearchResultRow>> {
-  const response = await fetchWithRetry(() =>
+type ProviderResult = Effect.Effect<ReadonlyArray<WebSearchResultRow>, unknown>;
+
+/**
+ * Fetch (with retry) and parse a provider's JSON reply. A non-OK final status
+ * fails with {@link WebSearchProviderError} carrying the provider's own message.
+ */
+const fetchProviderJson = (
+  label: string,
+  request: (signal: AbortSignal) => Promise<Response>,
+): Effect.Effect<{ readonly status: number; readonly body: unknown }, unknown> =>
+  Effect.gen(function* () {
+    const response = yield* fetchWithRetry(request);
+    const body = yield* readJsonBody(response);
+    if (!response.ok) {
+      return yield* Effect.fail(
+        new WebSearchProviderError({
+          message: formatProviderHttpRejection(label, response.status, response.statusText, body),
+          provider: label,
+          status: response.status,
+        }),
+      );
+    }
+    return { status: response.status, body };
+  });
+
+/** A 2xx reply whose body only carried an API error message: try the next provider. */
+const emptyWithApiError = (label: string, status: number, apiErr: string): WebSearchProviderError =>
+  new WebSearchProviderError({
+    message: `${label}: ${apiErr} (trying next search provider)`,
+    provider: label,
+    status,
+  });
+
+const searchTavily = (query: string, maxResults: number, apiKey: string): ProviderResult =>
+  Effect.gen(function* () {
+  const { status, body } = yield* fetchProviderJson("Tavily", (signal) =>
     fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, max_results: maxResults, api_key: apiKey }),
-    })
+      signal,
+    }),
   );
-
-  const body = await readJsonBody(response);
-
-  if (!response.ok) {
-    throw new Error(formatProviderHttpRejection("Tavily", response.status, response.statusText, body));
-  }
 
   const data = body as {
     results?: Array<{
@@ -208,37 +271,25 @@ async function searchTavily(
 
   if (rows.length === 0) {
     const apiErr = extractApiErrorMessage(body);
-    if (apiErr) {
-      throw new Error(`Tavily: ${apiErr} (trying next search provider)`);
-    }
+    if (apiErr) return yield* Effect.fail(emptyWithApiError("Tavily", status, apiErr));
   }
 
   return rows;
-}
+  });
 
-async function searchBrave(
-  query: string,
-  maxResults: number,
-  apiKey: string,
-): Promise<ReadonlyArray<WebSearchResultRow>> {
+const searchBrave = (query: string, maxResults: number, apiKey: string): ProviderResult =>
+  Effect.gen(function* () {
   const url = new URL("https://api.search.brave.com/res/v1/web/search");
   url.searchParams.set("q", query);
   url.searchParams.set("count", String(maxResults));
 
-  const response = await fetchWithRetry(() =>
+  const { status, body } = yield* fetchProviderJson("Brave Search", (signal) =>
     fetch(url.toString(), {
       method: "GET",
       headers: { Accept: "application/json", "X-Subscription-Token": apiKey },
-    })
+      signal,
+    }),
   );
-
-  const body = await readJsonBody(response);
-
-  if (!response.ok) {
-    throw new Error(
-      formatProviderHttpRejection("Brave Search", response.status, response.statusText, body),
-    );
-  }
 
   const data = body as {
     web?: {
@@ -260,22 +311,17 @@ async function searchBrave(
 
   if (rows.length === 0) {
     const apiErr = extractApiErrorMessage(body);
-    if (apiErr) {
-      throw new Error(`Brave Search: ${apiErr} (trying next search provider)`);
-    }
+    if (apiErr) return yield* Effect.fail(emptyWithApiError("Brave Search", status, apiErr));
   }
 
   return rows;
-}
+  });
 
 const KEENABLE_SNIPPET_MAX_CHARS = 500;
 
-async function searchKeenable(
-  query: string,
-  maxResults: number,
-  apiKey: string,
-): Promise<ReadonlyArray<WebSearchResultRow>> {
-  const response = await fetchWithRetry(() =>
+const searchKeenable = (query: string, maxResults: number, apiKey: string): ProviderResult =>
+  Effect.gen(function* () {
+  const { body } = yield* fetchProviderJson("Keenable", (signal) =>
     fetch("https://api.keenable.ai/v1/search", {
       method: "POST",
       headers: {
@@ -284,18 +330,9 @@ async function searchKeenable(
         "X-Keenable-Title": "reactive-agents",
       },
       body: JSON.stringify({ query, max_results: maxResults }),
-    })
+      signal,
+    }),
   );
-
-  const body = await readJsonBody(response);
-
-  if (!response.ok) {
-    throw new WebSearchProviderError({
-      message: formatProviderHttpRejection("Keenable", response.status, response.statusText, body),
-      provider: "Keenable",
-      status: response.status,
-    });
-  }
 
   const data = body as {
     results?: Array<{ title?: string; url?: string; description?: string; snippet?: string }>;
@@ -308,26 +345,18 @@ async function searchKeenable(
       content: String(r.description || (r.snippet ?? "").slice(0, KEENABLE_SNIPPET_MAX_CHARS)),
     }))
     .filter((r) => r.url.length > 0);
-}
+  });
 
-async function searchSerper(
-  query: string,
-  maxResults: number,
-  apiKey: string,
-): Promise<ReadonlyArray<WebSearchResultRow>> {
-  const response = await fetchWithRetry(() =>
+const searchSerper = (query: string, maxResults: number, apiKey: string): ProviderResult =>
+  Effect.gen(function* () {
+  const { status, body } = yield* fetchProviderJson("Serper", (signal) =>
     fetch("https://google.serper.dev/search", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
       body: JSON.stringify({ q: query, num: maxResults }),
-    })
+      signal,
+    }),
   );
-
-  const body = await readJsonBody(response);
-
-  if (!response.ok) {
-    throw new Error(formatProviderHttpRejection("Serper", response.status, response.statusText, body));
-  }
 
   const data = body as {
     organic?: Array<{ title?: string; link?: string; snippet?: string }>;
@@ -343,11 +372,11 @@ async function searchSerper(
 
   if (rows.length === 0) {
     const apiErr = extractApiErrorMessage(body);
-    if (apiErr) throw new Error(`Serper: ${apiErr} (trying next search provider)`);
+    if (apiErr) return yield* Effect.fail(emptyWithApiError("Serper", status, apiErr));
   }
 
   return rows;
-}
+  });
 
 type DdgRelatedEntry =
   | { Topics?: readonly DdgRelatedEntry[]; FirstURL?: string; Text?: string }
@@ -378,27 +407,17 @@ function collectDdgRelated(
 /**
  * DuckDuckGo Instant Answer API (no API key). Coverage is limited vs paid search APIs.
  */
-async function searchDuckDuckGoInstant(
-  query: string,
-  maxResults: number,
-): Promise<ReadonlyArray<WebSearchResultRow>> {
+const searchDuckDuckGoInstant = (query: string, maxResults: number): ProviderResult =>
+  Effect.gen(function* () {
   const url = new URL("https://api.duckduckgo.com/");
   url.searchParams.set("q", query);
   url.searchParams.set("format", "json");
   url.searchParams.set("no_html", "1");
   url.searchParams.set("no_redirect", "1");
 
-  const response = await fetchWithRetry(() =>
-    fetch(url.toString(), { method: "GET", headers: { Accept: "application/json" } })
+  const { body } = yield* fetchProviderJson("DuckDuckGo", (signal) =>
+    fetch(url.toString(), { method: "GET", headers: { Accept: "application/json" }, signal }),
   );
-
-  const body = await readJsonBody(response);
-
-  if (!response.ok) {
-    throw new Error(
-      formatProviderHttpRejection("DuckDuckGo", response.status, response.statusText, body),
-    );
-  }
 
   const data = body as {
     Heading?: string;
@@ -445,7 +464,7 @@ async function searchDuckDuckGoInstant(
   collectDdgRelated(data.RelatedTopics, out, maxResults);
 
   return out.slice(0, maxResults);
-}
+  });
 
 /**
  * Tavily hard-rejects queries over 400 characters (HTTP 400) and the other
@@ -482,17 +501,18 @@ function formatWebSearchFailure(
   query: string,
   attempts: readonly string[],
   keyedProviderConfigured: boolean,
-): Error {
+): WebSearchExhaustedError {
   const summary =
     attempts.length > 0 ? attempts.join(" | ") : "No provider returned any rows.";
   const coverage = keyedProviderConfigured
     ? ""
     : "Only DuckDuckGo instant answers are configured; they cover few queries. ";
-  return new Error(
-    `Web search produced no results for query "${query}". ${summary} ${coverage}` +
+  return new WebSearchExhaustedError({
+    message:
+      `Web search produced no results for query "${query}". ${summary} ${coverage}` +
       "Try a different query, or for a known URL, use http-get instead.",
-    { cause: WEB_SEARCH_CONFIG_HINT },
-  );
+    cause: WEB_SEARCH_CONFIG_HINT,
+  });
 }
 
 export const webSearchTool: ToolDefinition = {
@@ -546,7 +566,7 @@ type ChainEntry = {
     query: string,
     maxResults: number,
     apiKey: string,
-  ) => Promise<ReadonlyArray<WebSearchResultRow>>;
+  ) => ProviderResult;
 };
 
 const CHAIN: Readonly<Record<WebSearchKeyedProvider, ChainEntry>> = {
@@ -574,8 +594,7 @@ export const makeWebSearchHandler =
   (
     args: Record<string, unknown>,
   ): Effect.Effect<WebSearchHandlerResult, ToolExecutionError> =>
-    Effect.tryPromise({
-      try: async (): Promise<WebSearchHandlerResult> => {
+    Effect.gen(function* () {
         const query = clampQueryLength(args.query as string);
         const maxResults = clampMaxResults((args.maxResults as number) ?? 5);
         const attempts: string[] = [];
@@ -594,14 +613,14 @@ export const makeWebSearchHandler =
 
         for (const id of order) {
           if (id === "duckduckgo") {
-            try {
-              const results = await searchDuckDuckGoInstant(query, maxResults);
-              if (results.length > 0) {
-                return { query, maxResults, provider: "duckduckgo", results };
+            const ddg = yield* Effect.either(searchDuckDuckGoInstant(query, maxResults));
+            if (ddg._tag === "Right") {
+              if (ddg.right.length > 0) {
+                return { query, maxResults, provider: "duckduckgo" as const, results: ddg.right };
               }
               attempts.push("DuckDuckGo instant answers returned no usable rows.");
-            } catch (e) {
-              attempts.push(formatProviderAttemptError("DuckDuckGo", e, secrets));
+            } else {
+              attempts.push(formatProviderAttemptError("DuckDuckGo", ddg.left, secrets));
             }
             continue;
           }
@@ -613,23 +632,24 @@ export const makeWebSearchHandler =
             }
             continue;
           }
-          try {
-            const results = await entry.run(query, maxResults, key);
-            if (results.length > 0) return { query, maxResults, provider: id, results };
+          const run = yield* Effect.either(entry.run(query, maxResults, key));
+          if (run._tag === "Right") {
+            if (run.right.length > 0) return { query, maxResults, provider: id, results: run.right };
             attempts.push(entry.emptyMessage);
-          } catch (e) {
-            attempts.push(formatProviderAttemptError(entry.label, e, secrets));
+          } else {
+            attempts.push(formatProviderAttemptError(entry.label, run.left, secrets));
           }
         }
 
-        throw formatWebSearchFailure(
-          query,
-          attempts,
-          order.some((id) => id !== "duckduckgo" && keys.has(id)),
+        return yield* Effect.fail(
+          formatWebSearchFailure(
+            query,
+            attempts,
+            order.some((id) => id !== "duckduckgo" && keys.has(id)),
+          ),
         );
-      },
-      catch: toToolError("web-search", "Web search"),
     }).pipe(
+      Effect.mapError(toToolError("web-search", "Web search")),
       // Developer log: provider setup advice the model must not see.
       Effect.tapError(() =>
         Effect.logWarning("web-search-providers-exhausted").pipe(

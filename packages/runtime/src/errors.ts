@@ -1,4 +1,5 @@
 import { Data } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 
 /**
  * Thrown when an unexpected error occurs during a lifecycle phase.
@@ -368,7 +369,7 @@ export function errorContext(error: unknown): ErrorContext {
     }
   }
 
-  const msg = error instanceof Error ? error.message : String(error);
+  const msg = errorMessage(error);
   return {
     suggestion: `Unexpected error: ${msg}. Enable .withObservability({ verbosity: "debug" }) for detailed diagnostics.`,
   };

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Effect } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
@@ -334,7 +335,7 @@ export const codeExecuteHandler = (
       } catch (e) {
         return {
           executed: false,
-          error: `Failed to write temp file: ${e instanceof Error ? e.message : String(e)}`,
+          error: `Failed to write temp file: ${errorMessage(e)}`,
         };
       }
 
@@ -360,7 +361,7 @@ export const codeExecuteHandler = (
     },
     catch: (e) =>
       new ToolExecutionError({
-        message: `Code execution failed: ${e instanceof Error ? e.message : String(e)}`,
+        message: `Code execution failed: ${errorMessage(e)}`,
         toolName: "code-execute",
         cause: e,
       }),

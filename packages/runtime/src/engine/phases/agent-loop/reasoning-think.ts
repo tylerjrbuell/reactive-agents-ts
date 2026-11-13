@@ -13,7 +13,7 @@
  */
 import { describeStrategyCause } from "../../strategy-failure.js";
 import { Effect, FiberRef } from "effect";
-import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, emitLoadBearingFailure, errorMessage, errorTag } from "@reactive-agents/core";
 import { approvalDecisionSlot, getRunSlot, interactionResponseSlot, resumeStateSlot } from "@reactive-agents/core/internal/run-scope";
 import type { MessageContent, Task } from "@reactive-agents/core";
 import { taskOriginalContent } from "../../../agent/task-input.js";
@@ -268,7 +268,7 @@ export const runReasoningThink = (
               capability: "durable-resume",
               site: "runtime/src/engine/phases/agent-loop/reasoning-think.ts:resume-deserialize",
               tag: errorTag(err),
-              message: err instanceof Error ? err.message : String(err),
+              message: errorMessage(err),
             }).pipe(Effect.as(undefined)),
           ),
         )

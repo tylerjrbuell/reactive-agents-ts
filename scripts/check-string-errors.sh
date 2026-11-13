@@ -59,7 +59,9 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # durable-guard throw in build-agent.ts is gone.
 # 2026-11-12 255->246: SHRINK from the day's typed-error work (typed Gateway/Channel/
 # runtime-shim errors replaced string throw sites); ledger lowered so it cannot regrow.
-STRING_ERRORS_BASELINE=246
+# 2026-11-12 246->238: web-search failures are typed (WebSearchProviderError /
+# WebSearchExhaustedError) instead of raw Error instances.
+STRING_ERRORS_BASELINE=238
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-
@@ -80,7 +82,11 @@ STRING_ERRORS_BASELINE=246
 # shell-execute preset); their 3 identity checks are gone.
 # 2026-11-12 121->120: gateway runTask catch no longer identity-checks; an
 # undelivered turn throws GatewayTurnNotDelivered (typed) so history stays clean.
-INSTANCEOF_BASELINE=120
+# 2026-11-12 120->109: 11 runtime copies of the message-or-String idiom replaced
+# by errorMessage from @reactive-agents/core.
+# 2026-11-12 109->84: 25 tools copies of the message-or-String idiom replaced by
+# errorMessage from @reactive-agents/core.
+INSTANCEOF_BASELINE=84
 
 # SCAN-EMPTY guard.
 COUNTED="$(find "$SCAN_DIR" -path '*/src/*' -name '*.ts' ! -name '*.test.ts' \

@@ -19,7 +19,7 @@ import { makeToolRegistry } from "./registry/tool-registry.js";
 import { makeMCPClient } from "./mcp/mcp-client.js";
 import { makeSandbox } from "./execution/sandbox.js";
 import { validateToolInput } from "./validation/input-validator.js";
-import { EventBus } from "@reactive-agents/core";
+import { EventBus, errorMessage } from "@reactive-agents/core";
 import { builtinTools } from "./skills/builtin.js";
 import { ToolResultCache } from "./caching/tool-result-cache.js";
 import { ToolApprovalGate, definitionRequiresApproval } from "./governance/tool-approval-gate.js";
@@ -195,20 +195,26 @@ export class ToolService extends Context.Tag("ToolService")<
      * ```
      */
     readonly connectMCPServer: (
-      config: Pick<
-        MCPServer,
-        | "name"
-        | "transport"
-        | "endpoint"
-        | "command"
-        | "args"
-        | "cwd"
-        | "env"
-        | "headers"
-        | "auth"
-        | "tokenStore"
-        | "defaultRiskLevel"
-      >,
+      config: Omit<
+        Pick<
+          MCPServer,
+          | "name"
+          | "transport"
+          | "endpoint"
+          | "command"
+          | "args"
+          | "cwd"
+          | "env"
+          | "headers"
+          | "auth"
+          | "tokenStore"
+          | "defaultRiskLevel"
+        >,
+        "transport"
+      > & {
+        /** Optional: inferred from `command` (stdio) or `endpoint` (sse / streamable-http). */
+        readonly transport?: MCPServer["transport"];
+      },
     ) => Effect.Effect<MCPServer, MCPConnectionError>;
 
     /**
@@ -526,22 +532,25 @@ export const ToolServiceLive = Layer.effect(
     ): Effect.Effect<void, never> => registry.register(definition, handler);
 
     const connectMCPServer = (
-      config: Pick<
-        MCPServer,
-        | "name"
-        | "transport"
-        | "endpoint"
-        | "command"
-        | "args"
-        | "cwd"
-        | "env"
-        | "headers"
-        | "auth"
-        | "tokenStore"
-        | "defaultRiskLevel"
-        | "readOnly"
-        | "trustAnnotations"
-      >,
+      config: Omit<
+        Pick<
+          MCPServer,
+          | "name"
+          | "transport"
+          | "endpoint"
+          | "command"
+          | "args"
+          | "cwd"
+          | "env"
+          | "headers"
+          | "auth"
+          | "tokenStore"
+          | "defaultRiskLevel"
+          | "readOnly"
+          | "trustAnnotations"
+        >,
+        "transport"
+      > & { readonly transport?: MCPServer["transport"] },
     ): Effect.Effect<MCPServer, MCPConnectionError> =>
       Effect.gen(function* () {
         const server = yield* mcpClient.connect(config);
@@ -592,7 +601,7 @@ export const ToolServiceLive = Layer.effect(
                 Effect.mapError(
                   (e) =>
                     new ToolExecutionError({
-                      message: `MCP tool ${toolName} failed: ${e instanceof Error ? e.message : String(e)}`,
+                      message: `MCP tool ${toolName} failed: ${errorMessage(e)}`,
                       toolName,
                       cause: e,
                     }),

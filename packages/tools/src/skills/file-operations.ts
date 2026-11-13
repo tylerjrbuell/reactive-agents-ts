@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -203,7 +204,7 @@ export const fileReadHandler = (
         // prefix once wrapped, and a bare errno with no way to act on it.
         // Name the root, because a relative path the model invented is
         // meaningless without knowing what it resolved against.
-        message: `File read failed: ${e instanceof Error ? e.message : String(e)} (working root: ${getFileRoot()})`,
+        message: `File read failed: ${errorMessage(e)} (working root: ${getFileRoot()})`,
         toolName: "file-read",
         cause: e,
       }),
@@ -262,7 +263,7 @@ export const listDirectoryHandler = (
     },
     catch: (e) =>
       new ToolExecutionError({
-        message: `List directory failed: ${e instanceof Error ? e.message : String(e)}`,
+        message: `List directory failed: ${errorMessage(e)}`,
         toolName: "list-directory",
         cause: e,
       }),
@@ -433,7 +434,7 @@ export function writeContentRejection(
     } catch (e) {
       return (
         `Refusing to write ${path.basename(filePath)}: the content is not valid JSON ` +
-        `(${e instanceof Error ? e.message : String(e)}). ` +
+        `(${errorMessage(e)}). ` +
         `Pass \`content\` as the JSON value itself (an object or array, not a string); ` +
         `it is saved as valid JSON. No prose, no explanation, no code fence.`
       );

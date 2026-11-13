@@ -24,6 +24,7 @@ import { Effect } from "effect";
 import { join, dirname } from "node:path";
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { errorMessage } from "@reactive-agents/core";
 import { spawn } from "@reactive-agents/runtime-shim";
 import { ToolExecutionError, ToolTimeoutError } from "../errors.js";
 import {
@@ -429,7 +430,7 @@ export const makeDockerSandbox = (
         },
         catch: (e) =>
           new ToolExecutionError({
-            message: `Failed to build sandbox images: ${e instanceof Error ? e.message : String(e)}`,
+            message: `Failed to build sandbox images: ${errorMessage(e)}`,
             toolName: "docker-execute",
             cause: e,
           }),

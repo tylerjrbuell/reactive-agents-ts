@@ -22,6 +22,7 @@ import type {
     GatewayService as GatewayServiceTag,
     SchedulerService as SchedulerServiceTag,
 } from '@reactive-agents/gateway'
+import { errorMessage } from '@reactive-agents/core'
 import type { GatewayChatManager } from '../gateway-context-formatting.js'
 import type { GLog } from './gateway-bootstrap.js'
 import type { GatewayInboundQueue } from './gateway-inbound-queue.js'
@@ -226,9 +227,7 @@ export const makeGatewayTick = (
         } catch (err) {
             glog(
                 'error',
-                `tick error: ${
-                    err instanceof Error ? err.message : String(err)
-                }`
+                `tick error: ${errorMessage(err)}`
             )
         }
     }

@@ -24,7 +24,7 @@
 import { Effect } from "effect";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { Task, TerminatedBy } from "@reactive-agents/core";
-import { emitErrorSwallowed, emitLoadBearingFailure, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, emitLoadBearingFailure, errorMessage, errorTag } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import {
   synthesizeDebrief,
@@ -360,7 +360,7 @@ export const finalizeDebriefBackground = (
                 site: "runtime/src/engine/finalize/debrief-synthesis.ts:debrief-store-save",
                 tag: errorTag(err),
                 entityId: ctx.taskId,
-                message: err instanceof Error ? err.message : String(err),
+                message: errorMessage(err),
               }),
             ),
           );

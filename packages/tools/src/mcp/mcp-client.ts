@@ -26,6 +26,7 @@
 import { spawn as nodeSpawn } from "node:child_process";
 import { createServer } from "node:net";
 import { Effect, Ref } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -743,9 +744,7 @@ async function reconnectViaHttp(
 
   if (dockerContainerName) dockerRmForce(dockerContainerName);
   throw new Error(
-    `MCP server "${config.name}": all HTTP transports failed. Last error: ${
-      lastError instanceof Error ? lastError.message : String(lastError)
-    }`,
+    `MCP server "${config.name}": all HTTP transports failed. Last error: ${errorMessage(lastError)}`,
   );
 }
 
@@ -873,7 +872,7 @@ async function connectInternal(config: ConnectConfig): Promise<ActiveConnection>
         return reconnectViaHttp(config, httpUrl, probeContainerName);
       }
       const stderrContext = stderrLines.slice(-5).join(" | ").trim();
-      const base = winner.error instanceof Error ? winner.error.message : String(winner.error);
+      const base = errorMessage(winner.error);
       const detail = stderrContext ? `\nServer stderr: ${stderrContext}` : "";
       throw new Error(`MCP server "${config.name}" connection failed: ${base}${detail}`);
     }
@@ -1025,7 +1024,7 @@ export const makeMCPClient = Effect.gen(function* () {
       },
       catch: (e) =>
         new MCPConnectionError({
-          message: e instanceof Error ? e.message : String(e),
+          message: errorMessage(e),
           serverName: config.name,
           transport: config.transport ?? "stdio",
           cause: e,
@@ -1057,7 +1056,7 @@ export const makeMCPClient = Effect.gen(function* () {
       },
       catch: (e) => {
         if (e instanceof MCPConnectionError) return e;
-        const rawMessage = e instanceof Error ? e.message : String(e);
+        const rawMessage = errorMessage(e);
         return new ToolExecutionError({
           message: sanitizeErrorMessage(rawMessage, conn.authProvider),
           toolName,
@@ -1082,7 +1081,7 @@ export const makeMCPClient = Effect.gen(function* () {
       },
       catch: (e) =>
         new MCPConnectionError({
-          message: sanitizeErrorMessage(e instanceof Error ? e.message : String(e), undefined),
+          message: sanitizeErrorMessage(errorMessage(e), undefined),
           serverName,
           transport: "unknown",
         }),

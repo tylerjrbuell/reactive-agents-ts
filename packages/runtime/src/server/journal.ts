@@ -17,6 +17,7 @@
  * so we keep it for consistency. Measurable overhead under load — logged as a GAP.
  */
 import { Effect } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 import type { AgentStreamEvent } from "../stream-types.js";
 import { RunStoreLive, RunStoreService } from "../services/run-store.js";
 
@@ -111,7 +112,7 @@ export const toJournaledSSE = (
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
         }
       } catch (err) {
-        const cause = err instanceof Error ? err.message : String(err);
+        const cause = errorMessage(err);
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ _tag: "StreamError", cause })}\n\n`));
       } finally {
         controller.close();

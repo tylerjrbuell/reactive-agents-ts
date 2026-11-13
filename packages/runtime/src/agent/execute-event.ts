@@ -19,6 +19,7 @@ import { startRun } from '../engine/start-run.js'
 import type { TaskError } from '@reactive-agents/core'
 import type { GatewayService as GatewayServiceTag } from '@reactive-agents/gateway'
 import type { RuntimeErrors } from '../errors.js'
+import { errorMessage } from '@reactive-agents/core'
 import type { AgentResultMetadata } from '../builder/types.js'
 import type { GLog } from './gateway-bootstrap.js'
 import { ORIGIN_CONTEXT_KEY } from '../chat/todo-seed.js'
@@ -153,9 +154,7 @@ export const makeExecuteEvent = (
             const durationMs = Date.now() - runStart
             deps.glog(
                 'warn',
-                `${source} failed (${durationMs}ms): ${
-                    err instanceof Error ? err.message : String(err)
-                }`
+                `${source} failed (${durationMs}ms): ${errorMessage(err)}`
             )
             await deps.publish({
                 _tag: 'ProactiveActionCompleted',

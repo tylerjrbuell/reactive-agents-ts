@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import type { AgentDefinition, Capability } from "@reactive-agents/core";
+import { errorMessage, type AgentDefinition, type Capability } from "@reactive-agents/core";
 import type { ToolDefinition, ToolParameter } from "../types.js";
 import { ToolExecutionError } from "../errors.js";
 
@@ -513,7 +513,7 @@ export const createSubAgentExecutor = (
       return {
         subAgentName: config.name,
         success: false,
-        summary: error instanceof Error ? error.message : String(error),
+        summary: errorMessage(error),
         tokensUsed: 0,
       };
     }
@@ -782,7 +782,7 @@ export const executeAgentTool = async (
     return result;
   } catch (error) {
     throw new ToolExecutionError({
-      message: error instanceof Error ? error.message : String(error),
+      message: errorMessage(error),
       toolName: tool.name,
       input,
     });

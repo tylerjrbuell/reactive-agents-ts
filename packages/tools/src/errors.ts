@@ -1,4 +1,5 @@
 import { Data } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 
 export class ToolNotFoundError extends Data.TaggedError("ToolNotFoundError")<{
   readonly message: string;
@@ -30,7 +31,7 @@ export const toToolError =
   (toolName: string, label: string) =>
   (e: unknown): ToolExecutionError =>
     new ToolExecutionError({
-      message: `${label} failed: ${e instanceof Error ? e.message : String(e)}`,
+      message: `${label} failed: ${errorMessage(e)}`,
       toolName,
       cause: e,
     });
@@ -104,6 +105,17 @@ export class WebSearchProviderError extends Data.TaggedError(
   readonly provider: string;
   /** HTTP status code returned by the provider. */
   readonly status: number;
+}> {}
+
+/**
+ * Raised when every configured `web-search` backend failed or returned no rows.
+ * `message` is model-facing; `cause` carries developer-only setup advice.
+ */
+export class WebSearchExhaustedError extends Data.TaggedError(
+  "WebSearchExhaustedError",
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
 }> {}
 
 export class ToolAuthorizationError extends Data.TaggedError(

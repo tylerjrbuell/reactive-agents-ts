@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 import type { ToolDefinition, ToolParameter } from "./types.js";
 import { ToolExecutionError } from "./errors.js";
 
@@ -95,7 +96,7 @@ export function tool(
       try: () => Promise.resolve(options.handler(args)),
       catch: (e) =>
         new ToolExecutionError({
-          message: `Tool "${name}" failed: ${e instanceof Error ? e.message : String(e)}`,
+          message: `Tool "${name}" failed: ${errorMessage(e)}`,
           toolName: name,
         }),
     });

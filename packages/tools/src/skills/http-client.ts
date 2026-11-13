@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { assertPublicUrl } from "@reactive-agents/runtime-shim";
+import { fetchPinned, type PinnedFetchOptions } from "@reactive-agents/runtime-shim";
 
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
@@ -99,6 +99,11 @@ export const httpGetTool: ToolDefinition = {
 
 export interface HttpGetConfig {
   readonly allowPrivate?: boolean;
+  /**
+   * Test seam: injectable DNS resolver and socket transport for the pinned
+   * fetch. Production callers leave this unset.
+   */
+  readonly network?: Pick<PinnedFetchOptions, "resolve" | "transport">;
 }
 
 export const httpGetHandler = (
@@ -110,25 +115,31 @@ export const httpGetHandler = (
       const url = args.url as string;
       const headers = (args.headers as Record<string, string>) ?? {};
 
-      // Egress guard (F6): the URL is model-controlled. Validate the target —
-      // and every redirect hop — is public before fetching, so a prompt-injected
-      // agent cannot reach cloud metadata (169.254.169.254) or internal hosts.
+      // Egress guard (F6): the URL is model-controlled. fetchPinned resolves DNS
+      // once, validates every answer is public, and connects to that validated
+      // address (closing the DNS-rebinding gap). Redirect hops are driven here
+      // (redirect: "manual") so each is re-pinned and credentials the model
+      // supplied are dropped (broader than fetchPinned's header list) when a hop
+      // leaves their origin.
       // Set RA_HTTP_ALLOW_PRIVATE=1 to permit trusted loopback/private targets,
       // or override per-agent via config.
-      const guard = { allowPrivate: config?.allowPrivate ?? httpAllowPrivateEnabled() };
-      let current = (await assertPublicUrl(url, guard)).toString();
+      const guard: PinnedFetchOptions = {
+        ...config?.network,
+        allowPrivate: config?.allowPrivate ?? httpAllowPrivateEnabled(),
+        redirect: "manual",
+      };
+      let current = url;
       let hopHeaders = headers;
-      let response = await fetch(current, { method: "GET", headers: hopHeaders, redirect: "manual" });
+      let response = await fetchPinned(current, { method: "GET", headers: hopHeaders }, guard);
       for (let hop = 0; hop < MAX_REDIRECTS; hop++) {
         if (response.status < 300 || response.status >= 400) break;
         const location = response.headers.get("location");
         if (!location) break;
+        await response.body?.cancel();
         const next = new URL(location, current);
-        // Credentials the model supplied belong to the origin it named: a
-        // redirect to another origin must not receive them (and stays without).
         if (next.origin !== new URL(current).origin) hopHeaders = withoutCredentialHeaders(hopHeaders);
-        current = (await assertPublicUrl(next.toString(), guard)).toString();
-        response = await fetch(current, { method: "GET", headers: hopHeaders, redirect: "manual" });
+        current = next.toString();
+        response = await fetchPinned(current, { method: "GET", headers: hopHeaders }, guard);
       }
       const contentType = response.headers.get("content-type") ?? "";
 

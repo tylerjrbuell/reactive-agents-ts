@@ -101,7 +101,7 @@ import type { EnvironmentUpdateOption } from './chat/environment-snapshot.js'
 import { makeChatComplete, makeChatPublishTurn, makeChatToolIntent, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorMessage, errorTag } from "@reactive-agents/core";
 import {
     generateAgentCard,
     createA2AServer,
@@ -840,7 +840,7 @@ export class ReactiveAgent<TOut = unknown> {
                 catch: (e) =>
                     new A2AError({
                         code: 'INTERNAL_ERROR',
-                        message: e instanceof Error ? e.message : String(e),
+                        message: errorMessage(e),
                     }),
             }).pipe(
                 Effect.flatMap(a2aResultToEffect),

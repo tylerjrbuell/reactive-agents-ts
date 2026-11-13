@@ -187,6 +187,8 @@ These tools are registered internally as soon as you call `.withTools()`, but ea
 | `code-execute` | code | Execute code in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env) | — |
 | `crypto-price` | data | Get current prices for 30+ cryptocurrencies via CoinGecko's free public API | — |
 
+`http-get` only fetches public addresses. It resolves the host once, checks every answer, and connects to that checked address (and re-checks each redirect hop), so a hostname that later resolves to a private or metadata address (DNS rebinding) is never reached. Credentials you pass in `headers` are dropped when a redirect leaves the original origin. Set `RA_HTTP_ALLOW_PRIVATE=1` to allow trusted local targets.
+
 Git and the GitHub CLI are not separate tools. The `git` toolset gives the agent a `shell-execute` limited to `git` and `gh`. See [Git and GitHub CLIs](#git-and-github-clis).
 
 Ad-hoc note builtins were removed from the default tool list. Use the **`recall`** meta-tool (Conductor's Suite) for working-memory writes, reads, search, and listing. If you use **`.withDocuments()`**, ingestion uses **`rag-ingest`** and retrieval is typically routed through **`find`** rather than a standalone `rag-search` builtin.

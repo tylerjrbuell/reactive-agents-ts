@@ -4,7 +4,7 @@ import { join, resolve, isAbsolute } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
-import { ToolExecutionError } from "../errors.js";
+import { ToolExecutionError, toToolError } from "../errors.js";
 import { makeDockerSandbox, runSandboxEffect } from "../execution/docker-sandbox.js";
 import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sandbox.js";
 import { sandboxDockerEnabled } from "../flags.js";
@@ -828,11 +828,6 @@ export function shellExecuteHandler(
           stderrTruncated,
         };
       },
-      catch: (e) =>
-        new ToolExecutionError({
-          message: `Shell execution failed: ${e instanceof Error ? e.message : String(e)}`,
-          toolName: "shell-execute",
-          cause: e,
-        }),
+      catch: toToolError("shell-execute", "Shell execution"),
     });
 }
