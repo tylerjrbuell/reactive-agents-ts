@@ -18,6 +18,7 @@ import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { reactKernel } from "../../src/kernel/loop/react-kernel.js";
 import { runPass } from "../../src/kernel/loop/run-pass.js";
 import type { KernelInput, KernelRunOptions } from "../../src/kernel/state/kernel-state.js";
+import { classifyContractOutstanding } from "../../src/kernel/loop/contract-outstanding.js";
 
 const SCHEMAS = [
   {
@@ -74,7 +75,15 @@ describe("an outstanding action requirement is never success", () => {
       ),
     );
     const state = pass.state;
-    expect(state.status).toBe("failed");
-    expect(String(state.error)).toContain("actually complete the requested action");
+    // Declared-vs-heuristic rule (terminal-decision audit 2026-11-14): this pin
+    // used to assert the run FAILS because the prose-derived send requirement was
+    // unlanded. That requirement is a verb-x-noun guess from task text (the
+    // gateway's channel guidance is prose, not a declared requiredTool), so it no
+    // longer holds the run back. A DECLARED requirement still blocks (see
+    // veto-basis-declared-vs-heuristic.test.ts). Interface still needed: the
+    // gateway should declare an outbound-reply requirement (requiredTools or a
+    // TaskContract) to get this block back.
+    expect(state.status).toBe("done");
+    expect(classifyContractOutstanding(state, input, state.output ?? "").blocking).toEqual([]);
   });
 });

@@ -130,6 +130,18 @@ export const StepMetadataSchema = Schema.Struct({
       /** Unfinished items the gate found (empty on accept). */
       outstanding: Schema.Array(Schema.String),
       /**
+       * What entitles each `outstanding` item to block (same order and length):
+       * `declared` (caller named it), `evidence` (a literal anchor checked
+       * against a receipt), `heuristic` (answer shape / a guard's own line).
+       * See kernel/contract/requirement-basis.ts.
+       */
+      outstandingBasis: Schema.optional(Schema.Array(Schema.Literal("declared", "evidence", "heuristic"))),
+      /**
+       * Heuristic-basis contract items (an action inferred from task prose that
+       * nothing landed). Guidance only: they never appear in `outstanding`.
+       */
+      advisory: Schema.optional(Schema.Array(Schema.String)),
+      /**
        * Write-coverage targets already satisfied when this record was written.
        * Present only when the `writeCoverage` contract is active; the next soft
        * proposal compares it to see whether the run progressed since this denial.

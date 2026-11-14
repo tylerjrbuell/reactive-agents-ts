@@ -574,7 +574,7 @@ export function handleActing(
               yield* hooks.onObservation(
                 transitionState(state, { steps: [...allSteps, blockedActionStep] }),
                 guardOutcome.observation,
-                !guardFailed,
+                false, // harness reply, the call never ran: not an ok:true receipt
               );
               allSteps = [...allSteps, blockedActionStep, blockedObsStep];
               continue;
@@ -766,7 +766,7 @@ export function handleActing(
           yield* hooks.onObservation(
             transitionState(state, { steps: [...allSteps, actionStep] }),
             guardOutcome.observation,
-            !guardFailed,
+            false, // harness reply, the call never ran: not an ok:true receipt
           );
           allSteps = [...allSteps, actionStep, guardObsStep];
           // Update meta-tool dedup tracking even for blocked calls (the call still happened)

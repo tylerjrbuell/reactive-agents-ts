@@ -23,6 +23,7 @@
  */
 import { guardEvidence, type GuardEvidence } from "../../utils/guard-evidence.js";
 import { GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
+import { succeededToolNames } from "../verify/claimed-actions.js";
 import { transitionState } from "../../../kernel/state/kernel-state.js";
 // Sprint 3.3 — Sole Termination Authority: loop detector emits a
 // "loop-detected" intent and lets the Arbitrator decide success/failure.
@@ -421,7 +422,11 @@ export function checkAllToolsCalled(
   // If ALL tools are utility tools, don't early-exit (let LLM finish naturally)
   if (primaryTools.length === 0) return state;
 
-  const allPrimaryCalled = primaryTools.every((name) => state.toolsUsed.has(name));
+  // A tool counts once it SUCCEEDED (a receipt), not once it was attempted:
+  // `toolsUsed` is written before execution, so an all-failed run read "done"
+  // (9 of 9 such accepts were wrong; terminal-decision audit 2026-11-14).
+  const succeeded = succeededToolNames(state.steps);
+  const allPrimaryCalled = primaryTools.every((name) => succeeded.has(name));
   if (!allPrimaryCalled) return state;
 
   const lastObs = [...state.steps].reverse().find((s) => s.type === "observation");

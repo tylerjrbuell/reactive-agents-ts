@@ -136,8 +136,24 @@ export function succeededToolNames(steps: readonly ReasoningStep[]): ReadonlySet
 }
 
 /**
+ * Stems whose completed form reports an effect OUTSIDE the answer text (a
+ * message went out, a deploy ran). Verbs like "wrote" / "created" / "saved" also
+ * describe the answer itself ("I've written the summary below"), so they only
+ * count against a tool that could have done them.
+ */
+const OUTWARD_STEMS: ReadonlySet<string> = new Set([
+  "send", "email", "message", "post", "submit", "publish", "schedule", "book", "notify", "deploy", "push", "commit", "upload",
+]);
+
+/**
  * Completed actions the answer asserts that no successful tool call backs.
  * `tools` is the run's tool surface (names); meta and harness tools never match.
+ *
+ * The ledger, not the surface, is the authority for an outward action: a
+ * first-person ("I've sent") or "has been sent" claim of an {@link OUTWARD_STEMS}
+ * action in a run with ZERO successful non-meta receipts is unbacked whatever
+ * tools were offered, including none. Before, an empty surface returned no
+ * claims, so a fabricated "email sent" shipped (terminal-decision audit 2026-11-14).
  */
 export function unbackedClaimedActions(
   answer: string,
@@ -145,7 +161,8 @@ export function unbackedClaimedActions(
   succeeded: ReadonlySet<string>,
 ): readonly UnbackedClaim[] {
   const candidates = tools.filter((t) => !META_TOOLS.has(t) && !HARNESS_PSEUDO_TOOLS.has(t));
-  if (candidates.length === 0 || answer.trim().length === 0) return [];
+  if (answer.trim().length === 0) return [];
+  const noReceipts = ![...succeeded].some((t) => !META_TOOLS.has(t) && !HARNESS_PSEUDO_TOOLS.has(t));
   const out: UnbackedClaim[] = [];
   for (const pattern of [ACTIVE_CLAIM, PASSIVE_CLAIM]) {
     for (const m of answer.matchAll(pattern)) {
@@ -156,7 +173,15 @@ export function unbackedClaimedActions(
       if (NOT_A_CLAIM.test(before) || answer[idx + sentence.length - before.length] === "?") continue;
       if (pattern === PASSIVE_CLAIM && thirdPartyDoer(answer.slice(idx + m[0].length))) continue;
       const matched = matchingTools(stem, sentence, candidates);
-      if (matched.length === 0 || matched.some((t) => succeeded.has(t))) continue;
+      if (matched.length === 0) {
+        const agentClaim = pattern === ACTIVE_CLAIM || /\bbeen\b/i.test(m[0]);
+        const phrase = sentence.trim().slice(0, 120);
+        if (noReceipts && agentClaim && OUTWARD_STEMS.has(stem) && !out.some((c) => c.phrase === phrase)) {
+          out.push({ phrase, tools: [] });
+        }
+        continue;
+      }
+      if (matched.some((t) => succeeded.has(t))) continue;
       const phrase = sentence.trim().slice(0, 120);
       if (!out.some((c) => c.phrase === phrase)) out.push({ phrase, tools: matched });
     }
@@ -200,6 +225,9 @@ export function requestedActionTools(
 
 /** The outstanding item an unbacked claim becomes (exit gate list, verifier reason). */
 export function describeUnbackedClaim(c: UnbackedClaim): string {
+  if (c.tools.length === 0) {
+    return `the answer says "${c.phrase}" but no tool call succeeded in this run: do it with a tool, or say plainly that it was not done`;
+  }
   const names = c.tools.map((t) => `\`${t}\``).join(" or ");
   return `the answer says "${c.phrase}" but ${names} never ran successfully: call it, or say plainly that it was not done`;
 }

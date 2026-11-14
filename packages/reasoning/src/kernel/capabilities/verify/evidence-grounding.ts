@@ -278,7 +278,7 @@ export function detectFabricatedMeasurement(
   output: string,
   evidence: string,
   tolerance = 0.01,
-): { readonly ok: true } | { readonly ok: false; readonly violations: readonly string[] } {
+): { readonly ok: true } | { readonly ok: false; readonly violations: readonly string[]; readonly hard: boolean } {
   const claims = extractMeasurementClaims(output);
   if (claims.length === 0) return { ok: true };
   const corpus = extractAllNumbers(evidence);
@@ -291,6 +291,10 @@ export function detectFabricatedMeasurement(
     c.kind.tag === "time" && corpusSet.has(c.value) ? [{ value: c.value, seconds: c.kind.seconds }] : [],
   );
   const violations: string[] = [];
+  // `hard`: a violating claim carries its own unit (ms, ops/s, MB/s, Nx faster), so
+  // the number is a literal anchor no observation holds. A bare percent is read as a
+  // measurement only from a perf word in its sentence (a semantic category): it advises.
+  let hard = false;
   for (const claim of claims) {
     const grounded =
       corpus.some(
@@ -298,10 +302,11 @@ export function detectFabricatedMeasurement(
       ) || isDerivedMeasurement(claim, corpusSet, cited, timeOperands);
     if (!grounded) {
       violations.push(`fabricated measurement "${claim.phrase}" — no tool observation produced this value`);
+      if (claim.kind.tag !== "percent") hard = true;
     }
   }
   if (violations.length === 0) return { ok: true };
-  return { ok: false, violations };
+  return { ok: false, violations, hard };
 }
 
 /**

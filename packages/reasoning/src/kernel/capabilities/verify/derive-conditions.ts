@@ -25,7 +25,6 @@ import {
   artifactProduced,
   outputContains,
   sideEffectLanded,
-  surfaceHasSubstantiveTool,
   toolCalled,
   WRITING_TOOL_NAMES,
   type PostCondition,
@@ -754,7 +753,11 @@ export function seedPostConditions(
   // cannot re-derive from that prompt either.
   const conditions = rails.seedRunContract?.postConditions ?? derived;
   if (conditions.length === 0) return isStepScope(rails) || rails.seedRunContract !== undefined ? [] : undefined;
-  if (surfaceHasSubstantiveTool(surface)) return [...conditions];
+  // Basis rule (terminal-decision audit 2026-11-14): `SideEffectLanded` is a
+  // verb-x-noun guess from prose, never a declared requirement, so it is advisory
+  // on EVERY surface (the contract's `action-required` item carries the same
+  // guess to the exit gate as guidance, contract-outstanding.ts). The derivation
+  // is kept so a caller can still read it; the seed never stores it.
   return conditions.filter((c) => c.kind !== "SideEffectLanded");
 }
 

@@ -577,11 +577,16 @@ export const defaultVerifier: Verifier = {
       // "Let me summarize:\n<content>" do not trip it. Severity: reject — the
       // kernel suppresses the mid-thought (→ honest failure / bounded retry)
       // instead of shipping it as success.
+      // Basis demotion (terminal-decision audit 2026-11-14): the check reads the
+      // last line's shape with a regex (heuristic basis), so it WARNS on the
+      // receipt and never rejects alone. The exit gate still denies a model exit
+      // whose text announces a next step (exit-gate.ts answerGap), which is where
+      // the model is told to write the answer instead.
       const continuation = detectContinuationIntent(ctx.content);
       checks.push({
         name: "output-not-continuation-intent",
         passed: !continuation.isContinuation,
-        severity: continuation.isContinuation ? "reject" : "pass",
+        severity: continuation.isContinuation ? "warn" : "pass",
         reason: continuation.isContinuation ? continuation.reason : undefined,
       });
 
@@ -635,11 +640,14 @@ export const defaultVerifier: Verifier = {
             ctx.content,
           );
         const fab = detectFabricatedMeasurement(ctx.content, corpus);
+        // Rejects only on a `hard` violation: a unit-bearing number that no
+        // observation holds (a literal anchor). A percent read from a perf word
+        // in its sentence is a semantic guess and warns (evidence-grounding.ts).
         checks.push({
           name: "output-not-fabricated-measurement",
           passed: fab.ok,
           severity:
-            fab.ok ? "pass" : fabMode === "block" && !(corpusEmpty && !benchmarkShaped) ? "reject" : "warn",
+            fab.ok ? "pass" : fab.hard && fabMode === "block" && !(corpusEmpty && !benchmarkShaped) ? "reject" : "warn",
           reason: fab.ok
             ? undefined
             : corpusEmpty && !benchmarkShaped

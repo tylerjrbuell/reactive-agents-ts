@@ -122,10 +122,15 @@ describe("K1: a tool-less direct run is never held to a side effect quoted in it
     expect(seedPostConditions(derived, metaOnly)).toEqual([]);
   });
 
-  it("keeps SideEffectLanded when a substantive tool could land it, or the surface is unknown", () => {
+  // Declared-vs-heuristic rule (terminal-decision audit 2026-11-14): this test used
+  // to pin that a substantive surface KEEPS the derived SideEffectLanded as a
+  // blocking condition. It is a verb-x-noun guess from prose (0/12 precision in
+  // the audit), so the seed now drops it on every surface; the contract's
+  // action-required item reaches the gate as advisory guidance instead.
+  it("drops the derived SideEffectLanded on every surface (heuristic basis never blocks)", () => {
     const derived = deriveConditions(TRANSCRIPT_TASK, []);
-    expect(seedPostConditions(derived, [{ name: "notes-create" }])).toContainEqual(sideEffectLanded());
-    expect(seedPostConditions(derived, undefined)).toContainEqual(sideEffectLanded());
+    expect(seedPostConditions(derived, [{ name: "notes-create" }])).toEqual([]);
+    expect(seedPostConditions(derived, undefined)).toEqual([]);
     expect(seedPostConditions([], [])).toBeUndefined();
   });
 
@@ -141,10 +146,11 @@ describe("K1: a tool-less direct run is never held to a side effect quoted in it
       expect(derived).not.toContainEqual(sideEffectLanded());
       expect(seedPostConditions(derived, surface)).not.toContainEqual(sideEffectLanded());
     }
-    // A governed external action stays derived, whatever the surface holds.
+    // A governed external action is still DERIVED, but only as an advisory guess:
+    // the seed never stores it, so it cannot hold the run back (basis rule above).
     const sendTask = "Working directory for this task: /tmp/x\n\nSend an email to the team with the report.";
     expect(deriveConditions(sendTask, [])).toContainEqual(sideEffectLanded());
-    expect(seedPostConditions(deriveConditions(sendTask, []), surface)).toContainEqual(sideEffectLanded());
+    expect(seedPostConditions(deriveConditions(sendTask, []), surface)).not.toContainEqual(sideEffectLanded());
   });
 
   it("the side-effect steer never claims a tool call was made", () => {

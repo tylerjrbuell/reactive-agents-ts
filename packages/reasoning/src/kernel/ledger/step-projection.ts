@@ -116,7 +116,8 @@ export function stepToEntries(step: ReasoningStep, iteration: number): LedgerEnt
         {
           kind: "tool-result",
           iteration,
-          success: obs?.success ?? true,
+          // A guard's reply is not a tool result: it is never recorded as a success.
+          success: meta?.frameworkInstrumentation === GUARD_OBSERVATION_TAG ? false : (obs?.success ?? true),
           preview: ev.preview,
           ...(toolName !== undefined ? { toolName } : {}),
           ...(meta?.toolCallId !== undefined ? { toolCallId: meta.toolCallId } : {}),

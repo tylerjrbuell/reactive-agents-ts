@@ -76,14 +76,10 @@ import { deliverableTextOf } from "../capabilities/reason/assistant-turn.js";
 import { unresolvedThoughtSet } from "../capabilities/reflect/unresolved-steps.js";
 import { detectContinuationIntent } from "../capabilities/verify/quality-utils.js";
 import { verifyDelivery } from "../capabilities/verify/delivery-authority.js";
-import { describeUnmet } from "../capabilities/verify/post-conditions.js";
-import { describeUnbackedClaim, succeededToolNames, unbackedClaimedActions } from "../capabilities/verify/claimed-actions.js";
-import { resolveFabricationGuardMode } from "../capabilities/verify/evidence-grounding.js";
-import { deliveryConditions } from "../contract/declared-deliverables.js";
-import { unlandedActionRequirements } from "../contract/satisfiability.js";
 import { emitGuardFired } from "../utils/diagnostics.js";
 import { terminate, type TerminateOptions, type TerminateReason } from "./terminate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
+import { basisOfOutstanding, classifyContractOutstanding } from "./contract-outstanding.js";
 import { unavailableRequiredTools, unavailableToolItem } from "./runner-helpers/tool-health.js";
 import {
   assembleDeliverable,
@@ -290,50 +286,20 @@ function answerGap(state: KernelState, d: Deliverable): string | undefined {
     : undefined;
 }
 
-/** `describeUnmet` phrases a list as one sentence; the gate lists items one by one. */
-const itemOf = (sentence: string): string =>
-  sentence.replace(/^You still must:\s*/, "").replace(/\.$/, "");
-
 /**
- * The contract part of {@link outstandingItems}: required tools not yet called
- * and delivery conditions `output` does not meet. No answer-shape item, so a
- * mid-run reader (the duplicate-call note) names the work, not the answer text.
+ * The contract part of {@link outstandingItems}: the BLOCKING items (declared or
+ * evidence basis) - required tools not yet called, delivery conditions `output`
+ * does not meet, an action the answer claims that nothing backs. Heuristic-basis
+ * items are advisory and live in `classifyContractOutstanding(...).advisory`.
+ * No answer-shape item, so a mid-run reader (the duplicate-call note) names the
+ * work, not the answer text.
  */
 export function contractOutstanding(
   state: KernelState,
   input: KernelInput,
   output: string,
 ): readonly string[] {
-  const out: string[] = [];
-  const add = (item: string) => {
-    if (item.length > 0 && !out.includes(item)) out.push(item);
-  };
-  for (const tool of missingRequiredToolsForInput(state, input)) {
-    add(`call the \`${tool}\` tool`);
-  }
-  const conditions = deliveryConditions(state.meta) ?? [];
-  if (conditions.length > 0) {
-    const { unmet } = verifyDelivery(conditions, {
-      steps: state.steps,
-      output,
-      ledger: state.ledger,
-    });
-    for (const c of unmet) add(itemOf(describeUnmet([c])));
-  }
-  // A declared external action nothing in the run landed (meta-only calls do not count).
-  for (const description of unlandedActionRequirements(state.meta.runContract, state.steps, state.ledger)) {
-    add(`perform the requested action: ${description}`);
-  }
-  // An action the answer claims that no successful tool call backs (claimed-actions.ts).
-  // A required tool already named above is not repeated. Respects the fabrication-guard off switch.
-  if (resolveFabricationGuardMode(input.fabricationGuard) !== "off") {
-    const missing = new Set(missingRequiredToolsForInput(state, input));
-    const tools = (input.availableToolSchemas ?? []).map((t) => t.name).filter((t) => !missing.has(t));
-    for (const c of unbackedClaimedActions(output, tools, succeededToolNames(state.steps))) {
-      add(describeUnbackedClaim(c));
-    }
-  }
-  return out;
+  return classifyContractOutstanding(state, input, output).blocking.map((b) => b.text);
 }
 
 /**
@@ -595,7 +561,11 @@ export function gateContent(record: ExitGateRecord): string {
         (record.answerTurnAt !== undefined
           ? "Tools are not available on this turn: write the answer now, using the tool results you already have. "
           : "Do these now, using the tool results you already have. ") +
-        "Do not describe a next step or ask for permission."
+        "Do not describe a next step or ask for permission." +
+        // Heuristic-basis items advise, never block: the model may act on them or say plainly why not.
+        (record.advisory !== undefined && record.advisory.length > 0
+          ? `\nAlso consider (not required): ${record.advisory.join("; ")}`
+          : "")
       : record.gateDecision === "handoff"
         ? `exit gate: ${record.proposedBy} stopped the run with ${record.outstanding.length} item(s) unfinished; the model's draft ships as a partial, or the run fails with its evidence attached. Unfinished: ${record.outstanding.join("; ")}`
         : `exit gate: accepted ${record.proposedBy} exit`;
@@ -641,6 +611,10 @@ export function emitDisposition(taskId: string, state: KernelState, record: Exit
       proposedBy: record.proposedBy,
       gateDecision: record.gateDecision,
       outstanding: record.outstanding,
+      // Basis of each outstanding item (declared | evidence | heuristic) and the
+      // heuristic items that only advised: a zero-token audit query.
+      outstandingBasis: record.outstandingBasis ?? [],
+      advisory: record.advisory ?? [],
       handoffSynthesis: false,
     },
   });
@@ -724,11 +698,13 @@ export function proposeExit(args: {
       ...unavailableLines,
       ...(proposal.outstanding ?? []),
     ];
+    const classified = classifyContractOutstanding(state, args.input, deliverableToContent(judged));
+    const outstandingBasis = basisOfOutstanding(outstanding, classified, unavailableLines);
     const unmeetableOnly = unavailableLines.length > 0 && outstanding.every((item) => unavailableLines.includes(item));
     const progress = writeProgressArgs(state);
     // Only the answer is missing (no required tool, no unmet delivery
     // condition): a denial is an answer turn, and the next think call withholds tools.
-    const answerOnly = contractOutstanding(state, args.input, deliverableToContent(judged)).length === 0;
+    const answerOnly = classified.blocking.length === 0;
     const decision = disposeExit({
       ...(progress === undefined
         ? {}
@@ -752,6 +728,8 @@ export function proposeExit(args: {
       gateDecision: decision,
       reason: progressDenial ? `${PROGRESS_DENIAL_REASON}:${proposal.reason}` : proposal.reason,
       outstanding,
+      outstandingBasis,
+      ...(classified.advisory.length > 0 ? { advisory: classified.advisory } : {}),
       ...(progress === undefined ? {} : { writesSatisfied: progress.met }),
       ...(answerTurn ? { answerTurnAt: state.llmCalls ?? 0 } : {}),
     };

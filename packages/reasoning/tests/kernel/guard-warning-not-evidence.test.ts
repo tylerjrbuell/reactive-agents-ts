@@ -111,7 +111,10 @@ describe("guard-authored observations (seam pin)", () => {
       observationResult: makeObservationResult("probe", true, warning),
     });
     const [entry] = stepToEntries(step, 3);
-    expect(entry).toMatchObject({ kind: "tool-result", toolName: "probe", success: true, harnessAuthored: true });
+    // A guard's reply is not a tool result: the ledger never records it as a
+    // success, even though the step's own result flag says true (2026-11-14: a
+    // consumer counting ledger `success` was fooled by "you have already called").
+    expect(entry).toMatchObject({ kind: "tool-result", toolName: "probe", success: false, harnessAuthored: true });
   });
 
   it("a real tool observation is not marked", () => {

@@ -28,6 +28,7 @@ import { isSideEffectLanded } from "../capabilities/verify/post-conditions.js";
 import type { ReasoningStep } from "../../types/index.js";
 import type { RunLedger } from "../ledger/run-ledger.js";
 import type { RunContract } from "./run-contract.js";
+import { requirementBasis, type RequirementBasis } from "./requirement-basis.js";
 
 export interface ActionSatisfiabilityInput {
   /** The compiled run contract (reads its `action-required` requirements). */
@@ -119,7 +120,20 @@ export function unlandedActionRequirements(
   steps: readonly ReasoningStep[],
   ledger?: RunLedger,
 ): readonly string[] {
+  return unlandedActions(contract, steps, ledger).map((a) => a.description);
+}
+
+/**
+ * {@link unlandedActionRequirements} with each requirement's basis. An action
+ * inferred from task prose is `heuristic` (advisory); the exit gate blocks only
+ * on the `declared` ones (requirement-basis.ts).
+ */
+export function unlandedActions(
+  contract: RunContract | undefined,
+  steps: readonly ReasoningStep[],
+  ledger?: RunLedger,
+): readonly { readonly description: string; readonly basis: RequirementBasis }[] {
   const actions = (contract?.requirements ?? []).filter((r) => r.kind === "action-required");
   if (actions.length === 0 || isSideEffectLanded(steps, ledger)) return [];
-  return actions.map((a) => a.spec.description);
+  return actions.map((a) => ({ description: a.spec.description, basis: requirementBasis(a) }));
 }
