@@ -50,6 +50,37 @@ describe("extractCurrentTurn", () => {
   }
 });
 
+describe("extractCurrentTurn — public index export", () => {
+  it("is reachable from the package index with the shared markers", async () => {
+    const idx = await import("../../src/index.js");
+    expect(idx.extractCurrentTurn).toBe(extractCurrentTurn);
+    expect(withHistoryBlock).toContain(idx.HISTORY_BLOCK_MARKER);
+    expect(withHistoryBlock).toContain(idx.CURRENT_MESSAGE_MARKER);
+    expect(withNewRequest).toContain(idx.NEW_REQUEST_MARKER);
+  });
+  it("multi-turn history: only the last message survives", () => {
+    const task =
+      "--- Conversation history ---\nUser: a\nAssistant: b\nUser: c\nAssistant: d\n\n--- Current message ---\nfinal ask";
+    expect(extractCurrentTurn(task).text.trim()).toBe("final ask");
+  });
+  it("history without a current-message marker is not stripped", () => {
+    const t = extractCurrentTurn("--- Conversation history ---\nUser: a");
+    expect(t.historyStripped).toBe(false);
+    expect(t.offset).toBe(0);
+  });
+  it("marker text inside user content: the LAST marker wins", () => {
+    const task = `${HISTORY}\n\n--- Current message ---\nexplain "--- Current message ---" please`;
+    const t = extractCurrentTurn(task);
+    expect(t.historyStripped).toBe(true);
+    expect(t.text.trim()).toBe('" please');
+  });
+  it("empty current message yields empty text, history stripped", () => {
+    const t = extractCurrentTurn(`${HISTORY}\n\n--- Current message ---\n`);
+    expect(t.historyStripped).toBe(true);
+    expect(t.text.trim()).toBe("");
+  });
+});
+
 describe("compileRunContract — history never reaches the contract", () => {
   it("control: the same history compiled as the task WOULD derive history requirements", () => {
     const polluted = compileRunContract(HISTORY);

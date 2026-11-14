@@ -185,6 +185,13 @@ export type {
   AcceptanceTier,
   CompileRunContractOptions,
 } from "./kernel/contract/run-contract.js";
+export {
+  extractCurrentTurn,
+  HISTORY_BLOCK_MARKER,
+  CURRENT_MESSAGE_MARKER,
+  NEW_REQUEST_MARKER,
+} from "./kernel/contract/current-turn.js";
+export type { CurrentTurn } from "./kernel/contract/current-turn.js";
 export { decomposeRequirements, shouldDecompose } from "./kernel/contract/decompose.js";
 export type { DecomposeOptions } from "./kernel/contract/decompose.js";
 

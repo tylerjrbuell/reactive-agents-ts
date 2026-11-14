@@ -26,7 +26,14 @@ export interface CurrentTurn {
   readonly historyStripped: boolean;
 }
 
-const LITERAL_MARKERS = ["New request:", "--- Current message ---"] as const;
+/** Header `formatHistoryBlock` (runtime) puts ahead of inlined prior turns. */
+export const HISTORY_BLOCK_MARKER = "--- Conversation history ---";
+/** Separator `withHistoryBlock` (runtime) puts between the history block and the current message. */
+export const CURRENT_MESSAGE_MARKER = "--- Current message ---";
+/** Separator the chat contextSummary composition puts before the current ask. */
+export const NEW_REQUEST_MARKER = "New request:";
+
+const LITERAL_MARKERS = [NEW_REQUEST_MARKER, CURRENT_MESSAGE_MARKER] as const;
 const GATEWAY_MARKER = /You are in a live conversation with [^\n]*\n\nUser: /g;
 
 /**
@@ -54,6 +61,10 @@ function trailingContextStart(task: string, from: number): number {
 }
 
 /**
+ * Public entry for consumers that must not read prior turns as intent.
+ * Last marker wins; marker text inside the user's own message therefore moves
+ * the boundary forward (documented, not escaped).
+ *
  * Locate the current turn inside a (possibly history-prefixed) task string.
  * Pure, deterministic. No marker present ⇒ `{ text: task, offset: 0 }`
  * (byte-identical to the pre-fix compile input). Injected trailing context
@@ -65,7 +76,7 @@ export function extractCurrentTurn(task: string): CurrentTurn {
     const idx = task.lastIndexOf(marker);
     if (idx >= 0) end = Math.max(end, idx + marker.length);
   }
-  if (task.includes("--- Conversation history ---")) {
+  if (task.includes(HISTORY_BLOCK_MARKER)) {
     for (const m of task.matchAll(GATEWAY_MARKER)) {
       end = Math.max(end, (m.index ?? 0) + m[0].length);
     }
