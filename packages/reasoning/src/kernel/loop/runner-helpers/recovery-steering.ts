@@ -26,6 +26,7 @@ import {
   GUARD_OBSERVATION_TAG,
 } from "../../../kernel/state/kernel-constants.js";
 import { canSubstitute } from "./tool-substitution.js";
+import { brokenTools, type BrokenTool } from "./tool-health.js";
 
 export type ToolFailureRecovery = {
   readonly failedUnresolved: readonly string[];
@@ -43,6 +44,13 @@ export type ToolFailureRecovery = {
   readonly policyBlocked?: readonly string[];
   /** Truncated refusal text per policy-blocked tool — the tool's own remedy re-surfaced by the steer. */
   readonly policyErrors?: Readonly<Record<string, string>>;
+  /**
+   * Subset of `failedUnresolved` that is persistently failing ({@link brokenTools}:
+   * >= BROKEN_TOOL_STREAK consecutive failures), with the alternate that already
+   * succeeded when the run has routed around it. The steer must never say
+   * "retry" for these.
+   */
+  readonly broken?: readonly BrokenTool[];
 };
 
 export type RecoverySteeringKind = "stall" | "loop";
@@ -100,6 +108,27 @@ export function buildRecoverySteeringGuidance(
     return (
         `Recovery required: loop detected after policy-blocked tool ${blockedTool}.${remedy} ` +
         `Retrying other tools cannot help — fix ${blockedTool}'s own arguments per the error before completion. ${progress}`
+    );
+  }
+
+  // Broken-tool arm: a tool that has failed over and over is unavailable, not
+  // mistyped. NEVER say "retry" for it; if the run already routed around it,
+  // say so (the campaign's misleading-guidance case: "retry web-search" after
+  // the model had switched to http-get).
+  const dead = recovery.broken?.[0];
+  if (dead !== undefined) {
+    const down = `${dead.toolName} is unavailable (it failed ${dead.failureStreak} times in a row)`;
+    if (dead.routedVia !== undefined) {
+      return (
+        `Recovery required: ${down} and you already have results from ${dead.routedVia}. ` +
+        `Do not call ${dead.toolName} again; continue the task with the evidence you have. ${progress}`
+      );
+    }
+    const alt = recovery.alternativeCandidates[0];
+    return (
+      `Recovery required: ${down}; retrying it will not help. ` +
+      (alt !== undefined ? `Use ${alt} instead, or ` : "") +
+      `deliver what you have and state that ${dead.toolName} was unavailable. ${progress}`
     );
   }
 
@@ -237,6 +266,7 @@ export function getToolFailureRecoveryFromSteps(
     alternativeCandidates,
     policyBlocked,
     policyErrors,
+    broken: brokenTools(steps).filter((b) => failedUnresolvedSet.has(b.toolName)),
   };
 }
 

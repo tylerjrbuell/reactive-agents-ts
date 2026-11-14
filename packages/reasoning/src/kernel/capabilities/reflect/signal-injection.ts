@@ -88,13 +88,19 @@ export function recoveryTarget(recovery: {
   readonly failedUnresolved: readonly string[];
   readonly alternativeCandidates: readonly string[];
   readonly policyBlocked?: readonly string[];
+  readonly broken?: readonly { readonly toolName: string; readonly routedVia?: string }[];
 }): SignalTarget {
   // A policy refusal never names an alternate (recovery-steering fix B): the
   // steer asks for a retry of the SAME tool, so that is what to classify.
   const blocked = recovery.policyBlocked?.[0];
   if (blocked !== undefined) return { policy: "denied-tool-retry", tool: blocked };
+  // A broken tool is never retried (the steer says so): classify against the
+  // route the run took around it, or the first alternate; else nothing to check.
+  const dead = recovery.broken?.[0];
+  if (dead?.routedVia !== undefined) return { policy: "alternate-tool", tool: dead.routedVia };
   const alternate = recovery.alternativeCandidates[0];
   if (alternate !== undefined) return { policy: "alternate-tool", tool: alternate };
+  if (dead !== undefined) return { policy: "other" };
   const failed = recovery.failedUnresolved[0];
   return failed !== undefined ? { policy: "denied-tool-retry", tool: failed } : { policy: "other" };
 }

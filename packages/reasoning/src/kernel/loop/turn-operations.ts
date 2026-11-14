@@ -41,7 +41,7 @@
  *   think → grounding-redirect-trace → low-delta-guard → auto-checkpoint →
  *   scratchpad-sync → reactive-observer → dispatcher-early-stop →
  *   dispatcher-strategy-switch → iteration-progress →
- *   repeated-failure-redirect → execution-lane → stall → ics-nudge →
+ *   repeated-failure-redirect → execution-lane → broken-tool-exit → stall → ics-nudge →
  *   oracle-gate → primary-tools-exit → loop-detection → required-tools-guard →
  *   post-iteration-snapshot → learn-write
  */
@@ -67,6 +67,7 @@ import { handleDispatcherEarlyStop } from "./iterate-early-stop-seam.js";
 import { runAutoCheckpointStep, applyExecutionLane, runIcsNudgeStep } from "./iterate-guard-seams.js";
 import { forkIterLearnWrite } from "./iterate-learn-seam.js";
 import { reserveBudgetAnswerTurn } from "./budget-answer-turn.js";
+import { proposeBrokenToolExit } from "./broken-tool-exit.js";
 
 /** Values one operation hands a later one within a single pass (reset per pass). */
 export interface TurnPassLocals {
@@ -189,6 +190,7 @@ export const KERNEL_TURN_OPERATIONS = [
     proposesExit: true,
   },
   { name: "execution-lane", reads: ["state.evidence"], writes: ["state.meta.executionLane", "state.meta.missingRequiredTools", "pass.laneDecision"], proposesExit: false },
+  { name: "broken-tool-exit", reads: ["state.steps", "state.evidence", "state.status"], writes: ["state"], proposesExit: true },
   {
     name: "stall",
     reads: ["state", "carry.consecutiveStalled", "carry.prevArtifactCount", "pass.toolsThisStep", "pass.laneDecision"],
@@ -262,7 +264,7 @@ const NEXT = "next" as const;
 export type SeamOperationName =
   | "run-control-checkpoint" | "iteration-start" | "recall" | "think" | "auto-checkpoint"
   | "scratchpad-sync" | "reactive-observer" | "dispatcher-early-stop"
-  | "iteration-progress" | "execution-lane" | "ics-nudge" | "primary-tools-exit"
+  | "iteration-progress" | "execution-lane" | "broken-tool-exit" | "ics-nudge" | "primary-tools-exit"
   | "post-iteration-snapshot" | "learn-write";
 
 /** Operations with no script-anchored content (bodies moved verbatim from iterate-pass.ts). */
@@ -496,6 +498,16 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
     t.pass.laneDecision = laneSeam.laneDecision;
     return Effect.succeed("next");
   },
+
+  "broken-tool-exit": (t) =>
+    Effect.gen(function* () {
+      // A required tool that keeps failing is an unsatisfiable requirement: end
+      // honestly now instead of stalling to the cap (broken-tool-exit.ts).
+      const exit = yield* proposeBrokenToolExit({ state: t.state, input: t.currentInput, options: t.currentOptions });
+      if (exit === null) return NEXT;
+      t.state = exit.state;
+      return exit;
+    }),
 
   "ics-nudge": (t, cfg) =>
     Effect.gen(function* () {

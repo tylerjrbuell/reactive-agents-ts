@@ -28,6 +28,7 @@ import { makeStep } from "../../capabilities/sense/step-utils.js";
 import { contributeGuidance } from "../../state/guidance-channel.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
+import { brokenTools } from "./tool-health.js";
 
 /** Intervention actor stamped on every graduated loop-guidance step. */
 export const LOOP_GUIDANCE_ACTOR = "loop-guidance";
@@ -77,9 +78,18 @@ export function applyLoopGuidance(args: {
     const budget = args.budgetOverride ?? loopGuidanceBudget(args.maxIterations, args.longHorizon);
     const used = loopGuidanceCycles(state.steps);
     if (used >= budget) return null;
+    // Name a persistently failing tool (tool-health.ts) instead of leaving the
+    // model to guess why it is looping; say whether it already has a route around it.
+    const broken = brokenTools(state.steps);
+    const brokenNote = broken
+      .map((b) =>
+        ` ${b.toolName} is unavailable (it failed ${b.failureStreak} times in a row): do not call it again` +
+        (b.routedVia !== undefined ? `; you already have results from ${b.routedVia}.` : "."),
+      )
+      .join("");
     const text =
       `${detection.message} (loop warning ${used + 1} of ${budget}: the run is stopped only if this ` +
-      `continues with no progress.) Try a different approach, or deliver the answer you have.`;
+      `continues with no progress.)${brokenNote} Try a different approach, or deliver the answer you have.`;
     yield* emitGuardFired({
       taskId: args.taskId,
       iteration: state.iteration,

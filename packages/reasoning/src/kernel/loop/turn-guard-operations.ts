@@ -33,6 +33,7 @@ import { transitionState } from "../state/kernel-state.js";
 import { contributeGuidance } from "../state/guidance-channel.js";
 import { applyStrategySwitch } from "./runner-helpers/strategy-switch.js";
 import { openSignal } from "../state/signal-ledger.js";
+import { recoveryTarget } from "../capabilities/reflect/signal-injection.js";
 import { runStallDeliverableStep } from "./runner-helpers/stall-deliverable.js";
 import {
   assessmentFailuresAreArgVarying,
@@ -411,11 +412,16 @@ export const GUARD_TURN_OPERATIONS: Omit<TurnOperationImpls, SeamOperationName> 
             }
 
             t.failureRecoveryRedirects++;
+            // A broken tool is steered AWAY from (recovery-steering's broken arm):
+            // classify against the route around it, never a retry of the same tool.
+            const brokenTarget = (repeatedRecovery.broken?.length ?? 0) > 0 ? recoveryTarget(repeatedRecovery) : undefined;
             const recoveryTargetPolicy =
-              (repeatedRecovery?.alternativeCandidates?.length ?? 0) > 0
+              brokenTarget?.policy ??
+              ((repeatedRecovery?.alternativeCandidates?.length ?? 0) > 0
                 ? ("alternate-tool" as const)
-                : ("denied-tool-retry" as const);
+                : ("denied-tool-retry" as const));
             const recoveryTargetTool =
+              brokenTarget?.tool ??
               (repeatedRecovery?.alternativeCandidates?.[0] as string | undefined) ??
               repeated.toolName;
             const openedRecovery = openSignal(t.state.signalLedger ?? [], {

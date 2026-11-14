@@ -84,6 +84,7 @@ import { unlandedActionRequirements } from "../contract/satisfiability.js";
 import { emitGuardFired } from "../utils/diagnostics.js";
 import { terminate, type TerminateOptions, type TerminateReason } from "./terminate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
+import { unavailableRequiredTools, unavailableToolItem } from "./runner-helpers/tool-health.js";
 import {
   assembleDeliverable,
   collectValidatedObservations,
@@ -548,6 +549,12 @@ export function disposeExit(args: {
    */
   readonly answerOnly?: boolean;
   /**
+   * Everything outstanding is a required tool the run declared unavailable:
+   * no denial or nudge can make the work land, so the exit ends (handoff with
+   * material, otherwise the guard's own failure stands).
+   */
+  readonly unmeetableOnly?: boolean;
+  /**
    * `harness.budgetAnswerTurn` (opt-in, ablation 2026-11-10). Only when true
    * may an answer-only denial take the run's last think call at iteration
    * `maxIterations - 1`; absent, a soft guard there gets no extra turn.
@@ -555,6 +562,7 @@ export function disposeExit(args: {
   readonly budgetAnswerTurn?: boolean;
 }): ExitGateDecision {
   if (args.outstanding.length === 0) return "accept";
+  if (args.unmeetableOnly === true) return args.hasMaterial ? "handoff" : "accept";
   // The model's answer is not a stop: deny it while work is outstanding (the cap bounds the run).
   if (args.proposedBy === "model") return "deny";
   // One more think fits while `llmCalls < maxIterations` (the runner's own loop
@@ -701,7 +709,19 @@ export function proposeExit(args: {
       deliverableToContent(proposal.deliverable).trim().length === 0
         ? assembleDeliverable(state)
         : proposal.deliverable;
-    const outstanding = outstandingItems(state, args.input, judged);
+    // A required tool the run gave up on (tool-health.ts: a streak of failures,
+    // still unmet) cannot be "called now": its plain "call the `tool` tool"
+    // item is REPLACED by the unavailable line, so every exit's result says why
+    // the requirement went unmet, and an exit left with only such lines is not
+    // denied for work that cannot land (`unmeetableOnly`).
+    const unavailable = unavailableRequiredTools(state, args.input);
+    const replaced = new Set(unavailable.map((b) => `call the \`${b.toolName}\` tool`));
+    const unavailableLines = unavailable.map(unavailableToolItem);
+    const outstanding = [
+      ...outstandingItems(state, args.input, judged).filter((item) => !replaced.has(item)),
+      ...unavailableLines,
+    ];
+    const unmeetableOnly = unavailableLines.length > 0 && outstanding.every((item) => unavailableLines.includes(item));
     const progress = writeProgressArgs(state);
     // Only the answer is missing (no required tool, no unmet delivery
     // condition): a denial is an answer turn, and the next think call withholds tools.
@@ -719,6 +739,7 @@ export function proposeExit(args: {
       llmCalls: state.llmCalls ?? 0,
       maxIterations: args.maxIterations,
       answerOnly,
+      unmeetableOnly,
       budgetAnswerTurn: args.input.harness?.budgetAnswerTurn === true,
     });
     const progressDenial = decision === "deny-once" && exitDeniedBefore(state.steps);
