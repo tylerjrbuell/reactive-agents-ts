@@ -17,7 +17,13 @@ import type { ReactiveAgentBuilder } from "../builder.js";
 import type { ChannelAgentHandle } from "./channel-router-resolver.js";
 
 /** Token budget for the acknowledgement completion: one short sentence. */
-export const ACK_MAX_TOKENS = 60;
+export const ACK_MAX_TOKENS = 80;
+
+/**
+ * Why a model ack came back unusable (the router then sends the canned text). The router owns
+ * the `timeout` case (it bounds the port); the runtime can only see these.
+ */
+export type AckFallbackReason = "empty" | "thinking_only" | "error";
 
 const ACK_SYSTEM_PROMPT =
   "You are replying in a chat. The user's message follows. Write ONE short sentence (under 20 words) " +
@@ -64,9 +70,17 @@ export const drainWithNarration = async (
   return Promise.reject("stream ended without a completion");
 };
 
-/** `RoutedSession["acknowledge"]` over a plain completion; fails soft to an empty string. */
+/**
+ * `RoutedSession["acknowledge"]` over a plain completion; fails soft to an empty string.
+ * Extended thinking is switched off for the call: a thinking model otherwise spends the
+ * router's few-second bound (and the token budget) reasoning before any visible text.
+ * `onFallback` (optional) is told why an unusable result was returned.
+ */
 export const makeAcknowledge =
-  (complete: NonNullable<ChannelAgentHandle["complete"]>): NonNullable<RoutedSession["acknowledge"]> =>
+  (
+    complete: NonNullable<ChannelAgentHandle["complete"]>,
+    onFallback?: (reason: AckFallbackReason) => void,
+  ): NonNullable<RoutedSession["acknowledge"]> =>
   (turn: RoutedTurn) =>
     Effect.tryPromise({
       try: () =>
@@ -74,11 +88,19 @@ export const makeAcknowledge =
           systemPrompt: ACK_SYSTEM_PROMPT,
           messages: [{ role: "user", content: turn.text }],
           budgetTokens: ACK_MAX_TOKENS,
+          thinking: false,
         }),
       catch: (cause) => cause,
     }).pipe(
-      Effect.map((r) => r.message.trim()),
-      Effect.orElseSucceed(() => ""),
+      Effect.map((r) => {
+        const text = r.message.trim();
+        if (text.length === 0) onFallback?.((r.thinking ?? "").trim().length > 0 ? "thinking_only" : "empty");
+        return text;
+      }),
+      Effect.orElseSucceed(() => {
+        onFallback?.("error");
+        return "";
+      }),
     );
 
 /**

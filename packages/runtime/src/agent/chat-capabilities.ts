@@ -26,6 +26,12 @@ import type { TaskInput } from './task-input.js'
 /** The services the chat capabilities run against (contravariant: any richer runtime fits). */
 type ChatRuntime = ManagedRuntime.ManagedRuntime<LLMService | EventBus, never>
 
+type ChatEngineComplete = ChatEngineCapabilities['complete']
+/** `complete` plus a per-call `thinking` override in and the emitted `thinking` text out (engine ignores both). */
+export type ChatComplete = (
+    params: Parameters<ChatEngineComplete>[0] & { thinking?: boolean },
+) => Promise<Awaited<ReturnType<ChatEngineComplete>> & { thinking?: string }>
+
 /**
  * Plain conversational completion (no tools) through the LLM gateway.
  *
@@ -36,7 +42,7 @@ type ChatRuntime = ManagedRuntime.ManagedRuntime<LLMService | EventBus, never>
  * `StreamCompleted` with `success: false`.
  */
 export const makeChatComplete =
-    (runtime: ChatRuntime): ChatEngineCapabilities['complete'] =>
+    (runtime: ChatRuntime): ChatComplete =>
     async (params) => {
         const response = await runFacadeEffect(
             runtime,
@@ -49,12 +55,14 @@ export const makeChatComplete =
                         messages: params.messages,
                         systemPrompt: params.systemPrompt,
                         temperature: 0.7,
+                        ...(params.thinking !== undefined ? { thinking: params.thinking } : {}),
                     },
                 )
             }),
         )
         return {
             message: response.content,
+            ...(response.thinking ? { thinking: response.thinking } : {}),
             tokens: response.usage?.totalTokens,
             ...(typeof response.usage?.inputTokens === 'number'
                 ? { inputTokens: response.usage.inputTokens }

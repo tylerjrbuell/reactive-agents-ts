@@ -38,7 +38,9 @@ export interface ChannelAgentHandle {
     readonly systemPrompt: string;
     readonly messages: ReadonlyArray<{ readonly role: "user" | "assistant"; readonly content: string }>;
     readonly budgetTokens: number;
-  }) => Promise<{ readonly message: string }>;
+    /** Per-call extended-thinking override; `false` = no thinking this call. */
+    readonly thinking?: boolean;
+  }) => Promise<{ readonly message: string; readonly thinking?: string }>;
   /**
    * Optional. Empties the PERSISTED history of one session id (rejects when the store fails).
    * Without it, `reset` only clears the in-memory session.
