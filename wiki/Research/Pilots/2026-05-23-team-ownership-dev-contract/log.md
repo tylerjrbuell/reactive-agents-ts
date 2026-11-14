@@ -2193,3 +2193,16 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   tmp-before-after: "2.3G -> 2.4G"
   files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-P2b.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest.jsonl]
 ```
+
+```yaml
+- date: 2026-11-14
+  warden: ablation-warden
+  task: live-verification-pass-new-head
+  state: completed
+  confidence: 0.6
+  verdicts: {sideeffectlanded: "no signal (ceiling, no regression)", fail-fast: "works n=1 (qwen3.5 lh-1 8 it/46k tok vs 33 and 12 it baseline; honest error, output field leaks continuation)", abstain: "no signal", false-veto: "works small n (qwen3.5 LH 2->0)", code-execute: "errors legible, no success lift, new missing-sentinel mode", declared-vs-heuristic: "no new false-success class; advisory-softfail shipped a verifier-flagged answer", h3: "no tier moved beyond noise (qwen3.5 -8.5pp, gpt-oss +4.9pp, qwen3:4b +0.8pp)", lh: "qwen3.5 5/10->9/10, gpt-oss 10/10->8/10 (lh-enumerate-audit 2/2->0/2, model skipped inv-12, halted per brief)"}
+  evidence: {cells: "108 H3 + 20 LH + 1 lh-1 = 129 new, 0 voided", sha: "b167e4f66", not-run: "lh-1 gpt-oss/qwen3:4b, act5 probe x8"}
+  spend-usd: 0
+  tmp-before-after: "2.4G -> 2.4G"
+  files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-VERIFY.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest-verify.jsonl]
+```
