@@ -250,6 +250,15 @@ export function budgetAnswerTurnEnabled(): boolean {
 }
 
 /**
+ * Lean thinking: a tool-selection turn on a thinking model runs with thinking
+ * off (`kernel/capabilities/reason/lean-thinking.ts`). Default OFF pending an
+ * ablation-warden measurement. `RA_LEAN_THINKING=1` enables it.
+ */
+export function leanThinkingEnabled(): boolean {
+  return readFlag("RA_LEAN_THINKING") === "1";
+}
+
+/**
  * Compact call constraints: compact tool profiles (`names-only`,
  * `names-and-types`) keep the description sentences that limit a parameter's
  * values, and the compact reference lists enum values as `a|b|c`

@@ -41,6 +41,8 @@ export interface PrepareThinkGatewayCallParams {
   readonly toolProvenance?: ReadonlyMap<string, ToolProvenance>
   /** Forced-call retry only (act-or-answer.ts). Absent on every other call. */
   readonly toolChoice?: CompletionRequest["toolChoice"]
+  /** Lean thinking (lean-thinking.ts): `false` = this turn's request carries `thinking: false`. Absent otherwise. */
+  readonly thinking?: false
 }
 
 /**
@@ -296,7 +298,8 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
       ...(wireTools.length > 0 && context.toolCallingDriver.mode !== "text-parse" ? { tools: wireTools } : {}),
       ...(wantLogprobs ? { logprobs: true, topLogprobs: 5 } : {}),
       // Plan 9 #9: the one thinking-runaway retry runs with thinking off.
-      ...(isThinkingRunawayRetry(state) ? { thinking: false } : {}),
+      // Lean thinking (default OFF) sends the same override on a tool-selection turn.
+      ...(isThinkingRunawayRetry(state) || params.thinking === false ? { thinking: false } : {}),
       ...(params.toolChoice !== undefined ? { toolChoice: params.toolChoice } : {}),
     });
 

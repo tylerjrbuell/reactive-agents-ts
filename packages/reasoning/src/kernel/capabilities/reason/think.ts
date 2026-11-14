@@ -70,6 +70,7 @@ import { emitToolsWithheld, guidanceForToolsWithheld, refuseWithheldToolCall, sh
 import { answerTurnPending, emitAnswerTurn, guidanceForAnswerTurn } from "./answer-turn.js";
 import { buildWireParameterSchema } from "./wire-parameter-schema.js";
 import { callThinkActOrAnswer, planProactiveActOrAnswer, settleActOrAnswer } from "./act-or-answer.js";
+import { decideLeanThinking } from "./lean-thinking.js";
 import { compactToolDescription, type ToolSchema } from "../attend/tool-formatting.js";
 import { normalizeThinkResponse } from "./normalize-think-response.js";
 import { dispatchThinkResponse, type ThinkTurnParams } from "./dispatch-think-response.js";
@@ -729,7 +730,9 @@ export function handleThinking(
     // here). A recoverable provider failure is retried in this turn under the
     // run's recovery budget: resample, compact (2d) or back off (think-call-recovery.ts).
     const projectedState = state;
-    const prepare = { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas) };
+    // Lean thinking (harness switch, default OFF): a tool-selection turn on a thinking model asks for thinking off.
+    const leanThinking = yield* decideLeanThinking({ state, context, enabled: h.leanThinking === true, toolsWithheld: withholdTools, domainToolsOnWire: llmTools.length });
+    const prepare = { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas), ...(leanThinking ? { thinking: false as const } : {}) };
     // Act-or-answer (harness switch, default OFF → both calls below are no-ops
     // around callThinkWithRecovery): "proactive" forces the first request
     // of a turn that must act; a prose turn while tool work is outstanding is

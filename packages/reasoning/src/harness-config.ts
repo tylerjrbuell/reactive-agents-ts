@@ -39,6 +39,7 @@ import {
   stableToolListEnabled,
   compactCallConstraintsEnabled,
   budgetAnswerTurnEnabled,
+  leanThinkingEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -162,6 +163,16 @@ export interface HarnessConfig {
    */
   readonly budgetAnswerTurn?: boolean;
   /**
+   * Lean thinking. A tool-selection turn on a thinking-capable Ollama model
+   * (native function calling, a domain tool on the wire, tool work outstanding,
+   * the last tool result not a failure) is requested with `thinking: false`, so
+   * the model picks its tool without a reasoning chain. Every other turn thinks
+   * as before, and the thinking-runaway recovery is unchanged. Boolean only:
+   * llm-provider has no per-turn thinking-token budget.
+   * Default OFF pending a live ablation. (`RA_LEAN_THINKING=1`)
+   */
+  readonly leanThinking?: boolean;
+  /**
    * LLM recovery budget: how many recoverable provider failures on think turns
    * one run may retry. A think call that fails with a recoverable error class
    * is retried in the same turn instead of ending the run: malformed model
@@ -276,6 +287,8 @@ export interface ResolvedHarness {
   readonly compactCallConstraints?: true;
   /** Budget answer turn (see `HarnessConfig.budgetAnswerTurn`). Present only when on. */
   readonly budgetAnswerTurn?: true;
+  /** Lean thinking (see `HarnessConfig.leanThinking`). Present only when on. */
+  readonly leanThinking?: true;
   /**
    * LLM recovery budget (see `HarnessConfig.llmRecoveryBudget`), a whole number
    * in 0..10. Present only when configured; absent = {@link DEFAULT_LLM_RECOVERY_BUDGET}.
@@ -378,6 +391,7 @@ export function resolveHarnessConfig(
       ? { compactCallConstraints: true as const }
       : {}),
     ...(pick(config.budgetAnswerTurn, budgetAnswerTurnEnabled()) ? { budgetAnswerTurn: true as const } : {}),
+    ...(pick(config.leanThinking, leanThinkingEnabled()) ? { leanThinking: true as const } : {}),
     ...(llmRecoveryBudget !== undefined ? { llmRecoveryBudget } : {}),
   });
 }
