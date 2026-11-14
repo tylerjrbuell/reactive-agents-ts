@@ -111,6 +111,8 @@ Adding an owner, turning on **Open to anyone** or choosing **The agent's full to
 
 The acknowledgement is not part of the conversation history. See [Acknowledging slow turns](/guides/messaging-channels/#acknowledging-slow-turns) for the framework side.
 
+When a model-written acknowledgement falls back to the canned text, the activity feed shows why (`timeout`, `empty`, `thinking_only` or `error`), for example `acknowledged (canned, owner; model ack fell back: thinking_only)`.
+
 **Send test message.** Pick a channel, enter a sender such as `telegram:123456789` and a message, and optionally mark it as sent in a group or as mentioning the agent. The panel runs it through the real routing path and sends nothing to the platform:
 
 - Routing (explain) says which route takes the message, whether the sender runs as owner or non-owner, with which tools, or why it is refused. It is free.

@@ -16,6 +16,8 @@ export interface HubActivity {
   readonly routeId?: string;
   /** Plain-words detail: the role, the drop reason, the failure reason. */
   readonly detail: string;
+  /** On `acknowledged`: why canned text was sent although the route asked for a model-written ack. */
+  readonly ackFallbackReason?: "timeout" | "empty" | "thinking_only" | "error";
   /** True for a simulated message (nothing was sent to the platform). */
   readonly simulated: boolean;
 }
@@ -97,7 +99,13 @@ export class HubActivityTracker {
         });
         return;
       case "ChannelTurnAcknowledged":
-        this.note({ kind: "acknowledged", routeId: event.routeId, detail: `acknowledged (${event.source ?? "canned"}, ${event.role})`, simulated: event.simulated });
+        this.note({
+          kind: "acknowledged",
+          routeId: event.routeId,
+          detail: `acknowledged (${event.source ?? "canned"}, ${event.role}${event.ackFallbackReason ? `; model ack fell back: ${event.ackFallbackReason}` : ""})`,
+          ...(event.ackFallbackReason ? { ackFallbackReason: event.ackFallbackReason } : {}),
+          simulated: event.simulated,
+        });
         return;
       case "ChannelTurnDropped":
         this.bump(event.routeId, { dropped: 1 });

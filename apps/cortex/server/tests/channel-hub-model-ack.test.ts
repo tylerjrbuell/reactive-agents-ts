@@ -107,7 +107,7 @@ describe("model-written acknowledgement", () => {
     const texts = await converse(ch, "pizza please");
     expect(texts).toContain("CANNED ACK");
     const feed = (await hub.status()).activity.map((a) => a.detail);
-    expect(feed.some((d) => d.startsWith("acknowledged (canned"))).toBe(true);
+    expect(feed.some((d) => d.startsWith("acknowledged (canned") && d.includes("model ack fell back: error"))).toBe(true);
   }, 60_000);
 });
 
@@ -135,5 +135,13 @@ describe("activity feed", () => {
       ["acknowledged", "acknowledged (canned, sender)"],
       ["acknowledged", "acknowledged (narration, owner)"],
     ]);
+  });
+
+  it.each(["timeout", "empty", "thinking_only", "error"] as const)("shows why a model ack fell back: %s", (reason) => {
+    const t = new HubActivityTracker(() => 1);
+    t.observe({ _tag: "ChannelTurnAcknowledged", routeId: "r", role: "owner", ackFallbackReason: reason });
+    const [a] = t.snapshot();
+    expect(a?.detail).toBe(`acknowledged (canned, owner; model ack fell back: ${reason})`);
+    expect(a?.ackFallbackReason).toBe(reason);
   });
 });
