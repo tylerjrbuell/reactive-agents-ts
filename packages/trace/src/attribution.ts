@@ -113,7 +113,7 @@ import type {
   LedgerEntryTraceEvent,
 } from "./events.js";
 import {
-  isMeta, isWriter, HARNESS_STOP, OBJECT_LITERAL_FRAGMENT, LOCATOR_ARG, RECORDER_MESSAGE_CAP,
+  isMeta, isWriter, sameTool, HARNESS_STOP, OBJECT_LITERAL_FRAGMENT, LOCATOR_ARG, RECORDER_MESSAGE_CAP,
   str, strArr, ev1, clip, oneLine, gatherFacts, baseName, artifactRef, isTemplate, refMatcher,
   argPath, pickTargets, exchangeBefore, divergenceFor, requestView, ALREADY_DONE, resultText,
   ELIDED_LINES, presence, curatedPresence, HARNESS_NOTICE, evidenceBefore, nativeCalls, executedOk,
@@ -299,7 +299,7 @@ const IDENTICAL_FAILURES = 2;
  */
 const identicalFailuresBefore = (f: Facts, d: DroppedCall): readonly ToolCallEvent[] => {
   const key = canonicalArgs(d.args);
-  return f.toolEnds.filter((e) => e.toolName === d.name && e.ok === false && e.seq < d.x.seq && canonicalArgs(e.args) === key);
+  return f.toolEnds.filter((e) => sameTool(e.toolName, d.name) && e.ok === false && e.seq < d.x.seq && canonicalArgs(e.args) === key);
 };
 
 const ruleToolCallDropped: Rule = ({ f, targets, divergences }) => {
@@ -328,7 +328,7 @@ const ruleToolCallDropped: Rule = ({ f, targets, divergences }) => {
   // read for notes-2.txt). A drop that repeats a call which already failed on
   // the same resource changes nothing, so it is not linked.
   const sameResource = (e: ToolCallEvent, d: { readonly name: string; readonly path?: string }): boolean =>
-    e.toolName === d.name && (d.path === undefined || baseName(argPath(e.args) ?? "") === baseName(d.path));
+    sameTool(e.toolName, d.name) && (d.path === undefined || baseName(argPath(e.args) ?? "") === baseName(d.path));
   const req = drops.find((d) =>
     (d.path !== undefined || f.requiredTools.includes(d.name)) &&
     !f.toolEnds.some((e) => sameResource(e, d) && executedOk(e) && e.seq > d.x.seq) &&
@@ -361,7 +361,7 @@ function corruptedCalls(f: Facts): readonly { readonly end: ToolCallEvent; reado
     if (fragment === undefined) continue;
     const x = exchangeBefore(f, end.seq);
     // The model itself emitted the mangled value as a native call: not the harness.
-    const native = (x?.response.toolCalls ?? []).some((c) => c.name === end.toolName && OBJECT_LITERAL_FRAGMENT.test(JSON.stringify(c.arguments ?? null)));
+    const native = (x?.response.toolCalls ?? []).some((c) => sameTool(c.name, end.toolName) && OBJECT_LITERAL_FRAGMENT.test(JSON.stringify(c.arguments ?? null)));
     if (native) continue;
     out.push({ end, ...(x ? { x } : {}), fragment });
   }
@@ -557,7 +557,7 @@ function followed(f: Facts, g: Guidance): { readonly x: LLMExchangeEvent; readon
   const x = xs[0];
   if (!x) return undefined;
   const next = f.exchanges.find((y) => y.seq > x.seq)?.seq ?? Number.POSITIVE_INFINITY;
-  const called = (x.response.toolCalls ?? []).some((c) => c.name === g.target) ||
+  const called = (x.response.toolCalls ?? []).some((c) => g.target !== undefined && sameTool(c.name, g.target)) ||
     [...f.toolStarts, ...f.toolEnds].some((t) => t.toolName === g.target && t.seq > x.seq && t.seq < next);
   const printed = !called && new RegExp(`${g.target.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[({]`).test(x.response.content);
   return { x, called, printed };

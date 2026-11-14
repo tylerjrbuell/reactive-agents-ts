@@ -34,7 +34,14 @@ export const META_TOOLS: ReadonlySet<string> = new Set([
   "checkpoint", "final-answer", "task-complete", "activate-skill",
   "get-skill-section", "todo",
 ]);
-export const isMeta = (name: string): boolean => META_TOOLS.has(name);
+/**
+ * Canonical tool identity: models emit `file_write` for the registered `file-write`.
+ * Every tool-name comparison in attribution goes through this, so an alias is the same tool.
+ */
+export const canonTool = (name: string): string => name.trim().toLowerCase().replace(/_/g, "-");
+/** True when two tool names are the same tool under {@link canonTool}. */
+export const sameTool = (a: string, b: string): boolean => canonTool(a) === canonTool(b);
+export const isMeta = (name: string): boolean => META_TOOLS.has(canonTool(name));
 
 /** Tools that produce files (writers), by name. Their results are receipts, not evidence. */
 export const WRITER = /write|edit|patch|create|save/i;
@@ -222,7 +229,7 @@ export function nativeCalls(f: Facts): readonly NativeCall[] {
     const x = f.exchanges[i]!;
     const next = f.exchanges[i + 1]?.seq ?? Number.POSITIVE_INFINITY;
     const inWin = (e: TraceEvent): boolean => e.seq > x.seq && e.seq < next;
-    const calls = (x.response.toolCalls ?? []).filter((c) => !isMeta(c.name));
+    const calls = (x.response.toolCalls ?? []).filter((c) => !isMeta(c.name)).map((c) => ({ ...c, name: canonTool(c.name) }));
     if (calls.length === 0) continue;
     const ends = f.toolEnds.filter((t) => inWin(t) && !isMeta(t.toolName));
     const used = new Set<ToolCallEvent>();
@@ -237,13 +244,13 @@ export function nativeCalls(f: Facts): readonly NativeCall[] {
     calls.forEach((c, ci) => {
       const p = argPath(c.arguments);
       if (p === undefined) return;
-      const e = ends.find((t) => !used.has(t) && t.toolName === c.name && argPath(t.args) !== undefined && baseName(argPath(t.args)!) === baseName(p));
+      const e = ends.find((t) => !used.has(t) && sameTool(t.toolName, c.name) && argPath(t.args) !== undefined && baseName(argPath(t.args)!) === baseName(p));
       if (e) claim(ci, e);
     });
     // Pass 2: same tool, an unclaimed end where either side carries no path.
     calls.forEach((c, ci) => {
       if (fates[ci] !== undefined) return;
-      const e = ends.find((t) => !used.has(t) && t.toolName === c.name &&
+      const e = ends.find((t) => !used.has(t) && sameTool(t.toolName, c.name) &&
         (argPath(t.args) === undefined || argPath(c.arguments) === undefined));
       if (e) claim(ci, e);
     });
@@ -251,14 +258,14 @@ export function nativeCalls(f: Facts): readonly NativeCall[] {
     const openStarts = new Map<string, number>();
     for (const s of f.toolStarts) {
       if (!inWin(s) || isMeta(s.toolName)) continue;
-      openStarts.set(s.toolName, (openStarts.get(s.toolName) ?? 0) + 1);
+      openStarts.set(canonTool(s.toolName), (openStarts.get(canonTool(s.toolName)) ?? 0) + 1);
     }
-    for (const e of ends) openStarts.set(e.toolName, (openStarts.get(e.toolName) ?? 0) - 1);
+    for (const e of ends) openStarts.set(canonTool(e.toolName), (openStarts.get(canonTool(e.toolName)) ?? 0) - 1);
     const refusals = new Map<string, number>();
     for (const e of f.ev) {
       if (e.kind === "guard-fired" && e.guard === "tool-gate" && inWin(e)) {
         const n = str(e.metadata, "toolName");
-        if (n !== undefined) refusals.set(n, (refusals.get(n) ?? 0) + 1);
+        if (n !== undefined) refusals.set(canonTool(n), (refusals.get(canonTool(n)) ?? 0) + 1);
       }
     }
     calls.forEach((c, ci) => {
@@ -334,7 +341,10 @@ export function refMatcher(ref: string): (path: string) => boolean {
 export const argPath = (args: unknown): string | undefined => {
   if (typeof args !== "object" || args === null || Array.isArray(args)) return undefined;
   const v = (args as Meta)["path"];
-  return typeof v === "string" ? v : undefined;
+  if (typeof v !== "string") return undefined;
+  // A directory root (`.`, `./`, empty) is no target: the tool resolves it to the absolute task dir,
+  // so a model path of "." and the recorded absolute path must not be compared as different files.
+  return /^(?:\.?\/*)$/.test(v.trim()) ? undefined : v;
 };
 
 /** The file stem (`processor` for `src/processor.ts`); undefined when shorter than 3 chars. */
@@ -398,7 +408,7 @@ export function sourceExchange(f: Facts, end: ToolCallEvent): LLMExchangeEvent |
     return undefined;
   };
   // 1. A native call to the same tool on the same file.
-  const native = latest((x) => (x.response.toolCalls ?? []).some((c) => c.name === end.toolName &&
+  const native = latest((x) => (x.response.toolCalls ?? []).some((c) => sameTool(c.name, end.toolName) &&
     (path === undefined || (argPath(c.arguments) !== undefined && baseName(argPath(c.arguments)!) === baseName(path)))));
   if (native) return native;
   // 2. The turn whose response text holds the written content (a synthesize or planner step).
@@ -457,7 +467,7 @@ export function evidenceCutoff(d: Divergence | undefined): number {
   const w = d.write;
   if (w === undefined) return d.exchange.seq;
   const p = argPath(w.args);
-  const native = (d.exchange.response.toolCalls ?? []).some((c) => c.name === w.toolName &&
+  const native = (d.exchange.response.toolCalls ?? []).some((c) => sameTool(c.name, w.toolName) &&
     (p === undefined || baseName(argPath(c.arguments) ?? "") === baseName(p)));
   return native ? d.exchange.seq : w.seq;
 }

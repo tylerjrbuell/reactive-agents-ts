@@ -120,3 +120,17 @@ I attempted the attribution fix in `packages/trace/src/attribution-facts.ts` (my
 
 ## 9. Artifacts
 Results `/home/tylerbuell/campaign-traces/p2/{qwen3_14b,qwen2.5_14b,gemma4_e4b,gemma4_12b,deepseek-r1_14b}.json`, LH `/home/tylerbuell/campaign-traces/p3b/{gemma4_12b,qwen3_14b}.json`; traces `/home/tylerbuell/campaign-traces/traces/{p2,p3b}/`; logs `p2-*.log`, `p3b-*.log`; scripts `loop.sh loop-lh.sh wait2.sh wait3.sh agg2.ts cost2.ts lh2.ts`; voided r1 attempt `/home/tylerbuell/campaign-traces/superseded/r1-ollama-busy/`.
+
+## 10. Erratum (2026-11-14): attribution fix applied, numbers changed
+
+The instrument fix proposed in section 8 landed in `packages/trace` (one `canonTool`/`sameTool` normalizer for tool names; a directory-root path `.`/`./` is no target). Re-attributed with `rax-diagnose attribute --all` on `/home/tylerbuell/campaign-traces/traces/{p2,p3a,p3b}`:
+
+| corpus | reason | before | after |
+| --- | --- | --- | --- |
+| p2 | harness:tool-call-dropped | 5 | 1 |
+| p2 | model:had-evidence-wrong-output | 67 | 71 |
+| p2 | harness verdict total | 25 | 21 |
+| p2 | model verdict total | 110 | 114 |
+| p3a, p3b | all rows | unchanged | unchanged |
+
+All other p2 rows, the confidence split and the mechanism counts are identical. The 4 flipped runs are the gemma4:12b runs named in section 8 (all now `model:had-evidence-wrong-output`, decisive). The remaining `tool-call-dropped` is gpt-oss rw-7 run2 (`01M7BJYRHFJHRC1VAZ1M39D2XB`, P2a): the seq 854 `file-write(pipeline.ts)` has no tool-call event before the run ended, so it is a genuine drop. Wherever this report or RESULTS-P2a counts gemma4:12b harness verdicts, read the 4 as model-attributed; the P2a line 47 gpt-oss `tool-call-dropped` stands.
