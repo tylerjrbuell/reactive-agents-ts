@@ -111,8 +111,9 @@ describe("Ollama capability probe (S2.4)", () => {
 
   it("caches the probe result — second call hits the in-process cache, not the network", async () => {
     let callCount = 0;
-    const fetchMock = mock(async () => {
-      callCount++;
+    const fetchMock = mock(async (input: string | URL | Request) => {
+      // /api/tags (digest lookup) is not a /api/show probe: count probes only.
+      if (!String(input).endsWith("/api/tags")) callCount++;
       return new Response(JSON.stringify(GEMMA4_SHOW_FIXTURE), { status: 200 });
     });
     const originalFetch = globalThis.fetch;

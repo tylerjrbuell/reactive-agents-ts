@@ -7,8 +7,12 @@
  * - parallelCallCapability → blueprint strategy batch cap (blueprint.ts)
  * - observationHandling → recall force-on (think.ts)
  * - systemPromptAttention (weak) and observationHandling (hallucinate-risk)
- *   raise `guard.scaffoldingLevel` (harness-plan.ts), but that field has no
- *   reader (verified 2026-11-10): no behavior changes from it today
+ *   raise `guard.scaffoldingLevel` (harness-plan.ts, reasoning-owned). That is
+ *   a harness-plan field, NOT a calibration field: this schema never carried
+ *   it. It has no reader (census 2026-11-13): no behavior changes from it today
+ * - digest (optional) → staleness gate in {@link loadCalibration}: a record
+ *   whose digest differs from the live Ollama digest is dropped (tier
+ *   defaults) and a recalibrate signal is published (model-digest.ts)
  * - optimalToolResultChars → ProfileOverrides.toolResultMaxChars, applied to
  *   the runtime ContextProfile (kernel loop runner)
  * - classifierReliability → classifier bypass (runtime classifier-bypass.ts)
@@ -21,6 +25,7 @@ import { Schema } from "effect";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ProviderAdapter } from "./adapter.js";
+import { checkDigest, getLiveDigest, reportModelDigestStale } from "./model-digest.js";
 import type { ToolCallObservation } from "@reactive-agents/memory";
 
 /**
@@ -65,6 +70,14 @@ export const ModelCalibrationSchema = Schema.Struct({
 
   /** Optimal chars per tool result before hallucination starts */
   optimalToolResultChars: Schema.Number,
+
+  /**
+   * Content digest of the model weights measured (Ollama). Optional: shipped
+   * calibrations carry none (version-controlled claims). When present and the
+   * live digest differs, {@link loadCalibration} treats the record as stale
+   * and returns undefined (tier defaults) and emits a recalibrate signal.
+   */
+  digest: Schema.optionalWith(Schema.String, { exact: true }),
 
   /** Derived from observed classifier false-positive rate. "low" → skip the classifier LLM call. */
   classifierReliability: Schema.optionalWith(
@@ -206,6 +219,25 @@ export function loadDialectPriorClaim(modelId: string): DialectPriorClaim | unde
  *   3. User cache at ~/.reactive-agents/calibrations/<normalized-id>.json
  */
 export function loadCalibration(modelId: string): ModelCalibration | undefined {
+  const cal = loadCalibrationRecord(modelId);
+  if (cal === undefined || cal.digest === undefined) return cal;
+  // Digest-bearing record: trust it only while the live weights match. The
+  // live digest is registered by the Ollama capability probe; absent => unknown
+  // => unchanged behavior.
+  const verdict = checkDigest(cal.digest, getLiveDigest("ollama", modelId));
+  if (verdict.status !== "stale") return cal;
+  reportModelDigestStale({
+    kind: "calibration",
+    provider: "ollama",
+    model: modelId,
+    recordedDigest: cal.digest,
+    liveDigest: verdict.live ?? "",
+    action: "recalibrate",
+  });
+  return undefined;
+}
+
+function loadCalibrationRecord(modelId: string): ModelCalibration | undefined {
   const key = normalizeModelId(modelId);
   if (calibrationCache.has(key)) return calibrationCache.get(key) ?? undefined;
 

@@ -47,8 +47,9 @@ function mockShow(payload: unknown): { restore: () => void; calls: () => number 
   const original = globalThis.fetch;
   let n = 0;
   globalThis.fetch = fetchStub(
-    mock(async () => {
-      n++;
+    mock(async (input: string | URL | Request) => {
+      // /api/tags (digest lookup) is not a /api/show probe: count probes only.
+      if (!String(input).endsWith("/api/tags")) n++;
       return new Response(JSON.stringify(payload), { status: 200 });
     }),
   );

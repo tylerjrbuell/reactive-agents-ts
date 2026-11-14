@@ -83,8 +83,9 @@ function mockShowResponse(payload: unknown | (() => unknown)): {
   const originalFetch = globalThis.fetch;
   let fetchCount = 0;
   globalThis.fetch = fetchStub(
-    mock(async () => {
-      fetchCount++;
+    mock(async (input: string | URL | Request) => {
+      // /api/tags (digest lookup) is not a /api/show probe: count probes only.
+      if (!String(input).endsWith("/api/tags")) fetchCount++;
       const body = typeof payload === "function" ? (payload as () => unknown)() : payload;
       return new Response(JSON.stringify(body), { status: 200 });
     }),

@@ -51,6 +51,9 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       // Optional (2026-11-12): model accepts audio input (Gemini, OpenAI audio
       // models, Ollama probe `audio` capability).
       "supportsAudioIn",
+      // Optional (2026-11-13): content digest of the probed model weights;
+      // a changed live digest marks the persisted row stale (model-digest.ts).
+      "digest",
     ]);
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count

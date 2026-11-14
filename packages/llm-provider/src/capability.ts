@@ -253,6 +253,15 @@ export const CapabilitySchema = Schema.Struct({
    * version and stop being trusted when the producer changes.
    */
   probeVersion: Schema.optional(Schema.Number),
+
+  /**
+   * Content digest of the model weights this row was probed against (Ollama
+   * `/api/show` or `/api/tags` digest). Absent on static rows and on rows
+   * written before digest tracking (old files still decode). A persisted
+   * probe row whose digest differs from the live one is stale — see
+   * model-digest.ts.
+   */
+  digest: Schema.optional(Schema.String),
 });
 
 export type Capability = typeof CapabilitySchema.Type;

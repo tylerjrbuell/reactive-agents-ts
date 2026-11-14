@@ -347,6 +347,9 @@ export type {
   ExperienceSummary,
 } from "./calibration.js";
 
+export { checkDigest, onModelDigestStale } from "./model-digest.js";
+export type { DigestStaleness, ModelDigestStaleEvent } from "./model-digest.js";
+
 /**
  * ─── Calibration Runner ───
  * @unstable See Calibration section above.

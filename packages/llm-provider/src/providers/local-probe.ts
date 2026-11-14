@@ -22,6 +22,12 @@
 import type { Capability, TokenizerFamily } from "../capability.js";
 import { CURRENT_PROBE_VERSION } from "../capability.js";
 import { getCapabilityStore } from "../capability-store.js";
+import {
+  checkDigest,
+  fetchOllamaDigest,
+  registerLiveDigest,
+  reportModelDigestStale,
+} from "../model-digest.js";
 
 // ─── Module-scope cache (in-memory layer over the persistent store) ─────────
 
@@ -157,7 +163,9 @@ function showResponseToCapability(
     details?: { family?: string; parameter_size?: string };
     model_info?: Record<string, unknown>;
     template?: string;
+    digest?: string;
   },
+  digest?: string,
 ): Capability {
   const caps = new Set(show.capabilities ?? []);
   const family = show.details?.family;
@@ -201,6 +209,7 @@ function showResponseToCapability(
     // Producer stamp: persisted rows are trusted for routing only while
     // this matches CURRENT_PROBE_VERSION (capability-store staleness gate).
     probeVersion: CURRENT_PROBE_VERSION,
+    ...(digest !== undefined ? { digest } : {}),
     source: "probe",
   };
 }
@@ -236,8 +245,29 @@ export async function probeOllamaCapability(
   const store = getCapabilityStore();
   const fromStore = store.loadCapability("ollama", model, baseUrl);
   if (fromStore) {
-    probeCache.set(key, fromStore);
-    return fromStore;
+    // Digest gate: a row measured against other weights (re-pulled tag) is
+    // stale — fall through to a live re-probe whose write-through overwrites
+    // it. Rows without a digest, or an unreachable live digest, keep the
+    // prior behavior.
+    if (fromStore.digest === undefined) {
+      probeCache.set(key, fromStore);
+      return fromStore;
+    }
+    const liveDigest = await fetchOllamaDigest(model, baseUrl, apiKey);
+    const verdict = checkDigest(fromStore.digest, liveDigest);
+    if (verdict.status !== "stale") {
+      if (liveDigest !== undefined) registerLiveDigest("ollama", model, liveDigest);
+      probeCache.set(key, fromStore);
+      return fromStore;
+    }
+    reportModelDigestStale({
+      kind: "capability",
+      provider: "ollama",
+      model,
+      recordedDigest: fromStore.digest,
+      liveDigest: liveDigest ?? "",
+      action: "recalibrate",
+    });
   }
 
   try {
@@ -255,7 +285,12 @@ export async function probeOllamaCapability(
     clearTimeout(timer);
     if (!res.ok) return null;
     const data = (await res.json()) as Parameters<typeof showResponseToCapability>[1];
-    const cap = showResponseToCapability(model, data);
+    const liveDigest =
+      typeof data.digest === "string" && data.digest.length > 0
+        ? data.digest
+        : await fetchOllamaDigest(model, baseUrl, apiKey);
+    if (liveDigest !== undefined) registerLiveDigest("ollama", model, liveDigest);
+    const cap = showResponseToCapability(model, data, liveDigest);
     probeCache.set(key, cap);
     // S2.4 write-through — persist per model + endpoint so future processes
     // skip the probe.
