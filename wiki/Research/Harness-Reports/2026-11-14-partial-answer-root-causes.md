@@ -127,3 +127,7 @@ What does not look like a lever: more iterations by itself, a stronger exit gate
 - L1 depends on `code-execute` working. In these 98 runs the tool was called 6 times (granite 4, cogito 1, qwen3.5 1), every call returned an empty error, and 3 more granite calls were blocked by the repetition guard. Zero successful calls. L1 needs L6(b) first; whether the tool works for a model that formats the call correctly is not shown by this corpus.
 - Task mix is narrow (12 tasks). rw-2 plus rw-3 carry 44% of runs and 43% of lost credit.
 - Single-model confounds: qwen3:4b alone is 67 of 239 items and 52 of 54 NR items.
+
+## Erratum (2026-11-14, tools-warden, commit 7bacddc84)
+
+The phrase "code-execute returned an empty error / every call errored with an empty ERR" above is wrong. Reading the traces and running the real handler shows the tool works and every failure carried a populated message. The failures were model-input faults: (1) ENOENT on relative paths because host mode runs with cwd=/tmp, (2) module syntax (`export ...`) inside the async wrapper, (3) non-JavaScript input (Python/bash), (4) the repetition guard blocking the retry. Commit 7bacddc84 hoists module syntax, hints the /tmp working directory on ENOENT and guarantees non-empty failure reasons. The L1 conclusion (the model rarely calls the compute tool; arithmetic is done in its head) is unchanged, and L6(b) is no longer a prerequisite for L1.
