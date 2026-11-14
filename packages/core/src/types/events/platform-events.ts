@@ -311,6 +311,8 @@ export type PlatformAgentEvent =
       readonly role: string;
       /** Where the ack text came from: fixed config, the agent's pre-tool narration, or the model port. Absent on older emitters (canned). */
       readonly source?: "canned" | "narration" | "model";
+      /** Why canned text was sent although the route asked for a model-written ack. Absent otherwise. */
+      readonly ackFallbackReason?: "timeout" | "empty" | "thinking_only" | "error";
       /** True when produced by a router simulation (dry run). */
       readonly simulated?: boolean;
     }

@@ -3,6 +3,7 @@ import type { Effect, Scope } from "effect";
 import type { ChannelIdentity, DeliveryReceipt } from "../adapter.js";
 import type { ChannelError } from "../errors.js";
 import type { Attachment, InboundMessage } from "../types.js";
+import type { AckPortResult } from "./ack.js";
 
 /**
  * Channel routing types: a Route is one flat rule (match an inbound conversation, pick a target
@@ -191,9 +192,11 @@ export interface RoutedSession {
    * Optional. With `ack.source: "model"` and no narration yet, the router calls this once while
    * `send` is still running and sends the text as the acknowledgement. Text only, one short line,
    * must not touch the session history of the running turn. The router bounds it by
-   * `ack.modelTimeoutMs` and falls back to the canned text.
+   * `ack.modelTimeoutMs` and falls back to the canned text. Return a bare string, or
+   * `{ text, fallbackReason }` to say why the text is unusable (`empty`, `thinking_only`, `error`);
+   * the router reports it on `ChannelTurnAcknowledged.ackFallbackReason` (it records a timeout itself).
    */
-  readonly acknowledge?: (turn: RoutedTurn) => Effect.Effect<string, never>;
+  readonly acknowledge?: (turn: RoutedTurn) => Effect.Effect<AckPortResult, never>;
   /**
    * Optional. Called when a route owner sends a reset command (`/new`), before `close`. A resolver that
    * keeps conversation history outside the session object (a chat store keyed by `conversationKey`)

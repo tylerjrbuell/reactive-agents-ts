@@ -544,7 +544,7 @@ export class RouterEngine {
         acknowledge: () => session?.acknowledge?.(turn),
       });
       yield* this.reply(adapterId, msg, chosen.text, taskId);
-      yield* this.emit({ _tag: "ChannelTurnAcknowledged", routeId: route.id, role, source: chosen.source, simulated });
+      yield* this.emit({ _tag: "ChannelTurnAcknowledged", routeId: route.id, role, source: chosen.source, ...(chosen.fallbackReason ? { ackFallbackReason: chosen.fallbackReason } : {}), simulated });
     }).pipe(
       Effect.catchAll((error) => emitErrorSwallowed({ site: "channels/src/routing/engine.ts:ack", tag: errorTag(error) })),
     );

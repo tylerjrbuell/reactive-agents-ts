@@ -4,7 +4,7 @@ import type { AgentEvent } from "@reactive-agents/core";
 import type { ChannelAdapter } from "../../src/adapter.js";
 import { TelegramChannelAdapter } from "../../src/adapters/telegram.js";
 import { channelError } from "../../src/errors.js";
-import { MAX_MODEL_ACK_CHARS, pickAckText, resolveAck, sanitizeAckText } from "../../src/routing/ack.js";
+import { MAX_MODEL_ACK_CHARS, type AckPortResult, pickAckText, resolveAck, sanitizeAckText } from "../../src/routing/ack.js";
 import { makeMemoryLeases } from "../../src/routing/lease.js";
 import { makeRouteMeter } from "../../src/routing/meter.js";
 import { createChannelRouter, type ChannelRouterOptions } from "../../src/routing/router.js";
@@ -203,7 +203,7 @@ describe("route ack", () => {
 const modelAgent = (opts: {
   ms: number;
   narrate?: ReadonlyArray<{ at: number; text: string }>;
-  acknowledge?: () => Effect.Effect<string, never>;
+  acknowledge?: () => Effect.Effect<AckPortResult, never>;
   calls?: { ack: number; history: string[] };
 }): AgentResolver => ({
   open: () =>
@@ -322,6 +322,62 @@ describe("route ack: source model", () => {
           expect(t.texts()).toEqual(["On it..."]);
           yield* advance(4000);
           expect(t.texts()).toEqual(["On it...", "final"]);
+        }),
+      );
+    }
+  });
+
+  test("each fallback reason surfaces as ackFallbackReason; model success and canned routes carry none", async () => {
+    const cases: ReadonlyArray<{ name: string; ack?: object; port: () => Effect.Effect<AckPortResult, never>; reason: string | undefined; source: string }> = [
+      { name: "timeout", ack: { modelTimeoutMs: 500 }, port: () => Effect.zipRight(Effect.sleep(5000), Effect.succeed("late")), reason: "timeout", source: "canned" },
+      { name: "defect", port: () => Effect.die("boom") as Effect.Effect<string, never>, reason: "error", source: "canned" },
+      { name: "port error", port: () => Effect.succeed({ text: "", fallbackReason: "error" as const }), reason: "error", source: "canned" },
+      { name: "thinking_only", port: () => Effect.succeed({ text: "", fallbackReason: "thinking_only" as const }), reason: "thinking_only", source: "canned" },
+      { name: "empty object", port: () => Effect.succeed({ text: "", fallbackReason: "empty" as const }), reason: "empty", source: "canned" },
+      { name: "empty string", port: () => Effect.succeed(""), reason: "empty", source: "canned" },
+      { name: "sanitized to nothing", port: () => Effect.succeed("  **  "), reason: "empty", source: "canned" },
+      { name: "success object", port: () => Effect.succeed({ text: "Checking now." }), reason: undefined, source: "model" },
+      { name: "success string", port: () => Effect.succeed("Checking now."), reason: undefined, source: "model" },
+    ];
+    for (const c of cases) {
+      const t = withTyping();
+      const events: AgentEvent[] = [];
+      await runRouter(
+        {
+          channels: [t.adapter],
+          routes: [modelRoute(c.ack)],
+          agents: modelAgent({ ms: 10_000, acknowledge: c.port }),
+          eventBus: { publish: (e) => Effect.sync(() => void events.push(e)) },
+        },
+        Effect.gen(function* () {
+          t.inner.push(env());
+          yield* advance(5000);
+          const [e] = ackEvents(events);
+          expect(e?.source, c.name).toBe(c.source);
+          expect(e?.ackFallbackReason, c.name).toBe(c.reason);
+          expect("ackFallbackReason" in (e ?? {}), c.name).toBe(c.reason !== undefined);
+        }),
+      );
+    }
+  });
+
+  test("narration and canned-source routes carry no ackFallbackReason", async () => {
+    for (const mode of ["narration", "canned"] as const) {
+      const t = withTyping();
+      const events: AgentEvent[] = [];
+      await runRouter(
+        {
+          channels: [t.adapter],
+          routes: [mode === "canned" ? route({ ack: {} }) : modelRoute()],
+          agents: modelAgent({ ms: 10_000, narrate: [{ at: 1000, text: "Looking" }], acknowledge: () => Effect.succeed("") }),
+          eventBus: { publish: (e) => Effect.sync(() => void events.push(e)) },
+        },
+        Effect.gen(function* () {
+          t.inner.push(env());
+          yield* advance(4000);
+          const [e] = ackEvents(events);
+          expect(e?.source).toBe(mode);
+          expect("ackFallbackReason" in (e ?? {})).toBe(false);
         }),
       );
     }

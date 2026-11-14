@@ -58,10 +58,18 @@ export const sanitizeAckText = (raw: string): string | undefined => {
   return text.length > MAX_MODEL_ACK_CHARS ? `${text.slice(0, MAX_MODEL_ACK_CHARS - 1).trimEnd()}…` : text;
 };
 
+/** Why a requested model-written ack was replaced by the canned text. */
+export type AckFallbackReason = "timeout" | "empty" | "thinking_only" | "error";
+
+/** What a session's `acknowledge` port may return: plain text, or text plus why it is unusable. */
+export type AckPortResult = string | { readonly text: string; readonly fallbackReason?: AckFallbackReason };
+
 /** The chosen ack message and where it came from. */
 export interface ChosenAck {
   readonly text: string;
   readonly source: "canned" | "narration" | "model";
+  /** Set only when `source` is `canned` although a model ack was requested. */
+  readonly fallbackReason?: AckFallbackReason;
 }
 
 /**
@@ -74,7 +82,7 @@ export const chooseAckText = (plan: {
   readonly ack: ResolvedAck;
   readonly canned: string;
   readonly narration: () => string | undefined;
-  readonly acknowledge: (() => Effect.Effect<string, never> | undefined) | undefined;
+  readonly acknowledge: (() => Effect.Effect<AckPortResult, never> | undefined) | undefined;
 }): Effect.Effect<ChosenAck> =>
   Effect.gen(function* () {
     const canned: ChosenAck = { text: plan.canned, source: "canned" };
@@ -84,12 +92,18 @@ export const chooseAckText = (plan: {
     if (narratedText !== undefined) return { text: narratedText, source: "narration" } as const;
     const port = plan.acknowledge?.();
     if (port === undefined) return canned;
+    type Answer = { readonly text: string; readonly fallbackReason?: AckFallbackReason };
     const answer = yield* port.pipe(
       Effect.timeoutOption(plan.ack.modelTimeoutMs),
-      Effect.catchAllCause(() => Effect.succeed(Option.none<string>())),
+      Effect.map((r) => Option.map(r, (v): Answer => (typeof v === "string" ? { text: v } : v))),
+      Effect.catchAllCause(() => Effect.succeed(Option.some<Answer>({ text: "", fallbackReason: "error" }))),
     );
-    const modelText = Option.isSome(answer) ? sanitizeAckText(answer.value) : undefined;
-    return modelText === undefined ? canned : ({ text: modelText, source: "model" } as const);
+    const fellBack = (fallbackReason: AckFallbackReason): ChosenAck => ({ ...canned, fallbackReason });
+    if (Option.isNone(answer)) return fellBack("timeout");
+    const modelText = sanitizeAckText(answer.value.text);
+    return modelText === undefined
+      ? fellBack(answer.value.fallbackReason ?? "empty")
+      : ({ text: modelText, source: "model" } as const);
   });
 
 /**
