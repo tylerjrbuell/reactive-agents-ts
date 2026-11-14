@@ -30,6 +30,7 @@ import { runGuardedPhase } from "../../../pipeline.js";
 import type { Phase } from "../../../phase.js";
 import { fetchToolsRegistry } from "./tools-registry.js";
 import { classifyTools } from "./classifier.js";
+import { withDeclaredOutbound } from "../../../../agent/gateway-outbound-requirement.js";
 import { withAttachedMcpTools } from "./mcp-allowlist.js";
 
 export interface PreLoopDispatchDeps {
@@ -155,7 +156,10 @@ export const runPreLoopDispatch = (
     const { effectiveRequiredToolQuantities, classifiedRelevantTools } = classified;
     // `requiredTools: ["git-cli"]` is met by a shell-execute call (same
     // resolution as allowedTools above).
-    const effectiveRequiredTools = resolveToolNameList(classified.effectiveRequiredTools, registeredNames);
+    const effectiveRequiredTools = resolveToolNameList(
+      withDeclaredOutbound(classified.effectiveRequiredTools, task, cachedToolDefs),
+      registeredNames,
+    );
 
     return {
       ctx,

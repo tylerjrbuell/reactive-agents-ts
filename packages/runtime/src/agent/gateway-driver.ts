@@ -22,6 +22,7 @@ import type {
     GatewaySummary,
 } from '../builder/types.js'
 import type { GLog } from './gateway-bootstrap.js'
+import { outboundServerOf } from './gateway-outbound-requirement.js'
 import type { GatewayInboundQueue } from './gateway-inbound-queue.js'
 
 type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
@@ -127,6 +128,11 @@ export const subscribeChannelHandler = async (
                         return
                     }
 
+                    // Declared outbound requirement: only when delivery is by an MCP send tool.
+                    const outbound = outboundServerOf(
+                        event.mcpServer,
+                        event.adapterId !== undefined
+                    )
                     const gwEvent = {
                         id: `ch-${Date.now()}-${Math.random()
                             .toString(36)
@@ -144,6 +150,9 @@ export const subscribeChannelHandler = async (
                             sender: event.sender,
                             groupId: event.groupId,
                             mcpServer: event.mcpServer,
+                            ...(outbound !== undefined
+                                ? { outboundServer: outbound }
+                                : {}),
                         },
                     }
 

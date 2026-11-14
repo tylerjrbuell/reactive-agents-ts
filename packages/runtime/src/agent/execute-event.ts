@@ -23,6 +23,7 @@ import { errorMessage } from '@reactive-agents/core'
 import type { AgentResultMetadata } from '../builder/types.js'
 import type { GLog } from './gateway-bootstrap.js'
 import { ORIGIN_CONTEXT_KEY } from '../chat/todo-seed.js'
+import { OUTBOUND_SERVER_CONTEXT_KEY } from './gateway-outbound-requirement.js'
 
 type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
 
@@ -51,6 +52,13 @@ export interface ExecuteEventDeps {
     readonly agentId: string
     readonly persistMemory: boolean
     readonly incrementTotalRuns: () => void
+}
+
+/** Spread-ready `{ outboundServer }` from the event metadata the channel driver stamped; `{}` otherwise. */
+const outboundServerCarry = (event: unknown): Record<string, string> => {
+    const meta = (event as { metadata?: { outboundServer?: unknown } } | null | undefined)?.metadata
+    const server = meta?.outboundServer
+    return typeof server === 'string' && server !== '' ? { [OUTBOUND_SERVER_CONTEXT_KEY]: server } : {}
 }
 
 /** Run origin for a gateway event source: timers are `scheduled`, everything else `gateway`. */
@@ -97,7 +105,7 @@ export const makeExecuteEvent = (
                 status: 'pending' as const,
                 // Origin: timer-driven sources (heartbeat/cron) are `scheduled`;
                 // every other gateway source (channel, webhook, ...) is `gateway`.
-                metadata: { tags: [], context: { [ORIGIN_CONTEXT_KEY]: gatewayRunOrigin(source) } },
+                metadata: { tags: [], context: { [ORIGIN_CONTEXT_KEY]: gatewayRunOrigin(source), ...outboundServerCarry(_event) } },
                 createdAt: new Date(),
             }
             // The run's root entry (engine/start-run.ts).
