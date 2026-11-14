@@ -12,26 +12,66 @@ import { sandboxDockerEnabled } from "../flags.js";
 import { HANDLER_TIMEOUT_GRACE_MS } from "./timeout-grace.js";
 import { runProcessGroup } from "./process-group.js";
 
+/** A single-line static import (`import x from "m"`, `import "m"`, `import type {T} from "m"`). */
+const IMPORT_LINE_RE = /^\s*import\s+(?:[^'"\n]+\s+from\s+)?['"][^'"\n]+['"]\s*;?\s*$/;
+/** `export` in front of a declaration; the wrapper is a function body, where `export` is a syntax error. */
+const EXPORT_DECL_RE = /^(\s*)export\s+(?:default\s+)?(?=(?:async\s+)?(?:function|const|let|var|class|type|interface|enum)\b)/;
+
+/**
+ * Models write module-style code (`import x from "m"`, `export function f`).
+ * Inside the async-function wrapper both are syntax errors (witness: granite
+ * rw-7, "Unexpected export", 2026-11-13). Hoist single-line imports above the
+ * wrapper and drop `export` from declarations; everything else is unchanged.
+ */
+export function hoistModuleSyntax(rawCode: string): { readonly imports: string; readonly body: string } {
+  const imports: string[] = [];
+  const body: string[] = [];
+  for (const line of rawCode.split("\n")) {
+    if (IMPORT_LINE_RE.test(line)) imports.push(line.trim());
+    else body.push(line.replace(EXPORT_DECL_RE, "$1"));
+  }
+  return { imports: imports.join("\n"), body: body.join("\n") };
+}
+
 /** Wrap user code so `return` works and CJS `require()` is available in ESM. */
 function wrapCode(rawCode: string): string {
+  const { imports, body } = hoistModuleSyntax(rawCode);
   return `
 import { createRequire } from "node:module";
+${imports}
 const require = createRequire(import.meta.url);
-const __fn = async () => { ${rawCode} };
+const __fn = async () => { ${body} };
 __fn()
   .then((r) => console.log(JSON.stringify({ ok: true, result: r ?? null })))
   .catch((e) => console.log(JSON.stringify({ ok: false, error: String(e) })));
 `;
 }
 
+/** Bun's trailing version banner adds nothing the model can act on. */
+const BUN_BANNER_RE = /\n*Bun v\d[^\n]*\s*$/;
+/** ENOENT on a relative path: code-execute's cwd is /tmp, not the workspace. */
+const ENOENT_HINT =
+  " Hint: the working directory is /tmp, not the workspace, so relative paths do not resolve. " +
+  "Use the absolute path from the task (host sandbox only), or inline the data in the code.";
+
+/**
+ * Make a failure message non-empty and model-actionable: strip the temp-file
+ * path and Bun banner, name the cause when the text is empty, and explain the
+ * /tmp working directory on a missing file.
+ */
+export function explainCodeError(raw: string, fallback: string): string {
+  const cleaned = raw.replace(/\S*code-exec-[^\s]*/g, "<code>").replace(BUN_BANNER_RE, "").trim();
+  const message = cleaned.length > 0 ? cleaned : fallback;
+  return /ENOENT|no such file or directory/i.test(message) ? message + ENOENT_HINT : message;
+}
+
 /** Parse the wrapper's stdout sentinel into the code-execute result shape. */
 function parseCodeResult(stdout: string, stderr: string, exitCode: number): unknown {
   const errorOutput = stderr.trim();
   if (exitCode !== 0) {
-    const cleanError = errorOutput.replace(/\S*code-exec-[^\s]*/g, "<code>");
     return {
       executed: false,
-      error: cleanError || `Process exited with code ${exitCode}`,
+      error: explainCodeError(errorOutput, `Process exited with code ${exitCode} and wrote nothing to stderr.`),
       output: "(no output)",
       exitCode,
     };
@@ -54,7 +94,10 @@ function parseCodeResult(stdout: string, stderr: string, exitCode: number): unkn
   if (!sentinel.ok) {
     return {
       executed: false,
-      error: sentinel.error ?? "Unknown runtime error",
+      error: explainCodeError(
+        sentinel.error ?? "",
+        "The code threw a value with no message (for example `throw \"\"`). Throw an Error with a message to see the cause.",
+      ),
       output: output || "(no output)",
       exitCode,
     };
@@ -317,7 +360,9 @@ export const codeExecuteHandler = (
             Effect.catchAll((err) =>
               Effect.succeed({
                 output: "",
-                stderr: err.message,
+                stderr:
+                  `Docker sandbox failed: ${err.message || "no reason given"}. ` +
+                  `Nothing was executed. The sandbox is set to docker; check that Docker is installed and running.`,
                 exitCode: 1,
                 durationMs: 0,
                 truncated: false,
