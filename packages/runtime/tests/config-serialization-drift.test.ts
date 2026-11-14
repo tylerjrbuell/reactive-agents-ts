@@ -438,6 +438,7 @@ describe("HarnessConfigSchema <-> HarnessConfig bidirectional drift guard", () =
       stableToolList: true,
       compactCallConstraints: true,
       budgetAnswerTurn: true,
+      leanThinking: true,
       llmRecoveryBudget: true,
       // disclosureMode is set only by `.withTools({ disclosure })`, never by
       // `.withHarness`, so it has no HarnessConfigSchema leaf.

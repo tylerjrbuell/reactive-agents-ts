@@ -1559,12 +1559,7 @@ export class ReactiveAgent<TOut = unknown> {
                     systemPrompt: self._config?.systemPrompt
                         ? () => self._config!.systemPrompt!
                         : undefined,
-                    contextSummary: () =>
-                        buildChatSystemContext(
-                            self._config?.taskContext,
-                            self._lastDebrief,
-                            self._lastRunObservations,
-                        ),
+                    contextSummary: () => buildChatSystemContext(self._config?.taskContext),
                     scratchpadEntries: () => Object.fromEntries(self._scratchpad), toolIntent: makeChatToolIntent(self._config),
                 },
                 { sessionId },
@@ -1585,11 +1580,7 @@ export class ReactiveAgent<TOut = unknown> {
         _history?: ChatMessage[],
         _sessionId?: string,
     ): Promise<ChatReply> {
-        const contextSummary = buildChatSystemContext(
-            this._config?.taskContext,
-            this._lastDebrief,
-            this._lastRunObservations,
-        );
+        const contextSummary = buildChatSystemContext(this._config?.taskContext);
         // Retained compat path (cortex + history/sessionId callers). Migrated
         // onto a transient ChatEngine (Task 8): the direct path no longer calls
         // the deleted free function (pre-engine direct path), and the "Context from prior run"
@@ -1668,12 +1659,7 @@ export class ReactiveAgent<TOut = unknown> {
                 systemPrompt: self._config?.systemPrompt
                     ? () => self._config!.systemPrompt!
                     : undefined,
-                contextSummary: () =>
-                    buildChatSystemContext(
-                        self._config?.taskContext,
-                        self._lastDebrief,
-                        self._lastRunObservations,
-                    ),
+                contextSummary: () => buildChatSystemContext(self._config?.taskContext),
                 scratchpadEntries: () => Object.fromEntries(self._scratchpad), toolIntent: makeChatToolIntent(self._config),
                 ...sessionEnvironmentPorts(self.runtime, options),
             },

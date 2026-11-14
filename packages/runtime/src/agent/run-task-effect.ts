@@ -88,6 +88,7 @@ import type {
 } from '../builder/types.js'
 import type { AgentDebrief } from '../debrief.js'
 import { safeParseJson } from './_json.js'
+import { observationsFromSteps, type ObservationStep } from '../chat/last-run-context.js'
 import { resolveWorkspaceDir, startRun, type RunStateSpec } from '../engine/start-run.js'
 import { settleFromExit, withLiveApprover, type LiveApprovalCallback } from '../engine/human-gate.js'
 
@@ -419,41 +420,10 @@ export const buildRunTaskEffect = (
             // Capture reasoning context so chat() has access to actual data.
             // Includes: tool observations + agent analysis thoughts (which contain
             // the synthesized data from tool results, not just compressed previews).
-            const steps = ((r.metadata as { reasoningSteps?: readonly unknown[] } | undefined)?.reasoningSteps ??
-                []) as Array<{
-                type: string
-                content: string
-                metadata?: {
-                    observationResult?: { success?: boolean }
-                    toolUsed?: string
-                }
-            }>
-            const contextParts: string[] = []
-            for (let i = 0; i < steps.length; i++) {
-                const s = steps[i]!
-                if (s.type === 'observation') {
-                    // Include successful observations (tool results)
-                    if (
-                        s.metadata?.observationResult?.success !== false &&
-                        s.content.length > 10 &&
-                        !s.content.startsWith('⚠️') &&
-                        !s.content.startsWith('✓ final-answer')
-                    ) {
-                        contextParts.push(`[Tool result]: ${s.content}`)
-                    }
-                } else if (s.type === 'thought' && i > 0) {
-                    // Include analysis thoughts that follow observations — these contain
-                    // the actual synthesized data (e.g. commit summaries, parsed results).
-                    const prev = steps[i - 1]
-                    if (
-                        prev?.type === 'observation' &&
-                        s.content.length > 50
-                    ) {
-                        contextParts.push(`[Agent analysis]: ${s.content}`)
-                    }
-                }
-            }
-            deps.setLastRunObservations(contextParts)
+            deps.setLastRunObservations(
+                observationsFromSteps(((r.metadata as { reasoningSteps?: readonly unknown[] } | undefined)?.reasoningSteps ??
+                    []) as readonly ObservationStep[]),
+            )
             // Reuses the SAME `reasoningSteps` variable (and its existing
             // single-assertion cast pattern, see buildEvidenceCorpusFromSteps
             // below) rather than the narrower inline-typed `steps` local

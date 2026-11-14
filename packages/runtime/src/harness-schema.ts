@@ -69,6 +69,14 @@ export const HarnessConfigSchema = Schema.Struct({
    */
   budgetAnswerTurn: Schema.optional(Schema.Boolean),
   /**
+   * Lean thinking. Opt-in: on a thinking model, a tool-selection turn (tools
+   * on the wire, last tool result not a failure) is requested with
+   * `thinking: false`, so the model picks its tool without a reasoning chain.
+   * Every other turn thinks as before. Off by default pending a live ablation.
+   * (`RA_LEAN_THINKING=1`)
+   */
+  leanThinking: Schema.optional(Schema.Boolean),
+  /**
    * LLM recovery budget: how many recoverable provider failures on think
    * turns one run may retry instead of ending with `llm_error`. Malformed
    * model output is resampled; a request over the context window or the

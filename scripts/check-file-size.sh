@@ -203,9 +203,10 @@ GIANT_BAR=1000
 # 2026-11-12 structured questions: reactive-agent.ts 2012->2002 (listPendingInteractions inline row type replaced by the shared PendingInteraction from agent/durable-facade.ts).
 # 2026-11-13 loop guidance: kernel-state.ts 1299->1292 (LoopDetectionConfig moved verbatim to kernel/state/loop-detection-config.ts, +guidanceCycles field there).
 # 2026-11-12 chat routes by capability: reactive-agent.ts 2002->1987 (three pre-resolved useTools sites + _resolveUseTools replaced by one toolIntent capability per ChatEngine, makeChatToolIntent in agent/chat-capabilities.ts), chat/engine.ts 670->669 (routing JSDoc condensed, toolIntent port added).
+# 2026-11-14 chat run-context isolation: reactive-agent.ts 1987->1973 (three chat engines' contextSummary closures carry static taskContext only, no agent-level _lastDebrief/_lastRunObservations), chat/engine.ts 669->663 (tool path sends the raw input; prior-run context now per-session via chat/last-run-context.ts).
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:1987"
-  "runtime/src/chat/engine.ts:669"
+  "runtime/src/reactive-agent.ts:1973"
+  "runtime/src/chat/engine.ts:663"
   "runtime/src/builder.ts:2200"
   "runtime/src/execution-engine.ts:955"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:797"

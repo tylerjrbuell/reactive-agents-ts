@@ -9,7 +9,8 @@ import { applyHistoryWindow, applyHistoryWindowWithOverflow, type HistoryOverflo
 import { workspaceCarry, type WorkspaceOption } from "../engine/start-run.js";
 import { assistantTurnOf, healShapedAssistantTurns, recordedTurnPair, type AssistantTurn } from "./history-hygiene.js";
 import { assembleToolReply } from "./tool-reply.js";
-import { prependTaskText, taskInputHasMedia, taskInputText, type TaskInput } from "../agent/task-input.js";
+import { taskInputHasMedia, taskInputText, type TaskInput } from "../agent/task-input.js";
+import { lastRunContextOf } from "./last-run-context.js";
 import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TurnGate } from "./turn-gate.js";
@@ -32,14 +33,6 @@ const DEFAULT_MAX_DIRECT_TOKENS = 4096;
 const DIRECT_PROMPT_SEPARATOR = "\n\n---\n\n";
 
 /**
- * Separator used when composing the tool-path runTask input from the host's
- * `contextSummary` fragment and the raw message (Task 2). The engine owns the
- * joining mechanic; the fragment WORDINGS ("Context from prior run", "New
- * request") stay at the host's `contextSummary` composition point.
- */
-const TURN_INPUT_SEPARATOR = "\n\n---\n\n";
-
-/**
  * Engine-default direct-path persona, byte-for-byte the generic conversational prompt
  * `chat.ts:direct path` hardcodes for the no-context case. Used only when no
  * `systemPrompt` capability is wired — never a blank system prompt.
@@ -60,7 +53,7 @@ const CONTEXT_DIRECT_PROMPT_SUFFIX = "Answer conversationally and concisely.";
  *   `complete` (plain conversational completion, no tools).
  * - Optional infrastructure ports: `publishTurn` (EventBus ChatTurn emission),
  *   `saveHistory` / `loadHistory` (SessionStoreService persistence), `systemPrompt`
- *   (persona resolution) and `contextSummary` (prior-run context block).
+ *   (persona resolution) and `contextSummary` (static grounding block).
  *
  * The engine is a pure plain-async orchestrator (the `GatewayChatManager` shape
  * generalized): Effect lives at the host's edge exactly as the facades do today. Every
@@ -133,9 +126,8 @@ export interface ChatEngineCapabilities {
    */
   readonly systemPrompt?: (message: string) => string;
   /**
-   * "Context from prior run" block (debrief + observations + taskContext). The host
-   * supplies the composition (e.g. a `buildChatSystemContext` closure); the engine
-   * renders it as a fragment of the direct-path prompt.
+   * Static grounding (build-time taskContext) for the direct-path prompt. Never run
+   * results: the engine keeps this session's own last tool-turn results itself.
    */
   readonly contextSummary?: (message: string) => string;
   readonly scratchpadEntries?: () => Readonly<Record<string, string>>;
@@ -282,6 +274,8 @@ export class ChatEngine {
    */
   #loaded = false;
   readonly #todo: TodoCarry;
+  /** This session's latest tool-turn results, for its own direct (tools-off) turns only. Never shared across sessions. */
+  #lastRunContext = "";
   readonly #env: EnvironmentTracker;
 
   /**
@@ -328,9 +322,8 @@ export class ChatEngine {
    * assistant turn.
    *
    * Tool path (Task 2): requires `runTask` — typed {@link ChatEngineCapabilityError}
-   * rejection otherwise, never a silent fallback onto the direct path. The input
-   * handed to `runTask` composes the host's `contextSummary(message)` fragment with
-   * the raw message (joined by `---`); the RAW prior turn list rides `opts.history`.
+   * rejection otherwise, never a silent fallback onto the direct path. `runTask` gets
+   * the raw input (same as `streamTurn`); the RAW prior turn list rides `opts.history`.
    * The reply keeps `agent.chat()`'s tool-path field mapping (`toolsUsed`, `tokens`,
    * `steps`, `cost`, `reasoningSteps`, `scratchpad`, `citationCheck`).
    *
@@ -366,10 +359,9 @@ export class ChatEngine {
           capability: "runTask",
         });
       }
-      const contextSummary = this.#deps.contextSummary?.(message);
-      const taskIn = prependTaskText(input, (t) => [contextSummary ?? "", t].filter(isNonEmpty).join(TURN_INPUT_SEPARATOR));
       const history = await this.#historyForPath();
-      const result = await this.#deps.runTask(taskIn, {
+      // Raw input, exactly what streamTurn sends: no prior-run block rides the task.
+      const result = await this.#deps.runTask(input, {
         history,
         maxIterations: options?.maxIterations,
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? this.#origin),
@@ -377,6 +369,7 @@ export class ChatEngine {
       });
       const reply = assembleToolReply(result, options ?? {}, this.#deps.scratchpadEntries?.() ?? {});
       const userText = options?.recordUserText ?? message, assistant = assistantTurnOf(result);
+      this.#lastRunContext = lastRunContextOf(result.debrief, result.metadata);
       this.#recordBothTurns(userText, assistant);
       await this.#publishTurns(result.taskId, "react-loop", userText, assistant, result.metadata.tokensUsed);
       await this.#persistHistory();
@@ -495,6 +488,7 @@ export class ChatEngine {
         engine.#todo.observe(event);
         if (event._tag === "StreamCompleted" && !recorded) {
           recorded = true;
+          engine.#lastRunContext = lastRunContextOf(undefined, event.metadata);
           const assistant = assistantTurnOf(event);
           engine.#recordBothTurns(userText, assistant);
           await engine.#publishTurns(event.taskId ?? "stream", "react-loop", userText, assistant, event.metadata?.tokensUsed);
@@ -634,7 +628,7 @@ export class ChatEngine {
    */
   #directSystemPrompt(message: string, extraContext?: string): string {
     const systemPromptCapability = this.#deps.systemPrompt;
-    const contextSummary = this.#deps.contextSummary?.(message);
+    const contextSummary = [this.#deps.contextSummary?.(message), this.#lastRunContext].filter(isNonEmpty).join(DIRECT_PROMPT_SEPARATOR);
     if (systemPromptCapability) {
       return composeDirectPrompt(
         systemPromptCapability(message),

@@ -260,6 +260,36 @@ describe("run-started config + origin", () => {
     }
   });
 
+  test(".withHarness({ leanThinking: true }) is recorded as a mechanism (default off)", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const prior = process.env.RA_LEAN_THINKING;
+    delete process.env.RA_LEAN_THINKING;
+    try {
+      const on = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .withHarness({ leanThinking: true })
+        .build();
+      const onMech = await mechanismsOf(on.run("lean-thinking pin"));
+      await on.dispose();
+      expect(onMech?.leanThinking).toBe(true);
+
+      const off = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .build();
+      const offMech = await mechanismsOf(off.run("lean-thinking default pin"));
+      await off.dispose();
+      expect(offMech?.leanThinking).toBe(false);
+    } finally {
+      if (prior !== undefined) process.env.RA_LEAN_THINKING = prior;
+    }
+  });
+
   test("llmRecoveryBudget is recorded as a mechanism (default 2; .withHarness({ llmRecoveryBudget: 0 }) gives 0)", async () => {
     const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
       const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
