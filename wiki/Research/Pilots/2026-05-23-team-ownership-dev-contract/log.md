@@ -2154,3 +2154,16 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   tmp-before-after: 2.3G / 2.3G
   files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-P2a.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest.jsonl]
 ```
+
+```yaml
+- date: 2026-11-14
+  warden: harness-warden
+  task: terminal-decision-basis-audit
+  state: completed
+  confidence: 0.75
+  verdicts: {hypothesis: "MIXED: asymmetric authority explains 9/12 wrong vetoes (75%) and 29/109 wrong accepts (27%), but 66% of 121 mismatches are model-final accepts behind passing D/E gates (content beyond declared criteria)", declared-receipt-misses: "0/240 success-ended runs", correct-failures-declared-or-evidence: "63/68 (93%)", heuristic-sole-veto-precision: "5/14 (36%) vs 41% base"}
+  evidence: {n: "321 terminal outcomes (P2a+P3a, sha 2269ce57e), +245 ablation cells (arms not independent)", census: "21 veto + 12 terminate + 6 accept sites with file:line"}
+  spend-usd: 0
+  tmp-before-after: n/a
+  files: [wiki/Research/Harness-Reports/2026-11-14-terminal-decision-basis-audit.md, wiki/Research/Harness-Reports/2026-11-14-terminal-decision-basis-audit/]
+```
