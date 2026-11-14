@@ -181,6 +181,41 @@ export function deriveExecutionSuccess(
   // from its own delivery decision, and a `partial` whose verdict is refused is
   // vetoed the same way. An accepted or null (unjudged) verdict keeps the lane.
   const reconciled = readTerminalOutcome(rr?.metadata);
+  // RunContract x step-ledger scan of the declared deliverables (no model
+  // judgment). Shared by the answer-only exemption below and the
+  // deliverable-honesty invariant further down.
+  const scanDeclaredDeliverables = () =>
+    deriveReceiptDeliverables({
+      task: String((task.input as { question?: unknown })?.question ?? task.id),
+      ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
+      ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
+      ...(readPosture(task) === "plan" ? { posture: "plan" as const } : {}),
+      reasoningSteps: (ctx.metadata.reasoningSteps ?? []) as import("@reactive-agents/reasoning").ReasoningStep[],
+      // Wave C1 (task 6) — a ledger `artifact` entry marks a declared
+      // deliverable produced without re-scanning reasoningSteps.
+      // Wave C.2 — run-scoped (all passes), not just the last one.
+      runLedger: readRunLedger(ctx.metadata) ?? rr?.metadata?.runLedger,
+      output: hasSubstantiveOutput ? outputForSuccess : "",
+    });
+  // `answerSatisfied === false` is the SOLE refusal (no rejected verdict,
+  // deliverable decision or verifier verdict; nothing outstanding) and every
+  // declared deliverable verifiably landed: the artifacts are the answer (same
+  // rule as the empty-output invariant below), so a last turn that was not an
+  // answer-shaped message is not a failure. False-veto, local-model campaign
+  // 2026-11-13 (gpt-oss rw-4: output.ts written, hidden grader 1.0).
+  const deliverablesAreTheAnswer = (o: NonNullable<typeof reconciled>): boolean => {
+    if (
+      o.status !== "partial" ||
+      o.verdict?.accepted === false ||
+      o.deliverable?.accepted === false ||
+      o.verifierVerdict?.verified === false ||
+      (o.outstanding ?? []).length > 0
+    ) {
+      return false;
+    }
+    const declared = scanDeclaredDeliverables() ?? [];
+    return declared.length > 0 && declared.every((d) => d.produced);
+  };
   // A pass after the kernel minted its outcome failed (e.g. a failed
   // verification retry keeps the first pass's metadata but reports `failed`).
   // The minted record is then stale: stamp it, so the finalize fold reports
@@ -198,7 +233,7 @@ export function deriveExecutionSuccess(
     reconciled.success === false &&
     (reconciled.status !== "partial" ||
       reconciled.verdict?.accepted === false ||
-      reconciled.answerSatisfied === false)
+      (reconciled.answerSatisfied === false && !deliverablesAreTheAnswer(reconciled)))
   ) {
     executionSucceeded = false;
     ctx.metadata.terminalOutcomeNotSuccess = true;
@@ -261,20 +296,7 @@ export function deriveExecutionSuccess(
     rr?.status !== "abstained" &&
     !(typeof rr?.error === "string" && rr.error.trim().length > 0);
   if (executionSucceeded || emptyOutputNoErrorDetail) {
-    const declaredDeliverables = deriveReceiptDeliverables({
-      task: String((task.input as { question?: unknown })?.question ?? task.id),
-      ...(config.requiredTools?.tools ? { requiredTools: config.requiredTools.tools } : {}),
-      ...(config.taskContract !== undefined ? { taskContract: config.taskContract } : {}),
-      ...(readPosture(task) === "plan" ? { posture: "plan" as const } : {}),
-      reasoningSteps: (ctx.metadata.reasoningSteps ?? []) as import("@reactive-agents/reasoning").ReasoningStep[],
-      // Wave C1 (task 6) — same `rr.metadata.runLedger` forwarded
-      // onto TaskResult.metadata below (task 5); a ledger
-      // `artifact` entry marks a declared deliverable produced
-      // without re-scanning reasoningSteps.
-      // Wave C.2 — run-scoped (all passes), not just the last one.
-      runLedger: readRunLedger(ctx.metadata) ?? rr?.metadata?.runLedger,
-      output: hasSubstantiveOutput ? outputForSuccess : "",
-    });
+    const declaredDeliverables = scanDeclaredDeliverables();
     const declared = declaredDeliverables ?? [];
     const allProduced = declared.length > 0 && declared.every((d) => d.produced);
 
