@@ -54,7 +54,7 @@ export const makeChatComplete =
                     {
                         messages: params.messages,
                         systemPrompt: params.systemPrompt,
-                        temperature: 0.7,
+                        // No temperature: the agent's configured default applies, as on run().
                         ...(params.thinking !== undefined ? { thinking: params.thinking } : {}),
                     },
                 )
