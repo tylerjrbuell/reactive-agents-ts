@@ -23,7 +23,11 @@ import {
   type ForcedAbstention,
 } from "../loop/runner-helpers/force-abstention.js";
 import { countArtifacts, countDeliverableCandidates } from "../loop/runner-helpers/deliverable.js";
-import { proposeFromEnumerationIncomplete, proposeFromForcedAbstention } from "./emitters.js";
+import {
+  enumerationStallPatience,
+  proposeFromEnumerationIncomplete,
+  proposeFromForcedAbstention,
+} from "./emitters.js";
 import type { ControlProposal } from "./control-plane.js";
 import type { RunAssessment } from "../assessment/assess.js";
 import type { RunContract } from "../contract/run-contract.js";
@@ -108,6 +112,7 @@ export function enumerationIncompleteProposal(
   contract: RunContract | undefined,
   assessment: RunAssessment | undefined,
   horizonActive: boolean,
+  maxIterations?: number,
 ): ControlProposal | null {
   if (contract === undefined || assessment === undefined) return null;
   for (const r of contract.requirements) {
@@ -126,6 +131,10 @@ export function enumerationIncompleteProposal(
       // items (FM-14's status quo). Recorded as an open follow-up.
       itemsFound: 0,
       stallCount: progress.stallCount,
+      // Patience scales with the iteration budget; `stallCount` is the progress
+      // predicate (it resets on any iteration that showed the model something
+      // new), so an enumeration that is advancing never reaches it.
+      ...(maxIterations === undefined ? {} : { patience: enumerationStallPatience(maxIterations) }),
     });
     if (proposal) return proposal;
   }

@@ -141,6 +141,8 @@ export interface ExitProposal {
   readonly failure?: { readonly error: string; readonly stampReason?: boolean };
   /** The guard's own diagnostic (e.g. the loop-detector message), kept on the gate step. */
   readonly detail?: string;
+  /** Unfinished items only the guard knows (e.g. an enumeration requirement); merged into the gate's outstanding list. */
+  readonly outstanding?: readonly string[];
   /**
    * The proposing guard's own `guard-fired` record (its reason + evidence).
    * The gate emits it AFTER deciding, with an outcome read from the decision
@@ -720,6 +722,7 @@ export function proposeExit(args: {
     const outstanding = [
       ...outstandingItems(state, args.input, judged).filter((item) => !replaced.has(item)),
       ...unavailableLines,
+      ...(proposal.outstanding ?? []),
     ];
     const unmeetableOnly = unavailableLines.length > 0 && outstanding.every((item) => unavailableLines.includes(item));
     const progress = writeProgressArgs(state);

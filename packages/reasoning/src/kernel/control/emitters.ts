@@ -77,6 +77,19 @@ export function proposeFromForcedAbstention(
 
 // ─── N. Enumeration-incomplete (FM-16/FM-14) ─────────────────────────────────
 
+/** Floor of the enumeration stall patience; equals guard.ts's ESCALATION_EXHAUSTED. */
+export const ENUMERATION_STALL_FLOOR = 4;
+
+/**
+ * Stalled iterations an enumeration requirement may sit through before the
+ * control plane abstains: the floor, or 10% of the iteration budget when that
+ * is larger (the proportion the long-horizon stall threshold uses), so a
+ * 100-iteration run waits 10 stalled iterations and a 20-iteration run waits 4.
+ */
+export function enumerationStallPatience(maxIterations: number): number {
+  return Math.max(ENUMERATION_STALL_FLOOR, Math.ceil(0.1 * Math.max(1, Math.floor(maxIterations))));
+}
+
 /**
  * A `question-answered` requirement with a numeric `enumeration.expectedCount`
  * that has genuinely stalled (escalation exhausted, per guard.ts's
@@ -101,12 +114,16 @@ export function proposeFromEnumerationIncomplete(input: {
   };
   readonly itemsFound: number;
   readonly stallCount: number;
+  /**
+   * Stalled iterations tolerated before abstaining ({@link enumerationStallPatience}).
+   * Omitted = the guard.ts floor of 4.
+   */
+  readonly patience?: number;
 }): ControlProposal | null {
   if (!input.horizonActive) return null;
   const expected = input.requirement.enumeration?.expectedCount;
   if (typeof expected !== "number") return null;
-  const ESCALATION_EXHAUSTED = 4;
-  if (input.stallCount < ESCALATION_EXHAUSTED) return null;
+  if (input.stallCount < (input.patience ?? ENUMERATION_STALL_FLOOR)) return null;
   if (input.itemsFound >= expected) return null;
   return {
     source: "enumeration-incomplete",

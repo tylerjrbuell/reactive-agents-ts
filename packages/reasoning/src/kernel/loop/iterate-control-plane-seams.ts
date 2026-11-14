@@ -24,6 +24,7 @@ import {
 import { enumerationIncompleteProposal, inLoopAbstentionProposal } from "../control/abstention-proposal.js";
 import { emitControlResolution } from "../utils/diagnostics.js";
 import { proposeHarnessExit, type ExitDisposition } from "./exit-gate.js";
+import { ENUMERATION_PROPOSAL_SOURCE, proposeEnumerationAbstainExit } from "./enumeration-abstain-exit.js";
 import type { LaneDecision } from "../utils/lane-controller.js";
 import { transitionState, type KernelState } from "../../kernel/state/kernel-state.js";
 import type { HorizonProfile } from "./runner-helpers/horizon-profile.js";
@@ -59,6 +60,35 @@ function abstainExit(
     },
   });
   return { state: exit.state, exit };
+}
+
+/**
+ * Act on a winning `abstain`: the grounding-forced decline when `forced` is
+ * set, else the enumeration-incomplete exit through the gate (an enumeration
+ * abstain carries no `forced`, and was silently ignored before). Null when the
+ * resolution is not an abstain this seam can act on.
+ */
+function actOnAbstain(args: {
+  readonly state: KernelState;
+  readonly currentInput: KernelInput;
+  readonly currentOptions: KernelRunOptions;
+  readonly resolution: ReturnType<typeof resolveControlPlane>;
+  readonly forced: { readonly reason: string; readonly missing: readonly string[] } | null;
+}): Effect.Effect<ControlPlaneSeamResult | null, never, never> {
+  return Effect.gen(function* () {
+    const { state, currentInput, currentOptions, resolution, forced } = args;
+    if (resolution.action !== "abstain") return null;
+    if (forced !== null) return abstainExit(state, forced);
+    const winner = resolution.winner;
+    if (winner?.source !== ENUMERATION_PROPOSAL_SOURCE) return null;
+    const exit = yield* proposeEnumerationAbstainExit({
+      state: transitionState(state, { error: null }),
+      input: currentInput,
+      options: currentOptions,
+      winner,
+    });
+    return { state: exit.state, exit };
+  });
 }
 
 /** F3 seam — repeated-identical-failure proposals vs abstain (former lines 1242-1287). */
@@ -105,7 +135,7 @@ export function resolveF3ControlPlane(args: {
                 currentOptions.maxIterations,
               );
               const enumProposal = enumerationIncompleteProposal(
-                state.meta.runContract, state.meta.assessment, horizon !== undefined,
+                state.meta.runContract, state.meta.assessment, horizon !== undefined, currentOptions.maxIterations,
               );
               const proposals: ControlProposal[] = [];
               if (recoveryProposal) proposals.push(recoveryProposal);
@@ -120,13 +150,11 @@ export function resolveF3ControlPlane(args: {
                   reason: resolution.reason,
                   proposals: proposals.map((p) => ({ source: p.source, action: p.action })),
                 });
-                if (resolution.action === "abstain" && forced !== null) {
-                  // Abstain won — stand down the redirect (its counter was never
-                  // committed) and force the honest decline through the
-                  // single-owner terminate() abstain path, exactly as the
-                  // strategy-switch seam does.
-                  return abstainExit(state, forced);
-                }
+                // Abstain won — stand down the redirect (its counter was never
+                // committed) and decline honestly: the forced decline through the
+                // single-owner terminate() abstain path, or the enumeration exit.
+                const abstained = yield* actOnAbstain({ state, currentInput, currentOptions, resolution, forced });
+                if (abstained !== null) return abstained;
               }
     return { state, exit: null };
   });
@@ -171,7 +199,7 @@ export function resolveStallControlPlane(args: {
           currentOptions.maxIterations,
         );
         const enumProposal = enumerationIncompleteProposal(
-          state.meta.runContract, state.meta.assessment, horizon !== undefined,
+          state.meta.runContract, state.meta.assessment, horizon !== undefined, currentOptions.maxIterations,
         );
         const proposals: ControlProposal[] = [];
         if (stallProposal) proposals.push(stallProposal);
@@ -186,11 +214,10 @@ export function resolveStallControlPlane(args: {
             reason: resolution.reason,
             proposals: proposals.map((p) => ({ source: p.source, action: p.action })),
           });
-          if (resolution.action === "abstain" && forced !== null) {
-            // Abstain won — stand down the stall guard and decline honestly via
-            // the single-owner terminate() abstain path.
-            return abstainExit(state, forced);
-          }
+          // Abstain won — stand down the stall guard and decline honestly (the
+          // forced decline via terminate(), or the enumeration exit).
+          const abstained = yield* actOnAbstain({ state, currentInput, currentOptions, resolution, forced });
+          if (abstained !== null) return abstained;
         }
     return { state, exit: null };
   });
@@ -232,7 +259,7 @@ export function resolveSwitchControlPlane(args: {
                   currentOptions.maxIterations,
                 );
                 const enumProposal = enumerationIncompleteProposal(
-                  state.meta.runContract, state.meta.assessment, horizon !== undefined,
+                  state.meta.runContract, state.meta.assessment, horizon !== undefined, currentOptions.maxIterations,
                 );
                 const proposals: ControlProposal[] = [];
                 if (switchProposal) proposals.push(switchProposal);
@@ -247,13 +274,12 @@ export function resolveSwitchControlPlane(args: {
                     reason: resolution.reason,
                     proposals: proposals.map((p) => ({ source: p.source, action: p.action })),
                   });
-                  if (resolution.action === "abstain" && forced !== null) {
-                    // Abstain won — stand down the switch and force the honest
-                    // decline via the single-owner terminate() abstain path
-                    // (identical mechanics to runner §7.5; the post-loop block
-                    // then skips because terminatedBy === "abstained").
-                    return abstainExit(state, forced);
-                  }
+                  // Abstain won — stand down the switch and decline honestly (the
+                  // forced decline via terminate(), identical to runner §7.5, whose
+                  // post-loop block then skips because terminatedBy === "abstained";
+                  // or the enumeration exit).
+                  const abstained = yield* actOnAbstain({ state, currentInput, currentOptions, resolution, forced });
+                  if (abstained !== null) return abstained;
                 }
     return { state, exit: null };
   });
