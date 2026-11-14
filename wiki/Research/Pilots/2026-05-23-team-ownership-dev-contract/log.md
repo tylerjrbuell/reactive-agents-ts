@@ -2141,3 +2141,16 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   tmp-before-after: 2.3G / 2.3G
   files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/PLAN.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest.jsonl]
 ```
+
+```yaml
+- date: 2026-11-13
+  warden: harness-warden
+  task: local-model-campaign-p2a-restart
+  state: completed
+  confidence: 0.8
+  verdicts: {h3-ranking: "qwen3.5 81% > gpt-oss 69% > qwen3:4b 64% > granite 47% > cogito 39% > llama3.1 31% (adjacent gaps noise)", lh: "gpt-oss 10/12, qwen3.5 5/12, qwen3:4b 5/12; lh-1 environment-gated (web-search backend)", loop-detection-2269ce57e: "graduated redirect fired 7/36 LH cells, never terminate, did not change outcomes on broken-tool lh-1"}
+  evidence: {cells: "216 H3 + 36 LH, all with SHA 2269ce57e + digest", attribution-p2: "harness 13% model 74% env 12%", attribution-p3a: "harness 29% (false-veto 5, misleading-guidance 1)", superseded: [granite4:tiny-h, qwen3:4b]}
+  spend-usd: 0
+  tmp-before-after: 2.3G / 2.3G
+  files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-P2a.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest.jsonl]
+```
