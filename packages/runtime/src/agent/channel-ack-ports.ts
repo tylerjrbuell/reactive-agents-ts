@@ -20,10 +20,14 @@ import type { ChannelAgentHandle } from "./channel-router-resolver.js";
 export const ACK_MAX_TOKENS = 80;
 
 /**
- * Why a model ack came back unusable (the router then sends the canned text). The router owns
- * the `timeout` case (it bounds the port); the runtime can only see these.
+ * The widened result of `RoutedSession["acknowledge"]` (text plus why it is unusable). Derived
+ * from the channels port type: the channels package does not re-export `AckPortResult`.
  */
-export type AckFallbackReason = "empty" | "thinking_only" | "error";
+type AckPortResult = Effect.Effect.Success<ReturnType<NonNullable<RoutedSession["acknowledge"]>>>;
+type AckPortObject = Exclude<AckPortResult, string>;
+
+/** Why a model ack came back unusable (the router then sends the canned text). The router owns `timeout`. */
+export type AckFallbackReason = Exclude<NonNullable<AckPortObject["fallbackReason"]>, "timeout">;
 
 const ACK_SYSTEM_PROMPT =
   "You are replying in a chat. The user's message follows. Write ONE short sentence (under 20 words) " +
@@ -71,16 +75,14 @@ export const drainWithNarration = async (
 };
 
 /**
- * `RoutedSession["acknowledge"]` over a plain completion; fails soft to an empty string.
- * Extended thinking is switched off for the call: a thinking model otherwise spends the
- * router's few-second bound (and the token budget) reasoning before any visible text.
- * `onFallback` (optional) is told why an unusable result was returned.
+ * `RoutedSession["acknowledge"]` over a plain completion. Returns `{ text }` on success; an
+ * unusable result is `{ text: "", fallbackReason }` (`thinking_only`, `empty`, `error`) so the
+ * router can report why it sent the canned text. Extended thinking is switched off for the call:
+ * a thinking model otherwise spends the router's few-second bound (and the token budget) reasoning
+ * before any visible text.
  */
 export const makeAcknowledge =
-  (
-    complete: NonNullable<ChannelAgentHandle["complete"]>,
-    onFallback?: (reason: AckFallbackReason) => void,
-  ): NonNullable<RoutedSession["acknowledge"]> =>
+  (complete: NonNullable<ChannelAgentHandle["complete"]>): NonNullable<RoutedSession["acknowledge"]> =>
   (turn: RoutedTurn) =>
     Effect.tryPromise({
       try: () =>
@@ -92,15 +94,13 @@ export const makeAcknowledge =
         }),
       catch: (cause) => cause,
     }).pipe(
-      Effect.map((r) => {
+      Effect.map((r): AckPortObject => {
         const text = r.message.trim();
-        if (text.length === 0) onFallback?.((r.thinking ?? "").trim().length > 0 ? "thinking_only" : "empty");
-        return text;
+        if (text.length > 0) return { text };
+        const reason: AckFallbackReason = (r.thinking ?? "").trim().length > 0 ? "thinking_only" : "empty";
+        return { text: "", fallbackReason: reason };
       }),
-      Effect.orElseSucceed(() => {
-        onFallback?.("error");
-        return "";
-      }),
+      Effect.orElseSucceed((): AckPortObject => ({ text: "", fallbackReason: "error" })),
     );
 
 /**

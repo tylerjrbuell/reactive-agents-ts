@@ -14,7 +14,7 @@ describe("channel ack helpers public export", () => {
     const ack = makeAcknowledge(complete);
     const { Effect } = await import("effect");
     const out = await Effect.runPromise(ack({ text: "hi" } as never));
-    expect(out).toBe("on it");
+    expect(out).toEqual({ text: "on it" });
   });
 
   test("drainWithNarration returns StreamedTurn", async () => {

@@ -11,18 +11,14 @@ import type { RoutedTurn } from "@reactive-agents/channels";
 import { EventBusLive } from "@reactive-agents/core";
 import { LLMService, TestLLMServiceLayer, type CompletionRequest } from "@reactive-agents/llm-provider";
 import { makeChatComplete } from "../src/agent/chat-capabilities.js";
-import { ACK_MAX_TOKENS, makeAcknowledge, type AckFallbackReason } from "../src/agent/channel-ack-ports.js";
+import { ACK_MAX_TOKENS, makeAcknowledge } from "../src/agent/channel-ack-ports.js";
 import type { ChannelAgentHandle } from "../src/agent/channel-router-resolver.js";
 
 type Complete = NonNullable<ChannelAgentHandle["complete"]>;
 
 const turn = { text: "fix the bug" } as RoutedTurn;
 
-const run = (complete: Complete) => {
-  const reasons: AckFallbackReason[] = [];
-  const text = Effect.runPromise(makeAcknowledge(complete, (r) => reasons.push(r))(turn));
-  return text.then((t) => ({ text: t, reasons }));
-};
+const run = (complete: Complete) => Effect.runPromise(makeAcknowledge(complete)(turn));
 
 /**
  * Scripted thinking model: with thinking on it returns thinking and no content (budget eaten);
@@ -36,8 +32,7 @@ const thinkingModel: Complete = async (p) =>
 describe("model ack never runs extended thinking", () => {
   test("thinking model: ack requests no thinking and returns visible text", async () => {
     const out = await run(thinkingModel);
-    expect(out.text).toBe("On it, starting now.");
-    expect(out.reasons).toEqual([]);
+    expect(out).toEqual({ text: "On it, starting now." });
   });
 
   test("ack budget leaves room for a visible sentence", () => {
@@ -47,20 +42,17 @@ describe("model ack never runs extended thinking", () => {
 
   test("thinking-only response is not used as the ack and reports thinking_only", async () => {
     const out = await run(async () => ({ message: "", thinking: "reasoning only" }));
-    expect(out.text).toBe("");
-    expect(out.reasons).toEqual(["thinking_only"]);
+    expect(out).toEqual({ text: "", fallbackReason: "thinking_only" });
   });
 
   test("empty response reports empty", async () => {
     const out = await run(async () => ({ message: "   " }));
-    expect(out.text).toBe("");
-    expect(out.reasons).toEqual(["empty"]);
+    expect(out).toEqual({ text: "", fallbackReason: "empty" });
   });
 
   test("provider failure reports error", async () => {
     const out = await run(() => Promise.reject("provider down"));
-    expect(out.text).toBe("");
-    expect(out.reasons).toEqual(["error"]);
+    expect(out).toEqual({ text: "", fallbackReason: "error" });
   });
 
   test("makeChatComplete forwards thinking:false onto the CompletionRequest", async () => {

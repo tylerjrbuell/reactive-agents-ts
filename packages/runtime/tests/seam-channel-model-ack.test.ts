@@ -148,7 +148,7 @@ describe("channel model ack ports", () => {
       // A plain-chat turn is parked on its gate; acknowledge must still resolve.
       const running = Effect.runPromise(session.send(turn()));
       const ack = await Effect.runPromise(session.acknowledge!(turn()));
-      expect(ack).toBe("On it, taking a look.");
+      expect(ack).toEqual({ text: "On it, taking a look." });
       expect(spy.chats).toEqual(["fix the bug"]); // acknowledge did not call session.chat
       expect(spy.completes).toHaveLength(1);
       expect(spy.completes[0]!.budgetTokens).toBeLessThanOrEqual(100);
@@ -158,9 +158,9 @@ describe("channel model ack ports", () => {
     });
   });
 
-  test("acknowledge fails soft to an empty string", async () => {
+  test("acknowledge fails soft to empty text with an error reason", async () => {
     await withSession([completed("x")], () => Promise.reject("provider down"), async (session) => {
-      expect(await Effect.runPromise(session.acknowledge!(turn()))).toBe("");
+      expect(await Effect.runPromise(session.acknowledge!(turn()))).toEqual({ text: "", fallbackReason: "error" });
     });
   });
 
