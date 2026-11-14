@@ -84,15 +84,12 @@ describe("ReactiveStrategy", () => {
         },
       }).pipe(Effect.provide(layer)),
     ));
-    // Declared-vs-heuristic rule (terminal-decision audit 2026-11-14): the verifier's
-    // regex continuation-intent check now WARNS instead of rejecting, so this run
-    // no longer ends as a verifier `failed`. The exit gate still refuses to ship the
-    // announce-a-next-step text (3 denials), and the run ends `abstained`: never a
-    // success. The announcement text rides as the output of the abstained result
-    // (the warn does not null it), which is the cost of the demotion.
-    expect(result.status).toBe("abstained");
-    expect((result.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
-    expect(result.steps.filter((s) => String(s.content).includes("announced a next step")).length).toBeGreaterThan(0);
+    expect(result.status).toBe("failed");
+    expect(result.output == null || result.output === "").toBe(true);
+    // RED-ON-CUT (2026-11-10): without the mint's uniform cause step the
+    // kernel's verifier rejection reached `error` with no attempt summary.
+    expect(result.error ?? "").toContain("continuation-intent");
+    expect(result.error ?? "").toContain("\nWhat was attempted: no tool calls were made.");
   });
 
   it("should parse tool requests and add action + observation steps", async () => {

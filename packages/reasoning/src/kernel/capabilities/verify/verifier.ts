@@ -577,16 +577,15 @@ export const defaultVerifier: Verifier = {
       // "Let me summarize:\n<content>" do not trip it. Severity: reject — the
       // kernel suppresses the mid-thought (→ honest failure / bounded retry)
       // instead of shipping it as success.
-      // Basis demotion (terminal-decision audit 2026-11-14): the check reads the
-      // last line's shape with a regex (heuristic basis), so it WARNS on the
-      // receipt and never rejects alone. The exit gate still denies a model exit
-      // whose text announces a next step (exit-gate.ts answerGap), which is where
-      // the model is told to write the answer instead.
+      // Owner decision 2026-11-10 (kept after the 2026-11-14 basis audit): a
+      // continuation announcement is not a deliverable, so it may veto. This is a
+      // literal structural check (terminal clause shape), not semantic inference
+      // like fabricated-measurement or listed-entities, which were demoted.
       const continuation = detectContinuationIntent(ctx.content);
       checks.push({
         name: "output-not-continuation-intent",
         passed: !continuation.isContinuation,
-        severity: continuation.isContinuation ? "warn" : "pass",
+        severity: continuation.isContinuation ? "reject" : "pass",
         reason: continuation.isContinuation ? continuation.reason : undefined,
       });
 

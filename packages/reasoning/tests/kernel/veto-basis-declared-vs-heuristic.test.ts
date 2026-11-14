@@ -10,7 +10,7 @@
 //  - contract-outstanding.ts classify: make `unlandedActions` basis "declared" -> pin 1 fails.
 //  - requirement-basis.ts: action-required task-text -> "declared" -> pin 1 fails.
 //  - derive-conditions.ts seedPostConditions: drop the SideEffectLanded filter -> pin 2 fails.
-//  - verifier.ts continuation severity back to "reject" -> pin 4 fails; fab `fab.hard &&` removed -> pin 5 fails.
+//  - verifier.ts continuation severity to "warn" -> pin 4 fails; fab `fab.hard &&` removed -> pin 5 fails.
 //  - claimed-actions.ts: restore `candidates.length === 0` early return -> pin 6 fails.
 //  - loop-detector.ts: `succeeded.has` back to `state.toolsUsed.has` -> pin 7 fails.
 //  - act.ts guard onObservation `false` back to `!guardFailed` -> pin 8 fails.
@@ -116,8 +116,11 @@ describe("pin 3: the exit gate does not fail a prose-action task, and still fail
   });
 });
 
-describe("pin 4: continuation-intent warns, never rejects alone", () => {
-  it("severity is warn", () => {
+// Restored 2026-11-13: continuation-intent is a literal structural check and the
+// owner decision (2026-11-10) says a continuation never ships as the answer, so it
+// rejects. Only the semantic checks (fabricated-measurement, listed-entities) advise.
+describe("pin 4: continuation-intent rejects (structural, owner decision 2026-11-10)", () => {
+  it("severity is reject", () => {
     const r = defaultVerifier.verify({
       action: "final-answer",
       content: "I'll make one more attempt with a different search query:",
@@ -129,8 +132,7 @@ describe("pin 4: continuation-intent warns, never rejects alone", () => {
     });
     const check = r.checks.find((c) => c.name === "output-not-continuation-intent")!;
     expect(check.passed).toBe(false);
-    expect(check.severity).toBe("warn");
-    expect(r.checks.every((c) => c.severity !== "reject" || c.name !== "output-not-continuation-intent")).toBe(true);
+    expect(check.severity).toBe("reject");
   });
 });
 
