@@ -2167,3 +2167,16 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   tmp-before-after: n/a
   files: [wiki/Research/Harness-Reports/2026-11-14-terminal-decision-basis-audit.md, wiki/Research/Harness-Reports/2026-11-14-terminal-decision-basis-audit/]
 ```
+
+```yaml
+- date: 2026-11-14
+  warden: harness-warden
+  task: partial-answer-root-cause-study
+  state: completed
+  confidence: 0.7
+  verdicts: {dominant-cause: "RW retrieved-but-computed/concluded-wrong 46% of 239 missed items (51% of lost credit); mental arithmetic and single-pass inference with the evidence in hand", second: "NR never-retrieved 23%, 52 of 54 from qwen3:4b only", instrument: "FMT 11%, mostly rw-3 pipe-table requirement not in prompt", stop-behaviour: "76% model-chosen stop, 91% at or below 50% of iteration budget, but more iterations is not the lever", top-levers: "L1 compute offload (est 11-16% of lost credit, code-execute errored 6/6 calls) > L6 guard/tool mechanics > L8 fix rw-3/rw-6 grader"}
+  evidence: {runs: "98 of 98 false-success partials classified (2 extra cells in cell files excluded, not in audit)", controls: "88 solved successes on the same 12 tasks", sha: "2269ce57e"}
+  spend-usd: 0
+  tmp-before-after: n/a
+  files: [wiki/Research/Harness-Reports/2026-11-14-partial-answer-root-causes.md, wiki/Research/Harness-Reports/2026-11-14-partial-answer-root-causes/]
+```

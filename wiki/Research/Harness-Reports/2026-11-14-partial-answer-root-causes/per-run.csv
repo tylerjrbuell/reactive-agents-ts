@@ -1,0 +1,240 @@
+cell,task,model,accuracy,iterations,maxIter,tokens,terminatedBy,primaryCause,guardBlockedCalls,flags,missedItem,itemCause,note
+cogito:8b|h3-plan-only|0,h3-plan-only,cogito:8b,0.83,0,12,5009,final_answer,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+cogito:8b|h3-plan-only|1,h3-plan-only,cogito:8b,0.83,0,12,4083,final_answer,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+cogito:8b|h3-plan-only|2,h3-plan-only,cogito:8b,0.67,3,12,18958,loop_detected:all_tools_called,RW,0,,low-stock.txt is exactly the sorted SKUs below 10,RW,filter/selection wrong (extra or missing SKU)
+cogito:8b|h3-plan-only|2,h3-plan-only,cogito:8b,0.67,3,12,18958,loop_detected:all_tools_called,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+gemma4:e4b|h3-plan-only|0,h3-plan-only,gemma4:e4b,0.83,0,12,10463,final_answer,TM,0,,low-stock.txt is exactly the sorted SKUs below 10,TM,wrong content / wrong file / empty
+gemma4:e4b|h3-plan-only|1,h3-plan-only,gemma4:e4b,0.83,0,12,12072,final_answer,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+gpt-oss:latest|h3-plan-only|0,h3-plan-only,gpt-oss:latest,0.5,1,12,26933,loop_detected:all_tools_called,TM,0,,low-stock.txt is exactly the sorted SKUs below 10,TM,wrong content / wrong file / empty
+gpt-oss:latest|h3-plan-only|0,h3-plan-only,gpt-oss:latest,0.5,1,12,26933,loop_detected:all_tools_called,TM,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+gpt-oss:latest|h3-plan-only|0,h3-plan-only,gpt-oss:latest,0.5,1,12,26933,loop_detected:all_tools_called,TM,0,,summary.md has the Reorder heading,FMT,"required ""## Reorder"" heading missing/unwritten"
+gpt-oss:latest|h3-plan-only|1,h3-plan-only,gpt-oss:latest,0.17,1,12,51196,loop_detected:all_tools_called,TM,0,,low-stock.txt is exactly the sorted SKUs below 10,TM,wrong content / wrong file / empty
+gpt-oss:latest|h3-plan-only|1,h3-plan-only,gpt-oss:latest,0.17,1,12,51196,loop_detected:all_tools_called,TM,0,,totals.json parses,TM,totals.json never written
+gpt-oss:latest|h3-plan-only|1,h3-plan-only,gpt-oss:latest,0.17,1,12,51196,loop_detected:all_tools_called,TM,0,,totalUnits correct,TM,totals.json never written
+gpt-oss:latest|h3-plan-only|1,h3-plan-only,gpt-oss:latest,0.17,1,12,51196,loop_detected:all_tools_called,TM,0,,skuCount correct,TM,totals.json never written
+gpt-oss:latest|h3-plan-only|1,h3-plan-only,gpt-oss:latest,0.17,1,12,51196,loop_detected:all_tools_called,TM,0,,summary.md has the Reorder heading,FMT,"required ""## Reorder"" heading missing/unwritten"
+gpt-oss:latest|h3-plan-only|2,h3-plan-only,gpt-oss:latest,0.33,1,12,16348,loop_detected:all_tools_called,TM,0,,low-stock.txt is exactly the sorted SKUs below 10,TM,wrong content / wrong file / empty
+gpt-oss:latest|h3-plan-only|2,h3-plan-only,gpt-oss:latest,0.33,1,12,16348,loop_detected:all_tools_called,TM,0,,totals.json parses,TM,totals.json never written
+gpt-oss:latest|h3-plan-only|2,h3-plan-only,gpt-oss:latest,0.33,1,12,16348,loop_detected:all_tools_called,TM,0,,totalUnits correct,TM,totals.json never written
+gpt-oss:latest|h3-plan-only|2,h3-plan-only,gpt-oss:latest,0.33,1,12,16348,loop_detected:all_tools_called,TM,0,,skuCount correct,TM,totals.json never written
+granite4:tiny-h|h3-plan-only|0,h3-plan-only,granite4:tiny-h,0.5,0,12,15223,final_answer,TM,0,,low-stock.txt is exactly the sorted SKUs below 10,TM,wrong content / wrong file / empty
+granite4:tiny-h|h3-plan-only|0,h3-plan-only,granite4:tiny-h,0.5,0,12,15223,final_answer,TM,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+granite4:tiny-h|h3-plan-only|0,h3-plan-only,granite4:tiny-h,0.5,0,12,15223,final_answer,TM,0,,summary.md has the Reorder heading,FMT,"required ""## Reorder"" heading missing/unwritten"
+granite4:tiny-h|h3-plan-only|1,h3-plan-only,granite4:tiny-h,0.67,0,12,7320,final_answer,RW,0,,low-stock.txt is exactly the sorted SKUs below 10,RW,filter/selection wrong (extra or missing SKU)
+granite4:tiny-h|h3-plan-only|1,h3-plan-only,granite4:tiny-h,0.67,0,12,7320,final_answer,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+granite4:tiny-h|h3-plan-only|2,h3-plan-only,granite4:tiny-h,0.67,0,12,6818,final_answer,RW,0,,low-stock.txt is exactly the sorted SKUs below 10,RW,filter/selection wrong (extra or missing SKU)
+granite4:tiny-h|h3-plan-only|2,h3-plan-only,granite4:tiny-h,0.67,0,12,6818,final_answer,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+llama3.1:latest|h3-plan-only|0,h3-plan-only,llama3.1:latest,0.83,0,12,9507,final_answer,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+llama3.1:latest|h3-plan-only|1,h3-plan-only,llama3.1:latest,0.83,1,12,10469,loop_detected:all_tools_called,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+llama3.1:latest|h3-plan-only|2,h3-plan-only,llama3.1:latest,0.67,1,12,10682,loop_detected:all_tools_called,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+llama3.1:latest|h3-plan-only|2,h3-plan-only,llama3.1:latest,0.67,1,12,10682,loop_detected:all_tools_called,RW,0,,summary.md has the Reorder heading,FMT,"required ""## Reorder"" heading missing/unwritten"
+qwen2.5:14b|h3-plan-only|0,h3-plan-only,qwen2.5:14b,0.83,0,12,5301,final_answer,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+qwen2.5:14b|h3-plan-only|1,h3-plan-only,qwen2.5:14b,0.83,0,12,5608,final_answer,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+qwen2.5:14b|h3-plan-only|2,h3-plan-only,qwen2.5:14b,0.83,0,12,5577,final_answer,RW,0,,totalUnits correct,RW,mental-arithmetic sum wrong (no compute tool offered)
+qwen3:4b|h3-plan-only|1,h3-plan-only,qwen3:4b,0.83,0,12,28708,final_answer,TM,0,,low-stock.txt is exactly the sorted SKUs below 10,TM,wrong content / wrong file / empty
+cogito:8b|h3-required-tools|0,h3-required-tools,cogito:8b,0.67,5,10,3973,end_turn,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+cogito:8b|h3-required-tools|1,h3-required-tools,cogito:8b,0.67,6,10,4338,end_turn,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+cogito:8b|h3-required-tools|2,h3-required-tools,cogito:8b,0.67,5,10,3973,end_turn,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+granite4:tiny-h|h3-required-tools|0,h3-required-tools,granite4:tiny-h,0.67,3,10,2386,end_turn,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+granite4:tiny-h|h3-required-tools|1,h3-required-tools,granite4:tiny-h,0.67,3,10,2335,end_turn,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+granite4:tiny-h|h3-required-tools|2,h3-required-tools,granite4:tiny-h,0.67,3,10,2335,end_turn,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+llama3.1:latest|h3-required-tools|0,h3-required-tools,llama3.1:latest,0.67,7,10,7600,harness_deliverable,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+llama3.1:latest|h3-required-tools|1,h3-required-tools,llama3.1:latest,0.67,5,10,4885,harness_deliverable,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+llama3.1:latest|h3-required-tools|2,h3-required-tools,llama3.1:latest,0.67,7,10,7664,harness_deliverable,RW,1,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+qwen2.5:14b|h3-required-tools|0,h3-required-tools,qwen2.5:14b,0.67,2,10,1869,final_answer,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+qwen2.5:14b|h3-required-tools|1,h3-required-tools,qwen2.5:14b,0.33,2,10,1930,end_turn,TM,0,compute_tool_available_unused,mean.txt is a number,TM,placeholder literal written
+qwen2.5:14b|h3-required-tools|1,h3-required-tools,qwen2.5:14b,0.33,2,10,1930,end_turn,TM,0,compute_tool_available_unused,mean within 0.01 of 21.8300,TM,placeholder literal written
+qwen2.5:14b|h3-required-tools|2,h3-required-tools,qwen2.5:14b,0.67,2,10,2219,end_turn,RW,0,compute_tool_available_unused,mean within 0.01 of 21.8300,RW,mental-arithmetic mean; code-execute available and unused
+cogito:8b|h3-todo-heavy|1,h3-todo-heavy,cogito:8b,0.83,11,14,25081,harness_synthesis,TM,43,,out-6.txt is 108,TM,template placeholder written; corrective rewrite blocked by repetition guard
+granite4:tiny-h|h3-todo-heavy|1,h3-todo-heavy,granite4:tiny-h,0.83,14,14,16374,controller_early_stop:dispatcher_early_stop,RW,0,,out-4.txt is 126,RW,wrote 58 for 63*2 (stale value; no re-read)
+granite4:tiny-h|h3-todo-heavy|2,h3-todo-heavy,granite4:tiny-h,0.83,14,14,15969,controller_early_stop:dispatcher_early_stop,RW,0,,out-4.txt is 126,RW,wrote 58 for 63*2 (stale value; no re-read)
+qwen3.5:latest|lh-debug-green@lh-a0|0,lh-debug-green,qwen3.5:latest,0.67,8,24,34958,end_turn,RW,1,claims_verified_without_running,chunk: even and tail,RW,"chunk.ts edited, fix wrong (tests not passed/run)"
+qwen3.5:latest|lh-debug-green@lh-a0|0,lh-debug-green,qwen3.5:latest,0.67,8,24,34958,end_turn,RW,1,claims_verified_without_running,chunk: hidden short input,RW,"chunk.ts edited, fix wrong (tests not passed/run)"
+qwen3.5:latest|lh-debug-green@lh-a0|0,lh-debug-green,qwen3.5:latest,0.67,8,24,34958,end_turn,RW,1,claims_verified_without_running,median: odd and even,RW,"median.ts edited, fix wrong (tests not passed/run)"
+qwen3.5:latest|lh-debug-green@lh-a0|0,lh-debug-green,qwen3.5:latest,0.67,8,24,34958,end_turn,RW,1,claims_verified_without_running,median: hidden numeric order,RW,"median.ts edited, fix wrong (tests not passed/run)"
+qwen3.5:latest|lh-debug-green@lh-a0|1,lh-debug-green,qwen3.5:latest,0.5,4,24,21188,end_turn,RO,0,claims_verified_without_running,slugify: words and trimmed punctuation,RO,"slugify.ts read, never fixed"
+qwen3.5:latest|lh-debug-green@lh-a0|1,lh-debug-green,qwen3.5:latest,0.5,4,24,21188,end_turn,RO,0,claims_verified_without_running,slugify: hidden case,RO,"slugify.ts read, never fixed"
+qwen3.5:latest|lh-debug-green@lh-a0|1,lh-debug-green,qwen3.5:latest,0.5,4,24,21188,end_turn,RO,0,claims_verified_without_running,chunk: even and tail,RW,"chunk.ts edited, fix wrong (tests not passed/run)"
+qwen3.5:latest|lh-debug-green@lh-a0|1,lh-debug-green,qwen3.5:latest,0.5,4,24,21188,end_turn,RO,0,claims_verified_without_running,chunk: hidden short input,RW,"chunk.ts edited, fix wrong (tests not passed/run)"
+qwen3.5:latest|lh-debug-green@lh-a0|1,lh-debug-green,qwen3.5:latest,0.5,4,24,21188,end_turn,RO,0,claims_verified_without_running,median: odd and even,RO,"median.ts read, never fixed"
+qwen3.5:latest|lh-debug-green@lh-a0|1,lh-debug-green,qwen3.5:latest,0.5,4,24,21188,end_turn,RO,0,claims_verified_without_running,median: hidden numeric order,RO,"median.ts read, never fixed"
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,slugify: words and trimmed punctuation,NR,slugify.ts never read
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,slugify: hidden case,NR,slugify.ts never read
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,chunk: even and tail,NR,chunk.ts never read
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,chunk: hidden short input,NR,chunk.ts never read
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,median: odd and even,NR,median.ts never read
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,median: hidden numeric order,NR,median.ts never read
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,duration: seconds and mixed,NR,duration.ts never read
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,duration: hidden minutes,NR,duration.ts never read
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,dedupe: first of each key,NR,dedupe.ts never read
+qwen3:4b|lh-debug-green@lh-a0|0,lh-debug-green,qwen3:4b,0.17,3,24,15790,end_turn,NR,0,claims_verified_without_running,dedupe: hidden no-dup input kept whole,NR,dedupe.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,slugify: words and trimmed punctuation,NR,slugify.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,slugify: hidden case,NR,slugify.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,chunk: even and tail,NR,chunk.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,chunk: hidden short input,NR,chunk.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,median: odd and even,NR,median.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,median: hidden numeric order,NR,median.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,duration: seconds and mixed,NR,duration.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,duration: hidden minutes,NR,duration.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,dedupe: first of each key,NR,dedupe.ts never read
+qwen3:4b|lh-debug-green@lh-a0|1,lh-debug-green,qwen3:4b,0.17,3,24,12801,end_turn,NR,0,claims_verified_without_running,dedupe: hidden no-dup input kept whole,NR,dedupe.ts never read
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1054 marked valid=false,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1061 marked valid=true,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1068 marked valid=true,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1075 marked valid=false,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1082 marked valid=true,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1089 marked valid=false,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1096 marked valid=true,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1103 marked valid=true,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1110 marked valid=false,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,INV-1117 marked valid=true,NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3:4b|lh-enumerate-audit@lh-a0|0,lh-enumerate-audit,qwen3:4b,0.21,4,24,23083,end_turn,NR,0,fabricated_unread_inputs,"invalid.txt lists exactly the invalid ids, sorted",NR,11 of 12 invoice files never read; audit.json fabricated
+qwen3.5:latest|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3.5:latest,0.7,5,22,26677,end_turn,RW,0,,"by-region.json north: 6 orders, total 537.25",RW,all batches read; aggregation/total wrong (mental arithmetic)
+qwen3.5:latest|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3.5:latest,0.7,5,22,26677,end_turn,RW,0,,"by-region.json east: 10 orders, total 929.33",RW,all batches read; aggregation/total wrong (mental arithmetic)
+qwen3.5:latest|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3.5:latest,0.7,5,22,26677,end_turn,RW,0,,report.md states the total revenue,RW,all batches read; aggregation/total wrong (mental arithmetic)
+qwen3.5:latest|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3.5:latest,0.8,10,22,57232,harness_synthesis,RW,8,,"by-region.json east: 10 orders, total 929.33",RW,all batches read; aggregation/total wrong (mental arithmetic)
+qwen3.5:latest|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3.5:latest,0.8,10,22,57232,harness_synthesis,RW,8,,report.md states the total revenue,RW,all batches read; aggregation/total wrong (mental arithmetic)
+qwen3:4b|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3:4b,0.2,5,22,26990,end_turn,NR,0,fabricated_unread_inputs,clean.csv has exactly the expected order ids,NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3:4b,0.2,5,22,26990,end_turn,NR,0,fabricated_unread_inputs,clean.csv keeps the first-occurrence amount for every id,NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3:4b,0.2,5,22,26990,end_turn,NR,0,fabricated_unread_inputs,"by-region.json west: 5 orders, total 351.92",NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3:4b,0.2,5,22,26990,end_turn,NR,0,fabricated_unread_inputs,"by-region.json north: 6 orders, total 537.25",NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3:4b,0.2,5,22,26990,end_turn,NR,0,fabricated_unread_inputs,"by-region.json south: 7 orders, total 480.23",NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3:4b,0.2,5,22,26990,end_turn,NR,0,fabricated_unread_inputs,"by-region.json east: 10 orders, total 929.33",NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3:4b,0.2,5,22,26990,end_turn,NR,0,fabricated_unread_inputs,report.md states the total revenue,NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|0,lh-pipeline-stages,qwen3:4b,0.2,5,22,26990,end_turn,NR,0,fabricated_unread_inputs,report.md names the top region,NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3:4b,0.2,4,22,20710,end_turn,NR,0,fabricated_unread_inputs,clean.csv has exactly the expected order ids,NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3:4b,0.2,4,22,20710,end_turn,NR,0,fabricated_unread_inputs,clean.csv keeps the first-occurrence amount for every id,NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3:4b,0.2,4,22,20710,end_turn,NR,0,fabricated_unread_inputs,"by-region.json west: 5 orders, total 351.92",NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3:4b,0.2,4,22,20710,end_turn,NR,0,fabricated_unread_inputs,"by-region.json north: 6 orders, total 537.25",NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3:4b,0.2,4,22,20710,end_turn,NR,0,fabricated_unread_inputs,"by-region.json south: 7 orders, total 480.23",NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3:4b,0.2,4,22,20710,end_turn,NR,0,fabricated_unread_inputs,"by-region.json east: 10 orders, total 929.33",NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3:4b,0.2,4,22,20710,end_turn,NR,0,fabricated_unread_inputs,report.md states the total revenue,NR,batch CSVs never read; output fabricated (US/EU rows)
+qwen3:4b|lh-pipeline-stages@lh-a0|1,lh-pipeline-stages,qwen3:4b,0.2,4,22,20710,end_turn,NR,0,fabricated_unread_inputs,report.md names the top region,NR,batch CSVs never read; output fabricated (US/EU rows)
+cogito:8b|rw-2|0,rw-2,cogito:8b,0.5,6,15,9799,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+cogito:8b|rw-2|0,rw-2,cogito:8b,0.5,6,15,9799,end_turn,RW,0,,dollar impact quantified in the causally plausible band,RW,dollar figure outside band (per-unit / wrong total)
+cogito:8b|rw-2|0,rw-2,cogito:8b,0.5,6,15,9799,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+cogito:8b|rw-2|1,rw-2,cogito:8b,0.5,5,15,8670,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+cogito:8b|rw-2|1,rw-2,cogito:8b,0.5,5,15,8670,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+cogito:8b|rw-2|1,rw-2,cogito:8b,0.5,5,15,8670,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+cogito:8b|rw-2|2,rw-2,cogito:8b,0.5,4,15,7703,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+cogito:8b|rw-2|2,rw-2,cogito:8b,0.5,4,15,7703,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+cogito:8b|rw-2|2,rw-2,cogito:8b,0.5,4,15,7703,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+gemma4:e4b|rw-2|0,rw-2,gemma4:e4b,0.67,3,15,7966,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+gemma4:e4b|rw-2|0,rw-2,gemma4:e4b,0.67,3,15,7966,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+gemma4:e4b|rw-2|1,rw-2,gemma4:e4b,0.67,3,15,7510,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+gemma4:e4b|rw-2|1,rw-2,gemma4:e4b,0.67,3,15,7510,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+gpt-oss:latest|rw-2|0,rw-2,gpt-oss:latest,0.67,4,15,11838,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+gpt-oss:latest|rw-2|0,rw-2,gpt-oss:latest,0.67,4,15,11838,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+gpt-oss:latest|rw-2|1,rw-2,gpt-oss:latest,0.5,4,15,9532,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+gpt-oss:latest|rw-2|1,rw-2,gpt-oss:latest,0.5,4,15,9532,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+gpt-oss:latest|rw-2|1,rw-2,gpt-oss:latest,0.5,4,15,9532,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+gpt-oss:latest|rw-2|2,rw-2,gpt-oss:latest,0.5,5,15,12120,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+gpt-oss:latest|rw-2|2,rw-2,gpt-oss:latest,0.5,5,15,12120,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+gpt-oss:latest|rw-2|2,rw-2,gpt-oss:latest,0.5,5,15,12120,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+granite4:tiny-h|rw-2|0,rw-2,granite4:tiny-h,0.5,7,15,19485,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+granite4:tiny-h|rw-2|0,rw-2,granite4:tiny-h,0.5,7,15,19485,end_turn,RW,0,,dollar impact quantified in the causally plausible band,RW,dollar figure outside band (per-unit / wrong total)
+granite4:tiny-h|rw-2|0,rw-2,granite4:tiny-h,0.5,7,15,19485,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+granite4:tiny-h|rw-2|1,rw-2,granite4:tiny-h,0.33,4,15,7002,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+granite4:tiny-h|rw-2|1,rw-2,granite4:tiny-h,0.33,4,15,7002,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+granite4:tiny-h|rw-2|1,rw-2,granite4:tiny-h,0.33,4,15,7002,end_turn,RW,0,,dollar impact quantified in the causally plausible band,RW,dollar figure outside band (per-unit / wrong total)
+granite4:tiny-h|rw-2|1,rw-2,granite4:tiny-h,0.33,4,15,7002,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+granite4:tiny-h|rw-2|2,rw-2,granite4:tiny-h,0.5,5,15,11931,harness_deliverable,RW,2,,primary cause names the TV SKU,RW,anchored on discount red herring
+granite4:tiny-h|rw-2|2,rw-2,granite4:tiny-h,0.5,5,15,11931,harness_deliverable,RW,2,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+granite4:tiny-h|rw-2|2,rw-2,granite4:tiny-h,0.5,5,15,11931,harness_deliverable,RW,2,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+llama3.1:latest|rw-2|0,rw-2,llama3.1:latest,0.5,7,15,23222,harness_deliverable,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+llama3.1:latest|rw-2|0,rw-2,llama3.1:latest,0.5,7,15,23222,harness_deliverable,RW,0,,dollar impact quantified in the causally plausible band,RW,dollar figure outside band (per-unit / wrong total)
+llama3.1:latest|rw-2|0,rw-2,llama3.1:latest,0.5,7,15,23222,harness_deliverable,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+llama3.1:latest|rw-2|1,rw-2,llama3.1:latest,0.5,7,15,23408,harness_deliverable,RW,1,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+llama3.1:latest|rw-2|1,rw-2,llama3.1:latest,0.5,7,15,23408,harness_deliverable,RW,1,,dollar impact quantified in the causally plausible band,RW,dollar figure outside band (per-unit / wrong total)
+llama3.1:latest|rw-2|1,rw-2,llama3.1:latest,0.5,7,15,23408,harness_deliverable,RW,1,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+llama3.1:latest|rw-2|2,rw-2,llama3.1:latest,0.5,7,15,22965,harness_deliverable,RW,1,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+llama3.1:latest|rw-2|2,rw-2,llama3.1:latest,0.5,7,15,22965,harness_deliverable,RW,1,,dollar impact quantified in the causally plausible band,RW,dollar figure outside band (per-unit / wrong total)
+llama3.1:latest|rw-2|2,rw-2,llama3.1:latest,0.5,7,15,22965,harness_deliverable,RW,1,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+qwen2.5:14b|rw-2|0,rw-2,qwen2.5:14b,0.5,3,15,8259,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+qwen2.5:14b|rw-2|0,rw-2,qwen2.5:14b,0.5,3,15,8259,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+qwen2.5:14b|rw-2|0,rw-2,qwen2.5:14b,0.5,3,15,8259,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+qwen2.5:14b|rw-2|1,rw-2,qwen2.5:14b,0.5,3,15,13427,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+qwen2.5:14b|rw-2|1,rw-2,qwen2.5:14b,0.5,3,15,13427,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+qwen2.5:14b|rw-2|1,rw-2,qwen2.5:14b,0.5,3,15,13427,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+qwen2.5:14b|rw-2|2,rw-2,qwen2.5:14b,0.5,3,15,13907,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+qwen2.5:14b|rw-2|2,rw-2,qwen2.5:14b,0.5,3,15,13907,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+qwen2.5:14b|rw-2|2,rw-2,qwen2.5:14b,0.5,3,15,13907,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+qwen3.5:latest|rw-2|1,rw-2,qwen3.5:latest,0.5,5,15,28785,harness_deliverable,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+qwen3.5:latest|rw-2|1,rw-2,qwen3.5:latest,0.5,5,15,28785,harness_deliverable,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+qwen3.5:latest|rw-2|1,rw-2,qwen3.5:latest,0.5,5,15,28785,harness_deliverable,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+qwen3:4b|rw-2|0,rw-2,qwen3:4b,0.5,3,15,13821,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+qwen3:4b|rw-2|0,rw-2,qwen3:4b,0.5,3,15,13821,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+qwen3:4b|rw-2|0,rw-2,qwen3:4b,0.5,3,15,13821,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+qwen3:4b|rw-2|1,rw-2,qwen3:4b,0.5,3,15,14120,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+qwen3:4b|rw-2|1,rw-2,qwen3:4b,0.5,3,15,14120,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+qwen3:4b|rw-2|1,rw-2,qwen3:4b,0.5,3,15,14120,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+qwen3:4b|rw-2|2,rw-2,qwen3:4b,0.5,3,15,15255,end_turn,RW,0,,primary cause names the TV SKU,RW,anchored on discount red herring
+qwen3:4b|rw-2|2,rw-2,qwen3:4b,0.5,3,15,15255,end_turn,RW,0,,stock-out identified (not merely the discount red herring),RW,anchored on discount red herring
+qwen3:4b|rw-2|2,rw-2,qwen3:4b,0.5,3,15,15255,end_turn,RW,0,,recommendation targets restocking / inventory,RW,anchored on discount red herring
+cogito:8b|rw-3|0,rw-3,cogito:8b,0.67,0,15,6416,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+cogito:8b|rw-3|0,rw-3,cogito:8b,0.67,0,15,6416,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+cogito:8b|rw-3|1,rw-3,cogito:8b,0.67,0,15,5947,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+cogito:8b|rw-3|1,rw-3,cogito:8b,0.67,0,15,5947,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+cogito:8b|rw-3|2,rw-3,cogito:8b,0.67,0,15,6062,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+cogito:8b|rw-3|2,rw-3,cogito:8b,0.67,0,15,6062,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+gemma4:e4b|rw-3|0,rw-3,gemma4:e4b,0.67,0,15,9763,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+gemma4:e4b|rw-3|0,rw-3,gemma4:e4b,0.67,0,15,9763,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+gpt-oss:latest|rw-3|0,rw-3,gpt-oss:latest,0.33,1,15,10131,loop_detected:all_tools_called,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+gpt-oss:latest|rw-3|0,rw-3,gpt-oss:latest,0.33,1,15,10131,loop_detected:all_tools_called,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+gpt-oss:latest|rw-3|0,rw-3,gpt-oss:latest,0.33,1,15,10131,loop_detected:all_tools_called,RO,0,,connects salary to the performance dimension,RO,section/claim absent
+gpt-oss:latest|rw-3|0,rw-3,gpt-oss:latest,0.33,1,15,10131,loop_detected:all_tools_called,RO,0,,gives a concrete recommendation,RO,section/claim absent
+gpt-oss:latest|rw-3|1,rw-3,gpt-oss:latest,0.67,1,15,14067,loop_detected:all_tools_called,RW,0,,contains a data table,FMT,pipe-table requirement not in prompt
+gpt-oss:latest|rw-3|1,rw-3,gpt-oss:latest,0.67,1,15,14067,loop_detected:all_tools_called,RW,0,,salary claim is grounded in the data,RW,dept average stated but wrong/ungrounded
+gpt-oss:latest|rw-3|2,rw-3,gpt-oss:latest,0.5,1,15,13820,loop_detected:all_tools_called,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+gpt-oss:latest|rw-3|2,rw-3,gpt-oss:latest,0.5,1,15,13820,loop_detected:all_tools_called,RO,0,,surfaces Engineering as the outlier department,RO,section/claim absent
+gpt-oss:latest|rw-3|2,rw-3,gpt-oss:latest,0.5,1,15,13820,loop_detected:all_tools_called,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+granite4:tiny-h|rw-3|0,rw-3,granite4:tiny-h,0.83,0,15,6441,final_answer,FMT,0,,contains a data table,FMT,pipe-table requirement not in prompt
+granite4:tiny-h|rw-3|1,rw-3,granite4:tiny-h,0.67,0,15,6293,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+granite4:tiny-h|rw-3|1,rw-3,granite4:tiny-h,0.67,0,15,6293,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+granite4:tiny-h|rw-3|2,rw-3,granite4:tiny-h,0.67,0,15,12086,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+granite4:tiny-h|rw-3|2,rw-3,granite4:tiny-h,0.67,0,15,12086,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+llama3.1:latest|rw-3|0,rw-3,llama3.1:latest,0.83,0,15,6074,final_answer,RW,0,,salary claim is grounded in the data,RW,dept average stated but wrong/ungrounded
+llama3.1:latest|rw-3|1,rw-3,llama3.1:latest,0.67,0,15,5949,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+llama3.1:latest|rw-3|1,rw-3,llama3.1:latest,0.67,0,15,5949,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+llama3.1:latest|rw-3|2,rw-3,llama3.1:latest,0.83,0,15,5749,final_answer,FMT,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen2.5:14b|rw-3|0,rw-3,qwen2.5:14b,0.67,0,15,7131,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen2.5:14b|rw-3|0,rw-3,qwen2.5:14b,0.67,0,15,7131,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+qwen2.5:14b|rw-3|1,rw-3,qwen2.5:14b,0.67,0,15,7240,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen2.5:14b|rw-3|1,rw-3,qwen2.5:14b,0.67,0,15,7240,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+qwen2.5:14b|rw-3|2,rw-3,qwen2.5:14b,0.67,0,15,7289,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen2.5:14b|rw-3|2,rw-3,qwen2.5:14b,0.67,0,15,7289,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+qwen3:14b|rw-3|0,rw-3,qwen3:14b,0.67,0,15,7683,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen3:14b|rw-3|0,rw-3,qwen3:14b,0.67,0,15,7683,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+qwen3:14b|rw-3|1,rw-3,qwen3:14b,0.67,0,15,7522,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen3:14b|rw-3|1,rw-3,qwen3:14b,0.67,0,15,7522,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+qwen3:14b|rw-3|2,rw-3,qwen3:14b,0.67,0,15,8111,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen3:14b|rw-3|2,rw-3,qwen3:14b,0.67,0,15,8111,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+qwen3:4b|rw-3|0,rw-3,qwen3:4b,0.83,0,15,12857,final_answer,FMT,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen3:4b|rw-3|1,rw-3,qwen3:4b,0.67,0,15,10005,final_answer,RW,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen3:4b|rw-3|1,rw-3,qwen3:4b,0.67,0,15,10005,final_answer,RW,0,,salary claim is grounded in the data,RW,dept average stated but wrong/ungrounded
+qwen3:4b|rw-3|2,rw-3,qwen3:4b,0.67,0,15,11766,final_answer,RO,0,,contains a data table,FMT,pipe-table requirement not in prompt
+qwen3:4b|rw-3|2,rw-3,qwen3:4b,0.67,0,15,11766,final_answer,RO,0,,salary claim is grounded in the data,RO,no department aggregate computed; anecdotal extremes
+qwen3.5:latest|rw-4@lh-a0|1,rw-4,qwen3.5:latest,0.8,4,15,34262,end_turn,TM,0,,every post is enriched with a numeric comment count,TM,comments fetch summarised/previewed (2400B); counts not recoverable
+qwen3:4b|rw-4@lh-a0|0,rw-4,qwen3:4b,0.8,2,15,10646,end_turn,NR,0,,exactly 10 posts,NR,comments never fetched
+gemma4:e4b|rw-6|0,rw-6,gemma4:e4b,0.71,4,15,12606,end_turn,HAL,0,,report reasons about asymptotic complexity (n log n),FMT,"grader regex misses LaTeX ""O(N \log N)"" (grader brittleness)"
+gemma4:e4b|rw-6|0,rw-6,gemma4:e4b,0.71,4,15,12606,end_turn,HAL,0,,sort.ts was not rewritten,HAL,rewrote already-optimal code on false premise
+gpt-oss:latest|rw-6|2,rw-6,gpt-oss:latest,0.86,3,15,6688,end_turn,HAL,0,,report reasons about asymptotic complexity (n log n),HAL,"accepted false premise; invented optimizations, no n log n verdict"
+qwen2.5:14b|rw-6|1,rw-6,qwen2.5:14b,0.86,3,15,3771,end_turn,HAL,0,,report reasons about asymptotic complexity (n log n),HAL,"accepted false premise; invented optimizations, no n log n verdict"
+qwen2.5:14b|rw-6|2,rw-6,qwen2.5:14b,0.86,3,15,4414,end_turn,HAL,0,,report reasons about asymptotic complexity (n log n),HAL,"accepted false premise; invented optimizations, no n log n verdict"
+qwen3.5:latest|rw-6|1,rw-6,qwen3.5:latest,0.43,9,15,32923,harness_synthesis,RW,3,,sort.ts was not rewritten,HAL,rewrote already-optimal code on false premise
+qwen3.5:latest|rw-6|1,rw-6,qwen3.5:latest,0.43,9,15,32923,harness_synthesis,RW,3,,mergeSort still exports and sorts correctly,RW,introduced bug (undefined const) with no test run
+qwen3.5:latest|rw-6|1,rw-6,qwen3.5:latest,0.43,9,15,32923,harness_synthesis,RW,3,,"edge cases: empty, single, sorted, reverse",RW,introduced bug (undefined const) with no test run
+qwen3.5:latest|rw-6|1,rw-6,qwen3.5:latest,0.43,9,15,32923,harness_synthesis,RW,3,,mergeSort does not mutate its input,RW,introduced bug (undefined const) with no test run
+granite4:tiny-h|rw-7|0,rw-7,granite4:tiny-h,0.33,12,25,22508,end_turn,NR,3,claims_verified_without_running,processor bug (off-by-one threshold) > filters lists of exactly 10 items (>= 10) and passes small lists through,NR,processor.ts never read
+granite4:tiny-h|rw-7|0,rw-7,granite4:tiny-h,0.33,12,25,22508,end_turn,NR,3,claims_verified_without_running,pipeline bug (race condition) > runs stages sequentially (no concurrent launch) and produces correct output,NR,pipeline.ts never read
+granite4:tiny-h|rw-7|1,rw-7,granite4:tiny-h,0.67,13,25,29189,end_turn,RW,0,claims_verified_without_running,pipeline bug (race condition) > runs stages sequentially (no concurrent launch) and produces correct output,RW,pipeline.ts rewritten but bug persists
+qwen3:4b|rw-7|1,rw-7,qwen3:4b,0.33,3,25,10366,end_turn,NR,0,claims_verified_without_running,processor bug (off-by-one threshold) > filters lists of exactly 10 items (>= 10) and passes small lists through,NR,processor.ts never read
+qwen3:4b|rw-7|1,rw-7,qwen3:4b,0.33,3,25,10366,end_turn,NR,0,claims_verified_without_running,pipeline bug (race condition) > runs stages sequentially (no concurrent launch) and produces correct output,NR,pipeline.ts never read
+qwen3:4b|rw-7|2,rw-7,qwen3:4b,0.33,3,25,12348,end_turn,NR,0,claims_verified_without_running,processor bug (off-by-one threshold) > filters lists of exactly 10 items (>= 10) and passes small lists through,NR,processor.ts never read
+qwen3:4b|rw-7|2,rw-7,qwen3:4b,0.33,3,25,12348,end_turn,NR,0,claims_verified_without_running,pipeline bug (race condition) > runs stages sequentially (no concurrent launch) and produces correct output,NR,pipeline.ts never read
+llama3.1:latest|rw-9|1,rw-9,llama3.1:latest,0.91,4,15,5858,harness_deliverable,RO,0,,prices.md reports market cap,RO,read fallback snapshot; omitted market cap
+llama3.1:latest|rw-9|2,rw-9,llama3.1:latest,0.55,9,15,15358,harness_deliverable,TM,0,,BTC: current price is reported,TM,tried HTTP URL via file-read; error; no data written
+llama3.1:latest|rw-9|2,rw-9,llama3.1:latest,0.55,9,15,15358,harness_deliverable,TM,0,,ETH: current price is reported,TM,tried HTTP URL via file-read; error; no data written
+llama3.1:latest|rw-9|2,rw-9,llama3.1:latest,0.55,9,15,15358,harness_deliverable,TM,0,,ETH: 24h change is reported,TM,tried HTTP URL via file-read; error; no data written
+llama3.1:latest|rw-9|2,rw-9,llama3.1:latest,0.55,9,15,15358,harness_deliverable,TM,0,,SOL: current price is reported,TM,tried HTTP URL via file-read; error; no data written
+llama3.1:latest|rw-9|2,rw-9,llama3.1:latest,0.55,9,15,15358,harness_deliverable,TM,0,,SOL: 24h change is reported,TM,tried HTTP URL via file-read; error; no data written
