@@ -2180,3 +2180,16 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   tmp-before-after: n/a
   files: [wiki/Research/Harness-Reports/2026-11-14-partial-answer-root-causes.md, wiki/Research/Harness-Reports/2026-11-14-partial-answer-root-causes/]
 ```
+
+```yaml
+- date: 2026-11-14
+  warden: harness-warden
+  task: local-model-campaign-p2b
+  state: completed
+  confidence: 0.8
+  verdicts: {ranking: "qwen3.5 81 > gpt-oss 69 = gemma4:12b 69 > qwen3:4b 64 > qwen3:14b 58 = gemma4:e4b 58 > qwen2.5:14b 50 > granite 47 > cogito 39 > llama3.1 31 > deepseek-r1 25 (gaps under 26pp are noise)", instrument-fault: "4 false harness:tool-call-dropped on gemma4:12b ('.' path and file_write alias unmatched in nativeCalls); fix not applied (brief bounds)", infra: "deepseek-r1 first 24 cells void: Ollama 503 queue saturated by a non-driver client (Cortex or other, unproven)"}
+  evidence: {cells: "180 H3 + 20 LH new, 24 superseded", sha: "2269ce57e"}
+  spend-usd: 0
+  tmp-before-after: "2.3G -> 2.4G"
+  files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-P2b.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest.jsonl]
+```
