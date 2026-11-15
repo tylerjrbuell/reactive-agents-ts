@@ -1,4 +1,4 @@
-import { Deferred, Effect, Either, Exit, Scope } from "effect";
+import { Clock, Deferred, Effect, Either, Exit, Scope } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { channelSenderKey } from "@reactive-agents/gateway";
@@ -538,15 +538,19 @@ export class RouterEngine {
     const sessionReady = Effect.runSync(Deferred.make<RoutedSession>());
     const prefetched = Effect.runSync(Deferred.make<AckPortResult>());
     let noPort = false;
+    let portStartedAt: number | undefined;
+    let portFinishedAt: number | undefined;
     const background: Effect.Effect<void> | undefined =
       ack.source === "model"
         ? Effect.gen(function* () {
             const s = yield* Deferred.await(sessionReady);
             const port = s.acknowledge?.(turn);
             if (port === undefined) { noPort = true; return; }
+            portStartedAt = yield* Clock.currentTimeMillis;
             const result = yield* port.pipe(
               Effect.catchAllCause(() => Effect.succeed<AckPortResult>({ text: "", fallbackReason: "error" })),
             );
+            portFinishedAt = yield* Clock.currentTimeMillis;
             yield* Deferred.succeed(prefetched, result);
           })
         : undefined;
@@ -562,8 +566,15 @@ export class RouterEngine {
         narration: () => narration,
         acknowledge: () => (noPort ? undefined : Deferred.await(prefetched)),
       });
+      // Model-ack latency: port start to its result, or to now when it timed out. Narration and
+      // canned-only acks made no model attempt, so they carry none.
+      const now = yield* Clock.currentTimeMillis;
+      const ackLatencyMs =
+        chosen.source !== "narration" && portStartedAt !== undefined
+          ? Math.max(0, (portFinishedAt ?? now) - portStartedAt)
+          : undefined;
       yield* this.reply(adapterId, msg, chosen.text, taskId);
-      yield* this.emit({ _tag: "ChannelTurnAcknowledged", routeId: route.id, role, source: chosen.source, ...(chosen.fallbackReason ? { ackFallbackReason: chosen.fallbackReason } : {}), simulated });
+      yield* this.emit({ _tag: "ChannelTurnAcknowledged", routeId: route.id, role, source: chosen.source, ...(ackLatencyMs !== undefined ? { ackLatencyMs } : {}),...(chosen.fallbackReason ? { ackFallbackReason: chosen.fallbackReason } : {}), simulated });
     }).pipe(
       Effect.catchAll((error) => emitErrorSwallowed({ site: "channels/src/routing/engine.ts:ack", tag: errorTag(error) })),
     );

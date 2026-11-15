@@ -463,8 +463,37 @@ describe("route ack: source model", () => {
         yield* advance(1);
         expect(t.texts()).toEqual(["Warm now."]);
         expect(ackEvents(events).map((e) => [e.source, e.ackFallbackReason])).toEqual([["model", undefined]]);
+        expect(ackEvents(events).map((e) => e.ackLatencyMs)).toEqual([5000]);
       }),
     );
+  });
+
+  test("ackLatencyMs: success reports the port duration, timeout the bound from port start, narration/canned omit it", async () => {
+    const latencies = async (opts: { acknowledge?: () => Effect.Effect<AckPortResult>; narrate?: boolean; source?: "canned" }) => {
+      const t = withTyping();
+      const events: AgentEvent[] = [];
+      await runRouter(
+        {
+          channels: [t.adapter],
+          routes: [opts.source === "canned" ? route({ ack: {} }) : modelRoute({ modelTimeoutMs: 3000 })],
+          agents: modelAgent({
+            ms: 30_000,
+            ...(opts.narrate ? { narrate: [{ at: 1000, text: "Looking now." }] } : {}),
+            ...(opts.acknowledge ? { acknowledge: opts.acknowledge } : {}),
+          }),
+          eventBus: { publish: (e) => Effect.sync(() => void events.push(e)) },
+        },
+        Effect.gen(function* () {
+          t.inner.push(env());
+          yield* advance(8000);
+        }),
+      );
+      return ackEvents(events).map((e) => [e.source, e.ackLatencyMs]);
+    };
+    expect(await latencies({ acknowledge: () => Effect.zipRight(Effect.sleep(1200), Effect.succeed("Quick.")) })).toEqual([["model", 1200]]);
+    expect(await latencies({ acknowledge: () => Effect.zipRight(Effect.sleep(20_000), Effect.succeed("late")) })).toEqual([["canned", 7000]]);
+    expect(await latencies({ narrate: true, acknowledge: () => Effect.succeed("unused") })).toEqual([["narration", undefined]]);
+    expect(await latencies({ source: "canned", acknowledge: () => Effect.succeed("unused") })).toEqual([["canned", undefined]]);
   });
 
   test("prefetch: a 20s port falls back to canned with timeout at afterMs + modelTimeoutMs", async () => {
