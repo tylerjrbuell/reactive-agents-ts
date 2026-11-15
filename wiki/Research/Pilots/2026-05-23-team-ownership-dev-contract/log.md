@@ -2206,3 +2206,16 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   tmp-before-after: "2.4G -> 2.4G"
   files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-VERIFY.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest-verify.jsonl]
 ```
+
+```yaml
+- date: 2026-11-15
+  warden: ablation-warden
+  task: enumerate-audit-rerun-k6
+  state: completed
+  confidence: 0.7
+  verdicts: {enumerate-audit: "inconclusive, leaning no regression: gpt-oss base 4/6 vs head 3/6, Fisher p=1.0; baseline shows same never-reads-inv-12 mode (2/6); head +53% time +21% tokens", lh-1: "no required_tool_quota ending on gpt-oss (21 it, 339k tok) or qwen3:4b (5 it, 51k tok); both honest failure via max_iterations/thinking runaway", act5: "0/8 claim sent, 4 abstained, 4 success-status with unmet email; surface held only recall"}
+  evidence: {cells: "12 enumerate + 2 lh-1 + 8 act5 = 22 rows, 0 voided (1 false start void, flag), 0 503s", sha: "2269ce57e vs d34caadfd"}
+  spend-usd: 0
+  tmp-before-after: "2.4G -> 2.5G"
+  files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-ENUM.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest-enum.jsonl]
+```
