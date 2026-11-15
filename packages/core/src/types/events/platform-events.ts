@@ -313,6 +313,8 @@ export type PlatformAgentEvent =
       readonly source?: "canned" | "narration" | "model";
       /** Why canned text was sent although the route asked for a model-written ack. Absent otherwise. */
       readonly ackFallbackReason?: "timeout" | "empty" | "thinking_only" | "error";
+      /** Milliseconds from the model-ack call start to the port result or timeout. Absent when no model ack was attempted (canned or narration source). */
+      readonly ackLatencyMs?: number;
       /** True when produced by a router simulation (dry run). */
       readonly simulated?: boolean;
     }
