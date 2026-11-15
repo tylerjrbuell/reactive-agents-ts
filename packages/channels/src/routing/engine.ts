@@ -42,6 +42,13 @@ const MAX_LIVE_SESSIONS = 500;
 const BACKPRESSURE_NOTICE = "Still working on your last message.";
 const RESET_CONFIRMATION = "Started a new conversation.";
 const RESET_FAILED_NOTICE = "Could not start a new conversation.";
+const TURN_FAILED_NOTICE = "Something went wrong and I could not finish that. Send it again, or ask me to continue.";
+
+/** Fixed sender-facing text for a failed turn. Never carries the error message. */
+const failureNoticeText = (error: RoutingError, route: RouteSpec): string =>
+  error.reason === "turn_timeout"
+    ? `That took longer than the ${Math.max(1, Math.round(route.turnTimeoutMs / 1000))}-second turn limit, so I stopped. Send it again, or ask me to continue.`
+    : TURN_FAILED_NOTICE;
 
 /** True when the whole message is one of the route's reset commands (`/new`, `/New@my_bot`). */
 const isResetCommand = (route: RouteSpec, text: string): boolean => {
@@ -479,6 +486,10 @@ export class RouterEngine {
       self.totalProcessed += 1;
       if (Either.isLeft(attempt)) {
         yield* self.emit({ _tag: "ChannelTurnCompleted", routeId: route.id, role, ok: false, reason: attempt.left.reason, simulated });
+        if (self.deps.strict && route.failureNotice && !simulated && self.hub.has(adapterId)) {
+          // Best effort: `deliver` already counts and publishes a failed send; the turn outcome stays Failed.
+          yield* self.reply(adapterId, msg, failureNoticeText(attempt.left, route), taskId).pipe(Effect.ignore);
+        }
         return { _tag: "Failed", routeId: route.id, role, error: attempt.left } as const;
       }
       const reply: RoutedReply = attempt.right;

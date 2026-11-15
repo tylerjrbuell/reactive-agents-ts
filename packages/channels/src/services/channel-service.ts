@@ -65,6 +65,7 @@ const IMPLICIT_ROUTE: RouteSpec = {
   deny: [],
   owners: [],
   open: true,
+  failureNotice: false,
   senderTools: { _tag: "AgentDefault" },
   groups: "mention-only",
   turnTimeoutMs: 120_000,

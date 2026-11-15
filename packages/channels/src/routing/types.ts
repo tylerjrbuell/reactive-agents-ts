@@ -97,6 +97,11 @@ export const RouteSpec = Schema.Struct({
    */
   ack: Schema.optional(Schema.Union(RouteAck, Schema.Literal(false))),
   /**
+   * Tell the sender when a turn fails after the route accepted it (timeout or any other turn error),
+   * so an ack is never followed by silence. Fixed text, never agent output. `false` opts out. Default on.
+   */
+  failureNotice: Schema.optionalWith(Schema.Boolean, { default: () => true }),
+  /**
    * Messages that, sent by a route owner as the whole text (for example `/new`), end the conversation's
    * session and start a fresh one. Never forwarded to the agent. Default `["/new", "/reset"]`; `[]` disables.
    */
