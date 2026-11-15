@@ -637,13 +637,9 @@ const norm = raw.replace(/[,_$]/g, "")
 check("report.md exists and is substantive", () =>
   raw.replace(/\\s+/g, " ").length >= 300 && !/\\b(TODO|TBD|lorem ipsum|placeholder)\\b/i.test(raw))
 
-// The prompt never asks for a table, so a pipe table is not required: any
-// structured presentation passes (pipe table, or 3+ list lines carrying numbers).
+// No table is requested: a pipe table or 3+ numeric list lines both pass.
 check("presents data in a structured form", () => {
-  const lines = raw.split("\\n")
-  const pipeRows = lines.filter((l) => (l.match(/\\|/g) ?? []).length >= 2)
-  const listItems = lines.filter((l) => /^\\s*([-*•]|\\d+[.)])\\s+/.test(l) && /\\d/.test(l))
-  return pipeRows.length >= 3 || listItems.length >= 3
+  return raw.split("\\n").filter((l) => (l.match(/\\|/g) ?? []).length >= 2 || (/^\\s*([-*•]|\\d+[.)])\\s+/.test(l) && /\\d/.test(l))).length >= 3
 })
 
 check("surfaces Engineering as the outlier department", () => /engineering/i.test(raw))
