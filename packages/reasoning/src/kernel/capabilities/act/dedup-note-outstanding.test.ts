@@ -14,6 +14,7 @@ import { artifactProduced } from "../verify/post-conditions.js";
 import { initialKernelState, transitionState, type KernelState } from "../../state/kernel-state.js";
 import { makeKernelInput, makeKernelRunOptions } from "../../../testing/kernel-fixtures.js";
 import type { ReasoningStep } from "../../../types/index.js";
+import { GUARD_OBSERVATION_TAG } from "../../state/kernel-constants.js";
 
 const read = (id: string, path: string, out: string): ReasoningStep[] => [
   makeStep("action", `file-read(${JSON.stringify({ path })})`, {
@@ -70,5 +71,33 @@ describe("duplicateGuard note names outstanding work instead of a final answer",
     if (r.pass) return;
     expect(r.observation).toContain("You still need to call: file-write. Do that now.");
     expect(r.observation).not.toContain("FINAL ANSWER");
+  });
+});
+
+// Live repro (campaign enum, gpt-oss lh-enumerate-audit r2): a later identical
+// file-write got the note twice. The guard's own blocked answer (recorded
+// success=true, tagged harness-guard) was matched as the "prior successful
+// call", so the note nested.
+describe("duplicateGuard ignores its own blocked answers", () => {
+  it("does not nest the note when the latest match is a guard-blocked call", () => {
+    const args = { path: "audit.json", content: "[]" };
+    const write = (id: string): ReasoningStep => makeStep("action", "file-write(...)", {
+      toolCall: { id, name: "file-write", arguments: args },
+    });
+    const ran = makeStep("observation", "✓ Written to audit.json", {
+      toolCallId: "w1",
+      observationResult: makeObservationResult("file-write", true, "✓ Written to audit.json"),
+    });
+    const blockedText = "✓ Written to audit.json [Already done — do NOT repeat. Give FINAL ANSWER if all steps are complete.]";
+    const blocked = makeStep("observation", blockedText, {
+      toolCallId: "w2",
+      frameworkInstrumentation: GUARD_OBSERVATION_TAG,
+      observationResult: makeObservationResult("file-write", true, blockedText),
+    });
+    const state = stateWith([write("w1"), ran, write("w2"), blocked], []);
+    const r = duplicateGuard({ id: "w3", name: "file-write", arguments: args }, state, input);
+    expect(r.pass).toBe(false);
+    if (r.pass) return;
+    expect(r.observation.match(/Already done/g)?.length).toBe(1);
   });
 });

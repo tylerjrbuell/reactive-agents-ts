@@ -370,9 +370,9 @@ export const duplicateGuard: Guard = (tc, state, input) => {
   // obsA as b's "already done" result (cross-path content bleed).
   let priorObs: ReasoningStep | undefined;
   let priorIdx = -1;
-  for (let idx = 0; idx < state.steps.length; idx++) {
-    const step = state.steps[idx]!;
-    if (step.type !== "action") continue;
+  // Only calls that ran count: a guard-blocked call's answer is recorded
+  // success=true, and matching it nested the note ("[Already done] [Already done]").
+  for (const { step, index: idx } of ranActions(state.steps)) {
     const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
     if (!stepTc) continue;
     if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) continue;
