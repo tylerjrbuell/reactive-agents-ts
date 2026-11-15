@@ -88,11 +88,11 @@ describe("draftProblems", () => {
     expect(draftProblems({ ...ok(), senderTools: "AgentDefault", owners: ["telegram:1"] }, true)).toEqual([]);
   });
   it("sender keys need a platform prefix", () => expect(draftProblems({ ...ok(), allow: ["12345"] }, true)).toHaveLength(1));
-  it("the model wait stays inside 1..10000", () => {
+  it("the model wait stays inside 1..30000", () => {
     const d = { ...ok(), ackOn: true, ackSource: "model" as const };
     expect(draftProblems({ ...d, ackModelTimeoutMs: "0" }, true)).toHaveLength(1);
-    expect(draftProblems({ ...d, ackModelTimeoutMs: "10001" }, true)).toHaveLength(1);
-    expect(draftProblems({ ...d, ackModelTimeoutMs: "10000" }, true)).toEqual([]);
+    expect(draftProblems({ ...d, ackModelTimeoutMs: "30001" }, true)).toHaveLength(1);
+    expect(draftProblems({ ...d, ackModelTimeoutMs: "30000" }, true)).toEqual([]);
   });
   it("an id is needed only when creating", () => {
     expect(draftProblems({ ...ok(), id: "" }, true)).toHaveLength(1);

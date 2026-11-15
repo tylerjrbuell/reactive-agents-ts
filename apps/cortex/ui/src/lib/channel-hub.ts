@@ -58,9 +58,9 @@ export interface HubRouteWire {
 /** The framework's per-sender default when a non-open route sets none (shown, not hidden). */
 export const DEFAULT_PER_SENDER_PER_HOUR = 6;
 /** The acknowledgement defaults the router applies (shown as placeholders). */
-export const ACK_DEFAULTS = { afterMs: 4000, text: "On it...", modelTimeoutMs: 3000 } as const;
+export const ACK_DEFAULTS = { afterMs: 4000, text: "On it...", modelTimeoutMs: 12_000 } as const;
 /** `ack.modelTimeoutMs` bounds the framework enforces. */
-export const MODEL_TIMEOUT_RANGE = { min: 1, max: 10_000 } as const;
+export const MODEL_TIMEOUT_RANGE = { min: 1, max: 30_000 } as const;
 
 /** How the match narrows a conversation. */
 export type MatchWhen = "any" | "mention" | "command" | "keyword";
