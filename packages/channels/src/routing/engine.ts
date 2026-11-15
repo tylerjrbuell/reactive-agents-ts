@@ -1,4 +1,4 @@
-import { Effect, Either, Exit, Scope } from "effect";
+import { Deferred, Effect, Either, Exit, Scope } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { channelSenderKey } from "@reactive-agents/gateway";
@@ -6,7 +6,7 @@ import { envelopeToInboundMessage, type InboundEnvelope, type SenderGate } from 
 import type { ChannelError } from "../errors.js";
 import type { InboundMessage } from "../types.js";
 import { AdapterHub } from "./adapter-hub.js";
-import { chooseAckText, pickAckText, resolveAck, withTurnAck } from "./ack.js";
+import { chooseAckText, pickAckText, resolveAck, withTurnAck, type AckPortResult } from "./ack.js";
 import type { RouteMeter } from "./meter.js";
 import {
   decideRouteAccess,
@@ -523,32 +523,51 @@ export class RouterEngine {
     if (!ack || simulated || !this.hub.has(adapterId)) return run(baseTurn, () => undefined);
     // Per-turn closure state: the latest narration, the live session, and whether the ack already went out.
     let narration: string | undefined;
-    let session: RoutedSession | undefined;
     let sealed = false;
     const turn: RoutedTurn =
       ack.source === "model"
         ? { ...baseTurn, onProgress: (text) => { if (!sealed && typeof text === "string") narration = text; } }
         : baseTurn;
-    const turnEffect = run(turn, (s) => { session = s; });
     const conversation = {
       channelId: msg.channelId,
       ...(typeof msg.metadata["threadId"] === "string" ? { threadId: msg.metadata["threadId"] } : {}),
     };
     const pulse = this.hub.typingPulse(adapterId, conversation);
+    // Model-ack prefetch: the port call starts with the turn (once the session is known), so a cold
+    // model gets afterMs + modelTimeoutMs of wall time. The result waits in `prefetched`.
+    const sessionReady = Effect.runSync(Deferred.make<RoutedSession>());
+    const prefetched = Effect.runSync(Deferred.make<AckPortResult>());
+    let noPort = false;
+    const background: Effect.Effect<void> | undefined =
+      ack.source === "model"
+        ? Effect.gen(function* () {
+            const s = yield* Deferred.await(sessionReady);
+            const port = s.acknowledge?.(turn);
+            if (port === undefined) { noPort = true; return; }
+            const result = yield* port.pipe(
+              Effect.catchAllCause(() => Effect.succeed<AckPortResult>({ text: "", fallbackReason: "error" })),
+            );
+            yield* Deferred.succeed(prefetched, result);
+          })
+        : undefined;
+    const noteSession = (s: RoutedSession): void => {
+      Effect.runSync(Deferred.succeed(sessionReady, s));
+    };
+    const turnEffect = run(turn, noteSession);
     const sendAck = Effect.gen(this, function* () {
       sealed = true; // one ack only: narration pushed from here on is dropped
       const chosen = yield* chooseAckText({
         ack,
         canned: pickAckText(ack.texts, msg.id),
         narration: () => narration,
-        acknowledge: () => session?.acknowledge?.(turn),
+        acknowledge: () => (noPort ? undefined : Deferred.await(prefetched)),
       });
       yield* this.reply(adapterId, msg, chosen.text, taskId);
       yield* this.emit({ _tag: "ChannelTurnAcknowledged", routeId: route.id, role, source: chosen.source, ...(chosen.fallbackReason ? { ackFallbackReason: chosen.fallbackReason } : {}), simulated });
     }).pipe(
       Effect.catchAll((error) => emitErrorSwallowed({ site: "channels/src/routing/engine.ts:ack", tag: errorTag(error) })),
     );
-    return withTurnAck(turnEffect, { ack, pulse: pulse?.pipe(Effect.ignore), sendAck });
+    return withTurnAck(turnEffect, { ack, pulse: pulse?.pipe(Effect.ignore), sendAck, ...(background ? { background } : {}) });
   }
 
   /** Reply through the same adapter. A failed delivery is already counted and published by `deliver`. */

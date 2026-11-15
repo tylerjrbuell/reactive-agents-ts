@@ -259,7 +259,7 @@ describe("route ack: source model", () => {
         expect(t.texts()).toEqual([]);
         yield* advance(1);
         expect(t.texts()).toEqual(["Looking up the weather"]);
-        expect(calls.ack).toBe(0);
+        expect(calls.ack).toBe(1); // prefetched at turn start; narration still wins
         yield* advance(6000);
         expect(t.texts()).toEqual(["Looking up the weather", "final"]);
         expect(ackEvents(events).map((e) => e.source)).toEqual(["narration"]);
@@ -442,6 +442,69 @@ describe("route ack: source model", () => {
         quick.inner.push(env());
         yield* advance(20_000);
         expect(quick.texts()).toEqual(["final"]);
+      }),
+    );
+  });
+
+  test("prefetch: a 5s port with afterMs 4000 / timeout 3000 is the model ack, sent at 5000", async () => {
+    const t = withTyping();
+    const events: AgentEvent[] = [];
+    await runRouter(
+      {
+        channels: [t.adapter],
+        routes: [modelRoute({ modelTimeoutMs: 3000 })],
+        agents: modelAgent({ ms: 20_000, acknowledge: () => Effect.zipRight(Effect.sleep(5000), Effect.succeed("Warm now.")) }),
+        eventBus: { publish: (e) => Effect.sync(() => void events.push(e)) },
+      },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(4999);
+        expect(t.texts()).toEqual([]);
+        yield* advance(1);
+        expect(t.texts()).toEqual(["Warm now."]);
+        expect(ackEvents(events).map((e) => [e.source, e.ackFallbackReason])).toEqual([["model", undefined]]);
+      }),
+    );
+  });
+
+  test("prefetch: a 20s port falls back to canned with timeout at afterMs + modelTimeoutMs", async () => {
+    const t = withTyping();
+    const events: AgentEvent[] = [];
+    await runRouter(
+      {
+        channels: [t.adapter],
+        routes: [modelRoute({ modelTimeoutMs: 3000 })],
+        agents: modelAgent({ ms: 30_000, acknowledge: () => Effect.zipRight(Effect.sleep(20_000), Effect.succeed("late")) }),
+        eventBus: { publish: (e) => Effect.sync(() => void events.push(e)) },
+      },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(6999);
+        expect(t.texts()).toEqual([]);
+        yield* advance(1);
+        expect(t.texts()).toEqual(["On it..."]);
+        expect(ackEvents(events).map((e) => [e.source, e.ackFallbackReason])).toEqual([["canned", "timeout"]]);
+      }),
+    );
+  });
+
+  test("prefetch: a turn that ends before afterMs sends no ack and cancels the port call", async () => {
+    const t = withTyping();
+    let finished = false;
+    await runRouter(
+      {
+        channels: [t.adapter],
+        routes: [modelRoute()],
+        agents: modelAgent({
+          ms: 1000,
+          acknowledge: () => Effect.zipRight(Effect.sleep(3000), Effect.sync(() => ((finished = true), "late"))),
+        }),
+      },
+      Effect.gen(function* () {
+        t.inner.push(env());
+        yield* advance(30_000);
+        expect(t.texts()).toEqual(["final"]);
+        expect(finished).toBe(false);
       }),
     );
   });

@@ -75,8 +75,9 @@ export interface ChosenAck {
 /**
  * Pick the ack text. `canned` source: the canned text. `model` source, in order: the turn's own
  * narration (latest pushed so far), then the session's `acknowledge` port bounded by
- * `ack.modelTimeoutMs`, then the canned text. A port failure, timeout, defect or empty answer
- * falls through to canned; this never fails.
+ * `ack.modelTimeoutMs` (measured from when this runs, i.e. from `afterMs`; the engine starts the
+ * port call at turn start, so a result already produced is used at once), then the canned text.
+ * A port failure, timeout, defect or empty answer falls through to canned; this never fails.
  */
 export const chooseAckText = (plan: {
   readonly ack: ResolvedAck;
@@ -118,10 +119,13 @@ export const withTurnAck = <A, E, R>(
     readonly ack: ResolvedAck;
     readonly pulse: Effect.Effect<void> | undefined;
     readonly sendAck: Effect.Effect<void>;
+    /** Started with the turn (model-ack prefetch); interrupted with it. Must not fail. */
+    readonly background?: Effect.Effect<void>;
   },
 ): Effect.Effect<A, E, R> =>
   Effect.scoped(
     Effect.gen(function* () {
+      if (plan.background) yield* Effect.forkScoped(plan.background);
       if (plan.ack.typing && plan.pulse) {
         yield* Effect.forkScoped(Effect.repeat(plan.pulse, Schedule.spaced(TYPING_REFRESH_MS)));
       }

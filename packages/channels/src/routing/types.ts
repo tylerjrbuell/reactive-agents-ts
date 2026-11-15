@@ -189,10 +189,11 @@ export interface RoutedReply {
 export interface RoutedSession {
   readonly send: (turn: RoutedTurn) => Effect.Effect<RoutedReply, RoutingError>;
   /**
-   * Optional. With `ack.source: "model"` and no narration yet, the router calls this once while
-   * `send` is still running and sends the text as the acknowledgement. Text only, one short line,
-   * must not touch the session history of the running turn. The router bounds it by
-   * `ack.modelTimeoutMs` and falls back to the canned text. Return a bare string, or
+   * Optional. With `ack.source: "model"` the router calls this once, started with the turn
+   * (concurrent with `send`), and sends the text as the acknowledgement unless narration exists.
+   * Text only, one short line, must not touch the session history of the running turn. At
+   * `ack.afterMs` the router uses the result if ready, else waits up to `ack.modelTimeoutMs`
+   * from `afterMs`, then falls back to the canned text. Return a bare string, or
    * `{ text, fallbackReason }` to say why the text is unusable (`empty`, `thinking_only`, `error`);
    * the router reports it on `ChannelTurnAcknowledged.ackFallbackReason` (it records a timeout itself).
    */
