@@ -1,3 +1,4 @@
+import { HISTORY_BLOCK_MARKER } from "@reactive-agents/reasoning";
 import type { ChatMessage } from "./chat.js";
 import { healShapedAssistantTurns } from "./chat/history-hygiene.js";
 import type { AgentResult } from "./builder/types.js";
@@ -93,7 +94,7 @@ export function formatHistoryBlock(history: readonly ChatMessage[]): string {
   const lines = healShapedAssistantTurns(history).map((m) =>
     m.role === "user" ? `User: ${m.content}` : `Assistant: ${m.content}`,
   );
-  return `--- Conversation history ---\n${lines.join("\n")}`;
+  return `${HISTORY_BLOCK_MARKER}\n${lines.join("\n")}`;
 }
 
 /**

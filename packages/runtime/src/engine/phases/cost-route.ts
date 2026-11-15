@@ -26,7 +26,7 @@ import {
   isRoutableProvider,
 } from "@reactive-agents/cost";
 import type { ModelTier } from "@reactive-agents/cost";
-import { extractTaskText } from "../util.js";
+import { extractIntentText } from "../util.js";
 import type { Phase } from "../phase.js";
 
 // Convenience narrow: TIER_ORDER imported from @reactive-agents/cost.
@@ -48,7 +48,7 @@ export const costRoute: Phase = {
       if (!isRoutableProvider(deps.config.provider)) return fallback;
       const provider = deps.config.provider; // narrowed to Provider by the guard above
 
-      const taskText = extractTaskText(deps.task.input);
+      const taskText = extractIntentText(deps.task.input);
       const analysis = yield* analyzeComplexity(taskText).pipe(
         Effect.catchAll(() => Effect.succeed(null)),
       );

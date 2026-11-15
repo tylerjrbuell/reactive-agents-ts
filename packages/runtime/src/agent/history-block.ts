@@ -1,3 +1,4 @@
+import { CURRENT_MESSAGE_MARKER } from "@reactive-agents/reasoning";
 import type { ChatMessage } from "../chat.js";
 import { applyHistoryWindow, formatHistoryBlock } from "../gateway-context-formatting.js";
 import { prependTaskText, type TaskInput } from "./task-input.js";
@@ -17,5 +18,5 @@ export function withHistoryBlock(input: TaskInput, history?: readonly ChatMessag
   if (!history || history.length === 0) return input;
   const block = formatHistoryBlock(applyHistoryWindow(history));
   if (!block) return input;
-  return prependTaskText(input, (text) => `${block}\n\n--- Current message ---\n${text}`);
+  return prependTaskText(input, (text) => `${block}\n\n${CURRENT_MESSAGE_MARKER}\n${text}`);
 }

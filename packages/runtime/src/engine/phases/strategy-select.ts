@@ -14,7 +14,7 @@
  * stays inline.
  */
 import { Effect } from "effect";
-import { extractTaskText } from "../util.js";
+import { extractIntentText } from "../util.js";
 import { StrategySelectorService } from "@reactive-agents/reactive-intelligence";
 import type { Phase } from "../phase.js";
 
@@ -33,7 +33,7 @@ export const strategySelect: Phase = {
           ? yield* selectorOpt.value
               .select(
                 {
-                  taskDescription: extractTaskText(deps.task.input),
+                  taskDescription: extractIntentText(deps.task.input),
                   taskType: deps.task.type,
                   complexity: 0.5,
                   urgency: 0.5,

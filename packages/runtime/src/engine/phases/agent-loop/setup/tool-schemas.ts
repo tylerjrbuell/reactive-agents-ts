@@ -35,7 +35,7 @@ import { extractOutputFormat, filterToolsByRelevance } from "@reactive-agents/re
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { ReactiveAgentsConfig } from "../../../../types.js";
 import type { ObsLike } from "../../../runtime-context.js";
-import { extractTaskText } from "../../../util.js";
+import { extractIntentText } from "../../../util.js";
 
 export type ToolSchema = {
   name: string;
@@ -195,7 +195,7 @@ export const prepareReasoningToolSchemas = (
     // empirically-validated static base. See spec
     // wiki/Architecture/Design-Specs/2026-05-06-intelligent-default-builders.md
     // for the full pattern.
-    const taskTextForIntent = extractTaskText(task.input);
+    const taskTextForIntent = extractIntentText(task.input);
     const finalAnswerCtx = {
       outputFormat: extractOutputFormat(taskTextForIntent).format,
       hasRequiredTools: (effectiveRequiredTools?.length ?? 0) > 0,
@@ -253,7 +253,7 @@ export const prepareReasoningToolSchemas = (
         filteredSet = new Set([...classifiedRelevantTools, ...requiredSet]);
       } else {
         // Fallback: heuristic keyword matching
-        const taskTextForFilter = extractTaskText(task.input);
+        const taskTextForFilter = extractIntentText(task.input);
         const { primary } = filterToolsByRelevance(taskTextForFilter, availableToolSchemas);
         filteredSet = new Set(primary.map((t: { name: string }) => t.name));
       }

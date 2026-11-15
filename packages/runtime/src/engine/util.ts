@@ -1,4 +1,5 @@
 import type { TerminatedBy } from "@reactive-agents/core";
+import { extractCurrentTurn } from "@reactive-agents/reasoning";
 
 /**
  * Shared utilities used across phase modules. Keep this file tiny — only put
@@ -50,6 +51,17 @@ export function extractTaskText(input: unknown): string {
     if (typeof q === "string") return q;
   }
   return JSON.stringify(input);
+}
+
+/**
+ * The user's CURRENT ask only. Chat callers inline prior turns into the task
+ * text; intent readers (tool relevance, literal-mention, strategy/complexity
+ * routing, skill/experience queries) must use this, never `extractTaskText`,
+ * or they classify on old turns. Execution/verification/telemetry that needs
+ * the full task keeps `extractTaskText`.
+ */
+export function extractIntentText(input: unknown): string {
+  return extractCurrentTurn(extractTaskText(input)).text.trim();
 }
 
 /**

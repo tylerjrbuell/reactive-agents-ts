@@ -37,7 +37,7 @@ export type ClassifierToolDef = Pick<ToolDefinition, "name"> &
   Partial<Pick<ToolDefinition, "description" | "parameters" | "cardinality">>;
 import { classifyToolRelevance } from "@reactive-agents/reasoning";
 import { literalMentionRequired } from "../../../../classifier-bypass.js";
-import { extractTaskText } from "../../../util.js";
+import { extractIntentText } from "../../../util.js";
 import type { ReactiveAgentsConfig } from "../../../../types.js";
 import type { ObsLike } from "../../../runtime-context.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
@@ -137,7 +137,7 @@ export const classifyTools = (
       classifierReliability === "low" &&
       wantsClassification
     ) {
-      const taskText = extractTaskText(task.input);
+      const taskText = extractIntentText(task.input);
       const allToolNames = cachedToolDefs.map((t) => t.name);
       const literalMentions = literalMentionRequired(taskText, allToolNames);
       if (literalMentions.length > 0) {
@@ -175,7 +175,7 @@ export const classifyTools = (
 
     // Branch 3: classifier wanted + reliable → call classifyToolRelevance (LLM)
     const classifyResult = yield* classifyToolRelevance({
-      taskDescription: extractTaskText(task.input),
+      taskDescription: extractIntentText(task.input),
       availableTools: cachedToolDefs.map((t) => ({
         name: t.name,
         description: t.description ?? "",
@@ -227,7 +227,7 @@ export const classifyTools = (
     // Sanity-check classifier "required" against task text. Hallucinated tools
     // (not literally mentioned) are demoted to "relevant" — visible/usable
     // but not enforced.
-    const taskTextLower = extractTaskText(task.input);
+    const taskTextLower = extractIntentText(task.input);
     const literalMentions = literalMentionRequired(
       taskTextLower,
       classifyResult.required,

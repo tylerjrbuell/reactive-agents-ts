@@ -32,6 +32,7 @@ import { asThinkContext, getSelectedModelName } from "./think-context.js";
 import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 import {
   briefResolvedSkillsFromMetadata,
+  extractIntentText,
   extractTaskText,
   normalizeReasoningResult,
   type ExecutionReasoningResult,
@@ -235,7 +236,7 @@ export const runReasoningThink = (
     // through `taskClassification` so every downstream consumer (adaptive
     // heuristic, ToT cost gate, future capabilities) reads from a single
     // canonical snapshot instead of re-classifying the same task string.
-    const taskClassification = classifyTask(extractTaskText(task.input));
+    const taskClassification = classifyTask(extractIntentText(task.input));
 
     // Durable resume (Phase C): when ReactiveAgent.resume(runId) bound the run
     // slot resumeStateSlot to a serialized checkpoint, deserialize it here and forward

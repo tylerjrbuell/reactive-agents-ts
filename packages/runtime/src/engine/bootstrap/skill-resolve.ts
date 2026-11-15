@@ -27,7 +27,7 @@ import {
 } from "@reactive-agents/reactive-intelligence";
 import { capturedFileRoot, fileRootSlot } from "@reactive-agents/tools/internal/run-slots";
 import type { ReactiveAgentsConfig } from "../../types.js";
-import { extractTaskText } from "../util.js";
+import { extractIntentText } from "../util.js";
 import { AgentSkills, SKILLS_ACTIVATE_CONTEXT_KEY } from "../../runtime-skills-layer.js";
 import type { ActivatableSkillEntry } from "./skill-activatable.js";
 
@@ -138,7 +138,7 @@ export const resolveRunSkills = (args: {
 
     const resolved = yield* resolver
       .resolve({
-        taskDescription: extractTaskText(task.input),
+        taskDescription: extractIntentText(task.input),
         modelId,
         agentId: config.agentId,
         ...(root !== undefined ? { root } : {}),

@@ -23,7 +23,7 @@ import { classifyTaskCategory as classifyTaskCategoryFn } from "@reactive-agents
 import { ExperienceStore } from "@reactive-agents/memory";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../types.js";
 import type { EbLike, ObsLike } from "../runtime-context.js";
-import { extractTaskText } from "../util.js";
+import { extractIntentText } from "../util.js";
 import { bootstrapSkillActivations, type RunSkills } from "./skill-resolve.js";
 import { ACTIVATABLE_SKILLS_KEY, PINNED_SKILLS_KEY } from "./skill-activatable.js";
 
@@ -179,7 +179,7 @@ export const runBootstrapSkillPostprocess = (
       ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
 
       if (expOpt._tag === "Some") {
-        const taskText = extractTaskText(task.input);
+        const taskText = extractIntentText(task.input);
         const tips = yield* expOpt.value
           .query(taskText, task.type ?? "general", config.contextProfile?.tier ?? "mid")
           .pipe(Effect.catchAll(() => Effect.succeed({ tips: [] as readonly string[] })));
