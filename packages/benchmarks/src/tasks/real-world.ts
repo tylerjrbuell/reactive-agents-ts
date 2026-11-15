@@ -637,9 +637,13 @@ const norm = raw.replace(/[,_$]/g, "")
 check("report.md exists and is substantive", () =>
   raw.replace(/\\s+/g, " ").length >= 300 && !/\\b(TODO|TBD|lorem ipsum|placeholder)\\b/i.test(raw))
 
-check("contains a data table", () => {
-  const pipeRows = raw.split("\\n").filter((l) => (l.match(/\\|/g) ?? []).length >= 2)
-  return pipeRows.length >= 3
+// The prompt never asks for a table, so a pipe table is not required: any
+// structured presentation passes (pipe table, or 3+ list lines carrying numbers).
+check("presents data in a structured form", () => {
+  const lines = raw.split("\\n")
+  const pipeRows = lines.filter((l) => (l.match(/\\|/g) ?? []).length >= 2)
+  const listItems = lines.filter((l) => /^\\s*([-*•]|\\d+[.)])\\s+/.test(l) && /\\d/.test(l))
+  return pipeRows.length >= 3 || listItems.length >= 3
 })
 
 check("surfaces Engineering as the outlier department", () => /engineering/i.test(raw))
@@ -697,7 +701,7 @@ check("optimization-report.md exists and is substantive", () =>
   reportMd.replace(/\\s+/g, " ").length >= 120 && !/\\b(TODO|TBD|lorem ipsum)\\b/i.test(reportMd))
 
 check("report reasons about asymptotic complexity (n log n)", () =>
-  /n\\s*[·*]?\\s*log\\s*\\(?\\s*n/i.test(reportMd))
+  /n\\s*[·*×⋅]?\\s*\\\\?log(?:\\s*_?\\s*[2₂])?\\s*\\(?\\s*n/i.test(reportMd))
 
 check("sort.ts is still present", () => sortSrc.length > 0)
 

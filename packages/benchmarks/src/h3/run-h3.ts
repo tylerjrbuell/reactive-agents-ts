@@ -22,6 +22,7 @@ import { execSync } from "node:child_process"
 import { errorMessage } from "@reactive-agents/core"
 import { analyzeCause, parseTrace } from "@reactive-agents/trace"
 import { runSession } from "../runner.js"
+import { applySearchKeysFromEnvFiles, searchBackendConfigured } from "../search-env.js"
 import { isSolved } from "../report-format.js"
 import type { BenchmarkTask, HarnessVariant, ModelVariant } from "../types.js"
 import { H3_TASKS } from "./tasks.js"
@@ -238,7 +239,17 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
   const done = new Set(results.cells.map((c) => c.cellId))
   let cells = [...results.cells]
   const started = Date.now()
-  const tasks = suiteTasks.filter((t) => !opts.taskFilter?.length || opts.taskFilter.includes(t.id))
+  // lh-1 needs a real web-search backend. Campaign worktrees sit outside the repo, so
+  // bun never loads its .env: pull the search keys in (names only, never logged values).
+  applySearchKeysFromEnvFiles()
+  const searchless = !searchBackendConfigured()
+  const tasks = suiteTasks.filter((t) => !opts.taskFilter?.length || opts.taskFilter.includes(t.id)).filter((t) => {
+    if (t.id === "lh-1" && searchless) {
+      console.warn("H3: lh-1 EXCLUDED from aggregates: no web-search backend key in env or .env (TAVILY/BRAVE/SERPER/KEENABLE); DuckDuckGo-only search measures the network, not the harness")
+      return false
+    }
+    return true
+  })
   let ran = 0
   let remaining = 0
   const plan: Array<{ tier: string; task: BenchmarkTask; variant: HarnessVariant; run: number }> = []

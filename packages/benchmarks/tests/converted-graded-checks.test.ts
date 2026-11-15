@@ -220,6 +220,22 @@ The dataset includes tenure and score columns which are numeric.
     expect(s).toBeLessThan(1);
   });
 
+  it("no pipe table needed: grounded bulleted report → 1.0 (prompt never asks for a table)", () => {
+    const BULLETS = `# Compensation Report
+
+- Engineering: avg salary $144,600, avg performance 2.7
+- Product: avg salary $109,400, avg performance 3.8
+- Sales: avg salary $79,200, avg performance 4.0
+
+Engineering is paid roughly 41% above the company average yet posts the lowest
+performance scores of any department.
+
+## Recommendation
+Leadership should review the engineering band before the next cycle.
+`;
+    expect(scoreCheck("rw-3", { "report.md": BULLETS })).toBe(1.0);
+  });
+
   it("no report → 0.0", () => {
     expect(scoreCheck("rw-3", {})).toBe(0.0);
   });
@@ -245,6 +261,18 @@ of clarity. No changes were made — the correct engineering decision here is to
   it("untouched sort.ts + n-log-n conclusion → 1.0", () => {
     expect(scoreCheck("rw-6", { "sort.ts": canonicalSort(), "optimization-report.md": GOOD_REPORT })).toBe(1.0);
   });
+
+  it.each(["$O(n \\log n)$", "O(n·log n)", "O(nlogn)", "O(n log₂ n)", "O(n \\log_2 n)"])(
+    "complexity notation %s is accepted",
+    (notation) => {
+      const report = `# Optimization Analysis
+
+The merge sort is ${notation} and optimal for comparison sorts; profiling shows no hot spot
+beyond the merge loop. No changes were made because further tuning would be noise-level.
+`;
+      expect(scoreCheck("rw-6", { "sort.ts": canonicalSort(), "optimization-report.md": report })).toBe(1.0);
+    },
+  );
 
   it("wrong: 'optimized' rewrite that broke sorting → low score (discrimination)", () => {
     const broken = `export function mergeSort(arr: readonly number[]): number[] {
