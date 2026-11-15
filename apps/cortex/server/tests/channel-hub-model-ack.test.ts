@@ -137,6 +137,16 @@ describe("activity feed", () => {
     ]);
   });
 
+  it("shows the ack latency in seconds, with and without a fallback", () => {
+    const t = new HubActivityTracker(() => 1);
+    t.observe({ _tag: "ChannelTurnAcknowledged", routeId: "r", role: "owner", source: "model", ackLatencyMs: 5800 });
+    t.observe({ _tag: "ChannelTurnAcknowledged", routeId: "r", role: "owner", ackFallbackReason: "timeout", ackLatencyMs: 12000 });
+    const [fell, ok] = t.snapshot();
+    expect(ok?.detail).toBe("acknowledged (model, owner; 5.8s)");
+    expect(ok?.ackLatencyMs).toBe(5800);
+    expect(fell?.detail).toBe("acknowledged (canned, owner; model ack fell back: timeout after 12.0s)");
+  });
+
   it.each(["timeout", "empty", "thinking_only", "error"] as const)("shows why a model ack fell back: %s", (reason) => {
     const t = new HubActivityTracker(() => 1);
     t.observe({ _tag: "ChannelTurnAcknowledged", routeId: "r", role: "owner", ackFallbackReason: reason });

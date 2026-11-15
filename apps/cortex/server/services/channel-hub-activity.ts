@@ -18,6 +18,8 @@ export interface HubActivity {
   readonly detail: string;
   /** On `acknowledged`: why canned text was sent although the route asked for a model-written ack. */
   readonly ackFallbackReason?: "timeout" | "empty" | "thinking_only" | "error";
+  /** On `acknowledged`: milliseconds the model ack took (or waited before falling back). */
+  readonly ackLatencyMs?: number;
   /** True for a simulated message (nothing was sent to the platform). */
   readonly simulated: boolean;
 }
@@ -34,6 +36,22 @@ export interface RouteCounters {
 
 const LIMIT = 50;
 const zero: RouteCounters = { matched: 0, denied: 0, answered: 0, failed: 0, dropped: 0, costUsd: 0 };
+
+/** Plain-words ack line: source, role, latency (seconds, 1 decimal) and why a model ack fell back. */
+const ackDetail = (event: {
+  readonly source?: string | undefined;
+  readonly role: string;
+  readonly ackFallbackReason?: string | undefined;
+  readonly ackLatencyMs?: number | undefined;
+}): string => {
+  const parts: string[] = [event.source ?? "canned", event.role];
+  const head = parts.join(", ");
+  const latency = event.ackLatencyMs !== undefined ? `${(event.ackLatencyMs / 1000).toFixed(1)}s` : undefined;
+  const tail = event.ackFallbackReason
+    ? `model ack fell back: ${event.ackFallbackReason}${latency ? ` after ${latency}` : ""}`
+    : latency;
+  return `acknowledged (${head}${tail ? `; ${tail}` : ""})`;
+};
 
 /** Folds router events; one instance per hub run. */
 export class HubActivityTracker {
@@ -102,8 +120,9 @@ export class HubActivityTracker {
         this.note({
           kind: "acknowledged",
           routeId: event.routeId,
-          detail: `acknowledged (${event.source ?? "canned"}, ${event.role}${event.ackFallbackReason ? `; model ack fell back: ${event.ackFallbackReason}` : ""})`,
+          detail: ackDetail(event),
           ...(event.ackFallbackReason ? { ackFallbackReason: event.ackFallbackReason } : {}),
+          ...(event.ackLatencyMs !== undefined ? { ackLatencyMs: event.ackLatencyMs } : {}),
           simulated: event.simulated,
         });
         return;
