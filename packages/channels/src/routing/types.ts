@@ -57,7 +57,7 @@ export const RouteAck = Schema.Struct({
    * port, else the canned text. The router never calls a model itself.
    */
   source: Schema.optional(Schema.Literal("canned", "model")),
-  /** With `source: "model"`: ms the `acknowledge` port may take before the canned text is used. 1..10 000, default 3000. */
+  /** With `source: "model"`: ms the `acknowledge` port may take before the canned text is used. 1..30 000, default 12 000. */
   modelTimeoutMs: Schema.optional(Schema.Number),
 });
 /** See {@link RouteAck}. */

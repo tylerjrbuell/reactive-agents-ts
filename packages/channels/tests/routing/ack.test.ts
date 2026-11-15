@@ -570,7 +570,7 @@ describe("route ack: config", () => {
   test("defaults and rotation are deterministic", () => {
     expect(resolveAck(undefined)).toBeUndefined();
     expect(resolveAck(false)).toBeUndefined();
-    expect(resolveAck({})).toEqual({ afterMs: 4000, texts: ["On it..."], typing: true, source: "canned", modelTimeoutMs: 3000 });
+    expect(resolveAck({})).toEqual({ afterMs: 4000, texts: ["On it..."], typing: true, source: "canned", modelTimeoutMs: 12_000 });
     expect(pickAckText(["a", "b", "c"], "m1")).toBe(pickAckText(["a", "b", "c"], "m1"));
   });
 
@@ -593,8 +593,8 @@ describe("route ack: config", () => {
 
   test("source and modelTimeoutMs bounds", async () => {
     expect((await check({ source: "model", modelTimeoutMs: 1 }))._tag).toBe("Success");
-    expect((await check({ source: "model", modelTimeoutMs: 10_000 }))._tag).toBe("Success");
-    for (const bad of [{ source: "llm" }, { modelTimeoutMs: 0 }, { modelTimeoutMs: 10_001 }, { modelTimeoutMs: 1.5 }]) {
+    expect((await check({ source: "model", modelTimeoutMs: 30_000 }))._tag).toBe("Success");
+    for (const bad of [{ source: "llm" }, { modelTimeoutMs: 0 }, { modelTimeoutMs: 30_001 }, { modelTimeoutMs: 1.5 }]) {
       expect((await check(bad))._tag).toBe("Failure");
     }
   });

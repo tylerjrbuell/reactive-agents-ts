@@ -8,7 +8,7 @@ export const DEFAULT_ACK_TEXT = "On it...";
 /** Platforms expire a typing pulse after about 5 seconds; refresh a little sooner. */
 export const TYPING_REFRESH_MS = 4000;
 /** Default bound on the session's `acknowledge` port. */
-export const DEFAULT_ACK_MODEL_TIMEOUT_MS = 3000;
+export const DEFAULT_ACK_MODEL_TIMEOUT_MS = 12_000;
 /** Longest model-written ack, in characters. */
 export const MAX_MODEL_ACK_CHARS = 300;
 

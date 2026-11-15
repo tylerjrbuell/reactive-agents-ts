@@ -13,7 +13,7 @@ const RESET_COMMAND = /^\/[A-Za-z0-9_-]{1,31}$/;
 const MAX_RESET_COMMANDS = 5;
 
 const MAX_ACK_AFTER_MS =120_000;
-const MAX_ACK_MODEL_TIMEOUT_MS = 10_000;
+const MAX_ACK_MODEL_TIMEOUT_MS = 30_000;
 const MAX_ACK_TEXT = 200;
 const MAX_ACK_TEXTS = 10;
 
