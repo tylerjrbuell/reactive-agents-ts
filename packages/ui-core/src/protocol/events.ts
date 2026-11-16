@@ -462,6 +462,14 @@ export interface PlanStepWire {
   readonly status: PlanStepStatusWire;
 }
 
+/** A planning recon result (mirrors core `PlanFinding`): a tool the planner ran and what it learned. */
+export interface PlanFindingWire {
+  readonly id: string;
+  readonly tool: string;
+  readonly summary: string;
+  readonly at?: number;
+}
+
 /** A plan: a goal and its ordered steps (mirrors core `Plan`). */
 export interface PlanWire {
   readonly id: string;
@@ -469,6 +477,8 @@ export interface PlanWire {
   readonly steps: readonly PlanStepWire[];
   readonly createdAt: number;
   readonly source: PlanSourceWire;
+  /** Recon findings recorded while planning, when any. */
+  readonly findings?: readonly PlanFindingWire[];
 }
 
 /**
