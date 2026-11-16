@@ -130,8 +130,16 @@ export const createChannelRouter = (
       );
     }
 
+    // A durable inbox: retry what a crash left behind, off the startup path (replies need the adapters, which are up now).
+    yield* Effect.forkScoped(engine.replayInbox());
+
     return {
-      status: Effect.map(store.getRoutes, (r) => engine.routerStatus(r.length)),
+      status: Effect.flatMap(store.getRoutes, (r) =>
+        Effect.map(engine.inboxCounts(), (inbox) => ({
+          ...engine.routerStatus(r.length),
+          ...(inbox ? { inbox } : {}),
+        })),
+      ),
       setRoutes: (next, opts) =>
         Effect.gen(function* () {
           const validated = yield* validateRoutes(next, platformOf);

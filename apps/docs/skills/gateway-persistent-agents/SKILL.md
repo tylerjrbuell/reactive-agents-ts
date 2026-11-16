@@ -151,6 +151,12 @@ A bare `+15551234567` no longer matches, so an unprefixed allowlist denies every
 
 Channels reject unknown senders by default: with no `accessControl`, every inbound channel sender is denied (and the gateway logs a warning at start). Allow specific senders as above, or accept anyone explicitly with `accessControl: { accessPolicy: "open" }`. The GitHub webhook adapter also drops a replayed `x-github-delivery` id.
 
+### Durable inbox and event policy (channel router)
+
+Routed channels (`.withChannels({ routes })`) keep dedupe and queued messages in memory by default. For an always-on agent pass `store: await Effect.runPromise(openSqliteRouterStore({ path }))` from `@reactive-agents/channels`: every accepted message becomes a row (`received | running | done | failed | dropped`), dedupe survives a restart, turns a crash left `running` retry up to `maxAttempts` (default 3) then become `failed` (`channel.inbox.retried` / `channel.inbox.failed` events), and finished rows are pruned by age and count. Delivery is at-least-once with dedupe, so keep tools idempotent.
+
+Per route: `batchWindowMs` (0 to 30 000, default 0) joins one sender's burst into one turn; `midRun` (`"queue"` default, `"fold"`, `"interrupt"`) decides what a message that arrives during a running turn does. `fold` joins it through `turn.takeFolded()` (undrained text runs as one follow-up turn); `interrupt` cancels the turn with `turn_interrupted` and restarts from the combined input. Status: `agent.channelRouterStatus()` reports `durableStore` and per-status `inbox` counts. Full guide: messaging-channels.
+
 ### Policy engine
 
 ```ts

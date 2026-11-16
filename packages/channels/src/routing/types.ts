@@ -4,6 +4,7 @@ import type { ChannelIdentity, DeliveryReceipt } from "../adapter.js";
 import type { ChannelError } from "../errors.js";
 import type { Attachment, InboundMessage } from "../types.js";
 import type { AckPortResult } from "./ack.js";
+import type { InboxCounts, RouterInbox } from "./inbox.js";
 
 /**
  * Channel routing types: a Route is one flat rule (match an inbound conversation, pick a target
@@ -106,6 +107,20 @@ export const RouteSpec = Schema.Struct({
    * session and start a fresh one. Never forwarded to the agent. Default `["/new", "/reset"]`; `[]` disables.
    */
   resetCommands: Schema.optionalWith(Schema.Array(Schema.String), { default: () => ["/new", "/reset"] }),
+  /**
+   * Join envelopes from one sender in one conversation that arrive within this window (ms, 0 to 30 000)
+   * into ONE turn input: texts joined with a newline in arrival order, every source id kept in
+   * `metadata.batch.sourceIds`. Absent or 0: every envelope is its own turn (today's behavior).
+   */
+  batchWindowMs: Schema.optional(Schema.Number),
+  /**
+   * What an envelope that arrives while a turn for its conversation is running does. `"queue"`
+   * (default, today's behavior): wait its turn in the bounded FIFO. `"fold"`: join the running turn's
+   * pending input (the resolver drains it through `RoutedTurn.takeFolded` at a safe boundary; anything
+   * not drained runs as one follow-up turn). `"interrupt"`: cancel the running turn (typed
+   * `turn_interrupted`) and start a new one from the combined input.
+   */
+  midRun: Schema.optional(Schema.Literal("queue", "fold", "interrupt")),
 });
 /** A validated route (defaults applied). */
 export type RouteSpec = Schema.Schema.Type<typeof RouteSpec>;
@@ -127,7 +142,8 @@ export type RoutingErrorReason =
   | "confirmation_required"
   | "resolve_failed"
   | "turn_failed"
-  | "turn_timeout";
+  | "turn_timeout"
+  | "turn_interrupted";
 
 /** Typed routing failure. `message` carries classification only, never message text or secrets. */
 export class RoutingError extends Data.TaggedError("RoutingError")<{
@@ -178,6 +194,13 @@ export interface RoutedTurn {
    * pushed after the ack went out. Never throws; text is never recorded as history by the router.
    */
   readonly onProgress?: (text: string) => void;
+  /**
+   * Present only on routes with `midRun: "fold"`. A resolver calls it at a safe boundary (between
+   * tool calls, before the final answer) and gets the texts of messages that arrived while this turn
+   * ran, in order; each text is returned once and counts as part of this turn. Never throws.
+   * Texts nobody drains run as one follow-up turn after this one.
+   */
+  readonly takeFolded?: () => ReadonlyArray<string>;
 }
 
 /** The agent's answer to one turn. */
@@ -238,8 +261,10 @@ export interface AgentResolver {
 
 /** Port 2: routes, seen message ids and rate counters. In-memory by default. */
 export interface RouterStore {
-  /** True when counters and seen ids survive a restart (this slice only ships in-memory). */
+  /** True when counters and seen ids survive a restart (`makeSqliteRouterStore`); the in-memory default is false. */
   readonly durable: boolean;
+  /** Durable inbox (accepted envelopes, crash recovery). Absent on the in-memory store. */
+  readonly inbox?: RouterInbox;
   readonly getRoutes: Effect.Effect<ReadonlyArray<RouteSpec>>;
   readonly setRoutes: (routes: ReadonlyArray<RouteSpec>) => Effect.Effect<void>;
   /** Record a platform message id. True the first time, false on every repeat. */
@@ -299,4 +324,6 @@ export interface RouterStatus {
   readonly activeSessions: number;
   /** False means dedupe and rate counters reset on restart. */
   readonly durableStore: boolean;
+  /** Envelope count per status; present only with a durable inbox. */
+  readonly inbox?: InboxCounts;
 }

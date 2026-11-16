@@ -516,7 +516,7 @@ How access works:
 - **Owners run the agent's own tools. Everyone else gets `senderTools`**, which defaults to `ReadOnly`: only tools that declare `mutatesExternalState: false` and need no approval. Unclassified tools (custom, MCP, sub-agent) are removed. `Allowlist` keeps only named tools the agent already had.
 - **The tool surface is decided when the agent is built**, not per turn and not by prompt. The router builds one agent per (route, role), so a sender never shares history or tools with an owner. Sender text reaches the model only as the user message; persona and instructions stay in the agent's own configuration.
 - **The router is the only consumer of its adapters.** The gateway's legacy chat handler skips messages from adapters a router owns, so a routed message runs once, under the route's access decision.
-- **State is in memory by default.** Message dedupe and turn caps reset on restart, and the router logs a warning at startup. Pass a durable `store` to keep them.
+- **State is in memory by default.** Message dedupe and turn caps reset on restart, and the router logs a warning at startup. Pass a durable `store` to keep them (see [Surviving a restart](#surviving-a-restart-the-durable-inbox)).
 - This limits what an injected message can do. It does not make a model immune to injection, and read-only tools can still leak data they can read.
 
 ### Acknowledging slow turns
@@ -569,6 +569,53 @@ const resolver: AgentResolver = {
     }),
 };
 ```
+
+### Surviving a restart (the durable inbox)
+
+By default a restart loses queued messages and forgets which messages it already answered, so a platform that redelivers an update can run a turn twice. Opt in to a SQLite store and the router keeps every accepted message:
+
+```typescript
+import { openSqliteRouterStore } from "@reactive-agents/channels";
+import { Effect } from "effect";
+
+const store = await Effect.runPromise(
+  openSqliteRouterStore({ path: "./.agent/router.db" }), // Node and Bun; ":memory:" for a throwaway
+);
+
+// .withChannels({ adapters, routes, agents, store })
+```
+
+- **One row per accepted message**, with a status: `received`, `running`, `done`, `failed` or `dropped`, plus the dedupe key (adapter id and the platform's message id), attempt count and last error. A denied sender, an unrouted message or a rate drop is recorded `dropped`, a failed turn `failed`.
+- **Dedupe survives restart.** A redelivered message that was already accepted is refused, answered or not.
+- **Crash recovery.** At start the router returns turns a dead process left `running` to `received` and runs them again, oldest first, up to `maxAttempts` (default 3). A message that runs out of attempts becomes `failed`; the router publishes `channel.inbox.retried` and `channel.inbox.failed` events (type of a `Custom` event; payloads carry no message text). `leaseTtlMs` (default 0) is how old a `running` row must be to count as orphaned: the account lease already guarantees one router per inbox, so raise it only if several processes share one file. A replayed message runs as its own turn, without batching.
+- **At least once, not exactly once.** A turn killed after the agent acted but before the reply went out runs again. Keep tools idempotent or approval-gated.
+- **Retention is bounded.** Finished rows are pruned by age (`retentionMaxAgeMs`, default 7 days) and count (`retentionMaxRows`, default 50 000). A key pruned away can be accepted again. Rows still `received` or `running` are never pruned. A finished row keeps no message text, only the key and status.
+- **Turn caps persist too**, so a restart does not reset a sender's hourly limit.
+- **Status.** `agent.channelRouterStatus()` reports `durableStore: true` and `inbox: { received, running, done, failed, dropped }`.
+- A store failure never stops the router: it is reported as `ErrorSwallowed` and the message is answered without durability.
+
+### Bursts and follow-ups (`batchWindowMs`, `midRun`)
+
+People send several short messages, or a correction while the agent is still working. Two route fields decide what happens. Both default to today's behavior.
+
+```typescript
+import type { RouteSpecInput } from "@reactive-agents/channels";
+
+const route: RouteSpecInput = {
+  id: "main",
+  match: { channelId: "telegram" },
+  target: { agentId: "assistant" },
+  owners: ["telegram:123"],
+  batchWindowMs: 1500, // join one sender's burst into one turn
+  midRun: "interrupt", // "queue" (default) | "fold" | "interrupt"
+};
+```
+
+- **`batchWindowMs`** (0 to 30 000, default 0 = off). Messages from one sender in one conversation that arrive within the window become one turn input: texts joined by a newline in arrival order, attachments together, every source id in `message.metadata.batch.sourceIds`. The window starts at the first message. The turn runs once and each inbox row settles with its outcome. A `channel.inbox.batched` event records the size and source ids. Batching holds one inbound slot per waiting message, so very long windows on busy channels can crowd the adapter's inbound concurrency.
+- **`midRun: "queue"`** (default): a message that arrives while a turn runs waits in the bounded per-conversation queue and runs as its own turn.
+- **`midRun: "fold"`**: the message joins the running turn. A resolver that supports it calls `turn.takeFolded()` at a safe boundary (between tool calls) and receives the new texts once. Texts nobody drains run as one follow-up turn right after, so a resolver that ignores `takeFolded` behaves like a combined queue.
+- **`midRun: "interrupt"`**: the message cancels the running turn with a typed `turn_interrupted` error (published as `ChannelTurnCompleted` with `ok: false`; the sender gets no failure notice) and a new turn starts from the original and new text joined. Partial work stays in the session history. The turn rate cap is not charged again for the restart.
+- Folded and interrupting messages are bounded by the same conversation queue size, and past it they are dropped as backpressure. Router simulations skip both fields. Webhook routes reject them, because the reply is the HTTP response.
 
 ### Starting a new conversation (`/new`)
 

@@ -25,6 +25,17 @@ export {
   type MatchInput,
 } from "./routing/match.js";
 export { makeMemoryRouterStore } from "./routing/store.js";
+export { makeSqliteRouterStore, openSqliteRouterStore, type SqliteRouterStore, type SqliteRouterStoreOptions } from "./routing/sqlite-store.js";
+export {
+  InboxError,
+  type InboxCounts,
+  type InboxEntry,
+  type InboxRecovery,
+  type InboxSettled,
+  type InboxStatus,
+  type RouterInbox,
+} from "./routing/inbox.js";
+export type { InboxEventPayloads, InboxEventType } from "./routing/inbox-tracker.js";
 export {
   makeRouteMeter,
   type RouteMeter,

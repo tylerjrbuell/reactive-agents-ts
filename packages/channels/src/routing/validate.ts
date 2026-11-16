@@ -13,6 +13,7 @@ const RESET_COMMAND = /^\/[A-Za-z0-9_-]{1,31}$/;
 const MAX_RESET_COMMANDS = 5;
 
 const MAX_ACK_AFTER_MS =120_000;
+const MAX_BATCH_WINDOW_MS = 30_000;
 const MAX_ACK_MODEL_TIMEOUT_MS = 30_000;
 const MAX_ACK_TEXT = 200;
 const MAX_ACK_TEXTS = 10;
@@ -78,6 +79,13 @@ export const validateRoute = (
     if (platform === "webhook") return invalid(route.id, "webhook routes reject ack (the reply is the HTTP response)");
     const problem = ackProblem(route.ack);
     if (problem) return invalid(route.id, problem);
+  }
+  const batch = route.batchWindowMs;
+  if (batch !== undefined && !(Number.isInteger(batch) && batch >= 0 && batch <= MAX_BATCH_WINDOW_MS)) {
+    return invalid(route.id, `batchWindowMs must be an integer from 0 to ${MAX_BATCH_WINDOW_MS}`);
+  }
+  if (platform === "webhook" && ((batch ?? 0) > 0 || (route.midRun ?? "queue") !== "queue")) {
+    return invalid(route.id, "webhook routes reject batchWindowMs and midRun (the reply is the HTTP response)");
   }
   if (route.resetCommands.length > MAX_RESET_COMMANDS || route.resetCommands.some((c) => !RESET_COMMAND.test(c))) {
     return invalid(route.id, `resetCommands must hold at most ${MAX_RESET_COMMANDS} commands like "/new" (slash, then 1 to 31 letters, digits, _ or -)`);

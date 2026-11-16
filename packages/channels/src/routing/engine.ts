@@ -7,6 +7,9 @@ import type { ChannelError } from "../errors.js";
 import type { InboundMessage } from "../types.js";
 import { AdapterHub } from "./adapter-hub.js";
 import { chooseAckText, pickAckText, resolveAck, withTurnAck, type AckPortResult } from "./ack.js";
+import { ConversationPolicy, combineMessages, type RunningTurn, type TurnEntry } from "./conversation-policy.js";
+import { InboxTracker, inboxEvent } from "./inbox-tracker.js";
+import type { InboxCounts } from "./inbox.js";
 import type { RouteMeter } from "./meter.js";
 import {
   decideRouteAccess,
@@ -122,8 +125,11 @@ export class RouterEngine {
   private readonly pending = new Map<string, number>();
   private readonly gates = new Map<string, Effect.Semaphore>();
   private readonly notified = new Set<string>();
+  private readonly policy = new ConversationPolicy();
+  private readonly inbox: InboxTracker;
 
   constructor(private readonly deps: EngineDeps) {
+    this.inbox = new InboxTracker(deps.strict ? deps.store.inbox : undefined, (e) => this.emit(e));
     this.hub = new AdapterHub({
       taskId: deps.taskId,
       ...(deps.eventBus ? { eventBus: deps.eventBus } : {}),
@@ -219,15 +225,54 @@ export class RouterEngine {
     );
   }
 
-  private process(adapterId: string, msg: InboundMessage, simulated: boolean): Effect.Effect<RouteOutcome> {
+  /**
+   * Re-run one envelope recovered from the durable inbox. It skips dedupe (the row already exists)
+   * and runs as its own turn: no batching or mid-run policy on a replay.
+   */
+  replay(adapterId: string, msg: InboundMessage): Effect.Effect<void, never> {
+    return this.process(adapterId, msg, false, true).pipe(
+      Effect.asVoid,
+      Effect.catchAllCause((cause) =>
+        emitErrorSwallowed({ site: "channels/src/routing/engine.ts:replay", tag: errorTag(cause) }),
+      ),
+    );
+  }
+
+  /**
+   * Startup recovery for a durable inbox: orphaned turns return to `received` (or fail when out of
+   * attempts, reported), then every pending envelope whose adapter is registered runs again, oldest
+   * first. No-op without an inbox.
+   */
+  replayInbox(): Effect.Effect<void> {
+    const self = this;
+    return Effect.gen(function* () {
+      if (!self.inbox.enabled) return;
+      for (const entry of yield* self.inbox.recover()) {
+        if (self.hub.has(entry.adapterId)) yield* self.replay(entry.adapterId, entry.message);
+      }
+    });
+  }
+
+  /** Envelope counts per status, when the store has a durable inbox. */
+  inboxCounts(): Effect.Effect<InboxCounts | undefined> {
+    return this.inbox.counts();
+  }
+
+  private process(adapterId: string, msg: InboundMessage, simulated: boolean, replayed = false): Effect.Effect<RouteOutcome> {
     const self = this;
     const deps = this.deps;
     return Effect.gen(function* () {
       if (!simulated) self.hub.noteReceived(adapterId);
       const taskId = deps.taskId();
-      if (deps.strict && !(yield* deps.store.markSeen(`${adapterId}:${msg.id}`))) {
-        return { _tag: "Duplicate" } as const;
+      const seenKey = `${adapterId}:${msg.id}`;
+      // Simulations never touch the durable inbox: a stored simulation would be replayed as a real turn.
+      const keys: ReadonlyArray<string> = simulated || !self.inbox.enabled ? [] : [seenKey];
+      if (deps.strict && !replayed) {
+        const fresh = keys.length > 0 ? yield* self.inbox.accept(seenKey, adapterId, msg) : yield* deps.store.markSeen(seenKey);
+        if (!fresh) return { _tag: "Duplicate" } as const;
       }
+      const settled = (outcome: RouteOutcome): Effect.Effect<RouteOutcome> =>
+        Effect.as(self.inbox.settle(keys, outcome), outcome);
       const routes = yield* deps.store.getRoutes;
       const platform = self.hub.platformOf(adapterId) ?? msg.platform;
       const input = matchInputOf(adapterId, msg);
@@ -235,7 +280,7 @@ export class RouterEngine {
       if (!route) {
         self.unrouted += 1;
         yield* self.emit({ _tag: "ChannelUnrouted", channelId: adapterId, simulated });
-        return { _tag: "Unrouted" } as const;
+        return yield* settled({ _tag: "Unrouted" } as const);
       }
 
       const verdict = yield* (deps.access
@@ -246,33 +291,129 @@ export class RouterEngine {
         if (verdict.reply !== undefined && !simulated && self.hub.has(adapterId)) {
           yield* self.reply(adapterId, msg, verdict.reply, taskId).pipe(Effect.ignore);
         }
-        return { _tag: "Denied", routeId: route.id, reason: verdict.reason } as const;
+        return yield* settled({ _tag: "Denied", routeId: route.id, reason: verdict.reason } as const);
       }
       const role = verdict.role;
       yield* self.emit({ _tag: "ChannelRouteMatched", routeId: route.id, channelId: adapterId, role, simulated });
 
       if (deps.strict) {
-        if (!groupAllowed(route, input)) return yield* self.drop("group", route.id, simulated);
+        if (!groupAllowed(route, input)) return yield* settled(yield* self.drop("group", route.id, simulated));
       }
 
       const key = `${route.id}:${role}:${conversationKeyOf(adapterId, msg)}`;
       // Owner reset command: handled here, never forwarded to the agent, exempt from the turn-rate cap.
       if (deps.strict && role === "owner" && isResetCommand(route, msg.content)) {
-        return yield* self.queued(key, true, () => self.resetConversation({ adapterId, msg, route, role, key, taskId, simulated }), {
-          onOverflow: () => self.drop("backpressure", route.id, simulated),
-        });
-      }
-      if (deps.strict && !(yield* self.withinRate(route, platform, msg))) return yield* self.drop("rate", route.id, simulated);
-      return yield* self.queued(key, deps.strict, () => self.runTurn({ adapterId, msg, route, role, key, taskId, simulated }), {
-        onOverflow: () =>
-          Effect.gen(function* () {
-            if (!simulated && !self.notified.has(key) && self.hub.has(adapterId)) {
-              self.notified.add(key);
-              yield* self.reply(adapterId, msg, BACKPRESSURE_NOTICE, taskId).pipe(Effect.ignore);
-            }
-            return yield* self.drop("backpressure", route.id, simulated);
+        return yield* settled(
+          yield* self.queued(key, true, () => self.resetConversation({ adapterId, msg, route, role, key, taskId, simulated }), {
+            onOverflow: () => self.drop("backpressure", route.id, simulated),
           }),
+        );
+      }
+      const entry: TurnEntry = { adapterId, msg, route, role, key, taskId, simulated, keys };
+      if (deps.strict && !simulated && !replayed && (route.batchWindowMs ?? 0) > 0) {
+        return yield* self.policy.batch(
+          entry,
+          (combined) => self.dispatch(combined, platform, replayed),
+          (size, sourceIds) => self.emit(inboxEvent("channel.inbox.batched", { routeId: route.id, size, sourceIds })),
+        );
+      }
+      return yield* self.dispatch(entry, platform, replayed);
+    });
+  }
+
+  /**
+   * From access-checked entry to a settled outcome: mid-run policy for a conversation whose turn is
+   * running, the turn-rate cap, the bounded queue, then the turn itself.
+   */
+  private dispatch(entry: TurnEntry, platform: string, replayed: boolean): Effect.Effect<RouteOutcome> {
+    const self = this;
+    const deps = this.deps;
+    const { route, key, msg, simulated } = entry;
+    const mode = route.midRun ?? "queue";
+    return Effect.gen(function* () {
+      if (deps.strict && !simulated && !replayed && mode !== "queue") {
+        const running = self.policy.runningFor(key);
+        if (running) {
+          yield* self.emitJoined(entry, mode);
+          const outcome = yield* self.policy.absorb(running, entry, mode, deps.conversationQueue ?? DEFAULT_CONVERSATION_QUEUE);
+          return outcome ?? (yield* self.overflow(entry));
+        }
+      }
+      if (deps.strict && !(yield* self.withinRate(route, platform, msg))) {
+        const dropped = yield* self.drop("rate", route.id, simulated);
+        yield* self.inbox.settle(entry.keys, dropped);
+        return dropped;
+      }
+      return yield* self.queued(key, deps.strict, () => self.turnLoop(entry, replayed), {
+        onOverflow: () => self.overflow(entry),
       });
+    });
+  }
+
+  /** Record that an envelope joined a running turn (the receipt for fold and interrupt). */
+  private emitJoined(entry: TurnEntry, mode: "fold" | "interrupt"): Effect.Effect<void> {
+    return this.emit(
+      inboxEvent(mode === "fold" ? "channel.inbox.folded" : "channel.inbox.interrupted", {
+        routeId: entry.route.id,
+        sourceId: entry.msg.id,
+      }),
+    );
+  }
+
+  /** Conversation backlog full: notice once per backlog, count it, settle the rows as dropped. */
+  private overflow(entry: TurnEntry): Effect.Effect<RouteOutcome> {
+    const self = this;
+    const { adapterId, msg, route, key, taskId, simulated } = entry;
+    return Effect.gen(function* () {
+      if (!simulated && !self.notified.has(key) && self.hub.has(adapterId)) {
+        self.notified.add(key);
+        yield* self.reply(adapterId, msg, BACKPRESSURE_NOTICE, taskId).pipe(Effect.ignore);
+      }
+      const outcome = yield* self.drop("backpressure", route.id, simulated);
+      yield* self.inbox.settle(entry.keys, outcome);
+      return outcome;
+    });
+  }
+
+  /**
+   * One turn, plus what follows it on a `fold` or `interrupt` route: an interrupted attempt restarts
+   * from the combined input, messages nobody drained run as one follow-up turn. Every inbox row the
+   * turn covered is marked running at the start and settled with the outcome.
+   */
+  private turnLoop(entry: TurnEntry, replayed: boolean): Effect.Effect<RouteOutcome> {
+    const self = this;
+    const mode = entry.route.midRun ?? "queue";
+    if (!this.deps.strict || entry.simulated || replayed || mode === "queue") {
+      return Effect.gen(function* () {
+        yield* self.inbox.begin(entry.keys);
+        const outcome = yield* self.runTurn(entry);
+        yield* self.inbox.settle(entry.keys, outcome);
+        return outcome;
+      });
+    }
+    return Effect.suspend(() => {
+      const turn = self.policy.open(entry.key, entry.keys);
+      let final: RouteOutcome | undefined;
+      return Effect.gen(function* () {
+        let current = entry;
+        for (;;) {
+          final = undefined;
+          self.policy.arm(turn, current.keys, mode);
+          yield* self.inbox.begin(current.keys);
+          const outcome: RouteOutcome = yield* self.runTurn(current, { mode, turn });
+          if (outcome._tag === "Failed" && outcome.error.reason === "turn_interrupted") {
+            const next = self.policy.drain(turn);
+            current = { ...current, msg: combineMessages(current.msg, next.msgs), keys: [...turn.keys, ...next.keys] };
+            continue;
+          }
+          final = outcome;
+          yield* self.inbox.settle(turn.keys, outcome);
+          const rest = self.policy.drain(turn);
+          const [head, ...tail] = rest.msgs;
+          if (head === undefined) return outcome;
+          current = { ...current, msg: combineMessages(head, tail), keys: rest.keys };
+        }
+      }).pipe(Effect.ensuring(Effect.suspend(() => self.policy.close(entry.key, final))));
     });
   }
 
@@ -423,15 +564,10 @@ export class RouterEngine {
     });
   }
 
-  private runTurn(args: {
-    readonly adapterId: string;
-    readonly msg: InboundMessage;
-    readonly route: RouteSpec;
-    readonly role: RouteRole;
-    readonly key: string;
-    readonly taskId: string;
-    readonly simulated: boolean;
-  }): Effect.Effect<RouteOutcome> {
+  private runTurn(
+    args: TurnEntry,
+    live?: { readonly mode: "fold" | "interrupt"; readonly turn: RunningTurn },
+  ): Effect.Effect<RouteOutcome> {
     const self = this;
     const { adapterId, msg, route, role, key, taskId, simulated } = args;
     const meter = self.deps.meter;
@@ -456,6 +592,7 @@ export class RouterEngine {
         approval: failClosedApproval,
         message: msg,
         taskId,
+        ...(live?.mode === "fold" ? { takeFolded: () => self.policy.take(live.turn) } : {}),
       };
       const attempt = yield* Effect.either(
         self.acknowledged(route, role, adapterId, msg, taskId, simulated, baseTurn, (turn, noteSession) => Effect.gen(function* () {
@@ -471,9 +608,19 @@ export class RouterEngine {
                 }),
               )
             : send;
-          return yield* route.session === "stateless"
+          const closed = route.session === "stateless"
             ? bounded.pipe(Effect.ensuring(Scope.close(entry.scope, Exit.void)))
             : bounded;
+          // `interrupt`: a newer envelope cancels this attempt with a typed error; partial work stays in the session.
+          return yield* live?.mode === "interrupt"
+            ? Effect.raceFirst(
+                closed,
+                Effect.zipRight(
+                  Deferred.await(live.turn.signal),
+                  Effect.fail(new RoutingError({ reason: "turn_interrupted", message: `route ${route.id}: turn interrupted by a newer message`, routeId: route.id })),
+                ),
+              )
+            : closed;
         })),
       ).pipe(
         Effect.tap((result) =>
@@ -486,7 +633,7 @@ export class RouterEngine {
       self.totalProcessed += 1;
       if (Either.isLeft(attempt)) {
         yield* self.emit({ _tag: "ChannelTurnCompleted", routeId: route.id, role, ok: false, reason: attempt.left.reason, simulated });
-        if (self.deps.strict && route.failureNotice && !simulated && self.hub.has(adapterId)) {
+        if (self.deps.strict && route.failureNotice && !simulated && attempt.left.reason !== "turn_interrupted" && self.hub.has(adapterId)) {
           // Best effort: `deliver` already counts and publishes a failed send; the turn outcome stays Failed.
           yield* self.reply(adapterId, msg, failureNoticeText(attempt.left, route), taskId).pipe(Effect.ignore);
         }
