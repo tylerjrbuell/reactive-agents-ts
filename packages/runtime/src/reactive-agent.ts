@@ -1665,7 +1665,7 @@ export class ReactiveAgent<TOut = unknown> {
             {
                 sessionId,
                 onOverflow: options?.onOverflow,
-                initialHistory: options?.initialHistory, initialTodo: options?.initialTodo, ...originCarry(options?.origin), ...(options?.mode ? { mode: options.mode } : {}),
+                initialHistory: options?.initialHistory, initialTodo: options?.initialTodo, initialPlanFindings: options?.initialPlanFindings, ...originCarry(options?.origin), ...(options?.mode ? { mode: options.mode } : {}),
                 ...sessionEnvironmentOption(self.runtime, options),
             },
         );

@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
-import type { AgentEvent, EnvironmentChangedEvent, Plan, RunOrigin, RunPosture } from "@reactive-agents/core";
+import type { AgentEvent, EnvironmentChangedEvent, Plan, PlanFinding, RunOrigin, RunPosture } from "@reactive-agents/core";
 import { editPlan, findingsAfterEdit, freshPlanMeta, planOfTodo, type SessionPlanMeta } from "./chat/session-plan.js";
 import type { PlanStepInput } from "./agent/plan-facade.js";
 import type { EnvironmentSnapshotInput } from "./chat/environment-snapshot.js";
@@ -240,6 +240,8 @@ export interface SessionOptions {
    * continues it instead of starting empty; read it back with `session.todo()`.
    */
   initialTodo?: readonly TodoSeedItem[];
+  /** The conversation's stored plan findings (recon facts), seeded with `initialTodo` so `session.plan.findings` and the next Execute turn carry them after a rebuild. Malformed rows are dropped. */
+  initialPlanFindings?: readonly PlanFinding[];
   /**
    * Live environment facts (model, tools, skills, docs, goal...) read at each turn
    * boundary. When supplied, a change between two turns publishes one

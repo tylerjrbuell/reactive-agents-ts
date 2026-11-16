@@ -15,7 +15,7 @@ import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapsho
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TurnGate } from "./turn-gate.js";
 import { turnPosture, announceModeChange, DEFAULT_CHAT_MODE, type ChatMode } from "./session-mode.js";
-import { TodoCarry, planPosture, originCarry, todoTurnPorts, todoSeedOf, type OriginOption, type PostureOption, type TodoReportOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
+import { TodoCarry, planPosture, originCarry, todoTurnPorts, todoSeedOf, type InitialPlanFindingsOption, type OriginOption, type PostureOption, type TodoReportOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 import { announceSteps } from "./plan-step-events.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
@@ -146,7 +146,7 @@ export interface ChatEngineCapabilities {
  * Engine options. Every field a host may pin (canonically all optional); every omitted
  * field falls back to the engine's own default (spec A7 inheritance law).
  */
-export interface ChatEngineOptions extends EnvironmentSeedOption {
+export interface ChatEngineOptions extends EnvironmentSeedOption, InitialPlanFindingsOption {
   /**
    * Canonical session id, `sess_<scope>_<unique>` (`agent | session | gateway` scope).
    * Hosts generate via the engine module's id helper (Task 3) rather than pinning
@@ -289,7 +289,7 @@ export class ChatEngine {
     this.#history = [...healShapedAssistantTurns(initialHistory)];
     // Load-once latch: a non-empty seed means the loader NEVER runs.
     this.#loaded = initialHistory.length > 0;
-    this.#todo = new TodoCarry(options?.initialTodo, announceSteps(deps.publishPlan, this.#sessionId, (e) => swallowError(e, "chat/engine.ts:publishPlan"))); this.#mode = options?.mode ?? DEFAULT_CHAT_MODE;
+    this.#todo = new TodoCarry(options?.initialTodo, announceSteps(deps.publishPlan, this.#sessionId, (e) => swallowError(e, "chat/engine.ts:publishPlan")), options?.initialPlanFindings); this.#mode = options?.mode ?? DEFAULT_CHAT_MODE;
     this.#env = new EnvironmentTracker(this.#sessionId, {
       ...deps, onPublishError: (err) => swallowError(err, "chat/engine.ts:publishEnvironment"),
     }, options?.environmentUpdates !== false, options?.initialEnvironment);

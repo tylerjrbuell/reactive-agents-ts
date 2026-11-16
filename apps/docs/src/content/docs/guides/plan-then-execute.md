@@ -128,7 +128,7 @@ plan.findings // [{ id: "f1", tool: "site-list", summary: "site-42 (main)", at: 
 await agent.execute(plan) // the execute run is shown the findings once, as context
 ```
 
-`PlanRecorded` carries `findings`, and the Markdown, JSON and HTML plan formats include them. A plan with findings but no steps is still empty: findings never make a plan executable. `result.plan` keeps the findings, and a user-edited plan keeps them too. In a session, `session.plan.findings` holds what plan turns found and they seed later turns. `session.setPlan(steps)` keeps the held findings; `session.setPlan(plan)` takes the findings that plan states.
+`PlanRecorded` carries `findings`, and the Markdown, JSON and HTML plan formats include them. A plan with findings but no steps is still empty: findings never make a plan executable. `result.plan` keeps the findings, and a user-edited plan keeps them too. In a session, `session.plan.findings` holds what plan turns found and they seed later turns. `session.setPlan(steps)` keeps the held findings; `session.setPlan(plan)` takes the findings that plan states. To rebuild a session from stored state, pass `agent.session({ initialTodo, initialPlanFindings })`: the findings come back on `session.plan` and ride the next execute turn. Malformed rows are dropped.
 
 ## Wrap-up reserve
 

@@ -47,6 +47,19 @@ export function mergeFindings(held: readonly PlanFinding[], incoming: readonly P
   return out.length === held.length ? held : out;
 }
 
+/** Keep only well-formed findings (`id`, `tool`, `summary` strings; `at` kept when numeric), deduped like {@link mergeFindings}. Pure; non-arrays give `[]`. */
+export function validPlanFindings(raw: unknown): readonly PlanFinding[] {
+  if (!Array.isArray(raw)) return [];
+  const ok = raw.flatMap((r: unknown): PlanFinding[] => {
+    if (typeof r !== "object" || r === null) return [];
+    const f = r as Partial<Record<keyof PlanFinding, unknown>>;
+    return typeof f.id === "string" && typeof f.tool === "string" && typeof f.summary === "string"
+      ? [{ id: f.id, tool: f.tool, summary: f.summary, ...(typeof f.at === "number" ? { at: f.at } : {}) }]
+      : [];
+  });
+  return mergeFindings([], ok);
+}
+
 /** Spread into `task.metadata.context`: non-empty findings under {@link PLAN_FINDINGS_CONTEXT_KEY}, else nothing. */
 export const findingsMetadata = (findings: readonly PlanFinding[] | undefined): Record<string, unknown> =>
   findings !== undefined && findings.length > 0 ? { [PLAN_FINDINGS_CONTEXT_KEY]: findings } : {};

@@ -14,7 +14,7 @@
  *                                   `ChecklistUpdated` events of each turn.
  */
 import type { ChecklistItemStatus, ChecklistSnapshot, PlanFinding, RunOrigin, RunPosture, Task, TaskCurrentTurn } from "@reactive-agents/core";
-import { findingsMetadata, findingsOfEntries, mergeFindings, type PlanFindingsOption } from "./plan-findings.js";
+import { findingsMetadata, findingsOfEntries, mergeFindings, validPlanFindings, type PlanFindingsOption } from "./plan-findings.js";
 import type { CurrentTurnOption } from "../agent/history-block.js";
 import type { AgentStreamEvent } from "../stream-types.js";
 import { ENVIRONMENT_UPDATE_CONTEXT_KEY, type EnvironmentUpdateOption } from "./environment-snapshot.js";
@@ -38,6 +38,12 @@ export interface TodoSeedItem {
 export interface TodoSeedOption extends PlanFindingsOption {
   /** The conversation's latest to-do list; becomes the run's seeded advisory list. */
   readonly initialTodo?: readonly TodoSeedItem[];
+}
+
+/** Options-bag mixin: a conversation rebuilt from stored state starts holding its plan's findings. */
+export interface InitialPlanFindingsOption {
+  /** The conversation's stored plan findings; seeded like `initialTodo` so a rebuilt session carries them into the next Execute turn. Malformed rows are dropped. */
+  readonly initialPlanFindings?: readonly PlanFinding[];
 }
 
 /** Options-bag mixin: the posture a turn/run executes under (`"plan"` ⇒ plan-only). */
@@ -155,8 +161,9 @@ export class TodoCarry {
   #findings: readonly PlanFinding[] = [];
   readonly #onChange: ((before: readonly TodoSeedItem[], after: readonly TodoSeedItem[]) => void) | undefined;
   /** @param onChange called with the list before and after each turn-driven update (not on `replace`). */
-  constructor(initial?: readonly TodoSeedItem[], onChange?: (before: readonly TodoSeedItem[], after: readonly TodoSeedItem[]) => void) {
+  constructor(initial?: readonly TodoSeedItem[], onChange?: (before: readonly TodoSeedItem[], after: readonly TodoSeedItem[]) => void, initialFindings?: unknown) {
     this.#items = initial ?? [];
+    this.#findings = validPlanFindings(initialFindings);
     this.#onChange = onChange;
   }
   /** Current list (oldest id first). */
