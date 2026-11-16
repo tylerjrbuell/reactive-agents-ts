@@ -251,6 +251,16 @@ export type {
   PlanChecklistSeedItem,
   PlanFromChecklistMeta,
 } from "./types/plan.js";
+// Portable plan formats (Markdown / JSON / HTML).
+export {
+  PLAN_FORMAT_VERSION,
+  planToMarkdown,
+  planFromMarkdown,
+  planToJSON,
+  planFromJSON,
+  planToHtml,
+} from "./types/plan-portable.js";
+export type { PlanParseError, PlanParseReason, PlanFromMarkdownDefaults } from "./types/plan-portable.js";
 // LLM throughput: output tokens/sec from LLMRequestCompleted (firstTokenMs-aware).
 export { outputTokensPerSecond } from "./utils/llm-throughput.js";
 export type { LLMThroughputFields } from "./utils/llm-throughput.js";
