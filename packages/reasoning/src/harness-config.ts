@@ -40,6 +40,7 @@ import {
   compactCallConstraintsEnabled,
   budgetAnswerTurnEnabled,
   leanThinkingEnabled,
+  computeOffloadEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -173,6 +174,16 @@ export interface HarnessConfig {
    */
   readonly leanThinking?: boolean;
   /**
+   * Compute offload. When the task text asks for a numeric aggregate over data
+   * the run reads (an aggregate verb AND a data-source reference), `code-execute`
+   * stays on the visible tool surface even if the task did not declare it (it
+   * must be in the permitted catalog), and one advisory guidance line follows
+   * once data was read without a successful `code-execute` call. Advisory only:
+   * no veto, no exit-gate change.
+   * Default OFF pending an ablation. (`RA_COMPUTE_OFFLOAD=1`)
+   */
+  readonly computeOffload?: boolean;
+  /**
    * LLM recovery budget: how many recoverable provider failures on think turns
    * one run may retry. A think call that fails with a recoverable error class
    * is retried in the same turn instead of ending the run: malformed model
@@ -289,6 +300,8 @@ export interface ResolvedHarness {
   readonly budgetAnswerTurn?: true;
   /** Lean thinking (see `HarnessConfig.leanThinking`). Present only when on. */
   readonly leanThinking?: true;
+  /** Compute offload (see `HarnessConfig.computeOffload`). Present only when on. */
+  readonly computeOffload?: true;
   /**
    * LLM recovery budget (see `HarnessConfig.llmRecoveryBudget`), a whole number
    * in 0..10. Present only when configured; absent = {@link DEFAULT_LLM_RECOVERY_BUDGET}.
@@ -392,6 +405,7 @@ export function resolveHarnessConfig(
       : {}),
     ...(pick(config.budgetAnswerTurn, budgetAnswerTurnEnabled()) ? { budgetAnswerTurn: true as const } : {}),
     ...(pick(config.leanThinking, leanThinkingEnabled()) ? { leanThinking: true as const } : {}),
+    ...(pick(config.computeOffload, computeOffloadEnabled()) ? { computeOffload: true as const } : {}),
     ...(llmRecoveryBudget !== undefined ? { llmRecoveryBudget } : {}),
   });
 }

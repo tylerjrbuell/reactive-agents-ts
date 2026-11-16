@@ -23,6 +23,7 @@ import { shouldNarrowToFinalAnswerOnly } from "./context-pressure.js";
 import { ABSTAIN_TOOL_NAME } from "../act/meta-tool-handlers.js";
 import { shouldOfferAbstain } from "./abstain-gate.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
+import { asksForComputedAggregate, withComputeToolSchema, COMPUTE_TOOL } from "../comprehend/compute-offload.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import { isFailedToolObservation } from "../../utils/observation-helpers.js";
 
@@ -175,8 +176,10 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
     // surface is unchanged. Captured once so the W-Q tool-surface intervention
     // (below) can report which tools the deny-list actually removed.
     const deniedToolNames = forbiddenTools(state.meta.runContract);
+    // Compute offload (opt-in): an aggregate-over-data task keeps code-execute visible.
+    const offload = h.computeOffload === true && asksForComputedAggregate(input.task);
     const resolvedSurface = resolveToolSurface({
-      augmented: augmentedToolSchemas,
+      augmented: withComputeToolSchema(augmentedToolSchemas, input.allToolSchemas, offload),
       finalAnswerSchema: {
         name: finalAnswerTool.name,
         description: finalAnswerTool.description,
@@ -211,7 +214,7 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
       taskText: input.task,
       // Consumer-intent floor, carried separately from classifier relevance so
       // `hasClassification` above stays honest.
-      floorTools: input.builtinFloorTools ?? [],
+      floorTools: offload ? [...(input.builtinFloorTools ?? []), COMPUTE_TOOL] : (input.builtinFloorTools ?? []),
       harness: h,
       iteration: state.iteration,
       withheld,

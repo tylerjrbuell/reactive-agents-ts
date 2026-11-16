@@ -15,7 +15,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-RESOLVERS='lazyDisclosureEnabled|toolDiscoveryEnabled|toolIndexEnabled|toolIndexMaxEntriesFlag|verboseRulesEnabled|stableToolListEnabled|compactCallConstraintsEnabled|budgetAnswerTurnEnabled|recencyBudgetCharsOverride|toolResultBudgetCharsOverride|rationaleAuditEnabled|treeOfThoughtExploreBudgetMs|assemblyDebugEnabled|promptDumpPathPrefix'
+RESOLVERS='lazyDisclosureEnabled|toolDiscoveryEnabled|toolIndexEnabled|toolIndexMaxEntriesFlag|verboseRulesEnabled|stableToolListEnabled|compactCallConstraintsEnabled|budgetAnswerTurnEnabled|leanThinkingEnabled|computeOffloadEnabled|recencyBudgetCharsOverride|toolResultBudgetCharsOverride|rationaleAuditEnabled|treeOfThoughtExploreBudgetMs|assemblyDebugEnabled|promptDumpPathPrefix'
 
 STRAYS=$(grep -rnE "\b($RESOLVERS)\(" packages apps --include=*.ts \
   | grep -v '/dist/' \

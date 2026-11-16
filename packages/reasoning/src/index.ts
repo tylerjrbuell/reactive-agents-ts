@@ -413,6 +413,7 @@ export { evaluateToolPolicy, forbiddenToolsFromContract, type ToolPolicy, type T
 // hardcoded copy that could drift.
 export { ABSTAIN_TOOL_NAME } from "./kernel/capabilities/act/meta-tool-handlers.js";
 export { extractOutputFormat } from "./kernel/capabilities/comprehend/task-intent.js";
+export { asksForComputedAggregate } from "./kernel/capabilities/comprehend/compute-offload.js";
 export { classifyTask } from "./kernel/capabilities/comprehend/task-classification.js";
 export type { TaskClassification } from "./kernel/capabilities/comprehend/task-classification.js";
 export { classifyTaskComplexity } from "./kernel/capabilities/comprehend/task-complexity.js";

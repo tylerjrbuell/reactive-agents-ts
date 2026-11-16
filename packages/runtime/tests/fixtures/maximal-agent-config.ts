@@ -96,6 +96,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
       compactCallConstraints: true,
       budgetAnswerTurn: true,
       leanThinking: true,
+      computeOffload: true,
       llmRecoveryBudget: 3,
     },
   },

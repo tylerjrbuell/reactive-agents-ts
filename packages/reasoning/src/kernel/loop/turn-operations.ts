@@ -69,6 +69,7 @@ import { forkIterLearnWrite } from "./iterate-learn-seam.js";
 import { reserveBudgetAnswerTurn } from "./budget-answer-turn.js";
 import { proposeBrokenToolExit } from "./broken-tool-exit.js";
 import { applyInputOrderGuidance } from "./iterate-input-order-seam.js";
+import { applyComputeOffloadGuidance } from "./iterate-compute-offload-seam.js";
 
 /** Values one operation hands a later one within a single pass (reset per pass). */
 export interface TurnPassLocals {
@@ -526,6 +527,8 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
       });
       // Read-before-write order: a write made while listed inputs are unread says so (inputCoverage only).
       t.state = applyInputOrderGuidance(t.state, t.pass.stepsAtPassStart);
+      // Compute offload: once data was read, one advisory line says to compute with code-execute (computeOffload only).
+      t.state = applyComputeOffloadGuidance(t.state, t.currentInput);
       return NEXT;
     }),
 

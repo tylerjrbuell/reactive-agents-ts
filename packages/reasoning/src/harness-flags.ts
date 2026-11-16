@@ -259,6 +259,17 @@ export function leanThinkingEnabled(): boolean {
 }
 
 /**
+ * Compute offload: a task that asks for a numeric aggregate over data it reads
+ * keeps `code-execute` on the tool surface and gets one advisory line once data
+ * was read without a successful `code-execute` call
+ * (`kernel/capabilities/comprehend/compute-offload.ts`). Default OFF pending an
+ * ablation-warden measurement. `RA_COMPUTE_OFFLOAD=1` enables it.
+ */
+export function computeOffloadEnabled(): boolean {
+  return readFlag("RA_COMPUTE_OFFLOAD") === "1";
+}
+
+/**
  * Compact call constraints: compact tool profiles (`names-only`,
  * `names-and-types`) keep the description sentences that limit a parameter's
  * values, and the compact reference lists enum values as `a|b|c`

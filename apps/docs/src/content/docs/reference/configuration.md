@@ -203,6 +203,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.auditRationale` | `boolean` | no |  |
 | `reasoning.harness.budgetAnswerTurn` | `boolean` | no |  |
 | `reasoning.harness.compactCallConstraints` | `boolean` | no |  |
+| `reasoning.harness.computeOffload` | `boolean` | no |  |
 | `reasoning.harness.inputCoverage` | `boolean` | no |  |
 | `reasoning.harness.lazyDisclosure` | `boolean` | no |  |
 | `reasoning.harness.leanThinking` | `boolean` | no |  |

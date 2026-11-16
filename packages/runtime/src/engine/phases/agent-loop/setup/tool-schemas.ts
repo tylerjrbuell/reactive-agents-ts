@@ -31,11 +31,18 @@ import {
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
 import type { ToolDefinition, ToolParameter } from "@reactive-agents/tools";
-import { extractOutputFormat, filterToolsByRelevance } from "@reactive-agents/reasoning";
+import {
+  asksForComputedAggregate,
+  extractOutputFormat,
+  filterToolsByRelevance,
+  resolveHarnessConfig,
+} from "@reactive-agents/reasoning";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { ReactiveAgentsConfig } from "../../../../types.js";
 import type { ObsLike } from "../../../runtime-context.js";
 import { extractIntentText } from "../../../util.js";
+import { disclosureFloor } from "../../../run-envelope-config.js";
+import { disclosureHarness } from "../../../tool-disclosure.js";
 
 export type ToolSchema = {
   name: string;
@@ -157,6 +164,20 @@ export const prepareReasoningToolSchemas = (
     // the consumer's intent regardless of the builtins opt-in default.
     for (const name of effectiveAllowedTools) optedInBuiltins.add(name);
     for (const name of effectiveRequiredTools ?? []) optedInBuiltins.add(name);
+    // Compute offload (harness `computeOffload`, default OFF): an aggregation
+    // task over data the run reads gets `code-execute` even when the consumer
+    // did not opt in, because weak models compute figures in their head and are
+    // wrong (spike 2026-11-15: tool absent in 86% of wrong runs). DECISION: an
+    // explicit `allowedTools` list that omits `code-execute` is a hard
+    // restriction and is NOT widened here; forbidden tools still win (applied
+    // last). Only the builtins opt-in default is bypassed.
+    if (
+      (effectiveAllowedTools.length === 0 || effectiveAllowedTools.includes("code-execute")) &&
+      resolveHarnessConfig(disclosureHarness(config), disclosureFloor(config)).computeOffload === true &&
+      asksForComputedAggregate(extractIntentText(task.input))
+    ) {
+      optedInBuiltins.add("code-execute");
+    }
     // Classifier-relevant built-ins stay VISIBLE (not enforced) — this is
     // the documented contract above ("Required + relevant + meta-tools are
     // unaffected"). Regression (2026-07-10, trace 01KX6KY8ANMXC1BSQ1SNJN3DAP):

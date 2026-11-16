@@ -150,6 +150,7 @@ export function buildRunConfigSnapshot(args: {
     compactCallConstraints: harness.compactCallConstraints === true,
     budgetAnswerTurn: harness.budgetAnswerTurn === true,
     leanThinking: harness.leanThinking === true,
+    computeOffload: harness.computeOffload === true,
     llmRecoveryBudget: llmRecoveryBudgetOf(harness),
   });
   const contract = config.taskContract;

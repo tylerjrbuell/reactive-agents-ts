@@ -76,6 +76,7 @@ export const HarnessConfigSchema = Schema.Struct({
    * (`RA_LEAN_THINKING=1`)
    */
   leanThinking: Schema.optional(Schema.Boolean),
+  computeOffload: Schema.optional(Schema.Boolean),
   /**
    * LLM recovery budget: how many recoverable provider failures on think
    * turns one run may retry instead of ending with `llm_error`. Malformed
