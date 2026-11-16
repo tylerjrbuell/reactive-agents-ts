@@ -47,6 +47,9 @@ __fn()
 `;
 }
 
+/** `language` labels code-execute accepts; all run as JavaScript/TypeScript under Bun. */
+const JS_TS_LANGUAGES: ReadonlySet<string> = new Set(["javascript", "typescript", "js", "ts"]);
+
 /** Bun's trailing version banner adds nothing the model can act on. */
 const BUN_BANNER_RE = /\n*Bun v\d[^\n]*\s*$/;
 /** ENOENT on a relative path: code-execute's cwd is /tmp, not the workspace. */
@@ -86,7 +89,11 @@ function parseCodeResult(stdout: string, stderr: string, exitCode: number): unkn
   } catch {
     return {
       executed: false,
-      error: `Unexpected output format (missing sentinel). stderr: ${errorOutput || "(none)"}`,
+      error:
+        `Unexpected output format (missing sentinel): the code finished with exit code ${exitCode} but the result line was not printed. ` +
+        `stderr: ${errorOutput || "(none)"}. ` +
+        "Hint: likely cause is process.exit(), or code that overwrote console.log/stdout. " +
+        "Do not call process.exit(); end the code with `return <value>`.",
       output: output || "(no output)",
       exitCode,
     };
@@ -242,14 +249,15 @@ export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition =
   return {
   name: "code-execute",
   description:
-    "Execute JavaScript/TypeScript code with Bun and return the result. " +
-    "Best for: math, string transforms, JSON parsing, sorting, regex extraction, data processing. " +
+    "Execute JavaScript/TypeScript only (Bun). No shell commands, no Python: other languages fail. " +
+    "Best for: math, aggregation, string transforms, JSON parsing, sorting, regex extraction. " +
+    "Data must be inline in the code or read from a file by absolute path. " +
+    "Example: const rows = [3, 5, 9]; return rows.reduce((a, b) => a + b, 0) / rows.length; " +
     "IMPORTANT: The code runs in a separate process with NO access to stored results, tool outputs, " +
     "or agent state — variables like _tool_result_N do NOT exist in the code environment. " +
     storedDataText(config) +
     ENVIRONMENT_TEXT[sandbox] +
-    "For HTML text already retrieved: use regex or string methods — NOT DOMParser. " +
-    "Example: const text = htmlString.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim(); " +
+    "For HTML text: use regex or string methods, NOT DOMParser. " +
     "RESULT CONTRACT: you MUST end with `return <value>` — the returned value arrives in the `result` field. " +
     "A bare final expression (no return) yields result:null; console.log() text arrives ONLY in the `output` string. " +
     "Returns { executed: true, result, output, exitCode } on success.",
@@ -268,11 +276,10 @@ export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition =
       name: "language",
       type: "string",
       description:
-        "Programming language label: 'javascript' (default) or 'typescript'. " +
-        "Either value runs the same way: the code is executed by Bun.",
+        "Optional label: 'javascript' (default) or 'typescript'. JavaScript/TypeScript only: " +
+        "other languages are rejected. Both run the same way, executed by Bun.",
       required: false,
       default: "javascript",
-      enum: ["javascript", "typescript"],
     },
   ],
   returnType:
@@ -332,6 +339,17 @@ export const codeExecuteHandler = (
       // Guard: model passed a stored-result key as the code to execute.
       if (/^_tool_result_\d+$/.test(rawCode?.trim?.())) {
         return { executed: false, error: storageKeyRefusal(rawCode, config) };
+      }
+
+      // Guard: non-JS language label (was an opaque enum rejection upstream).
+      const language = typeof args.language === "string" ? args.language.trim().toLowerCase() : "";
+      if (language !== "" && !JS_TS_LANGUAGES.has(language)) {
+        return {
+          executed: false,
+          error:
+            `language "${String(args.language)}" is not supported: code-execute runs JavaScript/TypeScript only ` +
+            `(no shell, no Python). Rewrite the logic in JavaScript/TypeScript. Nothing was executed.`,
+        };
       }
 
       // Guard: shell input. Run as JS it fails with a syntax or reference

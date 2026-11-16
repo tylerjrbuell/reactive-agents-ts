@@ -93,3 +93,44 @@ describe("code-execute seam: error shaping", () => {
     expect(body).toBe("const x = 1;\nreturn x;");
   });
 });
+
+describe("code-execute model-facing contract (compute-offload spike 2026-11-15)", () => {
+  it("description states JS/TS only, no shell/Python, absolute-path data, and a compute example", async () => {
+    const { codeExecuteToolFor } = await import("../src/skills/code-execution.js");
+    const d = codeExecuteToolFor({ sandbox: "host" }).description;
+    expect(d).toContain("JavaScript/TypeScript only");
+    expect(d).toMatch(/no shell/i);
+    expect(d).toMatch(/Python/);
+    expect(d).toMatch(/absolute path/i);
+    expect(d).toContain("Example:");
+  });
+
+  it("rejects a non-JS language with an explicit JavaScript/TypeScript-only message", async () => {
+    for (const language of ["python", "bash", "sh"]) {
+      const r = (await Effect.runPromise(
+        codeExecuteHandler({ sandbox: "host" })({ code: "return 1", language }),
+      )) as CodeResult;
+      expect(r.executed).toBe(false);
+      expect(r.error).toContain("JavaScript/TypeScript only");
+      expect(r.error).toContain(language);
+    }
+  });
+
+  it("accepts js/ts language labels", async () => {
+    for (const language of ["javascript", "typescript", "js", "ts"]) {
+      const r = (await Effect.runPromise(
+        codeExecuteHandler({ sandbox: "host" })({ code: "return 1", language }),
+      )) as CodeResult;
+      expect(r.executed).toBe(true);
+    }
+  });
+
+  it("missing-sentinel failure names exit code, likely cause, and a hint", async () => {
+    const r = (await run("process.stdout.write('not json'); process.exit(0);")) as CodeResult;
+    expect(r.executed).toBe(false);
+    expect(r.error).toContain("missing sentinel");
+    expect(r.error).toContain("exit code 0");
+    expect(r.error).toMatch(/process\.exit/);
+    expect(r.error).toMatch(/Hint:/);
+  });
+});

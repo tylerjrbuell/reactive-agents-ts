@@ -10,7 +10,7 @@ import {
   toParameterJsonSchema,
 } from "../src/function-calling/parameter-json-schema.js";
 import { ToolParameterSchema, type ToolDefinition, type ToolParameter } from "../src/types.js";
-import { codeExecuteTool } from "../src/skills/code-execution.js";
+import { dockerExecuteTool } from "../src/skills/docker-execution.js";
 import { fileWriteTool } from "../src/skills/file-operations.js";
 
 describe("Function Adapter", () => {
@@ -152,9 +152,9 @@ describe("ToolParameter projection drift", () => {
     const props = (t: ToolDefinition) =>
       (toFunctionCallingTool(t).input_schema as { properties: Record<string, { type: unknown; enum?: unknown }> })
         .properties;
-    const lang = codeExecuteTool.parameters.find((p) => p.enum !== undefined);
+    const lang = dockerExecuteTool.parameters.find((p) => p.enum !== undefined);
     expect(lang).toBeDefined();
-    if (lang) expect(props(codeExecuteTool)[lang.name]?.enum).toEqual(lang.enum);
+    if (lang) expect(props(dockerExecuteTool)[lang.name]?.enum).toEqual(lang.enum);
     expect(props(fileWriteTool).content?.type).toEqual([...FILE_CONTENT_JSON_TYPES]);
   });
 });

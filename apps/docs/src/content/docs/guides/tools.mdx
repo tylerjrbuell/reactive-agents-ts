@@ -184,7 +184,7 @@ These tools are registered internally as soon as you call `.withTools()`, but ea
 | `file-read` | file | Read file contents (path-traversal protected) | — |
 | `file-write` | file | Write file contents (requires approval) | — |
 | `file-edit` | file | Replace text in existing files (use instead of `file-write` for edits; requires approval) | — |
-| `code-execute` | code | Execute code in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env) | — |
+| `code-execute` | code | Execute JavaScript/TypeScript only (no shell, no Python) in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env); data is inline or read by absolute path | — |
 | `crypto-price` | data | Get current prices for 30+ cryptocurrencies via CoinGecko's free public API | — |
 
 `http-get` only fetches public addresses. It resolves the host once, checks every answer, and connects to that checked address (and re-checks each redirect hop), so a hostname that later resolves to a private or metadata address (DNS rebinding) is never reached. Credentials you pass in `headers` are dropped when a redirect leaves the original origin. Set `RA_HTTP_ALLOW_PRIVATE=1` to allow trusted local targets. A 4xx or 5xx response, or a 200 whose body is a short (under 2 KB) "not found" page, is returned as a tool failure that names the status and URL, not as a success.
