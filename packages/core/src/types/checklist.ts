@@ -235,6 +235,50 @@ export function planStepToolHint(text: string): string | undefined {
   return planStepToolHints(text)[0];
 }
 
+const TOOL_MARKER = /\(?\s*\btools?:\s*[`\w][\w./`-]*(?:\s*,\s*[`\w][\w./`-]*)*\s*\)?/gi;
+const TITLE_STOPWORDS: ReadonlySet<string> = new Set(["the", "a", "an", "of", "to", "and"]);
+
+/**
+ * Comparison tokens of a step title: tool-hint markers (`(tool: x)`, `tools: a, b`)
+ * stripped, case-folded, split on non-letter/digit runs, articles and the
+ * stopwords `of`, `to`, `and` dropped. Pure; never throws; empty set for
+ * non-string or wordless input.
+ */
+export function normalizeTitle(title: string): ReadonlySet<string> {
+  if (typeof title !== "string") return new Set();
+  const bare = planStepToolHint(title) === undefined ? title : title.replace(TOOL_MARKER, " ");
+  return new Set(
+    bare
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((w) => w.length > 0 && !TITLE_STOPWORDS.has(w)),
+  );
+}
+
+/**
+ * True when two step titles restate the same step. The one shared dedupe rule
+ * for checklist add and plan refinement. Tokens come from {@link normalizeTitle}
+ * (tool hints never count). Duplicate when any of:
+ * - token overlap of at least 80% of the larger title (a superset of Jaccard >= 0.8);
+ * - the smaller title has 2+ tokens, all inside the larger ("Verify report" vs
+ *   "Verify the report file content"). This is the union of the old tools rule
+ *   (2+ inside a 3+ title) and reasoning rules (3+ contained; 2+ contained within
+ *   twice the size), so no size-ratio bound remains.
+ *
+ * Symmetric. A title with no tokens is never a duplicate. Pure; never throws.
+ */
+export function isNearDuplicateTitle(a: string, b: string): boolean {
+  const ta = normalizeTitle(a);
+  const tb = normalizeTitle(b);
+  if (ta.size === 0 || tb.size === 0) return false;
+  let shared = 0;
+  for (const w of ta) if (tb.has(w)) shared++;
+  const min = Math.min(ta.size, tb.size);
+  const max = Math.max(ta.size, tb.size);
+  if (shared / max >= 0.8) return true;
+  return min >= 2 && shared === min;
+}
+
 /**
  * Fold advisory facts into items, in insertion order. An `add` item with no
  * explicit `tool` takes the hint named in its title ({@link planStepToolHint});

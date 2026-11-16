@@ -333,6 +333,50 @@ export type PlatformAgentEvent =
       readonly simulated?: boolean;
     }
   | {
+      /** An orphaned `running` inbox row went back to `received` for another attempt. Carries no message text. */
+      readonly _tag: "ChannelInboxRetried";
+      /** Id of the adapter the row arrived on. */
+      readonly adapterId: string;
+      /** Attempts the row has used so far. */
+      readonly attempts: number;
+    }
+  | {
+      /** An inbox row ran out of attempts and is now `failed`. Carries no message text. */
+      readonly _tag: "ChannelInboxFailed";
+      /** Id of the adapter the row arrived on. */
+      readonly adapterId: string;
+      /** Attempts the row used before failing. */
+      readonly attempts: number;
+      /** Why the row failed (classification, not message text). */
+      readonly reason: string;
+    }
+  | {
+      /** Several inbound envelopes became one turn input (`batchWindowMs`). Carries no message text. */
+      readonly _tag: "ChannelInboxBatched";
+      /** Id of the route the batch ran under. */
+      readonly routeId: string;
+      /** Number of envelopes in the batch. */
+      readonly size: number;
+      /** Source ids of the batched envelopes, in arrival order. */
+      readonly sourceIds: ReadonlyArray<string>;
+    }
+  | {
+      /** An inbound envelope was folded into a running turn (`midRun: "fold"`). Carries no message text. */
+      readonly _tag: "ChannelInboxFolded";
+      /** Id of the route whose running turn absorbed the envelope. */
+      readonly routeId: string;
+      /** Source id of the folded envelope. */
+      readonly sourceId: string;
+    }
+  | {
+      /** A running turn was cancelled for a newer envelope (`midRun: "interrupt"`). Carries no message text. */
+      readonly _tag: "ChannelInboxInterrupted";
+      /** Id of the route whose running turn was cancelled. */
+      readonly routeId: string;
+      /** Source id of the envelope that interrupted the turn. */
+      readonly sourceId: string;
+    }
+  | {
       /** A routed message was dropped before an agent turn ran. */
       readonly _tag: "ChannelTurnDropped";
       /** Id of the route that dropped the message. */

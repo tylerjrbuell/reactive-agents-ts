@@ -69,6 +69,8 @@ export {
   inferChecklistProgress,
   isChecklistEvidenceFact,
   isChecklistFact,
+  isNearDuplicateTitle,
+  normalizeTitle,
   makeChecklistTracker,
   nextAdvisoryIds,
   projectChecklist,
