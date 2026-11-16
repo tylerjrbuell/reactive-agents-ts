@@ -13,7 +13,7 @@
  * kernel meta-tool handler commits changes as checklist-item facts).
  * List management (edit, remove, clear, patch): ./todo-manage.ts.
  */
-import type { AdvisoryItem, ChecklistItemOp, ChecklistItemStatus } from "@reactive-agents/core";
+import { planStepToolHint, type AdvisoryItem, type ChecklistItemOp, type ChecklistItemStatus } from "@reactive-agents/core";
 import type { ToolDefinition } from "../types.js";
 import { closestValid, healParamNames } from "./arg-healing.js";
 import { extractAddItems, isNearDuplicate, titleTokens } from "./todo-add.js";
@@ -333,16 +333,25 @@ function applyCanonicalTodoAction(
         items.map((t) => ({ tokens: titleTokens(t.title), hit: t }));
       const requested = entries.length;
       const dupLines: string[] = [];
+      const attach: ChecklistItemOp[] = [];
       entries = entries.filter((e) => {
         const k = norm(e.text);
         const tokens = titleTokens(e.text);
         const match = seen.has(k) ? { hit: seen.get(k) } : known.find((kn) => isNearDuplicate(tokens, kn.tokens));
         if (match !== undefined) {
           const hit = match.hit;
+          // A duplicate that names a tool the existing row lacks hands it over once.
+          const dupTool = e.tool ?? planStepToolHint(e.text);
+          const attaches =
+            hit !== undefined && hit.tool === undefined && dupTool !== undefined &&
+            !attach.some((a) => a.op === "tool" && a.id === hit.id);
+          if (attaches) attach.push({ op: "tool", id: hit.id, tool: dupTool });
           dupLines.push(
             hit === undefined
               ? "Repeated in this call; not added."
-              : `Already on the list as #${hit.id} (${hit.status === "completed" ? "done" : "open"}); not added.`,
+              : `Already on the list as #${hit.id} (${hit.status === "completed" ? "done" : "open"}); ${
+                  attaches ? `set its tool to ${dupTool}` : "not added"
+                }.`,
           );
           return false;
         }
@@ -352,16 +361,17 @@ function applyCanonicalTodoAction(
       });
       const skipped = requested - entries.length;
       const skipNote = skipped > 0 ? `Skipped ${skipped} duplicate item(s): already on the list.\n${dupLines.join("\n")}\n` : "";
+      const attached = applyTodoOps(items, attach);
       if (entries.length === 0) {
         return {
           rendered:
             posture === "plan"
-              ? `${skipNote}Nothing new added: these are already on the plan.\n${renderTodoChecklist(items, posture)}`
+              ? `${skipNote}Nothing new added: these are already on the plan.\n${renderTodoChecklist(attached, posture)}`
               : `${skipNote}Nothing new added: these are already on the list. To record progress call ` +
-                `todo({action:"done", id:N}) (or start).\n${renderTodoChecklist(items)}`,
+                `todo({action:"done", id:N}) (or start).\n${renderTodoChecklist(attached)}`,
           ok: true,
-          changes: [],
-          finalItems: items,
+          changes: attach,
+          finalItems: attached,
         };
       }
       const ids = nextTodoIds(items, opts.history ?? [], entries.length);
@@ -370,7 +380,7 @@ function applyCanonicalTodoAction(
         title: e.text,
         ...(e.tool !== undefined ? { tool: e.tool } : {}),
       }));
-      const changes: readonly ChecklistItemOp[] = [{ op: "add", items: added }];
+      const changes: readonly ChecklistItemOp[] = [{ op: "add", items: added }, ...attach];
       const next = applyTodoOps(items, changes);
       return { rendered: `${skipNote}${renderTodoChecklist(next, posture)}`, ok: true, changes, finalItems: next };
     }

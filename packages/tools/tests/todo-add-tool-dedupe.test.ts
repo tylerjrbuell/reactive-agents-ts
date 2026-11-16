@@ -145,17 +145,20 @@ describe("near-duplicate: each branch pinned on its own", () => {
 describe("near-duplicate: tool hints never count as words (both directions)", () => {
   const plain = "Identify which website(s) to analyze";
   const hinted = "Identify which website(s) to analyze (tool: umami/list_websites)";
-  for (const [label, existing, resent] of [
-    ["hinted re-sent over plain row", plain, hinted],
-    ["plain re-sent over hinted row", hinted, plain],
-  ] as const) {
-    test(label, () => {
-      const s = makeSession();
-      s.run({ action: "add", items: [existing] });
-      expect(s.run({ action: "add", items: [resent] }).changes).toEqual([]);
-      expect(s.items().length).toBe(1);
-    });
-  }
+  test("hinted re-sent over plain row adds no row; only attaches the tool", () => {
+    const s = makeSession();
+    s.run({ action: "add", items: [plain] });
+    expect(s.run({ action: "add", items: [hinted] }).changes).toEqual([
+      { op: "tool", id: "1", tool: "umami/list_websites" },
+    ]);
+    expect(s.items().length).toBe(1);
+  });
+  test("plain re-sent over hinted row changes nothing", () => {
+    const s = makeSession();
+    s.run({ action: "add", items: [hinted] });
+    expect(s.run({ action: "add", items: [plain] }).changes).toEqual([]);
+    expect(s.items().length).toBe(1);
+  });
   test("hint forms are stripped: bare, parenthesised, list", () => {
     const base = titleTokens("Fetch page views for the site");
     for (const h of ["tool: a/b", "(tool: a/b)", "(tools: a, b-c)", "Tool: `x_y`"]) {

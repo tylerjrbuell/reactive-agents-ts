@@ -57,3 +57,36 @@ describe("foldAdvisory tool hint", () => {
     expect(snap.root.rows.find((r) => r.id === "1")?.tool).toBe("umami/list_websites");
   });
 });
+
+describe("foldAdvisory tool op", () => {
+  const op = (seq: number, change: ChecklistItemOp): ChecklistFact => ({ kind: "checklist-item", seq, iteration: 1, change });
+  const base = [
+    add(1, [{ id: "1", title: "first" }, { id: "2", title: "second (tool: from-text)" }, { id: "3", title: "third" }]),
+    op(2, { op: "status", id: "1", status: "in_progress" }),
+  ];
+
+  test("sets tool, preserves order/status/title", () => {
+    const items = foldAdvisory([...base, op(3, { op: "tool", id: "1", tool: "web-search" })]);
+    expect(items.map((i) => i.id)).toEqual(["1", "2", "3"]);
+    expect(items[0]).toMatchObject({ id: "1", title: "first", status: "in_progress", tool: "web-search" });
+  });
+  test("explicit wins over text hint", () => {
+    const items = foldAdvisory([...base, op(3, { op: "tool", id: "2", tool: "explicit" })]);
+    expect(items[1]?.tool).toBe("explicit");
+  });
+  test("clear falls back to text hint, or none", () => {
+    const cleared = foldAdvisory([...base, op(3, { op: "tool", id: "2", tool: "explicit" }), op(4, { op: "tool", id: "2" })]);
+    expect(cleared[1]?.tool).toBe("from-text");
+    const none = foldAdvisory([...base, op(3, { op: "tool", id: "1", tool: "x" }), op(4, { op: "tool", id: "1", tool: "  " })]);
+    expect("tool" in none[0]!).toBe(false);
+  });
+  test("unknown id is a no-op; unused keeps snapshot identical", () => {
+    const noop = [...base, op(3, { op: "tool", id: "zzz", tool: "x" })];
+    expect(foldAdvisory(noop)).toEqual(foldAdvisory(base));
+    expect(JSON.stringify(projectChecklist(noop).root)).toBe(JSON.stringify(projectChecklist(base).root));
+  });
+  test("projection row carries the tool", () => {
+    const row = projectChecklist([...base, op(3, { op: "tool", id: "3", tool: "t" })]).root.rows.find((r) => r.id === "3");
+    expect(row?.tool).toBe("t");
+  });
+});

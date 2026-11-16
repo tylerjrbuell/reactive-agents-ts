@@ -38,6 +38,13 @@ export type ChecklistItemOp =
   | { readonly op: "status"; readonly id: string; readonly status: ChecklistItemStatus }
   /** Replace one item's title. Status, seq and origin are kept; not an explicit status mark. */
   | { readonly op: "edit"; readonly id: string; readonly title: string }
+  /**
+   * Set or clear one item's explicit tool hint without touching order, status, title or origin.
+   * A non-empty `tool` becomes the row tool (it wins over a hint in the title). `tool` absent or
+   * empty/whitespace clears the explicit tool; the row then falls back to the hint parsed from its
+   * current title, or has none. Same-value changes are no-ops; not an explicit status mark.
+   */
+  | { readonly op: "tool"; readonly id: string; readonly tool?: string }
   /** Delete items. A later `add` with the same id starts a fresh pending item. */
   | { readonly op: "remove"; readonly ids: readonly string[] };
 
@@ -232,7 +239,7 @@ export function planStepToolHint(text: string): string | undefined {
  * Fold advisory facts into items, in insertion order. An `add` item with no
  * explicit `tool` takes the hint named in its title ({@link planStepToolHint});
  * an explicit `tool` always wins and titles are never rewritten. Same-status changes and
- * same-title edits are no-ops; ops on unknown or removed ids are ignored.
+ * same-title edits and same-value `tool` ops are no-ops; ops on unknown or removed ids are ignored.
  */
 export function foldAdvisory(facts: readonly ChecklistFact[]): readonly AdvisoryItem[] {
   const items = new Map<string, AdvisoryItem>();
@@ -266,6 +273,16 @@ export function foldAdvisory(facts: readonly ChecklistFact[]): readonly Advisory
       case "edit": {
         const existing = items.get(change.id);
         if (existing && existing.title !== change.title) items.set(change.id, { ...existing, title: change.title });
+        break;
+      }
+      case "tool": {
+        const existing = items.get(change.id);
+        if (!existing) break;
+        const explicit = change.tool?.trim();
+        const next = explicit !== undefined && explicit.length > 0 ? explicit : planStepToolHint(existing.title);
+        if (existing.tool === next) break;
+        const { tool: _prev, ...rest } = existing;
+        items.set(change.id, next !== undefined ? { ...rest, tool: next } : rest);
         break;
       }
       case "remove":
@@ -428,6 +445,9 @@ export function inferChecklistProgress(
         break;
       case "edit":
         // A title change is not a status mark; inference re-reads the current title.
+        break;
+      case "tool":
+        // A tool hint is not a status mark.
         break;
       case "remove":
         // A re-added id starts over: its own add seq, no inherited marks.

@@ -72,6 +72,18 @@ export function applyTodoOps(items: readonly AdvisoryItem[], changes: readonly C
       case "edit":
         next = next.map((t) => (t.id === c.id ? { ...t, title: c.title } : t));
         break;
+      case "tool": {
+        // Mirrors core foldAdvisory: explicit tool wins; empty clears, falling back to the title hint.
+        const explicit = c.tool?.trim();
+        next = next.map((t) => {
+          if (t.id !== c.id) return t;
+          const tool = explicit !== undefined && explicit.length > 0 ? explicit : planStepToolHint(t.title);
+          if (t.tool === tool) return t;
+          const { tool: _prev, ...rest } = t;
+          return tool !== undefined ? { ...rest, tool } : rest;
+        });
+        break;
+      }
       case "remove":
         next = next.filter((t) => !c.ids.includes(t.id));
         break;
