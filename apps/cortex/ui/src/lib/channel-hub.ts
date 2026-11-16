@@ -10,6 +10,7 @@
  */
 import { normalizeSender, senderProblem } from "./channel-access.js";
 import { resetDraftFromWire, resetProblems, resetWireFromDraft, type ResetDraft } from "./channel-reset-commands.js";
+import { turnLimitDraftFromWire, turnLimitProblems, turnLimitWireFromDraft, type TurnLimitDraft } from "./channel-turn-limits.js";
 
 /** What non-owner senders may do, as the framework's tagged union. */
 export type SenderToolsWire = { _tag: "ReadOnly" } | { _tag: "AgentDefault" } | { _tag: "Allowlist"; tools: string[] };
@@ -45,6 +46,8 @@ export interface HubRouteWire {
   groups?: "mention-only" | "off";
   maxIterations?: number;
   turnTimeoutMs?: number;
+  /** Tell the sender when a turn fails (framework default: on). See `channel-turn-limits.ts`. */
+  failureNotice?: boolean;
   maxTurnsPerSenderPerHour?: number;
   maxTurnsPerHour?: number;
   maxCostPerDayUsd?: number;
@@ -66,7 +69,7 @@ export const MODEL_TIMEOUT_RANGE = { min: 1, max: 30_000 } as const;
 export type MatchWhen = "any" | "mention" | "command" | "keyword";
 
 /** The editor's flat form of a route. Numbers are strings while typed. */
-export interface RouteDraft extends ResetDraft {
+export interface RouteDraft extends ResetDraft, TurnLimitDraft {
   id: string;
   enabled: boolean;
   channelId: string;
@@ -127,6 +130,7 @@ export function newDraft(channelId = "", agentId = "", platform?: string): Route
     ackSource: telegram ? "model" : "canned",
     ackModelTimeoutMs: "",
     ...resetDraftFromWire(undefined),
+    ...turnLimitDraftFromWire({}),
   };
 }
 
@@ -163,6 +167,7 @@ export function draftFromRoute(r: HubRouteWire): RouteDraft {
     ackSource: ack?.source ?? "canned",
     ackModelTimeoutMs: num(ack?.modelTimeoutMs),
     ...resetDraftFromWire(r.resetCommands),
+    ...turnLimitDraftFromWire(r),
   };
 }
 
@@ -219,6 +224,8 @@ function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
     maxTurnsPerSenderPerHour: _s,
     maxIterations: _i,
     resetCommands: _r,
+    turnTimeoutMs: _tt,
+    failureNotice: _fn,
     ...rest
   } = base;
   const resetCommands = resetWireFromDraft(d);
@@ -240,6 +247,7 @@ function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
     ...opt("maxIterations", d.maxIterations),
     ack,
     ...(resetCommands ? { resetCommands } : {}),
+    ...turnLimitWireFromDraft(d),
   };
 }
 
@@ -269,6 +277,7 @@ export function draftProblems(d: RouteDraft, creating: boolean): string[] {
   positive("Max iterations", d.maxIterations, false);
   if (d.senderTools === "AgentDefault" && d.owners.length === 0) out.push("Full agent tools for senders needs at least one owner, who approves risky tools.");
   out.push(...resetProblems(d));
+  out.push(...turnLimitProblems(d));
   if (d.ackOn) {
     const after = toNum(d.ackAfterMs);
     if (after !== undefined && !(after >= 0)) out.push("Acknowledge after must be zero or more milliseconds.");
@@ -371,12 +380,20 @@ export function explainView(explain: unknown): ProbeView {
   return { headline, tone: decision === "allowed" ? "ok" : decision === "denied" ? "bad" : "warn", lines };
 }
 
+/** A failed turn's router reason in plain words (unknown reasons pass through). */
+export function failureReasonLine(reason: string | undefined): string | undefined {
+  if (reason === "turn_timeout") return "The turn ran past the route's turn limit and was stopped.";
+  if (reason === "turn_failed") return "The agent failed while answering.";
+  if (reason === "resolve_failed") return "The agent for this route could not be opened.";
+  return reason;
+}
+
 /** Read the `simulate` outcome (a real run through the real path, nothing sent). */
 export function simulateView(sim: unknown): ProbeView {
   if (!isRec(sim)) return { headline: "No answer", tone: "neutral", lines: [] };
   const outcome = str(sim.outcome);
   if (outcome === "answered") return { headline: "The agent answered", tone: "ok", lines: [str(sim.text) ?? ""].filter((l) => l !== "") };
-  if (outcome === "failed") return { headline: "The turn failed", tone: "bad", lines: [str(sim.reason), str(sim.detail)].filter((l): l is string => !!l) };
+  if (outcome === "failed") return { headline: "The turn failed", tone: "bad", lines: [failureReasonLine(str(sim.reason)), str(sim.detail)].filter((l): l is string => !!l) };
   if (outcome === "denied") return { headline: "Refused", tone: "bad", lines: [str(sim.reason)].filter((l): l is string => !!l) };
   if (outcome === "dropped") return { headline: "Dropped", tone: "warn", lines: [str(sim.reason)].filter((l): l is string => !!l) };
   if (outcome === "unrouted") return { headline: "No route matches", tone: "warn", lines: [] };

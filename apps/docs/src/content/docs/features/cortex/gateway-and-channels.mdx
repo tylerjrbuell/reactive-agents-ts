@@ -97,7 +97,8 @@ If a channel is saved for an account the hub already holds, the page says so and
 | Open to anyone | Any sender on the channel can talk. Requires all three caps. |
 | Sender tools | What non-owners get: Read-only (the default), Only these tools, or The agent's full tools. |
 | Caps | Cost per day in USD, turns per hour for the route, turns per sender per hour (default 6 when empty) and max iterations per turn. |
-| Acknowledge slow turns | Off by default; see below. |
+| Acknowledge slow turns | Off by default except on a new Telegram route (model-written); see below. |
+| Turn limit, Tell the sender when a turn fails | How many seconds one turn may run (empty = 120) and whether the sender gets a fixed failure message (on by default); see "When a turn fails". |
 | Start-over commands | `/new` and `/reset` by default. When a route owner sends one as the whole message, that conversation starts fresh and its saved history is cleared; the agent never sees the command. Leave blank for the default, list your own, or turn it off. Other senders' `/new` is ordinary text. |
 
 Webhook routes are authorised by the channel's signing secret, so the editor hides owners, allow and deny lists, open access, sender tools and acknowledgements for them.
@@ -107,11 +108,13 @@ Adding an owner, turning on **Open to anyone** or choosing **The agent's full to
 **Acknowledgements.** With **Acknowledge** on, the route shows a typing indicator where the platform supports it (Telegram does) and sends one short message if the turn is still running after the delay (default 4000 ms). **Message comes from** has two values:
 
 - Fixed text: your text, one entry per line to rotate. The default is "On it...".
-- Written by the model: the agent's own narration if it already said something before a tool call, otherwise a one-line model call (it may cost a few tokens), otherwise the fixed text. **Wait for the model** bounds that call (1 to 10000 ms, default 3000); when it runs out, the fixed text is sent.
+- Written by the model: the agent's own narration if it already said something before a tool call, otherwise a one-line model call (it may cost a few tokens), otherwise the fixed text. **Wait for the model** bounds that call (1 to 30000 ms, default 12000, counted from the moment the acknowledgement is due); when it runs out, the fixed text is sent.
 
 The acknowledgement is not part of the conversation history. See [Acknowledging slow turns](/guides/messaging-channels/#acknowledging-slow-turns) for the framework side.
 
-When a model-written acknowledgement falls back to the canned text, the activity feed shows why (`timeout`, `empty`, `thinking_only` or `error`), for example `acknowledged (canned, owner; model ack fell back: thinking_only)`.
+When a model-written acknowledgement falls back to the canned text, the activity feed shows why (`timeout`, `empty`, `thinking_only` or `error`), for example `acknowledged (canned, owner; model ack fell back: thinking_only)`. The line also shows how long the acknowledgement took, in seconds: `acknowledged (model, owner; 5.8s)`, or `acknowledged (canned, owner; model ack fell back: timeout after 12.0s)`.
+
+**When a turn fails.** A turn that runs past the route's **Turn limit** (default 120 seconds) is stopped and counted as failed. The activity feed says why in words, for example `turn timed out after 120s (the route's turn limit)`, followed by the cause when the agent reported one (secrets and URL queries removed). With **Tell the sender when a turn fails** on (the default), the framework also sends the sender one fixed message, so an acknowledgement is never followed by silence: after a timeout it names the limit, otherwise it says something went wrong and to send the message again. The message is fixed text, never the error. Turn it off to leave the sender with silence. Webhook routes have no failure message (the reply is the HTTP response).
 
 **Send test message.** Pick a channel, enter a sender such as `telegram:123456789` and a message, and optionally mark it as sent in a group or as mentioning the agent. The panel runs it through the real routing path and sends nothing to the platform:
 

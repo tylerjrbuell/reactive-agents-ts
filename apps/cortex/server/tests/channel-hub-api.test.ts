@@ -125,6 +125,19 @@ describe("routes", () => {
     expect(after.body.routes[0]?.ack ?? false).toBe(false);
   });
 
+  it("turnTimeoutMs and failureNotice survive save and read back; null clears them", async () => {
+    const id = await makeChannel();
+    expect((await call("POST", "/api/channels/routes", { route: route(id, { turnTimeoutMs: 45_000, failureNotice: false }) })).status).toBe(201);
+    type Listed = { routes: { turnTimeoutMs?: number; failureNotice?: boolean }[] };
+    const first = await call<Listed>("GET", "/api/channels");
+    expect(first.body.routes[0]?.turnTimeoutMs).toBe(45_000);
+    expect(first.body.routes[0]?.failureNotice).toBe(false);
+    expect((await call("PATCH", "/api/channels/routes/r1", { route: { turnTimeoutMs: null, failureNotice: null } })).status).toBe(200);
+    const after = await call<Listed>("GET", "/api/channels");
+    expect(after.body.routes[0]?.turnTimeoutMs ?? 120_000).toBe(120_000);
+    expect(after.body.routes[0]?.failureNotice ?? true).toBe(true);
+  });
+
   it("an edit detaches a migrated route from the agent config", async () => {
     createGatewayAgent(db, "gw-2", "Bot2", JSON.stringify({ provider: "test", channels: [{ id: "ch-cccc3333", kind: "telegram" }], gateway: { accessControl: { accessPolicy: "allowlist", allowedSenders: ["telegram:9"] } } }), null, "gateway");
     await hub.migrateNow();

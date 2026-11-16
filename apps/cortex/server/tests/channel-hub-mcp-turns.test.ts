@@ -148,8 +148,10 @@ describe("hub turns with an MCP server", () => {
     expect(out?.outcome).toBe("failed");
     const feed = JSON.stringify((await failing.status()).activity);
     const sim = JSON.stringify(out);
+    // The feed words the router reason ("could not open the agent"); the simulate result keeps the machine code.
+    expect(feed).toContain("could not open the agent for this route");
+    expect(sim).toContain("resolve_failed");
     for (const text of [feed, sim]) {
-      expect(text).toContain("resolve_failed");
       expect(text).not.toContain("SECRET123");
       expect(text).not.toContain("abcdef123456");
     }

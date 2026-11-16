@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Either, Schema } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
 import { makeMemoryLeases } from "../../src/routing/lease.js";
 import { createChannelRouter, type ChannelRouterOptions } from "../../src/routing/router.js";
-import { RoutingError, type AgentResolver, type RouteSpecInput } from "../../src/routing/types.js";
+import { RouteSpec, RoutingError, type AgentResolver, type RouteSpecInput } from "../../src/routing/types.js";
 import { validateRoutes } from "../../src/routing/validate.js";
 import { env, makeScriptedAdapter, waitFor } from "./scripted.js";
 
@@ -127,9 +127,7 @@ describe("failed-turn user notice", () => {
   test("failureNotice defaults to true and rejects non-boolean", async () => {
     const ok = await Effect.runPromise(validateRoutes([route()], () => "scripted"));
     expect(ok[0]?.failureNotice).toBe(true);
-    const bad = await Effect.runPromise(
-      Effect.either(validateRoutes([route({ failureNotice: "no" as unknown as boolean })], () => "scripted")),
-    );
-    expect(bad._tag).toBe("Left");
+    const loose: Record<string, unknown> = { ...route(), failureNotice: "no" };
+    expect(Either.isLeft(Schema.decodeUnknownEither(RouteSpec)(loose))).toBe(true);
   });
 });

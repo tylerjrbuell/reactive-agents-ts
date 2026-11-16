@@ -19,6 +19,27 @@ const redact = (text: string): string =>
     .replace(/\b(sk|pk|key|tok|token|xox[a-z])[-_][A-Za-z0-9_-]{8,}/gi, "$1-••••")
     .replace(/\b[A-Za-z0-9_-]{32,}\b/g, "••••");
 
+/** The framework default turn limit (`RouteSpec.turnTimeoutMs`), used when a route sets none. */
+export const DEFAULT_TURN_TIMEOUT_MS = 120_000;
+
+/**
+ * A failed turn's router reason in plain words. `turn_timeout` names the limit that was hit
+ * (`turnTimeoutMs`, in seconds); an unknown reason passes through as written.
+ */
+export const failureReasonText = (reason: string | undefined, turnTimeoutMs: number = DEFAULT_TURN_TIMEOUT_MS): string => {
+  switch (reason) {
+    case undefined:
+    case "turn_failed":
+      return "turn failed";
+    case "turn_timeout":
+      return `turn timed out after ${Math.max(1, Math.round(turnTimeoutMs / 1000))}s (the route's turn limit)`;
+    case "resolve_failed":
+      return "could not open the agent for this route";
+    default:
+      return reason;
+  }
+};
+
 /** A one-line, secret-free, bounded message for a failure `cause`. */
 export const sanitizedCause = (cause: unknown): string => {
   const inner = cause !== null && typeof cause === "object" && "cause" in cause ? (cause as { readonly cause: unknown }).cause : undefined;

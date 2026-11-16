@@ -7,6 +7,7 @@
  * injected clock, so a scripted event list pins it.
  */
 import type { AgentEvent } from "@reactive-agents/core";
+import { failureReasonText } from "./channel-hub-failure.js";
 
 /** One line of the feed, newest first in a snapshot. */
 export interface HubActivity {
@@ -59,7 +60,11 @@ export class HubActivityTracker {
   private readonly counters = new Map<string, RouteCounters>();
   private readonly causes = new Map<string, string>();
 
-  constructor(private readonly now: () => number = Date.now) {}
+  /** `turnTimeoutMsOf` names a route's turn limit so a timeout line can say how long it was. */
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly turnTimeoutMsOf: (routeId: string) => number | undefined = () => undefined,
+  ) {}
 
   private note(a: Omit<HubActivity, "at" | "simulated"> & { readonly simulated?: boolean | undefined }): void {
     this.feed.push({ ...a, at: this.now(), simulated: a.simulated === true });
@@ -112,7 +117,7 @@ export class HubActivityTracker {
         this.note({
           kind: event.ok ? "answered" : "failed",
           routeId: event.routeId,
-          detail: event.ok ? `turn completed (${event.role})` : `${event.reason ?? "turn failed"}${cause ? `: ${cause}` : ""}`,
+          detail: event.ok ? `turn completed (${event.role})` : `${failureReasonText(event.reason, this.turnTimeoutMsOf(event.routeId))}${cause ? `: ${cause}` : ""}`,
           simulated: event.simulated,
         });
         return;

@@ -36,7 +36,7 @@ import {
 } from "@reactive-agents/channels";
 import { cortexLog } from "../cortex-log.js";
 import { getGatewayAgents, getGatewayAgent } from "../db/queries.js";
-import { getChannel, listChannels, parseRouteTarget, type ChannelRecord } from "../db/channel-hub-queries.js";
+import { getChannel, getRoute, listChannels, parseRouteTarget, type ChannelRecord } from "../db/channel-hub-queries.js";
 import { buildChannelAdapters, type BuiltChannels } from "./channel-adapters.js";
 import { CHANNEL_KINDS, parseCortexChannels, type CortexChannelEntry, type ChannelKind } from "./channel-config.js";
 import { installedChannelCredentials } from "./channel-credentials.js";
@@ -191,7 +191,7 @@ export class ChannelHub {
   private startedAt: number | null = null;
   private skipped = new Map<string, string>();
   private inactiveRoutes = new Map<string, string>();
-  private tracker = new HubActivityTracker();
+  private tracker = this.newTracker();
   private lastPlan: MigrationPlan = { channels: [], routes: [], warnings: [], legacy: [] };
   private chain: Promise<void> = Promise.resolve();
   private readonly store: DurableRouterStore;
@@ -222,6 +222,14 @@ export class ChannelHub {
           ? buildChannelAdapters(entries, creds)
           : { adapters: [], webhooks: [], skipped: entries.filter((e) => e.enabled).map((e) => ({ id: e.id, reason: "The credential store is not available." })) };
       });
+  }
+
+  /** A feed that reads each route's saved turn limit, so a timeout line says how long the limit was. */
+  private newTracker(): HubActivityTracker {
+    return new HubActivityTracker(Date.now, (routeId) => {
+      const limit: unknown = getRoute(this.opts.db, routeId)?.body.turnTimeoutMs;
+      return typeof limit === "number" ? limit : undefined;
+    });
   }
 
   /** Whether the hub hosts `channelId`: the single-poller rule. True even when the hub failed to start (a failed hub must not hand a channel to a second poller). */
@@ -351,7 +359,7 @@ export class ChannelHub {
       return;
     }
     this.phase = "starting";
-    this.tracker = new HubActivityTracker();
+    this.tracker = this.newTracker();
     const built = this.makeAdapters(entries);
     const adapters: ChannelAdapter[] = [];
     const seenAccount = new Map<string, string>();
