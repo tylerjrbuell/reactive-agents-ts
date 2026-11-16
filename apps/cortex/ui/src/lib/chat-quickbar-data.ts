@@ -5,6 +5,7 @@
  * source fails soft to an empty list so one bad endpoint never blanks the bar.
  */
 import { CORTEX_SERVER_URL } from "./constants.js";
+import type { McpDiscoveryState } from "./mcp-tool-discovery.js";
 import { loadCapabilities } from "./capabilities.js";
 import { workspaceCandidates, type WorkspaceCandidate } from "./workspace-api.js";
 
@@ -16,6 +17,8 @@ export interface QuickbarCatalog {
   readonly shellPresets: Readonly<Record<string, readonly string[]>>;
   readonly builtinTools: readonly { name: string; label: string }[];
   readonly mcpServers: readonly { serverId: string; name: string; tools: readonly string[] }[];
+  /** Tool listing state per MCP server id while Cortex connects to list its tools (`mcp-tool-discovery.ts`). */
+  readonly mcpDiscovery?: Readonly<Record<string, McpDiscoveryState>>;
   readonly presets: readonly { name: string; config: Record<string, unknown> }[];
   /** Ranked workspace suggestions (launch project first, then recent). */
   readonly workspaces: readonly WorkspaceCandidate[];

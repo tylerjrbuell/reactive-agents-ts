@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { quickBarChips, type QuickBarChipContext } from "./chat-quickbar-chips.js";
+import { composerBar } from "./chat-composer-bar.js";
 
 const ctx = (over: Partial<QuickBarChipContext> = {}): QuickBarChipContext => ({
   provider: "anthropic",
@@ -23,6 +24,48 @@ describe("quickBarChips", () => {
     expect(chips.find((c) => c.cmd === "/terminal ")?.on).toBe(true);
     expect(chips.find((c) => c.cmd === "/terminal ")?.text).toBe("Shell on this machine");
     expect(chips.find((c) => c.cmd === "/thinking ")?.text).toBe("Thinking auto");
+  });
+
+  // Regression: dd44d9f4b stopped writing an attached server's tools into cfg.tools (the framework exposes all of
+  // them), but the chip still counted cfg.tools only, so umami/signal added nothing to "web-search".
+  describe("tools chip counts what attached MCP servers contribute", () => {
+    const servers = [
+      { serverId: "s1", name: "umami", tools: ["umami/stats", "umami/events", "umami/pages"] },
+      { serverId: "s2", name: "signal", tools: ["signal/send", "signal/read"] },
+    ];
+    const toolsChip = (cfg: Record<string, unknown>, over: Partial<QuickBarChipContext> = {}) => quickBarChips(cfg, ctx({ mcpServers: servers, ...over })).find((c) => c.cmd === "/tools ")!;
+
+    test("built-ins plus every tool of servers with no explicit entries", () => {
+      const chip = toolsChip({ tools: ["web-search"], mcpServerIds: ["s1", "s2"], enableTools: true });
+      expect(chip.text).toBe("web-search +5");
+      expect(chip.title).toBe("Tools: web-search; umami: 3 tools (stats, events, pages); signal: 2 tools (send, read)");
+      expect(chip.on).toBe(true);
+    });
+
+    test("explicit server/tool entries restrict that server", () => {
+      const chip = toolsChip({ tools: ["web-search", "umami/stats"], mcpServerIds: ["s1"], enableTools: true });
+      expect(chip.text).toBe("web-search +1");
+      expect(chip.title).toContain("umami: 1 tool (stats)");
+    });
+
+    test("MCP-only selection is on the bar", () => {
+      const cfg = { mcpServerIds: ["s1"], enableTools: true };
+      const chips = quickBarChips(cfg, ctx({ mcpServers: servers }));
+      expect(chips.find((c) => c.cmd === "/tools ")).toMatchObject({ text: "3 MCP", on: true });
+      expect(composerBar(chips, cfg, { thinkingChoice: "auto", modelThinking: null }).shown.map((c) => c.cmd)).toContain("/tools ");
+    });
+
+    test("a server still being listed or failed says so", () => {
+      const cold = [{ serverId: "s1", name: "umami", tools: [] as string[] }];
+      expect(toolsChip({ tools: ["web-search"], mcpServerIds: ["s1"], enableTools: true }, { mcpServers: cold, mcpDiscovery: { s1: { status: "loading" } } }).title).toBe("Tools: web-search; umami: listing tools…");
+      expect(toolsChip({ mcpServerIds: ["s1"], enableTools: true }, { mcpServers: cold, mcpDiscovery: { s1: { status: "failed", error: "connect refused" } } }).title).toBe("Tools: umami: could not list tools (connect refused)");
+    });
+
+    test("no servers: unchanged", () => {
+      expect(toolsChip({ tools: ["web-search"], enableTools: true }).text).toBe("web-search");
+      expect(toolsChip({}).text).toBe("Tools off");
+      expect(toolsChip({ enableTools: true }).text).toBe("No tools");
+    });
   });
 
   test("no provider: only skills / agent control / docs chips", () => {

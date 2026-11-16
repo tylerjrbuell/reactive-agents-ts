@@ -4,7 +4,9 @@
  */
 import { agentControlEnabled } from "./proposal-view.js";
 import { enabledControlGroups } from "./agent-control.js";
-import { effectiveIterations, selectedTools, terminalChoice, terminalLabel, toolsetSummary } from "./chat-quickbar.js";
+import { effectiveIterations, selectedTools, terminalChoice, terminalLabel, toolsOn } from "./chat-quickbar.js";
+import { mcpToolAvailable } from "./tool-selection.js";
+import type { McpDiscoveryState } from "./mcp-tool-discovery.js";
 import { workspaceLabel } from "./workspace-api.js";
 import { shellOffLabel, shellPickReason, shellState, type ShellPresets } from "./shell-from-picks.js";
 import type { IconName } from "./icons.js";
@@ -26,7 +28,46 @@ export type QuickBarChipContext = {
   documentCount: number;
   /** Shell toolsets → programs (`GET /api/tools/shell-presets`); a picked one brings `shell-execute`. */
   shellPresets?: ShellPresets;
+  /** Saved MCP servers with their cached tool names (`/api/mcp-servers`), so the tools chip counts what the servers add. */
+  mcpServers?: readonly { serverId: string; name: string; tools: readonly string[] }[];
+  /** Tool listing state per MCP server id (`mcp-tool-discovery.ts`); absent = not attempted. */
+  mcpDiscovery?: Readonly<Record<string, McpDiscoveryState>>;
 };
+
+/**
+ * The tools chip: the real tool surface of the session. Selected built-in and custom tools,
+ * plus what each attached MCP server contributes under the runtime rule: no `server/tool`
+ * name selected = every tool of the server; some named = only those (`tool-selection.ts`).
+ * A server still being listed or that failed to connect says so instead of adding nothing.
+ */
+export function toolsChip(cfg: Record<string, unknown>, servers: readonly { serverId: string; name: string; tools: readonly string[] }[], discovery: Readonly<Record<string, McpDiscoveryState>> = {}): QuickBarChip {
+  const ids = Array.isArray(cfg.mcpServerIds) ? cfg.mcpServerIds.filter((i): i is string => typeof i === "string") : [];
+  const attached = ids.map((id) => servers.find((s) => s.serverId === id) ?? { serverId: id, name: "MCP server", tools: [] as string[] });
+  const mcpNames = new Set(attached.flatMap((s) => s.tools));
+  const own = selectedTools(cfg).filter((t) => !mcpNames.has(t));
+  const selection = { tools: selectedTools(cfg), mcpServerIds: ids };
+  const lines = [...own];
+  let mcpCount = 0;
+  let pending = 0;
+  for (const s of attached) {
+    const state = discovery[s.serverId];
+    const on = s.tools.filter((t) => mcpToolAvailable(selection, s, t));
+    mcpCount += on.length;
+    if (s.tools.length > 0) lines.push(`${s.name}: ${on.length === 1 ? "1 tool" : `${on.length} tools`} (${on.map((t) => t.replace(`${s.name}/`, "")).join(", ")})`);
+    else if (state?.status === "failed") lines.push(`${s.name}: could not list tools (${state.error})`);
+    else {
+      pending++;
+      lines.push(`${s.name}: listing tools…`);
+    }
+  }
+  if (!toolsOn(cfg)) return { text: "Tools off", icon: "tool", cmd: "/tools ", title: "Choose tools" };
+  const total = own.length + mcpCount;
+  if (own.length === 0 && attached.length === 0) return { text: "No tools", icon: "tool", cmd: "/tools ", title: "Choose tools", on: false };
+  const shown = own.slice(0, 2).join(", ");
+  const rest = total - Math.min(own.length, 2);
+  const text = [shown, rest > 0 ? (shown === "" ? `${rest} MCP` : `+${rest}`) : "", pending > 0 && rest === 0 ? "MCP…" : ""].filter(Boolean).join(" ");
+  return { text, icon: "tool", cmd: "/tools ", title: `Tools: ${lines.join("; ")}`, on: true };
+}
 
 /** Shell chip, same three states as the builder checkbox: off, toolset-only (`Shell: git · gh only`), or the full shell's choice. */
 function shellChip(cfg: Record<string, unknown>, presets: ShellPresets): QuickBarChip {
@@ -47,7 +88,6 @@ function shellChip(cfg: Record<string, unknown>, presets: ShellPresets): QuickBa
 /** Chips for a session config, in display order. No provider ⇒ only the skill / agent / doc chips. */
 export function quickBarChips(cfg: Record<string, unknown>, ctx: QuickBarChipContext): QuickBarChip[] {
   const { provider, model } = ctx;
-  const toolNames = selectedTools(cfg);
   const workspace = typeof cfg.workspace === "string" ? cfg.workspace : "";
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   return [
@@ -63,7 +103,7 @@ export function quickBarChips(cfg: Record<string, unknown>, ctx: QuickBarChipCon
     ...(provider
       ? [
           { text: ctx.strategyLabel, icon: "strategy", cmd: "/strategy ", title: "Change the reasoning strategy" },
-          { text: toolsetSummary(cfg), icon: "tool", cmd: "/tools ", title: toolNames.length > 0 ? `Tools: ${toolNames.join(", ")}` : "Choose tools", on: toolNames.length > 0 },
+          toolsChip(cfg, ctx.mcpServers ?? [], ctx.mcpDiscovery),
           shellChip(cfg, ctx.shellPresets ?? {}),
           {
             text: workspace ? workspaceLabel(workspace) : "No workspace",

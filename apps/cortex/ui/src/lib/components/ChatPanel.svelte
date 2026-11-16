@@ -41,6 +41,7 @@
   import { composerBar, configGroups } from "$lib/chat-composer-bar.js";
   import { btwStore } from "$lib/stores/chat-btw.js";
   import { quickAddMcpToChat } from "$lib/mcp-quick-add.js";
+  import { autoDiscoverMcp } from "$lib/mcp-tool-discovery.js";
   import ChatQuickBar from "$lib/components/ChatQuickBar.svelte";
   import ChatSlashMenu from "$lib/components/ChatSlashMenu.svelte";
   import { panelTitle, settingEntries, surfaceBack, surfaceView } from "$lib/config-menu-nav.js";
@@ -358,9 +359,8 @@
   const shell = $derived(terminalChoice(cfg));
   const toolNames = $derived(selectedTools(cfg));
   let catalog = $state<QuickbarCatalog>(EMPTY_CATALOG);
-  $effect(() => {
-    void loadQuickbarCatalog().then((c) => (catalog = c));
-  });
+  $effect(() => void loadQuickbarCatalog().then((c) => (catalog = c)));
+  $effect(() => autoDiscoverMcp(cfg.mcpServerIds, catalog, (c) => (catalog = c), loadQuickbarCatalog));
   const strategyLabel = $derived(catalog.strategies.find((s) => s.value === strategy)?.label ?? strategy);
 
   let models = $state<UiModelOption[]>([]);
@@ -473,7 +473,7 @@
   const modelThinking = $derived(models.find((m) => m.value === model)?.thinking ?? null);
 
   // The composer bar: the model chip + settings changed from the defaults; the rest sit in its Config popover.
-  const chipCtx: QuickBarChipContext = $derived({ provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, availableSkillCount: skillList?.length ?? 0, documentCount: docs.length, shellPresets: catalog.shellPresets });
+  const chipCtx: QuickBarChipContext = $derived({ provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, availableSkillCount: skillList?.length ?? 0, documentCount: docs.length, shellPresets: catalog.shellPresets, mcpServers: catalog.mcpServers, mcpDiscovery: catalog.mcpDiscovery });
   const allChips = $derived(quickBarChips(cfg, chipCtx));
   const bar = $derived(composerBar(allChips, cfg, chipCtx));
   // The Config rows' current values, shown next to each setting's slash alias in the one command list.
