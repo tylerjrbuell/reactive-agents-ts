@@ -194,9 +194,9 @@ describe("G3: plan posture does not demand what it withholds", () => {
     expect(ids("plan")).toEqual(["answer"]);
   });
 
-  it("plan offers no tools, so NO required tool survives into the contract (todo included)", () => {
+  it("plan tools stay required under plan; a withheld required tool does not", () => {
     const ids = compileRunContract("t", { posture: "plan", requiredTools: ["file-write", "todo"] }).requirements.map((r) => r.id);
-    expect(ids).not.toContain("tool:todo");
+    expect(ids).toContain("tool:todo");
     expect(ids).not.toContain("tool:file-write");
   });
 
@@ -239,7 +239,10 @@ describe("G3: plan posture does not demand what it withholds", () => {
     expect(outcomeOf(result)).toMatchObject({ status: "completed", authority: "model-final", outstanding: [] });
     expect(guards(trace, "terminal_status_override")).toEqual([]);
     const posture = guards(trace, "posture-applied");
-    expect("planRecorded" in meta(posture[posture.length - 1]!)).toBe(false);
+    const last = meta(posture[posture.length - 1]!);
+    expect("planRecorded" in last).toBe(false);
+    // The model recorded no todo list: the harness derived the three steps from the reply.
+    expect(last).toMatchObject({ planSteps: 3, planSource: "harness-derived" });
   });
 
   it("CONTROL: the same task in execute posture still carries the file-write requirement", async () => {

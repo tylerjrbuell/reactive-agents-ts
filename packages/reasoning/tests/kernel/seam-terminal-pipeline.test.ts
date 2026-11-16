@@ -77,6 +77,7 @@ describe("terminal pipeline — one entry", () => {
       "output-ownership",
       "verify-gate",
       "quality-gate",
+      "plan-checklist",
       "budget-exhausted",
       "terminal-decision",
     ]);

@@ -128,6 +128,13 @@ export interface ChecklistItemEntry extends LedgerEntryBase {
    * facts — the model is the default author.
    */
   readonly origin?: "plan";
+  /**
+   * True on rows the terminal plan-checklist step derived from a plan-posture
+   * reply when the model recorded no `todo` list (loop/plan-checklist-step.ts).
+   * A separate flag, not a second `origin`: core's fold narrows `origin` to
+   * `"plan"` and a derived row must stay a normal explicit row to execute.
+   */
+  readonly harnessDerived?: true;
 }
 
 /**

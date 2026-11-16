@@ -1,0 +1,5 @@
+---
+"@reactive-agents/reasoning": minor
+---
+
+Plan posture keeps the planning tools so the plan is a durable checklist: `todo`, `brief` and `final-answer` are offered (every capability tool is still blocked and recorded), and the single guidance line tells the model to record the steps with `todo` before presenting the plan. When the model records no list, the harness derives the checklist deterministically from the reply's numbered or bulleted step lines and records it through the same checklist ledger facts (flagged `harnessDerived`), so `ChecklistUpdated` fires; a reply with no derivable steps emits an explicit `planNoSteps` on the `posture-applied` trace signal. An execute run seeded with a checklist that still has unchecked steps gets one advisory guidance line to follow it (no veto, no exit-gate change; an empty or absent seed is byte-identical). New opt-in harness switch `planToolCatalog` (default off, `RA_PLAN_TOOL_CATALOG=1`) appends a capped line naming the execute-phase tools to plan guidance.

@@ -55,6 +55,7 @@ import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncatio
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { LOOP_DETECTED_DEFAULT, guidanceFieldHasText, guidanceTurnCost, renderGuidance, type PendingGuidance } from "../../state/guidance-channel.js";
 import { emitPostureApplied, isPlanPosture, planPostureGuidanceParts, registerPostureSignal, stampPostureRendered, toolIndexUniverse } from "../../policy/run-posture.js";
+import { planToolCatalogLine } from "../../policy/plan-steps.js";
 import { provenanceBySanitizedName } from "./wire-facts.js";
 import { checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
 import { stepEnvironmentUpdate } from "../reflect/environment-update.js";
@@ -600,7 +601,9 @@ export function handleThinking(
     yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps });
     const rendered = renderGuidance(shownGuidance, { loopDetectedMessage });
     // The one join (Plan 9 Phase 4 stage D2): guidance renders as text parts.
-    const guidanceParts = planPosture ? planPostureGuidanceParts() : rendered.parts;
+    const guidanceParts = planPosture
+      ? planPostureGuidanceParts(input.harness?.planToolCatalog === true ? planToolCatalogLine(input.availableToolSchemas) : undefined)
+      : rendered.parts;
     const defaultGuidanceText = guidanceParts.length > 0 ? contentText(guidanceParts) : null;
     const guidanceText = pipeline
       ? yield* Effect.promise(() =>

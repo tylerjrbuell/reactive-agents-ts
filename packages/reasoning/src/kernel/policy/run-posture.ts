@@ -6,17 +6,20 @@
  * A posture is typed state the HARNESS owns (`RunEnvelope.rails.posture`), not
  * prompt wording. Under `"plan"` every harness-authored instruction derives from
  * it, so exactly one coherent story reaches the model:
- *   - tool surface  : EMPTY ({@link PLAN_POSTURE_TOOLS} has no members): plan is a
- *                     pure reasoning mode and the model is offered no tool at all.
- *                     Any call it names anyway is blocked at the tool-policy choke
- *                     point (`evaluateToolPolicy`) and recorded as a failed
+ *   - tool surface  : the planning meta tools only ({@link PLAN_POSTURE_TOOLS}:
+ *                     `todo` records the durable checklist, `brief`, `final-answer`).
+ *                     Any other call the model names is blocked at the tool-policy
+ *                     choke point (`evaluateToolPolicy`) and recorded as a failed
  *                     observation, never executed. Provider thinking is untouched;
  *   - guidance      : the `Guidance:` block is ONE line ({@link PLAN_POSTURE_GUIDANCE});
  *                     act-reminder / checklist reminder / required-tools pressure /
  *                     every other pending nudge are suppressed at render;
  *   - completion    : required tools are cleared at the merge boundary so no
  *                     required-tool gate can fail or force a deliberately
- *                     stopped run — it completes when the model replies with its plan;
+ *                     stopped run — it completes when the model replies with its plan.
+ *                     The terminal `plan-checklist` step (loop/plan-checklist-step.ts)
+ *                     then guarantees the checklist: derived from the reply when the
+ *                     model recorded none, else a `plan-no-steps` signal;
  *   - observability : a `posture-applied` signal rides the existing
  *                     `GuardFiredEmitted` trace event (no TraceEvent schema change).
  *   - nudges        : execute-oriented act guidance is not even produced under
@@ -47,16 +50,16 @@ declare module "../state/kernel-state.js" {
 export const POSTURE_APPLIED_GUARD = "posture-applied";
 
 /**
- * The tools a plan-posture run may call: NONE. Plan is a pure reasoning mode
- * (owner direction 2026-11-15): the surface is empty and every call, meta and
- * exit tools included, is blocked at the tool-policy gate. The model's prose
- * reply is the plan; the user switches to execute to carry it out.
+ * The tools a plan-posture run may call: the planning meta tools. `todo` makes
+ * the plan a durable checklist (owner direction 2026-11-16, spec
+ * 2026-11-16-plan-execute-posture-robustness.md); `brief` and `final-answer`
+ * are read-only / exit. Every capability tool is blocked at the tool-policy gate.
  */
-export const PLAN_POSTURE_TOOLS: ReadonlySet<string> = new Set<string>();
+export const PLAN_POSTURE_TOOLS: ReadonlySet<string> = new Set(["todo", "brief", "final-answer"]);
 
 /** The single `Guidance:` line rendered under plan posture. */
 export const PLAN_POSTURE_GUIDANCE =
-  "Plan mode: no tools are available. Reason it through and give the plan; the user will switch to execute mode to carry it out.";
+  "Plan mode: reason it through, then record the steps with todo (one actionable step each, naming the tool to use when known), then present the plan. You cannot run tools other than todo until the user switches to execute.";
 
 /** Stable prefix of the block message; also how blocked calls are read back off the steps. */
 export const PLAN_POSTURE_BLOCK_PREFIX = "[Tool \"";
@@ -69,7 +72,7 @@ export const isPlanPosture = (carrier: { readonly posture?: RunPosture } | undef
 
 /** Observation text for a call blocked by plan posture. */
 export function planPostureBlockMessage(toolName: string): string {
-  return `${PLAN_POSTURE_BLOCK_PREFIX}${toolName}" ${BLOCK_MARKER} — plan mode offers no tools; blocked, not executed. Reason it through and reply with the plan.]`;
+  return `${PLAN_POSTURE_BLOCK_PREFIX}${toolName}" ${BLOCK_MARKER} — plan mode offers only ${[...PLAN_POSTURE_TOOLS].join(", ")}; blocked, not executed. Record the steps with todo and reply with the plan.]`;
 }
 
 /**
@@ -121,8 +124,12 @@ export function postureInputOverrides(posture: RunPosture | undefined): {
   return posture === "plan" ? { posture: "plan", requiredTools: [], requiredToolQuantities: {} } : {};
 }
 
-/** The one-line `Guidance:` block rendered under plan posture (the channel's block format, as parts). */
-export const planPostureGuidanceParts = (): readonly TextPart[] => guidanceBlockParts([PLAN_POSTURE_GUIDANCE]);
+/**
+ * The `Guidance:` block rendered under plan posture (the channel's block format,
+ * as parts): the one posture line, plus the opt-in tool catalog line when given.
+ */
+export const planPostureGuidanceParts = (catalogLine?: string): readonly TextPart[] =>
+  guidanceBlockParts(catalogLine === undefined ? [PLAN_POSTURE_GUIDANCE] : [PLAN_POSTURE_GUIDANCE, catalogLine]);
 
 /** Ledger `origin` of the once-per-run posture signal. */
 export const POSTURE_SIGNAL_ORIGIN = "policy/run-posture:posture-applied";
@@ -176,6 +183,15 @@ export function stampPostureRendered(
   );
 }
 
+/**
+ * What the terminal plan-checklist step found, carried on the final
+ * `posture-applied` event: `planNoSteps` is the explicit "no steps" signal;
+ * `planSteps` counts the checklist items and `planSource` says who wrote them.
+ */
+export type PlanChecklistOutcome =
+  | { readonly planSteps: number; readonly planSource: "recorded" | "harness-derived" }
+  | { readonly planSteps: 0; readonly planNoSteps: true };
+
 /** Emit the `posture-applied` signal for one think pass (no-op outside plan posture). */
 export function emitPostureApplied(args: {
   readonly posture: RunPosture | undefined;
@@ -184,6 +200,8 @@ export function emitPostureApplied(args: {
   readonly taskId: string;
   readonly iteration: number;
   readonly steps: readonly ReasoningStep[];
+  /** Terminal plan-checklist outcome (`loop/plan-checklist-step.ts`); absent on in-loop passes. */
+  readonly plan?: PlanChecklistOutcome;
 }): Effect.Effect<void> {
   if (args.posture !== "plan") return Effect.void;
   const blocked = blockedPostureCalls(args.steps);
@@ -197,6 +215,7 @@ export function emitPostureApplied(args: {
       posture: "plan",
       allowedTools: [...PLAN_POSTURE_TOOLS],
       blockedCalls: [...blocked],
+      ...(args.plan !== undefined ? args.plan : {}),
       ...(args.signalId !== undefined ? { signalId: args.signalId } : {}),
     },
   });

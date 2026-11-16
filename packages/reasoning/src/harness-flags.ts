@@ -270,6 +270,16 @@ export function computeOffloadEnabled(): boolean {
 }
 
 /**
+ * Plan tool catalog: plan posture's guidance gains one capped line naming the
+ * tools the execute phase would have (`kernel/policy/plan-steps.ts`), so plan
+ * steps can reference them as `tool: name`. Default OFF pending an
+ * ablation-warden measurement. `RA_PLAN_TOOL_CATALOG=1` enables it.
+ */
+export function planToolCatalogEnabled(): boolean {
+  return readFlag("RA_PLAN_TOOL_CATALOG") === "1";
+}
+
+/**
  * Compact call constraints: compact tool profiles (`names-only`,
  * `names-and-types`) keep the description sentences that limit a parameter's
  * values, and the compact reference lists enum values as `a|b|c`

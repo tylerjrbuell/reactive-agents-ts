@@ -41,6 +41,7 @@ import {
   budgetAnswerTurnEnabled,
   leanThinkingEnabled,
   computeOffloadEnabled,
+  planToolCatalogEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -184,6 +185,14 @@ export interface HarnessConfig {
    */
   readonly computeOffload?: boolean;
   /**
+   * Plan tool catalog. Under plan posture the guidance gains one capped line
+   * listing the tools the execute phase would have (names plus a one-line
+   * description; "you cannot call these now; reference them in steps as
+   * `tool: name`"). Advisory text only: the plan tool surface is unchanged.
+   * Default OFF pending an ablation. (`RA_PLAN_TOOL_CATALOG=1`)
+   */
+  readonly planToolCatalog?: boolean;
+  /**
    * LLM recovery budget: how many recoverable provider failures on think turns
    * one run may retry. A think call that fails with a recoverable error class
    * is retried in the same turn instead of ending the run: malformed model
@@ -302,6 +311,8 @@ export interface ResolvedHarness {
   readonly leanThinking?: true;
   /** Compute offload (see `HarnessConfig.computeOffload`). Present only when on. */
   readonly computeOffload?: true;
+  /** Plan tool catalog (see `HarnessConfig.planToolCatalog`). Present only when on. */
+  readonly planToolCatalog?: true;
   /**
    * LLM recovery budget (see `HarnessConfig.llmRecoveryBudget`), a whole number
    * in 0..10. Present only when configured; absent = {@link DEFAULT_LLM_RECOVERY_BUDGET}.
@@ -406,6 +417,7 @@ export function resolveHarnessConfig(
     ...(pick(config.budgetAnswerTurn, budgetAnswerTurnEnabled()) ? { budgetAnswerTurn: true as const } : {}),
     ...(pick(config.leanThinking, leanThinkingEnabled()) ? { leanThinking: true as const } : {}),
     ...(pick(config.computeOffload, computeOffloadEnabled()) ? { computeOffload: true as const } : {}),
+    ...(pick(config.planToolCatalog, planToolCatalogEnabled()) ? { planToolCatalog: true as const } : {}),
     ...(llmRecoveryBudget !== undefined ? { llmRecoveryBudget } : {}),
   });
 }

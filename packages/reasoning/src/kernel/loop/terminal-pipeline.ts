@@ -53,6 +53,7 @@ import { runTerminalVerifierGate } from "./runner-terminal-verify-gate.js";
 import { runOutputQualityGate } from "./runner-output-quality-gate.js";
 import { emitTerminalDecision } from "./runner-helpers/terminal-decision.js";
 import { publishBudgetExhaustedAtTerminal } from "./budget-exhausted-terminal.js";
+import { runPlanChecklistStep } from "./plan-checklist-step.js";
 
 /**
  * Terminal kinds the answer-shaping steps must leave alone, read once at entry.
@@ -106,6 +107,7 @@ export const KERNEL_TERMINAL_STEPS = [
   "output-ownership",
   "verify-gate",
   "quality-gate",
+  "plan-checklist",
   "budget-exhausted",
   "terminal-decision",
 ] as const;
@@ -162,6 +164,8 @@ const STEPS: { readonly [K in KernelTerminalStepName]: TerminalStep } = {
       emitLog: ctx.emitLog,
       ...ctx.fences,
     }),
+  // Plan posture: the run ends with a durable checklist (derived from the reply when none was recorded).
+  "plan-checklist": (state, ctx) => runPlanChecklistStep(state, ctx.currentInput),
   // Budget pre-guard stop → BudgetExhausted with kind/limit/used (emit-only).
   "budget-exhausted": (state, ctx) =>
     publishBudgetExhaustedAtTerminal(state, ctx.effectiveInput.agentId ?? "reasoning-agent"),

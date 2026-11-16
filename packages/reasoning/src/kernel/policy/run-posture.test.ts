@@ -15,6 +15,7 @@ import { runPass } from "../loop/run-pass.js";
 import { RunEnvelope, buildRunEnvelope, mergeRunEnvelopeIntoKernelInput } from "../envelope/run-envelope.js";
 import type { KernelInput, KernelRunOptions } from "../state/kernel-state.js";
 import { evaluateToolPolicy } from "../capabilities/act/tool-observe.js";
+import { FOLLOW_PLAN_GUIDANCE } from "./plan-steps.js";
 import {
   PLAN_POSTURE_GUIDANCE,
   PLAN_POSTURE_TOOLS,
@@ -29,6 +30,8 @@ const SCHEMAS = [
   {
     name: "todo",
     description: "checklist",
+    // As the runtime builds it (tool-capabilities.ts toToolSchema): an opted-in meta tool is wire-visible.
+    scope: "domain" as const,
     parameters: [
       { name: "action", type: "string", required: true },
       { name: "items", type: "array", required: false },
@@ -109,43 +112,56 @@ const planTurns = (): Turns => [
   SUMMARY,
 ];
 
-describe("run posture: plan (kernel) — pure reasoning mode, no tools", () => {
-  it("tools the model names anyway (capability AND todo) are blocked + recorded, never executed; the reply still completes the run", async () => {
+const checklistFacts = (pass: Awaited<ReturnType<typeof run>>["pass"]) =>
+  (pass.state.ledger ?? []).flatMap((e) => (e.kind === "checklist-item" ? [e] : []));
+const postureEvents = (events: AgentEvent[]) =>
+  events.filter((e) => e._tag === "GuardFiredEmitted" && e.guard === POSTURE_APPLIED_GUARD) as Extract<
+    AgentEvent,
+    { _tag: "GuardFiredEmitted" }
+  >[];
+
+describe("run posture: plan (kernel) — planning meta tools only, durable checklist", () => {
+  it("the capability tool the model names is blocked + recorded, never executed; its todo call RUNS and records the plan; the reply completes the run", async () => {
     executed.length = 0;
     const { pass, events } = await run(planTurns(), "plan");
 
     expect(executed).toEqual([]);
-    for (const name of ["crypto-price", "todo"]) {
-      const obs = pass.state.steps.filter(
-        (s) => s.type === "observation" && s.metadata?.observationResult?.toolName === name,
-      );
-      expect(obs.length).toBe(1);
-      expect(obs[0]?.metadata?.observationResult?.success).toBe(false);
-      expect(obs[0]?.content).toContain("not available in plan posture");
-    }
-    expect(blockedPostureCalls(pass.state.steps)).toEqual(["crypto-price", "todo"]);
-    // The todo tool never ran: no checklist facts exist.
-    expect((pass.state.ledger ?? []).some((e) => e.kind === "checklist-item")).toBe(false);
+    const blocked = pass.state.steps.filter(
+      (s) => s.type === "observation" && s.metadata?.observationResult?.toolName === "crypto-price",
+    );
+    expect(blocked.length).toBe(1);
+    expect(blocked[0]?.metadata?.observationResult?.success).toBe(false);
+    expect(blocked[0]?.content).toContain("not available in plan posture");
+    expect(blockedPostureCalls(pass.state.steps)).toEqual(["crypto-price"]);
+    // todo is a planning tool: it ran (not blocked) and recorded the model's own list.
+    const todoObs = pass.state.steps.filter(
+      (s) => s.type === "observation" && s.metadata?.observationResult?.toolName === "todo",
+    );
+    expect(todoObs.length).toBe(1);
+    expect(todoObs[0]?.content).not.toContain("not available in plan posture");
+    const facts = checklistFacts(pass);
+    expect(facts.length).toBeGreaterThan(0);
+    expect(facts.some((f) => f.harnessDerived === true)).toBe(false); // model recorded: nothing derived
     expect(pass.state.status).toBe("done");
     expect(pass.state.output).toContain("Plan: 1) fetch the price");
 
-    const posture = events.filter(
-      (e) => e._tag === "GuardFiredEmitted" && e.guard === POSTURE_APPLIED_GUARD,
-    ) as Extract<AgentEvent, { _tag: "GuardFiredEmitted" }>[];
+    const posture = postureEvents(events);
     expect(posture.length).toBeGreaterThanOrEqual(2);
     const last = posture[posture.length - 1];
     expect(last?.outcome).toBe("block");
     expect(last?.metadata).toEqual({
       posture: "plan",
-      allowedTools: [],
-      blockedCalls: ["crypto-price", "todo"],
+      allowedTools: ["todo", "brief", "final-answer"],
+      blockedCalls: ["crypto-price"],
+      planSteps: 2,
+      planSource: "recorded",
       // Tracked signal: the stable ledger id (same on every pass of the run).
       signalId: expect.stringMatching(/^sig-/),
     });
     expect(new Set(posture.map((p) => (p.metadata as { signalId?: string }).signalId)).size).toBe(1);
   });
 
-  it("the model is offered NO tool at all and sees exactly one Guidance line", async () => {
+  it("the model is offered ONLY planning tools (todo, no capability tool) and sees exactly one Guidance line", async () => {
     const { events } = await run(planTurns(), "plan");
     const exchanges = events.filter((e) => e._tag === "LLMExchangeEmitted") as Extract<
       AgentEvent,
@@ -153,7 +169,10 @@ describe("run posture: plan (kernel) — pure reasoning mode, no tools", () => {
     >[];
     expect(exchanges.length).toBeGreaterThanOrEqual(2);
     for (const ex of exchanges) {
-      expect(ex.toolSchemaNames).toEqual([]);
+      expect(ex.toolSchemaNames).toContain("todo");
+      expect(ex.toolSchemaNames.every((n) => PLAN_POSTURE_TOOLS.has(n))).toBe(true);
+      expect(ex.toolSchemaNames).not.toContain("crypto-price");
+      expect(ex.toolSchemaNames).not.toContain("file-write");
       const userGuidance = ex.messages.filter((m) => m.role === "user" && m.content.startsWith("Guidance:"));
       expect(userGuidance.length).toBe(1);
       expect(userGuidance[0]?.content).toBe(`Guidance:\n- ${PLAN_POSTURE_GUIDANCE}`);
@@ -164,29 +183,86 @@ describe("run posture: plan (kernel) — pure reasoning mode, no tools", () => {
     expect(everything).not.toContain("Do not give your final answer while items are open");
   });
 
-  it("guidance is ONE line saying plan mode, no tools, give the plan, user switches to execute", () => {
-    expect(PLAN_POSTURE_TOOLS.size).toBe(0);
+  it("guidance is ONE line: reason, record steps with todo, present the plan, no other tools until the user switches", () => {
+    expect([...PLAN_POSTURE_TOOLS].sort()).toEqual(["brief", "final-answer", "todo"]);
     expect(PLAN_POSTURE_GUIDANCE).not.toContain("\n");
-    expect(PLAN_POSTURE_GUIDANCE).toContain("no tools are available");
-    expect(PLAN_POSTURE_GUIDANCE).toContain("give the plan");
-    expect(PLAN_POSTURE_GUIDANCE).toContain("execute mode");
-    expect(PLAN_POSTURE_GUIDANCE).not.toContain("todo");
+    expect(PLAN_POSTURE_GUIDANCE).toBe(
+      "Plan mode: reason it through, then record the steps with todo (one actionable step each, naming the tool to use when known), then present the plan. You cannot run tools other than todo until the user switches to execute.",
+    );
   });
 
-  it("a plain prose reply completes the run successfully with zero tool use, and no planRecorded field exists", async () => {
+  it("a prose reply with no todo call completes the run; the harness DERIVES the checklist from the reply, tagged harnessDerived, published on the ledger tap", async () => {
     executed.length = 0;
-    const { pass, events } = await run([SUMMARY], "plan");
+    const published: unknown[] = [];
+    const { pass, events } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const evs = yield* Ref.make<AgentEvent[]>([]);
+        const bus = yield* EventBus;
+        yield* bus.on("GuardFiredEmitted", (ev) => Ref.update(evs, (xs) => [...xs, ev]));
+        yield* bus.on("LedgerEntryAppended", (ev) => Effect.sync(() => void published.push(...ev.entries)));
+        const p = yield* runPass(reactKernel, baseInput(), opts);
+        return { pass: p, events: yield* Ref.get(evs) };
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            makeObservableLLM().pipe(Layer.provide(TestLLMServiceLayer([SUMMARY]))),
+            toolLayer,
+            EventBusLive,
+            Layer.succeed(RunEnvelope, buildRunEnvelope({ posture: "plan" })),
+          ),
+        ),
+      ),
+    );
     expect(pass.state.status).toBe("done");
     expect(pass.state.output).toContain("Plan:");
     expect(executed).toEqual([]);
-    expect(pass.state.steps.some((s) => s.type === "observation" && s.metadata?.observationResult !== undefined)).toBe(false);
-    const posture = events.filter(
-      (e) => e._tag === "GuardFiredEmitted" && e.guard === POSTURE_APPLIED_GUARD,
-    ) as Extract<AgentEvent, { _tag: "GuardFiredEmitted" }>[];
-    expect(posture.length).toBeGreaterThanOrEqual(1);
-    const last = posture[posture.length - 1];
+    const facts = checklistFacts(pass);
+    expect(facts.length).toBe(1);
+    expect(facts[0]?.harnessDerived).toBe(true);
+    expect(facts[0]?.change).toEqual({
+      op: "add",
+      items: [
+        { id: "1", title: "fetch the price" },
+        { id: "2", title: "write it to a file" },
+      ],
+    });
+    // Published through the live ledger tap (what the runtime turns into ChecklistUpdated).
+    expect(published.some((e) => (e as { kind?: string; harnessDerived?: boolean }).kind === "checklist-item" && (e as { harnessDerived?: boolean }).harnessDerived === true)).toBe(true);
+    const last = postureEvents(events).at(-1);
     expect(last?.outcome).toBe("pass");
+    expect(last?.metadata).toMatchObject({ planSteps: 2, planSource: "harness-derived" });
     expect("planRecorded" in (last?.metadata as object)).toBe(false);
+  });
+
+  it("a reply with nothing derivable still completes, records no checklist, and emits the plan-no-steps signal", async () => {
+    const { pass, events } = await run([{ text: "Sounds good, I will think about it and get back to you." }], "plan");
+    expect(pass.state.status).toBe("done");
+    expect(checklistFacts(pass)).toEqual([]);
+    const last = postureEvents(events).at(-1);
+    expect(last?.metadata).toMatchObject({ planSteps: 0, planNoSteps: true });
+  });
+
+  it("execute posture never derives a checklist, even from a numbered reply", async () => {
+    const { pass, events } = await run([SUMMARY], undefined, baseInput({ requiredTools: [] }));
+    expect(checklistFacts(pass)).toEqual([]);
+    expect(postureEvents(events)).toEqual([]);
+  });
+
+  it("opt-in planToolCatalog appends ONE capped catalog line to plan guidance; off/absent is the single posture line", async () => {
+    const guidanceOf = async (harness: KernelInput["harness"]) => {
+      const { events } = await run([SUMMARY], "plan", baseInput({ ...(harness ? { harness } : {}) }));
+      const ex = events.find((e) => e._tag === "LLMExchangeEmitted") as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>;
+      return ex.messages.filter((m) => m.role === "user" && m.content.startsWith("Guidance:")).map((m) => m.content);
+    };
+    const off = await guidanceOf(undefined);
+    expect(off).toEqual([`Guidance:\n- ${PLAN_POSTURE_GUIDANCE}`]);
+    const on = await guidanceOf({ planToolCatalog: true } as KernelInput["harness"]);
+    expect(on.length).toBe(1);
+    expect(on[0]?.startsWith(`Guidance:\n- ${PLAN_POSTURE_GUIDANCE}\n- Execute-phase tools: `)).toBe(true);
+    expect(on[0]).toContain("crypto-price (price)");
+    expect(on[0]).toContain("file-write (write)");
+    expect(on[0]).not.toContain("; todo");
+    expect(on[0]).toContain("`tool: name`");
   });
 
   it("completes even with a classifier-demanded required tool and a task that names a deliverable (no act-or-answer forcing)", async () => {
@@ -298,6 +374,26 @@ describe("run posture: plan (kernel) — pure reasoning mode, no tools", () => {
     expect(planGuidance).not.toContain("changed since your last turn");
   });
 
+  it("execute run seeded with an unchecked checklist renders ONE follow-the-plan line; all-done or empty seeds render none (byte-identical)", async () => {
+    const guidanceLines = async (initialAdvisory: KernelInput["initialAdvisory"]) => {
+      const { events } = await run(
+        [SUMMARY],
+        undefined,
+        baseInput({ requiredTools: [], ...(initialAdvisory ? { initialAdvisory } : {}) }),
+      );
+      const exs = events.filter((e) => e._tag === "LLMExchangeEmitted") as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>[];
+      return exs.flatMap((e) => e.messages.map((m) => m.content)).join("\n");
+    };
+    const open = await guidanceLines([
+      { id: "1", title: "fetch the price", status: "completed" },
+      { id: "2", title: "write it to a file", status: "pending" },
+    ]);
+    expect(open.split(FOLLOW_PLAN_GUIDANCE).length - 1).toBe(1);
+    expect(await guidanceLines([{ id: "1", title: "fetch", status: "completed" }])).not.toContain("Follow the plan checklist");
+    expect(await guidanceLines([])).not.toContain("Follow the plan checklist");
+    expect(await guidanceLines(undefined)).not.toContain("Follow the plan checklist");
+  });
+
   it("execute posture is unchanged: same input, no posture ⇒ tool runs, no posture signal", async () => {
     executed.length = 0;
     const { events } = await run(
@@ -324,12 +420,15 @@ describe("run posture: plan (kernel) — pure reasoning mode, no tools", () => {
     expect(buildRunEnvelope().rails).toEqual({});
   });
 
-  it("policy gate: plan blocks EVERY tool (capability, meta, plan-recording and exit tools)", () => {
+  it("policy gate: plan blocks every tool outside PLAN_POSTURE_TOOLS (capability and the other meta/exit tools); planning tools pass", () => {
     for (const name of [
       "crypto-price", "checkpoint", "discover-tools", "activate-skill",
-      "todo", "recall", "find", "context-status", "brief", "pulse", "final-answer", "task-complete",
+      "recall", "find", "context-status", "pulse", "task-complete",
     ]) {
       expect(evaluateToolPolicy(name, { posture: "plan" }).blocked).toBe(true);
+    }
+    for (const name of ["todo", "brief", "final-answer"]) {
+      expect(evaluateToolPolicy(name, { posture: "plan" }).blocked).toBe(false);
     }
     // No posture: META bypass and open policy exactly as before.
     expect(evaluateToolPolicy("checkpoint", {}).blocked).toBe(false);

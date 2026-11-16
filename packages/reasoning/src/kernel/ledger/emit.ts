@@ -383,6 +383,8 @@ export interface ChecklistItemFact {
   readonly toolCallId?: string;
   /** `"plan"` for harness-derived plan rows; omit for model `todo` facts. */
   readonly origin?: "plan";
+  /** True for rows the terminal plan-checklist step derived from a plan-posture reply (the model recorded no `todo` list). */
+  readonly harnessDerived?: true;
 }
 
 /**
@@ -403,6 +405,7 @@ export function recordChecklistItems(
       change: f.change,
       ...(f.toolCallId !== undefined ? { toolCallId: f.toolCallId } : {}),
       ...(f.origin !== undefined ? { origin: f.origin } : {}),
+      ...(f.harnessDerived === true ? { harnessDerived: true as const } : {}),
     })),
   );
 }
