@@ -1,6 +1,6 @@
 import { chatEnvironmentSnapshot, countTodoEdits, type EnvironmentSnapshotInput } from "./chat-environment.js";
 import { applyChatMode, modeSwitchNeedsRebuild } from "./chat-session-mode.js";
-import { ChatSessionPlans, persistSessionPlan } from "./chat-session-plan.js";
+import { ChatSessionPlans, persistSessionPlan, seedTodoOf } from "./chat-session-plan.js";
 import { chatMetaTools } from "./chat-meta-tools.js";
 import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure } from "./chat-document-cache.js";
 import type { Database } from "bun:sqlite";
@@ -1046,7 +1046,7 @@ let tokensUsed = 0;
     const agent = await buildCortexAgent(params);
     const turns = getChatTurns(this.db, sessionId);
     const initialHistory = turnsToChatMessages(turns);
-    const initialTodo = getChatTodo(this.db, sessionId);
+    const initialTodo = seedTodoOf(this.db, sessionId);
     const session = agent.session({
       // Session default: every chat turn (chat/runStream) records run-started.origin = "cortex-chat".
       origin: "cortex-chat",

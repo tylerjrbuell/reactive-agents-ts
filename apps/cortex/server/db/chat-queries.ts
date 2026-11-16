@@ -425,7 +425,15 @@ export function rewindChatTurns(
 }
 
 /** One persisted to-do row (the conversation-level list; mirrors the runtime's `TodoSeedItem`). */
-export type StoredTodoItem = { id: string; title: string; status: "pending" | "in_progress" | "completed" };
+export type StoredTodoItem = {
+  id: string;
+  title: string;
+  status: "pending" | "in_progress" | "completed";
+  /** Tool the step names (a plan step's hint). Absent = none. */
+  tool?: string;
+  /** `"harness-derived"` when the harness derived the row from the model's reply. */
+  origin?: "harness-derived";
+};
 
 const TODO_STATUSES: ReadonlySet<string> = new Set(["pending", "in_progress", "completed"]);
 
@@ -441,7 +449,15 @@ export function getChatTodo(db: Database, sessionId: string): StoredTodoItem[] {
     return raw.flatMap((r): StoredTodoItem[] => {
       const o = r as Partial<StoredTodoItem> | null;
       return o && typeof o.id === "string" && typeof o.title === "string" && typeof o.status === "string" && TODO_STATUSES.has(o.status)
-        ? [{ id: o.id, title: o.title, status: o.status as StoredTodoItem["status"] }]
+        ? [
+            {
+              id: o.id,
+              title: o.title,
+              status: o.status as StoredTodoItem["status"],
+              ...(typeof o.tool === "string" && o.tool !== "" ? { tool: o.tool } : {}),
+              ...(o.origin === "harness-derived" ? { origin: o.origin } : {}),
+            },
+          ]
         : [];
     });
   } catch {

@@ -1,13 +1,14 @@
 /**
  * A chat session's plan: read and edit through the framework (`AgentSession.plan` /
  * `setPlan`), persisted with the session. The conversation's to-do list stays the one store of
- * steps and statuses (`cortex_chat_sessions.todo_json`); the plan meta (id, goal, author, tool
- * hints) a list cannot carry sits beside it (`db/chat-plan-queries.ts`). Cortex only renders and
- * persists: the plan's meaning (what `setPlan` seeds, `PlanRecorded`) is the framework's.
+ * steps, statuses, tool hints and origin (`cortex_chat_sessions.todo_json`, the framework's own
+ * seed row); the plan meta (id, goal, author) a list cannot carry sits beside it
+ * (`db/chat-plan-queries.ts`). Cortex only renders and persists: the plan's meaning (what
+ * `setPlan` seeds, `PlanRecorded`) is the framework's.
  */
 import type { Plan, PlanStep } from "@reactive-agents/core";
-import { getChatPlanMeta, setChatPlanMeta, type StoredPlanMeta } from "../db/chat-plan-queries.js";
-import { getChatSession, getChatTodo, setChatTodo, type StoredTodoItem } from "../db/chat-queries.js";
+import { getChatPlanMeta, getChatTodoWithHints, setChatPlanMeta, type StoredPlanMeta } from "../db/chat-plan-queries.js";
+import { getChatSession, setChatTodo, type StoredTodoItem } from "../db/chat-queries.js";
 import { CortexNotFoundError } from "../errors.js";
 
 type Db = Parameters<typeof setChatTodo>[0];
@@ -23,7 +24,7 @@ export interface PlanStepBody {
 /** The slice of the framework `AgentSession` plan editing needs. */
 export interface PlanSessionLike {
   readonly plan: Plan | undefined;
-  setPlan(steps: readonly PlanStepBody[]): Plan;
+  setPlan(input: Plan | readonly PlanStepBody[]): Plan;
   todo(): readonly StoredTodoItem[];
 }
 
@@ -57,29 +58,45 @@ export function cleanPlanSteps(
 const stepStatusOf = (status: StoredTodoItem["status"]): PlanStep["status"] =>
   status === "completed" ? "done" : status === "in_progress" ? "in-progress" : "pending";
 
-/** The plan a stored to-do list and its meta make. `null` for an empty list. Pure. */
+/**
+ * The plan a stored to-do list and its meta make. `null` for an empty list. A row's own hint wins;
+ * a row from before lists carried hints falls back to the meta's. Pure.
+ */
 export function planOfStored(sessionId: string, todo: readonly StoredTodoItem[], meta: StoredPlanMeta | null): Plan | null {
   if (todo.length === 0) return null;
   const steps = todo.map((i): PlanStep => {
-    const tool = meta?.tools[i.id];
+    const tool = i.tool ?? meta?.tools[i.id];
     return { id: i.id, title: i.title, status: stepStatusOf(i.status), ...(tool !== undefined ? { tool } : {}) };
   });
-  return { id: meta?.id ?? `plan-${sessionId}`, goal: meta?.goal ?? "", steps, createdAt: meta?.createdAt ?? 0, source: meta?.source ?? "model" };
+  const author = meta?.source ?? "model";
+  // The rows say who wrote them (the framework's rule): a model plan whose rows the harness derived is harness-derived.
+  const source = author === "model" && todo.some((i) => i.origin === "harness-derived") ? "harness-derived" : author;
+  return { id: meta?.id ?? `plan-${sessionId}`, goal: meta?.goal ?? "", steps, createdAt: meta?.createdAt ?? 0, source };
 }
 
-/** Keep the stored tool hint on a live step that has lost it (the engine rebuilds from a list without hints). Pure. */
-export function withStoredTools(plan: Plan, meta: StoredPlanMeta | null): Plan {
-  if (meta === null) return plan;
-  return { ...plan, steps: plan.steps.map((s) => (s.tool === undefined && meta.tools[s.id] !== undefined ? { ...s, tool: meta.tools[s.id] as string } : s)) };
-}
+/** The to-do list a (re)built session seeds from: the stored rows with their tool hints, older rows migrated. */
+export const seedTodoOf = (db: Db, sessionId: string): StoredTodoItem[] => getChatTodoWithHints(db, sessionId);
 
-/** Persist the session's list and plan meta (after a turn and after an edit). */
+/** Persist the session's list (hints and origin ride its rows) and plan meta (after a turn and after an edit). */
 export function persistSessionPlan(db: Db, sessionId: string, session: Pick<PlanSessionLike, "plan" | "todo">): void {
   setChatTodo(db, sessionId, session.todo());
   const plan = session.plan;
   if (plan === undefined) return setChatPlanMeta(db, sessionId, null);
-  const tools = Object.fromEntries(plan.steps.flatMap((s) => (s.tool !== undefined ? [[s.id, s.tool] as const] : [])));
-  setChatPlanMeta(db, sessionId, { id: plan.id, goal: plan.goal, source: plan.source, createdAt: plan.createdAt, tools });
+  setChatPlanMeta(db, sessionId, { id: plan.id, goal: plan.goal, source: plan.source, createdAt: plan.createdAt });
+}
+
+/**
+ * The plan an edit with a goal hands `setPlan`: the session's own plan id (an imported plan's id
+ * never replaces it, so step events keep one plan), the given goal and steps. Pure.
+ */
+export function withGoal(current: Plan | undefined, sessionId: string, steps: readonly PlanStepBody[], goal: string): Plan {
+  return {
+    id: current?.id ?? `plan-${sessionId}`,
+    goal,
+    steps: steps.map((s, i): PlanStep => ({ id: s.id ?? `step-${i + 1}`, title: s.title, status: s.status ?? "pending", ...(s.tool !== undefined ? { tool: s.tool } : {}) })),
+    createdAt: current?.createdAt ?? 0,
+    source: "user-edited",
+  };
 }
 
 /** What {@link ChatSessionPlans} needs from the chat service. */
@@ -98,22 +115,21 @@ export class ChatSessionPlans {
 
   /** The session's plan: the live session's, else the stored list. `null` while there is none. */
   read(sessionId: string): Plan | null {
-    const meta = getChatPlanMeta(this.db, sessionId);
-    const live = this.deps.live.get(sessionId)?.session.plan;
-    return live !== undefined ? withStoredTools(live, meta) : planOfStored(sessionId, getChatTodo(this.db, sessionId), meta);
+    return this.deps.live.get(sessionId)?.session.plan ?? planOfStored(sessionId, getChatTodoWithHints(this.db, sessionId), getChatPlanMeta(this.db, sessionId));
   }
 
   /**
    * Replace the plan (a user edit) through `session.setPlan`: the next turn, in any mode, seeds
-   * from it, and the framework publishes `PlanRecorded`. Runs under the turn guard.
+   * from it, and the framework publishes `PlanRecorded`. Runs under the turn guard. With a `goal`
+   * (an imported plan) the plan's goal is replaced too; without one the session's goal stays.
    */
-  async write(sessionId: string, steps: readonly PlanStepBody[]): Promise<Plan> {
+  async write(sessionId: string, steps: readonly PlanStepBody[], goal?: string): Promise<Plan> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new CortexNotFoundError({ id: sessionId, resource: "chat session" });
     const { session } = await this.deps.build(sessionId, row.agentConfig, row.stableAgentId);
     const release = this.deps.acquireTurn(sessionId);
     try {
-      const plan = session.setPlan(steps);
+      const plan = session.setPlan(goal === undefined || steps.length === 0 ? steps :withGoal(session.plan, sessionId, steps, goal));
       persistSessionPlan(this.db, sessionId, session);
       return plan;
     } finally {

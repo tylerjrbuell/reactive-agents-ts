@@ -93,6 +93,18 @@ export {
 export { foldSubAgentActivity,type SubAgentTrace, type SubAgentBlock, type SubAgentFolder } from "./state/sub-agent-fold.js";
 export { toolBadgesOf, type ToolBadge, type ToolBadges, type ToolBadgeTone } from "./state/tool-badges.js";
 export {
+  nextStepId,
+  addStep,
+  removeStep,
+  moveStep,
+  setStepTitle,
+  setStepTool,
+  planEdited,
+  stepStatusLabel,
+  planProgressLine,
+  type PlanDraftStep,
+} from "./state/plan-edit.js";
+export {
   FLOOR_REQUIREMENT_ID,
   isImplicitRequirement,
   goalSummaryOf,

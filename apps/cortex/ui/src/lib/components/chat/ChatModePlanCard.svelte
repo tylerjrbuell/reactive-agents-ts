@@ -11,9 +11,12 @@
   import Button from "$lib/components/kit/Button.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import PlanChecklist from "./PlanChecklist.svelte";
+  import PlanTransferMenu from "./PlanTransferMenu.svelte";
   import { chatStore } from "$lib/stores/chat-store.js";
   import { chatPlan, refreshChatPlan, savePlan } from "$lib/stores/chat-plan-store.js";
   import { planEdited, planProgressLine, type DraftStep } from "$lib/plan-edit.js";
+  import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
+  import { planToolOptions } from "$lib/plan-tool-options.js";
 
   interface Props {
     /** Run the plan: record `edited` (when the user changed it), switch to Execute, send the follow-up turn. */
@@ -35,6 +38,14 @@
   const steps = $derived(draft ?? saved);
   const dirty = $derived(draft !== null && planEdited(saved, draft));
   let busy = $state(false);
+
+  // The tool dropdown offers what the session offers: the quick bar's own catalog and rules.
+  let catalog = $state<QuickbarCatalog>(EMPTY_CATALOG);
+  $effect(() => {
+    if (editable) void loadQuickbarCatalog().then((c) => (catalog = c));
+  });
+  const sessionConfig = $derived($chatStore.sessions.find((s) => s.sessionId === $chatStore.activeSessionId)?.agentConfig ?? {});
+  const toolChoices = $derived(planToolOptions(sessionConfig, catalog, steps.flatMap((s) => (s.tool !== undefined ? [s.tool] : []))));
 
   async function run() {
     busy = true;
@@ -60,11 +71,12 @@
   <header class="head">
     <Icon name="checklist" size="sm" /><span>Plan</span>
     <span class="sub">{editable ? "Reasoning only: nothing has run" : planProgressLine(steps)}</span>
+    <PlanTransferMenu idBase="plan-{turnId}" canExport={saved.length > 0} canImport={editable} dirty={dirty} onimported={() => (draft = null)} />
   </header>
 
   {#if steps.length > 0 || editable}
     <div class="steps">
-      <PlanChecklist idBase="plan-{turnId}" {steps} {editable} onchange={(next) => (draft = next)} />
+      <PlanChecklist idBase="plan-{turnId}" {steps} {editable} {toolChoices} onchange={(next) => (draft = next)} />
     </div>
   {/if}
 

@@ -1,19 +1,22 @@
 import type { Plan } from "@reactive-agents/core";
-import type { setChatTodo } from "./chat-queries.js";
+import { getChatTodo, type setChatTodo, type StoredTodoItem } from "./chat-queries.js";
 
 type Db = Parameters<typeof setChatTodo>[0];
 
 /**
- * What a session's plan holds beside its to-do list. The list is the plan's steps and statuses;
- * a list row carries no plan id, goal, author or tool hint. Stored as JSON in
- * `cortex_chat_sessions.plan_meta_json`.
+ * What a session's plan holds beside its to-do list. The list is the plan's steps, statuses, tool
+ * hints and origin (the framework's own seed row); a list row carries no plan id, goal or author.
+ * Stored as JSON in `cortex_chat_sessions.plan_meta_json`.
  */
 export interface StoredPlanMeta {
   readonly id: string;
   readonly goal: string;
   readonly source: Plan["source"];
   readonly createdAt: number;
-  /** Tool hint per step id. */
+  /**
+   * Tool hint per step id, as older rows stored them before the to-do row carried the hint. Read
+   * only (see {@link getChatTodoWithHints}); never written again.
+   */
   readonly tools: Readonly<Record<string, string>>;
 }
 
@@ -40,10 +43,27 @@ export function getChatPlanMeta(db: Db, sessionId: string): StoredPlanMeta | nul
   }
 }
 
-/** Store (or, with `null`, clear) the session's plan meta. */
-export function setChatPlanMeta(db: Db, sessionId: string, meta: StoredPlanMeta | null): void {
+/** Store (or, with `null`, clear) the session's plan meta. Tool hints ride the to-do rows, not the meta. */
+export function setChatPlanMeta(db: Db, sessionId: string, meta: Omit<StoredPlanMeta, "tools"> | null): void {
   db.prepare(`UPDATE cortex_chat_sessions SET plan_meta_json = ? WHERE session_id = ?`).run(
     meta === null ? null : JSON.stringify(meta),
     sessionId,
   );
+}
+
+/** A to-do list with each row that lost its hint given the one an older row kept in the meta. Pure. */
+export function withLegacyTools(todo: readonly StoredTodoItem[], meta: StoredPlanMeta | null): StoredTodoItem[] {
+  if (meta === null) return [...todo];
+  return todo.map((i) => {
+    const legacy = meta.tools[i.id];
+    return i.tool === undefined && legacy !== undefined ? { ...i, tool: legacy } : i;
+  });
+}
+
+/**
+ * The session's persisted to-do list, tool hints included. A row written before the list carried
+ * hints gets the one its plan meta held, so a plan survives the move without a data migration.
+ */
+export function getChatTodoWithHints(db: Db, sessionId: string): StoredTodoItem[] {
+  return withLegacyTools(getChatTodo(db, sessionId), getChatPlanMeta(db, sessionId));
 }

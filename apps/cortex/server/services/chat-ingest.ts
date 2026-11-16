@@ -77,8 +77,12 @@ const str = (v: unknown): string | undefined => (typeof v === "string" && v.leng
 
 const ENDS: ReadonlySet<string> = new Set(["AgentCompleted", "TaskFailed", "ExecutionCancelled"]);
 
-/** Events a chat session publishes outside any run (no `taskId` on a mode switch or a user plan edit). */
-const SESSION_EVENT_TAGS: readonly string[] = ["ChatModeChanged", "PlanRecorded"];
+/**
+ * Events a chat session publishes outside any run that still shape the next one: a mode switch has
+ * no `taskId`. A user plan edit is not held: the framework stamps it (and every plan step event)
+ * with the `sessionId`, and the plan itself is read from the session (`GET .../plan`), not from a run.
+ */
+const SESSION_EVENT_TAGS: readonly string[] = ["ChatModeChanged"];
 const HELD_SESSION_MAX = 20;
 
 /** Subscribe `agent` to `sink`. */

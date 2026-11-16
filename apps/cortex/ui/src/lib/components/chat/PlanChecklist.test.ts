@@ -32,4 +32,12 @@ describe("PlanChecklist", () => {
     expect(html).toContain('data-testid="plan-add-step"');
     expect(html).toContain('value="Read config"');
   });
+
+  test("editable: the tool is a dropdown (not free text) that keeps a hinted name visible", async () => {
+    const html = markup(await renderComponent(file, { steps, idBase: "t", editable: true }));
+    expect(html).toMatch(/<button[^>]*role="combobox"[^>]*aria-label="Step 2 tool"[^]*?file-write/);
+    expect(html).not.toMatch(/<input[^>]*aria-label="Step 2 tool"/);
+    // A step with no hint shows the empty choice.
+    expect(html).toMatch(/aria-label="Step 1 tool"[^]*?No tool/);
+  });
 });
