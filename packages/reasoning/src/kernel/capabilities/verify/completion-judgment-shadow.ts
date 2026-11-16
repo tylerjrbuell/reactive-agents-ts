@@ -104,7 +104,7 @@ export function judgmentCompletionShadow(
     yield* Effect.forkDaemon(
       Effect.gen(function* () {
         const result = yield* judgment
-          .ask({ state: buildState(input), questions: buildQuestions() })
+          .ask({ state: buildState(input), questions: buildQuestions(), priority: "shadow" })
           .pipe(Effect.either);
 
         const judged = Either.isRight(result)

@@ -187,7 +187,7 @@ export function judgmentComprehendShadow(
 
         for (const chunk of chunks) {
           const questionIds = Object.keys(chunk);
-          const result = yield* judgment.ask({ state, questions: chunk }).pipe(Effect.either);
+          const result = yield* judgment.ask({ state, questions: chunk, priority: "shadow" }).pipe(Effect.either);
           const answers = Either.isRight(result) ? result.right : null;
           yield* publishChunkShadow(
             eventBus,

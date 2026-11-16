@@ -678,6 +678,7 @@ function judgmentClassifyShadow(
               availableTools: input.availableTools,
             }),
             questions: buildAdaptiveJudgmentQuestions(),
+            priority: "shadow",
           })
           .pipe(Effect.either); // substrate-ok: shadow judgment daemon, no run.pass inside
 
