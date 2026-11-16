@@ -34,7 +34,17 @@
     </button>
   {/each}
   {#each chips as chip (chip.cmd)}
+    {#if chip.segments}
+      <span class="combo" role="group" aria-label={chip.title} data-testid="provider-model-chip">
+        <Icon name={chip.icon} size="sm" />
+        {#each chip.segments as seg, i (seg.cmd)}
+          {#if i > 0}<span class="dot" aria-hidden="true">·</span>{/if}
+          <button type="button" class="seg" use:tooltip={seg.title} data-cmd={seg.cmd} onclick={() => onPick(seg.cmd)}><span class="txt">{seg.text}</span></button>
+        {/each}
+      </span>
+    {:else}
     <Chip icon={chip.icon} on={chip.on === true} title={chip.title ?? chip.text} class="quick-chip" onclick={() => onPick(chip.cmd)}><span class="txt">{chip.text}</span></Chip>
+    {/if}
   {/each}
   {#if config}
     <button type="button" class="config" class:open aria-haspopup="listbox" aria-expanded={open} onclick={() => onPick("/")} use:tooltip={"Every chat setting and command: the same list as typing /"}>
@@ -46,6 +56,13 @@
 <style>
   .quick { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 8px 8px 0; min-width: 0; }
   .quick :global(.quick-chip) { max-width: 100%; min-width: 0; }
+  /* provider · model: one chip, two buttons; the model part gives way first (ellipsis). */
+  .combo { display: inline-flex; align-items: center; gap: 2px; height: 24px; padding: 0 4px 0 8px; min-width: 0; max-width: 100%; border-radius: var(--cortex-r-chip); background: var(--cortex-surface-2); color: var(--cortex-text-2); font-size: var(--cortex-t-xs); }
+  .seg { display: inline-flex; min-width: 0; height: 20px; align-items: center; padding: 0 4px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  .seg:hover { background: var(--cortex-surface-3); color: var(--cortex-text); }
+  .seg:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 1px; }
+  .seg:last-child { flex: 0 1 auto; }
+  .dot { color: var(--cortex-text-3); }
   .txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .skill {
     display: inline-flex;

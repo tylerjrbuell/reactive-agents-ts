@@ -1,10 +1,10 @@
-import { chatEnvironmentSnapshot, countTodoEdits } from "./chat-environment.js";
-import type { EnvironmentSnapshotInput } from "./chat-environment.js";
+import { chatEnvironmentSnapshot, countTodoEdits, type EnvironmentSnapshotInput } from "./chat-environment.js";
+import { applyChatMode } from "./chat-session-mode.js";
 import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure } from "./chat-document-cache.js";
 import type { Database } from "bun:sqlite";
 import { generateTaskId, type RunPosture } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import { AgentSession, getCapabilityManifest, type ChatMessage, type ChatOptions, type AgentStreamEvent, type GoalRunEventSlice } from "@reactive-agents/runtime";
+import { AgentSession, getCapabilityManifest, type ChatMessage, type ChatOptions, type AgentStreamEvent, type GoalRunEventSlice, type TaskInput } from "@reactive-agents/runtime";
 import {
   createChatSession,
   getChatSession,
@@ -49,20 +49,18 @@ import { recordRecallActivity, withTurnRecall, type RecallActivityLog } from "./
 import { recordSkillActivity,turnSkillPinsOf, turnSkillsOption, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
 import { detectToolCallShape } from "@reactive-agents/tools";
 import type { AttachmentMeta } from "@reactive-agents/ui-core";
-import type { TaskInput } from "@reactive-agents/runtime";
 import { withTurnAttachments } from "./chat-turn-trace.js";
 import { Effect, type Layer } from "effect";
 import { traceDirs } from "./run-trace-file.js";
 import { cortexLog } from "../cortex-log.js";
 import { turnEvidenceOf, type TurnEvidence } from "./chat-turn-evidence.js";
-import { buildCortexAgent } from "./build-cortex-agent.js";
+import { buildCortexAgent, type BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { waitsLive, durableApprovals } from "./durable-approvals.js";
 import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
 import { compactionContextEstimate, compactionPrompt, structureCompactionSummary } from "./compaction-summary.js";
 import { attachChatIngest, withStartedArgs, type ChatIngestHandle, type ChatIngestSink } from "./chat-ingest.js";
 import { recordTurnAssessments, type TurnAssessmentRecorder } from "./turn-assessments.js";
 import { CortexIngestService } from "./ingest-service.js";
-import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import { buildRunTaskContext } from "./chat-run-context.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { chatToolParams, resolveEnableTools } from "./chat-tool-params.js";
@@ -456,6 +454,8 @@ export class ChatSessionService {
     return { ...session, turns, totals: getChatSessionTotals(this.db, sessionId), todo: getChatTodo(this.db, sessionId), documentFailures: this.documents.failures(sessionId), pendingApprovals: this.approvals.list(sessionId), pendingInteractions: this.approvals.listInteractions(sessionId) };
   }
 
+  /** Switch the session mode (persisted, applied to the live session; chat-session-mode.ts). */ async setMode(sessionId: string, mode: RunPosture): Promise<void> { applyChatMode(this.db, this.sessions, sessionId, mode); }
+
   /**
    * Replace the conversation's to-do list (user edit). Runs under the turn guard and evicts
    * the cached engine so the next turn is rebuilt and seeded from the edited list.
@@ -470,7 +470,6 @@ export class ChatSessionService {
     });
     return clean;
   }
-
 
   // ─── Chat utilities: rewind / clear / fork / compact ───────────────────────
   // Every history mutation runs under the turn guard (no mutation mid-stream) and
@@ -1051,6 +1050,7 @@ let tokensUsed = 0;
       origin: "cortex-chat",
       persist: false,
       id: sessionId,
+      mode: getChatSession(this.db, sessionId)?.mode ?? "execute", // stored with the session; a per-turn posture only overrides it
       environment: () => {
         const snap = chatEnvironmentSnapshot(built, {
           agentControl: agentConfig.agentControl === true,

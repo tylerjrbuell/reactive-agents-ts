@@ -610,7 +610,7 @@ describe("chatStore history utilities", () => {
 });
 
 describe("chatStore posture", () => {
-  it("sends posture in the stream body and flags planning until an execute turn", async () => {
+  it("sends the per-turn posture override in the stream body", async () => {
     const bodies: Array<Record<string, unknown>> = [];
     const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200, headers: { "Content-Type": "application/json" } });
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -626,10 +626,8 @@ describe("chatStore posture", () => {
     await chatStore.selectSession("s1");
     await chatStore.sendMessageStream("plan it", { posture: "plan" });
     expect(bodies[0]).toEqual({ message: "plan it", posture: "plan" });
-    expect(get(chatStore).planning).toBe(true);
-    await chatStore.sendMessageStream("Go ahead with the plan.", { posture: "execute" });
-    expect(bodies[1]).toEqual({ message: "Go ahead with the plan.", posture: "execute" });
-    expect(get(chatStore).planning).toBe(false);
+    await chatStore.sendMessageStream("do it", { posture: "execute" });
+    expect(bodies[1]).toEqual({ message: "do it", posture: "execute" });
     await chatStore.sendMessageStream("plain");
     expect(bodies[2]).toEqual({ message: "plain" });
   });

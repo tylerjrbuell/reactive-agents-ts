@@ -13,6 +13,8 @@
   import { highlightPieces, insertAtCaret, parseInlineCommands } from "$lib/chat-inline-commands.js";
   import { draftSkills } from "$lib/chat-composer-input.js";
   import { tick } from "svelte";
+  import ChatModeToggle from "$lib/components/chat/ChatModeToggle.svelte";
+  import { isModeShortcut, modeHint, nextMode, type ChatMode } from "$lib/chat-mode.js";
 
   interface Props {
     /** Composer text. */
@@ -32,8 +34,9 @@
     footerTools?: Snippet;
     /** Files dropped on the composer or pasted into it. */
     onFiles?: (files: File[]) => void | Promise<void>;
-    /** The harness restricts this turn to planning. */
-    planning: boolean;
+    /** The session's mode: plan = reasoning only, no tools, until Execute. */
+    mode: ChatMode;
+    onModeChange: (mode: ChatMode) => void;
     queued: QueuedMessage;
     sendAction: ReturnType<typeof composerAction>;
     hasText: boolean;
@@ -43,9 +46,19 @@
     onClearQueued: () => void;
   }
   let {
-    message = $bindable(""), caret = $bindable(0), skills = [], inputEl = $bindable(null), sending, quickBar, attachBar, footerTools, onFiles, planning, queued, sendAction, hasText,
+    message = $bindable(""), caret = $bindable(0), skills = [], inputEl = $bindable(null), sending, quickBar, attachBar, footerTools, onFiles, mode, onModeChange, queued, sendAction, hasText,
     onKeydown, onSendButton, onSendQueuedNow, onClearQueued,
   }: Props = $props();
+
+  // Shift+Tab flips the mode from the text box; everything else is the panel's key handling.
+  function onComposerKeydown(e: KeyboardEvent) {
+    if (isModeShortcut(e, message)) {
+      e.preventDefault();
+      onModeChange(nextMode(mode));
+      return;
+    }
+    onKeydown(e);
+  }
 
   // Drop and paste: files go to the attachment checks, text drops and pastes stay the browser's.
   let dropping = $state(false);
@@ -107,12 +120,12 @@
     <ChatQueuedRow text={queued} {sending} onSendNow={onSendQueuedNow} onClear={onClearQueued} />
   {/if}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="composer" class:dropping data-slash-menu-keep ondragover={onDragOver} ondragleave={() => (dropping = false)} ondrop={onDrop}>
+  <div class="composer" class:dropping class:plan={mode === "plan"} data-mode={mode} data-slash-menu-keep ondragover={onDragOver} ondragleave={() => (dropping = false)} ondrop={onDrop}>
     {#if quickBar}{@render quickBar()}{/if}
     {#if attachBar}{@render attachBar()}{/if}
-    {#if planning}
-      <p data-testid="planning-badge" class="planning" use:tooltip={"The harness restricts this turn to planning: the agent records steps but does not run other tools. /go carries the plan out."}>
-        <Icon name="checklist" size="sm" />Planning mode. Send /go to carry the plan out.
+    {#if mode === "plan"}
+      <p data-testid="plan-mode-note" class="planning" role="status">
+        <Icon name="checklist" size="sm" />{modeHint("plan")}
       </p>
     {/if}
     <div class="field">
@@ -126,7 +139,7 @@
         placeholder={sending ? "Reply in progress. Type to queue your next message" : "Message the agent"}
         rows="3"
         bind:value={message}
-        onkeydown={onKeydown}
+        onkeydown={onComposerKeydown}
         oninput={() => { syncCaret(); syncScroll(); }}
         onkeyup={syncCaret}
         onclick={syncCaret}
@@ -141,6 +154,7 @@
       <p id="composer-skills-note" class="sr-only" aria-live="polite">Skills used with this message: {usedSkills.join(", ")}</p>
     {/if}
     <div class="composer-f">
+      <ChatModeToggle {mode} onChange={onModeChange} />
       <span class="hint">
         <kbd>/</kbd> commands
         {#if sending}<kbd>Enter</kbd> queue <kbd>Esc</kbd> clear{:else}<kbd>Enter</kbd> send <kbd>Shift Enter</kbd> new line{/if}
@@ -182,6 +196,8 @@
     background: var(--cortex-surface-1);
     transition: border-color var(--cortex-d-fast), box-shadow var(--cortex-d-fast);
   }
+  /* Plan mode: a calm accent edge and wash, no motion (the live glow is reserved for running). */
+  .composer.plan { border-color: var(--cortex-accent); background: color-mix(in srgb, var(--cortex-accent-tint) 40%, var(--cortex-surface-1)); }
   .composer.dropping { border-color: var(--cortex-accent); box-shadow: 0 0 0 3px var(--cortex-accent-tint); }
   .composer:focus-within { border-color: var(--cortex-accent); box-shadow: 0 0 0 3px var(--cortex-accent-tint); }
   .planning { display: flex; align-items: center; gap: 6px; margin: 8px 14px 0; font-size: var(--cortex-t-xs); color: var(--cortex-accent); }

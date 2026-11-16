@@ -96,7 +96,7 @@ A chat session can change under the model: you switch the model or thinking, add
 
 In a chat, these slash commands drive longer work:
 
-- `/goal`, `/plan`, `/go`, `/loop`, `/schedule`: see [Goals, plans and loops](/features/cortex/goals-plans-loops/). Goal segments, schedule fires and loop ticks stream live into the open chat (tokens, tool chips, to-do updates) like a turn you typed, and reloading the page mid-segment reattaches to it.
+- `/goal`, `/plan`, `/execute` (`/go`), `/loop`, `/schedule`: see [Goals, plans and loops](/features/cortex/goals-plans-loops/). Goal segments, schedule fires and loop ticks stream live into the open chat (tokens, tool chips, to-do updates) like a turn you typed, and reloading the page mid-segment reattaches to it.
 - `/agent on` — opt the chat into agent session control ("let the agent manage this chat"). Off by default.
 - `/tools` — the tool disclosure picker (`all`, `index`, `discover`, or tier).
 - `/mcp` — turn an MCP server on for this chat, or `/mcp add <command or URL>`.
@@ -104,7 +104,11 @@ In a chat, these slash commands drive longer work:
 
 A tool call shows the arguments it was called with as soon as it starts, so a long-running call (a slow shell command, a large fetch) says what it is doing before it finishes; credential-shaped values (API keys, bearer tokens, `?key=` query values) are redacted on screen. A turn that pauses for approval shows an approval card in the thread, and one that asks you a question shows a reply box (Yes/No, choices, form fields, or free text). A live context meter reads the `ContextPressure` event, and a `TokenUsage` event drives the live input/output counters and the per-call strip; estimates are marked `~`. Usage details consolidate into the **Inspector's Context tab** (session, provider/model, context limit, usage, total/input/output/cache tokens, message counts, cost, timestamps, raw messages) alongside Steps and Run trace.
 
-The provider chip (or `/provider`) opens a picker of the supported providers. A provider that cannot be used right now is greyed out with the reason beside it: no API key configured (set it in Settings, or in the server's environment), or Ollama not reachable. Choosing one switches the session; the model stays when the new provider lists it, otherwise it becomes that provider's default model.
+Provider and model share **one chip**, read as `ollama · bonsai-2:27b` (the model is cut with an ellipsis when the bar is narrow; the tooltip gives `Provider: X, Model: Y`). Its two parts are separate buttons: the provider part types `/provider` into the composer and the model part types `/model`, so the commands show up where you can learn them. Both open the same list with two sections, **Provider** and **Models for <provider>**; the command you opened leads. A provider that cannot be used right now is greyed out with the reason beside it: no API key configured (set it in Settings, or in the server's environment), or Ollama not reachable. Choosing a provider switches the session in place and the model list reloads for it (the model stays when the new provider lists it, otherwise it becomes that provider's default model); choosing a model closes the list.
+
+## Plan and Execute mode
+
+A **Plan | Execute** toggle sits at the left of the composer's footer. It is the chat session's mode, stored with the session, so it survives a reload. **Plan** is reasoning only: the agent has no tools until you switch to Execute, and the composer says so (`Reasoning only: no tools until you Execute`) with a calm accent edge. A Plan reply renders as a **plan card** with a primary **Execute** button: one click switches the session to Execute and sends `Execute the plan.`. **Shift+Tab** flips the mode from the text box; `/plan` and `/execute` (alias `/go`) flip the same session mode, and `/plan <task>` also sends the task as the first Plan turn. See [Goals, plans and loops](/features/cortex/goals-plans-loops/).
 
 The chat quick bar shows the model and the settings changed from their defaults; its Config popover sets strategy, tools, shell, workspace, and the per-turn step cap next to provider and model.
 

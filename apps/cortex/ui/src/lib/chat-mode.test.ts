@@ -1,0 +1,43 @@
+import { describe, expect, test } from "bun:test";
+import { isModeShortcut, modeHint, modeLabel, nextMode, planCardTurnId } from "./chat-mode.js";
+import type { ChatTurn } from "./stores/chat-store.js";
+
+const turn = (id: number, role: "user" | "assistant", over: Partial<ChatTurn> = {}): ChatTurn =>
+  ({ id, role, content: role === "assistant" ? "a plan" : "q", tokensUsed: 0, ts: id, ...over }) as ChatTurn;
+
+describe("chat mode helpers", () => {
+  test("labels and hints", () => {
+    expect(modeLabel("plan")).toBe("Plan");
+    expect(modeLabel("execute")).toBe("Execute");
+    expect(modeHint("plan")).toBe("Reasoning only: no tools until you Execute");
+    expect(modeHint("execute")).toContain("tools");
+  });
+
+  test("nextMode toggles", () => {
+    expect(nextMode("plan")).toBe("execute");
+    expect(nextMode("execute")).toBe("plan");
+  });
+
+  test("planCardTurnId: latest finished assistant turn, only in plan mode", () => {
+    const turns = [turn(1, "user"), turn(2, "assistant"), turn(3, "user"), turn(4, "assistant")];
+    expect(planCardTurnId(turns, "plan")).toBe(4);
+    expect(planCardTurnId(turns, "execute")).toBeUndefined();
+  });
+
+  test("planCardTurnId skips a streaming, empty or failed latest turn", () => {
+    expect(planCardTurnId([turn(1, "user"), turn(2, "assistant", { streaming: true })], "plan")).toBeUndefined();
+    expect(planCardTurnId([turn(1, "user"), turn(2, "assistant", { content: "  " })], "plan")).toBeUndefined();
+    expect(planCardTurnId([turn(1, "user")], "plan")).toBeUndefined();
+    // the thread's last turn is the user's: the previous plan is already answered
+    expect(planCardTurnId([turn(1, "user"), turn(2, "assistant"), turn(3, "user")], "plan")).toBeUndefined();
+  });
+
+  test("Shift+Tab is the mode shortcut; plain Tab, IME and slash drafts are not", () => {
+    const k = { key: "Tab", shiftKey: true, ctrlKey: false, altKey: false, metaKey: false, isComposing: false };
+    expect(isModeShortcut(k, "hello")).toBe(true);
+    expect(isModeShortcut({ ...k, shiftKey: false }, "hello")).toBe(false);
+    expect(isModeShortcut({ ...k, isComposing: true }, "hello")).toBe(false);
+    expect(isModeShortcut(k, "/mod")).toBe(false);
+    expect(isModeShortcut({ ...k, key: "Enter" }, "hello")).toBe(false);
+  });
+});

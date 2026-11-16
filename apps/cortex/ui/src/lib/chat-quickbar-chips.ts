@@ -12,7 +12,15 @@ import { shellOffLabel, shellPickReason, shellState, type ShellPresets } from ".
 import type { IconName } from "./icons.js";
 
 /** One quick-bar chip; clicking it puts `cmd` in the composer. `on` marks a setting that is switched on (a workspace set, tools picked). */
-export type QuickBarChip = { text: string; icon: IconName; cmd: string; title?: string; on?: boolean };
+export type QuickBarChip = {
+  text: string;
+  icon: IconName;
+  cmd: string;
+  title?: string;
+  on?: boolean;
+  /** A chip made of clickable parts (provider · model): each opens its own slash command, `cmd` is the chip's identity. */
+  segments?: readonly { text: string; cmd: string; title: string }[];
+};
 
 /** Values the panel already derives that the chips display. */
 export type QuickBarChipContext = {
@@ -93,8 +101,17 @@ export function quickBarChips(cfg: Record<string, unknown>, ctx: QuickBarChipCon
   return [
     ...(provider
       ? [
-          { text: provider, icon: "cloud", cmd: "/provider ", title: "Change provider" },
-          { text: model || "default model", icon: "model", cmd: "/model ", title: "Change model" },
+          // One chip for both (space): provider · model. Each part opens its own slash picker (/provider, /model).
+          {
+            text: `${provider} · ${model || "default model"}`,
+            icon: "cloud",
+            cmd: "/model ",
+            title: `Provider: ${provider}, Model: ${model || "default model"}`,
+            segments: [
+              { text: provider, cmd: "/provider ", title: `Provider: ${provider}. Click to change (/provider)` },
+              { text: model || "default model", cmd: "/model ", title: `Model: ${model || "default model"}. Click to change (/model)` },
+            ],
+          },
         ] satisfies QuickBarChip[]
       : []),
     ...(provider && model

@@ -45,6 +45,8 @@ export type ChatSessionRow = {
   lastUsedAt: number;
   /** Stable agentId generated at session creation for persistent memory. */
   stableAgentId?: string;
+  /** Session mode: `plan` = reasoning only, no tools, until switched to `execute`. */
+  mode: "plan" | "execute";
 };
 
 export type ChatTurnRow = {
@@ -105,7 +107,7 @@ export function createChatSession(
 export function getChatSession(db: Database, sessionId: string): ChatSessionRow | null {
   const row = db
     .prepare(
-      `SELECT session_id, name, agent_config, stable_agent_id, created_at, last_used_at
+      `SELECT session_id, name, agent_config, stable_agent_id, mode, created_at, last_used_at
        FROM cortex_chat_sessions WHERE session_id = ?`,
     )
     .get(sessionId) as
@@ -114,6 +116,7 @@ export function getChatSession(db: Database, sessionId: string): ChatSessionRow 
         name: string;
         agent_config: string;
         stable_agent_id: string | null;
+        mode: string | null;
         created_at: number;
         last_used_at: number;
       }
@@ -124,15 +127,21 @@ export function getChatSession(db: Database, sessionId: string): ChatSessionRow 
     name: row.name,
     agentConfig: migrateLegacyCliToolsInConfig(JSON.parse(row.agent_config) as Record<string, unknown>),
     ...(row.stable_agent_id ? { stableAgentId: row.stable_agent_id } : {}),
+    mode: row.mode === "plan" ? "plan" : "execute",
     createdAt: row.created_at,
     lastUsedAt: row.last_used_at,
   };
 }
 
+/** Persist the session's mode (`plan` | `execute`). False when the session does not exist. */
+export function setChatMode(db: Database, sessionId: string, mode: "plan" | "execute"): boolean {
+  return db.prepare(`UPDATE cortex_chat_sessions SET mode = ? WHERE session_id = ?`).run(mode, sessionId).changes > 0;
+}
+
 export function listChatSessions(db: Database): ChatSessionRow[] {
   const rows = db
     .prepare(
-      `SELECT session_id, name, agent_config, stable_agent_id, created_at, last_used_at
+      `SELECT session_id, name, agent_config, stable_agent_id, mode, created_at, last_used_at
        FROM cortex_chat_sessions ORDER BY last_used_at DESC LIMIT 100`,
     )
     .all() as Array<{
@@ -140,6 +149,7 @@ export function listChatSessions(db: Database): ChatSessionRow[] {
     name: string;
     agent_config: string;
     stable_agent_id: string | null;
+    mode: string | null;
     created_at: number;
     last_used_at: number;
   }>;
@@ -148,6 +158,7 @@ export function listChatSessions(db: Database): ChatSessionRow[] {
     name: r.name,
     agentConfig: migrateLegacyCliToolsInConfig(JSON.parse(r.agent_config) as Record<string, unknown>),
     ...(r.stable_agent_id ? { stableAgentId: r.stable_agent_id } : {}),
+    mode: r.mode === "plan" ? ("plan" as const) : ("execute" as const),
     createdAt: r.created_at,
     lastUsedAt: r.last_used_at,
   }));

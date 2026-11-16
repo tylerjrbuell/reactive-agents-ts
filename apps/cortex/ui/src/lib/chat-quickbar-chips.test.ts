@@ -14,10 +14,12 @@ const ctx = (over: Partial<QuickBarChipContext> = {}): QuickBarChipContext => ({
 });
 
 describe("quickBarChips", () => {
-  test("provider set: provider, model, thinking, strategy, tools, shell, workspace, steps in order", () => {
+  test("provider set: provider+model (one chip), thinking, strategy, tools, shell, workspace, steps in order", () => {
     const chips = quickBarChips({ terminalTools: true, workspace: "/home/me/proj/" }, ctx());
+    expect(chips[0]).toMatchObject({ text: "anthropic · claude-x", icon: "cloud", cmd: "/model ", title: "Provider: anthropic, Model: claude-x" });
+    expect(chips[0]!.segments?.map((s) => [s.text, s.cmd])).toEqual([["anthropic", "/provider "], ["claude-x", "/model "]]);
     expect(chips.map((c) => c.cmd)).toEqual([
-      "/provider ", "/model ", "/thinking ", "/strategy ", "/tools ", "/terminal ", "/workspace ", "/iterations ",
+      "/model ", "/thinking ", "/strategy ", "/tools ", "/terminal ", "/workspace ", "/iterations ",
     ]);
     expect(chips.find((c) => c.cmd === "/workspace ")).toMatchObject({ text: "proj", icon: "folder", title: "/home/me/proj/", on: true });
     // A setting that is switched on reads as on (kit Chip `on`); the shell on this machine is on.
@@ -82,7 +84,7 @@ describe("quickBarChips", () => {
     expect(quickBarChips({}, ctx({ modelThinking: false })).find((c) => c.cmd === "/thinking ")?.text).toBe("No thinking mode");
     const noModel = quickBarChips({}, ctx({ model: "" }));
     expect(noModel.some((c) => c.cmd === "/thinking ")).toBe(false);
-    expect(noModel.find((c) => c.cmd === "/model ")?.text).toBe("default model");
+    expect(noModel.find((c) => c.cmd === "/model ")?.text).toBe("anthropic · default model");
     expect(noModel.find((c) => c.cmd === "/workspace ")).toMatchObject({ text: "No workspace", icon: "folder", on: false });
     expect(noModel.find((c) => c.cmd === "/terminal ")?.on).toBe(false);
   });

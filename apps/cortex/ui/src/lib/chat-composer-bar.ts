@@ -85,7 +85,7 @@ const byCmd = (chips: readonly QuickBarChip[], cmd: string): QuickBarChip | unde
  * exists even when its chip does not (no documents yet, no MCP server), so every
  * setting is one click away. Empty when no provider is chosen (nothing to configure).
  */
-export function configGroups(chips: readonly QuickBarChip[], cfg: Cfg, ctx: Pick<QuickBarChipContext, "thinkingChoice" | "modelThinking" | "provider">): ConfigGroup[] {
+export function configGroups(chips: readonly QuickBarChip[], cfg: Cfg, ctx: Pick<QuickBarChipContext, "thinkingChoice" | "modelThinking" | "provider" | "model">): ConfigGroup[] {
   if (ctx.provider === "") return [];
   const row = (label: string, cmd: string, icon: IconName, fallback: string, on: (c: QuickBarChip | undefined) => boolean = (c) => c?.on === true): ConfigRow => {
     const c = byCmd(chips, cmd);
@@ -100,8 +100,8 @@ export function configGroups(chips: readonly QuickBarChip[], cfg: Cfg, ctx: Pick
     {
       title: "Model",
       rows: [
-        row("Provider", "/provider ", "cloud", ctx.provider, () => false),
-        row("Model", "/model ", "model", "default model", () => false),
+        { label: "Provider", value: ctx.provider, cmd: "/provider ", icon: "cloud", on: false },
+        { label: "Model", value: ctx.model || "default model", cmd: "/model ", icon: "model", on: false },
         row("Thinking", "/thinking ", "think", "Thinking auto", onBar),
       ],
     },

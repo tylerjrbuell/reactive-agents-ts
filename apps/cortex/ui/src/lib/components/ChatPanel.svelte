@@ -11,7 +11,9 @@
   import { agentControlEnabled, toggleAgentControlPatch } from "$lib/proposal-view.js";
   import { chatGoalStore } from "$lib/stores/chat-goal.js";
   import { planHidden } from "$lib/stores/plan-visibility.js";
-  import { parsePlanArg, GO_MESSAGE } from "$lib/plan-command.js";
+  import { parsePlanArg } from "$lib/plan-command.js";
+  import { modeHint } from "$lib/chat-mode.js";
+  import { chatMode, setChatMode } from "$lib/stores/chat-mode-store.js";
   import { runGoalSlash } from "$lib/chat-goal-commands.js";
   import { inferredFromChecklist, todoToolEnabled, type TodoItem } from "$lib/todo-dock.js";
   import { confirmAction } from "$lib/stores/confirm-store.js";
@@ -279,10 +281,10 @@
   }
 
   /** Send one message with `skills` (its `/skill` tokens) pinned for it only; the session config is untouched. */
-  async function sendWith(text: string, skills: readonly string[], posture?: "execute" | "plan") {
+  async function sendWith(text: string, skills: readonly string[]) {
     // The chips ride this message only (composer-attachments.ts); the typed text is sent as written.
     const attachments = attach.take();
-    await chatStore.sendMessageStream(text, { ...(posture ? { posture } : {}), skills: [...skills], ...(attachments.length > 0 ? { attachments } : {}) });
+    await chatStore.sendMessageStream(text, { skills: [...skills], ...(attachments.length > 0 ? { attachments } : {}) });
   }
 
   // ── Attachments and the `@` file picker ───────────────────────────────────
@@ -463,9 +465,10 @@
     }, 0);
   }
   async function setProvider(next: string) {
+    // In the provider · model picker: switch in place (the menu stays open, the model list reloads); a model pick closes it.
     const s = await providerSwitch(next, model);
-    await applyConfig(s.label, s.patch);
-    if (s.needsModel) toast.info("Pick a model", "Use /model to choose one for this provider");
+    await patchConfig(s.label, s.patch);
+    if (s.needsModel) toast.info("Pick a model", "Choose one from the list for this provider");
   }
 
   const thinkingChoice = $derived(cfg.thinking === true ? "on" : cfg.thinking === false ? "off" : "auto");
@@ -609,19 +612,12 @@
       }
       case "plan": {
         const plan = parsePlanArg(arg);
-        if (plan.kind === "hide") {
-          planHidden.set(true);
-          return void toast.info("Plan card and to-do hidden", "/plan show brings them back");
-        }
-        planHidden.set(false);
-        if (plan.kind === "show") {
-          return void toast.info(todo.length > 0 ? "Plan shown" : "No plan yet", todo.length > 0 ? undefined : "Use /plan <task> to have the agent plan it");
-        }
-        // The harness restricts the turn to planning; the to-do tool must be on so the plan can be recorded.
-        if (!todoToolEnabled(cfg)) {
-          const mt = typeof cfg.metaTools === "object" && cfg.metaTools !== null ? cfg.metaTools : {};
-          await chatStore.patchSessionConfig(sessionId, { metaTools: { ...mt, todo: true } });
-        }
+        planHidden.set(plan.kind === "hide");
+        if (plan.kind === "hide") return void toast.info("To-do hidden", "/plan show brings it back");
+        if (plan.kind === "show") return void toast.info(todo.length > 0 ? "To-do shown" : "No to-do list yet");
+        // The same session mode as the composer toggle: every turn is reasoning only until /execute.
+        await setChatMode("plan");
+        if (plan.kind === "mode") return void toast.info("Plan mode", modeHint("plan"));
         message = "";
         // Skill tokens in the task (`/plan audit auth /review`) apply as in any message.
         const segs = parseInlineCommands(plan.task, skillNames);
@@ -629,11 +625,14 @@
         const task = promptWithoutCommands(segs) || plan.task;
         await pinSessionSkills(acts.session);
         lastSent = task;
-        return void (await sendWith(task, acts.turn, "plan"));
+        return void (await sendWith(task, acts.turn));
       }
+      case "execute":
       case "go":
-        lastSent = GO_MESSAGE;
-        return void (await sendWith(GO_MESSAGE, [], "execute"));
+        await setChatMode("execute");
+        if (arg.trim() === "") return void toast.info("Execute mode", modeHint("execute"));
+        message = "";
+        return void (await sendWith((lastSent = arg.trim()), []));
       case "rename":
         return void (await runAction("Rename", () => chatStore.renameSession(sessionId, arg), `Renamed to "${arg}"`));
       case "rewind": {
@@ -839,7 +838,8 @@
     skills={skillNames}
     bind:inputEl
     {sending}
-    planning={$chatStore.planning}
+    mode={$chatMode}
+    onModeChange={(m) => void setChatMode(m)}
     {queued}
     {sendAction}
     {hasText}

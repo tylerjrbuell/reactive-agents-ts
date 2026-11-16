@@ -67,6 +67,9 @@
     </li>
   {/if}
   {#each items as item, i (item.key)}
+    {#if item.group && item.group !== items[i - 1]?.group}
+      <li class="grp" role="presentation">{item.group}</li>
+    {/if}
     <li role="option" aria-selected={item.multi ? item.active === true : i === selected}>
       <button
         type="button"
@@ -152,6 +155,7 @@
   .hint { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   .detail { min-width: 0; flex: 1; padding-left: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   /* Sticks to the bottom edge; while rows are hidden below it fades the last visible one out. */
+  .grp { padding: 6px 8px 2px; font-size: var(--cortex-t-xs); font-weight: 600; color: var(--cortex-text-2); }
   .foot { position: sticky; bottom: -4px; padding: 6px 8px 4px; margin: 0 -4px -4px; background: var(--cortex-surface-1); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
   .foot.fade { box-shadow: 0 -10px 10px -4px var(--cortex-surface-1); }
 </style>

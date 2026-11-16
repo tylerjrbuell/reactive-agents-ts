@@ -15,7 +15,7 @@ const ctx = (over: Partial<QuickBarChipContext> = {}): QuickBarChipContext => ({
 const barCmds = (cfg: Record<string, unknown>, c = ctx()) => composerBar(quickBarChips(cfg, c), cfg, c).shown.map((x) => x.cmd);
 
 describe("composerBar", () => {
-  test("a default chat shows only the model chip", () => {
+  test("a default chat shows only the provider · model chip", () => {
     expect(barCmds({})).toEqual(["/model "]);
   });
 
@@ -64,6 +64,7 @@ describe("configGroups", () => {
     expect(rows.find((r) => r.cmd === "/workspace ")).toMatchObject({ value: "proj", on: true });
     expect(rows.find((r) => r.cmd === "/tools disclosure")).toMatchObject({ on: true });
     expect(rows.find((r) => r.cmd === "/provider ")).toMatchObject({ value: "ollama", on: false });
+    expect(rows.find((r) => r.cmd === "/model ")).toMatchObject({ value: "qwen3", on: false });
     expect(rows.find((r) => r.cmd === "/mcp ")).toBeDefined();
   });
 

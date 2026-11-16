@@ -137,8 +137,8 @@ describe("pickerItems", () => {
 
   test("provider rows mark the current provider and run setProvider", () => {
     const { ctx, calls } = picker("/provider ");
-    const rows = pickerItems(ctx);
-    expect(rows.map((r) => r.key)).toEqual(["anthropic", "ollama"]);
+    const rows = pickerItems(ctx).filter((r) => r.group === "Provider");
+    expect(rows.map((r) => r.key)).toEqual(["provider:anthropic", "provider:ollama"]);
     expect(rows[1]).toMatchObject({ active: true, hint: "current" });
     void rows[0]!.run();
     expect(calls).toEqual(["provider:anthropic"]);
@@ -147,7 +147,7 @@ describe("pickerItems", () => {
   test("a blocked provider row shows its reason and does nothing; the current one is never blocked", () => {
     const { ctx, calls } = picker("/provider ", { providerBlocks: { anthropic: "no API key configured (ANTHROPIC_API_KEY)", ollama: "Ollama not reachable" } });
     const rows = pickerItems(ctx);
-    expect(rows[0]).toMatchObject({ key: "anthropic", disabled: "no API key configured (ANTHROPIC_API_KEY)", hint: "no API key configured (ANTHROPIC_API_KEY)" });
+    expect(rows[0]).toMatchObject({ key: "provider:anthropic", disabled: "no API key configured (ANTHROPIC_API_KEY)", hint: "no API key configured (ANTHROPIC_API_KEY)" });
     void rows[0]!.run();
     expect(calls).toEqual([]);
     expect(rows[1]!.disabled).toBeUndefined();
@@ -156,8 +156,16 @@ describe("pickerItems", () => {
   test("model rows filter by the typed text and offer a custom id", () => {
     const rows = pickerItems(picker("/model llama3").ctx);
     expect(rows.map((r) => r.label)).toEqual(['Use "llama3"']);
-    const all = pickerItems(picker("/model ").ctx);
+    const all = pickerItems(picker("/model ").ctx).filter((r) => r.group === "Models for ollama");
     expect(all[0]).toMatchObject({ active: true, badge: "think", hint: "thinking model" });
+  });
+
+  test("/provider and /model open one list with both sections; the typed command leads", () => {
+    const a = pickerItems(picker("/provider ").ctx);
+    const b = pickerItems(picker("/model ").ctx);
+    expect([...a.map((r) => r.key)].sort()).toEqual([...b.map((r) => r.key)].sort());
+    expect(a.map((r) => r.group)).toEqual(["Provider", "Provider", "Models for ollama"]);
+    expect(b.map((r) => r.group)).toEqual(["Models for ollama", "Provider", "Provider"]);
   });
 
   test("a multi row computes its patch from the config when it runs, not when it was built", () => {

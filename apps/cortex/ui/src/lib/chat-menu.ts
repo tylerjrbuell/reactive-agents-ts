@@ -15,6 +15,8 @@ export type MenuItem = {
    * and the menu stays open so several can be changed in one visit.
    */
   multi?: boolean;
+  /** Section title shown above the first row of a run of rows with this group (the provider · model picker). */
+  group?: string;
   /** Why the row cannot be chosen; the row shows it and its `run` does nothing. */
   disabled?: string;
   run: () => void | Promise<void>;

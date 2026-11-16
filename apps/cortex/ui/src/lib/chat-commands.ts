@@ -8,10 +8,10 @@ export type ChatCommandName =
   | "clear" | "compact" | "fork" | "rerun" | "rewind" | "copy" | "export" | "rename" | "help"
   | "model" | "provider" | "thinking" | "skill" | "skills" | "docs"
   | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals"
-  | "goal" | "plan" | "go" | "loop" | "schedule" | "agent" | "mcp" | "btw";
+  | "goal" | "plan" | "execute" | "go" | "loop" | "schedule" | "agent" | "mcp" | "btw";
 
 /** What `/cmd <partial>` offers as second-level choices. */
-export type ChatPicker = "model" | "provider" | "thinking" | "skill" | "skill-once" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals" | "mcp" | "agent";
+export type ChatPicker = "model" | "thinking" | "skill" | "skill-once" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals" | "mcp" | "agent";
 
 export interface ChatCommand {
   readonly name: ChatCommandName;
@@ -34,8 +34,8 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "rewind", icon: "undo", summary: "Drop the last exchange and put your message back in the input", needsTurns: true },
   { name: "copy", icon: "copy", summary: "Copy the whole conversation", needsTurns: true },
   { name: "export", icon: "download", summary: "Download the conversation as Markdown, JSON or JSONL traces", arg: "[md|json|jsonl]", needsTurns: true },
-  { name: "model", icon: "model", summary: "Switch the model for this chat", arg: "[model]", needsTurns: false, picker: "model" },
-  { name: "provider", icon: "cloud", summary: "Switch the provider for this chat", arg: "[provider]", needsTurns: false, picker: "provider" },
+  { name: "model", icon: "model", summary: "Switch the provider and model for this chat", arg: "[provider | model]", needsTurns: false, picker: "model" },
+  { name: "provider", icon: "cloud", summary: "Switch the provider and model for this chat (same picker as /model)", arg: "[provider | model]", needsTurns: false, picker: "model" },
   { name: "thinking", icon: "think", summary: "Turn model thinking on, off or auto", arg: "[on|off|auto]", needsTurns: false, picker: "thinking" },
   { name: "skill", icon: "bolt", summary: "Use a workspace skill for your next message only", arg: "[skill]", needsTurns: false, picker: "skill-once" },
   { name: "skills", icon: "bolt", summary: "Pin workspace skills for every turn of this chat", arg: "[skill]", needsTurns: false, picker: "skill" },
@@ -49,8 +49,9 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "iterations", icon: "steps", summary: "Cap the steps one turn may take", arg: "[number]", needsTurns: false, picker: "iterations" },
   { name: "approvals", icon: "pause", summary: "Choose which tools and shell commands wait for your approval", arg: "[add <command>]", needsTurns: false, picker: "approvals" },
   { name: "goal", icon: "goal", summary: "Pursue an objective across several turns (propose, then accept)", arg: "<objective|pause|resume|cancel|status>", needsTurns: false },
-  { name: "plan", icon: "checklist", summary: "Plan a task as a to-do list first (or show / hide the plan)", arg: "[task | show | hide]", needsTurns: false },
-  { name: "go", icon: "play", summary: "Carry out the plan you just asked for (ends planning mode)", needsTurns: true },
+  { name: "plan", icon: "checklist", summary: "Plan mode: reasoning only, no tools, until you /execute (or show / hide the to-do dock)", arg: "[task | show | hide]", needsTurns: false },
+  { name: "execute", icon: "play", summary: "Execute mode: the agent may use its tools again", arg: "[message]", needsTurns: false },
+  { name: "go", icon: "play", summary: "Alias of /execute", arg: "[message]", needsTurns: false },
   { name: "loop", icon: "retry", summary: "Re-run a prompt on an interval (5m, 1h, 1d)", arg: "<5m|1h|1d> <prompt> | stop", needsTurns: false },
   { name: "schedule", icon: "clock", summary: "Run a prompt on a cron schedule", arg: '"<cron>" <prompt> | list | rm <id>', needsTurns: false },
   { name: "agent", icon: "agents", summary: "Let the agent manage this chat: it proposes, you approve each change (off by default)", arg: "[on|off]", needsTurns: false, picker: "agent" },

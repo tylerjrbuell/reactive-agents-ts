@@ -3,6 +3,7 @@
   import { tooltip } from "$lib/actions/tooltip.js";
   import ChatTranscript from "$lib/components/ChatTranscript.svelte";
   import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
+  import ChatModePlanCard from "./ChatModePlanCard.svelte";
   import SkillActivationRow from "$lib/components/SkillActivationRow.svelte";
   import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
@@ -34,8 +35,11 @@
     onRerun: () => void | Promise<void>;
     onTrace: (turnId: number) => void;
     onFork: (turnId: number) => void | Promise<void>;
+    /** Plan mode, latest finished reply: render it as the plan card with its Execute action. */
+    planCard?: boolean;
+    onExecutePlan?: () => void | Promise<void>;
   }
-  const { turn, index: i, entering, idle, provider, model, planHidden, isLast, onCopy, strategyLabel, onRerun, onTrace, onFork }: Props = $props();
+  const { turn, index: i, entering, idle, provider, model, planHidden, isLast, onCopy, strategyLabel, onRerun, onTrace, onFork, planCard = false, onExecutePlan }: Props = $props();
 
   const TONE = { error: "bad", warn: "warn", quiet: "neutral" } as const;
   const status = $derived(statusOfTurn(turnEnding(turn), { streaming: turn.streaming === true }));
@@ -83,7 +87,14 @@
     <span class="usage"><ChatTokenUsage {turn} /></span>
   </header>
 
-  <ChatTranscript {turn} {planHidden} answerCopy={false} onRetry={canRetry ? () => void onRerun() : undefined} />
+  {#snippet transcript()}
+    <ChatTranscript {turn} {planHidden} answerCopy={false} onRetry={canRetry ? () => void onRerun() : undefined} />
+  {/snippet}
+  {#if planCard && onExecutePlan}
+    <ChatModePlanCard onExecute={onExecutePlan}>{@render transcript()}</ChatModePlanCard>
+  {:else}
+    {@render transcript()}
+  {/if}
 
   <!-- Skills the run had active and why (stored with the finished turn). -->
   <SkillActivationRow skills={turn.skills} />

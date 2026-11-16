@@ -415,6 +415,10 @@ export function applySchema(db: Database): void {
   if (!chatSessionCols.includes("todo_json")) {
     db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN todo_json TEXT");
   }
+  // Session mode (plan | execute): legacy rows read as execute.
+  if (!chatSessionCols.includes("mode")) {
+    db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'execute'");
+  }
 
   const promptCols = (db.prepare("PRAGMA table_info(cortex_prompts)").all() as Array<{ name: string }>)
     .map((c) => c.name);

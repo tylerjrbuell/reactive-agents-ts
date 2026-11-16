@@ -116,13 +116,27 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
   const { provider, model, models, catalog, strategy, workspace, shell, toolNames, pinned, docs } = ctx;
   const cfg = ctx.cfg;
   switch (slashCmd.picker) {
-    case "provider":
-      return ctx.providers.filter((p) => has(p)).map((p) => {
+    // Provider and model in one list (`/provider` and `/model` both open it, the one you typed first). A provider row
+    // switches in place and the model rows reload for it; a model row closes the menu.
+    case "model": {
+      const providerRows = ctx.providers.filter((p) => has(p)).map((p) => {
         const blocked = p === provider ? undefined : ctx.providerBlocks?.[p];
+        const group = "Provider";
         return blocked
-          ? configRow(p, "cloud", p, () => {}, { disabled: blocked, hint: blocked })
-          : configRow(p, "cloud", p, () => ctx.setProvider(p), { active: p === provider, ...(p === provider ? { hint: "current" } : {}) });
+          ? configRow(`provider:${p}`, "cloud", p, () => {}, { group, disabled: blocked, hint: blocked })
+          : configRow(`provider:${p}`, "cloud", p, () => ctx.setProvider(p), { group, active: p === provider, ...(p === provider ? { hint: "current" } : {}) });
       });
+      const group = `Models for ${provider}`;
+      const rows = models.filter((m) => has(m.value, m.label)).map((m) =>
+        configRow(m.value, "model", m.label || m.value, () => ctx.apply(`Model ${m.value}`, { model: m.value }), { group, active: m.value === model, ...(m.thinking ? { badge: "think", hint: "thinking model" } : {}), ...(m.label !== m.value ? { detail: m.value } : {}) }),
+      );
+      const typed = slash.arg.trim();
+      if (typed && !models.some((m) => m.value === typed)) {
+        rows.push(configRow(`use:${typed}`, "edit", `Use "${typed}"`, () => ctx.apply(`Model ${typed}`, { model: typed }), { group, detail: "custom model id" }));
+      }
+      // The command you opened leads: /provider lists providers first, /model lists models first.
+      return slashCmd.name === "provider" ? [...providerRows, ...rows] : [...rows, ...providerRows];
+    }
     case "thinking": {
       const note = ctx.modelThinking === false ? "This model has no thinking mode" : ctx.modelThinking === null ? "Support not known for this model" : "";
       return ([["auto", "Auto", "The model's own default"], ["on", "On", "Reason before answering (slower, more tokens)"], ["off", "Off", "Answer directly"]] as const)
@@ -133,16 +147,6 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
             detail: v === "auto" && note ? `${detail} · ${note}` : detail,
           }),
         );
-    }
-    case "model": {
-      const rows = models.filter((m) => has(m.value, m.label)).map((m) =>
-        configRow(m.value, "model", m.label || m.value, () => ctx.apply(`Model ${m.value}`, { model: m.value }), { active: m.value === model, ...(m.thinking ? { badge: "think", hint: "thinking model" } : {}), ...(m.label !== m.value ? { detail: m.value } : {}) }),
-      );
-      const typed = slash.arg.trim();
-      if (typed && !models.some((m) => m.value === typed)) {
-        rows.push(configRow(`use:${typed}`, "edit", `Use "${typed}"`, () => ctx.apply(`Model ${typed}`, { model: typed }), { detail: "custom model id" }));
-      }
-      return rows;
     }
     case "strategy":
       return catalog.strategies.filter((s) => has(s.value, s.label)).map((s) =>

@@ -265,6 +265,9 @@ export type ChatSession = {
   pendingApprovals?: ChatPendingApprovalWire[];
   /** Turns paused on `request_user_input`, waiting for a reply (absent on older servers). */
   pendingInteractions?: ChatPendingInteractionWire[];
+  /** Session mode, plan or execute (absent on older servers: execute).
+   *  Read it through `chatMode` (chat-mode-store.ts). */
+  mode?: "plan" | "execute";
 };
 
 type ChatState = {
@@ -282,8 +285,6 @@ type ChatState = {
   /** The active session's turns paused on a question (rendered as reply cards). */
   activePendingInteractions: ChatPendingInteractionWire[];
   sending: boolean;
-  /** True while the latest turn was sent with posture "plan" (cleared by the next execute turn or a session switch). */
-  planning: boolean;
   loadingSession: boolean;
   error: string | null;
   streamReasoningSteps: boolean;
@@ -343,7 +344,7 @@ function createChatStore() {
     activePendingApprovals: [],
     activePendingInteractions: [],
     sending: false,
-    planning: false,    loadingSession: false,
+    loadingSession: false,
     error: null,
     streamReasoningSteps: false,
     structuredOutput: false,
@@ -364,7 +365,7 @@ function createChatStore() {
       return;
     }
     const session = (await res.json()) as ChatSession & { turns: ChatTurn[] };
-    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [], activePendingApprovals: session.pendingApprovals ?? [], activePendingInteractions: session.pendingInteractions ?? [], planning: false, loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
+    update((s) => ({ ...s, activeTurns: session.turns.map(hydrateTurn), activeTotals: session.totals, activeTodo: session.todo ?? [], activeDocumentFailures: session.documentFailures ?? [], activePendingApprovals: session.pendingApprovals ?? [], activePendingInteractions: session.pendingInteractions ?? [], loadingSession: false, streamReasoningSteps: session.agentConfig?.streamReasoningSteps === true, structuredOutput: session.agentConfig?.outputSchema != null }));
     // A turn still running server-side (the page was reloaded mid-wait) is attached to, not lost.
     void resumeActiveTurn(sessionId);
   }
@@ -659,7 +660,6 @@ function createChatStore() {
       ...s,
       activeTurns: [...s.activeTurns, optimisticUserTurn, assistantTurn],
       sending: true,
-      planning: opts.posture === "plan",
       error: null,
     }));
 

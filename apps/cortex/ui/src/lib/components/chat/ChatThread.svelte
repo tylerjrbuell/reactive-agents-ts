@@ -18,6 +18,8 @@
   import ChatAssistantTurn from "./ChatAssistantTurn.svelte";
   import type { compactionRows } from "$lib/chat-compaction.js";
   import { followAfterScroll, shouldFollow, type FollowState } from "$lib/chat-scroll.js";
+  import { planCardTurnId } from "$lib/chat-mode.js";
+  import { chatMode, executePlan } from "$lib/stores/chat-mode-store.js";
   import { fade } from "svelte/transition";
   import { onMount } from "svelte";
 
@@ -57,6 +59,9 @@
     atBottom = $bindable(true), editingSummaryId = $bindable(null), summaryDraft = $bindable(""),
     onStarter, onSaveSummary, onCopy, strategyLabel, onEdit, onRewind, onRerun, onTrace, onFork,
   }: Props = $props();
+
+  // Plan mode: the latest finished reply is the plan card (Execute switches the session and sends the follow-up).
+  const planTurnId = $derived(planCardTurnId(turns, $chatMode));
 
   // Live approvals of this chat that no streaming turn shows (e.g. after a reload): the
   // open chat is their surface, so the app-wide toast skips them (approval-surface.ts).
@@ -161,7 +166,7 @@
         {:else if turn.role === "user"}
           <ChatUserTurn {turn} index={i} {entering} {idle} {onCopy} {strategyLabel} {onEdit} {onRewind} />
         {:else}
-          <ChatAssistantTurn {turn} index={i} {entering} {idle} {provider} {model} {planHidden} isLast={turn.id === lastAssistantId} {onCopy} {strategyLabel} {onRerun} {onTrace} {onFork} />
+          <ChatAssistantTurn {turn} index={i} {entering} {idle} {provider} {model} {planHidden} isLast={turn.id === lastAssistantId} planCard={turn.id === planTurnId} onExecutePlan={executePlan} {onCopy} {strategyLabel} {onRerun} {onTrace} {onFork} />
         {/if}
       {/each}
     {/if}

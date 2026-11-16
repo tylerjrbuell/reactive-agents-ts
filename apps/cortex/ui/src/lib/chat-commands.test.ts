@@ -38,9 +38,10 @@ describe("chat slash commands", () => {
   });
 });
 
-describe("/go command", () => {
-  test("is registered and resolvable", () => {
-    expect(resolveCommand({ query: "go", arg: "", hasArg: false })?.name).toBe("go");
+describe("/execute and /go commands (session mode shortcuts)", () => {
+  test("both are registered, resolvable and need no prior turns", () => {
+    expect(resolveCommand({ query: "go", arg: "", hasArg: false })).toMatchObject({ name: "go", needsTurns: false });
+    expect(resolveCommand({ query: "execute", arg: "", hasArg: false })).toMatchObject({ name: "execute", needsTurns: false });
   });
 });
 
