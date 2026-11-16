@@ -597,7 +597,7 @@ export function handleThinking(
     const planPosture = isPlanPosture(input);
     const postureSignal = yield* registerPostureSignal(state, input.posture);
     if (postureSignal) state = postureSignal.state;
-    yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps, ledger: state.ledger });
+    yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps });
     const rendered = renderGuidance(shownGuidance, { loopDetectedMessage });
     // The one join (Plan 9 Phase 4 stage D2): guidance renders as text parts.
     const guidanceParts = planPosture ? planPostureGuidanceParts() : rendered.parts;

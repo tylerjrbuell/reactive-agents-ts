@@ -243,7 +243,7 @@ const awaitToolEffectObserver = (
 export interface ToolPolicy {
   readonly allowedTools?: readonly string[];
   readonly forbiddenTools?: readonly string[];
-  /** Run posture: `"plan"` restricts to `PLAN_POSTURE_TOOLS` and, unlike the META bypass, applies to META tools too. */
+  /** Run posture: `"plan"` blocks every tool (`PLAN_POSTURE_TOOLS` is empty) and, unlike the META bypass, applies to META tools too. */
   readonly posture?: RunPosture;
 }
 

@@ -7,7 +7,7 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer, Ref } from "effect";
 import { LLMService, TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { EventBus, EventBusLive, foldAdvisory, type AgentEvent } from "@reactive-agents/core";
+import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { mockToolServiceLayer } from "../../testing/tool-service-mock.js";
 import { makeObservableLLM } from "../observable-llm.js";
 import { reactKernel } from "../loop/react-kernel.js";
@@ -19,7 +19,6 @@ import {
   PLAN_POSTURE_GUIDANCE,
   PLAN_POSTURE_TOOLS,
   POSTURE_APPLIED_GUARD,
-  isPlanRecorded,
   blockedPostureCalls,
 } from "./run-posture.js";
 
@@ -110,35 +109,26 @@ const planTurns = (): Turns => [
   SUMMARY,
 ];
 
-describe("run posture: plan (kernel)", () => {
-  it("crypto-price attempted under plan is blocked + recorded, plan recorded, summary delivered", async () => {
+describe("run posture: plan (kernel) — pure reasoning mode, no tools", () => {
+  it("tools the model names anyway (capability AND todo) are blocked + recorded, never executed; the reply still completes the run", async () => {
     executed.length = 0;
     const { pass, events } = await run(planTurns(), "plan");
 
-    // Never executed.
     expect(executed).toEqual([]);
-    // Recorded as a failed observation, with the posture block message.
-    const blockedObs = pass.state.steps.filter(
-      (s) => s.type === "observation" && s.metadata?.observationResult?.toolName === "crypto-price",
-    );
-    expect(blockedObs.length).toBe(1);
-    expect(blockedObs[0]?.metadata?.observationResult?.success).toBe(false);
-    expect(blockedObs[0]?.content).toContain("not available in plan posture");
-    expect(blockedPostureCalls(pass.state.steps)).toEqual(["crypto-price"]);
-    // Plan recorded as checklist facts.
-    const facts = (pass.state.ledger ?? []).flatMap((e) => (e.kind === "checklist-item" ? [e] : []));
-    expect(foldAdvisory(facts).map((i) => i.title)).toEqual(["fetch the price", "write it to a file"]);
-    // The todo result carries the PLAN closing line, not the execute one.
-    const todoObs = pass.state.steps.find(
-      (s) => s.type === "observation" && s.metadata?.observationResult?.toolName === "todo",
-    );
-    expect(todoObs?.content).toContain("Plan recorded (2 items)");
-    expect(todoObs?.content).not.toContain("Do not give your final answer while items are open");
-    // Complete: required-tool gate did not fail/force the run; summary delivered.
+    for (const name of ["crypto-price", "todo"]) {
+      const obs = pass.state.steps.filter(
+        (s) => s.type === "observation" && s.metadata?.observationResult?.toolName === name,
+      );
+      expect(obs.length).toBe(1);
+      expect(obs[0]?.metadata?.observationResult?.success).toBe(false);
+      expect(obs[0]?.content).toContain("not available in plan posture");
+    }
+    expect(blockedPostureCalls(pass.state.steps)).toEqual(["crypto-price", "todo"]);
+    // The todo tool never ran: no checklist facts exist.
+    expect((pass.state.ledger ?? []).some((e) => e.kind === "checklist-item")).toBe(false);
     expect(pass.state.status).toBe("done");
     expect(pass.state.output).toContain("Plan: 1) fetch the price");
 
-    // Trace shape: posture-applied on the guard-fired event.
     const posture = events.filter(
       (e) => e._tag === "GuardFiredEmitted" && e.guard === POSTURE_APPLIED_GUARD,
     ) as Extract<AgentEvent, { _tag: "GuardFiredEmitted" }>[];
@@ -147,17 +137,15 @@ describe("run posture: plan (kernel)", () => {
     expect(last?.outcome).toBe("block");
     expect(last?.metadata).toEqual({
       posture: "plan",
-      allowedTools: [...PLAN_POSTURE_TOOLS],
-      blockedCalls: ["crypto-price"],
-      planRecorded: true,
+      allowedTools: [],
+      blockedCalls: ["crypto-price", "todo"],
       // Tracked signal: the stable ledger id (same on every pass of the run).
       signalId: expect.stringMatching(/^sig-/),
     });
     expect(new Set(posture.map((p) => (p.metadata as { signalId?: string }).signalId)).size).toBe(1);
   });
 
-
-  it("the model only SEES the posture-allowed surface and exactly one Guidance line", async () => {
+  it("the model is offered NO tool at all and sees exactly one Guidance line", async () => {
     const { events } = await run(planTurns(), "plan");
     const exchanges = events.filter((e) => e._tag === "LLMExchangeEmitted") as Extract<
       AgentEvent,
@@ -165,8 +153,7 @@ describe("run posture: plan (kernel)", () => {
     >[];
     expect(exchanges.length).toBeGreaterThanOrEqual(2);
     for (const ex of exchanges) {
-      expect(ex.toolSchemaNames).not.toContain("crypto-price");
-      expect(ex.toolSchemaNames).not.toContain("file-write");
+      expect(ex.toolSchemaNames).toEqual([]);
       const userGuidance = ex.messages.filter((m) => m.role === "user" && m.content.startsWith("Guidance:"));
       expect(userGuidance.length).toBe(1);
       expect(userGuidance[0]?.content).toBe(`Guidance:\n- ${PLAN_POSTURE_GUIDANCE}`);
@@ -176,40 +163,78 @@ describe("run posture: plan (kernel)", () => {
     expect(everything).not.toContain("You must still call");
     expect(everything).not.toContain("Do not give your final answer while items are open");
   });
-  it("guidance is ONE concrete action line, not a rule to acknowledge", () => {
-    expect(PLAN_POSTURE_GUIDANCE).toBe("Call todo to add each step of the plan, then write the plan for the user.");
+
+  it("guidance is ONE line saying plan mode, no tools, give the plan, user switches to execute", () => {
+    expect(PLAN_POSTURE_TOOLS.size).toBe(0);
     expect(PLAN_POSTURE_GUIDANCE).not.toContain("\n");
+    expect(PLAN_POSTURE_GUIDANCE).toContain("no tools are available");
+    expect(PLAN_POSTURE_GUIDANCE).toContain("give the plan");
+    expect(PLAN_POSTURE_GUIDANCE).toContain("execute mode");
+    expect(PLAN_POSTURE_GUIDANCE).not.toContain("todo");
   });
 
-  it("prose-only reply (no todo) completes honestly: success, and the trace says planRecorded:false", async () => {
+  it("a plain prose reply completes the run successfully with zero tool use, and no planRecorded field exists", async () => {
+    executed.length = 0;
     const { pass, events } = await run([SUMMARY], "plan");
     expect(pass.state.status).toBe("done");
     expect(pass.state.output).toContain("Plan:");
-    expect(isPlanRecorded(pass.state.ledger)).toBe(false);
+    expect(executed).toEqual([]);
+    expect(pass.state.steps.some((s) => s.type === "observation" && s.metadata?.observationResult !== undefined)).toBe(false);
     const posture = events.filter(
       (e) => e._tag === "GuardFiredEmitted" && e.guard === POSTURE_APPLIED_GUARD,
     ) as Extract<AgentEvent, { _tag: "GuardFiredEmitted" }>[];
     expect(posture.length).toBeGreaterThanOrEqual(1);
-    expect((posture[posture.length - 1]?.metadata as { planRecorded?: boolean }).planRecorded).toBe(false);
-    // No fabricated checklist rows.
-    expect((pass.state.ledger ?? []).some((e) => e.kind === "checklist-item")).toBe(false);
+    const last = posture[posture.length - 1];
+    expect(last?.outcome).toBe("pass");
+    expect("planRecorded" in (last?.metadata as object)).toBe(false);
   });
 
-  it("duplicate todo add after the plan is recorded does not trip the loop guard", async () => {
-    const { pass } = await run(
-      [
-        { text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] },
-        { text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] },
-        { text: pad(), toolCalls: [{ name: "todo", args: PLAN_ADD }] },
-        SUMMARY,
-      ],
-      "plan",
-    );
+  it("completes even with a classifier-demanded required tool and a task that names a deliverable (no act-or-answer forcing)", async () => {
+    const { pass, events } = await run([SUMMARY], "plan", baseInput({ requiredTools: ["crypto-price", "file-write"] }));
     expect(pass.state.status).toBe("done");
-    expect(pass.state.meta?.terminatedBy).not.toBe("max_iterations");
-    expect(pass.state.steps.some((s) => s.content.includes("Loop detected"))).toBe(false);
-    expect(pass.state.output).toContain("Plan: 1) fetch the price");
-    expect(isPlanRecorded(pass.state.ledger)).toBe(true);
+    // One model call: nothing forced a retry.
+    const exchanges = events.filter((e) => e._tag === "LLMExchangeEmitted");
+    expect(exchanges.length).toBe(1);
+  });
+
+  it("posture does not switch provider thinking off (no thinking:false override on any request)", async () => {
+    const thinkingSeen: Array<boolean | undefined> = [];
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* runPass(reactKernel, baseInput(), opts);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            makeObservableLLM().pipe(
+              Layer.provide(
+                Layer.effect(
+                  LLMService,
+                  Effect.gen(function* () {
+                    const inner = yield* LLMService;
+                    return {
+                      ...inner,
+                      complete: (req) => {
+                        thinkingSeen.push(req.thinking);
+                        return inner.complete(req);
+                      },
+                      stream: (req) => {
+                        thinkingSeen.push(req.thinking);
+                        return inner.stream(req);
+                      },
+                    };
+                  }),
+                ).pipe(Layer.provide(TestLLMServiceLayer([SUMMARY]))),
+              ),
+            ),
+            toolLayer,
+            EventBusLive,
+            Layer.succeed(RunEnvelope, buildRunEnvelope({ posture: "plan" })),
+          ),
+        ),
+      ),
+    );
+    expect(thinkingSeen.length).toBeGreaterThan(0);
+    expect(thinkingSeen.every((t) => t !== false)).toBe(true);
   });
 
   it("execute control: the same duplicate todo add IS still caught by the loop guard", async () => {
@@ -299,12 +324,12 @@ describe("run posture: plan (kernel)", () => {
     expect(buildRunEnvelope().rails).toEqual({});
   });
 
-  it("policy gate: plan blocks capability AND non-allowed META tools; allows plan tools", () => {
-    for (const name of ["crypto-price", "checkpoint", "discover-tools", "activate-skill"]) {
+  it("policy gate: plan blocks EVERY tool (capability, meta, plan-recording and exit tools)", () => {
+    for (const name of [
+      "crypto-price", "checkpoint", "discover-tools", "activate-skill",
+      "todo", "recall", "find", "context-status", "brief", "pulse", "final-answer", "task-complete",
+    ]) {
       expect(evaluateToolPolicy(name, { posture: "plan" }).blocked).toBe(true);
-    }
-    for (const name of PLAN_POSTURE_TOOLS) {
-      expect(evaluateToolPolicy(name, { posture: "plan" }).blocked).toBe(false);
     }
     // No posture: META bypass and open policy exactly as before.
     expect(evaluateToolPolicy("checkpoint", {}).blocked).toBe(false);

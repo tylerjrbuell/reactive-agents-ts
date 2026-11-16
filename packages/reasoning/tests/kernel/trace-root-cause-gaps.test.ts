@@ -194,9 +194,9 @@ describe("G3: plan posture does not demand what it withholds", () => {
     expect(ids("plan")).toEqual(["answer"]);
   });
 
-  it("plan tools stay required under plan; a withheld required tool does not", () => {
+  it("plan offers no tools, so NO required tool survives into the contract (todo included)", () => {
     const ids = compileRunContract("t", { posture: "plan", requiredTools: ["file-write", "todo"] }).requirements.map((r) => r.id);
-    expect(ids).toContain("tool:todo");
+    expect(ids).not.toContain("tool:todo");
     expect(ids).not.toContain("tool:file-write");
   });
 
@@ -220,8 +220,7 @@ describe("G3: plan posture does not demand what it withholds", () => {
         Effect.provide(
           Layer.mergeAll(
             TestLLMServiceLayer([
-              { text: "planning", toolCalls: [{ name: "todo", args: { action: "add", items: ["write alpha", "write beta", "write gamma"] } }] },
-              { text: "FINAL ANSWER: Plan: 1) write alpha 2) write beta 3) write gamma. Say go to start." },
+              { text: "Plan: 1) write alpha 2) write beta 3) write gamma. Say go to start." },
             ]),
             mockToolServiceLayer({
               execute: () => Effect.succeed({ success: true, result: { ok: 1 } }),
@@ -234,13 +233,13 @@ describe("G3: plan posture does not demand what it withholds", () => {
       ),
     );
 
-  it("a plan turn on a task naming file-write ends completed with the plan recorded, not vetoed by contract-coverage", async () => {
+  it("a plan turn on a task naming file-write ends completed on the model's prose plan, not vetoed by contract-coverage", async () => {
     const { result, trace } = await planTurn("plan");
     expect(result.status).toBe("completed");
     expect(outcomeOf(result)).toMatchObject({ status: "completed", authority: "model-final", outstanding: [] });
     expect(guards(trace, "terminal_status_override")).toEqual([]);
     const posture = guards(trace, "posture-applied");
-    expect(meta(posture[posture.length - 1]!).planRecorded).toBe(true);
+    expect("planRecorded" in meta(posture[posture.length - 1]!)).toBe(false);
   });
 
   it("CONTROL: the same task in execute posture still carries the file-write requirement", async () => {
