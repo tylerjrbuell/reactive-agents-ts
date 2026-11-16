@@ -2231,3 +2231,15 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   spend-usd: 0
   files: [wiki/Research/Harness-Reports/2026-11-15-compute-offload-spike.md]
 ```
+
+```yaml
+- date: 2026-11-15
+  warden: ablation-warden
+  task: compute-offload-ablation
+  state: blocked
+  confidence: 0.8
+  verdicts: {gate: "not run; underpowered (16 contaminated cogito:8b cells)", A1: "not separable by config (one flag drives surface floor and guidance)", floor: "no-op on h3-required-tools (code-execute already declared available); effect only on plan-only, todo-heavy, lh-pipeline-stages, lh-enumerate-audit", blocker: "ambient /v1/systemone traffic on shared Ollama from Cortex dev server (pid 1638556) and parent bun test packages/runtime (pid 2311346), 219/min with no bench process running; one cell timed out at 150s"}
+  evidence: {sha: "6f24b599b", worktree: "/home/tylerbuell/offload-worktree", cells: 16, models: "cogito:8b only"}
+  spend-usd: 0
+  files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-OFFLOAD.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest-offload.jsonl]
+```
