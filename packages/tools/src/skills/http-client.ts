@@ -4,6 +4,7 @@ import { fetchPinned, type PinnedFetchOptions } from "@reactive-agents/runtime-s
 import type { ToolDefinition } from "../types.js";
 import { ToolExecutionError, toToolError } from "../errors.js";
 import { httpAllowPrivateEnabled } from "../flags.js";
+import { httpFailureMessage } from "./http-soft-404.js";
 
 /** Max redirect hops to follow while re-validating each against the egress guard. */
 const MAX_REDIRECTS = 5;
@@ -166,10 +167,19 @@ export const httpGetHandler = (
       }
 
       return {
+        url: current,
         status: response.status,
         statusText: response.statusText,
         body,
       };
     },
     catch: toToolError("http-get", "HTTP GET"),
-  });
+  }).pipe(
+    Effect.flatMap(({ url, ...result }) => {
+      // A 4xx/5xx or a soft-404 page is a failed fetch, not a success.
+      const failure = httpFailureMessage(result.status, url, result.body);
+      return failure === undefined
+        ? Effect.succeed(result)
+        : Effect.fail(new ToolExecutionError({ message: failure, toolName: "http-get" }));
+    }),
+  );

@@ -103,3 +103,70 @@ describe("httpGetHandler DNS pinning (rebinding)", () => {
     expect(connected).toBe(false);
   });
 });
+
+describe("httpGetHandler failure statuses and soft 404s", () => {
+  const run = (respond: () => Response, url = "https://example.com/missing") =>
+    Effect.runPromise(httpGetHandler({ network: net(respond) })({ url }).pipe(Effect.either));
+
+  it("fails on HTTP 404 naming status and URL", async () => {
+    const r = await run(() => new Response("nope", { status: 404 }));
+    expect(r._tag).toBe("Left");
+    if (r._tag === "Left") {
+      expect(r.left.message).toContain("404");
+      expect(r.left.message).toContain("https://example.com/missing");
+      expect(r.left.message).toContain("different");
+    }
+  });
+
+  it("fails on HTTP 500", async () => {
+    const r = await run(() => new Response("boom", { status: 500 }));
+    expect(r._tag).toBe("Left");
+    if (r._tag === "Left") expect(r.left.message).toContain("500");
+  });
+
+  it("fails on a 200 tiny 'Page not found' body", async () => {
+    const r = await run(
+      () =>
+        new Response("<html><body><h1>Page not found</h1></body></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+    );
+    expect(r._tag).toBe("Left");
+    if (r._tag === "Left") expect(r.left.message).toContain("not found");
+  });
+
+  it("succeeds on a normal 200 HTML page", async () => {
+    const r = await run(
+      () => new Response("<html><body><p>Welcome to the docs. Lots of content.</p></body></html>", { status: 200 }),
+    );
+    expect(r._tag).toBe("Right");
+  });
+
+  it("succeeds on a large page that merely mentions 'page not found'", async () => {
+    const big = "Article text. ".repeat(400) + " handling page not found errors";
+    const r = await run(() => new Response(big, { status: 200 }));
+    expect(r._tag).toBe("Right");
+  });
+
+  it("succeeds on a JSON 200 body", async () => {
+    const r = await run(
+      () =>
+        new Response(JSON.stringify({ msg: "not found 404" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    expect(r._tag).toBe("Right");
+  });
+
+  it("succeeds when a redirect resolves to a normal 200", async () => {
+    let n = 0;
+    const r = await run(() =>
+      ++n === 1
+        ? new Response(null, { status: 302, headers: { location: "https://example.com/real" } })
+        : new Response("real content here", { status: 200 }),
+    );
+    expect(r._tag).toBe("Right");
+  });
+});

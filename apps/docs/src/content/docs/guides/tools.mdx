@@ -187,7 +187,7 @@ These tools are registered internally as soon as you call `.withTools()`, but ea
 | `code-execute` | code | Execute code in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env) | — |
 | `crypto-price` | data | Get current prices for 30+ cryptocurrencies via CoinGecko's free public API | — |
 
-`http-get` only fetches public addresses. It resolves the host once, checks every answer, and connects to that checked address (and re-checks each redirect hop), so a hostname that later resolves to a private or metadata address (DNS rebinding) is never reached. Credentials you pass in `headers` are dropped when a redirect leaves the original origin. Set `RA_HTTP_ALLOW_PRIVATE=1` to allow trusted local targets.
+`http-get` only fetches public addresses. It resolves the host once, checks every answer, and connects to that checked address (and re-checks each redirect hop), so a hostname that later resolves to a private or metadata address (DNS rebinding) is never reached. Credentials you pass in `headers` are dropped when a redirect leaves the original origin. Set `RA_HTTP_ALLOW_PRIVATE=1` to allow trusted local targets. A 4xx or 5xx response, or a 200 whose body is a short (under 2 KB) "not found" page, is returned as a tool failure that names the status and URL, not as a success.
 
 Git and the GitHub CLI are not separate tools. The `git` toolset gives the agent a `shell-execute` limited to `git` and `gh`. See [Git and GitHub CLIs](#git-and-github-clis).
 
