@@ -14,6 +14,7 @@ import { lastRunContextOf } from "./last-run-context.js";
 import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TurnGate } from "./turn-gate.js";
+import { turnPosture, DEFAULT_CHAT_MODE, type ChatMode } from "./session-mode.js";
 import { TodoCarry, planPosture, originCarry, type OriginOption, type PostureOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
@@ -190,6 +191,8 @@ export interface ChatEngineOptions extends EnvironmentSeedOption {
   readonly initialTodo?: readonly TodoSeedItem[];
   /** Tell the model what changed since its last turn (needs `environment`). Default true; `false` opts out. */
   readonly environmentUpdates?: boolean;
+  /** Mode the session starts in. Default `"execute"`. */
+  readonly mode?: ChatMode;
 }
 
 /**
@@ -276,7 +279,7 @@ export class ChatEngine {
   readonly #todo: TodoCarry;
   /** This session's latest tool-turn results, for its own direct (tools-off) turns only. Never shared across sessions. */
   #lastRunContext = "";
-  readonly #env: EnvironmentTracker;
+  readonly #env: EnvironmentTracker; #mode: ChatMode;
 
   /**
    * @param deps host-injected capabilities.
@@ -295,11 +298,16 @@ export class ChatEngine {
     // Load-once latch seeds with the option: a non-empty seed means the loader
     // must NEVER run; empty seeds keep the loader's first-turn resolution.
     this.#loaded = initialHistory.length > 0;
-    this.#todo = new TodoCarry(options?.initialTodo);
+    this.#todo = new TodoCarry(options?.initialTodo); this.#mode = options?.mode ?? DEFAULT_CHAT_MODE;
     this.#env = new EnvironmentTracker(this.#sessionId, {
       ...deps, onPublishError: (err) => swallowError(err, "chat/engine.ts:publishEnvironment"),
     }, options?.environmentUpdates !== false, options?.initialEnvironment);
   }
+
+  /** The session mode; each turn runs under its posture unless the turn sets one. */
+  mode(): ChatMode { return this.#mode; }
+  /** Switch the mode for later turns (a turn in flight keeps the mode it started under). */
+  setMode(mode: ChatMode): void { this.#mode = mode; }
 
   /** The conversation's latest to-do list, as of the last completed `streamTurn()` event. */
   todo(): readonly TodoSeedItem[] {
@@ -313,35 +321,28 @@ export class ChatEngine {
    * Routing: `options.useTools ?? toolIntent(message) ?? false`; `toolIntent` is the
    * host's capability (the engine itself never classifies).
    *
-   * Direct path (Task 1 shape): composes the system prompt from the host's
-   * `systemPrompt` / `contextSummary` capabilities plus the turn's `extraContext`
-   * (persona, summary, extra; empty fragments skipped, joined by `---`); with no
-   * `systemPrompt` capability it falls back to a generic conversational prompt, never
-   * a blank one. Sends history + the message to `complete` with the engine-resolved
-   * `budgetTokens`, then records the user turn (`recordUserText ?? message`) and the
-   * assistant turn.
+   * Direct path: composes the system prompt from the host's `systemPrompt` /
+   * `contextSummary` capabilities plus the turn's `extraContext` (empty fragments
+   * skipped, joined by `---`); with no `systemPrompt` capability it falls back to a
+   * generic conversational prompt, never a blank one. Sends history + the message to
+   * `complete` with the engine-resolved `budgetTokens`, then records the user turn
+   * (`recordUserText ?? message`) and the assistant turn.
    *
-   * Tool path (Task 2): requires `runTask` — typed {@link ChatEngineCapabilityError}
+   * Tool path: requires `runTask` — typed {@link ChatEngineCapabilityError}
    * rejection otherwise, never a silent fallback onto the direct path. `runTask` gets
    * the raw input (same as `streamTurn`); the RAW prior turn list rides `opts.history`.
    * The reply keeps `agent.chat()`'s tool-path field mapping (`toolsUsed`, `tokens`,
    * `steps`, `cost`, `reasoningSteps`, `scratchpad`, `citationCheck`).
    *
-   * Serialized per engine: concurrent calls queue FIFO behind one gate, so history
-   * reads and the user+assistant append never interleave; a failed turn releases it.
+   * Serialized per engine: concurrent calls queue FIFO behind one gate; a failed turn
+   * releases it. Both paths record symmetric turns, publish a user+assistant `ChatTurn`
+   * pair via `publishTurn` when wired, and persist via `saveHistory` when wired
+   * (swallow-sites: a failure never fails the turn; it surfaces as `ErrorSwallowed`).
    *
-   * Both paths record symmetric turns, publish a user+assistant `ChatTurn` pair
-   * via `publishTurn` when wired (`routedVia` reflects the path), and persist the
-   * full post-turn state via `saveHistory` when wired. Publish and persist are
-   * swallow-sites (telemetry-quality): a failure there never fails the turn and
-   * surfaces as an `ErrorSwallowed` event tagged `chat/engine.ts`.
-   *
-   * History resolution (Task 3) precedes routing: the first turn with empty
-   * in-memory state loads the persisted session exactly once via `loadHistory`
-   * (even when the loader resolves empty) and seeds the engine's state. What is
-   * HANDED to the path calls is the windowed copy ({@link #historyForPath});
-   * recording, publishing payloads, and persistence always run on the FULL
-   * unwindowed state.
+   * History resolution precedes routing: the first turn with empty in-memory state
+   * loads the persisted session exactly once via `loadHistory` (even when it resolves
+   * empty). The path calls get the windowed copy ({@link #historyForPath}); recording,
+   * publishing and persistence always run on the FULL unwindowed state.
    */
   turn(input: TaskInput, options?: TurnOptions): Promise<ChatReply> {
     return this.#gate.run(() => this.#turn(input, options));
@@ -364,7 +365,7 @@ export class ChatEngine {
       const result = await this.#deps.runTask(input, {
         history,
         maxIterations: options?.maxIterations,
-        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? this.#origin),
+        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(turnPosture(this.#mode, options?.posture)), ...originCarry(options?.origin ?? this.#origin),
         ...workspaceCarry(options?.workspace), ...(options?.skills ? { skills: options.skills } : {}),
       });
       const reply = assembleToolReply(result, options ?? {}, this.#deps.scratchpadEntries?.() ?? {});
@@ -410,22 +411,19 @@ export class ChatEngine {
    * History resolution mirrors {@link turn()}: load-once seeding, then the windowed
    * copy goes to `runStreamTask`; the FULL unwindowed state owns recording and persistence.
    *
-   * Returns a wrapper {@link RunHandle} whose generator tees the inner handle's
-   * {@link AgentStreamEvent}s unaltered while capturing the terminal event. Recording
-   * happens at TERMINAL-EVENT OBSERVATION, inside the tee loop and BEFORE the terminal
-   * event is yielded: when `StreamCompleted` is observed the symmetric user
-   * (`recordUserText ?? message`) + assistant turns are recorded, the `ChatTurn` pair
-   * is published (`routedVia: "react-loop"`) and the FULL state persisted — swallow-sites
-   * exactly as in `turn()`. Because recording precedes the yield, a consumer that closes
-   * the stream right after `StreamCompleted` (e.g. an SSE route) cannot drop the turn,
-   * and one iterating past the terminal records once. On `StreamError` (or a
-   * cancelled stream that never reaches `StreamCompleted`) NOTHING is recorded,
-   * published, or persisted. A run that completes FAILED (`success: false`, not paused) is
-   * recorded as a failed turn, here and in `turn()`: the assistant row is
+   * Returns a wrapper {@link RunHandle} that tees the inner handle's
+   * {@link AgentStreamEvent}s unaltered. Recording happens at TERMINAL-EVENT
+   * OBSERVATION, BEFORE the terminal event is yielded: on `StreamCompleted` the
+   * symmetric user (`recordUserText ?? message`) + assistant turns are recorded, the
+   * `ChatTurn` pair is published (`routedVia: "react-loop"`) and the FULL state
+   * persisted (swallow-sites as in `turn()`), so a consumer that closes the stream
+   * right after `StreamCompleted` cannot drop the turn and one iterating past it
+   * records once. On `StreamError` or a cancelled stream NOTHING is recorded. A run
+   * that completes FAILED (`success: false`, not paused) is recorded as a failed turn,
+   * here and in `turn()`: the assistant row is
    * `[previous run failed: <cause>; no answer was given]` with `failed: true` and
-   * `error` (see `ChatMessage.failed`), never the run's output, so the next turn's
-   * history tells the model no answer was given; the published ChatTurn carries
-   * the same note plus `failed: true` and `error`.
+   * `error` (see `ChatMessage.failed`), never the run's output; the published ChatTurn
+   * carries the same note plus `failed: true` and `error`.
    *
    * The `RunHandle` verbs delegate to the inner `runStreamTask` handle, lazily bound at
    * first iteration: before that they no-op (`status()` is `"running"`, `inspect()` is
@@ -468,7 +466,7 @@ export class ChatEngine {
       const environmentUpdate = await engine.#env.begin();
       const handle = streamTask(input, {
         history,
-        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin ?? engine.#origin),
+        ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(turnPosture(engine.#mode, options?.posture)), ...originCarry(options?.origin ?? engine.#origin),
         density: options?.density,
         signal: options?.signal, ...workspaceCarry(options?.workspace), ...(options?.skills ? { skills: options.skills } : {}),
         ...(engine.#todo.items.length > 0 ? { initialTodo: engine.#todo.items } : {}),

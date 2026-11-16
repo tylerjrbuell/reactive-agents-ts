@@ -13,7 +13,8 @@
  *  - {@link TodoCarry}            — the engine's held list, updated from the
  *                                   `ChecklistUpdated` events of each turn.
  */
-import type { ChecklistItemStatus, ChecklistSnapshot, RunOrigin, RunPosture, Task } from "@reactive-agents/core";
+import type { ChecklistItemStatus, ChecklistSnapshot, RunOrigin, RunPosture, Task, TaskCurrentTurn } from "@reactive-agents/core";
+import type { CurrentTurnOption } from "../agent/history-block.js";
 import type { AgentStreamEvent } from "../stream-types.js";
 import { ENVIRONMENT_UPDATE_CONTEXT_KEY, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { skillsCarry, type SkillsRunOption } from "../runtime-skills-layer.js";
@@ -70,14 +71,14 @@ export function readPosture(task: Pick<Task, "metadata">): RunPosture | undefine
  * to-do seed, the environment notice, the posture, the origin and the per-run
  * skill pins (`skills: { activate }`, same as `run()`).
  */
-export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption & SkillsRunOption;
+export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption & PostureOption & OriginOption & SkillsRunOption & CurrentTurnOption;
 
 /**
  * Spread into `task.metadata`: {@link todoSeedMetadata} plus the environment notice
  * (`context.environmentUpdate`), posture, origin and skill pins when present.
  * All absent ⇒ nothing (bytes identical).
  */
-export function turnCarryMetadata(opts: TurnCarryOption): { context?: Record<string, unknown> } {
+export function turnCarryMetadata(opts: TurnCarryOption): { context?: Record<string, unknown>; currentTurn?: TaskCurrentTurn } {
   const context = {
     ...todoSeedMetadata(opts.initialTodo).context,
     ...(opts.environmentUpdate ? { [ENVIRONMENT_UPDATE_CONTEXT_KEY]: opts.environmentUpdate } : {}),
@@ -85,7 +86,7 @@ export function turnCarryMetadata(opts: TurnCarryOption): { context?: Record<str
     ...(opts.origin !== undefined ? { [ORIGIN_CONTEXT_KEY]: opts.origin } : {}),
     ...skillsCarry(opts.skills),
   };
-  return Object.keys(context).length > 0 ? { context } : {};
+  return { ...(Object.keys(context).length > 0 ? { context } : {}), ...(opts.currentTurn ? { currentTurn: opts.currentTurn } : {}) };
 }
 
 /** Key under `task.metadata.context` that carries the seed into the engine. */

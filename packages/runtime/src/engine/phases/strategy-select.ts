@@ -33,7 +33,7 @@ export const strategySelect: Phase = {
           ? yield* selectorOpt.value
               .select(
                 {
-                  taskDescription: extractIntentText(deps.task.input),
+                  taskDescription: extractIntentText(deps.task.input, deps.task.metadata),
                   taskType: deps.task.type,
                   complexity: 0.5,
                   urgency: 0.5,

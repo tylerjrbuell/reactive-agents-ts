@@ -238,6 +238,7 @@ export {
   type ChatReply,
   type ChatOptions,
   type SessionOptions,
+  type ChatMode,
 } from "./chat.js";
 export type { ToolIntent } from "./builder/withers/capability-progress.js";
 

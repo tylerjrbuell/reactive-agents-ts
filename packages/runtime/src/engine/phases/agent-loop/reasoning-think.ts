@@ -35,6 +35,7 @@ import {
   extractIntentText,
   extractTaskText,
   normalizeReasoningResult,
+  typedCurrentTurnText,
   type ExecutionReasoningResult,
 } from "../../util.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
@@ -236,7 +237,7 @@ export const runReasoningThink = (
     // through `taskClassification` so every downstream consumer (adaptive
     // heuristic, ToT cost gate, future capabilities) reads from a single
     // canonical snapshot instead of re-classifying the same task string.
-    const taskClassification = classifyTask(extractIntentText(task.input));
+    const taskClassification = classifyTask(extractIntentText(task.input, task.metadata));
 
     // Durable resume (Phase C): when ReactiveAgent.resume(runId) bound the run
     // slot resumeStateSlot to a serialized checkpoint, deserialize it here and forward
@@ -305,8 +306,11 @@ export const runReasoningThink = (
       ),
     });
 
+    const currentTurnText = typedCurrentTurnText(task.metadata);
     const executeRequest = {
       taskDescription: extractTaskText(task.input),
+      // Producer-typed current turn (no inlined history); KernelInput.currentTurnText. Absent ⇒ marker parsing.
+      ...(currentTurnText !== undefined ? { currentTurnText } : {}),
       taskType: task.type,
       taskClassification,
       memoryContext: memCtx,

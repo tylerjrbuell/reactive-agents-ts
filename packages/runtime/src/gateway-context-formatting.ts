@@ -5,6 +5,7 @@ import type { AgentResult } from "./builder/types.js";
 import type { ChatTurnEvent } from "@reactive-agents/core";
 import type { ChatEngine } from "./chat/engine.js";
 import { taskInputText, type TaskInput } from "./agent/task-input.js";
+import { stampCurrentTurn } from "./agent/gateway-current-turn.js";
 import { GatewayTurnNotDelivered, isGatewayTurnNotDelivered } from "./chat/engine-errors.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -328,7 +329,7 @@ export class GatewayChatManager {
       adapterBacked,
     });
 
-    this.currentEvents.set(sender, gwEvent);
+    this.currentEvents.set(sender, stampCurrentTurn(gwEvent, { content: message, priorTurnCount: windowed.length }));
     this.currentPlatforms.set(sender, platform);
 
     let reply: Awaited<ReturnType<ChatEngine["turn"]>>;

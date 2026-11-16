@@ -137,7 +137,7 @@ export const classifyTools = (
       classifierReliability === "low" &&
       wantsClassification
     ) {
-      const taskText = extractIntentText(task.input);
+      const taskText = extractIntentText(task.input, task.metadata);
       const allToolNames = cachedToolDefs.map((t) => t.name);
       const literalMentions = literalMentionRequired(taskText, allToolNames);
       if (literalMentions.length > 0) {
@@ -175,7 +175,7 @@ export const classifyTools = (
 
     // Branch 3: classifier wanted + reliable → call classifyToolRelevance (LLM)
     const classifyResult = yield* classifyToolRelevance({
-      taskDescription: extractIntentText(task.input),
+      taskDescription: extractIntentText(task.input, task.metadata),
       availableTools: cachedToolDefs.map((t) => ({
         name: t.name,
         description: t.description ?? "",
@@ -227,7 +227,7 @@ export const classifyTools = (
     // Sanity-check classifier "required" against task text. Hallucinated tools
     // (not literally mentioned) are demoted to "relevant" — visible/usable
     // but not enforced.
-    const taskTextLower = extractIntentText(task.input);
+    const taskTextLower = extractIntentText(task.input, task.metadata);
     const literalMentions = literalMentionRequired(
       taskTextLower,
       classifyResult.required,

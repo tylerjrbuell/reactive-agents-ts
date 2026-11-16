@@ -138,7 +138,7 @@ export const resolveRunSkills = (args: {
 
     const resolved = yield* resolver
       .resolve({
-        taskDescription: extractIntentText(task.input),
+        taskDescription: extractIntentText(task.input, task.metadata),
         modelId,
         agentId: config.agentId,
         ...(root !== undefined ? { root } : {}),

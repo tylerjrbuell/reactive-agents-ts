@@ -179,7 +179,7 @@ export const runBootstrapSkillPostprocess = (
       ).pipe(Effect.catchAll(() => Effect.succeed({ _tag: "None" as const })));
 
       if (expOpt._tag === "Some") {
-        const taskText = extractIntentText(task.input);
+        const taskText = extractIntentText(task.input, task.metadata);
         const tips = yield* expOpt.value
           .query(taskText, task.type ?? "general", config.contextProfile?.tier ?? "mid")
           .pipe(Effect.catchAll(() => Effect.succeed({ tips: [] as readonly string[] })));

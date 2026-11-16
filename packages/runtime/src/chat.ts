@@ -12,6 +12,8 @@ import {
 export type { HistoryOverflowHandler } from "./gateway-context-formatting.js";
 import type { RunHandle } from "./run-controller.js";
 import { ChatEngine } from "./chat/engine.js";
+import { DEFAULT_CHAT_MODE, type ChatMode } from "./chat/session-mode.js";
+export type { ChatMode } from "./chat/session-mode.js";
 import { taskInputText, type TaskInput } from "./agent/task-input.js";
 import { ChatEngineCapabilityError } from "./chat/engine-errors.js";
 import type { StreamDensity } from "./stream-types.js";
@@ -187,6 +189,12 @@ export interface ChatOptions extends WorkspaceOption, SkillsRunOption {
  * session identifier for resuming).
  */
 export interface SessionOptions {
+  /**
+   * The mode the session starts in: `"execute"` (default) or `"plan"` (pure
+   * reasoning, no tools). Switch later with `session.setMode()`. Independent
+   * of the `plan-execute` reasoning strategy.
+   */
+  mode?: ChatMode;
   /**
    * Caller origin for every run this session starts (`run-started.origin`),
    * e.g. `"cortex-chat"`. Absent ⇒ `"user"`. A per-turn `ChatOptions.origin` wins.
@@ -386,6 +394,7 @@ export class AgentSession {
   private _history: ChatMessage[] = [];
   private _historyLoader?: () => Promise<ChatMessage[]>;
   private _historyLoaded = false;
+  private _mode: ChatMode = DEFAULT_CHAT_MODE;
   private readonly chatFn?: (message: string, history: ChatMessage[], options?: ChatOptions) => Promise<ChatReply>;
   private readonly onEnd?: (history: ChatMessage[]) => Promise<void>;
   private readonly onSave?: (history: ChatMessage[]) => Promise<void>;
@@ -404,8 +413,7 @@ export class AgentSession {
     if (engineOrChatFn instanceof ChatEngine) {
       this.engine = engineOrChatFn;
       return;
-    }
-    this.chatFn = engineOrChatFn;
+    }    this.chatFn = engineOrChatFn;
     this.onEnd = onEnd;
     this.onSave = onSave;
     if (initialHistory) this._history = [...initialHistory];
@@ -431,11 +439,30 @@ export class AgentSession {
       ? await applyHistoryWindowWithOverflow(this._history, this.onOverflow)
       : this._history;
     const text = taskInputText(message);
-    const reply = await this.chatFn!(text, historyForChat, options);
+    const reply = await this.chatFn!(text, historyForChat, this._mode === "plan" && options?.posture === undefined ? { ...options, posture: "plan" } : options);
     this._history.push({ role: "user", content: text, timestamp: Date.now() });
     this._history.push({ role: "assistant", content: reply.message, timestamp: Date.now() });
     if (this.onSave) await this.onSave(this._history);
     return reply;
+  }
+
+  /**
+   * The session's mode: `"execute"` (default) or `"plan"`. In plan mode every
+   * turn runs plan-only (pure reasoning, no tools) and the prose plan stays in
+   * history, so the next execute turn sees it. Independent of the `plan-execute`
+   * reasoning strategy. A per-turn `posture` option still overrides it.
+   */
+  get mode(): ChatMode {
+    return this.engine ? this.engine.mode() : this._mode;
+  }
+
+  /**
+   * Switch the session mode. It holds for every later turn until changed again;
+   * a turn already in flight keeps the mode it started under.
+   */
+  setMode(mode: ChatMode): void {
+    if (this.engine) this.engine.setMode(mode);
+    else this._mode = mode;
   }
 
   /**

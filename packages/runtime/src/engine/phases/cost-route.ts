@@ -48,7 +48,7 @@ export const costRoute: Phase = {
       if (!isRoutableProvider(deps.config.provider)) return fallback;
       const provider = deps.config.provider; // narrowed to Provider by the guard above
 
-      const taskText = extractIntentText(deps.task.input);
+      const taskText = extractIntentText(deps.task.input, deps.task.metadata);
       const analysis = yield* analyzeComplexity(taskText).pipe(
         Effect.catchAll(() => Effect.succeed(null)),
       );

@@ -24,6 +24,7 @@ import type { AgentResultMetadata } from '../builder/types.js'
 import type { GLog } from './gateway-bootstrap.js'
 import { ORIGIN_CONTEXT_KEY } from '../chat/todo-seed.js'
 import { OUTBOUND_SERVER_CONTEXT_KEY } from './gateway-outbound-requirement.js'
+import { currentTurnFromEvent } from './gateway-current-turn.js'
 
 type GatewayService = Context.Tag.Service<typeof GatewayServiceTag>
 
@@ -105,7 +106,7 @@ export const makeExecuteEvent = (
                 status: 'pending' as const,
                 // Origin: timer-driven sources (heartbeat/cron) are `scheduled`;
                 // every other gateway source (channel, webhook, ...) is `gateway`.
-                metadata: { tags: [], context: { [ORIGIN_CONTEXT_KEY]: gatewayRunOrigin(source), ...outboundServerCarry(_event) } },
+                metadata: { tags: [], ...currentTurnFromEvent(_event), context: { [ORIGIN_CONTEXT_KEY]: gatewayRunOrigin(source), ...outboundServerCarry(_event) } },
                 createdAt: new Date(),
             }
             // The run's root entry (engine/start-run.ts).

@@ -174,7 +174,7 @@ export const prepareReasoningToolSchemas = (
     if (
       (effectiveAllowedTools.length === 0 || effectiveAllowedTools.includes("code-execute")) &&
       resolveHarnessConfig(disclosureHarness(config), disclosureFloor(config)).computeOffload === true &&
-      asksForComputedAggregate(extractIntentText(task.input))
+      asksForComputedAggregate(extractIntentText(task.input, task.metadata))
     ) {
       optedInBuiltins.add("code-execute");
     }
@@ -216,7 +216,7 @@ export const prepareReasoningToolSchemas = (
     // empirically-validated static base. See spec
     // wiki/Architecture/Design-Specs/2026-05-06-intelligent-default-builders.md
     // for the full pattern.
-    const taskTextForIntent = extractIntentText(task.input);
+    const taskTextForIntent = extractIntentText(task.input, task.metadata);
     const finalAnswerCtx = {
       outputFormat: extractOutputFormat(taskTextForIntent).format,
       hasRequiredTools: (effectiveRequiredTools?.length ?? 0) > 0,
@@ -274,7 +274,7 @@ export const prepareReasoningToolSchemas = (
         filteredSet = new Set([...classifiedRelevantTools, ...requiredSet]);
       } else {
         // Fallback: heuristic keyword matching
-        const taskTextForFilter = extractIntentText(task.input);
+        const taskTextForFilter = extractIntentText(task.input, task.metadata);
         const { primary } = filterToolsByRelevance(taskTextForFilter, availableToolSchemas);
         filteredSet = new Set(primary.map((t: { name: string }) => t.name));
       }

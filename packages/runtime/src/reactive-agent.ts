@@ -77,7 +77,7 @@ import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
 import { RunController, installDurableCheckpointing, type RunHandle } from './run-controller.js'
 import { RunStoreLive } from './services/run-store.js'
 import { checkTaskInputModality, taskInputText, toTaskInputPayload, type TaskInput } from './agent/task-input.js'
-import { withHistoryBlock } from './agent/history-block.js'
+import { withHistoryBlock, currentTurnCarry } from './agent/history-block.js'
 // withHistoryBlock lives in agent/history-block.ts (multimodal-aware); re-exported for existing importers.
 export { withHistoryBlock }
 // The abstention projection moved to `engine/abstention-projection.ts` so the
@@ -744,7 +744,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
             ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
             // Chat-turn carry: environment notice + plan posture ride task context to the envelope.
-            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace), ...skillsCarry(options?.skills), ...(options?.onApproval ? { onApproval: options.onApproval } : {}),
+            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace), ...skillsCarry(options?.skills), ...(options?.onApproval ? { onApproval: options.onApproval } : {}), ...currentTurnCarry(input, options?.history),
         }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise
@@ -1255,7 +1255,7 @@ export class ReactiveAgent<TOut = unknown> {
             }
         }
         const controller = new RunController(internalAbort);
-        const gen = runTurnWithSchema(options?.outputSchema, input, this.runtime, (turnInput) => this._runStreamImpl(withHistoryBlock(turnInput, options?.history), { ...options, signal: controller.signal }, controller));
+        const gen = runTurnWithSchema(options?.outputSchema, input, this.runtime, (turnInput) => this._runStreamImpl(withHistoryBlock(turnInput, options?.history), { ...options, signal: controller.signal, ...currentTurnCarry(turnInput, options?.history) }, controller));
         return Object.assign(gen, {
             pause: () => controller.pause(),
             resume: () => controller.resume(),
@@ -1666,7 +1666,7 @@ export class ReactiveAgent<TOut = unknown> {
             {
                 sessionId,
                 onOverflow: options?.onOverflow,
-                initialHistory: options?.initialHistory, initialTodo: options?.initialTodo, ...originCarry(options?.origin),
+                initialHistory: options?.initialHistory, initialTodo: options?.initialTodo, ...originCarry(options?.origin), ...(options?.mode ? { mode: options.mode } : {}),
                 ...sessionEnvironmentOption(self.runtime, options),
             },
         );

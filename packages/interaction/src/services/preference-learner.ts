@@ -50,6 +50,8 @@ function autonomyConfidenceShadow(
               cost,
             }),
             questions: buildAutonomyConfidenceQuestions(),
+            // Observation-only (publishes JudgmentShadow, never feeds the approval decision): bounded by the shadow gate.
+            priority: "shadow",
           })
           .pipe(Effect.either);
 

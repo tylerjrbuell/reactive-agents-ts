@@ -62,6 +62,7 @@ import type {
     TaskError,
     OutputFormat,
     TerminatedBy,
+    TaskCurrentTurn,
 } from '@reactive-agents/core'
 import { LLMService, resolveCapability } from '@reactive-agents/llm-provider'
 import type { SchemaContract, ReasoningStep } from '@reactive-agents/reasoning'
@@ -102,6 +103,8 @@ export interface RunTaskEffectOptions {
     readonly posture?: 'execute' | 'plan'
     /** Caller origin; rides `task.metadata.context.origin` to `run-started.origin`. */
     readonly origin?: RunOrigin
+    /** The typed current turn (input before history was folded in); rides `task.metadata.currentTurn`. */
+    readonly currentTurn?: TaskCurrentTurn
     readonly durableRunId?: string
     /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
     readonly forkedFrom?: string
@@ -220,6 +223,7 @@ export const buildRunTaskEffect = (
         status: 'pending' as const,
         metadata: {
             tags: [],
+            ...(options?.currentTurn ? { currentTurn: options.currentTurn } : {}),
             ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length
                 ? {
                       context: {

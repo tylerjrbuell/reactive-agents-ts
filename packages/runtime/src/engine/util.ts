@@ -1,4 +1,4 @@
-import type { TerminatedBy } from "@reactive-agents/core";
+import { contentText, type TaskMetadata, type TerminatedBy } from "@reactive-agents/core";
 import { extractCurrentTurn } from "@reactive-agents/reasoning";
 
 /**
@@ -59,9 +59,20 @@ export function extractTaskText(input: unknown): string {
  * routing, skill/experience queries) must use this, never `extractTaskText`,
  * or they classify on old turns. Execution/verification/telemetry that needs
  * the full task keeps `extractTaskText`.
+ *
+ * Pass `task.metadata` when you have it: a producer-typed `currentTurn` is the
+ * current turn (no marker parsing); absent or blank, the text markers decide.
  */
-export function extractIntentText(input: unknown): string {
-  return extractCurrentTurn(extractTaskText(input)).text.trim();
+export function extractIntentText(input: unknown, metadata?: Pick<TaskMetadata, "currentTurn">): string {
+  return typedCurrentTurnText(metadata) ?? extractCurrentTurn(extractTaskText(input)).text.trim();
+}
+
+/** The text of `metadata.currentTurn`, or `undefined` when absent or blank. */
+export function typedCurrentTurnText(metadata?: Pick<TaskMetadata, "currentTurn">): string | undefined {
+  const turn = metadata?.currentTurn;
+  if (turn === undefined) return undefined;
+  const text = contentText(turn.content).trim();
+  return text.length > 0 ? text : undefined;
 }
 
 /**

@@ -374,6 +374,8 @@ function judgmentComplexityShadow(task: string, current: ModelTier): Effect.Effe
           .ask({
             state: buildComplexityJudgmentState({ task }),
             questions: buildComplexityJudgmentQuestions(),
+            // Observation-only (publishes JudgmentShadow, drives nothing): bounded by the shadow gate.
+            priority: "shadow",
           })
           .pipe(Effect.either);
 
