@@ -533,6 +533,7 @@ export type HarnessAgentEvent =
   | LedgerEntryAppendedEvent
   | ChecklistInferredEvent
   | EnvironmentChangedEvent
+  | ChatModeChangedEvent
   | PromptAssembledEvent
   | StructuredOutputReportedEvent;
 
@@ -626,6 +627,23 @@ export interface EnvironmentChangedEvent {
     readonly kind: EnvironmentChangeKind;
     readonly summary: string;
   }>;
+  readonly timestamp: number;
+}
+
+/**
+ * A chat session's mode changed (`AgentSession.setMode`). Emitted once per
+ * actual change; a no-op set (`from === to`) emits nothing. The mode drives the
+ * run posture of later turns, so this is the record of why posture changed
+ * between turns.
+ */
+export interface ChatModeChangedEvent {
+  readonly _tag: "ChatModeChanged";
+  /** Chat session whose mode changed. */
+  readonly sessionId: string;
+  /** Mode before the change. */
+  readonly from: "plan" | "execute";
+  /** Mode after the change. Always differs from `from`. */
+  readonly to: "plan" | "execute";
   readonly timestamp: number;
 }
 

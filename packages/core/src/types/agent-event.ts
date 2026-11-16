@@ -8,6 +8,7 @@ export type {
   LedgerEntryAppendedEvent,
   ChecklistInferredEvent,
   EnvironmentChangedEvent,
+  ChatModeChangedEvent,
   EnvironmentChangeKind,
   SignalRenderedEmittedEvent,
   SignalEffectEmittedEvent,

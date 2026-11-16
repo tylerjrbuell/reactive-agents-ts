@@ -223,6 +223,7 @@ export type {
   LedgerEntryAppendedEvent,
   ChecklistInferredEvent,
   EnvironmentChangedEvent,
+  ChatModeChangedEvent,
   EnvironmentChangeKind,
   PromptAssembledEvent,
   PromptAssembledFragment,
