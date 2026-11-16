@@ -4,6 +4,7 @@
   import ChatTranscript from "$lib/components/ChatTranscript.svelte";
   import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
   import ChatModePlanCard from "./ChatModePlanCard.svelte";
+  import type { DraftStep } from "$lib/plan-edit.js";
   import SkillActivationRow from "$lib/components/SkillActivationRow.svelte";
   import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
@@ -37,9 +38,12 @@
     onFork: (turnId: number) => void | Promise<void>;
     /** Plan mode, latest finished reply: render it as the plan card with its Execute action. */
     planCard?: boolean;
-    onExecutePlan?: () => void | Promise<void>;
+    /** Record the edited plan (when changed), switch to Execute and send the follow-up turn. */
+    onExecutePlan?: (edited?: readonly DraftStep[]) => void | Promise<void>;
+    /** The plan turn that was executed: a read-only plan card with the plan's live status. */
+    pastPlanCard?: boolean;
   }
-  const { turn, index: i, entering, idle, provider, model, planHidden, isLast, onCopy, strategyLabel, onRerun, onTrace, onFork, planCard = false, onExecutePlan }: Props = $props();
+  const { turn, index: i, entering, idle, provider, model, planHidden, isLast, onCopy, strategyLabel, onRerun, onTrace, onFork, planCard = false, onExecutePlan, pastPlanCard = false }: Props = $props();
 
   const TONE = { error: "bad", warn: "warn", quiet: "neutral" } as const;
   const status = $derived(statusOfTurn(turnEnding(turn), { streaming: turn.streaming === true }));
@@ -91,7 +95,9 @@
     <ChatTranscript {turn} {planHidden} answerCopy={false} onRetry={canRetry ? () => void onRerun() : undefined} />
   {/snippet}
   {#if planCard && onExecutePlan}
-    <ChatModePlanCard onExecute={onExecutePlan}>{@render transcript()}</ChatModePlanCard>
+    <ChatModePlanCard turnId={turn.id} onExecute={onExecutePlan}>{@render transcript()}</ChatModePlanCard>
+  {:else if pastPlanCard}
+    <ChatModePlanCard turnId={turn.id}>{@render transcript()}</ChatModePlanCard>
   {:else}
     {@render transcript()}
   {/if}

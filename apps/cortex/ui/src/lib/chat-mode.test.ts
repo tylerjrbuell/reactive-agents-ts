@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isModeShortcut, modeHint, modeLabel, nextMode, planCardTurnId } from "./chat-mode.js";
+import { executedPlanTurnId, isModeShortcut, modeHint, modeLabel, nextMode, planCardTurnId } from "./chat-mode.js";
 import type { ChatTurn } from "./stores/chat-store.js";
 
 const turn = (id: number, role: "user" | "assistant", over: Partial<ChatTurn> = {}): ChatTurn =>
@@ -30,6 +30,15 @@ describe("chat mode helpers", () => {
     expect(planCardTurnId([turn(1, "user")], "plan")).toBeUndefined();
     // the thread's last turn is the user's: the previous plan is already answered
     expect(planCardTurnId([turn(1, "user"), turn(2, "assistant"), turn(3, "user")], "plan")).toBeUndefined();
+  });
+
+  test("executedPlanTurnId: the assistant turn before the latest 'Execute the plan.' turn", () => {
+    const run = [turn(1, "user"), turn(2, "assistant"), turn(3, "user", { content: "Execute the plan." }), turn(4, "assistant")];
+    expect(executedPlanTurnId(run)).toBe(2);
+    // a later execute wins; none = undefined; a leading execute turn has no plan before it
+    expect(executedPlanTurnId([...run, turn(5, "user"), turn(6, "assistant"), turn(7, "user", { content: " Execute the plan. " }), turn(8, "assistant")])).toBe(6);
+    expect(executedPlanTurnId([turn(1, "user"), turn(2, "assistant")])).toBeUndefined();
+    expect(executedPlanTurnId([turn(1, "user", { content: "Execute the plan." })])).toBeUndefined();
   });
 
   test("Shift+Tab is the mode shortcut; plain Tab, IME and slash drafts are not", () => {

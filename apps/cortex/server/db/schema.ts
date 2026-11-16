@@ -415,6 +415,10 @@ export function applySchema(db: Database): void {
   if (!chatSessionCols.includes("todo_json")) {
     db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN todo_json TEXT");
   }
+  // Plan fields a to-do list cannot carry (id, goal, source, tool hints): db/chat-plan-queries.ts.
+  if (!chatSessionCols.includes("plan_meta_json")) {
+    db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN plan_meta_json TEXT");
+  }
   // Session mode (plan | execute): legacy rows read as execute.
   if (!chatSessionCols.includes("mode")) {
     db.exec("ALTER TABLE cortex_chat_sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'execute'");

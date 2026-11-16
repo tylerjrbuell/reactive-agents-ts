@@ -9,6 +9,8 @@ import { chatStore } from "./chat-store.js";
 import { toast } from "./toast-store.js";
 import type { ChatMode } from "../chat-mode.js";
 import { EXECUTE_MESSAGE } from "../plan-command.js";
+import type { DraftStep } from "../plan-edit.js";
+import { savePlan } from "./chat-plan-store.js";
 
 /** Modes the user set in this page, by session id (wins over the list until a reload). */
 const chosen = writable<Readonly<Record<string, ChatMode>>>({});
@@ -52,7 +54,13 @@ export async function setChatMode(mode: ChatMode): Promise<boolean> {
   }
 }
 
-/** The plan card's Execute action: switch to Execute, then send the follow-up turn in one step. */
-export async function executePlan(): Promise<void> {
+/**
+ * The plan card's Execute action: record the user's edited steps as the session's plan (the
+ * framework `session.setPlan`, so the next turn seeds from them), switch to Execute, then send the
+ * follow-up turn in one step. `edited` is absent when the plan was not changed. A plan the server
+ * refuses stops here, with its toast: nothing executes a plan the user did not see recorded.
+ */
+export async function executePlan(edited?: readonly DraftStep[]): Promise<void> {
+  if (edited !== undefined && !(await savePlan(edited))) return;
   if (await setChatMode("execute")) await chatStore.sendMessageStream(EXECUTE_MESSAGE);
 }

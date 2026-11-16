@@ -44,6 +44,12 @@ describe("eventPreview", () => {
     expect(eventPreview(ev("ReasoningIterationProgress", { iteration: 2, maxIterations: 6, toolsThisStep: ["a"] }))).toBe("Loop 2 of 6 · a");
     expect(eventPreview(ev("EntropyScored", { composite: 0.25, trajectory: { shape: "converging" } }))).toBe("η 0.250 · converging");
   });
+  it("words the plan and mode events (the feed shows them, not a field dump)", () => {
+    expect(eventPreview(ev("PlanRecorded", { planId: "p", steps: [{ id: "1" }, { id: "2" }, { id: "3" }], source: "user-edited" }))).toBe("3 steps · user-edited");
+    expect(eventPreview(ev("PlanRecorded", { planId: "p", steps: [{ id: "1" }], source: "model" }))).toBe("1 step · model");
+    expect(eventPreview(ev("PlanStepStatusChanged", { planId: "p", stepId: "2", from: "pending", to: "in-progress" }))).toBe("step 2: pending to in-progress");
+    expect(eventPreview(ev("ChatModeChanged", { sessionId: "s", from: "execute", to: "plan" }))).toBe("execute to plan");
+  });
   it("lists scalar fields for other types, skipping bookkeeping", () => {
     expect(eventPreview(ev("ContextPressure", { taskId: "t", level: "high", utilizationPct: 82, nested: { a: 1 } }))).toBe("level high · utilizationPct 82");
     expect(eventPreview(ev("ExecutionPhaseCompleted", { phase: "think", durationMs: 18326.362272 }))).toBe("phase think · durationMs 18326.36");

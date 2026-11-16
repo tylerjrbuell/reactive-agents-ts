@@ -448,6 +448,64 @@ export interface ChecklistUpdated {
   readonly checklist: ChecklistSnapshotWire;
   readonly iteration: number;
 }
+/** Status of one plan step (mirrors core `PlanStepStatus`). `skipped` = resolved without being done. */
+export type PlanStepStatusWire = "pending" | "in-progress" | "done" | "skipped";
+
+/** Who authored a plan (mirrors core `PlanSource`). */
+export type PlanSourceWire = "model" | "harness-derived" | "user-edited";
+
+/** One plan step (mirrors core `PlanStep`). `tool` is the tool the step expects to use. */
+export interface PlanStepWire {
+  readonly id: string;
+  readonly title: string;
+  readonly tool?: string;
+  readonly status: PlanStepStatusWire;
+}
+
+/** A plan: a goal and its ordered steps (mirrors core `Plan`). */
+export interface PlanWire {
+  readonly id: string;
+  readonly goal: string;
+  readonly steps: readonly PlanStepWire[];
+  readonly createdAt: number;
+  readonly source: PlanSourceWire;
+}
+
+/**
+ * A plan was recorded (mirrors core `PlanRecorded`: `agent.plan()`, a model-written plan or a
+ * user edit). Carried by run-event logs and the server's plan routes, not by the SSE stream.
+ */
+export interface PlanRecordedWire {
+  readonly _tag: "PlanRecorded";
+  readonly planId: string;
+  readonly steps: readonly PlanStepWire[];
+  readonly source: PlanSourceWire;
+  readonly agentId?: string;
+  readonly taskId?: string;
+  readonly timestamp: number;
+}
+
+/** One plan step changed status (mirrors core `PlanStepStatusChanged`). Never emitted for `from === to`. */
+export interface PlanStepStatusChangedWire {
+  readonly _tag: "PlanStepStatusChanged";
+  readonly planId: string;
+  readonly stepId: string;
+  readonly from: PlanStepStatusWire;
+  readonly to: PlanStepStatusWire;
+  readonly agentId?: string;
+  readonly taskId?: string;
+  readonly timestamp: number;
+}
+
+/** A chat session's mode changed (mirrors core `ChatModeChanged`). Always `from !== to`. */
+export interface ChatModeChangedWire {
+  readonly _tag: "ChatModeChanged";
+  readonly sessionId: string;
+  readonly from: "plan" | "execute";
+  readonly to: "plan" | "execute";
+  readonly timestamp: number;
+}
+
 /**
  * The shared exit gate judged a "done" claim and did not simply accept it
  * (mirrors runtime `ExitGateDecision`). The same event for every strategy:

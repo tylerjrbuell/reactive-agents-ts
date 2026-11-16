@@ -105,6 +105,14 @@ export function eventPreview(e: LogEvent): string {
       return `${p.success === false ? "failed" : "succeeded"}${num(p.totalTokens) !== undefined ? ` · ${num(p.totalTokens)} tok` : ""}${num(p.durationMs) !== undefined ? ` · ${num(p.durationMs)} ms` : ""}`;
     case "TaskFailed":
       return oneLine(str(p.error) ?? str(p.reason) ?? "", 90);
+    case "PlanRecorded": {
+      const n = Array.isArray(p.steps) ? p.steps.length : undefined;
+      return [n !== undefined ? `${n} ${n === 1 ? "step" : "steps"}` : undefined, str(p.source)].filter(Boolean).join(" · ");
+    }
+    case "PlanStepStatusChanged":
+      return `step ${str(p.stepId) ?? "?"}: ${str(p.from) ?? "?"} to ${str(p.to) ?? "?"}`;
+    case "ChatModeChanged":
+      return `${str(p.from) ?? "?"} to ${str(p.to) ?? "?"}`;
     default: {
       const parts: string[] = [];
       for (const [k, v] of Object.entries(p)) {

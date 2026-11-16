@@ -77,6 +77,10 @@ const str = (v: unknown): string | undefined => (typeof v === "string" && v.leng
 
 const ENDS: ReadonlySet<string> = new Set(["AgentCompleted", "TaskFailed", "ExecutionCancelled"]);
 
+/** Events a chat session publishes outside any run (no `taskId` on a mode switch or a user plan edit). */
+const SESSION_EVENT_TAGS: readonly string[] = ["ChatModeChanged", "PlanRecorded"];
+const HELD_SESSION_MAX = 20;
+
 /** Subscribe `agent` to `sink`. */
 export async function attachChatIngest(
   agent: SubscribableAgent,
@@ -91,6 +95,8 @@ export async function attachChatIngest(
   const agentIds = new Map<string, string>();
   // This turn's started-call arguments by call id (cleared each turn).
   let startedArgs = new Map<string, unknown>();
+  // Session events that arrived with no run open, for the next chat root.
+  let heldSession: AgentEvent[] = [];
 
   const send = (taskId: string, agentId: string, event: AgentEvent): void => {
     const msg: CortexIngestMessage = {
@@ -124,7 +130,16 @@ export async function attachChatIngest(
     // Judgment events carry no `taskId` (framework gap: core `judgment-events.ts`). A chat
     // session runs one root at a time, so the turn's open root is the run that asked.
     const taskId = str(e.taskId) ?? (JUDGMENT_EVENT_TAGS.includes(e._tag) ? onlyOpenRoot() : undefined);
-    if (taskId === undefined) return;
+    if (taskId === undefined) {
+      // Session-level events (a mode switch, a user plan edit) have no run: file them under the
+      // open root, or hold them for the next root so the run they shaped shows them.
+      if (SESSION_EVENT_TAGS.includes(e._tag)) {
+        const root = onlyOpenRoot();
+        if (root !== undefined) send(root, agentIds.get(root) ?? agentIdOf(root, undefined), event);
+        else heldSession = [...heldSession, event].slice(-HELD_SESSION_MAX);
+      }
+      return;
+    }
     if (e._tag === "AgentStarted") {
       if (str(e.parentRunId) === undefined) chatRoots.add(taskId);
       open.add(taskId);
@@ -135,6 +150,10 @@ export async function attachChatIngest(
     const agentId = agentIdOf(taskId, str(e.agentId));
     agentIds.set(taskId, agentId);
     send(taskId, agentId, event);
+    if (e._tag === "AgentStarted" && chatRoots.has(taskId)) {
+      for (const held of heldSession) send(taskId, agentId, held);
+      heldSession = [];
+    }
   });
 
   return {

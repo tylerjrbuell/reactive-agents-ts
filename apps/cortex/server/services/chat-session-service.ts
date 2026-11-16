@@ -1,5 +1,7 @@
 import { chatEnvironmentSnapshot, countTodoEdits, type EnvironmentSnapshotInput } from "./chat-environment.js";
-import { applyChatMode } from "./chat-session-mode.js";
+import { applyChatMode, modeSwitchNeedsRebuild } from "./chat-session-mode.js";
+import { ChatSessionPlans, persistSessionPlan } from "./chat-session-plan.js";
+import { chatMetaTools } from "./chat-meta-tools.js";
 import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure } from "./chat-document-cache.js";
 import type { Database } from "bun:sqlite";
 import { generateTaskId, type RunPosture } from "@reactive-agents/core";
@@ -286,22 +288,12 @@ export class ChatSessionService {
       persistExchange: (id, userMessage, reply, result, toolsUsed) => {
         const row = getChatSession(this.db, id);
         const by = row ? producedBy(normalizeCortexAgentConfig(row.agentConfig)) : undefined;
-        this.persistTurn(
-          id,
-          userMessage,
-          reply,
-          result?.metadata.tokensUsed ?? 0,
-          toolsUsed,
-          undefined,
-          by,
-          result ? turnCostOf(result.metadata.cost, undefined) : undefined,
-          result?.taskId,
-          undefined,
-          result ? { inputTokens: result.metadata.inputTokens, outputTokens: result.metadata.outputTokens } : undefined,
-        );
+        const split = result ? { inputTokens: result.metadata.inputTokens, outputTokens: result.metadata.outputTokens } : undefined;
+        this.persistTurn(id, userMessage, reply, result?.metadata.tokensUsed ?? 0, toolsUsed, undefined, by, result ? turnCostOf(result.metadata.cost, undefined) : undefined, result?.taskId, undefined, split);
       },
       evict: (id) => this.evictSession(id),
     });
+    this.plans = new ChatSessionPlans(db, { live: this.sessions, acquireTurn: (id) => this.acquireTurn(id), build: (id, cfg, stable) => this.getOrBuildSession(id, normalizeCortexAgentConfig(cfg), stable) });
   }
 
   /** Turns paused on a durable approval gate: listing, approve / deny / dismiss (see `chat-approvals.ts`). */
@@ -455,7 +447,17 @@ export class ChatSessionService {
     return { ...session, turns, totals: getChatSessionTotals(this.db, sessionId), todo: getChatTodo(this.db, sessionId), documentFailures: this.documents.failures(sessionId), pendingApprovals: this.approvals.list(sessionId), pendingInteractions: this.approvals.listInteractions(sessionId) };
   }
 
-  /** Switch the session mode (persisted, applied to the live session; chat-session-mode.ts). */ async setMode(sessionId: string, mode: RunPosture): Promise<void> { applyChatMode(this.db, this.sessions, sessionId, mode); }
+  /** The session's plan: read, and edit through `session.setPlan` (chat-session-plan.ts). */
+  readonly plans: ChatSessionPlans;
+
+  /** Switch the session mode (persisted, applied to the live session; chat-session-mode.ts). Entering Plan rebuilds an agent lacking the `todo` tool (after a running turn). */
+  async setMode(sessionId: string, mode: RunPosture): Promise<void> {
+    const before = getChatSession(this.db, sessionId);
+    applyChatMode(this.db, this.sessions, sessionId, mode);
+    if (!modeSwitchNeedsRebuild(before, mode, this.sessions.has(sessionId))) return;
+    if (this.inFlight.has(sessionId)) this.evictAfterTurn.add(sessionId);
+    else await this.evictSession(sessionId);
+  }
 
   /**
    * Replace the conversation's to-do list (user edit). Runs under the turn guard and evicts
@@ -897,7 +899,7 @@ let tokensUsed = 0;
             outputTokens: streamOutputTokens,
           });
           // The to-do list belongs to the conversation: keep the engine's latest list for the next turn / restart.
-          setChatTodo(this.db, sessionId, entry.session.todo());
+          persistSessionPlan(this.db, sessionId, entry.session);
         } else if (!completed) {
           // Cancelled or errored: the engine recorded nothing, but the calls that
           // already reported did spend tokens. Keep the user message, whatever
@@ -1259,10 +1261,8 @@ let tokensUsed = 0;
         }
       : { working: false, episodic: false, semantic: false };
 
-    const metaTools =
-      agentConfig.metaTools && typeof agentConfig.metaTools === "object" && !Array.isArray(agentConfig.metaTools)
-        ? (agentConfig.metaTools as BuildCortexAgentParams["metaTools"])
-        : undefined;
+    // Plan mode adds the `todo` meta-tool so the model records its plan (chat-meta-tools.ts).
+    const metaTools = chatMetaTools(agentConfig.metaTools, getChatSession(this.db, sessionId)?.mode ?? "execute", enableTools);
     const observability =
       agentConfig.observability && typeof agentConfig.observability === "object" && !Array.isArray(agentConfig.observability)
         ? (agentConfig.observability as BuildCortexAgentParams["observability"])

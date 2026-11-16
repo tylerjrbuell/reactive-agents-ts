@@ -64,4 +64,40 @@ describe("chat session mode store", () => {
     expect(body).toEqual({ message: "Execute the plan." });
     expect(get(chatMode)).toBe("execute");
   });
+
+  it("executePlan with edited steps PUTs the plan first (setPlan), then switches mode, then sends", async () => {
+    const calls: string[] = [];
+    let planBody: { steps: Array<{ id: string; title: string; tool?: string }> } | undefined;
+    server([row("m5", "plan")], { put: (b) => (calls.push("mode"), json({ mode: b.mode })), stream: () => calls.push("stream") });
+    const base = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/sessions/m5/plan") && init?.method === "PUT") {
+        calls.push("plan");
+        planBody = JSON.parse(String(init.body)) as typeof planBody;
+        return json({ plan: { id: "p", goal: "", source: "user-edited", createdAt: 1, steps: planBody!.steps.map((s) => ({ ...s, status: "pending" })) } });
+      }
+      return base(url, init);
+    }) as FetchFn;
+    await chatStore.loadSessions();
+    await chatStore.selectSession("m5");
+    await executePlan([
+      { id: "2", title: "Second first", status: "pending", tool: "file-write" },
+      { id: "1", title: "First second", status: "pending" },
+    ]);
+    expect(calls).toEqual(["plan", "mode", "stream"]);
+    expect(planBody?.steps.map((s) => [s.id, s.title, s.tool])).toEqual([["2", "Second first", "file-write"], ["1", "First second", undefined]]);
+  });
+
+  it("executePlan stops when the server refuses the edited plan: no mode switch, no turn", async () => {
+    const calls: string[] = [];
+    server([row("m6", "plan")], { put: (b) => (calls.push("mode"), json({ mode: b.mode })), stream: () => calls.push("stream") });
+    const base = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) =>
+      url.endsWith("/sessions/m6/plan") ? json({ error: "busy" }, 409) : base(url, init)) as FetchFn;
+    await chatStore.loadSessions();
+    await chatStore.selectSession("m6");
+    await executePlan([{ id: "1", title: "x", status: "pending" }]);
+    expect(calls).toEqual([]);
+    expect(get(chatMode)).toBe("plan");
+  });
 });

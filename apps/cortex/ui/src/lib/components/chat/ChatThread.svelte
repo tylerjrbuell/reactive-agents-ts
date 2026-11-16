@@ -18,8 +18,9 @@
   import ChatAssistantTurn from "./ChatAssistantTurn.svelte";
   import type { compactionRows } from "$lib/chat-compaction.js";
   import { followAfterScroll, shouldFollow, type FollowState } from "$lib/chat-scroll.js";
-  import { planCardTurnId } from "$lib/chat-mode.js";
+  import { executedPlanTurnId, planCardTurnId } from "$lib/chat-mode.js";
   import { chatMode, executePlan } from "$lib/stores/chat-mode-store.js";
+  import { chatPlan, refreshChatPlan } from "$lib/stores/chat-plan-store.js";
   import { fade } from "svelte/transition";
   import { onMount } from "svelte";
 
@@ -62,6 +63,12 @@
 
   // Plan mode: the latest finished reply is the plan card (Execute switches the session and sends the follow-up).
   const planTurnId = $derived(planCardTurnId(turns, $chatMode));
+  // The executed plan turn keeps a read-only plan card (the persisted plan's live status), also after a reload.
+  const executedTurnId = $derived(executedPlanTurnId(turns));
+  const pastPlanTurnId = $derived(executedTurnId !== undefined && ($chatPlan?.steps.length ?? 0) > 0 && executedTurnId !== planTurnId ? executedTurnId : undefined);
+  $effect(() => {
+    if (executedTurnId !== undefined && !sending) void refreshChatPlan();
+  });
 
   // Live approvals of this chat that no streaming turn shows (e.g. after a reload): the
   // open chat is their surface, so the app-wide toast skips them (approval-surface.ts).
@@ -166,7 +173,7 @@
         {:else if turn.role === "user"}
           <ChatUserTurn {turn} index={i} {entering} {idle} {onCopy} {strategyLabel} {onEdit} {onRewind} />
         {:else}
-          <ChatAssistantTurn {turn} index={i} {entering} {idle} {provider} {model} {planHidden} isLast={turn.id === lastAssistantId} planCard={turn.id === planTurnId} onExecutePlan={executePlan} {onCopy} {strategyLabel} {onRerun} {onTrace} {onFork} />
+          <ChatAssistantTurn {turn} index={i} {entering} {idle} {provider} {model} {planHidden} isLast={turn.id === lastAssistantId} planCard={turn.id === planTurnId} pastPlanCard={turn.id === pastPlanTurnId} onExecutePlan={executePlan} {onCopy} {strategyLabel} {onRerun} {onTrace} {onFork} />
         {/if}
       {/each}
     {/if}
