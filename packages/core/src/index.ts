@@ -64,6 +64,8 @@ export type { RunNode, RunScope, RunTree } from "./run-tree.js";
 export {
   checklistChanged,
   foldAdvisory,
+  planStepToolHint,
+  planStepToolHints,
   inferChecklistProgress,
   isChecklistEvidenceFact,
   isChecklistFact,

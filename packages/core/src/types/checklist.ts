@@ -201,8 +201,37 @@ export function isChecklistEvidenceFact(
 /** Compile-time exhaustiveness check for `ChecklistItemOp` switches. */
 const unhandledOp = (op: never): never => op;
 
+const TOOL_HINT_NAME = "`?[\\w][\\w./-]*`?";
+const TOOL_HINT_LIST = new RegExp(`\\btools?:\\s*(${TOOL_HINT_NAME}(?:\\s*,\\s*${TOOL_HINT_NAME})*)`, "i");
+
 /**
- * Fold advisory facts into items, in insertion order. Same-status changes and
+ * Every tool a step's text names with an explicit `tool:` / `tools:` marker, in
+ * order: `tool: x`, `(tool: x)`, tool: `x` (backticked), `tools: a, b`. Names may
+ * hold `/`, `-`, `_`, `.`; trailing punctuation is not part of a name. Prose that
+ * mentions a tool without the marker yields nothing. Only the first marker is read.
+ * Pure; never throws; `[]` when no hint.
+ */
+export function planStepToolHints(text: string): readonly string[] {
+  const list = TOOL_HINT_LIST.exec(typeof text === "string" ? text : "")?.[1];
+  if (list === undefined) return [];
+  return list
+    .split(",")
+    .map((n) => n.trim().replace(/`/g, "").replace(/[./-]+$/, ""))
+    .filter((n) => n.length > 0);
+}
+
+/**
+ * The row tool named in a step's text (first of {@link planStepToolHints}), or
+ * `undefined` when the text carries no `tool:` marker.
+ */
+export function planStepToolHint(text: string): string | undefined {
+  return planStepToolHints(text)[0];
+}
+
+/**
+ * Fold advisory facts into items, in insertion order. An `add` item with no
+ * explicit `tool` takes the hint named in its title ({@link planStepToolHint});
+ * an explicit `tool` always wins and titles are never rewritten. Same-status changes and
  * same-title edits are no-ops; ops on unknown or removed ids are ignored.
  */
 export function foldAdvisory(facts: readonly ChecklistFact[]): readonly AdvisoryItem[] {
@@ -218,13 +247,14 @@ export function foldAdvisory(facts: readonly ChecklistFact[]): readonly Advisory
           const parsed = Number(added.id);
           const seq = Number.isInteger(parsed) && parsed > 0 ? parsed : maxSeq + 1;
           maxSeq = Math.max(maxSeq, seq);
+          const tool = added.tool ?? planStepToolHint(added.title);
           items.set(added.id, {
             id: added.id,
             seq,
             title: added.title,
             status: "pending",
             ...(fact.origin !== undefined ? { origin: fact.origin } : {}),
-            ...(added.tool !== undefined ? { tool: added.tool } : {}),
+            ...(tool !== undefined ? { tool } : {}),
           });
         }
         break;
