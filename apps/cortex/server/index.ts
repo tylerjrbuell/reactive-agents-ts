@@ -55,7 +55,7 @@ import { CortexEventBridge } from "./services/event-bridge.js";
 import type { CortexConfig } from "./types.js";
 import { defaultCortexConfig } from "./types.js";
 import { cortexBanner, cortexLog } from "./cortex-log.js";
-import { cortexEnv } from "./env-config.js";
+import { applyCortexProcessDefaults, cortexEnv } from "./env-config.js";
 import { CortexStartRefusedError } from "./errors.js";
 import { closeOrphanedChatRuns } from "./db/queries.js";
 import { isLoopbackHost, resolveCortexHostname } from "./listen-host.js";
@@ -96,6 +96,7 @@ export async function startCortexServer(
   };
 
   // Off loopback the API needs an access token; refuse to start before anything is opened or bound.
+  applyCortexProcessDefaults();
   const env = cortexEnv();
   const token = (config.token ?? env.token)?.trim() || undefined;
   const refusal = bindRefusal(resolveCortexHostname(config.hostname, env.raw), token);

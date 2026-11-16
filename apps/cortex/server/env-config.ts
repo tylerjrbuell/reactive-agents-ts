@@ -41,3 +41,17 @@ export function cortexEnv(env: Readonly<Record<string, string | undefined>> = pr
     raw: env,
   };
 }
+
+/**
+ * Process-wide defaults Cortex sets once at startup (`env` is `process.env` in production).
+ *
+ * `REACTIVE_AGENTS_NO_AUTO_SHADOW=1`: without it the framework's `build()` probes the local
+ * Ollama and, when it answers, wires an observation-only judgment backend even though the
+ * agent's Judgment section is unchecked. Every shadow site then POSTs `/v1/systemone` to the
+ * same Ollama the chat turn uses (thousands of calls in one session, a third failing with
+ * model-load timeouts). Checking Judgment in the Lab calls `.withJudgment()`, which always wins
+ * over this opt-out. A value the user already set is left alone.
+ */
+export function applyCortexProcessDefaults(env: Record<string, string | undefined> = process.env): void {
+  if (env.REACTIVE_AGENTS_NO_AUTO_SHADOW === undefined) env.REACTIVE_AGENTS_NO_AUTO_SHADOW = "1";
+}
