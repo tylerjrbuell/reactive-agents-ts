@@ -1,4 +1,5 @@
-import type { Plan } from "@reactive-agents/core";
+import type { Plan, PlanFinding } from "@reactive-agents/core";
+import { findingsOfStored } from "../services/chat-plan-findings.js";
 import { getChatTodo, type setChatTodo, type StoredTodoItem } from "./chat-queries.js";
 
 type Db = Parameters<typeof setChatTodo>[0];
@@ -18,6 +19,8 @@ export interface StoredPlanMeta {
    * only (see {@link getChatTodoWithHints}); never written again.
    */
   readonly tools: Readonly<Record<string, string>>;
+  /** Recon findings the plan carries (`Plan.findings`); absent when it has none. */
+  readonly findings?: readonly PlanFinding[];
 }
 
 const SOURCES: ReadonlySet<string> = new Set(["model", "harness-derived", "user-edited"]);
@@ -37,7 +40,8 @@ export function getChatPlanMeta(db: Db, sessionId: string): StoredPlanMeta | nul
     const tools = isRecord(raw.tools)
       ? Object.fromEntries(Object.entries(raw.tools).filter((e): e is [string, string] => typeof e[1] === "string"))
       : {};
-    return { id: raw.id, goal: raw.goal, source: raw.source as Plan["source"], createdAt: raw.createdAt, tools };
+    const findings = findingsOfStored(raw.findings);
+    return { id: raw.id, goal: raw.goal, source: raw.source as Plan["source"], createdAt: raw.createdAt, tools, ...(findings.length > 0 ? { findings } : {}) };
   } catch {
     return null;
   }

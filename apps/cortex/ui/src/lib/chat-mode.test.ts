@@ -32,6 +32,11 @@ describe("chat mode helpers", () => {
     expect(planCardTurnId([turn(1, "user"), turn(2, "assistant"), turn(3, "user")], "plan")).toBeUndefined();
   });
 
+  test("a plan turn paused on a question is never wrapped in the plan card, so its reply controls stay visible", () => {
+    const asking = turn(2, "assistant", { streaming: true, liveInteraction: { runId: "r", interactionId: "i", kind: "form", prompt: "Which site?", schema: {} } });
+    expect(planCardTurnId([turn(1, "user"), asking], "plan")).toBeUndefined();
+  });
+
   test("executedPlanTurnId: the assistant turn before the latest 'Execute the plan.' turn", () => {
     const run = [turn(1, "user"), turn(2, "assistant"), turn(3, "user", { content: "Execute the plan." }), turn(4, "assistant")];
     expect(executedPlanTurnId(run)).toBe(2);

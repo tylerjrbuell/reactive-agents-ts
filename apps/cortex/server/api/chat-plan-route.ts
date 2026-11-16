@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import { cleanPlanSteps, type ChatSessionPlans } from "../services/chat-session-plan.js";
+import { cleanPlanFindings } from "../services/chat-plan-findings.js";
 import { exportPlan, importPlan, isPlanExportFormat, PLAN_IMPORT_MAX_CHARS } from "../services/chat-plan-portable.js";
 
 /** The slice of the chat service the plan routes use (`ChatSessionService.plans`, `getSession`). */
@@ -81,8 +82,13 @@ export const chatPlanRoute = (svc: ChatPlanHost) =>
           set.status = 400;
           return { error: clean.error };
         }
+        const findings = body.findings === undefined ? undefined : cleanPlanFindings(body.findings);
+        if (findings !== undefined && !findings.ok) {
+          set.status = 400;
+          return { error: findings.error };
+        }
         try {
-          return { plan: await svc.plans.write(params.sessionId, clean.steps, body.goal?.trim()) };
+          return { plan: await svc.plans.write(params.sessionId, clean.steps, body.goal?.trim(), findings?.findings) };
         } catch (e) {
           set.status = isBusy(e) ? 409 : isNotFound(e) ? 404 : 500;
           return { error: isNotFound(e) ? `Chat session ${params.sessionId} not found` : messageOf(e) };
@@ -91,6 +97,8 @@ export const chatPlanRoute = (svc: ChatPlanHost) =>
       {
         body: t.Object({
           goal: t.Optional(t.String()),
+          // Recon findings, kept or reworded or removed by the user; absent keeps the plan's own, `[]` clears.
+          findings: t.Optional(t.Array(t.Object({ id: t.String(), tool: t.String(), summary: t.String(), at: t.Optional(t.Number()) }))),
           steps: t.Array(
             t.Object({
               id: t.Optional(t.String()),

@@ -6,6 +6,7 @@
 import type { PlanWire } from "@reactive-agents/ui-core";
 import { CORTEX_SERVER_URL } from "./constants.js";
 import type { PlanStepBody } from "./plan-edit.js";
+import type { PlanFindingView } from "./plan-findings.js";
 
 /** A plan call's result: the plan (`null` while the session has none) or a person-readable reason. */
 export type PlanResult = { readonly ok: true; readonly plan: PlanWire | null } | { readonly ok: false; readonly error: string };
@@ -28,10 +29,15 @@ export async function fetchSessionPlan(sessionId: string): Promise<PlanResult> {
 }
 
 /** Replace the session's plan with the edited steps (a user edit: the next turn seeds from it). A `goal` replaces the plan's goal too (an imported plan). */
-export async function putSessionPlan(sessionId: string, steps: readonly PlanStepBody[], goal?: string): Promise<PlanResult> {
+export async function putSessionPlan(sessionId: string, steps: readonly PlanStepBody[], goal?: string, findings?: readonly PlanFindingView[]): Promise<PlanResult> {
   try {
     return await settle(
-      await fetch(url(sessionId), { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ steps, ...(goal !== undefined ? { goal } : {}) }) }),
+      await fetch(url(sessionId), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        // `findings` absent keeps the plan's own; `[]` clears them.
+        body: JSON.stringify({ steps, ...(goal !== undefined ? { goal } : {}), ...(findings !== undefined ? { findings } : {}) }),
+      }),
     );
   } catch (e) {
     return { ok: false, error: String(e) };

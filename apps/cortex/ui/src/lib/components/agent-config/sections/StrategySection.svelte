@@ -8,6 +8,7 @@
   import ConfigSection from "../ConfigSection.svelte";
   import Select from "$lib/components/kit/Select.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
+  import HarnessPlanToggles from "../HarnessPlanToggles.svelte";
   import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
   import type { AgentConfig } from "$lib/types/agent-config.js";
   import type { CapabilityManifest } from "$lib/capabilities.js";
@@ -62,6 +63,7 @@
           hint="The framework may move to another strategy when the agent stops making progress."
           checked={config.strategySwitching}
           onchange={(on) => (config = { ...config, strategySwitching: on })} />
+        <HarnessPlanToggles harness={config.harness} onchange={(next) => (config = { ...config, harness: next })} />
         <div>
           <div class="config-label">Harness config (JSON)</div>
           <textarea bind:value={config.harness} rows="6" spellcheck="false"

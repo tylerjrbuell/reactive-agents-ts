@@ -11,7 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import type { Static } from "elysia";
-import { agentConfigToBuilder } from "@reactive-agents/runtime";
+import { Either, Schema } from "effect";
+import { agentConfigToBuilder, AgentConfigSchema } from "@reactive-agents/runtime";
 import { applySchema } from "../db/schema.js";
 import { getChatSession, createChatSession } from "../db/chat-queries.js";
 import { RunConfigBody, runBodyToLaunchParams } from "../api/runs.js";
@@ -137,6 +138,13 @@ describe("each former overlay maps onto its AgentConfig path", () => {
       rawConfig: { reasoning: { harness: { verboseRules: true } } },
     });
     expect(merged.reasoning?.harness).toEqual({ verboseRules: true, toolIndex: true });
+  });
+
+  it("plan harness switches (planRecon, planBudget, wrapUpReserve, planToolCatalog) reach reasoning.harness and the framework's schema accepts them", () => {
+    const harness = { planRecon: true, planBudget: false, wrapUpReserve: true, planToolCatalog: false };
+    const config = cortexParamsToAgentConfig({ provider: "test", harness });
+    expect(config.reasoning?.harness).toEqual(harness);
+    expect(Either.isRight(Schema.decodeUnknownEither(AgentConfigSchema)(config))).toBe(true);
   });
 
   it("agent tools (local + remote) and dynamic sub-agents", () => {

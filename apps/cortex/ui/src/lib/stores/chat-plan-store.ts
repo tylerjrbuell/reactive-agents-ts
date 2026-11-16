@@ -11,6 +11,7 @@ import { chatStore } from "./chat-store.js";
 import { toast } from "./toast-store.js";
 import { exportSessionPlan, fetchSessionPlan, parseSessionPlan, putSessionPlan } from "../plan-api.js";
 import { toPlanBody, type DraftStep } from "../plan-edit.js";
+import type { PlanFindingView } from "../plan-findings.js";
 import { importFailureLine, importTextBlank, importTextTooLarge, type PlanExportItem } from "../plan-transfer.js";
 import { saveTextFile } from "../chat-download.js";
 
@@ -42,6 +43,23 @@ export async function savePlan(steps: readonly DraftStep[], goal?: string): Prom
   const res = await putSessionPlan(sid, toPlanBody(steps), goal);
   if (!res.ok) {
     toast.error("Could not save the plan", res.error);
+    return false;
+  }
+  setPlanFor(sid, res.plan);
+  return true;
+}
+
+/**
+ * Keep the plan's steps and replace its recon findings (a removal drops one; `[]` clears them).
+ * Resolves true when the server recorded the edit.
+ */
+export async function saveFindings(findings: readonly PlanFindingView[]): Promise<boolean> {
+  const sid = get(chatStore).activeSessionId;
+  const plan = sid === null ? undefined : get(plans)[sid];
+  if (sid === null || !plan) return false;
+  const res = await putSessionPlan(sid, toPlanBody(plan.steps), undefined, findings);
+  if (!res.ok) {
+    toast.error("Could not update the findings", res.error);
     return false;
   }
   setPlanFor(sid, res.plan);

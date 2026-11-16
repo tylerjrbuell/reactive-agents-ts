@@ -13,7 +13,9 @@
   import PlanChecklist from "./PlanChecklist.svelte";
   import PlanTransferMenu from "./PlanTransferMenu.svelte";
   import { chatStore } from "$lib/stores/chat-store.js";
-  import { chatPlan, refreshChatPlan, savePlan } from "$lib/stores/chat-plan-store.js";
+  import PlanFindings from "./PlanFindings.svelte";
+  import { chatPlan, refreshChatPlan, saveFindings, savePlan } from "$lib/stores/chat-plan-store.js";
+  import { findingsOfPlan } from "$lib/plan-findings.js";
   import { planEdited, planProgressLine, type DraftStep } from "$lib/plan-edit.js";
   import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
   import { planToolOptions } from "$lib/plan-tool-options.js";
@@ -36,6 +38,7 @@
   let draft = $state<readonly DraftStep[] | null>(null);
   const saved = $derived<readonly DraftStep[]>($chatPlan?.steps ?? []);
   const steps = $derived(draft ?? saved);
+  const findings = $derived(findingsOfPlan($chatPlan));
   const dirty = $derived(draft !== null && planEdited(saved, draft));
   let busy = $state(false);
 
@@ -79,6 +82,8 @@
       <PlanChecklist idBase="plan-{turnId}" {steps} {editable} {toolChoices} onchange={(next) => (draft = next)} />
     </div>
   {/if}
+
+  <PlanFindings findings={findings} {editable} onchange={(next) => void saveFindings(next)} />
 
   {#if steps.length > 0}
     <details class="reply">

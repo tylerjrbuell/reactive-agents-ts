@@ -70,4 +70,14 @@ describe("plan calls", () => {
     await putSessionPlan("s", [{ id: "1", title: "a", status: "pending" }], "Goal");
     expect(JSON.parse(String(seen.init?.body)).goal).toBe("Goal");
   });
+
+  test("putSessionPlan sends findings only when given (an empty list clears them)", async () => {
+    const seen: { init?: RequestInit } = {};
+    stub(new Response(JSON.stringify({ plan: null })), seen);
+    const step = [{ id: "1", title: "a", status: "pending" as const }];
+    await putSessionPlan("s", step);
+    expect("findings" in JSON.parse(String(seen.init?.body))).toBe(false);
+    await putSessionPlan("s", step, undefined, []);
+    expect(JSON.parse(String(seen.init?.body)).findings).toEqual([]);
+  });
 });
