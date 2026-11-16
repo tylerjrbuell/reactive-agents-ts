@@ -2243,3 +2243,15 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   spend-usd: 0
   files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-OFFLOAD.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest-offload.jsonl]
 ```
+
+```yaml
+- date: 2026-11-16
+  warden: ablation-warden
+  task: compute-offload-ablation (resume, attempt 1 continued)
+  state: partial
+  confidence: 0.75
+  verdicts: {gate: "not default-on: weak tier lift -1.6pp (SE 3.2) on trigger tasks, billed tokens +38%, strong tier not run; no promotable lift in any tier", controls: "no new false-success class seen (h3-continuation 15/15 both arms; rw-9 8/15 vs 9/15 noise)", stopped: "systemone=49 in 09:03-09:10 window; `bun run repo test packages/runtime` (pid 458464) and the Cortex dev server shared the Ollama; 2 qwen2.5:14b LH A0 cells voided"}
+  evidence: {sha: "6f24b599b", models-complete: "llama3.1, cogito:8b", models-partial: "qwen2.5:14b (H3 done, LH 4/5 of 10 per arm)", models-not-run: "granite4:tiny-h, qwen3.5, gpt-oss", wall: "07:16-09:11"}
+  spend-usd: 0
+  files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-OFFLOAD.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest-offload.jsonl]
+```

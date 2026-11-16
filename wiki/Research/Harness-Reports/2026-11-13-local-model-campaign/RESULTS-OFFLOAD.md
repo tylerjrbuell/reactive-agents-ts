@@ -1,46 +1,88 @@
 ---
 type: research
-status: blocked
+status: partial
 created: 2026-11-15
 tags: [ablation, compute-offload, local-models, instrument]
 ---
 
-# computeOffload ablation: BLOCKED at the instrument check (no verdict)
+# computeOffload ablation: weak tier measured, strong tier not run. Not default-on; no lift found.
 
-Verdict: none. The brief's stop rule fired (systemone traffic on the shared Ollama during measured cells). Cause attributed to OTHER processes on the machine, not to the bench cells. Only 16 pilot/partial cells exist (cogito:8b). They are contaminated and cannot support a gate result. The gate (`evaluateLiftGate`) was not run: no paired cell has 3 runs per arm on 2 tiers, so the honest state is `underpowered` / not measured.
+Pinned worktree `/home/tylerbuell/offload-worktree` at `6f24b599b`. Arms: A0 flag off, A2 `RA_COMPUTE_OFFLOAD=1`. A1 is not separable by config (one flag drives both the surface floor and the guidance line). Every cell ran with `REACTIVE_AGENTS_NO_AUTO_SHADOW=1` and `RA_BENCH_ALLOW_FALLBACK=1`; arms alternated per invocation (`step.sh`). Rows: `manifest-offload.jsonl` (each has SHA, model digest, arm, `voided` flag).
+
+## Verdict
+
+- Gate: NOT default-on. `rax eval gate` was not run and no ledger entry was written: it needs a report with 2 tiers x >=3 runs per paired cell, and the strong tier has zero cells. In `evaluateLiftGate` terms the result is `underpowered` for the promotion question, and the measured weak tier shows no lift (opt-in at best).
+- Weak tier, trigger tasks (n about 70 per arm): solved 3/68 (A0) vs 2/70 (A2), lift -1.6pp, SE 3.2pp; accuracy lift -2.1pp. Billed tokens/run +38%, wall time +48% (27 s to 40 s). Fails the lift bar (>=3pp) and the overhead bar (<=15%).
+- The default-on rule needs lift in >=2 tiers. Strong tier (qwen3.5, gpt-oss) not run; weak tier does not pass alone. Cannot promote.
+- Controls (`h3-continuation`, `rw-9`): 23/30 vs 24/30 solved, +12% tokens. No new false-success class seen (h3-continuation 15/15 in both arms; rw-9 8/15 vs 9/15, noise).
 
 ## Pre-stated decision rule (written before any measured cell)
 
-Gate: `evaluateLiftGate`, `DEFAULT_LIFT_POLICY` (minLiftPp 3, 95% band 1.96, maxTokenOverheadPct 15 billed, minTiers 2, minRuns 3).
-- Primary metric: per-run accuracy and solved rate on the 5 trigger tasks (`h3-required-tools`, `h3-plan-only`, `h3-todo-heavy`, `lh-pipeline-stages`, `lh-enumerate-audit`), per tier (weak = llama3.1, cogito:8b, qwen2.5:14b, granite4:tiny-h; strong = qwen3.5, gpt-oss).
-- default-on needs: lift >= 3pp (above the 1.96 band) in >= 2 tiers, billed-token overhead <= 15% on every tier, and no new false-success class on controls `h3-continuation` and `rw-9` (accepted-and-wrong rate and `harness:ignored-guidance` unchanged).
-- Noise: Bernoulli cells, k=5 x 4 models = n=20/arm on the weak tier, SE about 11pp, so only a lift above about 20pp is detectable on one tier.
-- Diagnostics (not in the rule): code-execute call rate and success rate per arm.
+Gate `evaluateLiftGate`, `DEFAULT_LIFT_POLICY`: lift >=3pp above the 1.96 band in >=2 tiers; billed-token overhead <=15% on every tier; no new false-success class on controls. Bernoulli cells: k=5 x 4 weak models gives n=20/arm per task-set, SE about 11pp, so only a lift above about 20pp is detectable on one tier.
 
-## Instrument findings (valid, load-bearing)
+## Coverage (what actually ran)
 
-1. A1 is NOT separable by config. `computeOffload` is one flag: the `builtins-floor` surface change (`resolve-think-surface.ts:180`) and the guidance line (`iterate-compute-offload-seam.ts`) both read `harness.computeOffload`. Only A0 (off) vs A2 (on) can be run without source edits.
-2. Surface floor is a no-op on `h3-required-tools` (and `rw-7`, `lh-debug-green`): the task already declares `code-execute` as `available`. Verified in traces: A0 and A2 both show `visible:[file-read,file-write,code-execute]`. On that task A2 = guidance only. Floor effect exists only on `h3-plan-only`, `h3-todo-heavy`, `lh-pipeline-stages`, `lh-enumerate-audit`. A pooled "arithmetic item" lift mixes two different treatments; report per task.
-3. Verified pilots (cogito:8b): A0 `h3-todo-heavy` visible `[file-read,file-write]`; A2 `[file-read,file-write,code-execute]` (`builtins-floor`). Run-started config records `computeOffload:false` (A0) and `true` (A2). Flag toggle is `RA_COMPUTE_OFFLOAD=1` env (bench picks it up through `resolveHarnessConfig`).
-4. Trigger (`asksForComputedAggregate`) on the task prompts: fires on all 5 target tasks, quiet on both controls `h3-continuation`, `rw-9`. It also fires on `rw-2`, `ab-trap-5`, `h3-exact-value` (not in this matrix).
-5. No judgment/shadow events in any bench trace; cells ran with `REACTIVE_AGENTS_NO_AUTO_SHADOW=1`.
+| Model | Digest | H3 (25/arm) | LH (10/arm) |
+|---|---|---|---|
+| llama3.1:latest | 46e0c10c039e | full | full |
+| cogito:8b | 75b508ddece1 | full | full |
+| qwen2.5:14b | 7cdf5a0187d5 | full | A0 4, A2 5 of 10 (stopped) |
+| granite4:tiny-h | 566b725534ea | not run | not run |
+| qwen3.5, gpt-oss | 56671c2ab938, f38aa0c53da5 | not run | not run |
 
-## Why it stopped: ambient /v1/systemone traffic
+Stopped at 09:11 on 2026-11-16 (about 2 h of work). The brief's stop rule fired again: the invocation window 09:03-09:10 logged `/v1/systemone` x49. Concurrent processes on the shared Ollama: `bun run repo test packages/runtime` (pid 458464, started about 09:08) and the restarted Cortex dev server (pid 225317). The preceding invocations (07:16-09:03) each logged systemone=0 and http503=0. The 2 qwen2.5:14b LH A0 cells from the contaminated invocation (`lh-enumerate-audit` run 2, `lh-pipeline-stages` run 2) were removed from the analysis and kept in the manifest flagged `voided`. The 18 earlier voided rows (first attempt, 2026-11-15) are also flagged.
 
-- During the first measured chunk (cogito:8b A0, 2026-11-15 23:14-23:21) the ollama journal logged `/v1/systemone` (2 hits in that window: 23:15:44 and 23:20:20, HTTP 499).
-- With NO bench process running (checked with `ps`), a second window showed 219 `/v1/systemone` + 375 `/api/tags` per minute. The `ss -tnp` owners of the connections to :11434 were pid 1638556 (Cortex dev server `bun run server/index.ts`, up since 22:56) and pid 2311346 (`bun test packages/runtime`, started by `bun run repo verify packages/runtime` from the main thread). So the traffic is the dev stack and concurrent repo test runs sharing the same Ollama, not the bench.
-- Consequence: the GPU is shared. One cell in the partial data hit the 150 s cell timeout (`h3-plan-only` A0 run1, inconclusive, 0 tokens), consistent with contention. Cell timing and timeouts are not trustworthy while this runs, and token/latency overhead comparisons would be confounded.
-- I could not separate "my" systemone from ambient by journal alone, so per the brief I stopped. Evidence my cells made none: zero judgment events in traces, env opt-out set, systemone present while the driver was absent.
+## Per model (target tasks = the 5 trigger tasks)
 
-## Partial data (cogito:8b only; contaminated, do not gate on it)
+| Model | A0 solved | A2 solved | lift pp | tokens/run | s/run |
+|---|---|---|---|---|---|
+| llama3.1 | 0/25 | 0/25 | 0 (acc +4.8) | 9749 -> 17117 (+76%) | 13 -> 17 |
+| cogito:8b | 0/25 | 0/25 | 0 (acc -4.1) | 10770 -> 11321 (+5%) | 15 -> 17 |
+| qwen2.5:14b | 3/18 (1 inconclusive) | 2/20 | -6.7 (SE 11) | 8133 -> 11314 (+39%) | 63 -> 99 |
 
-16 cells in `manifest-offload.jsonl` (A0 12, A2 2 pilot cells plus 2 earlier pilot cells; every row: gitSha 6f24b599b, model digest `75b508ddece1`, arm). Solved: A0 5/12 conclusive-ish (1 inconclusive), A2 0/2 on trigger tasks. n is far below any gate threshold; no inference.
+Floor of 0 on llama3.1 and cogito:8b: those models solve none of the trigger tasks in either arm, so lift cannot show on the "solved" metric.
 
-## To resume (needs owner action)
+## Per task (weak tier pooled)
 
-1. Quiet the shared Ollama: stop the Cortex dev stack (pid 1638556) or run it with `REACTIVE_AGENTS_NO_AUTO_SHADOW=1`, and do not run `bun test` suites that hit Ollama while cells run.
-2. Re-run: `/home/tylerbuell/campaign-traces/step.sh <model>` (one <=590 s invocation per call, alternates A0/A2, prints `systemone=` and `http503=` counts per invocation). Worktree `/home/tylerbuell/offload-worktree` at `6f24b599b`, reasoning dist built. Void and re-run the 16 existing cells.
-3. Estimated cost: about 420 runs, 6-8 h of wall time for the full 6-model matrix; weak tier first.
-4. Consider asking kernel-warden for a separate flag for the guidance line if A1 vs A2 attribution matters.
+| Task | A0 | A2 | lift pp | tokens/run | Treatment |
+|---|---|---|---|---|---|
+| h3-required-tools | 0/15 | 0/15 | 0 | +49% | guidance only (tool already declared available) |
+| h3-plan-only | 0/15 | 0/15 | 0 | +4% | floor + guidance |
+| h3-todo-heavy | 3/15 | 1/15 | -13.3 (SE 12) | +48% | floor + guidance |
+| lh-pipeline-stages | 0/11 (1 inc) | 0/12 | 0 | +74% | floor + guidance |
+| lh-enumerate-audit | 0/12 | 1/13 | +7.7 (SE 8) | +22% | floor + guidance |
+| h3-continuation (control) | 15/15 | 15/15 | 0 | -2% | quiet trigger |
+| rw-9 (control) | 8/15 | 9/15 | +6.7 (SE 18) | +18% | quiet trigger |
 
-Artifacts: `/home/tylerbuell/campaign-traces/offload/` (cell json, logs, traces), drivers `driver-offload.ts`, `runo.sh`, `step.sh`.
+Every difference is inside 1 SE. No task shows a promotable lift.
+
+## code-execute usage (trace-derived, H3 tasks only; LH traces were not covered by the script's path glob, so this is partial)
+
+| Arm | target runs | runs with a code-execute call | ok calls | failed calls |
+|---|---|---|---|---|
+| A0 | 45 | 5 | 0 | 8 |
+| A2 | 45 | 15 | 4 | 27 |
+
+The mechanism did what it was built to do on the surface: the tool is called 3x as often (5 to 15 runs of 45). But 27 of 31 A2 calls failed, so the extra calls did not turn into correct figures. This matches the spike's own warning: "if A2 calls succeed less than half the time, do (c) deeper first". The code-execute reliability work (description, language mismatch, sentinel mode) is the lever; offload amplifies an unreliable tool.
+
+## Instrument checks
+
+- A0 `h3-todo-heavy`: visible `[file-read,file-write]`; A2: `[file-read,file-write,code-execute]` with reason `builtins-floor`. Run-started config recorded `computeOffload` false/true. `h3-required-tools` declares `code-execute` available, so the floor is a no-op there.
+- Trigger fires on all 5 target tasks and stays quiet on both controls.
+- Zero judgment/shadow events in bench traces; opt-out env set.
+- `/v1/systemone` seen in the journal only in the contaminated 09:03 window (49) and the first-attempt windows; the source processes were identified by `ss -tnp` and `ps` and are not bench processes.
+
+## Caveats
+
+- Weak-tier "arithmetic item" correctness is the task's hidden-grader solved flag, not a per-figure score; a task can fail for non-arithmetic reasons (see rw-2 anchoring in the spike).
+- Two of three measured weak models score 0/25 on the trigger tasks in both arms; this tier gives little room to show lift.
+- qwen2.5:14b LH is a partial pair (4 vs 5 cells per arm).
+- Wall-time and token overhead were measured with the GPU free except for the contaminated window; the A2 overhead is real (extra tool calls, failed code-execute turns), not a contention artifact.
+
+## Recommendation
+
+1. Do not make `computeOffload` default-on. Keep it opt-in; it adds +38% tokens on the weak tier for no solved-rate gain.
+2. Fix code-execute reliability first (27 of 31 calls failed in A2); re-run after that, A2 only on `h3-todo-heavy`, `lh-pipeline-stages`, `lh-enumerate-audit` and granite4:tiny-h, plus the strong tier for the 2-tier requirement.
+3. If A1 vs A2 attribution matters, ask kernel-warden to split the flag.
+
+To resume: `/home/tylerbuell/campaign-traces/chain-offload.sh qwen2.5:14b granite4:tiny-h qwen3.5:latest gpt-oss:latest` (aborts on any systemone or 503 in an invocation window). Artifacts: `/home/tylerbuell/campaign-traces/offload/` (cell json, `chain.status`, traces, `voided/`), analysis `offload-analyze.py`.
