@@ -21,6 +21,7 @@ import {
 } from "@reactive-agents/ui-core";
 import type { ChatContext, ChatTurn, LiveTokenSplit, ReasoningStep } from "./chat-store.js";
 import { projectSubAgents } from "../sub-agent-view.js";
+import { effectiveBound } from "../plan-budget.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
 import { cancelledEnding, completionEnding, failedBeforeStream } from "../turn-ending.js";
 import { liveApprovalAfter, type LiveApproval } from "../chat-live-approval.js";
@@ -396,7 +397,8 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
       }
       case "IterationProgress": {
         receivedContent = true;
-        stepMeta.set(event.iteration, { maxIterations: event.maxIterations, tools: event.toolsCalledThisStep });
+        // The stream's bound is the configured one (a plan-sized raise is not carried on the stream): never read "11 / 10".
+        stepMeta.set(event.iteration, { maxIterations: effectiveBound(event.maxIterations, event.iteration), tools: event.toolsCalledThisStep });
         sawIteration = true;
         flushPending();
         foldIntoTurn(event);

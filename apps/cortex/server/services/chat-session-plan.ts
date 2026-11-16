@@ -6,7 +6,8 @@
  * (`db/chat-plan-queries.ts`). Cortex only renders and persists: the plan's meaning (what
  * `setPlan` seeds, `PlanRecorded`) is the framework's.
  */
-import type { Plan, PlanStep } from "@reactive-agents/core";
+import { planStepToolHint, type Plan, type PlanStep } from "@reactive-agents/core";
+import { resolveStepTools, withTitleToolHints } from "./chat-plan-tools.js";
 import { getChatPlanMeta, getChatTodoWithHints, setChatPlanMeta, type StoredPlanMeta } from "../db/chat-plan-queries.js";
 import { getChatSession, setChatTodo, type StoredTodoItem } from "../db/chat-queries.js";
 import { CortexNotFoundError } from "../errors.js";
@@ -65,7 +66,8 @@ const stepStatusOf = (status: StoredTodoItem["status"]): PlanStep["status"] =>
 export function planOfStored(sessionId: string, todo: readonly StoredTodoItem[], meta: StoredPlanMeta | null): Plan | null {
   if (todo.length === 0) return null;
   const steps = todo.map((i): PlanStep => {
-    const tool = i.tool ?? meta?.tools[i.id];
+    // The row's hint, an older meta's, else the one the title names (rows saved before hints were derived).
+    const tool = i.tool ?? meta?.tools[i.id] ?? planStepToolHint(i.title);
     return { id: i.id, title: i.title, status: stepStatusOf(i.status), ...(tool !== undefined ? { tool } : {}) };
   });
   const author = meta?.source ?? "model";
@@ -115,7 +117,8 @@ export class ChatSessionPlans {
 
   /** The session's plan: the live session's, else the stored list. `null` while there is none. */
   read(sessionId: string): Plan | null {
-    return this.deps.live.get(sessionId)?.session.plan ?? planOfStored(sessionId, getChatTodoWithHints(this.db, sessionId), getChatPlanMeta(this.db, sessionId));
+    const live = this.deps.live.get(sessionId)?.session.plan;
+    return (live !== undefined ? withTitleToolHints(live) : undefined) ?? planOfStored(sessionId, getChatTodoWithHints(this.db, sessionId), getChatPlanMeta(this.db, sessionId));
   }
 
   /**
@@ -129,7 +132,9 @@ export class ChatSessionPlans {
     const { session } = await this.deps.build(sessionId, row.agentConfig, row.stableAgentId);
     const release = this.deps.acquireTurn(sessionId);
     try {
-      const plan = session.setPlan(goal === undefined || steps.length === 0 ? steps :withGoal(session.plan, sessionId, steps, goal));
+      // Each step's tool resolves through the framework's checklist `tool` op (explicit wins, a cleared one falls back to its title's hint).
+      const resolved = resolveStepTools(steps);
+      const plan = session.setPlan(goal === undefined || resolved.length === 0 ? resolved : withGoal(session.plan, sessionId, resolved, goal));
       persistSessionPlan(this.db, sessionId, session);
       return plan;
     } finally {

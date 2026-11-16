@@ -9,6 +9,7 @@ import { CORTEX_SERVER_URL } from "../constants.js";
 import { buildRunHierarchy } from "../run-hierarchy.js";
 import { runStatusAfter } from "../run-live-status.js";
 import { isIdLike, taskHeadline } from "../run-view.js";
+import { effectiveBound, planBudgetEffective } from "../plan-budget.js";
 import { formatCost, turnOutcomeOf } from "@reactive-agents/ui-core";
 
 export type AgentCognitiveState =
@@ -34,6 +35,8 @@ export interface AgentNode {
   /** Reasoning steps — `ReasoningStepCompleted` (can exceed loop) */
   readonly reasoningSteps: number;
   readonly maxIterations: number;
+  /** The plan-raised iteration bound, once announced (`plan_budget_raised`). */
+  readonly planBudgetMax?: number;
   readonly tokensUsed: number;
   readonly cost: number;
   readonly connectedAt: number;
@@ -325,6 +328,7 @@ export function liveFieldsFromEvents(events: readonly StoredRunEvent[]): Replaye
   const entropy: number[] = [];
   let loop = 0;
   let max = 0;
+  let raisedMax: number | undefined;
   let calls = 0;
   let tool: string | undefined;
   let task: string | undefined;
@@ -339,9 +343,17 @@ export function liveFieldsFromEvents(events: readonly StoredRunEvent[]): Replaye
         break;
       case "ReasoningIterationProgress":
         if (typeof p.iteration === "number") loop = Math.max(loop, p.iteration);
-        if (typeof p.maxIterations === "number") max = p.maxIterations;
+        if (typeof p.maxIterations === "number") max = effectiveBound(p.maxIterations, raisedMax);
         tool = undefined;
         break;
+      case "GuardFiredEmitted": {
+        const raised = planBudgetEffective(e.type, p);
+        if (raised !== undefined) {
+          raisedMax = raised;
+          max = effectiveBound(max, raised);
+        }
+        break;
+      }
       case "ToolCallStarted":
         calls++;
         tool = typeof p.toolName === "string" ? p.toolName : "tool";
@@ -570,12 +582,20 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
           patch.currentStepLabel = undefined;
           patch.currentTool = undefined;
           break;
+        case "GuardFiredEmitted": {
+          const raised = planBudgetEffective(msg.type, msg.payload);
+          if (raised !== undefined) {
+            patch.planBudgetMax = raised;
+            patch.maxIterations = effectiveBound(existing?.maxIterations, raised);
+          }
+          break;
+        }
         case "ReasoningIterationProgress": {
           const iter = typeof (msg.payload as { iteration?: number }).iteration === "number"
             ? (msg.payload as { iteration: number }).iteration
             : existing?.loopIteration ?? 0;
           const max = typeof (msg.payload as { maxIterations?: number }).maxIterations === "number"
-            ? (msg.payload as { maxIterations: number }).maxIterations
+            ? effectiveBound((msg.payload as { maxIterations: number }).maxIterations, existing?.planBudgetMax)
             : existing?.maxIterations ?? 0;
           patch.loopIteration = Math.max(existing?.loopIteration ?? 0, Math.max(0, iter));
           patch.maxIterations = max;

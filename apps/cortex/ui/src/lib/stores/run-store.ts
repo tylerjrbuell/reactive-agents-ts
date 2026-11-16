@@ -6,6 +6,7 @@ import { createWsClient } from "./ws-client.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
 import { foldRunStrategy, initialRunStrategy, runStrategyOf, type RunStrategyState, type StructuredOutputReportWire, type ThroughputSample } from "@reactive-agents/ui-core";
 import { throughputSampleOf } from "../llm-throughput.js";
+import { effectiveBound, planBudgetEffective } from "../plan-budget.js";
 import { abortStatusOf } from "../run-live-status.js";
 
 /**
@@ -71,6 +72,8 @@ export interface RunVitals {
    */
   readonly reasoningSteps: number;
   readonly maxIterations: number;
+  /** The plan-raised iteration bound (`plan_budget_raised`), once announced; progress events keep the configured bound. */
+  readonly planBudgetMax?: number;
   /** LLM provider name (e.g. "anthropic", "openai") — from LLMRequestCompleted */
   readonly provider?: string;
   /** LLM model name (e.g. "claude-sonnet-4-6") — from LLMRequestCompleted */
@@ -261,13 +264,17 @@ function foldVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): RunVi
       const clamped = Math.max(v.reasoningSteps, Math.max(0, steps));
       return { ...v, reasoningSteps: clamped };
     }
+    case "GuardFiredEmitted": {
+      const raised = planBudgetEffective(msg.type, p);
+      return raised === undefined ? v : { ...v, planBudgetMax: raised, maxIterations: effectiveBound(v.maxIterations, raised) };
+    }
     case "ReasoningIterationProgress": {
       const iter = typeof p.iteration === "number" ? p.iteration : v.loopIteration;
       // maxIterations: use what the framework configured, never let it grow with actual count.
       // If agent runs over, we just show "26" not "26/26" — handled in VitalsStrip display.
       const max =
         typeof p.maxIterations === "number" && p.maxIterations > 0
-          ? p.maxIterations
+          ? effectiveBound(p.maxIterations, v.planBudgetMax)
           : v.maxIterations;
       const clampedLoop = Math.max(v.loopIteration, Math.max(0, iter));
       return {

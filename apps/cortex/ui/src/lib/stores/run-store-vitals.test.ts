@@ -91,6 +91,17 @@ describe("updateVitals", () => {
     expect(v.reasoningTokens).toBe(150);
   });
 
+  // Repro (2026-11-16): a plan-seeded run passed its configured 10 iterations, the readout still divided by 10.
+  it("uses the plan-raised iteration bound over the configured one progress events carry", () => {
+    let v = updateVitals(base, msg("ReasoningIterationProgress", { iteration: 1, maxIterations: 10 }), 0);
+    expect(v.maxIterations).toBe(10);
+    v = updateVitals(v, msg("GuardFiredEmitted", { guard: "plan_budget_raised", outcome: "pass", metadata: { configured: 10, steps: 22, effective: 23, hardCap: 30 } }), 0);
+    expect(v.maxIterations).toBe(23);
+    v = updateVitals(v, msg("ReasoningIterationProgress", { iteration: 11, maxIterations: 10 }), 0);
+    expect(v.maxIterations).toBe(23);
+    expect(updateVitals(v, msg("GuardFiredEmitted", { guard: "exit_gate", metadata: { effective: 99 } }), 0).maxIterations).toBe(23);
+  });
+
   it("keeps unreported halves absent rather than fabricating them", () => {
     const v = updateVitals(base, msg("LLMRequestCompleted", { tokensUsed: 1500, estimatedCost: 0.01 }), 0);
     expect(v.tokensIn).toBeUndefined();

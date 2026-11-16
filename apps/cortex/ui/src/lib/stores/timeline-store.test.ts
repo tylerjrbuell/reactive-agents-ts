@@ -100,6 +100,16 @@ describe("createTimelineStore", () => {
     expect(cat("guard terminal_decision terminate")).toBe("control");
   });
 
+  it("titles the plan-budget raise by its reason and keeps it in the default feed", () => {
+    const rs = writable(runStateWith([
+      ev("ReasoningIterationProgress", { iteration: 1 }),
+      ev("GuardFiredEmitted", { taskId: "run-1", iteration: 1, guard: "plan_budget_raised", outcome: "pass", reason: "iteration budget raised to 23 for a 22-step plan", metadata: { configured: 10, steps: 22, effective: 23, hardCap: 30 }, timestamp: 1 }),
+    ]));
+    const row = get(createTimelineStore(rs)).flatMap((x) => x.rows).find((r) => r.kind === "guard-fired");
+    expect(row?.title).toBe("iteration budget raised to 23 for a 22-step plan");
+    expect(row?.category).toBe("control");
+  });
+
   it("renders a kernel action step as `call tool {args}`, not double-escaped JSON", () => {
     expect(actionTitle(JSON.stringify({ tool: "brief", input: JSON.stringify({ section: "math" }) }))).toBe(
       'call brief {"section":"math"}',
