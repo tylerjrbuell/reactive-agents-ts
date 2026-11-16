@@ -178,8 +178,8 @@ const CLOSING_OPEN = (n: number, firstId: string): string =>
 function closingLine(items: readonly AdvisoryItem[], posture: TodoPosture = "execute"): string {
   if (posture === "plan") {
     return items.length === 0
-      ? "No plan recorded yet. Record the plan with todo add, then present it to the user and stop; do not start work."
-      : `Plan recorded (${items.length} ${items.length === 1 ? "item" : "items"}). Present the plan to the user and stop; do not start work.`;
+      ? "No plan recorded yet. Record the plan with todo add, then present it to the user."
+      : `Plan recorded (${items.length} ${items.length === 1 ? "step" : "steps"}). Present it to the user; execution starts from this list.`;
   }
   if (items.length === 0) return "Open: 0. Plan the task with todo add when it has 3+ steps.";
   const open = items.filter((t) => t.status !== "completed");

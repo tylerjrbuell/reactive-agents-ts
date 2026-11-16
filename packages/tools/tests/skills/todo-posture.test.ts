@@ -9,8 +9,8 @@ const item = (id: string, title: string, status: AdvisoryItem["status"] = "pendi
   status,
 });
 const two = [item("1", "a"), item("2", "b")];
-const PLAN_ONE = "Plan recorded (1 item). Present the plan to the user and stop; do not start work.";
-const PLAN_N = "Plan recorded (2 items). Present the plan to the user and stop; do not start work.";
+const PLAN_ONE = "Plan recorded (1 step). Present it to the user; execution starts from this list.";
+const PLAN_N = "Plan recorded (2 steps). Present it to the user; execution starts from this list.";
 const noExecGuidance = (s: string): void => {
   expect(s).not.toContain("Work the first unchecked item");
   expect(s).not.toContain("Mark progress");

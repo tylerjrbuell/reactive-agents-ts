@@ -538,7 +538,7 @@ describe("todo list management: every result renders the list and the next step"
 
   it("plan posture keeps the plan closing line", () => {
     const r = applyTodoChecklistAction(three, { action: "remove", id: 1 }, "plan");
-    expect(lastLine(r.rendered)).toBe("Plan recorded (2 items). Present the plan to the user and stop; do not start work.");
+    expect(lastLine(r.rendered)).toBe("Plan recorded (2 steps). Present it to the user; execution starts from this list.");
   });
 
   it("unknown-action teaching lists every action", () => {

@@ -40,6 +40,6 @@ describe("todo add dedupe", () => {
 
   it("plan posture closing line unchanged on duplicate add", () => {
     const r = applyTodoChecklistAction(items, { action: "add", items: ["Fetch BTC price"] }, "plan");
-    expect(r.rendered.split("\n").at(-1)).toBe("Plan recorded (2 items). Present the plan to the user and stop; do not start work.");
+    expect(r.rendered.split("\n").at(-1)).toBe("Plan recorded (2 steps). Present it to the user; execution starts from this list.");
   });
 });
