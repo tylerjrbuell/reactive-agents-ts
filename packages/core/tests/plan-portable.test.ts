@@ -28,6 +28,7 @@ const STATUSES: PlanStepStatus[] = ["pending", "in-progress", "done", "skipped"]
 
 const randomPlan = (r: () => number): Plan => {
   const str = () => Array.from({ length: Math.floor(r() * 6) }, () => ATOMS[Math.floor(r() * ATOMS.length)]).join("");
+  const nFindings = r() < 0.5 ? 0 : 1 + Math.floor(r() * 4);
   return {
     id: str() || "id",
     goal: str(),
@@ -39,6 +40,16 @@ const randomPlan = (r: () => number): Plan => {
       status: STATUSES[Math.floor(r() * 4)]!,
       ...(r() < 0.5 ? { tool: str() } : {}),
     })),
+    ...(nFindings > 0
+      ? {
+          findings: Array.from({ length: nFindings }, (_, i) => ({
+            id: `f${i}-${str()}`,
+            tool: str(),
+            summary: str(),
+            ...(r() < 0.5 ? { at: Math.floor(r() * 2e12) } : {}),
+          })),
+        }
+      : {}),
   };
 };
 
@@ -77,6 +88,29 @@ describe("plan markdown", () => {
     expect(md).toContain(`version: ${PLAN_FORMAT_VERSION}`);
   });
 
+  it("writes and reads a Findings section; absent section means none", () => {
+    const base: Plan = { id: "p", goal: "g", createdAt: 1, source: "model", steps: [{ id: "a", title: "t", status: "pending" }] };
+    const withF: Plan = {
+      ...base,
+      findings: [{ id: "f1", tool: "umami/list_websites", summary: "site id abc-123", at: 9 }, { id: "f2", tool: "x", summary: "y" }],
+    };
+    const md = planToMarkdown(withF);
+    expect(md).toContain("## Findings");
+    expect(md).toContain("- [umami/list_websites] site id abc-123");
+    expect(right(planFromMarkdown(md))).toEqual(withF);
+    expect(planToMarkdown(base)).not.toContain("Findings");
+    expect(right(planFromMarkdown(planToMarkdown(base))).findings).toBeUndefined();
+  });
+
+  it("does not turn finding lines into steps and tolerates hand-edited findings", () => {
+    const plan = right(planFromMarkdown("# G\n- [ ] one\n\n## findings\n- plain note\n* [tool] with tool\n\n## Other\n- [ ] two\n"));
+    expect(plan.steps.map((s) => s.title)).toEqual(["one", "two"]);
+    expect(plan.findings?.map((f) => [f.tool, f.summary])).toEqual([
+      ["", "plain note"],
+      ["tool", "with tool"],
+    ]);
+  });
+
   it("parses hand-edited markdown tolerantly", () => {
     const plan = right(
       planFromMarkdown("---\nfoo: bar\n---\n# Goal\n\nnotes\n1. first\n- second\n* [X] third\n  - [ ] fourth\n"),
@@ -107,6 +141,16 @@ describe("plan json", () => {
     expect(right(planFromJSON(planToJSON(plan)))).toEqual(plan);
   });
 
+  it("round-trips findings and decodes v1 envelopes without them", () => {
+    const withF: Plan = { ...plan, findings: [{ id: "f", tool: "t", summary: "s", at: 3 }] };
+    expect(right(planFromJSON(planToJSON(withF)))).toEqual(withF);
+    const old = JSON.stringify({ kind: "reactive-agents.plan", version: 1, plan });
+    expect(right(planFromJSON(old)).findings).toBeUndefined();
+    const bad = JSON.stringify({ kind: "reactive-agents.plan", version: 1, plan: { ...plan, findings: [{ id: 1 }] } });
+    const e = planFromJSON(bad);
+    expect(Either.isLeft(e) && e.left.reason).toBe("invalid-shape");
+  });
+
   it("rejects unknown versions with a tagged value", () => {
     const e = planFromJSON(JSON.stringify({ kind: "reactive-agents.plan", version: 99, plan }));
     expect(Either.isLeft(e) && e.left).toMatchObject({ _tag: "PlanParseError", reason: "unsupported-version", version: 99 });
@@ -130,6 +174,12 @@ describe("plan html", () => {
     createdAt: 1,
     source: "model",
     steps: [{ id: "s", title: evil, status: "done", tool: evil }],
+    findings: [{ id: evil, tool: evil, summary: evil }],
+  });
+
+  it("renders findings escaped", () => {
+    expect(html).toContain("<h2>Findings</h2>");
+    expect(html.match(/&lt;script&gt;/g)?.length).toBeGreaterThanOrEqual(5);
   });
 
   it("escapes every interpolated string", () => {

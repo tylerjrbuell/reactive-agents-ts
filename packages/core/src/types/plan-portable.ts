@@ -1,6 +1,6 @@
 import { Either, Schema } from "effect";
 import { PlanSchema, PlanSourceSchema } from "./plan.js";
-import type { Plan, PlanSource, PlanStep, PlanStepStatus } from "./plan.js";
+import type { Plan, PlanFinding, PlanSource, PlanStep, PlanStepStatus } from "./plan.js";
 
 /**
  * Portable plan formats: Markdown (editable checklist), JSON (versioned
@@ -60,6 +60,8 @@ const unescapeText = (s: string): string =>
 const escapeTitle = (s: string): string => escapeText(s).replace(/\(tool:/g, "\\(tool:");
 const escapeTool = (s: string): string => escapeText(s).replace(/\)/g, "\\)");
 
+const escapeFindingTool = (s: string): string => escapeText(s).replace(/\]/g, "\\]");
+
 const safeDecode = (s: string): string => {
   try {
     return decodeURIComponent(s);
@@ -72,7 +74,9 @@ const safeDecode = (s: string): string => {
  * Render a plan as Markdown: a front-matter block (`id`, `source`, `createdAt`,
  * `version`), a `# <goal>` heading, and one checklist line per step:
  * `- [ ] title  (tool: name) <!--id:...-->` with `x` done, `~` in progress,
- * `-` skipped. Lossless with {@link planFromMarkdown}.
+ * `-` skipped. When the plan has findings, a `## Findings` section follows the
+ * steps, one line per finding: `- [tool] summary <!--id:...;at:...-->`.
+ * Lossless with {@link planFromMarkdown}.
  */
 export function planToMarkdown(plan: Plan): string {
   const head = [
@@ -90,8 +94,59 @@ export function planToMarkdown(plan: Plan): string {
     const tool = s.tool !== undefined ? `  (tool: ${escapeTool(s.tool)})` : "";
     return `- [${STATUS_CHAR[s.status]}] ${escapeTitle(s.title)}${tool} <!--id:${encodeURIComponent(s.id)}-->`;
   });
-  return [...head, ...lines, ""].join("\n");
+  const findings = plan.findings ?? [];
+  const findingLines =
+    findings.length === 0
+      ? []
+      : [
+          "",
+          FINDINGS_HEADING,
+          "",
+          ...findings.map(
+            (f) =>
+              `- [${escapeFindingTool(f.tool)}] ${escapeText(f.summary)} <!--id:${encodeURIComponent(f.id)}${
+                f.at !== undefined ? `;at:${f.at}` : ""
+              }-->`,
+          ),
+        ];
+  return [...head, ...lines, ...findingLines, ""].join("\n");
 }
+
+const FINDINGS_HEADING = "## Findings";
+const FINDINGS_HEADING_RE = /^##\s+findings\s*$/i;
+const FINDING_LINE = /^\s*(?:[-*+]|\d+[.)])\s+([\s\S]*)$/;
+const FINDING_TOOL = /^\[((?:[^\\\]]|\\[\s\S])*)\]\s?/;
+const FINDING_TRAILER_MARK = "<!--id:";
+const FINDING_TRAILER = /^<!--id:([^>;]*)(?:;at:(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?))?-->\s*$/i;
+
+/** Parse one line of the `## Findings` section; `undefined` when the line is not a finding. */
+const parseFindingLine = (rest: string, ordinal: number, used: Set<string>): PlanFinding | undefined => {
+  let body = rest;
+  let id: string | undefined;
+  let at: number | undefined;
+  const cut = body.lastIndexOf(FINDING_TRAILER_MARK);
+  if (cut >= 0) {
+    const tm = FINDING_TRAILER.exec(body.slice(cut));
+    if (tm) {
+      id = safeDecode(tm[1]!);
+      if (tm[2] !== undefined && Number.isFinite(Number(tm[2]))) at = Number(tm[2]);
+      body = body.slice(0, cut);
+    }
+  }
+  let tool = "";
+  const pm = FINDING_TOOL.exec(body);
+  if (pm) {
+    tool = unescapeText(pm[1]!);
+    body = body.slice(pm[0].length);
+  }
+  const summary = unescapeText(body.trim());
+  if (id === undefined && tool === "" && summary === "") return undefined;
+  const base = id ?? `finding-${ordinal}`;
+  let finalId = base;
+  for (let n = 2; used.has(finalId); n++) finalId = `${base}-${n}`;
+  used.add(finalId);
+  return { id: finalId, tool, summary, ...(at !== undefined ? { at } : {}) };
+};
 
 /** Defaults for fields hand-edited Markdown may omit. */
 export interface PlanFromMarkdownDefaults {
@@ -132,8 +187,24 @@ export function planFromMarkdown(
   let goal: string | undefined;
   const steps: PlanStep[] = [];
   const used = new Set<string>();
+  const findings: PlanFinding[] = [];
+  const usedFindings = new Set<string>();
+  let inFindings = false;
   for (; i < lines.length; i++) {
     const line = lines[i]!;
+    if (FINDINGS_HEADING_RE.test(line)) {
+      inFindings = true;
+      continue;
+    }
+    if (inFindings) {
+      if (/^#{1,6}\s/.test(line)) inFindings = false;
+      else {
+        const fm = FINDING_LINE.exec(line);
+        const f = fm ? parseFindingLine(fm[1]!, findings.length + 1, usedFindings) : undefined;
+        if (f) findings.push(f);
+        continue;
+      }
+    }
     if (goal === undefined && /^#\s/.test(line)) {
       goal = unescapeText(line.slice(2).trim());
       continue;
@@ -177,7 +248,14 @@ export function planFromMarkdown(
   const createdAt = Number.isFinite(created) ? created : (defaults.createdAt ?? 0);
   const src = Schema.decodeUnknownEither(PlanSourceSchema)(meta.source);
   const source: PlanSource = Either.isRight(src) ? src.right : "user-edited";
-  return Either.right({ id, goal: goal ?? "", steps, createdAt, source });
+  return Either.right({
+    id,
+    goal: goal ?? "",
+    steps,
+    createdAt,
+    source,
+    ...(findings.length > 0 ? { findings } : {}),
+  });
 }
 
 // -------------------------------------------------------------------- JSON
@@ -233,6 +311,7 @@ body{font:16px/1.5 system-ui,sans-serif;color:var(--fg);background:var(--bg);max
 h1{font-size:1.4rem}.meta{color:var(--mut);font-size:.85rem}
 ol{list-style:none;padding:0}li{padding:.35rem 0;display:flex;gap:.6rem;align-items:baseline}
 .g{width:1.2rem;text-align:center}.done .t{color:var(--mut);text-decoration:line-through}.skipped .t{color:var(--mut)}
+h2{font-size:1.1rem}ul.f{list-style:none;padding:0}ul.f li{display:block;padding:.35rem 0}.tl{margin-right:.4rem}
 code{background:var(--chip);padding:.05rem .4rem;border-radius:.3rem;font-size:.8rem}
 @media print{body{margin:0;max-width:none}}`;
 
@@ -249,6 +328,13 @@ export function planToHtml(plan: Plan): string {
         `<span class="t">${esc(s.title)}</span>${s.tool !== undefined ? ` <code>${esc(s.tool)}</code>` : ""}</li>`,
     )
     .join("\n");
+  const findings = plan.findings ?? [];
+  const findingsHtml =
+    findings.length === 0
+      ? ""
+      : `\n<h2>Findings</h2>\n<ul class="f">\n${findings
+          .map((f) => `<li><code class="tl">${esc(f.tool)}</code><span class="t">${esc(f.summary)}</span></li>`)
+          .join("\n")}\n</ul>`;
   const d = new Date(plan.createdAt);
   const when = Number.isNaN(d.getTime()) ? "" : d.toISOString();
   return `<!doctype html>
@@ -258,6 +344,6 @@ export function planToHtml(plan: Plan): string {
 <p class="meta">${esc(plan.source)}${when ? ` · ${esc(when)}` : ""} · ${esc(plan.id)}</p>
 <ol>
 ${items}
-</ol></body></html>
+</ol>${findingsHtml}</body></html>
 `;
 }

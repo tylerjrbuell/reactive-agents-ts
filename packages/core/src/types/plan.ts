@@ -32,6 +32,24 @@ export const PlanStepSchema = Schema.Struct({
 /** One step of a plan. */
 export type PlanStep = typeof PlanStepSchema.Type;
 
+/**
+ * A fact learned during plan recon: the result of a bounded read-only tool call
+ * (for example a website id from a list call). Findings travel with the plan and
+ * seed execution.
+ */
+export const PlanFindingSchema = Schema.Struct({
+  /** Stable finding id, unique within the plan. */
+  id: Schema.String,
+  /** Name of the tool that produced the finding. */
+  tool: Schema.String,
+  /** Short text of what was learned. */
+  summary: Schema.String,
+  /** When the finding was recorded, ms since epoch. Absent when unknown. */
+  at: Schema.optional(Schema.Number),
+});
+/** A fact learned during plan recon. See {@link PlanFindingSchema}. */
+export type PlanFinding = typeof PlanFindingSchema.Type;
+
 /** A plan: a goal and its ordered steps. */
 export const PlanSchema = Schema.Struct({
   /** Plan id, stable across edits. */
@@ -44,6 +62,11 @@ export const PlanSchema = Schema.Struct({
   createdAt: Schema.Number,
   /** Who authored the plan. */
   source: PlanSourceSchema,
+  /**
+   * Facts gathered by plan recon. Absent when the plan ran no recon. Findings
+   * alone never make a plan non-empty (see {@link isPlanEmpty}).
+   */
+  findings: Schema.optional(Schema.Array(PlanFindingSchema)),
 });
 /** A plan: a goal and its ordered steps. */
 export type Plan = typeof PlanSchema.Type;
@@ -68,6 +91,8 @@ export interface PlanFromChecklistMeta {
   readonly source: PlanSource;
   /** Tool hint per step id. Overrides the row's own `tool`; steps with neither get no `tool`. */
   readonly tools?: Readonly<Record<string, string>>;
+  /** Recon findings to carry on the plan. Absent or empty = the plan has no `findings`. */
+  readonly findings?: ReadonlyArray<PlanFinding>;
 }
 
 const stepStatusOfRow = (status: ChecklistRow["status"]): PlanStepStatus =>
@@ -88,7 +113,14 @@ export function planFromChecklist(snapshot: ChecklistSnapshot, meta: PlanFromChe
       const tool = meta.tools?.[row.id] ?? row.tool;
       return { id: row.id, title: row.title, status: stepStatusOfRow(row.status), ...(tool !== undefined ? { tool } : {}) };
     });
-  return { id: meta.id, goal: meta.goal, steps, createdAt: meta.createdAt, source: meta.source };
+  return {
+    id: meta.id,
+    goal: meta.goal,
+    steps,
+    createdAt: meta.createdAt,
+    source: meta.source,
+    ...(meta.findings !== undefined && meta.findings.length > 0 ? { findings: meta.findings } : {}),
+  };
 }
 
 /**

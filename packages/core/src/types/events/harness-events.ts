@@ -2,7 +2,7 @@ import type {
   LlmCallPurpose,
 } from "../llm-purpose.js";
 import type { ContentPartSummary } from "../content.js";
-import type { PlanSource, PlanStep, PlanStepStatus } from "../plan.js";
+import type { PlanFinding, PlanSource, PlanStep, PlanStepStatus } from "../plan.js";
 import type { StructuredAttemptReport } from "../structured-attempt.js";
 import type { StructuredOutputReport } from "../structured-output-report.js";
 import type { PromptFragmentId, PromptFragmentSlot, PromptFragmentStatus } from "../prompt-fragment.js";
@@ -663,6 +663,8 @@ export interface PlanRecordedEvent {
   readonly steps: ReadonlyArray<PlanStep>;
   /** Who authored the plan. */
   readonly source: PlanSource;
+  /** Recon findings carried by the plan. Absent when the plan has none. */
+  readonly findings?: ReadonlyArray<PlanFinding>;
   /** Agent that recorded the plan. Absent when recorded outside an agent run. */
   readonly agentId?: string;
   /** Task the plan belongs to. Absent when recorded before a task exists. */

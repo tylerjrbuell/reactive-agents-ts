@@ -128,6 +128,17 @@ describe("plan events", () => {
     expect([a._tag, b._tag]).toEqual(["PlanRecorded", "PlanStepStatusChanged"]);
   });
 
+  it("PlanRecorded carries optional findings; planFromChecklist passes them through", () => {
+    const f = [{ id: "f", tool: "t", summary: "s" }];
+    const a: PlanRecordedEvent = { _tag: "PlanRecorded", planId: "p", steps: [], source: "model", findings: f, timestamp: 1 };
+    expect(a.findings).toEqual(f);
+    const snap = snapshot([]);
+    expect(planFromChecklist(snap, { ...meta, findings: f }).findings).toEqual(f);
+    expect(planFromChecklist(snap, meta)).not.toHaveProperty("findings");
+    expect(planFromChecklist(snap, { ...meta, findings: [] })).not.toHaveProperty("findings");
+    expect(isPlanEmpty({ steps: [], findings: f })).toBe(true);
+  });
+
   it("carry an optional sessionId", async () => {
     const got = await Effect.runPromise(
       Effect.gen(function* () {

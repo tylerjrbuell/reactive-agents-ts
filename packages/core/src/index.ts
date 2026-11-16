@@ -239,6 +239,7 @@ export type {
 export {
   PlanSchema,
   PlanStepSchema,
+  PlanFindingSchema,
   PlanSourceSchema,
   PlanStepStatusSchema,
   isPlanEmpty,
@@ -248,6 +249,7 @@ export {
 export type {
   Plan,
   PlanStep,
+  PlanFinding,
   PlanSource,
   PlanStepStatus,
   PlanChecklistSeedItem,
