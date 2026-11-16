@@ -15,6 +15,7 @@ import type { ToolSchema } from "../attend/tool-formatting.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
 import type { KernelState } from "../../../kernel/state/kernel-state.js";
 import type { ResolvedHarness } from "../../../harness-config.js";
+import type { RunPosture } from "@reactive-agents/core";
 
 /**
  * Assemble the think-phase ProviderRequest via the canonical project() seam.
@@ -58,6 +59,8 @@ export function buildThinkProviderRequest(
   remainingGoals?: readonly string[],
   /** This call ships with zero tool schemas (think.ts's one `shouldWithholdTools` decision). */
   toolsWithheld = false,
+  /** `KernelInput.posture`; `"plan"` frames the rendered goal as plan-only. */
+  posture?: RunPosture,
 ): Projection {
   // A withheld call offers no tools, so the prompt shows none either: the
   // text-parse tool reference ("Required tools (call these)") would otherwise
@@ -67,6 +70,6 @@ export function buildThinkProviderRequest(
     ...ts,
     name: sanitizeToolName(ts.name),
   }));
-  const input = fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect, harness, remainingGoals);
+  const input = fromKernelState(state, profile, { system: systemPrompt }, { schemas: displaySchemas }, task, priorContext, dialect, harness, remainingGoals, posture);
   return project(toolsWithheld ? { ...input, toolsWithheld: true } : input);
 }

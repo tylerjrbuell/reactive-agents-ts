@@ -24,7 +24,7 @@
 // live as pure FREE functions here (not methods) to honor that plain-data
 // contract and the codebase's readonly-immutable state convention.
 
-import type { ChecklistItemOp } from "@reactive-agents/core";
+import type { ChecklistItemOp, ChecklistItemOrigin } from "@reactive-agents/core";
 import type { PostCondition } from "../capabilities/verify/post-condition-types.js";
 import type { RequirementKind } from "../contract/run-contract.js";
 
@@ -123,18 +123,12 @@ export interface ChecklistItemEntry extends LedgerEntryBase {
   readonly toolCallId?: string;
   /**
    * Who wrote the row. `"plan"` marks rows the harness derived from a
-   * strategy's plan (D9 P7: plan-execute's steps ARE the checklist), so a
-   * consumer can tell them from model-authored `todo` rows. Absent on `todo`
+   * strategy's plan (D9 P7: plan-execute's steps ARE the checklist);
+   * `"harness-derived"` marks rows the terminal plan-checklist step derived
+   * from a plan-posture reply (loop/plan-checklist-step.ts). Absent on `todo`
    * facts — the model is the default author.
    */
-  readonly origin?: "plan";
-  /**
-   * True on rows the terminal plan-checklist step derived from a plan-posture
-   * reply when the model recorded no `todo` list (loop/plan-checklist-step.ts).
-   * A separate flag, not a second `origin`: core's fold narrows `origin` to
-   * `"plan"` and a derived row must stay a normal explicit row to execute.
-   */
-  readonly harnessDerived?: true;
+  readonly origin?: ChecklistItemOrigin;
 }
 
 /**

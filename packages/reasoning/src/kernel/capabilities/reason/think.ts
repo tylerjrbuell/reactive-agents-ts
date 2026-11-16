@@ -266,7 +266,7 @@ export function handleThinking(
     // (tools ride the FC `tools` array); text-parse/weak-FC still get it.
     const requestAt = (s: KernelState, p: ContextProfile) =>
       buildThinkProviderRequest(s, p, effectiveSystemPrompt ?? "", promptSchemas, input.task, input.priorContext,
-        context.toolCallingDriver.mode, h, input.remainingGoals, withholdTools);
+        context.toolCallingDriver.mode, h, input.remainingGoals, withholdTools, input.posture);
     const { request, trace } = requestAt(state, profile);
     const systemPromptText: string = request.systemPrompt;
     const conversationMessages: LLMMessage[] = toLLMMessages(request.messages);

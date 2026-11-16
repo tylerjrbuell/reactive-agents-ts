@@ -7,7 +7,8 @@
  *   - the model already recorded a `todo` list  → nothing is derived;
  *   - the list is empty and the reply holds step lines → the steps are derived
  *     deterministically ({@link derivePlanSteps}) and recorded as ordinary
- *     `checklist-item` facts tagged `harnessDerived: true`; the runner's
+ *     `checklist-item` facts tagged `origin: "harness-derived"` (a step naming `tool: x` carries
+ *     that tool as its row hint); the runner's
  *     post-pipeline ledger tap publishes them, so `ChecklistUpdated` fires;
  *   - nothing derivable → an explicit `planNoSteps` signal.
  * Each outcome rides the existing `posture-applied` guard event. The step never
@@ -19,7 +20,7 @@ import type { KernelInput, KernelState } from "../state/kernel-state.js";
 import { transitionState } from "../state/kernel-state.js";
 import { recordChecklistItems } from "../ledger/emit.js";
 import { startRound, viewItems } from "../capabilities/act/checklist-round.js";
-import { derivePlanSteps } from "../policy/plan-steps.js";
+import { derivePlanSteps, planStepTool } from "../policy/plan-steps.js";
 import { POSTURE_SIGNAL_ORIGIN, emitPostureApplied, isPlanPosture, type PlanChecklistOutcome } from "../policy/run-posture.js";
 
 /** Pure: the ledger the plan-checklist step leaves, and what it found. */
@@ -30,11 +31,14 @@ export function derivePlanChecklist(
   if (recorded > 0) return { state, outcome: { planSteps: recorded, planSource: "recorded" } };
   const titles = derivePlanSteps(state.output ?? "");
   if (titles.length === 0) return { state, outcome: { planSteps: 0, planNoSteps: true } };
-  const items = titles.map((title, i) => ({ id: String(i + 1), title }));
+  const items = titles.map((title, i) => {
+    const tool = planStepTool(title);
+    return { id: String(i + 1), title, ...(tool !== undefined ? { tool } : {}) };
+  });
   return {
     state: transitionState(state, {
       ledger: recordChecklistItems(state.ledger, [
-        { iteration: state.iteration, change: { op: "add", items }, harnessDerived: true },
+        { iteration: state.iteration, change: { op: "add", items }, origin: "harness-derived" },
       ]),
     }),
     outcome: { planSteps: items.length, planSource: "harness-derived" },

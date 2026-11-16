@@ -82,6 +82,17 @@ export function derivePlanSteps(reply: string): readonly string[] {
   return out;
 }
 
+const TOOL_HINT = /\btool:\s*`?([\w][\w./-]*)/i;
+
+/**
+ * The tool a step names as `tool: name` / `(tool: name)`, or undefined. Trailing
+ * punctuation is not part of the name.
+ */
+export function planStepTool(title: string): string | undefined {
+  const name = TOOL_HINT.exec(title)?.[1]?.replace(/[.\/-]+$/, "");
+  return name !== undefined && name.length > 0 ? name : undefined;
+}
+
 const firstSentence = (s: string): string => clip(clean(s).split(/(?<=[.!?])\s/)[0] ?? "", MAX_CATALOG_DESC_CHARS);
 
 /**

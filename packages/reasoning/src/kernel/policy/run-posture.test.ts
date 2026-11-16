@@ -16,6 +16,7 @@ import { RunEnvelope, buildRunEnvelope, mergeRunEnvelopeIntoKernelInput } from "
 import type { KernelInput, KernelRunOptions } from "../state/kernel-state.js";
 import { evaluateToolPolicy } from "../capabilities/act/tool-observe.js";
 import { FOLLOW_PLAN_GUIDANCE } from "./plan-steps.js";
+import { PLAN_TASK_FRAME } from "./plan-task-frame.js";
 import {
   PLAN_POSTURE_GUIDANCE,
   PLAN_POSTURE_TOOLS,
@@ -141,7 +142,7 @@ describe("run posture: plan (kernel) — planning meta tools only, durable check
     expect(todoObs[0]?.content).not.toContain("not available in plan posture");
     const facts = checklistFacts(pass);
     expect(facts.length).toBeGreaterThan(0);
-    expect(facts.some((f) => f.harnessDerived === true)).toBe(false); // model recorded: nothing derived
+    expect(facts.some((f) => f.origin === "harness-derived")).toBe(false); // model recorded: nothing derived
     expect(pass.state.status).toBe("done");
     expect(pass.state.output).toContain("Plan: 1) fetch the price");
 
@@ -191,7 +192,7 @@ describe("run posture: plan (kernel) — planning meta tools only, durable check
     );
   });
 
-  it("a prose reply with no todo call completes the run; the harness DERIVES the checklist from the reply, tagged harnessDerived, published on the ledger tap", async () => {
+  it("a prose reply with no todo call completes the run; the harness DERIVES the checklist from the reply, tagged origin harness-derived, published on the ledger tap", async () => {
     executed.length = 0;
     const published: unknown[] = [];
     const { pass, events } = await Effect.runPromise(
@@ -218,7 +219,7 @@ describe("run posture: plan (kernel) — planning meta tools only, durable check
     expect(executed).toEqual([]);
     const facts = checklistFacts(pass);
     expect(facts.length).toBe(1);
-    expect(facts[0]?.harnessDerived).toBe(true);
+    expect(facts[0]?.origin).toBe("harness-derived");
     expect(facts[0]?.change).toEqual({
       op: "add",
       items: [
@@ -227,7 +228,7 @@ describe("run posture: plan (kernel) — planning meta tools only, durable check
       ],
     });
     // Published through the live ledger tap (what the runtime turns into ChecklistUpdated).
-    expect(published.some((e) => (e as { kind?: string; harnessDerived?: boolean }).kind === "checklist-item" && (e as { harnessDerived?: boolean }).harnessDerived === true)).toBe(true);
+    expect(published.some((e) => (e as { kind?: string; origin?: string }).kind === "checklist-item" && (e as { origin?: string }).origin === "harness-derived")).toBe(true);
     const last = postureEvents(events).at(-1);
     expect(last?.outcome).toBe("pass");
     expect(last?.metadata).toMatchObject({ planSteps: 2, planSource: "harness-derived" });
@@ -246,6 +247,21 @@ describe("run posture: plan (kernel) — planning meta tools only, durable check
     const { pass, events } = await run([SUMMARY], undefined, baseInput({ requiredTools: [] }));
     expect(checklistFacts(pass)).toEqual([]);
     expect(postureEvents(events)).toEqual([]);
+  });
+
+  it("plan posture frames the goal the model sees as plan-only (once); execute posture shows the raw task; the typed task is untouched", async () => {
+    const seen = async (posture: "plan" | undefined) => {
+      const input = baseInput({ requiredTools: [] });
+      const { events } = await run([SUMMARY], posture, input);
+      const ex = events.find((e) => e._tag === "LLMExchangeEmitted") as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>;
+      return { text: ex.messages.map((m) => m.content).join("\n"), task: input.task };
+    };
+    const planned = await seen("plan");
+    expect(planned.text).toContain(`${PLAN_TASK_FRAME}${planned.task}`);
+    expect(planned.text.split(PLAN_TASK_FRAME).length - 1).toBeLessThanOrEqual(2); // system goal + user turn, never doubled
+    expect(planned.task).toBe("Plan how to get the BTC price and save it.");
+    const executed = await seen(undefined);
+    expect(executed.text).not.toContain(PLAN_TASK_FRAME);
   });
 
   it("opt-in planToolCatalog appends ONE capped catalog line to plan guidance; off/absent is the single posture line", async () => {

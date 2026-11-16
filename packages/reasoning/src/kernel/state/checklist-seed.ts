@@ -19,6 +19,8 @@ export interface AdvisorySeedItem {
   readonly id: string;
   readonly title: string;
   readonly status: ChecklistItemStatus;
+  /** Tool the step named (a plan step's `tool: name` hint). Absent = none. */
+  readonly tool?: string;
 }
 
 // Interface merging keeps kernel-state.ts (LOC-pinned) untouched; the field
@@ -40,7 +42,7 @@ export function seedInitialAdvisory(state: KernelState, input: Pick<KernelInput,
   if (seed === undefined || seed.length === 0 || input.resumeState !== undefined) return state;
   if ((state.ledger ?? []).some((e) => e.kind === "checklist-item")) return state;
   const changes: ChecklistItemOp[] = [
-    { op: "add", items: seed.map((t) => ({ id: t.id, title: t.title })) },
+    { op: "add", items: seed.map((t) => ({ id: t.id, title: t.title, ...(t.tool !== undefined ? { tool: t.tool } : {}) })) },
     ...seed.flatMap((t): ChecklistItemOp[] => (t.status === "pending" ? [] : [{ op: "status", id: t.id, status: t.status }])),
   ];
   return transitionState(state, {

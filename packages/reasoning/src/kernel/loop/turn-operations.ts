@@ -531,7 +531,7 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
       // Compute offload: once data was read, one advisory line says to compute with code-execute (computeOffload only).
       t.state = applyComputeOffloadGuidance(t.state, t.currentInput);
       // Seeded plan checklist: while a step is unchecked, one advisory line says to work the list.
-      t.state = applyFollowPlanGuidance(t.state, t.currentInput);
+      t.state = applyFollowPlanGuidance(t.state, t.currentInput, t.pass.stepsAtPassStart);
       return NEXT;
     }),
 

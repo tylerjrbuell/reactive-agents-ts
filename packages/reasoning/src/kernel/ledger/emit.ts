@@ -10,7 +10,7 @@
 // Pure — returns a NEW ledger. Callers (arbitrator.applyTermination) append
 // these BEFORE handing the ledger to `transitionState` via `patch.ledger`.
 
-import type { ChecklistItemOp } from "@reactive-agents/core";
+import type { ChecklistItemOp, ChecklistItemOrigin } from "@reactive-agents/core";
 import type { RequirementKind } from "../contract/run-contract.js";
 import type { ReasoningStep } from "../../types/index.js";
 import {
@@ -381,10 +381,8 @@ export interface ChecklistItemFact {
   readonly iteration: number;
   readonly change: ChecklistItemOp;
   readonly toolCallId?: string;
-  /** `"plan"` for harness-derived plan rows; omit for model `todo` facts. */
-  readonly origin?: "plan";
-  /** True for rows the terminal plan-checklist step derived from a plan-posture reply (the model recorded no `todo` list). */
-  readonly harnessDerived?: true;
+  /** `"plan"` for strategy plan rows, `"harness-derived"` for rows derived from a plan reply; omit for model `todo` facts. */
+  readonly origin?: ChecklistItemOrigin;
 }
 
 /**
@@ -405,7 +403,6 @@ export function recordChecklistItems(
       change: f.change,
       ...(f.toolCallId !== undefined ? { toolCallId: f.toolCallId } : {}),
       ...(f.origin !== undefined ? { origin: f.origin } : {}),
-      ...(f.harnessDerived === true ? { harnessDerived: true as const } : {}),
     })),
   );
 }

@@ -14,7 +14,8 @@ import { resolveCapability, type Tier } from "./capability.js";
 import type { AssemblyInput } from "./assembly-ctx.js";
 import type { ResolvedHarness } from "../harness-config.js";
 import { resolveScratchpadValue } from "@reactive-agents/tools";
-import { contentText, normalizeContent } from "@reactive-agents/core";
+import { contentText, normalizeContent, type RunPosture } from "@reactive-agents/core";
+import { frameGoalForPosture } from "../kernel/policy/plan-task-frame.js";
 import { mediaPartsOf } from "../kernel/capabilities/act/tool-result-content.js";
 
 // ── fromKernelState ───────────────────────────────────────────────────────────
@@ -84,6 +85,8 @@ export function fromKernelState(
    * to pre-wiring behavior.
    */
   remainingGoals?: readonly string[],
+  /** `KernelInput.posture`: under `"plan"` the rendered goal is framed as plan-only (policy/plan-task-frame.ts). */
+  posture?: RunPosture,
 ): AssemblyInput {
   // ── 1. Seed ResultStore from scratchpad ──────────────────────────────────
   //
@@ -135,7 +138,11 @@ export function fromKernelState(
   const firstUser = state.messages.find((m) => m.role === "user");
   // Typed parts (Plan 9 Phase 4): the goal keeps its text for the system prompt
   // and carries the parts only when a non-text part is present.
-  const goalContent = firstUser && firstUser.role === "user" ? normalizeContent(firstUser.content) : (task ?? "");
+  // Plan posture frames the goal the model SEES (system-prompt goal + user turn); state.messages and input.task stay raw.
+  const goalContent = frameGoalForPosture(
+    firstUser && firstUser.role === "user" ? normalizeContent(firstUser.content) : (task ?? ""),
+    posture,
+  );
   const goalText = contentText(goalContent);
   if (typeof goalContent !== "string") {
     log = log.append({ kind: "goal", text: goalText, parts: goalContent });
