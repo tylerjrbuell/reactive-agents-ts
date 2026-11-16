@@ -56,6 +56,8 @@ export interface PlanChecklistSeedItem {
   readonly id: string;
   readonly title: string;
   readonly status: ChecklistItemStatus;
+  /** Tool hint for the step. Absent when the step names no tool. */
+  readonly tool?: string;
 }
 
 /** Plan fields a checklist snapshot does not carry. */
@@ -64,7 +66,7 @@ export interface PlanFromChecklistMeta {
   readonly goal: string;
   readonly createdAt: number;
   readonly source: PlanSource;
-  /** Tool hint per step id. Steps absent from the map get no `tool`. */
+  /** Tool hint per step id. Overrides the row's own `tool`; steps with neither get no `tool`. */
   readonly tools?: Readonly<Record<string, string>>;
 }
 
@@ -83,17 +85,21 @@ export function planFromChecklist(snapshot: ChecklistSnapshot, meta: PlanFromChe
   const steps = snapshot.root.rows
     .filter((row) => row.kind === "advisory")
     .map((row): PlanStep => {
-      const tool = meta.tools?.[row.id];
+      const tool = meta.tools?.[row.id] ?? row.tool;
       return { id: row.id, title: row.title, status: stepStatusOfRow(row.status), ...(tool !== undefined ? { tool } : {}) };
     });
   return { id: meta.id, goal: meta.goal, steps, createdAt: meta.createdAt, source: meta.source };
 }
 
 /**
- * Project a plan onto checklist seed items (ids, titles, status). Lossy by
- * design: `skipped` becomes `completed`, and `tool` is dropped (the checklist
- * has no tool field; carry it via {@link PlanFromChecklistMeta.tools}).
+ * Project a plan onto checklist seed items (ids, titles, status, tool hint).
+ * Lossy by design: `skipped` becomes `completed`.
  */
 export function planToChecklistSeed(plan: Plan): PlanChecklistSeedItem[] {
-  return plan.steps.map((step) => ({ id: step.id, title: step.title, status: seedStatusOfStep(step.status) }));
+  return plan.steps.map((step) => ({
+    id: step.id,
+    title: step.title,
+    status: seedStatusOfStep(step.status),
+    ...(step.tool !== undefined ? { tool: step.tool } : {}),
+  }));
 }

@@ -29,8 +29,11 @@ export type ChecklistItemStatus = "pending" | "in_progress" | "completed";
  * Ops naming an unknown (never added or already removed) id are no-ops.
  */
 export type ChecklistItemOp =
-  /** Append items as `pending`. An id already present is skipped; a removed id may be added again. */
-  | { readonly op: "add"; readonly items: readonly { readonly id: string; readonly title: string }[] }
+  /**
+   * Append items as `pending`. An id already present is skipped; a removed id may be added again.
+   * `tool` is an optional hint naming the tool the step expects to use; absent = no hint.
+   */
+  | { readonly op: "add"; readonly items: readonly { readonly id: string; readonly title: string; readonly tool?: string }[] }
   /** Set one item's status. Same-status changes are no-ops. */
   | { readonly op: "status"; readonly id: string; readonly status: ChecklistItemStatus }
   /** Replace one item's title. Status, seq and origin are kept; not an explicit status mark. */
@@ -46,9 +49,16 @@ export interface ChecklistItemFact {
   readonly pass?: string;
   readonly change: ChecklistItemOp;
   readonly toolCallId?: string;
-  /** `"plan"` = written by the harness from a strategy's plan state, not by a `todo` call. */
-  readonly origin?: "plan";
+  /**
+   * `"plan"` = written by the harness from a strategy's plan state, not by a `todo` call;
+   * `"harness-derived"` = checklist derived by the harness from the model's own output.
+   * Absent = a model `todo` call.
+   */
+  readonly origin?: ChecklistItemOrigin;
 }
+
+/** Who wrote a checklist item's facts when it was not a model `todo` call. */
+export type ChecklistItemOrigin = "plan" | "harness-derived";
 
 /** Any ledger fact the checklist projector consumes. */
 export type ChecklistFact = RequirementFact | ChecklistItemFact;
@@ -110,8 +120,14 @@ export interface AdvisoryItem {
   readonly seq: number;
   readonly title: string;
   readonly status: ChecklistItemStatus;
-  /** `"plan"` when the item was added from a strategy's plan (harness-driven status). */
-  readonly origin?: "plan";
+  /**
+   * `"plan"` when the item was added from a strategy's plan (harness-driven status);
+   * `"harness-derived"` when the harness derived it from model output (status is
+   * explicit/inferrable like a model row). Absent for model `todo` items.
+   */
+  readonly origin?: ChecklistItemOrigin;
+  /** Tool hint from the add op. Absent when the step named no tool. */
+  readonly tool?: string;
 }
 
 /** One rendered checklist row. */
@@ -128,6 +144,10 @@ export interface ChecklistRow {
   readonly source?: ChecklistItemSource;
   /** Present iff `source === "inferred"`. */
   readonly evidence?: ChecklistEvidenceRef;
+  /** Advisory rows only. Present as `"harness-derived"` when the harness derived the row; absent otherwise (plan rows are identified by `source`). */
+  readonly origin?: "harness-derived";
+  /** Advisory rows only. Tool hint the step carried. Absent when none. */
+  readonly tool?: string;
 }
 
 /** A run's checklist group; children are sub-agent runs. */
@@ -198,7 +218,14 @@ export function foldAdvisory(facts: readonly ChecklistFact[]): readonly Advisory
           const parsed = Number(added.id);
           const seq = Number.isInteger(parsed) && parsed > 0 ? parsed : maxSeq + 1;
           maxSeq = Math.max(maxSeq, seq);
-          items.set(added.id, { id: added.id, seq, title: added.title, status: "pending", ...(fact.origin === "plan" ? { origin: "plan" as const } : {}) });
+          items.set(added.id, {
+            id: added.id,
+            seq,
+            title: added.title,
+            status: "pending",
+            ...(fact.origin !== undefined ? { origin: fact.origin } : {}),
+            ...(added.tool !== undefined ? { tool: added.tool } : {}),
+          });
         }
         break;
       case "status": {
@@ -463,13 +490,17 @@ function buildRows(facts: readonly ChecklistInputFact[]): {
   const inferred = inferChecklistProgress(adv, facts);
   const advRows: ChecklistRow[] = adv.map((a) => {
     // Plan rows: the harness writes their status from plan state; never inferred.
+    const extra = {
+      ...(a.origin === "harness-derived" ? { origin: "harness-derived" as const } : {}),
+      ...(a.tool !== undefined ? { tool: a.tool } : {}),
+    };
     if (a.origin === "plan") {
-      return { id: a.id, kind: "advisory", title: a.title, status: a.status === "completed" ? "done" : a.status, source: "plan" };
+      return { id: a.id, kind: "advisory", title: a.title, status: a.status === "completed" ? "done" : a.status, source: "plan", ...extra };
     }
     const evidence = inferred.get(a.id);
     return evidence !== undefined
-      ? { id: a.id, kind: "advisory", title: a.title, status: "done", source: "inferred", evidence }
-      : { id: a.id, kind: "advisory", title: a.title, status: a.status === "completed" ? "done" : a.status, source: "explicit" };
+      ? { id: a.id, kind: "advisory", title: a.title, status: "done", source: "inferred", evidence, ...extra }
+      : { id: a.id, kind: "advisory", title: a.title, status: a.status === "completed" ? "done" : a.status, source: "explicit", ...extra };
   });
   return {
     rows: [...reqRows, ...advRows],

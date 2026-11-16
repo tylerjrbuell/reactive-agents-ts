@@ -4,6 +4,8 @@ import {
   EventBus,
   EventBusLive,
   PlanSchema,
+  foldAdvisory,
+  projectChecklist,
   isPlanEmpty,
   planFromChecklist,
   planToChecklistSeed,
@@ -79,10 +81,38 @@ describe("plan <-> checklist", () => {
     ]);
   });
 
-  it("skipped seeds as completed; tool hint is dropped from the seed", () => {
-    const plan: Plan = { ...meta, steps: [{ id: "1", title: "a", tool: "t", status: "skipped" }] };
+  it("skipped seeds as completed; tool hint rides the seed", () => {
+    const plan: Plan = { ...meta, steps: [{ id: "1", title: "a", tool: "t", status: "skipped" }, { id: "2", title: "b", status: "pending" }] };
     const seed = planToChecklistSeed(plan);
-    expect(seed).toEqual([{ id: "1", title: "a", status: "completed" }]);
+    expect(seed).toEqual([
+      { id: "1", title: "a", status: "completed", tool: "t" },
+      { id: "2", title: "b", status: "pending" },
+    ]);
+  });
+
+  it("tool hint survives ledger fold -> row -> plan; meta.tools overrides", () => {
+    const snap = projectChecklist([
+      { kind: "checklist-item", seq: 1, iteration: 1, origin: "harness-derived", change: { op: "add", items: [{ id: "a", title: "Write it", tool: "file-write" }, { id: "b", title: "Read it" }] } },
+    ]);
+    expect(foldAdvisory([{ kind: "checklist-item", seq: 1, iteration: 1, change: { op: "add", items: [{ id: "a", title: "x", tool: "t" }] } }])[0]?.tool).toBe("t");
+    const plan = planFromChecklist(snap, meta);
+    expect(plan.steps[0]?.tool).toBe("file-write");
+    expect(plan.steps[1]).not.toHaveProperty("tool");
+    expect(planFromChecklist(snap, { ...meta, tools: { a: "shell" } }).steps[0]?.tool).toBe("shell");
+  });
+
+  it("harness-derived rows stay explicit and inferrable; plan rows stay plan; old facts decode unchanged", () => {
+    const add = (origin?: "plan" | "harness-derived") => ({
+      kind: "checklist-item" as const, seq: 1, iteration: 1, ...(origin ? { origin } : {}),
+      change: { op: "add" as const, items: [{ id: "s1", title: "Write ./out/report.md" }] },
+    });
+    const artifact = { kind: "artifact" as const, seq: 2, iteration: 1, path: "./out/report.md", op: "write" };
+    const derived = projectChecklist([add("harness-derived"), artifact]).root.rows[0];
+    expect(derived).toMatchObject({ source: "inferred", status: "done", origin: "harness-derived" });
+    expect(projectChecklist([add("harness-derived")]).root.rows[0]).toMatchObject({ source: "explicit", origin: "harness-derived" });
+    expect(projectChecklist([add("plan"), artifact]).root.rows[0]).toMatchObject({ source: "plan", status: "pending" });
+    const legacy = projectChecklist([add()]).root.rows[0];
+    expect(legacy).toEqual({ id: "s1", kind: "advisory", title: "Write ./out/report.md", status: "pending", source: "explicit" });
   });
 
   it("isPlanEmpty flags a plan with no steps", () => {
@@ -96,6 +126,20 @@ describe("plan events", () => {
     const a: AgentEvent = { _tag: "PlanRecorded", planId: "p", steps: [], source: "model", timestamp: 1 };
     const b: AgentEvent = { _tag: "PlanStepStatusChanged", planId: "p", stepId: "1", from: "pending", to: "done", timestamp: 2 };
     expect([a._tag, b._tag]).toEqual(["PlanRecorded", "PlanStepStatusChanged"]);
+  });
+
+  it("carry an optional sessionId", async () => {
+    const got = await Effect.runPromise(
+      Effect.gen(function* () {
+        const bus = yield* EventBus;
+        const ref = yield* Ref.make<AgentEvent[]>([]);
+        yield* bus.subscribe((e) => Ref.update(ref, (xs) => [...xs, e]));
+        yield* bus.publish({ _tag: "PlanRecorded", planId: "p", steps: [], source: "user-edited", sessionId: "s1", timestamp: 1 });
+        yield* bus.publish({ _tag: "PlanStepStatusChanged", planId: "p", stepId: "1", from: "pending", to: "done", sessionId: "s1", timestamp: 2 });
+        return yield* Ref.get(ref);
+      }).pipe(Effect.provide(EventBusLive)),
+    );
+    expect(got.map((e) => (e._tag === "PlanRecorded" || e._tag === "PlanStepStatusChanged" ? e.sessionId : "x"))).toEqual(["s1", "s1"]);
   });
 
   it("round-trips through EventBus.on with narrowing", async () => {

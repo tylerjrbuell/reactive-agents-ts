@@ -79,6 +79,7 @@ export type {
   ChecklistFact,
   ChecklistInputFact,
   ChecklistItemSource,
+  ChecklistItemOrigin,
   ToolInvocationFact,
   ToolResultFact,
   ChecklistGroup,

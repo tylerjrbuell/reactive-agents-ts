@@ -667,6 +667,8 @@ export interface PlanRecordedEvent {
   readonly agentId?: string;
   /** Task the plan belongs to. Absent when recorded before a task exists. */
   readonly taskId?: string;
+  /** Chat session the plan belongs to. Absent when recorded outside a session. */
+  readonly sessionId?: string;
   readonly timestamp: number;
 }
 
@@ -688,6 +690,8 @@ export interface PlanStepStatusChangedEvent {
   readonly agentId?: string;
   /** Task the change happened under. Absent when changed outside a task. */
   readonly taskId?: string;
+  /** Chat session the change happened under. Absent when changed outside a session. */
+  readonly sessionId?: string;
   readonly timestamp: number;
 }
 
