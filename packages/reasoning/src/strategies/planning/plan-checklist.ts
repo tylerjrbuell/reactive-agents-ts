@@ -10,8 +10,8 @@
  * remain the only completion truth.
  *
  * Row identity is (step id, title): a plan patch can reuse a step id for a new
- * step, which gets its own row. A failed or replaced step keeps its last
- * status (the checklist has no cancelled state yet).
+ * step, which gets its own row. A failed step keeps its last status; a replaced
+ * step (gone from the plan) has its row removed unless it completed.
  */
 import { Effect, Ref } from "effect";
 import type { ChecklistItemOp, ChecklistItemStatus } from "@reactive-agents/core";
@@ -22,7 +22,8 @@ import { appendAnnounced, ledgerSinkTarget, type LedgerSinkTarget } from "../../
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 
 /** The plan-step fields a checklist row is projected from (any planner's step shape). */
-export type PlanChecklistStep = Pick<PlanStep, "id" | "title" | "status">;
+export type PlanChecklistStep = Pick<PlanStep, "id" | "title" | "status"> &
+  Partial<Pick<PlanStep, "toolName" | "toolHints">>;
 
 /** What has already been written to the checklist, keyed by step id + title. */
 export interface PlanChecklistState {
@@ -54,7 +55,14 @@ export function planChecklistFacts(
 ): { readonly state: PlanChecklistState; readonly facts: readonly ChecklistItemFact[] } {
   const rows = new Map(state.rows);
   const usedIds = new Set([...rows.values()].map((r) => r.rowId));
-  const added: { id: string; title: string }[] = [];
+  const added: { id: string; title: string; tool?: string }[] = [];
+  const present = new Set(steps.map(rowKey));
+  const removed: string[] = [];
+  for (const [key, row] of state.rows) {
+    if (present.has(key) || row.status === "completed") continue;
+    rows.delete(key);
+    removed.push(row.rowId);
+  }
   const statusOps: ChecklistItemOp[] = [];
   for (const s of steps) {
     const key = rowKey(s);
@@ -65,7 +73,8 @@ export function planChecklistFacts(
       usedIds.add(rowId);
       row = { rowId, status: "pending" };
       rows.set(key, row);
-      added.push({ id: rowId, title: s.title });
+      const tool = s.toolName ?? s.toolHints?.[0];
+      added.push({ id: rowId, title: s.title, ...(tool !== undefined && tool.length > 0 ? { tool } : {}) });
     }
     const next = rowStatus(s, active);
     if (next !== undefined && next !== row.status) {
@@ -73,7 +82,11 @@ export function planChecklistFacts(
       statusOps.push({ op: "status", id: row.rowId, status: next });
     }
   }
-  const ops: ChecklistItemOp[] = [...(added.length > 0 ? [{ op: "add" as const, items: added }] : []), ...statusOps];
+  const ops: ChecklistItemOp[] = [
+    ...(removed.length > 0 ? [{ op: "remove" as const, ids: removed }] : []),
+    ...(added.length > 0 ? [{ op: "add" as const, items: added }] : []),
+    ...statusOps,
+  ];
   return { state: { rows }, facts: ops.map((change) => ({ iteration, change, origin: "plan" as const })) };
 }
 

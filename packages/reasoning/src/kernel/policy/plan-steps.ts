@@ -59,6 +59,19 @@ function similar(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   return shared / Math.max(a.size, b.size) >= 0.8 || (Math.min(a.size, b.size) >= 3 && shared === Math.min(a.size, b.size));
 }
 
+/** True when two step titles are near-duplicates (the one rule derived checklists and plan refinement share). */
+export const titlesNearDuplicate = (a: string, b: string): boolean => {
+  const ta = tokens(a);
+  const tb = tokens(b);
+  if (similar(ta, tb)) return true;
+  // Plan restatements pad a short title ("Verify report" -> "Verify the report file content"):
+  // a ≥2-word title wholly contained in a title at most twice its size is the same step.
+  let shared = 0;
+  for (const w of ta) if (tb.has(w)) shared++;
+  const min = Math.min(ta.size, tb.size);
+  return min >= 2 && shared === min && min / Math.max(ta.size, tb.size) >= 0.5;
+};
+
 /** Inline `1) a 2) b` runs: markers must count up from 1 and number at least two. */
 function inlineNumbered(reply: string): readonly string[] {
   const marks: { n: number; at: number; end: number }[] = [];

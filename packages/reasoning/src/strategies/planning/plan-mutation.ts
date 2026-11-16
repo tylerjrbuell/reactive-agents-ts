@@ -40,9 +40,33 @@ import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formattin
 import { extractGoalText } from "./plan-text.js";
 import { tokenSpendOf, type TokenSpend } from "../../kernel/run-budget.js";
 import { normalizeReplanRefs } from "./plan-refs.js";
+import { titlesNearDuplicate } from "../../kernel/policy/plan-steps.js";
 
 /** Replanned steps plus the replan call's spend (incl. the provider's split). */
 export type PlanMutation = { steps: PlanStep[] } & TokenSpend;
+
+/** Most steps one augment may add (a gap-filler, not a second plan). */
+export const MAX_AUGMENT_STEPS = 3;
+
+/**
+ * Drop candidates whose title near-duplicates an `existing` title or an earlier
+ * kept candidate, then cap. The one dedupe for patch and augment steps.
+ */
+export function dedupeNewSteps<S extends { readonly title: string }>(
+  candidates: readonly S[],
+  existing: readonly string[],
+  cap = Number.POSITIVE_INFINITY,
+): S[] {
+  const seen = [...existing];
+  const out: S[] = [];
+  for (const c of candidates) {
+    if (seen.some((t) => titlesNearDuplicate(t, c.title))) continue;
+    seen.push(c.title);
+    out.push(c);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
 
 /** Minimal input shape consumed by `patchPlan`. */
 export interface PatchInput {
@@ -116,7 +140,14 @@ export function patchPlan(
         planMode: plan.mode,
       });
       // Re-number patch steps starting after the failed step
-      const patchedSteps = patchedPlan.steps.map((s, idx) => ({
+      // A rewrite never restates work already completed (nor itself).
+      const fresh = dedupeNewSteps(
+        patchedPlan.steps,
+        plan.steps.filter((s) => s.status === "completed").map((s) => s.title),
+      );
+      // Nothing new: no patch, so the caller keeps the tail it would otherwise replace with nothing.
+      if (fresh.length === 0) return Effect.succeed(null);
+      const patchedSteps = fresh.map((s, idx) => ({
         ...s,
         id: `s${failedStepIndex + 2 + idx}`,
         seq: failedStepIndex + 2 + idx,
@@ -189,7 +220,13 @@ export function augmentPlan(
         goal: plan.goal,
         planMode: plan.mode,
       });
-      const augmentedSteps = augmentedPlan.steps.map((s, idx) => ({
+      // Never re-add a step already on the plan (failed ones may be retried); cap the additions.
+      const fresh = dedupeNewSteps(
+        augmentedPlan.steps,
+        plan.steps.filter((s) => s.status !== "failed").map((s) => s.title),
+        MAX_AUGMENT_STEPS,
+      );
+      const augmentedSteps = fresh.map((s, idx) => ({
         ...s,
         id: `s${nextSeq + idx}`,
         seq: nextSeq + idx,
