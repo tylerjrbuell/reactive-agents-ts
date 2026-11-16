@@ -71,6 +71,7 @@ import { proposeBrokenToolExit } from "./broken-tool-exit.js";
 import { applyInputOrderGuidance } from "./iterate-input-order-seam.js";
 import { applyComputeOffloadGuidance } from "./iterate-compute-offload-seam.js";
 import { applyFollowPlanGuidance } from "./iterate-follow-plan-seam.js";
+import { emitBookkeepingRefund, proposeBookkeepingRefund } from "./iterate-bookkeeping-refund-seam.js";
 
 /** Values one operation hands a later one within a single pass (reset per pass). */
 export interface TurnPassLocals {
@@ -182,8 +183,8 @@ export const KERNEL_TURN_OPERATIONS = [
   },
   {
     name: "iteration-progress",
-    reads: ["state.steps", "state.iteration", "carry.prevActionCount", "pass.iterationAtPassStart"],
-    writes: ["carry.prevActionCount", "pass.toolsThisStep"],
+    reads: ["state.steps", "state.iteration", "carry.currentInput", "carry.currentOptions", "carry.prevActionCount", "pass.iterationAtPassStart"],
+    writes: ["state.steps", "carry.currentOptions", "carry.prevActionCount", "pass.toolsThisStep"],
     proposesExit: false,
   },
   {
@@ -491,6 +492,17 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
         yield* cfg.hooks.onIterationProgress(t.state, toolsThisStep);
       }
       t.prevActionCount = t.state.steps.length;
+      // A todo-only round on a seeded plan run does not spend the budget (bounded).
+      const refund = proposeBookkeepingRefund({
+        state: t.state, input: t.currentInput, options: t.currentOptions,
+        toolsThisStep, iterationAtPassStart: t.pass.iterationAtPassStart,
+      });
+      if (refund !== undefined) {
+        t.state = refund.state;
+        t.currentOptions = refund.options;
+        t.prevActionCount = t.state.steps.length;
+        yield* emitBookkeepingRefund(t.state, t.currentOptions, toolsThisStep);
+      }
       return NEXT;
     }),
 

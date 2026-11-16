@@ -24,9 +24,10 @@ const MAX_CATALOG_DESC_CHARS = 70;
 
 /** The execute-side advisory line, rendered while a seeded checklist has unchecked steps. */
 export const FOLLOW_PLAN_GUIDANCE =
-  "Follow the plan checklist: work the next unchecked step, mark it done with todo when finished, and revise the list with todo if reality differs from the plan.";
+  "Follow the plan checklist: work the next unchecked step, mark it done with todo when finished, and revise the list with todo if reality differs from the plan. " +
+  "Issue independent tool calls together in one turn, update todo in the same turn as the real work, and never re-add steps already on the list.";
 
-const NUMBERED = /^\s*(?:step\s+)?\d{1,2}\s*[.):]\s+(\S.*)$/i;
+const NUMBERED = /^\s*(?:step\s+)?(\d{1,2})\s*[.):]\s+(\S.*)$/i;
 const BULLETED = /^\s*[-*•]\s+(\S.*)$/;
 const INLINE_MARKER = /(?:^|\s)(\d{1,2})[.)]\s+(?=\S)/g;
 
@@ -73,23 +74,43 @@ function inlineNumbered(reply: string): readonly string[] {
   return run.map((mk, i) => (reply.slice(mk.end, run[i + 1]?.at ?? reply.length).split(/(?<=[.!?])\s/)[0] ?? ""));
 }
 
+/** One list in a reply: the prose line above it and its raw item texts. */
+interface RawList {
+  readonly heading: string;
+  readonly items: string[];
+}
+
 /**
- * Checklist titles derived from a plan reply: the numbered step lines (else the
- * bulleted ones, else an inline `1) a 2) b` run), markers and emphasis stripped,
- * each clipped to {@link MAX_DERIVED_STEP_CHARS}, deduplicated, at most
- * {@link MAX_DERIVED_STEPS}. Prose lines are ignored. Empty when nothing reads
- * as a step.
+ * The lists `re` finds, in reply order. A list ends at an unindented prose line
+ * (a heading) and, for numbered lists, where the numbering restarts. Indented
+ * prose is a continuation and ends nothing.
  */
-export function derivePlanSteps(reply: string): readonly string[] {
-  const lines = reply.split(/\r?\n/);
-  const pick = (re: RegExp): string[] =>
-    lines.flatMap((l) => {
-      const hit = re.exec(l)?.[1];
-      return hit !== undefined ? [hit] : [];
-    });
-  const numbered = pick(NUMBERED);
-  const raw = numbered.length > 0 ? numbered : pick(BULLETED);
-  const source = raw.length > 0 ? raw : inlineNumbered(reply);
+function listsOf(lines: readonly string[], re: RegExp, numbered: boolean): readonly RawList[] {
+  const lists: RawList[] = [];
+  let open: RawList | undefined;
+  let heading = "";
+  let prev = 0;
+  for (const line of lines) {
+    const m = re.exec(line);
+    if (m !== undefined && m !== null) {
+      const text = m[numbered ? 2 : 1] ?? "";
+      const n = numbered ? Number(m[1]) : 0;
+      if (open === undefined || (numbered && n <= prev)) {
+        open = { heading, items: [] };
+        lists.push(open);
+      }
+      open.items.push(text);
+      prev = n;
+    } else if (line.trim().length > 0 && !NUMBERED.test(line) && !BULLETED.test(line) && !/^\s/.test(line)) {
+      open = undefined;
+      heading = line;
+    }
+  }
+  return lists;
+}
+
+/** One list's step titles: cleaned, clipped, narrative and near-duplicates dropped, capped. */
+function stepTitles(source: readonly string[]): readonly string[] {
   const seen: ReadonlySet<string>[] = [];
   const out: string[] = [];
   for (const r of source) {
@@ -102,6 +123,42 @@ export function derivePlanSteps(reply: string): readonly string[] {
     if (out.length === MAX_DERIVED_STEPS) break;
   }
   return out;
+}
+
+const PLAN_HEADING = /todo|steps?|actionable|plan/i;
+
+/**
+ * Checklist titles derived from a plan reply, taken from ONE list: a model that
+ * restates its plan (a vague list, then the same steps with tool hints, then
+ * bullets) must not get the union. Numbered lists are the candidates (else
+ * bulleted, else an inline `1) a 2) b` run). The winner has the most steps
+ * naming a tool; ties go to the list under a plan/steps/todo heading, then to
+ * the later one. With no hints anywhere the longest list wins (ties: later).
+ * Inside it, markers and emphasis are stripped, each title clipped to
+ * {@link MAX_DERIVED_STEP_CHARS}, narrative and near-duplicates dropped, at most
+ * {@link MAX_DERIVED_STEPS}. Empty when nothing reads as a step.
+ */
+export function derivePlanSteps(reply: string): readonly string[] {
+  const lines = reply.split(/\r?\n/);
+  const numbered = listsOf(lines, NUMBERED, true);
+  const candidates = numbered.length > 0 ? numbered : listsOf(lines, BULLETED, false);
+  const lists: readonly { readonly heading: string; readonly titles: readonly string[] }[] =
+    candidates.length > 0
+      ? candidates.map((l) => ({ heading: l.heading, titles: stepTitles(l.items) }))
+      : [{ heading: "", titles: stepTitles(inlineNumbered(reply)) }];
+  let best: (typeof lists)[number] | undefined;
+  let bestKey: readonly number[] = [];
+  for (const l of lists) {
+    const hinted = l.titles.filter((t) => planStepTool(t) !== undefined).length;
+    const key = [hinted, hinted === 0 ? l.titles.length : 0, PLAN_HEADING.test(l.heading) ? 1 : 0];
+    // Lexicographic key compare; an equal key lets the later list win.
+    const firstDiff = key.findIndex((k, i) => k !== bestKey[i]);
+    if (best === undefined || firstDiff === -1 || key[firstDiff]! > bestKey[firstDiff]!) {
+      best = l;
+      bestKey = key;
+    }
+  }
+  return best?.titles ?? [];
 }
 
 const TOOL_HINT = /\btool:\s*`?([\w][\w./-]*)/i;

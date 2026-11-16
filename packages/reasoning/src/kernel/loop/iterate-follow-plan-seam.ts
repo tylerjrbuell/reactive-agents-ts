@@ -16,6 +16,8 @@
 //
 // Pure, deterministic, NO LLM, NO fs.
 
+import type { AdvisoryItem } from "@reactive-agents/core";
+import { recordChecklistItems } from "../ledger/emit.js";
 import { appendGuidanceText } from "../state/guidance-channel.js";
 import { transitionState, type KernelInput, type KernelState } from "../state/kernel-state.js";
 import { startRound, viewItems } from "../capabilities/act/checklist-round.js";
@@ -29,35 +31,82 @@ export function followPlanLine(state: KernelState, input: KernelInput): string |
   return unchecked ? FOLLOW_PLAN_GUIDANCE : undefined;
 }
 
-/**
- * The propose-done line (spec item 7): the first unchecked seeded step whose
- * tool hint names a tool that SUCCEEDED in the steps at/after `fromStep`.
- * Undefined when no step carries a hint, no hinted tool succeeded this pass,
- * or the run is not an execute run with a seed. Advisory: the model decides.
- */
-export function proposeDoneLine(state: KernelState, input: KernelInput, fromStep: number): string | undefined {
-  if (isPlanPosture(input) || (input.initialAdvisory?.length ?? 0) === 0) return undefined;
+/** Tools whose calls SUCCEEDED in the steps at/after `fromStep`. */
+function succeededSince(state: KernelState, fromStep: number): ReadonlySet<string> {
   const succeeded = new Set<string>();
   for (const s of state.steps.slice(fromStep)) {
     const r = s.type === "observation" ? s.metadata?.observationResult : undefined;
     if (r?.success === true && typeof r.toolName === "string") succeeded.add(r.toolName);
   }
-  if (succeeded.size === 0) return undefined;
-  const hit = viewItems(startRound(), state.ledger).find(
+  return succeeded;
+}
+
+/** Unchecked seeded steps whose tool hint names a tool that succeeded this pass (an execute run with a seed only). */
+function hintedHits(state: KernelState, input: KernelInput, fromStep: number): readonly AdvisoryItem[] {
+  if (isPlanPosture(input) || (input.initialAdvisory?.length ?? 0) === 0) return [];
+  const succeeded = succeededSince(state, fromStep);
+  if (succeeded.size === 0) return [];
+  return viewItems(startRound(), state.ledger).filter(
     (item) => item.status !== "completed" && item.tool !== undefined && succeeded.has(item.tool),
   );
+}
+
+/**
+ * The propose-done line (spec item 7): the first unchecked seeded step whose
+ * tool hint names a tool that SUCCEEDED in the steps at/after `fromStep`.
+ * Undefined when no step carries a hint, no hinted tool succeeded this pass,
+ * or the run is not an execute run with a seed. Advisory: the model decides.
+ * {@link autoTickSteps} settles the unambiguous matches first; this line is
+ * what is left, a tool several unchecked steps share.
+ */
+export function proposeDoneLine(state: KernelState, input: KernelInput, fromStep: number): string | undefined {
+  const hit = hintedHits(state, input, fromStep)[0];
   return hit === undefined
     ? undefined
     : `Step ${hit.id} ("${hit.title}") named tool ${hit.tool}, which just succeeded: if the step is complete, mark it done with todo.`;
 }
 
 /**
- * Append the follow-the-plan line, then the propose-done line, to the pending
- * guidance when each applies (each at most once per turn).
+ * Auto-tick (execute-phase iteration efficiency): a seeded step whose tool hint
+ * names a tool that SUCCEEDED this pass, and that NO other unchecked step names,
+ * is marked done by the harness itself, so the model spends no turn on the
+ * bookkeeping. The status is a `checklist-item` ledger fact, which the runner's
+ * ledger tap publishes as `ChecklistUpdated`; the item's origin is untouched
+ * (a status change never carries one). Ambiguous matches (a tool two or more
+ * unchecked steps share) stay advisory ({@link proposeDoneLine}). Idempotent: a
+ * ticked step is no longer unchecked. Inert without a seed or tool hints, and in
+ * plan posture (state identity). Deterministic, no LLM.
+ */
+export function autoTickSteps(
+  state: KernelState,
+  input: KernelInput,
+  fromStep: number,
+): { readonly state: KernelState; readonly ticked: readonly AdvisoryItem[] } {
+  const hits = hintedHits(state, input, fromStep);
+  if (hits.length === 0) return { state, ticked: [] };
+  const unchecked = viewItems(startRound(), state.ledger).filter((item) => item.status !== "completed");
+  const ticked = hits.filter((hit) => unchecked.filter((item) => item.tool === hit.tool).length === 1);
+  if (ticked.length === 0) return { state, ticked: [] };
+  const ledger = recordChecklistItems(
+    state.ledger,
+    ticked.map((item) => ({ iteration: state.iteration, change: { op: "status" as const, id: item.id, status: "completed" as const } })),
+  );
+  return { state: transitionState(state, { ledger }), ticked };
+}
+
+/**
+ * Settle the unambiguous hinted steps ({@link autoTickSteps}), then append the
+ * follow-the-plan line, the auto-tick note and the propose-done line to the
+ * pending guidance when each applies (each at most once per turn).
  */
 export function applyFollowPlanGuidance(state: KernelState, input: KernelInput, fromStep: number = state.steps.length): KernelState {
-  let next = state;
-  for (const line of [followPlanLine(state, input), proposeDoneLine(state, input, fromStep)]) {
+  const auto = autoTickSteps(state, input, fromStep);
+  const tickedLine =
+    auto.ticked.length === 0
+      ? undefined
+      : `Marked done by the harness (the named tool succeeded): ${auto.ticked.map((i) => `step ${i.id} ("${i.title}")`).join(", ")}. Do not repeat them or mark them yourself.`;
+  let next = auto.state;
+  for (const line of [followPlanLine(next, input), tickedLine, proposeDoneLine(next, input, fromStep)]) {
     if (line === undefined || next.pendingGuidance?.icsGuidance?.includes(line) === true) continue;
     next = transitionState(next, { pendingGuidance: appendGuidanceText(next.pendingGuidance, "icsGuidance", line) });
   }

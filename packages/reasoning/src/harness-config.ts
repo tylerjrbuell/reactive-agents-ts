@@ -39,6 +39,7 @@ import {
   stableToolListEnabled,
   compactCallConstraintsEnabled,
   budgetAnswerTurnEnabled,
+  wrapUpReserveEnabled,
   leanThinkingEnabled,
   computeOffloadEnabled,
   planToolCatalogEnabled,
@@ -308,6 +309,8 @@ export interface ResolvedHarness {
   readonly compactCallConstraints?: true;
   /** Budget answer turn (see `HarnessConfig.budgetAnswerTurn`). Present only when on. */
   readonly budgetAnswerTurn?: true;
+  /** Wrap-up reserve (`RA_WRAPUP_RESERVE=1`; env-only, no `HarnessConfig` field yet). Present only when on. */
+  readonly wrapUpReserve?: true;
   /** Lean thinking (see `HarnessConfig.leanThinking`). Present only when on. */
   readonly leanThinking?: true;
   /** Compute offload (see `HarnessConfig.computeOffload`). Present only when on. */
@@ -416,6 +419,7 @@ export function resolveHarnessConfig(
       ? { compactCallConstraints: true as const }
       : {}),
     ...(pick(config.budgetAnswerTurn, budgetAnswerTurnEnabled()) ? { budgetAnswerTurn: true as const } : {}),
+    ...(wrapUpReserveEnabled() ? { wrapUpReserve: true as const } : {}),
     ...(pick(config.leanThinking, leanThinkingEnabled()) ? { leanThinking: true as const } : {}),
     ...(pick(config.computeOffload, computeOffloadEnabled()) ? { computeOffload: true as const } : {}),
     ...(pick(config.planToolCatalog, planToolCatalogEnabled()) ? { planToolCatalog: true as const } : {}),

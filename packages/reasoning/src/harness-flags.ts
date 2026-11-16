@@ -250,6 +250,17 @@ export function budgetAnswerTurnEnabled(): boolean {
 }
 
 /**
+ * Wrap-up reserve: on a run seeded with a plan checklist, the last think call
+ * the iteration budget allows ships with no tools and asks for an answer from
+ * the evidence gathered, naming what is unfinished
+ * (`kernel/loop/wrap-up-reserve.ts`). Default OFF, env-only until an ablation
+ * measures it. `RA_WRAPUP_RESERVE=1` enables it.
+ */
+export function wrapUpReserveEnabled(): boolean {
+  return readFlag("RA_WRAPUP_RESERVE") === "1";
+}
+
+/**
  * Lean thinking: a tool-selection turn on a thinking model runs with thinking
  * off (`kernel/capabilities/reason/lean-thinking.ts`). Default OFF pending an
  * ablation-warden measurement. `RA_LEAN_THINKING=1` enables it.

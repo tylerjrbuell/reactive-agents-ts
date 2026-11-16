@@ -43,6 +43,7 @@ import {
   outstandingItems,
   type ExitGateRecord,
 } from "./exit-gate.js";
+import { wrapUpReserve } from "./wrap-up-reserve.js";
 import { assembleDeliverable, collectValidatedObservations } from "./runner-helpers/deliverable.js";
 import { requestedActionTools, succeededToolNames } from "../capabilities/verify/claimed-actions.js";
 
@@ -96,21 +97,27 @@ export function reserveBudgetAnswerTurn(args: {
 }): Effect.Effect<KernelState, never, never> {
   return Effect.gen(function* () {
     const { state, maxIterations, taskId } = args;
-    const record = budgetAnswerTurnRecord(state, args.input, maxIterations);
+    // A seeded plan run's wrap-up reserve (wrap-up-reserve.ts) takes the call the
+    // budget answer turn leaves; both are the same tools-withheld answer turn.
+    const budgeted = budgetAnswerTurnRecord(state, args.input, maxIterations);
+    const wrapUp = budgeted === undefined ? wrapUpReserve(state, args.input, isLastThinkCall(state, maxIterations)) : undefined;
+    const record = budgeted ?? wrapUp?.record;
     if (record === undefined) return state;
     yield* emitGuardFired({
       taskId,
       iteration: state.iteration,
       guard: BUDGET_ANSWER_TURN_GUARD,
       outcome: "block",
-      reason: "last think call of the iteration budget reserved for the answer",
+      reason: wrapUp === undefined
+        ? "last think call of the iteration budget reserved for the answer"
+        : "last think call of the iteration budget reserved for a wrap-up answer (seeded plan run)",
       metadata: { llmCalls: record.answerTurnAt, maxIterations, outstanding: record.outstanding },
     });
     yield* emitDisposition(taskId, state, record);
     return transitionState(state, {
       steps: [...state.steps, gateStep(record, state.iteration)],
       pendingGuidance: contributeGuidance(state.pendingGuidance, [
-        { kind: "qualityGateHint", text: gateContent(record).replace(/^⚠️ /, "") },
+        { kind: "qualityGateHint", text: wrapUp?.hint ?? gateContent(record).replace(/^⚠️ /, "") },
       ]),
     });
   });

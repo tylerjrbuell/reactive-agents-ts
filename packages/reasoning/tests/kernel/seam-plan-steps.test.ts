@@ -25,7 +25,8 @@ import {
 } from "../../src/kernel/policy/plan-steps.js";
 import { resolveHarnessConfig } from "../../src/harness-config.js";
 import { derivePlanChecklist } from "../../src/kernel/loop/plan-checklist-step.js";
-import { followPlanLine, applyFollowPlanGuidance, proposeDoneLine } from "../../src/kernel/loop/iterate-follow-plan-seam.js";
+import { followPlanLine, applyFollowPlanGuidance, autoTickSteps, proposeDoneLine } from "../../src/kernel/loop/iterate-follow-plan-seam.js";
+import { startRound, viewItems } from "../../src/kernel/capabilities/act/checklist-round.js";
 import { frameGoalForPosture, PLAN_TASK_FRAME } from "../../src/kernel/policy/plan-task-frame.js";
 import { makeObservationResult } from "../../src/kernel/utils/observation-helpers.js";
 import { seedInitialAdvisory } from "../../src/kernel/state/checklist-seed.js";
@@ -58,6 +59,68 @@ describe("derivePlanSteps: umami gpt-4.1 shape (narrative bullets + restated ste
       "Summarize the findings",
     ]);
     expect(derivePlanSteps("- I need to look.\n- I'll compare.")).toEqual([]);
+  });
+});
+
+describe("derivePlanSteps: one plan, never a union of restated lists", () => {
+  // Cortex trace 01M7JJ1ENHRYK467BEXCHKG42T (gpt-4.1 plan turn, no todo call): the same plan three times.
+  const reply = [
+    "### Plan and Reasoning",
+    "",
+    "1. Find out which websites exist.",
+    "2. Work out the available date range.",
+    "3. Pull the traffic numbers for the spike.",
+    "4. Break the traffic down by metric.",
+    "5. Look for annotations that explain it.",
+    "6. Dig into sessions if the cause is unclear.",
+    "",
+    "Actionable Steps as TODOs:",
+    "",
+    "1. List the websites available in Umami (`tool: umami/list_websites`).",
+    "2. Get the available date range for the website (`tool: umami/get_website_daterange`).",
+    "3. Retrieve traffic stats for the spike (`tool: umami/get_website_stats` and `tool: umami/get_website_traffic`).",
+    "4. Analyze breakdowns by key metrics (`tool: umami/get_website_metrics`).",
+    "5. Review annotations for context (`tool: umami/get_annotations`).",
+    "6. Inspect sessions and events for anomalies (`tool: umami/get_sessions`, `tool: umami/get_events`).",
+    "",
+    "Here is the structured plan as todo items:",
+    "",
+    "- List websites in Umami (`tool: umami/list_websites`)",
+    "- Get available date range for the target website (`tool: umami/get_website_daterange`)",
+    "- Retrieve summary and detailed traffic stats (`tool: umami/get_website_stats`, `tool: umami/get_website_traffic`)",
+    "- Analyze traffic breakdowns by metric (`tool: umami/get_website_metrics`)",
+    "- Review website annotations (`tool: umami/get_annotations`)",
+    "- Investigate sessions and events (`tool: umami/get_sessions`, `tool: umami/get_events`)",
+    "",
+    "Let me know when you'd like to proceed.",
+  ].join("\n");
+
+  it("takes the single list whose steps carry tool hints: 6 steps with tools, not the 12-step union", () => {
+    const steps = derivePlanSteps(reply);
+    expect(steps.length).toBe(6);
+    expect(steps.every((s) => planStepTool(s) !== undefined)).toBe(true);
+    expect(steps[0]).toBe("List the websites available in Umami (tool: umami/list_websites)");
+    // A multi-tool step keeps its full text; the row tool is the first one named.
+    expect(steps[2]).toBe("Retrieve traffic stats for the spike (tool: umami/get_website_stats and tool: umami/get_website_traffic)");
+    expect(planStepTool(steps[2]!)).toBe("umami/get_website_stats");
+    expect(planStepTool(steps[5]!)).toBe("umami/get_sessions");
+  });
+
+  it("a single list without hints is used as is", () => {
+    expect(derivePlanSteps("Plan:\n1. read the file\n2. count the rows\n3. report")).toEqual([
+      "read the file",
+      "count the rows",
+      "report",
+    ]);
+  });
+
+  it("two lists without hints: ONE is chosen (the longer; a tie goes to the later), never merged", () => {
+    expect(derivePlanSteps("Draft:\n1. read it\n2. write it\n\nFinal:\n1. read the input file\n2. count the rows\n3. report totals")).toEqual([
+      "read the input file",
+      "count the rows",
+      "report totals",
+    ]);
+    expect(derivePlanSteps("Draft:\n1. read it\n2. write it\n\nFinal:\n1. fetch data\n2. save data")).toEqual(["fetch data", "save data"]);
   });
 });
 
@@ -223,7 +286,8 @@ describe("followPlanLine (execute, seeded checklist)", () => {
     const s = seeded(["completed", "pending"]);
     expect(followPlanLine(s.state, s.input)).toBe(FOLLOW_PLAN_GUIDANCE);
     expect(FOLLOW_PLAN_GUIDANCE).toBe(
-      "Follow the plan checklist: work the next unchecked step, mark it done with todo when finished, and revise the list with todo if reality differs from the plan.",
+      "Follow the plan checklist: work the next unchecked step, mark it done with todo when finished, and revise the list with todo if reality differs from the plan. " +
+        "Issue independent tool calls together in one turn, update todo in the same turn as the real work, and never re-add steps already on the list.",
     );
     const applied = applyFollowPlanGuidance(s.state, s.input);
     expect(applied.pendingGuidance?.icsGuidance).toBe(FOLLOW_PLAN_GUIDANCE);
@@ -283,14 +347,53 @@ describe("proposeDoneLine (execute, seeded hinted step)", () => {
     });
   });
 
-  it("the named tool succeeding this pass proposes done for that step: ONE line, advisory, idempotent", () => {
-    const s = withSteps(seededState(), [obs("crypto-price", true)]);
-    const line = proposeDoneLine(s, input({ initialAdvisory: seed }), 0);
+  it("the named tool succeeding this pass proposes done for that step: ONE line, advisory, idempotent (ambiguous match: two unchecked steps share the tool)", () => {
+    const shared = [
+      { id: "1", title: "Fetch the price", status: "pending" as const, tool: "crypto-price" },
+      { id: "2", title: "Fetch the price again", status: "pending" as const, tool: "crypto-price" },
+    ];
+    const s = withSteps(seedInitialAdvisory(fresh(), { initialAdvisory: shared }), [obs("crypto-price", true)]);
+    const line = proposeDoneLine(s, input({ initialAdvisory: shared }), 0);
     expect(line).toBe('Step 1 ("Fetch the price") named tool crypto-price, which just succeeded: if the step is complete, mark it done with todo.');
-    const applied = applyFollowPlanGuidance(s, input({ initialAdvisory: seed }), 0);
+    const applied = applyFollowPlanGuidance(s, input({ initialAdvisory: shared }), 0);
+    expect(applied.ledger).toBe(s.ledger); // ambiguous: the harness ticks nothing
     expect(applied.pendingGuidance?.icsGuidance).toContain(line!);
     expect(applied.pendingGuidance?.icsGuidance).toContain(FOLLOW_PLAN_GUIDANCE);
-    expect(applyFollowPlanGuidance(applied, input({ initialAdvisory: seed }), 0)).toBe(applied);
+    expect(applyFollowPlanGuidance(applied, input({ initialAdvisory: shared }), 0)).toBe(applied);
+  });
+
+  it("auto-tick: the unambiguous hinted step is marked done by the harness (ledger fact, origin untouched), once, with a note and no propose line", () => {
+    const i = input({ initialAdvisory: seed });
+    const s = withSteps(seededState(), [obs("crypto-price", true)]);
+    const applied = applyFollowPlanGuidance(s, i, 0);
+    const items = viewItems(startRound(), applied.ledger);
+    expect(items.map((x) => [x.id, x.status])).toEqual([["1", "completed"], ["2", "pending"]]);
+    expect(items[0]?.origin).toBeUndefined();
+    const facts = (applied.ledger ?? []).flatMap((e) => (e.kind === "checklist-item" ? [e] : []));
+    expect(facts[facts.length - 1]?.change).toEqual({ op: "status", id: "1", status: "completed" });
+    const guidance = applied.pendingGuidance?.icsGuidance ?? "";
+    expect(guidance).toContain('Marked done by the harness (the named tool succeeded): step 1 ("Fetch the price")');
+    expect(guidance).not.toContain("if the step is complete, mark it done");
+    // Idempotent: a second pass over the same steps ticks nothing more.
+    const again = applyFollowPlanGuidance(applied, i, 0);
+    expect(again.ledger).toBe(applied.ledger);
+    expect(again).toBe(applied);
+    // A seeded origin survives the tick (plan-origin rows stay plan-origin).
+    const planRow = recordChecklistItems(undefined, [
+      { iteration: 0, origin: "plan", change: { op: "add", items: [{ id: "1", title: "Fetch the price", tool: "crypto-price" }] } },
+    ]);
+    const ticked = applyFollowPlanGuidance(withSteps(transitionState(fresh(), { ledger: planRow }), [obs("crypto-price", true)]), i, 0);
+    expect(viewItems(startRound(), ticked.ledger)[0]).toMatchObject({ status: "completed", origin: "plan" });
+  });
+
+  it("auto-tick is inert: failed call, call before this pass, no seed, plan posture", () => {
+    const i = input({ initialAdvisory: seed });
+    const failed = withSteps(seededState(), [obs("crypto-price", false)]);
+    expect(autoTickSteps(failed, i, 0).state).toBe(failed);
+    const old = withSteps(seededState(), [obs("crypto-price", true)]);
+    expect(autoTickSteps(old, i, 1).state).toBe(old);
+    expect(autoTickSteps(old, input(), 0).state).toBe(old);
+    expect(autoTickSteps(old, { ...i, posture: "plan" }, 0).state).toBe(old);
   });
 
   it("nothing proposed: failed call, other tool, call before this pass, no hint, done step, no seed, plan posture", () => {
