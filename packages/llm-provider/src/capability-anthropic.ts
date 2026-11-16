@@ -162,6 +162,23 @@ export const ANTHROPIC_STATIC_CAPABILITIES: Readonly<Record<string, Capability>>
     toolCallDialect: "native-fc",
     source: "static-table",
   },
+  // claude-opus-4-1: 200K window / 32K output are owner-supplied, not verified
+  // in-repo (2026-11-16). Flags mirror the other Opus rows.
+  "anthropic/claude-opus-4-1": {
+    provider: "anthropic",
+    model: "claude-opus-4-1",
+    tier: "frontier",
+    maxContextTokens: 200_000,
+    recommendedNumCtx: 200_000,
+    maxOutputTokens: 32_000,
+    tokenizerFamily: "claude",
+    supportsPromptCaching: true,
+    supportsVision: true,
+    supportsThinkingMode: true,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
   "anthropic/claude-haiku-4-5-20251001": {
     provider: "anthropic",
     model: "claude-haiku-4-5-20251001",

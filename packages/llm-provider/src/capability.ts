@@ -14,6 +14,7 @@
 
 import { Schema } from "effect";
 import { ANTHROPIC_STATIC_CAPABILITIES } from "./capability-anthropic.js";
+import { HOSTED_STATIC_CAPABILITIES } from "./capability-hosted.js";
 import { OLLAMA_LOCAL_STATIC_CAPABILITIES } from "./capability-ollama-local.js";
 
 // ─── Literal unions ──────────────────────────────────────────────────────────
@@ -315,6 +316,9 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
   // ── Anthropic ────────────────────────────────────────────────────────────
   // Rows live in capability-anthropic.ts (size ceiling); spread in place.
   ...ANTHROPIC_STATIC_CAPABILITIES,
+
+  // Legacy-but-selectable OpenAI/Gemini rows live in capability-hosted.ts.
+  ...HOSTED_STATIC_CAPABILITIES,
 
   // ── OpenAI ───────────────────────────────────────────────────────────────
   // GPT-5 family per OpenAI model docs (2026-06): 1M context, 128K output,
