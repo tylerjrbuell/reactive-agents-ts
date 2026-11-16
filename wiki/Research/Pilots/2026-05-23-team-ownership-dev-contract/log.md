@@ -2219,3 +2219,15 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   tmp-before-after: "2.4G -> 2.5G"
   files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-ENUM.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest-enum.jsonl]
 ```
+
+```yaml
+- date: 2026-11-15
+  warden: harness-warden
+  task: compute-offload-spike
+  state: completed
+  confidence: 0.7
+  verdicts: {trigger: "94 of 267 accepted aggregation runs (35%) wrong on a computed item", tool-absent: "86% of those runs had no code-execute on the surface", visible-use: "5 of 38 required-tools runs called it; weak models in-head 0/14, strong 21/21", code-execute: "31 of 120 calls ok, mostly model-input faults", recommend: "(c) description fix then (a) surface+guidance behind ablation; reject (b),(d)"}
+  evidence: {runs: "623 trace files, 570 graded, zero tokens", sha: "traces p2/p3a/p3b/verify/enum"}
+  spend-usd: 0
+  files: [wiki/Research/Harness-Reports/2026-11-15-compute-offload-spike.md]
+```
