@@ -9,6 +9,8 @@ export type {
   ChecklistInferredEvent,
   EnvironmentChangedEvent,
   ChatModeChangedEvent,
+  PlanRecordedEvent,
+  PlanStepStatusChangedEvent,
   EnvironmentChangeKind,
   SignalRenderedEmittedEvent,
   SignalEffectEmittedEvent,

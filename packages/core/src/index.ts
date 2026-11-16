@@ -224,12 +224,32 @@ export type {
   ChecklistInferredEvent,
   EnvironmentChangedEvent,
   ChatModeChangedEvent,
+  PlanRecordedEvent,
+  PlanStepStatusChangedEvent,
   EnvironmentChangeKind,
   PromptAssembledEvent,
   PromptAssembledFragment,
   PromptAssembledToolDescription,
   StructuredOutputReportedEvent,
 } from "./services/event-bus.js";
+// Plan primitive: plan IS the advisory checklist (plan/execute posture).
+export {
+  PlanSchema,
+  PlanStepSchema,
+  PlanSourceSchema,
+  PlanStepStatusSchema,
+  isPlanEmpty,
+  planFromChecklist,
+  planToChecklistSeed,
+} from "./types/plan.js";
+export type {
+  Plan,
+  PlanStep,
+  PlanSource,
+  PlanStepStatus,
+  PlanChecklistSeedItem,
+  PlanFromChecklistMeta,
+} from "./types/plan.js";
 // LLM throughput: output tokens/sec from LLMRequestCompleted (firstTokenMs-aware).
 export { outputTokensPerSecond } from "./utils/llm-throughput.js";
 export type { LLMThroughputFields } from "./utils/llm-throughput.js";

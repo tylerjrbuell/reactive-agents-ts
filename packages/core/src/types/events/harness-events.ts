@@ -2,6 +2,7 @@ import type {
   LlmCallPurpose,
 } from "../llm-purpose.js";
 import type { ContentPartSummary } from "../content.js";
+import type { PlanSource, PlanStep, PlanStepStatus } from "../plan.js";
 import type { StructuredAttemptReport } from "../structured-attempt.js";
 import type { StructuredOutputReport } from "../structured-output-report.js";
 import type { PromptFragmentId, PromptFragmentSlot, PromptFragmentStatus } from "../prompt-fragment.js";
@@ -534,6 +535,8 @@ export type HarnessAgentEvent =
   | ChecklistInferredEvent
   | EnvironmentChangedEvent
   | ChatModeChangedEvent
+  | PlanRecordedEvent
+  | PlanStepStatusChangedEvent
   | PromptAssembledEvent
   | StructuredOutputReportedEvent;
 
@@ -644,6 +647,47 @@ export interface ChatModeChangedEvent {
   readonly from: "plan" | "execute";
   /** Mode after the change. Always differs from `from`. */
   readonly to: "plan" | "execute";
+  readonly timestamp: number;
+}
+
+/**
+ * A plan was recorded (`agent.plan()`, a model-written plan, or a user edit).
+ * Emitted once per recorded plan or edit; `steps` is the full step list at that
+ * moment.
+ */
+export interface PlanRecordedEvent {
+  readonly _tag: "PlanRecorded";
+  /** Id of the recorded plan. */
+  readonly planId: string;
+  /** Full step list at record time. */
+  readonly steps: ReadonlyArray<PlanStep>;
+  /** Who authored the plan. */
+  readonly source: PlanSource;
+  /** Agent that recorded the plan. Absent when recorded outside an agent run. */
+  readonly agentId?: string;
+  /** Task the plan belongs to. Absent when recorded before a task exists. */
+  readonly taskId?: string;
+  readonly timestamp: number;
+}
+
+/**
+ * One step of a plan changed status. Emitted once per actual change; a no-op
+ * (`from === to`) emits nothing.
+ */
+export interface PlanStepStatusChangedEvent {
+  readonly _tag: "PlanStepStatusChanged";
+  /** Plan the step belongs to. */
+  readonly planId: string;
+  /** Step whose status changed. */
+  readonly stepId: string;
+  /** Status before the change. */
+  readonly from: PlanStepStatus;
+  /** Status after the change. Always differs from `from`. */
+  readonly to: PlanStepStatus;
+  /** Agent that ran the step. Absent when changed outside an agent run. */
+  readonly agentId?: string;
+  /** Task the change happened under. Absent when changed outside a task. */
+  readonly taskId?: string;
   readonly timestamp: number;
 }
 
