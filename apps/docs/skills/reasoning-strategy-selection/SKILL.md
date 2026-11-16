@@ -47,6 +47,8 @@ const agent = await ReactiveAgents.create()
 | Quality-critical iterative refinement | `"reflexion"` | Self-critique loop improves output |
 | Unknown complexity | `"adaptive"` | Best safe default |
 
+Plan-then-execute with a reviewable plan is separate from the `"plan-execute-reflect"` strategy: `const plan = await agent.plan(task)` returns a typed, editable `Plan` with no tools run, and `agent.execute(plan)` runs it with per-step status in `result.plan`. It works with any strategy.
+
 ```ts
 // NOTE: strategy name is "plan-execute-reflect" — NOT "plan-execute"
 .withReasoning({ defaultStrategy: "plan-execute-reflect", maxIterations: 15 })

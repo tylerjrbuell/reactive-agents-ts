@@ -84,6 +84,7 @@ export {
   // Structured output
   StructuredOutputError,
   OutputSchemaError,
+  PlanNoStepsError,
   SubAgentInputError,
   SubAgentParametersError,
   isJsonSchemaObject,

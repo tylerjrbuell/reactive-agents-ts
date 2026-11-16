@@ -207,9 +207,10 @@ GIANT_BAR=1000
 # 2026-11-14 chat run-context isolation: reactive-agent.ts 1987->1973 (three chat engines' contextSummary closures carry static taskContext only, no agent-level _lastDebrief/_lastRunObservations), chat/engine.ts 669->663 (tool path sends the raw input; prior-run context now per-session via chat/last-run-context.ts).
 # 2026-11-15 chat session mode: chat/engine.ts 663->661 (session mode()/setMode() + mode option added; turn/streamTurn/ctor JSDoc condensed to pay for them). reactive-agent.ts stays 1973 (mode + typed currentTurn wired on existing lines).
 # 2026-11-15 ChatModeChanged: chat/engine.ts 661->656 (publishMode port + setMode announce added; setMode one line, two engine-private JSDoc blocks condensed). reactive-agent.ts stays 1973 (publishMode wired on an existing line).
+# 2026-11-16 plan/execute primitives: reactive-agent.ts 1973->1972, chat/engine.ts 656->655 (plan()/execute()/setTodo added, paid for by condensed JSDoc/bodies).
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:1973"
-  "runtime/src/chat/engine.ts:656"
+  "runtime/src/reactive-agent.ts:1972"
+  "runtime/src/chat/engine.ts:655"
   "runtime/src/builder.ts:2200"
   "runtime/src/execution-engine.ts:955"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:796"

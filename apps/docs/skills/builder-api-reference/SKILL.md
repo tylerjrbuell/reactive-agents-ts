@@ -165,6 +165,8 @@ const agent = await ReactiveAgents.create()
 
 ## Run input
 
+**Plan then execute.** `await agent.plan(input)` runs the task under plan posture (planning tools only, no capability tools) and returns a typed `Plan` (`{ id, goal, steps: [{ id, title, tool?, status }], createdAt, source }`) that always has steps or rejects with `PlanNoStepsError`. `agent.execute(plan)` and `agent.run(input, { plan })` run seeded from the plan's checklist and return `result.plan` with each step's final status. Chat sessions: `session.plan` (read) and `session.setPlan(planOrSteps)` (edit before switching `session.setMode("execute")`). Events: `PlanRecorded`, `PlanStepStatusChanged`. Opt-in `.withHarness({ planToolCatalog: true })` lists the execute-phase tools in plan guidance.
+
 `agent.run()`, `runStream()`, `runEffect()` and `chat()` take a `TaskInput`: a string, or an array of content parts (`text`, `image`, `audio`, `file`) from `@reactive-agents/core`. `modelInputCapabilities(provider, model)` says what a model accepts; an unsupported image or audio part fails with `UnsupportedModalityError`.
 
 ## Pitfalls

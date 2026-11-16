@@ -41,8 +41,8 @@ import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
 import { unwrapErrorWithSuggestion } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
-import type { Task, TaskResult, TaskError } from '@reactive-agents/core'
-import { generateTaskId, AgentId, TaskId } from '@reactive-agents/core'
+import type { Task, TaskResult, TaskError, Plan } from '@reactive-agents/core'
+import { generateTaskId, AgentId, TaskId, isPlanEmpty } from '@reactive-agents/core'
 import { join } from 'node:path'
 import {
     CapabilityRegistry,
@@ -96,9 +96,10 @@ import {
     type HistoryOverflowHandler,
 } from './chat.js'
 import { ChatEngine, nextSessionId } from './chat/engine.js'
-import { turnCarryMetadata, planPosture, originCarry, type TurnCarryOption, type PostureOption, type OriginOption } from './chat/todo-seed.js'
+import { turnCarryMetadata, planPosture, originCarry, type TurnCarryOption, type PostureOption, type OriginOption, type TodoSeedOption } from './chat/todo-seed.js'
+import { planFacade, executeFacade, type PlanRunOptions, type PlanRunOption } from './agent/plan-facade.js'
 import type { EnvironmentUpdateOption } from './chat/environment-snapshot.js'
-import { makeChatComplete, makeChatPublishMode, makeChatPublishTurn, makeChatToolIntent, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
+import { makeChatComplete, makeChatPublishMode, makeChatPublishPlan, makeChatPublishTurn, makeChatToolIntent, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorMessage, errorTag } from "@reactive-agents/core";
@@ -732,8 +733,9 @@ export class ReactiveAgent<TOut = unknown> {
                 readonly toolName: string
                 readonly args: unknown
             }) => boolean | { approve: boolean; reason?: string } | Promise<boolean | { approve: boolean; reason?: string }>
-        } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption & SkillsRunOption
+        } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption & SkillsRunOption & TodoSeedOption & PlanRunOption
     ): Promise<AgentResult & { object?: TOut }> {
+        if (options?.plan && !isPlanEmpty(options.plan)) { const { plan, ...rest } = options; return executeFacade(this, input, plan, rest) }
         // Run the task on ManagedRuntime only — do not wrap in Effect.runPromise(Effect.promise(...)),
         // which nests the default runtime with ManagedRuntime and can yield pure interruption
         // ("All fibers interrupted without errors") on first execution (e.g. with Cortex + reasoning).
@@ -744,7 +746,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
             ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
             // Chat-turn carry: environment notice + plan posture ride task context to the envelope.
-            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace), ...skillsCarry(options?.skills), ...(options?.onApproval ? { onApproval: options.onApproval } : {}), ...currentTurnCarry(input, options?.history),
+            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace), ...skillsCarry(options?.skills), ...(options?.initialTodo ? { initialTodo: options.initialTodo } : {}), ...(options?.onApproval ? { onApproval: options.onApproval } : {}), ...currentTurnCarry(input, options?.history),
         }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise
@@ -795,26 +797,23 @@ export class ReactiveAgent<TOut = unknown> {
         ).finally(terminal.disarm) as Promise<AgentResult & { object?: TOut }>
     }
 
+    /** Run `input` under plan posture (planning tools only) and return the typed `Plan`; rejects `PlanNoStepsError` when it has no steps. */
+    plan(input: TaskInput, options?: PlanRunOptions): Promise<Plan> { return planFacade(this, input, options) }
+    /** Run `plan.goal` seeded from the plan's checklist; `result.plan` carries per-step status. */
+    execute(plan: Plan, options?: PlanRunOptions): Promise<AgentResult & { readonly plan: Plan }> { return executeFacade(this, plan.goal, plan, options) }
+
     /**
      * Serve this agent over the A2A protocol. Returns once the port is bound.
      *
      * Other agents discover it at `/.well-known/agent.json` and invoke it with
-     * JSON-RPC `message/send`. Replaces the old `.withA2A()` layer wiring,
-     * which composed at runtime-construction time — before the agent existed —
-     * and so bound no port and reached no executor (dead code, deleted
-     * alongside this method). `.withA2A(options)` itself is kept as a config
-     * carrier: its `port` and `basePath` are the defaults here when the
-     * caller omits them.
+     * JSON-RPC `message/send`. `.withA2A(options)` is a config carrier: its
+     * `port` and `basePath` are the defaults here when the caller omits them.
      *
-     * Cancel correlation: A2A's minted `taskId` (`task-handler.ts`) is passed
-     * straight into `run()`'s own `options.taskId`, which `buildRunTaskEffect`
-     * adopts verbatim as the `Task.id` the ExecutionEngine executes under
-     * (`reactive-agent.ts`'s `buildRunTaskEffect`). So the SAME id `agent
-     * .cancel(taskId)` expects is the id A2A already knows — no separate
-     * id-mapping table needed. (`tasks/cancel` still only flips the A2A task's
-     * status today — the executor fiber itself is `forkDaemon`'d with no
-     * retained interrupt handle in non-blocking mode; that gap is out of scope
-     * here, see the A2A repair plan's Task 1 note.)
+     * Cancel correlation: A2A's minted `taskId` is passed into `run()`'s
+     * `options.taskId`, which `buildRunTaskEffect` adopts as the `Task.id`, so
+     * the id `agent.cancel(taskId)` expects is the id A2A already knows.
+     * (`tasks/cancel` still only flips the A2A task's status; the executor
+     * fiber has no retained interrupt handle in non-blocking mode.)
      */
     async serveA2A(options?: {
         readonly port?: number
@@ -1654,7 +1653,7 @@ export class ReactiveAgent<TOut = unknown> {
                 runStreamTask: makeSessionRunStreamTask((input, o) => self.runStream(input, o)),
                 complete: makeChatComplete(self.runtime),
                 publishTurn: makeChatPublishTurn(self.runtime, "runtime/src/reactive-agent.ts:session-publish"),
-                publishMode: makeChatPublishMode(self.runtime), saveHistory: sessionStore?.save,
+                publishMode: makeChatPublishMode(self.runtime), publishPlan: makeChatPublishPlan(self.runtime), saveHistory: sessionStore?.save,
                 loadHistory: sessionStore?.load,
                 systemPrompt: self._config?.systemPrompt
                     ? () => self._config!.systemPrompt!

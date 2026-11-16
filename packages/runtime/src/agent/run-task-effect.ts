@@ -46,6 +46,7 @@ import {
 } from 'effect'
 import { ManagedRuntime } from 'effect'
 import { runFacadeEffect } from './run-facade-effect.js'
+import { todoSeedMetadata, type TodoSeedItem } from '../chat/todo-seed.js'
 import { SKILLS_ACTIVATE_CONTEXT_KEY } from '../runtime-skills-layer.js'
 import {
     generateTaskId,
@@ -103,6 +104,8 @@ export interface RunTaskEffectOptions {
     readonly posture?: 'execute' | 'plan'
     /** Caller origin; rides `task.metadata.context.origin` to `run-started.origin`. */
     readonly origin?: RunOrigin
+    /** A prior to-do list (a plan's checklist); rides `task.metadata.context.initialTodo` to `rails.initialAdvisory`. */
+    readonly initialTodo?: readonly TodoSeedItem[]
     /** The typed current turn (input before history was folded in); rides `task.metadata.currentTurn`. */
     readonly currentTurn?: TaskCurrentTurn
     readonly durableRunId?: string
@@ -224,9 +227,10 @@ export const buildRunTaskEffect = (
         metadata: {
             tags: [],
             ...(options?.currentTurn ? { currentTurn: options.currentTurn } : {}),
-            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length
+            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length || options?.initialTodo?.length
                 ? {
                       context: {
+                          ...todoSeedMetadata(options.initialTodo).context,
                           ...(options.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
                           ...(options.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}),
                           ...(options.posture === 'plan' ? { posture: options.posture } : {}),

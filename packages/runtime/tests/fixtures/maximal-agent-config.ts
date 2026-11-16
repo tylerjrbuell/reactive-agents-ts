@@ -97,6 +97,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
       budgetAnswerTurn: true,
       leanThinking: true,
       computeOffload: true,
+      planToolCatalog: true,
       llmRecoveryBudget: 3,
     },
   },

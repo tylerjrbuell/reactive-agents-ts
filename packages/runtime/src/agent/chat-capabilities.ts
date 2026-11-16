@@ -111,6 +111,11 @@ export const makeChatPublishMode =
     (runtime: ChatRuntime): NonNullable<ChatEngineCapabilities['publishMode']> =>
     (event) => runtime.runPromise(EventBus.pipe(Effect.flatMap((bus) => bus.publish(event))))
 
+/** Publish a `PlanRecorded` event on the agent's EventBus (the engine swallows a failed publish). */
+export const makeChatPublishPlan =
+    (runtime: ChatRuntime): NonNullable<ChatEngineCapabilities['publishPlan']> =>
+    (event) => runtime.runPromise(EventBus.pipe(Effect.flatMap((bus) => bus.publish(event))))
+
 /**
  * Names of the tools actually registered on the agent's `ToolService`, read
  * synchronously (the registry is Ref-backed). `[]` when the agent has no tools

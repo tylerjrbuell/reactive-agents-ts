@@ -6,7 +6,7 @@
  * can grow without growing that ledger-pinned file. builder/types.ts
  * re-exports both names, so every existing import keeps working.
  */
-import type { OutputFormat, TerminatedBy, TrustReceipt } from '@reactive-agents/core'
+import type { OutputFormat, Plan, TerminatedBy, TrustReceipt } from '@reactive-agents/core'
 import type { AgentDebrief } from '../debrief.js'
 
 // ─── Result Types ────────────────────────────────────────────────────────────
@@ -258,6 +258,11 @@ export interface AgentResult {
      * finished run; absent while a durable run is paused (`status` says why).
      */
     readonly outcome?: AgentOutcome
+    /**
+     * The plan the run executed with each step's final status. Present on
+     * `agent.execute(plan)` and on `agent.run(input, { plan })` when the plan has steps.
+     */
+    readonly plan?: Plan
     /** Unique ID for this execution task. */
     readonly taskId: string
     /** ID of the agent that performed the execution. */

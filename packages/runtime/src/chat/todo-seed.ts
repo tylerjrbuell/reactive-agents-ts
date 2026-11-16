@@ -143,6 +143,10 @@ export class TodoCarry {
   get items(): readonly TodoSeedItem[] {
     return this.#items;
   }
+  /** Replace the list (a plan edit); the next turn seeds from it. */
+  replace(items: readonly TodoSeedItem[]): void {
+    this.#items = items;
+  }
   /** Fold one stream event; non-checklist events are ignored. */
   observe(event: AgentStreamEvent): void {
     if (event._tag === "ChecklistUpdated") this.#items = snapshotToTodoSeed(event.checklist);

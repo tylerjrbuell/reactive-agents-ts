@@ -78,6 +78,12 @@ export const HarnessConfigSchema = Schema.Struct({
   leanThinking: Schema.optional(Schema.Boolean),
   computeOffload: Schema.optional(Schema.Boolean),
   /**
+   * Plan tool catalog: plan-posture guidance gains one capped line naming the
+   * tools the execute phase would have. Advisory text only; default off.
+   * (`RA_PLAN_TOOL_CATALOG=1`)
+   */
+  planToolCatalog: Schema.optional(Schema.Boolean),
+  /**
    * LLM recovery budget: how many recoverable provider failures on think
    * turns one run may retry instead of ending with `llm_error`. Malformed
    * model output is resampled; a request over the context window or the

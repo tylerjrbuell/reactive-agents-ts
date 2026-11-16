@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
-import type { AgentEvent, EnvironmentChangedEvent, RunOrigin, RunPosture } from "@reactive-agents/core";
+import type { AgentEvent, EnvironmentChangedEvent, Plan, RunOrigin, RunPosture } from "@reactive-agents/core";
+import { editPlan, freshPlanMeta, planOfTodo, type SessionPlanMeta } from "./chat/session-plan.js";
+import type { PlanStepInput } from "./agent/plan-facade.js";
 import type { EnvironmentSnapshotInput } from "./chat/environment-snapshot.js";
 import type { AgentDebrief } from "./debrief.js";
 import type { AgentResult } from "./builder/types.js";
@@ -480,6 +482,33 @@ export class AgentSession {
    */
   todo(): readonly TodoSeedItem[] {
     return this.engine?.todo() ?? [];
+  }
+
+  private _planMeta?: SessionPlanMeta;
+
+  /**
+   * The conversation's to-do list as a typed {@link Plan}, or `undefined` while
+   * the list is empty. A plan turn's list (the model's `todo` list or the steps
+   * the harness derived from its reply) lands here after a streamed turn
+   * (`session.runStream`); `source` is `"model"` until {@link setPlan} edits it.
+   */
+  get plan(): Plan | undefined {
+    return planOfTodo(this.todo(), (this._planMeta ??= freshPlanMeta("session", Date.now())));
+  }
+
+  /**
+   * Replace the conversation's plan before switching to execute. Takes a
+   * {@link Plan} or plain steps (titles, or `{ title, tool?, status?, id? }`);
+   * the next turn, in any mode, seeds from the edited list. Publishes
+   * `PlanRecorded` (`source: "user-edited"`). Engine-backed sessions only.
+   * @returns the plan as recorded
+   */
+  setPlan(plan: Plan | readonly PlanStepInput[]): Plan {
+    if (!this.engine) throw new ChatEngineCapabilityError({ message: "AgentSession.setPlan() requires an engine-backed session (construct via agent.session()).", capability: "runStreamTask" });
+    const edit = editPlan(plan, this._planMeta ?? freshPlanMeta("session", Date.now()), Date.now());
+    this._planMeta = edit.meta;
+    this.engine.setTodo(edit.seed, edit.event);
+    return edit.plan;
   }
 
   /**

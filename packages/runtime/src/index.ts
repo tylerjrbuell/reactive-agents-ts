@@ -60,6 +60,8 @@ export {
   type ErrorContext,
 } from "./errors.js";
 export { StructuredOutputError, OutputSchemaError } from "./errors/structured-output-error.js";
+export { PlanNoStepsError } from "./errors/plan-no-steps-error.js";
+export type { PlanRunOptions, PlanRunOption, PlanStepInput } from "./agent/plan-facade.js";
 export { SubAgentInputError, SubAgentParametersError } from "./errors/sub-agent-parameters-error.js";
 export { isJsonSchemaObject, type JsonSchemaObject, type OutputSchemaInput, type AnyOutputSchema } from "./engine/finalize/json-schema-contract.js";
 export type { DeepPartial, OutputSchemaOptions } from "./builder/types.js";

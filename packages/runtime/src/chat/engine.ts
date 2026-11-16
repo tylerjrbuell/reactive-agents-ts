@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { AgentResult } from "../builder/types.js";
-import type { ChatModeChangedEvent, ChatTurnEvent, EnvironmentChangedEvent, RunOrigin } from "@reactive-agents/core";
+import type { ChatModeChangedEvent, PlanRecordedEvent, ChatTurnEvent, EnvironmentChangedEvent, RunOrigin } from "@reactive-agents/core";
 import type { ChatMessage, ChatOptions, ChatReply } from "../chat.js";
 import type { RunHandle } from "../run-controller.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
@@ -126,10 +126,7 @@ export interface ChatEngineCapabilities {
    * conversational prompt — direct-path parity, never a blank system prompt.
    */
   readonly systemPrompt?: (message: string) => string;
-  /**
-   * Static grounding (build-time taskContext) for the direct-path prompt. Never run
-   * results: the engine keeps this session's own last tool-turn results itself.
-   */
+  /** Static grounding (build-time taskContext) for the direct-path prompt; never run results. */
   readonly contextSummary?: (message: string) => string;
   readonly scratchpadEntries?: () => Readonly<Record<string, string>>;
   /** Default routing when a turn's `useTools` is unset: true takes the tool path. Absent ⇒ direct. */
@@ -140,6 +137,8 @@ export interface ChatEngineCapabilities {
   readonly publishEnvironment?: (event: EnvironmentChangedEvent) => Promise<void>;
   /** `ChatModeChanged` publication port (swallow-site): one event per actual `setMode` change. */
   readonly publishMode?: (event: ChatModeChangedEvent) => Promise<void>;
+  /** `PlanRecorded` publication port (swallow-site): one event per `setTodo` plan edit. */
+  readonly publishPlan?: (event: PlanRecordedEvent) => Promise<void>;
 }
 
 /**
@@ -305,9 +304,9 @@ export class ChatEngine {
   setMode(mode: ChatMode): void { const from = this.#mode; this.#mode = mode; announceModeChange(this.#deps.publishMode, this.#sessionId, from, mode, (e) => swallowError(e, "chat/engine.ts:publishMode")); }
 
   /** The conversation's latest to-do list, as of the last completed `streamTurn()` event. */
-  todo(): readonly TodoSeedItem[] {
-    return this.#todo.items;
-  }
+  todo(): readonly TodoSeedItem[] { return this.#todo.items; }
+  /** Replace the to-do list (a plan edit; later turns seed from it); `recorded` is published when given. */
+  setTodo(items: readonly TodoSeedItem[], recorded?: PlanRecordedEvent): void { this.#todo.replace(items); if (recorded) this.#deps.publishPlan?.(recorded).catch((e) => swallowError(e, "chat/engine.ts:publishPlan")); }
 
   /**
    * Buffered conversational turn — the single entry point for `agent.chat`,
