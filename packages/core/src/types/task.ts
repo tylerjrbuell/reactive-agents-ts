@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { AgentId } from "./agent.js";
+import { MessageContentSchema } from "./content.js";
 
 // ─── Task ID (branded string) ───
 
@@ -34,6 +35,22 @@ export const TaskStatus = Schema.Literal(
 );
 export type TaskStatus = typeof TaskStatus.Type;
 
+// ─── Current Turn ───
+
+/**
+ * The user's current ask, carried as typed data. Chat producers fold prior
+ * turns into the flattened task text (a "Conversation history" block); this
+ * lets them say which part is the current turn instead of consumers parsing
+ * text markers. Modality-neutral: `content` is a string or typed parts.
+ */
+export const TaskCurrentTurnSchema = Schema.Struct({
+  /** The current turn's content, WITHOUT any inlined prior conversation. Text or typed parts (image/audio/file). */
+  content: MessageContentSchema,
+  /** How many prior turns were folded into the task text ahead of this turn. Absent when unknown; 0 means none. */
+  priorTurnCount: Schema.optional(Schema.Number),
+});
+export type TaskCurrentTurn = typeof TaskCurrentTurnSchema.Type;
+
 // ─── Task Metadata ───
 
 export const TaskMetadataSchema = Schema.Struct({
@@ -44,6 +61,13 @@ export const TaskMetadataSchema = Schema.Struct({
   context: Schema.optional(
     Schema.Record({ key: Schema.String, value: Schema.Unknown }),
   ),
+  /**
+   * The current turn as typed data, set by the producer that flattened
+   * history into the task text (the chat engine). Absent for non-chat runs and
+   * older producers; consumers then fall back to text-marker parsing
+   * (`extractCurrentTurn` in reasoning).
+   */
+  currentTurn: Schema.optional(TaskCurrentTurnSchema),
 });
 export type TaskMetadata = typeof TaskMetadataSchema.Type;
 
