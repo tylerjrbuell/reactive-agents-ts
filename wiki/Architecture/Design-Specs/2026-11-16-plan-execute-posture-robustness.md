@@ -39,5 +39,16 @@ Claude Code / Codex / Cursor / OpenCode: plan mode = read-only exploration + exp
 - **cortex-warden (3rd):** plan card renders the checklist (editable steps: reorder/edit/remove/add before Execute), Execute button switches mode with the edited list, plan card persists; docs.
 - **ablation-warden (after):** plan+execute vs execute-only on multi-step tasks (success, steps followed, tokens); `planToolCatalog` on/off. Accept rule stated before running.
 
+## Framework-first public API (owner rule: Cortex is an expression of framework abilities)
+Everything above must be reachable from the builder/agent API with no Cortex involvement; Cortex only renders and persists. Surface (names guessable without docs; additive; modality-neutral):
+- **Typed `Plan`** (core, additive): `{ id, goal, steps: PlanStep[], createdAt, source: "model" | "harness-derived" | "user-edited" }`, `PlanStep { id, title, tool?: string, status: "pending" | "in-progress" | "done" | "skipped" }`. Maps 1:1 to the existing checklist rows (`ChecklistSnapshot`), with `tool` hints from the plan.
+- **`agent.plan(input, options?) -> Plan`**: runs the task under plan posture (reasoning + planning meta tools only), returns the durable `Plan` (harness-derived fallback guaranteed non-empty or a typed `PlanNoSteps` failure). No chat session required.
+- **`agent.run(input, { plan })` / `agent.execute(plan, options?)`**: executes seeded from the plan's checklist with the follow-the-list guidance; the final result reports per-step status (`result.plan`).
+- **Chat sessions**: `session.mode`/`setMode` (shipped), `session.plan` (read), `session.setPlan(plan | steps)` (edit before execute); mode switch plan->execute seeds from it. Same primitives underneath.
+- **Builder**: `.withPlanning({ toolCatalog?: boolean, ... })` is optional sugar for defaults; plan/execute work without it (posture is per-call state, not builder config).
+- **Events** (core, additive): `PlanRecorded {planId, steps, source}`, `PlanStepStatusChanged {planId, stepId, from, to}` (plus the shipped `ChatModeChanged`), so any UI/trace consumer can render plan progress.
+- **Docs + skills**: builder-api reference, a "Plan then execute" guide, `apps/docs/skills` consumer skill update (builder-api-reference / reasoning-strategy-selection mention), and CLI `rax` flag if `rax run` has a posture/plan option (report).
+- **Cortex** is then only: toggle, editable plan card, persistence, feed rendering.
+
 ## Non-goals (v1)
 Read-only exploration tools in plan mode (decide after the measurement), hard enforcement that execute must follow the list (advisory only), a second LLM call to structure the plan.
