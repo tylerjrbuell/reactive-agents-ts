@@ -152,6 +152,8 @@ export function buildRunConfigSnapshot(args: {
     leanThinking: harness.leanThinking === true,
     computeOffload: harness.computeOffload === true,
     planToolCatalog: harness.planToolCatalog === true,
+    planBudget: harness.planBudget !== false,
+    wrapUpReserve: harness.wrapUpReserve === true,
     llmRecoveryBudget: llmRecoveryBudgetOf(harness),
   });
   const contract = config.taskContract;

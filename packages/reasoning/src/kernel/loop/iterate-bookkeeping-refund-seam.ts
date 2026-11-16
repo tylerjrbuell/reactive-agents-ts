@@ -14,6 +14,9 @@
 // a `bookkeeping-refund` intervention (the record the cap counts, receipt
 // visible) plus a `bookkeeping_refund` guard-fired event.
 //
+// A plan-sized raise (plan-budget.ts) keeps this cap on the ORIGINAL configured
+// budget and keeps raise plus refunds under the plan hard cap.
+//
 // Without a seed, in plan posture, or in a round that made any other call:
 // returns undefined and nothing changes (byte-identical to a run without it).
 // Pure decision, deterministic, NO LLM, NO fs.
@@ -43,10 +46,11 @@ export const bookkeepingRefundsIssued = (state: KernelState): number =>
 
 /**
  * Most refunds a run may earn: half of the ORIGINAL budget. `currentMax` is the
- * carrier's (already raised) bound, so the original is `currentMax - issued`.
+ * carrier's (already raised) bound, so the original is `currentMax - issued`,
+ * unless the plan budget raised it first (then `configured` is the original).
  */
-export const bookkeepingRefundCap = (currentMax: number, issued: number): number =>
-  Math.floor((currentMax - issued) / 2);
+export const bookkeepingRefundCap = (currentMax: number, issued: number, configured?: number): number =>
+  Math.floor((configured ?? currentMax - issued) / 2);
 
 /** True when the round's calls (at least one) were all bookkeeping. */
 export const isBookkeepingRound = (toolsThisStep: readonly string[]): boolean =>
@@ -70,8 +74,10 @@ export function proposeBookkeepingRefund(args: {
   if (state.status === "done" || state.status === "failed") return undefined;
   if (state.iteration <= args.iterationAtPassStart || !isBookkeepingRound(args.toolsThisStep)) return undefined;
   const issued = bookkeepingRefundsIssued(state);
-  const cap = bookkeepingRefundCap(options.maxIterations, issued);
+  const cap = bookkeepingRefundCap(options.maxIterations, issued, options.configuredMaxIterations);
   if (issued >= cap) return undefined;
+  // A plan-raised bound plus refunds never passes the plan budget's hard cap (plan-budget.ts).
+  if (options.planBudgetHardCap !== undefined && options.maxIterations + 1 > options.planBudgetHardCap) return undefined;
   const step = makeStep("harness_signal", `bookkeeping round refunded: ${args.toolsThisStep.join(", ")} only (${issued + 1}/${cap})`, {
     intervention: {
       actor: BOOKKEEPING_REFUND_ACTOR,

@@ -98,6 +98,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
       leanThinking: true,
       computeOffload: true,
       planToolCatalog: true,
+      planBudget: false,
       llmRecoveryBudget: 3,
     },
   },

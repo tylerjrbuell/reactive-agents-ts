@@ -21,6 +21,7 @@ import { sentinelDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
 import { migrateLegacyTodo } from "../state/checklist-migrate.js";
 import { seedPassState } from "../state/pass-seed.js";
+import { applyPlanBudgetAtStart } from "./plan-budget.js";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
 import { resolveStrategyServices } from "../../kernel/utils/service-utils.js";
@@ -612,12 +613,11 @@ export function runKernel(
       }
     }
 
-    // Strategy switching state — currentOptions tracks the active strategy
-    // name for the current pass; currentInput carries any handoff priorContext;
-    // currentContext is rebuilt when input changes on switch. All three
-    // round-trip through the carrier so the outer while loop and post-loop
-    // finalization see the latest values after a mid-iteration switch.
-    let currentOptions = options;
+    // currentOptions/currentInput/currentContext round-trip through the carrier (strategy
+    // switches). A seeded plan run gets a plan-sized iteration bound first (plan-budget.ts).
+    const planBudgeted = yield* applyPlanBudgetAtStart({ state, input: effectiveInput, options });
+    state = planBudgeted.state;
+    let currentOptions = planBudgeted.options;
     let currentInput: KernelInput = effectiveInput;
     let currentContext: KernelContext = context;
 

@@ -85,6 +85,13 @@ export const HarnessConfigSchema = Schema.Struct({
    */
   planToolCatalog: Schema.optional(Schema.Boolean),
   /**
+   * Plan budget: a run seeded with a plan checklist gets its iteration bound
+   * raised once at run start to fit the unchecked steps plus a reserve, capped
+   * at min(60, 3x configured). Default ON; `false` or `RA_PLAN_BUDGET=0` turns
+   * it off.
+   */
+  planBudget: Schema.optional(Schema.Boolean),
+  /**
    * LLM recovery budget: how many recoverable provider failures on think
    * turns one run may retry instead of ending with `llm_error`. Malformed
    * model output is resampled; a request over the context window or the

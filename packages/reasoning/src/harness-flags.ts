@@ -261,6 +261,16 @@ export function wrapUpReserveEnabled(): boolean {
 }
 
 /**
+ * Plan budget: a run seeded with a plan checklist gets its iteration bound
+ * raised at run start to fit the unchecked steps plus a reserve, capped
+ * (`kernel/loop/plan-budget.ts`). Default ON (seeded runs only);
+ * `RA_PLAN_BUDGET=0` disables it.
+ */
+export function planBudgetEnabled(): boolean {
+  return readFlag("RA_PLAN_BUDGET") !== "0";
+}
+
+/**
  * Lean thinking: a tool-selection turn on a thinking model runs with thinking
  * off (`kernel/capabilities/reason/lean-thinking.ts`). Default OFF pending an
  * ablation-warden measurement. `RA_LEAN_THINKING=1` enables it.

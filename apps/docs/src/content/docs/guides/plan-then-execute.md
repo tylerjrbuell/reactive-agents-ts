@@ -87,6 +87,22 @@ const agent = await ReactiveAgents.create()
   .build()
 ```
 
+## Plan-sized iteration budget
+
+A run seeded from a plan gets enough iterations to finish it. The configured `maxIterations` is the floor. When the unchecked steps plus a reserve of max(2, 25%) need more, the bound is raised once at run start, to at most min(60, 3x the configured value). Unseeded runs, and plans that already fit, are unchanged. Cost, token and time limits are not touched. The raise is recorded as a `plan-budget-raised` signal and the `planBudget` mechanism appears in the run-started config. It is on by default. Turn it off with the harness config or the environment:
+
+```ts
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withHarness({ planBudget: false }) // or RA_PLAN_BUDGET=0
+  .build()
+```
+
+## Wrap-up reserve
+
+Opt-in, off by default: set `RA_WRAPUP_RESERVE=1` to hold back the last iterations of a run for the answer. The run-started config records the effective `wrapUpReserve` value. It has no `.withHarness` key yet.
+
 ## Events
 
 | Event | When |
