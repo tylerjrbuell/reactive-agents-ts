@@ -241,6 +241,8 @@ export interface BuilderState {
   _mcpToolkitRequests: import("@reactive-agents/tools").MCPToolkitRequest[];
   _lazyValidation: boolean;
   _enableJudgment: boolean;
+  /** `false` after `.withJudgment(false)` — skips the build-time auto-shadow probe. */
+  _autoShadow: boolean;
   _judgmentOptions?: import("../types.js").JudgmentBuilderOptions;
   _judgmentShadowDbPath?: string;
   _approvalPolicy?: import("../types.js").ApprovalPolicyConfig;
@@ -396,6 +398,7 @@ const _assertBuilderStateViewShape = (
   _mcpToolkitRequests: self['_mcpToolkitRequests'],
   _lazyValidation: self['_lazyValidation'],
   _enableJudgment: self['_enableJudgment'],
+  _autoShadow: self['_autoShadow'],
   _judgmentOptions: self['_judgmentOptions'],
   _judgmentShadowDbPath: self['_judgmentShadowDbPath'],
   _approvalPolicy: self['_approvalPolicy'],

@@ -44,12 +44,12 @@ export const buildAgent = async <TOut>(
         // Wave 7.1 auto-shadow: shadow sites sample nothing without a wired
         // JudgmentService, so a default-off world never accumulates inversion
         // traffic. When the user did not opt into judgment AND did not opt
-        // out (REACTIVE_AGENTS_NO_AUTO_SHADOW=1), probe for a cheap LOCAL
+        // out (`.withJudgment(false)` or REACTIVE_AGENTS_NO_AUTO_SHADOW=1), probe for a cheap LOCAL
         // Ollama backend: shadow events fire, decisions are never consumed.
         // Keyless-safe: unreachable server or any error = no service, build
         // proceeds unchanged. Explicit `.withJudgment()` always wins (this
         // branch only runs when it was never called).
-        if (!state._enableJudgment) {
+        if (!state._enableJudgment && state._autoShadow) {
             const auto = await probeAutoShadow()
             if (auto !== undefined) {
                 state._enableJudgment = true

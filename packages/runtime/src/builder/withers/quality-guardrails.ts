@@ -92,7 +92,12 @@ export const applyWithVerification = (state: BuilderState, options?: Verificatio
  * primitive over this agent's own configured `LLMService` — uncalibrated,
  * `calibrated: false` on every answer). Override with `options.backend`.
  *
- * @param options - Optional judgment configuration
+ * Pass `false` to turn judgment OFF and opt out of the framework's
+ * observation-only auto-shadow (which otherwise probes a local Ollama at
+ * `build()` and POSTs shadow judgments to it). Last call wins. The
+ * `REACTIVE_AGENTS_NO_AUTO_SHADOW=1` env var does the same without code.
+ *
+ * @param options - Optional judgment configuration, or `false` to disable judgment and auto-shadow
  * @param options.apiKey - TypeSafe API key. Falls back to TYPESAFE_API_KEY env var
  * @param options.baseUrl - Backend base URL override (TypeSafe root or Ollama server root)
  * @param options.model - Model identifier passed to the backend on each ask() call
@@ -103,7 +108,13 @@ export const applyWithVerification = (state: BuilderState, options?: Verificatio
  * @param options.sites - Per-site opt-ins for internal harness consumers (all default off)
  * @returns `this` for chaining
  */
-export const applyWithJudgment = (state: BuilderState, options?: JudgmentBuilderOptions) => {
+export const applyWithJudgment = (state: BuilderState, options?: JudgmentBuilderOptions | false) => {
+    if (options === false) {
+        state._enableJudgment = false
+        state._judgmentOptions = undefined
+        state._autoShadow = false
+        return
+    }
     state._enableJudgment = true
     if (options) state._judgmentOptions = options
 }
