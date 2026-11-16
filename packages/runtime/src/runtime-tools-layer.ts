@@ -2,6 +2,7 @@ import { Layer, Effect } from "effect";
 import type { EventBus } from "@reactive-agents/core";
 import { META_TOOLS } from "@reactive-agents/reasoning";
 import { createToolsLayer, ToolService, ToolNotFoundError } from "@reactive-agents/tools";
+import { withAttachedMcpTools } from "./engine/phases/agent-loop/setup/mcp-allowlist.js";
 import { withRiskLevelOverrides, type ToolRiskLevelOverrides } from "./tool-risk-levels.js";
 
 // Extracted verbatim from runtime.ts (GH #267).
@@ -31,6 +32,8 @@ export function buildToolsLayer(
     // and keeps the helper compatible with LightRuntimeOptions (no mcpServers).
     readonly mcpServers?: readonly unknown[] | undefined;
     readonly allowedTools?: readonly string[];
+    /** Names kept hidden even when their MCP server is attached. */
+    readonly forbiddenTools?: readonly string[];
     /** `.withTools({ riskLevels })` — applied to every definition the service hands out. */
     readonly riskLevels?: ToolRiskLevelOverrides;
   },
@@ -68,10 +71,10 @@ export function buildToolsLayer(
   // bypass (guard.ts:84). Without this, setting an explicit allowedTools silently
   // blocks every meta-tool at ToolService.execute even though it is offered to the
   // model — the bug that hid write_result_to_file behind "not in the allowed tools list".
-  const allowed = new Set([
+  const userAllowed = [
     ...options.allowedTools.map((name) => name.trim()).filter((name) => name.length > 0),
     ...META_TOOLS,
-  ]);
+  ];
 
   return Layer.effect(
     ToolService,
@@ -79,39 +82,46 @@ export function buildToolsLayer(
       // Get the underlying ToolService from the base layer
       const base = yield* ToolService.pipe(Effect.provide(baseToolsLayer));
 
+      // Attached MCP servers' tools join the allowlist (canonical rule in
+      // mcp-allowlist.ts), resolved against the live registry on every call so
+      // late-connected servers are covered.
+      const allowedNow = () =>
+        base.listTools().pipe(
+          Effect.map(
+            (defs) => new Set(withAttachedMcpTools(userAllowed, defs, options.forbiddenTools)),
+          ),
+        );
+      const notAllowed = (toolName: string) =>
+        new ToolNotFoundError({
+          message: `Tool "${toolName}" is not in the allowed tools list`,
+          toolName,
+        });
+
       return {
-        execute: (input: import("@reactive-agents/tools").ToolInput) => {
-          if (!allowed.has(input.toolName)) {
-            return Effect.fail(
-              new ToolNotFoundError({
-                message: `Tool "${input.toolName}" is not in the allowed tools list`,
-                toolName: input.toolName,
-              }),
-            );
-          }
-          return base.execute(input);
-        },
+        execute: (input: import("@reactive-agents/tools").ToolInput) =>
+          allowedNow().pipe(
+            Effect.flatMap((allowed) =>
+              allowed.has(input.toolName)
+                ? base.execute(input)
+                : Effect.fail(notAllowed(input.toolName)),
+            ),
+          ),
         register: base.register,
         connectMCPServer: base.connectMCPServer,
         disconnectMCPServer: base.disconnectMCPServer,
         listTools: (filter?: { category?: string; source?: string; riskLevel?: string }) =>
-          base.listTools(filter).pipe(
-            Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
+          Effect.all([base.listTools(filter), allowedNow()]).pipe(
+            Effect.map(([tools, allowed]) => tools.filter((t) => allowed.has(t.name))),
           ),
-        getTool: (name: string) => {
-          if (!allowed.has(name)) {
-            return Effect.fail(
-              new ToolNotFoundError({
-                message: `Tool "${name}" is not in the allowed tools list`,
-                toolName: name,
-              }),
-            );
-          }
-          return base.getTool(name);
-        },
+        getTool: (name: string) =>
+          allowedNow().pipe(
+            Effect.flatMap((allowed) =>
+              allowed.has(name) ? base.getTool(name) : Effect.fail(notAllowed(name)),
+            ),
+          ),
         toFunctionCallingFormat: () =>
-          base.toFunctionCallingFormat().pipe(
-            Effect.map((tools) => tools.filter((t) => allowed.has(t.name))),
+          Effect.all([base.toFunctionCallingFormat(), allowedNow()]).pipe(
+            Effect.map(([tools, allowed]) => tools.filter((t) => allowed.has(t.name))),
           ),
         listMCPServers: base.listMCPServers,
         unregisterTool: base.unregisterTool,

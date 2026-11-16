@@ -223,6 +223,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
       senderTools: { _tag: "Allowlist", tools: ["web-search"] },
       deniedReply: "Not available.",
       groups: "mention-only",
+      failureNotice: false,
       maxIterations: 8,
       turnTimeoutMs: 60_000,
       maxTurnsPerSenderPerHour: 6,
