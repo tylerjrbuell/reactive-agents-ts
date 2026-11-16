@@ -1051,6 +1051,20 @@ Both fields are part of the declarative agent config (`mcpServers[].readOnly`, `
 
 A tool the server annotates `destructiveHint: true` or `openWorldHint: true` is never marked read-only, even if listed. Both fields are a promise by you, the operator: a wrong declaration exposes a mutating tool to non-owner senders. Trust is never inferred.
 
+### Tool effect: read, write or unknown
+
+Every tool resolves to one declared effect, exported as `toolEffect(definition)` (type `ToolEffect`):
+
+| Effect | Meaning |
+| --- | --- |
+| `"read"` | Declared read-only (`mutatesExternalState: false`) and needs no approval. |
+| `"write"` | Declared to change state outside the run (`mutatesExternalState: true`). |
+| `"unknown"` | Nothing declared, or a read-only tool that requires approval. |
+
+`unknown` is the default for your own `defineTool()` tools and for unannotated MCP tools. It is never eligible wherever only read-only tools may run (channel narrowing, bounded read-only recon): the effect is declared by the tool or operator, never guessed from a name or description. All built-in tools are classified `read` or `write`.
+
+For MCP tools the mapping is: a trusted `readOnlyHint: true` (or an operator `readOnly` listing) gives `read`; `destructiveHint: true` or `readOnlyHint: false` gives `write`, honored even from an untrusted server because those hints only narrow; anything else, including `openWorldHint: true` alone, stays `unknown`. To let a server's `list_*` tools count as `read`, set `trustAnnotations: true` or list them under `readOnly`.
+
 ### Cleanup
 
 MCP stdio servers run as subprocesses — the process will hang if they aren't shut down. Always dispose the agent when done. See [Resource Management](../../reference/builder-api/#resource-management) for full patterns.

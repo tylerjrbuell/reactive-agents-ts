@@ -18,3 +18,20 @@ export const isReadOnlyTool = (
 export const readOnlyTools = <T extends Pick<ToolDefinition, "mutatesExternalState" | "requiresApproval">>(
   defs: ReadonlyArray<T>,
 ): ReadonlyArray<T> => defs.filter(isReadOnlyTool);
+
+/**
+ * What a tool does to the world, as the tool DECLARED it.
+ *
+ * - `"read"`: declared read-only and needs no approval ({@link isReadOnlyTool}).
+ * - `"write"`: declared to change state outside the run.
+ * - `"unknown"`: nothing declared (user tools, unannotated MCP tools), or a
+ *   read-only tool that needs approval. NOT eligible wherever only read-only
+ *   tools may run; never guessed from the tool name or description.
+ */
+export type ToolEffect = "read" | "write" | "unknown";
+
+/** Resolve a definition's {@link ToolEffect} from `mutatesExternalState` and `requiresApproval`. */
+export const toolEffect = (
+  def: Pick<ToolDefinition, "mutatesExternalState" | "requiresApproval">,
+): ToolEffect =>
+  isReadOnlyTool(def) ? "read" : def.mutatesExternalState === true ? "write" : "unknown";

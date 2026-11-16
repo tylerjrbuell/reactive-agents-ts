@@ -4,7 +4,7 @@ import { describe, it, expect } from "bun:test";
 import { EventBusLive } from "@reactive-agents/core";
 import { ToolService, ToolServiceLive } from "../../src/tool-service.js";
 import { defineTool } from "../../src/define-tool.js";
-import { isReadOnlyTool } from "../../src/read-only.js";
+import { isReadOnlyTool, toolEffect, type ToolEffect } from "../../src/read-only.js";
 import type { ToolDefinition } from "../../src/types.js";
 import { classifyMCPToolMutation } from "../../src/mcp/read-only-classification.js";
 
@@ -138,10 +138,66 @@ describe("MCP read-only marking (integration)", () => {
 });
 
 describe("classifyMCPToolMutation (seam)", () => {
-  it("never returns true; trust gate is the only path for annotations", () => {
+  it("read (false) needs the trust gate; only narrowing hints yield write (true)", () => {
     expect(classifyMCPToolMutation({}, "t", { readOnlyHint: true })).toBeUndefined();
     expect(classifyMCPToolMutation({ trustAnnotations: true }, "t", { readOnlyHint: true })).toBe(false);
-    expect(classifyMCPToolMutation({ trustAnnotations: true }, "t", { readOnlyHint: false })).toBeUndefined();
     expect(classifyMCPToolMutation({ trustAnnotations: true }, "t", undefined)).toBeUndefined();
+    // Narrowing hints are honored without trust.
+    expect(classifyMCPToolMutation({}, "t", { readOnlyHint: false })).toBe(true);
+    expect(classifyMCPToolMutation({}, "t", { destructiveHint: true })).toBe(true);
+    expect(classifyMCPToolMutation({ readOnly: true }, "t", { destructiveHint: true })).toBe(true);
+    expect(classifyMCPToolMutation({ trustAnnotations: true }, "t", { readOnlyHint: false })).toBe(true);
+    // openWorld alone is not a write claim.
+    expect(classifyMCPToolMutation({ readOnly: true }, "t", { openWorldHint: true })).toBeUndefined();
+  });
+});
+
+describe("tool effect (read | write | unknown)", () => {
+  const effectMap = (endpoint: string, extra: Extra): Promise<Record<string, ToolEffect>> =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const tools = yield* ToolService;
+        yield* tools.connectMCPServer({ name: "s", transport: "streamable-http", endpoint, ...extra });
+        const out: Record<string, ToolEffect> = {};
+        for (const t of SERVER_TOOLS) out[t.name] = toolEffect(yield* tools.getTool(`s/${t.name}`));
+        return out;
+      }).pipe(Effect.provide(TestToolLayer)),
+    );
+
+  it("trusted server: annotated read tool is read, unannotated is unknown, write hints are write", async () => {
+    await withStub(async (ep) => {
+      expect(await effectMap(ep, { trustAnnotations: true })).toEqual({
+        lookup: "read",
+        wipe: "write",
+        browse: "unknown",
+        plain: "unknown",
+        write_it: "write",
+      });
+    });
+  });
+
+  it("untrusted server: a readOnlyHint never yields read (unknown), write hints still write", async () => {
+    await withStub(async (ep) => {
+      const m = await effectMap(ep, {});
+      expect(m["lookup"]).toBe("unknown");
+      expect(m["wipe"]).toBe("write");
+      expect(m["write_it"]).toBe("write");
+      expect(m["plain"]).toBe("unknown");
+    });
+  });
+
+  it("toolEffect: custom defineTool declares effect; approval-gated read is unknown", () => {
+    const base = {
+      name: "list_websites",
+      description: "d",
+      input: Schema.Struct({}),
+      handler: async () => "ok",
+    };
+    expect(toolEffect(defineTool({ ...base, mutatesExternalState: false }).definition)).toBe("read");
+    expect(toolEffect(defineTool({ ...base, mutatesExternalState: true }).definition)).toBe("write");
+    expect(toolEffect(defineTool(base).definition)).toBe("unknown");
+    expect(
+      toolEffect(defineTool({ ...base, mutatesExternalState: false, requiresApproval: true }).definition),
+    ).toBe("unknown");
   });
 });

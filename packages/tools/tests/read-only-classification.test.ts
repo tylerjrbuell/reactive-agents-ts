@@ -16,6 +16,7 @@ import {
   defineTool,
   isReadOnlyTool,
   readOnlyTools,
+  toolEffect,
 } from "../src/index.js";
 import type { ToolDefinition } from "../src/types.js";
 
@@ -72,6 +73,12 @@ describe("built-in read-only classification", () => {
       expect(isReadOnlyTool(def)).toBe(EXPECTED_READ_ONLY[def.name]);
     });
   }
+
+  it("every built-in resolves to read or write, never unknown", () => {
+    for (const def of ALL) {
+      expect(toolEffect(def)).toBe(EXPECTED_READ_ONLY[def.name] ? "read" : "write");
+    }
+  });
 
   it("mutating tools set the flag true, never merely approval-gated", () => {
     for (const name of ["file-write", "file-edit", "code-execute", "shell-execute", "docker-execute"]) {

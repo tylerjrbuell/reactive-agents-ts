@@ -374,7 +374,8 @@ export { ToolBuilder } from "./tool-builder.js";
 
 // ─── Schema-Inferred Tool Factory ───
 export { defineTool } from "./define-tool.js";
-export { isReadOnlyTool, readOnlyTools } from "./read-only.js";
+export { isReadOnlyTool, readOnlyTools, toolEffect } from "./read-only.js";
+export type { ToolEffect } from "./read-only.js";
 export type {
   DefineToolOptions,
   DefinedTool,
