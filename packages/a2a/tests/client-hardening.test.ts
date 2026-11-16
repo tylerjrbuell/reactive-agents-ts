@@ -151,7 +151,7 @@ describe("A2A server auth coverage (secureServe bearer token)", () => {
       expect((await fetch(base + path, { ...init, headers: { Authorization: "Bearer nope" } })).status).toBe(401);
       expect((await fetch(base + path, { ...init, headers: { Authorization: "Bearer s3cret" } })).status).toBe(200);
     }
-    // X-API-Key is NOT accepted by the server (client `auth.type: "apiKey"` mismatch, see report).
+    // X-API-Key is NOT accepted by the server; the client's apiKey type now sends Bearer (client-auth-discovery.test.ts).
     expect((await fetch(base + "/agent/card", { headers: { "X-API-Key": "s3cret" } })).status).toBe(401);
   });
 });

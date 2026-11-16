@@ -8,8 +8,8 @@ import {
   EgressDeniedError,
 } from "../errors.js";
 import { Effect, Context, Layer } from "effect";
-import { assertPublicUrl, fetchPinned } from "@reactive-agents/runtime-shim";
-import { agentEgressGuard, type AgentEgressConfig } from "./discovery.js";
+import { fetchPinned } from "@reactive-agents/runtime-shim";
+import { agentEgressGuard, fetchCardJson, type AgentEgressConfig } from "./discovery.js";
 
 /** Errors a client RPC can fail with. */
 export type ClientRequestError =
@@ -31,7 +31,10 @@ export class A2AClient extends Context.Tag("A2AClient")<
 
 export interface ClientConfig {
   baseUrl: string;
-  /** Egress policy for `getAgentCard` and RPCs (metadata/link-local always blocked; `strictEgress` also blocks private). */
+  /**
+   * Egress policy for `getAgentCard` and RPCs (metadata/link-local always blocked; `strictEgress` also blocks private).
+   * `egress.timeoutMs` bounds `getAgentCard` / discovery fetches (default 10000).
+   */
   egress?: AgentEgressConfig;
   /** Per-request time budget in ms (connect + headers + body). Default 30000. */
   timeoutMs?: number;
@@ -121,7 +124,8 @@ export const createA2AClient = (config: ClientConfig) =>
                   headers: {
                     "Content-Type": "application/json",
                     ...(config.auth?.type === "bearer" && { Authorization: `Bearer ${config.auth.token}` }),
-                    ...(config.auth?.type === "apiKey" && { "X-API-Key": config.auth.apiKey ?? "" }),
+                    // The server accepts only `Authorization: Bearer`, so an apiKey rides as the bearer value.
+                    ...(config.auth?.type === "apiKey" && { Authorization: `Bearer ${config.auth.apiKey ?? ""}` }),
                   },
                   body: JSON.stringify({ jsonrpc: JSONRPC_VERSION, method, params, id: crypto.randomUUID() }),
                 },
@@ -173,10 +177,9 @@ export const createA2AClient = (config: ClientConfig) =>
           Effect.tryPromise({
             try: async () => {
               const cardUrl = `${url.replace(/\/$/, "")}/agent/card`;
-              await assertPublicUrl(cardUrl, agentEgressGuard(config.egress));
-              const response = await fetch(cardUrl, { redirect: "error" });
-              const data = await response.json();
-              return data as AgentCard;
+              const result = await fetchCardJson(cardUrl, config.egress);
+              if (!result.ok || !result.card) throw new DiscoveryError({ message: `Agent card fetch failed: HTTP ${result.status}`, url });
+              return result.card;
             },
             catch: (e) => new DiscoveryError({ message: String(e), url }),
           }),

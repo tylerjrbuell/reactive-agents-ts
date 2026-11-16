@@ -196,7 +196,9 @@ const layer2 = createA2AClient({
 });
 ```
 
-The server accepts only `Authorization: Bearer <token>` (set via `RA_A2A_TOKEN` or the server options); the client's `apiKey` type sends `X-API-Key`, which the built-in server does not accept, so use `bearer` against it.
+The server accepts only `Authorization: Bearer <token>` (set via `RA_A2A_TOKEN` or the server options); the client's `apiKey` type is sent as `Authorization: Bearer <apiKey>`, the same header as `bearer`, so either type authenticates against the built-in server.
+
+Agent-card discovery (`discoverAgent`, `getAgentCard`) uses the same pinned, SSRF-checked fetch and refuses redirects. It has its own time budget: 10 seconds by default, set with `egress: { timeoutMs }` on the client or the second argument of `discoverAgent`. A slow endpoint fails with `DiscoveryError`.
 
 ### Timeout, size cap and egress policy
 
