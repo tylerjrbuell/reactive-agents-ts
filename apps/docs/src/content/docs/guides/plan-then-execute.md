@@ -101,7 +101,7 @@ const agent = await ReactiveAgents.create()
 
 ## Wrap-up reserve
 
-Opt-in, off by default: set `RA_WRAPUP_RESERVE=1` to hold back the last iterations of a run for the answer. The run-started config records the effective `wrapUpReserve` value. It has no `.withHarness` key yet.
+Opt-in, off by default: set `.withHarness({ wrapUpReserve: true })` (or `RA_WRAPUP_RESERVE=1`; config wins) to hold back the last iterations of a run for the answer. The run-started config records the effective `wrapUpReserve` value.
 
 ## Events
 

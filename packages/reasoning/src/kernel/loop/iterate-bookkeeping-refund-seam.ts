@@ -88,7 +88,10 @@ export function proposeBookkeepingRefund(args: {
     },
   });
   return {
-    state: transitionState(state, { steps: [...state.steps, step] }),
+    state: transitionState(state, {
+      steps: [...state.steps, step],
+      meta: { ...state.meta, maxIterations: options.maxIterations + 1 }, // progress events read meta
+    }),
     options: { ...options, maxIterations: options.maxIterations + 1 },
   };
 }

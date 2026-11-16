@@ -438,6 +438,7 @@ describe("HarnessConfigSchema <-> HarnessConfig bidirectional drift guard", () =
       stableToolList: true,
       compactCallConstraints: true,
       budgetAnswerTurn: true,
+      wrapUpReserve: true,
       leanThinking: true,
       computeOffload: true,
       planToolCatalog: true,

@@ -49,8 +49,6 @@ import {
 import { skillsContextFromMetadata } from "../../bootstrap/skill-activatable.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
-/** Fields that ride `...params` into the strategy input; the service's execute params do not declare them. */
-type UndeclaredExecuteFields = { readonly builtinFloorTools?: readonly string[]; readonly allowedTools?: readonly string[] };
 type ToolSchemaShape =NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
 
 /**
@@ -309,7 +307,7 @@ export const runReasoningThink = (
     });
 
     const currentTurnText = typedCurrentTurnText(task.metadata);
-    const executeRequest: ReasoningExecuteRequest & UndeclaredExecuteFields = {
+    const executeRequest: ReasoningExecuteRequest = {
       taskDescription: extractTaskText(task.input),
       // Producer-typed current turn (no inlined history); KernelInput.currentTurnText. Absent ⇒ marker parsing.
       ...(currentTurnText !== undefined ? { currentTurnText } : {}),

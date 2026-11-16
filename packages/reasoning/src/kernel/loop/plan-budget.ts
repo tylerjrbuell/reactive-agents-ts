@@ -110,7 +110,8 @@ export function proposePlanBudget(args: {
     },
   );
   return {
-    state: transitionState(state, { steps: [...state.steps, step] }),
+    // `meta.maxIterations` is what ReasoningIterationProgress reports: keep it the effective bound.
+    state: transitionState(state, { steps: [...state.steps, step], meta: { ...state.meta, maxIterations: budget.effective } }),
     options: {
       ...options,
       maxIterations: budget.effective,

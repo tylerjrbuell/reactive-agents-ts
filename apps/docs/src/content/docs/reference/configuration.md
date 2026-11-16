@@ -220,6 +220,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.toolResultBudgetChars` | `number` | no |  |
 | `reasoning.harness.treeOfThoughtExploreBudgetMs` | `number` | no |  |
 | `reasoning.harness.verboseRules` | `boolean` | no |  |
+| `reasoning.harness.wrapUpReserve` | `boolean` | no |  |
 | `reasoning.harness.writeCoverage` | `boolean` | no |  |
 | `reasoning.maxStrategySwitches` | `number` | no |  |
 | `reasoning.observationSummary` | `boolean` \| `"auto"` | no |  |

@@ -167,6 +167,14 @@ export interface HarnessConfig {
    */
   readonly budgetAnswerTurn?: boolean;
   /**
+   * Wrap-up reserve. On a seeded (checklist) run with validated tool evidence,
+   * the last think call the iteration budget allows ships with no tools, so
+   * the model answers and names the unchecked steps instead of making a call
+   * nobody answers. Default OFF until an ablation measures it.
+   * (`RA_WRAPUP_RESERVE=1`)
+   */
+  readonly wrapUpReserve?: boolean;
+  /**
    * Lean thinking. A tool-selection turn on a thinking-capable Ollama model
    * (native function calling, a domain tool on the wire, tool work outstanding,
    * the last tool result not a failure) is requested with `thinking: false`, so
@@ -319,7 +327,7 @@ export interface ResolvedHarness {
   readonly compactCallConstraints?: true;
   /** Budget answer turn (see `HarnessConfig.budgetAnswerTurn`). Present only when on. */
   readonly budgetAnswerTurn?: true;
-  /** Wrap-up reserve (`RA_WRAPUP_RESERVE=1`; env-only, no `HarnessConfig` field yet). Present only when on. */
+  /** Wrap-up reserve (see `HarnessConfig.wrapUpReserve`). Present only when on. */
   readonly wrapUpReserve?: true;
   /** Lean thinking (see `HarnessConfig.leanThinking`). Present only when on. */
   readonly leanThinking?: true;
@@ -431,7 +439,7 @@ export function resolveHarnessConfig(
       ? { compactCallConstraints: true as const }
       : {}),
     ...(pick(config.budgetAnswerTurn, budgetAnswerTurnEnabled()) ? { budgetAnswerTurn: true as const } : {}),
-    ...(wrapUpReserveEnabled() ? { wrapUpReserve: true as const } : {}),
+    ...(pick(config.wrapUpReserve, wrapUpReserveEnabled()) ? { wrapUpReserve: true as const } : {}),
     ...(pick(config.leanThinking, leanThinkingEnabled()) ? { leanThinking: true as const } : {}),
     ...(pick(config.computeOffload, computeOffloadEnabled()) ? { computeOffload: true as const } : {}),
     ...(pick(config.planToolCatalog, planToolCatalogEnabled()) ? { planToolCatalog: true as const } : {}),

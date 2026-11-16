@@ -11,6 +11,7 @@
  *    catalog of the tools the execute phase would have;
  *  - {@link FOLLOW_PLAN_GUIDANCE}: the execute-side advisory line.
  */
+import { planStepToolHint } from "@reactive-agents/core";
 import type { ToolSchema } from "../capabilities/attend/tool-formatting.js";
 import { META_TOOLS } from "../state/kernel-constants.js";
 
@@ -149,7 +150,7 @@ export function derivePlanSteps(reply: string): readonly string[] {
   let best: (typeof lists)[number] | undefined;
   let bestKey: readonly number[] = [];
   for (const l of lists) {
-    const hinted = l.titles.filter((t) => planStepTool(t) !== undefined).length;
+    const hinted = l.titles.filter((t) => planStepToolHint(t) !== undefined).length;
     const key = [hinted, hinted === 0 ? l.titles.length : 0, PLAN_HEADING.test(l.heading) ? 1 : 0];
     // Lexicographic key compare; an equal key lets the later list win.
     const firstDiff = key.findIndex((k, i) => k !== bestKey[i]);
@@ -159,17 +160,6 @@ export function derivePlanSteps(reply: string): readonly string[] {
     }
   }
   return best?.titles ?? [];
-}
-
-const TOOL_HINT = /\btool:\s*`?([\w][\w./-]*)/i;
-
-/**
- * The tool a step names as `tool: name` / `(tool: name)`, or undefined. Trailing
- * punctuation is not part of the name.
- */
-export function planStepTool(title: string): string | undefined {
-  const name = TOOL_HINT.exec(title)?.[1]?.replace(/[.\/-]+$/, "");
-  return name !== undefined && name.length > 0 ? name : undefined;
 }
 
 const firstSentence = (s: string): string => clip(clean(s).split(/(?<=[.!?])\s/)[0] ?? "", MAX_CATALOG_DESC_CHARS);

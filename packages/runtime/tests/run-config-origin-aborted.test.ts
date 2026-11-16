@@ -230,6 +230,36 @@ describe("run-started config + origin", () => {
     }
   });
 
+  test(".withHarness({ wrapUpReserve: true }) is recorded as a mechanism (default off)", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const prior = process.env.RA_WRAPUP_RESERVE;
+    delete process.env.RA_WRAPUP_RESERVE;
+    try {
+      const on = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .withHarness({ wrapUpReserve: true })
+        .build();
+      const onMech = await mechanismsOf(on.run("wrapup-reserve pin"));
+      await on.dispose();
+      expect(onMech?.wrapUpReserve).toBe(true);
+
+      const off = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .build();
+      const offMech = await mechanismsOf(off.run("wrapup-reserve default pin"));
+      await off.dispose();
+      expect(offMech?.wrapUpReserve).toBe(false);
+    } finally {
+      if (prior !== undefined) process.env.RA_WRAPUP_RESERVE = prior;
+    }
+  });
+
   test(".withHarness({ budgetAnswerTurn: true }) is recorded as a mechanism (default off)", async () => {
     const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
       const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");

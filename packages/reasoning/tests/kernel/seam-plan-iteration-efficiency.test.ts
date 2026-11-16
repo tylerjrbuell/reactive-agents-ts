@@ -122,6 +122,13 @@ describe("wrapUpReserve (opt-in)", () => {
     expect(resolveHarnessConfig().wrapUpReserve).toBe(true);
   });
 
+  it("config wins over env: config true beats an unset env, config false beats RA_WRAPUP_RESERVE=1", () => {
+    delete process.env.RA_WRAPUP_RESERVE;
+    expect(resolveHarnessConfig({ wrapUpReserve: true }).wrapUpReserve).toBe(true);
+    process.env.RA_WRAPUP_RESERVE = "1";
+    expect("wrapUpReserve" in resolveHarnessConfig({ wrapUpReserve: false })).toBe(false);
+  });
+
   it("flag on, seeded, last call, evidence: an answer-turn record (tools withheld) and a hint naming the unfinished steps", () => {
     const r = wrapUpReserve(lastCall(), seededInput({ harness: ON() }), true);
     expect(r?.record.gateDecision).toBe("deny-once");

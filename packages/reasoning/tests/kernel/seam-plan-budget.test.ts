@@ -21,7 +21,9 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
-import { EventBusLive } from "@reactive-agents/core";
+import { EventBus, EventBusLive } from "@reactive-agents/core";
+import { runKernel } from "../../src/kernel/loop/runner.js";
+import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { reactKernel } from "../../src/kernel/loop/react-kernel.js";
 import { runPass } from "../../src/kernel/loop/run-pass.js";
@@ -35,7 +37,7 @@ import { proposeBookkeepingRefund } from "../../src/kernel/loop/iterate-bookkeep
 import { seedInitialAdvisory, type AdvisorySeedItem } from "../../src/kernel/state/checklist-seed.js";
 import { resolveHarnessConfig } from "../../src/harness-config.js";
 import { makeKernelInput, makeKernelRunOptions, makeKernelState } from "../../src/testing/kernel-fixtures.js";
-import type { KernelInput, KernelRunOptions, KernelState } from "../../src/kernel/state/kernel-state.js";
+import { transitionState, type KernelInput, type KernelRunOptions, type KernelState, type ThoughtKernel } from "../../src/kernel/state/kernel-state.js";
 
 const seedOf = (n: number, done = 0): AdvisorySeedItem[] =>
   Array.from({ length: n }, (_, i) => ({
@@ -86,6 +88,20 @@ describe("proposePlanBudget", () => {
     expect(step?.content).toContain("iteration budget raised to 23");
   });
 
+  it("meta.maxIterations (what progress events report) carries the effective bound, and a refund keeps it in step", () => {
+    const r = proposePlanBudget(args())!;
+    expect(r.state.meta.maxIterations).toBe(23);
+    const refunded = proposeBookkeepingRefund({
+      state: { ...r.state, iteration: 1 },
+      input: inputOf(seed),
+      options: r.options,
+      toolsThisStep: ["todo"],
+      iterationAtPassStart: 0,
+    });
+    expect(refunded?.options.maxIterations).toBe(24);
+    expect(refunded?.state.meta.maxIterations).toBe(24);
+  });
+
   it("only UNCHECKED steps count: a resumed plan with 15 of 18 done fits and is untouched", () => {
     expect(proposePlanBudget(args({ seed: seedOf(18, 15) }))).toBeUndefined();
     expect(proposePlanBudget(args({ seed: seedOf(18, 6) }))?.budget.steps).toBe(12);
@@ -102,6 +118,43 @@ describe("proposePlanBudget", () => {
   it("a plan that fits is byte-identical: no step, same options object", () => {
     const small = seedOf(3);
     expect(proposePlanBudget(args({ seed: small }))).toBeUndefined();
+  });
+});
+
+describe("ReasoningIterationProgress reports the effective bound", () => {
+  const bounds = async (seed: readonly AdvisorySeedItem[]): Promise<unknown[]> => {
+    const events: Record<string, unknown>[] = [];
+    const bus: EventBus["Type"] = {
+      publish: (event) => {
+        events.push({ ...event });
+        return Effect.void;
+      },
+      subscribe: () => Effect.succeed(() => {}),
+      on: () => Effect.succeed(() => {}),
+    };
+    const kernel: ThoughtKernel = (state) => {
+      if (state.status === "thinking") return Effect.succeed(transitionState(state, { status: "acting" }));
+      const next = state.iteration + 1;
+      return Effect.succeed(
+        transitionState(state, {
+          status: next >= 2 ? "done" : "thinking",
+          ...(next >= 2 ? { output: "finished" } : {}),
+          iteration: next,
+          steps: [...state.steps, makeStep("action", `probe-${next}()`, { toolUsed: `probe-${next}` })],
+        }),
+      );
+    };
+    await Effect.runPromise(
+      runKernel(kernel, { task: "Execute the plan.", initialAdvisory: seed }, { maxIterations: 10, strategy: "reactive", kernelType: "react" }).pipe(
+        Effect.provide(Layer.merge(TestLLMServiceLayer(), Layer.succeed(EventBus, bus))),
+      ),
+    );
+    return events.filter((e) => e._tag === "ReasoningIterationProgress").map((e) => e.maxIterations);
+  };
+
+  it("a seeded 18-step run vs max 10 reports 23; a plan that fits reports the configured 10", async () => {
+    expect(await bounds(seedOf(18))).toEqual([23, 23]);
+    expect(await bounds(seedOf(3))).toEqual([10, 10]);
   });
 });
 

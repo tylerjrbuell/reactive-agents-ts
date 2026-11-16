@@ -68,6 +68,7 @@ export const HarnessConfigSchema = Schema.Struct({
    * noise). (`RA_BUDGET_ANSWER_TURN=1`)
    */
   budgetAnswerTurn: Schema.optional(Schema.Boolean),
+  wrapUpReserve: Schema.optional(Schema.Boolean),
   /**
    * Lean thinking. Opt-in: on a thinking model, a tool-selection turn (tools
    * on the wire, last tool result not a failure) is requested with

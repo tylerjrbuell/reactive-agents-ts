@@ -70,6 +70,10 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       readonly sessionId?: string;
       /** Tools that MUST be called before the agent can declare success */
       readonly requiredTools?: readonly string[];
+      /** Tools the agent always keeps on the wire (the builtin prune floor) — spread via `...params` into the strategy input. */
+      readonly builtinFloorTools?: readonly string[];
+      /** Hard whitelist: when set, only these tools may run — spread via `...params` into the strategy input. */
+      readonly allowedTools?: readonly string[];
       /** Minimum call counts per required tool — from tool classifier */
       readonly requiredToolQuantities?: Readonly<Record<string, number>>;
       /** Tools identified as relevant/supplementary (LLM-classified) — allowed through the required-tools gate */

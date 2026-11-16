@@ -6,7 +6,7 @@
 //   planToolCatalogLine   — the opt-in capped catalog line;
 //   followPlanLine        — the execute-side advisory line for a seeded list.
 //
-//   planStepTool / proposeDoneLine — tool hints and the propose-done advisory;
+//   planStepToolHint (core) / proposeDoneLine — tool hints and the propose-done advisory;
 //   frameGoalForPosture   — plan-only goal framing.
 //
 // RED-ON-CUT: return [] from derivePlanSteps, drop the `origin: "harness-derived"`
@@ -20,9 +20,9 @@ import {
   MAX_DERIVED_STEPS,
   MAX_DERIVED_STEP_CHARS,
   derivePlanSteps,
-  planStepTool,
   planToolCatalogLine,
 } from "../../src/kernel/policy/plan-steps.js";
+import { planStepToolHint } from "@reactive-agents/core";
 import { resolveHarnessConfig } from "../../src/harness-config.js";
 import { derivePlanChecklist } from "../../src/kernel/loop/plan-checklist-step.js";
 import { followPlanLine, applyFollowPlanGuidance, autoTickSteps, proposeDoneLine } from "../../src/kernel/loop/iterate-follow-plan-seam.js";
@@ -98,12 +98,12 @@ describe("derivePlanSteps: one plan, never a union of restated lists", () => {
   it("takes the single list whose steps carry tool hints: 6 steps with tools, not the 12-step union", () => {
     const steps = derivePlanSteps(reply);
     expect(steps.length).toBe(6);
-    expect(steps.every((s) => planStepTool(s) !== undefined)).toBe(true);
+    expect(steps.every((s) => planStepToolHint(s) !== undefined)).toBe(true);
     expect(steps[0]).toBe("List the websites available in Umami (tool: umami/list_websites)");
     // A multi-tool step keeps its full text; the row tool is the first one named.
     expect(steps[2]).toBe("Retrieve traffic stats for the spike (tool: umami/get_website_stats and tool: umami/get_website_traffic)");
-    expect(planStepTool(steps[2]!)).toBe("umami/get_website_stats");
-    expect(planStepTool(steps[5]!)).toBe("umami/get_sessions");
+    expect(planStepToolHint(steps[2]!)).toBe("umami/get_website_stats");
+    expect(planStepToolHint(steps[5]!)).toBe("umami/get_sessions");
   });
 
   it("a single list without hints is used as is", () => {
@@ -313,13 +313,13 @@ describe("followPlanLine (execute, seeded checklist)", () => {
   });
 });
 
-describe("planStepTool", () => {
+describe("planStepToolHint (core parser)", () => {
   it("reads `tool: name` / `(tool: name)` / backticked names; trailing punctuation is not part of the name; none = undefined", () => {
-    expect(planStepTool("Fetch it (tool: crypto-price)")).toBe("crypto-price");
-    expect(planStepTool("Save it, tool: file-write.")).toBe("file-write");
-    expect(planStepTool("Run it with Tool: `code-execute`")).toBe("code-execute");
-    expect(planStepTool("Summarize the result")).toBeUndefined();
-    expect(planStepTool("the tool: ")).toBeUndefined();
+    expect(planStepToolHint("Fetch it (tool: crypto-price)")).toBe("crypto-price");
+    expect(planStepToolHint("Save it, tool: file-write.")).toBe("file-write");
+    expect(planStepToolHint("Run it with Tool: `code-execute`")).toBe("code-execute");
+    expect(planStepToolHint("Summarize the result")).toBeUndefined();
+    expect(planStepToolHint("the tool: ")).toBeUndefined();
   });
 });
 

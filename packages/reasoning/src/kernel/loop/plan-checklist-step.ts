@@ -20,7 +20,8 @@ import type { KernelInput, KernelState } from "../state/kernel-state.js";
 import { transitionState } from "../state/kernel-state.js";
 import { recordChecklistItems } from "../ledger/emit.js";
 import { startRound, viewItems } from "../capabilities/act/checklist-round.js";
-import { derivePlanSteps, planStepTool } from "../policy/plan-steps.js";
+import { planStepToolHint } from "@reactive-agents/core";
+import { derivePlanSteps } from "../policy/plan-steps.js";
 import { POSTURE_SIGNAL_ORIGIN, emitPostureApplied, isPlanPosture, type PlanChecklistOutcome } from "../policy/run-posture.js";
 
 /** Pure: the ledger the plan-checklist step leaves, and what it found. */
@@ -32,7 +33,7 @@ export function derivePlanChecklist(
   const titles = derivePlanSteps(state.output ?? "");
   if (titles.length === 0) return { state, outcome: { planSteps: 0, planNoSteps: true } };
   const items = titles.map((title, i) => {
-    const tool = planStepTool(title);
+    const tool = planStepToolHint(title);
     return { id: String(i + 1), title, ...(tool !== undefined ? { tool } : {}) };
   });
   return {
