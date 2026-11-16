@@ -49,7 +49,9 @@ import {
 import { skillsContextFromMetadata } from "../../bootstrap/skill-activatable.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
-type ToolSchemaShape = NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
+/** Fields that ride `...params` into the strategy input; the service's execute params do not declare them. */
+type UndeclaredExecuteFields = { readonly builtinFloorTools?: readonly string[]; readonly allowedTools?: readonly string[] };
+type ToolSchemaShape =NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
 
 /**
  * Append cross-run experience tips to the memory context, capped + tier-aware.
@@ -307,7 +309,7 @@ export const runReasoningThink = (
     });
 
     const currentTurnText = typedCurrentTurnText(task.metadata);
-    const executeRequest = {
+    const executeRequest: ReasoningExecuteRequest & UndeclaredExecuteFields = {
       taskDescription: extractTaskText(task.input),
       // Producer-typed current turn (no inlined history); KernelInput.currentTurnText. Absent ⇒ marker parsing.
       ...(currentTurnText !== undefined ? { currentTurnText } : {}),
@@ -425,7 +427,7 @@ export const runReasoningThink = (
         posture: readPosture(task),
         runTask: extractTaskText(task.input),
       }),
-    } as unknown as ReasoningExecuteRequest;
+    };
 
     const strategyEffect = reasoningService.execute(executeRequest);
     // The kernel's mid-run switch target (reporting only — see strategy-switch-capture.ts).

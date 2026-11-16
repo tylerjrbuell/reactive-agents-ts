@@ -493,7 +493,7 @@ export class AgentSession {
    * (`session.runStream`); `source` is `"model"` until {@link setPlan} edits it.
    */
   get plan(): Plan | undefined {
-    return planOfTodo(this.todo(), (this._planMeta ??= freshPlanMeta("session", Date.now())));
+    return planOfTodo(this.todo(), (this._planMeta ??= freshPlanMeta(this.engine?.id ?? "session", Date.now())));
   }
 
   /**
@@ -505,7 +505,7 @@ export class AgentSession {
    */
   setPlan(plan: Plan | readonly PlanStepInput[]): Plan {
     if (!this.engine) throw new ChatEngineCapabilityError({ message: "AgentSession.setPlan() requires an engine-backed session (construct via agent.session()).", capability: "runStreamTask" });
-    const edit = editPlan(plan, this._planMeta ?? freshPlanMeta("session", Date.now()), Date.now());
+    const edit = editPlan(plan, this._planMeta ?? freshPlanMeta(this.engine.id, Date.now()), Date.now());
     this._planMeta = edit.meta;
     this.engine.setTodo(edit.seed, edit.event);
     return edit.plan;

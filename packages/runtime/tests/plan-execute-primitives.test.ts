@@ -62,7 +62,7 @@ describe("pure plan mapping", () => {
 
   test("planFromWatch with no snapshot keeps the known steps", () => {
     const known = [{ id: "1", title: "x", status: "pending" as const }];
-    expect(planFromWatch({ snapshot: undefined, harnessDerived: false }, { id: "p", goal: "g", createdAt: 0, source: "model" }, known).steps).toEqual(known);
+    expect(planFromWatch({ snapshot: undefined }, { id: "p", goal: "g", createdAt: 0, source: "model" }, known).steps).toEqual(known);
   });
 
   test("session plan: todo <-> plan round trip; user edit is user-edited and seeds the list", () => {
@@ -71,7 +71,7 @@ describe("pure plan mapping", () => {
     const plan = planOfTodo([{ id: "1", title: "a", status: "completed" }, { id: "2", title: "b", status: "in_progress" }], meta)!;
     expect(plan.steps.map((s) => s.status)).toEqual(["done", "in-progress"]);
     const edit = editPlan(["first", { title: "second", tool: "file-read" }], meta, 9);
-    expect(edit.seed).toEqual([{ id: "1", title: "first", status: "pending" }, { id: "2", title: "second", status: "pending" }]);
+    expect(edit.seed).toEqual([{ id: "1", title: "first", status: "pending" }, { id: "2", title: "second", status: "pending", tool: "file-read" }]);
     expect(edit.plan.source).toBe("user-edited");
     expect(edit.event).toMatchObject({ _tag: "PlanRecorded", source: "user-edited", planId: meta.id });
     expect(planOfTodo(edit.seed, edit.meta)!.steps[1]!.tool).toBe("file-read");

@@ -765,7 +765,7 @@ export class ReactiveAgent<TOut = unknown> {
                       input: taskInput,
                       runId: crypto.randomUUID(),
                       task: taskInputText(taskInput),
-                      ...(options?.taskId ? { taskId: options.taskId } : {}), ...workspaceCarry(options?.workspace),
+                      ...(options?.taskId ? { taskId: options.taskId } : {}), ...workspaceCarry(options?.workspace), ...(options?.initialTodo ? { initialTodo: options.initialTodo } : {}), ...planPosture(options?.posture),
                   })
                 : await this.runtime.runPromise(
                       this.buildRunTaskEffect(taskInput, taskIdOpt),
@@ -1101,7 +1101,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
             durableRunId: params.runId,
             ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
-            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}), ...workspaceCarry(params.workspace),
+            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}), ...workspaceCarry(params.workspace), ...(params.initialTodo ? { initialTodo: params.initialTodo } : {}), ...planPosture(params.posture),
             runState: {
                 runController: controller,
                 ...(params.modelOverride !== undefined ? { modelOverride: params.modelOverride } : {}),
@@ -1552,7 +1552,7 @@ export class ReactiveAgent<TOut = unknown> {
             const self = this;
             this._defaultChatEngine = new ChatEngine(
                 {
-                    runTask: makeSessionRunTask((input, o) => self.run(input, o)),
+                    runTask: makeSessionRunTask((input, o) => self.run(input, o), self.runtime),
                     complete: makeChatComplete(self.runtime),
                     publishTurn: makeChatPublishTurn(self.runtime, "runtime/src/reactive-agent.ts:chat"),
                     systemPrompt: self._config?.systemPrompt
@@ -1649,7 +1649,7 @@ export class ReactiveAgent<TOut = unknown> {
 
         const engine = new ChatEngine(
             {
-                runTask: makeSessionRunTask((input, o) => self.run(input, o)),
+                runTask: makeSessionRunTask((input, o) => self.run(input, o), self.runtime),
                 runStreamTask: makeSessionRunStreamTask((input, o) => self.runStream(input, o)),
                 complete: makeChatComplete(self.runtime),
                 publishTurn: makeChatPublishTurn(self.runtime, "runtime/src/reactive-agent.ts:session-publish"),

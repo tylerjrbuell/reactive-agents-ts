@@ -79,8 +79,9 @@ export const HarnessConfigSchema = Schema.Struct({
   computeOffload: Schema.optional(Schema.Boolean),
   /**
    * Plan tool catalog: plan-posture guidance gains one capped line naming the
-   * tools the execute phase would have. Advisory text only; default off.
-   * (`RA_PLAN_TOOL_CATALOG=1`)
+   * tools the execute phase would have, by name (MCP tools grouped). Advisory
+   * text only; default ON (ablation pending). `false` or `RA_PLAN_TOOL_CATALOG=0`
+   * turns it off.
    */
   planToolCatalog: Schema.optional(Schema.Boolean),
   /**

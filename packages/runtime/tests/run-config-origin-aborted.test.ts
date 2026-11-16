@@ -320,7 +320,7 @@ describe("run-started config + origin", () => {
     }
   });
 
-  test(".withHarness({ planToolCatalog: true }) is recorded as a mechanism (default off)", async () => {
+  test("planToolCatalog is recorded as a mechanism: default ON; .withHarness({ planToolCatalog: false }) and RA_PLAN_TOOL_CATALOG=0 turn it off", async () => {
     const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
       const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
       return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
@@ -329,23 +329,33 @@ describe("run-started config + origin", () => {
     const prior = process.env.RA_PLAN_TOOL_CATALOG;
     delete process.env.RA_PLAN_TOOL_CATALOG;
     try {
-      const on = await ReactiveAgents.create()
+      const dflt = await ReactiveAgents.create()
         .withTestScenario([{ text: "FINAL ANSWER: ok" }])
         .withReasoning({ defaultStrategy: "reactive" })
-        .withHarness({ planToolCatalog: true })
         .build();
-      const onMech = await mechanismsOf(on.run("plan-tool-catalog pin"));
-      await on.dispose();
-      expect(onMech?.planToolCatalog).toBe(true);
+      const dfltMech = await mechanismsOf(dflt.run("plan-tool-catalog default pin"));
+      await dflt.dispose();
+      expect(dfltMech?.planToolCatalog).toBe(true);
 
       const off = await ReactiveAgents.create()
         .withTestScenario([{ text: "FINAL ANSWER: ok" }])
         .withReasoning({ defaultStrategy: "reactive" })
+        .withHarness({ planToolCatalog: false })
         .build();
-      const offMech = await mechanismsOf(off.run("plan-tool-catalog default pin"));
+      const offMech = await mechanismsOf(off.run("plan-tool-catalog explicit-off pin"));
       await off.dispose();
       expect(offMech?.planToolCatalog).toBe(false);
+
+      process.env.RA_PLAN_TOOL_CATALOG = "0";
+      const envOff = await ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .build();
+      const envMech = await mechanismsOf(envOff.run("plan-tool-catalog env-off pin"));
+      await envOff.dispose();
+      expect(envMech?.planToolCatalog).toBe(false);
     } finally {
+      delete process.env.RA_PLAN_TOOL_CATALOG;
       if (prior !== undefined) process.env.RA_PLAN_TOOL_CATALOG = prior;
     }
   });

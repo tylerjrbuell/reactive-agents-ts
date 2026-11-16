@@ -9,8 +9,9 @@
 import { Effect, Option, type ManagedRuntime } from 'effect'
 import { ToolService } from '@reactive-agents/tools'
 import type { EnvironmentSnapshotInput } from '../chat/environment-snapshot.js'
-import { EventBus, emitErrorSwallowed, errorTag, type RunOrigin, type RunPosture } from '@reactive-agents/core'
-import { originCarry, planPosture, type TodoSeedItem } from '../chat/todo-seed.js'
+import { EventBus, emitErrorSwallowed, errorTag, generateTaskId, type RunOrigin, type RunPosture } from '@reactive-agents/core'
+import { originCarry, planPosture, snapshotToTodoSeed, type TodoSeedItem } from '../chat/todo-seed.js'
+import { watchChecklist, type PlanRuntime } from './plan-watch.js'
 import { workspaceCarry, type WorkspaceOption } from '../engine/start-run.js'
 import { skillsOption, type SkillsRunOption } from '../runtime-skills-layer.js'
 import type { RunHandle } from '../run-controller.js'
@@ -194,18 +195,34 @@ const turnRunOptions = (opts: TurnRunOptions | undefined): TurnRunOptions => ({
 
 /**
  * `runTask` adapter for every agent ChatEngine (`chat()`, legacy chat,
- * `session()`): forwards history, iteration cap and the per-turn options to `run()`.
+ * `session()`): forwards history, iteration cap, the to-do seed and the per-turn
+ * options to `run()`. With a `runtime` and a turn that reports its list
+ * (`onTodo`), it watches the run's checklist on the bus and hands the final list
+ * back, so a buffered turn carries the to-do list exactly as a streamed one does.
  */
 export const makeSessionRunTask =
     (
-        run: (input: TaskInput, o: { history?: ChatMessage[]; maxIterations?: number } & TurnRunOptions) => Promise<AgentResult>,
+        run: (input: TaskInput, o: { history?: ChatMessage[]; maxIterations?: number; taskId?: string; initialTodo?: readonly TodoSeedItem[] } & TurnRunOptions) => Promise<AgentResult>,
+        runtime?: PlanRuntime,
     ): NonNullable<ChatEngineCapabilities['runTask']> =>
-    (input, opts) =>
-        run(input, {
-            ...(opts?.history ? { history: [...opts.history] } : {}),
-            ...(opts?.maxIterations !== undefined ? { maxIterations: opts.maxIterations } : {}),
-            ...turnRunOptions(opts),
-        })
+    async (input, opts) => {
+        const taskId = runtime && opts?.onTodo ? String(generateTaskId()) : undefined
+        const watch = runtime && taskId ? await watchChecklist(runtime, taskId) : undefined
+        try {
+            const result = await run(input, {
+                ...(opts?.history ? { history: [...opts.history] } : {}),
+                ...(opts?.maxIterations !== undefined ? { maxIterations: opts.maxIterations } : {}),
+                ...(taskId ? { taskId } : {}),
+                ...(opts?.initialTodo ? { initialTodo: opts.initialTodo } : {}),
+                ...turnRunOptions(opts),
+            })
+            const snapshot = watch?.result().snapshot
+            if (snapshot) opts?.onTodo?.(snapshotToTodoSeed(snapshot))
+            return result
+        } finally {
+            await watch?.stop()
+        }
+    }
 
 /** `runStreamTask` adapter for `session()`: forwards history, density, signal, to-do seed and the per-turn options to `runStream()`. */
 export const makeSessionRunStreamTask =

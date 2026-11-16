@@ -27,6 +27,10 @@ export interface TodoSeedItem {
   readonly id: string;
   readonly title: string;
   readonly status: ChecklistItemStatus;
+  /** Tool the step named (a plan step's hint); the kernel's propose-done advisory reads it. Absent = none. */
+  readonly tool?: string;
+  /** `"harness-derived"` when the harness derived the row from the model's reply; absent = a model or user row. */
+  readonly origin?: "harness-derived";
 }
 
 /** Options-bag mixin: a turn/run that starts from a prior to-do list. */
@@ -103,7 +107,10 @@ export function snapshotToTodoSeed(snapshot: ChecklistSnapshot): TodoSeedItem[] 
   return snapshot.root.rows.flatMap((row): TodoSeedItem[] =>
     row.kind !== "advisory" || row.source === "plan"
       ? []
-      : [{ id: row.id, title: row.title, status: row.status === "done" ? "completed" : row.status === "in_progress" ? "in_progress" : "pending" }],
+      : [{
+          id: row.id, title: row.title, status: row.status === "done" ? "completed" : row.status === "in_progress" ? "in_progress" : "pending",
+          ...(row.tool !== undefined ? { tool: row.tool } : {}), ...(row.origin === "harness-derived" ? { origin: row.origin } : {}),
+        }],
   );
 }
 
@@ -123,7 +130,8 @@ export function readTodoSeed(task: Pick<Task, "metadata">): readonly TodoSeedIte
       typeof r === "object" && r !== null &&
       typeof (r as TodoSeedItem).id === "string" &&
       typeof (r as TodoSeedItem).title === "string" &&
-      STATUSES.has((r as TodoSeedItem).status),
+      STATUSES.has((r as TodoSeedItem).status) &&
+      ((r as TodoSeedItem).tool === undefined || typeof (r as TodoSeedItem).tool === "string"),
   );
   return items.length > 0 ? items : undefined;
 }
@@ -136,8 +144,11 @@ export function readTodoSeed(task: Pick<Task, "metadata">): readonly TodoSeedIte
  */
 export class TodoCarry {
   #items: readonly TodoSeedItem[];
-  constructor(initial?: readonly TodoSeedItem[]) {
+  readonly #onChange: ((before: readonly TodoSeedItem[], after: readonly TodoSeedItem[]) => void) | undefined;
+  /** @param onChange called with the list before and after each turn-driven update (not on `replace`). */
+  constructor(initial?: readonly TodoSeedItem[], onChange?: (before: readonly TodoSeedItem[], after: readonly TodoSeedItem[]) => void) {
     this.#items = initial ?? [];
+    this.#onChange = onChange;
   }
   /** Current list (oldest id first). */
   get items(): readonly TodoSeedItem[] {
@@ -147,8 +158,28 @@ export class TodoCarry {
   replace(items: readonly TodoSeedItem[]): void {
     this.#items = items;
   }
+  /** Take a turn's final list (buffered turns); announces step changes like a streamed update. */
+  update(items: readonly TodoSeedItem[]): void {
+    const before = this.#items;
+    this.#items = items;
+    this.#onChange?.(before, items);
+  }
   /** Fold one stream event; non-checklist events are ignored. */
   observe(event: AgentStreamEvent): void {
-    if (event._tag === "ChecklistUpdated") this.#items = snapshotToTodoSeed(event.checklist);
+    if (event._tag === "ChecklistUpdated") this.update(snapshotToTodoSeed(event.checklist));
   }
+}
+
+/**
+ * Spread into a buffered turn's `runTask` options: the conversation's list as the
+ * run's seed, and the port the host reports the run's final list through.
+ */
+export const todoTurnPorts = (carry: TodoCarry): TodoSeedOption & TodoReportOption => ({
+  ...(carry.items.length > 0 ? { initialTodo: carry.items } : {}),
+  onTodo: (items) => carry.update(items),
+});
+
+/** Options-bag mixin: the host calls this with the run's final to-do list (buffered turns). */
+export interface TodoReportOption {
+  readonly onTodo?: (items: readonly TodoSeedItem[]) => void;
 }

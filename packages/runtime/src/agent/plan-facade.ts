@@ -16,16 +16,14 @@
  * Pure parts ({@link toolHintOf}, {@link planFromWatch}, {@link stepChanges},
  * {@link normalizeSteps}) hold the mapping rules; the class shell only delegates.
  */
-import { Effect, type ManagedRuntime } from "effect";
+import { Effect } from "effect";
 import {
   EventBus,
   generateTaskId,
   isPlanEmpty,
-  makeChecklistTracker,
   planFromChecklist,
   planToChecklistSeed,
   type AgentEvent,
-  type ChecklistSnapshot,
   type Plan,
   type PlanSource,
   type PlanStep,
@@ -36,9 +34,7 @@ import { PlanNoStepsError } from "../errors/plan-no-steps-error.js";
 import { taskInputText, type TaskInput } from "./task-input.js";
 import type { TodoSeedItem } from "../chat/todo-seed.js";
 import type { ChatMessage } from "../chat.js";
-
-/** The services the plan facade runs against (contravariant: any richer runtime fits). */
-type PlanRuntime = ManagedRuntime.ManagedRuntime<EventBus, never>;
+import { planSourceOf, watchChecklist, type PlanRuntime, type PlanWatchResult } from "./plan-watch.js";
 
 /** What the facade adds to the caller's run options: the task id it watches, the posture and the seed. */
 export interface PlanRunSeed {
@@ -82,13 +78,6 @@ export function toolHintOf(title: string): string | undefined {
 const toolsOf = (steps: ReadonlyArray<Pick<PlanStep, "id" | "title" | "tool">>): Record<string, string> =>
   Object.fromEntries(steps.flatMap((s) => { const t = s.tool ?? toolHintOf(s.title); return t === undefined ? [] : [[s.id, t] as const]; }));
 
-/** What a run's checklist watcher saw. */
-export interface PlanWatchResult {
-  readonly snapshot: ChecklistSnapshot | undefined;
-  /** True when the harness (not the model) wrote the plan-turn checklist. */
-  readonly harnessDerived: boolean;
-}
-
 /**
  * Build the plan a run left behind. Pure.
  * `fallback` supplies the steps (and tool hints) when the run touched no checklist.
@@ -111,7 +100,7 @@ export function planFromWatch(
 export function stepChanges(
   before: Plan,
   after: Plan,
-  stamp: { readonly agentId?: string; readonly taskId?: string; readonly timestamp: number },
+  stamp: { readonly agentId?: string; readonly taskId?: string; readonly sessionId?: string; readonly timestamp: number },
 ): readonly PlanStepStatusChangedEvent[] {
   const prior = new Map(before.steps.map((s) => [s.id, s.status] as const));
   return after.steps.flatMap((s): PlanStepStatusChangedEvent[] => {
@@ -144,35 +133,6 @@ export function normalizeSteps(steps: readonly PlanStepInput[]): readonly PlanSt
 const publish = (runtime: PlanRuntime, event: AgentEvent): Promise<void> =>
   runtime.runPromise(EventBus.pipe(Effect.flatMap((bus) => bus.publish(event)), Effect.catchAll(() => Effect.void)));
 
-interface Watch {
-  readonly result: () => PlanWatchResult;
-  readonly stop: () => Promise<void>;
-}
-
-/** Watch `taskId`'s checklist on the bus (the one tracker the stream uses) until `stop()`. */
-const watchChecklist = (runtime: PlanRuntime, taskId: string): Promise<Watch> =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      const bus = yield* EventBus;
-      const tracker = makeChecklistTracker(taskId);
-      let snapshot: ChecklistSnapshot | undefined;
-      let harnessDerived = false;
-      const fold = (event: AgentEvent): void => {
-        if (event._tag === "LedgerEntryAppended" && event.taskId === taskId && event.entries.some((e) => e.harnessDerived === true)) harnessDerived = true;
-        if (event._tag === "AgentStarted" || event._tag === "AgentCompleted" || event._tag === "LedgerEntryAppended") snapshot = tracker.track({ ...event }) ?? snapshot;
-      };
-      const offs = yield* Effect.all([
-        bus.on("AgentStarted", (e) => Effect.sync(() => fold(e))),
-        bus.on("AgentCompleted", (e) => Effect.sync(() => fold(e))),
-        bus.on("LedgerEntryAppended", (e) => Effect.sync(() => fold(e))),
-      ]);
-      return {
-        result: (): PlanWatchResult => ({ snapshot, harnessDerived }),
-        stop: async (): Promise<void> => { for (const off of offs) off(); },
-      };
-    }),
-  );
-
 /**
  * `agent.plan()`: run `input` under plan posture, return the recorded `Plan`.
  * Rejects with {@link PlanNoStepsError} when the run left no steps.
@@ -192,7 +152,7 @@ export async function planFacade<R extends { readonly output: string }>(
   }
   const seen = watch.result();
   const goal = taskInputText(input);
-  const plan = planFromWatch(seen, { id: `plan-${taskId}`, goal, createdAt: Date.now(), source: seen.harnessDerived ? "harness-derived" : "model" });
+  const plan = planFromWatch(seen, { id: `plan-${taskId}`, goal, createdAt: Date.now(), source: planSourceOf(seen.snapshot) });
   if (isPlanEmpty(plan)) throw new PlanNoStepsError({ goal, reply: result.output });
   await publish(host.runtime, { _tag: "PlanRecorded", planId: plan.id, steps: plan.steps, source: plan.source, agentId: host.agentId, taskId, timestamp: Date.now() });
   return plan;

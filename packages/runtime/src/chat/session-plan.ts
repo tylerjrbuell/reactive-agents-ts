@@ -30,15 +30,20 @@ const isStepList = (x: Plan | readonly PlanStepInput[]): x is readonly PlanStepI
 export function planOfTodo(items: readonly TodoSeedItem[], meta: SessionPlanMeta): Plan | undefined {
   if (items.length === 0) return undefined;
   const steps = items.map((i): PlanStep => {
-    const tool = meta.tools[i.id];
+    const tool = i.tool ?? meta.tools[i.id];
     return { id: i.id, title: i.title, status: stepStatusOfSeed(i.status), ...(tool !== undefined ? { tool } : {}) };
   });
-  return { id: meta.id, goal: meta.goal, steps, createdAt: meta.createdAt, source: meta.source };
+  // The rows say who wrote them: a model-sourced session plan whose rows the harness derived is harness-derived.
+  const source = meta.source === "model" && items.some((i) => i.origin === "harness-derived") ? "harness-derived" : meta.source;
+  return { id: meta.id, goal: meta.goal, steps, createdAt: meta.createdAt, source };
 }
+
+/** The plan id a session's to-do list carries (`PlanRecorded` and step events agree on it). */
+export const sessionPlanId = (sessionId: string): string => `plan-${sessionId}`;
 
 /** The meta a fresh session starts with: no goal, model-sourced until the user edits. */
 export const freshPlanMeta = (sessionId: string, now: number): SessionPlanMeta => ({
-  id: `plan-${sessionId}`,
+  id: sessionPlanId(sessionId),
   goal: "",
   createdAt: now,
   source: "model",

@@ -73,17 +73,17 @@ session.setMode("execute")
 for await (const e of session.runStream("go", { density: "full" })) { /* seeded from the edited plan */ }
 ```
 
-`session.plan` reads the conversation's to-do list as a `Plan`. `session.setPlan(planOrSteps)` replaces the list (steps may be plain titles) and publishes `PlanRecorded` with `source: "user-edited"`. The next execute turn starts from it. Plan turns carry their list to the next turn through streamed turns (`session.runStream`); that is where checklist updates are observed.
+`session.plan` reads the conversation's to-do list as a `Plan`. `session.setPlan(planOrSteps)` replaces the list (steps may be plain titles) and publishes `PlanRecorded` with `source: "user-edited"`. The next execute turn starts from it. Plan turns carry their list to the next turn through both streamed (`session.runStream`) and buffered (`session.chat`) tool turns. `session.plan.source` is `"harness-derived"` when the harness derived the rows from the model's reply, and each row keeps its `tool` hint.
 
 ## Plan tool catalog
 
-Plan posture can name the tools execution will have, so steps can say `tool: name`. It is off by default until it is measured:
+Plan posture names the tools execution will have, by name (MCP tools grouped by server), so steps can say `tool: name`. A step's tool hint rides the plan into the seeded checklist, so the execute run can tell when a step's named tool has succeeded. It is on by default; the ablation is still pending. Turn it off with the harness config or the environment:
 
 ```ts
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withHarness({ planToolCatalog: true }) // or RA_PLAN_TOOL_CATALOG=1
+  .withHarness({ planToolCatalog: false }) // or RA_PLAN_TOOL_CATALOG=0
   .build()
 ```
 
@@ -92,5 +92,5 @@ const agent = await ReactiveAgents.create()
 | Event | When |
 | --- | --- |
 | `PlanRecorded { planId, steps, source }` | `agent.plan()` returned a plan, or `session.setPlan()` edited one |
-| `PlanStepStatusChanged { planId, stepId, from, to }` | a step's status changed during `execute()` / `run({ plan })` |
+| `PlanStepStatusChanged { planId, stepId, from, to }` | a step's status changed during `execute()` / `run({ plan })`, or during a chat session turn (then carries `sessionId`) |
 | `ChatModeChanged` | a session switched between plan and execute |

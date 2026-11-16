@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { AgentResult } from "../builder/types.js";
-import type { ChatModeChangedEvent, PlanRecordedEvent, ChatTurnEvent, EnvironmentChangedEvent, RunOrigin } from "@reactive-agents/core";
+import type { ChatModeChangedEvent, PlanRecordedEvent, PlanStepStatusChangedEvent, ChatTurnEvent, EnvironmentChangedEvent, RunOrigin } from "@reactive-agents/core";
 import type { ChatMessage, ChatOptions, ChatReply } from "../chat.js";
 import type { RunHandle } from "../run-controller.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
@@ -15,7 +15,8 @@ import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapsho
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TurnGate } from "./turn-gate.js";
 import { turnPosture, announceModeChange, DEFAULT_CHAT_MODE, type ChatMode } from "./session-mode.js";
-import { TodoCarry, planPosture, originCarry, type OriginOption, type PostureOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
+import { TodoCarry, planPosture, originCarry, todoTurnPorts, type OriginOption, type PostureOption, type TodoReportOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
+import { announceSteps } from "./plan-step-events.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
 
@@ -70,7 +71,7 @@ export interface ChatEngineCapabilities {
   readonly runTask?: (input: TaskInput, opts: {
     history: readonly ChatMessage[];
     maxIterations?: number;
-  } & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption & Pick<ChatOptions, "skills">) => Promise<AgentResult>;
+  } & TodoSeedOption & TodoReportOption & EnvironmentUpdateOption & PostureOption & OriginOption & WorkspaceOption & Pick<ChatOptions, "skills">) => Promise<AgentResult>;
   /**
    * Agentic streaming. Backed by the host's `ReactiveAgent.runStream()`. Required by
    * `streamTurn()`; absent ⇒ typed capability rejection (Task 4).
@@ -137,8 +138,8 @@ export interface ChatEngineCapabilities {
   readonly publishEnvironment?: (event: EnvironmentChangedEvent) => Promise<void>;
   /** `ChatModeChanged` publication port (swallow-site): one event per actual `setMode` change. */
   readonly publishMode?: (event: ChatModeChangedEvent) => Promise<void>;
-  /** `PlanRecorded` publication port (swallow-site): one event per `setTodo` plan edit. */
-  readonly publishPlan?: (event: PlanRecordedEvent) => Promise<void>;
+  /** Plan publication port (swallow-site): `PlanRecorded` per `setTodo` edit, `PlanStepStatusChanged` per step a turn moved. */
+  readonly publishPlan?: (event: PlanRecordedEvent | PlanStepStatusChangedEvent) => Promise<void>;
 }
 
 /**
@@ -265,11 +266,7 @@ export class ChatEngine {
   #history: ChatMessage[] = [];
   /** Serializes turns: concurrent turn()/streamTurn() calls queue FIFO instead of interleaving history. */
   readonly #gate = new TurnGate();
-  /**
-   * Load-once latch (Task 3): set after the first turn resolves `loadHistory` —
-   * including when the loader resolves empty — so the loader is ever called
-   * exactly once per engine lifetime.
-   */
+  /** Load-once latch: set after the first turn resolves `loadHistory` (even empty), so the loader runs once per engine. */
   #loaded = false;
   readonly #todo: TodoCarry;
   /** This session's latest tool-turn results, for its own direct (tools-off) turns only. Never shared across sessions. */
@@ -292,7 +289,7 @@ export class ChatEngine {
     this.#history = [...healShapedAssistantTurns(initialHistory)];
     // Load-once latch: a non-empty seed means the loader NEVER runs.
     this.#loaded = initialHistory.length > 0;
-    this.#todo = new TodoCarry(options?.initialTodo); this.#mode = options?.mode ?? DEFAULT_CHAT_MODE;
+    this.#todo = new TodoCarry(options?.initialTodo, announceSteps(deps.publishPlan, this.#sessionId, (e) => swallowError(e, "chat/engine.ts:publishPlan"))); this.#mode = options?.mode ?? DEFAULT_CHAT_MODE;
     this.#env = new EnvironmentTracker(this.#sessionId, {
       ...deps, onPublishError: (err) => swallowError(err, "chat/engine.ts:publishEnvironment"),
     }, options?.environmentUpdates !== false, options?.initialEnvironment);
@@ -305,8 +302,10 @@ export class ChatEngine {
 
   /** The conversation's latest to-do list, as of the last completed `streamTurn()` event. */
   todo(): readonly TodoSeedItem[] { return this.#todo.items; }
-  /** Replace the to-do list (a plan edit; later turns seed from it); `recorded` is published when given. */
-  setTodo(items: readonly TodoSeedItem[], recorded?: PlanRecordedEvent): void { this.#todo.replace(items); if (recorded) this.#deps.publishPlan?.(recorded).catch((e) => swallowError(e, "chat/engine.ts:publishPlan")); }
+  /** The session id (plan events are stamped with it). */
+  get id(): string { return this.#sessionId; }
+  /** Replace the to-do list (a plan edit; later turns seed from it); `recorded` is published (session-stamped) when given. */
+  setTodo(items: readonly TodoSeedItem[], recorded?: PlanRecordedEvent): void { this.#todo.replace(items); if (recorded) this.#deps.publishPlan?.({ ...recorded, sessionId: this.#sessionId }).catch((e) => swallowError(e, "chat/engine.ts:publishPlan")); }
 
   /**
    * Buffered conversational turn — the single entry point for `agent.chat`,
@@ -360,7 +359,7 @@ export class ChatEngine {
         history,
         maxIterations: options?.maxIterations,
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(turnPosture(this.#mode, options?.posture)), ...originCarry(options?.origin ?? this.#origin),
-        ...workspaceCarry(options?.workspace), ...(options?.skills ? { skills: options.skills } : {}),
+        ...workspaceCarry(options?.workspace), ...(options?.skills ? { skills: options.skills } : {}), ...todoTurnPorts(this.#todo),
       });
       const reply = assembleToolReply(result, options ?? {}, this.#deps.scratchpadEntries?.() ?? {});
       const userText = options?.recordUserText ?? message, assistant = assistantTurnOf(result);

@@ -80,6 +80,7 @@ import { captureCallerFileRoot, workspaceCarry, type RunStateSpec } from '../eng
 import type { AgentResult } from '../builder/types.js'
 import type { RunRecord, RunStatus } from '../services/run-store.js'
 import { safeParseJson } from './_json.js'
+import type { TodoSeedItem } from '../chat/todo-seed.js'
 
 /**
  * Reconcile a crashed run's tool-effect rows for resume (GH #262).
@@ -223,6 +224,10 @@ export interface RunDurableParams {
     readonly fileRoot?: string | null
     /** The caller's per-run `workspace` (`run(task, { workspace })` on a durable agent). */
     readonly workspace?: string
+    /** The caller's to-do seed (`run(task, { initialTodo })` / `{ plan }` on a durable agent). */
+    readonly initialTodo?: readonly TodoSeedItem[]
+    /** The caller's posture (`"plan"` ⇒ plan-only), carried like `initialTodo`. */
+    readonly posture?: 'execute' | 'plan'
 }
 
 /** Explicit dependency surface — exactly the `ReactiveAgent` fields/methods the moved methods read. */
