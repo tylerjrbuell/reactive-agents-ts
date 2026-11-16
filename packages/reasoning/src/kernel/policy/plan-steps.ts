@@ -11,7 +11,7 @@
  *    catalog of the tools the execute phase would have;
  *  - {@link FOLLOW_PLAN_GUIDANCE}: the execute-side advisory line.
  */
-import { planStepToolHint } from "@reactive-agents/core";
+import { isNearDuplicateTitle, planStepToolHint } from "@reactive-agents/core";
 import type { ToolSchema } from "../capabilities/attend/tool-formatting.js";
 import { META_TOOLS } from "../state/kernel-constants.js";
 
@@ -45,32 +45,6 @@ const clip = (s: string, max: number): string =>
  */
 const NARRATIVE =
   /^(?:(?:first|next|then|finally|lastly|after that|now)[,:]?\s+)?(?:i\b|i'(?:ll|m|d|ve)\b|we\b|we'(?:ll|re)\b|let me\b|let's\b|my plan\b)|^to\s[^,]{1,80},\s*(?:i|we)\b/i;
-
-const normalizeTokens = (s: string): ReadonlySet<string> =>
-  new Set(s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 0 && !["the", "a", "an", "of", "to", "and"].includes(w)));
-const tokens = normalizeTokens;
-
-/** Near-identical titles: same words ignoring case/punctuation/articles, or ≥80% token overlap. */
-function similar(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-  if (a.size === 0 || b.size === 0) return a.size === b.size;
-  let shared = 0;
-  for (const w of a) if (b.has(w)) shared++;
-  // A restatement that is wholly contained in a longer title (≥3 words) is a duplicate too.
-  return shared / Math.max(a.size, b.size) >= 0.8 || (Math.min(a.size, b.size) >= 3 && shared === Math.min(a.size, b.size));
-}
-
-/** True when two step titles are near-duplicates (the one rule derived checklists and plan refinement share). */
-export const titlesNearDuplicate = (a: string, b: string): boolean => {
-  const ta = tokens(a);
-  const tb = tokens(b);
-  if (similar(ta, tb)) return true;
-  // Plan restatements pad a short title ("Verify report" -> "Verify the report file content"):
-  // a ≥2-word title wholly contained in a title at most twice its size is the same step.
-  let shared = 0;
-  for (const w of ta) if (tb.has(w)) shared++;
-  const min = Math.min(ta.size, tb.size);
-  return min >= 2 && shared === min && min / Math.max(ta.size, tb.size) >= 0.5;
-};
 
 /** Inline `1) a 2) b` runs: markers must count up from 1 and number at least two. */
 function inlineNumbered(reply: string): readonly string[] {
@@ -125,14 +99,13 @@ function listsOf(lines: readonly string[], re: RegExp, numbered: boolean): reado
 
 /** One list's step titles: cleaned, clipped, narrative and near-duplicates dropped, capped. */
 function stepTitles(source: readonly string[]): readonly string[] {
-  const seen: ReadonlySet<string>[] = [];
+  const seen: string[] = [];
   const out: string[] = [];
   for (const r of source) {
     const title = clip(clean(r), MAX_DERIVED_STEP_CHARS);
     if (title.length === 0 || NARRATIVE.test(title)) continue;
-    const words = tokens(title);
-    if (seen.some((s) => similar(s, words))) continue;
-    seen.push(words);
+    if (seen.some((s) => isNearDuplicateTitle(s, title))) continue;
+    seen.push(title);
     out.push(title);
     if (out.length === MAX_DERIVED_STEPS) break;
   }

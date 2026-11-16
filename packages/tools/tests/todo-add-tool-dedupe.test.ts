@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { foldAdvisory, type AdvisoryItem, type ChecklistItemFact } from "@reactive-agents/core";
 import { applyTodoChecklistAction, todoTool } from "../src/skills/todo.js";
-import { extractAddItems, isNearDuplicate, titleTokens } from "../src/skills/todo-add.js";
+import { isNearDuplicateTitle, normalizeTitle } from "@reactive-agents/core";
+import { extractAddItems } from "../src/skills/todo-add.js";
 
 function makeSession() {
   const facts: ChecklistItemFact[] = [];
@@ -87,8 +88,8 @@ describe("todo add: near-duplicate dedupe", () => {
   });
 
   test("one-word candidate never matches by containment", () => {
-    expect(isNearDuplicate(titleTokens("test"), titleTokens("run the test suite now"))).toBe(false);
-    expect(isNearDuplicate(titleTokens("run tests"), titleTokens("run the test suite now"))).toBe(false);
+    expect(isNearDuplicateTitle("test", "run the test suite now")).toBe(false);
+    expect(isNearDuplicateTitle("run tests", "run the test suite now")).toBe(false);
   });
 });
 
@@ -107,31 +108,34 @@ describe("local fold mirrors core tool-hint fallback", () => {
 });
 
 describe("near-duplicate: each branch pinned on its own", () => {
-  const t = (s: string) => titleTokens(s);
-  test("Jaccard-only: 8 of 9 shared words (0.8), neither title contains the other", () => {
+  test("overlap-only: 8 of 9 shared words (0.89), neither title contains the other", () => {
     const a = "w1 w2 w3 w4 w5 w6 w7 w8 xa";
     const b = "w1 w2 w3 w4 w5 w6 w7 w8 xb";
-    expect(isNearDuplicate(t(a), t(b))).toBe(true);
-    expect(isNearDuplicate(t(b), t(a))).toBe(true);
+    expect(isNearDuplicateTitle(a, b)).toBe(true);
+    expect(isNearDuplicateTitle(b, a)).toBe(true);
     const s = makeSession();
     s.run({ action: "add", items: [a] });
     expect(s.run({ action: "add", items: [b] }).changes).toEqual([]);
   });
-  test("just under the Jaccard bar (7 of 8 = 0.78) and 3 of 5 do not dedupe", () => {
-    expect(isNearDuplicate(t("w1 w2 w3 w4 w5 w6 w7 xa"), t("w1 w2 w3 w4 w5 w6 w7 xb"))).toBe(false);
-    expect(isNearDuplicate(t("a1 a2 a3 b1 b2"), t("a1 a2 a3 c1 c2"))).toBe(false);
+  test("just under the overlap bar (3 of 5 = 0.6; 4 of 6 = 0.67) does not dedupe", () => {
+    // Unified core rule is shared/max (old tools rule was Jaccard): 7 of 8 shared now dedupes.
+    expect(isNearDuplicateTitle("w1 w2 w3 w4 w5 w6 w7 xa", "w1 w2 w3 w4 w5 w6 w7 xb")).toBe(true);
+    expect(isNearDuplicateTitle("w1 w2 w3 w4 yy zz", "w1 w2 w3 w4 xa xb")).toBe(false);
+    expect(isNearDuplicateTitle("a1 a2 a3 b1 b2", "a1 a2 a3 c1 c2")).toBe(false);
     const s = makeSession();
     s.run({ action: "add", items: ["a1 a2 a3 b1 b2"] });
     expect(s.run({ action: "add", items: ["a1 a2 a3 c1 c2"] }).changes.length).toBe(1);
   });
-  test("containment-only: low Jaccard but candidate wholly inside a 3+ word title", () => {
-    const cand = t("fetch stats");
-    const ex = t("fetch the page view stats for each site");
+  test("containment-only: low overlap but smaller title (2+ words) wholly inside the larger", () => {
+    const cand = normalizeTitle("fetch stats");
+    const ex = normalizeTitle("fetch the page view stats for each site");
     expect(cand.size / ex.size).toBeLessThan(0.8);
-    expect(isNearDuplicate(cand, ex)).toBe(true);
-    // existing title under 3 words: containment does not apply
-    expect(isNearDuplicate(t("fetch stats"), t("fetch stats"))).toBe(true);
-    expect(isNearDuplicate(t("a b c"), t("a b"))).toBe(false);
+    expect(isNearDuplicateTitle("fetch stats", "fetch the page view stats for each site")).toBe(true);
+    expect(isNearDuplicateTitle("fetch stats", "fetch stats")).toBe(true);
+    // Unified rule: 2+ tokens contained in a 2-token-larger title also dedupes (old tools rule needed 3+).
+    expect(isNearDuplicateTitle("x y z", "x y")).toBe(true);
+    // single-token smaller title never matches by containment
+    expect(isNearDuplicateTitle("x y z", "x")).toBe(false);
   });
   test("umami trace: re-sent step without its inline tool hint dedupes", () => {
     const s = makeSession();
@@ -160,9 +164,9 @@ describe("near-duplicate: tool hints never count as words (both directions)", ()
     expect(s.items().length).toBe(1);
   });
   test("hint forms are stripped: bare, parenthesised, list", () => {
-    const base = titleTokens("Fetch page views for the site");
+    const base = normalizeTitle("Fetch page views for the site");
     for (const h of ["tool: a/b", "(tool: a/b)", "(tools: a, b-c)", "Tool: `x_y`"]) {
-      expect(titleTokens(`Fetch page views for the site ${h}`)).toEqual(base);
+      expect(normalizeTitle(`Fetch page views for the site ${h}`)).toEqual(base);
     }
   });
 });

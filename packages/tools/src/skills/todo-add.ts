@@ -3,11 +3,9 @@
  *
  * Pure; never throws. `extractAddItems` accepts the plain `["step"]` shape plus
  * a structured per-item tool (`[{text, tool}]` or a parallel `tools` array);
- * `isNearDuplicate` is the rephrase-tolerant dedupe the add path applies after
- * its exact-title check.
+ * the rephrase-tolerant dedupe the add path applies after its exact-title check
+ * is core's `isNearDuplicateTitle`.
  */
-
-import { planStepToolHint } from "@reactive-agents/core";
 
 /** One step to add, with the tool the model expects to use for it (absent = none). */
 export interface TodoAddItem {
@@ -55,35 +53,3 @@ export function extractAddItems(rawItems: unknown, rawTools?: unknown): TodoAddI
   return out;
 }
 
-const ARTICLES: ReadonlySet<string> = new Set(["a", "an", "the"]);
-
-const TOOL_MARKER = /\(?\s*\btools?:\s*[`\w][\w./`-]*(?:\s*,\s*[`\w][\w./`-]*)*\s*\)?/gi;
-
-/** Title without its `(tool: x)` / `tool: x` / `(tools: a, b)` hint, so hints never count as words. */
-export function stripToolHint(title: string): string {
-  return planStepToolHint(title) === undefined ? title : title.replace(TOOL_MARKER, " ");
-}
-
-/** Dedupe tokens: case-folded words, punctuation, articles and tool hints dropped. */
-export function titleTokens(title: string): ReadonlySet<string> {
-  return new Set(
-    stripToolHint(title)
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}]+/u)
-      .filter((w) => w.length > 0 && !ARTICLES.has(w)),
-  );
-}
-
-/**
- * True when `candidate` restates `existing`: token overlap (Jaccard) of at
- * least 80%, or the candidate's tokens (2+) all sit inside an existing title of
- * 3+ tokens.
- */
-export function isNearDuplicate(candidate: ReadonlySet<string>, existing: ReadonlySet<string>): boolean {
-  if (candidate.size === 0 || existing.size === 0) return false;
-  let shared = 0;
-  for (const w of candidate) if (existing.has(w)) shared++;
-  const union = candidate.size + existing.size - shared;
-  if (shared / union >= 0.8) return true;
-  return candidate.size >= 2 && existing.size >= 3 && shared === candidate.size;
-}

@@ -220,7 +220,9 @@ describe("todo checklist: property", () => {
     // so make every generated title unique to keep comparing the shared behaviour.
     const uniqueTitles = (steps: readonly Args[]): Args[] => {
       let n = 0;
-      const tag = (v: unknown): unknown => `${String(v)}#${n++}`;
+      // Word characters are replaced by one unique token: the shared near-duplicate rule
+      // (core `isNearDuplicateTitle`) compares word sets, so `5#1` and `1#5` would collide.
+      const tag = (v: unknown): unknown => `${String(v).replace(/[\p{L}\p{N}]+/gu, "")}u${n++}x`;
       return steps.map((a) => {
         const out: Record<string, unknown> = { ...a };
         if (Array.isArray(a.items)) out.items = a.items.map(tag);

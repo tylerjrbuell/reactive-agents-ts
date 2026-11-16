@@ -12,9 +12,14 @@
  * Row identity is (step id, title): a plan patch can reuse a step id for a new
  * step, which gets its own row. A failed step keeps its last status; a replaced
  * step (gone from the plan) has its row removed unless it completed.
+ *
+ * The same sync publishes the typed plan events (`PlanRecorded` when the plan
+ * first appears or its step set changes, `PlanStepStatusChanged` per status
+ * change; see ./plan-events.ts) on the strategy's event bus.
  */
-import { Effect, Ref } from "effect";
-import type { ChecklistItemOp, ChecklistItemStatus } from "@reactive-agents/core";
+import { Effect, Option, Ref } from "effect";
+import { emitErrorSwallowed, errorTag, type ChecklistItemOp, type ChecklistItemStatus } from "@reactive-agents/core";
+import { planStepEvents, toCorePlanStatus, type PlanEventSnapshot, type PlanEventSnapshotStep } from "./plan-events.js";
 import type { PlanStep } from "../../types/plan.js";
 import type { RunLedger } from "../../kernel/ledger/run-ledger.js";
 import { recordChecklistItems, type ChecklistItemFact } from "../../kernel/ledger/emit.js";
@@ -113,6 +118,7 @@ export const makePlanChecklist = (args: {
 }): Effect.Effect<PlanChecklist, never> =>
   Effect.gen(function* () {
     const state = yield* Ref.make(emptyPlanChecklist);
+    const published = yield* Ref.make<PlanEventSnapshot>(undefined);
     const target: LedgerSinkTarget = ledgerSinkTarget(args.eventBus, args.taskId, args.agentId, args.site);
     return {
       sync: (steps, opts) =>
@@ -121,6 +127,29 @@ export const makePlanChecklist = (args: {
           const { state: next, facts } = planChecklistFacts(prev, steps, new Set(opts?.active ?? []), opts?.iteration ?? 0);
           yield* Ref.set(state, next);
           if (facts.length > 0) yield* appendAnnounced(args.ledger, (led) => recordChecklistItems(led, facts), target);
+          // The same sync also publishes the plan events (PlanRecorded / PlanStepStatusChanged).
+          if (Option.isSome(args.eventBus)) {
+            const bus = args.eventBus.value;
+            const snap: PlanEventSnapshotStep[] = steps.map((s) => {
+              const tool = s.toolName ?? s.toolHints?.[0];
+              return {
+                id: s.id,
+                title: s.title,
+                ...(tool !== undefined && tool.length > 0 ? { tool } : {}),
+                status: toCorePlanStatus(next.rows.get(rowKey(s))?.status ?? "pending"),
+              };
+            });
+            const { snapshot, events } = planStepEvents(yield* Ref.get(published), snap, {
+              planId: args.taskId,
+              taskId: args.taskId,
+              ...(args.agentId ? { agentId: args.agentId } : {}),
+              timestamp: Date.now(),
+            });
+            yield* Ref.set(published, snapshot);
+            for (const event of events) {
+              yield* bus.publish(event).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: args.site, tag: errorTag(err) })));
+            }
+          }
         }),
     };
   });

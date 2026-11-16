@@ -13,10 +13,10 @@
  * kernel meta-tool handler commits changes as checklist-item facts).
  * List management (edit, remove, clear, patch): ./todo-manage.ts.
  */
-import { planStepToolHint, type AdvisoryItem, type ChecklistItemOp, type ChecklistItemStatus } from "@reactive-agents/core";
+import { isNearDuplicateTitle, planStepToolHint, type AdvisoryItem, type ChecklistItemOp, type ChecklistItemStatus } from "@reactive-agents/core";
 import type { ToolDefinition } from "../types.js";
 import { closestValid, healParamNames } from "./arg-healing.js";
-import { extractAddItems, isNearDuplicate, titleTokens } from "./todo-add.js";
+import { extractAddItems } from "./todo-add.js";
 import { hasTodoTargets, resolveTodoTargets } from "./todo-targets.js";
 import {
   applyTodoOps,
@@ -329,15 +329,14 @@ function applyCanonicalTodoAction(
       // Every add skips titles already on the list (any status) or repeated in
       // this call, exact or rephrased: models re-send the whole list each turn.
       const seen = new Map<string, AdvisoryItem | undefined>(items.map((t) => [norm(t.title), t]));
-      const known: { readonly tokens: ReadonlySet<string>; readonly hit: AdvisoryItem | undefined }[] =
-        items.map((t) => ({ tokens: titleTokens(t.title), hit: t }));
+      const known: { readonly title: string; readonly hit: AdvisoryItem | undefined }[] =
+        items.map((t) => ({ title: t.title, hit: t }));
       const requested = entries.length;
       const dupLines: string[] = [];
       const attach: ChecklistItemOp[] = [];
       entries = entries.filter((e) => {
         const k = norm(e.text);
-        const tokens = titleTokens(e.text);
-        const match = seen.has(k) ? { hit: seen.get(k) } : known.find((kn) => isNearDuplicate(tokens, kn.tokens));
+        const match = seen.has(k) ? { hit: seen.get(k) } : known.find((kn) => isNearDuplicateTitle(e.text, kn.title));
         if (match !== undefined) {
           const hit = match.hit;
           // A duplicate that names a tool the existing row lacks hands it over once.
@@ -356,7 +355,7 @@ function applyCanonicalTodoAction(
           return false;
         }
         seen.set(k, undefined);
-        known.push({ tokens, hit: undefined });
+        known.push({ title: e.text, hit: undefined });
         return true;
       });
       const skipped = requested - entries.length;

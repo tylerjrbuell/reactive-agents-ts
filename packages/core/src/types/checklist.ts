@@ -265,12 +265,23 @@ export function normalizeTitle(title: string): ReadonlySet<string> {
  *   (2+ inside a 3+ title) and reasoning rules (3+ contained; 2+ contained within
  *   twice the size), so no size-ratio bound remains.
  *
+ * Numeric guard (checked first): when BOTH titles carry digit-bearing tokens
+ * (`1`, `q3`, the `1` in `out-1.txt`) and those token sets differ, the titles are
+ * never duplicates, whatever the overlap. Per-item numbered steps ("Read notes-1.txt
+ * and write out-1.txt" vs "... notes-2.txt ... out-2.txt", "Step 1: fetch X" vs
+ * "Step 2: fetch X", "Q3 report" vs "Q4 report") are distinct work. When only one
+ * side has digit tokens the normal rules apply ("Flip 4 coins" vs "Flip four coins"
+ * still dedupe); a bare extra number on one side is not treated as a difference.
+ *
  * Symmetric. A title with no tokens is never a duplicate. Pure; never throws.
  */
 export function isNearDuplicateTitle(a: string, b: string): boolean {
   const ta = normalizeTitle(a);
   const tb = normalizeTitle(b);
   if (ta.size === 0 || tb.size === 0) return false;
+  const da = [...ta].filter((w) => /\p{N}/u.test(w));
+  const db = [...tb].filter((w) => /\p{N}/u.test(w));
+  if (da.length > 0 && db.length > 0 && (da.length !== db.length || da.some((w) => !tb.has(w)))) return false;
   let shared = 0;
   for (const w of ta) if (tb.has(w)) shared++;
   const min = Math.min(ta.size, tb.size);

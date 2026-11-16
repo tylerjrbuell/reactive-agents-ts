@@ -40,7 +40,7 @@ import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formattin
 import { extractGoalText } from "./plan-text.js";
 import { tokenSpendOf, type TokenSpend } from "../../kernel/run-budget.js";
 import { normalizeReplanRefs } from "./plan-refs.js";
-import { titlesNearDuplicate } from "../../kernel/policy/plan-steps.js";
+import { isNearDuplicateTitle } from "@reactive-agents/core";
 
 /** Replanned steps plus the replan call's spend (incl. the provider's split). */
 export type PlanMutation = { steps: PlanStep[] } & TokenSpend;
@@ -60,7 +60,7 @@ export function dedupeNewSteps<S extends { readonly title: string }>(
   const seen = [...existing];
   const out: S[] = [];
   for (const c of candidates) {
-    if (seen.some((t) => titlesNearDuplicate(t, c.title))) continue;
+    if (seen.some((t) => isNearDuplicateTitle(t, c.title))) continue;
     seen.push(c.title);
     out.push(c);
     if (out.length >= cap) break;
