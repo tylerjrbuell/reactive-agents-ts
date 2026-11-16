@@ -54,7 +54,7 @@ export function disposeModelExit(
   extraMeta?: Record<string, unknown>,
 ): Effect.Effect<ModelExitDisposition, never, never> {
   const contextOf = (s: KernelState) =>
-    arbitrationContextFromState(s, { task: input.task, requiredTools: input.requiredTools });
+    arbitrationContextFromState(s, { task: input.task, requiredTools: input.requiredTools, currentTurnText: input.currentTurnText });
   const ctx = contextOf(state);
   if (arbiterOwnsClaim(ctx, intent)) {
     return Effect.succeed({ decision: "arbiter", state: arbitrateAndApply(state, intent, ctx, extraMeta) });

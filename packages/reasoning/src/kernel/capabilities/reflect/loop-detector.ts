@@ -441,6 +441,7 @@ export function checkAllToolsCalled(
     arbitrationContextFromState(state, {
       task: currentInput.task,
       requiredTools: currentInput.requiredTools,
+      currentTurnText: currentInput.currentTurnText,
     }),
   );
 }

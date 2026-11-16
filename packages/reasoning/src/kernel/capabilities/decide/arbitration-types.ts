@@ -85,6 +85,8 @@ export interface ArbitrationContext {
   readonly iteration: number;
   readonly maxIterations?: number;
   readonly task: string;
+  /** Producer-typed current turn (`KernelInput.currentTurnText`); preferred over marker parsing when deriving conditions. */
+  readonly currentTurnText?: string;
   readonly steps: readonly ReasoningStep[];
   /**
    * The run-scoped RunLedger. Carries facts `steps` structurally cannot: a

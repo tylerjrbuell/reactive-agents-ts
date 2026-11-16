@@ -86,6 +86,9 @@ export function openStrategyContract(
       requiredTools: args.requiredTools ?? [],
       ...(availableWritingTools !== undefined ? { availableWritingTools } : {}),
       ...(envelope.rails.posture !== undefined ? { posture: envelope.rails.posture } : {}),
+      ...(envelope.rails.currentTurnText !== undefined && args.task.includes(envelope.rails.currentTurnText)
+        ? { currentTurnText: envelope.rails.currentTurnText }
+        : {}),
       ...(envelope.policy.taskContract !== undefined ? { taskContract: envelope.policy.taskContract } : {}),
     });
     yield* emitContractCompiled({ taskId: args.taskId, iteration: args.iteration ?? 0, contract });

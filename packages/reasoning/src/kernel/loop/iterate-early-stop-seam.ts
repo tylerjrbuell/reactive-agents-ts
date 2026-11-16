@@ -99,6 +99,7 @@ export function handleDispatcherEarlyStop(args: {
             ctx: arbitrationContextFromState(s, {
               task: input.task,
               requiredTools: input.requiredTools,
+              currentTurnText: input.currentTurnText,
             }),
             taskId: effectiveInput.taskId ?? "",
           });

@@ -74,6 +74,13 @@ export interface RunEnvelopeRails {
    */
   readonly posture?: RunPosture;
   /**
+   * The producer-typed current turn's text (`TaskMetadata.currentTurn`, no
+   * inlined history). Every contract compile and `deriveConditions` prefers it
+   * over parsing history markers out of the task. Absent ⇒ marker parsing; the
+   * key is never written when absent (byte-identical envelope).
+   */
+  readonly currentTurnText?: string;
+  /**
    * Per-tool call caps (`.withTools({ maxCallsPerTool })`), e.g. `{ "web-search": 3 }`.
    * Merged onto every kernel pass (the think-phase tool gate refuses the extra
    * call) and read by the strategy substrate's direct-dispatch budget
@@ -121,6 +128,8 @@ export interface BuildRunEnvelopeOptions {
   readonly environmentUpdate?: string;
   /** See `RunEnvelopeRails.posture`. */
   readonly posture?: RunPosture;
+  /** See `RunEnvelopeRails.currentTurnText`. */
+  readonly currentTurnText?: string;
   /** See `RunEnvelopeRails.maxCallsPerTool`. */
   readonly maxCallsPerTool?: Readonly<Record<string, number>>;
   /** See `RunEnvelopeRails.askUser`. */
@@ -154,6 +163,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
       ...(opts.initialAdvisory !== undefined ? { initialAdvisory: opts.initialAdvisory } : {}),
       ...(opts.environmentUpdate !== undefined ? { environmentUpdate: opts.environmentUpdate } : {}),
       ...(opts.posture === "plan" ? { posture: opts.posture } : {}),
+      ...(opts.currentTurnText !== undefined ? { currentTurnText: opts.currentTurnText } : {}),
       ...(opts.maxCallsPerTool !== undefined ? { maxCallsPerTool: opts.maxCallsPerTool } : {}),
       ...(opts.askUser !== undefined ? { askUser: opts.askUser } : {}),
     },
@@ -227,6 +237,12 @@ export function mergeRunEnvelopeIntoKernelInput(
     ...(input.environmentUpdate === undefined && rails.environmentUpdate !== undefined
       ? { environmentUpdate: rails.environmentUpdate }
       : {}),
+    // Only a pass whose task CARRIES the current turn: a sub-kernel with its own
+    // task (plan-execute step, critique) must not scan the parent's typed turn.
+    ...(input.currentTurnText === undefined && rails.currentTurnText !== undefined
+      && input.task.includes(rails.currentTurnText)
+      ? { currentTurnText: rails.currentTurnText }
+      : {}),
     ...(input.maxCallsPerTool === undefined && rails.maxCallsPerTool !== undefined
       ? { maxCallsPerTool: rails.maxCallsPerTool }
       : {}),
@@ -248,6 +264,20 @@ export function withMaxCallsPerTool(
 ): RunEnvelopeData {
   if (maxCallsPerTool === undefined || envelope.rails.maxCallsPerTool !== undefined) return envelope;
   return { ...envelope, rails: { ...envelope.rails, maxCallsPerTool } };
+}
+
+/**
+ * Fold the producer-typed current turn onto an envelope's rails.
+ * `ReasoningService.execute` takes `currentTurnText` as a param; this puts it on
+ * the one carrier so every strategy's contract compile and every kernel pass
+ * sees it. Text already on the envelope wins; absent text returns the same object.
+ */
+export function withCurrentTurnText(
+  envelope: RunEnvelopeData,
+  currentTurnText: string | undefined,
+): RunEnvelopeData {
+  if (currentTurnText === undefined || envelope.rails.currentTurnText !== undefined) return envelope;
+  return { ...envelope, rails: { ...envelope.rails, currentTurnText } };
 }
 
 /**

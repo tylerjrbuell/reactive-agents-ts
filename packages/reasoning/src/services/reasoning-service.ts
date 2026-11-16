@@ -18,7 +18,7 @@ import type { SynthesisConfig } from "../context/synthesis-types.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { CurrentModelRouting } from "../kernel/llm-gateway.js";
 import type { ModelRoutingPool } from "../kernel/policy/purpose-routing.js";
-import { RunEnvelope, buildRunEnvelope, withMaxCallsPerTool } from "../kernel/envelope/run-envelope.js";
+import { RunEnvelope, buildRunEnvelope, withMaxCallsPerTool, withCurrentTurnText } from "../kernel/envelope/run-envelope.js";
 import type { RunEnvelopeData } from "../kernel/envelope/run-envelope.js";
 import { CurrentRunBudget, makeRunBudgetMeter, withRunBudgetMeter } from "../kernel/run-budget.js";
 
@@ -34,6 +34,13 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
      */
     readonly execute: (params: {
       readonly taskDescription: string;
+      /**
+       * Producer-typed current turn (`TaskMetadata.currentTurn`), no inlined
+       * history. Folded onto `envelope.rails.currentTurnText`, so every
+       * strategy's contract compile and kernel pass prefers it over parsing
+       * history markers out of `taskDescription`. Absent ⇒ marker parsing.
+       */
+      readonly currentTurnText?: string;
       readonly taskType: string;
       readonly memoryContext: string;
       readonly availableTools: readonly string[];
@@ -244,7 +251,10 @@ export const ReasoningServiceLive = (
               RunEnvelope,
               // `maxCallsPerTool` rides the envelope, so every strategy enforces it
               // without forwarding it (kernel gate + direct-dispatch budget).
-              withMaxCallsPerTool(params.envelope ?? buildRunEnvelope(), params.maxCallsPerTool),
+              withCurrentTurnText(
+                withMaxCallsPerTool(params.envelope ?? buildRunEnvelope(), params.maxCallsPerTool),
+                params.currentTurnText,
+              ),
             );
             const piped = provided.pipe(
               Effect.provide(strategyLayer),

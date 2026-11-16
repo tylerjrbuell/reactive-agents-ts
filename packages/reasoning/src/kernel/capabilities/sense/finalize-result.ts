@@ -157,6 +157,7 @@ function judgeContractSatisfied(
   ledger: RunLedger,
   output: unknown,
   posture?: RunPosture,
+  currentTurnText?: string,
 ): boolean {
   // Defensive read: `prompt` is declared `string` and every PRODUCTION producer
   // does supply it — the reachable partial-contract sources are test fixtures
@@ -171,6 +172,7 @@ function judgeContractSatisfied(
     ...(requiredTools.length > 0 ? { requiredTools } : {}),
     taskContract,
     ...(posture !== undefined ? { posture } : {}),
+    ...(currentTurnText !== undefined && prompt.includes(currentTurnText) ? { currentTurnText } : {}),
   });
   const outputText = typeof output === "string" ? output : "";
   return compiled.postConditions.every((c) => conditionMetByLedger(c, ledger, outputText));
@@ -403,6 +405,7 @@ export function finalizeStrategyResult(
             params.runLedger,
             base.output,
             envelope.rails.posture,
+            envelope.rails.currentTurnText,
           )
         : undefined;
 

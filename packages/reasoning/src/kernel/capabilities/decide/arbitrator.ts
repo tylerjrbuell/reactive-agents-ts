@@ -141,8 +141,7 @@ function applyPostConditionGate(verdict: Verdict, ctx: ArbitrationContext): Verd
   // gate and the terminal gate (terminate.ts) read the SAME conditions. Fall
   // back to deriving here only for direct callers (tests / pre-stored runs)
   // that didn't thread postConditions through the context.
-  const conditions =
-    ctx.postConditions ?? deriveConditions(ctx.task, ctx.requiredTools);
+  const conditions = ctx.postConditions ?? deriveConditions(ctx.task, ctx.requiredTools, undefined, undefined, ctx.currentTurnText);
   if (conditions.length === 0) return verdict; // fall back to prose, as today
 
   // Single delivery authority (Move 2) — disk ground truth ON by default, so a
@@ -731,7 +730,7 @@ export function arbitrateAndApplyWithBudgetEmit(args: {
  */
 export function arbitrationContextFromState(
   state: _KernelState,
-  input: { readonly task: string; readonly requiredTools?: readonly string[] },
+  input: { readonly task: string; readonly requiredTools?: readonly string[]; readonly currentTurnText?: string },
 ): ArbitrationContext {
   const entropyMeta = state.meta.entropy as
     | { latestScore?: { composite?: number } }
@@ -759,7 +758,7 @@ export function arbitrationContextFromState(
   return {
     iteration: state.iteration,
     maxIterations: state.meta.maxIterations as number | undefined,
-    task: input.task,
+    task: input.task, ...(input.currentTurnText !== undefined ? { currentTurnText: input.currentTurnText } : {}),
     steps: state.steps,
     // Wave C.2 — the run-scoped ledger, populated HERE (the one builder every
     // arbitration call site goes through) rather than at each caller, so a new
