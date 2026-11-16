@@ -104,6 +104,8 @@ In a chat, these slash commands drive longer work:
 
 A tool call shows the arguments it was called with as soon as it starts, so a long-running call (a slow shell command, a large fetch) says what it is doing before it finishes; credential-shaped values (API keys, bearer tokens, `?key=` query values) are redacted on screen. A turn that pauses for approval shows an approval card in the thread, and one that asks you a question shows a reply box (Yes/No, choices, form fields, or free text). A live context meter reads the `ContextPressure` event, and a `TokenUsage` event drives the live input/output counters and the per-call strip; estimates are marked `~`. Usage details consolidate into the **Inspector's Context tab** (session, provider/model, context limit, usage, total/input/output/cache tokens, message counts, cost, timestamps, raw messages) alongside Steps and Run trace.
 
+The provider chip (or `/provider`) opens a picker of the supported providers. A provider that cannot be used right now is greyed out with the reason beside it: no API key configured (set it in Settings, or in the server's environment), or Ollama not reachable. Choosing one switches the session; the model stays when the new provider lists it, otherwise it becomes that provider's default model.
+
 The chat quick bar shows the model and the settings changed from their defaults; its Config popover sets strategy, tools, shell, workspace, and the per-turn step cap next to provider and model.
 
 See also [Approvals and questions](/features/cortex/approvals-and-questions/), [Voice](/features/cortex/voice/) and [Memory and skills](/features/cortex/memory-and-skills/).

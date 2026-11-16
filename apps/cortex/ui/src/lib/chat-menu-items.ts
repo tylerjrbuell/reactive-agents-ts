@@ -72,6 +72,8 @@ export interface PickerContext {
   readonly model: string;
   readonly models: readonly UiModelOption[];
   readonly providers: readonly string[];
+  /** Provider id to why it cannot be picked (no key, unreachable); see `chat-provider-pick.ts`. */
+  readonly providerBlocks?: Readonly<Record<string, string>>;
   readonly thinkingChoice: "on" | "off" | "auto";
   /** true = the model has a thinking mode, false = it does not, null = not known. */
   readonly modelThinking: boolean | null;
@@ -115,9 +117,12 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
   const cfg = ctx.cfg;
   switch (slashCmd.picker) {
     case "provider":
-      return ctx.providers.filter((p) => has(p)).map((p) =>
-        configRow(p, "cloud", p, () => ctx.setProvider(p), { active: p === provider, ...(p === provider ? { hint: "current" } : {}) }),
-      );
+      return ctx.providers.filter((p) => has(p)).map((p) => {
+        const blocked = p === provider ? undefined : ctx.providerBlocks?.[p];
+        return blocked
+          ? configRow(p, "cloud", p, () => {}, { disabled: blocked, hint: blocked })
+          : configRow(p, "cloud", p, () => ctx.setProvider(p), { active: p === provider, ...(p === provider ? { hint: "current" } : {}) });
+      });
     case "thinking": {
       const note = ctx.modelThinking === false ? "This model has no thinking mode" : ctx.modelThinking === null ? "Support not known for this model" : "";
       return ([["auto", "Auto", "The model's own default"], ["on", "On", "Reason before answering (slower, more tokens)"], ["off", "Off", "Answer directly"]] as const)

@@ -74,6 +74,8 @@
         class="row"
         class:sel={i === selected}
         class:active={item.active}
+        class:off={item.disabled !== undefined}
+        aria-disabled={item.disabled !== undefined}
         onmousedown={(e) => e.preventDefault()}
         onmouseenter={() => onHover(i)}
         onclick={() => void item.run()}
@@ -142,6 +144,7 @@
   .gtitle { font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-text); }
   .galias { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-text-3); }
   .row.sel { background: var(--cortex-surface-2); color: var(--cortex-text); }
+  .row.off, .row.off .label { cursor: not-allowed; color: var(--cortex-text-3); }
   .ico { display: inline-flex; color: var(--cortex-text-3); }
   .row.sel .ico, .row.active .ico, .badge { color: var(--cortex-accent); }
   .badge { display: inline-flex; }

@@ -26,6 +26,7 @@
   import { showJumpToLatest } from "$lib/chat-scroll.js";
   import { replaceDraft, restoreDraft } from "$lib/chat-draft.js";
   import { loadProviders, PROVIDER_FALLBACK, type ProviderOption } from "$lib/providers.js";
+  import { loadProviderBlocks, providerSwitch, type ProviderBlocks } from "$lib/chat-provider-pick.js";
   import { fetchModelsForProvider, type UiModelOption } from "$lib/framework-models.js";
   import { fetchExport, transcriptText, type ExportFormat } from "$lib/chat-export.js";
   import { saveTextFile } from "$lib/chat-download.js";
@@ -58,9 +59,9 @@
   import { fetchInputCapabilities, type WorkspaceFileHit } from "$lib/chat-files.js";
   import type { InputCapabilitiesLike } from "@reactive-agents/ui-core";
   let providerList = $state<readonly ProviderOption[]>(PROVIDER_FALLBACK);
-  $effect(() => {
-    void loadProviders().then((list) => { providerList = list; });
-  });
+  let providerBlockList = $state<ProviderBlocks>({});
+  $effect(() => { void loadProviders().then((l) => (providerList = l)); });
+  $effect(() => { void loadProviderBlocks().then((b) => (providerBlockList = b)); });
   import {
     parseKeepLast,
     parseExportFormat,
@@ -462,10 +463,9 @@
     }, 0);
   }
   async function setProvider(next: string) {
-    const r = await fetchModelsForProvider(next).catch(() => ({ options: [] as UiModelOption[], default: undefined }));
-    const nextModel = r.default ?? r.options[0]?.value;
-    await applyConfig(`Provider ${next}${nextModel ? `, model ${nextModel}` : ""}`, { provider: next, ...(nextModel ? { model: nextModel } : {}) });
-    if (!nextModel) toast.info("Pick a model", "Use /model to choose one for this provider");
+    const s = await providerSwitch(next, model);
+    await applyConfig(s.label, s.patch);
+    if (s.needsModel) toast.info("Pick a model", "Use /model to choose one for this provider");
   }
 
   const thinkingChoice = $derived(cfg.thinking === true ? "on" : cfg.thinking === false ? "off" : "auto");
@@ -497,7 +497,7 @@
       command: slashCmd,
       get cfg() { return cfg; },
       provider, model, models, thinkingChoice, modelThinking, strategy, workspace, shell, toolNames, catalog, pinned, docs,
-      providers: providerList.map((x) => x.id),
+      providers: providerList.map((x) => x.id), providerBlocks: providerBlockList,
       skills: skillList,
       queuedSkills: draftSkillList,
       toggleQueuedSkill: pickSkillFromMenu,

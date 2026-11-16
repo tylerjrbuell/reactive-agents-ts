@@ -144,6 +144,15 @@ describe("pickerItems", () => {
     expect(calls).toEqual(["provider:anthropic"]);
   });
 
+  test("a blocked provider row shows its reason and does nothing; the current one is never blocked", () => {
+    const { ctx, calls } = picker("/provider ", { providerBlocks: { anthropic: "no API key configured (ANTHROPIC_API_KEY)", ollama: "Ollama not reachable" } });
+    const rows = pickerItems(ctx);
+    expect(rows[0]).toMatchObject({ key: "anthropic", disabled: "no API key configured (ANTHROPIC_API_KEY)", hint: "no API key configured (ANTHROPIC_API_KEY)" });
+    void rows[0]!.run();
+    expect(calls).toEqual([]);
+    expect(rows[1]!.disabled).toBeUndefined();
+  });
+
   test("model rows filter by the typed text and offer a custom id", () => {
     const rows = pickerItems(picker("/model llama3").ctx);
     expect(rows.map((r) => r.label)).toEqual(['Use "llama3"']);
