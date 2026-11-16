@@ -16,6 +16,7 @@
 import type { AdvisoryItem, ChecklistItemOp, ChecklistItemStatus } from "@reactive-agents/core";
 import type { ToolDefinition } from "../types.js";
 import { closestValid, healParamNames } from "./arg-healing.js";
+import { extractAddItems, isNearDuplicate, titleTokens } from "./todo-add.js";
 import { hasTodoTargets, resolveTodoTargets } from "./todo-targets.js";
 import {
   applyTodoOps,
@@ -109,6 +110,7 @@ const TODO_UPDATE_VERBS: ReadonlySet<string> = new Set([
 /** Accepted alternates per canonical parameter (canonical present => alternates ignored). */
 const TODO_PARAM_ALIASES: Readonly<Record<string, readonly string[]>> = {
   items: ["item", "tasks", "task", "todos", "steps", "text"],
+  tools: ["tool", "item_tools", "step_tools"],
   id: ["index", "number", "n"],
 };
 // start/done targets (id | ids | item | index | number | n, number|string|"1,2"|array|title)
@@ -118,7 +120,7 @@ const TODO_VALID_ACTIONS = ["add", "start", "done", "reopen", "edit", "remove", 
 
 /** Example call per action whose shape is not `todo({action, id:N})`, for the unknown-action teaching. */
 const TODO_EXAMPLES: Readonly<Record<string, string>> = {
-  add: `todo({action:"add", items:["step 1","step 2"]})`,
+  add: `todo({action:"add", items:["step 1","step 2"], tools:["web-search",""]})`,
   list: `todo({action:"list"})`,
   edit: `todo({action:"edit", id:N, text:"new title"})`,
   clear: `todo({action:"clear"})`,
@@ -192,14 +194,6 @@ interface CanonicalOutcome extends TodoChecklistResult {
   readonly finalItems: readonly AdvisoryItem[];
 }
 
-function extractTexts(raw: unknown): string[] {
-  return Array.isArray(raw)
-    ? raw.filter((x): x is string => typeof x === "string")
-    : typeof raw === "string"
-      ? raw.split("\n").map((s) => s.trim()).filter(Boolean)
-      : [];
-}
-
 /**
  * Pure todo action over advisory items (a fold of ledger facts). Returns the
  * rendered view plus the ledger `changes` to commit. Never throws. Heals drifted
@@ -230,7 +224,7 @@ export function applyTodoChecklistAction(
     status = "completed";
     healedFrom = rawAction;
   } else if (TODO_UPDATE_VERBS.has(key)) {
-    const hasItems = extractTexts(healedArgs.items).length > 0;
+    const hasItems = extractAddItems(healedArgs.items, healedArgs.tools).length > 0;
     const mapped = todoStatusOf(healedArgs.status);
     if (newTitle && healedArgs.id != null && mapped === undefined) {
       // `update {id, text}` renames the item; without an id the text is new items.
@@ -328,19 +322,23 @@ function applyCanonicalTodoAction(
     case "patch":
       return managed(patchTodoItems(items, args.ops));
     case "add": {
-      let texts = extractTexts(args.items);
-      if (texts.length === 0) {
+      let entries = extractAddItems(args.items, args.tools);
+      if (entries.length === 0) {
         return fail(`No items provided. Usage: todo({action:"add", items:["step 1","step 2"]})\n${renderTodoChecklist(items, posture)}`);
       }
       // Every add skips titles already on the list (any status) or repeated in
-      // this call: models re-send the whole list each turn.
+      // this call, exact or rephrased: models re-send the whole list each turn.
       const seen = new Map<string, AdvisoryItem | undefined>(items.map((t) => [norm(t.title), t]));
-      const requested = texts.length;
+      const known: { readonly tokens: ReadonlySet<string>; readonly hit: AdvisoryItem | undefined }[] =
+        items.map((t) => ({ tokens: titleTokens(t.title), hit: t }));
+      const requested = entries.length;
       const dupLines: string[] = [];
-      texts = texts.filter((t) => {
-        const k = norm(t);
-        if (seen.has(k)) {
-          const hit = seen.get(k);
+      entries = entries.filter((e) => {
+        const k = norm(e.text);
+        const tokens = titleTokens(e.text);
+        const match = seen.has(k) ? { hit: seen.get(k) } : known.find((kn) => isNearDuplicate(tokens, kn.tokens));
+        if (match !== undefined) {
+          const hit = match.hit;
           dupLines.push(
             hit === undefined
               ? "Repeated in this call; not added."
@@ -349,11 +347,12 @@ function applyCanonicalTodoAction(
           return false;
         }
         seen.set(k, undefined);
+        known.push({ tokens, hit: undefined });
         return true;
       });
-      const skipped = requested - texts.length;
+      const skipped = requested - entries.length;
       const skipNote = skipped > 0 ? `Skipped ${skipped} duplicate item(s): already on the list.\n${dupLines.join("\n")}\n` : "";
-      if (texts.length === 0) {
+      if (entries.length === 0) {
         return {
           rendered:
             posture === "plan"
@@ -365,8 +364,12 @@ function applyCanonicalTodoAction(
           finalItems: items,
         };
       }
-      const ids = nextTodoIds(items, opts.history ?? [], texts.length);
-      const added = texts.map((title, i) => ({ id: ids[i] as string, title }));
+      const ids = nextTodoIds(items, opts.history ?? [], entries.length);
+      const added = entries.map((e, i) => ({
+        id: ids[i] as string,
+        title: e.text,
+        ...(e.tool !== undefined ? { tool: e.tool } : {}),
+      }));
       const changes: readonly ChecklistItemOp[] = [{ op: "add", items: added }];
       const next = applyTodoOps(items, changes);
       return { rendered: `${skipNote}${renderTodoChecklist(next, posture)}`, ok: true, changes, finalItems: next };
@@ -417,6 +420,8 @@ export const todoTool: ToolDefinition = {
   name: "todo",
   description:
     "Your task checklist. Plan once with todo({action:'add', items:['step 1','step 2',...]}); " +
+    "when a step needs a specific tool, name it in the tools array (same order as items, '' for none) instead of writing it into the step text: " +
+    "todo({action:'add', items:['list the sites','summarize'], tools:['umami/list_websites','']}); " +
     "set the item you are working on with todo({action:'start', id:N}). " +
     "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open. " +
     "Put a done item back with todo({action:'reopen', id:N}). " +
@@ -439,7 +444,14 @@ export const todoTool: ToolDefinition = {
     {
       name: "items",
       type: "array",
-      description: "For 'add': list of step descriptions.",
+      description: "For 'add': list of step descriptions. An entry may also be {text, tool}.",
+      required: false,
+    },
+    {
+      name: "tools",
+      type: "array",
+      items: { type: "string" },
+      description: "For 'add': the tool each step will use, in the same order as items ('' for none). Do not write the tool into the step text.",
       required: false,
     },
     {

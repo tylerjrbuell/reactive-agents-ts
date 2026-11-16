@@ -5,7 +5,7 @@
  * Each action returns a lead line plus the ledger `changes`; skills/todo.ts
  * renders the list after the changes and the closing line. Pure; never throws.
  */
-import type { AdvisoryItem, ChecklistItemOp, ChecklistItemStatus } from "@reactive-agents/core";
+import { planStepToolHint, type AdvisoryItem, type ChecklistItemOp, type ChecklistItemStatus } from "@reactive-agents/core";
 import { resolveTodoTargets, resolveTodoTargetsAllowMissing } from "./todo-targets.js";
 
 /** What one list-management action did: a lead line (may be empty) and the ops to commit. */
@@ -61,7 +61,9 @@ export function applyTodoOps(items: readonly AdvisoryItem[], changes: readonly C
           const parsed = Number(a.id);
           const max = next.reduce((m, t) => Math.max(m, t.seq), 0);
           const seq = Number.isInteger(parsed) && parsed > 0 ? parsed : max + 1;
-          next = [...next, { id: a.id, seq, title: a.title, status: "pending" }];
+          // Mirrors core foldAdvisory: an explicit tool wins over a hint in the title.
+          const tool = a.tool ?? planStepToolHint(a.title);
+          next = [...next, { id: a.id, seq, title: a.title, status: "pending", ...(tool !== undefined ? { tool } : {}) }];
         }
         break;
       case "status":

@@ -265,6 +265,8 @@ describe("todoTool definition is pinned", () => {
       name: "todo",
       description:
         "Your task checklist. Plan once with todo({action:'add', items:['step 1','step 2',...]}); " +
+        "when a step needs a specific tool, name it in the tools array (same order as items, '' for none) instead of writing it into the step text: " +
+        "todo({action:'add', items:['list the sites','summarize'], tools:['umami/list_websites','']}); " +
         "set the item you are working on with todo({action:'start', id:N}). " +
         "Mark it done immediately after finishing it with todo({action:'done', id:N}); before your final answer make sure no item is left open. " +
         "Put a done item back with todo({action:'reopen', id:N}). " +
@@ -279,7 +281,14 @@ describe("todoTool definition is pinned", () => {
           enum: ["add", "start", "done", "reopen", "edit", "remove", "clear", "patch", "list"],
           required: true,
         },
-        { name: "items", type: "array", description: "For 'add': list of step descriptions.", required: false },
+        { name: "items", type: "array", description: "For 'add': list of step descriptions. An entry may also be {text, tool}.", required: false },
+        {
+          name: "tools",
+          type: "array",
+          items: { type: "string" },
+          description: "For 'add': the tool each step will use, in the same order as items ('' for none). Do not write the tool into the step text.",
+          required: false,
+        },
         { name: "id", type: "number", description: "For 'start'/'done'/'reopen'/'edit'/'remove': the item id.", required: false },
         { name: "ids", type: "array", items: { type: "number" }, description: "Several item ids at once.", required: false },
         { name: "text", type: "string", description: "For 'edit': the new item title.", required: false },
