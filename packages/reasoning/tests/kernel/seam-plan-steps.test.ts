@@ -35,6 +35,32 @@ import { initialKernelState, transitionState, type KernelInput, type KernelState
 const fresh = (): KernelState => initialKernelState({ maxIterations: 4, strategy: "reactive", kernelType: "react" });
 const withOutput = (output: string): KernelState => transitionState(fresh(), { output });
 
+describe("derivePlanSteps: umami gpt-4.1 shape (narrative bullets + restated steps)", () => {
+  it("drops first-person narrative and near-duplicate restatements", () => {
+    const reply = [
+      "- I need to look at the website stats for the spike.",
+      "- To understand the cause, I'll analyze referrers.",
+      "- I'll compare against last week.",
+      "- Finally, I'll summarize the findings.",
+      "1. Gather website stats (tool: umami/get_website_stats)",
+      "2. Identify the spike date.",
+      "3. Analyze referrers and pages.",
+      "4. Compare to the prior week",
+      "5. Summarize the findings.",
+      "6. gather website stats!",
+      "7. Summarize findings",
+    ].join("\n");
+    expect(derivePlanSteps(reply)).toEqual([
+      "Gather website stats (tool: umami/get_website_stats)",
+      "Identify the spike date",
+      "Analyze referrers and pages",
+      "Compare to the prior week",
+      "Summarize the findings",
+    ]);
+    expect(derivePlanSteps("- I need to look.\n- I'll compare.")).toEqual([]);
+  });
+});
+
 describe("derivePlanSteps", () => {
   it("numbered lines become steps; markers, emphasis and trailing punctuation are stripped; prose ignored", () => {
     const reply = [
@@ -151,13 +177,34 @@ describe("planToolCatalogLine", () => {
     expect(planToolCatalogLine(undefined)).toBeUndefined();
     expect(planToolCatalogLine([tool("todo", "x")])).toBeUndefined();
   });
+
+  it("groups MCP tools by server after own tools, keeping full `server/name` names", () => {
+    const line = planToolCatalogLine([
+      tool("umami/get_website_stats", "Get stats. More."),
+      tool("file-write", "Write a file"),
+      tool("umami/get_pageviews", "Get pageviews"),
+      tool("github/list_issues", "List issues"),
+    ])!;
+    expect(line).toBe(
+      "Execute-phase tools: file-write (Write a file). MCP umami: umami/get_website_stats (Get stats.); umami/get_pageviews (Get pageviews). MCP github: github/list_issues (List issues). You cannot call these now; reference them in steps as `tool: name`.",
+    );
+  });
 });
 
 describe("planToolCatalog harness switch", () => {
-  it("default OFF (key absent); on through config; the resolved value is what think.ts reads", () => {
-    expect("planToolCatalog" in resolveHarnessConfig()).toBe(false);
-    expect(resolveHarnessConfig({ planToolCatalog: true }).planToolCatalog).toBe(true);
-    expect("planToolCatalog" in resolveHarnessConfig({ planToolCatalog: false })).toBe(false);
+  it("default ON; explicit false and RA_PLAN_TOOL_CATALOG=0 turn it off; the resolved value is what think.ts reads", () => {
+    const prior = process.env.RA_PLAN_TOOL_CATALOG;
+    try {
+      delete process.env.RA_PLAN_TOOL_CATALOG;
+      expect(resolveHarnessConfig().planToolCatalog).toBe(true);
+      expect(resolveHarnessConfig({ planToolCatalog: true }).planToolCatalog).toBe(true);
+      expect("planToolCatalog" in resolveHarnessConfig({ planToolCatalog: false })).toBe(false);
+      process.env.RA_PLAN_TOOL_CATALOG = "0";
+      expect("planToolCatalog" in resolveHarnessConfig()).toBe(false);
+    } finally {
+      if (prior === undefined) delete process.env.RA_PLAN_TOOL_CATALOG;
+      else process.env.RA_PLAN_TOOL_CATALOG = prior;
+    }
   });
 });
 

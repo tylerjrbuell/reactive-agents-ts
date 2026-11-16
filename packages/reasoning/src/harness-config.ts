@@ -189,7 +189,8 @@ export interface HarnessConfig {
    * listing the tools the execute phase would have (names plus a one-line
    * description; "you cannot call these now; reference them in steps as
    * `tool: name`"). Advisory text only: the plan tool surface is unchanged.
-   * Default OFF pending an ablation. (`RA_PLAN_TOOL_CATALOG=1`)
+   * Default ON (ablation pending); `false` or `RA_PLAN_TOOL_CATALOG=0` turns it
+   * off. Execute posture never reads it.
    */
   readonly planToolCatalog?: boolean;
   /**
@@ -311,7 +312,7 @@ export interface ResolvedHarness {
   readonly leanThinking?: true;
   /** Compute offload (see `HarnessConfig.computeOffload`). Present only when on. */
   readonly computeOffload?: true;
-  /** Plan tool catalog (see `HarnessConfig.planToolCatalog`). Present only when on. */
+  /** Plan tool catalog (see `HarnessConfig.planToolCatalog`). Present when on (the default). */
   readonly planToolCatalog?: true;
   /**
    * LLM recovery budget (see `HarnessConfig.llmRecoveryBudget`), a whole number

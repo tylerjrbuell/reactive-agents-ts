@@ -272,11 +272,11 @@ export function computeOffloadEnabled(): boolean {
 /**
  * Plan tool catalog: plan posture's guidance gains one capped line naming the
  * tools the execute phase would have (`kernel/policy/plan-steps.ts`), so plan
- * steps can reference them as `tool: name`. Default OFF pending an
- * ablation-warden measurement. `RA_PLAN_TOOL_CATALOG=1` enables it.
+ * steps can reference them as `tool: name`. Default ON (plan posture only;
+ * execute is untouched), ablation pending. `RA_PLAN_TOOL_CATALOG=0` disables it.
  */
 export function planToolCatalogEnabled(): boolean {
-  return readFlag("RA_PLAN_TOOL_CATALOG") === "1";
+  return readFlag("RA_PLAN_TOOL_CATALOG") !== "0";
 }
 
 /**

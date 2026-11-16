@@ -602,7 +602,7 @@ export function handleThinking(
     const rendered = renderGuidance(shownGuidance, { loopDetectedMessage });
     // The one join (Plan 9 Phase 4 stage D2): guidance renders as text parts.
     const guidanceParts = planPosture
-      ? planPostureGuidanceParts(input.harness?.planToolCatalog === true ? planToolCatalogLine(input.availableToolSchemas) : undefined)
+      ? planPostureGuidanceParts(input.harness?.planToolCatalog === true ? planToolCatalogLine(input.allToolSchemas ?? input.availableToolSchemas) : undefined)
       : rendered.parts;
     const defaultGuidanceText = guidanceParts.length > 0 ? contentText(guidanceParts) : null;
     const guidanceText = pipeline

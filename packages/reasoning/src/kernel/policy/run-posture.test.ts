@@ -15,6 +15,7 @@ import { runPass } from "../loop/run-pass.js";
 import { RunEnvelope, buildRunEnvelope, mergeRunEnvelopeIntoKernelInput } from "../envelope/run-envelope.js";
 import type { KernelInput, KernelRunOptions } from "../state/kernel-state.js";
 import { evaluateToolPolicy } from "../capabilities/act/tool-observe.js";
+import { resolveHarnessConfig } from "../../harness-config.js";
 import { FOLLOW_PLAN_GUIDANCE } from "./plan-steps.js";
 import { PLAN_TASK_FRAME } from "./plan-task-frame.js";
 import {
@@ -176,7 +177,8 @@ describe("run posture: plan (kernel) — planning meta tools only, durable check
       expect(ex.toolSchemaNames).not.toContain("file-write");
       const userGuidance = ex.messages.filter((m) => m.role === "user" && m.content.startsWith("Guidance:"));
       expect(userGuidance.length).toBe(1);
-      expect(userGuidance[0]?.content).toBe(`Guidance:\n- ${PLAN_POSTURE_GUIDANCE}`);
+      // The default-on tool catalog may follow the one posture line.
+      expect(userGuidance[0]?.content.startsWith(`Guidance:\n- ${PLAN_POSTURE_GUIDANCE}`)).toBe(true);
     }
     // No execute-oriented nudge anywhere in what the model was shown.
     const everything = exchanges.flatMap((e) => e.messages.map((m) => m.content)).join("\n");
@@ -270,7 +272,7 @@ describe("run posture: plan (kernel) — planning meta tools only, durable check
       const ex = events.find((e) => e._tag === "LLMExchangeEmitted") as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>;
       return ex.messages.filter((m) => m.role === "user" && m.content.startsWith("Guidance:")).map((m) => m.content);
     };
-    const off = await guidanceOf(undefined);
+    const off = await guidanceOf(resolveHarnessConfig({ planToolCatalog: false }));
     expect(off).toEqual([`Guidance:\n- ${PLAN_POSTURE_GUIDANCE}`]);
     const on = await guidanceOf({ planToolCatalog: true } as KernelInput["harness"]);
     expect(on.length).toBe(1);
@@ -279,6 +281,24 @@ describe("run posture: plan (kernel) — planning meta tools only, durable check
     expect(on[0]).toContain("file-write (write)");
     expect(on[0]).not.toContain("; todo");
     expect(on[0]).toContain("`tool: name`");
+  });
+
+  it("resolved-default catalog reaches the plan-turn request with MCP tools from the full catalog (pruned surface has none); none registered adds nothing; execute unchanged", async () => {
+    const mcp = (name: string) => ({ name, description: "Umami stat. Extra.", parameters: [] });
+    const guidanceOf = async (posture: "plan" | undefined, over: Partial<KernelInput>) => {
+      const { events } = await run([SUMMARY], posture, baseInput({ harness: resolveHarnessConfig(), ...over }));
+      const ex = events.find((e) => e._tag === "LLMExchangeEmitted") as Extract<AgentEvent, { _tag: "LLMExchangeEmitted" }>;
+      return ex.messages.filter((m) => m.role === "user" && m.content.startsWith("Guidance:")).map((m) => m.content).join("\n");
+    };
+    const g = await guidanceOf("plan", {
+      availableToolSchemas: [{ name: "todo", description: "checklist", parameters: [] }],
+      allToolSchemas: [mcp("umami/get_website_stats"), mcp("umami/get_pageviews"), ...SCHEMAS],
+    });
+    expect(g).toContain("MCP umami: umami/get_website_stats (Umami stat.); umami/get_pageviews (Umami stat.)");
+    expect(g).toContain("`tool: name`");
+    const none = await guidanceOf("plan", { availableToolSchemas: [], allToolSchemas: [] });
+    expect(none).toBe(`Guidance:\n- ${PLAN_POSTURE_GUIDANCE}`);
+    expect(await guidanceOf(undefined, { requiredTools: [], allToolSchemas: [mcp("umami/get_pageviews")] })).not.toContain("Execute-phase tools");
   });
 
   it("completes even with a classifier-demanded required tool and a task that names a deliverable (no act-or-answer forcing)", async () => {
