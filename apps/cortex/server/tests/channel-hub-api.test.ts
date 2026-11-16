@@ -138,6 +138,20 @@ describe("routes", () => {
     expect(after.body.routes[0]?.failureNotice ?? true).toBe(true);
   });
 
+  it("batchWindowMs and midRun survive save and read back; null clears them; bad values are refused", async () => {
+    const id = await makeChannel();
+    expect((await call("POST", "/api/channels/routes", { route: route(id, { batchWindowMs: 1500, midRun: "fold" }) })).status).toBe(201);
+    type Listed = { routes: { batchWindowMs?: number; midRun?: string }[] };
+    const first = await call<Listed>("GET", "/api/channels");
+    expect(first.body.routes[0]?.batchWindowMs).toBe(1500);
+    expect(first.body.routes[0]?.midRun).toBe("fold");
+    expect((await call("PATCH", "/api/channels/routes/r1", { route: { batchWindowMs: 30_001 } })).status).toBe(400);
+    expect((await call("PATCH", "/api/channels/routes/r1", { route: { batchWindowMs: null, midRun: null } })).status).toBe(200);
+    const after = await call<Listed>("GET", "/api/channels");
+    expect(after.body.routes[0]?.batchWindowMs).toBeUndefined();
+    expect(after.body.routes[0]?.midRun).toBeUndefined();
+  });
+
   it("an edit detaches a migrated route from the agent config", async () => {
     createGatewayAgent(db, "gw-2", "Bot2", JSON.stringify({ provider: "test", channels: [{ id: "ch-cccc3333", kind: "telegram" }], gateway: { accessControl: { accessPolicy: "allowlist", allowedSenders: ["telegram:9"] } } }), null, "gateway");
     await hub.migrateNow();

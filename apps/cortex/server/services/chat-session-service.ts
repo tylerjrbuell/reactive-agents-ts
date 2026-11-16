@@ -1,6 +1,6 @@
 import { chatEnvironmentSnapshot, countTodoEdits, type EnvironmentSnapshotInput } from "./chat-environment.js";
 import { applyChatMode, modeSwitchNeedsRebuild } from "./chat-session-mode.js";
-import { ChatSessionPlans, persistSessionPlan, seedTodoOf } from "./chat-session-plan.js";
+import { ChatSessionPlans, persistSessionPlan, planSeedOf } from "./chat-session-plan.js";
 import { chatMetaTools } from "./chat-meta-tools.js";
 import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure } from "./chat-document-cache.js";
 import type { Database } from "bun:sqlite";
@@ -1046,7 +1046,6 @@ let tokensUsed = 0;
     const agent = await buildCortexAgent(params);
     const turns = getChatTurns(this.db, sessionId);
     const initialHistory = turnsToChatMessages(turns);
-    const initialTodo = seedTodoOf(this.db, sessionId);
     const session = agent.session({
       // Session default: every chat turn (chat/runStream) records run-started.origin = "cortex-chat".
       origin: "cortex-chat",
@@ -1065,7 +1064,8 @@ let tokensUsed = 0;
       environmentUpdates: agentConfig.environmentUpdates !== false,
       ...(this.envBaselines.has(sessionId) ? { initialEnvironment: this.envBaselines.get(sessionId)! } : {}),
       ...(initialHistory.length > 0 ? { initialHistory } : {}),
-      ...(initialTodo.length > 0 ? { initialTodo } : {}),
+      // A rebuilt session starts from the stored to-do list and the plan's recon findings.
+      ...planSeedOf(this.db, sessionId),
     });
     const sink = await this.resolveIngestSink();
     const ingest = sink

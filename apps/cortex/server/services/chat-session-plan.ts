@@ -80,6 +80,13 @@ export function planOfStored(sessionId: string, todo: readonly StoredTodoItem[],
 /** The to-do list a (re)built session seeds from: the stored rows with their tool hints, older rows migrated. */
 export const seedTodoOf = (db: Db, sessionId: string): StoredTodoItem[] => getChatTodoWithHints(db, sessionId);
 
+/** What a (re)built session seeds its plan from: the stored to-do list and recon findings, each only when non-empty. Spread into `agent.session(...)`. */
+export function planSeedOf(db: Db, sessionId: string): { initialTodo?: StoredTodoItem[]; initialPlanFindings?: readonly PlanFinding[] } {
+  const initialTodo = seedTodoOf(db, sessionId);
+  const initialPlanFindings = getChatPlanMeta(db, sessionId)?.findings ?? [];
+  return { ...(initialTodo.length > 0 ? { initialTodo } : {}), ...(initialPlanFindings.length > 0 ? { initialPlanFindings } : {}) };
+}
+
 /** Persist the session's list (hints and origin ride its rows) and plan meta (after a turn and after an edit). */
 export function persistSessionPlan(db: Db, sessionId: string, session: Pick<PlanSessionLike, "plan" | "todo">): void {
   setChatTodo(db, sessionId, session.todo());
@@ -122,10 +129,7 @@ export class ChatSessionPlans {
   read(sessionId: string): Plan | null {
     const live = this.deps.live.get(sessionId)?.session.plan;
     if (live === undefined) return planOfStored(sessionId, getChatTodoWithHints(this.db, sessionId), getChatPlanMeta(this.db, sessionId));
-    const hinted = withTitleToolHints(live);
-    // A session rebuilt from storage holds no findings (the framework seeds only the to-do list): the stored ones stand in.
-    const stored = hinted.findings === undefined ? (getChatPlanMeta(this.db, sessionId)?.findings ?? []) : [];
-    return stored.length > 0 ? { ...hinted, findings: stored } : hinted;
+    return withTitleToolHints(live); // a rebuilt session is seeded with the stored findings (`planSeedOf`)
   }
 
   /**
@@ -141,11 +145,10 @@ export class ChatSessionPlans {
     try {
       // Each step's tool resolves through the framework's checklist `tool` op (explicit wins, a cleared one falls back to its title's hint).
       const resolved = resolveStepTools(steps);
-      // Findings: an edit's own list wins (an empty one clears); else a rebuilt session hands the stored ones back so a step edit never loses them.
-      const carried = findings ?? (session.plan?.findings === undefined ? getChatPlanMeta(this.db, sessionId)?.findings : undefined);
-      const fullPlan = resolved.length > 0 && (goal !== undefined || (carried !== undefined && carried.length > 0) || findings !== undefined);
+      // Findings: an edit's own list wins (an empty one clears); absent, the session's seeded ones are kept by the framework.
+      const fullPlan = resolved.length > 0 && (goal !== undefined || findings !== undefined);
       const plan = session.setPlan(
-        fullPlan ? withGoal(session.plan, sessionId, resolved, goal ?? session.plan?.goal ?? getChatPlanMeta(this.db, sessionId)?.goal ?? "", carried) : resolved,
+        fullPlan ? withGoal(session.plan, sessionId, resolved, goal ?? session.plan?.goal ?? getChatPlanMeta(this.db, sessionId)?.goal ?? "", findings) : resolved,
       );
       persistSessionPlan(this.db, sessionId, session);
       return plan;

@@ -10,6 +10,7 @@
  */
 import { normalizeSender, senderProblem } from "./channel-access.js";
 import { resetDraftFromWire, resetProblems, resetWireFromDraft, type ResetDraft } from "./channel-reset-commands.js";
+import { batchingDraftFromWire, batchingProblems, batchingWireFromDraft, type BatchingDraft, type MidRunMode } from "./channel-batching.js";
 import { turnLimitDraftFromWire, turnLimitProblems, turnLimitWireFromDraft, type TurnLimitDraft } from "./channel-turn-limits.js";
 
 /** What non-owner senders may do, as the framework's tagged union. */
@@ -48,6 +49,10 @@ export interface HubRouteWire {
   turnTimeoutMs?: number;
   /** Tell the sender when a turn fails (framework default: on). See `channel-turn-limits.ts`. */
   failureNotice?: boolean;
+  /** Join one sender's burst into one turn (ms, 0 to 30 000). See `channel-batching.ts`. */
+  batchWindowMs?: number;
+  /** What a message that arrives during a running turn does (framework default: queue). */
+  midRun?: MidRunMode;
   maxTurnsPerSenderPerHour?: number;
   maxTurnsPerHour?: number;
   maxCostPerDayUsd?: number;
@@ -69,7 +74,7 @@ export const MODEL_TIMEOUT_RANGE = { min: 1, max: 30_000 } as const;
 export type MatchWhen = "any" | "mention" | "command" | "keyword";
 
 /** The editor's flat form of a route. Numbers are strings while typed. */
-export interface RouteDraft extends ResetDraft, TurnLimitDraft {
+export interface RouteDraft extends ResetDraft, TurnLimitDraft, BatchingDraft {
   id: string;
   enabled: boolean;
   channelId: string;
@@ -131,6 +136,7 @@ export function newDraft(channelId = "", agentId = "", platform?: string): Route
     ackModelTimeoutMs: "",
     ...resetDraftFromWire(undefined),
     ...turnLimitDraftFromWire({}),
+    ...batchingDraftFromWire({}),
   };
 }
 
@@ -168,6 +174,7 @@ export function draftFromRoute(r: HubRouteWire): RouteDraft {
     ackModelTimeoutMs: num(ack?.modelTimeoutMs),
     ...resetDraftFromWire(r.resetCommands),
     ...turnLimitDraftFromWire(r),
+    ...batchingDraftFromWire(r),
   };
 }
 
@@ -188,7 +195,7 @@ const lines = (s: string): string[] => s.split("\n").map((l) => l.trim()).filter
 export function routeFromDraft(d: RouteDraft, saved?: HubRouteWire, platform?: string): HubRouteWire {
   const wire = routeWithAll(d, saved);
   if (platform !== "webhook") return wire;
-  const { senderTools: _s, ack: _a, ...rest } = wire;
+  const { senderTools: _s, ack: _a, batchWindowMs: _bw, midRun: _mr, ...rest } = wire;
   return { ...rest, owners: [], allow: [], deny: [], open: false };
 }
 
@@ -226,6 +233,8 @@ function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
     resetCommands: _r,
     turnTimeoutMs: _tt,
     failureNotice: _fn,
+    batchWindowMs: _bw,
+    midRun: _mr,
     ...rest
   } = base;
   const resetCommands = resetWireFromDraft(d);
@@ -248,6 +257,7 @@ function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
     ack,
     ...(resetCommands ? { resetCommands } : {}),
     ...turnLimitWireFromDraft(d),
+    ...batchingWireFromDraft(d),
   };
 }
 
@@ -278,6 +288,7 @@ export function draftProblems(d: RouteDraft, creating: boolean): string[] {
   if (d.senderTools === "AgentDefault" && d.owners.length === 0) out.push("Full agent tools for senders needs at least one owner, who approves risky tools.");
   out.push(...resetProblems(d));
   out.push(...turnLimitProblems(d));
+  out.push(...batchingProblems(d));
   if (d.ackOn) {
     const after = toNum(d.ackAfterMs);
     if (after !== undefined && !(after >= 0)) out.push("Acknowledge after must be zero or more milliseconds.");

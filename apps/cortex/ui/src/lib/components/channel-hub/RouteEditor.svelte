@@ -28,6 +28,7 @@
   import AckFields from "./AckFields.svelte";
   import ResetFields from "./ResetFields.svelte";
   import TurnLimitFields from "./TurnLimitFields.svelte";
+  import BatchingFields from "./BatchingFields.svelte";
   import SenderChips from "./SenderChips.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Field from "$lib/components/kit/Field.svelte";
@@ -181,6 +182,7 @@
 
     {#if !isWebhook}<AckFields bind:draft />{/if}
     <TurnLimitFields bind:draft showNotice={!isWebhook} />
+    {#if !isWebhook}<BatchingFields bind:draft />{/if}
     {#if !isWebhook && draft.session === "per-conversation"}<ResetFields bind:draft />{/if}
 
     {#if showProblems && problems.length > 0}

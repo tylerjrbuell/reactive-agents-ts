@@ -12,7 +12,7 @@ import { chatPlanRoute } from "../api/chat-plan-route.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
 import { getChatPlanMeta, setChatPlanMeta } from "../db/chat-plan-queries.js";
 import { cleanPlanFindings, findingsOfStored, PLAN_MAX_FINDINGS } from "../services/chat-plan-findings.js";
-import { planOfStored } from "../services/chat-session-plan.js";
+import { planOfStored, planSeedOf } from "../services/chat-session-plan.js";
 
 const F1: PlanFinding = { id: "f1", tool: "umami/get-websites", summary: "site id is abc-123" };
 const F2: PlanFinding = { id: "f2", tool: "web-search", summary: "docs live at example.com", at: 5 };
@@ -80,6 +80,34 @@ describe("plan findings over the plan route", () => {
       const id = await svc.createSession({ agentConfig: CFG });
       const res = await call("PUT", id, "", { steps: [{ title: "a" }], findings: [{ id: "x", tool: "t", summary: "" }] });
       expect(res.status).toBe(400);
+    } finally { await cleanup(); }
+  });
+});
+
+describe("a session rebuilt from storage", () => {
+  it("is seeded with the stored findings: a step-only edit and a read keep them", async () => {
+    const { db, svc, call, cleanup } = setup();
+    try {
+      const id = await svc.createSession({ agentConfig: CFG });
+      setChatPlanMeta(db, id, { id: "p", goal: "g", source: "model", createdAt: 1, findings: [F1, F2] });
+      const edited = (await (await call("PUT", id, "", { steps: [{ title: "a" }] })).json()) as PlanBody;
+      expect(edited.plan?.findings?.map((f) => f.id)).toEqual(["f1", "f2"]);
+      const read = (await (await call("GET", id, "")).json()) as PlanBody;
+      expect(read.plan?.findings?.map((f) => f.id)).toEqual(["f1", "f2"]);
+    } finally { await cleanup(); }
+  });
+});
+
+describe("planSeedOf", () => {
+  it("seeds the stored to-do list and findings, each only when present", async () => {
+    const { db, svc, cleanup } = setup();
+    try {
+      const id = await svc.createSession({ agentConfig: CFG });
+      expect(planSeedOf(db, id)).toEqual({});
+      setChatPlanMeta(db, id, { id: "p", goal: "g", source: "model", createdAt: 1, findings: [F1, F2] });
+      expect(planSeedOf(db, id)).toEqual({ initialPlanFindings: [F1, F2] });
+      setChatPlanMeta(db, id, { id: "p", goal: "g", source: "model", createdAt: 1 });
+      expect(planSeedOf(db, id)).toEqual({});
     } finally { await cleanup(); }
   });
 });

@@ -130,7 +130,7 @@ export interface HubStatus {
   readonly rejected: readonly RejectedRoute[];
   /** Who holds each account right now (channel, pid): the page links a duplicate to its owner. */
   readonly leases: readonly LeaseHolder[];
-  readonly router: Pick<RouterStatus, "unrouted" | "dropped" | "activeSessions"> | null;
+  readonly router: Pick<RouterStatus, "unrouted" | "dropped" | "activeSessions" | "inbox"> | null;
   readonly activity: readonly HubActivity[];
   readonly migration: { readonly warnings: readonly MigrationWarning[]; readonly legacy: MigrationPlan["legacy"] };
 }
@@ -537,7 +537,8 @@ export class ChannelHub {
       routes,
       rejected: loaded.rejected,
       leases: listLeaseHolders(db),
-      router: router ? { unrouted: router.unrouted, dropped: router.dropped, activeSessions: router.activeSessions } : null,
+      // `inbox` (envelope counts per status) exists only when the router's store keeps a durable inbox.
+      router: router ? { unrouted: router.unrouted, dropped: router.dropped, activeSessions: router.activeSessions, ...(router.inbox ? { inbox: router.inbox } : {}) } : null,
       activity: this.tracker.snapshot(),
       migration: { warnings: this.lastPlan.warnings, legacy: this.lastPlan.legacy },
     };

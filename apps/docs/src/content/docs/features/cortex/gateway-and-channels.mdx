@@ -99,9 +99,10 @@ If a channel is saved for an account the hub already holds, the page says so and
 | Caps | Cost per day in USD, turns per hour for the route, turns per sender per hour (default 6 when empty) and max iterations per turn. |
 | Acknowledge slow turns | Off by default except on a new Telegram route (model-written); see below. |
 | Turn limit, Tell the sender when a turn fails | How many seconds one turn may run (empty = 120) and whether the sender gets a fixed failure message (on by default); see "When a turn fails". |
+| Batch window, While a turn is running | Batch window (milliseconds, 0 to 30000, empty or 0 = off) joins messages one sender sends in a burst into one turn. While a turn is running chooses what a new message in that conversation does: wait its turn (default), join the running turn, or stop it and restart from the combined messages. Both are hidden on webhook routes. |
 | Start-over commands | `/new` and `/reset` by default. When a route owner sends one as the whole message, that conversation starts fresh and its saved history is cleared; the agent never sees the command. Leave blank for the default, list your own, or turn it off. Other senders' `/new` is ordinary text. |
 
-Webhook routes are authorised by the channel's signing secret, so the editor hides owners, allow and deny lists, open access, sender tools and acknowledgements for them.
+Webhook routes are authorised by the channel's signing secret, so the editor hides owners, allow and deny lists, open access, sender tools, acknowledgements, the batch window and the mid-turn choice for them.
 
 Adding an owner, turning on **Open to anyone** or choosing **The agent's full tools** widens access. The editor asks through a confirm dialog that names the change, sends the matching `confirm` tokens, and the server records the change in the audit trail. If the server finds a widening change the editor did not predict, it answers 409 and the same dialog opens. The server refuses to save an open route without caps. Nothing a sender writes can add an owner or change a route.
 
@@ -113,6 +114,8 @@ Adding an owner, turning on **Open to anyone** or choosing **The agent's full to
 The acknowledgement is not part of the conversation history. See [Acknowledging slow turns](/guides/messaging-channels/#acknowledging-slow-turns) for the framework side.
 
 When a model-written acknowledgement falls back to the canned text, the activity feed shows why (`timeout`, `empty`, `thinking_only` or `error`), for example `acknowledged (canned, owner; model ack fell back: thinking_only)`. The line also shows how long the acknowledgement took, in seconds: `acknowledged (model, owner; 5.8s)`, or `acknowledged (canned, owner; model ack fell back: timeout after 12.0s)`.
+
+**Router inbox.** Beside the hub status, a line shows how many received messages are received, running, done, failed or dropped when the router keeps a durable inbox. Cortex's hub runs the router with its own durable store for dedupe and caps, which does not keep an inbox yet, so the line reads "In-memory inbox (resets on restart)" and a restart loses messages that had not been answered.
 
 **When a turn fails.** A turn that runs past the route's **Turn limit** (default 120 seconds) is stopped and counted as failed. The activity feed says why in words, for example `turn timed out after 120s (the route's turn limit)`, followed by the cause when the agent reported one (secrets and URL queries removed). With **Tell the sender when a turn fails** on (the default), the framework also sends the sender one fixed message, so an acknowledgement is never followed by silence: after a timeout it names the limit, otherwise it says something went wrong and to send the message again. The message is fixed text, never the error. Turn it off to leave the sender with silence. Webhook routes have no failure message (the reply is the HTTP response).
 
