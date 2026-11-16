@@ -93,6 +93,14 @@ export const HarnessConfigSchema = Schema.Struct({
    */
   planBudget: Schema.optional(Schema.Boolean),
   /**
+   * Plan recon: under plan posture the model may call tools whose effect is
+   * `read` (bounded: 6 calls per run, 2 per tool) to look up facts the plan
+   * needs. Each successful result is recorded as a plan finding (`Plan.findings`)
+   * and seeds the execute run. Default OFF pending an ablation; `true` or
+   * `RA_PLAN_RECON=1` turns it on.
+   */
+  planRecon: Schema.optional(Schema.Boolean),
+  /**
    * LLM recovery budget: how many recoverable provider failures on think
    * turns one run may retry instead of ending with `llm_error`. Malformed
    * model output is resampled; a request over the context window or the

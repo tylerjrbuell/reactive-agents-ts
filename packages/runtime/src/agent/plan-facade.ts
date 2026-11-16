@@ -25,6 +25,7 @@ import {
   planToChecklistSeed,
   type AgentEvent,
   type Plan,
+  type PlanFinding,
   type PlanSource,
   type PlanStep,
   type PlanStepStatusChangedEvent,
@@ -41,6 +42,7 @@ export interface PlanRunSeed {
   readonly taskId: string;
   readonly posture?: "plan";
   readonly initialTodo?: readonly TodoSeedItem[];
+  readonly planFindings?: readonly PlanFinding[];
 }
 
 /** What the facade needs of the agent (the agent passes itself): its runtime, its id and its own `run()`. */
@@ -84,10 +86,13 @@ const toolsOf = (steps: ReadonlyArray<Pick<PlanStep, "id" | "title" | "tool">>):
  */
 export function planFromWatch(
   watch: PlanWatchResult,
-  meta: { readonly id: string; readonly goal: string; readonly createdAt: number; readonly source: PlanSource },
+  meta: { readonly id: string; readonly goal: string; readonly createdAt: number; readonly source: PlanSource; readonly findings?: ReadonlyArray<PlanFinding> },
   known: ReadonlyArray<PlanStep> = [],
 ): Plan {
-  if (watch.snapshot === undefined) return { ...meta, steps: known };
+  if (watch.snapshot === undefined) {
+    const { findings, ...rest } = meta;
+    return { ...rest, steps: known, ...(findings && findings.length > 0 ? { findings } : {}) };
+  }
   const base = planFromChecklist(watch.snapshot, { ...meta, tools: toolsOf(known) });
   // A step titled `tool: x` keeps its hint even when the checklist row is new to `known`.
   const hinted = base.steps.map((s) => (s.tool === undefined && toolHintOf(s.title) !== undefined ? { ...s, tool: toolHintOf(s.title) as string } : s));
@@ -152,9 +157,9 @@ export async function planFacade<R extends { readonly output: string }>(
   }
   const seen = watch.result();
   const goal = taskInputText(input);
-  const plan = planFromWatch(seen, { id: `plan-${taskId}`, goal, createdAt: Date.now(), source: planSourceOf(seen.snapshot) });
+  const plan = planFromWatch(seen, { id: `plan-${taskId}`, goal, createdAt: Date.now(), source: planSourceOf(seen.snapshot), findings: seen.findings });
   if (isPlanEmpty(plan)) throw new PlanNoStepsError({ goal, reply: result.output });
-  await publish(host.runtime, { _tag: "PlanRecorded", planId: plan.id, steps: plan.steps, source: plan.source, agentId: host.agentId, taskId, timestamp: Date.now() });
+  await publish(host.runtime, { _tag: "PlanRecorded", planId: plan.id, steps: plan.steps, source: plan.source, ...(plan.findings ? { findings: plan.findings } : {}), agentId: host.agentId, taskId, timestamp: Date.now() });
   return plan;
 }
 
@@ -174,11 +179,12 @@ export async function executeFacade<R, O extends object>(
   const watch = await watchChecklist(host.runtime, taskId);
   let result: R;
   try {
-    result = await host.run(input, { ...options, taskId, ...(seed.length > 0 ? { initialTodo: seed } : {}) } as O & PlanRunSeed);
+    result = await host.run(input, { ...options, taskId, ...(seed.length > 0 ? { initialTodo: seed } : {}), ...(plan.findings && plan.findings.length > 0 ? { planFindings: plan.findings } : {}) } as O & PlanRunSeed);
   } finally {
     await watch.stop();
   }
-  const after = isPlanEmpty(plan) ? plan : planFromWatch(watch.result(), { id: plan.id, goal: plan.goal, createdAt: plan.createdAt, source: plan.source }, plan.steps);
+  // The plan keeps its findings: an execute run records none of its own.
+  const after = isPlanEmpty(plan) ? plan : planFromWatch({ ...watch.result(), findings: plan.findings ?? [] }, { id: plan.id, goal: plan.goal, createdAt: plan.createdAt, source: plan.source, findings: plan.findings }, plan.steps);
   const stamp = { agentId: host.agentId, taskId, timestamp: Date.now() };
   for (const event of stepChanges(plan, after, stamp)) await publish(host.runtime, event);
   return { ...result, plan: after };

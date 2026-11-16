@@ -88,6 +88,13 @@ export interface ToolSchema {
    * visible domain tool is flagged `false`.
    */
   readonly mutatesExternalState?: boolean;
+  /**
+   * The tool's effect class (mirrors `ToolEffect` in `@reactive-agents/tools`,
+   * derived there from `mutatesExternalState` + approval). Only `"read"` makes
+   * a tool plan-recon eligible (`policy/plan-recon.ts`); `"write"`, `"unknown"`
+   * and absent never are.
+   */
+  readonly effect?: "read" | "write" | "unknown";
 }
 
 /** Format tool schemas for LLM consumption.

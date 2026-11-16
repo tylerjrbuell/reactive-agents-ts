@@ -7,7 +7,8 @@
  * buffered session turn, so every non-streamed path reads the list the same way.
  */
 import { Effect, type ManagedRuntime } from "effect";
-import { EventBus, makeChecklistTracker, type AgentEvent, type ChecklistSnapshot, type PlanSource } from "@reactive-agents/core";
+import { EventBus, makeChecklistTracker, type AgentEvent, type ChecklistSnapshot, type PlanFinding, type PlanSource } from "@reactive-agents/core";
+import { findingsOfEntries, mergeFindings } from "../chat/plan-findings.js";
 
 /** The services the watcher runs against (contravariant: any richer runtime fits). */
 export type PlanRuntime = ManagedRuntime.ManagedRuntime<EventBus, never>;
@@ -15,6 +16,8 @@ export type PlanRuntime = ManagedRuntime.ManagedRuntime<EventBus, never>;
 /** What a run's checklist watcher saw. */
 export interface PlanWatchResult {
   readonly snapshot: ChecklistSnapshot | undefined;
+  /** Recon findings the run recorded (`plan-finding` ledger entries); empty when it ran no recon. */
+  readonly findings: readonly PlanFinding[];
 }
 
 /** A live watch: read what it has seen, then stop it. */
@@ -38,8 +41,13 @@ export const watchChecklist = (runtime: PlanRuntime, taskId: string): Promise<Wa
       const bus = yield* EventBus;
       const tracker = makeChecklistTracker(taskId);
       let snapshot: ChecklistSnapshot | undefined;
+      let findings: readonly PlanFinding[] = [];
       const fold = (event: AgentEvent): void => {
         snapshot = tracker.track({ ...event }) ?? snapshot;
+        // Recon facts of THIS run only (a sub-agent's task id differs), never the resume seed batch.
+        if (event._tag === "LedgerEntryAppended" && event.taskId === taskId && event.restored !== true) {
+          findings = mergeFindings(findings, findingsOfEntries(event.entries, event.timestamp));
+        }
       };
       const offs = yield* Effect.all([
         bus.on("AgentStarted", (e) => Effect.sync(() => fold(e))),
@@ -47,7 +55,7 @@ export const watchChecklist = (runtime: PlanRuntime, taskId: string): Promise<Wa
         bus.on("LedgerEntryAppended", (e) => Effect.sync(() => fold(e))),
       ]);
       return {
-        result: (): PlanWatchResult => ({ snapshot }),
+        result: (): PlanWatchResult => ({ snapshot, findings }),
         stop: async (): Promise<void> => { for (const off of offs) off(); },
       };
     }),

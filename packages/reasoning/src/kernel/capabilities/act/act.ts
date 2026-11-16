@@ -379,7 +379,7 @@ export function handleActing(
         // execution too (defense-in-depth behind the tool-surface visibility
         // filter). META_TOOLS bypass lives inside the predicate.
         const policyDecision = evaluateToolPolicy(tc.name, {
-          ...toolPolicyFromInput(input),
+          ...toolPolicyFromInput(input, state, allSteps),
           forbiddenTools: forbiddenTools(state.meta.runContract),
         });
         if (policyDecision.blocked) {
@@ -545,7 +545,7 @@ export function handleActing(
             // this loop bypasses the canonical primitive, so the gate must fire
             // HERE too). Found in a framework quality audit, 2026-07-26.
             const batchPolicyDecision = evaluateToolPolicy(batchCall.name, {
-              ...toolPolicyFromInput(input),
+              ...toolPolicyFromInput(input, state, allSteps, executableCalls),
               forbiddenTools: forbiddenTools(state.meta.runContract),
             });
             if (batchPolicyDecision.blocked) {
@@ -679,7 +679,7 @@ export function handleActing(
               state: asKernelStateLike(state),
               // The pruned schemas actually shown to the model this turn — a
               // recovery hint may name a tool only from this set.
-              schemas: filteredToolSchemas,
+              schemas: filteredToolSchemas, kernelGated: true,
             },
             {
               compression,
@@ -858,7 +858,7 @@ export function handleActing(
             // never passed from here, so the primitive read `undefined`. It is
             // the model's toolbox for the turn — the recovery hint needs it to
             // know which tools it may name.
-            schemas: filteredToolSchemas,
+            schemas: filteredToolSchemas, kernelGated: true,
           },
           {
             compression,

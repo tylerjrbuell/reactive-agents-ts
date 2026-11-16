@@ -64,6 +64,7 @@ import type {
     OutputFormat,
     TerminatedBy,
     TaskCurrentTurn,
+    PlanFinding,
 } from '@reactive-agents/core'
 import { LLMService, resolveCapability } from '@reactive-agents/llm-provider'
 import type { SchemaContract, ReasoningStep } from '@reactive-agents/reasoning'
@@ -106,6 +107,8 @@ export interface RunTaskEffectOptions {
     readonly origin?: RunOrigin
     /** A prior to-do list (a plan's checklist); rides `task.metadata.context.initialTodo` to `rails.initialAdvisory`. */
     readonly initialTodo?: readonly TodoSeedItem[]
+    /** Recon findings of the plan being executed; ride `task.metadata.context.planFindings` to `rails.planFindings`. */
+    readonly planFindings?: readonly PlanFinding[]
     /** The typed current turn (input before history was folded in); rides `task.metadata.currentTurn`. */
     readonly currentTurn?: TaskCurrentTurn
     readonly durableRunId?: string
@@ -227,10 +230,10 @@ export const buildRunTaskEffect = (
         metadata: {
             tags: [],
             ...(options?.currentTurn ? { currentTurn: options.currentTurn } : {}),
-            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length || options?.initialTodo?.length
+            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length || options?.initialTodo?.length || options?.planFindings?.length
                 ? {
                       context: {
-                          ...todoSeedMetadata(options.initialTodo).context,
+                          ...todoSeedMetadata(options.initialTodo, options.planFindings).context,
                           ...(options.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
                           ...(options.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}),
                           ...(options.posture === 'plan' ? { posture: options.posture } : {}),

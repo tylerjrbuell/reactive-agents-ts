@@ -96,7 +96,7 @@ import {
     type HistoryOverflowHandler,
 } from './chat.js'
 import { ChatEngine, nextSessionId } from './chat/engine.js'
-import { turnCarryMetadata, planPosture, originCarry, type TurnCarryOption, type PostureOption, type OriginOption, type TodoSeedOption } from './chat/todo-seed.js'
+import { turnCarryMetadata, planPosture, originCarry, seedCarry, type TurnCarryOption, type PostureOption, type OriginOption, type TodoSeedOption } from './chat/todo-seed.js'
 import { planFacade, executeFacade, type PlanRunOptions, type PlanRunOption } from './agent/plan-facade.js'
 import type { EnvironmentUpdateOption } from './chat/environment-snapshot.js'
 import { makeChatComplete, makeChatPublishMode, makeChatPublishPlan, makeChatPublishTurn, makeChatToolIntent, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
@@ -746,7 +746,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(options?.taskId ? { taskId: options.taskId } : {}),
             ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
             // Chat-turn carry: environment notice + plan posture ride task context to the envelope.
-            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace), ...skillsCarry(options?.skills), ...(options?.initialTodo ? { initialTodo: options.initialTodo } : {}), ...(options?.onApproval ? { onApproval: options.onApproval } : {}), ...currentTurnCarry(input, options?.history),
+            ...(options?.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}), ...planPosture(options?.posture), ...originCarry(options?.origin), ...workspaceCarry(options?.workspace), ...skillsCarry(options?.skills), ...seedCarry(options), ...(options?.onApproval ? { onApproval: options.onApproval } : {}), ...currentTurnCarry(input, options?.history),
         }
 
         // Killswitch AbortSignal for the run fiber: threading it into runPromise
@@ -765,7 +765,7 @@ export class ReactiveAgent<TOut = unknown> {
                       input: taskInput,
                       runId: crypto.randomUUID(),
                       task: taskInputText(taskInput),
-                      ...(options?.taskId ? { taskId: options.taskId } : {}), ...workspaceCarry(options?.workspace), ...(options?.initialTodo ? { initialTodo: options.initialTodo } : {}), ...planPosture(options?.posture),
+                      ...(options?.taskId ? { taskId: options.taskId } : {}), ...workspaceCarry(options?.workspace), ...seedCarry(options), ...planPosture(options?.posture),
                   })
                 : await this.runtime.runPromise(
                       this.buildRunTaskEffect(taskInput, taskIdOpt),
@@ -1101,7 +1101,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
             durableRunId: params.runId,
             ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
-            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}), ...workspaceCarry(params.workspace), ...(params.initialTodo ? { initialTodo: params.initialTodo } : {}), ...planPosture(params.posture),
+            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}), ...workspaceCarry(params.workspace), ...seedCarry(params), ...planPosture(params.posture),
             runState: {
                 runController: controller,
                 ...(params.modelOverride !== undefined ? { modelOverride: params.modelOverride } : {}),

@@ -10,7 +10,7 @@ import { Effect, Option, type ManagedRuntime } from 'effect'
 import { ToolService } from '@reactive-agents/tools'
 import type { EnvironmentSnapshotInput } from '../chat/environment-snapshot.js'
 import { EventBus, emitErrorSwallowed, errorTag, generateTaskId, type RunOrigin, type RunPosture } from '@reactive-agents/core'
-import { originCarry, planPosture, snapshotToTodoSeed, type TodoSeedItem } from '../chat/todo-seed.js'
+import { originCarry, planPosture, seedCarry, snapshotToTodoSeed, type TodoSeedOption } from '../chat/todo-seed.js'
 import { watchChecklist, type PlanRuntime } from './plan-watch.js'
 import { workspaceCarry, type WorkspaceOption } from '../engine/start-run.js'
 import { skillsOption, type SkillsRunOption } from '../runtime-skills-layer.js'
@@ -202,7 +202,7 @@ const turnRunOptions = (opts: TurnRunOptions | undefined): TurnRunOptions => ({
  */
 export const makeSessionRunTask =
     (
-        run: (input: TaskInput, o: { history?: ChatMessage[]; maxIterations?: number; taskId?: string; initialTodo?: readonly TodoSeedItem[] } & TurnRunOptions) => Promise<AgentResult>,
+        run: (input: TaskInput, o: { history?: ChatMessage[]; maxIterations?: number; taskId?: string } & TodoSeedOption & TurnRunOptions) => Promise<AgentResult>,
         runtime?: PlanRuntime,
     ): NonNullable<ChatEngineCapabilities['runTask']> =>
     async (input, opts) => {
@@ -213,11 +213,12 @@ export const makeSessionRunTask =
                 ...(opts?.history ? { history: [...opts.history] } : {}),
                 ...(opts?.maxIterations !== undefined ? { maxIterations: opts.maxIterations } : {}),
                 ...(taskId ? { taskId } : {}),
-                ...(opts?.initialTodo ? { initialTodo: opts.initialTodo } : {}),
+                ...seedCarry(opts),
                 ...turnRunOptions(opts),
             })
-            const snapshot = watch?.result().snapshot
-            if (snapshot) opts?.onTodo?.(snapshotToTodoSeed(snapshot))
+            const seen = watch?.result()
+            if (seen?.snapshot) opts?.onTodo?.(snapshotToTodoSeed(seen.snapshot))
+            if (seen && seen.findings.length > 0) opts?.onFindings?.(seen.findings)
             return result
         } finally {
             await watch?.stop()
@@ -229,7 +230,7 @@ export const makeSessionRunStreamTask =
     (
         runStream: (
             input: TaskInput,
-            o: { history?: ChatMessage[]; density?: StreamDensity; signal?: AbortSignal; initialTodo?: readonly TodoSeedItem[] } & TurnRunOptions,
+            o: { history?: ChatMessage[]; density?: StreamDensity; signal?: AbortSignal } & TodoSeedOption & TurnRunOptions,
         ) => RunHandle,
     ): NonNullable<ChatEngineCapabilities['runStreamTask']> =>
     (input, opts) =>
@@ -237,6 +238,6 @@ export const makeSessionRunStreamTask =
             history: opts.history ? [...opts.history] : undefined,
             density: opts.density,
             signal: opts.signal,
-            ...(opts.initialTodo ? { initialTodo: opts.initialTodo } : {}),
+            ...seedCarry(opts),
             ...turnRunOptions(opts),
         })

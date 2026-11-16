@@ -21,6 +21,7 @@ import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { readPosture, readTodoSeed } from "../../../chat/todo-seed.js";
+import { readPlanFindings } from "../../../chat/plan-findings.js";
 import { readEnvironmentUpdate } from "../../../chat/environment-snapshot.js";
 
 import { RUN_LEDGER_METADATA_KEY, seedRunLedger } from "../../run-ledger-scope.js";
@@ -421,6 +422,7 @@ export const runReasoningThink = (
         approvalDecision,
         interactionResponse,
         initialAdvisory: readTodoSeed(task),
+        planFindings: readPlanFindings(task),
         environmentUpdate: readEnvironmentUpdate(task),
         posture: readPosture(task),
         runTask: extractTaskText(task.input),

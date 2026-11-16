@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { AgentEvent, EnvironmentChangedEvent, Plan, RunOrigin, RunPosture } from "@reactive-agents/core";
-import { editPlan, freshPlanMeta, planOfTodo, type SessionPlanMeta } from "./chat/session-plan.js";
+import { editPlan, findingsAfterEdit, freshPlanMeta, planOfTodo, type SessionPlanMeta } from "./chat/session-plan.js";
 import type { PlanStepInput } from "./agent/plan-facade.js";
 import type { EnvironmentSnapshotInput } from "./chat/environment-snapshot.js";
 import type { AgentDebrief } from "./debrief.js";
@@ -493,7 +493,7 @@ export class AgentSession {
    * (`session.runStream`); `source` is `"model"` until {@link setPlan} edits it.
    */
   get plan(): Plan | undefined {
-    return planOfTodo(this.todo(), (this._planMeta ??= freshPlanMeta(this.engine?.id ?? "session", Date.now())));
+    return planOfTodo(this.todo(), (this._planMeta ??= freshPlanMeta(this.engine?.id ?? "session", Date.now())), this.engine?.carry.findings);
   }
 
   /**
@@ -505,8 +505,10 @@ export class AgentSession {
    */
   setPlan(plan: Plan | readonly PlanStepInput[]): Plan {
     if (!this.engine) throw new ChatEngineCapabilityError({ message: "AgentSession.setPlan() requires an engine-backed session (construct via agent.session()).", capability: "runStreamTask" });
-    const edit = editPlan(plan, this._planMeta ?? freshPlanMeta(this.engine.id, Date.now()), Date.now());
+    const findings = findingsAfterEdit(plan, this.engine.carry.findings);
+    const edit = editPlan(plan, this._planMeta ?? freshPlanMeta(this.engine.id, Date.now()), Date.now(), findings);
     this._planMeta = edit.meta;
+    this.engine.carry.setFindings(findings);
     this.engine.setTodo(edit.seed, edit.event);
     return edit.plan;
   }

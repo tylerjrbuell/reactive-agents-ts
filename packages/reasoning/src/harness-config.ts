@@ -44,6 +44,7 @@ import {
   computeOffloadEnabled,
   planToolCatalogEnabled,
   planBudgetEnabled,
+  planReconEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -213,6 +214,17 @@ export interface HarnessConfig {
    */
   readonly planBudget?: boolean;
   /**
+   * Plan recon. Under plan posture the model may call tools whose schema
+   * `effect` is `read` (a `write`, `unknown` or absent effect never is) to look
+   * facts up, such as an id the plan needs. Bounded by a harness budget: 6
+   * calls per run, 2 per tool. Each successful result is recorded as a
+   * `plan-finding` ledger fact and seeds the execute run's context; once the
+   * budget is spent (or on the last iteration) only `todo` / `final-answer`
+   * remain so the plan reply is produced. Execute posture never reads it.
+   * Default OFF pending an ablation; `true` or `RA_PLAN_RECON=1` turns it on.
+   */
+  readonly planRecon?: boolean;
+  /**
    * LLM recovery budget: how many recoverable provider failures on think turns
    * one run may retry. A think call that fails with a recoverable error class
    * is retried in the same turn instead of ending the run: malformed model
@@ -337,6 +349,8 @@ export interface ResolvedHarness {
   readonly planToolCatalog?: true;
   /** Plan budget (see `HarnessConfig.planBudget`). Present only when OFF (`false`); absent = on (the default). */
   readonly planBudget?: false;
+  /** Plan recon (see `HarnessConfig.planRecon`). Present only when on. */
+  readonly planRecon?: true;
   /**
    * LLM recovery budget (see `HarnessConfig.llmRecoveryBudget`), a whole number
    * in 0..10. Present only when configured; absent = {@link DEFAULT_LLM_RECOVERY_BUDGET}.
@@ -444,6 +458,7 @@ export function resolveHarnessConfig(
     ...(pick(config.computeOffload, computeOffloadEnabled()) ? { computeOffload: true as const } : {}),
     ...(pick(config.planToolCatalog, planToolCatalogEnabled()) ? { planToolCatalog: true as const } : {}),
     ...(pick(config.planBudget, planBudgetEnabled()) ? {} : { planBudget: false as const }),
+    ...(pick(config.planRecon, planReconEnabled()) ? { planRecon: true as const } : {}),
     ...(llmRecoveryBudget !== undefined ? { llmRecoveryBudget } : {}),
   });
 }

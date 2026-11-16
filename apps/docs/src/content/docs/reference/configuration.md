@@ -210,6 +210,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.llmRecoveryBudget` | `number` | no |  |
 | `reasoning.harness.numCtxPolicy` | `fixed` \| `demand` | no |  |
 | `reasoning.harness.planBudget` | `boolean` | no |  |
+| `reasoning.harness.planRecon` | `boolean` | no |  |
 | `reasoning.harness.planToolCatalog` | `boolean` | no |  |
 | `reasoning.harness.promptDumpPathPrefix` | `string` | no |  |
 | `reasoning.harness.recencyBudgetChars` | `number` | no |  |

@@ -301,6 +301,17 @@ export function planToolCatalogEnabled(): boolean {
 }
 
 /**
+ * Plan recon: plan posture may call tools whose schema `effect` is `read`,
+ * bounded by a harness budget (6 calls, 2 per tool); each result is recorded
+ * as a plan finding and exhaustion forces the plan reply
+ * (`kernel/policy/plan-recon.ts`). Default OFF pending an ablation-warden
+ * measurement. `RA_PLAN_RECON=1` enables it.
+ */
+export function planReconEnabled(): boolean {
+  return readFlag("RA_PLAN_RECON") === "1";
+}
+
+/**
  * Compact call constraints: compact tool profiles (`names-only`,
  * `names-and-types`) keep the description sentences that limit a parameter's
  * values, and the compact reference lists enum values as `a|b|c`

@@ -29,8 +29,9 @@ import {
   resolveBuiltinNames,
   buildFinalAnswerDescription,
   buildFinalAnswerOutputDescription,
+  toolEffect,
 } from "@reactive-agents/tools";
-import type { ToolDefinition, ToolParameter } from "@reactive-agents/tools";
+import type { ToolDefinition, ToolEffect, ToolParameter } from "@reactive-agents/tools";
 import {
   asksForComputedAggregate,
   extractOutputFormat,
@@ -66,6 +67,12 @@ export type ToolSchema = {
    * preflight can tell "only read-only tools are visible" from "an action tool is visible".
    */
   mutatesExternalState?: boolean;
+  /**
+   * The tool's effect class from `toolEffect(def)`: `read` (declared read-only, no approval),
+   * `write`, or `unknown` (undeclared, or read-only but approval-gated). Plan recon runs only
+   * `read` tools; the kernel never guesses an effect from a name.
+   */
+  effect?: ToolEffect;
 };
 
 /**
@@ -81,6 +88,7 @@ export const toKernelToolSchema = (t: ToolDefinition): ToolSchema => ({
   ...(t.returnType !== undefined ? { returnType: t.returnType } : {}),
   ...(t.riskLevel !== undefined ? { riskLevel: t.riskLevel } : {}),
   ...(t.mutatesExternalState !== undefined ? { mutatesExternalState: t.mutatesExternalState } : {}),
+  effect: toolEffect(t),
   parameters: [...(t.parameters ?? [])],
 });
 

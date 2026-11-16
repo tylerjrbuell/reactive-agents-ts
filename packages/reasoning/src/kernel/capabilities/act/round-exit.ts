@@ -17,7 +17,8 @@ import type { Option } from "effect";
 import { resolveProduces, type ProducesKind } from "@reactive-agents/tools";
 import { deriveArtifactEntries } from "../../ledger/artifact-projection.js";
 import type { LedgerEntryInput, RunLedger } from "../../ledger/run-ledger.js";
-import { recordRequirementsDeclared, seedRoundFacts } from "../../ledger/emit.js";
+import { recordPlanFindings, recordRequirementsDeclared, seedRoundFacts } from "../../ledger/emit.js";
+import { planFindingFacts } from "../../policy/plan-recon.js";
 import { declarePlanOutputs } from "../../contract/plan-declared.js";
 import type { RunPosture } from "@reactive-agents/core";
 import { detectDuplicateGathers, dedupSignalEntries } from "../../../assembly/gather-dedup.js";
@@ -119,7 +120,11 @@ export function deriveRoundLedger(
     const roundStepTokens = round.skills.length === 0
       ? 0
       : roundNewSteps.reduce((sum, s) => sum + estimateSkillTokens(s.content), 0);
-    const committed = commitRound(round, seeded, state.iteration + 1, roundStepTokens);
+    const committedRound = commitRound(round, seeded, state.iteration + 1, roundStepTokens);
+    // Plan posture: a recon tool's successful result is a harness-written `plan-finding` fact.
+    const committed = snap.posture === "plan"
+      ? recordPlanFindings(committedRound, planFindingFacts(roundNewSteps), state.iteration + 1)
+      : committedRound;
     // One SkillActivated per committed `skill-activated` fact (this is the
     // round's single commit, so no activation is published twice).
     yield* emitSkillsActivated({

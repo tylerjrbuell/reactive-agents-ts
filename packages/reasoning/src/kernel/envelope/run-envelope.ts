@@ -18,6 +18,7 @@ import type { FabricationGuardMode } from "../capabilities/verify/evidence-groun
 import type { AdvisorySeedItem } from "../state/checklist-seed.js";
 import type { AskUserRail } from "../capabilities/act/user-interaction.js";
 import { postureInputOverrides } from "../policy/run-posture.js";
+import type { PlanFindingSeed } from "../policy/plan-recon.js";
 import { resolveHarnessConfig, type HarnessConfig, type ResolvedHarness } from "../../harness-config.js";
 
 export interface RunEnvelopePolicy {
@@ -66,6 +67,8 @@ export interface RunEnvelopeRails {
   readonly initialAdvisory?: readonly AdvisorySeedItem[];
   /** Fully rendered between-turn environment notice; rendered once in `Guidance:` on the pass's first think. */
   readonly environmentUpdate?: string;
+  /** Findings recorded while planning (the plan's `findings`); an execute run renders them once as context. */
+  readonly planFindings?: readonly PlanFindingSeed[];
   /**
    * Run posture. `"plan"` ⇒ plan-only: restricted tool surface, one `Guidance:`
    * line, required-tool pressure off (see `policy/run-posture.ts`). Absent ⇒
@@ -126,6 +129,8 @@ export interface BuildRunEnvelopeOptions {
   readonly initialAdvisory?: readonly AdvisorySeedItem[];
   /** See `RunEnvelopeRails.environmentUpdate`. */
   readonly environmentUpdate?: string;
+  /** See `RunEnvelopeRails.planFindings`. */
+  readonly planFindings?: readonly PlanFindingSeed[];
   /** See `RunEnvelopeRails.posture`. */
   readonly posture?: RunPosture;
   /** See `RunEnvelopeRails.currentTurnText`. */
@@ -162,6 +167,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
         : {}),
       ...(opts.initialAdvisory !== undefined ? { initialAdvisory: opts.initialAdvisory } : {}),
       ...(opts.environmentUpdate !== undefined ? { environmentUpdate: opts.environmentUpdate } : {}),
+      ...(opts.planFindings !== undefined && opts.planFindings.length > 0 ? { planFindings: opts.planFindings } : {}),
       ...(opts.posture === "plan" ? { posture: opts.posture } : {}),
       ...(opts.currentTurnText !== undefined ? { currentTurnText: opts.currentTurnText } : {}),
       ...(opts.maxCallsPerTool !== undefined ? { maxCallsPerTool: opts.maxCallsPerTool } : {}),
@@ -236,6 +242,9 @@ export function mergeRunEnvelopeIntoKernelInput(
       : {}),
     ...(input.environmentUpdate === undefined && rails.environmentUpdate !== undefined
       ? { environmentUpdate: rails.environmentUpdate }
+      : {}),
+    ...(input.planFindings === undefined && rails.planFindings !== undefined
+      ? { planFindings: rails.planFindings }
       : {}),
     // Only a pass whose task CARRIES the current turn: a sub-kernel with its own
     // task (plan-execute step, critique) must not scan the parent's typed turn.

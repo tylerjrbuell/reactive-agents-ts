@@ -170,14 +170,19 @@ const firstSentence = (s: string): string => clip(clean(s).split(/(?<=[.!?])\s/)
  * MCP tools `server/name` grouped by server after the own tools),
  * capped at {@link MAX_CATALOG_TOOLS}. `undefined` when there is nothing to list.
  */
-export function planToolCatalogLine(schemas: readonly Pick<ToolSchema, "name" | "description">[] | undefined): string | undefined {
+export function planToolCatalogLine(
+  schemas: readonly Pick<ToolSchema, "name" | "description">[] | undefined,
+  reconTools: readonly Pick<ToolSchema, "name">[] = [],
+): string | undefined {
   const tools = (schemas ?? []).filter((t) => !META_TOOLS.has(t.name));
   if (tools.length === 0) return undefined;
   const own: string[] = [];
   const servers = new Map<string, string[]>();
+  const recon = new Set(reconTools.map((t) => t.name));
   for (const t of tools.slice(0, MAX_CATALOG_TOOLS)) {
     const d = firstSentence(t.description);
-    const entry = d.length > 0 ? `${t.name} (${d})` : t.name;
+    const mark = recon.has(t.name) ? "read; " : "";
+    const entry = d.length > 0 ? `${t.name} (${mark}${d})` : recon.has(t.name) ? `${t.name} (read)` : t.name;
     const slash = t.name.indexOf("/");
     if (slash <= 0) own.push(entry);
     else {
@@ -191,5 +196,6 @@ export function planToolCatalogLine(schemas: readonly Pick<ToolSchema, "name" | 
   ];
   const hidden = tools.length - Math.min(tools.length, MAX_CATALOG_TOOLS);
   const more = hidden > 0 ? `; and ${hidden} more` : "";
-  return `Execute-phase tools: ${parts.join(". ")}${more}. You cannot call these now; reference them in steps as \`tool: name\`.`;
+  const callable = recon.size > 0 ? "You cannot call these now except those marked (read), which are recon tools; " : "You cannot call these now; ";
+  return `Execute-phase tools: ${parts.join(". ")}${more}. ${callable}reference them in steps as \`tool: name\`.`;
 }

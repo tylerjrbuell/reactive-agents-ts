@@ -153,6 +153,7 @@ export function buildRunConfigSnapshot(args: {
     computeOffload: harness.computeOffload === true,
     planToolCatalog: harness.planToolCatalog === true,
     planBudget: harness.planBudget !== false,
+    planRecon: harness.planRecon === true,
     wrapUpReserve: harness.wrapUpReserve === true,
     llmRecoveryBudget: llmRecoveryBudgetOf(harness),
   });

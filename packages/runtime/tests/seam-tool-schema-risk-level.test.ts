@@ -75,6 +75,7 @@ describe("toKernelToolSchema", () => {
       description: "Tool probe-read",
       returnType: "string",
       riskLevel: "low",
+      effect: "unknown",
       parameters: [{ name: "path", type: "string", description: "Absolute path", required: true }],
     });
   });

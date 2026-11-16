@@ -62,7 +62,7 @@ describe("pure plan mapping", () => {
 
   test("planFromWatch with no snapshot keeps the known steps", () => {
     const known = [{ id: "1", title: "x", status: "pending" as const }];
-    expect(planFromWatch({ snapshot: undefined }, { id: "p", goal: "g", createdAt: 0, source: "model" }, known).steps).toEqual(known);
+    expect(planFromWatch({ snapshot: undefined, findings: [] }, { id: "p", goal: "g", createdAt: 0, source: "model" }, known).steps).toEqual(known);
   });
 
   test("session plan: todo <-> plan round trip; user edit is user-edited and seeds the list", () => {

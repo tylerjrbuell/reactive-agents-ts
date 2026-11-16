@@ -439,6 +439,48 @@ describe("run-started config + origin", () => {
     }
   });
 
+  test("planRecon is recorded as a mechanism: default OFF; explicit config and RA_PLAN_RECON=1 turn it on", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const build = (harness?: { planRecon?: boolean }) => {
+      const b = ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" });
+      return (harness ? b.withHarness(harness) : b).build();
+    };
+    const prior = process.env.RA_PLAN_RECON;
+    delete process.env.RA_PLAN_RECON;
+    try {
+      const dflt = await build();
+      const dfltMech = await mechanismsOf(dflt.run("plan-recon default pin"));
+      await dflt.dispose();
+      expect(dfltMech?.planRecon).toBe(false);
+
+      const on = await build({ planRecon: true });
+      const onMech = await mechanismsOf(on.run("plan-recon explicit-on pin"));
+      await on.dispose();
+      expect(onMech?.planRecon).toBe(true);
+
+      process.env.RA_PLAN_RECON = "1";
+      const env = await build();
+      const envMech = await mechanismsOf(env.run("plan-recon env pin"));
+      await env.dispose();
+      expect(envMech?.planRecon).toBe(true);
+
+      // explicit config beats env
+      const off = await build({ planRecon: false });
+      const offMech = await mechanismsOf(off.run("plan-recon explicit-off pin"));
+      await off.dispose();
+      expect(offMech?.planRecon).toBe(false);
+    } finally {
+      delete process.env.RA_PLAN_RECON;
+      if (prior !== undefined) process.env.RA_PLAN_RECON = prior;
+    }
+  });
+
   test("llmRecoveryBudget is recorded as a mechanism (default 2; .withHarness({ llmRecoveryBudget: 0 }) gives 0)", async () => {
     const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
       const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");

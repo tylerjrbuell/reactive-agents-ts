@@ -73,7 +73,7 @@ export function disclosureFloor(config: ReactiveAgentsConfig): BuildRunEnvelopeO
  */
 export type RunEnvelopeExtras = Pick<
   BuildRunEnvelopeOptions,
-  "approvalDecision" | "interactionResponse" | "auxiliaryPass" | "initialAdvisory"
+  "approvalDecision" | "interactionResponse" | "auxiliaryPass" | "initialAdvisory" | "planFindings"
 > & {
   /**
    * Rendered between-turn environment notice (chat engine). Lands on

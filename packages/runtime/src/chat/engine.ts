@@ -15,7 +15,7 @@ import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapsho
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TurnGate } from "./turn-gate.js";
 import { turnPosture, announceModeChange, DEFAULT_CHAT_MODE, type ChatMode } from "./session-mode.js";
-import { TodoCarry, planPosture, originCarry, todoTurnPorts, type OriginOption, type PostureOption, type TodoReportOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
+import { TodoCarry, planPosture, originCarry, todoTurnPorts, todoSeedOf, type OriginOption, type PostureOption, type TodoReportOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 import { announceSteps } from "./plan-step-events.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
@@ -300,9 +300,9 @@ export class ChatEngine {
   /** Switch the mode for later turns (in-flight turn keeps its mode); publishes `ChatModeChanged` on change. */
   setMode(mode: ChatMode): void { const from = this.#mode; this.#mode = mode; announceModeChange(this.#deps.publishMode, this.#sessionId, from, mode, (e) => swallowError(e, "chat/engine.ts:publishMode")); }
 
-  /** The conversation's latest to-do list, as of the last completed `streamTurn()` event. */
+  /** The latest to-do list (as of the last completed turn event); its carrier (held plan findings); the session id (plan events carry it). */
   todo(): readonly TodoSeedItem[] { return this.#todo.items; }
-  /** The session id (plan events are stamped with it). */
+  get carry(): TodoCarry { return this.#todo; }
   get id(): string { return this.#sessionId; }
   /** Replace the to-do list (a plan edit; later turns seed from it); `recorded` is published (session-stamped) when given. */
   setTodo(items: readonly TodoSeedItem[], recorded?: PlanRecordedEvent): void { this.#todo.replace(items); if (recorded) this.#deps.publishPlan?.({ ...recorded, sessionId: this.#sessionId }).catch((e) => swallowError(e, "chat/engine.ts:publishPlan")); }
@@ -462,7 +462,7 @@ export class ChatEngine {
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(turnPosture(engine.#mode, options?.posture)), ...originCarry(options?.origin ?? engine.#origin),
         density: options?.density,
         signal: options?.signal, ...workspaceCarry(options?.workspace), ...(options?.skills ? { skills: options.skills } : {}),
-        ...(engine.#todo.items.length > 0 ? { initialTodo: engine.#todo.items } : {}),
+        ...todoSeedOf(engine.#todo),
       });
       inner.handle = handle;
       /**

@@ -13,7 +13,8 @@
  *  - {@link TodoCarry}            — the engine's held list, updated from the
  *                                   `ChecklistUpdated` events of each turn.
  */
-import type { ChecklistItemStatus, ChecklistSnapshot, RunOrigin, RunPosture, Task, TaskCurrentTurn } from "@reactive-agents/core";
+import type { ChecklistItemStatus, ChecklistSnapshot, PlanFinding, RunOrigin, RunPosture, Task, TaskCurrentTurn } from "@reactive-agents/core";
+import { findingsMetadata, findingsOfEntries, mergeFindings, type PlanFindingsOption } from "./plan-findings.js";
 import type { CurrentTurnOption } from "../agent/history-block.js";
 import type { AgentStreamEvent } from "../stream-types.js";
 import { ENVIRONMENT_UPDATE_CONTEXT_KEY, type EnvironmentUpdateOption } from "./environment-snapshot.js";
@@ -34,7 +35,7 @@ export interface TodoSeedItem {
 }
 
 /** Options-bag mixin: a turn/run that starts from a prior to-do list. */
-export interface TodoSeedOption {
+export interface TodoSeedOption extends PlanFindingsOption {
   /** The conversation's latest to-do list; becomes the run's seeded advisory list. */
   readonly initialTodo?: readonly TodoSeedItem[];
 }
@@ -84,7 +85,7 @@ export type TurnCarryOption = TodoSeedOption & EnvironmentUpdateOption & Posture
  */
 export function turnCarryMetadata(opts: TurnCarryOption): { context?: Record<string, unknown>; currentTurn?: TaskCurrentTurn } {
   const context = {
-    ...todoSeedMetadata(opts.initialTodo).context,
+    ...todoSeedMetadata(opts.initialTodo, opts.planFindings).context,
     ...(opts.environmentUpdate ? { [ENVIRONMENT_UPDATE_CONTEXT_KEY]: opts.environmentUpdate } : {}),
     ...(opts.posture === "plan" ? { [POSTURE_CONTEXT_KEY]: opts.posture } : {}),
     ...(opts.origin !== undefined ? { [ORIGIN_CONTEXT_KEY]: opts.origin } : {}),
@@ -114,9 +115,16 @@ export function snapshotToTodoSeed(snapshot: ChecklistSnapshot): TodoSeedItem[] 
   );
 }
 
-/** Spread into `task.metadata`: a non-empty seed as `context.initialTodo`, else nothing (bytes identical). */
-export function todoSeedMetadata(seed: readonly TodoSeedItem[] | undefined): { context?: Record<string, unknown> } {
-  return seed !== undefined && seed.length > 0 ? { context: { [TODO_SEED_CONTEXT_KEY]: seed } } : {};
+/**
+ * Spread into `task.metadata`: a non-empty seed as `context.initialTodo` and non-empty
+ * plan findings as `context.planFindings`, else nothing (bytes identical).
+ */
+export function todoSeedMetadata(
+  seed: readonly TodoSeedItem[] | undefined,
+  findings?: readonly PlanFinding[],
+): { context?: Record<string, unknown> } {
+  const context = { ...(seed !== undefined && seed.length > 0 ? { [TODO_SEED_CONTEXT_KEY]: seed } : {}), ...findingsMetadata(findings) };
+  return Object.keys(context).length > 0 ? { context } : {};
 }
 
 const STATUSES: ReadonlySet<string> = new Set(["pending", "in_progress", "completed"]);
@@ -144,6 +152,7 @@ export function readTodoSeed(task: Pick<Task, "metadata">): readonly TodoSeedIte
  */
 export class TodoCarry {
   #items: readonly TodoSeedItem[];
+  #findings: readonly PlanFinding[] = [];
   readonly #onChange: ((before: readonly TodoSeedItem[], after: readonly TodoSeedItem[]) => void) | undefined;
   /** @param onChange called with the list before and after each turn-driven update (not on `replace`). */
   constructor(initial?: readonly TodoSeedItem[], onChange?: (before: readonly TodoSeedItem[], after: readonly TodoSeedItem[]) => void) {
@@ -164,9 +173,22 @@ export class TodoCarry {
     this.#items = items;
     this.#onChange?.(before, items);
   }
-  /** Fold one stream event; non-checklist events are ignored. */
+  /** The plan's recon findings held for the conversation (empty when the plan ran no recon). */
+  get findings(): readonly PlanFinding[] {
+    return this.#findings;
+  }
+  /** Replace the held findings (a plan edit). */
+  setFindings(findings: readonly PlanFinding[]): void {
+    this.#findings = findings;
+  }
+  /** Add findings a plan turn recorded; one already held is kept once. */
+  addFindings(findings: readonly PlanFinding[]): void {
+    this.#findings = mergeFindings(this.#findings, findings);
+  }
+  /** Fold one stream event; checklist events replace the list, plan-finding ledger entries add findings, the rest are ignored. */
   observe(event: AgentStreamEvent): void {
     if (event._tag === "ChecklistUpdated") this.update(snapshotToTodoSeed(event.checklist));
+    else if (event._tag === "LedgerEntry") this.addFindings(findingsOfEntries([event.entry], Date.now()));
   }
 }
 
@@ -175,11 +197,25 @@ export class TodoCarry {
  * run's seed, and the port the host reports the run's final list through.
  */
 export const todoTurnPorts = (carry: TodoCarry): TodoSeedOption & TodoReportOption => ({
-  ...(carry.items.length > 0 ? { initialTodo: carry.items } : {}),
+  ...todoSeedOf(carry),
   onTodo: (items) => carry.update(items),
+  onFindings: (findings) => carry.addFindings(findings),
 });
 
-/** Options-bag mixin: the host calls this with the run's final to-do list (buffered turns). */
+/** Spread-ready forwarder: the to-do seed and the plan findings of `o` when present, `{}` otherwise (bytes identical). */
+export const seedCarry = (o: TodoSeedOption | undefined): TodoSeedOption => ({
+  ...(o?.initialTodo ? { initialTodo: o.initialTodo } : {}),
+  ...(o?.planFindings && o.planFindings.length > 0 ? { planFindings: o.planFindings } : {}),
+});
+
+/** The seed a turn starts from: the held list and the held plan findings (each only when non-empty). */
+export const todoSeedOf = (carry: TodoCarry): TodoSeedOption => ({
+  ...(carry.items.length > 0 ? { initialTodo: carry.items } : {}),
+  ...(carry.findings.length > 0 ? { planFindings: carry.findings } : {}),
+});
+
+/** Options-bag mixin: the host calls these with the run's final to-do list and recon findings (buffered turns). */
 export interface TodoReportOption {
   readonly onTodo?: (items: readonly TodoSeedItem[]) => void;
+  readonly onFindings?: (findings: readonly PlanFinding[]) => void;
 }

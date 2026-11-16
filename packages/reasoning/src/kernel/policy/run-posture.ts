@@ -70,10 +70,14 @@ const BLOCK_MARKER = "is not available in plan posture";
 export const isPlanPosture = (carrier: { readonly posture?: RunPosture } | undefined): boolean =>
   carrier?.posture === "plan";
 
-/** Observation text for a call blocked by plan posture. */
-export function planPostureBlockMessage(toolName: string): string {
-  return `${PLAN_POSTURE_BLOCK_PREFIX}${toolName}" ${BLOCK_MARKER} — plan mode offers only ${[...PLAN_POSTURE_TOOLS].join(", ")}; blocked, not executed. Record the steps with todo and reply with the plan.]`;
+/** Observation text for a call blocked by plan posture (`recon`: read-only recon is on, so the offer includes it). */
+export function planPostureBlockMessage(toolName: string, recon = false): string {
+  const offer = recon ? `${[...PLAN_POSTURE_TOOLS].join(", ")} and read-only recon calls within budget` : [...PLAN_POSTURE_TOOLS].join(", ");
+  return `${PLAN_POSTURE_BLOCK_PREFIX}${toolName}" ${BLOCK_MARKER} — plan mode offers only ${offer}; blocked, not executed. Record the steps with todo and reply with the plan.]`;
 }
+
+/** True when an observation's text is a plan-posture block message. */
+export const isPostureBlockedObservation = (content: string): boolean => content.includes(BLOCK_MARKER);
 
 /**
  * Narrow a resolved surface to the posture-allowed tools: `visible`/`callable`
@@ -128,8 +132,11 @@ export function postureInputOverrides(posture: RunPosture | undefined): {
  * The `Guidance:` block rendered under plan posture (the channel's block format,
  * as parts): the one posture line, plus the opt-in tool catalog line when given.
  */
-export const planPostureGuidanceParts = (catalogLine?: string): readonly TextPart[] =>
-  guidanceBlockParts(catalogLine === undefined ? [PLAN_POSTURE_GUIDANCE] : [PLAN_POSTURE_GUIDANCE, catalogLine]);
+export const planPostureGuidanceParts = (
+  catalogLine?: string,
+  turn?: { readonly base?: string; readonly lines: readonly string[] },
+): readonly TextPart[] =>
+  guidanceBlockParts([turn?.base ?? PLAN_POSTURE_GUIDANCE, ...(turn?.lines ?? []), ...(catalogLine === undefined ? [] : [catalogLine])]);
 
 /** Ledger `origin` of the once-per-run posture signal. */
 export const POSTURE_SIGNAL_ORIGIN = "policy/run-posture:posture-applied";

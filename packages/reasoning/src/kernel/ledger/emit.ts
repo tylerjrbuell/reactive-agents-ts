@@ -443,6 +443,24 @@ export function recordSkillActivations(
 }
 
 /**
+ * Record plan-recon results as `plan-finding` entries, ids `f1`, `f2`, ... in
+ * record order across the run. Returns the SAME ledger reference for an empty
+ * batch. Pure — returns a NEW ledger.
+ */
+export function recordPlanFindings(
+  ledger: RunLedger | undefined,
+  facts: readonly { readonly tool: string; readonly summary: string }[],
+  iteration: number,
+): RunLedger | undefined {
+  if (facts.length === 0) return ledger;
+  const prior = entriesOfKind(ledger, "plan-finding").length;
+  return appendEntries(
+    ledger,
+    facts.map((f, i) => ({ kind: "plan-finding" as const, iteration, id: `f${prior + i + 1}`, tool: f.tool, summary: f.summary })),
+  );
+}
+
+/**
  * Seed a round's pre-derived facts (artifact entries, gather-dedup signals)
  * onto the ledger. Returns the SAME ledger reference when `inputs` is empty so
  * callers can detect "nothing added" by identity. Act's round exits seed

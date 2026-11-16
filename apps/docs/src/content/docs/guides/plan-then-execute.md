@@ -99,6 +99,37 @@ const agent = await ReactiveAgents.create()
   .build()
 ```
 
+## Questions and recon
+
+Plan posture can do two things beyond writing steps.
+
+**Questions.** When user interaction is wired (`.withUserInteraction()`), a plan turn is offered `request_user_input`. The model is told to ask only when the answer changes the plan, to batch its questions, and never to ask what recon or the conversation can answer. The answer resumes the same planning run. This works for `agent.plan()` and plan-mode sessions. Without interaction the tool is not offered.
+
+**Recon.** Opt-in, off by default: `.withHarness({ planRecon: true })` (or `RA_PLAN_RECON=1`; config wins) lets a plan turn call tools whose effect is `read` to look up facts the plan needs, such as an id from a list call. Recon is bounded: 6 calls per run, 2 per tool. When it is spent, or on the last iteration, only `todo` and `final-answer` stay offered so the plan reply is produced. The run-started config records the effective `planRecon` value.
+
+A tool's effect comes from what it declares, never from its name:
+
+| Tool | Effect |
+| --- | --- |
+| `mutatesExternalState: false` and no approval needed | `read` (recon may call it) |
+| `mutatesExternalState: true` | `write` |
+| nothing declared, or read-only but approval-gated | `unknown` (never in recon) |
+
+An MCP tool's `readOnlyHint` counts as `read` only when you trust the server's annotations: set `trustAnnotations: true` on the server config, or list the tool under `readOnly: [...]`. A destructive or `readOnlyHint: false` hint maps to `write`. Untrusted or missing hints stay `unknown`.
+
+### Findings
+
+Each successful recon result becomes a finding on the plan: `{ id, tool, summary, at }`.
+
+```ts
+const plan = await agent.plan("Report on my site")
+plan.findings // [{ id: "f1", tool: "site-list", summary: "site-42 (main)", at: 1731780000000 }]
+
+await agent.execute(plan) // the execute run is shown the findings once, as context
+```
+
+`PlanRecorded` carries `findings`, and the Markdown, JSON and HTML plan formats include them. A plan with findings but no steps is still empty: findings never make a plan executable. `result.plan` keeps the findings, and a user-edited plan keeps them too. In a session, `session.plan.findings` holds what plan turns found and they seed later turns. `session.setPlan(steps)` keeps the held findings; `session.setPlan(plan)` takes the findings that plan states.
+
 ## Wrap-up reserve
 
 Opt-in, off by default: set `.withHarness({ wrapUpReserve: true })` (or `RA_WRAPUP_RESERVE=1`; config wins) to hold back the last iterations of a run for the answer. The run-started config records the effective `wrapUpReserve` value.
@@ -107,6 +138,6 @@ Opt-in, off by default: set `.withHarness({ wrapUpReserve: true })` (or `RA_WRAP
 
 | Event | When |
 | --- | --- |
-| `PlanRecorded { planId, steps, source }` | `agent.plan()` returned a plan, or `session.setPlan()` edited one |
+| `PlanRecorded { planId, steps, source, findings? }` | `agent.plan()` returned a plan, or `session.setPlan()` edited one |
 | `PlanStepStatusChanged { planId, stepId, from, to }` | a step's status changed during `execute()` / `run({ plan })`, or during a chat session turn (then carries `sessionId`) |
 | `ChatModeChanged` | a session switched between plan and execute |

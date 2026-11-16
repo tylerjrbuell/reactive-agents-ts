@@ -55,7 +55,9 @@ import type { ContextProfile } from "../../../context/context-profile.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import type { RunPosture } from "@reactive-agents/core";
 import { PLAN_POSTURE_TOOLS, planPostureBlockMessage } from "../../policy/run-posture.js";
+import { planTurnTools, type PlanReconInput } from "../../policy/plan-recon.js";
 import type {
+  KernelState,
   ToolServiceInstance,
 } from "../../state/kernel-state.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
@@ -85,6 +87,13 @@ export interface ToolObserveContext {
    * ordinary runs have no durable controller at all).
    */
   readonly effectId?: string;
+  /**
+   * The kernel act path already ran `evaluateToolPolicy` for this call, with
+   * the run's plan-recon budget in hand. The primitive then skips its own
+   * plan-posture re-check, which has no step record and so would re-block a
+   * budgeted recon call. Non-kernel callers leave it absent (posture blocks all).
+   */
+  readonly kernelGated?: boolean;
 }
 
 export interface ToolObserveHealConfig {
@@ -245,16 +254,28 @@ export interface ToolPolicy {
   readonly forbiddenTools?: readonly string[];
   /** Run posture: `"plan"` blocks every tool (`PLAN_POSTURE_TOOLS` is empty) and, unlike the META bypass, applies to META tools too. */
   readonly posture?: RunPosture;
+  /** Plan recon (opt-in): read-only tools plan posture still lets run this turn (`policy/plan-recon.ts`). Absent ⇒ none. */
+  readonly reconAllowed?: ReadonlySet<string>;
 }
 
-/** Policy fields a `KernelInput` carries (act.ts spreads this at both gate sites). */
-export function toolPolicyFromInput(input: {
-  readonly allowedTools?: readonly string[];
-  readonly posture?: RunPosture;
-}): Pick<ToolPolicy, "allowedTools" | "posture"> {
+/**
+ * Policy fields a `KernelInput` carries (act.ts spreads this at both gate sites).
+ * `state` + `steps` (+ `pending`: calls dispatched earlier in the same batch) let
+ * plan recon enforce its budget at the gate; without the recon flag they are unread.
+ */
+export function toolPolicyFromInput(
+  input: PlanReconInput,
+  state?: Pick<KernelState, "iteration" | "meta">,
+  steps: readonly ReasoningStep[] = [],
+  pending: readonly { readonly name: string }[] = [],
+): Pick<ToolPolicy, "allowedTools" | "posture" | "reconAllowed"> {
+  const recon = input.posture === "plan" && input.harness?.planRecon === true && state !== undefined
+    ? planTurnTools(input, { iteration: state.iteration, maxIterations: (state.meta.maxIterations as number | undefined) ?? 10, steps, pending: pending.map((c) => c.name) }).recon
+    : undefined;
   return {
     ...(input.allowedTools !== undefined ? { allowedTools: input.allowedTools } : {}),
     ...(input.posture === "plan" ? { posture: input.posture } : {}),
+    ...(recon !== undefined ? { reconAllowed: recon } : {}),
   };
 }
 
@@ -288,8 +309,8 @@ export function forbiddenToolsFromContract(contract?: TaskContract): readonly st
 }
 
 export function evaluateToolPolicy(toolName: string, policy: ToolPolicy): ToolPolicyDecision {
-  if (policy.posture === "plan" && !PLAN_POSTURE_TOOLS.has(toolName)) {
-    return { blocked: true, message: planPostureBlockMessage(toolName) };
+  if (policy.posture === "plan" && !PLAN_POSTURE_TOOLS.has(toolName) && policy.reconAllowed?.has(toolName) !== true) {
+    return { blocked: true, message: planPostureBlockMessage(toolName, policy.reconAllowed !== undefined) };
   }
   if (META_TOOLS.has(toolName)) return { blocked: false };
   const forbidden = policy.forbiddenTools ?? [];
@@ -474,7 +495,7 @@ export function executeToolAndObserve(
         policyForbiddenTools = derivedForbidden;
       }
     }
-    const policyPosture = envelope?.rails.posture === "plan" ? envelope.rails.posture : undefined;
+    const policyPosture = envelope?.rails.posture === "plan" && ctx.kernelGated !== true ? envelope.rails.posture : undefined;
     if (policyAllowedTools !== undefined || policyForbiddenTools !== undefined || policyPosture !== undefined) {
       const decision = evaluateToolPolicy(toolName, {
         ...(policyPosture !== undefined ? { posture: policyPosture } : {}),

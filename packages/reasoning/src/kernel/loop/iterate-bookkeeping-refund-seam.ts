@@ -17,14 +17,19 @@
 // A plan-sized raise (plan-budget.ts) keeps this cap on the ORIGINAL configured
 // budget and keeps raise plus refunds under the plan hard cap.
 //
-// Without a seed, in plan posture, or in a round that made any other call:
-// returns undefined and nothing changes (byte-identical to a run without it).
+// Plan posture with `planRecon` on: a round of recon calls (plus at most `todo`)
+// is refunded the same bounded way ({@link isReconRound}); recon gathers facts
+// for the plan and is itself capped (policy/plan-recon.ts).
+//
+// Without a seed, in plan posture without recon, or in a round that made any
+// other call: returns undefined and nothing changes (byte-identical).
 // Pure decision, deterministic, NO LLM, NO fs.
 
 import { Effect } from "effect";
 import { authorityOf } from "../capabilities/decide/authority.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { isPlanPosture } from "../policy/run-posture.js";
+import { planReconOn, reconEligibleSchemas } from "../policy/plan-recon.js";
 import {
   transitionState,
   type KernelInput,
@@ -57,6 +62,14 @@ export const isBookkeepingRound = (toolsThisStep: readonly string[]): boolean =>
   toolsThisStep.length > 0 && toolsThisStep.every((t) => BOOKKEEPING_TOOLS.has(t));
 
 /**
+ * A plan-posture round (recon on) of recon calls, with at most `todo` beside
+ * them: it gathered facts for the plan, no step of the budget. At least one
+ * call must be a recon tool, so a todo-only plan round counts as it always did.
+ */
+export const isReconRound = (toolsThisStep: readonly string[], reconTools: ReadonlySet<string>): boolean =>
+  toolsThisStep.some((t) => reconTools.has(t)) && toolsThisStep.every((t) => BOOKKEEPING_TOOLS.has(t) || reconTools.has(t));
+
+/**
  * The refund for the act round that just ended, or undefined when it does not
  * apply: not a seeded execute run, the pass spent no iteration (a think pass),
  * the round made a real call, the run is over, or the refund cap is reached.
@@ -70,9 +83,12 @@ export function proposeBookkeepingRefund(args: {
   readonly iterationAtPassStart: number;
 }): { readonly state: KernelState; readonly options: KernelRunOptions } | undefined {
   const { state, input, options } = args;
-  if (isPlanPosture(input) || (input.initialAdvisory?.length ?? 0) === 0) return undefined;
+  const planRecon = planReconOn(input);
+  if (isPlanPosture(input) ? !planRecon : (input.initialAdvisory?.length ?? 0) === 0) return undefined;
   if (state.status === "done" || state.status === "failed") return undefined;
-  if (state.iteration <= args.iterationAtPassStart || !isBookkeepingRound(args.toolsThisStep)) return undefined;
+  const reconTools = new Set(reconEligibleSchemas(input).map((t) => t.name));
+  const refundable = planRecon ? isReconRound(args.toolsThisStep, reconTools) : isBookkeepingRound(args.toolsThisStep);
+  if (state.iteration <= args.iterationAtPassStart || !refundable) return undefined;
   const issued = bookkeepingRefundsIssued(state);
   const cap = bookkeepingRefundCap(options.maxIterations, issued, options.configuredMaxIterations);
   if (issued >= cap) return undefined;
@@ -83,7 +99,9 @@ export function proposeBookkeepingRefund(args: {
       actor: BOOKKEEPING_REFUND_ACTOR,
       authorityClass: authorityOf(BOOKKEEPING_REFUND_ACTOR),
       evidence: `iteration ${state.iteration} called only ${[...new Set(args.toolsThisStep)].join(", ")}`,
-      whatChanged: "bookkeeping-refund: the todo-only round did not count against maxIterations",
+      whatChanged: planRecon
+        ? "bookkeeping-refund: the plan recon round did not count against maxIterations"
+        : "bookkeeping-refund: the todo-only round did not count against maxIterations",
       iter: state.iteration,
     },
   });

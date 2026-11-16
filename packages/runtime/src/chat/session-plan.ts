@@ -7,7 +7,7 @@
  * hints), held here. Reading maps list -> plan; editing maps plan -> list, so the
  * next `plan -> execute` turn seeds from exactly what the user left.
  */
-import { planToChecklistSeed, type Plan, type PlanRecordedEvent, type PlanStep } from "@reactive-agents/core";
+import { planToChecklistSeed, type Plan, type PlanFinding, type PlanRecordedEvent, type PlanStep } from "@reactive-agents/core";
 import { normalizeSteps, type PlanStepInput } from "../agent/plan-facade.js";
 import type { TodoSeedItem } from "./todo-seed.js";
 
@@ -27,7 +27,7 @@ const stepStatusOfSeed = (status: TodoSeedItem["status"]): PlanStep["status"] =>
 const isStepList = (x: Plan | readonly PlanStepInput[]): x is readonly PlanStepInput[] => Array.isArray(x);
 
 /** The plan a to-do list is. `undefined` for an empty list (no plan yet). Pure. */
-export function planOfTodo(items: readonly TodoSeedItem[], meta: SessionPlanMeta): Plan | undefined {
+export function planOfTodo(items: readonly TodoSeedItem[], meta: SessionPlanMeta, findings: readonly PlanFinding[] = []): Plan | undefined {
   if (items.length === 0) return undefined;
   const steps = items.map((i): PlanStep => {
     const tool = i.tool ?? meta.tools[i.id];
@@ -35,8 +35,15 @@ export function planOfTodo(items: readonly TodoSeedItem[], meta: SessionPlanMeta
   });
   // The rows say who wrote them: a model-sourced session plan whose rows the harness derived is harness-derived.
   const source = meta.source === "model" && items.some((i) => i.origin === "harness-derived") ? "harness-derived" : meta.source;
-  return { id: meta.id, goal: meta.goal, steps, createdAt: meta.createdAt, source };
+  return { id: meta.id, goal: meta.goal, steps, createdAt: meta.createdAt, source, ...(findings.length > 0 ? { findings } : {}) };
 }
+
+/**
+ * The findings a `setPlan` edit leaves the session with: a full `Plan` states its
+ * own (so the user can edit or drop them); a plain step list keeps the `held` ones. Pure.
+ */
+export const findingsAfterEdit = (input: Plan | readonly PlanStepInput[], held: readonly PlanFinding[]): readonly PlanFinding[] =>
+  isStepList(input) ? held : (input.findings ?? held);
 
 /** The plan id a session's to-do list carries (`PlanRecorded` and step events agree on it). */
 export const sessionPlanId = (sessionId: string): string => `plan-${sessionId}`;
@@ -58,15 +65,16 @@ export function editPlan(
   input: Plan | readonly PlanStepInput[],
   meta: SessionPlanMeta,
   now: number,
+  findings: readonly PlanFinding[] = [],
 ): { readonly seed: TodoSeedItem[]; readonly meta: SessionPlanMeta; readonly plan: Plan; readonly event: PlanRecordedEvent } {
   const given = isStepList(input) ? undefined : input;
   const steps = normalizeSteps(isStepList(input) ? input : input.steps);
-  const plan: Plan = { id: given?.id ?? meta.id, goal: given?.goal ?? meta.goal, steps, createdAt: meta.createdAt, source: "user-edited" };
+  const plan: Plan = { id: given?.id ?? meta.id, goal: given?.goal ?? meta.goal, steps, createdAt: meta.createdAt, source: "user-edited", ...(findings.length > 0 ? { findings } : {}) };
   const tools = Object.fromEntries(steps.flatMap((s) => (s.tool !== undefined ? [[s.id, s.tool] as const] : [])));
   return {
     seed: planToChecklistSeed(plan),
     meta: { id: plan.id, goal: plan.goal, createdAt: plan.createdAt, source: "user-edited", tools },
     plan,
-    event: { _tag: "PlanRecorded", planId: plan.id, steps, source: "user-edited", timestamp: now },
+    event: { _tag: "PlanRecorded", planId: plan.id, steps, source: "user-edited", ...(plan.findings ? { findings: plan.findings } : {}), timestamp: now },
   };
 }

@@ -61,7 +61,7 @@ import { Effect, Option } from 'effect'
 import type { TaskInput } from './task-input.js'
 import { ManagedRuntime } from 'effect'
 import { toolEffectIdentityKey } from '@reactive-agents/core'
-import type { EffectReceiptRecord, InteractionQuestion, ToolEffectRecord } from '@reactive-agents/core'
+import type { EffectReceiptRecord, InteractionQuestion, PlanFinding, ToolEffectRecord } from '@reactive-agents/core'
 import { join } from 'node:path'
 import type { ToolEffectRow } from '../services/run-store.js'
 import {
@@ -226,6 +226,8 @@ export interface RunDurableParams {
     readonly workspace?: string
     /** The caller's to-do seed (`run(task, { initialTodo })` / `{ plan }` on a durable agent). */
     readonly initialTodo?: readonly TodoSeedItem[]
+    /** Recon findings of the plan being executed (`run(task, { plan })`), carried like `initialTodo`. */
+    readonly planFindings?: readonly PlanFinding[]
     /** The caller's posture (`"plan"` ⇒ plan-only), carried like `initialTodo`. */
     readonly posture?: 'execute' | 'plan'
 }

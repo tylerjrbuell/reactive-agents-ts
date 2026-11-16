@@ -443,6 +443,7 @@ describe("HarnessConfigSchema <-> HarnessConfig bidirectional drift guard", () =
       computeOffload: true,
       planToolCatalog: true,
       planBudget: true,
+      planRecon: true,
       llmRecoveryBudget: true,
       // disclosureMode is set only by `.withTools({ disclosure })`, never by
       // `.withHarness`, so it has no HarnessConfigSchema leaf.

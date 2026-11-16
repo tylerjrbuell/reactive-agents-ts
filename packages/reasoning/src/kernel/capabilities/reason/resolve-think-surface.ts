@@ -15,7 +15,8 @@ import { Effect, Ref } from "effect";
 import { currentDiscoveredToolsStore } from "@reactive-agents/tools";
 import { resolveToolSurface } from "./tool-surface.js";
 import { forbiddenTools } from "../../contract/run-contract.js";
-import { isPlanPosture, restrictSurfaceToPosture } from "../../policy/run-posture.js";
+import { isPlanPosture } from "../../policy/run-posture.js";
+import { planPostureSurface } from "../../policy/plan-recon.js";
 import { finalAnswerTool, shouldShowFinalAnswer, requestUserInputTool } from "@reactive-agents/tools";
 import { missingRequired } from "../verify/requirement-state.js";
 import { transitionState, asKernelStateLike, type KernelState, type KernelContext } from "../../../kernel/state/kernel-state.js";
@@ -224,7 +225,12 @@ export function resolveThinkToolSurface(params: ResolveThinkSurfaceParams) {
     // `universe` stays whole on purpose — a call to a withheld tool must still
     // RESOLVE so it reaches the act-time tool-policy gate and is blocked +
     // recorded there, instead of vanishing as an unresolved thought.
-    const toolSurface = isPlanPosture(input) ? restrictSurfaceToPosture(resolvedSurface) : resolvedSurface;
+    // The plan surface may add the ask tool (interaction wired) and bounded recon (planRecon), see plan-recon.ts.
+    const toolSurface = isPlanPosture(input)
+      ? planPostureSurface(resolvedSurface, input, { iteration: state.iteration, maxIterations: maxIter, steps: state.steps }, {
+          name: requestUserInputTool.name, description: requestUserInputTool.description, parameters: requestUserInputTool.parameters,
+        } as ToolSchema)
+      : resolvedSurface;
     const promptSchemas = toolSurface.visible;
     // Stable tool list: pin this turn's list (the first turn pins; later turns
     // only append, so re-pinning records the grown list).

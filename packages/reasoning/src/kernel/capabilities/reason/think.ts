@@ -56,6 +56,7 @@ import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { LOOP_DETECTED_DEFAULT, guidanceFieldHasText, guidanceTurnCost, renderGuidance, type PendingGuidance } from "../../state/guidance-channel.js";
 import { emitPostureApplied, isPlanPosture, planPostureGuidanceParts, registerPostureSignal, stampPostureRendered, toolIndexUniverse } from "../../policy/run-posture.js";
 import { planToolCatalogLine } from "../../policy/plan-steps.js";
+import { planFindingsLine, planTurnGuidance, planTurnTools, reconEligibleSchemas } from "../../policy/plan-recon.js";
 import { provenanceBySanitizedName } from "./wire-facts.js";
 import { checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
 import { stepEnvironmentUpdate } from "../reflect/environment-update.js";
@@ -185,7 +186,7 @@ export function handleThinking(
     const checklistReminder = pending?.checklistReminder ?? checklistStep.reminder;
     const envStep = yield* stepEnvironmentUpdate({
       pending: pending?.environmentUpdate,
-      inputNotice: input.environmentUpdate,
+      inputNotice: [input.environmentUpdate, planFindingsLine(input)].filter((n) => n !== undefined).join("\n") || undefined,
       signalLedger: checklistStep.signalLedger ?? state.signalLedger,
       taskId: state.taskId,
       iteration: state.iteration,
@@ -601,8 +602,12 @@ export function handleThinking(
     yield* emitPostureApplied({ posture: input.posture, signalId: postureSignal?.signalId, taskId: state.taskId, iteration: state.iteration, steps: state.steps });
     const rendered = renderGuidance(shownGuidance, { loopDetectedMessage });
     // The one join (Plan 9 Phase 4 stage D2): guidance renders as text parts.
+    const planTurn = planTurnTools(input, { iteration: state.iteration, maxIterations: (state.meta.maxIterations as number | undefined) ?? 10, steps: state.steps });
     const guidanceParts = planPosture
-      ? planPostureGuidanceParts(input.harness?.planToolCatalog === true ? planToolCatalogLine(input.allToolSchemas ?? input.availableToolSchemas) : undefined)
+      ? planPostureGuidanceParts(
+          input.harness?.planToolCatalog === true ? planToolCatalogLine(input.allToolSchemas ?? input.availableToolSchemas, reconEligibleSchemas(input)) : undefined,
+          planTurnGuidance(planTurn),
+        )
       : rendered.parts;
     const defaultGuidanceText = guidanceParts.length > 0 ? contentText(guidanceParts) : null;
     const guidanceText = pipeline

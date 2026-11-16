@@ -244,6 +244,22 @@ export interface SkillActivatedEntry extends LedgerEntryBase {
   readonly toolCallId?: string;
 }
 
+/**
+ * A fact a plan-posture run learned by bounded read-only recon (a successful
+ * call of a tool the posture let run). Harness-written, never model-written;
+ * the planning run's findings travel to the execute run
+ * (`kernel/policy/plan-recon.ts`).
+ */
+export interface PlanFindingEntry extends LedgerEntryBase {
+  readonly kind: "plan-finding";
+  /** Stable per-run id (`f1`, `f2`, ...), assigned in record order. */
+  readonly id: string;
+  /** The recon tool that produced it. */
+  readonly tool: string;
+  /** The tool result, whitespace-collapsed and clipped to ~200 characters. */
+  readonly summary: string;
+}
+
 /** The append-only entry union. */
 export type LedgerEntry =
   | ToolInvocationEntry
@@ -257,7 +273,8 @@ export type LedgerEntry =
   | HandoffEntry
   | CompactionMarkerEntry
   | ResultTruncatedEntry
-  | SkillActivatedEntry;
+  | SkillActivatedEntry
+  | PlanFindingEntry;
 
 /**
  * The fact families the ledger can record — DERIVED from {@link LedgerEntry}
