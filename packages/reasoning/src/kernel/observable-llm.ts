@@ -43,7 +43,8 @@ import {
   emitContextPressure,
   deriveRequestId,
 } from "./utils/diagnostics.js";
-import { hashPromptPrefix, hashToolSurface } from "./utils/prefix-hash.js";
+import { resolveContextWindow } from "./utils/context-window-fallback.js";
+import { hashPromptPrefix,hashToolSurface } from "./utils/prefix-hash.js";
 import { FiberRef } from "effect";
 import {
   EventBus,
@@ -203,11 +204,16 @@ function emitForRequestWith(
   // sub-kernels) when the call is correlated to a real run (traceContext.taskId
   // present — filters out aux calls like the intent classifier), the provider
   // reported prompt tokens, AND surfaced the exact resolved context window.
-  // Gated strictly on resolvedParams.contextWindow > 0 (no capability fallback):
-  // the gauge must reflect the real provider window, not the model's assumed max.
+  // The provider-set resolvedParams.contextWindow wins (Ollama). Absent that,
+  // a hosted provider falls back to its framework capability row, only when a
+  // real row resolves (never the conservative fallback window).
   const taskId = request.traceContext?.taskId ?? ambientTaskId;
   const tokensUsed = fullResponse?.usage?.inputTokens ?? 0;
-  const contextWindow = fullResponse?.resolvedParams?.contextWindow ?? 0;
+  const contextWindow = resolveContextWindow(
+    fullResponse?.resolvedParams?.contextWindow,
+    typeof request.model === "object" ? (request.model?.provider ?? providerId) : providerId,
+    typeof request.model === "string" ? request.model : (request.model?.model ?? fullResponse?.model),
+  );
   const contextPressure =
     taskId !== undefined && taskId.length > 0 && tokensUsed > 0 && contextWindow > 0
       ? emitContextPressure({ taskId, tokensUsed, contextWindow })

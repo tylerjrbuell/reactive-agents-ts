@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
-import { Effect, Layer, Ref, Stream } from "effect";
+import { Context, Effect, Layer, Ref, Stream } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
-import type { CompletionRequest, CompletionResponse, StreamEvent } from "@reactive-agents/llm-provider";
+import type { CompletionRequest, CompletionResponse, ModelConfig, StreamEvent } from "@reactive-agents/llm-provider";
 import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { makeObservableLLM } from "./observable-llm.js";
 
@@ -194,6 +194,73 @@ describe("makeObservableLLM — uniform ContextPressure chokepoint", () => {
       } satisfies CompletionRequest),
     );
 
+    expect(captured.length).toBe(0);
+  }, 15000);
+});
+
+// Hosted-provider capability fallback: inner reports its provider via getModelConfig.
+const hostedInner = (provider: ModelConfig["provider"], events: readonly StreamEvent[]) =>
+  Layer.map(makeInnerLLM(events), (ctx) =>
+    Context.make(LLMService, {
+      ...Context.get(ctx, LLMService),
+      getModelConfig: () => Effect.succeed({ provider, model: "stub" }),
+    }),
+  );
+
+const cpRequest = (model: string): CompletionRequest => ({
+  messages: [{ role: "user", content: "say hi" }],
+  systemPrompt: "You are a test agent.",
+  maxTokens: 64,
+  temperature: 0.1,
+  model,
+  traceContext: { taskId: "run-HOSTED", iteration: 1 },
+});
+
+const usageOnlyEvents = (windowed: boolean): readonly StreamEvent[] => [
+  { type: "text_delta", text: "hi" },
+  { type: "content_complete", content: "hi" },
+  {
+    type: "usage",
+    usage: { inputTokens: 1000, outputTokens: 5, totalTokens: 1005, estimatedCost: 0 },
+    ...(windowed ? { resolvedParams: { contextWindow: 8_192 } } : {}),
+  },
+];
+
+describe("makeObservableLLM — ContextPressure capability fallback (hosted providers)", () => {
+  it("falls back to the capability row window for a known hosted model", async () => {
+    const { resolveCapability } = await import("@reactive-agents/llm-provider");
+    const cap = resolveCapability("openai", "gpt-4o-mini");
+    expect(cap.source).not.toBe("fallback");
+    const captured = await Effect.runPromise(
+      captureContextPressureWith(hostedInner("openai", usageOnlyEvents(false)))(cpRequest("gpt-4o-mini")),
+    );
+    expect(captured.length).toBe(1);
+    const cp = captured[0]! as Extract<AgentEvent, { _tag: "ContextPressure" }>;
+    expect(cp.tokensUsed).toBe(1000);
+    expect(cp.tokensAvailable).toBe(cap.maxContextTokens - 1000);
+  }, 15000);
+
+  it("emits nothing when the model has no real capability row (source fallback)", async () => {
+    const captured = await Effect.runPromise(
+      captureContextPressureWith(hostedInner("openai", usageOnlyEvents(false)))(
+        cpRequest("zz-unknown-model-xyz"),
+      ),
+    );
+    expect(captured.length).toBe(0);
+  }, 15000);
+
+  it("provider-set window wins over the capability row", async () => {
+    const captured = await Effect.runPromise(
+      captureContextPressureWith(hostedInner("openai", usageOnlyEvents(true)))(cpRequest("gpt-4o-mini")),
+    );
+    const cp = captured[0]! as Extract<AgentEvent, { _tag: "ContextPressure" }>;
+    expect(cp.tokensAvailable).toBe(8_192 - 1000);
+  }, 15000);
+
+  it("Ollama without a provider-set window stays silent (no table fallback)", async () => {
+    const captured = await Effect.runPromise(
+      captureContextPressureWith(hostedInner("ollama", usageOnlyEvents(false)))(cpRequest("gpt-4o-mini")),
+    );
     expect(captured.length).toBe(0);
   }, 15000);
 });
