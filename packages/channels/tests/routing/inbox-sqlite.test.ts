@@ -189,7 +189,7 @@ describe("durable inbox through the router", () => {
       expect(turns).toEqual(["do it"]);
       expect(chan.sends[0]?.text).toBe("re:do it");
       expect((await status()).inbox).toEqual({ received: 0, running: 0, done: 1, failed: 0, dropped: 0 });
-      expect(events.some((e) => e._tag === "Custom" && e.type === "channel.inbox.retried")).toBe(true);
+      expect(events.some((e) => e._tag === "ChannelInboxRetried")).toBe(true);
       // The platform redelivers the same update after the restart: deduped, no second turn.
       chan.push(env({ id: "m1", text: "do it" }));
       await new Promise<void>((r) => setTimeout(r, 60));
@@ -222,7 +222,7 @@ describe("durable inbox through the router", () => {
       await waitFor(() => turns.length === 1);
     });
     await runRouter(path, { store: { maxAttempts: 1 }, resolver: answering, events }, async ({ chan, turns, status }) => {
-      await waitFor(() => events.some((e) => e._tag === "Custom" && e.type === "channel.inbox.failed"));
+      await waitFor(() => events.some((e) => e._tag === "ChannelInboxFailed"));
       expect(turns).toEqual([]);
       expect(chan.sends.length).toBe(0);
       expect((await status()).inbox?.["failed"]).toBe(1);

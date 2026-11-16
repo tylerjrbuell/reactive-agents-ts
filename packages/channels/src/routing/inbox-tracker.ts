@@ -6,31 +6,13 @@ import type { InboxCounts, InboxEntry, InboxSettled, RouterInbox } from "./inbox
 import type { RouteOutcome } from "./types.js";
 
 /**
- * Typed payloads of the inbox events. They ride the existing `Custom` event
- * (`type` below) until core owns first-class `ChannelInbox*` events. Payloads never carry message text.
+ * The inbox events are first-class core `AgentEvent` members (`ChannelInboxRetried`, `Failed`,
+ * `Batched`, `Folded`, `Interrupted`). Payloads never carry message text.
  */
-export interface InboxEventPayloads {
-  /** An orphaned `running` row went back to `received`. */
-  readonly "channel.inbox.retried": { readonly adapterId: string; readonly attempts: number };
-  /** A row ran out of attempts and is `failed`. */
-  readonly "channel.inbox.failed": { readonly adapterId: string; readonly attempts: number; readonly reason: string };
-  /** Several envelopes became one turn input (`batchWindowMs`). */
-  readonly "channel.inbox.batched": { readonly routeId: string; readonly size: number; readonly sourceIds: ReadonlyArray<string> };
-  /** An envelope was folded into a running turn (`midRun: "fold"`). */
-  readonly "channel.inbox.folded": { readonly routeId: string; readonly sourceId: string };
-  /** A running turn was cancelled for a newer envelope (`midRun: "interrupt"`). */
-  readonly "channel.inbox.interrupted": { readonly routeId: string; readonly sourceId: string };
-}
+export type InboxEvent = Extract<AgentEvent, { readonly _tag: `ChannelInbox${string}` }>;
 
-/** The `type` of an inbox event. */
-export type InboxEventType = keyof InboxEventPayloads;
-
-/** Build the typed event for an inbox transition. */
-export const inboxEvent = <T extends InboxEventType>(type: T, payload: InboxEventPayloads[T]): AgentEvent => ({
-  _tag: "Custom",
-  type,
-  payload,
-});
+/** The `_tag` of an inbox event. */
+export type InboxEventType = InboxEvent["_tag"];
 
 /** Settled status for a routing outcome. */
 export const settledFor = (outcome: RouteOutcome): { readonly status: InboxSettled; readonly detail?: string } => {
@@ -102,12 +84,10 @@ export class InboxTracker {
     return Effect.gen(function* () {
       const recovered = yield* self.guard("recover", undefined, (i) => i.recover());
       for (const r of recovered?.requeued ?? []) {
-        yield* self.emit(inboxEvent("channel.inbox.retried", { adapterId: r.adapterId, attempts: r.attempts }));
+        yield* self.emit({ _tag: "ChannelInboxRetried", adapterId: r.adapterId, attempts: r.attempts });
       }
       for (const r of recovered?.exhausted ?? []) {
-        yield* self.emit(
-          inboxEvent("channel.inbox.failed", { adapterId: r.adapterId, attempts: r.attempts, reason: "attempts-exhausted" }),
-        );
+        yield* self.emit({ _tag: "ChannelInboxFailed", adapterId: r.adapterId, attempts: r.attempts, reason: "attempts-exhausted" });
       }
       yield* self.guard("prune", 0, (i) => i.prune());
       return yield* self.guard<ReadonlyArray<InboxEntry>>("pending", [], (i) => i.pending());

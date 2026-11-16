@@ -35,7 +35,37 @@ export {
   type InboxStatus,
   type RouterInbox,
 } from "./routing/inbox.js";
-export type { InboxEventPayloads, InboxEventType } from "./routing/inbox-tracker.js";
+export type { InboxEvent, InboxEventType } from "./routing/inbox-tracker.js";
+export {
+  OutboxError,
+  makeMemoryOutbox,
+  type OutboxCounts,
+  type OutboxEntry,
+  type OutboxOptions,
+  type OutboxRowInput,
+  type OutboxStatus,
+  type RouterOutbox,
+} from "./routing/outbox.js";
+export {
+  FollowUpTimers,
+  TimerError,
+  makeFollowUpTool,
+  makeMemoryTimers,
+  parseFollowUpDelay,
+  type FollowUpLimits,
+  type FollowUpPort,
+  type FollowUpRequest,
+  type FollowUpTimer,
+  type FollowUpTool,
+  type FollowUpToolParameter,
+  type FollowUpToolResult,
+  type RouterTimers,
+  type TimerBinding,
+  type TimerCounts,
+  type TimerErrorReason,
+  type TimerRow,
+  type TimerStatus,
+} from "./routing/timers.js";
 export {
   makeRouteMeter,
   type RouteMeter,

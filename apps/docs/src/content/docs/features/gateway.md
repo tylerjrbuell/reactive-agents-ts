@@ -543,6 +543,8 @@ Webhook-capable adapters (for example Telegram in webhook mode) mount on the gat
 
 See the [Messaging Channels guide](/guides/messaging-channels/) for setup instructions.
 
+For an always-on agent the channel router adds a durable inbox (restart-safe dedupe and crash recovery), an outbox (ordered sends with bounded retry and a typed `ChannelSendFailed` event on permanent failure) and follow-up timers (the agent asks to be woken in a conversation later, bounded and cancellable, durable with the SQLite store). Timers are separate from the cron schedules above, which stay the home for recurring work. Details: [Messaging Channels guide](/guides/messaging-channels/).
+
 ### Channel Access Control
 
 <!-- docs-skip-typecheck -->

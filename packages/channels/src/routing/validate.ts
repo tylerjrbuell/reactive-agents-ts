@@ -14,6 +14,7 @@ const MAX_RESET_COMMANDS = 5;
 
 const MAX_ACK_AFTER_MS =120_000;
 const MAX_BATCH_WINDOW_MS = 30_000;
+const MAX_MIN_GAP_MS = 60_000;
 const MAX_ACK_MODEL_TIMEOUT_MS = 30_000;
 const MAX_ACK_TEXT = 200;
 const MAX_ACK_TEXTS = 10;
@@ -86,6 +87,10 @@ export const validateRoute = (
   }
   if (platform === "webhook" && ((batch ?? 0) > 0 || (route.midRun ?? "queue") !== "queue")) {
     return invalid(route.id, "webhook routes reject batchWindowMs and midRun (the reply is the HTTP response)");
+  }
+  const gap = route.minGapMs;
+  if (gap !== undefined && !(Number.isInteger(gap) && gap >= 0 && gap <= MAX_MIN_GAP_MS)) {
+    return invalid(route.id, `minGapMs must be an integer from 0 to ${MAX_MIN_GAP_MS}`);
   }
   if (route.resetCommands.length > MAX_RESET_COMMANDS || route.resetCommands.some((c) => !RESET_COMMAND.test(c))) {
     return invalid(route.id, `resetCommands must hold at most ${MAX_RESET_COMMANDS} commands like "/new" (slash, then 1 to 31 letters, digits, _ or -)`);

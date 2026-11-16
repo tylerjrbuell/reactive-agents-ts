@@ -2,15 +2,31 @@ import { Clock, Deferred, Effect, Either, Exit, Scope } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { channelSenderKey } from "@reactive-agents/gateway";
-import { envelopeToInboundMessage, type InboundEnvelope, type SenderGate } from "../adapter.js";
+import {
+  envelopeToInboundMessage,
+  type DeliveryReceipt,
+  type InboundEnvelope,
+  type OutboundMessage,
+  type SenderGate,
+} from "../adapter.js";
 import type { ChannelError } from "../errors.js";
 import type { InboundMessage } from "../types.js";
 import { AdapterHub } from "./adapter-hub.js";
 import { chooseAckText, pickAckText, resolveAck, withTurnAck, type AckPortResult } from "./ack.js";
 import { ConversationPolicy, combineMessages, type RunningTurn, type TurnEntry } from "./conversation-policy.js";
-import { InboxTracker, inboxEvent } from "./inbox-tracker.js";
+import { InboxTracker } from "./inbox-tracker.js";
 import type { InboxCounts } from "./inbox.js";
 import type { RouteMeter } from "./meter.js";
+import { makeMemoryOutbox, OutboxDispatcher, type OutboxCounts, type OutboxOptions, type RouterOutbox } from "./outbox.js";
+import {
+  timerMessage,
+  timerRouteOf,
+  type FollowUpPort,
+  type FollowUpTimers,
+  type TimerBinding,
+  type TimerCounts,
+  type TimerRow,
+} from "./timers.js";
 import {
   decideRouteAccess,
   explainRoute,
@@ -92,7 +108,17 @@ export interface EngineDeps {
   readonly conversationQueue?: number;
   /** Optional per-route cost and message meter; a refused reservation drops the turn before the resolver is called. */
   readonly meter?: RouteMeter;
+  /** Outbox tuning and an explicit store (defaults to `store.outbox`, else memory). Strict engines only. */
+  readonly outbox?: { readonly store?: RouterOutbox; readonly options?: OutboxOptions };
+  /** Follow-up timers; present enables the `follow-up` capability and the timer wake-ups. Strict engines only. */
+  readonly timers?: FollowUpTimers;
 }
+
+/** The route without its `when` filter: a timer re-enters the route that created it, whatever the wake-up text says. */
+const withoutWhen = (route: RouteSpec): RouteSpec => {
+  const { when: _when, ...match } = route.match;
+  return { ...route, match };
+};
 
 const conversationKeyOf = (adapterId: string, msg: InboundMessage): string => {
   const thread = msg.metadata["threadId"];
@@ -127,9 +153,22 @@ export class RouterEngine {
   private readonly notified = new Set<string>();
   private readonly policy = new ConversationPolicy();
   private readonly inbox: InboxTracker;
+  private readonly outbox: OutboxDispatcher | undefined;
+  /** Timer ids a fire is in progress for; the poller skips them until the turn ends. */
+  private readonly firing = new Set<string>();
 
   constructor(private readonly deps: EngineDeps) {
     this.inbox = new InboxTracker(deps.strict ? deps.store.inbox : undefined, (e) => this.emit(e));
+    this.outbox = deps.strict
+      ? new OutboxDispatcher(
+          {
+            store: deps.outbox?.store ?? deps.store.outbox ?? makeMemoryOutbox(),
+            deliver: (adapterId, message, taskId) => this.hub.deliver(adapterId, message, taskId),
+            emit: (e) => this.emit(e),
+          },
+          deps.outbox?.options,
+        )
+      : undefined;
     this.hub = new AdapterHub({
       taskId: deps.taskId,
       ...(deps.eventBus ? { eventBus: deps.eventBus } : {}),
@@ -246,8 +285,13 @@ export class RouterEngine {
   replayInbox(): Effect.Effect<void> {
     const self = this;
     return Effect.gen(function* () {
-      if (!self.inbox.enabled) return;
-      for (const entry of yield* self.inbox.recover()) {
+      const entries = self.inbox.enabled ? yield* self.inbox.recover() : [];
+      // Replies a crash left unsent go out first, except those whose turn is about to run again.
+      if (self.deps.store.outbox) {
+        yield* self.outbox?.recover(new Set(entries.map((e) => e.key)), (id) => self.hub.has(id), self.deps.taskId) ?? Effect.void;
+      }
+      if (self.deps.timers) yield* Effect.ignore(self.deps.timers.store.prune());
+      for (const entry of entries) {
         if (self.hub.has(entry.adapterId)) yield* self.replay(entry.adapterId, entry.message);
       }
     });
@@ -256,6 +300,96 @@ export class RouterEngine {
   /** Envelope counts per status, when the store has a durable inbox. */
   inboxCounts(): Effect.Effect<InboxCounts | undefined> {
     return this.inbox.counts();
+  }
+
+  /** Outgoing message counts per status, when the store has a durable outbox. */
+  outboxCounts(): Effect.Effect<OutboxCounts | undefined> {
+    return this.deps.store.outbox && this.outbox ? this.outbox.counts() : Effect.succeed(undefined);
+  }
+
+  /** Follow-up timer counts per status, when the router runs with timers. */
+  timerCounts(): Effect.Effect<TimerCounts | undefined> {
+    const timers = this.deps.timers;
+    if (!timers) return Effect.succeed(undefined);
+    return timers.store.counts().pipe(
+      Effect.catchAll((error) =>
+        Effect.as(emitErrorSwallowed({ site: "channels/src/routing/engine.ts:timerCounts", tag: errorTag(error) }), undefined),
+      ),
+    );
+  }
+
+  /**
+   * Send through a registered adapter with the outbox's retry, order and pacing, and get the real
+   * receipt. A non-strict engine (`ChannelService`) sends directly, as it always did.
+   */
+  send(
+    adapterId: string,
+    message: OutboundMessage,
+    taskId: string = this.deps.taskId(),
+    extra: { readonly resume?: boolean; readonly sourceKey?: string; readonly minGapMs?: number } = {},
+  ): Effect.Effect<DeliveryReceipt, ChannelError> {
+    return this.outbox ? this.outbox.send(adapterId, message, { taskId, ...extra }) : this.hub.deliver(adapterId, message, taskId);
+  }
+
+  // ── Follow-up timers ────────────────────────────────────────────────────
+
+  /** Timers due now that no fire is already handling; each is marked as firing until {@link fireTimer} ends. */
+  dueTimers(): Effect.Effect<ReadonlyArray<TimerRow>> {
+    const self = this;
+    const timers = this.deps.timers;
+    if (!timers) return Effect.succeed([]);
+    return timers.due().pipe(
+      Effect.map((rows) => rows.filter((r) => !self.firing.has(r.id))),
+      Effect.tap((rows) => Effect.sync(() => rows.forEach((r) => self.firing.add(r.id)))),
+      Effect.catchAll((error) =>
+        Effect.as(emitErrorSwallowed({ site: "channels/src/routing/engine.ts:dueTimers", tag: errorTag(error) }), []),
+      ),
+    );
+  }
+
+  /**
+   * Wake a conversation: the due timer becomes an inbound message (id `timer-<id>`) on the normal
+   * path, so dedupe, access, rate caps and the turn queue all apply. The timer is marked fired once
+   * the message was handled; a crash before that fires it again, and the dedupe key refuses the duplicate.
+   */
+  fireTimer(row: TimerRow): Effect.Effect<void> {
+    const self = this;
+    const timers = this.deps.timers;
+    return Effect.gen(function* () {
+      yield* self.emit({ _tag: "Custom", type: "ChannelFollowUpFired", payload: { routeId: row.routeId, timerId: row.id } });
+      yield* self.handleInbound(row.adapterId, timerMessage(row));
+      if (timers) {
+        yield* timers.store.fired(row.id).pipe(
+          Effect.catchAll((error) =>
+            emitErrorSwallowed({ site: "channels/src/routing/engine.ts:fireTimer", tag: errorTag(error) }),
+          ),
+        );
+      }
+    }).pipe(Effect.ensuring(Effect.sync(() => void self.firing.delete(row.id))));
+  }
+
+  /** The conversation's timer capability, with a receipt event per change. Never carries the note. */
+  private followUpFor(binding: TimerBinding): FollowUpPort | undefined {
+    const timers = this.deps.timers;
+    if (!timers) return undefined;
+    const port = timers.bind(binding);
+    return {
+      schedule: (request) =>
+        port.schedule(request).pipe(
+          Effect.tap((timer) =>
+            this.emit({ _tag: "Custom", type: "ChannelFollowUpScheduled", payload: { routeId: binding.routeId, timerId: timer.id, dueAt: timer.dueAt } }),
+          ),
+        ),
+      cancel: (id) =>
+        port.cancel(id).pipe(
+          Effect.tap((found) =>
+            found
+              ? this.emit({ _tag: "Custom", type: "ChannelFollowUpCancelled", payload: { routeId: binding.routeId, timerId: id } })
+              : Effect.void,
+          ),
+        ),
+      pending: port.pending,
+    };
   }
 
   private process(adapterId: string, msg: InboundMessage, simulated: boolean, replayed = false): Effect.Effect<RouteOutcome> {
@@ -276,7 +410,12 @@ export class RouterEngine {
       const routes = yield* deps.store.getRoutes;
       const platform = self.hub.platformOf(adapterId) ?? msg.platform;
       const input = matchInputOf(adapterId, msg);
-      const route = matchRoute(routes, input);
+      // A follow-up timer re-enters the route that created it (only when timers are on; the id check keeps a platform message from claiming it).
+      const pinned = deps.timers ? timerRouteOf(msg) : undefined;
+      const route =
+        pinned !== undefined
+          ? matchRoute(routes.filter((r) => r.id === pinned).map(withoutWhen), input)
+          : matchRoute(routes, input);
       if (!route) {
         self.unrouted += 1;
         yield* self.emit({ _tag: "ChannelUnrouted", channelId: adapterId, simulated });
@@ -289,7 +428,7 @@ export class RouterEngine {
       if (!verdict.allowed) {
         yield* self.emit({ _tag: "ChannelRouteDenied", routeId: route.id, channelId: adapterId, simulated });
         if (verdict.reply !== undefined && !simulated && self.hub.has(adapterId)) {
-          yield* self.reply(adapterId, msg, verdict.reply, taskId).pipe(Effect.ignore);
+          yield* self.reply(adapterId, msg, verdict.reply, taskId, route).pipe(Effect.ignore);
         }
         return yield* settled({ _tag: "Denied", routeId: route.id, reason: verdict.reason } as const);
       }
@@ -314,7 +453,7 @@ export class RouterEngine {
         return yield* self.policy.batch(
           entry,
           (combined) => self.dispatch(combined, platform, replayed),
-          (size, sourceIds) => self.emit(inboxEvent("channel.inbox.batched", { routeId: route.id, size, sourceIds })),
+          (size, sourceIds) => self.emit({ _tag: "ChannelInboxBatched", routeId: route.id, size, sourceIds }),
         );
       }
       return yield* self.dispatch(entry, platform, replayed);
@@ -352,11 +491,10 @@ export class RouterEngine {
 
   /** Record that an envelope joined a running turn (the receipt for fold and interrupt). */
   private emitJoined(entry: TurnEntry, mode: "fold" | "interrupt"): Effect.Effect<void> {
+    const { id: sourceId } = entry.msg;
+    const routeId = entry.route.id;
     return this.emit(
-      inboxEvent(mode === "fold" ? "channel.inbox.folded" : "channel.inbox.interrupted", {
-        routeId: entry.route.id,
-        sourceId: entry.msg.id,
-      }),
+      mode === "fold" ? { _tag: "ChannelInboxFolded", routeId, sourceId } : { _tag: "ChannelInboxInterrupted", routeId, sourceId },
     );
   }
 
@@ -367,7 +505,7 @@ export class RouterEngine {
     return Effect.gen(function* () {
       if (!simulated && !self.notified.has(key) && self.hub.has(adapterId)) {
         self.notified.add(key);
-        yield* self.reply(adapterId, msg, BACKPRESSURE_NOTICE, taskId).pipe(Effect.ignore);
+        yield* self.reply(adapterId, msg, BACKPRESSURE_NOTICE, taskId, route).pipe(Effect.ignore);
       }
       const outcome = yield* self.drop("backpressure", route.id, simulated);
       yield* self.inbox.settle(entry.keys, outcome);
@@ -481,10 +619,24 @@ export class RouterEngine {
     role: RouteRole,
     adapterId: string,
     msg: InboundMessage,
+    simulated = false,
   ): Effect.Effect<{ readonly session: RoutedSession; readonly scope: Scope.CloseableScope }, RoutingError> {
     const self = this;
     return Effect.gen(function* () {
       const stateless = route.session === "stateless";
+      const threadId = msg.metadata["threadId"];
+      const followUp =
+        simulated || !self.deps.strict
+          ? undefined
+          : self.followUpFor({
+              adapterId,
+              platform: msg.platform,
+              channelId: msg.channelId,
+              ...(typeof threadId === "string" ? { threadId } : {}),
+              isGroup: msg.metadata["isGroup"] === true,
+              routeId: route.id,
+              senderId: msg.senderId,
+            });
       const live = stateless ? undefined : self.sessions.get(key);
       if (live) {
         self.sessions.delete(key);
@@ -500,6 +652,7 @@ export class RouterEngine {
           toolExposure: toolExposureFor(route, role),
           conversationKey: conversationKeyOf(adapterId, msg),
           stateless,
+          ...(followUp ? { followUp } : {}),
         }),
         scope,
       ).pipe(Effect.tapError(() => Scope.close(scope, Exit.void)));
@@ -557,7 +710,7 @@ export class RouterEngine {
       });
       const reply: RoutedReply = { text: ok ? RESET_CONFIRMATION : RESET_FAILED_NOTICE };
       if (simulated || !self.hub.has(adapterId)) return { _tag: "Answered", routeId: route.id, role, reply } as const;
-      const sent = yield* Effect.either(self.reply(adapterId, msg, reply.text, taskId));
+      const sent = yield* Effect.either(self.reply(adapterId, msg, reply.text, taskId, route));
       return Either.isRight(sent)
         ? ({ _tag: "Answered", routeId: route.id, role, reply, receipt: sent.right } as const)
         : ({ _tag: "Answered", routeId: route.id, role, reply, deliveryError: sent.left } as const);
@@ -596,7 +749,7 @@ export class RouterEngine {
       };
       const attempt = yield* Effect.either(
         self.acknowledged(route, role, adapterId, msg, taskId, simulated, baseTurn, (turn, noteSession) => Effect.gen(function* () {
-          const entry = yield* self.session(key, route, role, adapterId, msg);
+          const entry = yield* self.session(key, route, role, adapterId, msg, simulated);
           noteSession(entry.session);
           const send = entry.session.send(turn);
           const bounded = self.deps.strict
@@ -635,7 +788,7 @@ export class RouterEngine {
         yield* self.emit({ _tag: "ChannelTurnCompleted", routeId: route.id, role, ok: false, reason: attempt.left.reason, simulated });
         if (self.deps.strict && route.failureNotice && !simulated && attempt.left.reason !== "turn_interrupted" && self.hub.has(adapterId)) {
           // Best effort: `deliver` already counts and publishes a failed send; the turn outcome stays Failed.
-          yield* self.reply(adapterId, msg, failureNoticeText(attempt.left, route), taskId).pipe(Effect.ignore);
+          yield* self.reply(adapterId, msg, failureNoticeText(attempt.left, route), taskId, route).pipe(Effect.ignore);
         }
         return { _tag: "Failed", routeId: route.id, role, error: attempt.left } as const;
       }
@@ -654,7 +807,7 @@ export class RouterEngine {
       if (!reply.text || simulated || !self.hub.has(adapterId)) {
         return { _tag: "Answered", routeId: route.id, role, reply } as const;
       }
-      const sent = yield* Effect.either(self.reply(adapterId, msg, reply.text, taskId));
+      const sent = yield* Effect.either(self.reply(adapterId, msg, reply.text, taskId, route, args.keys));
       return Either.isRight(sent)
         ? ({ _tag: "Answered", routeId: route.id, role, reply, receipt: sent.right } as const)
         : ({ _tag: "Answered", routeId: route.id, role, reply, deliveryError: sent.left } as const);
@@ -731,7 +884,7 @@ export class RouterEngine {
         chosen.source !== "narration" && portStartedAt !== undefined
           ? Math.max(0, (portFinishedAt ?? now) - portStartedAt)
           : undefined;
-      yield* this.reply(adapterId, msg, chosen.text, taskId);
+      yield* this.reply(adapterId, msg, chosen.text, taskId, route);
       yield* this.emit({ _tag: "ChannelTurnAcknowledged", routeId: route.id, role, source: chosen.source, ...(ackLatencyMs !== undefined ? { ackLatencyMs } : {}),...(chosen.fallbackReason ? { ackFallbackReason: chosen.fallbackReason } : {}), simulated });
     }).pipe(
       Effect.catchAll((error) => emitErrorSwallowed({ site: "channels/src/routing/engine.ts:ack", tag: errorTag(error) })),
@@ -740,8 +893,15 @@ export class RouterEngine {
   }
 
   /** Reply through the same adapter. A failed delivery is already counted and published by `deliver`. */
-  private reply(adapterId: string, msg: InboundMessage, text: string, taskId: string) {
-    return this.hub.deliver(
+  private reply(
+    adapterId: string,
+    msg: InboundMessage,
+    text: string,
+    taskId: string,
+    route: RouteSpec,
+    answers?: ReadonlyArray<string>,
+  ) {
+    return this.send(
       adapterId,
       {
         conversation: {
@@ -752,6 +912,11 @@ export class RouterEngine {
         ...(msg.replyTo !== undefined ? { replyTo: msg.replyTo } : {}),
       },
       taskId,
+      {
+        ...(route.minGapMs !== undefined ? { minGapMs: route.minGapMs } : {}),
+        // Only an agent's answer is worth sending after a restart; acks and notices go stale.
+        ...(answers !== undefined && answers.length > 0 ? { resume: true, sourceKey: answers.join("\n") } : {}),
+      },
     );
   }
 

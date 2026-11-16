@@ -10,6 +10,10 @@ import {
   type InboxStatus,
   type RouterInbox,
 } from "./inbox.js";
+import type { RouterOutbox } from "./outbox.js";
+import type { RouterTimers } from "./timers.js";
+import { initOutboxSchema, makeSqliteOutbox } from "./sqlite-outbox.js";
+import { initTimersSchema, makeSqliteTimers } from "./sqlite-timers.js";
 import type { RouteSpec, RouterStore } from "./types.js";
 
 const DAY_MS = 86_400_000;
@@ -38,6 +42,8 @@ export interface SqliteRouterStoreOptions {
 /** A {@link RouterStore} whose accepted envelopes, dedupe keys and turn counters survive a restart. */
 export interface SqliteRouterStore extends RouterStore {
   readonly inbox: RouterInbox;
+  readonly outbox: RouterOutbox;
+  readonly timers: RouterTimers;
   /** Close the database. Idempotent callers should call it once, after the router's scope closed. */
   readonly close: Effect.Effect<void>;
 }
@@ -79,6 +85,8 @@ export const openSqliteRouterStore = (
         db.exec("CREATE INDEX IF NOT EXISTS router_inbox_status ON router_inbox (status, seq)");
         db.exec("CREATE TABLE IF NOT EXISTS router_turns (bucket TEXT NOT NULL, at INTEGER NOT NULL)");
         db.exec("CREATE INDEX IF NOT EXISTS router_turns_bucket ON router_turns (bucket, at)");
+        initOutboxSchema(db);
+        initTimersSchema(db);
         return db;
       },
       catch: failure("open"),
@@ -215,6 +223,8 @@ export const openSqliteRouterStore = (
       const store: SqliteRouterStore = {
         durable: true,
         inbox,
+        outbox: makeSqliteOutbox(db, { maxAgeMs, maxRows }),
+        timers: makeSqliteTimers(db, maxAgeMs),
         close: Effect.sync(() => db.close()),
         getRoutes: Effect.sync(() => routes),
         setRoutes: (next) =>

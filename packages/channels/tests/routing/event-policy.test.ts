@@ -81,8 +81,9 @@ describe("batchWindowMs", () => {
       expect(turns[0]?.text).toBe("first\nsecond\nthird");
       expect(turns[0]?.message.metadata["batch"]).toEqual({ sourceIds: ["a", "b", "c"], size: 3 });
       expect(chan.sends).toHaveLength(1);
-      const batched = events.find((e) => e._tag === "Custom" && e.type === "channel.inbox.batched");
-      expect(batched && batched._tag === "Custom" ? batched.payload : undefined).toEqual({
+      const batched = events.find((e) => e._tag === "ChannelInboxBatched");
+      expect(batched).toEqual({
+        _tag: "ChannelInboxBatched",
         routeId: "r1",
         size: 3,
         sourceIds: ["a", "b", "c"],
@@ -125,7 +126,7 @@ describe("midRun fold", () => {
       await waitFor(() => turns.length === 1);
       expect(turns[0]?.takeFolded).toBeDefined();
       chan.push(env({ id: "b", text: "also this" }));
-      await waitFor(() => events.some((e) => e._tag === "Custom" && e.type === "channel.inbox.folded"));
+      await waitFor(() => events.some((e) => e._tag === "ChannelInboxFolded"));
       Effect.runSync(Deferred.succeed(gate, undefined));
       await waitFor(() => chan.sends.length === 1);
       await sleep(40);
@@ -176,7 +177,7 @@ describe("midRun interrupt", () => {
       expect(
         events.some((e) => e._tag === "ChannelTurnCompleted" && !e.ok && e.reason === "turn_interrupted"),
       ).toBe(true);
-      expect(events.some((e) => e._tag === "Custom" && e.type === "channel.inbox.interrupted")).toBe(true);
+      expect(events.some((e) => e._tag === "ChannelInboxInterrupted")).toBe(true);
     });
   });
 });

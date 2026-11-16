@@ -5,6 +5,8 @@ import type { ChannelError } from "../errors.js";
 import type { Attachment, InboundMessage } from "../types.js";
 import type { AckPortResult } from "./ack.js";
 import type { InboxCounts, RouterInbox } from "./inbox.js";
+import type { OutboxCounts, RouterOutbox } from "./outbox.js";
+import type { FollowUpPort, RouterTimers, TimerCounts } from "./timers.js";
 
 /**
  * Channel routing types: a Route is one flat rule (match an inbound conversation, pick a target
@@ -121,6 +123,12 @@ export const RouteSpec = Schema.Struct({
    * `turn_interrupted`) and start a new one from the combined input.
    */
   midRun: Schema.optional(Schema.Literal("queue", "fold", "interrupt")),
+  /**
+   * Pacing: least gap (ms, 0 to 60 000) between two messages the router sends into one conversation,
+   * so a chatty agent does not flood a chat. Applies to replies, acks and notices alike. Absent or 0:
+   * off (today's behavior); overrides the outbox's `minGapMs` when set.
+   */
+  minGapMs: Schema.optional(Schema.Number),
 });
 /** A validated route (defaults applied). */
 export type RouteSpec = Schema.Schema.Type<typeof RouteSpec>;
@@ -244,6 +252,12 @@ export interface OpenSessionRequest {
   readonly toolExposure: ToolExposure;
   readonly conversationKey: string;
   readonly stateless: boolean;
+  /**
+   * Present only when the router runs with `followUp` enabled. The conversation's timer capability:
+   * build the agent's `follow-up` tool from it with `makeFollowUpTool(req.followUp)` and register
+   * the tool on the agent this session opens. Absent in simulations and on routers without timers.
+   */
+  readonly followUp?: FollowUpPort;
 }
 
 /**
@@ -265,6 +279,10 @@ export interface RouterStore {
   readonly durable: boolean;
   /** Durable inbox (accepted envelopes, crash recovery). Absent on the in-memory store. */
   readonly inbox?: RouterInbox;
+  /** Durable outbox (sent-message ledger, restart recovery). Absent on the in-memory store. */
+  readonly outbox?: RouterOutbox;
+  /** Durable follow-up timers. Absent on the in-memory store (the router then keeps them in memory). */
+  readonly timers?: RouterTimers;
   readonly getRoutes: Effect.Effect<ReadonlyArray<RouteSpec>>;
   readonly setRoutes: (routes: ReadonlyArray<RouteSpec>) => Effect.Effect<void>;
   /** Record a platform message id. True the first time, false on every repeat. */
@@ -326,4 +344,8 @@ export interface RouterStatus {
   readonly durableStore: boolean;
   /** Envelope count per status; present only with a durable inbox. */
   readonly inbox?: InboxCounts;
+  /** Outgoing message count per status; present only with a durable outbox. */
+  readonly outbox?: OutboxCounts;
+  /** Follow-up timer count per status; present only when the router runs with `followUp`. */
+  readonly timers?: TimerCounts;
 }

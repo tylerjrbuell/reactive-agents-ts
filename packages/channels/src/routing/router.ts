@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schedule } from "effect";
 import type { Scope } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
 import type { ChannelAdapter, DeliveryReceipt, InboundEnvelope, OutboundMessage } from "../adapter.js";
@@ -6,7 +6,9 @@ import { isChannelError, type ChannelError } from "../errors.js";
 import { RouterEngine } from "./engine.js";
 import { makeFileLeases, type AccountLeases } from "./lease.js";
 import type { RouteMeter } from "./meter.js";
+import type { OutboxOptions } from "./outbox.js";
 import { makeMemoryRouterStore } from "./store.js";
+import { FollowUpTimers, makeMemoryTimers, type FollowUpLimits } from "./timers.js";
 import {
   RoutingError,
   type AgentResolver,
@@ -36,6 +38,18 @@ export interface ChannelRouterOptions {
    * as `ChannelTurnDropped` with reason `budget` (cost) or `rate` (messages). Omitted: no metering.
    */
   readonly meter?: RouteMeter;
+  /**
+   * Outgoing sends: retry, order and pacing. Defaults keep today's behavior (one attempt, no
+   * pacing); set `maxAttempts` above 1 to retry transient failures with capped backoff. The row
+   * ledger is durable when the store is (`makeSqliteRouterStore`).
+   */
+  readonly outbox?: OutboxOptions;
+  /**
+   * Follow-up timers: sessions get a `followUp` capability (see `OpenSessionRequest`), and due
+   * timers wake their conversation. `true` takes the defaults. Timers are durable with a SQLite store.
+   * Absent: off.
+   */
+  readonly followUp?: true | (FollowUpLimits & { readonly pollMs?: number });
   readonly eventBus?: { publish: (e: AgentEvent) => Effect.Effect<void, never> };
   readonly taskId?: () => string;
 }
@@ -91,6 +105,8 @@ export const createChannelRouter = (
     yield* store.setRoutes(routes);
     const leases = options.leases ?? makeFileLeases();
     let counter = 0;
+    const followUp = options.followUp === true ? {} : options.followUp;
+    const timers = followUp ? new FollowUpTimers(store.timers ?? makeMemoryTimers(), followUp) : undefined;
     const engine = new RouterEngine({
       store,
       agents: options.agents,
@@ -98,6 +114,8 @@ export const createChannelRouter = (
       ...(options.eventBus ? { eventBus: options.eventBus } : {}),
       strict: true,
       ...(options.meter ? { meter: options.meter } : {}),
+      ...(options.outbox ? { outbox: { options: options.outbox } } : {}),
+      ...(timers ? { timers } : {}),
     });
     yield* Effect.addFinalizer(() => engine.shutdown());
 
@@ -133,12 +151,26 @@ export const createChannelRouter = (
     // A durable inbox: retry what a crash left behind, off the startup path (replies need the adapters, which are up now).
     yield* Effect.forkScoped(engine.replayInbox());
 
+    // Follow-up timers: poll the store, wake each due conversation on the normal inbound path. A timer
+    // that came due while the process was down fires on the first pass.
+    if (timers) {
+      const pass = Effect.flatMap(engine.dueTimers(), (due) =>
+        Effect.forEach(due, (row) => Effect.forkScoped(engine.fireTimer(row)), { discard: true }),
+      );
+      yield* Effect.forkScoped(Effect.repeat(pass, Schedule.spaced(`${Math.max(10, followUp?.pollMs ?? 1000)} millis`)));
+    }
+
     return {
       status: Effect.flatMap(store.getRoutes, (r) =>
-        Effect.map(engine.inboxCounts(), (inbox) => ({
-          ...engine.routerStatus(r.length),
-          ...(inbox ? { inbox } : {}),
-        })),
+        Effect.map(
+          Effect.all([engine.inboxCounts(), engine.outboxCounts(), engine.timerCounts()]),
+          ([inbox, outbox, timerCounts]) => ({
+            ...engine.routerStatus(r.length),
+            ...(inbox ? { inbox } : {}),
+            ...(outbox ? { outbox } : {}),
+            ...(timerCounts ? { timers: timerCounts } : {}),
+          }),
+        ),
       ),
       setRoutes: (next, opts) =>
         Effect.gen(function* () {
@@ -157,6 +189,6 @@ export const createChannelRouter = (
         }),
       simulate: (env, channelId) => engine.simulate(env, channelId),
       explain: (env, channelId) => engine.explain(env, channelId),
-      deliver: (channelId, message) => engine.hub.deliver(channelId, message),
+      deliver: (channelId, message) => engine.send(channelId, message),
     } satisfies ChannelRouter;
   });
