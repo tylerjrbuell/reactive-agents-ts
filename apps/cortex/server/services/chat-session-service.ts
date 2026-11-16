@@ -62,6 +62,7 @@ import { attachChatIngest, withStartedArgs, type ChatIngestHandle, type ChatInge
 import { recordTurnAssessments, type TurnAssessmentRecorder } from "./turn-assessments.js";
 import { CortexIngestService } from "./ingest-service.js";
 import { buildRunTaskContext } from "./chat-run-context.js";
+import { withDerivedContext } from "./chat-context-fallback.js";
 import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
 import { chatToolParams, resolveEnableTools } from "./chat-tool-params.js";
 import { DEFAULT_CHAT_NAME, cleanChatTitle, fallbackChatTitle } from "./chat-title.js";
@@ -821,14 +822,13 @@ let tokensUsed = 0;
       let reportedOutSeen = false;
       let done: Extract<AgentStreamEvent, { _tag: "StreamCompleted" }> | undefined;
       const recorder = new TurnTraceRecorder();
-
       try {
-        for await (const streamed of entry.session.runStream(turnInput, {
+        for await (const streamed of withDerivedContext(entry.session.runStream(turnInput, {
           density: "full",
           signal: stop.signal,
           ...(posture !== undefined ? { posture } : {}),
           ...turnSkillsOption(turnPins),
-        })) {
+        }))) {
           // A started call shows its arguments while it runs (bus args when the stream has none).
           const event = withStartedArgs(streamed, entry.ingest?.startedArgsOf);
           recorder.record(event);
