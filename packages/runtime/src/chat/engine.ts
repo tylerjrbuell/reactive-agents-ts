@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { AgentResult } from "../builder/types.js";
-import type { ChatTurnEvent, EnvironmentChangedEvent, RunOrigin } from "@reactive-agents/core";
+import type { ChatModeChangedEvent, ChatTurnEvent, EnvironmentChangedEvent, RunOrigin } from "@reactive-agents/core";
 import type { ChatMessage, ChatOptions, ChatReply } from "../chat.js";
 import type { RunHandle } from "../run-controller.js";
 import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
@@ -14,7 +14,7 @@ import { lastRunContextOf } from "./last-run-context.js";
 import { EnvironmentTracker, type EnvironmentSeedOption, type EnvironmentSnapshotInput, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { ChatEngineCapabilityError } from "./engine-errors.js";
 import { TurnGate } from "./turn-gate.js";
-import { turnPosture, DEFAULT_CHAT_MODE, type ChatMode } from "./session-mode.js";
+import { turnPosture, announceModeChange, DEFAULT_CHAT_MODE, type ChatMode } from "./session-mode.js";
 import { TodoCarry, planPosture, originCarry, type OriginOption, type PostureOption, type TodoSeedItem, type TodoSeedOption } from "./todo-seed.js";
 
 // ─── Engine defaults (spec A7: engine-optional capabilities carry engine defaults) ──
@@ -138,6 +138,8 @@ export interface ChatEngineCapabilities {
   readonly environment?: () => EnvironmentSnapshotInput;
   /** `EnvironmentChanged` publication port (swallow-site). */
   readonly publishEnvironment?: (event: EnvironmentChangedEvent) => Promise<void>;
+  /** `ChatModeChanged` publication port (swallow-site): one event per actual `setMode` change. */
+  readonly publishMode?: (event: ChatModeChangedEvent) => Promise<void>;
 }
 
 /**
@@ -213,17 +215,11 @@ export interface TurnOptions extends ChatOptions {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Keep only non-empty prompt fragments (empty parts are skipped when composing the
- * direct-path system prompt).
- */
+/** Keep only non-empty prompt fragments. */
 const isNonEmpty = (part: string | undefined): part is string =>
   typeof part === "string" && part.length > 0;
 
-/**
- * Join non-empty prompt fragments with the `---` separator `direct path` uses today
- * (parity: `"\n\n---\n\n"`), skipping empty fragments.
- */
+/** Join non-empty prompt fragments with the `---` separator (parity: `"\n\n---\n\n"`). */
 function composeDirectPrompt(...parts: (string | undefined)[]): string {
   return parts.filter(isNonEmpty).join(DIRECT_PROMPT_SEPARATOR);
 }
@@ -295,8 +291,7 @@ export class ChatEngine {
     this.#maxDirectTokens = options?.maxDirectTokens ?? DEFAULT_MAX_DIRECT_TOKENS;
     const initialHistory = options?.initialHistory ?? [];
     this.#history = [...healShapedAssistantTurns(initialHistory)];
-    // Load-once latch seeds with the option: a non-empty seed means the loader
-    // must NEVER run; empty seeds keep the loader's first-turn resolution.
+    // Load-once latch: a non-empty seed means the loader NEVER runs.
     this.#loaded = initialHistory.length > 0;
     this.#todo = new TodoCarry(options?.initialTodo); this.#mode = options?.mode ?? DEFAULT_CHAT_MODE;
     this.#env = new EnvironmentTracker(this.#sessionId, {
@@ -306,8 +301,8 @@ export class ChatEngine {
 
   /** The session mode; each turn runs under its posture unless the turn sets one. */
   mode(): ChatMode { return this.#mode; }
-  /** Switch the mode for later turns (a turn in flight keeps the mode it started under). */
-  setMode(mode: ChatMode): void { this.#mode = mode; }
+  /** Switch the mode for later turns (in-flight turn keeps its mode); publishes `ChatModeChanged` on change. */
+  setMode(mode: ChatMode): void { const from = this.#mode; this.#mode = mode; announceModeChange(this.#deps.publishMode, this.#sessionId, from, mode, (e) => swallowError(e, "chat/engine.ts:publishMode")); }
 
   /** The conversation's latest to-do list, as of the last completed `streamTurn()` event. */
   todo(): readonly TodoSeedItem[] {

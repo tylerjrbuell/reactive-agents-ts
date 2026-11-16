@@ -1,5 +1,5 @@
 ---
-"@reactive-agents/core": patch
+"@reactive-agents/runtime": patch
 ---
 
-New `ChatModeChanged` AgentEvent (`sessionId`, `from`, `to`, `timestamp`) for chat session plan/execute mode changes. Additive.
+`agent.session().setMode()` now publishes a `ChatModeChanged` event (`{ sessionId, from, to, timestamp }`) on the agent's EventBus, once per actual change. Setting the mode the session already has publishes nothing.

@@ -106,6 +106,11 @@ export const makeChatPublishEnvironment =
         )
     }
 
+/** Publish a `ChatModeChanged` event on the agent's EventBus (the engine swallows a failed publish). */
+export const makeChatPublishMode =
+    (runtime: ChatRuntime): NonNullable<ChatEngineCapabilities['publishMode']> =>
+    (event) => runtime.runPromise(EventBus.pipe(Effect.flatMap((bus) => bus.publish(event))))
+
 /**
  * Names of the tools actually registered on the agent's `ToolService`, read
  * synchronously (the registry is Ref-backed). `[]` when the agent has no tools

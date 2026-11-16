@@ -1,4 +1,4 @@
-import type { RunPosture } from "@reactive-agents/core";
+import type { ChatModeChangedEvent, RunPosture } from "@reactive-agents/core";
 
 /**
  * The mode a chat session is in. `"execute"` (default): turns run normally.
@@ -19,3 +19,19 @@ export const DEFAULT_CHAT_MODE: ChatMode = "execute";
  * `"execute"`) wins, otherwise the session's mode decides.
  */
 export const turnPosture = (mode: ChatMode, explicit?: RunPosture): RunPosture => explicit ?? mode;
+
+/**
+ * Announce a session mode change on `publish` (the host's EventBus port): one
+ * `ChatModeChanged` per actual change, nothing for a no-op set or an unwired
+ * port. A publish failure goes to `onError`, never to the caller.
+ */
+export const announceModeChange = (
+  publish: ((event: ChatModeChangedEvent) => Promise<void>) | undefined,
+  sessionId: string,
+  from: ChatMode,
+  to: ChatMode,
+  onError: (err: unknown) => void,
+): void => {
+  if (from === to || !publish) return;
+  publish({ _tag: "ChatModeChanged", sessionId, from, to, timestamp: Date.now() }).catch(onError);
+};

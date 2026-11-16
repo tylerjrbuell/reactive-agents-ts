@@ -192,6 +192,7 @@ GIANT_BAR=1000
 # 2026-11-11 sub-agent memoryAgentId: runtime-types.ts 1071->1065 (agentDisplayName JSDoc condensed; +memoryAgentId field; runtime.ts unchanged at 1105, in-place edits).
 # 2026-11-11 skill control API: reactive-agent.ts 2029->2025 (skills delegates condensed to one-line JSDoc, full JSDoc lives in agent/skills-facade.ts; +rollbackSkill/setSkillMode delegates).
 # 2026-11-11 budget event: arbitrator.ts 823->797 (run-meter-aware BudgetSignal derivation moved to decide/budget-signal.ts budgetSignalOfState, shared with the terminal BudgetExhausted publish).
+# 2026-11-15 typed current turn: arbitrator.ts 797->796 (+currentTurnText forwarding into the deriveConditions fallback, offset by folding the 2-line `conditions` binding to one line).
 # 2026-11-11 ollama cloud auth: llm-provider local.ts 1149->1139 (endpoint/key/header resolution delegated to ollama-endpoint.ts resolveOllamaTarget).
 # 2026-11-12 gateway inbound queue: builder/types.ts 1063->1062 (+GatewayOptions.queue field; persistMemoryAcrossRuns JSDoc condensed).
 # 2026-11-12 agent.schedules(): reactive-agent.ts 2017->2016 (schedules() delegate to agent/schedules-facade.ts added; gatewayStatus example JSDoc condensed).
@@ -205,12 +206,13 @@ GIANT_BAR=1000
 # 2026-11-12 chat routes by capability: reactive-agent.ts 2002->1987 (three pre-resolved useTools sites + _resolveUseTools replaced by one toolIntent capability per ChatEngine, makeChatToolIntent in agent/chat-capabilities.ts), chat/engine.ts 670->669 (routing JSDoc condensed, toolIntent port added).
 # 2026-11-14 chat run-context isolation: reactive-agent.ts 1987->1973 (three chat engines' contextSummary closures carry static taskContext only, no agent-level _lastDebrief/_lastRunObservations), chat/engine.ts 669->663 (tool path sends the raw input; prior-run context now per-session via chat/last-run-context.ts).
 # 2026-11-15 chat session mode: chat/engine.ts 663->661 (session mode()/setMode() + mode option added; turn/streamTurn/ctor JSDoc condensed to pay for them). reactive-agent.ts stays 1973 (mode + typed currentTurn wired on existing lines).
+# 2026-11-15 ChatModeChanged: chat/engine.ts 661->656 (publishMode port + setMode announce added; setMode one line, two engine-private JSDoc blocks condensed). reactive-agent.ts stays 1973 (publishMode wired on an existing line).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:1973"
-  "runtime/src/chat/engine.ts:661"
+  "runtime/src/chat/engine.ts:656"
   "runtime/src/builder.ts:2200"
   "runtime/src/execution-engine.ts:955"
-  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:797"
+  "reasoning/src/kernel/capabilities/decide/arbitrator.ts:796"
   "reasoning/src/kernel/loop/runner.ts:848"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
   "reasoning/src/strategies/plan-execute.ts:817"

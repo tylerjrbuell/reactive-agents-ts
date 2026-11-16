@@ -98,7 +98,7 @@ import {
 import { ChatEngine, nextSessionId } from './chat/engine.js'
 import { turnCarryMetadata, planPosture, originCarry, type TurnCarryOption, type PostureOption, type OriginOption } from './chat/todo-seed.js'
 import type { EnvironmentUpdateOption } from './chat/environment-snapshot.js'
-import { makeChatComplete, makeChatPublishTurn, makeChatToolIntent, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
+import { makeChatComplete, makeChatPublishMode, makeChatPublishTurn, makeChatToolIntent, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
 import { Health } from '@reactive-agents/health'
 import { emitErrorSwallowed, errorMessage, errorTag } from "@reactive-agents/core";
@@ -1654,7 +1654,7 @@ export class ReactiveAgent<TOut = unknown> {
                 runStreamTask: makeSessionRunStreamTask((input, o) => self.runStream(input, o)),
                 complete: makeChatComplete(self.runtime),
                 publishTurn: makeChatPublishTurn(self.runtime, "runtime/src/reactive-agent.ts:session-publish"),
-                saveHistory: sessionStore?.save,
+                publishMode: makeChatPublishMode(self.runtime), saveHistory: sessionStore?.save,
                 loadHistory: sessionStore?.load,
                 systemPrompt: self._config?.systemPrompt
                     ? () => self._config!.systemPrompt!
