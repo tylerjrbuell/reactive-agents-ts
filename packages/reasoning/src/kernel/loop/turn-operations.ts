@@ -68,6 +68,7 @@ import { runAutoCheckpointStep, applyExecutionLane, runIcsNudgeStep } from "./it
 import { forkIterLearnWrite } from "./iterate-learn-seam.js";
 import { reserveBudgetAnswerTurn } from "./budget-answer-turn.js";
 import { proposeBrokenToolExit } from "./broken-tool-exit.js";
+import { applyInputOrderGuidance } from "./iterate-input-order-seam.js";
 
 /** Values one operation hands a later one within a single pass (reset per pass). */
 export interface TurnPassLocals {
@@ -200,7 +201,7 @@ export const KERNEL_TURN_OPERATIONS = [
     ],
     proposesExit: true,
   },
-  { name: "ics-nudge", reads: ["state", "pass.laneDecision"], writes: ["state.pendingGuidance", "pass.oracleReady"], proposesExit: false },
+  { name: "ics-nudge", reads: ["state", "pass.laneDecision", "pass.stepsAtPassStart"], writes: ["state.pendingGuidance", "pass.oracleReady"], proposesExit: false },
   {
     name: "oracle-gate",
     reads: ["state.readyToAnswerNudgeCount", "state.output", "state.steps", "pass.laneDecision", "pass.oracleReady"],
@@ -523,6 +524,8 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
       t.state = yield* runIcsNudgeStep({
         state: t.state, currentInput: t.currentInput, effectiveToolsUsed, profile: cfg.profile, shouldAllowIcsNudge,
       });
+      // Read-before-write order: a write made while listed inputs are unread says so (inputCoverage only).
+      t.state = applyInputOrderGuidance(t.state, t.pass.stepsAtPassStart);
       return NEXT;
     }),
 

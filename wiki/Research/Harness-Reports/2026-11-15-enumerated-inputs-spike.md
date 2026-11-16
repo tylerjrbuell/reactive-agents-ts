@@ -38,4 +38,6 @@ Did not build a second mechanism. A new evidence-basis input requirement would d
 2. Exclude `input:` items from proactive forcing's outstanding list, or add per-target write coverage so "fix X" stays outstanding.
 3. Owner call: are the 6 test files "inputs" for `lh-debug-green` (doubles forced reads)? Narrower rule = files the task asks to fix.
 
-Item 1 touches the guard/turn-operations seam and changes model-visible guidance, so it needs a placement decision plus an ablation (>= 2 tiers) before default-on; it should land as a flagged extension of `inputCoverage`, not a new flag.
+Update 2026-11-15 (owner-approved): item 1 implemented as `kernel/loop/iterate-input-order-seam.ts`, wired into the `ics-nudge` turn operation; a pass that writes while listed inputs are unread appends one `icsGuidance` line naming them. Inert unless `inputCoverage` is on. Not yet measured; ablation-warden next. Items 2 and 3 not done.
+
+Original note: item 1 touches the guard/turn-operations seam and changes model-visible guidance, so it needs a placement decision plus an ablation (>= 2 tiers) before default-on; it should land as a flagged extension of `inputCoverage`, not a new flag.
