@@ -23,7 +23,7 @@
 
 import type { RunPosture, TaskContract } from "@reactive-agents/core";
 import { PLAN_POSTURE_TOOLS } from "../policy/run-posture.js";
-import { extractCurrentTurn } from "./current-turn.js";
+import { resolveCurrentTurn } from "./current-turn.js";
 import { classifyTaskHorizon, type TaskHorizon } from "../capabilities/comprehend/task-horizon.js";
 import {
   deriveDeliverableItems,
@@ -249,6 +249,12 @@ export interface CompileRunContractOptions {
    * delivery-scope.ts). Absent ⇒ byte-identical to before.
    */
   readonly deliveryScope?: DeliveryScope;
+  /**
+   * The producer-typed current turn's text (`TaskMetadata.currentTurn`). When
+   * present it is the current turn; marker parsing (`extractCurrentTurn`) is
+   * only the fallback. Absent ⇒ byte-identical to before.
+   */
+  readonly currentTurnText?: string;
   /**
    * Harness switch `inputCoverage` (default OFF): compile one `input-coverage`
    * requirement per input the task lists (derive-inputs.ts), so one read does
@@ -494,7 +500,7 @@ export function compileRunContract(
   // Compile from the CURRENT turn only — chat callers inline prior conversation
   // ahead of it, and requirements derived from that history can never be
   // satisfied this turn (see current-turn.ts). No marker ⇒ identical to before.
-  const turn = extractCurrentTurn(fullTask);
+  const turn = resolveCurrentTurn(fullTask, opts.currentTurnText);
   const task = turn.text;
   const spanOf = (start: number, len: number): { start: number; end: number } => ({
     start: turn.offset + start,

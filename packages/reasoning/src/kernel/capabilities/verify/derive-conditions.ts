@@ -18,7 +18,7 @@
 // If nothing derives -> EMPTY set.
 
 import type { RunPosture } from "@reactive-agents/core";
-import { extractCurrentTurn } from "../../contract/current-turn.js";
+import { resolveCurrentTurn } from "../../contract/current-turn.js";
 import { isStepScope, type DeliveryScope } from "../../contract/delivery-scope.js";
 import {
   anchorDeliverablePath,
@@ -639,6 +639,8 @@ export function deriveConditions(
    * Absent ⇒ the run owns every file its task text names.
    */
   deliveryScope?: DeliveryScope,
+  /** Producer-typed current-turn text; preferred over marker parsing. Absent ⇒ markers. */
+  currentTurnText?: string,
 ): PostCondition[] {
   // Root fix (2026-09-04): two independent call sites prepend prior-turn prose
   // to the task text verbatim before it reaches the kernel:
@@ -659,7 +661,7 @@ export function deriveConditions(
   // produce). Scan only the text after the LAST of either marker (whichever
   // is closer to the actual current ask); absent both, byte-identical.
   // Marker parsing now lives in ONE place: contract/current-turn.ts.
-  const scanTask = extractCurrentTurn(task).text;
+  const scanTask = resolveCurrentTurn(task, currentTurnText).text;
 
   const conditions: PostCondition[] = [];
   const seen = new Set<string>();

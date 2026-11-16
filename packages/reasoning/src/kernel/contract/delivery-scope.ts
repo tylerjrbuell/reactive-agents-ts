@@ -38,6 +38,12 @@ declare module "../state/kernel-state.js" {
      */
     readonly deliveryScope?: DeliveryScope;
     /**
+     * The producer-typed current turn's text (from `TaskMetadata.currentTurn`,
+     * no inlined history). Both run-start derivations prefer it over parsing
+     * history markers out of `task`. Absent ⇒ marker parsing, as before.
+     */
+    readonly currentTurnText?: string;
+    /**
      * The tools a parent's plan step declared for this sub-kernel (plan-execute
      * composite `toolHints`). A step that declares tools expects to call one:
      * act-or-answer counts "none of them called yet" as outstanding tool work.
@@ -64,11 +70,13 @@ export const isStepScope = (carrier: { readonly deliveryScope?: DeliveryScope } 
 export function deliveryRails(input: {
   readonly posture?: RunPosture;
   readonly deliveryScope?: DeliveryScope;
+  readonly currentTurnText?: string;
   readonly harness?: Pick<ResolvedHarness, "inputCoverage" | "writeCoverage">;
   readonly availableToolSchemas?: readonly { readonly name: string }[];
 }): {
   readonly posture?: RunPosture;
   readonly deliveryScope?: DeliveryScope;
+  readonly currentTurnText?: string;
   readonly inputCoverage?: true;
   readonly writeCoverage?: true;
   readonly writeTargetExists?: (path: string) => boolean;
@@ -80,6 +88,7 @@ export function deliveryRails(input: {
   return {
     ...(input.posture !== undefined ? { posture: input.posture } : {}),
     ...(input.deliveryScope !== undefined ? { deliveryScope: input.deliveryScope } : {}),
+    ...(input.currentTurnText !== undefined ? { currentTurnText: input.currentTurnText } : {}),
     ...(inputCoverage ? { inputCoverage: true as const } : {}),
     // Targets must exist at run start (resolved against the active file root).
     ...(writeCoverage ? { writeCoverage: true as const, writeTargetExists: (p: string) => nodeFileExists(p) } : {}),

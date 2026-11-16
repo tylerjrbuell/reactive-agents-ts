@@ -413,7 +413,7 @@ export function runKernel(
       const derived = seedPostConditions(deriveConditions(
         effectiveInput.task,
         effectiveInput.requiredTools ?? [],
-        availableWritingTools, effectiveInput.deliveryScope, // step: the text's files are the parent's
+        availableWritingTools, effectiveInput.deliveryScope, effectiveInput.currentTurnText, // step scope; typed turn
       ), availableSchemas, effectiveInput); // K1 surface filter + plan/step rails (empty set, never re-derived)
       if (derived !== undefined) {
         state = transitionState(state, {

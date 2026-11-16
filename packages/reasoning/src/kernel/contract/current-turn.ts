@@ -61,6 +61,19 @@ function trailingContextStart(task: string, from: number): number {
 }
 
 /**
+ * The current turn, preferring a producer-typed value over marker parsing.
+ * `typedText` is the text of `TaskMetadata.currentTurn.content` (no inlined
+ * history). Blank/absent ⇒ exactly `extractCurrentTurn(task)`. `offset` is where
+ * the typed text sits in `task` (last occurrence; 0 when it is not found, in
+ * which case spans are relative to the typed text).
+ */
+export function resolveCurrentTurn(task: string, typedText?: string): CurrentTurn {
+  if (typedText === undefined || typedText.trim().length === 0) return extractCurrentTurn(task);
+  const at = task.lastIndexOf(typedText);
+  return { text: typedText, offset: Math.max(at, 0), historyStripped: typedText !== task };
+}
+
+/**
  * Public entry for consumers that must not read prior turns as intent.
  * Last marker wins; marker text inside the user's own message therefore moves
  * the boundary forward (documented, not escaped).
