@@ -97,6 +97,7 @@
 </script>
 
 <div class="ch" role="region" aria-label="Channels and routes">
+<div class="ch-in">
   <header class="ch-h">
     <div>
       <h2>Channels</h2>
@@ -123,6 +124,8 @@
       <p class="ch-bad" role="alert">{snapshot.rejected.length} saved route{snapshot.rejected.length === 1 ? " was" : "s were"} refused and not served: {snapshot.rejected.map((r) => `${r.id} (${r.reason})`).join("; ")}</p>
     {/if}
 
+    <div class="ch-grid">
+    <div class="ch-main">
     <section class="ch-sec" aria-labelledby="ch-ch">
       <header class="ch-sh">
         <h3 id="ch-ch">Channels</h3>
@@ -151,9 +154,11 @@
     </section>
 
     <HubRoutes {routes} {channels} {agents} {live} onEdit={(r) => (editor = { saved: r })} onNew={() => (editor = {})} onChanged={() => void reload()} />
-
-    <RouteTestPanel {channels} />
+    </div>
+    <aside class="ch-side" aria-label="Test a message"><RouteTestPanel {channels} /></aside>
+    </div>
   {/if}
+</div>
 </div>
 
 {#if editor}
@@ -173,11 +178,21 @@
 {/if}
 
 <style>
-  .ch { display: grid; gap: 22px; max-width: 980px; }
-  .ch-h { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  /* Scroll container with the same 32px gutter as the Lab header and sibling tabs (GatewayOverview `.gw`).
+     `.lab-panel` is overflow:hidden and adds no padding for this tab, so without this the hub sat flush
+     at x=0 and could not scroll. */
+  .ch { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 32px 48px; }
+  .ch-in { display: grid; gap: 22px; width: 100%; max-width: 1480px; }
+  /* One column below 1280px; from 1280px the test panel sits beside channels + routes. */
+  .ch-grid { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .ch-main { display: grid; gap: 22px; min-width: 0; }
+  .ch-side { min-width: 0; }
+  @media (min-width: 1280px) {
+    .ch-grid { grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); }  }
+  .ch-h { display: flex; justify-content: space-between; gap: 12px 24px; align-items: flex-start; flex-wrap: wrap; }
   .ch-h h2 { margin: 0; font-size: var(--cortex-t-lg); font-weight: 600; color: var(--cortex-text); }
   .ch-h p { margin: 4px 0 0; max-width: 62ch; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
-  .ch-sum { display: flex; gap: 8px; align-items: center; }
+  .ch-sum { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .ch-sec { display: grid; gap: 12px; }
   .ch-sh { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .ch-sh h3 { margin: 0; font-size: var(--cortex-t-md); font-weight: 600; color: var(--cortex-text); }
