@@ -52,3 +52,19 @@ Everything above must be reachable from the builder/agent API with no Cortex inv
 
 ## Non-goals (v1)
 Read-only exploration tools in plan mode (decide after the measurement), hard enforcement that execute must follow the list (advisory only), a second LLM call to structure the plan.
+
+## Addendum 2026-11-16 (owner): clarifying questions and bounded recon in plan mode
+Owner direction: a robust planner can ask the user before finalizing, and may run a few tools as recon (e.g. look up the umami website id) so execution is smooth, without drifting into execution. This promotes the v1 non-goal "read-only exploration tools in plan mode".
+
+### Questions
+- `request-user-input` (existing tool, `packages/tools/src/skills/request-user-input.ts`, kernel `act/user-interaction.ts`) joins `PLAN_POSTURE_TOOLS` when user interaction is wired. Guidance: ask only when a missing answer would change the plan; batch questions in one call; never ask what recon or the conversation can answer. A pending question suspends the plan turn through the existing user-interaction path; the answer resumes it. Cortex/any UI renders it through the existing HITL card.
+
+### Recon (flag `planRecon`, default OFF until measured)
+- Eligibility is a declared property, not a heuristic: each tool carries `effect: "read" | "write" | "unknown"` (MCP `readOnlyHint` maps to read; built-ins classified; unknown = not eligible). Only `read` tools are callable in plan posture, in addition to `todo`/`brief`/`request-user-input`/`final-answer`.
+- Bounded by the harness, not by prompt: at most N recon calls per plan turn (default 6), per-tool call cap, no side-effect tools ever, results are recorded as plan **findings** (id, tool, one-line summary) on the Plan and shown in the plan card, and the guidance says "recon only to remove unknowns the plan needs (ids, names, ranges); do not do the task".
+- Anti-drift rule: recon budget exhausted, or the model's reply lacks a plan -> the harness forces the plan reply (tools withheld, existing derive-from-reply fallback). Recon does not count toward the execute iteration budget.
+- Execution seeds findings into the execute turn as context (e.g. "website id = X") so recon is not repeated.
+- Ablation before any default change: plan+recon vs plan-only on multi-step MCP tasks (success, wasted steps, tokens, premature-execution rate = write-effect attempts).
+
+### Work split
+tools-warden (effect classification + request-user-input in plan) -> kernel-warden (posture surface, recon budget, findings, forced plan reply) -> core-warden (Plan.findings, PlanRecorded payload, markdown/JSON/HTML formats) -> runtime-warden (config key, findings carry, user-interaction wiring in plan sessions) -> cortex-warden (question card in Plan mode, findings panel) -> ablation-warden.
