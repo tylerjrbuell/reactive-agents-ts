@@ -2,6 +2,9 @@ import { Context, Effect, Layer } from "effect";
 import { EventBus } from "@reactive-agents/core";
 import {
   DEFAULT_JUDGMENT_CAPABILITIES,
+  JudgmentConnectionError,
+  JudgmentShadowDropped,
+  JudgmentTimeout,
   JudgmentUnsupported,
   type JudgmentAnswer,
   type JudgmentAnswers,
@@ -12,6 +15,28 @@ import {
   type JudgmentModel,
   type QuestionSpecs,
 } from "../types.js";
+
+/** `"shadow"` = observation-only (gated, droppable); `"explicit"` (default) is never gated or dropped. */
+export type AskPriority = "explicit" | "shadow";
+
+/** Bounded-concurrency policy for `priority: "shadow"` asks, per service instance. */
+export interface ShadowGateOptions {
+  /** Max shadow asks in flight at once. Default 1. */
+  readonly maxInFlight?: number;
+  /** Max shadow asks waiting for a slot; beyond this they are dropped. Default 8. */
+  readonly maxQueue?: number;
+  /** Per-shadow-ask budget (queue wait + run), never retried. Default 5000. */
+  readonly timeoutMs?: number;
+}
+
+/** Counters for the shadow gate (drops are counted, never silent). */
+export interface ShadowStats {
+  readonly inFlight: number;
+  readonly queued: number;
+  readonly dropped: number;
+  readonly timedOut: number;
+  readonly completed: number;
+}
 
 /**
  * The batched-ask judgment primitive. Backend-agnostic — construction wires
@@ -26,7 +51,11 @@ export class JudgmentService extends Context.Tag("JudgmentService")<
       readonly questions: Q;
       readonly model?: string;
       readonly images?: readonly string[];
+      /** Defaults to `"explicit"`. Observation-only callers MUST pass `"shadow"` so a burst cannot starve real work. */
+      readonly priority?: AskPriority;
     }) => Effect.Effect<JudgmentAnswers<Q>, JudgmentError>;
+    /** Shadow-gate counters; absent on fakes and wrappers that do not gate. */
+    readonly shadowStats?: () => Effect.Effect<ShadowStats>;
     /** List the models/aliases the backend's account can send in `ask`'s `model` field. Fails `JudgmentUnsupported` if the backend has no catalog endpoint. */
     readonly listModels: () => Effect.Effect<ReadonlyArray<JudgmentModel>, JudgmentError>;
     /**
@@ -52,7 +81,16 @@ export const capabilitiesOf = (svc: JudgmentService["Type"]): Effect.Effect<Judg
   svc.capabilities?.() ?? Effect.succeed(DEFAULT_JUDGMENT_CAPABILITIES);
 
 /** Wraps a `JudgmentBackend` with no observability — tests and internal composition. */
-export const makeJudgmentServiceLive = (backend: JudgmentBackend): Layer.Layer<JudgmentService> => {
+export const makeJudgmentServiceLive = (
+  backend: JudgmentBackend,
+  options: { readonly shadow?: ShadowGateOptions } = {},
+): Layer.Layer<JudgmentService> => {
+  const maxInFlight = Math.max(1, options.shadow?.maxInFlight ?? 1);
+  const maxQueue = Math.max(0, options.shadow?.maxQueue ?? 8);
+  const shadowTimeoutMs = options.shadow?.timeoutMs ?? 5000;
+  const permits = Effect.unsafeMakeSemaphore(maxInFlight);
+  const stats = { inFlight: 0, queued: 0, dropped: 0, timedOut: 0, completed: 0 };
+
   const caps: JudgmentCapabilities = {
     ...DEFAULT_JUDGMENT_CAPABILITIES,
     modelCatalog: backend.listModels !== undefined,
@@ -64,6 +102,7 @@ export const makeJudgmentServiceLive = (backend: JudgmentBackend): Layer.Layer<J
     readonly questions: Q;
     readonly model?: string;
     readonly images?: readonly string[];
+    readonly priority?: AskPriority;
   }): Effect.Effect<JudgmentAnswers<Q>, JudgmentError> => {
     for (const [id, question] of Object.entries(input.questions)) {
       if (!caps.supportedKinds.includes(question.type)) {
@@ -81,14 +120,70 @@ export const makeJudgmentServiceLive = (backend: JudgmentBackend): Layer.Layer<J
         }),
       );
     }
-    return backend.evaluate(input).pipe(
+    const run = backend.evaluate(input).pipe(
       // `evaluate` returns one answer per requested id (or fails): the cast
       // recovers the per-call generic `Q` the plain `JudgmentBackend`
       // interface can't express; see translate.ts's `fromSdkResult` for the
       // "never partial-trust a missing answer" guarantee this relies on.
       Effect.map((answers) => answers as JudgmentAnswers<typeof input.questions>),
     );
+    return input.priority === "shadow" ? gateShadow(run) : run;
   };
+
+  // Observation-only asks: bounded in-flight, bounded queue (excess dropped and
+  // counted), one timeout covering wait + run, no retry, defects folded into
+  // typed errors so a shadow can never crash or stall the run it observes.
+  const gateShadow = <A>(run: Effect.Effect<A, JudgmentError>): Effect.Effect<A, JudgmentError> =>
+    Effect.suspend(() => {
+      // `queued` includes asks granted a permit but not yet started, so bound the sum.
+      if (stats.inFlight + stats.queued >= maxInFlight + maxQueue) {
+        stats.dropped++;
+        return Effect.fail(
+          new JudgmentShadowDropped({
+            message: `shadow judgment dropped: ${stats.inFlight} in flight, ${stats.queued} queued (cap ${maxInFlight}/${maxQueue})`,
+          }),
+        );
+      }
+      stats.queued++;
+      let admitted = false;
+      const body = Effect.suspend(() => {
+        admitted = true;
+        stats.queued--;
+        stats.inFlight++;
+        return run;
+      }).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            stats.inFlight--;
+            stats.completed++;
+          }),
+        ),
+      );
+      return permits.withPermits(1)(body).pipe(
+        Effect.timeoutFail({
+          duration: `${shadowTimeoutMs} millis`,
+          onTimeout: () => {
+            stats.timedOut++;
+            return new JudgmentTimeout({
+              message: `shadow judgment exceeded ${shadowTimeoutMs}ms`,
+              timeoutMs: shadowTimeoutMs,
+            });
+          },
+        }),
+        Effect.catchAllDefect((defect) =>
+          Effect.fail(
+            new JudgmentConnectionError({
+              message: `shadow judgment defect: ${String(defect)}`,
+            }),
+          ),
+        ),
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (!admitted) stats.queued--;
+          }),
+        ),
+      );
+    });
 
   return Layer.succeed(JudgmentService, {
     ask: guardAsk,
@@ -96,6 +191,7 @@ export const makeJudgmentServiceLive = (backend: JudgmentBackend): Layer.Layer<J
       backend.listModels?.() ??
       Effect.fail(new JudgmentUnsupported({ message: `Backend "${backend.name}" has no model catalog` })),
     capabilities: () => Effect.succeed(caps),
+    shadowStats: () => Effect.sync(() => ({ ...stats })),
     backend: backend.name,
   });
 };
@@ -156,6 +252,7 @@ export const withEvents = (
           }),
         listModels: () => inner.listModels(),
         capabilities: inner.capabilities,
+        shadowStats: inner.shadowStats,
         backend: inner.backend ?? backendName,
       };
     }),

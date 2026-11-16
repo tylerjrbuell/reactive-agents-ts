@@ -27,6 +27,7 @@ export {
   JudgmentConfig as JudgmentConfigSchema,
   JudgmentConnectionError,
   JudgmentRateLimited,
+  JudgmentShadowDropped,
   JudgmentTimeout,
   JudgmentUnauthorized,
   JudgmentUnsupported,
@@ -36,6 +37,7 @@ export {
 } from "./types.js";
 
 export { JudgmentService, capabilitiesOf, makeJudgmentServiceLive, withEvents } from "./services/judgment-service.js";
+export type { AskPriority, ShadowGateOptions, ShadowStats } from "./services/judgment-service.js";
 export { makeJevBackend } from "./backends/jev-backend.js";
 export { makeLlmBackend } from "./backends/llm-backend.js";
 

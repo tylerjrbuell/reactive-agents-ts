@@ -138,7 +138,16 @@ export class JudgmentUnsupported extends Data.TaggedError("JudgmentUnsupported")
   readonly message: string;
 }> {}
 
+/**
+ * A `priority: "shadow"` ask was dropped because the shadow gate's queue was
+ * full. Observation-only callers treat it like any other failed shadow.
+ */
+export class JudgmentShadowDropped extends Data.TaggedError("JudgmentShadowDropped")<{
+  readonly message: string;
+}> {}
+
 export type JudgmentError =
+  | JudgmentShadowDropped
   | JudgmentUnauthorized
   | JudgmentRateLimited
   | JudgmentTimeout
