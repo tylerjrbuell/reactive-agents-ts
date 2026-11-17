@@ -44,6 +44,25 @@ export function setLabCustomToolDisabled(db: Database, toolId: string, disabled:
   return r.changes > 0;
 }
 
+/**
+ * Change a custom tool's name, description and/or parameters (the fields left out keep their value).
+ * False when the tool does not exist; a name already used by another tool throws (UNIQUE).
+ */
+export function updateLabCustomTool(
+  db: Database,
+  toolId: string,
+  patch: { name?: string; description?: string; parametersJson?: string },
+): boolean {
+  const r = db
+    .prepare(
+      `UPDATE cortex_lab_custom_tools
+       SET name = COALESCE(?, name), description = COALESCE(?, description), parameters_json = COALESCE(?, parameters_json)
+       WHERE tool_id = ?`,
+    )
+    .run(patch.name?.trim() ?? null, patch.description?.trim() ?? null, patch.parametersJson ?? null, toolId);
+  return r.changes > 0;
+}
+
 export function deleteLabCustomTool(db: Database, toolId: string): boolean {
   const r = db.prepare(`DELETE FROM cortex_lab_custom_tools WHERE tool_id = ?`).run(toolId);
   return r.changes > 0;

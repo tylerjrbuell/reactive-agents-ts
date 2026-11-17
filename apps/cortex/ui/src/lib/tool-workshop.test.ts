@@ -10,8 +10,60 @@ import {
   mcpDraftJsonError,
   previewMcpImport,
   relativeTime,
+  credentialEdit,
+  credentialRowsOf,
+  mcpServerStatus,
+  secretsPayload,
   type CatalogEntry,
 } from "./tool-workshop.js";
+
+describe("mcpServerStatus", () => {
+  const now = 1_000_000_000;
+  test("disabled wins over any probe result", () => {
+    expect(mcpServerStatus({ enabled: false, lastStatus: "error", lastError: "x", lastCheckedAt: now }, now).status).toBe("disabled");
+  });
+  test("ok reads Connected with the check age", () => {
+    const s = mcpServerStatus({ enabled: true, lastStatus: "ok", lastError: null, lastCheckedAt: now - 5 * 60_000 }, now);
+    expect(s).toEqual({ status: "ok", label: "Connected", detail: "checked 5 minutes ago" });
+  });
+  test("error carries the reason and age", () => {
+    const s = mcpServerStatus({ lastStatus: "error", lastError: "ECONNREFUSED", lastCheckedAt: now - 60_000 }, now);
+    expect(s.status).toBe("error");
+    expect(s.detail).toContain("ECONNREFUSED");
+    expect(s.detail).toContain("checked");
+  });
+  test("never checked, and an older server build with no fields, read unknown", () => {
+    expect(mcpServerStatus({ enabled: true, lastStatus: null, lastError: null, lastCheckedAt: null }, now)).toEqual({ status: "unknown", label: "Not checked" });
+    expect(mcpServerStatus({}, now).status).toBe("unknown");
+  });
+});
+
+describe("credential rows", () => {
+  test("stored keys become blank stored rows (values are never read back)", () => {
+    expect(credentialRowsOf({ A: "••••••••", B: "••••••••" })).toEqual([
+      { key: "A", value: "", stored: true },
+      { key: "B", value: "", stored: true },
+    ]);
+    expect(credentialRowsOf(undefined)).toEqual([]);
+  });
+  test("untouched rows change nothing", () => {
+    expect(credentialEdit(["A", "B"], credentialRowsOf({ A: "x", B: "y" }))).toBeNull();
+  });
+  test("a typed value replaces, a new keyed row adds, a deleted stored row removes", () => {
+    const rows = [
+      { key: "A", value: "new-a", stored: true },
+      { key: "C", value: "new-c", stored: false },
+    ];
+    expect(credentialEdit(["A", "B"], rows)).toEqual({ set: { A: "new-a", C: "new-c" }, remove: ["B"] });
+  });
+  test("blank new rows and rows with no key are ignored", () => {
+    expect(credentialEdit([], [{ key: "", value: "v", stored: false }, { key: "K", value: "", stored: false }])).toBeNull();
+  });
+  test("secretsPayload keeps only changed records", () => {
+    expect(secretsPayload({ env: null, headers: null })).toBeNull();
+    expect(secretsPayload({ env: { remove: ["A"] }, headers: null })).toEqual({ env: { remove: ["A"] } });
+  });
+});
 
 const entry = (over: Partial<CatalogEntry>): CatalogEntry => ({
   id: "x",

@@ -58,7 +58,7 @@ SERVER_ANY_BASELINE=0
 UI_ANY_BASELINE=0
 SERVER_AS_UNKNOWN_AS_BASELINE=6
 UI_AS_UNKNOWN_AS_BASELINE=4
-NEW_ERROR_BASELINE=21
+NEW_ERROR_BASELINE=20
 INSTANCEOF_BASELINE=38
 CONSOLE_BASELINE=0
 PROCESS_ENV_BASELINE=29
@@ -68,7 +68,7 @@ BUN_SQLITE_BASELINE=49
 # (new giants are forbidden at birth). Keep NO '#' characters inside the array literal: the
 # self-test patches this block by regex.
 SIZE_LEDGER=(
-  "server/services/chat-session-service.ts:1456"
+  "server/services/chat-session-service.ts:1453"
   "server/services/runner-service.ts:844"
   "server/api/chat.ts:839"
   "ui/src/lib/components/ChatPanel.svelte:899"

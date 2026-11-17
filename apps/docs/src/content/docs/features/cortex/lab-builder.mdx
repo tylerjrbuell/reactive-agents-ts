@@ -37,6 +37,8 @@ Cortex’s Lab **Builder** tab tracks the framework, but two options deserve a c
 
 **Allowed tools** are chosen in the Lab Builder **Tools** section: quick toggles for common builtins, MCP tools from your saved servers, plus an **Additional allowed tools** field for exact IDs (Lab custom tools, less common builtins). Optional `additionalToolNames` is merged with the toggle list at run time.
 
+A saved MCP server keeps its last connection result (`Connected`, `Failed` with the reason, or `Not checked`), can be tested without changing its tool list (`POST /api/mcp-servers/:id/test`), and can be switched off (`PATCH /api/mcp-servers/:id/enabled`): an agent that still lists a disabled server never starts it, on chat, desk runs, gateway agents and channel routes. Refresh tools also stores each tool's input schema (`GET /api/mcp-servers/:id/tools`). A custom tool's name, description and parameters can be edited in place (`PATCH /api/tools/lab-custom/:id`); renaming does not rewrite agents that list the old name.
+
 Attaching an MCP server makes all of its tools available; click a tool chip to leave one out. The MCP server form also has **Read-only** (off, all tools, or named tools) and **Trust server annotations**. Read-only marks tools as non-mutating so they stay available to read-only senders and to read-only satisfiability checks; trusting annotations honors the server's own read-only hints. Both are your declaration as the operator: a server cannot make itself read-only unless you trust its annotations.
 
 **Host shell (`shell-execute`)** is **off by default**. When you enable it in **Tools**, Cortex registers the framework terminal tool with the default allowlist/blocklist. The shell options below all map to one `ShellExecuteConfig`:

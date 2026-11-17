@@ -7,7 +7,12 @@ import { makeMCPClient } from "@reactive-agents/tools";
 import type { MCPServerConfig } from "@reactive-agents/runtime";
 import { cortexLog } from "../cortex-log.js";
 
-export type DiscoveredMcpTool = { toolName: string; description?: string };
+export type DiscoveredMcpTool = {
+  toolName: string;
+  description?: string;
+  /** The tool's JSON Schema input as the server reported it. */
+  inputSchema?: Record<string, unknown>;
+};
 
 export function discoverMcpTools(config: MCPServerConfig): Promise<DiscoveredMcpTool[]> {
   // Name and transport only: endpoints and command lines often carry tokens in the query string or args.
@@ -31,11 +36,12 @@ export function discoverMcpTools(config: MCPServerConfig): Promise<DiscoveredMcp
         const raw = server.tools[i];
         const toolName = `${server.name}/${raw}`;
         const description = schemas[i]?.description;
-        out.push(
-          description !== undefined && description !== ""
-            ? { toolName, description }
-            : { toolName },
-        );
+        const inputSchema = schemas[i]?.inputSchema;
+        out.push({
+          toolName,
+          ...(description !== undefined && description !== "" ? { description } : {}),
+          ...(inputSchema !== undefined && inputSchema !== null ? { inputSchema } : {}),
+        });
       }
       yield* client.disconnect(server.name);
       yield* Effect.logInfo(`[MCP discover] "${config.name}" → ${out.length} tool(s) cached`);

@@ -45,7 +45,71 @@ export type McpListRow = {
   name: string;
   config: Record<string, unknown>;
   tools: { toolName: string; description?: string }[];
+  /** False when switched off: agents never start it. Absent on an older server build (treated as on). */
+  enabled?: boolean;
+  /** Outcome of the last test or tool refresh; null / absent = never checked. */
+  lastStatus?: "ok" | "error" | null;
+  lastError?: string | null;
+  lastCheckedAt?: number | null;
 };
+
+/** One cached tool of a server with its JSON input schema (GET /api/mcp-servers/:id/tools). */
+export type McpToolDetail = { toolName: string; description?: string; inputSchema?: Record<string, unknown> };
+
+/** How a saved server reads in the list. */
+export type McpStatus = "ok" | "error" | "disabled" | "unknown";
+
+/** What to show for a server's state: the kind, a short label and (when there is one) the reason or age. */
+export function mcpServerStatus(
+  row: Pick<McpListRow, "enabled" | "lastStatus" | "lastError" | "lastCheckedAt">,
+  now: number = Date.now(),
+): { status: McpStatus; label: string; detail?: string } {
+  if (row.enabled === false) return { status: "disabled", label: "Disabled", detail: "Agents will not start this server" };
+  const checked = row.lastCheckedAt != null ? `checked ${formatRelativeTime(row.lastCheckedAt, now)}` : undefined;
+  if (row.lastStatus === "ok") return { status: "ok", label: "Connected", ...(checked ? { detail: checked } : {}) };
+  if (row.lastStatus === "error") {
+    const why = row.lastError?.trim();
+    const detail = [why, checked].filter(Boolean).join(" · ");
+    return { status: "error", label: "Failed", ...(detail ? { detail } : {}) };
+  }
+  return { status: "unknown", label: "Not checked" };
+}
+
+/** One editable credential line. A `stored` row shows a mask and keeps its value unless `value` is typed. */
+export type CredentialRow = { key: string; value: string; stored: boolean };
+
+/** Rows for the keys a server already holds (values are write-only: never read back, so `value` starts empty). */
+export function credentialRowsOf(record: Record<string, unknown> | undefined): CredentialRow[] {
+  return Object.keys(record ?? {}).map((key) => ({ key, value: "", stored: true }));
+}
+
+/** One credential record's edit as the secrets route takes it. */
+export type CredentialEdit = { set?: Record<string, string>; remove?: string[] };
+
+/**
+ * What changed between the stored keys and the rows on screen: typed values (new or replacing) go to
+ * `set`, stored keys whose row is gone go to `remove`. A stored row left blank keeps its value; a new
+ * row with no key or no value is ignored. Null when nothing changed.
+ */
+export function credentialEdit(storedKeys: readonly string[], rows: readonly CredentialRow[]): CredentialEdit | null {
+  const set: Record<string, string> = {};
+  const present = new Set<string>();
+  for (const row of rows) {
+    const key = row.key.trim();
+    if (key === "") continue;
+    present.add(key);
+    if (row.value !== "") set[key] = row.value;
+  }
+  const remove = storedKeys.filter((k) => !present.has(k));
+  if (Object.keys(set).length === 0 && remove.length === 0) return null;
+  return { ...(Object.keys(set).length > 0 ? { set } : {}), ...(remove.length > 0 ? { remove } : {}) };
+}
+
+/** Body for PUT /api/mcp-servers/:id/secrets, or null when neither record changed. */
+export function secretsPayload(edits: { env: CredentialEdit | null; headers: CredentialEdit | null }): { env?: CredentialEdit; headers?: CredentialEdit } | null {
+  if (edits.env === null && edits.headers === null) return null;
+  return { ...(edits.env ? { env: edits.env } : {}), ...(edits.headers ? { headers: edits.headers } : {}) };
+}
 
 /** MCP transports the form offers. */
 export type McpTransport = "stdio" | "sse" | "websocket" | "streamable-http";

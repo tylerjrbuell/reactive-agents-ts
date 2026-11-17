@@ -20,7 +20,7 @@ import { Elysia } from "elysia";
 import { getCapabilityManifest } from "@reactive-agents/runtime";
 import { applySchema } from "../db/schema.js";
 import { getChatSession } from "../db/chat-queries.js";
-import { getMcpServersByIds, insertMcpServer, parseMcpConfig } from "../db/mcp-queries.js";
+import { getEnabledMcpConfigsByIds, insertMcpServer } from "../db/mcp-queries.js";
 import { chatRouter } from "../api/chat.js";
 import { runsRouter } from "../api/runs.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
@@ -167,7 +167,7 @@ const post = (app: { handle: (r: Request) => Promise<Response> }, url: string, b
   app.handle(new Request(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
 
 const mcpConfigsFor = (cfg: Record<string, unknown>) =>
-  getMcpServersByIds(db, (cfg.mcpServerIds as string[] | undefined) ?? []).map(parseMcpConfig);
+  getEnabledMcpConfigsByIds(db, (cfg.mcpServerIds as string[] | undefined) ?? []);
 
 async function runnerParams(cfg: Record<string, unknown>): Promise<BuildCortexAgentParams> {
   const captured = { params: null as LaunchParams | null };

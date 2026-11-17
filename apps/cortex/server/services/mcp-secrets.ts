@@ -40,6 +40,49 @@ export function maskMcpConfig(cfg: MCPServerConfig): MCPServerConfig {
   return out;
 }
 
+/** Keys to write and keys to drop for one credential record (env or headers). */
+export type McpSecretEdit = {
+  readonly set?: Readonly<Record<string, string>>;
+  readonly remove?: readonly string[];
+};
+
+/** A write-only credential edit: individual env / header keys, never the whole config. */
+export type McpSecretUpdate = { readonly env?: McpSecretEdit; readonly headers?: McpSecretEdit };
+
+/** Why `update` cannot be applied (empty key, empty or masked value), or null. Never includes a value. */
+export function mcpSecretUpdateProblem(update: McpSecretUpdate): string | null {
+  for (const [field, edit] of [["env", update.env], ["headers", update.headers]] as const) {
+    for (const [key, value] of Object.entries(edit?.set ?? {})) {
+      if (key.trim() === "") return `${field}: key names cannot be empty`;
+      if (value === "") return `${field}.${key}: value cannot be empty (remove the key instead)`;
+      if (value === MCP_SECRET_MASK) return `${field}.${key}: send the new value, not the mask`;
+    }
+    if ((edit?.remove ?? []).some((k) => k.trim() === "")) return `${field}: key names cannot be empty`;
+  }
+  return null;
+}
+
+const editRecord = (current: Readonly<Record<string, string>> | undefined, edit: McpSecretEdit | undefined): Record<string, string> | undefined => {
+  if (edit === undefined) return current === undefined ? undefined : { ...current };
+  const next: Record<string, string> = { ...current, ...edit.set };
+  for (const key of edit.remove ?? []) delete next[key];
+  return next;
+};
+
+/**
+ * `stored` with the given env / header keys set, replaced or removed; every other key keeps its stored
+ * value. An emptied record is dropped. Check {@link mcpSecretUpdateProblem} first.
+ */
+export function applyMcpSecretUpdate(stored: MCPServerConfig, update: McpSecretUpdate): MCPServerConfig {
+  const out: MCPServerConfig = { ...stored };
+  for (const field of ["env", "headers"] as const) {
+    const next = editRecord(stored[field], update[field]);
+    if (next !== undefined && Object.keys(next).length > 0) out[field] = next;
+    else delete out[field];
+  }
+  return out;
+}
+
 /** Entries whose value is still the mask take the stored value; a masked entry with no stored one is dropped. */
 function restoreRecord(incoming: Readonly<Record<string, string>>, stored: Readonly<Record<string, string>> | undefined): Record<string, string> {
   const out: Record<string, string> = {};

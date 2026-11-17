@@ -33,7 +33,7 @@ import { emitErrorSwallowed, errorTag, type AgentEvent } from "@reactive-agents/
 import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import { getGatewayAgent } from "../db/queries.js";
 import { HubAgentBuildError } from "../errors.js";
-import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
+import { getEnabledMcpConfigsByIds } from "../db/mcp-queries.js";
 import { parseRouteTarget } from "../db/channel-hub-queries.js";
 import { sanitizedCause } from "./channel-hub-failure.js";
 import { clearPersistedHistory } from "./channel-hub-history.js";
@@ -96,7 +96,7 @@ export const makeHubResolver = (deps: HubResolverDeps): HubResolver => {
     if (!row) throw new HubAgentBuildError({ message: `no saved agent "${agentId}"` });
     const config = normalizeCortexAgentConfig(JSON.parse(row.config) as Record<string, unknown>);
     const mcpIds = (config.mcpServerIds as string[] | undefined)?.filter((x) => typeof x === "string" && x.length > 0) ?? [];
-    const mcpConfigs = (mcpIds.length > 0 ? getMcpServersByIds(deps.db, mcpIds) : []).map(parseMcpConfig);
+    const mcpConfigs = getEnabledMcpConfigsByIds(deps.db, mcpIds);
     // The agent is not a gateway host here: the router owns access, queueing and channels.
     const { gateway: _gateway, channelAdapters: _adapters, ...base } = deps.toBuildParams({ agentId, name: row.name, config, mcpConfigs });
     const prepared = deps.prepare ? deps.prepare(base, { agentId, role: req.role }) : base;

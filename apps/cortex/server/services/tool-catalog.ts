@@ -164,11 +164,14 @@ export function buildToolCatalog(db: Database): CortexToolCatalogEntry[] {
   const ids = servers.map((s) => s.server_id);
   const cached = listCachedToolsForServers(db, ids);
   const serverNameById = new Map(servers.map((s) => [s.server_id, s.name]));
+  const disabledServerIds = new Set(servers.filter((s) => s.enabled === 0).map((s) => s.server_id));
 
   for (const row of cached) {
     const registryName = row.tool_name;
     const serverName = serverNameById.get(row.server_id) ?? "mcp";
     out.push({
+      // A tool of a server switched off in the Tools Lab: agents never get it. Still testable here.
+      ...(disabledServerIds.has(row.server_id) ? { disabled: true } : {}),
       id: `mcp:${row.server_id}:${encodeURIComponent(registryName)}`,
       kind: "mcp",
       name: registryName,

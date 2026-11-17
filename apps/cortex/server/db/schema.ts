@@ -93,13 +93,18 @@ export function applySchema(db: Database): void {
       name        TEXT    NOT NULL UNIQUE,
       config_json TEXT    NOT NULL,
       created_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
-      updated_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000)
+      updated_at  INTEGER NOT NULL DEFAULT (unixepoch('now','subsec') * 1000),
+      enabled         INTEGER NOT NULL DEFAULT 1,
+      last_status     TEXT,
+      last_error      TEXT,
+      last_checked_at INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS cortex_mcp_cached_tools (
       server_id   TEXT    NOT NULL,
       tool_name   TEXT    NOT NULL,
       description TEXT,
+      input_schema_json TEXT,
       PRIMARY KEY (server_id, tool_name),
       FOREIGN KEY (server_id) REFERENCES cortex_mcp_servers(server_id) ON DELETE CASCADE
     );
@@ -335,6 +340,15 @@ export function applySchema(db: Database): void {
   if (!proposalCols.includes("direction")) db.exec("ALTER TABLE chat_proposals ADD COLUMN direction TEXT");
   if (!proposalCols.includes("flag")) db.exec("ALTER TABLE chat_proposals ADD COLUMN flag TEXT");
   if (!proposalCols.includes("applied_by")) db.exec("ALTER TABLE chat_proposals ADD COLUMN applied_by TEXT");
+  // Tools Lab: a server can be switched off (rows from before read as enabled), keeps the result
+  // of its last probe, and its cached tools keep their JSON input schema.
+  const mcpCols = (db.prepare("PRAGMA table_info(cortex_mcp_servers)").all() as Array<{ name: string }>).map((c) => c.name);
+  if (!mcpCols.includes("enabled")) db.exec("ALTER TABLE cortex_mcp_servers ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1");
+  if (!mcpCols.includes("last_status")) db.exec("ALTER TABLE cortex_mcp_servers ADD COLUMN last_status TEXT");
+  if (!mcpCols.includes("last_error")) db.exec("ALTER TABLE cortex_mcp_servers ADD COLUMN last_error TEXT");
+  if (!mcpCols.includes("last_checked_at")) db.exec("ALTER TABLE cortex_mcp_servers ADD COLUMN last_checked_at INTEGER");
+  const mcpToolCols = (db.prepare("PRAGMA table_info(cortex_mcp_cached_tools)").all() as Array<{ name: string }>).map((c) => c.name);
+  if (!mcpToolCols.includes("input_schema_json")) db.exec("ALTER TABLE cortex_mcp_cached_tools ADD COLUMN input_schema_json TEXT");
   const runCols = (db.prepare("PRAGMA table_info(cortex_runs)").all() as Array<{ name: string }>)
     .map((c) => c.name);
   if (!runCols.includes("provider")) db.exec("ALTER TABLE cortex_runs ADD COLUMN provider TEXT");

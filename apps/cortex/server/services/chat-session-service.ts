@@ -65,7 +65,7 @@ import { recordTurnAssessments, type TurnAssessmentRecorder } from "./turn-asses
 import { CortexIngestService } from "./ingest-service.js";
 import { buildRunTaskContext } from "./chat-run-context.js";
 import { withDerivedContext } from "./chat-context-fallback.js";
-import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
+import { getEnabledMcpConfigsByIds } from "../db/mcp-queries.js";
 import { chatToolParams, resolveEnableTools } from "./chat-tool-params.js";
 import { DEFAULT_CHAT_NAME, cleanChatTitle, fallbackChatTitle } from "./chat-title.js";
 import { turnCostOf, type TurnCost } from "./chat-turn-cost.js";
@@ -1237,10 +1237,7 @@ let tokensUsed = 0;
     const mcpServerIds = Array.isArray(agentConfig.mcpServerIds)
       ? (agentConfig.mcpServerIds as unknown[]).filter((x): x is string => typeof x === "string" && x.length > 0)
       : [];
-    const mcpConfigs =
-      enableTools && mcpServerIds.length > 0
-        ? getMcpServersByIds(this.db, mcpServerIds).map(parseMcpConfig)
-        : [];
+    const mcpConfigs = enableTools ? getEnabledMcpConfigsByIds(this.db, mcpServerIds) : [];
     const toolParams = chatToolParams(agentConfig, enableTools, mcpConfigs);
 
     // Chat history already carries the conversation, and recalled cross-run memory

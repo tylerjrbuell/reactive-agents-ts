@@ -22,7 +22,7 @@ import type { Layer } from "effect";
 import type { AdapterInfo, ChannelAdapter, ConnectionState } from "@reactive-agents/channels";
 import { emitErrorSwallowed, errorTag, type AgentEvent } from "@reactive-agents/core";
 import { cortexLog, formatErrorDetails } from "../cortex-log.js";
-import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
+import { getEnabledMcpConfigsByIds } from "../db/mcp-queries.js";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
 import { buildChannelAdapters, type BuiltChannels } from "./channel-adapters.js";
 import { mountWebhookIngress } from "./channel-ingress.js";
@@ -298,7 +298,7 @@ export class GatewayChannelHost {
 
     try {
       const mcpIds = (config.mcpServerIds as string[] | undefined)?.filter((x) => typeof x === "string" && x.length > 0) ?? [];
-      const mcpConfigs = (mcpIds.length > 0 ? getMcpServersByIds(this.db, mcpIds) : []).map(parseMcpConfig);
+      const mcpConfigs = getEnabledMcpConfigsByIds(this.db, mcpIds);
       const params = this.toBuildParams({ agentId, name, config, mcpConfigs });
       h.gateway = params.gateway;
       const agent = await buildCortexAgent({ ...params, gateway: params.gateway ?? {}, channelAdapters: built.adapters });

@@ -12,7 +12,7 @@ import {
   upsertRun,
   getLaunchParams,
 } from "../db/queries.js";
-import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
+import { getEnabledMcpConfigsByIds } from "../db/mcp-queries.js";
 import { CortexError } from "../errors.js";
 import type { RunSummary } from "../types.js";
 import type { MCPServerConfig } from "@reactive-agents/runtime";
@@ -134,11 +134,7 @@ export const CortexStoreServiceLive = (db: Database) =>
       }),
 
     getMcpServerConfigsByIds: (ids) =>
-      Effect.sync(() => {
-        if (ids.length === 0) return [];
-        const rows = getMcpServersByIds(db, ids);
-        return rows.map((r) => parseMcpConfig(r));
-      }).pipe(
+      Effect.sync(() => getEnabledMcpConfigsByIds(db, ids)).pipe(
         Effect.catchAll((e) => Effect.fail(new CortexError({ message: String(e), cause: e }))),
       ),
   });

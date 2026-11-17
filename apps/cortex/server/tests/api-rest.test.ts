@@ -365,7 +365,7 @@ describe("POST /api/mcp-servers/import-json", () => {
 });
 
 describe("POST /api/tools/mcp-import-json", () => {
-  it("imports MCP configs (same logic as /api/mcp-servers/import-json)", async () => {
+  it("is gone: answers 410 and imports nothing (use /api/mcp-servers/import-json)", async () => {
     const db = new Database(":memory:");
     applySchema(db);
     const app = new Elysia().use(toolsRouter(CortexStoreServiceLive(db), db));
@@ -378,9 +378,7 @@ describe("POST /api/tools/mcp-import-json", () => {
         }),
       }),
     );
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; count: number };
-    expect(body.ok).toBe(true);
-    expect(body.count).toBe(1);
+    expect(res.status).toBe(410);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM cortex_mcp_servers").get()).toEqual({ n: 0 });
   });
 });

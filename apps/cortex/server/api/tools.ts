@@ -7,9 +7,10 @@ import { invokeCatalogTool } from "../services/tool-playground-invoke.js";
 import {
   insertLabCustomTool,
   deleteLabCustomTool,
+  getLabCustomTool,
   setLabCustomToolDisabled,
+  updateLabCustomTool,
 } from "../db/lab-custom-tools-queries.js";
-import { executeMcpJsonImport } from "../services/mcp-json-import-apply.js";
 import {
   BUILTIN_SHELL_PRESETS,
   BUILTIN_TOOLSET_ALIASES,
@@ -26,7 +27,10 @@ const parameterItem = t.Object({
   enum: t.Optional(t.Array(t.String())),
 });
 
-export const toolsRouter = (storeLayer: Layer.Layer<CortexStoreService>, db: Database) =>
+const KEBAB_NAME_ERROR = "name must be kebab-case (letters, numbers, hyphens)";
+const isKebabToolName = (name: string): boolean => /^[a-z0-9][a-z0-9-]*$/.test(name);
+
+export const toolsRouter =(storeLayer: Layer.Layer<CortexStoreService>, db: Database) =>
   new Elysia({ prefix: "/api/tools" })
     .get("/", async () => {
       const program = Effect.gen(function* () {
@@ -76,15 +80,13 @@ export const toolsRouter = (storeLayer: Layer.Layer<CortexStoreService>, db: Dat
         }),
       },
     )
+    // Duplicate of POST /api/mcp-servers/import-json, removed. The Tool Workshop still calls this path
+    // as a fallback until the Tools Lab UI repoints; delete this alias with that change.
     .post(
       "/mcp-import-json",
-      async ({ body, set }) => {
-        const out = executeMcpJsonImport(db, body.json);
-        if (!out.ok) {
-          set.status = out.status;
-          return { error: out.error };
-        }
-        return { ok: true as const, count: out.count, created: out.created };
+      ({ set }) => {
+        set.status = 410;
+        return { error: "Moved: use POST /api/mcp-servers/import-json" };
       },
       { body: t.Object({ json: t.String() }) },
     )
@@ -92,9 +94,9 @@ export const toolsRouter = (storeLayer: Layer.Layer<CortexStoreService>, db: Dat
       "/lab-custom",
       async ({ body, set }) => {
         const name = body.name.trim();
-        if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+        if (!isKebabToolName(name)) {
           set.status = 400;
-          return { error: "name must be kebab-case (letters, numbers, hyphens)" };
+          return { error: KEBAB_NAME_ERROR };
         }
         try {
           const parametersJson = JSON.stringify(body.parameters);
@@ -120,20 +122,47 @@ export const toolsRouter = (storeLayer: Layer.Layer<CortexStoreService>, db: Dat
     .patch(
       "/lab-custom/:toolId",
       async ({ params, body, set }) => {
-        if (body.disabled === undefined) {
+        const edits = body.name !== undefined || body.description !== undefined || body.parameters !== undefined;
+        if (body.disabled === undefined && !edits) {
           set.status = 400;
-          return { error: "disabled (boolean) required" };
+          return { error: "disabled, name, description or parameters required" };
         }
-        const ok = setLabCustomToolDisabled(db, params.toolId, body.disabled);
-        if (!ok) {
+        if (body.name !== undefined && !isKebabToolName(body.name.trim())) {
+          set.status = 400;
+          return { error: KEBAB_NAME_ERROR };
+        }
+        if (body.description !== undefined && body.description.trim() === "") {
+          set.status = 400;
+          return { error: "description cannot be empty" };
+        }
+        if (!getLabCustomTool(db, params.toolId)) {
           set.status = 404;
           return { error: "Tool not found" };
+        }
+        try {
+          if (edits) {
+            updateLabCustomTool(db, params.toolId, {
+              ...(body.name !== undefined ? { name: body.name } : {}),
+              ...(body.description !== undefined ? { description: body.description } : {}),
+              ...(body.parameters !== undefined ? { parametersJson: JSON.stringify(body.parameters) } : {}),
+            });
+          }
+          if (body.disabled !== undefined) setLabCustomToolDisabled(db, params.toolId, body.disabled);
+        } catch (e) {
+          // Same shape as create: a name another tool already holds is a 400 with the reason.
+          set.status = 400;
+          return { error: e instanceof Error ? e.message : String(e) };
         }
         return { ok: true as const };
       },
       {
         params: t.Object({ toolId: t.String() }),
-        body: t.Object({ disabled: t.Boolean() }),
+        body: t.Object({
+          disabled: t.Optional(t.Boolean()),
+          name: t.Optional(t.String()),
+          description: t.Optional(t.String()),
+          parameters: t.Optional(t.Array(parameterItem)),
+        }),
       },
     )
     .delete(

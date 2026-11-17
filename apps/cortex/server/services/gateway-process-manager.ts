@@ -16,7 +16,7 @@ import { parseCron, shouldFireAt } from "@reactive-agents/gateway";
 import { cortexLog, formatErrorDetails } from "../cortex-log.js";
 import type { Database } from "bun:sqlite";
 import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun, updateRunStats } from "../db/queries.js";
-import { getMcpServersByIds, parseMcpConfig } from "../db/mcp-queries.js";
+import { getEnabledMcpConfigsByIds } from "../db/mcp-queries.js";
 import { structuredOutputExtractedEvent } from "./structured-output-event.js";
 import {
   coerceTaskContextRecord,
@@ -399,7 +399,7 @@ export class GatewayProcessManager {
       );
 
       const mcpIds = (config.mcpServerIds as string[] | undefined)?.filter((x) => typeof x === "string" && x.length > 0) ?? [];
-      const mcpConfigs = (mcpIds.length > 0 ? getMcpServersByIds(this.db, mcpIds) : []).map(parseMcpConfig);
+      const mcpConfigs = getEnabledMcpConfigsByIds(this.db, mcpIds);
 
       cortexLog("debug", "gateway", "prepared normalized agent config for run", {
         agentId,
