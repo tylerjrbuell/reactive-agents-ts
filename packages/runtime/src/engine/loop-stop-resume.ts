@@ -88,11 +88,20 @@ export const prepareLoopStopResume = (params: {
     note !== undefined && note.length > 0
       ? { ...resumed, pendingGuidance: appendGuidanceText(resumed.pendingGuidance, "errorRecovery", `The user adds: ${note}`) }
       : resumed;
-  return {
-    stateJson: serializeKernelState(withNote),
-    maxIterations: resumeMaxIterations(state, params.extraIterations ?? DEFAULT_RESUME_ITERATIONS),
-  };
+  const maxIterations = resumeMaxIterations(state, params.extraIterations ?? DEFAULT_RESUME_ITERATIONS);
+  return { stateJson: serializeKernelState(withResumedCap(withNote, maxIterations)), maxIterations };
 };
+
+/**
+ * The restored state with the resumed run's cap. `meta.maxIterations` is what
+ * the kernel's iteration guards read and a restored state carries the cap of
+ * the run that stopped (a plan-budget raised one included): left alone, a
+ * resumed run would re-stop at the cap it already spent.
+ */
+export const withResumedCap = (state: KernelState, maxIterations: number): KernelState => ({
+  ...state,
+  meta: { ...state.meta, maxIterations },
+});
 
 /**
  * Remember the last serialized state a run checkpoints, by wrapping the

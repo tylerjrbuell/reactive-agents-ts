@@ -157,6 +157,8 @@ if (result.resumable) {
 - gives the run a fresh iteration budget (`extraIterations`, default 10) because the stopped run's own cap is already spent;
 - checkpoints again, so a run that loops a second time can be continued again.
 
+Any resume of a run whose iteration cap is spent (a `max_iterations` stop, including a cap a plan raised at run start) gets that many more iterations past where it stopped: `extraIterations` if given, else 10. A resume does not re-stop at the cap it already spent. A run that stopped with iterations left (a pause, an error) keeps its own cap unless you pass `extraIterations`.
+
 `resumeRun(runId, { note?, extraIterations? })` fails `RunNotResumableError` when the run already completed. Plain `resumeRun(runId)` still resumes a crashed run.
 
 ### Stop, pause and continue any run
@@ -168,7 +170,7 @@ A loop stop is one kind of stop. Every durable run that does not complete is con
 | `agent.pauseRun(runId)` | `paused` | `user-paused` |
 | `agent.stopRun(runId)`, `handle.stop()`, `handle.terminate()` | `stopped` | `user-stopped` |
 | a loop guard | `stopped` | `loop` |
-| the iteration budget ran out | `failed` | `budget` |
+| the iteration budget ran out | `failed` | `budget` (`stop.reason` is `max_iterations` for the iteration cap, so a UI can word it apart from a token or cost budget) |
 | a timeout | `failed` | `timeout` |
 | an error | `failed` | `error` |
 | the process died | `running` (stale) | none |

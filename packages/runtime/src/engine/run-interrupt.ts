@@ -111,7 +111,10 @@ export const classifyEnd = (
   // A controller early stop can still ship a good answer (`success: true`): that run completed, the record only says why the loop ended.
   if (loop !== undefined && result.success !== true) return { kind: "loop", reason: loop.reason, stop: { ...loop, kind: "loop" } };
   if (result.success === false) {
-    return { kind: failureKind(result.terminatedBy), reason: result.error ?? result.terminatedBy ?? "the run failed" };
+    const kind = failureKind(result.terminatedBy);
+    // A spent iteration cap keeps its stable code, so a host can word it apart from a token/cost budget (`kind` stays "budget" for both).
+    const reason = kind === "budget" && result.terminatedBy === "max_iterations" ? "max_iterations" : (result.error ?? result.terminatedBy ?? "the run failed");
+    return { kind, reason };
   }
   return undefined;
 };

@@ -21,7 +21,7 @@ import {
   serializeKernelState,
   type KernelState,
 } from "@reactive-agents/reasoning";
-import { prepareLoopStopResume, type LoopStopResume } from "./loop-stop-resume.js";
+import { DEFAULT_RESUME_ITERATIONS, prepareLoopStopResume, withResumedCap, type LoopStopResume } from "./loop-stop-resume.js";
 import { stopKindOf, type RunStopKind, type RunStopSummary } from "../loop-stop-summary.js";
 
 /** What a continued run starts from; `maxIterations` only when the caller bounded it (`extraIterations`) or a loop resume needs a fresh budget. */
@@ -64,20 +64,37 @@ export const prepareResume = (params: {
     ...(isUserStop(kind) ? [CONTINUE_TEXT] : []),
     ...(note !== undefined && note.length > 0 ? [`The user adds: ${note}`] : []),
   ];
-  if (guidance.length === 0 && params.extraIterations === undefined) return { stateJson: params.stateJson };
-
   let state: KernelState;
   try {
     state = deserializeKernelState(params.stateJson);
   } catch {
     return { stateJson: params.stateJson };
   }
+  const maxIterations = resumeCap(state, params.extraIterations);
+  if (guidance.length === 0 && maxIterations === undefined) return { stateJson: params.stateJson };
+
   const guided = guidance.reduce<KernelState>(
     (s, text) => ({ ...s, pendingGuidance: appendGuidanceText(s.pendingGuidance, "errorRecovery", text) }),
     state,
   );
+  const capped = maxIterations !== undefined ? withResumedCap(guided, maxIterations) : guided;
   return {
-    stateJson: guidance.length > 0 ? serializeKernelState(guided) : params.stateJson,
-    ...(params.extraIterations !== undefined ? { maxIterations: resumeMaxIterations(state, params.extraIterations) } : {}),
+    stateJson: capped !== state ? serializeKernelState(capped) : params.stateJson,
+    ...(maxIterations !== undefined ? { maxIterations } : {}),
   };
+};
+
+/**
+ * The iteration cap of a continued run. The counters carry over and gate the
+ * loop, so a spent cap (the run's own `meta.maxIterations`, a plan-budget
+ * raised one included) would end the resume at once: it gets `extra` more
+ * (default {@link DEFAULT_RESUME_ITERATIONS}) past the restored iteration.
+ * A run that stopped with cap left (a pause, an error) keeps its own cap
+ * unless the caller asked for `extra`.
+ */
+const resumeCap = (state: KernelState, extra: number | undefined): number | undefined => {
+  if (extra !== undefined) return resumeMaxIterations(state, extra);
+  const cap = state.meta.maxIterations;
+  const spent = cap === undefined || Math.max(state.iteration, state.llmCalls ?? 0) >= cap - 1;
+  return spent ? resumeMaxIterations(state, DEFAULT_RESUME_ITERATIONS) : undefined;
 };
