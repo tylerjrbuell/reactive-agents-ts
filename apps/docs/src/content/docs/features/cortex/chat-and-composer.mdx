@@ -13,14 +13,15 @@ related:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import CortexShot from "../../../../components/CortexShot.astro";
 
-![The Cortex chat composer: quick-bar chips, message box, attach, dictate, voice mode and prompt library.](../../../../assets/cortex-chat-composer.png)
+<CortexShot id="chat-composer" variant="crop" />
 
 The Chat view provides a conversational interface for multi-turn dialogue with any agent. Chats are listed in the left rail, newest first under **Today** and **Earlier**, with a search box, each chat's model and when it was last used, and a dot on the chat whose reply is running. Each row's **More actions** menu edits the chat's settings, renames it or deletes it. Opening a chat lands on its latest turn. Each chat preserves the full conversation history.
 
 Answers read as prose (15px, a comfortable line length) with code, ids, tool names and token counts in monospace. Your messages sit on the right; the agent's turns sit on the canvas with a thin rail on the left that moves while the turn runs and turns red when it did not finish. An empty chat shows starter prompts.
 
-![Cortex Chat — a live multi-turn conversation. The left panel lists sessions; the main area shows the assistant's rich markdown response with categorized options. Token count and step count are shown per message.](../../../../assets/cortex-chat-session.png)
+<CortexShot id="chat-session" />
 
 Chat sessions are powered by `@reactive-agents/svelte` under the hood — the same `createCortexAgentRun` primitive that you can use in your own Svelte frontend.
 

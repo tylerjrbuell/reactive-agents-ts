@@ -11,19 +11,21 @@ import CortexShot from "../../../../components/CortexShot.astro";
 
 Cortex has four top-bar views (Beacon, Chat, Runs, Lab) plus Settings. A run view opens from any run. Each section below says what the view is for and links to the page that covers it in depth.
 
-![Cortex Beacon with no agents yet: the welcome offers Open a chat, Build an agent and Connect an app.](../../../../assets/cortex-tour-beacon-empty.png)
+<CortexShot id="beacon" />
 
 ## Beacon: what your agents are doing right now
 
 Beacon is the home page. It updates over WebSocket as events stream in, and it has two views: **Board** (the default) and **Field**. Switch with the Board / Field control in the header; the choice is kept in the URL (`/?view=field`) and remembered in the browser, and the URL wins.
 
-![Cortex Beacon (an earlier version: the live canvas, now the Field view).](../../../../assets/cortex-beacon.png)
+<CortexShot id="beacon-board" />
 
 **Board.** *Running now* shows one card per agent that is working: its name (the run's label, saved agent, chat or task, never a bare id), where it came from (chat, gateway, desk run, app), how long it has run, its task, what it is doing now (`Calling http-get`, `Thinking after 14 tool calls`), a small entropy line with the latest value (`η 0.62`), a loop meter and `step 3 of 6 · 2.1k tok · $0.310`. Only running cards glow. A page opened mid-run fills the entropy line from the run's stored events. Below, the **Agents** grid lists every other agent with its status, source, last line (the question or approval it waits on, why it failed, or its task), model, tokens and time, filtered by **All**, **Needs you**, **Failed** and **Idle** (finished, stopped or idle).
 
 Statuses use the same words as Runs and Chat: Running, Needs you (paused on an approval or a `request_user_input` question), Finished, Failed, Stopped, Idle.
 
 **Field.** The free canvas: agents as nodes on a dot grid, labelled by name and status (`Calling http-get`, `Running · step 3`, `Finished`). Running nodes glow and carry one sonar ring. Sub-agents link to their parent run (linked by persisted `parentRunId`, so the hierarchy survives a reload), and a link flows only while both ends run. Nodes never overlap: each takes its own slot, sub-agents sit in the row under their parent, and the Field scrolls when the desk has more agents than one screen holds. Drag a node by its handle to move it; **Arrange** forgets your drags and groups delegation trees, then lanes by state. Dragged positions are kept per browser.
+
+<CortexShot id="beacon-field" />
 
 The **prompt bar** at the bottom starts a new agent in both views: the model chip opens the full agent settings for this run, the book opens the prompt library, and **Run** (or Enter) submits via `POST /api/runs` and opens the new run. Press `R` anywhere to focus it.
 
@@ -60,7 +62,7 @@ A run without a trace file (tracing off) is compared on its summary and config o
 
 Open any run from Runs, a chat turn or Beacon to get the step-debugger: vitals, the answer, the **Why it ended** diagnosis, the loop and timeline trace, and an inspector with Summary, Safety, Decisions, Signal, Context, Memory, Messages and Events tabs. See [Run view and traces](/features/cortex/run-view-and-traces/).
 
-![Cortex run view with the vitals strip, execution trace and summary panel.](../../../../assets/cortex-run-details.png)
+<CortexShot id="run-cause" variant="crop" />
 
 ## Chat
 

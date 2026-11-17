@@ -107,4 +107,18 @@ describe("cortex screenshots", () => {
       expect(p).toContain("--crop.webp");
     }
   });
+
+  it("no Cortex page uses a hand-taken image: every Cortex screenshot is a <CortexShot>", () => {
+    const offenders: string[] = [];
+    for (const f of contentFiles.filter((p) => p.includes("/features/cortex"))) {
+      const text = readFileSync(f, "utf8");
+      // Markdown or HTML image, or an asset import, of a raster file.
+      if (/!\[[^\]]*\]\([^)]*\.(png|jpe?g|gif|webp)\b/i.test(text)) offenders.push(`${f}: markdown image`);
+      if (/<img\b/i.test(text)) offenders.push(`${f}: <img>`);
+      if (/assets\/cortex-[^\s"')]+/.test(text)) offenders.push(`${f}: assets/cortex-*`);
+    }
+    expect(offenders).toEqual([]);
+    const assetsDir = join(DOCS, "src/assets");
+    expect(readdirSync(assetsDir).filter((n) => /^cortex-.*\.(png|jpe?g|gif|webp)$/i.test(n))).toEqual([]);
+  });
 });
