@@ -68,9 +68,39 @@ function trailingContextStart(task: string, from: number): number {
  * which case spans are relative to the typed text).
  */
 export function resolveCurrentTurn(task: string, typedText?: string): CurrentTurn {
-  if (typedText === undefined || typedText.trim().length === 0) return extractCurrentTurn(task);
+  if (typedText === undefined || typedText.trim().length === 0) {
+    const turn = extractCurrentTurn(task);
+    const text = maskAttachedContext(turn.text);
+    return text === turn.text ? turn : { ...turn, text };
+  }
   const at = task.lastIndexOf(typedText);
-  return { text: typedText, offset: Math.max(at, 0), historyStripped: typedText !== task };
+  return {
+    text: maskAttachedContext(typedText),
+    offset: Math.max(at, 0),
+    historyStripped: typedText !== task,
+  };
+}
+
+/** Opens an attached-context block: `--- Attached file: <label> ---` on its own line. */
+export const ATTACHED_FILE_OPEN = "--- Attached file:";
+/** Closes an attached-context block, on its own line. */
+export const ATTACHED_FILE_CLOSE = "--- End attached file ---";
+
+const ATTACHED_BLOCK_RE =
+  /^--- Attached file:[^\n]*$[\s\S]*?(?:^--- End attached file ---[ \t]*$|(?![\s\S]))/gm;
+
+/**
+ * Blank the content of host-attached context blocks (file contents a UI tag
+ * inlined into the task). That text is reference data, not instruction: a path
+ * mentioned inside an attached AGENTS.md must never become a deliverable
+ * (Cortex chat, 2026-11-17: "Goals 0/60"). The block is replaced by spaces
+ * (newlines kept) so every offset into the text, and so every provenance span,
+ * is unchanged. An unterminated block masks to the end of the text. No block
+ * present ⇒ the text itself (same reference).
+ */
+export function maskAttachedContext(text: string): string {
+  if (!text.includes(ATTACHED_FILE_OPEN)) return text;
+  return text.replace(ATTACHED_BLOCK_RE, (block) => block.replace(/[^\n]/g, " "));
 }
 
 /**

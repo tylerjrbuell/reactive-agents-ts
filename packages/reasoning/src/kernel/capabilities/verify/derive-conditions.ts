@@ -611,8 +611,14 @@ export function deriveDeliverableItems(task: string): DerivedDeliverable[] {
     }
   }
 
-  return out;
+  // Typed "too many": a task that "names" this many files is quoting a document
+  // (an attached listing, pasted notes), not declaring deliverables. Declare
+  // NONE rather than truncate to an arbitrary subset (Cortex "Goals 0/60").
+  return out.length > MAX_DERIVED_DELIVERABLES ? [] : out;
 }
+
+/** Above this many path-derived deliverables none are declared (see above). */
+export const MAX_DERIVED_DELIVERABLES = 8;
 
 /**
  * Derive post-conditions for a run. Deterministic. NO LLM. Conservative.
