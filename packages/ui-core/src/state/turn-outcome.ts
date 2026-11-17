@@ -38,6 +38,13 @@ export type TurnEnding =
 /** Who stopped an interrupted turn: the user (Stop), or the client's connection closing. */
 export type InterruptedBy = "user" | "disconnect";
 
+/**
+ * Which button a user pressed: `"pause"` (Pause) or `"stop"` (Stop). A
+ * {@link TurnOutcome} sets it only for a pause, so an unmarked user stop reads
+ * as a stop.
+ */
+export type UserInterrupt = "pause" | "stop";
+
 /** A declared deliverable and whether the run produced it (`receipt.deliverables`). */
 export interface TurnDeliverable {
   readonly spec: string;
@@ -61,6 +68,8 @@ export interface TurnOutcome {
   readonly deliverables?: readonly TurnDeliverable[];
   /** Interrupted turns, and a partial the user stopped (`"user"`): who stopped it, when known. */
   readonly interruptedBy?: InterruptedBy;
+  /** `"pause"` when the user's stop was a Pause (a `user-paused` record, or a stream cancelled as `user-paused`); absent for a Stop. */
+  readonly userInterrupt?: UserInterrupt;
 }
 
 /**
@@ -88,8 +97,8 @@ export interface RunCompletionLike {
   readonly loopStop?: unknown;
   /**
    * Set when the turn never completed: `"user"` (stopped), `"disconnect"` (the
-   * client went away) or `true` (unknown). A `StreamCancelled.reason` can be
-   * passed as is. Absent or `false` on a run that completed.
+   * client went away), `"user-paused"` (the user paused it) or `true` (unknown).
+   * A `StreamCancelled.reason` can be passed as is. Absent or `false` on a run that completed.
    */
   readonly interrupted?: unknown;
 }
@@ -104,6 +113,14 @@ export const USER_STOP_CRITERION = "stopped_by_request";
  */
 export function isUserStopKind(kind: unknown): kind is "user-stopped" | "user-paused" {
   return kind === "user-stopped" || kind === "user-paused";
+}
+
+/**
+ * `"pause"` when a stop record's `kind` is `user-paused`, else `undefined` (a
+ * `user-stopped` kind and every non-user kind read as no marker).
+ */
+export function userInterruptOf(stop: unknown): UserInterrupt | undefined {
+  return record(stop)?.["kind"] === "user-paused" ? "pause" : undefined;
 }
 
 /**
@@ -128,9 +145,10 @@ export function isUserStopResult(c: RunCompletionLike): boolean {
  * The cause line of an interrupted turn, for apps that store or show one.
  * `undefined` reads as "stopped before it finished" without naming who.
  */
-export function interruptionCause(by: InterruptedBy | undefined): string {
+export function interruptionCause(by: InterruptedBy | undefined, how?: UserInterrupt): string {
   switch (by) {
     case "user":
+      if (how === "pause") return "You paused this reply before it finished.";
       return "You stopped this reply before it finished.";
     case "disconnect":
       return "The connection closed before the reply finished (the page was closed or left), so the run was stopped.";
@@ -235,13 +253,16 @@ export function turnOutcomeOf(c: RunCompletionLike): TurnOutcome {
   };
 
   if (c.interrupted !== undefined && c.interrupted !== false && c.interrupted !== null) {
+    const paused = c.interrupted === "user-paused";
     const by: InterruptedBy | undefined =
-      c.interrupted === "user" || c.interrupted === "disconnect" ? c.interrupted : undefined;
+      paused || c.interrupted === "user" ? "user" : c.interrupted === "disconnect" ? "disconnect" : undefined;
+    const how: UserInterrupt | undefined = paused ? "pause" : undefined;
     return {
       ending: "interrupted",
       ...base,
-      error: error ?? interruptionCause(by),
+      error: error ?? interruptionCause(by, how),
       ...(by !== undefined ? { interruptedBy: by } : {}),
+      ...(how !== undefined ? { userInterrupt: how } : {}),
     };
   }
 
@@ -264,11 +285,13 @@ export function turnOutcomeOf(c: RunCompletionLike): TurnOutcome {
     // The person's own stop: the answer so far, no cause, nothing to blame.
     const { error: _cause, ...rest } = base;
     const left = (split?.unfinished ?? strings(outcome?.["outstanding"])).filter((x) => x !== USER_STOP_CRITERION);
+    const how = userInterruptOf(c.stop) ?? userInterruptOf(c.loopStop);
     return {
       ending: "partial",
       ...rest,
       draft: split?.draft ?? output.trim(),
       interruptedBy: "user",
+      ...(how !== undefined ? { userInterrupt: how } : {}),
       ...(left.length > 0 ? { unfinished: left } : {}),
     };
   }

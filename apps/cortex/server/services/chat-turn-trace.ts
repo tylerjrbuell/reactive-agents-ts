@@ -14,8 +14,10 @@ import {
   type TurnDeliverable,
   type TurnTrace,
   type UiStreamEvent,
+  type UserInterrupt,
 } from "@reactive-agents/ui-core";
 import { storedRunError } from "./chat-run-errors.js";
+import { cancelReasonOf } from "./chat-turn-stop.js";
 
 /** Max chars of one tool result/error kept in a persisted turn trace. */
 const STORED_RESULT_CAP = 4_000;
@@ -45,6 +47,8 @@ export interface StoredTurnOutcome {
   readonly unfinished?: readonly string[];
   /** Interrupted turns, and a partial the user stopped (`"user"`): who stopped it. */
   readonly interruptedBy?: InterruptedBy;
+  /** `"pause"` when the user's stop was a Pause; absent for a Stop (and on older rows). */
+  readonly userInterrupt?: UserInterrupt;
 }
 
 /** Outcome of a turn that failed before the run could report (the agent threw, or could not be built). */
@@ -54,9 +58,15 @@ export function failedOutcome(raw: unknown): StoredTurnOutcome {
 }
 
 /** Outcome of a turn stopped before its run completed; the cause line is ui-core's `interruptionCause`. */
-export function interruptedOutcome(by: InterruptedBy): StoredTurnOutcome {
-  const o = readTurnOutcome({ interrupted: by });
-  return { success: false, ending: "interrupted", interruptedBy: by, ...(o.error ? { error: o.error } : {}) };
+export function interruptedOutcome(by: InterruptedBy, how?: UserInterrupt): StoredTurnOutcome {
+  const o = readTurnOutcome({ interrupted: cancelReasonOf(by, how) });
+  return {
+    success: false,
+    ending: "interrupted",
+    interruptedBy: by,
+    ...(o.userInterrupt ? { userInterrupt: o.userInterrupt } : {}),
+    ...(o.error ? { error: o.error } : {}),
+  };
 }
 
 /**
@@ -107,6 +117,7 @@ export function turnOutcomeOf(event: RunCompletionLike, busError?: string): Stor
     success: false,
     ending: o.ending,
     ...(o.ending === "partial" && o.interruptedBy ? { interruptedBy: o.interruptedBy } : {}),
+    ...(o.ending === "partial" && o.userInterrupt ? { userInterrupt: o.userInterrupt } : {}),
     ...(o.terminatedBy ? { terminatedBy: o.terminatedBy } : {}),
     ...(error ? { error } : {}),
     ...(o.abstention ? { abstention: o.abstention } : {}),
@@ -143,6 +154,7 @@ export function readStoredOutcome(raw: unknown): StoredTurnOutcome | undefined {
     ...(ab && str(ab["reason"]) ? { abstention: { reason: ab["reason"], ...(missing.length > 0 ? { missing } : {}) } } : {}),
     ...(unfinished.length > 0 ? { unfinished } : {}),
     ...((ending === "interrupted" || ending === "partial") && by !== undefined ? { interruptedBy: by } : {}),
+    ...((ending === "interrupted" || ending === "partial") && by === "user" && o["userInterrupt"] === "pause" ? { userInterrupt: "pause" as const } : {}),
   };
 }
 

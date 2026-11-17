@@ -34,8 +34,8 @@ export class ChatRunControl {
 /** What {@link interruptChatTurn} needs from the chat session service. */
 export interface ChatTurnInterruptPorts {
   readonly resume: { readonly control: ChatRunControl };
-  /** Abort the session's streamed turn as the user (`false` when none is in flight). */
-  stopTurn(sessionId: string): boolean;
+  /** Abort the session's streamed turn as the user (`false` when none is in flight); `kind` makes the thread read paused or stopped. */
+  stopTurn(sessionId: string, kind?: InterruptKind): boolean;
 }
 
 /** What Pause / Stop answers: whether a turn was ended and how the run's end was saved. */
@@ -50,7 +50,7 @@ export interface ChatInterruptAnswer {
 /**
  * The chat Stop / Pause: the framework ends the durable run first (a saved place to
  * continue from, `pauseRun` / `stopRun`), then the streamed turn is aborted as the user
- * so the thread reads "stopped by you" at once. A session whose run is not durable only
+ * so the thread reads "stopped by you" (or "paused by you" for a Pause) at once. A session whose run is not durable only
  * gets the abort (what Stop did before).
  */
 export async function interruptChatTurn(
@@ -59,6 +59,6 @@ export async function interruptChatTurn(
   kind: InterruptKind,
 ): Promise<ChatInterruptAnswer> {
   const outcome = await svc.resume.control.interrupt(sessionId, kind);
-  const aborted = svc.stopTurn(sessionId);
+  const aborted = svc.stopTurn(sessionId, kind);
   return { stopped: aborted || outcome !== "not-live", persisted: outcome === "persisted", outcome };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { abstentionInAnswer, bareEnding, chatTurnOutcome, completionEnding, endingBadge, endingNote, runEnding, storedRunEnding } from "./turn-ending.js";
+import { abstentionInAnswer, bareEnding, cancelledEnding, chatTurnOutcome, completionEnding, endingBadge, endingNote, runEnding, storedRunEnding } from "./turn-ending.js";
 import { turnEnding, turnTranscript } from "./stores/chat-timeline.js";
 import type { ChatTurn } from "./stores/chat-store.js";
 
@@ -169,5 +169,31 @@ describe("a turn the user stopped reads as partial by you, never a failure", () 
     const o = runEnding([{ type: "AgentCompleted", payload: done }]);
     expect(o).toMatchObject({ ending: "partial", interruptedBy: "user", draft: "Half the answer." });
     expect(o?.error).toBeUndefined();
+  });
+});
+
+describe("a turn the user paused reads 'paused by you', never 'stopped'", () => {
+  const paused = { success: false, output: "Half the answer.", stop: { kind: "user-paused" } };
+  test("a paused partial: badge, note and stored round trip say paused", () => {
+    const { runFailed } = completionEnding(paused);
+    expect(runFailed).toMatchObject({ ending: "partial", interruptedBy: "user", userInterrupt: "pause" });
+    expect(endingBadge(runFailed!)).toMatchObject({ label: "paused by you", tone: "quiet" });
+    expect(endingBadge(runFailed!).title).toContain("paused");
+    const note = endingNote(chatTurnOutcome({ content: "Half the answer.", runFailed })!);
+    expect(note?.heading).toBe("Paused by you; the answer so far is above");
+    const stored = storedRunEnding({ ending: "partial", interruptedBy: "user", userInterrupt: "pause" });
+    expect(endingBadge(stored).label).toBe("paused by you");
+  });
+  test("a stop stays 'stopped by you'", () => {
+    const { runFailed } = completionEnding({ success: false, output: "x", stop: { kind: "user-stopped" } });
+    expect(endingBadge(runFailed!).label).toBe("stopped by you");
+    expect(endingNote(chatTurnOutcome({ content: "x", runFailed })!)?.heading).toBe("Stopped by you; the answer so far is above");
+  });
+  test("a stream cancelled by a Pause is an interrupted turn labelled paused", () => {
+    const ending = cancelledEnding("user-paused");
+    expect(ending).toMatchObject({ ending: "interrupted", interruptedBy: "user", userInterrupt: "pause" });
+    expect(endingBadge(ending)).toMatchObject({ label: "paused", tone: "quiet" });
+    expect(endingNote(chatTurnOutcome({ content: "x", runFailed: ending })!)?.heading).toBe("Paused");
+    expect(endingBadge(cancelledEnding("user")).label).toBe("stopped");
   });
 });

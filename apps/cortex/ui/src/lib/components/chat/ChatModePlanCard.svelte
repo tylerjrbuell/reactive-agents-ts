@@ -136,23 +136,24 @@
 <style>
   .card {
     display: grid;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
-    padding: 12px 14px;
+    padding: 10px 12px;
     border: 1px solid var(--cortex-line-strong);
     border-left: 3px solid var(--cortex-accent);
     border-radius: var(--cortex-r-panel);
     background: color-mix(in srgb, var(--cortex-accent-tint) 40%, var(--cortex-surface-1));
   }
   .card.past { border-left-color: var(--cortex-line-strong); background: var(--cortex-surface-1); }
-  .head { display: flex; align-items: center; gap: 6px; font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-accent); }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-accent); }
   .past .head { color: var(--cortex-text-2); }
-  .sub { font-weight: 400; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .sub { flex: 1 1 auto; min-width: 0; font-weight: 400; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .head > :global(:last-child) { margin-left: auto; }
   .steps { min-width: 0; }
   .body { min-width: 0; }
   .reply summary { cursor: pointer; font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
   .reply .body { margin-top: 6px; }
-  .foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .foot { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
   .note { font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
   .problem { margin: 0; font-size: var(--cortex-t-xs); color: var(--cortex-bad); }
   .foot :global(.strategy) { flex: 0 0 190px; min-width: 0; }

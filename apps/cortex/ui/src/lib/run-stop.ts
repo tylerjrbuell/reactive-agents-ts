@@ -74,6 +74,17 @@ function loopHeadline(reason: string): string {
   return `The run was stopped (${reason}).`;
 }
 
+/**
+ * A `budget` stop in plain words. The framework files the iteration cap (`max_iterations`)
+ * under `budget`, and local models have no spend, so the reason decides the words.
+ */
+function budgetHeadline(reason: string): string {
+  const r = reason.toLowerCase();
+  if (/max[_ -]?iterations?|\biterations?\b/.test(r)) return "The run reached its iteration limit before it finished. Continue gives it more.";
+  if (/cost|token|spend|budget|usd|dollar/.test(r)) return "The run reached its spending (or token) limit before it finished.";
+  return "The run reached a limit before it finished.";
+}
+
 /** Why the run is not finished, in plain words, for the card's first line. */
 export function stopHeadline(kind: RunStopKind, stop?: Pick<StopWire, "reason">): string {
   switch (kind) {
@@ -84,7 +95,7 @@ export function stopHeadline(kind: RunStopKind, stop?: Pick<StopWire, "reason">)
     case "loop":
       return loopHeadline(stop?.reason ?? "");
     case "budget":
-      return "The run reached its spending limit before it finished.";
+      return budgetHeadline(stop?.reason ?? "");
     case "timeout":
       return "The run ran out of time before it finished.";
     case "error":

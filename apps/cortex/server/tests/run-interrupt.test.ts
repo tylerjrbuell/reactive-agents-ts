@@ -70,6 +70,15 @@ describe("chat Stop / Pause", () => {
     expect(out).toEqual({ stopped: true, persisted: true, outcome: "persisted" });
   });
 
+  it("passes the requested kind to the turn abort, so a Pause reads as paused and a Stop as stopped", async () => {
+    const kinds: string[] = [];
+    const agent = fakeAgent({});
+    const stopTurn = (_id: string, kind?: string) => (kinds.push(kind ?? "none"), true);
+    await interruptChatTurn({ resume: { control: new ChatRunControl({ liveAgentOf: () => agent }) }, stopTurn }, "s1", "pause");
+    await interruptChatTurn({ resume: { control: new ChatRunControl({ liveAgentOf: () => agent }) }, stopTurn }, "s1", "stop");
+    expect(kinds).toEqual(["pause", "stop"]);
+  });
+
   it("with no live durable agent it only aborts the turn, as Stop always did", async () => {
     const aborted: string[] = [];
     expect(await interruptChatTurn(ports(undefined, aborted), "s1", "stop")).toEqual({ stopped: true, persisted: false, outcome: "not-live" });

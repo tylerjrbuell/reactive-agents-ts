@@ -82,7 +82,7 @@ import {
   type StoredTurnOutcome,
   type StoredTurnTrace,
 } from "./chat-turn-trace.js";
-import { ChatTurnStops } from "./chat-turn-stop.js";
+import { ChatTurnStops, cancelReasonOf } from "./chat-turn-stop.js";
 import { recordRunErrors, type RunErrorLog } from "./chat-run-errors.js";
 import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-control-tool.js";
 import type { SessionControlPort } from "./chat-proposal-service.js";
@@ -872,9 +872,9 @@ let tokensUsed = 0;
       } catch (e) {
         if (stop.signal.aborted) {
           // B2/B3: the turn is stored as interrupted and its runs close as stopped.
-          outcome = interruptedOutcome(stop.stoppedBy());
+          outcome = interruptedOutcome(stop.stoppedBy(), stop.stoppedHow());
           entry.ingest?.closeOpenRuns({ kind: "stopped" });
-          yield { _tag: "StreamCancelled", reason: stop.stoppedBy(), iterationsCompleted };
+          yield { _tag: "StreamCancelled", reason: cancelReasonOf(stop.stoppedBy(), stop.stoppedHow()), iterationsCompleted };
         } else {
           outcome = failedOutcome(e);
           entry.ingest?.closeOpenRuns({ kind: "failed", error: outcome.error ?? "The run broke before it finished" });
@@ -906,7 +906,7 @@ let tokensUsed = 0;
             // The consumer left while this generator waited on a yield, so nothing threw here:
             // stop the run and record the interruption.
             stop.abort();
-            outcome = interruptedOutcome(stop.stoppedBy());
+            outcome = interruptedOutcome(stop.stoppedBy(), stop.stoppedHow());
             entry.ingest?.closeOpenRuns({ kind: "stopped" });
           }
           const trace = withTurnOutcome(recorder.finish(), outcome);
@@ -937,8 +937,8 @@ let tokensUsed = 0;
   }
 
   /** Stop the session's streamed turn as the user. `false` when no turn is in flight. */
-  stopTurn(sessionId: string): boolean {
-    return this.turnStops.stop(sessionId);
+  stopTurn(sessionId: string, kind?: "pause" | "stop"): boolean {
+    return this.turnStops.stop(sessionId, kind);
   }
 
   /** Persist one completed user/assistant exchange and bump the session's last-used stamp. */

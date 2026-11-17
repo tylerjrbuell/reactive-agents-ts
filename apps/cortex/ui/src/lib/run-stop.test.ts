@@ -53,7 +53,12 @@ describe("stop headline", () => {
   it("words the other kinds without blaming the agent for a person's stop", () => {
     expect(stopHeadline("user-stopped")).toContain("You stopped this run");
     expect(stopHeadline("user-paused")).toContain("You paused this run");
-    expect(stopHeadline("budget")).toContain("spending limit");
+    expect(stopHeadline("budget")).toBe("The run reached a limit before it finished.");
+    expect(stopHeadline("budget", { reason: "max_iterations" })).toBe("The run reached its iteration limit before it finished. Continue gives it more.");
+    expect(stopHeadline("budget", { reason: "Reached max iterations (10)" })).toContain("iteration limit");
+    expect(stopHeadline("budget", { reason: "cost_limit" })).toContain("spending (or token) limit");
+    expect(stopHeadline("budget", { reason: "token budget exceeded" })).toContain("spending (or token) limit");
+    expect(stopHeadline("budget", { reason: "something odd" })).toBe("The run reached a limit before it finished.");
     expect(stopHeadline("timeout")).toContain("out of time");
     expect(stopHeadline("error", { reason: "rate limited" })).toBe("The run hit an error (rate limited).");
     expect(stopHeadline("crash")).toContain("interrupted");

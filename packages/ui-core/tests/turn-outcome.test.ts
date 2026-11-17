@@ -5,9 +5,11 @@ import {
   foldTurnTrace,
   initialRunState,
   initialTurnTrace,
+  interruptionCause,
   isUserStopKind,
   isUserStopResult,
   USER_STOP_CRITERION,
+  userInterruptOf,
   persistedTurnTranscriptOf,
   reduceRunState,
   splitUnfinished,
@@ -173,5 +175,23 @@ describe("a run the user stopped is a partial, never a failure", () => {
     expect(isUserStopResult({ success: true, stop: { kind: "user-stopped" } })).toBe(false);
     expect(turnOutcomeOf({ success: false, output: "", error: "boom" }).ending).toBe("failed");
     expect(isUserStopKind("user-stopped") && isUserStopKind("user-paused") && !isUserStopKind("error")).toBe(true);
+  });
+
+  test("a user-paused stop record marks the partial as paused; a stop stays unmarked", () => {
+    expect(turnOutcomeOf({ success: false, output: "So far.", stop: { kind: "user-paused" } })).toEqual({
+      ending: "partial",
+      draft: "So far.",
+      interruptedBy: "user",
+      userInterrupt: "pause",
+    });
+    expect(turnOutcomeOf({ success: false, output: "So far.", stop: { kind: "user-stopped" } }).userInterrupt).toBeUndefined();
+    expect(userInterruptOf({ kind: "user-paused" })).toBe("pause");
+    expect(userInterruptOf({ kind: "user-stopped" })).toBeUndefined();
+  });
+  test("a stream cancelled as user-paused is an interrupted turn by the user, marked paused", () => {
+    const o = turnOutcomeOf({ interrupted: "user-paused" });
+    expect(o).toMatchObject({ ending: "interrupted", interruptedBy: "user", userInterrupt: "pause", error: "You paused this reply before it finished." });
+    expect(turnOutcomeOf({ interrupted: "user" }).userInterrupt).toBeUndefined();
+    expect(interruptionCause("user", "pause")).toBe("You paused this reply before it finished.");
   });
 });

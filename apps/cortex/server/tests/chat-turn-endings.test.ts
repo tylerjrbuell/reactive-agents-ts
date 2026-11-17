@@ -151,6 +151,32 @@ describe("B2: a turn interrupted mid-reply is stored as interrupted, with its ca
       await cleanup();
     }
   });
+
+  it("Pause (stopTurn with a pause) is stored as interrupted by the user, marked paused, and cancelled as user-paused", async () => {
+    const { db, svc, cleanup } = setup();
+    try {
+      const id = await svc.createSession({ agentConfig: { provider: "test", model: "test-model", enableTools: true } });
+      await svc.chat(id, "warm");
+      (svc as unknown as Internal).sessions.get(id)!.session.runStream = async function* (
+        _msg: string,
+        opts: { signal?: AbortSignal },
+      ): AsyncGenerator<FakeEvent> {
+        yield { _tag: "TextDelta", text: "half" };
+        svc.stopTurn(id, "pause");
+        if (opts.signal?.aborted) throw new Error("aborted");
+        yield { _tag: "TextDelta", text: " never" };
+      };
+
+      const events: FakeEvent[] = [];
+      for await (const e of svc.chatStream(id, "go", new AbortController().signal)) events.push(e as FakeEvent);
+      expect(events.find((e) => e._tag === "StreamCancelled")?.reason).toBe("user-paused");
+      const outcome = getChatTurns(db, id).at(-1)!.trace?.outcome;
+      expect(outcome).toMatchObject({ ending: "interrupted", interruptedBy: "user", userInterrupt: "pause" });
+      expect(outcome?.error).toContain("paused");
+    } finally {
+      await cleanup();
+    }
+  });
 });
 
 describe("B3: an interrupted chat run reaches a terminal status in the run list", () => {

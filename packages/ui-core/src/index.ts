@@ -34,6 +34,8 @@ export {
   USER_STOP_CRITERION,
   isUserStopKind,
   isUserStopResult,
+  userInterruptOf,
+  type UserInterrupt,
   type TurnEnding,
   type TurnOutcome,
   type TurnDeliverable,

@@ -15,6 +15,7 @@ import {
   type InterruptedBy,
   type TurnDeliverable,
   type TurnOutcome,
+  type UserInterrupt,
 } from "@reactive-agents/ui-core";
 import { runErrorLine } from "./run-error.js";
 import type { IconName } from "./icons.js";
@@ -34,6 +35,8 @@ export interface TurnRunEnding {
   readonly unfinished?: readonly string[];
   /** Interrupted turns, and a partial the user stopped (`"user"`): who stopped it. */
   readonly interruptedBy?: InterruptedBy;
+  /** `"pause"` when the user's stop was a Pause (words read "paused by you"); absent for a Stop. */
+  readonly userInterrupt?: UserInterrupt;
 }
 
 /**
@@ -46,9 +49,9 @@ export function failedBeforeStream(cause: unknown): TurnRunEnding {
   return { ending: "failed", ...(error ? { error } : {}) };
 }
 
-/** Ending of a `StreamCancelled` (its `reason` is who stopped it: `user` or `disconnect`). */
+/** Ending of a `StreamCancelled` (its `reason` is who stopped it: `user`, `user-paused` or `disconnect`). */
 export function cancelledEnding(reason: string): TurnRunEnding {
-  return runEndingOf(turnOutcomeOf({ interrupted: reason === "user" || reason === "disconnect" ? reason : true }));
+  return runEndingOf(turnOutcomeOf({ interrupted: reason === "user" || reason === "user-paused" || reason === "disconnect" ? reason : true }));
 }
 
 /** What a finished `StreamCompleted` tells a chat turn: how it ended (when not success) and the files it produced. */
@@ -75,6 +78,7 @@ const runEndingOf = (o: TurnOutcome): TurnRunEnding => ({
   ...(o.abstention ? { abstention: o.abstention } : {}),
   ...(o.unfinished && o.unfinished.length > 0 ? { unfinished: o.unfinished } : {}),
   ...(o.interruptedBy ? { interruptedBy: o.interruptedBy } : {}),
+  ...(o.userInterrupt ? { userInterrupt: o.userInterrupt } : {}),
 });
 
 /** A server-stored outcome (`trace.outcome`) as a turn ending; fields absent on older rows stay absent. */
@@ -88,6 +92,7 @@ export function storedRunEnding(o: TurnRunEnding): TurnRunEnding {
     ...((o.ending === "interrupted" || o.ending === "partial") && (o.interruptedBy === "user" || o.interruptedBy === "disconnect")
       ? { interruptedBy: o.interruptedBy }
       : {}),
+    ...(o.userInterrupt === "pause" && o.interruptedBy === "user" ? { userInterrupt: o.userInterrupt } : {}),
   };
 }
 
@@ -111,6 +116,7 @@ export function chatTurnOutcome(turn: {
     ...(split ? { draft: split.draft } : {}),
     ...(unfinished && unfinished.length > 0 ? { unfinished } : {}),
     ...(r.interruptedBy ? { interruptedBy: r.interruptedBy } : {}),
+    ...(r.userInterrupt ? { userInterrupt: r.userInterrupt } : {}),
     ...deliverables,
   };
 }
@@ -126,9 +132,16 @@ export function endingBadge(r: TurnRunEnding): { readonly label: string; readonl
       return { label: "abstained", tone: "quiet", title: "The agent declined to answer; the reason is below. Open the trace for detail." };
     case "partial":
       // The user's own stop is a partial result they chose, not a warning.
-      if (r.interruptedBy === "user") return { label: "stopped by you", tone: "quiet", title: "You stopped this reply; the answer so far is shown. Retry runs it again." };
+      if (r.interruptedBy === "user") {
+        return r.userInterrupt === "pause"
+          ? { label: "paused by you", tone: "quiet", title: "You paused this reply; the answer so far is shown. Continue picks it up where it left off." }
+          : { label: "stopped by you", tone: "quiet", title: "You stopped this reply; the answer so far is shown. Retry runs it again." };
+      }
       return { label: "partial", tone: "warn", title: `The run stopped${how} with a draft and unfinished items, listed below.` };
     case "interrupted":
+      if (r.interruptedBy === "user" && r.userInterrupt === "pause") {
+        return { label: "paused", tone: "quiet", title: "You paused this reply before it finished. Continue picks it up where it left off." };
+      }
       return r.interruptedBy === "user"
         ? { label: "stopped", tone: "quiet", title: "You stopped this reply before it finished. Retry runs it again." }
         : { label: "interrupted", tone: "warn", title: "The reply was cut off before it finished; the cause is below. Retry runs it again." };
@@ -189,7 +202,8 @@ export function endingNote(o: TurnOutcome, opts: { readonly reasonInAnswer?: boo
     }
     case "partial": {
       if (o.interruptedBy === "user") {
-        return { kind: "partial", tone: "quiet", icon: "stop", heading: "Stopped by you; the answer so far is above", items: o.unfinished ?? [] };
+        const paused = o.userInterrupt === "pause";
+        return { kind: "partial", tone: "quiet", icon: paused ? "clock" : "stop", heading: `${paused ? "Paused" : "Stopped"} by you; the answer so far is above`, items: o.unfinished ?? [] };
       }
       const line = o.unfinished && o.unfinished.length > 0 ? undefined : runErrorLine(o.error);
       return { kind: "partial", tone: "warn", icon: "clock", heading: "Unfinished", ...(line ? { line } : {}), items: o.unfinished ?? [] };
@@ -204,7 +218,7 @@ export function endingNote(o: TurnOutcome, opts: { readonly reasonInAnswer?: boo
         kind: "interrupted",
         tone: o.interruptedBy === "user" ? "quiet" : "warn",
         icon: o.interruptedBy === "user" ? "stop" : "unlink",
-        heading: o.interruptedBy === "user" ? "Stopped" : "Interrupted",
+        heading: o.interruptedBy === "user" ? (o.userInterrupt === "pause" ? "Paused" : "Stopped") : "Interrupted",
         ...(line ? { line } : {}),
         items: [],
       };
