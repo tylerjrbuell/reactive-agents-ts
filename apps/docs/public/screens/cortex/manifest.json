@@ -59,8 +59,8 @@
       "alt": "Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button.",
       "width": 1440,
       "height": 900,
-      "bytes": 41032,
-      "sha256": "cf5b78ea9fd9dae001924eaaa1d7a88282124803eddeacdf56f5ea6bf0d28aaf"
+      "bytes": 40578,
+      "sha256": "bf94efc18964d31ab67de3a76aa3b502154d98d261080447dba9f2ca38a93947"
     },
     {
       "id": "chat-stopped-continue--crop",
@@ -71,17 +71,17 @@
       "alt": "Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button. Cropped to show: The Stopped by you card with the finished tool, the note field and the Continue button.",
       "width": 960,
       "height": 600,
-      "bytes": 19860,
-      "sha256": "5ba09e5104f7228c764c8696b12891e1947bf1f07f1131dd8312e49673609712",
+      "bytes": 19312,
+      "sha256": "4ad13e716452ba623c2a31df51249e32044d38e8de1c60d06952164eb0b2d2d6",
       "variantOf": "chat-stopped-continue",
       "crop": {
         "x": 380,
-        "y": 190,
+        "y": 215,
         "width": 960,
         "height": 600,
         "shows": "The Stopped by you card with the finished tool, the note field and the Continue button."
       },
-      "note": "Readability crop of chat-stopped-continue: 960x600 CSS px from (380, 190) of the full capture, for display at 480 to 820 px wide."
+      "note": "Readability crop of chat-stopped-continue: 960x600 CSS px from (380, 215) of the full capture, for display at 480 to 820 px wide."
     },
     {
       "id": "tools-lab",
@@ -170,8 +170,8 @@
       "alt": "Cortex Beacon first-run view: the neural mark in the middle of the page, 'Welcome to Cortex', and buttons to open a chat, build an agent or connect an app.",
       "width": 1440,
       "height": 900,
-      "bytes": 22070,
-      "sha256": "84db38b6e142b3342cc24ab156a77aa6d49af5750af2f21fa759163ce3dd3e8f",
+      "bytes": 22320,
+      "sha256": "cc0171a40e741e90f1fee502e2ed9b418fc98c7af435bc9af7df3390580ee675",
       "note": "Motion on; every CSS animation is paused at 2.0 s so the frame is the same on every run. beacon-still is the reduced-motion version."
     },
     {
@@ -183,8 +183,8 @@
       "alt": "Cortex Beacon first-run view with the neural mark at rest and no animation.",
       "width": 1440,
       "height": 900,
-      "bytes": 23444,
-      "sha256": "ce1f030f988148dff95d71e789e4f5c5d14f8d25d64b77f4a8dcf29ca1c815f5",
+      "bytes": 23692,
+      "sha256": "82fc9d139359dd18aea19b49afad9a829e1b1e62975cde60a385477d80e0a0a3",
       "note": "prefers-reduced-motion emulation; animations disabled at capture."
     },
     {

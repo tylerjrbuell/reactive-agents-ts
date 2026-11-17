@@ -123,7 +123,7 @@ export const SHOTS: readonly Shot[] = [
     route: "/chat",
     caption: "A durable run you stopped keeps its place. Continue resumes the same run without repeating finished work.",
     alt: "Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button.",
-    crop: { x: 380, y: 190, width: 960, height: 600, shows: "The Stopped by you card with the finished tool, the note field and the Continue button." },
+    crop: { x: 380, y: 215, width: 960, height: 600, shows: "The Stopped by you card with the finished tool, the note field and the Continue button." },
     async capture({ page, base, sessionId }) {
       await page.goto(`${base}/chat?session=${sessionId("Audit the docs folder")}`);
       await page.getByRole("button", { name: "Continue" }).waitFor();
