@@ -72,5 +72,11 @@ Generate N tasks for a use case, run them in a sandbox (replay tool tables + fix
 - Privacy: community data off by default, content-hash keyed, no task text.
 - Attribution noise: Bernoulli cells (~13pp SE at 5x5) -> n and significance per the project bench rules before any default change.
 
+## Phase 0 result (2026-11-17): RE-SCOPE
+Report: `wiki/Experiments/2026-11-17-skill-learning-phase0.md`. 3,744 traces (1,306 real-model), 563 failure episodes, 351 usable recoveries in 170 runs; 13 recurring groups, but they are recurrences of tool-surface faults (shell allowlist/sandbox, empty args, todo unknown action, umami metrics args), not multi-step procedures; of 12 hand-read pairs 1 was skill-worthy, 5 harness/config-fixable, 6 model quirks. `ExperienceStore` is effectively empty today. Consequences for this spec:
+- Phase 1 narrows to the **evidence layer only** (`ExperienceEvidence` + `rax-diagnose pairs` miner, harness-warden); the learned unit is a **tool-usage note** (tool, error class, corrected shape) before it is a skill.
+- Recurring tool-surface faults go to their domain wardens as guards first (shell allowlist in the description + empty-command guard, empty-args guard for web-search/crypto-price, todo action hint, rooted-path heal, approval-handler default); several are already fixed (3aedf6c2e, d9f4326dc).
+- The distiller (Stage 2), validation (Stage 3) and tier-aware distillation (Stage 4) are held until recurring non-schema pairs persist after the guards land and `ExperienceStore` accumulates; re-run the miner then. Local tier has 10 usable pairs and there are no same-task small-vs-frontier pairs, so tier distillation has no evidence base yet.
+
 ## Non-goals
 Fine-tuning model weights; a second skill format; per-run LLM refinement; making Cortex own any learning logic.

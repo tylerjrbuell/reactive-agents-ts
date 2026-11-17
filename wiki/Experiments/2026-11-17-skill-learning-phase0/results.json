@@ -1,0 +1,924 @@
+{
+ "traces": 3744,
+ "realModelTraces": 1306,
+ "testFixtureTraces": 2438,
+ "tracesWithToolCalls": 811,
+ "tracesWithFailure": 238,
+ "realTracesWithFailure": 238,
+ "failureEpisodesAll": 563,
+ "failureEpisodesReal": 563,
+ "recoveryAll": [
+  [
+   "none",
+   210
+  ],
+  [
+   "same-tool-changed-args",
+   202
+  ],
+  [
+   "different-tool",
+   149
+  ],
+  [
+   "same-tool-same-args",
+   2
+  ]
+ ],
+ "recoveryReal": [
+  [
+   "none",
+   210
+  ],
+  [
+   "same-tool-changed-args",
+   202
+  ],
+  [
+   "different-tool",
+   149
+  ],
+  [
+   "same-tool-same-args",
+   2
+  ]
+ ],
+ "byTierReal": [
+  [
+   "mid",
+   400
+  ],
+  [
+   "large",
+   85
+  ],
+  [
+   "frontier",
+   51
+  ],
+  [
+   "local",
+   27
+  ]
+ ],
+ "byTaskTypeReal": [
+  [
+   "crypto-price",
+   201
+  ],
+  [
+   "file-code",
+   118
+  ],
+  [
+   "web-research",
+   89
+  ],
+  [
+   "other",
+   78
+  ],
+  [
+   "analytics-mcp",
+   62
+  ],
+  [
+   "shell",
+   12
+  ],
+  [
+   "math",
+   3
+  ]
+ ],
+ "byToolReal": [
+  [
+   "shell-execute",
+   120
+  ],
+  [
+   "todo",
+   88
+  ],
+  [
+   "umami/get_website_metrics",
+   87
+  ],
+  [
+   "web-search",
+   44
+  ],
+  [
+   "spawn-agent",
+   31
+  ],
+  [
+   "file-read",
+   24
+  ],
+  [
+   "crypto-price",
+   21
+  ],
+  [
+   "umami/get_website_traffic",
+   14
+  ],
+  [
+   "code-execute",
+   11
+  ],
+  [
+   "gh-cli",
+   11
+  ],
+  [
+   "umami/get_website_stats",
+   9
+  ],
+  [
+   "umami/run_funnel",
+   8
+  ],
+  [
+   "list-directory",
+   7
+  ],
+  [
+   "grep",
+   7
+  ],
+  [
+   "request_user_input",
+   6
+  ],
+  [
+   "signal/reply_to_last_sender",
+   5
+  ],
+  [
+   "umami/get_website_daterange",
+   5
+  ],
+  [
+   "file-edit",
+   4
+  ],
+  [
+   "git-cli",
+   4
+  ],
+  [
+   "umami/get_performance",
+   4
+  ],
+  [
+   "signal/send_message_to_user",
+   3
+  ],
+  [
+   "web_search",
+   3
+  ],
+  [
+   "activate-skill",
+   3
+  ],
+  [
+   "umami/get_annotations",
+   3
+  ],
+  [
+   "file-write",
+   2
+  ]
+ ],
+ "byErrClassReal": [
+  [
+   "arg-validation",
+   192
+  ],
+  [
+   "denied",
+   67
+  ],
+  [
+   "duplicate",
+   50
+  ],
+  [
+   "unknown-action-enum",
+   44
+  ],
+  [
+   "other:{\"executed\":false,\"success\":false,\"error\":\"Command",
+   43
+  ],
+  [
+   "transient-network",
+   34
+  ],
+  [
+   "not-found",
+   28
+  ],
+  [
+   "other:No todo item with id N.",
+   6
+  ],
+  [
+   "other:The request was rejected: invalid questions: each ",
+   6
+  ],
+  [
+   "other:[Code execution failed: language \"python\" is not s",
+   6
+  ],
+  [
+   "other:[Tool error: MCP tool reply_to_last_sender failed:",
+   5
+  ],
+  [
+   "parse",
+   5
+  ],
+  [
+   "other:[Tool error: Web search failed: Web search produce",
+   5
+  ],
+  [
+   "other:[Tool error: Grep search failed: ENOTDIR: not a di",
+   5
+  ],
+  [
+   "other:[Tool error: File read failed: EISDIR: illegal ope",
+   3
+  ],
+  [
+   "other:No todo item with id Step N: Research BTC market t",
+   3
+  ],
+  [
+   "other:[Tool error: MCP tool send_message_to_user failed:",
+   2
+  ],
+  [
+   "other:Tool \"umami_get_website_stats\" is not available in",
+   2
+  ],
+  [
+   "other:Tool \"umami_get_event_stats\" is not available in t",
+   2
+  ],
+  [
+   "other:Tool \"umami_get_session_stats\" is not available in",
+   2
+  ],
+  [
+   "other:Tool \"umami_get_sessions\" is not available in this",
+   2
+  ],
+  [
+   "other:[Tool error: MCP tool MinecraftWiki_getPageContent",
+   2
+  ],
+  [
+   "other:patch needs a non-empty ops list. Usage: todo({act",
+   2
+  ],
+  [
+   "missing-arg",
+   2
+  ],
+  [
+   "other:No todo item with id Step N: Research XRP market t",
+   2
+  ]
+ ],
+ "byModelReal": [
+  [
+   "mimo-v2.6:latest",
+   360
+  ],
+  [
+   "bonsai-2:27b",
+   75
+  ],
+  [
+   "gemini-2.5-flash",
+   27
+  ],
+  [
+   "qwen3.5:latest",
+   19
+  ],
+  [
+   "gpt-4o",
+   11
+  ],
+  [
+   "hf.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB:Q4_K_M",
+   9
+  ],
+  [
+   "qwen/qwen3.8-27b",
+   9
+  ],
+  [
+   "grok-4",
+   8
+  ],
+  [
+   "cogito:14b",
+   8
+  ],
+  [
+   "llama3.2:3b",
+   8
+  ],
+  [
+   "gemma4:latest",
+   6
+  ],
+  [
+   "qwen3:4b",
+   6
+  ],
+  [
+   "gpt-4.1",
+   4
+  ],
+  [
+   "gemma4",
+   3
+  ],
+  [
+   "gemma4:12b",
+   2
+  ]
+ ],
+ "usableRecoveries": 351,
+ "usableByTier": [
+  [
+   "mid",
+   269
+  ],
+  [
+   "large",
+   39
+  ],
+  [
+   "frontier",
+   33
+  ],
+  [
+   "local",
+   10
+  ]
+ ],
+ "usableByTaskType": [
+  [
+   "crypto-price",
+   116
+  ],
+  [
+   "web-research",
+   63
+  ],
+  [
+   "file-code",
+   55
+  ],
+  [
+   "analytics-mcp",
+   52
+  ],
+  [
+   "other",
+   52
+  ],
+  [
+   "shell",
+   12
+  ],
+  [
+   "math",
+   1
+  ]
+ ],
+ "usableByTool": [
+  [
+   "umami/get_website_metrics",
+   75
+  ],
+  [
+   "shell-execute",
+   73
+  ],
+  [
+   "todo",
+   47
+  ],
+  [
+   "spawn-agent",
+   29
+  ],
+  [
+   "web-search",
+   25
+  ],
+  [
+   "crypto-price",
+   16
+  ],
+  [
+   "file-read",
+   12
+  ],
+  [
+   "umami/get_website_traffic",
+   10
+  ],
+  [
+   "list-directory",
+   7
+  ],
+  [
+   "grep",
+   7
+  ],
+  [
+   "umami/get_website_stats",
+   6
+  ],
+  [
+   "code-execute",
+   5
+  ],
+  [
+   "gh-cli",
+   5
+  ],
+  [
+   "umami/run_funnel",
+   5
+  ],
+  [
+   "file-edit",
+   3
+  ],
+  [
+   "activate-skill",
+   3
+  ],
+  [
+   "file-write",
+   2
+  ],
+  [
+   "session-control",
+   2
+  ],
+  [
+   "signal/reply_to_last_sender",
+   2
+  ],
+  [
+   "git-cli",
+   2
+  ]
+ ],
+ "recurStrict": [
+  {
+   "key": "shell-execute | other:{\"executed\":false,\"success\":false,\"error\":\"Command | same-tool-changed-args ~command",
+   "runs": 19,
+   "tasks": 10,
+   "models": 6,
+   "n": 23
+  },
+  {
+   "key": "shell-execute | denied | same-tool-changed-args ~command",
+   "runs": 18,
+   "tasks": 12,
+   "models": 4,
+   "n": 25
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_events",
+   "runs": 10,
+   "tasks": 7,
+   "models": 2,
+   "n": 16
+  },
+  {
+   "key": "shell-execute | arg-validation | same-tool-changed-args +command",
+   "runs": 10,
+   "tasks": 6,
+   "models": 1,
+   "n": 12
+  },
+  {
+   "key": "web-search | arg-validation | same-tool-changed-args +maxResults,+query",
+   "runs": 10,
+   "tasks": 10,
+   "models": 1,
+   "n": 10
+  },
+  {
+   "key": "todo | unknown-action-enum | same-tool-changed-args ~action,~items",
+   "runs": 9,
+   "tasks": 6,
+   "models": 2,
+   "n": 12
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | same-tool-changed-args ~type",
+   "runs": 8,
+   "tasks": 6,
+   "models": 2,
+   "n": 10
+  },
+  {
+   "key": "web-search | arg-validation | same-tool-changed-args +query",
+   "runs": 7,
+   "tasks": 6,
+   "models": 1,
+   "n": 7
+  },
+  {
+   "key": "crypto-price | arg-validation | same-tool-changed-args +coins,+currency",
+   "runs": 4,
+   "tasks": 4,
+   "models": 1,
+   "n": 4
+  },
+  {
+   "key": "web-search | arg-validation | different-tool ->crypto-price",
+   "runs": 4,
+   "tasks": 4,
+   "models": 1,
+   "n": 4
+  },
+  {
+   "key": "crypto-price | denied | different-tool ->web-search",
+   "runs": 4,
+   "tasks": 4,
+   "models": 1,
+   "n": 7
+  },
+  {
+   "key": "umami/get_website_traffic | arg-validation | same-tool-changed-args ~unit",
+   "runs": 3,
+   "tasks": 2,
+   "models": 1,
+   "n": 4
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_realtime",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 5
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_website_traffic",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 7
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_performance",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 3
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_website_daterange",
+   "runs": 3,
+   "tasks": 3,
+   "models": 2,
+   "n": 8
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_sessions",
+   "runs": 3,
+   "tasks": 2,
+   "models": 1,
+   "n": 3
+  },
+  {
+   "key": "crypto-price | arg-validation | same-tool-changed-args +coins",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 3
+  },
+  {
+   "key": "shell-execute | duplicate | same-tool-changed-args ~command",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 6
+  },
+  {
+   "key": "file-read | arg-validation | same-tool-changed-args ~path",
+   "runs": 3,
+   "tasks": 3,
+   "models": 2,
+   "n": 3
+  },
+  {
+   "key": "list-directory | arg-validation | same-tool-changed-args ~path",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 3
+  }
+ ],
+ "recurLoose": [
+  {
+   "key": "umami/get_website_metrics | arg-validation",
+   "runs": 32,
+   "tasks": 17,
+   "models": 6,
+   "n": 66
+  },
+  {
+   "key": "web-search | arg-validation",
+   "runs": 21,
+   "tasks": 20,
+   "models": 1,
+   "n": 21
+  },
+  {
+   "key": "shell-execute | denied",
+   "runs": 19,
+   "tasks": 13,
+   "models": 5,
+   "n": 32
+  },
+  {
+   "key": "shell-execute | other:{\"executed\":false,\"success\":false,\"error\":\"Command",
+   "runs": 19,
+   "tasks": 10,
+   "models": 6,
+   "n": 23
+  },
+  {
+   "key": "todo | unknown-action-enum",
+   "runs": 12,
+   "tasks": 7,
+   "models": 2,
+   "n": 18
+  },
+  {
+   "key": "shell-execute | arg-validation",
+   "runs": 10,
+   "tasks": 6,
+   "models": 1,
+   "n": 12
+  },
+  {
+   "key": "crypto-price | arg-validation",
+   "runs": 8,
+   "tasks": 7,
+   "models": 1,
+   "n": 8
+  },
+  {
+   "key": "umami/get_website_traffic | arg-validation",
+   "runs": 7,
+   "tasks": 6,
+   "models": 2,
+   "n": 9
+  },
+  {
+   "key": "umami/get_website_stats | arg-validation",
+   "runs": 5,
+   "tasks": 4,
+   "models": 2,
+   "n": 6
+  },
+  {
+   "key": "list-directory | arg-validation",
+   "runs": 5,
+   "tasks": 5,
+   "models": 2,
+   "n": 5
+  },
+  {
+   "key": "spawn-agent | transient-network",
+   "runs": 4,
+   "tasks": 3,
+   "models": 2,
+   "n": 21
+  },
+  {
+   "key": "file-read | arg-validation",
+   "runs": 4,
+   "tasks": 3,
+   "models": 2,
+   "n": 4
+  },
+  {
+   "key": "crypto-price | denied",
+   "runs": 4,
+   "tasks": 4,
+   "models": 1,
+   "n": 8
+  },
+  {
+   "key": "todo | other:No todo item with id N.",
+   "runs": 3,
+   "tasks": 3,
+   "models": 3,
+   "n": 3
+  },
+  {
+   "key": "file-read | not-found",
+   "runs": 3,
+   "tasks": 3,
+   "models": 2,
+   "n": 6
+  },
+  {
+   "key": "shell-execute | duplicate",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 6
+  },
+  {
+   "key": "grep | other:[Tool error: Grep search failed: ENOTDIR: not a di",
+   "runs": 3,
+   "tasks": 3,
+   "models": 2,
+   "n": 5
+  },
+  {
+   "key": "umami/run_funnel | arg-validation",
+   "runs": 3,
+   "tasks": 1,
+   "models": 1,
+   "n": 5
+  },
+  {
+   "key": "umami/get_website_metrics | duplicate",
+   "runs": 3,
+   "tasks": 2,
+   "models": 3,
+   "n": 9
+  }
+ ],
+ "recurStrictCrossTask": [
+  {
+   "key": "shell-execute | other:{\"executed\":false,\"success\":false,\"error\":\"Command | same-tool-changed-args ~command",
+   "runs": 19,
+   "tasks": 10,
+   "models": 6,
+   "n": 23
+  },
+  {
+   "key": "shell-execute | denied | same-tool-changed-args ~command",
+   "runs": 18,
+   "tasks": 12,
+   "models": 4,
+   "n": 25
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_events",
+   "runs": 10,
+   "tasks": 7,
+   "models": 2,
+   "n": 16
+  },
+  {
+   "key": "shell-execute | arg-validation | same-tool-changed-args +command",
+   "runs": 10,
+   "tasks": 6,
+   "models": 1,
+   "n": 12
+  },
+  {
+   "key": "web-search | arg-validation | same-tool-changed-args +maxResults,+query",
+   "runs": 10,
+   "tasks": 10,
+   "models": 1,
+   "n": 10
+  },
+  {
+   "key": "todo | unknown-action-enum | same-tool-changed-args ~action,~items",
+   "runs": 9,
+   "tasks": 6,
+   "models": 2,
+   "n": 12
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | same-tool-changed-args ~type",
+   "runs": 8,
+   "tasks": 6,
+   "models": 2,
+   "n": 10
+  },
+  {
+   "key": "web-search | arg-validation | same-tool-changed-args +query",
+   "runs": 7,
+   "tasks": 6,
+   "models": 1,
+   "n": 7
+  },
+  {
+   "key": "crypto-price | arg-validation | same-tool-changed-args +coins,+currency",
+   "runs": 4,
+   "tasks": 4,
+   "models": 1,
+   "n": 4
+  },
+  {
+   "key": "web-search | arg-validation | different-tool ->crypto-price",
+   "runs": 4,
+   "tasks": 4,
+   "models": 1,
+   "n": 4
+  },
+  {
+   "key": "crypto-price | denied | different-tool ->web-search",
+   "runs": 4,
+   "tasks": 4,
+   "models": 1,
+   "n": 7
+  },
+  {
+   "key": "umami/get_website_traffic | arg-validation | same-tool-changed-args ~unit",
+   "runs": 3,
+   "tasks": 2,
+   "models": 1,
+   "n": 4
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_realtime",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 5
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_website_traffic",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 7
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_performance",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 3
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_website_daterange",
+   "runs": 3,
+   "tasks": 3,
+   "models": 2,
+   "n": 8
+  },
+  {
+   "key": "umami/get_website_metrics | arg-validation | different-tool ->umami/get_sessions",
+   "runs": 3,
+   "tasks": 2,
+   "models": 1,
+   "n": 3
+  },
+  {
+   "key": "crypto-price | arg-validation | same-tool-changed-args +coins",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 3
+  },
+  {
+   "key": "shell-execute | duplicate | same-tool-changed-args ~command",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 6
+  },
+  {
+   "key": "file-read | arg-validation | same-tool-changed-args ~path",
+   "runs": 3,
+   "tasks": 3,
+   "models": 2,
+   "n": 3
+  },
+  {
+   "key": "list-directory | arg-validation | same-tool-changed-args ~path",
+   "runs": 3,
+   "tasks": 3,
+   "models": 1,
+   "n": 3
+  }
+ ]
+}
