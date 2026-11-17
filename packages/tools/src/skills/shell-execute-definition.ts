@@ -17,8 +17,10 @@ import {
   DEFAULT_ALLOWED_COMMANDS,
   OPT_IN_COMMANDS,
   resolveCommandAccess,
+  shellInputPolicyFor,
   type ShellExecuteConfig,
 } from "./shell-execution.js";
+import { checkShellInput } from "./shell-input-denial.js";
 import { HANDLER_TIMEOUT_GRACE_MS } from "./timeout-grace.js";
 
 /**
@@ -100,6 +102,7 @@ export function shellExecuteToolFor(
       ...resolveCommandAccess(config?.commandAccess),
     ]),
   ];
+  const inputPolicy = shellInputPolicyFor(config);
   const notEnabled = OPT_IN_COMMANDS.filter((c) => !allowed.includes(c));
   const escalated =
     !docker && config?.dockerEscalation?.enabled === true
@@ -154,6 +157,13 @@ export function shellExecuteToolFor(
     // CAN write files via redirects / commands — file producer (audit 01-F1 / C2).
     produces: "file",
     // Same `allowed` / `notEnabled` the description above is built from.
+    // Same policy the handler enforces, so an out-of-policy command is refused
+    // with the handler's exact text before a human is asked to approve it.
+    // Working-directory checks (path confinement, `cd`) are left to execution.
+    preflight: (args) => {
+      const verdict = checkShellInput(args, inputPolicy, undefined);
+      return verdict.denied ? verdict.error : undefined;
+    },
     commandPolicy: {
       allowedCommands: allowed,
       notEnabledCommands: notEnabled,

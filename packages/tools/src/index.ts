@@ -3,6 +3,7 @@ export type {
   ToolParameter,
   ToolDefinition,
   ShellCommandPolicy,
+  ToolPreflight,
   ToolInput,
   ToolOutput,
   MCPServer,
@@ -23,6 +24,8 @@ export {
   MCPResponseSchema,
   FunctionCallingToolSchema,
 } from "./types.js";
+
+export { preflightToolCall } from "./preflight.js";
 
 // ─── Errors ───
 export {

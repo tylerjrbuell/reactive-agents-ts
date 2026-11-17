@@ -327,7 +327,25 @@ export const ToolDefinitionSchema = Schema.Struct({
       workingDirectory: Schema.String,
     }),
   ),
+  /**
+   * Deterministic pre-approval check. Given the call's arguments it returns the
+   * refusal text the tool would return at execution, or `undefined` when the
+   * call may proceed. The framework runs it BEFORE asking a human to approve,
+   * so a call that is guaranteed to be refused (e.g. a shell command outside the
+   * allowlist) is never put in front of a person. Execution still validates;
+   * this only skips a pointless approval. Must be pure and fast. Call it through
+   * {@link preflightToolCall}, which treats a throwing preflight as "proceed".
+   */
+  preflight: Schema.optional(
+    Schema.declare((u: unknown): u is ToolPreflight => typeof u === "function"),
+  ),
 });
+
+/**
+ * A tool's pre-approval check: the refusal text for arguments the tool would
+ * refuse at execution, or `undefined` to proceed. See `ToolDefinition.preflight`.
+ */
+export type ToolPreflight = (args: Record<string, unknown>) => string | undefined;
 
 /** Typed allowed-command summary carried on a command-running tool's definition. */
 export type ShellCommandPolicy = NonNullable<typeof ToolDefinitionSchema.Type.commandPolicy>;

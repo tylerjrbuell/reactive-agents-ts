@@ -1,6 +1,6 @@
 import { Effect, Schema, ParseResult, SchemaAST as AST } from "effect";
 import { errorMessage } from "@reactive-agents/core";
-import type { ToolDefinition, ToolParameter } from "./types.js";
+import type { ToolDefinition, ToolParameter, ToolPreflight } from "./types.js";
 import { ToolExecutionError, ToolDefinitionError, ToolOutputValidationError } from "./errors.js";
 import { type StandardSchemaV1, isStandardSchema } from "./standard-schema.js";
 
@@ -97,6 +97,13 @@ export interface DefineToolOptions<A, O = unknown> {
   isCacheable?: boolean;
   /** Custom cache TTL in ms. */
   cacheTtlMs?: number;
+  /**
+   * Deterministic pre-approval check: return the refusal text for raw args the
+   * tool would refuse at execution, or `undefined` to proceed. Runs before any
+   * human approval so a doomed call is never put in front of a person.
+   * See `ToolDefinition.preflight`.
+   */
+  preflight?: ToolPreflight;
   /**
    * Optional output schema. When present, the handler's resolved return
    * value is decoded against it before the tool call is considered
@@ -635,6 +642,7 @@ export function defineTool<A, O = unknown>(options: DefineToolOptions<A, O>): De
     returnType,
     isCacheable,
     cacheTtlMs,
+    preflight,
   } = options;
 
   const parameters = extractParameters(input);
@@ -653,6 +661,7 @@ export function defineTool<A, O = unknown>(options: DefineToolOptions<A, O>): De
     ...(returnType !== undefined ? { returnType } : {}),
     ...(isCacheable !== undefined ? { isCacheable } : {}),
     ...(cacheTtlMs !== undefined ? { cacheTtlMs } : {}),
+    ...(preflight !== undefined ? { preflight } : {}),
   };
 
   const typedHandler = handler as ToolHandler<unknown>;

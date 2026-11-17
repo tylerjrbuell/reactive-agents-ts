@@ -165,6 +165,7 @@ The tool definition carries `commandPolicy` (`allowedCommands`, `notEnabledComma
 
 ## Pitfalls
 
+- A command the policy would refuse (not on the allowlist, blocked pattern, expansion) is refused without an approval prompt: the tool's `preflight` runs the same checks before approval and the model sees the identical refusal. Checks that depend on the working directory (path escapes, `cd`) still run at execution
 - `shell-execute` has `requiresApproval: true` by default — in automated pipelines, register a custom handler with `requiresApproval: false` if human approval flow is not wired
 - Commands are allowlisted by **executable name only** (first word) — `git` is allowed regardless of sub-command args; `curl` is opt-in
 - `MAX_COMMAND_LENGTH` is 4,096 — very long piped commands will be rejected

@@ -10,15 +10,17 @@ import type { RunnerLanguage, DockerSandboxConfig } from "../execution/docker-sa
 import { sandboxDockerEnabled } from "../flags.js";
 import { capShellOutput, runHostShell, timeoutMarker } from "./shell-host-process.js";
 import { GIT_BLOCKED_RULES } from "./shell-git-guard.js";
-import { SCRIPT_BLOCKED_RULES, scriptEscapeDenial } from "./shell-program-guard.js";
-import { readOnlyGitDenial, type ShellGitReadOnlyConfig } from "./shell-git-readonly.js";
-import { isRedirectAmpersand, pathCandidateTokens, splitCommandSegments, withoutNullRedirects } from "./shell-command-segments.js";
+import { SCRIPT_BLOCKED_RULES } from "./shell-program-guard.js";
+import type { ShellGitReadOnlyConfig } from "./shell-git-readonly.js";
+import { checkShellInput, findDisallowedCommand, type ShellInputPolicy } from "./shell-input-denial.js";
 import {
   DEFAULT_ALLOWED_COMMANDS,
-  OPT_IN_COMMANDS,
   resolveCommandAccess,
   type ShellCommandAccessConfig,
 } from "./shell-command-catalog.js";
+
+// Sanitizer + allow-list scan live in ./shell-input-denial.ts; re-exported for existing importers.
+export { findDisallowedCommand, sanitizeCommand } from "./shell-input-denial.js";
 
 // Command catalog lives in ./shell-command-catalog.ts; re-exported for existing importers.
 export {
@@ -30,9 +32,6 @@ export {
 } from "./shell-command-catalog.js";
 
 // ── Constants ─────────────────────────────────────────────────────────
-
-/** Maximum command length to prevent abuse via enormous strings. */
-const MAX_COMMAND_LENGTH = 4096;
 
 /**
  * Blocked patterns — checked against the full command string.
@@ -133,60 +132,7 @@ export const DEFAULT_BLOCKED_PATTERNS: ReadonlyArray<RegExp> = DEFAULT_BLOCKED_R
   (rule) => rule.pattern,
 );
 
-// ── Sanitization ──────────────────────────────────────────────────────
-
-/**
- * Sanitize a command string: strip null bytes, ANSI escapes, newlines,
- * carriage returns, and enforce a maximum length. Returns empty string
- * for excessively long commands (which will then be rejected as empty).
- */
-export function sanitizeCommand(raw: string): string {
-  if (raw.length > MAX_COMMAND_LENGTH) return "";
-  return raw
-    .replace(/\x00/g, " ")
-    // eslint-disable-next-line no-control-regex
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
-    // Strip newlines and carriage returns — prevents CWE-78 newline injection
-    .replace(/[\r\n]+/g, " ")
-    .trim();
-}
-
-// ── Validation helpers ────────────────────────────────────────────────
-
-// splitCommandSegments (quote-aware `&&` / `||` / `;` / `|` split): ./shell-command-segments.ts.
-
-/**
- * Find the first pipe/chain segment whose executable is not in the
- * allow-list. Returns the offender's basename, or `null` if every
- * segment is allowed. Empty input returns the sentinel `""` so callers
- * can distinguish "no command" from "all allowed".
- *
- * Used to build precise error messages — `find . | xargs wc` should
- * report `xargs` (the actual offender), not `find` (the first word).
- */
-export function findDisallowedCommand(
-  command: string,
-  allowList: ReadonlyArray<string> = DEFAULT_ALLOWED_COMMANDS,
-): string | null {
-  const trimmed = command.trim();
-  if (!trimmed) return "";
-
-  const segments = splitCommandSegments(trimmed);
-
-  let hasCommand = false;
-  for (const segment of segments) {
-    const seg = segment.trim();
-    if (!seg) continue;
-    hasCommand = true;
-    const firstWord = seg.split(/\s+/)[0]!;
-    // Extract basename to prevent absolute-path bypass:
-    // /usr/bin/wget → wget → not in defaults → blocked
-    const name = firstWord.includes("/") ? firstWord.split("/").pop()! : firstWord;
-    if (!allowList.includes(name)) return name;
-  }
-
-  return hasCommand ? null : "";
-}
+// Sanitizer + allow-list scan (sanitizeCommand, findDisallowedCommand): ./shell-input-denial.ts.
 
 /**
  * Check whether every command in a (potentially chained) pipeline is
@@ -227,124 +173,6 @@ export function isCommandBlocked(
   blockList: ReadonlyArray<RegExp> = DEFAULT_BLOCKED_PATTERNS,
 ): boolean {
   return blockList.some((pattern) => pattern.test(command));
-}
-
-/**
- * Detect shell expansion / substitution that this tool does not support.
- *
- * shell-execute runs commands literally inside a sandbox; parameter expansion
- * (`$VAR`, `${VAR}`), command substitution (`$(…)`, backticks), and process
- * substitution (`<(…)`, `>(…)`) are all injection vectors with no legitimate
- * use here. This scan is **quote-aware**: single quotes suppress every form of
- * shell expansion, so `awk '{print $NF}'` and `echo 'costs $5'` are allowed,
- * while `cat $VAR`, `cat "$VAR"`, and `cat <(id)` are rejected structurally
- * (a policy on the expansion class, not an enumerated blocklist of commands).
- *
- * Returns an error message if unsafe, or `null` if safe.
- */
-function detectShellExpansion(command: string): string | null {
-  let inSingle = false;
-  let inDouble = false;
-
-  for (let i = 0; i < command.length; i++) {
-    const ch = command[i]!;
-    const next = i + 1 < command.length ? command[i + 1]! : "";
-
-    if (ch === "'" && !inDouble) {
-      inSingle = !inSingle;
-      continue;
-    }
-    if (ch === '"' && !inSingle) {
-      inDouble = !inDouble;
-      continue;
-    }
-    // Single quotes suppress all shell expansion — skip their contents.
-    if (inSingle) continue;
-
-    // $VAR / ${VAR} / $(...) — variable and command substitution.
-    // A `$` followed by a digit (e.g. `$5`) is not a shell variable, so allow it.
-    if (ch === "$" && /[A-Za-z_{(]/.test(next)) {
-      return "shell variable/command expansion ($…) is not supported by shell-execute";
-    }
-    // Backtick command substitution.
-    if (ch === "`") {
-      return "backtick command substitution is not supported by shell-execute";
-    }
-    // Process substitution <(…) / >(…) — only meaningful outside quotes.
-    if ((ch === "<" || ch === ">") && next === "(" && !inDouble) {
-      return "process substitution <(...)/>(...) is not supported by shell-execute";
-    }
-    // Backgrounding `&` — mid-string or trailing — escapes the timeout and the
-    // splitter (`sleep 100 & evil`). `&&` chaining is fine, and so is an `&` inside a
-    // redirect (`2>&1`, `>&2`, `&>f`, `|&`): see isRedirectAmpersand.
-    if (ch === "&" && !inDouble) {
-      if (next === "&") {
-        i++; // consume the second '&' of a legitimate && chain
-        continue;
-      }
-      if (!isRedirectAmpersand(command, i)) {
-        return "background operator '&' is not supported by shell-execute (escapes the timeout)";
-      }
-    }
-  }
-
-  return null;
-}
-
-/** Strip a single matching pair of leading/trailing shell quotes and leading redirect operators. */
-function unwrapToken(raw: string): string {
-  let tok = raw.replace(/^[<>]+/, "");
-  if (
-    (tok.startsWith('"') && tok.length > 1) ||
-    (tok.startsWith("'") && tok.length > 1)
-  ) {
-    tok = tok.slice(1);
-  }
-  if (tok.endsWith('"') || tok.endsWith("'")) {
-    tok = tok.slice(0, -1);
-  }
-  return tok;
-}
-
-/** True if `resolved` is the sandbox directory itself or nested within it. */
-function isWithinSandbox(resolved: string, sandboxDir: string): boolean {
-  return resolved === sandboxDir || resolved.startsWith(sandboxDir + "/");
-}
-
-/**
- * Detect path tokens that reference locations outside the sandbox.
- *
- * Every whitespace-separated token is canonicalized uniformly — quotes and
- * redirect operators stripped, then absolute paths resolved and relative
- * traversal (`..`) resolved against the sandbox — and asserted to stay inside
- * `sandboxDir`. This replaces the previous case-by-case checks (which only
- * covered bare-absolute and redirect-target tokens and were defeated by a
- * leading quote or a bare relative `..`).
- *
- * Returns an error message if unsafe, or `null` if safe.
- */
-function detectUnsafePaths(command: string, sandboxDir: string): string | null {
-  // Tilde expansion → references $HOME
-  if (/~\//.test(command) || /~"/.test(command) || command.trim() === "~") {
-    return "Command references home directory via ~ — outside the sandbox";
-  }
-
-  for (const raw of pathCandidateTokens(command)) {
-    const token = unwrapToken(raw);
-    if (!token) continue;
-
-    if (isAbsolute(token)) {
-      if (!isWithinSandbox(resolve(token), sandboxDir)) {
-        return `Absolute path "${token}" is outside the sandbox (${sandboxDir})`;
-      }
-    } else if (token.includes("..")) {
-      if (!isWithinSandbox(resolve(sandboxDir, token), sandboxDir)) {
-        return `Relative path "${token}" escapes outside the sandbox`;
-      }
-    }
-  }
-
-  return null;
 }
 
 // ── Config ────────────────────────────────────────────────────────────
@@ -466,6 +294,28 @@ export interface ShellExecuteConfig extends ShellGitReadOnlyConfig {
 
 // ── Handler factory ───────────────────────────────────────────────────
 
+/** Commands granted on top of the base list: `additionalCommands` plus `commandAccess` groups. */
+function grantedCommands(config?: ShellExecuteConfig): string[] {
+  return [...(config?.additionalCommands ?? []), ...resolveCommandAccess(config?.commandAccess)];
+}
+
+/**
+ * The input policy a resolved config enforces. Shared by the handler and the
+ * tool's `preflight` so both refuse with the same text. A caller-supplied
+ * `blockedPatterns` has no labels, so its refusals use a generic reason.
+ */
+export function shellInputPolicyFor(config?: ShellExecuteConfig): ShellInputPolicy {
+  return {
+    allowedCommands: [...(config?.allowedCommands ?? DEFAULT_ALLOWED_COMMANDS), ...grantedCommands(config)],
+    blockedRules: config?.blockedPatterns
+      ? config.blockedPatterns.map((pattern) => ({ pattern, reason: "matches custom blocklist pattern" }))
+      : DEFAULT_BLOCKED_RULES,
+    customBlocklist: config?.blockedPatterns !== undefined,
+    gitReadOnly: config?.gitReadOnly === true,
+    ...(config?.approvalCommands ? { approvalCommands: config.approvalCommands } : {}),
+  };
+}
+
 /**
  * Create a shell-execute handler with the given configuration.
  *
@@ -491,12 +341,9 @@ export function shellExecuteHandler(
 ): (args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError> {
   const maxOutputChars = config?.maxOutputChars ?? 4000;
   const timeoutMs = config?.timeoutMs ?? 30_000;
-  const baseCommands = config?.allowedCommands ?? DEFAULT_ALLOWED_COMMANDS;
-  const additional = [
-    ...(config?.additionalCommands ?? []),
-    ...resolveCommandAccess(config?.commandAccess),
-  ];
-  const allowedCommands = [...baseCommands, ...additional];
+  const inputPolicy = shellInputPolicyFor(config);
+  const allowedCommands = inputPolicy.allowedCommands;
+  const additional = grantedCommands(config);
   const resolvedCommandDirs = resolveCommandDirectories(additional);
   const executionPath = [
     "/usr/local/bin",
@@ -504,15 +351,6 @@ export function shellExecuteHandler(
     "/bin",
     ...resolvedCommandDirs,
   ].join(":");
-  // When the caller overrides `blockedPatterns`, we have raw regexes with no
-  // labels — fall back to generic refusal messages. When unset, use the
-  // labelled rule table so error messages name which policy fired.
-  const blockedRules: ReadonlyArray<BlockedCommandRule> = config?.blockedPatterns
-    ? config.blockedPatterns.map((pattern) => ({
-        pattern,
-        reason: "matches custom blocklist pattern",
-      }))
-    : DEFAULT_BLOCKED_RULES;
   const allowUnsafeCwd = config?.allowUnsafeCwd ?? false;
   const onAudit = config?.onAudit;
 
@@ -611,115 +449,15 @@ export function shellExecuteHandler(
   return (args: Record<string, unknown>) =>
     Effect.tryPromise({
       try: async (signal) => {
-        // ── 0. Validate input type ──
-        if (typeof args.command !== "string" || !args.command.trim()) {
-          return {
-            executed: false,
-            success: false,
-            error: "Command must be a non-empty string",
-          };
+        // ── 0–4. Input policy (shell-input-denial.ts): type, sandbox dir, sanitize,
+        // allow-list, block-list, expansion, script, git read-only, path confinement ──
+        const verdict = checkShellInput(args, inputPolicy, sandboxDir);
+        if (verdict.denied) {
+          if (verdict.audit) audit({ command: verdict.audit.command, allowed: false, reason: verdict.audit.reason });
+          return { executed: false, success: false, error: verdict.error };
         }
-
-        // ── 0b. Validate sandbox dir resolved ──
-        if (!sandboxDir) {
-          return {
-            executed: false,
-            success: false,
-            error: "Working directory is outside the sandbox (/tmp). Set allowUnsafeCwd to override.",
-          };
-        }
-
-        // ── 1. Sanitize ──
-        const command = sanitizeCommand(args.command as string);
-        if (!command) {
-          audit({ command: args.command as string, allowed: false, reason: "sanitization-empty" });
-          return {
-            executed: false,
-            success: false,
-            error: "Command is empty after sanitization (too long or only control characters)",
-          };
-        }
-
-        // ── 2. Allow-list check ──
-        const disallowed = findDisallowedCommand(command, allowedCommands);
-        if (disallowed !== null) {
-          audit({ command, allowed: false, reason: "not-in-allowlist" });
-          const firstWord = command.split(/\s+/)[0] ?? "";
-          const offender = disallowed || firstWord;
-          // `cd` can never work: each call is a fresh `sh -c` with cwd fixed at
-          // the sandbox root — name the truth instead of a dead-end denial.
-          if (offender === "cd") {
-            return {
-              executed: false,
-              success: false,
-              error: `cd does not persist between calls — the shell already starts in the sandbox root ${sandboxDir}; use paths relative to it`,
-            };
-          }
-          // Hint when the offender is opt-in (e.g. xargs/curl/node): tells the
-          // caller the command exists in the framework but must be granted.
-          const optInHint = OPT_IN_COMMANDS.includes(offender)
-            ? ` ("${offender}" is opt-in — add it to additionalCommands to grant access)`
-            : "";
-          const segmentNote =
-            disallowed && disallowed !== firstWord
-              ? ` (in pipeline segment "${disallowed}")`
-              : "";
-          // Neither allowlisted nor opt-in-grantable: name what IS available
-          // so the model self-redirects. Skipped when optInHint fired.
-          const redirectHint = optInHint
-            ? ""
-            : ` Allowed commands: ${allowedCommands.join(", ")}.` +
-              ` Commands requiring developer opt-in: ${OPT_IN_COMMANDS.join(", ")}`;
-          return {
-            executed: false,
-            success: false,
-            error: `Command "${offender}" is not in the allowed commands list${segmentNote}${optInHint}${redirectHint}`,
-          };
-        }
-
-        // ── 3. Block-list check (default rules skip redirects to exactly /dev/null; custom patterns see the raw command) ──
-        const blockedReason = findBlockedReason(config?.blockedPatterns ? command : withoutNullRedirects(command), blockedRules);
-        if (blockedReason !== null) {
-          audit({ command, allowed: false, reason: "blocked-pattern" });
-          return {
-            executed: false,
-            success: false,
-            error: `Command blocked by security policy: ${blockedReason}`,
-          };
-        }
-
-        // ── 3b. Shell expansion / substitution check ──
-        const expansionIssue = detectShellExpansion(command);
-        if (expansionIssue !== null) {
-          audit({ command, allowed: false, reason: "shell-expansion" });
-          return {
-            executed: false,
-            success: false,
-            error: `Command blocked by security policy: ${expansionIssue}`,
-          };
-        }
-
-        // ── 3d. sed/awk programs: deny-by-default parse (always on; a boundary, not a policy) ──
-        const scriptDenial = scriptEscapeDenial(command, allowedCommands);
-        if (scriptDenial !== null) { audit({ command, allowed: false, reason: "script-escape" }); return { executed: false, success: false, error: `Command blocked by security policy: ${scriptDenial}` }; }
-
-        // ── 3c. Read-only git/gh preset: allow-list of subcommands ──
-        const gitDenial = config?.gitReadOnly === true ? readOnlyGitDenial(command, config.approvalCommands) : null;
-        if (gitDenial !== null) {
-          audit({ command, allowed: false, reason: "git-read-only" });
-          return { executed: false, success: false, error: `Command blocked by security policy: ${gitDenial}` };
-        }
-
-        // ── 4. Path safety check ──
-        const pathIssue = detectUnsafePaths(withoutNullRedirects(command), sandboxDir);
-        if (pathIssue) {
-          audit({ command, allowed: false, reason: "unsafe-path" });
-          return {
-            executed: false,
-            success: false,
-            error: `${pathIssue} — outside the sandbox`,
-          };
-        }
+        const command = verdict.command;
+        const cwd = sandboxDir!; // a null directory was denied by checkShellInput above
 
         // ── 4a. Opt-in Docker sandbox (F1b) ──
         // The command passed every input filter above; now run it inside a
@@ -794,8 +532,8 @@ export function shellExecuteHandler(
         }
 
         // ── 5. Ensure sandbox directory exists ──
-        if (!existsSync(sandboxDir)) {
-          mkdirSync(sandboxDir, { recursive: true, mode: 0o700 });
+        if (!existsSync(cwd)) {
+          mkdirSync(cwd, { recursive: true, mode: 0o700 });
         }
 
         // ── 6–7. Host process: minimal env, timeout kill (shell-host-process.ts) ──
@@ -803,7 +541,7 @@ export function shellExecuteHandler(
         // workspace) gets a scratch HOME outside it; the own sandbox is HOME.
         const { stdout: fullOutput, stderr: fullStderr, exitCode, timedOut } = await runHostShell({
           command,
-          cwd: sandboxDir,
+          cwd,
           path: executionPath,
           timeoutMs,
           homeInCwd: config?.cwd === undefined,
