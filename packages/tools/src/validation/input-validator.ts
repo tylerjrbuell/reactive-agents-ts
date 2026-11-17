@@ -1,8 +1,37 @@
 import { Effect } from "effect";
 
-import type { ToolDefinition } from "../types.js";
+import type { ToolDefinition, ToolParameter } from "../types.js";
 import { ToolValidationError } from "../errors.js";
 import { healEnumArg } from "../skills/arg-healing.js";
+
+/** Placeholder value for a parameter in an example call, by declared type. */
+const exampleValue = (param: ToolParameter): unknown => {
+  if (param.enum && param.enum.length > 0) return param.enum[0];
+  if (param.default !== undefined) return param.default;
+  if (param.type === "string") {
+    // A description that carries a literal example ("Examples: 'ls -la'") is the
+    // best sample value; otherwise show the parameter name as a placeholder.
+    const quoted = /Examples?:\s*'([^']+)'/.exec(param.description);
+    return quoted?.[1] ?? `<${param.name}>`;
+  }
+  if (param.type === "number") return 1;
+  if (param.type === "boolean") return true;
+  if (param.type === "array") return [];
+  return {};
+};
+
+/**
+ * One-line valid example call built from a tool's REQUIRED parameters, e.g.
+ * `shell-execute({"command":"git log --oneline -5"})`. Appended to the
+ * missing-parameter error so a model that sent `{}` sees the exact shape.
+ */
+export const exampleCall = (definition: ToolDefinition): string => {
+  const args: Record<string, unknown> = {};
+  for (const p of definition.parameters) {
+    if (p.required) args[p.name] = exampleValue(p);
+  }
+  return `${definition.name}(${JSON.stringify(args)})`;
+};
 
 export const validateToolInput = (
   definition: ToolDefinition,
@@ -59,7 +88,7 @@ export const validateToolInput = (
         if (param.required) {
           return yield* Effect.fail(
             new ToolValidationError({
-              message: `Missing required parameter "${param.name}"`,
+              message: `Missing required parameter "${param.name}". Valid call: ${exampleCall(definition)}`,
               toolName: definition.name,
               parameter: param.name,
               expected: param.type,

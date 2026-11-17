@@ -153,6 +153,13 @@ export function shellExecuteToolFor(
     source: "builtin",
     // CAN write files via redirects / commands — file producer (audit 01-F1 / C2).
     produces: "file",
+    // Same `allowed` / `notEnabled` the description above is built from.
+    commandPolicy: {
+      allowedCommands: allowed,
+      notEnabledCommands: notEnabled,
+      sandbox: docker ? "docker" : "host",
+      workingDirectory: describeShellLocation(config, surface, docker),
+    },
   };
 }
 

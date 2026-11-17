@@ -469,6 +469,8 @@ The workspace is one root for every tool that touches the file system:
 - **`shell-execute`** runs with the workspace as its working directory. A file the agent wrote with `file-write` is where the shell's `ls` or `bun test` finds it.
 - **Sub-agents** inherit the workspace.
 
+The `shell-execute` definition also carries `commandPolicy`, a typed summary of what it may run: `allowedCommands`, `notEnabledCommands`, `sandbox` and `workingDirectory`. It is read from the same allowlist the handler enforces. `shellCommandAvailability(definition.commandPolicy)` from `@reactive-agents/tools` returns which allowed commands exist on PATH, cached and without spawning a process (host shell only). A tool call with a missing required parameter now returns an error that names the parameter and shows a valid example call, for example `shell-execute({"command":"git log --oneline -5"})`.
+
 Override it for one run with the `workspace` run option. `run()`, `runStream()` and `runEffect()` take it:
 
 ```typescript

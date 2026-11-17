@@ -298,7 +298,30 @@ export const ToolDefinitionSchema = Schema.Struct({
    * @default undefined (uses cache default, typically 300_000 = 5 min)
    */
   cacheTtlMs: Schema.optional(Schema.Number),
+  /**
+   * Typed summary of which programs a command-running tool (shell-execute)
+   * may execute. Read-only metadata derived from the tool's real allowlist,
+   * never a second list, so a planner or UI can show what is possible without
+   * parsing the description. Omitted for tools that do not run commands.
+   *
+   * @see {@link ShellCommandPolicy}
+   */
+  commandPolicy: Schema.optional(
+    Schema.Struct({
+      /** Executables the tool will run (default set plus opt-ins granted). */
+      allowedCommands: Schema.Array(Schema.String),
+      /** Known opt-in executables NOT granted (developer opt-in required). */
+      notEnabledCommands: Schema.Array(Schema.String),
+      /** Where commands run: the host shell or a throwaway Docker container. */
+      sandbox: Schema.Literal("host", "docker"),
+      /** One sentence naming the working directory / confinement. */
+      workingDirectory: Schema.String,
+    }),
+  ),
 });
+
+/** Typed allowed-command summary carried on a command-running tool's definition. */
+export type ShellCommandPolicy = NonNullable<typeof ToolDefinitionSchema.Type.commandPolicy>;
 
 /**
  * A complete tool definition with metadata.

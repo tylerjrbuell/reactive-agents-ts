@@ -2,6 +2,7 @@
 export type {
   ToolParameter,
   ToolDefinition,
+  ShellCommandPolicy,
   ToolInput,
   ToolOutput,
   MCPServer,
@@ -292,6 +293,13 @@ export {
   resolveCommandAccess,
   type ShellCommandAccessConfig,
 } from "./skills/shell-command-catalog.js";
+// PATH availability of the allowed commands (cached, no spawn, no model).
+export {
+  isCommandOnPath,
+  shellCommandAvailability,
+  clearCommandAvailabilityCache,
+  type ShellCommandAvailability,
+} from "./skills/shell-command-availability.js";
 
 export {
   scratchpadWriteTool,

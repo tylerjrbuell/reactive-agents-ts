@@ -151,6 +151,10 @@ The `shell-execute` built-in tool has these characteristics:
 | `maxOutputChars` (default) | 4,000 chars |
 | `MAX_COMMAND_LENGTH` | 4,096 chars |
 
+### Allowed-command metadata and PATH availability
+
+The tool definition carries `commandPolicy` (`allowedCommands`, `notEnabledCommands`, `sandbox`, `workingDirectory`), derived from the same allowlist the handler enforces. `shellCommandAvailability(def.commandPolicy)` from `@reactive-agents/tools` reports which allowed commands exist on PATH (cached, no spawn, host shell only). A planner needs no step like `gh --version`. A call with no `command` returns `Missing required parameter "command". Valid call: shell-execute({"command":"git log --oneline -5"})`.
+
 ## Builder API reference
 
 | Method | Key params | Notes |
