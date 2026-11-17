@@ -70,8 +70,14 @@ describe("stop facts", () => {
     expect(stopFacts(stop())).toEqual([
       { label: "Kept repeating", items: ["web-search"], mono: true },
       { label: "Already done", items: ["web-search x3", "file-read"], mono: true },
-      { label: "Left to do", items: ["write report", "send summary"], mono: false },
+      { label: "Left to do", items: ["write report", "send summary"], mono: false, list: true },
     ]);
+  });
+
+  it("strips trailing periods from the rows left, so a list never reads 'x)., y'", () => {
+    const left = stopFacts(stop({ unfinished: ["Check pager settings (on-call).", "Retrieve the rota..", "  "] })).find((f) => f.label === "Left to do")!;
+    expect(left.items).toEqual(["Check pager settings (on-call)", "Retrieve the rota"]);
+    expect(left.list).toBe(true);
   });
 
   it("leaves empty groups out, caps long lists, and lists nothing for a crash (no stop record)", () => {

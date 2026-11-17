@@ -52,6 +52,21 @@ describe("webhook channel card, route row and test panel", () => {
     expect(html).toContain('data-testid="webhook-connection"');
   });
 
+  test("Generate sits in the signing-secret row, before the connection help, and the port hint says there is no default", async () => {
+    const entry = { id: "ch-webhook01", kind: "webhook", enabled: true, settings: {} };
+    const html = await renderComponent(parent("channels/ChannelCard.svelte"), { channel: entry, onChange: noop, onRemove: noop });
+    const words = text(html);
+    const secretRow = words.indexOf("Signing secret");
+    const generate = words.indexOf("Generate");
+    const connect = words.indexOf("Connect a caller");
+    expect(secretRow).toBeGreaterThan(-1);
+    expect(generate).toBeGreaterThan(secretRow);
+    expect(generate).toBeLessThan(connect);
+    expect(words).not.toContain("Generate secret");
+    expect(words).toContain("Required, there is no default");
+    expect(html).toContain('placeholder="e.g. 7700"');
+  });
+
   test("the route row says signing secret, not talk or tools", async () => {
     const route: HubRouteWire = { id: "deploy-hook", match: { channelId: "ch-webhook01" }, target: { agentId: "a1" }, enabled: true };
     const html = await renderComponent(here("HubRoutes.svelte"), { routes: [route], channels: [channel("webhook")], agents: [{ agentId: "a1", name: "Deployer" }], live: null, onEdit: noop, onNew: noop, onChanged: noop });

@@ -12,7 +12,9 @@
   import { channelIssues, channelKindInfo, channelName, webhookRoute, type ChannelEntry, type ChannelSettings } from "$lib/channels.js";
   import { deleteCredential, fetchCredentials, saveCredential, testChannel, type CredentialField } from "$lib/gateway-api.js";
   import { WEBHOOK_COPY } from "$lib/channel-kind-copy.js";
+  import { secretActions } from "$lib/webhook-card.js";
   import WebhookConnectionPanel from "./WebhookConnectionPanel.svelte";
+  import WebhookSecretGenerate from "./WebhookSecretGenerate.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Field from "$lib/components/kit/Field.svelte";
@@ -190,12 +192,20 @@
         <Input id={fid("cred")} type="password" mono autocomplete="off" spellcheck={false} placeholder={cred.placeholder} bind:value={draft} describedBy="{fid('cred')}-hint" />
         <Button size="field" variant="primary" type="submit" disabled={!draft.trim() || busy}>Save</Button>
         {#if editing}<Button size="field" variant="ghost" onclick={() => { editing = false; draft = ""; }}>Cancel</Button>{/if}
+        {#if channel.kind === "webhook"}<WebhookSecretGenerate channelId={channel.id} secretSaved={saved?.masked != null} disabled={busy} onSecretChanged={() => void load()} />{/if}
       </form>
-      <p id="{fid('cred')}-hint" class="chan-hint">{cred.hint}</p>
+      <p id="{fid('cred')}-hint" class="chan-hint">{cred.hint}{#if channel.kind === "webhook"}{" "}{WEBHOOK_COPY.generateHint}{/if}</p>
     {:else}
       <div class="chan-form">
-        <Button size="field" onclick={() => (editing = true)}>Replace</Button>
-        <Button size="field" variant="ghost" disabled={busy} onclick={clearCredential}>Remove</Button>
+        {#each secretActions(true) as action (action.id)}
+          {#if action.id === "replace"}
+            <Button size="field" onclick={() => (editing = true)}>{action.label}</Button>
+          {:else if action.id === "generate"}
+            {#if channel.kind === "webhook"}<WebhookSecretGenerate channelId={channel.id} secretSaved onSecretChanged={() => void load()} disabled={busy} />{/if}
+          {:else}
+            <Button size="field" variant="ghost" disabled={busy} onclick={clearCredential}>{action.label}</Button>
+          {/if}
+        {/each}
       </div>
     {/if}
   </div>
@@ -207,7 +217,7 @@
   {/if}
 
   {#if channel.kind === "webhook"}
-    <WebhookConnectionPanel {channel} secretSaved={saved?.masked != null} onSecretChanged={() => void load()} />
+    <WebhookConnectionPanel {channel} />
   {/if}
 
   <div class="chan-test">

@@ -114,7 +114,12 @@ export interface StopFact {
   readonly items: readonly string[];
   /** Values are tool names (machine text) rather than prose. */
   readonly mono: boolean;
+  /** Titles are sentences that may themselves contain commas: render one per line, not joined. */
+  readonly list?: boolean;
 }
+
+/** A row title without its closing full stops (rows are sentences; a list line does not need them). */
+const noTrailingPeriod = (s: string): string => s.trim().replace(/[.\s]+$/, "");
 
 const capped = (all: readonly string[], shown: number): string[] =>
   all.length > shown ? [...all.slice(0, shown), `and ${all.length - shown} more`] : [...all];
@@ -135,6 +140,7 @@ export function stopFacts(stop: StopWire | undefined): StopFact[] {
       mono: true,
     });
   }
-  if (stop.unfinished.length > 0) facts.push({ label: "Left to do", items: capped(stop.unfinished, LEFT_SHOWN), mono: false });
+  const left = stop.unfinished.map(noTrailingPeriod).filter((t) => t !== "");
+  if (left.length > 0) facts.push({ label: "Left to do", items: capped(left, LEFT_SHOWN), mono: false, list: true });
   return facts;
 }

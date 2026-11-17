@@ -59,6 +59,7 @@ export async function interruptChatTurn(
   kind: InterruptKind,
 ): Promise<ChatInterruptAnswer> {
   const outcome = await svc.resume.control.interrupt(sessionId, kind);
-  const aborted = svc.stopTurn(sessionId, kind);
+  // A Pause that saved nothing (the run is not durable) is a Stop: the thread must not say "paused".
+  const aborted = svc.stopTurn(sessionId, kind === "pause" && outcome === "not-live" ? "stop" : kind);
   return { stopped: aborted || outcome !== "not-live", persisted: outcome === "persisted", outcome };
 }

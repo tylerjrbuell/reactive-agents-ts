@@ -79,6 +79,14 @@ describe("chat Stop / Pause", () => {
     expect(kinds).toEqual(["pause", "stop"]);
   });
 
+  it("a Pause on a run that is not durable ends the turn as a Stop: nothing was saved to pick up, so it never reads 'paused'", async () => {
+    const kinds: string[] = [];
+    const stopTurn = (_id: string, kind?: string) => (kinds.push(kind ?? "none"), true);
+    const out = await interruptChatTurn({ resume: { control: new ChatRunControl({ liveAgentOf: () => undefined }) }, stopTurn }, "s1", "pause");
+    expect(kinds).toEqual(["stop"]);
+    expect(out.persisted).toBe(false);
+  });
+
   it("with no live durable agent it only aborts the turn, as Stop always did", async () => {
     const aborted: string[] = [];
     expect(await interruptChatTurn(ports(undefined, aborted), "s1", "stop")).toEqual({ stopped: true, persisted: false, outcome: "not-live" });

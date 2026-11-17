@@ -50,7 +50,11 @@
     <dl class="facts">
       {#each facts as f (f.label)}
         <dt>{f.label}</dt>
-        <dd class:mono={f.mono}>{f.items.join(", ")}</dd>
+        {#if f.list}
+          <dd><ul class="left">{#each f.items as item (item)}<li>{item}</li>{/each}</ul></dd>
+        {:else}
+          <dd class:mono={f.mono}>{f.items.join(", ")}</dd>
+        {/if}
       {/each}
     </dl>
   {/if}
@@ -78,6 +82,7 @@
   dt { color: var(--cortex-text-3); }
   dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--cortex-text); }
   dd.mono { font-family: var(--cortex-font-data); }
+  .left { margin: 0; padding-left: 16px; display: grid; gap: 2px; }
   .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .note { flex: 1; min-width: 14rem; height: 28px; }
   .steps { display: inline-flex; align-items: center; gap: 6px; color: var(--cortex-text-3); font-size: var(--cortex-t-xs); }

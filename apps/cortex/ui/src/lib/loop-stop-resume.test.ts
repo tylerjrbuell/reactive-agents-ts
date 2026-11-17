@@ -69,6 +69,33 @@ describe("continueTarget", () => {
   });
 });
 
+describe("continueTarget: only a run that belongs to the latest reply", () => {
+  const stoppedByUser: ContinueTurn = { role: "assistant", ts: 500, runFailed: { ending: "partial", interruptedBy: "user" } };
+  const earlier: ContinueTurn[] = [{ role: "user", ts: 100 }, { role: "assistant", ts: 200 }, { role: "user", ts: 480 }];
+
+  it("ignores an interrupted run stored before the previous exchange ended (the live 'nothing to continue from' contradiction)", () => {
+    const stale = [run({ runId: "stale", kind: "user-paused", status: "paused", updatedAt: 150 })];
+    expect(continueTarget([...earlier, stoppedByUser], false, stale)).toBeUndefined();
+    const fresh = [...stale, run({ runId: "fresh", kind: "user-stopped", status: "stopped", updatedAt: 495 })];
+    expect(continueTarget([...earlier, stoppedByUser], false, fresh)?.runId).toBe("fresh");
+  });
+
+  it("for a reply the person stopped, offers only a run the person stopped", () => {
+    const loop = [run({ runId: "loop", kind: "loop", updatedAt: 495 })];
+    expect(continueTarget([...earlier, stoppedByUser], false, loop)).toBeUndefined();
+    expect(continueTarget([...earlier, { role: "assistant", ts: 500, runFailed: { ending: "failed" } }], false, loop)?.runId).toBe("loop");
+  });
+});
+
+describe("loopStopHint for a reply the person stopped", () => {
+  const stopped: ContinueTurn = { role: "assistant", runFailed: { ending: "partial", interruptedBy: "user" } };
+  it("points at Durable runs when there is no saved run to continue", () => {
+    expect(loopStopHint([stopped], false, undefined, true)).toContain("Durable runs (Lab · Execution)");
+    expect(loopStopHint([stopped], false, undefined, false)).toBeUndefined();
+    expect(loopStopHint([stopped], false, run(), true)).toBeUndefined();
+  });
+});
+
 describe("loopStopHint", () => {
   const loopTurn: ContinueTurn = { role: "assistant", runFailed: { ending: "failed", terminatedBy: "loop_detected:repeat" } };
 

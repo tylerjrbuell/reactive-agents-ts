@@ -2,33 +2,26 @@
   /**
    * How a caller connects to a webhook channel: the framework's own connection facts (method, URL,
    * signature header, what is signed, replay rule, curl / node / openssl examples with a placeholder
-   * secret), a loopback note, "Generate secret" (stored sealed, shown once here so it can be copied to
-   * the caller) and "Send test request". The real secret is never rendered except in that one
-   * generate answer. Copy: `lib/channel-kind-copy.ts`; calls: `lib/webhook-api.ts`.
+   * secret), a loopback note and "Send test request". The replay rule is built from the framework's
+   * `replayWindowMs` (`lib/webhook-card.ts`). Generating a secret is in the card's secret row
+   * (`WebhookSecretGenerate`). Copy: `lib/channel-kind-copy.ts`; calls: `lib/webhook-api.ts`.
    */
   import { untrack } from "svelte";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
-  import { toast } from "$lib/stores/toast-store.js";
-  import { confirmAction } from "$lib/stores/confirm-store.js";
   import { WEBHOOK_COPY } from "$lib/channel-kind-copy.js";
   import type { ChannelEntry } from "$lib/channels.js";
-  import { fetchWebhookInfo, generateWebhookSecret, type GeneratedSecret, type WebhookInfoView } from "$lib/webhook-api.js";
+  import { fetchWebhookInfo, type WebhookInfoView } from "$lib/webhook-api.js";
+  import { replayLine } from "$lib/webhook-card.js";
   import Button from "$lib/components/kit/Button.svelte";
   import WebhookTestRequest from "./WebhookTestRequest.svelte";
 
   interface Props {
     channel: ChannelEntry;
-    /** Whether a signing secret is saved. */
-    secretSaved: boolean;
-    /** The saved secret changed (generated); the card re-reads its mask. */
-    onSecretChanged: () => void;
   }
-  let { channel, secretSaved, onSecretChanged }: Props = $props();
+  let { channel }: Props = $props();
 
   let view = $state<WebhookInfoView | null>(null);
   let error = $state<string | null>(null);
-  let generated = $state<GeneratedSecret | null>(null);
-  let busy = $state(false);
   let copiedKey = $state<string | null>(null);
 
   const settings = $derived({ ingressPort: channel.settings.ingressPort, route: channel.settings.route?.trim() || undefined });
@@ -58,22 +51,6 @@
     }
   }
 
-  async function generate() {
-    if (secretSaved) {
-      const ok = await confirmAction({ title: WEBHOOK_COPY.generate, message: WEBHOOK_COPY.generateReplaces, confirmLabel: WEBHOOK_COPY.generate });
-      if (!ok) return;
-    }
-    busy = true;
-    const r = await generateWebhookSecret(CORTEX_SERVER_URL, fetch, channel.id);
-    busy = false;
-    if (!r.ok) {
-      toast.error("Secret not generated", r.error);
-      return;
-    }
-    generated = r.value;
-    onSecretChanged();
-  }
-
   const facts = $derived(
     view
       ? [
@@ -85,7 +62,7 @@
           [WEBHOOK_COPY.factSignedPayload, view.info.signature.signedPayload],
           [WEBHOOK_COPY.factTimestampHeader, view.info.signature.timestampHeader],
           [WEBHOOK_COPY.factTimestamp, view.info.signature.timestamp],
-          [WEBHOOK_COPY.factReplay, view.info.signature.replay],
+          [WEBHOOK_COPY.factReplay, replayLine(view.info.signature.replayWindowMs)],
         ]
       : [],
   );
@@ -122,23 +99,6 @@
     </div>
   {/if}
 
-  <div class="wc-secret">
-    <div class="wc-row">
-      <Button size="field" disabled={busy} onclick={() => void generate()}>{WEBHOOK_COPY.generate}</Button>
-      <span class="wc-muted">{WEBHOOK_COPY.generateHint}</span>
-    </div>
-    {#if generated}
-      <div class="wc-once" role="status">
-        <p><strong>{WEBHOOK_COPY.generatedOnce}</strong></p>
-        <div class="wc-row">
-          <input class="wc-secret-in" readonly value={generated.secret} aria-label={WEBHOOK_COPY.generatedOnce} onfocus={(e) => e.currentTarget.select()} />
-          <Button size="sm" onclick={() => void copy("secret", generated?.secret ?? "")}>{copiedKey === "secret" ? WEBHOOK_COPY.copied : WEBHOOK_COPY.copy}</Button>
-          <Button size="sm" variant="ghost" onclick={() => (generated = null)}>{WEBHOOK_COPY.dismiss}</Button>
-        </div>
-      </div>
-    {/if}
-  </div>
-
   <WebhookTestRequest channelId={channel.id} {settings} />
 </section>
 
@@ -156,9 +116,4 @@
   .wc-examples { display: grid; gap: 6px; }
   .wc-ex summary { cursor: pointer; font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
   .wc-ex pre { margin: 6px 0; padding: 8px 10px; overflow-x: auto; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-ctl); background: var(--cortex-surface-1); font-size: var(--cortex-t-xs); }
-  .wc-secret { display: grid; gap: 8px; }
-  .wc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .wc-once { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--cortex-warn) 35%, transparent); border-radius: var(--cortex-r-ctl); background: var(--cortex-warn-tint); font-size: var(--cortex-t-xs); color: var(--cortex-text); }
-  .wc-once p { margin: 0; }
-  .wc-secret-in { flex: 1; min-width: 220px; padding: 6px 8px; font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-text); background: var(--cortex-canvas); border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-ctl); }
 </style>

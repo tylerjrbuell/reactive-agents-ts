@@ -85,8 +85,15 @@ export function continueBody(note: string, extraText: string): { readonly ok: tr
 export interface ContinueTurn {
   readonly role: "user" | "assistant";
   readonly streaming?: boolean;
+  /** When the turn was stored (epoch ms); an assistant turn's is when its run ended. */
+  readonly ts?: number;
   /** Set when the turn's run did not succeed; `ending` says how. */
-  readonly runFailed?: { readonly ending?: "failed" | "partial" | "abstained" | "interrupted"; readonly terminatedBy?: string | undefined } | undefined;
+  readonly runFailed?: {
+    readonly ending?: "failed" | "partial" | "abstained" | "interrupted";
+    readonly terminatedBy?: string | undefined;
+    /** Who stopped it, when the person (or a dropped connection) did. */
+    readonly interruptedBy?: string | undefined;
+  } | undefined;
 }
 
 /**
@@ -103,16 +110,36 @@ export function loopStopHint(
   if (sending || !lookedUp || target !== undefined) return undefined;
   const last = turns.at(-1);
   if (last?.role !== "assistant" || last.streaming === true) return undefined;
-  if (!last.runFailed?.terminatedBy?.startsWith("loop")) return undefined;
-  return "A loop guard stopped this run. To be able to continue a run like this, turn on Durable execution for this agent (Lab · Execution).";
+  if (last.runFailed?.terminatedBy?.startsWith("loop")) {
+    return "A loop guard stopped this run. To be able to continue a run like this, turn on Durable execution for this agent (Lab · Execution).";
+  }
+  if (last.runFailed?.interruptedBy === "user") {
+    return "You stopped this reply and there is no saved run to continue from. Turn on Durable runs (Lab · Execution) to pause and continue a reply.";
+  }
+  return undefined;
+}
+
+const USER_STOP_KINDS: ReadonlySet<RunStopKind> = new Set<RunStopKind>(["user-stopped", "user-paused"]);
+
+/**
+ * The stored runs that can belong to the latest reply: ones written after the previous
+ * exchange ended (an older interrupted run of the same agent is not this reply's) and,
+ * for a reply the person stopped, only runs the person stopped. The framework's store
+ * has no link from a streamed turn to its run, so time and kind are what tie them.
+ */
+function runsOfLatestReply(turns: readonly ContinueTurn[], resumable: readonly ResumableRunWire[]): ResumableRunWire[] {
+  const last = turns.at(-1);
+  const floor = turns.slice(0, -1).findLast((t) => t.role === "assistant")?.ts;
+  const byUser = last?.runFailed?.interruptedBy === "user";
+  return resumable.filter((r) => (floor === undefined || r.updatedAt >= floor) && (!byUser || USER_STOP_KINDS.has(r.kind)));
 }
 
 /**
  * The run Continue is offered for: only when no turn is in flight, the latest
  * assistant turn is a run that failed or stopped part-way (not an abstention; a turn
  * the person stopped counts: the framework keeps it resumable) and the session has
- * a resumable run to continue (the newest). A streamed turn carries no run stamp, so
- * the stored run is what links them.
+ * a resumable run of that reply to continue (the newest, `runsOfLatestReply`). A streamed
+ * turn carries no run stamp, so the stored run is what links them.
  */
 export function continueTarget(
   turns: readonly ContinueTurn[],
@@ -124,7 +151,7 @@ export function continueTarget(
   if (last?.role !== "assistant" || last.streaming === true) return undefined;
   const ending = last.runFailed?.ending;
   if (last.runFailed === undefined || ending === "abstained") return undefined;
-  return [...resumable].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  return runsOfLatestReply(turns, resumable).sort((a, b) => b.updatedAt - a.updatedAt)[0];
 }
 
 /** Server answer to a Continue: the run finished (maybe stopped again), or the server's reason. */

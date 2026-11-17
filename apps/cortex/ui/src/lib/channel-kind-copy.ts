@@ -164,7 +164,9 @@ export function channelKindCopy(kind: string | undefined): ChannelKindCopy {
 
 /** The webhook-only fields and the connection panel. Same no-messaging-words rule as the webhook kind copy. */
 export const WEBHOOK_COPY = {
-  listenPort: { label: "Listen port", hint: "Cortex listens on 127.0.0.1 at this port. Front it with a tunnel or proxy to reach it from elsewhere.", placeholder: "7700" },
+  // No default port exists: an unset port refuses to start ("No port set for the webhook listener"), so the
+  // hint says it is required and the placeholder is an example, not a default.
+  listenPort: { label: "Listen port", hint: "Required, there is no default. Cortex listens on 127.0.0.1 at this port. Front it with a tunnel or proxy to reach it from elsewhere.", placeholder: "e.g. 7700" },
   path: { label: "Path", hint: "Callers POST here:" },
   callback: { label: "Callback URL", hint: "Where the agent's result is POSTed as JSON. Leave empty to only receive.", placeholder: "https://example.com/callback" },
   callbackIssue: "The callback URL must start with http:// or https://.",
@@ -172,6 +174,8 @@ export const WEBHOOK_COPY = {
   noPort: "Set a listen port to see the full URL. Until then only the path is known.",
   secretPlaceholder: "$WEBHOOK_SECRET stands for your signing secret in every example. The real secret is never shown here.",
   generate: "Generate secret",
+  /** The signing-secret row's action label (the row already says what it acts on). */
+  generateShort: "Generate",
   generateHint: "Creates a random signing secret, stores it encrypted, and shows it once so you can copy it to the caller. It cannot be shown again.",
   generatedOnce: "Copy this secret now. It is not shown again.",
   generateReplaces: "A secret is already saved. Generating a new one replaces it, and callers using the old one are refused.",
