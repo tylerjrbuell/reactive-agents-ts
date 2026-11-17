@@ -186,7 +186,7 @@ describe("OpenInferenceTracerLayer", () => {
       // LLM span should be child of workflow span
       const agentSpan = spanByName("agent:a3");
       expect(agentSpan).toBeDefined();
-      expect(llmSpan!.parentSpanId).toBe(agentSpan!.spanContext().spanId);
+      expect(llmSpan!.parentSpanContext?.spanId).toBe(agentSpan!.spanContext().spanId);
     });
 
     it("estimates token split when tokensIn/tokensOut absent", async () => {
@@ -304,7 +304,7 @@ describe("OpenInferenceTracerLayer", () => {
 
       // Tool span should be child of workflow span
       const agentSpan = spanByName("agent:a5");
-      expect(toolSpan!.parentSpanId).toBe(agentSpan!.spanContext().spanId);
+      expect(toolSpan!.parentSpanContext?.spanId).toBe(agentSpan!.spanContext().spanId);
     });
 
     it("marks tool span error on failure", async () => {
