@@ -478,6 +478,55 @@
       "invoke": "bun run --cwd apps/docs docs:indicators:suggest"
     },
     {
+      "id": "apps/cortex/scripts/docs-screenshots/README.md",
+      "path": "apps/cortex/scripts/docs-screenshots/README.md",
+      "kind": "docs",
+      "summary": "How to run and extend the Cortex docs screenshot pipeline",
+      "invoke": "cat apps/cortex/scripts/docs-screenshots/README.md"
+    },
+    {
+      "id": "apps/cortex/scripts/docs-screenshots/run.ts",
+      "path": "apps/cortex/scripts/docs-screenshots/run.ts",
+      "kind": "ops",
+      "summary": "Captures Cortex docs screenshots from a hermetic demo instance",
+      "invoke": "bun run --cwd apps/cortex screenshots:docs"
+    },
+    {
+      "id": "apps/cortex/scripts/docs-screenshots/demo-server.ts",
+      "path": "apps/cortex/scripts/docs-screenshots/demo-server.ts",
+      "kind": "test-support",
+      "summary": "Starts an isolated temp-dir Cortex for the screenshot pipeline",
+      "invoke": "bun run --cwd apps/cortex screenshots:docs"
+    },
+    {
+      "id": "apps/cortex/scripts/docs-screenshots/seed.ts",
+      "path": "apps/cortex/scripts/docs-screenshots/seed.ts",
+      "kind": "test-support",
+      "summary": "Seeds scripted chats, MCP servers and channels for the demo Cortex",
+      "invoke": "bun run --cwd apps/cortex screenshots:docs"
+    },
+    {
+      "id": "apps/cortex/scripts/docs-screenshots/seed-http.ts",
+      "path": "apps/cortex/scripts/docs-screenshots/seed-http.ts",
+      "kind": "test-support",
+      "summary": "HTTP helpers the screenshot seed uses against the demo Cortex",
+      "invoke": "bun run --cwd apps/cortex screenshots:docs"
+    },
+    {
+      "id": "apps/cortex/scripts/docs-screenshots/fake-mcp.ts",
+      "path": "apps/cortex/scripts/docs-screenshots/fake-mcp.ts",
+      "kind": "test-support",
+      "summary": "Stdio fake MCP server (docs, issues, failure modes) for the Tools Lab shot",
+      "invoke": "bun run --cwd apps/cortex screenshots:docs"
+    },
+    {
+      "id": "apps/cortex/scripts/docs-screenshots/shots.ts",
+      "path": "apps/cortex/scripts/docs-screenshots/shots.ts",
+      "kind": "test-support",
+      "summary": "Shot definitions and masks for the Cortex docs screenshots",
+      "invoke": "bun run --cwd apps/cortex screenshots:docs"
+    },
+    {
       "id": "apps/docs/scripts/skills-dist.mjs",
       "path": "apps/docs/scripts/skills-dist.mjs",
       "kind": "build",

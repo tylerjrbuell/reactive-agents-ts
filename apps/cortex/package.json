@@ -52,6 +52,7 @@
     "start": "bun run scripts/dev-stack.ts",
     "build": "tsup",
     "build:ui": "cd ui && bun run build",
+    "screenshots:docs": "bun run scripts/docs-screenshots/run.ts",
     "test": "bun test server/tests --timeout 15000",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
