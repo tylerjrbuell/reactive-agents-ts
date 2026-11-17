@@ -11,7 +11,7 @@ const sortedSkills = [...skills].sort((left, right) => left.id.localeCompare(rig
   <ul>
     {sortedSkills.map((skill) => (
       <li>
-        <a href={`/.well-known/skills/${skill.id}/SKILL.md`}>
+        <a href={`/.well-known/agent-skills/${skill.id}/SKILL.md`}>
           {skill.data.name}
         </a>
         {" — "}

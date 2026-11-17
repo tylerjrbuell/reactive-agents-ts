@@ -12,6 +12,12 @@ export default defineConfig({
     // Cortex owns :4321 (its API port, wired into .withCortex()) and :5173 (Vite UI);
     // docs dev and preview use :4300 so both run side by side.
     server: { port: 4300 },
+    // Starlight 0.43 no longer sets :where() scoping for us, so Astro's default
+    // (data-attribute, +1 specificity) would apply. Keep the pre-0.43 :where()
+    // behavior so our component-scoped overrides (Header, PageSidebar,
+    // EmailSubscribe, HeroStarBadge, Feedback*) keep their existing cascade
+    // against Starlight's layered CSS. Astro-level option, not a starlight() one.
+    scopedStyleStrategy: 'where',
     integrations: [
         skills(),
         starlight({
@@ -452,7 +458,7 @@ export default defineConfig({
                 {
                     label: 'Cookbook',
                     collapsed: true,
-                    autogenerate: { directory: 'cookbook' },
+                    items: [{ autogenerate: { directory: 'cookbook' } }],
                 },
                 {
                     label: 'API Reference',

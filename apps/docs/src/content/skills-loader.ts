@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, promises as fs } from "node:fs";
 import { basename, extname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -147,7 +148,15 @@ export function starlightSafeSkillsLoader(options?: { base?: string }): Loader {
 
         const parsed = await parseData({
           id: skillId,
-          data: { name, description, files },
+          data: {
+            name,
+            description,
+            files,
+            // astro-skills >= 0.1 (Agent Skills Discovery v0.2.0) reads these.
+            type: "skill-md",
+            skillMdRaw: skillMdContent,
+            digest: `sha256:${createHash("sha256").update(skillMdContent).digest("hex")}`,
+          },
         });
 
         const digest = generateDigest(

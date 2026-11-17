@@ -25,6 +25,10 @@ const skillsSchema = z.object({
   name: z.string().min(1).max(64),
   description: z.string().max(1024),
   files: z.record(z.string(), skillFileSchema),
+  // astro-skills >= 0.1 (Agent Skills Discovery v0.2.0) requires these.
+  type: z.enum(["skill-md", "archive"]),
+  digest: z.string(),
+  skillMdRaw: z.string(),
 });
 
 export const collections = {

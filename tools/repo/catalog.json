@@ -478,6 +478,13 @@
       "invoke": "bun run --cwd apps/docs docs:indicators:suggest"
     },
     {
+      "id": "apps/docs/scripts/skills-dist.mjs",
+      "path": "apps/docs/scripts/skills-dist.mjs",
+      "kind": "build",
+      "summary": "Post-build: serves skills under both well-known paths and asserts every SKILL.md exists",
+      "invoke": "bun run --cwd apps/docs build"
+    },
+    {
       "id": "apps/docs/scripts/stale-claims.ts",
       "path": "apps/docs/scripts/stale-claims.ts",
       "kind": "check",

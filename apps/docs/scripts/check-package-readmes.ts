@@ -45,7 +45,7 @@ const SECTION_ALIASES: Readonly<Record<SectionKey, RegExp>> = {
   license: /^licen[sc]e$/,
 };
 
-const STATIC_DOC_PATHS = new Set(["llms.txt", "llms-full.txt", ".well-known/skills/index.json"]);
+const STATIC_DOC_PATHS = new Set(["llms.txt", "llms-full.txt", ".well-known/skills/index.json", ".well-known/agent-skills/index.json"]);
 
 /** Splits markdown into lines flagged as inside a fenced block. */
 export function classifyLines(md: string): { text: string; fenced: boolean; lang: string }[] {

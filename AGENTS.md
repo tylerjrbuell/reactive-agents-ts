@@ -267,7 +267,7 @@ Plugin skills: `claude-obsidian:wiki-query`, `claude-obsidian:save`, `claude-obs
 
 ## Consumer Skills (public)
 
-Source `apps/docs/skills/`; index `https://docs.reactiveagents.dev/.well-known/skills/index.json`.
+Source `apps/docs/skills/`; index `https://docs.reactiveagents.dev/.well-known/agent-skills/index.json` (the legacy `/.well-known/skills/` path is kept for older CLIs).
 
 - Discovery: reactive-agents
 - Capabilities: builder-api-reference, reasoning-strategy-selection, context-and-continuity, tool-creation, shell-execution-sandbox, mcp-tool-integration, memory-patterns, multi-agent-orchestration, gateway-persistent-agents, identity-and-guardrails, observability-instrumentation, cost-budget-enforcement, quality-assurance, ui-integration, interaction-autonomy, a2a-agent-networking, provider-patterns

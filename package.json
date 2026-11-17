@@ -46,7 +46,7 @@
     "docs:examples:check": "bun scripts/check-doc-examples.ts",
     "docs:sync:check": "bun apps/docs/scripts/check-docs-sync.ts",
     "docs:dev": "cd apps/docs && bun x astro dev",
-    "docs:build": "cd apps/docs && bun x astro build",
+    "docs:build": "bun run --cwd apps/docs build",
     "docs:preview": "cd apps/docs && bun x astro preview",
     "changeset": "changeset",
     "release": "bun scripts/release.ts",

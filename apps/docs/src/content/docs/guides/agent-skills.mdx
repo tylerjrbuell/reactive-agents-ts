@@ -20,7 +20,7 @@ Reactive Agents has **two distinct skill systems** that serve different audience
 |---|---|---|
 | **Audience** | Coding agents (Cursor, Copilot, Claude Code) building _with_ the framework | Agents running _inside_ the framework |
 | **Purpose** | Implementation playbooks for developers | Runtime behavior guidance for agents |
-| **Format** | SKILL.md published at `/.well-known/skills/` | SKILL.md loaded from filesystem or SQLite |
+| **Format** | SKILL.md published at `/.well-known/agent-skills/` | SKILL.md loaded from filesystem or SQLite |
 | **Consumed by** | External coding tools via HTTP discovery | The framework's `SkillResolverService` at bootstrap |
 | **Evolves?** | No — static reference docs | Yes — LLM-refined over time based on agent performance |
 
@@ -30,14 +30,18 @@ Reactive Agents has **two distinct skill systems** that serve different audience
 
 This docs site publishes Developer Skills so coding agents can discover reusable implementation playbooks directly from your docs URL.
 
-- Open the live skills index: [/.well-known/skills/index.json](/.well-known/skills/index.json)
+- Open the live skills index: [/.well-known/agent-skills/index.json](/.well-known/agent-skills/index.json)
+- Install with the skills CLI: `npx skills add https://docs.reactiveagents.dev`
 
 ## What gets published
 
 At build time, the docs generate:
 
-- `/.well-known/skills/index.json` — skill index
-- `/.well-known/skills/<skill-name>/SKILL.md` — canonical skill file
+- `/.well-known/agent-skills/index.json` — skill index (Agent Skills Discovery v0.2.0, canonical)
+- `/.well-known/agent-skills/<skill-name>/SKILL.md` — canonical skill file
+- `/.well-known/skills/index.json` and `/.well-known/skills/<skill-name>/SKILL.md` — the same skills under the older path, kept for compatibility with existing `npx skills add` users and older clients (the index uses the earlier `files` schema)
+
+A post-build step (`apps/docs/scripts/skills-dist.mjs`) writes the compatibility path and fails the build if any skill is missing from either path or from either index.
 
 ## Current published skills (dynamic)
 
@@ -93,28 +97,29 @@ Key files:
 Build docs:
 
 ```bash
-bun run docs:build
+bun run --cwd apps/docs build
 ```
 
 Verify generated outputs:
 
 ```bash
 cd apps/docs
-find dist -maxdepth 8 -type f | grep '.well-known/skills' | sort
-cat dist/.well-known/skills/index.json
+find dist -maxdepth 8 -type f | grep '.well-known/' | sort
+cat dist/.well-known/agent-skills/index.json
 ```
 
 You should see entries like:
 
-- `dist/.well-known/skills/index.json`
-- `dist/.well-known/skills/reactive-agents-framework/SKILL.md`
+- `dist/.well-known/agent-skills/index.json`
+- `dist/.well-known/agent-skills/reactive-agents/SKILL.md`
+- `dist/.well-known/skills/index.json` (compatibility copy)
 
 ## Add a new skill
 
 1. Create a new folder under `apps/docs/skills/` using kebab-case (for example, `reasoning-optimization`).
 2. Add `SKILL.md` with valid `name` + `description` frontmatter.
 3. Rebuild docs.
-4. Confirm the new skill appears in `dist/.well-known/skills/index.json`.
+4. Confirm the new skill appears in `dist/.well-known/agent-skills/index.json` (the build fails if it does not).
 
 ## Why this matters
 
