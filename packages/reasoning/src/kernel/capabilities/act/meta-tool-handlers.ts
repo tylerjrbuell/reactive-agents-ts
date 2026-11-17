@@ -35,6 +35,8 @@ import type { ReasoningStep } from "../../../types/index.js";
 import { healBriefArgs, healPulseArgs } from "./meta-tool-arg-healing.js";
 import { stageChanges, viewItems, viewOps, type ChecklistRound } from "./checklist-round.js";
 import { handleActivateSkillTool } from "./skill-activation.js";
+import { isPlanPosture } from "../../policy/run-posture.js";
+import { emitPlanTodoChurn, judgePlanTodoCall } from "../../policy/plan-todo-churn.js";
 
 /** `healingApplied` rides on the action step's metadata (the healing-trace convention); never in result bytes. */
 export type MetaToolResult = {
@@ -140,15 +142,23 @@ function handleTodoTool(
   tc: ToolCallSpec,
   state: KernelState,
   context: KernelContext,
-  _allSteps: readonly ReasoningStep[],
+  allSteps: readonly ReasoningStep[],
   _newToolsUsed: Set<string>,
   round: ChecklistRound,
 ): Effect.Effect<MetaToolResult, never> {
-  return Effect.sync(() => {
+  return Effect.gen(function* () {
+    const items = viewItems(round, state.ledger);
+    const plan = isPlanPosture(context.input);
+    // Plan posture: a recorded plan is not silently appended to with rephrased rows (policy/plan-todo-churn.ts).
+    const verdict = plan ? judgePlanTodoCall(tc.arguments ?? {}, items, allSteps.slice(state.steps.length)) : ({ kind: "pass" } as const);
+    if (verdict.kind !== "pass") {
+      yield* emitPlanTodoChurn({ taskId: state.taskId, iteration: state.iteration, verdict, planSteps: items.length });
+    }
+    if (verdict.kind === "answer") return { content: verdict.content, success: true };
     const result = applyTodoChecklistAction(
-      viewItems(round, state.ledger),
-      tc.arguments ?? {},
-      context.input.posture === "plan" ? "plan" : "execute",
+      items,
+      verdict.kind === "trim" ? verdict.args : tc.arguments ?? {},
+      plan ? "plan" : "execute",
       viewOps(round, state.ledger),
     );
     stageChanges(round, result.changes, tc.id);
@@ -156,7 +166,11 @@ function handleTodoTool(
       result.healedFrom === undefined
         ? undefined
         : [{ stage: "param-name", from: result.healedFrom, to: result.healedTo ?? result.healedFrom }];
-    return { content: result.rendered, success: result.ok, ...(healing ? { healingApplied: healing } : {}) };
+    return {
+      content: verdict.kind === "trim" ? `${verdict.note}\n${result.rendered}` : result.rendered,
+      success: result.ok,
+      ...(healing ? { healingApplied: healing } : {}),
+    };
   });
 }
 

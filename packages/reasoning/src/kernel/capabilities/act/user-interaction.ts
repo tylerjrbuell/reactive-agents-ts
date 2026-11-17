@@ -112,9 +112,13 @@ export function interactionObservation(outcome: AskUserOutcome): string {
     : `The user did not answer: ${outcome.reason}`;
 }
 
+/** One valid call shape, appended to a rejection (a live model sent `{ options, type: "choice" }` with no id/prompt). */
+const REJECTED_REQUEST_EXAMPLE =
+  '{"questions":[{"id":"repo","prompt":"Which repository?","type":"single-choice","options":[{"label":"This one","value":"here"},{"label":"Other","value":"other"}]}]}';
+
 /** What the model reads for a malformed structured request. */
 export function rejectedRequestObservation(problem: string): string {
-  return `The request was rejected: ${problem}. Ask again with corrected questions.`;
+  return `The request was rejected: ${problem}. Ask again with corrected questions, for example ${REJECTED_REQUEST_EXAMPLE}`;
 }
 
 /**

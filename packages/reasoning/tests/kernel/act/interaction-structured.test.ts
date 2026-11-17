@@ -243,6 +243,20 @@ describe("structured request_user_input — act phase", () => {
     expect(s.status).toBe("thinking");
     expect(toolResultOf(s)?.content).toContain("The request was rejected: questions must not be empty");
   });
+
+  // Live Cortex plan trace 01M7N75MCD0EGQ00SSTF3NA81R: mimo-v2.6 mixed the legacy
+  // `prompt`/`kind` keys with a `questions` entry lacking id/prompt and a "choice" type.
+  it("a mixed legacy/structured call is rejected with a worked example the model can copy", async () => {
+    const s = await act({
+      prompt: "Which git repository should I inspect?",
+      kind: "choice",
+      questions: [{ options: ["The repository I'm currently in", "I'll specify a path"], type: "choice" }],
+    });
+    expect(s.status).toBe("thinking");
+    const content = toolResultOf(s)?.content ?? "";
+    expect(content).toContain("The request was rejected: invalid questions: each needs id, prompt and type");
+    expect(content).toContain('"questions":[{"id":');
+  });
 });
 
 // ─── Durable resume ───────────────────────────────────────────────────────────

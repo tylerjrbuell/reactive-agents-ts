@@ -44,6 +44,8 @@ The returned plan always has steps. If the model records a `todo` list, that lis
 
 To let the model record the list itself, add the `todo` meta tool: `.withMetaTools({ todo: true })`. It is not required.
 
+Once a plan is recorded, `todo add` calls that only restate existing rows (the same step in other words) are not appended. The model gets the existing list and the line "A plan is already recorded (N steps). Edit or remove rows instead of adding rephrased ones, or finish."; genuinely new steps in the same call are still added. Plan posture also caps `todo` edits at 3 per turn. Each intervention publishes a `plan-todo-churn` guard event.
+
 `options` takes `history` and `origin`, the same as `run()`. A `PlanRecorded` event is published on the agent's EventBus.
 
 ## `agent.execute(plan, options?)` and `agent.run(input, { plan })`
