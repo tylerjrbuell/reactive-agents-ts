@@ -101,6 +101,13 @@ describe("a user stop or pause leaves the run continuable", () => {
       expect(await stopped).toBe(true);
       const runId = first.runId!;
       expect(agent.activeRunIds()).toEqual([]);
+      // A user stop is an honest partial: not a success, the answer so far shipped, the stop named.
+      expect(first.success).toBe(false);
+      expect(first.outcome).toBe("partial");
+      expect(first.metadata?.outstandingCriteria).toContain("stopped_by_request");
+      expect(first.output.length).toBeGreaterThan(0);
+      // `error` carries the partial's detail note, never an exception; the answer so far stays in `output`.
+      expect(first.error).toContain("stopped_by_request");
 
       const row = await rowOf(agent, runId);
       expect(row?.status).toBe("stopped");
@@ -109,6 +116,13 @@ describe("a user stop or pause leaves the run continuable", () => {
       expect(row?.stop?.toolsDone).toContainEqual({ tool: "read-tool", calls: 1 });
       expect(row?.loopStop).toBeUndefined();
       expect(counts).toEqual({ read: 1, write: 0 });
+      // The kernel's own checkpoint (one past the stop iteration) is the latest row; the fallback snapshot did not replace it.
+      const ckpt = await Effect.runPromise(
+        Effect.gen(function* () { return yield* (yield* RunStoreService).latestCheckpoint(runId); }).pipe(Effect.provide(RunStoreLive(join(dir, "runs.db")))),
+      );
+      const kernelState: unknown = JSON.parse(ckpt?.stateJson ?? "null");
+      const stateIteration: unknown = typeof kernelState === "object" && kernelState !== null ? Reflect.get(Reflect.get(kernelState, "state") ?? {}, "iteration") : undefined;
+      expect(ckpt?.iteration).toBe(Number(stateIteration) + 1);
       await agent.dispose();
 
       const second = await agentOf(dir, counts, REST);
@@ -366,6 +380,30 @@ describe("the pure rules", () => {
     );
     expect(out.ckpt).toMatchObject({ iteration: 3, stateJson: "new" });
     expect(out.row).toMatchObject({ status: "stopped", stop: { kind: "user-stopped", iteration: 2 }, resumable: true });
+  });
+
+  it("persistInterrupt keeps a newer kernel checkpoint: the fallback snapshot is written only when no row is newer", async () => {
+    const out = await Effect.runPromise(
+      Effect.gen(function* () {
+        const s = yield* RunStoreService;
+        yield* s.createRun({ runId: "r", agentId: "a", task: "t", configHash: "h" });
+        yield* s.putCheckpoint("r", 3, "kernel-final");
+        yield* persistInterrupt({ runId: "r", kind: "user-stopped", reason: "user-stopped", snapshot: { serialized: "noted", iteration: 2 } });
+        const kept = yield* s.latestCheckpoint("r");
+        yield* s.createRun({ runId: "q", agentId: "a", task: "t", configHash: "h" });
+        yield* s.putCheckpoint("q", 2, "older");
+        yield* persistInterrupt({ runId: "q", kind: "user-stopped", reason: "user-stopped", snapshot: { serialized: "noted", iteration: 2 } });
+        return { kept, fallback: yield* s.latestCheckpoint("q") };
+      }).pipe(Effect.provide(RunStoreLive(":memory:"))),
+    );
+    expect(out.kept).toMatchObject({ iteration: 3, stateJson: "kernel-final" });
+    expect(out.fallback).toMatchObject({ iteration: 3, stateJson: "noted" });
+  });
+
+  it("classifyEnd: a user stop is read from the kernel's terminal outcome even on a failed result", () => {
+    const outcome = { extensions: { terminalOutcome: { terminatedBy: "stop_requested" } } } as never;
+    expect(classifyEnd({ success: false, terminatedBy: "end_turn", metadata: outcome }, "user-stopped")).toEqual({ kind: "user-stopped", reason: "user-stopped" });
+    expect(classifyEnd({ success: false, terminatedBy: "end_turn", metadata: outcome }, undefined)?.kind).toBe("error");
   });
 
   it("prepareResume: user stop adds a plain continue; error adds nothing; the note and cap pass through", () => {

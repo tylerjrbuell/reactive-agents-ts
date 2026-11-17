@@ -451,6 +451,7 @@ export const makeExecuteStream =
         const runStoreLayer = RunStoreLive(dbPath);
         // Stable-ish run id: content hash of agent + task + start time.
         const runId = hash(`${agentId}:${String(task.id)}:${startMs}`).toString(36);
+        const runTaskText = String((task.input as { question?: unknown })?.question ?? task.id);
         runStoreCtx = { runId, runStoreLayer };
         // Agentic-UI kit (Task 13): expose the runId before the first event is
         // emitted so endpoint helpers can open a journal keyed on it. Fired
@@ -468,7 +469,7 @@ export const makeExecuteStream =
           yield* store.createRun({
             runId,
             agentId,
-            task: String((task.input as { question?: unknown })?.question ?? task.id),
+            task: runTaskText,
             configHash,
             ...(options.identity?.userId !== undefined ? { userId: options.identity.userId } : {}),
             ...(options.identity?.orgId !== undefined ? { orgId: options.identity.orgId } : {}),
@@ -489,6 +490,7 @@ export const makeExecuteStream =
           runId,
           runStoreLayer,
           checkpointEvery,
+          task: runTaskText,
         });
         durableInstalled = installed;
         durableFlush = installed.flush;

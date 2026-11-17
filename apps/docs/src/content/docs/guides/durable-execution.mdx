@@ -173,7 +173,7 @@ A loop stop is one kind of stop. Every durable run that does not complete is con
 | an error | `failed` | `error` |
 | the process died | `running` (stale) | none |
 
-`row.resumable` is true for every row that did not complete and has a checkpoint (a `running` row with a checkpoint is a crashed run unless `agent.activeRunIds()` lists it as live). `result.stop` and `result.resumable` say the same on a run's own result. A user stop still returns the synthesized answer; `result.stop` is what tells you the run is unfinished.
+`row.resumable` is true for every row that did not complete and has a checkpoint (a `running` row with a checkpoint is a crashed run unless `agent.activeRunIds()` lists it as live). `result.stop` and `result.resumable` say the same on a run's own result. A user stop returns the answer so far as an honest partial: `result.success` is `false`, `result.outcome` is `"partial"`, `result.metadata.outstandingCriteria` contains `stopped_by_request`, and `result.output` holds the work done so far. `result.stop` names the stop and `resumable` says it can continue. The kernel checkpoints the stopped state itself, so `resumeRun` continues from that checkpoint and repeats no completed tool call.
 
 ```typescript
 const running = agent.run("Research and write up the release");

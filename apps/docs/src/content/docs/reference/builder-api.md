@@ -908,7 +908,7 @@ Resume any durable run that did not complete from its last checkpoint: stopped o
 
 ### `pauseRun(runId: string): Promise<boolean>` / `stopRun(runId: string): Promise<boolean>`
 
-Ask a live durable run of this agent to stop at its next iteration boundary. A tool already running finishes first. The final checkpoint and a typed stop record are written and the row becomes `paused` (`pauseRun`) or `stopped` (`stopRun`); continue it with `resumeRun(runId)`. Resolves `true` once persisted, `false` when this agent has no live run with that id. `activeRunIds(): readonly string[]` lists the live ones (tells a crashed `running` row from a live one).
+Ask a live durable run of this agent to stop at its next iteration boundary. A tool already running finishes first. The final checkpoint and a typed stop record are written and the row becomes `paused` (`pauseRun`) or `stopped` (`stopRun`); continue it with `resumeRun(runId)` from the kernel's own checkpoint of the stopped state. A stopped run's result is an honest partial: `success: false`, `outcome: "partial"`, `metadata.outstandingCriteria` containing `stopped_by_request`, and the answer so far in `output`. Resolves `true` once persisted, `false` when this agent has no live run with that id. `activeRunIds(): readonly string[]` lists the live ones (tells a crashed `running` row from a live one).
 
 ### `listRuns(filter?: { status? }): Promise<readonly RunRecord[]>`
 

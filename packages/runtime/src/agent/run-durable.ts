@@ -80,6 +80,7 @@ export const runDurableRun = async (deps: RunDurableDeps, params: RunDurablePara
         runId: params.runId,
         runStoreLayer,
         checkpointEvery: 1,
+        task: params.task,
     })
     const release = activeRuns?.register(params.runId, controller) ?? (() => undefined)
 

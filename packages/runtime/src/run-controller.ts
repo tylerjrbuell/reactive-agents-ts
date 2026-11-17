@@ -34,6 +34,8 @@ export interface DurableCheckpointDeps {
     readonly runStoreLayer: Layer.Layer<RunStoreService>;
     /** Persist a checkpoint every N iterations (>=1). */
     readonly checkpointEvery: number;
+    /** The run's task, the goal of an interruption's stop record. */
+    readonly task?: string;
 }
 
 /**
@@ -76,7 +78,7 @@ export function installDurableCheckpointing(
     controller: RunControllerLike,
     deps: DurableCheckpointDeps,
 ): DurableCheckpointing {
-    const { runId, runStoreLayer, checkpointEvery } = deps;
+    const { runId, runStoreLayer, checkpointEvery, task } = deps;
     const every = checkpointEvery >= 1 ? checkpointEvery : 1;
 
     // In-flight write promises. `runWrite`'s Effect already swallows its own
@@ -222,7 +224,7 @@ export function installDurableCheckpointing(
         await flush();
         const final = stop === undefined ? snapshot() : undefined;
         return runWrite(
-            persistInterrupt({ runId, kind, reason, ...(final !== undefined ? { snapshot: final } : {}), ...(stop !== undefined ? { stop } : {}) }),
+            persistInterrupt({ runId, kind, reason, ...(task !== undefined ? { task } : {}), ...(final !== undefined ? { snapshot: final } : {}), ...(stop !== undefined ? { stop } : {}) }),
             "runtime/src/run-controller.ts:persistInterrupt",
         );
     };

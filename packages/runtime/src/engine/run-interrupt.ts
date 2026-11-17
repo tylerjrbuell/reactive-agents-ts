@@ -19,6 +19,7 @@
  * `running` with its last per-iteration checkpoint, and resumes the same way.
  */
 import { Effect } from "effect";
+import { buildStopRecordFromSerialized, isUserStopReason } from "@reactive-agents/reasoning";
 import { RunStoreService, type RunStatus } from "../services/run-store.js";
 import {
   summarizeLoopStop,
@@ -70,13 +71,12 @@ export interface Interruption {
   readonly stop?: RunStopSummary;
 }
 
-const USER_STOP_REASONS: ReadonlySet<string> = new Set(["stop_requested", "terminate_requested"]);
-
 /**
  * The kernel's own terminal reason for the run, from the terminal outcome it
- * attaches to the result. A graceful stop reports `terminatedBy: "end_turn"`
- * and `success: true` on the result (the synthesized answer), so the stop is
- * only visible here: `terminalOutcome.terminatedBy` is `stop_requested`.
+ * attaches to the result. A user stop ships the answer so far as an honest
+ * partial (`success: false`, outstanding `stopped_by_request`) while the
+ * public `terminatedBy` stays a core enum value; the raw reason
+ * (`stop_requested` / `terminate_requested`) is read here.
  */
 const kernelTerminalReason = (result: EndedRun): string | undefined => {
   const outcome: unknown = result.metadata?.extensions?.["terminalOutcome"];
@@ -104,7 +104,7 @@ export const classifyEnd = (
   requested: UserStopKind | undefined,
 ): Interruption | undefined => {
   const ended = kernelTerminalReason(result) ?? result.terminatedBy;
-  if (requested !== undefined && ended !== undefined && USER_STOP_REASONS.has(ended)) {
+  if (requested !== undefined && isUserStopReason(ended)) {
     return { kind: requested, reason: requested };
   }
   const loop = result.loopStop ?? summaryOfRelayedLoopStop(result);
@@ -122,27 +122,43 @@ const summaryOfRelayedLoopStop = (result: EndedRun) => {
 };
 
 /**
- * Persist an interruption: the snapshot as the final checkpoint (one past its
- * iteration, so it always wins `latestCheckpoint`), the stop record, then the
- * status. Returns the stop record written. Never fails (a store defect is the
- * caller's swallowed-error site).
+ * Persist an interruption: the snapshot as a FALLBACK final checkpoint (one
+ * past its iteration, so it wins `latestCheckpoint`), the stop record, then the
+ * status. The fallback is written only when the store has no row newer than the
+ * snapshot's iteration: the kernel checkpoints its own final state (iteration
+ * + 1) on a user stop, a terminate and a loop stop, and that row is kept (no
+ * duplicate, no race). A stop record the run does not already carry takes its
+ * `unfinished` items from the final kernel state; `toolsDone` comes from the
+ * effect journal. Returns the stop record written. Never fails (a store defect
+ * is the caller's swallowed-error site).
  */
 export const persistInterrupt = (params: {
   readonly runId: string;
   readonly kind: RunStopKind;
   readonly reason: string;
   readonly snapshot?: RunSnapshot;
+  /** The run's task: the goal of the stop record's unfinished items. */
+  readonly task?: string;
   /** A stop record the run already carries (a loop stop): written as is, no snapshot. */
   readonly stop?: RunStopSummary;
 }): Effect.Effect<RunStopSummary, never, RunStoreService> =>
   Effect.gen(function* () {
     const store = yield* RunStoreService;
     const { runId, kind } = params;
-    if (params.stop === undefined && params.snapshot !== undefined) {
-      yield* store.putCheckpoint(runId, params.snapshot.iteration + 1, params.snapshot.serialized);
-    }
-    const iteration =
-      params.snapshot?.iteration ?? (yield* store.latestCheckpoint(runId))?.iteration ?? 0;
+    const { snapshot } = params;
+    const kept = yield* store.latestCheckpoint(runId);
+    const needsFallback =
+      params.stop === undefined && snapshot !== undefined && (kept === undefined || kept.iteration <= snapshot.iteration);
+    if (needsFallback) yield* store.putCheckpoint(runId, snapshot.iteration + 1, snapshot.serialized);
+    const iteration = snapshot?.iteration ?? kept?.iteration ?? 0;
+    const finalState = needsFallback ? snapshot.serialized : (kept?.stateJson ?? snapshot?.serialized);
+    const unfinished =
+      params.stop === undefined && finalState !== undefined
+        ? (buildStopRecordFromSerialized(finalState, {
+            reason: params.reason,
+            ...(params.task !== undefined ? { goal: params.task } : {}),
+          })?.unfinished ?? [])
+        : [];
     const calls = new Map<string, number>();
     for (const row of yield* store.listToolEffects(runId)) {
       if (row.status === "succeeded") calls.set(row.toolName, (calls.get(row.toolName) ?? 0) + 1);
@@ -151,7 +167,7 @@ export const persistInterrupt = (params: {
       kind,
       reason: params.reason,
       toolsDone: [...calls].map(([tool, n]) => ({ tool, calls: n })),
-      unfinished: [],
+      unfinished: [...unfinished],
       iteration,
     };
     yield* store.setStop(runId, summary);
