@@ -5,6 +5,12 @@ description: >-
   concurrent streams, and adapters for SSE, ReadableStream, and AsyncIterable.
 sidebar:
   order: 14
+topic: streaming
+updated: "0.18"
+related:
+  - cookbook/streaming-responses
+  - guides/web-integration
+  - reference/builder-api/agent-runtime
 ---
 
 Agent streaming delivers LLM tokens to your UI the moment they're generated — no waiting for the full response. The `runStream()` API emits a discriminated union of events that you consume with a standard `for await...of` loop, and two **density modes** let you choose between minimal overhead (tokens only) and full lifecycle visibility (phases, tools, thoughts). Concurrent streams are fiber-isolated via Effect-TS `FiberRef`, so multiple callers never see each other's tokens.
@@ -249,7 +255,7 @@ while (true) {
 
 ### AsyncIterable
 
-`AgentStream.toAsyncIterable(stream)` converts the Effect stream into a standard `AsyncIterable<AgentStreamEvent>` for `for await...of` consumption. Works in Node 18+, Bun, and browsers.
+`AgentStream.toAsyncIterable(stream)` converts the Effect stream into a standard `AsyncIterable<AgentStreamEvent>` for `for await...of` consumption. Works in Node 22.5+, Bun, and browsers.
 
 <!-- docs-skip-typecheck -->
 ```typescript

@@ -3,6 +3,12 @@ title: Your First Agent
 description: A step-by-step guide to building a complete agent.
 sidebar:
   order: 5
+topic: getting-started
+related:
+  - guides/quickstart
+  - guides/reasoning
+  - guides/tools
+  - guides/memory
 ---
 
 import { CardGrid, LinkCard, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -222,7 +228,7 @@ The same faults on a reasoning-enabled builder return
 to a future breaking release; until then, wrap `run()` in `try/catch` whenever
 the builder might be bare. The full ordered procedure, with code anchors for
 every field, is in the
-[Builder API reference](/reference/builder-api/#how-to-tell-what-happened-the-decision-procedure).
+[Builder API reference](/reference/builder-api/agent-result/#how-to-tell-what-happened-the-decision-procedure).
 
 ## Using the Effect API
 

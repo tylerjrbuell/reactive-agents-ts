@@ -5,6 +5,12 @@ description: >-
   workload.
 sidebar:
   order: 6
+topic: getting-started
+related:
+  - guides/quickstart
+  - features/llm-providers
+  - guides/choosing-strategies
+  - guides/tools
 ---
 
 import { CardGrid, LinkCard, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -106,13 +112,7 @@ const agent = await ReactiveAgents.create()
 
 ## Strategy Selection Cheat Sheet
 
-| Workload | Strategy |
-|---|---|
-| API automation / deterministic tool work | `reactive` |
-| Long multi-step tasks with explicit plans | `plan-execute-reflect` |
-| Exploration and branching ideas | `tree-of-thought` |
-| Self-critique and iterative improvement | `reflexion` |
-| Mixed unknown workloads | `adaptive` |
+Default to `reactive` (ReAct) for tool work and `adaptive` when the workload is mixed or unknown. The other strategies are for specific task shapes: see the decision tree in [Choosing a Reasoning Strategy](/guides/choosing-strategies/#decision-tree).
 
 ## Cost-First vs Quality-First Profiles
 

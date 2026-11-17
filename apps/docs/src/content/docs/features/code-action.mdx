@@ -5,11 +5,17 @@ description: >-
   a Worker sandbox for isolation.
 sidebar:
   order: 16
+topic: reasoning
+stability: experimental
+related:
+  - guides/choosing-strategies
+  - guides/reasoning
+  - cookbook/custom-strategies
 ---
 
-import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 
-`code-action` is the sixth reasoning strategy. Instead of calling tools one at a time in a ReAct loop, the LLM writes a single code block that orchestrates multiple tools as ordinary async function calls. The block runs in an isolated Worker-thread sandbox.
+`code-action` is an experimental reasoning strategy. How it compares to the other seven strategies, and which model size it needs, is on [Choosing a Reasoning Strategy](/guides/choosing-strategies/#code-action-experimental). Instead of calling tools one at a time in a ReAct loop, the LLM writes a single code block that orchestrates multiple tools as ordinary async function calls. The block runs in an isolated Worker-thread sandbox.
 
 ## When to use
 
@@ -59,17 +65,3 @@ delegation composition.
 
 `@experimental` — v0.11.1
 
-## What's Next
-
-<CardGrid>
-  <LinkCard
-    title="Choosing a Reasoning Strategy"
-    description="How Code-Action compares to the other seven strategies."
-    href="/guides/choosing-strategies/"
-  />
-  <LinkCard
-    title="Reasoning"
-    description="The strategy interface and kernel Code-Action implements."
-    href="/guides/reasoning/"
-  />
-</CardGrid>

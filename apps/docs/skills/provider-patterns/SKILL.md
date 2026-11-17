@@ -29,7 +29,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools()
+  .withTools({ builtins: true })
   .build();
 
 // Local Ollama model

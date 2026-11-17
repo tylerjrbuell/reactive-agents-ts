@@ -5,6 +5,10 @@ description: >-
   with agents.
 sidebar:
   order: 19
+topic: observability
+related:
+  - cookbook/chat-and-sessions
+  - reference/builder-api/agent-result
 ---
 
 ## Overview

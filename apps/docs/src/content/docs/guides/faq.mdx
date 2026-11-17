@@ -16,7 +16,7 @@ faq:
       Claude, GPT, and Gemini.
   - q: Is Reactive Agents production-ready?
     a: >-
-      It is in early access (v0.18.0) with 13,000+ tests across 1,600+ files run on
+      It is in early access (v0.18.0) with 13,601 tests across 2,200+ files run on
       every PR, durable crash-resume, and human-in-the-loop approvals. The core
       execution engine, providers, tools, and memory are stable. APIs can still
       change between minor versions, so pin a version for production.
@@ -38,14 +38,19 @@ faq:
       higher-level agent harness and can sit on top of an SDK.
   - q: Do I need Bun to use Reactive Agents?
     a: >-
-      No. Bun 1.0+ is recommended for best performance, but Node.js 22.5+ is
-      fully supported via the runtime shim. The same code runs on both. Install
+      No. Bun 1.1.0+ is recommended for best performance, but Node.js 22.5+ is
+      supported via the runtime shim. The same code runs on both. Install
       with "bun add reactive-agents" or "npm install reactive-agents".
   - q: Is Reactive Agents open source and free?
     a: >-
       Yes. Reactive Agents is MIT licensed and free to use. It is published as
       33 packages on npm (35 total in the monorepo, 2 private), install
       everything with the single "reactive-agents" package.
+topic: help
+related:
+  - guides/troubleshooting
+  - reference/stability
+  - guides/quickstart
 ---
 
 import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
@@ -60,8 +65,8 @@ Skeptical-engineer questions answered straight. If you have one that isn't here,
 The framework runs **{metrics.tests.toLocaleString()} tests across {metrics.testFiles} files** on every PR; current main has 0 failures. The same agent code runs the full loop — tool execution with healing, verification, receipts — on frontier APIs (Anthropic, OpenAI, Gemini, Groq, xAI) and on local Ollama models, and we exercise both tiers continuously during development.
 
 **Honest caveats:**
-- **Bun ≥ 1.0 is recommended** (optimal performance — native SQLite, subprocess, HTTP). **Node.js 22.5+ is also fully supported** via `@reactive-agents/runtime-shim`; Node 20+ runs too, with an in-memory SQLite fallback where `node:sqlite` isn't available.
-- We're at **v0.18.0** — the API has been stable since 0.9.0. v0.18.0 has a few breaking changes (strategy switching is now opt-in, `persistOnEnd` removed, user-global skill dirs opt-in); each has a one-line migration listed in [What's New](/guides/whats-new/). We haven't tagged 1.0 yet.
+- **Bun ≥ 1.1.0 is recommended** (optimal performance — native SQLite, subprocess, HTTP). **Node.js ≥ 22.5 is supported** via `@reactive-agents/runtime-shim` (on Node, SQLite full-text search is unavailable and memory search falls back to `LIKE`). The floors are the `engines` fields in `packages/reactive-agents/package.json`.
+- We're at **v0.18.0** — while the version is 0.x, minor releases may include breaking changes. v0.18.0 has a few (strategy switching is now opt-in, `persistOnEnd` removed, user-global skill dirs opt-in); each has a one-line migration listed per release in [What's New](/guides/whats-new/) and the changelog. [Stability tiers](/reference/stability/) say which surfaces are safest. We haven't tagged 1.0 yet.
 - Some advanced features (full multi-session memory transfer) are still being hardened — see "What's not done yet" below.
 
 If you need an HTTP-API-as-a-service or a hosted control plane, we don't ship that. The framework is a TypeScript SDK.
@@ -107,7 +112,7 @@ If you only ever want one paid frontier model, you're paying for capabilities (h
 
 ### vs LangChain.js / LlamaIndex
 
-LangChain is Python-first, dynamically typed, monolithic. Reactive Agents is **TypeScript-native with zero `any`** in framework code, modular by layer, and observable by design (every phase emits spans + EventBus events).
+LangChain is Python-first, dynamically typed, monolithic. Reactive Agents is **TypeScript-native and strictly typed** (Effect-TS schemas and tagged errors), modular by layer, and observable by design (every phase emits spans + EventBus events).
 
 We ship a [side-by-side migration guide](/guides/migrating-from-langchain/) — the API maps cleanly: `ChatOpenAI` → `.withProvider("openai")`, `AgentExecutor` → `ReactiveAgent`, `BufferMemory` → `.withMemory()`, callbacks → `.withHook()`.
 
@@ -131,7 +136,7 @@ We try to be honest about gaps. Things on the roadmap that aren't shipped:
 
 - **Multi-session memory transfer** — episodic recall works within a process. Cross-process / cross-machine transfer is being designed.
 - **Sub-agent delegation effectiveness metrics** — the test harness exists; we haven't measured whether delegation beats inline execution on multi-step tasks.
-- **`v1.0` tag** — API is stable since 0.9; we'll tag 1.0 once the items above ship and the calibration store has 1k+ runs across community models.
+- **`v1.0` tag** — we'll tag 1.0 once the items above ship and the calibration store has 1k+ runs across community models.
 
 Track progress in the [GitHub issues](https://github.com/tylerjrbuell/reactive-agents-ts/issues) or the [public roadmap](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/ROADMAP.md).
 
@@ -192,7 +197,7 @@ Read [Contributing](/guides/contributing/) for the coding standards. Every page 
   />
   <LinkCard
     title="What's New"
-    description="v0.9.0 → v0.10.6 release highlights with concrete user gains."
+    description="Per-release highlights and breaking changes, with migration notes."
     href="/guides/whats-new/"
   />
 </CardGrid>

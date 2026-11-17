@@ -1,0 +1,283 @@
+---
+title: Custom tools
+description: >-
+  Authoring your own tools: defineTool, ToolBuilder, the function adapter, rich results (images, audio, files) and agents as tools.
+sidebar:
+  order: 3
+topic: tools
+related:
+  - guides/tools
+  - cookbook/building-tools
+  - guides/tools/scoping-and-policy
+  - guides/guardrails
+---
+
+Register your own tools with `defineTool` (typed, schema-validated), the `ToolBuilder` fluent API, or a plain function adapter. Tools can return images, audio or files, and another agent can be exposed as a tool.
+
+## Registering Custom Tools
+
+The canonical way to author a tool is `defineTool` — a schema plus a plain `async` handler whose `args` are typed from the schema. No Effect knowledge and no `Record<string, unknown>` casts required (handlers are functions, not serializable data, so custom-tool registration is builder-only — there is no declarative config equivalent):
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { defineTool } from "@reactive-agents/tools";
+import { Schema } from "effect";
+
+const calculator = defineTool({
+  name: "calculator",
+  description: "Perform arithmetic calculations",
+  input: Schema.Struct({
+    expression: Schema.String,
+  }),
+  // args is typed as { expression: string }
+  handler: async (args) => String(eval(args.expression)),
+});
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ tools: [calculator] })
+  .withReasoning()
+  .build();
+```
+
+The `input` field accepts an Effect `Schema.Struct` (canonical — full parameter metadata is extracted from the AST) or **any Standard Schema** — Zod, Valibot, ArkType, or `Schema.standardSchemaV1(...)`:
+
+{/* docs-skip-typecheck */}
+```typescript
+import { z } from "zod";
+
+const addTool = defineTool({
+  name: "add",
+  description: "Add two numbers",
+  input: z.object({ a: z.number(), b: z.number() }),
+  handler: async ({ a, b }) => a + b, // { a: number; b: number }
+});
+```
+
+Raw arguments are validated against the schema at runtime before the handler runs; validation failures surface as `ToolExecutionError`, never a crash. Optional config fields mirror the raw `ToolDefinition`: `riskLevel` (default `"low"`), `timeoutMs` (default `30_000`), `requiresApproval` (default `false`), `mutatesExternalState` (set `false` to declare the tool read-only; see below), `category`, `returnType`, `isCacheable`, `cacheTtlMs`.
+
+**Read-only tools.** When an agent is narrowed to read-only tools (for example for non-owner channel senders), only tools that declare `mutatesExternalState: false` and do not require approval survive. A tool that omits the flag is treated as NOT read-only. Setting `mutatesExternalState: false` is your promise that the tool never changes state outside the run.
+
+`defineTool` also **fails fast on malformed options**: passing intuitive-but-wrong keys (`parameters` instead of `input`, `execute` instead of `handler`) throws a typed `ToolDefinitionError` naming the correct field — not a raw `TypeError`.
+
+### Advanced: Effect handlers and raw definitions
+
+For Effect-native authors, the handler may return an `Effect` instead of a `Promise` — both are normalised at runtime:
+
+{/* docs-skip-typecheck */}
+```typescript
+import { Effect, Schema } from "effect";
+
+const searchTool = defineTool({
+  name: "search",
+  description: "Search the web",
+  input: Schema.Struct({ query: Schema.String }),
+  handler: (args) => Effect.succeed(`Results for: ${args.query}`),
+});
+```
+
+You can also pass raw `{ definition, handler }` pairs directly to the `tools` option — the pre-`defineTool` shape, still fully supported:
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { Effect } from "effect";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({
+    tools: [{
+      definition: {
+        name: "calculator",
+        description: "Perform arithmetic calculations",
+        parameters: [{ name: "expression", type: "string", description: "Math expression", required: true }],
+        riskLevel: "low",
+        timeoutMs: 5_000,
+        requiresApproval: false,
+        source: "function",
+      },
+      handler: (args) => Effect.try(() => String(eval(String(args.expression)))),
+    }],
+  })
+  .withReasoning()
+  .build();
+```
+
+For zero-schema quick tools there is also the `tool(name, description, handlerOrOptions)` helper (untyped args), and the [ToolBuilder fluent API](#toolbuilder-fluent-api) below.
+
+You can also register tools **after** `build()` on the agent facade: `await agent.registerTool(definition, handler)` and `await agent.unregisterTool("name")` (non-builtin tools only).
+
+## ToolBuilder Fluent API
+
+The `ToolBuilder` provides a fluent API for building `ToolDefinition` schema objects without raw literals. It validates at `build()` time (a missing description throws). The execution handler — `(args: Record<string, unknown>) => Effect<...>` — is supplied when you register the tool with `.withTools({ tools })`:
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+import { ToolBuilder } from "@reactive-agents/tools";
+import { Effect } from "effect";
+
+// Basic tool
+const { definition: calculatorDef } = ToolBuilder.create("calculator")
+  .description("Perform arithmetic calculations")
+  .param("expression", "string", "Math expression to evaluate", { required: true })
+  .riskLevel("low")
+  .timeout(5_000)
+  .build();
+
+// Tool with multiple params and enum
+const { definition: fileOpDef } = ToolBuilder.create("file-operation")
+  .description("Perform a file system operation")
+  .param("path", "string", "File path", { required: true })
+  .param("operation", "string", "Operation to perform", { required: true, enum: ["read", "write", "delete"] })
+  .param("content", "string", "Content for write operations", { required: false })
+  .riskLevel("medium")
+  .requiresApproval(true)
+  .timeout(10_000)
+  .build();
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withTools({
+    tools: [
+      {
+        definition: calculatorDef,
+        handler: (args) => Effect.try(() => String(args.expression)),
+      },
+      {
+        definition: fileOpDef,
+        handler: (args) =>
+          Effect.tryPromise(async () => {
+            // ... implementation using args.path / args.operation / args.content
+            return "done";
+          }),
+      },
+    ],
+  })
+  .build();
+```
+
+Prefer [`defineTool`](#registering-custom-tools) when you want typed, schema-validated handler args and plain `async` handlers — `ToolBuilder` shines when you are assembling definitions imperatively.
+
+### ToolBuilder Methods
+
+| Method | Description |
+|--------|-------------|
+| `ToolBuilder.create(name)` | Start a new tool definition (equivalent to `new ToolBuilder(name)`) |
+| `.description(text)` | Set the tool description (shown to LLM) — required, `build()` throws without it |
+| `.param(name, type, description, options?)` | Add a parameter. `type`: `"string" \| "number" \| "boolean" \| "object" \| "array"`. `options`: `{ required?, enum?, default? }` |
+| `.riskLevel(level)` | `"low" \| "medium" \| "high" \| "critical"` (default `"low"`) |
+| `.timeout(ms)` | Execution timeout in milliseconds (default 30,000) |
+| `.requiresApproval(bool)` | Sets the approval-required flag on the definition (metadata — see [Durable HITL](/guides/durable-hitl/) for enforcement) |
+| `.returnType(text)` | Human-readable return type description |
+| `.category(cat)` | `"search" \| "file" \| "code" \| "http" \| "data" \| "system" \| "custom" \| "vcs" \| "productivity"` |
+| `.handler(fn)` | Optional: attach an untyped function `(...args: unknown[]) => unknown` to carry alongside the definition for custom pipelines. The agent runtime does **not** execute this — pass an Effect handler to `.withTools({ tools })` instead |
+| `.build()` | Produce `{ definition, handler? }` — use the `definition` with `.withTools({ tools })` |
+
+## Function Adapter
+
+Convert plain functions into tool definitions:
+
+```typescript
+import { adaptFunction } from "@reactive-agents/tools";
+import { Effect } from "effect";
+
+const tool = adaptFunction({
+  name: "calculate",
+  description: "Perform arithmetic",
+  parameters: [
+    { name: "a", type: "number", description: "First operand", required: true },
+    { name: "b", type: "number", description: "Second operand", required: true },
+    {
+      name: "op",
+      type: "string",
+      description: "Operation to perform",
+      required: true,
+      enum: ["add", "sub", "mul", "div"],
+    },
+  ],
+  fn: (args) => {
+    const { a, b, op } = args as { a: number; b: number; op: string };
+    switch (op) {
+      case "add": return Effect.succeed(a + b);
+      case "sub": return Effect.succeed(a - b);
+      case "mul": return Effect.succeed(a * b);
+      default: return Effect.succeed(a / b);
+    }
+  },
+});
+```
+
+## Tool Type Conversion
+
+The framework automatically converts between the tools package format and the LLM provider's native format using `toFunctionCallingFormat()`:
+
+{/* docs-skip-typecheck */}
+```typescript
+// Internal: tools package format
+{ name: "search", description: "...", parameters: [...] }
+
+// Converted to: LLM provider format
+{ name: "search", description: "...", inputSchema: { type: "object", properties: {...} } }
+```
+
+This conversion happens automatically in the execution engine — you don't need to worry about format differences between providers.
+
+## Tools that return images, audio, or files
+
+A tool handler returns a string by default. To return typed media, wrap the parts with `toolContent()` from `@reactive-agents/tools`. The model receives the image itself, and traces and checkpoints store a summary instead of the bytes.
+
+```typescript
+import { toolContent } from "@reactive-agents/tools";
+
+// inside a tool handler (see Registering Custom Tools)
+async function renderChart(pngBase64: string) {
+  return toolContent([
+    { type: "text", text: "Revenue by quarter" },
+    {
+      type: "image",
+      source: { type: "base64", media_type: "image/png", data: pngBase64 },
+    },
+  ]);
+}
+```
+
+Image parts reach OpenAI, LiteLLM, Ollama and Gemini models as well as Anthropic. A model that cannot take an image gets a text note in its place (`[image omitted: ...]`), and a `content-part-degraded` warning is logged. MCP tools that return images work the same way.
+
+## Agent-as-Tool
+
+Register other agents (local or remote) as callable tools. This enables hierarchical agent architectures where a coordinator delegates subtasks to specialists.
+
+### Remote Agent (via A2A)
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("coordinator")
+  .withProvider("anthropic")
+  .withRemoteAgent("researcher", "https://research-agent.example.com")
+  .withReasoning()
+  .build();
+
+// The coordinator can now call the researcher as a tool during reasoning
+```
+
+The remote agent is discovered via its A2A Agent Card and called via JSON-RPC `message/send`.
+
+### Local Agent
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withName("coordinator")
+  .withProvider("anthropic")
+  .withAgentTool("specialist", {
+    name: "data-analyst",
+    description: "Analyzes data and produces insights",
+  })
+  .build();
+```
+
+See the [A2A Protocol](/features/a2a-protocol/) docs for full details.
+
+## Going further
+
+- [Building Custom Tools](/cookbook/building-tools/): raw `ToolDefinition`, side-effecting Effect handlers and the manual approval check
+- [Scoping and policy](/guides/tools/scoping-and-policy/): risk levels, per-tool call caps and the working directory

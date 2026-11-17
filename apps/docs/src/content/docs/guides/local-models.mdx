@@ -5,9 +5,16 @@ description: >-
   optimal performance
 sidebar:
   order: 11
+topic: local-models
+updated: "0.19"
+related:
+  - features/local-model-performance
+  - features/llm-providers
+  - cookbook/local-agent-ollama
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
+import Since from '../../../components/Since.astro';
 
 # Local Models Guide
 
@@ -78,7 +85,7 @@ const agent = await ReactiveAgents.create()
 
 `.withTimeout(ms)` remains a separate wall-clock limit for the whole agent run. See [Builder API](/reference/builder-api/).
 
-## Ollama Cloud
+## Ollama Cloud <Since version="0.19" />
 
 Point the Ollama provider at Ollama Cloud with an endpoint and a key:
 
@@ -105,7 +112,7 @@ Or set `OLLAMA_API_KEY` (and `OLLAMA_ENDPOINT`) in the environment. An `OLLAMA_A
 | Research with web search | `qwen3:14b` or `llama3.1:8b` | local | Reliable native function calling |
 | Code generation | `qwen2.5-coder:14b` | local | Specialized for code tasks |
 | Complex reasoning | `cogito:14b` | local | Extended thinking mode support |
-| Multi-step planning | `qwen3:14b` with Plan-Execute | local | Structured plan generation |
+| Multi-step tool tasks | `qwen3:14b` with the default ReAct strategy | local | Best native FC accuracy at this size; heavier strategies cost more and showed no measured quality gain locally |
 
 ### Model Comparison
 
@@ -192,7 +199,7 @@ ignore the field. `numCtx` is also a first-class `AgentConfig` field, so it
 survives `toConfig()` / `fromJSON()` and is settable from the Cortex Studio
 agent builder.
 
-## Images, Audio and Files
+## Images, Audio and Files <Since version="0.19" />
 
 Ollama models take images (when `/api/show` lists `vision`). Audio and file
 parts have no Ollama wire path, so they never reach the model as media and are
@@ -210,17 +217,7 @@ the same way.
 
 ## Strategy Recommendations for Local Models
 
-Not all reasoning strategies work well on small models:
-
-| Strategy | `<=8B` | 14B | 70B | Notes |
-|----------|:----:|:---:|:---:|-------|
-| **ReAct** | Good | Best | Best | Most reliable for local models |
-| **Reflexion** | Poor | Fair | Good | Self-critique requires model quality |
-| **Plan-Execute** | Poor | Fair | Good | Structured plan generation is fragile on small models |
-| **Tree-of-Thought** | Poor | Poor | Fair | BFS scoring unreliable below 70B |
-| **Adaptive** | Fair | Good | Best | Falls back to ReAct on small models (good) |
-
-**Recommendation:** Use `"reactive"` (ReAct) as default strategy for all local models. Only use `"adaptive"` if you're running 14B+ and want automatic strategy selection.
+ReAct (`"reactive"`) is the default on every local model. Heavier strategies cost more tokens and time on local models and showed no measured quality gain in our tests. The evidence summary lives in [Local Model Recommendations](/guides/choosing-strategies/#local-model-recommendations).
 
 ## Intelligent Context Synthesis (ICS)
 

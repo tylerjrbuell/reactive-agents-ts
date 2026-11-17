@@ -5,6 +5,10 @@ description: >-
   LLM providers.
 sidebar:
   order: 13
+topic: local-models
+related:
+  - guides/local-models
+  - cookbook/local-agent-ollama
 ---
 
 Reactive Agents automatically adapts its behavior based on the model tier. Local models (Ollama, LiteLLM) have different entropy distributions, latency profiles, and capability envelopes compared to frontier models (OpenAI, Anthropic, Google). The framework accounts for these differences at every level.
@@ -81,7 +85,7 @@ Local models typically have smaller context windows (4K–32K vs 128K–200K). T
 
 ### Strategy Switching
 
-When entropy trajectory is flat (no improvement), the controller may recommend switching strategies. Local models get more patience before triggering a switch. The switch only happens when you set `.withReasoning({ enableStrategySwitching: true })`. It is off by default: on qwen3:4b and cogito:8b it showed no accuracy lift and added 28% more billed tokens (2026-11-05 ablation).
+When entropy trajectory is flat (no improvement), the controller may recommend switching strategies. Local models get more patience before triggering a switch. The switch only happens when you set `.withReasoning({ enableStrategySwitching: true })`. It is off by default: on qwen3:4b and cogito:8b it showed no accuracy lift and added 28% more billed tokens (2026-11-05 ablation). Details: [Automatic Strategy Switching](/guides/choosing-strategies/#automatic-strategy-switching).
 
 ## Performance Tuning Tips
 
@@ -99,12 +103,7 @@ When entropy trajectory is flat (no improvement), the controller may recommend s
 
 ### Use Appropriate Reasoning Strategies
 
-Local models work best with:
-
-- **`reactive`** (default) — single-pass tool calling with entropy monitoring
-- **`plan-execute-reflect`** — explicit planning for complex multi-step tasks
-
-More sophisticated strategies (e.g., `tree-of-thought`) may underperform on local models due to increased token overhead.
+Start with `reactive` (the default). Heavier strategies cost more tokens and time on local models and showed no measured quality gain in our tests. The evidence summary is on one page: [Local Model Recommendations](/guides/choosing-strategies/#local-model-recommendations).
 
 ### Model-Specific Considerations
 

@@ -5,6 +5,10 @@ description: >-
   with agent.runStream().
 sidebar:
   order: 7
+topic: streaming
+related:
+  - features/streaming
+  - guides/web-integration
 ---
 
 `agent.runStream()` returns an `AsyncGenerator` of typed events. Use it to show tokens as they arrive, display step progress, or build live UIs.

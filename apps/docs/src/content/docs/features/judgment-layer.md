@@ -6,6 +6,11 @@ description: >-
     — a provider-abstracted primitive for programmable common sense.
 sidebar:
     order: 25
+topic: quality
+related:
+  - cookbook/judgment-recipes
+  - features/verification
+  - features/eval
 ---
 
 The judgment layer gives your agent a typed, calibrated primitive for the kind of question that isn't a fact lookup or a classical computation, but also shouldn't be a free-form LLM completion: "is this risky?", "which of these five options fits best?", "how complete is this answer, on a 0-2 scale?" Instead of parsing a probability out of generated text, a judgment call returns a typed answer with real probabilities attached.

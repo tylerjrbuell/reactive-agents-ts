@@ -8,6 +8,12 @@ description: >-
 sidebar:
   label: Tool Calling & MCP
   order: 31
+topic: tools
+related:
+  - guides/tools
+  - cookbook/building-tools
+  - guides/security-hardening
+  - guides/choosing-strategies
 ---
 
 Tools are how an AI agent stops talking and starts *acting* — searching the web, reading files, hitting an API, querying a database. A language model on its own can only produce text; tool calling (a.k.a. function calling) is what lets it choose an action, hand you structured arguments, and use the real result to decide what to do next.
@@ -159,38 +165,11 @@ const agent = await ReactiveAgents.create()
   .build();
 ```
 
-The first use of an unapproved image throws `MCPApprovalRequiredError` rather than silently running it — approve it once with `approveMcpImage()`, or pass `requireApproval: false` for environments you've already vetted. Full option reference (`env`, `volumes`, `registry`, `requireApproval`) and the approval flow are in the [Tools guide's Docker Hub MCP catalog section](/guides/tools/#registry-resolved-servers-docker-hub-with-more-registries-planned).
+The first use of an unapproved image throws `MCPApprovalRequiredError` rather than silently running it — approve it once with `approveMcpImage()`, or pass `requireApproval: false` for environments you've already vetted. Full option reference (`env`, `volumes`, `registry`, `requireApproval`) and the approval flow are in the [Tools guide's Docker Hub MCP catalog section](/guides/tools/mcp-tools/#registry-resolved-servers-docker-hub-with-more-registries-planned).
 
 ### streamable-http with OAuth 2.1
 
-`headers` above works for a pre-obtained token you manage yourself. If the server speaks OAuth 2.1 and
-you want RA to handle discovery, token exchange, refresh, and storage, use `auth` instead. For an
-unattended agent (no human present), use `client_credentials`:
-
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning()
-  .withMCP({
-    name: "billing",
-    transport: "streamable-http",
-    endpoint: "https://mcp.example.com/mcp",
-    auth: {
-      type: "client_credentials",
-      clientId: process.env.MCP_CLIENT_ID!,
-      clientSecret: process.env.MCP_CLIENT_SECRET!,
-    },
-  })
-  .build();
-```
-
-If the agent needs to act on behalf of a specific human, use `authorization_code` and run `rax mcp login
-<name>` once, ahead of time, to complete the interactive browser login — the agent itself never opens a
-browser (`interactive` defaults to `false` for exactly this reason). Tokens land in
-`~/.reactive-agents/mcp-auth/` (permission-locked to your user) unless you pass your own `tokenStore`
-(e.g. `createMemoryTokenStore()` for tests). Full grant-selection guidance, the token-store contract, and
-the `rax mcp login|logout|status` command reference are in the [Tools guide's OAuth
-section](/guides/tools/#oauth-21-auth).
+`headers` above works for a pre-obtained token you manage yourself. If the server speaks OAuth 2.1 and you want Reactive Agents to handle discovery, token exchange, refresh and storage, pass `auth` to `.withMCP()` instead (`client_credentials` for unattended agents, `authorization_code` plus `rax mcp login <name>` when the agent acts for a specific person). Examples, grant selection, the token-store contract and the `rax mcp login|logout|status` reference are in the [Tools guide's OAuth section](/guides/tools/mcp-tools/#oauth-21-auth).
 
 ## Step 4 — Adaptive tool calling on local *and* frontier models
 
@@ -215,8 +194,8 @@ Swap `.withProvider("ollama")` for `.withProvider("anthropic")` and the tool, th
 - **Risk levels and approval.** Set `.riskLevel("high")` and `.requiresApproval(true)` on destructive tools (file writes, payments, deletes). When approval is required, the agent pauses for a human decision before the handler runs. The built-in `file-write` tool already requires approval by default.
 - **Prevent runaway loops.** Parallel tool calls are capped at 3 simultaneous executions and 3 chained steps per phase, and side-effect tools (`create_*`, `delete_*`, `send_*`, …) are forced to run one at a time — so a confused model can't fan out destructively.
 - **Force critical tools.** Use `.withRequiredTools({ tools: ["get_weather"], adaptive: true, maxRetries: 2 })` to guarantee a tool is called before the agent is allowed to answer.
-- **Scope the surface.** `.withTools({ allowedTools: [...] })` is a hard allowlist (everything else is pruned before the model sees it); `.withTools({ focusedTools: [...] })` is soft guidance that highlights tools without blocking the rest. A tight `allowedTools` list also helps smaller models pick the right tool.
-- **Tool timeouts and big results.** Every tool runs in a sandbox with a timeout (default 30s, set via `.timeout(ms)`). Large tool outputs are auto-compressed into a structured preview and stored, so a 31K-character API response won't blow up the context window.
+- **Scope the surface.** `allowedTools` is a hard allowlist and `focusedTools` is soft guidance; a tight list also helps smaller models pick the right tool. See [Scoping the Tool Set](/guides/tools/scoping-and-policy/#scoping-the-tool-set).
+- **Tool timeouts and big results.** Every tool has a timeout (default 30s, set via `.timeout(ms)`), and large outputs are compressed into a stored preview. See [Tool Result Compression](/guides/tools/execution-and-results/#tool-result-compression).
 
 ## Where to go next
 

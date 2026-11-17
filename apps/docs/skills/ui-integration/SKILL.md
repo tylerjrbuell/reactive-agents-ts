@@ -148,7 +148,7 @@ app.post("/api/agent", async (req, res) => {
   const agent = await ReactiveAgents.create()
     .withProvider("anthropic")
     .withReasoning({ defaultStrategy: "adaptive" })
-    .withTools()
+    .withTools({ builtins: true })
     .build();
 
   const stream = agent.runStream(prompt);

@@ -5,6 +5,10 @@ description: >-
   Effect layers.
 sidebar:
   order: 3
+topic: quality
+related:
+  - reference/builder-api/observability-and-lifecycle
+  - features/eval
 ---
 
 Reactive Agents is designed for testability. The Layer system lets you swap any service with a test implementation, and the built-in test provider gives deterministic LLM responses.

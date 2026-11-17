@@ -3,13 +3,19 @@ title: Quickstart
 description: Build your first Reactive Agent in 5 minutes.
 sidebar:
   order: 3
+topic: getting-started
+related:
+  - guides/installation
+  - guides/your-first-agent
+  - guides/choosing-a-stack
+  - reference/cheatsheet
 ---
 
 import { FileTree, Aside, Badge, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) ≥1.0.0 (`curl -fsSL https://bun.sh/install | bash`)
+- [Bun](https://bun.sh) ≥1.1.0 (`curl -fsSL https://bun.sh/install | bash`)
 - An API key from [Anthropic](https://console.anthropic.com), [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com), [Groq](https://console.groq.com), [xAI](https://console.x.ai), or [LiteLLM](https://www.litellm.ai) — *or* run a local model with [Ollama](https://ollama.com) (no key needed)
 - TypeScript 5.5+ with `"moduleResolution": "bundler"` (`rax init` scaffolds this for you) — see [Installation](../installation/#typescript-configuration) for the full `tsconfig.json`
 
@@ -106,7 +112,7 @@ echo 'XAI_API_KEY=xai-...'          >> .env
 ollama pull qwen3:4b
 ```
 
-Optional keys for built-in tools (web search, etc.) — add them later when you call `.withTools()` (or set `tools: {}` in the config):
+Optional keys for built-in tools (web search, etc.) — add them later when you call `.withTools({ builtins: true })` (or set `tools: {}` in the config):
 
 ```bash
 echo 'TAVILY_API_KEY=tvly-...' >> .env   # Web search (Tavily backend)
@@ -221,7 +227,7 @@ console.log("Steps:", result.metadata.stepsCount);
 </Tabs>
 
 :::tip[Resource cleanup]
-Always dispose agents that use MCP servers or other subprocess-based tools — otherwise the process will hang on open pipes. Use `await using` for automatic cleanup, or [`runOnce()`](../../reference/builder-api/#runonceinput-string-promiseagentresult) for one-shot scripts. See [Resource Management](../../reference/builder-api/#resource-management) for all three patterns.
+Always dispose agents that use MCP servers or other subprocess-based tools — otherwise the process will hang on open pipes. Use `await using` for automatic cleanup, or [`runOnce()`](../../reference/builder-api/#runonceinput-string-promiseagentresult) for one-shot scripts. See [Resource Management](/reference/builder-api/agent-runtime/#resource-management) for all three patterns.
 :::
 
 ## 4. Run It

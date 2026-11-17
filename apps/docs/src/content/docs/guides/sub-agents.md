@@ -5,6 +5,12 @@ description: >-
   forwarding
 sidebar:
   order: 13
+topic: agents
+updated: "0.19"
+related:
+  - features/a2a-protocol
+  - cookbook/multi-agent-patterns
+  - reference/builder-api/integrations
 ---
 
 ## Overview

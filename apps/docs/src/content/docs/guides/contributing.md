@@ -3,6 +3,7 @@ title: Contributing
 description: 'How to develop, test, and release changes to Reactive Agents.'
 sidebar:
   order: 99
+topic: help
 ---
 
 ## Setup
@@ -11,7 +12,7 @@ sidebar:
 git clone https://github.com/tylerjrbuell/reactive-agents-ts.git
 cd reactive-agents-ts
 bun install
-bun test          # 9,000+ tests — all must pass
+bun test          # 13,601 tests — all must pass
 bun run build     # ESM + DTS for all 35 packages
 ```
 
@@ -87,7 +88,7 @@ All public packages ship at the same lockstep version — the bump type shapes t
 ### Docs site
 
 ```bash
-bun run docs:dev      # http://localhost:4321
+bun run docs:dev      # http://localhost:4300 (Cortex keeps :4321)
 bun run docs:build    # Production build
 bun run docs:preview  # Preview built output
 ```

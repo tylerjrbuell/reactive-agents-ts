@@ -1,0 +1,116 @@
+---
+title: "Routes: one connection, many agents"
+description: >-
+  withChannels routes: match inbound conversations, target agents, sender policy, per-route limits and slow-turn acknowledgements.
+sidebar:
+  order: 4
+topic: channels
+related:
+  - guides/messaging-channels
+  - guides/messaging-channels/reliability
+  - features/gateway
+  - guides/channel-adapters
+---
+
+How `.withChannels({ adapters, routes, agents })` maps conversations to agents. Part of [Messaging channels](/guides/messaging-channels/).
+
+## Routes: One Connection, Many Agents
+
+`.withChannels({ adapters, routes, agents })` starts a channel router. Each adapter is opened once. A **route** matches inbound conversations, names a target agent, and says who may talk and what a stranger may do.
+
+```typescript
+import { Redacted } from "effect";
+import { ReactiveAgents } from "reactive-agents";
+import { TelegramChannelAdapter } from "@reactive-agents/channels";
+
+const telegram = new TelegramChannelAdapter({
+  token: Redacted.make(process.env.TELEGRAM_BOT_TOKEN ?? ""),
+});
+
+const host = await ReactiveAgents.create()
+  .withName("channel-host")
+  .withProvider("anthropic")
+  .withGateway()
+  .withChannels({
+    adapters: [telegram], // canonical ChannelAdapters only
+    routes: [
+      {
+        id: "support",
+        match: { channelId: telegram.id, conversation: "dm" },
+        target: { agentId: "support" },
+        owners: ["telegram:1001"], // set from code only, never from a message
+        allow: ["telegram:2002"],
+        // senderTools defaults to { _tag: "ReadOnly" } for non-owners
+      },
+    ],
+    agents: {
+      // a fresh builder per (route, role); the router narrows its tools before build()
+      support: () => ReactiveAgents.create().withProvider("anthropic").withTools({ builtins: ["web-search", "file-write"] }),
+    },
+    meter: { reserveUsd: 0.05, maxMessagesPerDay: 500 }, // optional per-route cost and message caps
+  })
+  .build();
+
+const handle = host.start(); // the router starts and stops with the gateway handle
+await host.channelRouterStatus(); // { channels, routes, unrouted, dropped, activeSessions, durableStore }
+```
+
+How access works:
+
+- **Fail closed.** A message no route claims is dropped and counted as unrouted. A denied sender never reaches an agent.
+- **Owners run the agent's own tools. Everyone else gets `senderTools`**, which defaults to `ReadOnly`: only tools that declare `mutatesExternalState: false` and need no approval. Unclassified tools (custom, MCP, sub-agent) are removed. `Allowlist` keeps only named tools the agent already had.
+- **The tool surface is decided when the agent is built**, not per turn and not by prompt. The router builds one agent per (route, role), so a sender never shares history or tools with an owner. Sender text reaches the model only as the user message; persona and instructions stay in the agent's own configuration.
+- **The router is the only consumer of its adapters.** The gateway's legacy chat handler skips messages from adapters a router owns, so a routed message runs once, under the route's access decision.
+- **State is in memory by default.** Message dedupe and turn caps reset on restart, and the router logs a warning at startup. Pass a durable `store` to keep them (see [Surviving a restart](/guides/messaging-channels/reliability/#surviving-a-restart-the-durable-inbox)).
+- This limits what an injected message can do. It does not make a model immune to injection, and read-only tools can still leak data they can read.
+
+### Acknowledging slow turns
+
+A tool turn can take 15 to 40 seconds, and the chat is silent until the final answer. Set `ack` on a route and the router behaves like a chat partner: it shows a typing indicator as soon as the turn starts and, if the turn is still running after `afterMs`, sends one short message, then the final reply.
+
+```typescript
+import type { RouteSpecInput } from "@reactive-agents/channels";
+
+const route: RouteSpecInput = {
+  id: "support",
+  match: { channelId: "telegram", conversation: "dm" },
+  target: { agentId: "support" },
+  allow: ["telegram:2002"],
+  ack: { afterMs: 4000, text: ["On it...", "Working on that..."], typing: true }, // all fields optional
+};
+```
+
+- **Off by default.** No `ack`, or `ack: false`, sends nothing extra. `ack: {}` means typing on, and `"On it..."` after 4000 ms.
+- **Fixed text is deterministic and zero-token.** The text is config (1 to 10 entries of at most 200 characters; the same message id always picks the same entry) and is never built from sender text. With `source: "model"` (below) the message can come from the agent instead.
+- **Not history.** The ack goes straight to the adapter. The agent never sees it, and it is not recorded as an assistant reply.
+- **Only for turns that run.** A turn that finishes before `afterMs`, a denied or dropped message and a turn the meter refuses get no ack. A failed ack is swallowed and reported as `ErrorSwallowed`; it never fails the turn. Acks go through the adapter's normal outbound rate limits, and each one publishes `ChannelTurnAcknowledged` (no text).
+- **Model-written acks (`source: "model"`).** `ack: { source: "model" }` swaps the fixed text for the agent's own words. At `afterMs` the router sends, in order: (1) the agent's latest pre-tool narration, if the turn already produced some; (2) a one-line text from the session's `acknowledge` port; (3) the canned text. The port call starts when the turn starts, not at `afterMs`, so a cold model gets `afterMs` plus `modelTimeoutMs` of wall time. At `afterMs` the router uses the result if it is ready, otherwise waits up to `modelTimeoutMs` (1 to 30 000, default 12 000; sized for a cold model queued behind the turn's own calls) measured from `afterMs`, then falls back to canned with `ackFallbackReason: "timeout"`. The call is cancelled with the turn; a turn that ends before `afterMs` sends no ack. When narration wins, the prefetched port result is discarded. Narration pushed after the ack went out is dropped, so there is still exactly one ack. Model text is sanitized before sending: markdown stripped, one line, at most 300 characters. A port that fails, times out or returns nothing falls back to canned and never fails the turn. `ChannelTurnAcknowledged` carries `source: "canned" | "narration" | "model"`. When the route asked for `model` but canned text went out, the event also carries `ackFallbackReason: "timeout" | "empty" | "thinking_only" | "error"`: the router records `timeout` and a port defect (`error`) itself; a port reports the others by returning `{ text, fallbackReason }` instead of a bare string. The `channels` package never calls a model; the resolver owns that.
+- **Typing support is per adapter.** The optional `ChannelAdapter.sendTyping` is implemented by Telegram (`sendChatAction`, refreshed every 4 seconds until the reply). Adapters without it still send the ack message. Webhook routes reject `ack`.
+
+**When a turn fails.** A turn that the route accepted but could not finish (it ran past `turnTimeoutMs`, default 120 000, or the agent errored) no longer ends in silence. The router sends the sender one fixed plain-text notice through the adapter. After a timeout it reads `That took longer than the 120-second turn limit, so I stopped. Send it again, or ask me to continue.` (the limit is the route's `turnTimeoutMs` in seconds); any other failure gets `Something went wrong and I could not finish that. Send it again, or ask me to continue.` The notice never contains the error text. `ChannelTurnCompleted` with `ok: false` is published as before. No notice goes out for simulations, unregistered adapters, or denied and dropped messages, and a failed notice send is swallowed and never throws. Set `failureNotice: false` on a route to opt out (default `true`).
+
+**For resolver authors.** Two optional ports back `source: "model"`. A resolver that implements neither still gets the canned text.
+
+```typescript
+import { Effect } from "effect";
+import type { AgentResolver } from "@reactive-agents/channels";
+
+const resolver: AgentResolver = {
+  open: () =>
+    Effect.succeed({
+      send: (turn) =>
+        Effect.sync(() => {
+          // 1. Narration: onProgress exists only on source:"model" routes. Call it with the
+          //    text the agent wrote before its first tool call.
+          turn.onProgress?.("Checking the repo");
+          return { text: "done" };
+        }),
+      // 2. Ack port: text only, never fails. Run a tiny side call (no tools, short max tokens)
+      //    and do not append it to the session history. Return a string, or
+      //    { text: "", fallbackReason: "empty" | "thinking_only" | "error" } when the call gave
+      //    nothing usable, so the router can report why the canned text was sent.
+      acknowledge: (turn) => Effect.succeed(`One moment, looking at: ${turn.text.slice(0, 40)}`),
+      close: Effect.void,
+    }),
+};
+```

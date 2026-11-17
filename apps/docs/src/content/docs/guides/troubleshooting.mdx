@@ -5,6 +5,11 @@ description: >-
   production.
 sidebar:
   order: 23
+topic: help
+related:
+  - guides/faq
+  - concepts/decision-tracing
+  - reference/cli/diagnose
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
@@ -290,7 +295,7 @@ The CSV was in the prompt and the model still computed the wrong number: a model
 | `harness:false-veto` | Your grader passed the output but the harness marked the run failed. Check the deliverable contract and verifier. |
 | `harness:tool-surface` | A required tool was hidden from the model. Check `allowedTools` and tool-surface pruning. |
 
-`unattributed` lists in `missing` the signal that would settle it. Without a grader verdict in the trace, attribution never claims an answer was wrong. Run `rax diagnose attribute --all <dir>` over a directory of traces to see which failures your harness configuration can fix. The full reason list is in the [CLI reference](/reference/cli/#rax-diagnose).
+`unattributed` lists in `missing` the signal that would settle it. Without a grader verdict in the trace, attribution never claims an answer was wrong. Run `rax diagnose attribute --all <dir>` over a directory of traces to see which failures your harness configuration can fix. The full reason list is in the [CLI reference](/reference/cli/diagnose/).
 
 ## Diagnostics by Layer
 

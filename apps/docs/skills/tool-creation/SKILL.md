@@ -98,7 +98,7 @@ const myTool: ToolDefinition = {
 
 Enable selectively with `allowedTools`:
 
-**Standard tools** (enabled by `.withTools()` with no args):
+**Standard tools** (visible to the model with `.withTools({ builtins: true })`, or `builtins: [...]` for a subset; a bare `.withTools()` registers them but hides them):
 `web-search`, `http-get`, `file-read`, `file-write`, `code-execute`
 
 **Meta-tools** (registered by kernel, available in `.withTools()`):

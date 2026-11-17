@@ -6,6 +6,11 @@ description: >-
 sidebar:
   label: Local Agents with Ollama
   order: 30
+topic: local-models
+related:
+  - guides/local-models
+  - features/local-model-performance
+  - features/llm-providers
 ---
 
 This is a complete, runnable guide to **building a local AI agent in TypeScript with Ollama**. You will install Ollama, pull a small open model, wire it into Reactive Agents, give it tools, tune it for small-model reliability, and — the payoff — swap to a frontier API by changing a single line. The same agent code runs on a 4B model on your laptop and on Claude or GPT in production.
@@ -31,7 +36,7 @@ The historical downside was quality: small open models were unreliable at tool c
   ollama pull qwen3:4b
   ```
   For tool-heavy work, `qwen3:14b` is the most reliable local model at its size (see [Local Models](/guides/local-models/) for the full comparison).
-- **[Bun](https://bun.sh)** ≥ 1.0 (or Node ≥ 20). This guide uses Bun.
+- **[Bun](https://bun.sh)** ≥ 1.1.0 (or Node ≥ 22.5). This guide uses Bun.
 
 Confirm Ollama is serving on its default port (`http://localhost:11434`):
 

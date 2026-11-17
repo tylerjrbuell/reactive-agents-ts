@@ -5,6 +5,10 @@ description: >-
   agent.session().
 sidebar:
   order: 9
+topic: agents
+related:
+  - reference/builder-api/agent-sessions-and-control
+  - features/debrief-chat
 ---
 
 `agent.chat()` enables multi-turn conversation with capability-based routing — an agent with tools runs the ReAct loop for each message (and can answer directly in one iteration), an agent without tools goes straight to the LLM. `agent.session()` wraps a conversation with persistent context. When **`.withTools()`** is on, the **`recall`** meta-tool (Conductor's Suite) is the supported way for the model to read/write working notes across turns — not legacy note builtins.

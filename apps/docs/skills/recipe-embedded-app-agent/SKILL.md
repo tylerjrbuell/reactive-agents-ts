@@ -184,7 +184,7 @@ export async function POST(req: Request) {
   const { prompt } = await req.json();
   const agent = await ReactiveAgents.create()
     .withProvider("anthropic")
-    .withTools()
+    .withTools({ builtins: true })
     .build();
   const result = await agent.run(prompt);
   return Response.json({ output: result.output, cost: result.cost });

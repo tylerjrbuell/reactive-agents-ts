@@ -1,0 +1,215 @@
+---
+title: v0.13 and v0.14 release notes
+description: >-
+  Release notes for v0.14.0 (the log and the process), v0.13.5 (Groq, xAI, Agentic UI Kit) and v0.13.0 (receipts and first-touch), June to July 2026.
+sidebar:
+  order: 3
+topic: releases
+related:
+  - guides/whats-new
+  - reference/stability
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import metrics from '../../../../data/metrics.json';
+
+Archived release notes. The latest release and what is on `dev` are on [What's New](/guides/whats-new/).
+
+## v0.14.0 — The Log & The Process (July 2026)
+
+<Aside type="note" title="The truthful release">
+v0.14 is the release where the declared control surface and the *enforced* one converge. An internal audit found several builder methods that a caller could set but that the harness silently ignored; rather than ship a promise we don't keep, this release **removes the ones that lied** and **wires the ones worth keeping** — every fix landed with a mutation test that goes red if the wiring is cut. It is a **breaking** release: see [Migrating below](#migrating-to-v014).
+</Aside>
+
+The Arc 1 theme: **runs are inspectable processes, and every run leaves a signed record.**
+
+### The trust receipt — `result.receipt`
+
+Every run now returns a `receipt`: a claim→evidence record with a verdict, confidence, the verification method, the declared `deliverables[]`, and an Ed25519 signature over the provenance. It is a *provenance record, not a truth certificate* — it tells you what the run claimed, what evidence backs each claim, and whether the harness's own checks passed, so downstream code can gate on trust instead of parsing prose.
+
+```typescript
+const result = await agent.run("Summarize the Q3 report and cite figures.");
+result.receipt?.verdict;        // "verified" | "partial" | "abstained" | ...
+result.receipt?.deliverables;   // typed contract deliverables + their evidence
+result.abstained;               // honest decline — now correct on every strategy
+```
+
+### The process model — inspect, fork, attach
+
+A streamed run is a live handle. `runStream()` returns pause / resume / stop / terminate / status **and `inspect()`** for live kernel-state introspection (current iteration, steps, messages, pending tool calls, last thought).
+
+```typescript
+const run = agent.runStream("Research and draft the memo.");
+const state = run.inspect();     // { iteration, steps, pendingToolCalls, ... }
+run.pause(); /* ... */ run.resume();
+```
+
+Durable runs can be **forked** from any checkpoint for counterfactual restarts, and driven from the terminal:
+
+```typescript
+const alt = await agent.fork(runId, { at: 4, model: "claude-sonnet-5" }); // requires .withDurableRuns()
+```
+
+```bash
+rax ps                 # list durable runs
+rax attach <runId>     # tail a live run
+rax diagnose replay    # re-execute a recorded run with zero tokens (exact replay)
+```
+
+### Enforcement caught up to the docs
+
+The audit's central finding was a *façade* — surfaces that looked wired but weren't. v0.14 closes them:
+
+- **Tool policy is enforced, not suggested.** `allowedTools` / `forbiddenTools` and the `.withContract()` deny-list are now enforced at the shared tool-execution choke point on **every** strategy — including planned steps (plan-execute, blueprint), hallucinated tool names, and `code-action`'s sandbox, where generated code previously called tools with no policy check at all. A blocked call is recorded and never runs.
+- **Honest abstention everywhere.** `terminatedBy` and the abstention descriptor now cross the boundary on all eight strategies (was reactive-only), so `result.abstained` and the receipt are truthful regardless of which strategy ran.
+- **Sub-agents are part of the run.** Spawned sub-agents (`.withAgentTool()` / the `spawn-agent` tool) now fork into the parent's fiber tree: `agent.terminate()` interrupts in-flight children (no orphaned workers), a failed child returns a truthful `success: false`, child events reach the parent's EventBus tagged `parentAgentId`, traces correlate via `rootRunId` + depth, and the recursion cap is live (sub-delegation only below an explicit `maxRecursionDepth`).
+- **The requirement lifecycle is real.** Ledger `requirement` entries are minted when the contract compiles and transition at the verification gate, so run assessment sees declared / satisfied / blocked requirements — per entity, so touching `orders.json` no longer satisfies a requirement about `rates.json`.
+- **Phase stream events fire.** `PhaseStarted` / `PhaseCompleted` chunks (stream density `"full"`) are now actually emitted; they were advertised with zero writers before.
+
+### Reliability under provider turbulence
+
+- **Transient provider failures retry.** 5xx, `529` overload (Anthropic/Groq), and network faults (`ECONNRESET`, socket hang-up, `fetch failed`) are now classified as retryable and go through the exponential-backoff schedule; only `429` retried before. Permanent `4xx` still fail fast.
+- **A critique/reflect blip no longer discards the run.** If the self-critique pass (reflexion, plan-execute reflect) hits an LLM error, the run degrades gracefully — it keeps the answer it already produced and records an honest `[CRITIQUE skipped]` marker — instead of throwing away completed work.
+
+### APIs that now do what they say
+
+- **`.withVerificationStep()`** shapes the answer: a `REVISE` verdict re-runs once with the feedback (it previously burned a call and wrote to a field nothing read).
+- **`.withCalibration("skip")`** is honored (it was silently rewritten to `"auto"` under reasoning).
+- **Model calibration composes** with the tier adapter instead of replacing it — calibrating a model can refine behavior but can never remove a capability (it used to drop four live adapter hooks).
+- **The meta-tool suite is opt-in.** The default toolbox is task-facing; the planning/reflection meta-tools (and their web-egress default) load only when you ask for them.
+
+### Migrating to v0.14
+
+This release removes builder methods and options that had no reader, and unpublishes two packages that only a no-op reached. Migrate:
+
+| Removed | Replacement |
+| --- | --- |
+| `.withTerminalTools(cfg?)` | `.withTools({ terminal: cfg ?? true })` |
+| `.withTelemetry(cfg?)` | `.withObservability({ telemetry: cfg ?? true })` |
+| `.withoutTracing()` | `.withObservability({ tracing: false })` |
+| `.withProgressCheckpoint()` | `.withDurableRuns()` |
+| `.withCacheTimeout(ms)` | *removed — was a no-op* |
+| `.withIdentity()` / `.withInteraction()` / `.withOrchestration()` | *use `@reactive-agents/identity` / `/interaction` directly; orchestration has no replacement* |
+| `.withFallbacks({ models, errorThreshold })` | `.withFallbacks({ providers })` — ordered provider cascade |
+| `.withReactiveIntelligence({ autonomy, constraints })` | *options removed (were no-op safety switches)* |
+| bare `.withSkills()` / `packages` / `overrides` keys | `.withSkills({ paths: [...] })` (throws otherwise) |
+| `@reactive-agents/orchestration`, `@reactive-agents/scenarios` | *unpublished* |
+| `task-complete` tool | `final-answer` (the sole terminator) |
+| `rag-search` tool | the unified `find` tool (`.withDocuments()` still ingests) |
+
+The provider adapter contract is now **4 hooks** (`continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`) plus `parseToolCalls`; the three that never fired (`taskFraming`, `toolGuidance`, `systemPromptPatch`) are removed. The full list is in the [CHANGELOG](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md).
+
+---
+
+## v0.13.5 — Groq, xAI & the Agentic UI Kit (July 2026)
+
+<Aside type="tip" title="Released on npm">
+Shipped July 2026 — all {metrics.packagesTotal} packages are published. Install or upgrade with `bunx create-reactive-agent` or pin `reactive-agents@0.13.5`.
+</Aside>
+
+Two new providers, a headless UI-controller package that unifies the React, Svelte, and Vue bindings, a durable request-for-input rail in Cortex, and honest error surfacing.
+
+### Groq and xAI providers
+
+Both wire through a shared `makeOpenAICompatProvider` factory, so they inherit the full OpenAI-compatible stack — streaming, native function calling, structured output — with no bespoke adapter.
+
+```typescript
+ReactiveAgents.create().withProvider("groq").withModel("llama-3.3-70b-versatile").build();
+ReactiveAgents.create().withProvider("xai").withModel("grok-4").build();
+```
+
+Both are live-verified end to end (plain completion + native tool-call round-trips). Logprobs and embeddings are capability-gated (neither provider exposes them); structured output on Groq is model-dependent (`json_schema` strict on `gpt-oss` and some models, `json_object` elsewhere), with the parse-retry loop covering the gap. The selectable-provider count is now **{metrics.providers}**. See [LLM Providers](/features/llm-providers/).
+
+### Agentic UI Kit — `@reactive-agents/ui-core`
+
+A new framework-agnostic headless package holds the shared controllers behind every UI binding: a progressive UI-tree reconciler, a task-inbox fetch controller, and interaction + approval POST controllers. React, Svelte, and Vue now delegate to these instead of each re-implementing the wire protocol.
+
+- **React** — rewired onto `ui-core` with a core `useRun` hook and the full v1 family surface: Interact (`AgentPrompt`/`ChoiceCard`), Inbox (`useTaskInbox`/`TaskInbox`), Observe (`useRunCost`/`useRunSteps`, `CostMeter`/`StepTimeline`), Render (`AgentSurface` registry + UI-tree schema), plus `useResumableRun` and an `AgentDevtools` overlay with `testing`/`styles` subpaths.
+- **Svelte** and **Vue** — rewired onto the same controllers (`createRun`, `createInteractions`, `createResumableRun`, run cost/steps), with `requestInit`/header pass-through restored on structured streams.
+
+### Cortex `request_user_input` rail
+
+Cortex gains a durable request-for-input rail — runner methods plus a `.withUserInteraction(...)` surface, an interaction-watcher, and a real pause → register → respond → resume flow. The Cortex UI renders a live Interact panel and streaming structured previews.
+
+### Honest run errors
+
+Reasoning failures now propagate the real error string to `result.error` end to end. Previously the kernel captured the message in `state.error`, but `normalizeReasoningResult` dropped it during its whitelist rebuild, so callers only saw a generic `"Reasoning failed"`. A bad model id now surfaces `"…404 The model … does not exist"` on `result.error`.
+
+---
+
+## v0.13.0 — Receipts & first-touch (July 2026)
+
+<Aside type="tip" title="Released on npm">
+Shipped July 2026 — all 33 public packages are published. Install or upgrade with `bunx create-reactive-agent` or pin `reactive-agents@0.13.0`.
+</Aside>
+
+The v0.13 line is about **receipts and first-touch**: native reasoning on every provider, cost-aware routing, an overhauled first-ten-minutes developer experience, honest abstention as a first-class terminal, a new efficiency-first Blueprint strategy, two token-waste guards, and a broad correctness sweep across providers and the kernel.
+
+### Native thinking on every provider
+
+`.withThinking(...)` turns on native reasoning across Anthropic, OpenAI, Gemini, and local models from one builder switch — pass `true` or `{ effort, budgetTokens }`. It is **off by default everywhere**: `undefined` never auto-enables (this also flips Gemini's former thinks-by-default behavior off). Budgets are bounded and reserved _on top_ of the answer budget, so hidden reasoning can never starve the visible answer.
+
+```typescript
+ReactiveAgents.create()
+  .withProvider("anthropic").withModel("claude-sonnet-4-6")
+  .withThinking({ effort: "medium" })
+  .build();
+```
+
+See [Builder API](/reference/builder-api/).
+
+### Cost-aware model routing
+
+`.withModelRouting()` (opt-in, off by default) routes each run to the **cheapest _capable_ model** of your configured provider, picked by task complexity — on both the inline and reasoning paths. It stays within the provider's tiers (a `cheap → mid → expensive` ladder mapped to that provider's models, so it's provider-agnostic), is **capability-gated** (never drops below a model whose context window fits the prompt), and is **advisory** (degrades to your configured model on any error — it can only make a run cheaper, never break it). See [Cost-Aware Model Routing](/features/cost-tracking/#cost-aware-model-routing).
+
+```typescript
+ReactiveAgents.create()
+  .withProvider("anthropic").withModel("claude-sonnet-4-6")
+  .withModelRouting()   // simple tasks drop to the haiku tier
+  .build();
+```
+
+### First-touch developer experience
+
+The first ten minutes are re-paved:
+
+- **Typed tool authoring** — `defineTool({ name, description, input, handler })` takes a Standard Schema input (Zod, Effect, Valibot) and gives the plain-async handler **inferred argument types** — no `Record<string, unknown>` or `as never` casts. It also validates its own options and rejects wrong field names (e.g. `parameters`/`execute`) with a message naming the correct field instead of crashing. See [Tools](/guides/tools/).
+- **`ReactiveAgents.quick()`** — a two-line agent that resolves provider, model, and iteration defaults from the environment: `const agent = await ReactiveAgents.quick(); await agent.run("…")`. See [Quickstart](/guides/quickstart/).
+- **Fail-fast `build()`** — `.withStrictValidation()` catches a missing API key or unknown model at build time with a typed error and fix instructions, instead of a raw 401/404 on the first call.
+- **Per-LLM-call timeout** — `.withLlmTimeout(ms)` configures the local/Ollama per-call timeout (previously hardcoded at 120s); timeout errors name the model, elapsed time, and a cold-load/GPU-contention hint, and the in-flight local request is aborted server-side. See [Local Models](/guides/local-models/).
+
+### Honest abstention — a run that cannot succeed says so
+
+When a task is structurally impossible (a required tool is unavailable, or synthesis is repeatedly ungrounded), the run terminates with `terminatedBy: "abstained"` and a typed `result.abstention { reason, missing }` instead of fabricating an answer. This is harness-forced, not model-initiated. See [Structured Output](/guides/structured-output/).
+
+### Blueprint strategy — plan once, execute in parallel
+
+For static, decomposable tasks the whole plan is knowable up front. **Blueprint** (the 7th reasoning strategy) generates a plan, verifies it, executes independent steps in parallel **with no per-step LLM call**, then solves. Adaptive routing sends static-decomposable tasks to Blueprint automatically. See [Choosing Strategies](/guides/choosing-strategies/).
+
+### Two token-waste guards
+
+- **`.withStallPolicy(...)`** — when the model ignores required-tool nudges and makes no progress across consecutive iterations, the harness escalates and delivers accumulated artifacts (or fails) instead of looping to the full nudge cap — bounding wasted tokens on stuck runs while leaving progressing runs untouched.
+- **`.withFabricationGuard(mode)`** — an always-on verifier check (default `"block"`) that rejects empirical performance numbers (benchmark timings, %-speedups) absent from the tool-observation corpus. High-precision — only perf measurements are policed. Soften to `"warn"`/`"off"` or via the `RA_FABRICATION_GUARD` env var.
+
+See [Builder API](/reference/builder-api/).
+
+### Evaluation gate CLI
+
+`rax eval gate` runs the project lift rule over a benchmark report (`default-on | opt-in | reject`); `--ledger` appends a weakness→hypothesis→verdict chain and `rax eval ledger` reads it. Benchmark runs capture a per-run `RunDiagnosis` (honesty label, failure modes) when a trace dir is set. See [Eval](/features/eval/).
+
+### Correctness sweep
+
+Highlights from a broad provider + kernel fix pass:
+
+- **gpt-5.x non-thinking calls work** — the OpenAI adapter now picks the token-limit field by capability (`max_completion_tokens` for gpt-5.x/o-series, `max_tokens` for the gpt-4o family), fixing a 400 on default gpt-5.x calls.
+- **Thinking request shapes verified live** — Anthropic uses the adaptive shape on current-generation models and legacy `budget_tokens` on older ones; `temperature` is dropped when thinking is on (both Anthropic and OpenAI reject it otherwise).
+- **`withRetryPolicy` retries the real path** — it previously wrapped only `complete()`; the reactive kernel runs through `stream()` / `completeStructured()`, so transient failures were never retried. All three call sites are now retried.
+- **`withMinIterations(N)` enforces the full floor** — previously a lone `if` forced a single extra pass regardless of `N`; it now loops to the configured minimum.
+- **Cross-provider tool-call arguments are never dropped** — string-encoded JSON args (some Ollama models) are now coerced instead of silently reset to `{}`.
+- **Readable provider errors** — a model typo produces one clean error line with a suggestion instead of duplicated raw JSON and an internal stack.
+- **Configured-off phases stay off** — `runGuardedPhase` now honors `phase.skip`, so disabled phases don't run via direct callers.
+- **Context & structured-output correctness** — string-safe JSON repair, mid-thread user instructions kept over budget, boundary-matched + nested field provenance, duplicate-tool-name warnings, and a gated (O(N²)-removed) streaming reparse.
+
+The `withVerificationStep({ mode: "loop" })` option (documented but unimplemented) was removed; `"reflect"` is the only supported mode.
+
+See the [full 0.13.0 changelog](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) for the complete list.

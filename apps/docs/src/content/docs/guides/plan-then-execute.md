@@ -6,6 +6,11 @@ description: >-
   a typed object backed by the agent's checklist, and it works with no UI.
 sidebar:
   order: 28
+topic: reasoning
+since: "0.19"
+related:
+  - guides/choosing-strategies
+  - guides/reasoning
 ---
 
 > **Not the `plan-execute-reflect` strategy.** This page covers `agent.plan()` and `agent.execute(plan)`, an experimental way to review a plan before it runs. The `plan-execute-reflect` reasoning strategy is a different feature: see [Choosing a Strategy](/guides/choosing-strategies/).
@@ -22,7 +27,7 @@ import { ReactiveAgents } from "reactive-agents"
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools()
+  .withTools({ builtins: true })
   .build()
 
 const plan = await agent.plan("Audit the repo for unused exports and write a summary")

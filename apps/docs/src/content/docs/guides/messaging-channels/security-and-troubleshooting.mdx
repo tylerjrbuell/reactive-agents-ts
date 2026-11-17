@@ -1,0 +1,92 @@
+---
+title: Channel security and troubleshooting
+description: >-
+  Hardening a messaging channel (containers, secrets, sender access control, guardrails, kill switch) and fixing registration, session and delivery problems.
+sidebar:
+  order: 6
+topic: channels
+related:
+  - guides/messaging-channels
+  - guides/security-hardening
+  - features/gateway
+---
+
+Security practices for messaging channels and fixes for common failures. Part of [Messaging channels](/guides/messaging-channels/).
+
+## Security Best Practices
+
+### Container Hardening (Signal)
+
+The Signal Docker example uses strict isolation:
+
+| Flag | Purpose |
+|------|---------|
+| `--cap-drop ALL` | Remove all Linux capabilities |
+| `--no-new-privileges` | Prevent privilege escalation |
+| `--memory 512m` | Hard memory limit (Signal needs 512m for JVM) |
+| `--pids-limit 30` | Prevent fork bombs |
+| `--user 1000:1000` | Run as non-root |
+| `--read-only` | Immutable root filesystem |
+
+Telegram via `uvx` runs as your host user; apply process isolation separately if you need a sandbox.
+
+### Secret Management
+
+- **Never pass secrets as MCP tool arguments** — they'd appear in agent context
+- **For Telegram with `uvx`:** pass credentials via `.withMCP({ env: { ... } })` or your process manager — avoid putting secrets in MCP `args`
+- **Use Docker volumes** for Signal auth keys (`./signal-data/`)
+- **Add `.env.telegram` and `signal-data/` to `.gitignore`**
+
+### Sender Access Control
+
+Inbound messages are untrusted. With `accessControl` configured, the gateway decides who may trigger the agent, keyed by **`platform:userId`** so a Signal number and a Telegram id can never collide:
+
+```typescript
+const accessControl = {
+  accessPolicy: "allowlist" as const, // default; unknown senders are skipped
+  allowedSenders: ["signal:+15551234567", "telegram:123456789"],
+};
+// pass as the `accessControl` field of .withGateway({ ... })
+```
+
+- **Channels reject unknown senders by default.** A gateway with no `accessControl` denies every inbound sender (Telegram, Signal, webhook-channel); the deny reason names the sender (`telegram:123`) and the gateway logs a warning at start. Set `allowedSenders`, or accept anyone on purpose with `accessControl: { accessPolicy: "open" }`. A block with no `accessPolicy` still defaults to `allowlist`, so an empty `allowedSenders` also denies everyone.
+- Entries **must** carry the platform prefix (`signal:+1555...`). A bare `+1555...` no longer matches a platform-tagged sender; update existing allow/block lists when you upgrade.
+- A channel event with an **empty sender** is always denied (fail closed), even under `"open"`.
+- `unknownSenderAction: "escalate"` surfaces the denied sender instead of silently skipping.
+- `replyToUnknown` (a fixed text sent to an allowlist-denied sender) is only delivered by the `@reactive-agents/channels` `ChannelService` (`deps.replyToUnknown`), which the native adapters use. The legacy MCP-push path has no deterministic send step, so it does **not** send that reply.
+
+### Guardrails
+
+Always enable `.withGuardrails()` for messaging agents. Inbound messages from external users can contain prompt injection attempts. Guardrails check for injection, PII, and toxicity **before** the LLM processes the message.
+
+### Kill Switch
+
+Always enable `.withKillSwitch()` for autonomous messaging agents. This provides:
+- `agent.stop(reason)` — graceful shutdown at next phase boundary
+- `agent.terminate(reason)` — immediate halt
+
+## Troubleshooting
+
+### Signal registration fails
+- Ensure Docker is running
+- Signal requires a CAPTCHA — see the registration script
+- The Docker image requires glibc (not Alpine) for signal-cli's native library
+
+### Telegram session expired
+- Re-run `./docker/telegram-session.sh`
+- Update `.env.telegram` with new session string
+
+### `TELEGRAM_CHAT_ID environment variable required`
+- You are running the **wrong** PyPI `telegram-mcp` (hosted relay), not chigwell’s Telethon server.
+- Use `uvx --from git+https://github.com/chigwell/telegram-mcp.git@<tag> telegram-mcp` (or upstream’s documented install), not bare `uvx telegram-mcp` from PyPI.
+
+### `BotMethodInvalidError` / `GetDialogsRequest` / “cannot be executed as a bot”
+- chigwell/telegram-mcp is a **user-account** Telethon client (full dialogs, send as you). It does **not** work with a **@BotFather bot** session string.
+- Regenerate `TELEGRAM_SESSION_STRING` using `./docker/telegram-session.sh` and sign in with your **personal Telegram account** (SMS / Telegram OTP), not a bot token.
+
+### Agent not responding to messages
+- Check heartbeat interval (default: 15s)
+- Verify daily token budget isn't exhausted
+- Check `ProactiveActionSuppressed` events for policy blocks
+- Ensure the Signal container (if used) is running: `docker ps`
+- For Telegram, confirm `uvx` resolves chigwell’s package and that `TELEGRAM_*` env vars are set for the MCP subprocess

@@ -6,6 +6,12 @@ description: >-
   dimensions via @reactive-agents/eval.
 sidebar:
   order: 15
+topic: quality
+updated: "0.19"
+related:
+  - features/judgment-layer
+  - cookbook/testing-agents
+  - features/benchmarks
 ---
 
 The `@reactive-agents/eval` package provides a structured framework for measuring agent quality. It scores agent responses across multiple dimensions, persists results to SQLite, and detects regressions between agent versions. Judge calls route through `@reactive-agents/judge-server`, a private internal HTTP server (not published to npm) — you configure the judge model via `EvalService`, not by talking to that server directly.

@@ -6,6 +6,12 @@ description: >-
   durably from any process with gates that survive process death.
 sidebar:
   order: 27
+topic: durable-runs
+updated: "0.19"
+related:
+  - guides/durable-execution
+  - features/process-model
+  - guides/security-hardening
 ---
 
 Some actions need a human's sign-off before they run — a shell command, a file

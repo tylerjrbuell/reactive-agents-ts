@@ -5,6 +5,11 @@ description: >-
   registration via StrategyRegistry.
 sidebar:
   order: 5
+topic: concepts
+related:
+  - concepts/architecture
+  - concepts/agent-lifecycle
+  - features/harness-control
 ---
 
 The Composable Kernel Architecture separates *how a reasoning step works* (the kernel) from *when and how many times it runs* (the strategy). This makes reasoning algorithms swappable, testable in isolation, and extensible without touching core framework code.

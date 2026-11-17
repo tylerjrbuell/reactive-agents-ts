@@ -5,6 +5,11 @@ description: >-
   event-driven coordination, dynamic sub-agent spawning, and A2A delegation.
 sidebar:
   order: 4
+topic: agents
+related:
+  - guides/sub-agents
+  - features/a2a-protocol
+  - reference/builder-api/integrations
 ---
 
 Reactive Agents supports multiple agents working together. This page shows patterns for common multi-agent architectures — specializing agents by role, coordinating them through the EventBus, spawning sub-agents at runtime, and delegating across process boundaries with the A2A protocol.

@@ -160,7 +160,7 @@ The tool definition carries `commandPolicy` (`allowedCommands`, `notEnabledComma
 | Method | Key params | Notes |
 |--------|-----------|-------|
 | `.withTools({ tools, allowedTools })` | include `"shell-execute"` | Register custom handler for config |
-| `.withTools()` | no args | Enables shell-execute but with `requiresApproval: true` |
+| `.withTools()` | no args | Does NOT enable shell-execute; it is available only with `terminal: true` (approval required) |
 | `.withTools({ terminal: true, workspace })` | absolute or relative dir (must exist) | Shell cwd and file-tool root = workspace; `run(task, { workspace })` overrides per run |
 
 ## Pitfalls

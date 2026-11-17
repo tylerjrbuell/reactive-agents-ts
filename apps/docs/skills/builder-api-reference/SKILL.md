@@ -179,4 +179,4 @@ const agent = await ReactiveAgents.create()
 - `.withTools({ terminal: true })` enables shell execution sandboxed via Docker or local allowlist — use with caution in production
 - `.withMemory("enhanced")` without `dbPath` uses a default path — set it explicitly in multi-agent environments to avoid collisions
 - `.withGateway()` requires calling `.start()` on the built agent; `.build()` alone does not start the loop
-- `enableStrategySwitching: true` without `maxStrategySwitches` defaults to 2 switches max
+- `enableStrategySwitching: true` without `maxStrategySwitches` defaults to 1 switch max

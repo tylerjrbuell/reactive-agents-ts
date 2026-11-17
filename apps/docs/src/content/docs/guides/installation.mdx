@@ -3,12 +3,17 @@ title: Installation
 description: How to install and configure Reactive Agents.
 sidebar:
   order: 2
+topic: getting-started
+related:
+  - guides/quickstart
+  - guides/choosing-a-stack
+  - guides/local-models
 ---
 
 import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
 
 <Aside type="tip" title="Bun recommended — Node.js 22.5+ also supported">
-Bun ≥1.0.0 gives optimal performance (native SQLite, subprocess, HTTP). **Node.js 22.5+** is fully supported via `@reactive-agents/runtime-shim` — use `npm install reactive-agents` or `npx tsx` if you prefer the Node.js ecosystem. Install Bun: `curl -fsSL https://bun.sh/install | bash`.
+Bun ≥1.1.0 gives optimal performance (native SQLite, subprocess, HTTP). **Node.js 22.5+** is fully supported via `@reactive-agents/runtime-shim` — use `npm install reactive-agents` or `npx tsx` if you prefer the Node.js ecosystem. Install Bun: `curl -fsSL https://bun.sh/install | bash`.
 </Aside>
 
 ## From zero to running agent
@@ -245,12 +250,9 @@ TAVILY_API_KEY=tvly-...             # Enables built-in web search tool (any one 
 EMBEDDING_PROVIDER=openai           # "openai" | "ollama"
 EMBEDDING_MODEL=text-embedding-3-small
 
-# Tuning (optional)
-LLM_DEFAULT_MODEL=claude-sonnet-4-6
-LLM_DEFAULT_TEMPERATURE=0.7
-LLM_MAX_RETRIES=3
-LLM_TIMEOUT_MS=30000
 ```
+
+Tuning variables (`LLM_DEFAULT_MODEL`, `LLM_DEFAULT_TEMPERATURE`, `LLM_MAX_RETRIES`, `LLM_TIMEOUT_MS`) and every default are listed in [Configuration: environment variables](/reference/configuration/#environment-variables).
 
 ## TypeScript Configuration
 

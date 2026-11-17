@@ -1,11 +1,16 @@
 ---
 title: Configuration Reference
-description: 'Complete reference of all builder methods, defaults, and environment variables'
+description: 'Lookup of builder options, their defaults and environment variables, plus the declarative createAgent config'
+topic: config-reference
+related:
+  - reference/builder-api
+  - reference/cheatsheet
+  - cookbook/builder-stacks
 ---
 
 # Configuration Reference
 
-Every aspect of Reactive Agents is configurable through the builder API. This page documents all available options, their defaults, and how they affect agent behavior. For ready-made chains, see [Common builder stacks](/cookbook/builder-stacks/).
+This page is the **lookup for defaults**: what each option is called, what it defaults to and which environment variables apply, plus the declarative `createAgent(config)` form. For method signatures, option types and per-method behavior, see the [ReactiveAgentBuilder reference](/reference/builder-api/). For ready-made chains, see [Common builder stacks](/cookbook/builder-stacks/).
 
 ## Declarative config: `createAgent(config)`
 
@@ -60,6 +65,9 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `documents` | `array` | no |  |
 | `durableRuns.checkpointEvery` | `number` | no |  |
 | `durableRuns.dir` | `string` | no |  |
+| `durableRuns.retention.compactCheckpoints` | `boolean` | no |  |
+| `durableRuns.retention.keepCompleted` | `number` | no |  |
+| `durableRuns.retention.maxAgeDays` | `number` | no |  |
 | `dynamicSubAgents.maxIterations` | `number` | no |  |
 | `dynamicSubAgents.maxRecursionDepth` | `number` | no |  |
 | `execution.llmTimeoutMs` | `number` | no |  |
@@ -340,7 +348,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `.withTools(options?)` | disabled | `{ tools?` (custom defs + **Effect** handlers), `resultCompression?`, `allowedTools?`, `adaptive?` } |
 | `.withDocuments(docs, { store? })` | none | `DocumentSpec[]` ingested at build into the agent's own store; retrieval via the unified `find` meta-tool. `store` (from `createDocumentStore()`) shares one store across agents |
 | `.withRequiredTools(config)` | none | `{ tools?, adaptive?, maxRetries? }` |
-| `.withMCP(config \| catalogName)` | none | Hand-written config: `{ name, transport, command?, args?, endpoint?, headers?, env?, cwd?, auth?, tokenStore? }`. `auth` runs OAuth 2.1 for `streamable-http`/`sse` servers (startup error on `stdio`); default `tokenStore` is a permissioned file store under `~/.reactive-agents/mcp-auth`. `interactive` inside `auth` defaults to `false`. See [Builder API](/reference/builder-api/) transport table and the [Tools guide's OAuth section](/guides/tools/#oauth-21-auth). One-time interactive login: `rax mcp login <name>`. **Or** a catalog `string`/`string[]`/`(name, { registry?, env?, volumes?, requireApproval? })` — resolved via a pluggable `MCPRegistry` at `.build()` time (Docker Hub's `mcp/*` namespace is the first registry; `requireApproval` defaults `true`, gated by a local digest-keyed approval store). See the [Tools guide's Docker Hub MCP catalog section](/guides/tools/#registry-resolved-servers-docker-hub-with-more-registries-planned). |
+| `.withMCP(config \| catalogName)` | none | Hand-written config: `{ name, transport, command?, args?, endpoint?, headers?, env?, cwd?, auth?, tokenStore? }`. `auth` runs OAuth 2.1 for `streamable-http`/`sse` servers (startup error on `stdio`); default `tokenStore` is a permissioned file store under `~/.reactive-agents/mcp-auth`. `interactive` inside `auth` defaults to `false`. See [Builder API](/reference/builder-api/) transport table and the [Tools guide's OAuth section](/guides/tools/mcp-tools/#oauth-21-auth). One-time interactive login: `rax mcp login <name>`. **Or** a catalog `string`/`string[]`/`(name, { registry?, env?, volumes?, requireApproval? })` — resolved via a pluggable `MCPRegistry` at `.build()` time (Docker Hub's `mcp/*` namespace is the first registry; `requireApproval` defaults `true`, gated by a local digest-keyed approval store). See the [Tools guide's Docker Hub MCP catalog section](/guides/tools/mcp-tools/#registry-resolved-servers-docker-hub-with-more-registries-planned). |
 | `.withMetaTools(config?)` | on with tools | Conductor suite; pass `false` to disable defaults |
 
 ### LLM resilience & pricing
@@ -393,7 +401,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | Method | Default | Description |
 |--------|---------|-------------|
 | `.withSelfImprovement()` | disabled | Cross-task strategy outcome learning |
-| `.withReactiveIntelligence(false)` | on | Pass `false` to disable entropy/controller/telemetry stack |
+| `.withReactiveIntelligence(false)` | on | Pass `false` to disable the entropy/controller stack. Anonymous run telemetry is off by default; opt in with `{ telemetry: true }` or `REACTIVE_AGENTS_TELEMETRY=1` (see [Telemetry](/telemetry/)) |
 | `.withReactiveIntelligence(options?)` | defaults | Entropy, controller, hooks — see [Reactive Intelligence](/features/reactive-intelligence/) |
 | `.withHealthCheck()` | disabled | Exposes `agent.health()` |
 
@@ -440,6 +448,10 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `EMBEDDING_PROVIDER` | Enhanced memory tier | `"openai"` | Embedding provider |
 | `EMBEDDING_MODEL` | Enhanced memory tier | `"text-embedding-3-small"` | Embedding model name |
 | `LLM_DEFAULT_MODEL` | All providers | Provider default | Override default model |
+| `LLM_DEFAULT_TEMPERATURE` | All providers | `0.7` | Default sampling temperature |
+| `LLM_MAX_RETRIES` | All providers | `3` | LLM request retry attempts |
+| `LLM_TIMEOUT_MS` | All providers | `30000` | LLM request timeout in milliseconds |
+| `REACTIVE_AGENTS_RUNS_DIR` | Durable runs | `~/.reactive-agents` | Base directory for durable run stores (`<base>/<agentId>/runs.db`); replaces `~/.reactive-agents`. An explicit `.withDurableRuns({ dir })` still wins. Use it to isolate stores in tests and hosts |
 
 ## Hardcoded Defaults
 

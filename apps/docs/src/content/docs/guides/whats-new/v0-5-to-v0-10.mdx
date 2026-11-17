@@ -1,0 +1,114 @@
+---
+title: v0.5 to v0.10 release notes
+description: >-
+  Archived release notes for v0.10.x down to v0.5.0: local models, MCP hardening, native function calling, the Reactive Intelligence layer and the A2A protocol.
+sidebar:
+  order: 5
+topic: releases
+related:
+  - guides/whats-new
+  - reference/stability
+---
+
+import metrics from '../../../../data/metrics.json';
+
+Archived release notes. The latest release and what is on `dev` are on [What's New](/guides/whats-new/).
+
+## v0.10.x — Local models run the full loop (May 2026)
+
+The biggest release since v0.9 — `0.10.0` through `0.10.6`, shipped over four weeks. The headline: **local Ollama models now run the same tool-calling agent loop as paid frontier APIs**, thanks to a closed-loop healing pipeline and adaptive tool-calling. Read the full [v0.10.0 changelog](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) for engineering detail.
+
+### What you gain
+
+#### Local models that actually work
+
+- **Healing Pipeline** — 4-stage closed-loop recovery on every tool call (tool-name fuzzy match → parameter-name aliasing → path resolution → type coercion). Deterministic repairs instead of an LLM reprompt. Ships on by default — see [LLM Providers](/features/llm-providers/) and [Resilience](/features/resilience/).
+- **Adaptive tool calling** — Each model gets fingerprinted on first run; native FC capable models route through the JSON path, others through a 3-tier text-parse cascade (XML → JSON → pseudo-code) with capability-gated opt-in act-mode (`REACTIVE_AGENTS_TEXT_PARSE=act`; default-off). The framework learns each model's dialect after 5 runs and stops asking it to do things it can't.
+- **Calibration system** — Per-model observations (parallel-call capability, classifier reliability, tool-call dialect) adapt empirically. Auto-enabled when `.withReasoning()` is on.
+- **Cross-tier verification** — the same agent loop exercised across frontier models (`claude-sonnet-4-6`, `claude-haiku-4-5`, `gpt-4o-mini`, `gemini-2.5-pro`) and local models (`gemma4:e4b` at 4 GB, `cogito:14b` at 9 GB) during development.
+
+#### Long agent runs stay cheap
+
+- **Three-stage context curation** — Tool results get compressed and stashed → curator renders only what's needed → optional reactive trim. Long runs stay inside the context window with negligible per-step overhead. See [Intelligent Context Synthesis](/features/intelligent-context-synthesis/).
+- **Reactive Intelligence dispatcher** — 6 corrective interventions fire automatically when an agent shows entropy signs (early-stop, temperature adjust, strategy switch, context compress, tool inject, skill activate). Suppression gates prevent runaway dispatch. See [Reactive Intelligence](/features/reactive-intelligence/).
+
+#### Production safety hardened
+
+- **`@reactive-agents/diagnose`** — Standalone npm package detects system-prompt, API-key, credential, and internal-instruction leaks in any output. Deterministic regex-based detection with false-positive filters — no extra LLM call.
+- **Single-owner termination** — All 12 phases route stop decisions through one arbitrator. CI lint guard prevents future bypass paths. Agents always finish cleanly, never get stuck.
+
+#### Better runtime + tooling
+
+- **`@reactive-agents/cortex`** — Cortex Studio is now installable from npm: `bunx @reactive-agents/cortex` or `rax cortex` launches the live agent canvas, debrief UI, and visual builder. See [Cortex](/features/cortex/).
+- **Gateway chat mode** — Per-sender SQLite session history, episodic context injection, daily compaction. Set `channels.mode: 'chat'` for conversational webhooks; keep `'task'` for one-shot triggers. See [Gateway](/features/gateway/) and [Messaging Channels](/guides/messaging-channels/).
+- **Composable kernel architecture** — Internal `kernel/` reorganized by capability (`act/` · `attend/` · `comprehend/` · `decide/` · `reason/` · `reflect/` · `sense/` · `verify/` + `loop/` + `state/`). Doesn't change the public API; makes contributing to the framework easier. See [Composable Kernel](/concepts/composable-kernel/).
+- **{metrics.tests.toLocaleString()} tests** across {metrics.testFiles} files — verified by `bun test` on every PR.
+
+### Patch releases
+
+| Version | Highlights |
+|---------|-----------|
+| `0.10.0` | Phase 1 release — healing pipeline, calibration, diagnose, cortex npm |
+| `0.10.1–0.10.2` | Documentation polish, version drift fixes across 28 packages |
+| `0.10.3` | Coordinated package alignment, npm publish drift CI guard |
+| `0.10.4` | Coordinated changeset release (single source of truth) |
+| `0.10.5–0.10.6` | Static-asset serving in Cortex server, README + cookbook freshness |
+
+### Breaking changes
+
+None. All existing `ReactiveAgents.create().with*()` builder chains keep working unchanged. New calibration fields are forward-compatible — existing `~/.reactive-agents/observations/` files decode cleanly.
+
+---
+
+## v0.9.x — MCP Production Hardening + Pre-v0.10 Polish
+
+- **MCP client rewritten on `@modelcontextprotocol/sdk`** — smart auto-detection between stdio and HTTP-only containers, two-phase docker lifecycle — see [Tools](/guides/tools/)
+- **Composable kernel architecture (initial)** — `react-kernel.ts` reduced from ~1,700 to ~197 lines via `makeKernel({ phases })` factory — see [Composable Kernel](/concepts/composable-kernel/)
+- **Permanently-failed required tools fix** — tools that always error no longer cause loop-until-maxIterations — see [Harness Control Flow](/features/harness-control-flow/)
+- **Cortex MCP CRUD + JSON import** — import Cursor/Claude-style MCP configs directly into Cortex — see [Cortex](/features/cortex/)
+- **StatusRenderer TUI** — live terminal display with collapsible think panel (`t` key toggles), `mode: 'stream' | 'status'`
+- **3 new terminal tools** — `git-cli`, `gh-cli`, and `gws-cli` are now built-in
+- **Web-search provider Serper.dev** — third web-search backend alongside Tavily
+- **`crypto-price` built-in tool** — CoinGecko price lookup, no API key required
+- **Observability on by default** — minimal verbosity is now enabled out of the box
+- **Sub-agent `maxIterations` fully honored** — the silent cap of 3 has been removed
+
+---
+
+## v0.9.0 — MCP Production Hardening
+
+- **MCP client rewritten on `@modelcontextprotocol/sdk`** — smart auto-detection between stdio and HTTP-only containers, two-phase docker lifecycle — see [Tools](/guides/tools/)
+- **Composable kernel architecture** — `react-kernel.ts` reduced from ~1,700 to ~197 lines via `makeKernel({ phases })` factory; phases are now individually swappable — see [Composable Kernel](/concepts/composable-kernel)
+- **Permanently-failed required tools fix** — tools that always error no longer cause loop-until-maxIterations; framework detects and stops early — see [Harness Control Flow](/features/harness-control-flow)
+- **Cortex MCP CRUD + JSON import** — import Cursor/Claude-style MCP configs directly into Cortex — see [Cortex](/features/cortex)
+- **`effect` moved to `peerDependencies`** — add `effect` explicitly if you import from it directly — see [Installation](/guides/installation)
+
+---
+
+## v0.8.5 — Native FC Hardening + Web Framework Adapters
+
+- **React, Vue, and Svelte adapters** — `useAgentStream()` and `useAgent()` hooks/composables/stores for all three frameworks, consuming SSE endpoints — see [Web Integration](/guides/web-integration) and [Streaming](/features/streaming)
+- **Provider adapter hook system** — 4 kernel prompt hooks (`continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`) plus `parseToolCalls` (normalizes malformed native tool calls in every provider `complete()`/`stream()`); calibration composes additively with the tier adapter rather than replacing it — see [LLM Providers](/features/llm-providers/)
+- **Dynamic stopping (3-layer)** — novelty signal (Jaccard overlap), budget exhaustion phase transition, and per-tool call cap (`maxCallsPerTool`) — see [Harness Control Flow](/features/harness-control-flow)
+- **Full prompt observability** — `logModelIO: true` logs the complete FC conversation thread with no truncation — see [Observability](/features/observability)
+- **Actionable failure messages** — loop detection, required-tools, and stall detection all emit `Fix:` suggestions with specific builder options — see [Troubleshooting](/guides/troubleshooting)
+
+---
+
+## v0.8.0 — Reactive Intelligence Layer
+
+- **Entropy-aware intelligence pipeline** — 5-source composite entropy sensor, trajectory classifier, and reactive controller that takes corrective action automatically — see [Reactive Intelligence](/features/reactive-intelligence)
+- **Thompson Sampling strategy learner** — SQLite-backed bandit learns which reasoning strategy wins per task category across runs — see [Reactive Intelligence](/features/reactive-intelligence)
+- **Builder hardening** — `withStrictValidation()`, `withTimeout()`, `withRetryPolicy()`, `withFallbacks()`, `withHealthCheck()`, and `withErrorHandler()` — see [Builder API](/reference/builder-api)
+- **Automatic strategy switching** — when entropy analysis detects a stuck loop, the agent switches reasoning strategy without user intervention — see [Choosing Strategies](/guides/choosing-strategies)
+- **Observability dashboard upgrade** — chalk/boxen terminal UI with entropy grade (A–F), sparklines, and entropy-informed alerts — see [Observability](/features/observability)
+
+---
+
+## v0.5.0 — A2A Protocol + Observability Foundation
+
+- **Full A2A (Agent-to-Agent) protocol** — JSON-RPC 2.0 server, streaming SSE, client, discovery, and capability matching based on Google's A2A spec — see [A2A Protocol](/features/a2a-protocol)
+- **Agent-as-tool pattern** — wrap any local or remote A2A agent as a callable tool with `createAgentTool()` / `createRemoteAgentTool()` — see [Sub-agents](/guides/sub-agents)
+- **Live observability streaming** — `withObservability({ live: true, verbosity })` writes structured phase logs to stdout as each step fires — see [Observability](/features/observability)
+- **`rax serve`** — expose any agent as an A2A-compliant HTTP server with a single CLI command — see [CLI](/reference/cli)
+- **EventBus reasoning events** — all strategies publish `ReasoningStepCompleted`; subscribe with `agent.on()` for custom monitoring — see [Observability](/features/observability)

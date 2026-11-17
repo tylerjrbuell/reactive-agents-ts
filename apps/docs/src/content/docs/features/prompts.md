@@ -5,6 +5,10 @@ description: >-
   composition.
 sidebar:
   order: 12
+topic: context
+related:
+  - guides/context-engineering
+  - reference/builder-api/core-and-model
 ---
 
 The prompts layer provides a template engine for managing, versioning, and composing prompts. Define reusable templates with typed variables, track versions, and compose complex prompts from smaller pieces.

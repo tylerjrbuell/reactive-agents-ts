@@ -6,6 +6,10 @@ description: >-
   with Jaeger, Grafana Tempo, Langfuse, and any OTLP backend.
 sidebar:
   order: 21
+topic: observability
+related:
+  - features/observability
+  - concepts/decision-tracing
 ---
 
 import { Aside, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
@@ -19,6 +23,8 @@ npm install @reactive-agents/observe
 # or
 bun add @reactive-agents/observe
 ```
+
+`@reactive-agents/observe` uses the OpenTelemetry 2.x SDK line (`@opentelemetry/sdk-trace-base` and `sdk-trace-node` `^2.6`). If your app pins its own OpenTelemetry SDK packages, keep them on 2.x so one copy is shared.
 
 ## Zero-config auto-export
 

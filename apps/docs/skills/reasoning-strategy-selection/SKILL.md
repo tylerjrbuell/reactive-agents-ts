@@ -10,6 +10,8 @@ metadata:
 
 # Reasoning Strategy Selection
 
+Docs: https://docs.reactiveagents.dev/guides/choosing-strategies/ (the canonical page for what each strategy does and how to pick one).
+
 ## Agent objective
 
 Produce a `.withReasoning()` call with the correct strategy, iteration budget, and tool gates for the task — with output quality pipeline active when format matters.
@@ -30,7 +32,7 @@ const agent = await ReactiveAgents.create()
     defaultStrategy: "adaptive",
     maxIterations: 12,
   })
-  .withTools()
+  .withTools({ builtins: true })
   .withVerification()          // runtime output quality check
   .withCostTracking({ perRequest: 0.30 })
   .build();
@@ -46,6 +48,8 @@ const agent = await ReactiveAgents.create()
 | Ambiguous problems needing exploration | `"tree-of-thought"` | Branch multiple paths, prune weak ones |
 | Quality-critical iterative refinement | `"reflexion"` | Self-critique loop improves output |
 | Unknown complexity | `"adaptive"` | Best safe default |
+
+Local models (Ollama): keep `"reactive"`, the default on every tier. Heavier strategies cost more tokens and time locally and showed no measured quality gain in our tests; use them on frontier models or after measuring on your own tasks.
 
 Plan-then-execute with a reviewable plan is separate from the `"plan-execute-reflect"` strategy: `const plan = await agent.plan(task)` returns a typed, editable `Plan` with no tools run, and `agent.execute(plan)` runs it with per-step status in `result.plan`. It works with any strategy.
 
@@ -69,7 +73,7 @@ Plan-then-execute with a reviewable plan is separate from the `"plan-execute-ref
 Forces the agent to call specific tools before the final answer is accepted:
 
 ```ts
-.withTools()
+.withTools({ builtins: true })
 .withRequiredTools({
   tools: ["web-search"],   // must be called at least once
   maxRetries: 3,           // retry if model skips
@@ -115,6 +119,6 @@ agent.on("StrategySwitched", (e) => console.log("Switched to:", e.newStrategy));
 - `"plan-execute"` throws `StrategyNotFoundError` — the correct name is `"plan-execute-reflect"`
 - `"reflexion"` is expensive — each iteration runs a self-critique LLM call; cap `maxIterations` at 6–8
 - `"tree-of-thought"` spawns multiple branches — multiply expected token cost by branch factor
-- `enableStrategySwitching: true` without `maxStrategySwitches` defaults to 2 — agent may not switch enough for complex tasks
+- `enableStrategySwitching: true` without `maxStrategySwitches` defaults to 1 — agent may not switch enough for complex tasks
 - `withRequiredTools` without `withTools` does nothing — tools must be enabled first
 - High `maxIterations` without `.withCostTracking()` can produce runaway costs on stuck agents

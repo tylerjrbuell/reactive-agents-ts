@@ -3,6 +3,12 @@ title: Production Deployment Checklist
 description: Everything to enable before deploying Reactive Agents to production
 sidebar:
   order: 21
+topic: safety
+related:
+  - guides/security-hardening
+  - guides/deploying-agents
+  - guides/durable-execution
+  - features/resilience
 ---
 
 import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
@@ -68,31 +74,9 @@ const agent = await ReactiveAgents.create()
 
 ### Tool Approval Gates (human-in-the-loop)
 
-Gate high-risk tool calls behind human approval. Name the tools in
-`.withApprovalPolicy()` (with `.withDurableRuns()`): a gated call **pauses** the
-run, persists `awaiting-approval`, and `run()` returns `status:
-"awaiting-approval"` + `pendingApproval`. A human approves or denies — from this
-process or any other — and the run resumes from its checkpoint.
+Gate high-risk tool calls behind human approval: name the tools in `.withApprovalPolicy()`, and add `.withDurableRuns()` when the pause must survive process death. The setup, the approve and deny calls and the live-versus-durable modes are on one page, [Durable Human-in-the-Loop](/guides/durable-hitl/).
 
-{/* docs-skip-typecheck */}
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withTools({ tools: [databaseWriteTool] })
-  .withDurableRuns()
-  .withApprovalPolicy({ tools: ["database-write"], mode: "detach" })
-  .build();
-
-const result = await agent.run("purge stale records");
-if (result.status === "awaiting-approval") {
-  await agent.approveRun(result.pendingApproval.runId); // or denyRun(runId, reason)
-}
-// Or, in one call: agent.run(task, { onApproval: ({ toolName }) => confirm(toolName) })
-```
-
-See [Durable Human-in-the-Loop](/guides/durable-hitl/) for the full flow.
-
-> The per-tool `requiresApproval: true` flag is metadata only — it does not by
+> The per-tool `requiresApproval: true` flag is metadata only. It does not by
 > itself pause a run. Use `.withApprovalPolicy({ tools: [...] })` to gate.
 
 ### Tool Allowlist
@@ -239,61 +223,9 @@ const agent = await ReactiveAgents.create()
 
 ## Cost Control
 
-### Budget Enforcement
-
-Set per-request and daily token budgets. The agent performs a pre-flight budget check before each run and a per-iteration check during the ReAct loop. A `BudgetExceededError` is thrown on overspend.
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-import { createAgent } from "reactive-agents";
-
-const agent = await createAgent({
-  name: "prod-agent",
-  provider: "anthropic",
-  costTracking: {
-    perRequest: 0.10,  // USD
-    daily: 5.00,       // USD
-  },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withCostTracking({
-    perRequest: 0.10,  // USD
-    daily: 5.00,       // USD
-  })
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-```typescript
-import { BudgetExceededError } from "@reactive-agents/runtime";
-
-try {
-  const result = await agent.run("Analyze the Q4 sales report");
-} catch (e) {
-  if (e instanceof BudgetExceededError) {
-    console.error("Budget exceeded:", e.message);
-    // escalate, alert, or degrade gracefully
-  }
-}
-```
-
-### Complexity Routing
-
-With complexity routing enabled, simple queries are automatically routed to a cheaper model tier, reserving your primary model for tasks that need it. `.withModelRouting()` is builder-only — routing has no declarative `AgentConfig` key:
-
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withModelRouting()
-  .build();
-```
+- Set a per-request and daily budget with `.withCostTracking({ perRequest, daily })` and handle `BudgetExceededError`. Setup and error handling: [Budget Enforcement](/features/cost-tracking/#budget-enforcement).
+- Route simple queries to a cheaper tier with `.withModelRouting()` (builder-only). See [Cost-Aware Model Routing](/features/cost-tracking/#cost-aware-model-routing).
+- Size the budget from expected volume: [Cost Optimization](/guides/cost-optimization/).
 
 ---
 
@@ -420,90 +352,12 @@ try {
 
 ## Memory
 
-### Enhanced Memory
+Memory is configured once, in the [Memory guide](/guides/memory/). For production, decide:
 
-The `"enhanced"` memory tier activates semantic search, episodic recall, and procedural memory in addition to working memory. It requires embedding support — set `EMBEDDING_PROVIDER` and `EMBEDDING_MODEL` in your environment.
-
-```bash
-EMBEDDING_PROVIDER=openai
-EMBEDDING_MODEL=text-embedding-3-small
-```
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-import { createAgent } from "reactive-agents";
-
-const agent = await createAgent({
-  name: "prod-agent",
-  provider: "anthropic",
-  memory: { tier: "enhanced" },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withMemory({ tier: "enhanced" })
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-### Memory Consolidation
-
-Background consolidation merges and compacts memory entries over time, preventing unbounded growth and keeping retrieval quality high.
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-import { createAgent } from "reactive-agents";
-
-const agent = await createAgent({
-  name: "prod-agent",
-  provider: "anthropic",
-  memory: { tier: "enhanced", memoryConsolidation: true },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withMemory({ tier: "enhanced" })
-  .withMemoryConsolidation()
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-### Experience Learning
-
-Cross-run experience learning stores task outcomes in the episodic layer and surfaces relevant prior experiences at the start of each new run, improving performance on repeated task types.
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-import { createAgent } from "reactive-agents";
-
-const agent = await createAgent({
-  name: "prod-agent",
-  provider: "anthropic",
-  memory: { tier: "enhanced", experienceLearning: true },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withMemory({ tier: "enhanced" })
-  .withExperienceLearning()
-  .build();
-```
-  </TabItem>
-</Tabs>
+- **Tier.** `{ tier: "enhanced" }` adds vector search and needs `EMBEDDING_PROVIDER` and `EMBEDDING_MODEL`. See [Retrieval Tiers](/guides/memory/#retrieval-tiers).
+- **Growth.** `.withMemoryConsolidation()` (declarative `memory.memoryConsolidation`) decays and prunes episodic entries in the background. See [MemoryConsolidatorService](/guides/memory/#memoryconsolidatorservice--background-memory-intelligence).
+- **Cross-run learning.** `.withExperienceLearning()` (declarative `memory.experienceLearning`) injects prior tool and error tips at bootstrap. See [ExperienceStore](/guides/memory/#experiencestore--cross-agent-learning).
+- **Storage.** Set `dbPath` or rely on the default location. See [Storage Location](/guides/memory/#storage-location).
 
 ---
 

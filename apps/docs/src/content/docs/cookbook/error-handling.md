@@ -5,6 +5,10 @@ description: >-
   policies, and execution timeouts.
 sidebar:
   order: 10
+topic: safety
+related:
+  - features/resilience
+  - guides/production-checklist
 ---
 
 Reactive Agents uses typed errors throughout so you can distinguish transient failures from configuration problems and handle each appropriately.

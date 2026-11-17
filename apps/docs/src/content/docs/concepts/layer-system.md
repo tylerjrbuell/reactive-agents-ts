@@ -1,6 +1,10 @@
 ---
 title: Layer System
 description: How the composable layer system works.
+topic: concepts
+related:
+  - concepts/architecture
+  - concepts/effect-ts
 ---
 
 The layer system is the core architectural pattern of Reactive Agents. Every capability is an independent Effect Layer that can be enabled or disabled.

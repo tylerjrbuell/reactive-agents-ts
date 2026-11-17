@@ -5,6 +5,12 @@ description: >-
   Agents
 sidebar:
   order: 24
+topic: cost
+related:
+  - features/cost-tracking
+  - guides/local-models
+  - guides/production-checklist
+  - features/observability
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
@@ -195,44 +201,12 @@ const agent = await ReactiveAgents.create()
 
 ## Cost Control Features
 
-Use these builder methods to enforce budgets and reduce token usage:
+The mechanisms (budget enforcement, cost-aware model routing, semantic cache, prompt compression, analytics) are documented once, in [Cost Tracking](/features/cost-tracking/). This section lists the levers and what each is worth.
 
-### Budget Enforcement
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-const agent = await createAgent({
-  name: "budgeted-agent",
-  provider: "anthropic",
-  costTracking: {
-    perRequest: 0.10,    // Max $0.10 per single run
-    daily: 5.0,          // Max $5.00 per day
-    monthly: 100.0       // Max $100.00 per month
-  },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withName("budgeted-agent")
-  .withProvider("anthropic")
-  .withCostTracking({
-    perRequest: 0.10,    // Max $0.10 per single run
-    daily: 5.0,          // Max $5.00 per day
-    monthly: 100.0       // Max $100.00 per month
-  })
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-```typescript
-const result = await agent.run("Complex task");
-// Throws BudgetExceededError if any threshold is hit
-console.log(result.metadata.cost);  // Estimated USD cost
-```
+- **Budgets:** `.withCostTracking({ perRequest, daily, monthly })` throws `BudgetExceededError` on overspend. See [Budget Enforcement](/features/cost-tracking/#budget-enforcement).
+- **Model routing:** `.withModelRouting({ minTier, tierModels })` sends simple tasks to a cheaper tier. See [Cost-Aware Model Routing](/features/cost-tracking/#cost-aware-model-routing).
+- **Provider fallback:** `.withFallbacks({ providers })`. See [Builder API](/reference/builder-api/).
+- **Tool result compression:** `.withTools({ resultCompression: { budget } })` keeps large API responses from bloating context. See [Tool Result Compression](/guides/tools/execution-and-results/#tool-result-compression).
 
 ### Iteration Limits
 
@@ -244,52 +218,6 @@ console.log(result.metadata.cost);  // Estimated USD cost
 ```
 
 **Impact:** Single biggest lever on cost. Each iteration adds 1,000–2,000 tokens.
-
-### Tool Result Compression
-
-{/* docs-skip-typecheck */}
-```typescript
-.withTools({
-  resultCompression: {
-    budget: 2000       // Chars before large tool outputs are compressed
-  }
-})
-```
-
-**Impact:** Reduces context bloat from API responses (e.g., 5,000-char web search result → 2,000 char summary).
-
-### Complexity-Based Model Routing
-
-To route simple tasks to cheaper models and reserve the expensive model for hard ones, `@reactive-agents/cost` ships the routing primitives: `analyzeComplexity(task)` scores a task and `routeToModel(task)` returns a `ModelCostConfig` for the recommended tier. Both are Effect-based and also surface on `CostService.routeToModel(task, context)`, so you can decide the model **before** building the agent. Pick the model from the routing result, then pass it to `.withModel(...)`.
-
-For an automatic, builder-level path — fall back to an alternate provider on any error — use [`.withFallbacks({ providers })`](/reference/builder-api/), which is wired into the agent loop directly. It is an immediate, ordered provider cascade: the primary provider is tried first, and on any error the runtime falls back to the next provider in the `providers` array, in order (no error-count threshold, no budget-pressure logic).
-
-### Cost-Aware Model Routing (New in v0.13)
-
-`.withModelRouting()` wires complexity-based routing directly into the agent builder. The router scores each task at runtime and picks the cheapest capable tier at or above `minTier`. Use `tierModels` to pin the specific model used for each tier. `.withModelRouting()` has no declarative `AgentConfig` key, so this example is builder-only.
-
-```typescript
-import { ReactiveAgents } from 'reactive-agents'
-
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning()
-  .withModelRouting({
-    // Never route below the haiku tier; pin the model for each tier.
-    minTier: "haiku",
-    tierModels: {
-      haiku: "claude-haiku-4-5",
-      sonnet: "claude-sonnet-4-6",
-    },
-  })
-  .build()
-```
-
-Simple tasks run against the cheapest capable tier (`claude-haiku-4-5`); anything harder escalates toward `claude-sonnet-4-6`. Set `minTier` to establish a floor the router will never route below.
-
-**When to use:** Mixed workloads where most requests are simple (Q&A, classification, summarization) but occasional tasks need frontier reasoning. Typical savings: 40–70% vs. routing everything to the frontier model.
-
-**Note:** `.withModelRouting()` is provider-agnostic and capability-gated — if the selected model does not support a required capability (e.g., tool use), the router automatically escalates to the next eligible tier.
 
 ### Context Profile Tiers
 

@@ -5,6 +5,12 @@ description: >-
   Ollama, LiteLLM, and custom providers.
 sidebar:
   order: 4
+topic: providers
+updated: "0.18"
+related:
+  - guides/local-models
+  - reference/configuration
+  - features/resilience
 ---
 
 Reactive Agents supports multiple LLM providers through a unified `LLMService` interface. Switch providers with a single line — your agent code stays the same.
@@ -154,12 +160,9 @@ TAVILY_API_KEY=tvly-...                  # web search — Tavily (primary)
 BRAVE_SEARCH_API_KEY=BSA...              # web search — Brave (fallback)
 SERPER_API_KEY=...                       # web search — Serper/Google (fallback)
 KEENABLE_API_KEY=...                     # web search — Keenable (fallback)
-
-LLM_DEFAULT_MODEL=claude-sonnet-4-6
-LLM_DEFAULT_TEMPERATURE=0.7
-LLM_MAX_RETRIES=3
-LLM_TIMEOUT_MS=30000
 ```
+
+Tuning variables (`LLM_DEFAULT_MODEL`, `LLM_DEFAULT_TEMPERATURE`, `LLM_MAX_RETRIES`, `LLM_TIMEOUT_MS`) are listed with their defaults in [Configuration: environment variables](/reference/configuration/#environment-variables).
 
 ## Web Search Providers
 

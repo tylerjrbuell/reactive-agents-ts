@@ -1,0 +1,53 @@
+---
+title: Signal (native)
+description: >-
+  Connect an agent to Signal with SignalChannelAdapter over signal-cli JSON-RPC: delivery receipts, typed errors and reconnect.
+sidebar:
+  order: 2
+topic: channels
+related:
+  - guides/messaging-channels
+  - guides/channel-adapters
+  - guides/messaging-channels/legacy-mcp-setups
+---
+
+Run an agent on Signal with the native `SignalChannelAdapter`. Part of [Messaging channels](/guides/messaging-channels/).
+
+`SignalChannelAdapter` talks to `signal-cli` in `jsonRpc` mode directly. There is no MCP container and no model-in-the-loop send step: `ChannelService` sends the reply itself and gets a receipt.
+
+The Docker MCP setup (`docker/signal-mcp`, see [Legacy MCP setups](/guides/messaging-channels/legacy-mcp-setups/)) is the **legacy** path. It keeps working, but it has no receipts, detects echoes by message text, and replies through a single "last sender", so concurrent senders can be cross-wired. New setups should use the native adapter.
+
+**Setup**
+
+1. Register or link the account with `signal-cli` (`signal-cli -a +15551234567 register` then `verify`, or `link` for a secondary device). The registration helper `./docker/signal-mcp/register.sh` still works for this.
+2. Pick a transport:
+   - **Daemon socket (recommended on shared hosts).** Run `signal-cli -a +15551234567 daemon --tcp 127.0.0.1:7583` yourself, then use `makeSignalSocketTransport({ port: 7583 })` (or `{ path }` for a unix socket).
+   - **Spawned process.** `makeSignalProcessTransport({ account })` starts `signal-cli -a <account> --output=json jsonRpc`. The account number is a command-line argument, so it shows up in the host's process list.
+3. Create the adapter and register it with the channel service:
+
+```typescript
+import { Redacted } from "effect";
+import { SignalChannelAdapter, makeSignalSocketTransport } from "@reactive-agents/channels";
+
+const signal = new SignalChannelAdapter({
+  account: Redacted.make(process.env.SIGNAL_PHONE_NUMBER ?? ""),
+  transport: makeSignalSocketTransport({ port: 7583 }),
+});
+```
+
+**Behaviour**
+
+| Concern | What the adapter does |
+|---------|-----------------------|
+| Identity | `signal:<number>` (or `signal:<uuid>` when the sender hides their number). Allowlist entries use that key, e.g. `signal:+15551234567`. |
+| Conversations | A DM's `channelId` is the sender; a group's is the group id, and the individual sender is kept on every message. Signal has no threads (`capabilities.threads` is `false`). |
+| `mentionsSelf` | `true` in a DM, in a group only when the bot is mentioned or its message is quoted. |
+| Echoes | Messages sent from this account are echoes only when their timestamp is one this adapter sent. Matching is by message id, never by text. |
+| Replies | `replyTo` is `<author>:<timestamp>`, the same format as an inbound envelope `id`. |
+| Receipts | `send` returns the message timestamp as `messageId`. Delivery and read confirmations arrive on `adapter.deliveryUpdates`. |
+| Errors | Typed `ChannelError`: `not_found` (unregistered recipient, unknown group), `auth` (account not registered or authorization failed), `rate_limited` with `retryAfterMs`, `forbidden` (untrusted identity), `too_large`, `network`. |
+| Reconnect | Connection loss reconnects with exponential backoff. An `auth` failure stops retrying and sets the state to `failed`. |
+| Attachments | Inbound bytes arrive as `Uint8Array` (fetched with `getAttachment`; failures are counted in `metadata.attachmentsUnavailable`). Outbound accepts bytes only, not urls. |
+| Secrets | The account is `Redacted`, kept out of errors, receipts, state and logs. Spawn and socket failures keep only `{ name, code }` as the `cause` (Node's own error carries the account in `spawnargs`). The last 50 `signal-cli` stderr lines are held in a ring with the account masked and readable through `transport.diagnostics()`. A line over 1 MiB, or more than 1000 unread notifications, fails the connection with a `too_large` error instead of growing memory. |
+
+The adapter's `deliveryUpdates` stream is not yet published as an EventBus event by `ChannelService`; read it directly if you need receipts today.

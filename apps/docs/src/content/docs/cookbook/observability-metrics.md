@@ -5,6 +5,10 @@ description: >-
   and wire up external monitoring.
 sidebar:
   order: 11
+topic: observability
+related:
+  - features/observability
+  - concepts/decision-tracing
 ---
 
 `withObservability()` turns on distributed tracing, the metrics dashboard, and structured logging with a single builder call. This recipe shows how to use each piece.
@@ -61,9 +65,11 @@ No manual instrumentation is needed. `MetricsCollector` auto-subscribes to the E
 | Level | Dashboard | Real-time output |
 |-------|-----------|-----------------|
 | `"minimal"` | Not shown | Start + complete lines only |
-| `"normal"` *(default)* | Full dashboard | Phase transitions + tool names |
+| `"normal"` *(default on a TTY)* | Full dashboard | Phase transitions + tool names |
 | `"verbose"` | Full dashboard | + reasoning steps + LLM call summary |
 | `"debug"` | Full dashboard | + full prompt/tool I/O (no truncation) |
+
+With no `verbosity` set and stdout not a terminal (a server, a pipe, CI, an embedding app), only warnings and errors print. Set `verbosity` explicitly to get the dashboard there. See [Observability](/features/observability/).
 
 ## Live Phase Streaming
 

@@ -5,6 +5,11 @@ description: >-
   decomposition, NLI, and hallucination detection.
 sidebar:
   order: 5
+topic: quality
+related:
+  - guides/guardrails
+  - features/judgment-layer
+  - reference/builder-api/safety-and-quality
 ---
 
 The verification layer fact-checks agent outputs before they reach the user.

@@ -1,0 +1,440 @@
+---
+title: MCP tools
+description: >-
+  Connect Model Context Protocol servers: stdio, streamable-http, SSE and WebSocket transports, Docker and registry servers, OAuth 2.1, multiple servers and read-only marking.
+sidebar:
+  order: 5
+topic: tools
+related:
+  - guides/tools
+  - cookbook/agent-tool-calling-mcp
+  - guides/security-hardening
+  - guides/tools/scoping-and-policy
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Connect to [Model Context Protocol](https://modelcontextprotocol.io/docs/getting-started/intro) servers for external tool discovery and execution. MCP tools are automatically prefixed with `{serverName}/` (e.g. `filesystem/read_file`) and injected into the agent's reasoning loop alongside built-in tools.
+
+## Transports
+
+Four transports are supported, covering every MCP server deployment pattern:
+
+| Transport | When to use |
+|-----------|-------------|
+| `"stdio"` | Local subprocess — npm packages, Docker, Python scripts, any executable |
+| `"streamable-http"` | Modern remote servers (MCP spec 2025-03-26) — Claude.ai, Cursor, Stripe, cloud providers |
+| `"sse"` | Legacy remote servers (MCP spec 2024-11-05) — older self-hosted setups |
+| `"websocket"` | Real-time bidirectional servers |
+
+## stdio Transport
+
+Launches a subprocess and communicates via JSON-RPC over stdin/stdout. The subprocess inherits the parent process environment by default.
+
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "fs-agent",
+  provider: "anthropic",
+  mcpServers: [{
+    name: "filesystem",
+    transport: "stdio",
+    command: "bunx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
+  }],
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+{/* docs-skip-typecheck */}
+```typescript
+await using agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMCP({
+    name: "filesystem",
+    transport: "stdio",
+    command: "bunx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
+  })
+  .withReasoning()
+  .build();
+```
+  </TabItem>
+</Tabs>
+
+### Per-server environment variables
+
+Use `env` to inject secrets without relying on the global environment. These are **merged on top** of the parent process environment — only specify what differs:
+
+{/* docs-skip-typecheck */}
+```typescript
+.withMCP({
+  name: "github",
+  transport: "stdio",
+  command: "bunx",
+  args: ["-y", "@modelcontextprotocol/server-github"],
+  env: {
+    GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GH_TOKEN ?? "",
+  },
+})
+```
+
+### Working directory
+
+Set `cwd` to control where the subprocess starts. Useful when the MCP server reads relative paths:
+
+{/* docs-skip-typecheck */}
+```typescript
+.withMCP({
+  name: "project-tools",
+  transport: "stdio",
+  command: "node",
+  args: ["./mcp-server.js"],
+  cwd: "/home/user/my-project",
+})
+```
+
+### Docker containers
+
+`command` accepts any executable — `docker` works directly. Docker networking flags go in `args`:
+
+{/* docs-skip-typecheck */}
+```typescript
+.withMCP({
+  name: "my-server",
+  transport: "stdio",
+  command: "docker",
+  args: [
+    "run", "-i", "--rm",
+    "--network", "my-bridge-network",
+    "-e", "INTERNAL_VAR=value",          // container-only env (not secret)
+    "ghcr.io/myorg/mcp-server:latest",
+  ],
+  env: { SECRET_KEY: process.env.SECRET_KEY ?? "" }, // passed to docker CLI, not container
+})
+```
+
+:::note[Docker env vs `env` field]
+`-e KEY=value` in `args` injects into the container. The `env` field sets env vars on the host `docker` process itself — useful if the Docker CLI needs credentials (e.g. `DOCKER_AUTH_CONFIG`), not the container.
+:::
+
+### Registry-resolved servers (Docker Hub, with more registries planned)
+
+Instead of hand-writing the `docker run` config above, pass a catalog name as a plain string. `.withMCP()` resolves it through a pluggable `MCPRegistry` — [Docker Hub's `mcp/*` catalog](https://hub.docker.com/mcp) (200+ verified server images) is the first registry, chosen via the `registry` option (defaults to `"docker-hub"`), so additional registries (an npm/npx-based catalog, a private org registry) can plug into the same `.withMCP()` call later without an API change. Image, transport, and args are resolved for you (the catalog-name string form is builder-only — declarative `mcpServers` accepts config objects, not catalog names):
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withReasoning()
+  .withMCP("filesystem")                                    // single catalog name
+  .withMCP("brave-search", { env: { BRAVE_API_KEY: process.env.BRAVE_API_KEY! } })
+  .build();
+```
+
+A `string[]` batches multiple catalog names with no per-entry options — `.withMCP(["filesystem", "brave-search"])`.
+
+A bare `string` and an `MCPServerConfig` object are unambiguous at the type level (a string can never be a config object), so both forms compose freely — chain `.withMCP()` as many times as you need. One call cannot mix a string with an object in the same array (`.withMCP(["name", { name: "x", command: "echo" }])` is rejected, both by the TypeScript overloads and at runtime) — call `.withMCP()` once per input shape instead.
+
+`options` on the single-name form:
+
+| Option | Type | Purpose |
+|---|---|---|
+| `registry` | `string` | Registry id to resolve against. Defaults to `"docker-hub"`. |
+| `env` | `Record<string, string>` | Env vars the resolver validates against the catalog entry's declared requirements — throws if a required one is missing. |
+| `volumes` | `{ host, container, readOnly? }[]` | Dynamic bind mounts for servers that need host filesystem access (e.g. `filesystem`, `git`). |
+| `requireApproval` | `boolean` | Whether the approval gate below applies to this call. Defaults to `true`. |
+
+:::caution[Approval gate — on by default]
+Docker Hub's `mcp/*` namespace is build-signed but **not vetted for safety** — anyone can publish an image under that prefix. The first resolve of an image you haven't approved throws `MCPApprovalRequiredError` (naming the image and its digest) instead of silently pulling and running it. Approve it once, out of band, with the plain-`Promise` helper (no `effect` import required):
+
+```typescript
+import { approveMcpImage } from "@reactive-agents/tools";
+
+await approveMcpImage("docker-hub", "mcp/brave-search", "mcp/brave-search");
+```
+
+For environments where you've already vetted the registry out-of-band (CI, an internal mirror), pass `requireApproval: false` per call instead — this is an explicit trust decision you make each time, not a stored setting, and it never auto-records an approval.
+
+The current MVP limitation: Docker Hub's repository API doesn't expose a real image digest, so the "digest" used for approval keying is the image name itself — this proves "you approved this name before," not "the image hasn't changed since." Real digest pinning (via the image manifest) is planned but not yet wired in.
+:::
+
+## Streamable HTTP Transport
+
+The standard transport for modern remote and cloud-hosted MCP servers (MCP spec 2025-03-26). Uses a single POST endpoint — the server responds with either a plain JSON object or an SSE stream depending on the operation.
+
+{/* docs-skip-typecheck */}
+```typescript
+.withMCP({
+  name: "stripe",
+  transport: "streamable-http",
+  endpoint: "https://mcp.stripe.com",
+  headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+})
+```
+
+Session management is handled automatically: the session ID returned in the `Mcp-Session-Id` response header is captured and forwarded on all subsequent requests. When the agent is disposed, an HTTP DELETE is sent to cleanly terminate the session.
+
+## Auth Headers (SSE and Streamable HTTP)
+
+Pass `headers` to send authentication credentials on every request. Use for Bearer tokens (OAuth, JWT, PAT), API keys, or any per-server auth:
+
+{/* docs-skip-typecheck */}
+```typescript
+// Bearer token (OAuth, PAT, JWT)
+headers: { Authorization: "Bearer ghp_..." }
+
+// API key header
+headers: { "x-api-key": process.env.MCP_API_KEY ?? "" }
+
+// Multiple headers
+headers: {
+  Authorization: "Bearer token",
+  "X-Tenant-Id": "my-org",
+}
+```
+
+:::note[OAuth flow]
+The `headers` field accepts a pre-obtained Bearer token you manage yourself. If you want RA to run the OAuth flow for you (discovery, token exchange, refresh, secure storage), use the `auth` config described below instead.
+:::
+
+## OAuth 2.1 (`auth`)
+
+For remote servers (`streamable-http`/`sse`) protected by OAuth 2.1, pass an `auth` config and RA drives
+the whole flow itself — discovery, token exchange, automatic refresh, and secure on-disk storage. The `auth`
+config has no declarative `mcpServers` equivalent yet, so these examples are builder-only. This
+is not available for `stdio` servers: a `stdio` config with `auth` set is a **startup error** — stdio
+servers get credentials from the environment via `env` (see [Per-server environment
+variables](#per-server-environment-variables) above), not OAuth.
+
+### Picking a grant
+
+| Situation | Grant |
+|-----------|-------|
+| Unattended / production agent (cron, server, CI) — no human present | `client_credentials` |
+| Same, but the server requires asymmetric client auth (JWT-signed) instead of a shared secret | `private_key_jwt` |
+| A human is running an agent that needs to act on **their own** account | `authorization_code` |
+
+`client_credentials` and `private_key_jwt` never open a browser or need a human — the agent authenticates
+as itself:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withMCP({
+    name: "billing",
+    transport: "streamable-http",
+    endpoint: "https://mcp.example.com/mcp",
+    auth: {
+      type: "client_credentials",
+      clientId: process.env.MCP_CLIENT_ID!,
+      clientSecret: process.env.MCP_CLIENT_SECRET!,
+    },
+  })
+  .build();
+```
+
+`authorization_code` delegates access to a specific user. It needs a one-time interactive login **before**
+the agent runs — see [`rax mcp login`](#rax-mcp-login--logout--status) below:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withMCP({
+    name: "my-calendar",
+    transport: "streamable-http",
+    endpoint: "https://mcp.example.com/mcp",
+    auth: { type: "authorization_code" }, // run `rax mcp login my-calendar` once first
+  })
+  .build();
+```
+
+`interactive` defaults to **`false`**. An unattended agent run must never unexpectedly try to open a
+browser or bind a local port — if credentials aren't already on disk (or in your `tokenStore`) when an
+`authorization_code` server connects, the connection fails closed with an error instead of popping a
+browser. Only `rax mcp login` (or explicitly passing `interactive: true`) triggers the interactive flow.
+
+### Secrets are plain config — you source them
+
+`clientSecret` and `privateKey` (for `private_key_jwt`) are ordinary config values. **RA does not do any
+environment-variable interpolation** — read them from `process.env` yourself, as in the example above.
+Never hardcode a secret in source.
+
+### Where tokens are stored
+
+By default, tokens are persisted to `~/.reactive-agents/mcp-auth/` — one file per resource, named by a
+hash of the canonical resource URL (never the raw URL or client id). The directory is created `chmod
+0700` and each credential file `chmod 0600`; both `get()` and `list()` refuse to read a file whose
+permissions have been loosened. You can supply your own store instead — e.g. an in-memory store for
+tests/CI so nothing touches disk:
+
+```typescript
+import { createMemoryTokenStore } from "@reactive-agents/tools"
+
+const agent = await ReactiveAgents.create()
+  .withMCP({
+    name: "billing",
+    transport: "streamable-http",
+    endpoint: "https://mcp.example.com/mcp",
+    auth: { type: "client_credentials", clientId: "...", clientSecret: process.env.MCP_CLIENT_SECRET! },
+    tokenStore: createMemoryTokenStore(),
+  })
+  .build();
+```
+
+### `rax mcp login` / `logout` / `status`
+
+Run once, ahead of time, for any server using `authorization_code`:
+
+```bash
+rax mcp login <name|--url <endpoint>> [--client-id <id>] [--client-secret <secret>] [--scope <scope>] [--redirect-port <port>] [--no-browser] [--timeout <ms>] [--mcp-config <path>]
+rax mcp logout <name|--url <endpoint>> [--mcp-config <path>]
+rax mcp status
+```
+
+- `login` — runs the interactive authorization flow and stores the resulting tokens. `<name>` resolves
+  against `.rax/mcp.json` (or `--mcp-config <path>`); use `--url <endpoint>` for an ad-hoc server with no
+  config file. `--no-browser` still prints the authorization URL (for headless/SSH sessions) but doesn't
+  try to launch one. `--client-id` skips dynamic client registration when the server needs a statically
+  registered client. `--client-secret` is for a confidential OAuth client — some authorization servers
+  (e.g. Google's "Web application" client type) issue a secret alongside the client ID rather than a
+  public/native client. `--redirect-port` pins the loopback callback to a fixed port instead of an
+  ephemeral one; required by any authorization server that validates `redirect_uri` by exact
+  pre-registered match rather than accepting any loopback port — register
+  `http://127.0.0.1:<port>/callback` as that server's authorized redirect URI.
+- `logout` — deletes the stored credentials for a server, attempting revocation first (best-effort; local
+  deletion always happens even if the revocation endpoint is unreachable).
+- `status` — lists every stored credential (resource, scope, expiry, whether a refresh token is present).
+  **Never prints access or refresh tokens.**
+
+### What RA does not do
+
+- Host an OAuth authorization server — RA is a **client** only; you point it at a server you (or a
+  third party) already run.
+- Anything beyond the MCP SDK's own dynamic client registration (RA doesn't add a second registration
+  layer on top).
+- OS keychain storage (macOS Keychain, libsecret, Windows Credential Manager) — the default store is a
+  permissioned file on disk. Bring your own `tokenStore` if you need keychain-backed storage.
+- RFC 8693 token exchange (delegating a user's token to a sub-agent with attenuated scope).
+- Tool-description pinning or re-consent when a server's tool list mutates mid-session.
+
+## Multiple MCP Servers
+
+Pass an array to connect multiple servers at build time:
+
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "multi-mcp-agent",
+  provider: "anthropic",
+  mcpServers: [
+    {
+      name: "filesystem",
+      transport: "stdio",
+      command: "bunx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
+    },
+    {
+      name: "github",
+      transport: "stdio",
+      command: "bunx",
+      args: ["-y", "@modelcontextprotocol/server-github"],
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GH_TOKEN ?? "" },
+    },
+    {
+      name: "stripe",
+      transport: "streamable-http",
+      endpoint: "https://mcp.stripe.com",
+      headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` },
+    },
+  ],
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+{/* docs-skip-typecheck */}
+```typescript
+await using agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withMCP([
+    {
+      name: "filesystem",
+      transport: "stdio",
+      command: "bunx",
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "."],
+    },
+    {
+      name: "github",
+      transport: "stdio",
+      command: "bunx",
+      args: ["-y", "@modelcontextprotocol/server-github"],
+      env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GH_TOKEN ?? "" },
+    },
+    {
+      name: "stripe",
+      transport: "streamable-http",
+      endpoint: "https://mcp.stripe.com",
+      headers: { Authorization: `Bearer ${process.env.STRIPE_KEY}` },
+    },
+  ])
+  .withReasoning()
+  .build();
+```
+  </TabItem>
+</Tabs>
+
+## Marking MCP tools read-only
+
+By default every MCP tool is unclassified, so it is dropped when an agent is narrowed to read-only tools. Two operator-set fields on the server config change that:
+
+- `readOnly: true` marks every tool on the server read-only; `readOnly: ["lookup", "search"]` marks only the named tools (names without the `server/` prefix).
+- `trustAnnotations: true` honors the server's own MCP `readOnlyHint` annotation. Without it, annotations are ignored, because a malicious or buggy server can lie.
+
+Both fields are part of the declarative agent config (`mcpServers[].readOnly`, `mcpServers[].trustAnnotations`), so they survive `toConfig()` / `agentConfigToBuilder()` round trips and JSON import/export.
+
+A tool the server annotates `destructiveHint: true` or `openWorldHint: true` is never marked read-only, even if listed. Both fields are a promise by you, the operator: a wrong declaration exposes a mutating tool to non-owner senders. Trust is never inferred.
+
+## Tool effect: read, write or unknown
+
+Every tool resolves to one declared effect, exported as `toolEffect(definition)` (type `ToolEffect`):
+
+| Effect | Meaning |
+| --- | --- |
+| `"read"` | Declared read-only (`mutatesExternalState: false`) and needs no approval. |
+| `"write"` | Declared to change state outside the run (`mutatesExternalState: true`). |
+| `"unknown"` | Nothing declared, or a read-only tool that requires approval. |
+
+`unknown` is the default for your own `defineTool()` tools and for unannotated MCP tools. It is never eligible wherever only read-only tools may run (channel narrowing, bounded read-only recon): the effect is declared by the tool or operator, never guessed from a name or description. All built-in tools are classified `read` or `write`.
+
+For MCP tools the mapping is: a trusted `readOnlyHint: true` (or an operator `readOnly` listing) gives `read`; `destructiveHint: true` or `readOnlyHint: false` gives `write`, honored even from an untrusted server because those hints only narrow; anything else, including `openWorldHint: true` alone, stays `unknown`. To let a server's `list_*` tools count as `read`, set `trustAnnotations: true` or list them under `readOnly`.
+
+## Cleanup
+
+MCP stdio servers run as subprocesses — the process will hang if they aren't shut down. Always dispose the agent when done. See [Resource Management](/reference/builder-api/agent-runtime/#resource-management) for full patterns.
+
+{/* docs-skip-typecheck */}
+```typescript
+// Option A: await using (recommended) — auto-disposes on scope exit
+await using agent = await ReactiveAgents.create()
+  .withMCP({ name: "fs", transport: "stdio", command: "bunx", args: ["-y", "@modelcontextprotocol/server-filesystem", "."] })
+  .build();
+
+// Option B: runOnce — build + run + dispose in one call
+const result = await ReactiveAgents.create()
+  .withMCP({ name: "fs", transport: "stdio", command: "bunx", args: ["-y", "@modelcontextprotocol/server-filesystem", "."] })
+  .runOnce("What files are in this project?");
+```
+
+## Protocol Details
+
+The MCP client is spec-compliant with MCP 2025-03-26:
+
+- Sends `notifications/initialized` after the handshake (required by spec before any tool calls)
+- Negotiates protocol version `2025-03-26` (servers may respond with an older supported version)
+- Tool results are extracted from the MCP `content` array format — the model receives clean text, not raw JSON
+- `isError: true` results from servers surface as tool execution errors in the agent loop
+
+:::tip[Messaging via MCP]
+Signal and Telegram can be connected as MCP servers running in Docker containers. The agent uses MCP tools to send and receive messages, with the gateway heartbeat driving message polling. See the [Messaging Channels guide](/guides/messaging-channels/).
+:::

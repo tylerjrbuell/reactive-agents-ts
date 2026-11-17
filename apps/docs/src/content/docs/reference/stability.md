@@ -3,11 +3,15 @@ title: API Stability & Versioning
 description: >-
   SemVer commitments, stability tiers, what's stable vs experimental as of
   v0.18, and the deprecation policy.
+topic: releases
+related:
+  - guides/whats-new
+  - reference/builder-api
 ---
 
 This page is the honest answer to "is this safe to depend on?"
 
-Reactive Agents follows **Semantic Versioning** (`major.minor.patch`). The framework is currently in `0.x`, which under SemVer means **minor bumps may include breaking changes** to anything not marked stable below. We document each break in the [CHANGELOG](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) and ship a migration note for anything user-facing.
+Reactive Agents follows **Semantic Versioning** (`major.minor.patch`). The framework is currently in `0.x`, which under SemVer means **minor bumps may include breaking changes**. We list each break per release in the [CHANGELOG](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md) and [What's New](/guides/whats-new/) and ship a migration note for anything user-facing. The tiers below say which surfaces are safest: stable-tier surfaces get a deprecation cycle where one is possible; the others can change between minors.
 
 ## Stability tiers
 
@@ -15,13 +19,13 @@ Every public surface falls into one of three tiers. Tier is declared by JSDoc ta
 
 | Tier | Promise | Breaks allowed |
 |---|---|---|
-| **Stable** (`@stable`) | Source-compatible across `0.x` minor bumps. Behavior changes get a deprecation warning + one minor cycle before removal. | Patch versions only fix bugs. |
+| **Stable** (`@stable`) | Intended to stay source-compatible across `0.x` minor bumps; exceptions are listed per release. Behavior changes get a deprecation warning + one minor cycle before removal. | Patch versions only fix bugs. |
 | **Unstable** (`@unstable`) | API may change between minor versions with a CHANGELOG note. Suitable for production if you pin exactly. | Yes, between minors, with a migration note. |
 | **Experimental** (`@experimental`) | Active R&D. May change shape between any release. Use at your own risk; expect to update code on each upgrade. | Anytime, including patch. |
 
 ## What's stable as of v0.18
 
-The following surfaces are tier-1 stable. We will not break these without a major bump.
+The following surfaces are tier-1 stable: the safest to depend on. We aim to keep them source-compatible across `0.x` minors, with a deprecation cycle where possible; any exception is listed in that release's notes.
 
 - **Entry points** — `createAgent(config)` (declarative front door) and `ReactiveAgents.create()` + the `.with*()` chain syntax. Both are the same API in two syntaxes, generated from and validated against `AgentConfigSchema` (the single source of truth); anything expressible in one is expressible in the other.
 - **Provider selection** — `.withProvider("anthropic" | "openai" | "gemini" | "groq" | "xai" | "ollama" | "litellm" | "test")`, `.withModel(model)` (string) / `.withModel({ provider, model, numCtx? })` (object), and the `LLMProvider` interface

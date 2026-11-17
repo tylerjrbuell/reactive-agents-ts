@@ -6,6 +6,10 @@ description: >-
   produced.
 sidebar:
   order: 22
+topic: durable-runs
+related:
+  - guides/durable-execution
+  - guides/durable-hitl
 ---
 
 An agent run in Reactive Agents behaves like an OS process, not a fire-and-forget function call. Every durable run has an identity (`runId`), a live control plane (pause / resume / stop / inspect), an on-disk checkpoint history you can fork from, and a graded evidence trail — the trust receipt — attached to its result.

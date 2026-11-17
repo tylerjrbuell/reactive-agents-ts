@@ -5,6 +5,10 @@ description: >-
   Data — with links to the full API reference.
 sidebar:
   order: 1
+topic: config-reference
+related:
+  - reference/builder-api
+  - reference/configuration
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -24,7 +28,7 @@ For a first end-to-end walkthrough, see [Quickstart](/guides/quickstart/) and [Y
 
 1. **Start from** `ReactiveAgents.create()` — default name is `"agent"`, default provider is **`"test"`** until you call `.withProvider(...)`.
 2. **Finish with** `.build()` (async) or `.buildEffect()` (Effect) — see [Effect-TS primer](/concepts/effect-ts/).
-3. **Dispose** agents that use MCP stdio or other subprocess tools: prefer **`await using`**, **`runOnce()`**, or **`dispose()`** — [Resource management](/reference/builder-api/#resource-management).
+3. **Dispose** agents that use MCP stdio or other subprocess tools: prefer **`await using`**, **`runOnce()`**, or **`dispose()`** — [Resource management](/reference/builder-api/agent-runtime/#resource-management).
 4. **Custom tools and hooks** return **Effect** — `import { Effect } from "effect"` and use `Effect.succeed` / `Effect.fail` / `Effect.gen` as needed.
 
 ## Stack A — Direct LLM (no reasoning loop)
@@ -47,7 +51,7 @@ console.log(result.output);
 
 ## Stack B — ReAct + built-in tools
 
-Enables the reasoning kernel. `.withTools({ builtins: true })` opts in to the built-in tool registry (file I/O, web search when keys exist, etc.); bare `.withTools()` registers them internally but keeps them out of the model's schema. The **`recall`** Conductor meta-tool defaults **on** either way (**`find`** turns on with `.withDocuments()`; **`brief`**/**`pulse`** need `.withMetaTools({ brief: true, pulse: true })`) — see [Tools](/guides/tools/) and [Builder API — MetaToolsConfig](/reference/builder-api/#metatoolsconfig).
+Enables the reasoning kernel. `.withTools({ builtins: true })` opts in to the built-in tool registry (file I/O, web search when keys exist, etc.); bare `.withTools()` registers them internally but keeps them out of the model's schema. The **`recall`** Conductor meta-tool defaults **on** either way (**`find`** turns on with `.withDocuments()`; **`brief`**/**`pulse`** need `.withMetaTools({ brief: true, pulse: true })`) — see [Tools](/guides/tools/) and [Builder API — MetaToolsConfig](/reference/builder-api/reasoning-and-tools/#metatoolsconfig).
 
 {/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"
@@ -156,7 +160,7 @@ await agent.run("Ping.");
 
 ## Stack G — Adaptive strategy
 
-If **`defaultStrategy` is `"adaptive"`**, you must set **`adaptive: { enabled: true }`** — [Reasoning](/guides/reasoning/), [Builder API — ReasoningOptions](/reference/builder-api/#reasoningoptions).
+If **`defaultStrategy` is `"adaptive"`**, you must set **`adaptive: { enabled: true }`** — [Reasoning](/guides/reasoning/), [Builder API — ReasoningOptions](/reference/builder-api/reasoning-and-tools/#reasoningoptions).
 
 {/* docs-skip-typecheck */}
 ```typescript title="src/agent.ts"

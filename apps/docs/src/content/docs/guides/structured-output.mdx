@@ -7,6 +7,11 @@ description: >-
   arrive.
 sidebar:
   order: 27
+topic: quality
+updated: "0.19"
+related:
+  - reference/builder-api/safety-and-quality
+  - features/verification
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
@@ -33,7 +38,7 @@ Works across all supported providers and tiers — Anthropic, OpenAI, Gemini,
 Groq, xAI, and local Ollama models (qwen, gemma, etc.) — making it a practical option
 even on self-hosted infrastructure.
 
-## Quick start <Since version="v0.12" />
+## Quick start
 
 `.withOutputSchema()` is a **builder method** — call it in the builder chain
 before `.build()`, then use `agent.run()` or `agent.streamObject()` on the
@@ -307,7 +312,7 @@ absent when the agent's own answer already matched the schema (no extraction
 call was made) and on the grounded engine. With `onParseFail: "throw"`, the
 same report is on `StructuredOutputError.report`.
 
-## JSON Schema, and saving the schema with the agent
+## JSON Schema, and saving the schema with the agent <Since version="0.19" />
 
 `.withOutputSchema()` also takes a plain JSON Schema object. It is the only form
 that is plain data, so it is what `toConfig()` saves: an agent built with an
@@ -346,7 +351,7 @@ throw `OutputSchemaError`, naming the keyword and where it is, so a schema is
 never validated loosely. `result.object` is typed `unknown` with a JSON Schema;
 use an Effect or Standard Schema when you want a static type.
 
-## A schema for one turn
+## A schema for one turn <Since version="0.19" />
 
 `runStream(task, { outputSchema })` asks for a typed answer on a single turn
 without changing the agent (for example one message in a chat). It takes the
@@ -546,7 +551,7 @@ post-loop extraction step. The harness governs the reasoning loop; the
 extraction call (when the parse-first path misses) happens outside harness
 governance.
 
-## Extraction provenance (`extractStructuredOutput`)
+## Extraction provenance (`extractStructuredOutput`) <Since version="0.19" />
 
 The low-level `extractStructuredOutput()` in `@reactive-agents/reasoning` reports
 how each extraction went. A success carries `result.report`. A failure is a

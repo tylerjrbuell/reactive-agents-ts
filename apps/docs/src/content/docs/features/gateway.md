@@ -5,6 +5,13 @@ description: >-
   webhooks, and a composable policy engine.
 sidebar:
   order: 3
+topic: gateway
+updated: "0.19"
+related:
+  - guides/messaging-channels
+  - guides/channel-adapters
+  - guides/deploying-agents
+  - cookbook/production-deployment
 ---
 
 The Agent Gateway turns reactive agents into **persistent, autonomous services**. Instead of waiting for user prompts, gateway-enabled agents respond to heartbeat ticks, cron schedules, webhooks, and other event sources — all governed by a deterministic policy engine that decides what deserves an LLM call and what doesn't.
@@ -537,7 +544,7 @@ Returned by `handle.stop()`:
 
 ## Messaging Channels
 
-Agents talk to **Signal** and **Telegram** through native channel adapters from `@reactive-agents/channels`: `SignalChannelAdapter` (signal-cli JSON-RPC) and `TelegramChannelAdapter` (Bot API, long polling or webhook). Each implements the `ChannelAdapter` contract, so `ChannelService` sends replies itself and gets real delivery receipts instead of relying on the model to call a send tool. Register adapters with `.withChannels({ adapters: [...] })`. The older MCP-server setups (Docker Signal image, Telethon Telegram) still work, but they are the legacy path: no receipts, and the model does the sending.
+Agents talk to **Signal** and **Telegram** through native channel adapters from `@reactive-agents/channels`: `SignalChannelAdapter` (signal-cli JSON-RPC) and `TelegramChannelAdapter` (Bot API, long polling or webhook). Each implements the `ChannelAdapter` contract (defined in the [Channel Adapters guide](/guides/channel-adapters/#the-contract)), so `ChannelService` sends replies itself and gets real delivery receipts instead of relying on the model to call a send tool. Register adapters with `.withChannels({ adapters: [...] })`. The older MCP-server setups (Docker Signal image, Telethon Telegram) still work, but they are the legacy path: no receipts, and the model does the sending.
 
 Webhook-capable adapters (for example Telegram in webhook mode) mount on the gateway ingress server; see [Serving webhooks (ingress)](#serving-webhooks-ingress). To write your own adapter, see the [Channel Adapters guide](/guides/channel-adapters/).
 

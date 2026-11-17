@@ -5,9 +5,14 @@ description: >-
   behavior.
 sidebar:
   order: 5
+topic: reasoning
+related:
+  - guides/choosing-strategies
+  - guides/reasoning
+  - cookbook/composition-recipes
 ---
 
-While the 8 built-in strategies cover most use cases, you can register custom reasoning strategies for specialized behavior.
+While the [8 built-in strategies](/guides/choosing-strategies/) cover most use cases, you can register custom reasoning strategies for specialized behavior.
 
 ## Strategy Interface
 
@@ -207,8 +212,3 @@ const program = Effect.gen(function* () {
 });
 ```
 
-## What's Next
-
-- [Choosing a Reasoning Strategy](/guides/choosing-strategies/) — decision tree for the eight built-in strategies before you build a custom one
-- [Reasoning](/guides/reasoning/) — the strategy interface and kernel this custom strategy plugs into
-- [Composition Recipes](/cookbook/composition-recipes/) — Custom Termination Logic, a related extension point

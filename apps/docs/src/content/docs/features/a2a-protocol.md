@@ -6,6 +6,12 @@ description: >-
   JSON-RPC server/client, and agent discovery.
 sidebar:
   order: 1
+topic: agents
+updated: "0.19"
+related:
+  - guides/sub-agents
+  - cookbook/multi-agent-patterns
+  - reference/builder-api/integrations
 ---
 
 The A2A (Agent-to-Agent) protocol enables agents to discover each other and exchange tasks over HTTP. Reactive Agents implements the [A2A specification](https://a2a-protocol.org) with JSON-RPC 2.0 support. Real-time SSE streaming is not yet implemented — see [SSE Streaming](#sse-streaming) below.

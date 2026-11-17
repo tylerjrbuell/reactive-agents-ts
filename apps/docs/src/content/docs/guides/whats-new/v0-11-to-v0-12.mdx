@@ -1,0 +1,252 @@
+---
+title: v0.11 and v0.12 release notes
+description: >-
+  Release notes for v0.12.x (durable and honest) and v0.11.x (production tooling and full observability), May to June 2026.
+sidebar:
+  order: 4
+topic: releases
+related:
+  - guides/whats-new
+  - reference/stability
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Archived release notes. The latest release and what is on `dev` are on [What's New](/guides/whats-new/).
+
+## v0.12.0 — Durable & Honest (June 2026)
+
+<Aside type="tip" title="Released on npm">
+Shipped June 2026 — all packages are published. Install or upgrade with `bunx create-reactive-agent` or pin `reactive-agents@0.12.0`.
+</Aside>
+
+The v0.12 line makes runs **survive crashes**, makes outputs **typed and grounded**, and makes "which capabilities are on" **explicit and honest**. Headline capabilities: typed structured output, durable execution, and `HarnessProfile` composition — plus a developer-experience pass that removes Effect from the common builder surface.
+
+### Typed Structured Output
+
+Turn any agent into a typed extractor. Attach a schema at build time and read a fully-typed value off the result — no prompt engineering, no manual JSON parsing.
+
+{/* docs-skip-typecheck */}
+```ts
+import { z } from "zod";
+
+const Invoice = z.object({ total: z.number(), currency: z.string() });
+
+const agent = await ReactiveAgents.create()
+  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
+  .withOutputSchema(Invoice)   // builder-only
+  .build();
+
+const result = await agent.run("Extract the invoice: total $4,200 USD");
+result.object;       // { total: 4200, currency: "USD" } — typed as { total: number; currency: string }
+result.objectError;  // populated instead (lenient) if the model's output didn't validate
+```
+
+- **Any Standard Schema** — Zod, Valibot, ArkType, and Effect Schema all work through one adapter; JSON Schema is derived per-vendor so the model is never blind to the shape.
+- **Streaming** — `agent.streamObject(task)` yields `{ object: DeepPartial<T> }` as fields fill in.
+- **Grounded mode** — `.withOutputSchema(schema, { mode: "grounded" })` runs extraction inside the loop with provenance, confidence, and abstention instead of guessing.
+- **Top-level arrays, lenient-degrade** — array schemas and partial outputs are handled gracefully; parse failures surface on `result.objectError` rather than throwing (configurable via `{ onParseFail: "throw" }`).
+
+Verified live across Anthropic, OpenAI, Gemini, and local Ollama (qwen3.5, gemma4). See [Typed Structured Output](/guides/structured-output/).
+
+### Durable Execution — crash-resume
+
+Opt a run into a durable store and resume it from its last checkpoint after a crash, restart, or graceful pause.
+
+{/* docs-skip-typecheck */}
+```ts
+const agent = await ReactiveAgents.create()
+  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
+  .withDurableRuns()
+  .build();
+
+const runs = await agent.listRuns({ status: "running" });   // discover interrupted runs
+const result = await agent.resumeRun(runs[0].runId);        // continue from last checkpoint
+```
+
+Run state is persisted on a content-addressed config hash (system prompt + provider), so a resumed run reattaches to the correct configuration. Verified cross-process with a hard-kill end-to-end test. See [Durable Execution](/guides/durable-execution/).
+
+### Durable human-in-the-loop — approval gates that survive process death
+
+Name the tool calls that require sign-off. A gated call **pauses** the run — on
+**both** `run()` and `runStream()` — persists `awaiting-approval` plus the pending
+action, and returns `pendingApproval` so the process can exit. A human approves or
+denies from **any** process; the run resumes from its checkpoint to completion.
+
+{/* docs-skip-typecheck */}
+```ts
+const agent = await ReactiveAgents.create()
+  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
+  .withDurableRuns()
+  .withApprovalPolicy({ tools: ["shell-execution", "file-write"], mode: "detach" })
+  .build();
+
+// 1. A gated call pauses and returns status: "awaiting-approval".
+const result = await agent.run("clean up the temp files");
+if (result.status === "awaiting-approval") {
+  console.log("awaiting approval:", result.pendingApproval.toolName);
+}
+
+// 2. Later, from ANY process — decide on whatever is waiting:
+for (const p of await agent.listPendingApprovals()) {
+  await agent.approveRun(p.runId);          // resume + execute the call
+  // or: await agent.denyRun(p.runId, "not allowed");  // resume, skip the call
+}
+```
+
+Need same-process convenience? Pass `onApproval` and one `run()` call drives the
+whole pause → decide → resume loop:
+
+```ts
+const result = await agent.run("clean up the temp files", {
+  onApproval: ({ toolName, args }) => toolName !== "shell-execution",
+});
+```
+
+Built on the same durable RunStore as crash-resume — the decision and the paused
+checkpoint live in SQLite, so approve/deny works across process and machine
+boundaries. See [Durable Human-in-the-Loop](/guides/durable-hitl/).
+
+### Developer experience — Effect-free where it counts
+
+- **Plain-function hooks** — `.withHook()` handlers now accept ordinary sync/async functions; the Effect form still works. No `Effect.gen` required to tap the lifecycle. See [Lifecycle Hooks](/guides/hooks/).
+- **Faster `run()`** — the post-answer debrief LLM call was moved off the critical path (forked, non-blocking), cutting end-to-end `run()` latency ~46%. Rich debrief is awaited lazily via `result.debriefRich()`.
+
+### Opt-in evidence grounding
+
+`.withGrounding({ mode })` makes numeric grounding explicit (default **off**), eliminating false "failed at evidence-grounded" warnings on correct figures. Blocking mode does a bounded retry then degrades — it never hard-fails a correct answer. See [Verification](/features/verification/).
+
+### HarnessProfile presets — one-line capability composition
+
+`HarnessProfile` replaces the leaky `.withLeanHarness()` with three named, explicit presets applied via `.withProfile()`:
+
+```ts
+import { ReactiveAgents, HarnessProfile } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create()
+  .withProvider('anthropic')
+  .withProfile(HarnessProfile.balanced())   // canonical entry
+  .build()
+```
+
+| Preset | Composes |
+|--------|----------|
+| `HarnessProfile.lean()` | **Disables everything**: memory plus the registry-default capabilities (reactive intelligence, verifier; strategy switching is already opt-in as of v0.18) + skill persistence. The model is the entire harness — for latency/cost-sensitive paths and benchmark ablations. Fixes the historical `.withLeanHarness()` leak that left reactive intelligence on. |
+| `HarnessProfile.balanced()` | The full production stack: reactive intelligence + verifier (registry defaults) **plus memory, enabled explicitly** (strategy switching is not included: it is opt-in as of v0.18) (memory is off in a bare builder as of v0.12). |
+| `HarnessProfile.intelligent()` | Balanced **+ skill persistence** for cross-session compounding learning. |
+
+Presets compose with individual builder methods — later calls win, so `.withProfile(HarnessProfile.balanced()).withoutMemory()` drops memory back off. See [Choosing a Stack](/guides/choosing-a-stack/) and [Builder API](/reference/builder-api/).
+
+### New builder methods
+
+- **`.withBudget({ tokenLimit?, costLimit? })`** — hard cumulative token/cost ceiling enforced inside the loop (a killswitch, distinct from `.withCostTracking()` accounting). See [Builder API](/reference/builder-api/).
+- **`.withContract(taskContract)`** — declare a [`TaskContract`](/reference/builder-api/): required + forbidden tools, fixtures, a minimum model floor, and a success oracle. Required tools become an execute-time gate; forbidden tools are excluded from the tool schema. Enforced at `build()`.
+- **`.withLearning({ tier?, dbPath? })`** — enable the cross-run learning store (experience + skill learning).
+- **`.withSkillPersistence(enabled?)`** — persist learned `SkillRecord`s across process restarts (also enabled by `HarnessProfile.intelligent()`).
+
+### Capability-source honesty gate
+
+When an agent builds for a `(provider, model)` whose capability profile resolves to a silent **`fallback`** source (no probe, cache, or static-table entry → an assumed 2048-token context), `build()` now surfaces it: a **loud warning by default**, or a hard **error under `.withStrictValidation()`**. This catches the misconfigured-context class of failures at build time for every user instead of silently running on a wrong budget. See [Troubleshooting](/guides/troubleshooting/).
+
+### Behavior changes
+
+- **Memory is now OFF by default** (reversing the v0.11 GH #122 default-on). A bare `.create()….build()` is **stateless** — no surprise `~/.reactive-agents/<agentId>/` SQLite writes, predictable in CI. Opt in with one line: `.withMemory()`, `.withLearning()`, or `HarnessProfile.balanced()` / `.intelligent()` (all enable it explicitly). **Migration:** add `.withMemory()` to any v0.11 agent that relied on implicit cross-session memory.
+- **`.withLeanHarness()` is superseded** by `HarnessProfile.lean()`, which additionally disables reactive intelligence (the old method did not). Existing chains keep working.
+
+No breaking API removals — existing `ReactiveAgents.create().with*()` chains continue to compile and run; only the memory default changed (see migration note above).
+
+---
+
+## v0.11.x — Production tooling + full observability (May 2026)
+
+The focus: developer tooling that makes agents production-observable and repeatable, plus the first `create-reactive-agent` scaffolder, cross-runtime support, and three new capabilities (`code-action` strategy, skill persistence, interactive playground).
+
+### New packages
+
+- **`@reactive-agents/observe`** — Zero-config OpenTelemetry tracing. Set `OTEL_EXPORTER_OTLP_ENDPOINT` and every run emits a workflow → LLM → tool span hierarchy, OpenInference-compliant, to any OTLP backend (Jaeger, Grafana Tempo, Langfuse, Arize Phoenix). See [OpenTelemetry Tracing](/features/observe/).
+- **`@reactive-agents/replay`** — Deterministic trace replay. Record any run to a snapshot file and re-run it with a different model or prompt without calling the LLM again. Enables regression testing and prompt A/B comparisons. See [Snapshot & Replay](/features/snapshot-replay/).
+- **`@reactive-agents/runtime-shim`** — Cross-runtime support. The framework now runs on Node.js 22.5+ in addition to Bun. Provides unified `Database`, `spawn`, `serve`, `glob`, `writeFile`, `readFile`, and `hash` primitives that delegate to the available runtime. FTS5 is optional — falls back to LIKE-based search on Node's built-in SQLite. Unblocks Stackblitz WebContainers (Node-only) and Vercel/Netlify deployments.
+
+### New tooling
+
+- **`create-reactive-agent` CLI** — `bunx create-reactive-agent my-app` scaffolds a runnable agent project in seconds. Supports `--template minimal|standard|tool-use|multi-agent|gateway`, `--provider`, `--model`, `--pm bun|npm|yarn|pnpm`. See [create-reactive-agent](/features/create-reactive-agent/).
+
+### Interactive Playground
+
+Three live Stackblitz scenarios, zero install. Runs fully in-browser via WebContainers — no local runtime required. Default provider is Google Gemini (free tier).
+
+| Scenario | What it shows |
+|----------|--------------|
+| **Hello Agent** | Simple Q&A — minimal builder, one-step response |
+| **Tool Integration** | Built-in `code-execute` + `scratchpad` tools working together |
+| **Strategy Demo** | `reactive` vs `plan-execute-reflect` side-by-side on the same task |
+
+See [Playground](/guides/playground/).
+
+### `code-action` strategy (`@experimental`)
+
+A 7th reasoning strategy in which the LLM generates a TypeScript IIFE that runs inside a Worker-thread sandbox. Tools are exposed as normal async functions and called via `postMessage` round-trips — no JSON schema juggling in the prompt. Best suited for multi-tool orchestration tasks where expressing control flow in code is cleaner than iterative tool calls.
+
+Enable with `defaultStrategy: "code-action"`. `ToolService` is optional; the strategy also handles pure computation tasks. See [code-action](/features/code-action/).
+
+### Skill persistence
+
+Learned `SkillRecord` objects now survive process restarts. The skill system uses a dual-store: the existing in-memory session store for fast within-run access, plus a new SQLite-backed `SkillStore` that persists across runs. On cold start, skills are resolved from the persistent store before any LLM call. `skillFragmentToSkillRecord()` is exported from `reactive-agents` for manual skill construction.
+
+### New runtime controls
+
+- **`RunHandle`** — `runStream()` now returns a `RunHandle` with four controls and a status property:
+  - `.pause()` — suspends the loop at the next safe checkpoint
+  - `.resume()` — resumes a paused run
+  - `.stop()` — graceful shutdown: finishes the current step, then runs output synthesis
+  - `.terminate()` — immediate abort, skips synthesis
+  - `.status` — `"running" | "paused" | "stopped" | "terminated" | "completed"`
+  - `.result` — `Promise` that resolves when the run reaches a terminal state
+
+  See [Compose API](/reference/compose-api/).
+
+- **Killswitches** — Six factory functions from `@reactive-agents/compose` that wire stopping conditions into the agent loop. Pass them to `.compose()` or `.withHarness()`:
+
+  ```ts
+  import { maxIterations, budgetLimit, timeoutAfter, watchdog, requireApprovalFor } from "@reactive-agents/compose";
+  ```
+
+  | Factory | Stops when… |
+  |---------|-------------|
+  | `maxIterations(n)` | Loop count reaches `n` |
+  | `budgetLimit({ maxTokens?, maxCostUSD? })` | Token or cost ceiling hit |
+  | `timeoutAfter(duration)` | Wall-clock duration exceeded |
+  | `watchdog({ timeout })` | No progress within `timeout` |
+  | `requireApprovalFor(toolName, approver)` | Named tool needs human approval |
+
+  See [Compose API](/reference/compose-api/).
+
+- **Compose API** (`@stable`) — `.compose(fn)` (alias: `.withHarness(fn)`) attaches a harness transform that intercepts tagged chokepoints (`prompt.system`, `nudge.loop-detected`, `message.tool-result`, etc.) via `h.on()`, `h.tap()`, `h.before()`, `h.after()`, and `h.onError()`. Existing builder methods `.withSystemPrompt()`, `.withErrorHandler()`, and `.withHook()` now desugar through the harness. See [Compose API](/reference/compose-api/) and [Harness Tags](/reference/harness-tags/).
+
+### Strategy switching on by default (superseded in v0.18: now opt-in)
+
+> **Superseded in v0.18:** strategy switching is opt-in again. `enableStrategySwitching` defaults to `false`; set `.withReasoning({ enableStrategySwitching: true })` to enable it. The text below is the historical record of the earlier release.
+
+At that release, `enableStrategySwitching` defaulted to `true`. The reactive intelligence dispatcher will switch strategies automatically when entropy signals a stuck loop — no explicit opt-in required.
+
+### Decision tracing
+
+Agents can capture the model's stated *why* for every tool call. Tool-call rationale on the reactive/adaptive paths is **opt-in** (audit feature, not performance — pure token/latency cost):
+
+- **`auditRationale` opt-in** — `.withReasoning({ auditRationale: true })` (or env `RA_RATIONALE_AUDIT=1`). When on, the kernel coaxes one `<rationale call="N">{"why":"…","confidence":0-1}</rationale>` block per tool call. Off by default.
+- **Native function-calling capture** — `parseRationaleBlocks()` reads side-channel blocks from `thought` + `thinking` content and attaches each rationale to the matching `ToolCallSpec` by position. The parser tolerates fenced/prose-wrapped JSON, over-length `why`, and repeated `call="N"` attributes, so capture is reliable on small local models.
+- **plan-execute-reflect enforcement (always on)** — `LLMPlanStepSchema` carries a `rationale: { why, confidence? }` field, MANDATORY for every `tool_call` step (independent of `auditRationale`). Failures after retry emit a `plan_rationale_missing` metric — no synthetic fallback invented.
+- **`AgentDebrief.rationale[]`** — Unified milestone-decision log: tool selections, curator decisions, strategy switches, reactive interventions, and terminations. All render in `debrief.markdown` under `## Decision Rationale`.
+
+See [Decision Tracing](/concepts/decision-tracing/) for the full pipeline and [Debrief & Chat](/features/debrief-chat/) for the result shape.
+
+### Context-window override (`numCtx`)
+
+Pin the exact context window the provider receives instead of relying on the model's assumed maximum:
+
+- **`.withModel({ model, numCtx })`** — `numCtx` maps to Ollama's `num_ctx`; cloud providers without a context-window knob ignore it. Now a first-class `AgentConfig` field, so it round-trips through `toConfig()` / `fromJSON()` and the config-driven path. See [Builder API](/reference/builder-api/) and [Local Models](/guides/local-models/).
+- **Cortex Studio** — exposed as a **Context length (`numCtx`)** field in the Lab Builder's Inference section, and used as the authoritative denominator for the context-usage gauge.
+
+### Cortex rich-trace debugger
+
+The Cortex Run View's Trace Panel adds a **Timeline** view: a fine-grained, filterable, chronological event stream (LLM exchanges with prompt-cache %, tool calls, strategy switches, verifier verdicts, guards) grouped by iteration, reusing the same `TraceEvent` model as `rax diagnose`. The classic per-iteration **Frames** view remains a click away. See [Cortex](/features/cortex/).

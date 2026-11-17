@@ -7,6 +7,11 @@ description: >-
 sidebar:
   label: Next.js Agent
   order: 32
+topic: web-ui
+related:
+  - guides/web-integration
+  - features/streaming
+  - features/agentic-ui-core
 ---
 
 This tutorial shows how to add a streaming **AI agent to a Next.js app** using TypeScript and the App Router. You'll build the agent on the server, expose it through a Route Handler, and render tokens as they arrive in a client component — the same pattern you'd reach for to **stream an AI agent in Next.js** without writing any SSE plumbing by hand.
@@ -21,7 +26,7 @@ SSE is the bridge: the server agent reasons and calls tools, and each token stre
 ## Prerequisites
 
 - A Next.js 13+ project using the **App Router** (`app/` directory)
-- Node.js 18+
+- Node.js 22.5+ (or Bun 1.1.0+)
 - An API key for a model provider (this guide uses Anthropic)
 
 ## Step 1 — Install

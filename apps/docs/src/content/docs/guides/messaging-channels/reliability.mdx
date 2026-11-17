@@ -1,0 +1,156 @@
+---
+title: Reliability and conversation control
+description: >-
+  Channel router reliability: durable inbox across restarts, burst batching and mid-run follow-ups, outbox retries and pacing, follow-up timers and the /new reset.
+sidebar:
+  order: 5
+topic: channels
+related:
+  - guides/messaging-channels
+  - guides/messaging-channels/routes
+  - features/gateway
+---
+
+Make a channel router survive restarts and bursts, send reliably, schedule follow-ups and reset a conversation. Part of [Messaging channels](/guides/messaging-channels/); start with [Routes](/guides/messaging-channels/routes/).
+
+## Surviving a restart (the durable inbox)
+
+By default a restart loses queued messages and forgets which messages it already answered, so a platform that redelivers an update can run a turn twice. Opt in to a SQLite store and the router keeps every accepted message:
+
+```typescript
+import { openSqliteRouterStore } from "@reactive-agents/channels";
+import { Effect } from "effect";
+
+const store = await Effect.runPromise(
+  openSqliteRouterStore({ path: "./.agent/router.db" }), // Node and Bun; ":memory:" for a throwaway
+);
+
+// .withChannels({ adapters, routes, agents, store })
+```
+
+With `.withChannels` you can skip opening the store yourself: `inbox: { path: "./.agent/router.db" }` (plus the optional `retentionMaxAgeMs`, `retentionMaxRows`, `maxAttempts`, `leaseTtlMs`) opens the SQLite store when the router starts and closes it after the router stops. If you also pass `store`, the explicit store wins and the host logs a warning.
+
+- **One row per accepted message**, with a status: `received`, `running`, `done`, `failed` or `dropped`, plus the dedupe key (adapter id and the platform's message id), attempt count and last error. A denied sender, an unrouted message or a rate drop is recorded `dropped`, a failed turn `failed`.
+- **Dedupe survives restart.** A redelivered message that was already accepted is refused, answered or not.
+- **Crash recovery.** At start the router returns turns a dead process left `running` to `received` and runs them again, oldest first, up to `maxAttempts` (default 3). A message that runs out of attempts becomes `failed`; the router publishes `ChannelInboxRetried` and `ChannelInboxFailed` events (payloads carry no message text). `leaseTtlMs` (default 0) is how old a `running` row must be to count as orphaned: the account lease already guarantees one router per inbox, so raise it only if several processes share one file. A replayed message runs as its own turn, without batching.
+- **At least once, not exactly once.** A turn killed after the agent acted but before the reply went out runs again. Keep tools idempotent or approval-gated.
+- **Retention is bounded.** Finished rows are pruned by age (`retentionMaxAgeMs`, default 7 days) and count (`retentionMaxRows`, default 50 000). A key pruned away can be accepted again. Rows still `received` or `running` are never pruned. A finished row keeps no message text, only the key and status.
+- **Turn caps persist too**, so a restart does not reset a sender's hourly limit.
+- **Status.** `agent.channelRouterStatus()` reports `durableStore: true` and `inbox: { received, running, done, failed, dropped }`.
+- A store failure never stops the router: it is reported as `ErrorSwallowed` and the message is answered without durability.
+
+## Bursts and follow-ups (`batchWindowMs`, `midRun`)
+
+People send several short messages, or a correction while the agent is still working. Two route fields decide what happens. Both default to today's behavior.
+
+```typescript
+import type { RouteSpecInput } from "@reactive-agents/channels";
+
+const route: RouteSpecInput = {
+  id: "main",
+  match: { channelId: "telegram" },
+  target: { agentId: "assistant" },
+  owners: ["telegram:123"],
+  batchWindowMs: 1500, // join one sender's burst into one turn
+  midRun: "interrupt", // "queue" (default) | "fold" | "interrupt"
+};
+```
+
+- **`batchWindowMs`** (0 to 30 000, default 0 = off). Messages from one sender in one conversation that arrive within the window become one turn input: texts joined by a newline in arrival order, attachments together, every source id in `message.metadata.batch.sourceIds`. The window starts at the first message. The turn runs once and each inbox row settles with its outcome. A `ChannelInboxBatched` event records the size and source ids (`ChannelInboxFolded` and `ChannelInboxInterrupted` do the same for `midRun`). Batching holds one inbound slot per waiting message, so very long windows on busy channels can crowd the adapter's inbound concurrency.
+- **`midRun: "queue"`** (default): a message that arrives while a turn runs waits in the bounded per-conversation queue and runs as its own turn.
+- **`midRun: "fold"`**: the message joins the running turn. A resolver that supports it calls `turn.takeFolded()` at a safe boundary (between tool calls) and receives the new texts once. Texts nobody drains run as one follow-up turn right after, so a resolver that ignores `takeFolded` behaves like a combined queue.
+- **`midRun: "interrupt"`**: the message cancels the running turn with a typed `turn_interrupted` error (published as `ChannelTurnCompleted` with `ok: false`; the sender gets no failure notice) and a new turn starts from the original and new text joined. Partial work stays in the session history. The turn rate cap is not charged again for the restart.
+- **With `.withChannels()` routes** the built-in resolver implements both. Routes using `fold` or `interrupt` run each conversation on its own agent instance and stream the turn. `fold`: the messages that arrived mid-turn are attached to the result of the next custom tool call (`{ result, userMessages }`); a turn that only calls built-in tools drains nothing and the router runs the leftovers as one follow-up turn. `interrupt`: the running stream is aborted through its signal.
+- Folded and interrupting messages are bounded by the same conversation queue size, and past it they are dropped as backpressure. Router simulations skip both fields. Webhook routes reject them, because the reply is the HTTP response.
+
+## Reliable sends: the outbox (`outbox`, `minGapMs`)
+
+Every message the strict router sends (replies, acks, failure notices, `router.deliver`) goes through an outbox. By default it behaves as before: one attempt, no pacing. Opt in to retries and pacing. `outbox` and `followUp` (next section) are options of `createChannelRouter` and of `.withChannels`, which passes them through.
+
+```typescript
+// .withChannels({ ..., outbox: { maxAttempts: 4, baseBackoffMs: 500, maxBackoffMs: 30_000 } })
+// (or createChannelRouter({ ..., outbox }))
+// or per route: { id: "main", ..., minGapMs: 1200 }
+```
+
+- **Retry.** Only errors the adapter marks retryable (`network`, `rate_limited`) are retried, with doubling backoff capped by `maxBackoffMs`. A platform `retryAfterMs` is honored up to that cap. `maxAttempts` defaults to 1 (no retry).
+- **Order.** One conversation sends one message at a time, in call order, so a retrying message is never overtaken by a later one. Other conversations are not held up. A retry holds its conversation for at most `maxAttempts` times `maxBackoffMs`.
+- **No silent failure.** A message that cannot be sent ends as a `failed` row and a `ChannelSendFailed` event (`adapterId`, `conversationId`, `attempts`, `kind`, `retryable`, `exhausted`; never the text). It is a typed core event. The turn outcome stays `Answered` with `deliveryError`. A failed failure-notice or ack send is recorded the same way instead of being dropped without a trace. `ChannelDeliveryFailed` still reports every individual attempt.
+- **Pacing.** `minGapMs` (route, 0 to 60 000) or `outbox.minGapMs` (router default) keeps at least that gap between two sends into one conversation. Default 0 (off).
+- **Durable with the SQLite store.** Rows are `pending`, `sent` or `failed` with attempts and last error; finished rows keep no text and are pruned with the inbox retention. After a crash the router sends the agent replies left `pending`, oldest first. It does not resend acks and notices (stale), nor a reply whose inbox turn is about to run again (that turn writes a fresh reply). Attachments are not stored, so an attachment message is not resumed. Delivery is at least once: a crash after the platform accepted a message but before the row was marked `sent` can send it twice.
+- **Status.** With a durable store `agent.channelRouterStatus()` adds `outbox: { pending, sent, failed }`. The in-memory default reports nothing.
+
+## Follow-up timers (`followUp`)
+
+An agent can ask to be woken in a conversation later ("check the build in 20 minutes"). Timers live in their own store, separate from the inbox and from cron schedules, and are durable with the SQLite store.
+
+```typescript
+import { createChannelRouter, makeFollowUpTool } from "@reactive-agents/channels";
+
+// createChannelRouter({ ..., followUp: { maxPending: 5, maxHorizonMs: 7 * 86_400_000, pollMs: 1000 } })
+// or followUp: true for the defaults.
+
+// In your AgentResolver, a session that supports follow-ups reads req.followUp:
+//   open: (req) => { const tool = req.followUp ? makeFollowUpTool(req.followUp) : undefined; ... }
+```
+
+- **The tool.** `makeFollowUpTool(port)` returns a `follow-up` tool definition (`name`, `description`, `parameters`, `execute`) shaped like a tools-package definition. `{ in: "90m", note }` or `{ at: "2026-11-20T09:00:00Z", note }` sets a timer; `{ cancel: id }` cancels one; no arguments lists the pending ones. It never fails: a refused request comes back as `{ ok: false, reason, error }` so the agent can adapt. The resolver registers the tool on the agent it opens. With `.withChannels({ followUp })` the runtime resolver does this for you: each conversation runs on its own agent instance (built when the session opens, disposed when it closes) with the `follow-up` tool bound to that conversation. A `ReadOnly` sender surface never gets the tool; an `AgentDefault` surface does, and an `Allowlist` surface only when it names `follow-up`.
+- **Bounds.** At most `maxPending` timers per conversation (default 5), no further out than `maxHorizonMs` (default 7 days), no nearer than `minDelayMs` (default 5 s), notes up to 500 characters. An agent can only set, list and cancel its own conversation's timers.
+- **Waking.** A poller (`pollMs`, default 1000) turns each due timer into an inbound message `Follow-up you scheduled: <note>` for that conversation. It takes the normal path: dedupe on `timer-<id>`, the sender's access and role, the turn-rate caps, the conversation queue. The timer re-enters the route that created it, whatever the route's `when` filter says, and counts as the sender who was in the session when it was created; if access has changed since, it is denied. A wake-up in a group passes the mention rule (the agent addressed itself) but not `groups: "off"`.
+- **Restart safe.** A timer that came due while the process was down fires on the first poll. A crash between the wake-up and the `fired` mark fires it again, and dedupe refuses the duplicate. Delivery is at least once.
+- **Receipts.** `ChannelFollowUpScheduled`, `ChannelFollowUpFired` and `ChannelFollowUpCancelled` (typed core events; ids and times, never the note). Status adds `timers: { pending, fired, cancelled }`.
+- **Not recurring.** Repeats stay in cron schedules (gateway). Simulations get no `followUp` port.
+
+## Starting a new conversation (`/new`)
+
+A per-conversation route keeps history, so a wrong early reply can keep shaping later ones. A route owner (a `platform:userId` in `owners`) can send `/new` or `/reset` as the whole message to start over:
+
+```typescript
+import type { RouteSpecInput } from "@reactive-agents/channels";
+
+const main: RouteSpecInput = {
+  id: "main",
+  match: { channelId: "tg" },
+  target: { agentId: "assistant" },
+  owners: ["telegram:123"],
+  resetCommands: ["/new", "/reset"], // the default; [] turns it off; at most 5 commands like "/name"
+};
+```
+
+- **Owner only.** From anyone else the text is an ordinary message. Matching is case-insensitive, accepts Telegram's `/new@my_bot` form, and needs the command to be the whole message (`/new please` is plain text).
+- **Never reaches the agent.** The router calls the session's `reset`, closes the session and drops it from the cache, replies `Started a new conversation.`, and opens a fresh session on the next message. It is not rate-capped and waits for a turn already running in that conversation. A route with `session: "stateless"` has no history; it just gets the confirmation.
+- **Receipt.** Each reset publishes `ChannelConversationReset` (`routeId`, `role`, `ok`, `reason?`; no text). If the resolver's `reset` fails, the sender gets `Could not start a new conversation.`, `ok` is `false` and the session is kept.
+- **Strict router only.** Applies to `createChannelRouter`; the `ChannelService` pipeline is unchanged.
+
+**With `.withChannels()` routes.** The built-in resolver implements `reset` for per-conversation sessions: it flushes and clears the live session, then empties the stored chat history for that conversation (when the memory layer persists sessions), so a restart does not bring it back. A store failure is reported to the sender as `Could not start a new conversation.` and the session is kept.
+
+**For resolver authors.** If your history lives outside the session object (a chat store keyed by `conversationKey`), implement the optional `reset` on the `RoutedSession` and clear that store there. Otherwise the next `open` for the same key reads the old history back, including after a restart.
+
+```typescript
+import { Effect } from "effect";
+import type { AgentResolver } from "@reactive-agents/channels";
+
+const chat = new Map<string, string[]>(); // your persisted history, keyed by conversation
+
+const resolver: AgentResolver = {
+  open: (req) =>
+    Effect.succeed({
+      send: (turn) =>
+        Effect.sync(() => {
+          const history = chat.get(req.conversationKey) ?? [];
+          chat.set(req.conversationKey, [...history, turn.text]);
+          return { text: `${history.length + 1} messages so far` };
+        }),
+      reset: Effect.sync(() => void chat.delete(req.conversationKey)), // Effect<void, RoutingError>
+      close: Effect.void,
+    }),
+};
+```
+
+The built-in resolver behind `.withChannels({ routes, agents })` implements both ports for you. On a `source: "model"` route, a per-conversation turn streams, and the text the agent writes before its first tool call goes to `turn.onProgress` (a final answer is never sent as narration). `acknowledge` is a separate tool-less completion of at most 60 tokens (one short sentence): it bypasses the session's turn queue, is not added to chat history, and returns an empty string on any failure so the router falls back to the canned text. Stateless routes get the `acknowledge` port but no narration. Custom resolvers can reuse this by building on `makeChannelAgentResolver`.
+
+Read state from the agent: `agent.channelStatus()` gives the adapters and session counters (`null` before the gateway starts), `agent.channelRouterStatus()` the router view in [Routes](/guides/messaging-channels/routes/) (channels, routes, drops, sessions). `agent.gatewayStatus()` carries the inbound queue (`ready`, `deferred`, `capacity`, `overflow`, `dropped`).
+
+If the router cannot start (for example a route names a channel that is not configured), the gateway stops instead of running with no inbound channels: `handle.done` resolves with a summary whose `error` explains why.
+
+Routes (not adapters or agent factories) serialize with the rest of the agent as `channelRoutes` in `AgentConfig`. `.withChannels({ adapters, triggers })` keeps working for the single-agent path.

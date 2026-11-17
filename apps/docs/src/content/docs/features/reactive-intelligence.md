@@ -5,6 +5,11 @@ description: >-
   agent reasoning.
 sidebar:
   order: 10
+topic: reasoning
+stability: experimental
+related:
+  - features/harness-control
+  - guides/choosing-strategies
 ---
 
 Reactive Intelligence monitors reasoning quality in real time and takes corrective action automatically. Instead of waiting for an agent to exhaust its iteration budget, the system measures entropy — a composite signal of how uncertain or unfocused the agent's reasoning is — and intervenes early.
@@ -24,7 +29,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
   .withTools({ builtins: true })
-  .withReactiveIntelligence()  // Enable entropy sensing + telemetry
+  .withReactiveIntelligence()  // Entropy sensing + controller (telemetry stays off)
   .build();
 ```
 
@@ -170,7 +175,7 @@ When a run succeeds with converging entropy, the learning engine may extract a r
 
 ## Telemetry
 
-Anonymous, aggregate entropy data is sent to `api.reactiveagents.dev` to build model performance profiles that benefit all users. No prompts, outputs, API keys, or personally identifiable information is collected.
+Anonymous run telemetry is **opt-in** and off by default: with no telemetry setting nothing is sent, no install ID is created and no notice prints. If you opt in, aggregate entropy data is sent to `api.reactiveagents.dev` to build model performance profiles. No prompts, outputs, API keys, or personally identifiable information is collected. See [Telemetry](/telemetry/) for the full inventory.
 
 Each report contains:
 - Install ID (random UUID, no PII)
@@ -180,26 +185,24 @@ Each report contains:
 - Outcome (success/partial/failure) and termination reason
 - Token count and duration
 
-### Opting Out
+### Opting In
 
 <!-- docs-skip-typecheck -->
 ```typescript
-.withReactiveIntelligence({ telemetry: false })
+.withReactiveIntelligence({ telemetry: true })   // or { telemetry: { enabled: true, endpoint } }
 ```
 
-Or disable telemetry entirely by passing `telemetry: { enabled: false }`.
-
-Environment-level opt-out (no code change, honored at the same choke point as the config option above):
+Or opt in from the environment, with no code change:
 
 ```sh
-DO_NOT_TRACK=1                  # console DNT convention
-# or
-REACTIVE_AGENTS_TELEMETRY=0
+REACTIVE_AGENTS_TELEMETRY=1     # or "true"
 ```
+
+Opt-out always wins: `DO_NOT_TRACK=1` or `REACTIVE_AGENTS_TELEMETRY=0` turns telemetry off even over an explicit `telemetry: true`, and an explicit `telemetry: false` beats the `REACTIVE_AGENTS_TELEMETRY=1` opt-in.
 
 ### Silencing the Notice
 
-When telemetry is on, a one-time "Reactive Intelligence" notice prints at the start of the first run in a process. Three independent ways to silence just the notice (telemetry keeps running):
+When you have opted in to telemetry, a one-time "Reactive Intelligence" notice prints at the start of the first run in a process. Three independent ways to silence just the notice (telemetry keeps running):
 
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
@@ -282,8 +285,8 @@ interface ReactiveIntelligenceConfig {
   telemetry?: boolean | {
     enabled: boolean;
     endpoint?: string;
-  }; // default: false — set true or { enabled: true } to send reports
-  notice?: boolean;              // default: true — show the one-time telemetry banner
+  }; // default: off (opt-in) — set true or { enabled: true }, or REACTIVE_AGENTS_TELEMETRY=1
+  notice?: boolean;              // default: true — show the one-time telemetry banner (printed only after you opt in)
 }
 ```
 

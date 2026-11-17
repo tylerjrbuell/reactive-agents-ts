@@ -5,6 +5,11 @@ description: >-
   much the harness spends per model turn and how much it hides from the model.
 sidebar:
   order: 23
+topic: reasoning
+related:
+  - features/harness-control-flow
+  - reference/harness-tags
+  - reference/compose-api
 ---
 
 `.withHarness({...})` is the typed control surface for the 14 harness

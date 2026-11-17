@@ -5,6 +5,10 @@ description: >-
   escalation, speculative fan-out, re-ranking, and citation checking with agent.judge().
 sidebar:
   order: 13
+topic: quality
+related:
+  - features/judgment-layer
+  - features/verification
 ---
 
 Six worked recipes for `agent.judge()`. Each assumes `.withJudgment()` is already on the

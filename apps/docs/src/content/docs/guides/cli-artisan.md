@@ -5,6 +5,10 @@ description: >-
   Laravel.
 sidebar:
   hidden: true
+topic: cli
+related:
+  - reference/cli
+  - guides/quickstart
 ---
 
 `Rax` stands for **Reactive Agents Executable**.

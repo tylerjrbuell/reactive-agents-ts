@@ -3,9 +3,17 @@ title: Memory
 description: How agent memory works in Reactive Agents.
 sidebar:
   order: 10
+topic: memory
+updated: "0.19"
+related:
+  - guides/context-engineering
+  - guides/agent-skills
+  - features/debrief-chat
+  - guides/production-checklist
 ---
 
 import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+import Since from '../../../components/Since.astro';
 
 Reactive Agents provides a four-layer memory architecture inspired by cognitive science.
 
@@ -338,7 +346,7 @@ const program = Effect.gen(function* () {
 
 `save` is called automatically by the runtime's finalize phase whenever `DebriefStoreService` is provided — you don't call it yourself in normal use.
 
-## Inspecting and Editing Memory
+## Inspecting and Editing Memory <Since version="0.19" />
 
 `agent.memory()` lists, searches, edits and deletes what the agent has stored, without opening the SQLite file yourself. It needs `.withMemory()`; without it every call rejects with `MemoryNotEnabledError`.
 

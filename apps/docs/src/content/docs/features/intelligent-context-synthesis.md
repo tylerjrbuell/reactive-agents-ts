@@ -5,6 +5,10 @@ description: >-
   — templates or LLM — with per-strategy overrides.
 sidebar:
   order: 18
+topic: context
+related:
+  - guides/context-engineering
+  - reference/builder-api/reasoning-and-tools
 ---
 
 **Intelligent Context Synthesis (ICS)** runs after each thinking step (iteration ≥ 1) when the shared ReAct-style kernel is active. It produces a compact message list for the next LLM call instead of replaying the full raw transcript.
@@ -83,5 +87,5 @@ When synthesis runs, the framework publishes a **`ContextSynthesized`** event on
 ## See also
 
 - [Reasoning guide](/guides/reasoning/) — strategy overview
-- [Builder API — ReasoningOptions](/reference/builder-api/#reasoningoptions)
+- [Builder API — ReasoningOptions](/reference/builder-api/reasoning-and-tools/#reasoningoptions)
 - Design spec: [`wiki/Architecture/Design-Specs/_archive/2026-03-28-intelligent-context-synthesis-design.md`](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/wiki/Architecture/Design-Specs/_archive/2026-03-28-intelligent-context-synthesis-design.md)

@@ -1,0 +1,138 @@
+---
+title: Execution and results
+description: >-
+  How tool calls execute and what comes back: parallel and chain execution, sandboxing, input validation, result compression and memory integration.
+sidebar:
+  order: 6
+topic: tools
+related:
+  - guides/tools
+  - guides/cost-optimization
+  - guides/memory
+  - guides/tools/scoping-and-policy
+---
+
+How tool calls run: parallel and chained execution, sandboxing, input validation, how large results are compressed, and how results feed memory.
+
+## Parallel and Chain Tool Execution
+
+Agents can issue multiple tool calls from a single thought step via native function calling.
+
+### Parallel
+
+The model can return multiple `tool_use` blocks in a single response. The framework executes them concurrently:
+
+- Results are numbered and returned as separate `tool_result` messages.
+- Capped at 3 simultaneous tool calls to prevent runaway fan-out.
+- Side-effect tools (`create_*`, `delete_*`, `send_*`, `push_*`, etc.) are automatically forced to single mode.
+
+### Chain
+
+For sequential tool calls where the output of one feeds into the next, the model issues a single `tool_use` block per turn. The framework returns the `tool_result`, and the model issues the next call in a subsequent turn with the prior result available in its context.
+
+- Execution is sequential; the model sees each result before deciding the next call.
+- Capped at 3 chained steps per tool execution phase.
+
+## Sandboxed Execution
+
+All tool execution runs in a sandbox with:
+
+- **Timeout** — Default 30s per tool call, configurable
+- **Error containment** — Tool failures don't crash the agent; errors are reported as observation text
+- **Result wrapping** — All outputs are wrapped in `ToolExecutionResult` with success/failure status
+
+The `code-execute` tool uses subprocess isolation via `Bun.spawn()` with `cwd: "/tmp"` and a minimal environment (`PATH` only). This prevents spawned code from reading environment variables (API keys, secrets) or accessing files outside `/tmp`.
+
+## Input Validation
+
+Tool inputs are validated against their schemas before execution:
+
+- Required parameter checking
+- Type validation (string, number, boolean, array, object)
+- Enum validation
+- Default value injection for optional parameters
+
+Invalid inputs are rejected before the tool handler runs.
+
+## Tool Result Compression
+
+Large tool results (e.g. an MCP `list_commits` returning 31K characters) are automatically compressed so the agent receives accurate, structured data instead of garbled truncated JSON.
+
+### How It Works
+
+When a tool result exceeds the configured `budget` (default: 800 chars), the framework:
+
+1. Detects the result type (JSON array, JSON object, or plain text)
+2. Generates a **structured preview** — compact, accurate, fits within budget
+3. Stores the **full result** in working memory under `_tool_result_N`
+4. Injects the preview + storage key into context
+
+**Example — JSON array (github/list_commits, 30 items, 31K chars):**
+
+```
+[STORED: _tool_result_1 | github/list_commits]
+Type: Array(30) | Schema: sha, commit.message, author.login, date
+Preview (first 3):
+  [0] sha=e255a5d  msg="chore: update bun.lock"        date=2026-02-27
+  [1] sha=59bae87  msg="feat(examples): unified runner" date=2026-02-27
+  [2] sha=efc816e  msg="fix(examples): maxIterations"   date=2026-02-27
+  ...27 more — use recall("_tool_result_1") or | transform: to access full data
+```
+
+### Accessing Full Results
+
+The agent can retrieve the stored result using the `recall` meta-tool (via native function calling):
+
+```typescript
+// The model calls recall via its tool_use block:
+// { name: "recall", input: { key: "_tool_result_1" } }
+```
+
+### Pipe Transforms
+
+For agents that anticipate the response shape, a code-transform pipe lets them extract exactly what they need — **before the result enters context**. The pipe syntax is appended to the tool call args as a `_transform` field:
+
+```typescript
+// The model calls github/list_commits with a transform expression
+// { name: "github/list_commits", input: { owner: "...", repo: "...", _transform: "result.slice(0,5).map(c => ({sha: c.sha.slice(0,7), msg: c.commit.message.split('\\n')[0]}))" } }
+```
+
+The expression is evaluated in-process with `result` bound to the parsed tool output. Only the transform output enters context. On error, the framework falls back to the standard preview and includes the error message.
+
+### Configuration
+
+Tune compression behavior via `.withTools()`:
+
+{/* docs-skip-typecheck */}
+```typescript
+.withTools({
+  resultCompression: {
+    budget: 1200,        // chars before overflow triggers (default: 800)
+    previewItems: 5,     // array items shown in preview (default: 3)
+    autoStore: true,     // store oversized tool previews under stable keys (surfaced to the model via human-readable labels; `recall` can read them)
+    codeTransform: true, // enable | transform: pipe syntax (default: true)
+  }
+})
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `budget` | `800` | Character threshold before compression kicks in |
+| `previewItems` | `3` | Number of array items shown in the preview |
+| `autoStore` | `true` | Whether to store the full result for later retrieval |
+| `codeTransform` | `true` | Whether the `\| transform:` pipe syntax is enabled |
+
+## Memory Integration
+
+When tools are executed during reasoning, the results are automatically logged as episodic memories:
+
+```typescript
+// This happens automatically when both .withTools() and .withMemory() are enabled
+// Each tool result is logged with:
+// - Action taken
+// - Tool name and input
+// - Result content
+// - Timestamp
+```
+
+This means the agent can recall past tool results in future sessions.

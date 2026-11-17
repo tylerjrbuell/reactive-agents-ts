@@ -1,0 +1,243 @@
+---
+title: Built-in tools
+description: >-
+  The built-in tool registry: what ships, how to opt in, web search setup, git and GitHub CLIs, document stores and the kernel meta-tools.
+sidebar:
+  order: 2
+topic: tools
+related:
+  - guides/tools
+  - guides/tools/scoping-and-policy
+  - guides/tools/custom-tools
+  - cookbook/agent-tool-calling-mcp
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+These tools are registered internally as soon as you call `.withTools()`, but each one only reaches the model's prompt-level tool list if you opt in: pass `builtins: true` for all of them, `builtins: [...]` for a named subset, or list a tool by name in `allowedTools`/`requiredTools` (those bypass the opt-in gate on their own):
+
+| Tool | Category | Description | Requires |
+|------|----------|-------------|----------|
+| `web-search` | search | Search the web. Tries Tavily, Brave, Serper, Keenable, then DuckDuckGo | Any one search key (optional; DuckDuckGo needs none) |
+| `http-get` | http | Make HTTP GET requests | — |
+| `file-read` | file | Read file contents (path-traversal protected) | — |
+| `file-write` | file | Write file contents (requires approval) | — |
+| `file-edit` | file | Replace text in existing files (use instead of `file-write` for edits; requires approval) | — |
+| `code-execute` | code | Execute JavaScript/TypeScript only (no shell, no Python) in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env); data is inline or read by absolute path | — |
+| `crypto-price` | data | Get current prices for 30+ cryptocurrencies via CoinGecko's free public API | — |
+
+`http-get` only fetches public addresses. It resolves the host once, checks every answer, and connects to that checked address (and re-checks each redirect hop), so a hostname that later resolves to a private or metadata address (DNS rebinding) is never reached. Credentials you pass in `headers` are dropped when a redirect leaves the original origin. Set `RA_HTTP_ALLOW_PRIVATE=1` to allow trusted local targets. A 4xx or 5xx response, or a 200 whose body is a short (under 2 KB) "not found" page, is returned as a tool failure that names the status and URL, not as a success.
+
+Git and the GitHub CLI are not separate tools. The `git` toolset gives the agent a `shell-execute` limited to `git` and `gh`. See [Git and GitHub CLIs](#git-and-github-clis).
+
+Ad-hoc note builtins were removed from the default tool list. Use the **`recall`** meta-tool (Conductor's Suite) for working-memory writes, reads, search, and listing. If you use **`.withDocuments()`**, ingestion uses **`rag-ingest`** and retrieval is typically routed through **`find`** rather than a standalone `rag-search` builtin.
+
+### Document stores: per agent by default, shared on request
+
+Each built agent owns its document store. Documents from `.withDocuments()` and `agent.ingest()` go into that store, and `find` searches only that store, so two agents in one process never see each other's documents.
+
+To let a group of agents search the same documents, create one store and pass it to each builder:
+
+```typescript
+import { ReactiveAgents, createDocumentStore } from "reactive-agents";
+
+const store = createDocumentStore();
+
+const researcher = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withDocuments([{ source: "./handbook.md" }], { store })
+  .build();
+
+const writer = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withDocuments([], { store }) // no documents of its own, same store
+  .build();
+
+// Runtime ingestion by either agent is visible to both on their next run.
+await writer.ingest("Style guide: short sentences.", { source: "style.md" });
+```
+
+### crypto-price
+
+Fetches current cryptocurrency prices from [CoinGecko's free public API](https://www.coingecko.com/en/api). No API key or account required.
+
+**Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `coins` | `string[]` | yes | Array of coin symbols, e.g. `["BTC", "ETH", "SOL"]`. Case-insensitive. Always batch multiple coins into a single call. |
+| `currency` | `string` | no | Quote currency. Default: `"usd"`. Also accepts: `eur`, `gbp`, `jpy`, `btc`, `eth`. |
+
+**Supported symbols:** BTC, ETH, XRP, XLM, SOL, ADA, DOGE, DOT, AVAX, MATIC/POL, LINK, LTC, BCH, UNI, ATOM, NEAR, ARB, OP, SUI, APT, TRX, TON, SHIB, PEPE, FIL, ICP, VET, ALGO, HBAR.
+
+Prices are cached for 60 seconds — rapid repeated calls within a session return immediately without hitting the network. Responses include a `notFound: true` flag for any unrecognized symbol rather than failing the whole call.
+
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "prices-agent",
+  provider: "anthropic",
+  tools: { allowedTools: ["crypto-price"] },
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ allowedTools: ["crypto-price"] })
+  .withReasoning()
+  .build();
+```
+  </TabItem>
+</Tabs>
+
+```typescript
+const result = await agent.run("What are the current prices of BTC, ETH, and SOL in USD?");
+```
+
+The model is instructed to batch all needed coins into one call. The tool returns `{ prices: [{ symbol, name, price, currency }], currency, source: "coingecko" }`.
+
+### Git and GitHub CLIs
+
+The `git` toolset gives the agent one `shell-execute` tool that may run only `git` and `gh`:
+
+| Toolset | Programs | Requires |
+|---------|----------|----------|
+| `git` | `git`, `gh` | `git` in `$PATH`; `gh` installed and authenticated (`gh auth login` or `GH_TOKEN`) for GitHub commands |
+
+The model writes the full command, starting with the program name, for example `git log --oneline -10` or `gh pr list --state open --json number,title`. Pipes between allowed programs work. Any other program, command substitution (`$(...)`, backticks) or chaining into another program (`; rm`, `&& curl`) is refused.
+
+The shell runs in the run's workspace, so `git` sees your repository. Calls do not ask for approval, so the toolset is **read-only**. It runs an allow-list of subcommands that only read:
+
+- `git`: `status`, `log`, `diff`, `show`, `blame`, `shortlog`, `grep`, `describe`, `rev-parse`, `rev-list`, `ls-files`, `ls-tree`, `ls-remote`, `cat-file`, `show-ref`, `for-each-ref`, `show-branch`, `merge-base`, `name-rev`, `count-objects`, `check-ignore`, `version`, `fetch`, `branch` and `tag` (list mode only), `remote` (bare, `-v`, `show`, `get-url`), `stash list` / `stash show`. Before the subcommand only `-C <dir>`, `--no-pager`, `-P` and `--no-optional-locks` are accepted.
+- `gh`: `view` / `list` for `repo`, `release`, `run`, `workflow`, `gist`; `pr view|list|status|diff|checks`; `issue view|list|status`; `search`; `label list`; `gh status`; and `gh api` for GET requests only.
+
+Everything else is refused with a reason, including `git commit`, `push`, `checkout`, `config`, any alias, `rebase -x`, `submodule foreach`, `bisect run`, `difftool`, `--output`, `grep -O`, output redirects to a file (`>`, `&>`; a descriptor dup such as `2>&1` and a redirect to exactly `/dev/null` write no file and are allowed), `gh alias`, `gh extension`, `gh auth`, `--web`, and `gh api` writes. A block-list cannot be complete for git: `git config core.fsmonitor <cmd>` or a `!` alias stores a command in `.git/config` that a later `git status` runs.
+
+git gets a per-call global config with only your `user.name` and `user.email`. Aliases, credential helpers and URL rewrites from your global config are not passed, and nothing is written to the shell's home directory. So `git fetch` from a private HTTPS remote fails here; `gh` keeps its own credentials (`gh auth login` or `GH_TOKEN`). The toolset also turns off the system git config, hooks (`core.hooksPath` points at an empty directory) and `core.fsmonitor`, so a hook or fsmonitor command in the repository does not run. Output longer than 32 KB is truncated.
+
+To commit, push or run other git commands, use the full host shell: `.withTools({ terminal: true, builtins: ["git"] })`. The terminal asks for approval. When both are set, there is one `shell-execute`: the terminal's settings apply (it is not read-only), and the toolset's programs are added to its allowed commands. git still sees only your name and email.
+
+<Tabs syncKey="syntax">
+  <TabItem label="Declarative">
+```typescript
+const agent = await createAgent({
+  name: "repo-agent",
+  provider: "anthropic",
+  tools: { builtins: ["git"] },
+  reasoning: {},
+});
+```
+  </TabItem>
+  <TabItem label="Builder">
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools({ builtins: ["git"] })
+  .withReasoning()
+  .build();
+```
+  </TabItem>
+</Tabs>
+
+```typescript
+const result = await agent.run("Summarize the last 10 commits and list open PRs.");
+```
+
+`allowedTools: ["git"]` works the same way. An allow-list never widens the shell: when `allowedTools` names `git` (or `gh-cli`, `git-cli`) but not `shell-execute`, the one shell runs only those programs, even with `terminal: true`. The terminal keeps its sandbox settings and approval flags. To allow the full terminal, put `"shell-execute"` in `allowedTools`. The removed tool names `git-cli` and `gh-cli` still resolve to the `git` toolset with a deprecation warning. A custom tool that has one of these names keeps its own name.
+
+Other CLIs, such as the Google Workspace CLI (`gws`), have no toolset. Enable the terminal and allow the program: `.withTools({ terminal: { additionalCommands: ["gws"] } })`. The removed names `gws-cli` and `workspace` enable nothing and log a deprecation warning that says this.
+
+
+```typescript
+const result = await agent.run("What meetings do I have today?");
+```
+
+### Kernel meta-tools (reasoning loop)
+
+These are registered by the kernel with live state — not part of the static `builtinTools` list:
+
+| Tool | Description |
+|------|-------------|
+| `context-status` | Zero-parameter introspection: iteration budget, tools used/pending, stored keys, tokens, etc. |
+| `final-answer` | Hard-gate meta-tool: structured deliverable + format + confidence — the sole termination path for exiting the ReAct loop cleanly under native function calling. |
+
+### Conductor's Suite (opt-in beyond the task-facing defaults)
+
+When **`.withTools()`** is enabled, the default meta-tool surface is deliberately **task-facing**: **`recall`**, and **`find`** auto-enables only when you ingest documents via **`.withDocuments()`**. The built-in harness skill (tier-aware guidance) is only injected when **`brief`** or **`pulse`** is on, so it is off in the default configuration. The planning/reflection meta-tools (**`brief`**, **`pulse`**) — and `find`'s web-egress default — load only on request: enable them with **`.withMetaTools({ brief: true, pulse: true, find: true, … })`**, or pass **`false`** to disable the suite entirely.
+
+`.withMetaTools({...})` means **exactly the set you name**: tools you leave out are off, including the default-on **`recall`** (a notice is logged once when that happens). To add `todo` and keep `recall`, spell out both:
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools()
+  .withMetaTools({ todo: true, recall: true })
+  .build();
+```
+
+All of the above are invoked via the provider’s **native function calling** path (`tool_use` / `tool_calls` → executed → `tool_result` in the thread).
+
+### Healing built into tool design
+
+Models of different capability drift on enum-like values and parameter names (`todo({action:"update", items:[...]})`, `format:"md"`). Built-in tools absorb that drift in the handler instead of failing the call:
+
+- **Closed alias tables.** Each tool lists the exact variants it accepts. Anything outside the table is still rejected, and the error names the closest valid call. Healing never widens a value into something the tool did not declare.
+- **Context decides, not the verb alone.** `todo` treats `update`/`set` as "add" when `items` is present, as an edit when `id` + `text` are present, and as a status change when `id` + `status` are present.
+- **One wrap-up turn before the run finishes (opt-in, off by default; set `RA_TODO_WRAPUP=1`, it costs a model call).** When enabled and the model writes its final answer while `todo` items are still open, the harness holds the answer for one more turn and names the open items: mark them done, remove them, or finish them. It never checks an item for the model, asks only once per run, and does nothing when the list is empty or closed or no turn is left. The second final answer always ends the run.
+- **One item in progress at a time.** `todo` `start` with several targets starts only one (the item already in progress, else the first pending one); `start` with no id starts the first open item. A `start` or `done` that changes nothing returns a `No change: …` line that names the next step, so a repeated call is not mistaken for progress. `reopen` puts a done item back to pending (`undo` heals to it).
+- **The list can be managed.** `todo` also edits, removes and clears items:
+  - `todo({action:"edit", id:2, text:"new title"})` renames one item and keeps its status. The title must not be empty.
+  - `todo({action:"remove", ids:[2,3]})` deletes items. An id that is not on the list is a `No change: …` line, not an error.
+  - `todo({action:"edit", items:[{id:1, text:"…"}, {id:3, text:"…"}]})` renames several items in one call (it runs as a `patch`). `items` entries without an id fail with a message that names the accepted `edit` shapes, and nothing changes.
+  - `todo({action:"clear"})` empties the list. `status:"completed"` clears only the done items.
+  - `todo({action:"patch", ops:[{id:1, text:"…"}, {id:2, status:"done"}, {remove:3}]})` applies several changes in order and returns one result. If any op is invalid, nothing changes and the error names the op. `ops` is declared as a JSON string so OpenAI strict mode keeps the op fields; an array is accepted too.
+
+  `delete`/`rm` heal to `remove`, `rename` to `edit`, `reset` to `clear` and `clear_completed` to a done-only clear. Ids are never reused: after a `remove` or `clear`, the next `add` continues after the highest id the list ever had, when the caller passes the op history (`applyTodoChecklistAction(items, args, posture, history)`).
+- **`request_user_input` questions are schema-typed and healed.** The `questions` parameter publishes its item schema (`id`, `prompt` and `type` required; `type` is `text | single-choice | multi-choice | boolean | number`; `options` for choice types), generated from the same schema the parser decodes with. The legacy `{prompt, kind, schema}` form stays valid. A call that mixes both is repaired when there is one reading: an alias type (`choice` to `single-choice`), string `options` to `{label, value}`, a missing `id` to `q1`, `q2`, and the top-level `prompt` into a lone question that has none. Anything else is rejected with a valid example call.
+- **A step can name its tool.** `todo({action:"add", items:["list the sites","summarize"], tools:["umami/list_websites",""]})` records a structured tool hint per step (`tools` is parallel to `items`, an empty string means none; an item may also be `{text, tool}`). The hint reaches the checklist row's `tool` field instead of living in the step text. Re-sending an existing step with a tool attaches that tool to the existing row when the row has none (no duplicate row is added).
+- **Rephrased duplicates are skipped.** `add` ignores a step whose words (case, punctuation and articles ignored) overlap an existing or same-call step by 80% or more, or sit wholly inside an existing title of 3+ words. The result says `Already on the list as #N` for each skip.
+- **Plan posture.** Under posture `plan` the same `todo` list is the durable plan. Every result ends with `Plan recorded (N steps). Present it to the user; execution starts from this list.` and carries no execute-mode guidance. Execute-posture output is unchanged.
+- **A lone value under the wrong key is remapped.** When exactly one required parameter is missing and exactly one unknown parameter of a compatible type is present, the value moves to the required name: `web-search({q:"…"})` becomes `{query:"…"}` and `crypto-price({symbol:"BTC"})` becomes `{coins:["BTC"]}` (a string sent for an array parameter is one item; `"BTC,ETH"` is split into symbols). Two unknown keys, or no value at all (`{}`), are not guessed: the missing-parameter error shows a valid example call, e.g. `Valid call: web-search({"query":"Bitcoin price today USD"})`.
+- **A path that names the wrong root is read from the right one.** `file-read` and `list-directory` heal an absolute path that does not exist where it points when a suffix of it exists under the working root: a doubled root (`<root>/apps/cortex/apps/cortex/README.md` with a root ending in `apps/cortex`) or a foreign root (`/workspace/a.txt`, `/home/user/project/CHANGELOG.md`). The result carries a `note` with the path that was used. No heal when the path has a `..` segment, when it really exists outside the root (still refused), when the candidate is a credential path or leaves the root through a symlink, or when nothing under the root matches (the corrective traversal error is unchanged). `file-write` is never healed: a write to a path the model did not name would leave verification checking the wrong file.
+- **A sentence in `todo`'s `action` is an add.** `todo({action:"Verify the report", items:[…]})` with no id heals to `add` and reports `healedFrom`. Without items, the unknown-action error lists every valid action and shows the `add` example.
+- **Surfaced, not silent.** A healed call reports `healedFrom` (the raw value the model sent), which the kernel records on the tool-call trace.
+- **Definitions stay the source of truth.** The tool description and parameters describe only the canonical call; aliases are not advertised to the model.
+
+Shared pure helpers live in `packages/tools/src/skills/arg-healing.ts` (`healEnumArg`, `healParamNames`, `closestValid`). Apply them to new tools whose handler lives in `@reactive-agents/tools`.
+
+## Web Search Configuration
+
+`web-search` tries each configured provider in order and uses the first that returns results:
+
+| Order | Provider | Key |
+|-------|----------|-----|
+| 1 | [Tavily](https://www.tavily.com) | `TAVILY_API_KEY` |
+| 2 | Brave Search | `BRAVE_SEARCH_API_KEY` (alias `BRAVE_API_KEY`) |
+| 3 | Serper (Google) | `SERPER_API_KEY` |
+| 4 | Keenable | `KEENABLE_API_KEY` (contributed by @KGKallasmaa) |
+| 5 | DuckDuckGo instant answers | none |
+
+```bash
+# .env — set any one search key
+TAVILY_API_KEY=tvly-...
+KEENABLE_API_KEY=...
+```
+
+Embedders can pass keys per agent instead of through `process.env`. `makeWebSearchHandler({ apiKeys, providers })` (from `@reactive-agents/tools`) builds a `web-search` handler where an explicit key wins over the env var, a provider without one falls back to its env var, and `providers` sets the order and limits the chain (leave out `"duckduckgo"` to disable the keyless fallback). `WEB_SEARCH_PROVIDERS` lists the provider ids and the env vars each reads. Keys are scrubbed from error text.
+
+```ts
+import { makeWebSearchHandler } from "@reactive-agents/tools";
+
+const handler = makeWebSearchHandler({
+  apiKeys: { tavily: process.env.MY_TAVILY_KEY },
+  providers: ["tavily", "duckduckgo"],
+});
+```
+
+Each provider that fails (for example a 401) is recorded in the error text and the next one is tried. Results are `{ title, url, content }`. If no provider returns results, the agent sees an explicit error listing every attempt.

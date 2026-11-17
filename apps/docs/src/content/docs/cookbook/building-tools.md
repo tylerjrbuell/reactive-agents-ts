@@ -1,83 +1,96 @@
 ---
 title: 'Advanced Custom Tools'
 description: >-
-  The deeper-control path for custom tools — the fluent ToolBuilder API, raw
-  ToolDefinition objects, and Effect-native handlers — for when defineTool()
-  isn't enough.
+  The deeper-control path for custom tools — raw ToolDefinition objects,
+  side-effecting tools with Effect-native handlers, and a manual approval
+  check — for when defineTool() isn't enough.
 sidebar:
   order: 8
+topic: tools
+related:
+  - guides/tools
+  - cookbook/agent-tool-calling-mcp
+  - guides/durable-hitl
+  - cookbook/testing-agents
 ---
 
 :::note[Most tools don't need this page]
-Start with [`defineTool`](/guides/tools/#registering-custom-tools) or the
+Start with [`defineTool`](/guides/tools/custom-tools/#registering-custom-tools) or the
 [`tool()` helper](/cookbook/agent-tool-calling-mcp/#step-1--an-agent-with-one-custom-tool) —
 plain `async`/sync handlers, no Effect knowledge required. Reach for what's
-below when you want build-time validation on the definition itself, a raw
-`ToolDefinition` for integrating with an existing registry, or an
-Effect-native handler for structured error channels / resource-safe cleanup.
-Effect was never excluded — it's just not the default path.
+below when you want a raw `ToolDefinition` for integrating with an existing
+registry, or an Effect-native handler for structured error channels and
+resource-safe cleanup. Effect was never excluded — it's just not the default path.
 :::
 
-Tools give agents the ability to take real-world actions — fetch data, run code, call APIs, write files. This recipe covers the fluent `ToolBuilder` API, the lower-level `ToolDefinition` format, and Effect-returning handlers.
+The [Tools guide](/guides/tools/) is the canonical home for the tool system. This recipe covers only the lower-level pieces. Everything else that used to live here is there:
 
-## ToolBuilder
+- **Fluent `ToolBuilder`, parameter types, categories and risk levels:** [ToolBuilder Fluent API](/guides/tools/custom-tools/#toolbuilder-fluent-api) and its [method table](/guides/tools/custom-tools/#toolbuilder-methods).
+- **Restricting the tool set (`allowedTools`, `focusedTools`):** [Scoping the Tool Set](/guides/tools/scoping-and-policy/#scoping-the-tool-set).
+- **Result compression (`resultCompression`):** [Tool Result Compression](/guides/tools/execution-and-results/#tool-result-compression).
+- **MCP servers (`.withMCP()`):** [MCP Support](/guides/tools/mcp-tools/), or the [hands-on walkthrough](/cookbook/agent-tool-calling-mcp/).
 
-The fluent `ToolBuilder` builds the tool *definition* — name, description, typed parameters, risk metadata — and catches misconfiguration at build time (a missing description throws). The execution handler is supplied when you register the tool with `.withTools({ tools })`: it receives a single `args` record and returns an `Effect`.
+## Low-Level ToolDefinition
+
+For integrating with existing tool registries or when you need full control:
+
+```typescript
+import type { ToolDefinition } from "@reactive-agents/tools";
+
+const calculator: ToolDefinition = {
+  name: "calculator",
+  description: "Evaluate a mathematical expression",
+  parameters: [
+    {
+      name: "expression",
+      type: "string",
+      description: "Math expression to evaluate (e.g., '2 + 2 * 3')",
+      required: true,
+    },
+  ],
+  riskLevel: "low",
+  timeoutMs: 1_000,
+  requiresApproval: false,
+  source: "function",
+  returnType: "number",
+};
+```
+
+## Tools with Side Effects
+
+For tools that modify state, raise the `riskLevel` and return structured results so the agent can reason about success/failure. The `ToolBuilder` builds the definition and catches misconfiguration at build time (a missing description throws). The handler is supplied at registration through `.withTools({ tools })`. It receives a single `args` record and returns an `Effect`: use `Effect.succeed(...)` for pure values, `Effect.try(...)` for synchronous code that can throw and `Effect.tryPromise(...)` for async work. Errors reach the agent as observations instead of crashing the run.
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 import { ToolBuilder } from "@reactive-agents/tools";
 import { Effect } from "effect";
 
-const { definition } = ToolBuilder.create("web-search")
-  .description("Search the web for current information")
-  .param("query", "string", "The search query", { required: true })
-  .param("maxResults", "number", "Max results to return", { default: 5 })
-  .riskLevel("low")
-  .timeout(15_000)
-  .returnType("SearchResult[]")
-  .category("search")
+const { definition: writeFileDef } = ToolBuilder.create("write-file")
+  .description("Write content to a file, creating it if it doesn't exist")
+  .param("path", "string", "Destination file path", { required: true })
+  .param("content", "string", "Content to write", { required: true })
+  .param("append", "boolean", "Append instead of overwrite", { default: false })
+  .riskLevel("medium")
+  .timeout(10_000)
   .build();
+
+const writeFileHandler = (args: Record<string, unknown>) =>
+  Effect.tryPromise(async () => {
+    const path = String(args.path);
+    const content = String(args.content);
+    const { writeFile, appendFile } = await import("fs/promises");
+    const fn = args.append ? appendFile : writeFile;
+    await fn(path, content, "utf-8");
+    return { success: true, path, bytesWritten: content.length };
+  });
 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools({
-    tools: [
-      {
-        definition,
-        handler: (args) =>
-          Effect.tryPromise(async () => {
-            const query = String(args.query);
-            const maxResults = Number(args.maxResults ?? 5);
-            // your implementation
-            return { query, maxResults, results: [] };
-          }),
-      },
-    ],
-  })
+  .withTools({ tools: [{ definition: writeFileDef, handler: writeFileHandler }] })
   .build();
 ```
 
-Use `Effect.succeed(...)` for pure values, `Effect.try(...)` for synchronous code that can throw, and `Effect.tryPromise(...)` for async work — errors are surfaced to the agent as observations instead of crashing the run.
-
-For a fully *typed* handler (validated args inferred from a schema, plain `async` functions allowed), use [`defineTool`](/guides/tools/#registering-custom-tools) — its result is directly assignable to the `tools` array.
-
-## Parameter Types
-
-<!-- docs-skip-typecheck -->
-```typescript
-new ToolBuilder("file-processor")
-  .description("Process a file")
-  .param("path", "string", "Absolute file path", { required: true })
-  .param("encoding", "string", "File encoding", {
-    default: "utf-8",
-    enum: ["utf-8", "ascii", "base64"],   // restricts LLM to these values
-  })
-  .param("maxBytes", "number", "Maximum bytes to read")
-  .param("lines", "array", "Specific line numbers to extract")
-  .param("options", "object", "Advanced options")
-  .build();
-```
+For a fully *typed* handler (validated args inferred from a schema, plain `async` functions allowed), use [`defineTool`](/guides/tools/custom-tools/#registering-custom-tools) — its result is directly assignable to the `tools` array.
 
 ## Risk Levels and Approval Gates
 
@@ -115,124 +128,8 @@ if (definition.requiresApproval) {
 // proceed to register / execute
 ```
 
-## Tool Categories
-
-Categories help the agent reason about which tools to use:
-
-<!-- docs-skip-typecheck -->
-```typescript
-new ToolBuilder("fetch-status-page")
-  .description("Fetch the service status page")
-  .category("http")   // "search" | "file" | "code" | "http" | "data" | "system" | "custom" | "vcs" | "productivity"
-  .build();
-```
-
-## Low-Level ToolDefinition
-
-For integrating with existing tool registries or when you need full control:
-
-```typescript
-import type { ToolDefinition } from "@reactive-agents/tools";
-
-const calculator: ToolDefinition = {
-  name: "calculator",
-  description: "Evaluate a mathematical expression",
-  parameters: [
-    {
-      name: "expression",
-      type: "string",
-      description: "Math expression to evaluate (e.g., '2 + 2 * 3')",
-      required: true,
-    },
-  ],
-  riskLevel: "low",
-  timeoutMs: 1_000,
-  requiresApproval: false,
-  source: "function",
-  returnType: "number",
-};
-```
-
-## Tools with Side Effects
-
-For tools that modify state, raise the `riskLevel` and return structured results so the agent can reason about success/failure:
-
-```typescript
-import { ToolBuilder } from "@reactive-agents/tools";
-import { Effect } from "effect";
-
-const { definition: writeFileDef } = ToolBuilder.create("write-file")
-  .description("Write content to a file, creating it if it doesn't exist")
-  .param("path", "string", "Destination file path", { required: true })
-  .param("content", "string", "Content to write", { required: true })
-  .param("append", "boolean", "Append instead of overwrite", { default: false })
-  .riskLevel("medium")
-  .timeout(10_000)
-  .build();
-
-const writeFileHandler = (args: Record<string, unknown>) =>
-  Effect.tryPromise(async () => {
-    const path = String(args.path);
-    const content = String(args.content);
-    const { writeFile, appendFile } = await import("fs/promises");
-    const fn = args.append ? appendFile : writeFile;
-    await fn(path, content, "utf-8");
-    return { success: true, path, bytesWritten: content.length };
-  });
-
-// Register with .withTools({ tools: [{ definition: writeFileDef, handler: writeFileHandler }] })
-```
-
-## Restricting Available Tools
-
-Give the agent a focused set of tools for a specific task — prevents distraction and reduces token usage:
-
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withTools({
-    allowedTools: ["web-search", "file-read"],  // LLM only sees these
-  })
-  .build();
-```
-
-## Tool Result Compression
-
-Large tool outputs (e.g., full file contents, long API responses) are automatically compressed to fit the context window. Configure the compression behavior:
-
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withTools({
-    resultCompression: {
-      budget: 2_000,            // chars before overflow triggers compression
-      previewItems: 3,          // array items shown in the preview
-      autoStore: true,          // stash overflow in the scratchpad for recall
-    },
-  })
-  .build();
-```
-
-## MCP Tools
-
-Connect to any Model Context Protocol server to get its tools automatically:
-
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withMCP({
-    name: "filesystem",
-    transport: "stdio",
-    command: "npx",
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-  })
-  .build();
-```
-
-The agent discovers and uses all tools advertised by the MCP server.
-
 ## What's Next
 
-- [Tools](/guides/tools/) — the built-in tool registry, sandboxing, and reasoning integration this ToolBuilder API plugs into
+- [Tools](/guides/tools/) — the built-in tool registry, sandboxing, `ToolBuilder`, MCP and reasoning integration
 - [Build an Agent with Tool Calling and MCP](/cookbook/agent-tool-calling-mcp/) — a full walkthrough including MCP servers
 - [Testing Agents](/cookbook/testing-agents/) — mock and test the custom tools built here

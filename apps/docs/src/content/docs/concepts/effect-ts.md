@@ -1,6 +1,10 @@
 ---
 title: Effect-TS Primer
 description: The key Effect-TS concepts used in Reactive Agents.
+topic: concepts
+related:
+  - concepts/layer-system
+  - concepts/architecture
 ---
 
 Reactive Agents is built on [Effect-TS](https://effect.website). You don't need to be an Effect expert to use the framework, but understanding these concepts helps.

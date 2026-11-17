@@ -16,9 +16,9 @@ After loading this skill you know: (1) what the framework does, (2) the canonica
 
 ## Framework overview
 
-Reactive Agents is an Effect-TS layered runtime for building autonomous AI agents in TypeScript. Agents are composed via a fluent `ReactiveAgentBuilder` — each `.withX()` call wires in an optional capability layer. The runtime ships 25 packages covering reasoning, memory, tools, MCP, guardrails, identity, observability, orchestration, cost, verification, eval, A2A networking, and web framework integrations (React, Vue, Svelte).
+Reactive Agents is an Effect-TS layered runtime for building autonomous AI agents in TypeScript. Agents are composed via a fluent `ReactiveAgentBuilder` — each `.withX()` call wires in an optional capability layer. The runtime ships as focused `@reactive-agents/*` packages covering reasoning, memory, tools, MCP, guardrails, identity, observability, orchestration, cost, verification, eval, A2A networking, and web framework integrations (React, Vue, Svelte).
 
-Six LLM providers are supported: `anthropic`, `openai`, `gemini`, `ollama`, `litellm`, and `test`.
+Eight LLM providers are supported: `anthropic`, `openai`, `gemini`, `groq`, `xai`, `ollama`, `litellm`, and `test`.
 
 ## Two syntaxes, one API
 
@@ -58,7 +58,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withReasoning({ defaultStrategy: "adaptive", maxIterations: 10 })
-  .withTools()
+  .withTools({ builtins: true })
   .withMemory({ tier: "enhanced", dbPath: "./agent.db" })
   .withObservability({ verbosity: "normal", live: true })
   .build();                           // always await — returns Promise<ReactiveAgent>
@@ -110,7 +110,7 @@ builder.buildEffect()                        // returns Effect<ReactiveAgent> fo
 
 - `.build()` is async — always `await` it; forgetting causes silent "agent is undefined" errors
 - `.withProvider()` is required — there is no default provider
-- `.withTools()` with no args enables 5 standard tools: `web-search`, `http-get`, `file-read`, `file-write`, `code-execute`. Shell execution is **opt-in only** via `.withTools({ terminal: true })`; use `allowedTools` to restrict standard tools
+- `.withTools()` with no args registers the built-ins but hides them from the model (and logs a "no capability tools" warning if nothing else is configured). Opt in with `.withTools({ builtins: true })` for the 5 standard tools (`web-search`, `http-get`, `file-read`, `file-write`, `code-execute`) or `builtins: [...]` for a subset. Shell execution is **opt-in only** via `.withTools({ terminal: true })`; use `allowedTools` to restrict standard tools
 - Strategy name is `"plan-execute-reflect"` — **not** `"plan-execute"` (throws `StrategyNotFoundError`)
 - Memory tiers are `"standard"` and `"enhanced"` — **not** `"1"` and `"2"` (those are deprecated)
 - `"groq"` and `"openrouter"` are not valid provider names — use `"litellm"` for proxy/router providers

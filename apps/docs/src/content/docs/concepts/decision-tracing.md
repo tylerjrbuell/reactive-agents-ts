@@ -3,6 +3,11 @@ title: Decision Tracing
 description: >-
   Capture *why* every agent decision is made — tool selection, assumption,
   termination — as typed, queryable rationale across the harness.
+topic: observability
+related:
+  - features/observability
+  - reference/cli/diagnose
+  - features/snapshot-replay
 ---
 
 # Decision Tracing (v0.11.x)
@@ -188,7 +193,7 @@ rax diagnose attribute latest    # was it the harness or the model?
 rax diagnose attribute --all ./traces   # tally reasons across many runs
 ```
 
-`attribute` gives a verdict (`harness`, `model`, `environment`, `unattributed` or `not-failed`) and a reason. For example, `harness:completeness-blind` means the run stopped on its own while files the task required were still missing, and nothing in the harness knew they were required. `model:had-evidence-wrong-output` means the model saw every tool result it needed and still produced a wrong answer. It also prints an `activity` line: the harness mechanisms that acted in the run, such as guards that intervened (`guard:exit_gate:block`), injected signals, strategy switches and contract requirements by source. When you change a harness setting, compare activity before and after to confirm the change actually ran before you trust a pass-rate difference. The full reason list is in the [CLI reference](/reference/cli/#rax-diagnose).
+`attribute` gives a verdict (`harness`, `model`, `environment`, `unattributed` or `not-failed`) and a reason. For example, `harness:completeness-blind` means the run stopped on its own while files the task required were still missing, and nothing in the harness knew they were required. `model:had-evidence-wrong-output` means the model saw every tool result it needed and still produced a wrong answer. It also prints an `activity` line: the harness mechanisms that acted in the run, such as guards that intervened (`guard:exit_gate:block`), injected signals, strategy switches and contract requirements by source. When you change a harness setting, compare activity before and after to confirm the change actually ran before you trust a pass-rate difference. The full reason list is in the [CLI reference](/reference/cli/diagnose/).
 
 ## Programmatic access
 

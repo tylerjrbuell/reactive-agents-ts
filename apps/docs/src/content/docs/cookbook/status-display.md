@@ -5,6 +5,10 @@ description: >-
   scrollback in interactive terminal sessions.
 sidebar:
   order: 12
+topic: observability
+related:
+  - features/observability
+  - features/streaming
 ---
 
 `StatusRenderer` is a terminal UI that replaces scrolling log output with a single updating status line during agent execution. It is designed for interactive terminal sessions where you want a clean, information-dense view of what the agent is doing without a wall of streaming text.

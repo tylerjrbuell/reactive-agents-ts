@@ -5,6 +5,11 @@ description: >-
   cap risky tools, and override the workspace for a single run.
 sidebar:
   order: 20
+topic: tools
+since: "0.18"
+related:
+  - guides/agent-skills
+  - guides/tools/scoping-and-policy
 ---
 
 A coding agent needs three things: a root it cannot escape, the project's own instructions, and limits on the tools that touch the outside world. In v0.18 these are all per-run, so one agent instance can work on several projects without leaking state between them.

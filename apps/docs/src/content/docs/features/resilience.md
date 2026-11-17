@@ -5,6 +5,11 @@ description: >-
   Docker sandbox for production-grade reliability.
 sidebar:
   order: 16
+topic: safety
+related:
+  - cookbook/error-handling
+  - reference/builder-api/limits-cost-resilience
+  - guides/production-checklist
 ---
 
 Reactive Agents includes multiple resilience layers that protect your agent workflows from provider outages, redundant API calls, and unsafe code execution.

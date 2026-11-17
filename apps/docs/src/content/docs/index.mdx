@@ -1,9 +1,9 @@
 ---
 title: Reactive Agents
-description: Agents you can control, audit and improve. An agent harness you can compose like a framework, the TypeScript agentic harness framework for building reliable LLM agents. The same code runs the full agent loop on a local 4B model or a frontier API, on a harness you fully control, with tool-call healing, verification, and a signed evidence receipt for every run. Built on Effect-TS.
+description: Agents you can control, audit and improve. TypeScript agents that can finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from. Built on Effect-TS.
 template: splash
 hero:
-    tagline: 'Agents you can control, audit and improve. An agent harness you can compose like a framework, in TypeScript. Every run returns a signed receipt proving what it did — typed, observable, yours to steer.'
+    tagline: 'Agents you can control, audit and improve. TypeScript agents that can finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from.'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -18,6 +18,7 @@ hero:
           link: https://github.com/tylerjrbuell/reactive-agents-ts
           icon: external
           variant: secondary
+topic: getting-started
 ---
 
 import {
@@ -35,6 +36,7 @@ import RunPhases from '../../components/RunPhases.astro'
 import RunDebrief from '../../components/RunDebrief.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
 import ScrollReveal from '../../components/ScrollReveal.astro'
+import TaskFinder from '../../components/TaskFinder.astro'
 import metrics from '../../data/metrics.json'
 import demoGif from '../../assets/local-vs-frontier.gif'
 
@@ -90,6 +92,8 @@ import demoGif from '../../assets/local-vs-frontier.gif'
         </div>
     </div>
 </div>
+
+<TaskFinder />
 
 <div id="see-it-run" class="ra-section-card ra-panel ra-story" data-stack="1" style="scroll-margin-top:1.5rem">
   <div class="ra-panel-inner">
@@ -356,7 +360,7 @@ Everything below is evidence for four things: **transparent** (nothing happens o
 
 <CardGrid stagger>
     <Card title="Type-Safe from End to End" icon="seti:typescript">
-        **Zero `any`** in framework code. Every agent, tool, memory entry, and
+        **Strict TypeScript** throughout. Every agent, tool, memory entry, and
         LLM call is validated by Effect-TS schemas. Failures are typed tagged
         errors, not exceptions. **{metrics.tests.toLocaleString()} tests** keep
         every service boundary honest on every PR.
@@ -432,7 +436,7 @@ Everything below is evidence for four things: **transparent** (nothing happens o
 <CardGrid>
     <Card title="vs. LangChain / LlamaIndex" icon="document">
         Python-first, dynamically typed, monolithic. Reactive Agents is
-        **TypeScript-native with zero `any`**, fully modular layers, and
+        **TypeScript-native and strictly typed**, fully modular layers, and
         built-in observability. You see every decision — not just the final
         output. Side-by-side migration guide included.
     </Card>

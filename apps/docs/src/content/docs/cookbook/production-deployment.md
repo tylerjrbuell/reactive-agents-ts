@@ -5,6 +5,11 @@ description: >-
   cost controls, safety, and monitoring.
 sidebar:
   order: 6
+topic: gateway
+related:
+  - guides/production-checklist
+  - guides/deploying-agents
+  - features/gateway
 ---
 
 This guide covers what to enable and configure when deploying agents to production environments.
@@ -43,7 +48,7 @@ const agent = await ReactiveAgents.create()
   // Autonomous operation (optional)
   .withGateway({                  // Persistent event-driven harness
     heartbeat: { intervalMs: 1_800_000, policy: "adaptive" },
-    policies: { dailyTokenBudget: 50_000, maxActionsPerHour: 20 },
+    policies: { dailyTokenBudget: 50_000 },  // all options: /features/gateway/
   })
 
   .build();
@@ -54,10 +59,6 @@ const agent = await ReactiveAgents.create()
 ```bash
 # LLM Provider
 ANTHROPIC_API_KEY=sk-ant-...
-LLM_DEFAULT_MODEL=claude-sonnet-4-6
-LLM_DEFAULT_TEMPERATURE=0.7
-LLM_MAX_RETRIES=3
-LLM_TIMEOUT_MS=30000
 
 # Embeddings (for Tier 2 memory)
 EMBEDDING_PROVIDER=openai
@@ -70,6 +71,8 @@ OPENAI_API_KEY=sk-...
 # Tools (optional)
 TAVILY_API_KEY=tvly-...            # enables built-in web search tool
 ```
+
+Tuning variables (`LLM_DEFAULT_MODEL`, `LLM_MAX_RETRIES`, `LLM_TIMEOUT_MS` and others) and their defaults: [Configuration: environment variables](/reference/configuration/#environment-variables).
 
 ## Cost Controls
 
@@ -197,12 +200,7 @@ try {
 
 ## Memory Persistence
 
-For production, memory is stored in SQLite (bun:sqlite):
-
-- **WAL mode** enabled by default for concurrent reads
-- **FTS5** indexes for full-text search
-- **File-based** — persists across process restarts
-- **Per-agent** — each agent has its own database
+Memory is file-based SQLite, one database per agent, so it persists across process restarts. Mount the directory on a persistent volume. Location, tiers and retention are in the [Memory guide](/guides/memory/#storage-location).
 
 ## Performance Tips
 
@@ -267,60 +265,16 @@ app.post("/agent/:type", async (req, res) => {
 
 ### Autonomous Agent (Gateway)
 
-Long-running agent that responds to heartbeats, crons, and webhooks:
+A long-running agent that responds to heartbeats, crons and webhooks uses `.withGateway({ ... })`. The [Agent Gateway](/features/gateway/) page is the one home for the heartbeat, cron, webhook and policy options and the gateway events. Messaging-platform setup is in [Messaging Channels](/guides/messaging-channels/).
 
-<!-- docs-skip-typecheck -->
-```typescript
-const agent = await ReactiveAgents.create()
-  .withName("ops-agent")
-  .withProvider("anthropic")
-  .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools({ builtins: true })
-  .withMemory()
-  .withGuardrails()
-  .withCostTracking()
-  .withObservability({ verbosity: "normal" })
-  .withKillSwitch()
-  .withGateway({
-    heartbeat: {
-      intervalMs: 1_800_000,
-      policy: "adaptive",
-      instruction: "Check for pending tasks and recent alerts",
-    },
-    crons: [
-      {
-        schedule: "0 9 * * MON-FRI",
-        instruction: "Generate daily status summary",
-        priority: "high",
-      },
-    ],
-    webhooks: [
-      { path: "/github", adapter: "github", secret: process.env.GITHUB_WEBHOOK_SECRET },
-    ],
-    policies: {
-      dailyTokenBudget: 50_000,
-      maxActionsPerHour: 20,
-      heartbeatPolicy: "adaptive",
-    },
-  })
-  .build();
-
-// Monitor autonomous activity
-await agent.subscribe("ProactiveActionSuppressed", (event) => {
-  console.log(`Policy blocked: ${event.reason}`);
-});
-await agent.subscribe("BudgetExhausted", (event) => {
-  alerting.notify(`Token budget hit: ${event.tokensUsed}/${event.dailyBudget}`);
-});
-```
-
-Key production practices for autonomous agents:
+Production practices for autonomous agents:
 
 - **Always enable `.withKillSwitch()`** — emergency halt at any phase boundary
 - **Set `dailyTokenBudget`** — prevents runaway costs overnight
-- **Use `"adaptive"` heartbeats** — skip ticks when idle, saving ~50%+ of LLM calls
-- **Subscribe to `BudgetExhausted`** — get alerts when limits are hit
+- **Use `"adaptive"` heartbeats** — skip ticks when idle
+- **Subscribe to `BudgetExhausted`** — get alerts when limits are hit (see [gateway events](/features/gateway/#gateway-status--stats))
 - **Use `.withGuardrails()`** — webhook payloads are checked for injection before reaching the LLM
+- Before you deploy, read [Before you deploy a gateway agent](/guides/deploying-agents/#before-you-deploy-a-gateway-agent)
 
 ## What's Next
 

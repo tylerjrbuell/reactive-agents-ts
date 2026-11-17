@@ -5,6 +5,12 @@ description: >-
   transports.
 sidebar:
   order: 22
+topic: safety
+related:
+  - guides/tools
+  - guides/guardrails
+  - guides/durable-hitl
+  - guides/production-checklist
 ---
 
 This guide focuses on secure defaults and common mistakes in real deployments.
@@ -33,6 +39,8 @@ const agent = await ReactiveAgents.create()
 - Prefer allowlists/denylists for tools in high-trust environments.
 
 ## MCP Hardening
+
+Transports, auth and Docker options are documented in [MCP Support](/guides/tools/mcp-tools/). This is the checklist:
 
 - Prefer `streamable-http` with explicit auth headers for remote servers.
 - For `stdio`/Docker, keep containers minimal and ephemeral (`--rm`).

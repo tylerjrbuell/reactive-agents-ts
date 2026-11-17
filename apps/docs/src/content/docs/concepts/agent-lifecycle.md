@@ -3,6 +3,11 @@ title: Agent Lifecycle
 description: >-
   The 12-phase execution engine that powers every agent — now fully wired to all
   services.
+topic: concepts
+related:
+  - concepts/architecture
+  - guides/hooks
+  - reference/builder-api/observability-and-lifecycle
 ---
 
 Every task an agent processes flows through a deterministic 12-phase lifecycle. This is the core of the ExecutionEngine — and every phase is wired to its corresponding service when enabled.

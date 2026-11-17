@@ -3,12 +3,17 @@ title: Observability
 description: 'Distributed tracing, metrics, structured logging, and agent state snapshots.'
 sidebar:
   order: 8
+topic: observability
+related:
+  - cookbook/observability-metrics
+  - concepts/decision-tracing
+  - features/observe
 ---
 
 The observability layer gives you full visibility into agent behavior. Every execution phase emits spans, every LLM call records metrics, and every decision is logged with structured context.
 
-:::note[On by default]
-Observability is enabled automatically at `"minimal"` verbosity — no `.withObservability()` call required. At `"minimal"`, only the start and completion lines are printed. Call `.withObservability({ verbosity: "normal" | "verbose" | "debug", live: true })` to increase output or stream logs in real time.
+:::note[Default verbosity depends on stdout]
+Call `.withObservability({ verbosity: "normal" | "verbose" | "debug", live: true })` to turn on the metrics dashboard and live streaming. When you set no `verbosity`, the default follows where stdout goes: an interactive terminal gets `"normal"`; a non-TTY stdout (a server, a pipe, CI, or an app that embeds the library) prints warnings and errors only, with no phase narration, spans or dashboard. An explicit `verbosity` always wins, and an explicit `"minimal"` stays fully silent. EventBus events and traces are unchanged: the default only affects what is printed to stdout. The policy is exported as `resolveVerbosity(explicit, isTTY)`.
 :::
 
 ## Quick Start
@@ -38,8 +43,8 @@ const agent = await ReactiveAgents.create()
 
 | Level | Output |
 |-------|--------|
-| `"minimal"` (default) | Start + complete lines only |
-| `"normal"` | Phase transitions + tool names + final stats |
+| `"minimal"` | Start + complete lines only |
+| `"normal"` (default on a TTY) | Phase transitions + tool names + final stats |
 | `"verbose"` | + reasoning steps + LLM call summary + memory stats |
 | `"debug"` | + full prompt content + full tool I/O (no truncation) |
 
@@ -248,10 +253,10 @@ Telemetry data is aggregated by:
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withObservability({ verbosity: "normal" })
+  .withObservability({ verbosity: "normal", telemetry: true })
   .build();
 
-// Telemetry is collected automatically to local SQLite
+// With `telemetry` set on withObservability (above), data is collected locally
 const result = await agent.run("Fetch and summarize top 5 HN posts");
 
 // Later: Query aggregated telemetry
@@ -269,16 +274,7 @@ console.log(telemetry);
 
 ### Configuring Telemetry
 
-By default, telemetry is enabled when observability is enabled. To disable:
-
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withObservability({ verbosity: "normal", telemetry: false })
-  .build();
-```
-
-To configure privacy-preserving telemetry sharing:
+This local telemetry collector is separate from the anonymous run report Reactive Intelligence can send (see [Telemetry](/telemetry/); opt-in, off by default). The collector is built only when you pass a `telemetry` option to `.withObservability()`; `.withObservability()` alone does not create it. To configure it:
 
 <!-- docs-skip-typecheck -->
 ```typescript

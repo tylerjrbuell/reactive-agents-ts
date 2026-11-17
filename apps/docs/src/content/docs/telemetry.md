@@ -1,14 +1,21 @@
 ---
 title: Telemetry
-description: Exactly what anonymous data Reactive Intelligence telemetry collects, what it never collects, and every way to turn it off.
+description: Anonymous run telemetry is off by default. Exactly what it collects if you opt in, what it never collects, and how opt-in and opt-out interact.
+topic: observability
 ---
 
-When Reactive Intelligence is enabled, the framework sends an **anonymous run
-report** after each run to help improve model calibration profiles. A
-dismissible notice is shown the first time this happens in a process, linking
-here. This page is the complete, honest inventory.
+Anonymous run telemetry is **off by default**. An agent with no telemetry
+setting builds no telemetry client, creates no install ID, sends nothing to
+`api.reactiveagents.dev` and prints no notice. If you opt in, the framework
+sends an **anonymous run report** after each run to help improve model
+calibration profiles, and shows a one-time notice per process linking here.
+This page is the complete, honest inventory of what that report contains.
 
-## What is collected
+Local run observations (used by local calibration) are still written to
+`~/.reactive-agents/observations` whether or not you opt in; they never leave
+your machine.
+
+## What is collected (only if you opt in)
 
 Run-shape metrics only — the report is built in
 `packages/runtime/src/engine/finalize/telemetry-emit.ts` and its exact type is
@@ -34,24 +41,36 @@ Reports are signed and sent fire-and-forget to
 `REACTIVE_AGENTS_TELEMETRY_REPORTS_URL`); a network failure never affects the
 run. Runs on the `test` provider never send anything.
 
-## Turning it off
+## Opting in
 
-Any one of these disables telemetry entirely:
-
-```bash
-# Environment (no code change) — either variable works
-export DO_NOT_TRACK=1                  # console DNT convention
-export REACTIVE_AGENTS_TELEMETRY=0
-```
+Either of these turns it on:
 
 ```typescript
 // Per agent, in code
 ReactiveAgents.create()
-  .withReactiveIntelligence({ telemetry: false })
+  .withReactiveIntelligence({ telemetry: true })
   .build();
 ```
 
-Disabling telemetry does not disable Reactive Intelligence itself — the
-entropy sensor and controller keep working locally; only the anonymous
-reporting stops. When the environment opt-out is set, the first-run notice is
-suppressed too (the framework never claims to send what it doesn't).
+```bash
+# Environment (no code change)
+export REACTIVE_AGENTS_TELEMETRY=1     # or "true"
+```
+
+## Opting out, and precedence
+
+Precedence, strongest first:
+
+1. `DO_NOT_TRACK=1` (console DNT convention) or `REACTIVE_AGENTS_TELEMETRY=0`
+   in the environment: telemetry is off, even over an explicit
+   `telemetry: true`.
+2. An explicit `telemetry: false` in code beats the
+   `REACTIVE_AGENTS_TELEMETRY=1` opt-in.
+3. `telemetry: true` (or `{ enabled: true }`) or
+   `REACTIVE_AGENTS_TELEMETRY=1` opts in.
+4. Nothing set: off.
+
+Opting in or out does not change Reactive Intelligence itself: the entropy
+sensor and controller keep working locally; only the anonymous reporting is
+affected. The notice prints only when telemetry is actually on (the framework
+never claims to send what it does not).

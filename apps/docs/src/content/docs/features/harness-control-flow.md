@@ -5,6 +5,10 @@ description: >-
   work together to guide agent reasoning.
 sidebar:
   order: 11
+topic: reasoning
+related:
+  - features/harness-control
+  - reference/harness-tags
 ---
 
 The harness control flow is the real-time feedback loop that monitors and steers agent reasoning. It connects three systems — the **entropy sensor**, the **reactive controller**, and the **calibration store** — into a single evaluation pipeline that runs after every kernel iteration.

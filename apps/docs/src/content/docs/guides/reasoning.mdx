@@ -5,9 +5,15 @@ description: >-
   Tree-of-Thought, and Adaptive meta-strategy.
 sidebar:
   order: 8
+topic: reasoning
+related:
+  - guides/choosing-strategies
+  - cookbook/custom-strategies
+  - features/code-action
+  - guides/plan-then-execute
 ---
 
-import { Aside, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 The reasoning layer provides structured thinking strategies that go beyond simple LLM completions. Each strategy shapes how the agent breaks down and approaches a task. With 8 built-in strategies and support for custom ones, you can match the reasoning approach to the problem.
 
@@ -15,322 +21,9 @@ The reasoning layer provides structured thinking strategies that go beyond simpl
 `.withReasoning()` (builder) or `reasoning: {}` (declarative) with no options activates ReAct (Think → Act → Observe loop). Switch via `.withReasoning({ defaultStrategy: "tree-of-thought" })` or `reasoning: { defaultStrategy: "tree-of-thought" }`. **Strategy switching** (the agent picks a different strategy mid-run when entropy detects it's stuck) is opt-in: `enableStrategySwitching: true`. It is off by default because a 2026-11-05 ablation showed no accuracy lift at +28% billed tokens. See [Choosing a Reasoning Strategy](../choosing-strategies/) for the full decision tree.
 </Aside>
 
-<Aside type="caution" title="Pick by task shape, not by hype">
-Tree-of-Thought is *not* always better than ReAct. ToT explores wide and is good for **creative / open-ended** problems but uses 3-5× more tokens. Plan-Execute beats ReAct on **multi-step structured work** but burns budget on planning if your task is simple. The Adaptive strategy auto-picks per task — usually the safest choice when you don't know the workload.
-</Aside>
+## The Eight Strategies
 
-## Available Strategies
-
-### ReAct (Default)
-
-A **Thought → Action → Observation** loop that continues until the agent reaches a final answer. This is the most versatile strategy and the default when reasoning is enabled.
-
-1. **Think** — The agent reasons about the current state
-2. **Act** — If needed, invokes a tool via native function calling (tools are passed via API parameter; the model returns structured `tool_use` blocks)
-3. **Observe** — The tool is executed via ToolService and the real result is fed back as a `tool_result` message
-4. **Repeat** until the `final-answer` meta-tool is called or max iterations hit
-
-**Best for:** Tasks requiring tool use, multi-step reasoning, and iterative refinement.
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-import { createAgent } from "reactive-agents";
-
-const agent = await createAgent({
-  name: "research-agent",
-  provider: "anthropic",
-  reasoning: {},                    // ReAct strategy by default
-  tools: { builtins: true },        // opt in to built-in tools (web search, file I/O, etc.)
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-import { ReactiveAgents } from "reactive-agents";
-
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning()          // ReAct strategy by default
-  .withTools({ builtins: true })  // opt in to built-in tools (web search, file I/O, etc.)
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-Run it the same way either way:
-
-```typescript
-// ReAct loop: Think → tool_use: web_search({query: "..."}) → tool_result: [real results] → final-answer
-const result = await agent.run("What happened in AI this week?");
-```
-
-When `.withTools()` / `tools: {}` is added, the ReAct strategy passes tool definitions to the LLM via the API's native function calling parameter. The model returns structured `tool_use` blocks — no text parsing required. Tool results are fed back as `tool_result` messages. Without ToolService, the agent degrades gracefully — returning descriptive messages instead of tool results.
-
-### Blueprint
-
-A ReWOO-style **Plan → Verify → Execute → Solve** strategy for static, decomposable, tool-heavy tasks — the efficient counterpart to Plan-Execute-Reflect.
-
-1. **Plan** (1 LLM call) — emit the entire tool plan as a dependency graph (DAG) with `#E1/#E2` evidence references; schema/grammar-enforced so small local models produce a valid plan
-2. **Verify** (no LLM) — validate the DAG, repair fixable gaps, or **degrade to ReAct** if unusable
-3. **Execute** (no LLM) — run tools in dependency order, independent steps in parallel
-4. **Solve** (1 LLM call, skipped when a step already produced the deliverable)
-
-**Best for:** multi-file/artifact generation, static pipelines, independent parallel subtasks — where the plan is knowable up front. **~2 LLM calls total** (≈20× cheaper than plan-execute on its domain). Validated on both frontier and local (qwen3:14b) models.
-
-**Tradeoff:** no mid-course observation — can't react to surprises. For flaky I/O, debug-until-passing, or fetch-then-decide, use Plan-Execute-Reflect or ReAct.
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-const agent = await createAgent({
-  name: "codegen-agent",
-  provider: "anthropic",
-  reasoning: { defaultStrategy: "blueprint" },  // alias: "rewoo"
-  tools: { builtins: true },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning({ defaultStrategy: "blueprint" }) // alias: "rewoo"
-  .withTools({ builtins: true })
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-```typescript
-const result = await agent.run("Create types.ts, generate.ts, and validate.ts for the schema");
-// Plan (1 call) → Verify DAG → Execute 3 file-writes (no LLM) → Solve/short-circuit
-```
-
-### Reflexion
-
-A **Generate → Self-Critique → Improve** loop based on the [Reflexion paper](https://arxiv.org/abs/2303.11366) (Shinn et al., 2023):
-
-1. **Generate** — Produce an initial response
-2. **Critique** — Self-evaluate: identify inaccuracies, gaps, or ambiguities
-3. **Improve** — Rewrite using the critique as feedback
-4. **Repeat** until `SATISFIED:` or `maxRetries` reached
-
-**Best for:** Quality-critical output — writing, analysis, summarization.
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-const agent = await createAgent({
-  name: "writing-agent",
-  provider: "anthropic",
-  reasoning: { defaultStrategy: "reflexion" },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning({ defaultStrategy: "reflexion" })
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-```typescript
-const result = await agent.run("Write a concise explanation of quantum entanglement");
-// Generates → Critiques → Improves → Returns polished output
-```
-
-**Configuration:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `maxRetries` | 3 | Max generate-critique-improve cycles |
-| `selfCritiqueDepth` | "deep" | "shallow" or "deep" critique |
-| `kernelMaxIterations` | 3 | Max ReAct tool-call iterations per generate/improve pass |
-
-**Cross-run learning:** Reflexion supports `priorCritiques` — critiques from previous runs on similar tasks, loaded from episodic memory. This lets the agent avoid repeating past mistakes:
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-// The execution engine automatically loads prior critiques from episodic memory
-// when the strategy is "reflexion" and memory is enabled.
-const agent = await createAgent({
-  name: "writing-agent",
-  provider: "anthropic",
-  reasoning: { defaultStrategy: "reflexion" },
-  memory: {},  // Episodic memory stores/retrieves critiques
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-// The execution engine automatically loads prior critiques from episodic memory
-// when the strategy is "reflexion" and memory is enabled.
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning({ defaultStrategy: "reflexion" })
-  .withMemory()  // Episodic memory stores/retrieves critiques
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-**Trade-off:** Reflexion uses more tokens than ReAct (typically 3× per retry cycle) because each cycle requires a generate pass, a critique pass, and an improve pass. The additional cost is usually worth it for tasks where output quality matters more than speed — writing, detailed analysis, or any domain where a first-pass answer is rarely optimal.
-
-### Plan-Execute-Reflect
-
-A structured approach that generates a plan first, then executes each step:
-
-1. **Plan** — Generate a numbered list of steps to accomplish the task
-2. **Execute** — Work through each step sequentially, using tools if available
-3. **Reflect** — Evaluate execution against the original plan
-4. **Refine** — If reflection identifies gaps, generate a revised plan and re-execute
-
-**Best for:** Complex tasks with a clear decomposition — project planning, multi-step research, structured analysis.
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-const agent = await createAgent({
-  name: "research-agent",
-  provider: "anthropic",
-  reasoning: { defaultStrategy: "plan-execute-reflect" },
-  tools: { builtins: true },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning({ defaultStrategy: "plan-execute-reflect" })
-  .withTools({ builtins: true })
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-```typescript
-const result = await agent.run("Compare the GDP growth of the top 5 economies over the last decade");
-// Plans steps → Executes each → Reflects on completeness → Refines if needed
-```
-
-**Configuration:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `maxRefinements` | 2 | Max plan revision cycles |
-| `reflectionDepth` | "deep" | "shallow" or "deep" reflection |
-| `stepKernelMaxIterations` | derived | Max ReAct tool-call iterations per plan step — defaults to `max(5, ceil(runMaxIterations / planLength))` (floor 5) unless set explicitly |
-
-### Tree-of-Thought
-
-A two-phase **plan-then-execute** strategy that uses breadth-first tree search to find the best approach, then executes it using real tools:
-
-**Phase 1 — Planning (BFS tree search):**
-1. **Expand** — Generate multiple candidate thoughts, grounded in available tools
-2. **Score** — Evaluate each thought's promise (0.0–1.0)
-3. **Prune** — Discard thoughts below `pruningThreshold`
-4. **Deepen** — Expand surviving thoughts further (up to `depth` levels)
-
-**Phase 2 — Execution (ReAct loop):**
-5. **Execute** — Run a ReAct-style think/act/observe loop guided by the best path, calling real tools
-
-**Best for:** Complex tasks with multiple valid approaches that also require tool use (GitHub queries, file operations, multi-source research).
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-const agent = await createAgent({
-  name: "research-agent",
-  provider: "anthropic",
-  reasoning: { defaultStrategy: "tree-of-thought" },
-  tools: { builtins: true },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning({ defaultStrategy: "tree-of-thought" })
-  .withTools({ builtins: true })
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-```typescript
-const result = await agent.run("Research and summarize recent commits in this repo");
-// Phase 1: Explores 3 branches × 3 depth levels → Prunes weak ideas → Selects best path
-// Phase 2: Executes the plan with tool calls → FINAL ANSWER
-```
-
-**Configuration:**
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `breadth` | 3 | Candidate thoughts per expansion |
-| `depth` | 3 | Maximum tree depth |
-| `pruningThreshold` | 0.5 | Minimum score to survive pruning |
-
-### Adaptive (Meta-Strategy)
-
-The Adaptive strategy doesn't reason itself — it **analyzes the task and delegates to the best sub-strategy**:
-
-1. **Analyze** — Classify the task's complexity, type, and requirements
-2. **Select** — Choose the optimal strategy based on the analysis
-3. **Delegate** — Execute the selected strategy
-
-**Selection logic:**
-- Simple Q&A → ReAct
-- Quality-critical writing → Reflexion
-- Complex multi-step tasks → Plan-Execute-Reflect
-- Creative/open-ended → Tree-of-Thought
-
-<Tabs syncKey="syntax">
-  <TabItem label="Declarative">
-```typescript
-const agent = await createAgent({
-  name: "research-agent",
-  provider: "anthropic",
-  reasoning: { defaultStrategy: "adaptive" },
-  tools: { builtins: true },
-});
-```
-  </TabItem>
-  <TabItem label="Builder">
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning({ defaultStrategy: "adaptive" })
-  .withTools({ builtins: true })
-  .build();
-```
-  </TabItem>
-</Tabs>
-
-```typescript
-// Adaptive selects the best strategy per task
-await agent.run("What's 2+2?");              // → Uses ReAct (simple)
-await agent.run("Write a technical report");  // → Uses Reflexion (quality-critical)
-await agent.run("Plan a microservices arch"); // → Uses Plan-Execute (complex)
-```
-
-Alternatively, enable adaptive routing via the `adaptive.enabled` flag while keeping a named default (builder-only — the `adaptive` routing flag has no declarative config key):
-
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withReasoning({ adaptive: { enabled: true } })
-  .withTools({ builtins: true })
-  .build();
-// Every task is classified and routed to the best strategy automatically
-```
+ReAct (the default), Blueprint, Reflexion, Plan-Execute-Reflect, Tree-of-Thought, Adaptive, Direct and Code-Action (`@experimental`). What each one does, when to pick it, its options and the model size it needs are on one page: [Choosing a Reasoning Strategy](../choosing-strategies/). This guide covers what is common to all of them: enabling reasoning, tools in the loop, per-run configuration, the Plan-Execute engine internals and required-tools gating.
 
 ## Intelligent Context Synthesis
 
@@ -361,16 +54,6 @@ const agent = await ReactiveAgents.create()
 </Tabs>
 
 This is an **audit feature, not a performance one** — the per-call rationale block is pure decode/token cost (no quality benefit), so it's **off by default**. Turn it on when you need an auditable decision trail; leave it off for lowest latency. The `plan-execute-reflect` strategy always records plan-step rationale regardless of this flag. See [Decision Tracing](/concepts/decision-tracing/).
-
-## Strategy Comparison
-
-| Strategy | LLM Calls | Best For | Trade-off |
-|----------|-----------|----------|-----------|
-| **ReAct** | 1 per iteration | Tool use, step-by-step tasks | Fastest, most versatile |
-| **Reflexion** | 3 per retry cycle | Quality-critical output | Slower, higher quality |
-| **Plan-Execute** | 2+ per plan cycle | Structured multi-step work | Predictable, thorough |
-| **Tree-of-Thought** | 3× breadth × depth + execution | Creative + tool-using tasks | Most thorough: plans then executes |
-| **Adaptive** | 1 + delegated | Mixed workloads | Auto-selects, slight overhead |
 
 ## Enabling Reasoning
 
@@ -411,46 +94,7 @@ const agent2 = await ReactiveAgents.create()
 
 ## Custom Strategies
 
-Register custom reasoning strategies using the `StrategyRegistry`:
-
-{/* docs-skip-typecheck */}
-```typescript
-import { StrategyRegistry } from "@reactive-agents/reasoning";
-import { LLMService } from "@reactive-agents/llm-provider";
-import { Effect } from "effect";
-
-const registerMyStrategy = Effect.gen(function* () {
-  const registry = yield* StrategyRegistry;
-
-  yield* registry.register("my-custom", (input) =>
-    Effect.gen(function* () {
-      const llm = yield* LLMService;
-
-      const response = yield* llm.complete({
-        messages: [
-          { role: "user", content: `${input.taskDescription}\n\nContext: ${input.memoryContext}` },
-        ],
-        systemPrompt: "You are an expert problem solver.",
-        maxTokens: input.config.strategies.reactive.maxIterations * 500,
-      });
-
-      return {
-        strategy: "my-custom",
-        steps: [{ thought: "Custom reasoning", action: "none", observation: response.content }],
-        output: response.content,
-        metadata: {
-          duration: 0,
-          cost: response.usage.estimatedCost,
-          tokensUsed: response.usage.totalTokens,
-          stepsCount: 1,
-          confidence: 0.9,
-        },
-        status: "completed" as const,
-      };
-    }),
-  );
-});
-```
+Register your own strategy with `StrategyRegistry`. The strategy interface, a worked registration example and listing registered strategies are in [Custom Reasoning Strategies](/cookbook/custom-strategies/).
 
 ## Without Reasoning
 
@@ -692,25 +336,6 @@ When `.withMemory()` is enabled, the `PlanStoreService` (backed by `bun:sqlite`)
 
 This means plan state survives agent restarts and can be inspected for debugging or auditing. The persistence layer is optional — when memory is not configured, planning proceeds in-memory with no behavioral change.
 
-## Adaptive Strategy — Sub-Strategy Reporting
-
-When using `defaultStrategy: "adaptive"`, the framework selects a concrete sub-strategy at runtime (ReAct, Blueprint, Plan-Execute, Reflexion, or Tree-of-Thought). `agentResult.metadata.strategyUsed` now reports the **actual sub-strategy that produced the output**, not `"adaptive"`:
-
-```typescript
-const result = await agent.run("Research and write a report");
-
-console.log(result.metadata.strategyUsed);
-// "reactive" — not "adaptive"
-```
-
-The `[think]` observability log also shows the selection inline:
-
-```
-◉ [think]   12 steps | 8,432 tok | 18.4s (adaptive→reactive)
-```
-
-The EventBus `ReasoningStepCompleted` event still carries `strategy: "adaptive"` for subscribers that need to know the entry point. `result.metadata.selectedStrategy` carries the sub-strategy for downstream use.
-
 ## Required Tools and Per-Tool Budget
 
 When tools must be called before the agent can declare success, use `.withRequiredTools()`. The required-tools gate now includes hardening for real-world research tasks.
@@ -754,22 +379,3 @@ Native provider `toolCalls` are always preferred. If a model emits JSON tool cal
 
 This fallback path improves reliability for local or mid-tier models that occasionally emit tool calls as plain text rather than structured provider events.
 
-## What's Next
-
-<CardGrid>
-  <LinkCard
-    title="Choosing a Reasoning Strategy"
-    description="Decision tree and performance characteristics for all eight strategies."
-    href="../choosing-strategies/"
-  />
-  <LinkCard
-    title="Code-Action Strategy"
-    description="Generate executable code that composes tools as function calls."
-    href="/features/code-action/"
-  />
-  <LinkCard
-    title="Custom Reasoning Strategies"
-    description="Build and register your own strategy."
-    href="/cookbook/custom-strategies/"
-  />
-</CardGrid>

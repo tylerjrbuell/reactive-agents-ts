@@ -5,6 +5,10 @@ description: >-
   page.
 sidebar:
   order: 1
+topic: config-reference
+related:
+  - reference/builder-api
+  - reference/configuration
 ---
 
 import { Badge, Aside } from '@astrojs/starlight/components';
@@ -284,13 +288,9 @@ KEENABLE_API_KEY=...         # Web search (alt; Keenable)
 # Optional — vector memory ("enhanced" tier)
 EMBEDDING_PROVIDER=openai    # or "ollama"
 EMBEDDING_MODEL=text-embedding-3-small
-
-# Tuning
-LLM_DEFAULT_MODEL=claude-sonnet-4-6
-LLM_DEFAULT_TEMPERATURE=0.7
-LLM_MAX_RETRIES=3
-LLM_TIMEOUT_MS=30000
 ```
+
+Tuning variables (`LLM_DEFAULT_MODEL`, `LLM_DEFAULT_TEMPERATURE`, `LLM_MAX_RETRIES`, `LLM_TIMEOUT_MS`) and their defaults: [Configuration](/reference/configuration/#environment-variables).
 
 ---
 
@@ -305,7 +305,8 @@ rax cortex                                       # Launch Cortex Studio
 rax playground                                   # Interactive REPL
 rax eval run --suite ./eval-suite.yaml           # Run an evaluation
 rax inspect <agent-id>                           # Debug a session
-rax health                                       # Check provider readiness
+rax ps --all                                     # List durable runs (rax attach <runId> to watch one)
+rax diagnose cause <runId>                       # Why a recorded run ended as it did
 ```
 
 Full reference: [CLI Commands](/reference/cli/).

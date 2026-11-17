@@ -3,6 +3,12 @@ title: Cost Tracking
 description: 'Model routing, budget enforcement, semantic caching, and cost analytics.'
 sidebar:
   order: 6
+topic: cost
+related:
+  - guides/cost-optimization
+  - features/resilience
+  - features/eval
+  - guides/production-checklist
 ---
 
 The cost layer keeps your AI spending under control. It routes tasks to the cheapest model that can handle them, enforces budget limits, caches responses, and provides detailed cost analytics.
@@ -62,6 +68,10 @@ Applies on **both** the inline and reasoning (`.withReasoning()`) paths — the 
 - `minTier` — floor tier; a task will never be routed cheaper than this.
 - `tierModels` — override the specific model used for a cost tier (still capability-gated).
 
+`.withModelRouting()` has no declarative `AgentConfig` key; it is builder-only. Use it for mixed workloads where most requests are simple (Q&A, classification, summarization) and a few need frontier reasoning.
+
+To choose the model before you build the agent, `@reactive-agents/cost` exposes the routing primitives: `analyzeComplexity(task)` scores a task and `routeToModel(task)` returns a `ModelCostConfig` for the recommended tier. Both are Effect-based and also surface on `CostService.routeToModel(task, context)`. Pass the result to `.withModel(...)`. For an ordered provider cascade on errors (no budget logic), use [`.withFallbacks({ providers })`](/reference/builder-api/).
+
 ## Budget Enforcement
 
 Set spending limits at multiple levels:
@@ -78,6 +88,30 @@ const costLayer = createCostLayer({
 ```
 
 When a budget limit is exceeded, the agent fails with a `BudgetExceededError` rather than silently overspending.
+
+On the builder, the same limits are set with `.withCostTracking()` (declarative key: `costTracking`). The agent performs a pre-flight budget check before each run and a per-iteration check during the loop:
+
+```typescript
+import { BudgetExceededError } from "@reactive-agents/runtime";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withCostTracking({
+    perRequest: 0.10,  // Max $0.10 per single run
+    daily: 5.0,        // Max $5.00 per day
+    monthly: 100.0,    // Max $100.00 per month
+  })
+  .build();
+
+try {
+  const result = await agent.run("Complex task");
+  console.log(result.metadata.cost); // Estimated USD cost
+} catch (e) {
+  if (e instanceof BudgetExceededError) {
+    console.error("Budget exceeded:", e.message); // escalate, alert, or degrade gracefully
+  }
+}
+```
 
 `.withBudget({ tokenLimit, costLimit })` is enforced against cumulative run spend, not a fresh allowance for each kernel invocation. Multi-step strategies, direct LLM calls between kernels, structured-output retries, and continuation passes all draw from the same run-scoped meter. Compose's `budgetLimit()` kill switch reads that same spend, so builder budgets and composed budgets agree. See [Compose API](/reference/compose-api/).
 
