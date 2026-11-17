@@ -29,4 +29,4 @@ Four calls the owner has not yet made. Each shipped with a default; none is irre
 - **Learned calibration after 5 runs:** applies automatically; never ablated.
 - **Decide:** approve a benchmark spend for both, or flag them opt-in until measured.
 - **Decided 2026-11-17 (wrap-up):** opt-in until measured. `RA_TODO_WRAPUP=1` enables it (`6a94f6eeb`). A `.withHarness({ todoWrapUp })` field and a `run-started.config` entry are a runtime follow-up. Returning it to default-on needs a cross-tier ablation.
-- **Learned calibration:** still open.
+- **Decided 2026-11-17 (calibration):** learned and community calibration are both opt-in (`24f53da9a`), enabled with `.withCalibration("auto", { learned: true, community: true })`. Observations are still recorded locally. The docs must state the benefits clearly (owner requirement). Community fetch honors DO_NOT_TRACK (`6bdf002b6`). Telemetry is opt-in too (`aa92c22fb`).
