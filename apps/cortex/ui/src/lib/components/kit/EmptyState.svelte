@@ -9,6 +9,7 @@
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
   import NeuralMark from "./NeuralMark.svelte";
+  import SonarRings from "./SonarRings.svelte";
   import type { IconName } from "../../icons.js";
 
   interface Props {
@@ -18,7 +19,9 @@
     hero?: boolean;
     /** Hero mark size in px (96 by default; 132 for the Beacon first run). */
     markSize?: number;
-    /** Hero only: a run is starting now, so the mark shows its one sonar ring. */
+    /** Hero only: ambient sonar rings around the mark (Beacon first run only; elsewhere sonar means "running now"). */
+    markRings?: boolean;
+    /** With `markRings`: a run is launching, so the rings are faster and brighter. */
     markLive?: boolean;
     /** Hero only: a small status line under the headline (e.g. "Awaiting connections"). */
     status?: Snippet;
@@ -38,6 +41,7 @@
     icon,
     hero = false,
     markSize = 96,
+    markRings = false,
     markLive = false,
     status,
     brand = false,
@@ -50,7 +54,11 @@
 
 <div class="cx-empty {className}" class:cx-empty-hero={hero}>
   {#if hero}
-    <NeuralMark size={markSize} hero live={markLive} />
+    {#if markRings}
+      <SonarRings size={markSize} live={markLive}><NeuralMark size={markSize} hero /></SonarRings>
+    {:else}
+      <NeuralMark size={markSize} hero />
+    {/if}
     <h2 class:brand-grad={brand}>{title}{#if brandWord}{" "}<span class="brand-grad">{brandWord}</span>{/if}</h2>
     {#if status}{@render status()}{/if}
   {:else}

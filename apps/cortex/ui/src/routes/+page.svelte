@@ -105,7 +105,7 @@
     {#if empty}
       <div></div>
       <div class="hero">
-        <EmptyState hero markSize={132} markLive={$stageStore.submitting} title="Welcome to" brandWord="Cortex">
+        <EmptyState hero markSize={132} markRings markLive={$stageStore.submitting} title="Welcome to" brandWord="Cortex">
           {#snippet status()}<AwaitingConnections starting={$stageStore.submitting} />{/snippet}
           {#snippet body()}
             Your agents show up here while they work. Start one below, open a chat, or point an app at Cortex with

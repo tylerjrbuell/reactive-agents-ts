@@ -12,6 +12,8 @@ import { join, relative } from "node:path";
 
 const SRC = join(import.meta.dir, "..");
 const SELF = relative(SRC, import.meta.path);
+/** The one ambient sonar use (Beacon first-run hero rings); banned everywhere else. */
+const SONAR_HERO = join("lib", "components", "kit", "SonarRings.svelte");
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -46,6 +48,8 @@ describe("old visual layer is gone (Bench step 8)", () => {
     test(`no ${rule.name}`, () => {
       const hits: string[] = [];
       for (const file of files) {
+        // The one ambient sonar use: the Beacon first-run hero rings.
+        if (rule.name === "retired identity class" && relative(SRC, file).startsWith(SONAR_HERO.replace(/\.svelte$/, ""))) continue;
         readFileSync(file, "utf8")
           .split("\n")
           .forEach((line, i) => {
@@ -55,6 +59,14 @@ describe("old visual layer is gone (Bench step 8)", () => {
       expect(hits).toEqual([]);
     });
   }
+
+  test("ambient sonar rings live only in SonarRings, used by EmptyState, switched on by the Beacon page alone", () => {
+    const users = (needle: string) =>
+      files.filter((f) => !f.endsWith(".test.ts") && readFileSync(f, "utf8").includes(needle)).map((f) => relative(SRC, f)).sort();
+    expect(users("cx-sonar-ring")).toEqual([SONAR_HERO]);
+    expect(users("SonarRings.svelte")).toEqual([join("lib", "components", "kit", "EmptyState.svelte")]);
+    expect(users("markRings").filter((f) => !f.endsWith("EmptyState.svelte"))).toEqual([join("routes", "+page.svelte")]);
+  });
 
   test("the MD3 rule catches an alias and spares the semantic names", () => {
     expect(MD3.test('class="text-on-surface-variant"')).toBe(true);

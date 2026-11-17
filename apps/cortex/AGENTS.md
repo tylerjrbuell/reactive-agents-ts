@@ -90,7 +90,7 @@ Read the matching section there before editing that area.
 
 ## UI Rules That Always Apply
 
-- Visual language is fixed (Bench, `wiki/Architecture/Design-Specs/2026-11-10-cortex-ui-modernization.md`): semantic `--cortex-*` tokens in `ui/src/app.css`, Geist for words, JetBrains Mono for machine values, nothing under 11px, no uppercase labels. `NeuralMark` is the only logo. The signal gradient, live glow and sonar ring mean "running now" and appear nowhere else. Every motion has a reduced-motion fallback. Token and per-page detail: [[Cortex-Reference]].
+- Visual language is fixed (Bench, `wiki/Architecture/Design-Specs/2026-11-10-cortex-ui-modernization.md`): semantic `--cortex-*` tokens in `ui/src/app.css`, Geist for words, JetBrains Mono for machine values, nothing under 11px, no uppercase labels. `NeuralMark` is the only logo. The signal gradient, live glow and sonar ring mean "running now" and appear nowhere else, with one carve-out (owner decision 2026-11-17): the Beacon first-run hero mark shows calm ambient sonar rings (`kit/SonarRings.svelte`, switched on by `EmptyState markRings`, faster and brighter while a run launches, still under reduced motion); `no-legacy-visuals.test.ts` pins that no other surface uses them. Every motion has a reduced-motion fallback. Token and per-page detail: [[Cortex-Reference]].
 - Svelte 5 runes only (`$props`, `$state`, `$derived`, `$effect`). `RunDetail` remounts per `runId` via `{#key}`.
 
 ### Layout context

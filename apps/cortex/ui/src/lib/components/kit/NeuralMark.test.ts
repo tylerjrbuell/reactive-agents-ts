@@ -36,27 +36,21 @@ describe("NeuralMark", () => {
     expect(html).toContain("animation-delay:-0.9s");
   });
 
-  test("hero: core drift and orbit breathing, no sonar while idle", async () => {
+  test("hero: core drift and orbit breathing; the mark itself draws no sonar", async () => {
     const html = await renderComponent(FILE, { size: 96, hero: true });
     expect(html).toContain("cx-mark-core");
     expect(html).toContain("cx-mark-orbit");
-    expect(html).not.toContain("cx-mark-sonar");
-  });
-
-  test("sonar ring only for a live hero, never the bar mark", async () => {
-    const live = await renderComponent(FILE, { size: 96, hero: true, live: true });
-    expect(live.match(/<circle class="cx-mark-sonar/g)?.length).toBe(1);
-    const bar = await renderComponent(FILE, { size: 22, live: true });
-    expect(bar).not.toContain("cx-mark-sonar");
+    expect(html).not.toContain("sonar");
+    const bar = await renderComponent(FILE, { size: 22 });
     expect(bar).not.toContain("cx-mark-core");
   });
 
-  test("reduced motion stills every mark animation and hides the ring", async () => {
+  test("reduced motion stills every mark animation", async () => {
     const src = await Bun.file(FILE).text();
     const css = src.slice(src.indexOf("<style>"));
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toContain('html[data-motion="reduce"]');
-    for (const cls of ["cx-mark-tw", "cx-mark-core", "cx-mark-orbit", "cx-mark-sonar"]) {
+    for (const cls of ["cx-mark-tw", "cx-mark-core", "cx-mark-orbit"]) {
       expect(css.match(new RegExp(`\\.${cls}`, "g"))!.length).toBeGreaterThanOrEqual(3);
     }
   });

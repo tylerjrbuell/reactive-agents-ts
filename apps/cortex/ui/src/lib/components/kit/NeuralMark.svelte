@@ -5,9 +5,8 @@
    * filters. `hero` adds a soft halo and a slow staggered twinkle (7s) for
    * page-level empty and first-run states: the core drifts violet to cyan
    * (8s) and the orbit ring breathes (6s), as on the original Beacon landing;
-   * reduced motion keeps it still. `live` (hero only) adds the one sonar ring
-   * and means "an agent is running now": pass it from real run state, never
-   * as decoration.
+   * reduced motion keeps it still. Sonar rings around the hero are the separate
+   * `SonarRings` wrapper (Beacon first run only), not part of the mark.
    * Always `aria-hidden`: it sits next to a text label.
    */
   import { MARK_NODES, markRingPath, markSpokesPath, markStroke } from "../../neural-mark.js";
@@ -16,12 +15,10 @@
     /** Rendered width and height in px (22 in the bar, 64-132 for heroes). */
     size?: number;
     hero?: boolean;
-    /** Hero only: a run is starting or running now, so one sonar ring goes out from the core. */
-    live?: boolean;
     class?: string;
   }
 
-  let { size = 22, hero = false, live = false, class: className = "" }: Props = $props();
+  let { size = 22, hero = false, class: className = "" }: Props = $props();
 
   const uid = $props.id();
   const stroke = $derived(markStroke(size));
@@ -69,9 +66,6 @@
     />
   {/each}
   <circle cx="24" cy="24" r="8.5" style="fill:var(--cortex-mk-violet)" opacity=".18" />
-  {#if hero && live}
-    <circle class="cx-mark-sonar" cx="24" cy="24" r="9" fill="none" style="stroke:var(--cortex-mk-violet)" stroke-width="1.2" />
-  {/if}
   <circle class:cx-mark-core={hero} cx="24" cy="24" r="5.2" style="fill:var(--cortex-mk-violet)" />
   <circle class:cx-mark-orbit={hero} cx="24" cy="24" r="8" fill="none" style="stroke:var(--cortex-mk-cyan)" stroke-width=".6" opacity=".45" />
 </svg>
@@ -117,38 +111,16 @@
       opacity: 0.6;
     }
   }
-  .cx-mark-sonar {
-    transform-box: fill-box;
-    transform-origin: center;
-    opacity: 0;
-    animation: cx-mark-sonar 2.8s cubic-bezier(0, 0.2, 0.8, 1) infinite;
-  }
-  @keyframes cx-mark-sonar {
-    0% {
-      transform: scale(0.9);
-      opacity: 0.55;
-    }
-    100% {
-      transform: scale(3.2);
-      opacity: 0;
-    }
-  }
   @media (prefers-reduced-motion: reduce) {
     .cx-mark-tw,
     .cx-mark-core,
     .cx-mark-orbit {
       animation: none;
     }
-    .cx-mark-sonar {
-      display: none;
-    }
   }
   :global(html[data-motion="reduce"]) .cx-mark-tw,
   :global(html[data-motion="reduce"]) .cx-mark-core,
   :global(html[data-motion="reduce"]) .cx-mark-orbit {
     animation: none;
-  }
-  :global(html[data-motion="reduce"]) .cx-mark-sonar {
-    display: none;
   }
 </style>
