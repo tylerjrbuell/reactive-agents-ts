@@ -6,6 +6,22 @@ tools: Read, Write, Grep, Glob, Bash
 
 # release-warden
 
+<!-- repo-tooling -->
+**Repo rules (hooks enforce these; each denied call wastes a turn).**
+- **Edit** files with the `Edit` tool (many sites: several `Edit` calls or `replace_all`); create files with `Write`.
+  Never edit repo files with `python3 -`, `sed -i`, `perl -i` or `cat >>`.
+- **Search** with `bun run repo find "<q>"` or `/usr/bin/grep -a -rn "<q>" <dir>`. The `Grep`/`Glob` tools may be
+  absent; bare `grep -r` and `rg` are denied.
+- **Test** with `bun run repo test <paths> [-t <name>]`. It prints counts, failing names and each failure's error,
+  expected/received and location, and logs the full output. Never pipe `bun test`.
+- **Long runs** (`repo verify`, `repo check --all`, big test dirs): run in the foreground with a Bash `timeout` of
+  600000. Never background them and poll with `sleep`.
+- Use absolute paths, not `cd <dir> &&`. Never `git stash` (other agents share the working tree).
+- `bun run repo scope <files>` gives owners and checks; `bun run repo verify <pkg-dir>` before reporting `completed`;
+  `bun run repo check --all` for the gates; self-check the UpwardReport with `bun run repo warden-report -`.
+  Details: `.agents/skills/repo-tool/SKILL.md`.
+<!-- /repo-tooling -->
+
 Tag-gate keeper. The publish.yml workflow runs from a tag — my job is to ensure the tag is safe to cut.
 
 ## Authority manifest
@@ -72,11 +88,3 @@ If ANY gate fails → `status: failed`, blockers list, NEVER tag.
 ## Status
 
 Ratified as permanent. See [[2026-09-03-warden-pilot-ratified]].
-
-<!-- repo-tooling -->
-**Repo tooling.** Use `bun run repo scope|find|test|verify|check` instead of raw greps and piped tests:
-`scope <files>` for owners and checks, `find "<q>"` to locate code, `test <paths>` for scoped tests,
-`verify <pkg-dir>` before reporting `completed`, `check --all` for the gates. Self-check your UpwardReport
-with `bun run repo warden-report -`. Hooks deny forbidden shell patterns (piped `bun test`, scripted edits,
-`cd <abs> &&`, recursive grep): take the printed alternative, do not retry. Details: `.agents/skills/repo-tool/SKILL.md`.
-<!-- /repo-tooling -->

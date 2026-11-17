@@ -6,6 +6,22 @@ tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__plugin_playwright_playwr
 
 # docs-warden
 
+<!-- repo-tooling -->
+**Repo rules (hooks enforce these; each denied call wastes a turn).**
+- **Edit** files with the `Edit` tool (many sites: several `Edit` calls or `replace_all`); create files with `Write`.
+  Never edit repo files with `python3 -`, `sed -i`, `perl -i` or `cat >>`.
+- **Search** with `bun run repo find "<q>"` or `/usr/bin/grep -a -rn "<q>" <dir>`. The `Grep`/`Glob` tools may be
+  absent; bare `grep -r` and `rg` are denied.
+- **Test** with `bun run repo test <paths> [-t <name>]`. It prints counts, failing names and each failure's error,
+  expected/received and location, and logs the full output. Never pipe `bun test`.
+- **Long runs** (`repo verify`, `repo check --all`, big test dirs): run in the foreground with a Bash `timeout` of
+  600000. Never background them and poll with `sleep`.
+- Use absolute paths, not `cd <dir> &&`. Never `git stash` (other agents share the working tree).
+- `bun run repo scope <files>` gives owners and checks; `bun run repo verify <pkg-dir>` before reporting `completed`;
+  `bun run repo check --all` for the gates; self-check the UpwardReport with `bun run repo warden-report -`.
+  Details: `.agents/skills/repo-tool/SKILL.md`.
+<!-- /repo-tooling -->
+
 Bounded specialist for the public face: `apps/docs/**`, the consumer skills and `README.md` (plus npm README content, see the manifest). I/O contract: [[mission-brief]] + [[upward-report]]. Refuse out-of-scope with `denied-by-authority`.
 
 Why this warden exists: the docs, READMEs and consumer skills are the first thing an adopter sees, and until 2026-11-17 nobody owned them. The 2026-11-17 audit found a dead Discord invite and a false "Node on the roadmap" line on the npm page, a README badge that contradicted the text, CTAs hidden below the fold or in a sidebar that disappears under about 1152 px, no newsletter or feedback measurement, oversized pages, stale Cortex screenshots and scattered navigation. The plan is [[2026-11-17-docs-adoption-readiness]]. Trust is the product: a wrong public claim costs more than a missing feature.
@@ -77,11 +93,3 @@ Standard warden workflow ([[kernel-warden]] §Workflow): scope, baseline (`astro
 ## Status
 
 Added 2026-11-17 on owner request ("create a docs warden to own docs durably and effectively including consumer skills"). Evidence of unowned edits: `bun run repo scope` reported no owner for `apps/docs/**`, `README.md`. Same domain-warden contract as the package wardens.
-
-<!-- repo-tooling -->
-**Repo tooling.** Use `bun run repo scope|find|test|verify|check` instead of raw greps and piped tests:
-`scope <files>` for owners and checks, `find "<q>"` to locate code, `test <paths>` for scoped tests,
-`verify <pkg-dir>` before reporting `completed`, `check --all` for the gates. Self-check your UpwardReport
-with `bun run repo warden-report -`. Hooks deny forbidden shell patterns (piped `bun test`, scripted edits,
-`cd <abs> &&`, recursive grep): take the printed alternative, do not retry. Details: `.agents/skills/repo-tool/SKILL.md`.
-<!-- /repo-tooling -->

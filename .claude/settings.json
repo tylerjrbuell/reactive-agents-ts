@@ -10,6 +10,9 @@
       "mcp__ide__workspaceSymbol"
     ]
   },
+  "env": {
+    "PLAYWRIGHT_MCP_ISOLATED": "true"
+  },
   "hooks": {
     "PreToolUse": [
       {

@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown } from "../lib/args.ts"
-import { builtins, type BuiltinCtx } from "../lib/builtins.ts"
+import { builtins, fixers, type BuiltinCtx } from "../lib/builtins.ts"
 import { changedFiles, stagedFiles } from "../lib/changed-files.ts"
 import { expiry, loadChecks, registryProblems, selectChecks, type CheckEntry, type Stage } from "../lib/manifest.ts"
 import { resolveRoot } from "../lib/root.ts"
@@ -45,9 +45,10 @@ export function makeCheck(list: () => readonly Command[]): Command {
     name: "check",
     summary: "Run registered gates from checks.json, each once",
     example: "bun run repo check --changed",
+    detail: [`--fix: before a gate runs, apply its deterministic fixer if it has one (${Object.keys(fixers).join(", ")})`],
     async run(args, io) {
       const bad = rejectUnknown(io, "check", args, {
-        flags: ["--all", "--changed", "--staged"],
+        flags: ["--all", "--changed", "--staged", "--fix"],
         values: ["--stage", "--only", "--root"],
       })
       if (bad !== undefined) return bad
@@ -94,6 +95,8 @@ export function makeCheck(list: () => readonly Command[]): Command {
         const dropped: string[] = []
         const emit = (l: string): void => void (io.out(l) || dropped.push(l))
         emit(`── ${c.id}`)
+        const fixer = args.includes("--fix") ? fixers[c.id] : undefined
+        if (fixer !== undefined) for (const f of fixer(root)) emit(`fixed: ${f}`)
         const r = await run(root, c, ctx, emit)
         if (!r.ok) io.replay(dropped)
         outcomes.push({ id: c.id, ...r })

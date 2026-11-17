@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs"
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { join, sep } from "node:path"
 import { frontmatter } from "./frontmatter.ts"
 import { classifyBash, loadRules, type HookRule } from "./hook-rules.ts"
@@ -171,6 +171,35 @@ function readdirSafe(dir: string): string[] {
   } catch {
     return []
   }
+}
+
+/**
+ * Rewrite every warden's repo-tooling paragraph from `skills.json#wardenParagraph` and place it directly under
+ * the file's first `# ` heading, so a spawned warden reads the repo rules before its domain primer.
+ * Returns the repo paths it changed. The fixer behind `bun run repo check --only skills-valid --fix`.
+ */
+export function syncWardenParagraphs(root: string): string[] {
+  const man = loadSkillsManifest(root)
+  if (man.wardenParagraph.length === 0) return []
+  const block = `${TOOLING_OPEN}\n${man.wardenParagraph.join("\n").trim()}\n${TOOLING_CLOSE}`
+  const dir = join(root, ".claude", "agents")
+  const changed: string[] = []
+  for (const f of readdirSafe(dir).filter((n) => n.endsWith(".md"))) {
+    const path = join(dir, f)
+    const text = readFileSync(path, "utf8")
+    const a = text.indexOf(TOOLING_OPEN)
+    const b = text.indexOf(TOOLING_CLOSE)
+    const stripped =
+      a >= 0 && b > a ? `${text.slice(0, a).replace(/\n+$/, "\n")}${text.slice(b + TOOLING_CLOSE.length).replace(/^\n+/, "\n")}` : text
+    const h = /^# .*\n/m.exec(stripped)
+    if (!h) continue
+    const at = h.index + h[0].length
+    const next = `${stripped.slice(0, at)}\n${block}\n\n${stripped.slice(at).replace(/^\n+/, "")}`.replace(/\n*$/, "\n")
+    if (next === text) continue
+    writeFileSync(path, next)
+    changed.push(`.claude/agents/${f}`)
+  }
+  return changed
 }
 
 function wardenProblems(root: string, commandNames: readonly string[] | undefined, man: SkillsManifest): SkillProblem[] {

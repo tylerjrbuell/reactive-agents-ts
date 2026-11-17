@@ -7,7 +7,15 @@ import { manifestHealth } from "./manifest-expiry.ts"
 import { loadOwnership, nameAll, ownershipProblems } from "./ownership.ts"
 import { evaluateRatchets, isViolation } from "./ratchet.ts"
 import { loadPlacement, placementAudit, placementProblems } from "./placement.ts"
-import { auditSkills, type SkillProblem } from "./skills.ts"
+import { auditSkills, syncWardenParagraphs, type SkillProblem } from "./skills.ts"
+
+/**
+ * Deterministic fixers, by builtin check id: `bun run repo check --only <id> --fix` runs the fixer, then the check.
+ * Each returns the repo paths it changed.
+ */
+export const fixers: Readonly<Record<string, (root: string) => readonly string[]>> = {
+  "skills-valid": syncWardenParagraphs,
+}
 
 /** Outcome of a builtin check. */
 export interface BuiltinResult {
@@ -110,7 +118,9 @@ export const builtins: Readonly<Record<string, Builtin>> = {
     return {
       ok: false,
       output: problems.map((p) => `${p.skill}: ${p.problem}`).join("\n"),
-      next: `fix ${(problems[0] as SkillProblem).skill} (bun run repo check --only skills-valid)`,
+      next: problems.some((p) => p.problem.includes("repo-tooling paragraph"))
+        ? "bun run repo check --only skills-valid --fix"
+        : `fix ${(problems[0] as SkillProblem).skill} (bun run repo check --only skills-valid)`,
     }
   },
 

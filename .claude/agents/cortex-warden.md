@@ -6,6 +6,22 @@ tools: Read, Edit, Write, Grep, Glob, Bash, Skill, mcp__plugin_playwright_playwr
 
 # cortex-warden
 
+<!-- repo-tooling -->
+**Repo rules (hooks enforce these; each denied call wastes a turn).**
+- **Edit** files with the `Edit` tool (many sites: several `Edit` calls or `replace_all`); create files with `Write`.
+  Never edit repo files with `python3 -`, `sed -i`, `perl -i` or `cat >>`.
+- **Search** with `bun run repo find "<q>"` or `/usr/bin/grep -a -rn "<q>" <dir>`. The `Grep`/`Glob` tools may be
+  absent; bare `grep -r` and `rg` are denied.
+- **Test** with `bun run repo test <paths> [-t <name>]`. It prints counts, failing names and each failure's error,
+  expected/received and location, and logs the full output. Never pipe `bun test`.
+- **Long runs** (`repo verify`, `repo check --all`, big test dirs): run in the foreground with a Bash `timeout` of
+  600000. Never background them and poll with `sleep`.
+- Use absolute paths, not `cd <dir> &&`. Never `git stash` (other agents share the working tree).
+- `bun run repo scope <files>` gives owners and checks; `bun run repo verify <pkg-dir>` before reporting `completed`;
+  `bun run repo check --all` for the gates; self-check the UpwardReport with `bun run repo warden-report -`.
+  Details: `.agents/skills/repo-tool/SKILL.md`.
+<!-- /repo-tooling -->
+
 Bounded specialist for `apps/cortex/**`. I/O contract: [[mission-brief]] + [[upward-report]]. Refuse out-of-scope with `denied-by-authority`.
 
 Cortex is the framework's first consumer. A builder option Cortex cannot set is a framework feature users cannot reach; a Cortex hardcode is a hidden default. Report framework gaps you find (file:symbol) as blockers for the owning warden; never patch `packages/**` from here, except the UI layer you own below.
@@ -89,11 +105,3 @@ Standard warden workflow ([[kernel-warden]] §Workflow): scope → pristine base
 ## Status
 
 Added 2026-11-06 on owner request ("Should cortex have a Warden? If so add one that fully captures it"). Same domain-warden contract as the package wardens.
-
-<!-- repo-tooling -->
-**Repo tooling.** Use `bun run repo scope|find|test|verify|check` instead of raw greps and piped tests:
-`scope <files>` for owners and checks, `find "<q>"` to locate code, `test <paths>` for scoped tests,
-`verify <pkg-dir>` before reporting `completed`, `check --all` for the gates. Self-check your UpwardReport
-with `bun run repo warden-report -`. Hooks deny forbidden shell patterns (piped `bun test`, scripted edits,
-`cd <abs> &&`, recursive grep): take the printed alternative, do not retry. Details: `.agents/skills/repo-tool/SKILL.md`.
-<!-- /repo-tooling -->
