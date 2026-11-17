@@ -24,6 +24,9 @@ import type { KernelInput, KernelState } from "../state/kernel-state.js";
 import { lastExitGateRecord, type ExitGateRecord } from "./exit-gate.js";
 import { collectValidatedObservations } from "./runner-helpers/deliverable.js";
 
+/** The guard name the wrap-up reserve's trace event carries (distinct from the budget answer turn's, so activation is countable). */
+export const WRAP_UP_RESERVE_GUARD = "wrap_up_reserve";
+
 /** Most unchecked steps the hint names; the count says the rest. */
 const MAX_NAMED = 5;
 

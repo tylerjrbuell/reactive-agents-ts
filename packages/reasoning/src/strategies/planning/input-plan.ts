@@ -41,6 +41,16 @@ export const adoptInputPlan = (
   return Effect.succeed(isCorePlan(input) ? fromCorePlan(input, ctx) : input);
 };
 
+/**
+ * The plan a run ended with, in the portable core shape, each step carrying its
+ * final status (`done` / `skipped` / ...). A plan the caller supplied keeps its
+ * `source`; a model-made plan is `model`.
+ */
+export const finalCorePlan = (plan: Plan, supplied?: InputPlan): CorePlan => {
+  const core = toCorePlan(plan);
+  return supplied !== undefined && isCorePlan(supplied) ? { ...core, source: supplied.source } : core;
+};
+
 /** What `obtainPlan` needs beyond the strategy input. */
 export interface ObtainPlanParams {
   readonly input: {

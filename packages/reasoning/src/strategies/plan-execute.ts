@@ -39,7 +39,7 @@ import { makePlanChecklist } from "./planning/plan-checklist.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput, structuredCallSpend } from "../structured-output/pipeline.js";
-import { obtainPlan } from "./planning/input-plan.js";
+import { obtainPlan, finalCorePlan } from "./planning/input-plan.js";
 import type { InputPlan } from "./planning/input-plan.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
 import {
@@ -767,7 +767,7 @@ export const executePlanExecute = (
         : !finalOutput && !budgetStopped ? { error: unansweredPlanCause(plan.steps) } : {}),
       ...(outcome !== undefined ? { outcome } : {}),
       delivery: { runContract, decision: deliveryDecision },
-      plan: plan.steps,
+      plan: plan.steps, corePlan: finalCorePlan(plan, input.plan),
     };
       }),
     );

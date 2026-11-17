@@ -45,6 +45,8 @@ import {
   planToolCatalogEnabled,
   planBudgetEnabled,
   planReconEnabled,
+  autoTickEnabled,
+  bookkeepingRefundEnabled,
 } from "./harness-flags.js";
 
 /** User-facing shape: every field optional, absent means "do not decide". */
@@ -214,6 +216,20 @@ export interface HarnessConfig {
    */
   readonly planBudget?: boolean;
   /**
+   * Seeded-plan auto-tick. A plan step whose tool hint names a tool that just
+   * succeeded (and that no other unchecked step names) is marked done by the
+   * harness, so the model spends no turn on the bookkeeping. Default ON;
+   * `false` or `RA_AUTO_TICK=0` turns it off.
+   */
+  readonly autoTick?: boolean;
+  /**
+   * Bookkeeping refund. On a seeded plan run a round that only called `todo`
+   * (or, with `planRecon`, only recon tools) does not count against
+   * `maxIterations`; at most half the budget is refunded. Default ON; `false`
+   * or `RA_BOOKKEEPING_REFUND=0` turns it off.
+   */
+  readonly bookkeepingRefund?: boolean;
+  /**
    * Plan recon. Under plan posture the model may call tools whose schema
    * `effect` is `read` (a `write`, `unknown` or absent effect never is) to look
    * facts up, such as an id the plan needs. Bounded by a harness budget: 6
@@ -349,6 +365,10 @@ export interface ResolvedHarness {
   readonly planToolCatalog?: true;
   /** Plan budget (see `HarnessConfig.planBudget`). Present only when OFF (`false`); absent = on (the default). */
   readonly planBudget?: false;
+  /** Auto-tick (see `HarnessConfig.autoTick`). Present only when OFF (`false`); absent = on (the default). */
+  readonly autoTick?: false;
+  /** Bookkeeping refund (see `HarnessConfig.bookkeepingRefund`). Present only when OFF (`false`); absent = on (the default). */
+  readonly bookkeepingRefund?: false;
   /** Plan recon (see `HarnessConfig.planRecon`). Present only when on. */
   readonly planRecon?: true;
   /**
@@ -458,6 +478,8 @@ export function resolveHarnessConfig(
     ...(pick(config.computeOffload, computeOffloadEnabled()) ? { computeOffload: true as const } : {}),
     ...(pick(config.planToolCatalog, planToolCatalogEnabled()) ? { planToolCatalog: true as const } : {}),
     ...(pick(config.planBudget, planBudgetEnabled()) ? {} : { planBudget: false as const }),
+    ...(pick(config.autoTick, autoTickEnabled()) ? {} : { autoTick: false as const }),
+    ...(pick(config.bookkeepingRefund, bookkeepingRefundEnabled()) ? {} : { bookkeepingRefund: false as const }),
     ...(pick(config.planRecon, planReconEnabled()) ? { planRecon: true as const } : {}),
     ...(llmRecoveryBudget !== undefined ? { llmRecoveryBudget } : {}),
   });

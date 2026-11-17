@@ -83,6 +83,7 @@ export function proposeBookkeepingRefund(args: {
   readonly iterationAtPassStart: number;
 }): { readonly state: KernelState; readonly options: KernelRunOptions } | undefined {
   const { state, input, options } = args;
+  if (input.harness?.bookkeepingRefund === false) return undefined;
   const planRecon = planReconOn(input);
   if (isPlanPosture(input) ? !planRecon : (input.initialAdvisory?.length ?? 0) === 0) return undefined;
   if (state.status === "done" || state.status === "failed") return undefined;

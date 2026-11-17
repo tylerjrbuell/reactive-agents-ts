@@ -149,9 +149,21 @@ A strategy run cannot finish `completed` with plan steps left open. Each step en
 
 When the step results are too long for the final synthesis call, the steps most relevant to the goal are kept whole within the model's evidence budget, the rest are named as not shown, and a `solve-evidence` guard event records what the call saw (steps, characters, budget).
 
+### Handing a plan to a strategy
+
+`ReasoningService.execute` takes an optional `plan` (the portable core plan or the strategy plan). `blueprint` and `plan-execute-reflect` adopt it instead of calling the planner, after checking it (empty plan, unknown `dependsOn` id, self reference or cycle fail with an `ExecutionError` before any call). `adaptive` forwards it, and when its pick would not adopt a plan (reactive, reflexion, tree-of-thought) it runs `plan-execute-reflect` instead. Other strategies ignore it.
+
+The plan the run ended with comes back in core shape in `result.metadata.extensions.plan`, each step carrying its final status (`done`, `skipped`, `in-progress`, `pending`; a `failed` step reads `skipped`, core has no failed state). A plan you supplied keeps its `source`.
+
 ## Wrap-up reserve
 
-Opt-in, off by default: set `.withHarness({ wrapUpReserve: true })` (or `RA_WRAPUP_RESERVE=1`; config wins) to hold back the last iterations of a run for the answer. The run-started config records the effective `wrapUpReserve` value.
+Opt-in, off by default: set `.withHarness({ wrapUpReserve: true })` (or `RA_WRAPUP_RESERVE=1`; config wins) to hold back the last iterations of a run for the answer. The run-started config records the effective `wrapUpReserve` value. When the reserve takes the last think call it publishes a `wrap_up_reserve` guard event (the budget answer turn publishes `budget_answer_turn`), so a trace shows whether it fired.
+
+## Auto-tick and bookkeeping refund
+
+Two behaviors of a plan-seeded run are on by default and can be switched off, for example to measure them. Auto-tick marks a step done when its tool hint names a tool that just succeeded and no other open step names it. The bookkeeping refund does not count a todo-only round (or, with `planRecon`, a recon-only round) against `maxIterations`, at most half the budget; each refund publishes a `bookkeeping_refund` guard event.
+
+The switches are the reasoning package's harness config keys `autoTick` and `bookkeepingRefund` (config wins over the environment), or `RA_AUTO_TICK=0` and `RA_BOOKKEEPING_REFUND=0`. The builder's `.withHarness()` does not accept them yet.
 
 ## Events
 

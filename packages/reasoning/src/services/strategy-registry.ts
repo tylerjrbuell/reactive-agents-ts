@@ -21,6 +21,7 @@ import { executeAdaptive } from "../strategies/adaptive.js";
 import { executeDirect } from "../strategies/direct.js";
 import { executeCodeAction } from "../strategies/code-action.js";
 import { executeBlueprint } from "../strategies/blueprint.js";
+import type { InputPlan } from "../strategies/planning/input-plan.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import type { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
@@ -34,6 +35,8 @@ export type StrategyFn = (input: {
   readonly availableTools: readonly string[];
   readonly availableToolSchemas?: readonly ToolSchema[];
   readonly allToolSchemas?: readonly ToolSchema[];
+  /** A caller-supplied plan (core or strategy shape): blueprint and plan-execute-reflect adopt it instead of planning. */
+  readonly plan?: InputPlan;
   readonly config: ReasoningConfig;
   readonly systemPrompt?: string;
   readonly taskId?: string;

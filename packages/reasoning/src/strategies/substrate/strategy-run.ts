@@ -42,6 +42,7 @@ import { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
 import { makeToolCallBudget, type ToolCallBudget } from "../../kernel/capabilities/decide/tool-call-budget.js";
 import { runToolCallCounts } from "../../kernel/capabilities/decide/run-tool-call-counts.js";
 import { rootContext } from "@reactive-agents/core";
+import type { Plan as CorePlan } from "@reactive-agents/core";
 import { ensureRunScope } from "@reactive-agents/core/internal/run-scope";
 import {
   capStatusToEnvelope,
@@ -317,6 +318,12 @@ export type StrategyEnd =
        * (`kernel/policy/plan-completion.ts`). Absent: the strategy has no plan.
        */
       readonly plan?: readonly PlanStepLike[];
+      /**
+       * The run's final plan in the portable core shape (each step's final
+       * status). Rides `metadata.extensions.plan`; only the strategies that own
+       * a plan set it.
+       */
+      readonly corePlan?: CorePlan;
     });
 
 /** The `Result` arm of {@link StrategyEnd}. */
@@ -415,6 +422,9 @@ export function kernelTerminalMetadata(
       signalTally: tallySignals(state.signalLedger ?? []),
       actOrAnswer,
       ...(evidence !== undefined ? { unfinishedEvidence: evidence } : {}),
+      // Why a loop guard stopped the run (reason, repeated call, tools done,
+      // unfinished rows): lets any run, durable or not, surface a stop summary.
+      ...(state.meta.loopStop !== undefined ? { loopStop: state.meta.loopStop } : {}),
     },
     ...(state.meta.finalAnswerCapture !== undefined
       ? { finalAnswerCapture: state.meta.finalAnswerCapture }
@@ -430,6 +440,18 @@ export function kernelTerminalMetadata(
     // (validateCitations) read the corpus the kernel's grounding checks use.
     ...(state.scratchpad.size > 0 ? { scratchpad: Object.fromEntries(state.scratchpad) } : {}),
   };
+}
+
+const isRecord = (v: unknown): v is Readonly<Record<string, unknown>> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * `metadata.extensions` of a Result terminal: the strategy's own extensions
+ * joined with the relayed pass extensions (the relay wins a shared key), plus
+ * the run's final plan when it has one. Empty when there is nothing to carry.
+ */
+function joinedExtensions(own: unknown, relayed: unknown, plan: CorePlan | undefined): { readonly extensions?: Readonly<Record<string, unknown>> } {
+  const merged = { ...(isRecord(own) ? own : {}), ...(isRecord(relayed) ? relayed : {}), ...(plan !== undefined ? { plan } : {}) };
+  return Object.keys(merged).length > 0 ? { extensions: merged } : {};
 }
 
 /** What a strategy-decided outcome contributes to the terminal relay. */
@@ -740,6 +762,10 @@ export function runStrategy<E, R>(
         ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
         ...(abstention !== undefined ? { abstention } : {}),
       };
+      const relay: Record<string, unknown> = end.basedOn !== undefined
+        ? kernelTerminalMetadata(end.basedOn.state, ledger, sumActOrAnswerTally(actOrAnswerTallies))
+        : { runLedger: ledger, ...(actOrAnswerTallies.length > 0 ? { extensions: { actOrAnswer: sumActOrAnswerTally(actOrAnswerTallies) } } : {}) };
+      const relayExtensions = relay.extensions;
       return finalizeStrategyResult({
         strategy: spec.strategy,
         steps,
@@ -754,12 +780,12 @@ export function runStrategy<E, R>(
           ...end.extraMetadata,
           // A strategy-computed Result with no answering pass (plan-execute)
           // still relays the run's act-or-answer sum when any pass ran.
-          ...(end.basedOn !== undefined
-            ? kernelTerminalMetadata(end.basedOn.state, ledger, sumActOrAnswerTally(actOrAnswerTallies))
-            : { runLedger: ledger, ...(actOrAnswerTallies.length > 0 ? { extensions: { actOrAnswer: sumActOrAnswerTally(actOrAnswerTallies) } } : {}) }),
+          ...relay,
           ...claim,
           ...envelopeMeta,
           ...own?.markers,
+          // The relay's `extensions` replaced the strategy's own above: join them, plus the final plan.
+          ...joinedExtensions(end.extraMetadata?.extensions, relayExtensions, end.corePlan),
           ...(capped.cap !== undefined ? { statusCap: capped.cap } : {}),
           llmCalls: spend.llmCalls,
         },

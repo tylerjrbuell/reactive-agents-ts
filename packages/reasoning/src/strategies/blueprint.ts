@@ -40,7 +40,7 @@ import { Data, Effect } from "effect";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { obtainPlan, planningToolSchemas } from "./planning/input-plan.js";
+import { obtainPlan, planningToolSchemas, finalCorePlan } from "./planning/input-plan.js";
 import type { InputPlan } from "./planning/input-plan.js";
 import type { Plan } from "../types/plan.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
@@ -765,6 +765,7 @@ const blueprintBody = (
       status: finalStatus,
       delivery: { runContract },
       plan: settledSteps,
+      corePlan: finalCorePlan({ ...plan, steps: settledSteps }, input.plan),
       // H5/#40: the budget-capped join is a harness-authored terminal. The
       // substrate ships budgetTerminalPartial + harnessAuthoredOutput, this
       // warning, and the raw reason on the open-string channel (observability

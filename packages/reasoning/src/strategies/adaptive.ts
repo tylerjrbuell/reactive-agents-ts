@@ -93,6 +93,8 @@ interface AdaptiveInput {
    * once at entry and threads that snapshot.
    */
   readonly taskClassification?: TaskClassification;
+  /** A caller-supplied plan: forwarded to the sub-strategy; routes to plan-execute-reflect unless blueprint is selected. */
+  readonly plan?: import("./planning/input-plan.js").InputPlan;
   // FM-I (#195): cross-cutting fields forwarded verbatim to the dispatched
   // sub-strategy (via `{ ...input }` spread). Declared here so the forward is
   // type-visible — at runtime the spread already carried them, but the type
@@ -303,6 +305,12 @@ export const executeAdaptive = (
         selectedStrategy = adjustment.strategy;
         costAwareDowngradeReason = adjustment.reason;
       }
+    }
+
+    // A supplied plan needs a strategy that adopts it (blueprint or plan-execute).
+    if (input.plan !== undefined && selectedStrategy !== "blueprint" && selectedStrategy !== "plan-execute-reflect") {
+      run.record(makeStep("thought", `[ADAPTIVE] Plan supplied: ${selectedStrategy} → plan-execute-reflect (adopts the plan)`));
+      selectedStrategy = "plan-execute-reflect";
     }
 
     yield* emitLog({ _tag: "phase_started", phase: "adaptive:dispatch", timestamp: new Date() });

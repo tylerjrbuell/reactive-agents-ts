@@ -82,6 +82,7 @@ export function autoTickSteps(
   input: KernelInput,
   fromStep: number,
 ): { readonly state: KernelState; readonly ticked: readonly AdvisoryItem[] } {
+  if (input.harness?.autoTick === false) return { state, ticked: [] };
   const hits = hintedHits(state, input, fromStep);
   if (hits.length === 0) return { state, ticked: [] };
   const unchecked = viewItems(startRound(), state.ledger).filter((item) => item.status !== "completed");

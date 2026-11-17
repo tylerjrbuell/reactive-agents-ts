@@ -583,6 +583,10 @@ export {
   promptDumpPathPrefix,
 } from "./harness-flags.js";
 
+// ─── Guidance channel writers (resume callers append corrective guidance) ───
+export { appendGuidanceText, contributeGuidance } from "./kernel/state/guidance-channel.js";
+export type { PendingGuidance, GuidanceSignal, GuidanceTextKind } from "./kernel/state/guidance-channel.js";
+
 // ─── Loop-stop record + resume (public surface for runtime resume) ───
 export {
   resumeFromStop,

@@ -57,6 +57,13 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
         parameters: readonly { name: string; type: string; description: string; required: boolean }[];
       }[];
       readonly strategy?: ReasoningStrategy;
+      /**
+       * A caller-supplied plan (core or strategy shape). Forwarded to the
+       * strategy; blueprint and plan-execute-reflect adopt it instead of
+       * planning (adaptive routes to plan-execute-reflect when it is set).
+       * The final plan returns in `metadata.extensions.plan` (core shape).
+       */
+      readonly plan?: import("../strategies/planning/input-plan.js").InputPlan;
       /** Context profile for model-adaptive context engineering */
       readonly contextProfile?: Partial<ContextProfile>;
       /** LLM provider name (e.g. "ollama", "anthropic") — used to auto-derive default

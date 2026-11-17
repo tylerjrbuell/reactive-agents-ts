@@ -43,7 +43,7 @@ import {
   outstandingItems,
   type ExitGateRecord,
 } from "./exit-gate.js";
-import { wrapUpReserve } from "./wrap-up-reserve.js";
+import { wrapUpReserve, WRAP_UP_RESERVE_GUARD } from "./wrap-up-reserve.js";
 import { assembleDeliverable, collectValidatedObservations } from "./runner-helpers/deliverable.js";
 import { requestedActionTools, succeededToolNames } from "../capabilities/verify/claimed-actions.js";
 
@@ -106,7 +106,7 @@ export function reserveBudgetAnswerTurn(args: {
     yield* emitGuardFired({
       taskId,
       iteration: state.iteration,
-      guard: BUDGET_ANSWER_TURN_GUARD,
+      guard: wrapUp === undefined ? BUDGET_ANSWER_TURN_GUARD : WRAP_UP_RESERVE_GUARD,
       outcome: "block",
       reason: wrapUp === undefined
         ? "last think call of the iteration budget reserved for the answer"

@@ -271,6 +271,25 @@ export function planBudgetEnabled(): boolean {
 }
 
 /**
+ * Seeded-plan auto-tick: a step whose tool hint names a tool that just
+ * succeeded is marked done by the harness (`kernel/loop/iterate-follow-plan-seam.ts`).
+ * Default ON; `RA_AUTO_TICK=0` disables it (a kill switch for ablation).
+ */
+export function autoTickEnabled(): boolean {
+  return readFlag("RA_AUTO_TICK") !== "0";
+}
+
+/**
+ * Bookkeeping refund: a todo-only (or plan-recon) round on a seeded plan run
+ * does not count against `maxIterations`, bounded to half the budget
+ * (`kernel/loop/iterate-bookkeeping-refund-seam.ts`). Default ON;
+ * `RA_BOOKKEEPING_REFUND=0` disables it (a kill switch for ablation).
+ */
+export function bookkeepingRefundEnabled(): boolean {
+  return readFlag("RA_BOOKKEEPING_REFUND") !== "0";
+}
+
+/**
  * Lean thinking: a tool-selection turn on a thinking model runs with thinking
  * off (`kernel/capabilities/reason/lean-thinking.ts`). Default OFF pending an
  * ablation-warden measurement. `RA_LEAN_THINKING=1` enables it.
