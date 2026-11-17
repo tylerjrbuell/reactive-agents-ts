@@ -4,6 +4,8 @@ import {
   normalizeCortexAgentConfig,
   parseCortexSkillsConfig,
 } from "../services/cortex-agent-config.js";
+import { durableRunsEnabled } from "../services/durable-default.js";
+import { chatDurableSource } from "../services/chat-resume.js";
 
 describe("normalizeCortexAgentConfig", () => {
   test("coerces numeric fields from strings", () => {
@@ -228,6 +230,13 @@ describe("normalizeCortexAgentConfig — v0.12 fields (saved-agent durable/struc
   test("keeps an explicit durableRuns off (durable is the default)", () => {
     const out = normalizeCortexAgentConfig({ provider: "ollama", durableRuns: { enabled: false } }) as { durableRuns?: unknown };
     expect(out.durableRuns).toEqual({ enabled: false });
+  });
+  test("keeps durableRuns dir and checkpointEvery when `enabled` is absent (absent still means on)", () => {
+    const out = normalizeCortexAgentConfig({ provider: "ollama", durableRuns: { dir: " /srv/d ", checkpointEvery: 3 } }) as { durableRuns?: unknown };
+    expect(out.durableRuns).toEqual({ dir: "/srv/d", checkpointEvery: 3 });
+    expect(durableRunsEnabled(out.durableRuns === undefined ? {} : { durableRuns: out.durableRuns })).toBe(true);
+    expect(chatDurableSource({ stableAgentId: "a", agentConfig: out })).toEqual({ agentId: "a", dir: "/srv/d" });
+    expect((normalizeCortexAgentConfig({ provider: "ollama", durableRuns: {} }) as { durableRuns?: unknown }).durableRuns).toBeUndefined();
   });
   test("persists outputSchema", () => {
     const schema = { type: "object", properties: { a: { type: "string" } } };

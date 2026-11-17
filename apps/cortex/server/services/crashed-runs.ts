@@ -20,7 +20,7 @@ import type { Database } from "bun:sqlite";
 /** The Cortex database handle the desk-run finders take (re-exported so siblings add no `bun:sqlite` import). */
 export type DeskRunDb = Database;
 import { Effect } from "effect";
-import { listDurableRuns, RunStoreLive, RunStoreService, type RunRecord } from "@reactive-agents/runtime";
+import { defaultDurableRunsDir, listDurableRuns, RunStoreLive, RunStoreService, type RunRecord } from "@reactive-agents/runtime";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
 import type { LaunchParams } from "./runner-service.js";
 
@@ -37,11 +37,11 @@ export function isDurableBuild(p: Pick<BuildCortexAgentParams, "durableRuns" | "
 /**
  * The durable store file of an agent: `<dir>/runs.db`, where `dir` is the
  * configured `durableRuns.dir` or the framework default
- * `~/.reactive-agents/<agentId>/` (`withDurableRuns` JSDoc; the framework
- * exports no resolver for it).
+ * the framework's `defaultDurableRunsDir` (`~/.reactive-agents/<agentId>/`, or
+ * under `REACTIVE_AGENTS_RUNS_DIR` when set), the same resolver the write path uses.
  */
 export function durableRunsDbPath(agentId: string, dir?: string, home: string = homedir()): string {
-  return join(dir && dir.trim() !== "" ? dir : join(home, ".reactive-agents", agentId), "runs.db");
+  return join(dir && dir.trim() !== "" ? dir : defaultDurableRunsDir(agentId, home), "runs.db");
 }
 
 /**

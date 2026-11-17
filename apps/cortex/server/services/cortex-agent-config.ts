@@ -387,14 +387,17 @@ export function normalizeCortexAgentConfig(raw: Record<string, unknown>): Record
   else delete out.approvalPolicy;
 
   const dr = raw.durableRuns;
-  if (dr && typeof dr === "object" && !Array.isArray(dr) && typeof (dr as { enabled?: unknown }).enabled === "boolean") {
-    // Durable runs are on unless turned off (durable-default.ts), so an explicit `false` is kept.
+  if (dr && typeof dr === "object" && !Array.isArray(dr)) {
+    // Durable runs are on unless turned off (durable-default.ts): an explicit `false` is kept,
+    // and `dir` / `checkpointEvery` survive when `enabled` is absent (absent still means on).
     const d = dr as Record<string, unknown>;
-    out.durableRuns = {
-      enabled: d.enabled === true,
+    const kept = {
+      ...(typeof d.enabled === "boolean" ? { enabled: d.enabled } : {}),
       ...(typeof d.checkpointEvery === "number" ? { checkpointEvery: d.checkpointEvery } : {}),
       ...(typeof d.dir === "string" && d.dir.trim() !== "" ? { dir: d.dir.trim() } : {}),
     };
+    if (Object.keys(kept).length > 0) out.durableRuns = kept;
+    else delete out.durableRuns;
   } else {
     delete out.durableRuns;
   }

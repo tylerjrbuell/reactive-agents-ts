@@ -3,12 +3,25 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
-import { RunStoreLive, RunStoreService, listDurableRuns, type RunRecord } from "@reactive-agents/runtime";
+import { RunStoreLive, RunStoreService, defaultDurableRunsDir, listDurableRuns, type RunRecord } from "@reactive-agents/runtime";
 import { createCortexRuntime } from "../runtime.js";
 import { defaultCortexConfig } from "../types.js";
 import { CortexRunnerService } from "../services/runner-service.js";
 import { durableRunsDbPath, isDurableBuild, pickCrashedDurableRun } from "../services/crashed-runs.js";
 import { crashedRunsRouter } from "../api/crashed-runs.js";
+
+/** Run `fn` with REACTIVE_AGENTS_RUNS_DIR set (or cleared), restoring the preload's value after. */
+function withRunsDirEnv(value: string | undefined, fn: () => void): void {
+  const prev = process.env["REACTIVE_AGENTS_RUNS_DIR"];
+  if (value === undefined) delete process.env["REACTIVE_AGENTS_RUNS_DIR"];
+  else process.env["REACTIVE_AGENTS_RUNS_DIR"] = value;
+  try {
+    fn();
+  } finally {
+    if (prev === undefined) delete process.env["REACTIVE_AGENTS_RUNS_DIR"];
+    else process.env["REACTIVE_AGENTS_RUNS_DIR"] = prev;
+  }
+}
 
 const root = mkdtempSync(join(tmpdir(), "cortex-crashed-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -33,7 +46,17 @@ describe("crashed-run helpers", () => {
 
   it("the store path is the configured dir, else the framework default under the agent id", () => {
     expect(durableRunsDbPath("agent-1", "/tmp/d")).toBe("/tmp/d/runs.db");
-    expect(durableRunsDbPath("agent-1", undefined, "/home/u")).toBe("/home/u/.reactive-agents/agent-1/runs.db");
+    withRunsDirEnv(undefined, () => {
+      expect(durableRunsDbPath("agent-1", undefined, "/home/u")).toBe("/home/u/.reactive-agents/agent-1/runs.db");
+    });
+  });
+
+  it("the default store follows the framework resolver (REACTIVE_AGENTS_RUNS_DIR), the one the writer uses", () => {
+    withRunsDirEnv("/srv/runs", () => {
+      expect(durableRunsDbPath("agent-1")).toBe(join(defaultDurableRunsDir("agent-1"), "runs.db"));
+      expect(durableRunsDbPath("agent-1")).toBe("/srv/runs/agent-1/runs.db");
+      expect(durableRunsDbPath("agent-1", "/tmp/d")).toBe("/tmp/d/runs.db"); // an explicit dir still wins
+    });
   });
 
   it("picks the newest run a crash left mid-run, never one waiting on a person or finished", () => {
