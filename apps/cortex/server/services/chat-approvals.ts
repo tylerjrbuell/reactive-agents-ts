@@ -25,6 +25,9 @@
 import type { Database } from "bun:sqlite";
 import type { AgentResult, ReactiveAgent } from "@reactive-agents/runtime";
 import type { InteractionQuestion } from "@reactive-agents/core";
+import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import { runEventStream } from "./chat-resume-stream.js";
+import { TurnTraceRecorder, turnOutcomeOf, withTurnOutcome, type StoredTurnTrace } from "./chat-turn-trace.js";
 import { durableApprovals, type ApprovalDecision, type PendingGate } from "./durable-approvals.js";
 import { checkInteractionAnswer, questionsOfPending } from "./interaction-answers.js";
 
@@ -64,7 +67,9 @@ export interface PauseCarrier {
 /** The agent surface resolution needs. */
 export type ApprovableAgent = Pick<ReactiveAgent, "approveRun" | "denyRun" | "respondToInteraction"> &
   /** Continue a loop-stopped run (`chat-resume.ts`): the same durable agent resumes it. */
-  Pick<ReactiveAgent, "resumeRun">;
+  Pick<ReactiveAgent, "resumeRun"> &
+  /** The agent's own event bus, followed while a decided run works (live turn). */
+  Partial<Pick<ReactiveAgent, "subscribe">>;
 
 /** What chat approvals need from the chat session service (injected; no hidden globals). */
 export interface ChatApprovalHost {
@@ -78,7 +83,7 @@ export interface ChatApprovalHost {
    * Persist an exchange (user message + reply). `result` carries tokens, cost and run id;
    * it is absent for the agent's question half of an answered `request_user_input`.
    */
-  persistExchange(sessionId: string, userMessage: string, reply: string, result: AgentResult | undefined, toolsUsed: readonly string[]): void;
+  persistExchange(sessionId: string, userMessage: string, reply: string, result: AgentResult | undefined, toolsUsed: readonly string[], trace?: StoredTurnTrace): void;
   /** Drop the cached agent so the next turn rebuilds history from the DB. */
   evict(sessionId: string): Promise<void>;
 }
@@ -88,6 +93,11 @@ export type ChatApprovalOutcome =
   | { readonly ok: true; readonly status: "completed"; readonly reply: string; readonly success: boolean }
   | { readonly ok: true; readonly status: "awaiting-approval"; readonly pending: ChatPendingApproval }
   | { readonly ok: true; readonly status: "awaiting-interaction"; readonly pending: ChatPendingInteraction }
+  | { readonly ok: false; readonly code: "not-found" | "busy" | "failed"; readonly message: string };
+
+/** A decision started as a live turn: its stream events, ready for a detached turn. */
+export type ChatApprovalStart =
+  | { readonly ok: true; readonly message: string; readonly events: AsyncGenerator<AgentStreamEvent> }
   | { readonly ok: false; readonly code: "not-found" | "busy" | "failed"; readonly message: string };
 
 /** Denial reason sent to the run when the user gives none. */
@@ -209,12 +219,15 @@ export class ChatApprovals {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** Paused turns of a session, oldest first. */
+  /** Runs whose decision is being carried out as a live turn: decided, not yet landed. */
+  private readonly resolving = new Set<string>();
+
+  /** Paused turns of a session, oldest first (a turn already decided and running on is not paused any more). */
   list(sessionId: string): ChatPendingApproval[] {
     const rows = this.db
       .prepare(`SELECT * FROM chat_pending_approvals WHERE session_id = ? ORDER BY created_at ASC, run_id ASC`)
       .all(sessionId) as Row[];
-    return rows.map(rowToPending);
+    return rows.map(rowToPending).filter((p) => !this.resolving.has(p.runId));
   }
 
   /** Turns of a session paused on `request_user_input`, oldest first. */
@@ -365,6 +378,72 @@ export class ChatApprovals {
   }
 
   /**
+   * Decide a paused turn as a live turn: answers as soon as the decision is taken and
+   * yields the resumed run's progress (the gated call, its result, what the run does
+   * next) as stream events for a detached turn, then its end. The same landing as
+   * {@link resolve}: the reply lands in the thread (with the run's tool calls as the
+   * turn's trace), or the run holds again on its next gate or question. While it runs the
+   * turn is no longer listed as paused (one card, the live thread) and the desk list does
+   * not offer it a second time; a run that cannot start is held again as it was.
+   */
+  async startResolve(sessionId: string, runId: string, decision: ApprovalDecision, reason?: string): Promise<ChatApprovalStart> {
+    const pending = this.get(sessionId, runId);
+    if (!pending) return { ok: false, code: "not-found", message: `No paused turn ${runId} in session ${sessionId}` };
+    if (this.resolving.has(runId)) return { ok: false, code: "busy", message: "This approval is already being carried out." };
+    let release: () => void;
+    try {
+      release = this.host.acquireTurn(sessionId);
+    } catch (e) {
+      return { ok: false, code: "busy", message: errorMessage(e) };
+    }
+    let agent: ApprovableAgent;
+    try {
+      agent = await this.host.agentFor(sessionId);
+    } catch (e) {
+      release();
+      return { ok: false, code: "failed", message: errorMessage(e) };
+    }
+    this.resolving.add(runId);
+    await durableApprovals.finalize(runId);
+    const start = (): Promise<AgentResult> =>
+      decision === "approved"
+        ? agent.approveRun(runId, reason ? { reason } : undefined)
+        : agent.denyRun(runId, reason?.trim() ? reason : DEFAULT_DENY_REASON);
+    return { ok: true, message: pending.userMessage, events: this.followDecision(agent, start, pending, decision, release) };
+  }
+
+  /** The events of a decided run, landing its result before the terminal event reaches any client. */
+  private async *followDecision(
+    agent: ApprovableAgent,
+    start: () => Promise<AgentResult>,
+    pending: ChatPendingApproval,
+    decision: ApprovalDecision,
+    release: () => void,
+  ): AsyncGenerator<AgentStreamEvent> {
+    const recorder = new TurnTraceRecorder();
+    let landed = false;
+    try {
+      for await (const event of runEventStream(agent, start, async (end) => {
+        if (!("result" in end)) return;
+        const outcome = end.result.success ? undefined : turnOutcomeOf(end.result);
+        const trace = withTurnOutcome(recorder.finish(), outcome);
+        await this.settle(pending.sessionId, pending.runId, pending.userMessage, end.result, decision === "approved" ? [pending.toolName] : [], undefined, trace);
+        landed = true;
+        // Landed (reply stored, or held on the next gate): a re-pause shows as paused from here.
+        this.resolving.delete(pending.runId);
+      })) {
+        recorder.record(event);
+        yield event;
+      }
+    } finally {
+      this.resolving.delete(pending.runId);
+      // The run failed before it landed: the turn is still paused where it was.
+      if (!landed && this.get(pending.sessionId, pending.runId)) this.register(pending);
+      release();
+    }
+  }
+
+  /**
    * Answer a turn paused on `request_user_input`. The run resumes with `value`
    * (`respondToInteraction`); the question and the answer land in the thread as their
    * own exchange, then the run's reply (or its next pause) follows the answer.
@@ -407,6 +486,7 @@ export class ChatApprovals {
     result: AgentResult,
     toolsUsed: readonly string[],
     asked?: { readonly question: string; readonly answer: string },
+    trace?: StoredTurnTrace,
   ): Promise<ChatApprovalOutcome> {
     this.db.prepare(`DELETE FROM chat_pending_interactions WHERE run_id = ?`).run(runId);
     let said = userMessage;
@@ -424,7 +504,7 @@ export class ChatApprovals {
         outcome = { ok: true, status: "awaiting-interaction", pending: this.onInteractionPaused(sessionId, said, result.pendingInteraction) };
       } else {
         const reply = replyOf(result);
-        this.host.persistExchange(sessionId, said, reply, result, toolsUsed);
+        this.host.persistExchange(sessionId, said, reply, result, toolsUsed, trace);
         outcome = { ok: true, status: "completed", reply, success: result.success };
       }
     }

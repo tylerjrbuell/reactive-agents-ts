@@ -99,6 +99,22 @@ export async function* resumeEventStream(
   options: ResumeRunOptions | undefined,
   onSettled: (outcome: { readonly result: AgentResult } | { readonly error: unknown }) => void,
 ): AsyncGenerator<AgentStreamEvent> {
+  yield* runEventStream(agent, () => agent.resumeRun(runId, options), onSettled);
+}
+
+/** What a followed run ended with: its result, or the failure that stopped it. */
+export type RunSettled = { readonly result: AgentResult } | { readonly error: unknown };
+
+/**
+ * Follow any durable run the framework drives without a stream (`resumeRun`, `approveRun`,
+ * `denyRun`): start it with `start`, yield its bus progress, then its terminal event.
+ * `onSettled` may be async; it is awaited before the terminal event is yielded.
+ */
+export async function* runEventStream(
+  agent: Pick<ResumeStreamAgent, "subscribe">,
+  start: () => Promise<AgentResult>,
+  onSettled: (outcome: RunSettled) => void | Promise<void>,
+): AsyncGenerator<AgentStreamEvent> {
   const queue: AgentStreamEvent[] = [];
   let wake: (() => void) | undefined;
   let iterations = 0;
@@ -111,8 +127,8 @@ export async function* resumeEventStream(
   };
   // The bus is best effort: without it the turn still ends with its result.
   const detach = agent.subscribe ? await agent.subscribe(onEvent).catch(() => undefined) : undefined;
-  const end: { value?: { readonly result: AgentResult } | { readonly error: unknown } } = {};
-  void agent.resumeRun(runId, options).then(
+  const end: { value?: RunSettled } = {};
+  void start().then(
     (result) => {
       end.value = { result };
       wake?.();
@@ -138,7 +154,7 @@ export async function* resumeEventStream(
   }
   while (queue.length > 0) yield queue.shift()!;
   const settled = end.value;
-  onSettled(settled);
+  await onSettled(settled);
   if ("error" in settled) yield { _tag: "StreamError", cause: errorText(settled.error) };
   else yield resumeTerminalEvent(settled.result, iterations);
 }

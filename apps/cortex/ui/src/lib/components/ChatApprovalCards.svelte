@@ -1,13 +1,15 @@
 <script lang="ts">
   // A chat turn paused on a durable approval gate: the user's message, the gated tool call,
-  // and Approve / Deny / Dismiss. Approve and Deny resume the run on the server; its reply
-  // then lands in the thread as an ordinary exchange and this card goes away. Dismiss hides
-  // the card only (the turn stays paused and pending).
+  // and Approve / Deny / Dismiss. Approve and Deny record the decision and answer at once; the
+  // run goes on in the background and the thread attaches to it (the gated call, its progress and
+  // result stream in like any tool call), so this card goes away immediately. If the run reaches
+  // another gate the card comes back for that gate. Dismiss hides the card only (the turn stays
+  // paused and pending).
   import { chatStore } from "$lib/stores/chat-store.js";
-  import { toast } from "$lib/stores/toast-store.js";
   import Button from "$lib/components/kit/Button.svelte";
   import Status from "$lib/components/kit/Status.svelte";
-  import { approvalArgRows, decideChatApproval, type ApprovalVerb, type ChatPendingApprovalWire } from "$lib/chat-approvals.js";
+  import ApprovalParams from "$lib/components/chat/ApprovalParams.svelte";
+  import { startChatApproval, type ApprovalVerb, type ChatPendingApprovalWire } from "$lib/chat-approvals.js";
   import { approvalCardKey, hiddenApprovalCards, hideApprovalCard } from "$lib/chat-live-approval.js";
   import { clearApproval } from "$lib/stores/approval-watcher.js";
 
@@ -17,8 +19,14 @@
   const { sessionId: sessionIdProp }: Props = $props();
   const sessionId = $derived(sessionIdProp);
 
+  /** Gates decided on this page: their run goes on as the live turn, so the card is gone now (the store catches up when the turn ends). */
+  let decided = $state<Record<string, true>>({});
+  // When the attached turn ends the server's list is the truth again (a run that failed before it landed is still paused).
+  $effect(() => {
+    if (!$chatStore.sending) decided = {};
+  });
   const pending = $derived<readonly ChatPendingApprovalWire[]>(
-    $chatStore.activeSessionId === sessionId ? $chatStore.activePendingApprovals : [],
+    $chatStore.activeSessionId === sessionId ? $chatStore.activePendingApprovals.filter((p) => decided[approvalCardKey(p)] !== true) : [],
   );
 
   /** runId -> the verb in flight. */
@@ -28,11 +36,12 @@
   let denying = $state<Record<string, boolean>>({});
   let reasons = $state<Record<string, string>>({});
 
-  async function decide(p: ChatPendingApprovalWire, verb: ApprovalVerb) {
+  async function decide(p: ChatPendingApprovalWire, verb: "approve" | "deny") {
     busy = { ...busy, [p.runId]: verb };
     const { [p.runId]: _cleared, ...rest } = errors;
     errors = rest;
-    const out = await decideChatApproval(sessionId, p.runId, verb, verb === "deny" ? reasons[p.runId] : undefined);
+    // The decision is recorded and the run goes on in the background: the answer is immediate.
+    const out = await startChatApproval(sessionId, p.runId, verb, verb === "deny" ? reasons[p.runId] : undefined);
     const { [p.runId]: _done, ...stillBusy } = busy;
     busy = stillBusy;
     if (!out.ok) {
@@ -44,12 +53,18 @@
     // A re-pause keeps the same runId: start its new gate from a clean card.
     denying = { ...denying, [p.runId]: false };
     reasons = { ...reasons, [p.runId]: "" };
-    if (out.status === "awaiting-approval") toast.info("The run paused again", "It needs another approval to continue.");
-    await chatStore.refreshActive();
+    // Back to the normal live view: the card goes, the thread attaches to the running turn
+    // (the gated call, its progress and result stream in like any tool call).
+    decided = { ...decided, [approvalCardKey(p)]: true };
+    const attached = await chatStore.resumeActiveTurn(sessionId);
+    if (!attached) {
+      // The run ended before the page could attach: its stored exchange (or its next gate) is on the server.
+      await chatStore.refreshActive();
+    }
   }
 
-  const busyLabel = (verb: ApprovalVerb, tool: string): string =>
-    verb === "approve" ? `Running ${tool}…` : verb === "deny" ? "Sending the denial…" : "Dismissing…";
+  /** The word shown while a decision is on its way to the server (a moment: the run then streams live). */
+  const busyLabel = (verb: ApprovalVerb): string => (verb === "approve" ? "Starting the run…" : verb === "deny" ? "Sending the denial…" : "Dismissing…");
 </script>
 
 {#each pending as p (p.runId)}
@@ -62,17 +77,10 @@
     <div class="card rail rail-attention">
       <p class="h"><Status tone="attention" label="Waiting on you" /></p>
       <p class="what">The agent wants to run <span class="tool">{p.toolName}</span>. The run is paused until you decide; approve to continue.</p>
-      {#if approvalArgRows(p.args).length > 0}
-        <dl class="args">
-          {#each approvalArgRows(p.args) as row (row.key)}
-            <dt>{row.key}</dt>
-            <dd>{row.value}</dd>
-          {/each}
-        </dl>
-      {/if}
+      <ApprovalParams args={p.args} />
       {#if errors[p.runId]}<p class="err" role="alert">{errors[p.runId]}</p>{/if}
       {#if inFlight}
-        <p class="busy" aria-live="polite"><Status tone="running" label={busyLabel(inFlight, p.toolName)} /></p>
+        <p class="busy" aria-live="polite"><Status tone="running" label={busyLabel(inFlight)} /></p>
       {:else if denying[p.runId]}
         <form class="acts" onsubmit={(e) => { e.preventDefault(); void decide(p, "deny"); }}>
           <input type="text" bind:value={reasons[p.runId]} placeholder="Tell the agent why (optional)" aria-label="Reason for denying" class="cx-control reason" />
@@ -109,9 +117,6 @@
   .h, .what, .busy, .err { margin: 0; }
   .what { color: var(--cortex-text); }
   .tool { font-family: var(--cortex-font-data); font-size: var(--cortex-t-xs); color: var(--cortex-io); }
-  .args { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); }
-  dt { color: var(--cortex-text-3); }
-  dd { margin: 0; min-width: 0; overflow-wrap: anywhere; color: var(--cortex-text); }
   .err { color: var(--cortex-bad); overflow-wrap: anywhere; }
   .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .reason { flex: 1; min-width: 12rem; height: 28px; }

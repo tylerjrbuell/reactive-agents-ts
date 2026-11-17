@@ -15,6 +15,7 @@ import { crashedRunsRouter } from "./api/crashed-runs.js";
 import { chatRouter } from "./api/chat.js";
 import { chatModeRoute } from "./api/chat-mode-route.js";
 import { chatResumeRoute, loopStoppedRunsRouter } from "./api/loop-stop-routes.js";
+import { chatApprovalStartRoute } from "./api/chat-approval-start-route.js";
 import { chatPlanRoute } from "./api/chat-plan-route.js";
 import { ChatBtwService } from "./services/chat-btw.js";
 import { memoryRouter } from "./api/memory.js";
@@ -211,6 +212,7 @@ export async function startCortexServer(
     .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService, new ChatBtwService(runtime.rawDb), detachedTurns))
     .use(loopStoppedRunsRouter(runtime.rawDb, runtime.runnerLayer))
     .use(chatResumeRoute(chatSessionService, detachedTurns))
+    .use(chatApprovalStartRoute(chatSessionService, detachedTurns))
     .use(chatModeRoute(chatSessionService))
     .use(chatPlanRoute(chatSessionService))
     .use(memoryRouter(memoryInspector, runtime.rawDb))
