@@ -1,197 +1,65 @@
 # @reactive-agents/reasoning
 
-> Reasoning strategies and the composable kernel for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Reasoning strategies and the composable kernel that runs the think, act, observe, verify loop for Reactive Agents.
 
-This package contains five reasoning strategies (ReAct, Reflexion, Plan-Execute, Tree-of-Thought,
-Adaptive), the composable **reasoning kernel** that powers the runtime's `think → act → observe →
-verify` loop, and the **Intelligent Context Synthesis** (ICS) layer that keeps prompts compact
-without sacrificing fidelity.
+> **Stability:** stable. `.withReasoning()` and the strategy names are stable; kernel internals (inner `KernelHooks` taps, the arbitrator, the strategy-switching heuristic) may change between minors.
 
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/reasoning
+# or: npm install @reactive-agents/reasoning
 ```
 
-The `runtime` package re-exports everything you typically need; install this directly only if you
-are wiring strategies into your own Effect program.
+Most apps never import this package directly. `reactive-agents` (`bun add reactive-agents`) re-exports the builder, which wires reasoning for you. Install this one to call strategies or the kernel from your own Effect program.
 
-## Strategies
+## Usage
 
-| Strategy | Export | Description | LLM calls | Best for |
-|---|---|---|---|---|
-| ReAct | `executeReactive` | Think → Act → Observe loop with native function calling | 1 / iteration | General tool use |
-| Reflexion | `executeReflexion` | Generate → Critique → Improve loop | 3 / retry | Quality-critical output |
-| Plan-Execute | `executePlanExecute` | Plan all steps, execute, optionally re-plan | 2+ | Multi-step / sequential tasks |
-| Tree-of-Thought | `executeTreeOfThought` | Explore branches, score, prune | 3 × breadth × depth | Complex reasoning |
-| Adaptive | `executeAdaptive` | Analyze task → auto-pick strategy → delegate | 1 + delegated cost | Mixed workloads |
+Enable reasoning through the builder (ReAct is the default strategy):
 
-## Quick example
-
-```typescript
-import { ReactiveAgents } from "@reactive-agents/runtime";
+```ts
+import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("researcher")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withReasoning() // defaults to ReAct
+  .withReasoning() // ReAct by default
   .withTools()
   .build();
 
 const result = await agent.run("Analyze the trade-offs between TCP and UDP");
-```
-
-To enable runtime strategy switching (RI dispatcher) — the kernel will swap strategy mid-run when
-loop detection or low-progress signals fire:
-
-```typescript
-.withReasoning({
-  defaultStrategy: "reactive",
-  strategySwitching: { enabled: true },
-})
-```
-
-Strategy switching is **opt-in**; the default is single-strategy (`reactive`).
-
-## ReAct loop
-
-The default strategy. A native function-calling Think → Action → Observation loop:
-
-```
-Thought:  "I need to find information about X"
-Action:   web_search({"query": "X"})
-Observation: [actual search results from the registered tool]
-Thought:  "Based on the results, I can conclude..."
-FINAL ANSWER: ...
-```
-
-When `ToolService` is present (via `.withTools()`), tool calls execute real registered tools.
-Tool arguments must be valid JSON; if a plain string is provided, it maps to the first required
-parameter. When `ToolService` is absent the kernel returns a clear descriptive observation instead
-of crashing.
-
-## Reflexion loop
-
-Based on the [Reflexion paper](https://arxiv.org/abs/2303.11366). Use when output quality matters
-more than latency:
-
-```typescript
-import { executeReflexion } from "@reactive-agents/reasoning";
-import { Effect } from "effect";
-
-const result = await Effect.runPromise(
-  executeReflexion({
-    taskDescription: "Write a concise technical explanation of RAFT consensus.",
-    taskType: "explanation",
-    memoryContext: "",
-    availableTools: [],
-    config: {
-      defaultStrategy: "reflexion",
-      adaptive: { enabled: false, learning: false },
-      strategies: {
-        reactive: { maxIterations: 10, temperature: 0.7 },
-        planExecute: { maxRefinements: 2, reflectionDepth: "deep" },
-        treeOfThought: { breadth: 3, depth: 3, pruningThreshold: 0.5 },
-        reflexion: { maxRetries: 3, selfCritiqueDepth: "deep" },
-      },
-    },
-  }).pipe(Effect.provide(llmLayer)),
-);
-
 console.log(result.output);
-console.log(result.metadata.confidence); // 0.6–1.0
-console.log(result.status);              // "completed" | "partial"
 ```
 
-## The reasoning kernel
+Pick another strategy with `.withReasoning({ defaultStrategy: "reflexion" })`. ReAct is the default on every model tier. Heavier strategies cost more tokens and time on local models, with no measured quality gain in our tests. Which strategy fits which task: [Choosing a Reasoning Strategy](https://docs.reactiveagents.dev/guides/choosing-strategies/).
 
-The kernel is a composable, capability-grouped state machine that drives every reasoning strategy.
-It lives at `kernel/` inside this package:
+Strategy switching mid-run (when a loop is detected) is opt-in and off by default. See the reasoning guide for the option.
 
-```
-kernel/
-  capabilities/
-    act/        - tool execution, gating, parsing, healing
-    attend/     - context formatting, tool relevance filtering
-    comprehend/ - task intent classification
-    decide/     - the arbitrator (sole termination authority)
-    reason/     - think loop, stream parsing
-    reflect/    - loop detection, reactive observer, strategy evaluator
-    sense/      - step utilities
-    verify/     - verifier + retry policy + evidence grounding
-  loop/         - runner, react-kernel, terminate, output assembly
-  state/        - kernel state, hooks, constants
-  utils/        - diagnostics, ICS coordinator, lane controller
-```
+## API
 
-Two records, distinct purposes:
-
-- `state.messages[]` — what the LLM sees (provider conversation thread).
-- `state.steps[]` — what observers see (entropy, metrics, debrief).
-
-The **arbitrator** at `kernel/capabilities/decide/arbitrator.ts` is the single owner of the
-termination decision; every signal (verifier-fail, max-iterations, completion, controller veto, …)
-funnels through it.
-
-## Intelligent Context Synthesis (ICS)
-
-ICS coordinates three context-shaping stages so they don't fight each other:
-
-1. **Stash** — preserve original verbatim text for replay.
-2. **Curator** — entropy- and relevance-driven pruning of observations.
-3. **Patch** — last-mile message-window compaction.
-
-Configure via `withReasoning({ synthesis: { ... } })`. The default profile is task-phase aware
-(planning → execution → finalization).
-
-```typescript
-import {
-  defaultContextCurator,
-  applyMessageWindowWithCompact,
-  type SynthesisConfig,
-} from "@reactive-agents/reasoning";
-```
-
-## Verifier and retry
-
-`defaultVerifier` runs semantic + evidence-grounding checks on candidate outputs. The
-`defaultVerifierRetryPolicy` (Sprint 3.5) decides whether to retry, with what signal text, on each
-verifier rejection — overrideable for custom quality gates.
-
-## Tool-calling drivers
-
-Two drivers drive the act phase, selected by provider capability:
-
-- **`NativeFCDriver`** (`@reactive-agents/tools`) — native function calling for Anthropic, OpenAI,
-  Gemini, and modern Ollama models.
-- **`TextParseDriver`** — fallback that parses ACTION/JSON from text completions for older or
-  text-only models.
-
-Both pass through the **healing pipeline** (4-stage: tool-name → param-name → path resolution →
-type coercion), which recovers ~87% of malformed tool calls without re-prompting.
-
-## Key exports
-
-| Export | Purpose |
+| Export | Use it when |
 |---|---|
-| `executeReactive` / `executeReflexion` / `executePlanExecute` / `executeTreeOfThought` / `executeAdaptive` | Strategy entry points |
-| `ReasoningService` / `ReasoningServiceLive` | Effect service tag + layer |
-| `StrategyRegistry` / `StrategyRegistryLive` | Strategy registration |
-| `defaultContextCurator` / `applyMessageWindowWithCompact` | ICS primitives |
-| `defaultVerifier` / `defaultVerifierRetryPolicy` | Verification primitives |
-| `arbitrate` / `applyTermination` / `arbitrateAndApply` | Arbitrator API |
-| `inferRequiredTools` / `classifyToolRelevance` | Structured-output helpers |
-| `CONTEXT_PROFILES` / `resolveProfile` | Per-tier context profiles |
+| `executeReactive`, `executeReflexion`, `executePlanExecute`, `executeTreeOfThought`, `executeAdaptive` | You call a strategy directly from Effect code |
+| `ReasoningService`, `ReasoningServiceLive` | You resolve strategies through the Effect service |
+| `StrategyRegistry`, `StrategyRegistryLive` | You register or look up strategies |
+| `arbitrate`, `applyTermination`, `arbitrateAndApply` | You work with the kernel's single termination decision |
+| `defaultVerifier` | You run the default output checks on a candidate answer |
+| `classifyToolRelevance` | You rank tools by relevance to a task |
+| `CONTEXT_PROFILES`, `resolveProfile` | You need the per-tier context profiles |
+
+The kernel (`think`, `act`, `observe`, `verify` capabilities, loop runner, state) is described in [The Composable Kernel](https://docs.reactiveagents.dev/concepts/composable-kernel/).
 
 ## Documentation
 
-- Strategies guide: [docs.reactiveagents.dev/guides/reasoning/](https://docs.reactiveagents.dev/guides/reasoning/)
-- Kernel architecture: [docs.reactiveagents.dev/architecture/kernel/](https://docs.reactiveagents.dev/architecture/kernel/)
-- Related: [`@reactive-agents/runtime`](../runtime/README.md),
-  [`@reactive-agents/llm-provider`](../llm-provider/README.md),
-  [`@reactive-agents/tools`](../tools/README.md).
+- [Reasoning guide](https://docs.reactiveagents.dev/guides/reasoning/)
+- [Choosing a Reasoning Strategy](https://docs.reactiveagents.dev/guides/choosing-strategies/)
+- [The Composable Kernel](https://docs.reactiveagents.dev/concepts/composable-kernel/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

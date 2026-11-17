@@ -1,112 +1,67 @@
 # @reactive-agents/core
 
-Core services and types for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
+> Event bus, agent and task services, error taxonomy and canonical schemas that every other Reactive Agents package builds on.
 
-The foundational package every other `@reactive-agents/*` package depends on. Provides the EventBus, AgentService, TaskService, ContextWindowManager, framework error taxonomy, canonical schemas, and the narrow ports (`AgentMemory`, `EntropySensorService`) that other layers resolve.
+> **Stability:** unstable. The event bus tags are stable; service and schema shapes may change between minor versions.
 
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/core
+# or: npm install @reactive-agents/core
 ```
 
-Or install everything at once via the umbrella package:
+Most apps get this package through the facade (`bun add reactive-agents`).
 
-```bash
-bun add reactive-agents
-```
+## Usage
 
-## What This Package Provides
-
-- **EventBus** — typed publish/subscribe for the full `AgentEvent` taxonomy (lifecycle, intelligence, cortex, error-swallowed)
-- **AgentService** — agent registration, lookup, and lifecycle management
-- **TaskService** — task creation, status tracking (pending → running → completed/failed/cancelled), and cancellation
-- **ContextWindowManager** — token-aware truncation strategies for long conversations
-- **Framework error taxonomy** — `TransientError`, `LLMTimeoutError`, `LLMRateLimitError`, `ContractError`, `SecurityError`, `VerificationFailed`, etc., with `isRetryable()` for retry-rule pattern matching
-- **Canonical schemas** — `Agent`, `Task`, `TaskResult`, `Message`, `RuntimeConfig`, `ReasoningStep` (Effect Schema, branded IDs)
-- **AgentMemory port** — narrow interface the kernel resolves, decoupled from the `@reactive-agents/memory` adapter
-- **EntropySensorService tag** — service tag the reactive-intelligence layer plugs into
-
-## Quick Example
-
-```typescript
+```ts
 import { Effect } from "effect";
-import {
-  CoreServicesLive,
-  AgentService,
-  TaskService,
-  EventBus,
-} from "@reactive-agents/core";
+import { CoreServicesLive, EventBusLive, AgentService, TaskService, EventBus } from "@reactive-agents/core";
 
 const program = Effect.gen(function* () {
   const agents = yield* AgentService;
   const tasks = yield* TaskService;
   const bus = yield* EventBus;
 
-  const agent = yield* agents.create({
-    name: "my-agent",
-    capabilities: [],
-  });
+  const agent = yield* agents.create({ name: "my-agent", capabilities: [] });
 
-  yield* bus.subscribe("TaskCompleted", (event) =>
+  yield* bus.on("TaskCompleted", (event) =>
     Effect.sync(() => console.log("done:", event.taskId)),
   );
 
-  const task = yield* tasks.create(agent.id, { input: "hello" });
-  return { agent, task };
+  return yield* tasks.create({ agentId: agent.id, type: "query", input: "hello" });
 });
 
-await Effect.runPromise(program.pipe(Effect.provide(CoreServicesLive)));
+await Effect.runPromise(
+  program.pipe(Effect.provide(CoreServicesLive), Effect.provide(EventBusLive)),
+);
 ```
 
-## Key Exports
+`bus.on(tag, handler)` narrows the event type by tag. `bus.subscribe(handler)` receives every event.
 
-| Export                                 | Description                                              |
-| -------------------------------------- | -------------------------------------------------------- |
-| `CoreServicesLive`                     | Composite layer wiring AgentService + TaskService + EventBus |
-| `EventBus`, `EventBusLive`             | Typed pub/sub for `AgentEvent`                           |
-| `AgentService`, `AgentServiceLive`     | Create, register, and look up agents                     |
-| `TaskService`, `TaskServiceLive`       | Create, update, and cancel tasks                         |
-| `ContextWindowManager`                 | Token-aware conversation truncation                      |
-| `AgentMemory`                          | Narrow port for memory adapters                          |
-| `EntropySensorService`                 | Service tag consumed by reactive-intelligence            |
-| `AgentId`, `TaskId`, `MessageId`       | Branded ID types + generators                            |
-| `FrameworkError` and subtypes          | Tagged error taxonomy with `isRetryable()` guard         |
-| `defaultRuntimeConfig`                 | Sensible defaults for `RuntimeConfigSchema`              |
+## API
 
-## Event Taxonomy
-
-The `AgentEvent` type unions every event flowing through `EventBus`:
-
-- **Lifecycle** — `AgentCreated`, `TaskStarted`, `TaskCompleted`, `TaskFailed`, `TaskCancelled`
-- **Intelligence** — `SkillActivated`, `SkillRefined`, `TemperatureAdjusted`, `MemoryBoostTriggered`, `AgentNeedsHuman`
-- **Cortex** — `MemorySnapshot`, `ContextPressure`, `ChatTurnEvent`, `AgentHealthReport`, `ProviderFallbackActivated`, `DebriefCompleted`, `AgentConnected`, `AgentDisconnected`
-- **Errors** — `ErrorSwallowed` (replaces silent `catchAll(() => Effect.void)` sites)
-
-Subscribe to a single tag for type-narrowed handlers, or subscribe to `*` for all events.
-
-## Error Taxonomy
-
-```typescript
-import { isRetryable, LLMTimeoutError, ContractError } from "@reactive-agents/core";
-
-try {
-  await runMyAgent();
-} catch (err) {
-  if (isRetryable(err)) {
-    // TransientError, LLMTimeoutError, CapacityError, LLMRateLimitError
-    return retry();
-  }
-  // ContractError, SecurityError, VerificationFailed → surface to caller
-  throw err;
-}
-```
+| Export | Use it when |
+|---|---|
+| `CoreServicesLive` | You want AgentService, TaskService and EventBus wired in one layer. |
+| `EventBus`, `EventBusLive` | You publish or subscribe to `AgentEvent`s (lifecycle, intelligence, errors). |
+| `AgentService`, `TaskService` | You create agents and track tasks (pending, running, completed, failed, cancelled). |
+| `ContextWindowManager` | You need token-aware truncation of long conversations. |
+| `AgentMemory` | You provide your own memory adapter behind the narrow port the kernel resolves. |
+| `EntropySensorService` | You plug an entropy sensor in (used by reactive-intelligence). |
+| `AgentId`, `TaskId`, `MessageId` | You need branded IDs and `generate*Id` helpers. |
+| `isRetryable` and the framework errors | You branch on error type (`TransientError`, `LLMTimeoutError`, `LLMRateLimitError`, `ContractError`, `SecurityError`). |
+| `defaultRuntimeConfig` | You want default `RuntimeConfig` values. |
 
 ## Documentation
 
-- Full docs: [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)
-- Related packages: [`@reactive-agents/runtime`](https://www.npmjs.com/package/@reactive-agents/runtime), [`@reactive-agents/reasoning`](https://www.npmjs.com/package/@reactive-agents/reasoning)
+- [Architecture](https://docs.reactiveagents.dev/concepts/architecture/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

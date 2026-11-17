@@ -1,55 +1,89 @@
 # @reactive-agents/diagnose
 
-> Forensic CLI for recorded Reactive Agents traces — replay, grep, diff, and debrief agent runs
+> `rax-diagnose`: explain why a recorded Reactive Agents run failed, whether the harness or the model is at fault, and what to fix. Zero tokens.
 
 [![npm](https://img.shields.io/npm/v/@reactive-agents/diagnose?color=CB3837&logo=npm)](https://www.npmjs.com/package/@reactive-agents/diagnose)
-[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev)
+[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev/concepts/decision-tracing/)
 
-A **forensic CLI for debugging AI agent runs**. Point `rax-diagnose` at a recorded trace and pretty-print the timeline, filter events with a JS predicate, structurally diff two runs, or print a decision timeline with rationale ("why this path"). It replaces ad-hoc log-spelunking with deterministic, structured **LLM agent observability** over traces recorded by `@reactive-agents/trace`.
+> **Stability:** unstable. Not in the stable tier; command output and attribution reasons can change between minors. Pin an exact version.
 
 ## Install
+
 ```bash
 bun add @reactive-agents/diagnose
 # or: npm install -g @reactive-agents/diagnose   # exposes the `rax-diagnose` bin
 ```
 
 ## Usage
+
+Point `rax-diagnose` at a trace recorded by `@reactive-agents/trace`. A run ID is a bare ID resolved under `~/.reactive-agents/traces/`, an absolute path to a `.jsonl` file, or `latest`.
+
 ```bash
-rax-diagnose list                    # show recent traces
-rax-diagnose replay latest           # pretty-print the timeline of the newest run
-rax-diagnose replay <runId> --raw    # one event per line, no grouping
-rax-diagnose replay <runId> --json   # raw JSONL stream
-rax-diagnose replay <runId> --only=verifier-verdict,harness-signal-injected
-rax-diagnose replay-run <runId>      # recorded run metadata for re-execution via replay()
-rax-diagnose grep latest "e.kind === 'verifier-verdict' && !e.verified"
-rax-diagnose diff <runIdA> <runIdB>  # structural diff between two runs
-rax-diagnose debrief <runId>         # decision timeline with rationale
-rax-diagnose cause latest            # why the run ended as it did
+rax-diagnose list --limit=3          # recent traces
+rax-diagnose cause latest            # how the run ended, with evidence
 rax-diagnose attribute latest        # harness or model? plus the mechanisms that acted
-rax-diagnose attribute --all <dir>   # tally across a directory of traces
+rax-diagnose attribute --all <dir>   # tally reasons across a directory of traces
 ```
 
-Run IDs accept a bare ULID (resolved under `~/.reactive-agents/traces/`), an absolute path to a `.jsonl` file, or the literal `latest` alias.
+Output for a successful run:
 
-## CLI commands
-- `list` — show recent traces (`--limit=N`).
-- `replay <runId>` — pretty-print the event timeline; `--raw`, `--json`, `--only=k1,k2`.
-- `replay-run <runId>` — show recorded run metadata for re-execution via the `replay()` API; `--json`.
-- `grep <runId> "<expr>"` — filter events with a JS predicate (`e` is the event); outputs JSONL.
-- `diff <runIdA> <runIdB>` — structural diff between two runs.
-- `debrief <runId>` — decision timeline with rationale; `--json`.
-- `signals <runId>` — harness signals that never landed: never rendered into the prompt, rendered but never classified, or ignored/contradicted by the model; `--json`.
-- `cause <runId>` — deterministic cause of how the run ended, with evidence and missing signals; `--all [dir]` tallies a directory, `--real` skips synthetic traces, `--json`.
-- `attribute <runId>` — harness-vs-model attribution of a failed run (verdict, reason, divergence turn, evidence) plus an `activity` line naming the harness mechanisms that acted; `--all [dir]` tallies reasons and mechanisms across a directory, `--real`, `--json`. Reasons are listed in the [CLI reference](https://docs.reactiveagents.dev/reference/cli/#rax-diagnose).
+```text
+01M7NE5GJH9VSRNKGF204718HR: cause=none confidence=decisive status=success authority=model-final
+  evidence  run-completed#88  status=success terminatedBy=end_turn; deliverable_decision=pass (verified)
+  meaning   Finished normally
+```
 
-## Environment
-- `REACTIVE_AGENTS_TRACE_DIR` — override the default trace directory.
-- `REACTIVE_AGENTS_TRACE=off` — disable trace recording in agent runs.
+For a failed run, `attribute` reports a verdict (`harness`, `model`, `environment` or `unattributed`), a reason such as `harness:tool-not-offered` or `model:never-engaged`, the divergence turn and the evidence. `attribute --all <dir>` prints failed runs by verdict and a ranked reason table.
 
-## Programmatic API
-The CLI is the primary surface, but each command is also exported for tests and tooling:
-`listCommand`, `replayCommand`, `replayRunCommand`, `grepCommand`, `diffCommand`, `debriefCommand`, `signalsCommand`, `causeCommand`, `attributeCommand`, plus `classifyDirectories`, `attributeDirectories`, `tallyActivity`, `resolveTracePath`, `listTraces`, and `DEFAULT_TRACE_DIR`.
+More commands:
 
-## Part of Reactive Agents
+```bash
+rax-diagnose replay latest                 # pretty-print the timeline
+rax-diagnose replay <runId> --only=verifier-verdict,harness-signal-injected
+rax-diagnose grep latest "e.kind === 'run-completed'"   # JS predicate over events, JSONL out
+rax-diagnose diff <runIdA> <runIdB>        # structural diff between two runs
+rax-diagnose debrief <runId>               # decision timeline with rationale
+```
 
-This package is part of [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) — the TypeScript AI agent framework built on Effect-TS. See the [Observability docs](https://docs.reactiveagents.dev) and the [full documentation](https://docs.reactiveagents.dev).
+The same commands ship inside the main CLI as `rax diagnose <subcommand>`.
+
+## API
+
+CLI commands:
+
+| Command | Use it when |
+|---|---|
+| `list` | You need a recent run ID (`--limit=N`). |
+| `replay <runId>` | You want the event timeline (`--raw`, `--json`, `--only=k1,k2`). |
+| `replay-run <runId>` | You want recorded-run metadata to re-execute with `replay()` from `@reactive-agents/replay` (`--json`). |
+| `grep <runId> "<expr>"` | You filter events with a JS predicate; `e` is the event. |
+| `diff <runIdA> <runIdB>` | You compare two runs. |
+| `debrief <runId>` | You want the decision timeline with rationale (`--json`). |
+| `signals <runId>` | You find harness signals that never landed: not rendered, not classified, or ignored by the model (`--json`). |
+| `cause <runId>` | You want the deterministic cause of how a run ended; `--all [dir]` tallies a directory, `--real` skips synthetic traces, `--json`. |
+| `attribute <runId>` | You want harness-vs-model attribution; `--all [dir]`, `--real`, `--json`. |
+
+Environment: `REACTIVE_AGENTS_TRACE_DIR` overrides the trace directory; `REACTIVE_AGENTS_TRACE=off` disables recording.
+
+Programmatic API: each command is exported for tests and tooling (`listCommand`, `replayCommand`, `replayRunCommand`, `grepCommand`, `diffCommand`, `debriefCommand`, `signalsCommand`, `causeCommand`, `attributeCommand`), along with `classifyDirectories`, `attributeDirectories`, `tallyActivity`, `resolveTracePath`, `listTraces` and `DEFAULT_TRACE_DIR`.
+
+```ts
+import { attributeDirectories } from "@reactive-agents/diagnose";
+
+const runs = await attributeDirectories(["./traces"], { real: true });
+for (const r of runs) console.log(r.attribution.verdict, r.attribution.reason);
+```
+
+## Documentation
+
+- [Decision tracing](https://docs.reactiveagents.dev/concepts/decision-tracing/)
+- [CLI reference](https://docs.reactiveagents.dev/reference/cli/#rax-diagnose)
+- [`@reactive-agents/trace` on npm](https://www.npmjs.com/package/@reactive-agents/trace) records the traces and holds the analyzers.
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+
+## License
+
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

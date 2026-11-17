@@ -1,103 +1,58 @@
 # @reactive-agents/health
 
-Health checks and readiness probes for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
+> HTTP health, readiness and metrics endpoints with registered probes, for agents that run under Kubernetes or a load balancer.
 
-Provides an HTTP health server with registered probes, returning structured status responses suitable for Kubernetes liveness/readiness, load-balancer health checks, and dashboards. Integrates with the builder via `.withHealthCheck()` and exposes `agent.health()` for programmatic access.
+> **Stability:** unstable. Not listed as stable in the stability reference; the API may change between minors.
 
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/health
+# or: npm install @reactive-agents/health
 ```
 
-Or via the umbrella:
+The facade (`bun add reactive-agents`) does not re-export this package. The builder's `.withHealthCheck()` uses it for you.
 
-```bash
-bun add reactive-agents
-```
+## Usage
 
-## Quick Example
-
-### Builder Integration
-
-```typescript
-import { ReactiveAgents } from "reactive-agents";
-
-const agent = await ReactiveAgents.create()
-  .withName("my-agent")
-  .withProvider("anthropic", { model: "claude-haiku-4-5-20251001" })
-  .withHealthCheck({ port: 8080 })
-  .build();
-
-const health = await agent.health();
-// {
-//   status: "healthy" | "degraded" | "unhealthy",
-//   uptime: 12345,
-//   checks: [
-//     { name: "llm", healthy: true, durationMs: 42 },
-//     { name: "memory", healthy: true, durationMs: 3 },
-//   ],
-//   timestamp: "2026-05-05T19:55:00Z",
-// }
-```
-
-### Direct Service Usage
-
-```typescript
+```ts
 import { Effect } from "effect";
-import { makeHealthService, Health } from "@reactive-agents/health";
+import { Health, makeHealthService } from "@reactive-agents/health";
 
 const program = Effect.gen(function* () {
-  const health = yield* Health;
-  yield* health.registerCheck("db", () =>
-    Effect.tryPromise(() => myDb.ping().then(() => true)),
-  );
-  yield* health.start({ port: 8080 });
+  const health = yield* makeHealthService({ port: 8080, agentName: "my-agent" });
+  yield* health.registerCheck("db", () => Effect.succeed(true));
+  yield* health.start();
   const status = yield* health.check();
-  return status;
+  console.log(status.status); // "healthy" | "degraded" | "unhealthy"
+  yield* health.stop();
 });
+
+await Effect.runPromise(program);
 ```
 
-## HTTP Endpoints
+On a built agent, call `.withHealthCheck()` on the builder and read `await agent.health()`.
 
-| Endpoint   | Returns                                                            |
-| ---------- | ------------------------------------------------------------------ |
-| `/health`  | Aggregate `HealthResponse` — overall status + per-probe results    |
-| `/ready`   | Readiness probe — 200 when all checks pass, 503 otherwise          |
+Endpoints: `/health` (aggregate status), `/ready` (503 only when `unhealthy`), `/metrics` (text metrics).
 
-## Aggregation Logic
+## API
 
-| Probe results          | Overall status |
-| ---------------------- | -------------- |
-| All probes healthy     | `healthy`      |
-| Some probes unhealthy  | `degraded`     |
-| All probes unhealthy   | `unhealthy`    |
-
-Each probe reports its own `durationMs`, so latency regressions in dependencies surface immediately.
-
-## Key Features
-
-- **HTTP endpoints** — `/health` and `/ready` with structured JSON responses
-- **Registered probes** — `registerCheck(name, fn)` for LLM, database, queue, etc.
-- **Aggregate status** — `healthy` / `degraded` / `unhealthy`
-- **Builder integration** — single `.withHealthCheck()` call enables the server
-- **Per-check timing** — every probe reports its `durationMs`
-
-## Key Exports
-
-| Export                | Purpose                                       |
-| --------------------- | --------------------------------------------- |
-| `Health`              | Service tag                                   |
-| `makeHealthService`   | Constructs the health service                 |
-| `HealthConfig`        | Configuration schema (`port`, `path`, etc.)   |
-| `HealthResponse`      | Aggregate response shape                      |
-| `HealthCheckResult`   | Per-probe result shape                        |
-| `HealthServerError`   | Tagged error                                  |
+| Export | Use it when |
+|---|---|
+| `makeHealthService` | You construct the health server and register probes yourself |
+| `Health` | You need the service tag in an Effect program |
+| `HealthConfig` | You configure `port` and `agentName` |
+| `HealthResponse`, `HealthCheckResult` | You type the aggregate and per-probe results |
+| `HealthServerError` | You handle server startup failures |
 
 ## Documentation
 
-Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)
+- [Configuration reference](https://docs.reactiveagents.dev/reference/configuration/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

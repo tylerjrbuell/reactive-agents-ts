@@ -1,101 +1,77 @@
 # @reactive-agents/verification
 
-Post-LLM output verification for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
+> Post-LLM output verification for Reactive Agents: layered checks that score an answer and recommend accept, review or reject.
 
-Reduces hallucinations by combining multiple complementary techniques: semantic entropy (consistency across samples), fact decomposition (atomic claim checking), NLI-based hallucination detection, multi-source corroboration, and self-consistency voting. Each layer is independent — pick the ones that fit your latency and cost budget.
+> **Stability:** unstable. `.withVerification(options)` takes options today; a replaceable verifier is not shipped, and layer behaviour may change between minors.
 
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/verification
+# or: npm install @reactive-agents/verification
+# The facade re-exports it: bun add reactive-agents
 ```
 
-Or via the umbrella:
+## Usage
 
-```bash
-bun add reactive-agents
-```
+Through the builder:
 
-## Techniques
-
-| Layer                | Approach                                                          | Function                                  |
-| -------------------- | ----------------------------------------------------------------- | ----------------------------------------- |
-| Semantic entropy     | Sample N times; entail-cluster outputs; high entropy → low confidence | `checkSemanticEntropy(LLM)`         |
-| Fact decomposition   | Break output into atomic claims, verify each independently        | `checkFactDecomposition(LLM)`             |
-| NLI hallucination    | Detect entailment between claim and source via NLI model          | `checkNli`, `checkHallucination(LLM)`     |
-| Multi-source         | Cross-check the answer against multiple retrieval sources         | `checkMultiSource(LLM)`                   |
-| Self-consistency     | Majority vote over N independent samples                          | `checkSelfConsistency`                    |
-
-Each `check*` function returns a `LayerResult` with confidence, evidence, and risk classification.
-
-## Quick Example
-
-```typescript
+```ts
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("fact-checker")
-  .withProvider("anthropic", { model: "claude-sonnet-4-6" })
-  .withVerification()
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
+  .withVerification({ passThreshold: 0.7, hallucinationDetection: true })
   .build();
 
 const result = await agent.run("In what year did the Berlin Wall fall?");
-console.log(result.metadata.confidence); // 0.0–1.0 composite confidence
-console.log(result.metadata.verification); // per-layer evidence
 ```
 
-When confidence falls below the configured threshold, the agent can re-sample, escalate to the user (when paired with `@reactive-agents/interaction`), or surface a `VerificationFailed` error.
+Directly, with the service:
 
-## Direct Layer Usage
-
-Use individual layers without the full builder pipeline:
-
-```typescript
+```ts
 import { Effect } from "effect";
-import { checkSemanticEntropyLLM, checkHallucinationLLM } from "@reactive-agents/verification";
-import { LLMService } from "@reactive-agents/llm-provider";
+import { VerificationService, createVerificationLayer } from "@reactive-agents/verification";
 
 const program = Effect.gen(function* () {
-  const llm = yield* LLMService;
-  const entropy = yield* checkSemanticEntropyLLM({
-    llm,
-    question: "What is the capital of Australia?",
-    answer: "Canberra",
-    samples: 5,
-  });
-  return entropy; // { confidence, riskLevel, evidence }
+  const verifier = yield* VerificationService;
+  const result = yield* verifier.verify(
+    "Canberra is the capital of Australia.",
+    "What is the capital of Australia?",
+  );
+  console.log(result.overallScore, result.recommendation); // 0-1, "accept" | "review" | "reject"
 });
+
+await Effect.runPromise(program.pipe(Effect.provide(createVerificationLayer())));
 ```
 
-## Configuration
+`createVerificationLayer()` runs the heuristic layers with no model calls. Pass `{ useLLMTier: true }` with an `llm`, or use `createVerificationLayerWithRuntimeLlm()` inside a runtime that provides `LLMService`, to enable the LLM-backed layers.
 
-```typescript
-.withVerification({
-  layers: ["semantic-entropy", "fact-decomposition", "nli"],
-  threshold: 0.7,
-  samples: 5,
-  judgeModel: "claude-haiku-4-5-20251001",
-})
-```
+## API
 
-## Key Exports
+Layers (each has a heuristic form; entropy, decomposition, multi-source and hallucination also have an `...LLM` form):
 
-| Export                                              | Purpose                                                |
-| --------------------------------------------------- | ------------------------------------------------------ |
-| `VerificationService`, `VerificationServiceLive`    | Composite verification entry point                     |
-| `checkSemanticEntropy`, `checkSemanticEntropyLLM`   | Entropy across N samples                               |
-| `checkFactDecomposition`, `checkFactDecompositionLLM` | Per-claim verification                                |
-| `checkNli`                                          | NLI-based entailment check                             |
-| `checkHallucination`, `extractClaims`               | Claim extraction + hallucination detection             |
-| `checkMultiSource`, `checkSelfConsistency`          | Corroboration and majority-vote layers                 |
-| `createVerificationLayer`                           | Factory for the runtime layer                          |
-| `RiskLevel`, `ConfidenceScore`, `LayerResult`       | Schemas + types                                        |
+| Export | Use it when |
+|---|---|
+| `VerificationService`, `createVerificationLayer` | You want the composite verdict from all enabled layers. |
+| `checkSemanticEntropy` | You want a consistency signal for an answer. |
+| `checkFactDecomposition` | You want atomic claims checked one by one. |
+| `checkNli` | You want an entailment-style check of answer against question. |
+| `checkMultiSource` | You want cross-source corroboration. |
+| `checkSelfConsistency` | You want an internal-consistency check of the answer text. |
+| `checkHallucination`, `extractClaims` | You want claim extraction and hallucination detection. |
+| `defaultVerificationConfig`, `VerificationConfig` | You tune layers and thresholds. |
 
 ## Documentation
 
-- Full docs: [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)
-- Pairs with [`@reactive-agents/guardrails`](https://www.npmjs.com/package/@reactive-agents/guardrails) for *pre*-LLM safety filtering
+- [Verification](https://docs.reactiveagents.dev/features/verification/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

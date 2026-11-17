@@ -1,157 +1,63 @@
 # @reactive-agents/memory
 
-> Memory system for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Four-layer SQLite memory (working, semantic, episodic, procedural) with FTS5 search and optional vector retrieval, for agents built with Reactive Agents.
 
-Four memory layers — **Working**, **Semantic**, **Episodic**, **Procedural** — backed by
-SQLite. Retrieval has two tiers: FTS5 full-text search (Tier 1) and optional `sqlite-vec` KNN
-vectors (Tier 2).
-Plus an `ExperienceStore` for cross-agent learning, a background `MemoryConsolidator` (decay +
-summarization), a Zettelkasten link index, and the `SessionStore` that powers gateway chat mode.
+> **Stability:** unstable. Cross-run learning stores (experience, skills) are still settling their schema; pin exact versions if you depend on them.
 
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/memory
+# or: npm install @reactive-agents/memory
 ```
 
-> Bun provides native SQLite with FTS5. Node.js is also supported through the runtime shim; its
-> built-in SQLite lacks FTS5 and uses LIKE-based search instead. Tier 2 requires the `sqlite-vec`
-> extension and an embedding provider.
+Most apps enable memory through the builder in `@reactive-agents/runtime` (also re-exported by `reactive-agents`). Install this package directly to use the services on their own.
 
-## Memory layers
+## Usage
 
-| Service | Purpose | Backend |
-|---|---|---|
-| `WorkingMemoryService` | Short-term in-session items, LRU-evicted | SQLite (in-memory or file) |
-| `SemanticMemoryService` | Long-term knowledge, FTS5 + optional vec | SQLite + FTS5 |
-| `EpisodicMemoryService` | Conversation / session history (turns, snapshots) | SQLite |
-| `ProceduralMemoryService` | Learned workflows / step sequences | SQLite |
+Memory is opt-in and off by default.
 
-Cross-cutting:
-
-- **`ExperienceStore`** — per-(agent, model) records of tool patterns, error recoveries, success
-  signals; consumed by the calibration system.
-- **`MemoryConsolidatorService`** — background decay + summarization; rolls older episodic turns
-  into compact summaries.
-- **`ZettelkastenService`** — bidirectional links between memory entries.
-- **`SessionStoreService`** — persistent (platform, sender) chat sessions (used by gateway chat
-  mode).
-- **`SkillStoreService`** / **`DebriefStoreService`** / **`PlanStoreService`** — auxiliary stores
-  for the kernel and skill system.
-- **`AgentMemoryFromMemoryService`** — port adapter that satisfies the narrow `AgentMemory` Tag in
-  `@reactive-agents/core` from a `MemoryService` provider.
-
-## Retrieval tiers
-
-- **Tier 1 — FTS5.** Fast, deterministic keyword search; no embeddings required.
-  Best for short, key-term queries. Verbose natural-language queries should be decomposed first.
-- **Tier 2 — vector search.** `sqlite-vec` KNN; requires an embedding provider (OpenAI,
-  Anthropic-compatible, or Ollama).
-
-## Quick example
-
-```typescript
+```ts
 import { ReactiveAgents } from "@reactive-agents/runtime";
 
 const agent = await ReactiveAgents.create()
   .withName("my-agent")
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
-  .withMemory({ tier: "standard" }) // standard = Tier 1 retrieval
+  .withMemory() // standard tier: FTS5 keyword retrieval, no embeddings needed
   .build();
 
-const r1 = await agent.run("Remember that my favorite color is blue.");
-const r2 = await agent.run("What's my favorite color?"); // recalls 'blue'
+await agent.run("Remember that my favorite color is blue.");
+const result = await agent.run("What's my favorite color?");
 ```
 
-For enhanced retrieval, use `withMemory({ tier: "enhanced" })`. The named options also accept
-`dbPath`, `capacity`, `evictionPolicy`, `retainDays`, `importanceThreshold`,
-`experienceLearning`, and `memoryConsolidation`.
+`.withMemory({ tier: "enhanced" })` adds `sqlite-vec` KNN retrieval and needs an embedding provider. Without `dbPath`, the store lives at `~/.reactive-agents/memory/<agentId>/memory.db`. All options, tiers and environment variables are in the memory guide below.
 
-The legacy `.withMemory("1")` and `.withMemory("2")` forms remain supported but are deprecated;
-use the named `tier` options for new code.
+## API
 
-### Storage location
-
-With no explicit `dbPath`, memory always resolves to the same user-scope location, regardless
-of which API created it or which directory the process is running from:
-
-```
-~/.reactive-agents/memory/<agentId>/memory.db   # SQLite — source of truth
-~/.reactive-agents/memory/<agentId>/memory.md   # human-readable projection, regenerated on flush
-```
-
-This applies whether memory was enabled via `.withMemory()`, `.withLearning()`, a
-`HarnessProfile`, or by calling `createMemoryLayer()` directly — one location per `agentId`,
-so a second process (e.g. the `rax skills` CLI, or a second run from a different working
-directory) finds the same store. Pass `.withMemory({ dbPath })` for a custom or project-local
-path — `memory.md` follows it automatically, written next to whatever file `dbPath` points to.
-`NODE_ENV=test` / the `test` provider resolve to SQLite `:memory:` instead, so tests never
-write to disk.
-
-## Direct service usage
-
-```typescript
-import { Effect, Layer } from "effect";
-import {
-  MemoryServiceLive,
-  SemanticMemoryService,
-  ExperienceStoreLive,
-  createMemoryLayer,
-} from "@reactive-agents/memory";
-
-const layer = createMemoryLayer("1", { agentId: "my-agent", dbPath: "./memory.db" });
-
-await Effect.runPromise(
-  Effect.gen(function* () {
-    const sem = yield* SemanticMemoryService;
-    yield* sem.store({ content: "RAFT is a consensus algorithm...", tags: ["distsys"] });
-    return yield* sem.search({ query: "consensus", limit: 5 });
-  }).pipe(Effect.provide(layer)),
-);
-```
-
-## Environment variables (Tier 2 only)
-
-```bash
-EMBEDDING_PROVIDER=openai          # openai | anthropic | ollama | custom
-EMBEDDING_MODEL=text-embedding-3-small
-OPENAI_API_KEY=sk-...
-```
-
-## Gateway chat session persistence
-
-When `.withGateway()` and `.withChannels()` are combined in chat mode, the runtime uses
-`SessionStoreService` from this package to persist `(platform, senderId)` conversations across
-process restarts. Each session is windowed (40 turns / 8 KiB), compacted daily, and pruned by TTL.
-
-## Experience store (cross-agent learning)
-
-```typescript
-import { ExperienceStore } from "@reactive-agents/memory";
-
-const exp = yield* ExperienceStore;
-yield* exp.record({
-  agentId: "researcher",
-  modelId: "claude-sonnet-4-6",
-  toolName: "web-search",
-  outcome: "success",
-  /* ... */
-});
-
-const summary = yield* exp.queryByModel("claude-sonnet-4-6");
-```
-
-`ExperienceSummary` materialization feeds the calibration system in `@reactive-agents/llm-provider`.
+| Export | Use it when |
+|---|---|
+| `createMemoryLayer(tier, config)` | You want the memory services as an Effect `Layer` outside the builder. `tier` is `"1"` or `"2"`. |
+| `WorkingMemoryService` | Short-term, LRU-evicted in-session items. |
+| `SemanticMemoryService` | Long-term facts with FTS5 search (`LIKE` fallback on Node). |
+| `EpisodicMemoryService` | Session history: turns and snapshots. |
+| `ProceduralMemoryService` | Learned workflows and step sequences. |
+| `MemoryService` | One facade over the four layers. |
+| `ExperienceStore` | Per-(agent, model) tool patterns and outcomes; feeds calibration in `@reactive-agents/llm-provider`. |
+| `MemoryConsolidatorService` | Background decay and summarization of older episodic turns. |
+| `ZettelkastenService` | Bidirectional links between memory entries. |
+| `SessionStoreService` | Persistent (platform, sender) chat sessions used by gateway chat mode. |
+| `SkillStoreService`, `DebriefStoreService`, `PlanStoreService` | Auxiliary stores for the kernel and skill system. |
+| `AgentMemoryFromMemoryService` | Adapter that satisfies the `AgentMemory` tag in `@reactive-agents/core`. |
 
 ## Documentation
 
-- Memory guide: [docs.reactiveagents.dev/guides/memory/](https://docs.reactiveagents.dev/guides/memory/)
-- Calibration: [docs.reactiveagents.dev/guides/calibration/](https://docs.reactiveagents.dev/guides/calibration/)
-- Related: [`@reactive-agents/runtime`](../runtime/README.md),
-  [`@reactive-agents/llm-provider`](../llm-provider/README.md),
-  [`@reactive-agents/gateway`](../gateway/README.md).
+- [Memory guide](https://docs.reactiveagents.dev/guides/memory/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+. Node's built-in SQLite has no FTS5, so search falls back to `LIKE`. Vector search needs the `sqlite-vec` extension.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

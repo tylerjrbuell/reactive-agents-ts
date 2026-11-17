@@ -1,30 +1,33 @@
 # @reactive-agents/trace
 
-> Structured execution trace recording and inspection for Reactive Agents
+> Record every agent event to JSONL, then load, analyze and compare runs: failure causes, harness-vs-model attribution, guard activity and cost.
 
 [![npm](https://img.shields.io/npm/v/@reactive-agents/trace?color=CB3837&logo=npm)](https://www.npmjs.com/package/@reactive-agents/trace)
-[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev)
+[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev/concepts/decision-tracing/)
 
-Structured **execution-trace recording for AI agents**. This package records every reactive-agent event to JSONL, then lets you load, analyze, and compare runs — surfacing guard interventions, failure modes, reasoning trajectories, tool outcomes, cost signals, and honesty checks. It's the data layer behind the `rax-diagnose` forensic CLI and deterministic replay, and the foundation for **LLM agent debugging and observability**.
+> **Stability:** unstable. Not in the stable tier; analyzer outputs (cause and attribution reasons) can change between minors. Pin an exact version.
 
 ## Install
+
 ```bash
 bun add @reactive-agents/trace
 # or: npm install @reactive-agents/trace
 ```
 
 ## Usage
-Record runs by wiring `TraceBridgeLayer` over the recorder service, then inspect saved traces:
 
-```typescript
+Record runs by wiring `TraceBridgeLayer` over the recorder service, then inspect saved traces. Analysis reads trace events only and costs zero tokens.
+
+```ts
 import { Layer } from "effect";
 import {
   TraceRecorderServiceLive,
   TraceBridgeLayer,
   loadTrace,
   traceStats,
-  analyzeRun,
-  renderRunReport,
+  analyzeCause,
+  attributeFailure,
+  mechanismActivity,
 } from "@reactive-agents/trace";
 
 // Recording: bridge the EventBus into a JSONL recorder (dir: null = memory-only).
@@ -35,29 +38,40 @@ const TracingLayer = TraceBridgeLayer.pipe(
 
 // Inspecting a saved trace:
 const trace = await loadTrace("./traces/<runId>.jsonl");
-console.log(traceStats(trace));        // iterations, tokens, tool calls, ...
-console.log(renderRunReport(analyzeRun(trace))); // human-readable run report
-
-// Explaining a failed run (zero tokens):
-import { analyzeCause, attributeFailure, mechanismActivity } from "@reactive-agents/trace";
-console.log(analyzeCause(trace).cause);        // e.g. "stall-after-work"
-console.log(attributeFailure(trace).reason);   // e.g. "harness:completeness-blind"
-console.log([...mechanismActivity(trace)]);    // e.g. ["guard:exit_gate:block", ...]
+console.log(traceStats(trace));
+console.log(analyzeCause(trace).cause);      // how the run ended
+console.log(attributeFailure(trace).reason); // harness or model, e.g. "harness:completeness-blind"
+console.log([...mechanismActivity(trace)]);  // harness mechanisms that acted
 ```
 
+The same analyzers power the [`rax-diagnose`](https://www.npmjs.com/package/@reactive-agents/diagnose) CLI.
+
 ## API
-- `TraceRecorderService` / `TraceRecorderServiceLive(opts)` — the recorder tag and its live layer (`{ dir: string | null }`). Recorder exposes `emit`, `snapshot`, `flush`, `flushAll`, `close`.
-- `TraceBridgeLayer` — subscribes to the `EventBus` and converts `AgentEvent`s into recorded `TraceEvent`s.
-- `loadTrace(path)` / `traceStats(trace)` — load a JSONL trace into a `Trace`; compute `TraceStats`.
-- `analyzeRun(trace, opts?)` / `renderRunReport(analysis)` — full run analysis (`RunAnalysis`: failure modes, honesty checks, cost signals, reasoning trajectory) and its rendered report.
-- `analyzeInterventions(...)` / `renderInterventionReport(...)` — guard-intervention analysis and report.
-- `analyzeCause(trace)` / `renderCause(...)` / `tallyCauses(...)` — why a run ended as it did: a deterministic cause, a confidence, the supporting events and the signals missing for a decisive verdict. A success with zero tool calls whose task asked for a named tool (`Use the file-write tool ...`) is flagged `success-with-warning/tool-claim-without-call`.
-- `attributeFailure(trace)` / `renderAttribution(...)` / `tallyAttributions(...)` — is a failed run the harness's fault or the model's? Verdict (`harness` / `model` / `environment` / `unattributed`), reason (`harness:false-veto`, `harness:completeness-blind`, `harness:tool-not-offered`, `harness:refusal-counted-as-repeat`, `harness:evidence-withheld`, `harness:plan-fanout-blob`, `harness:offer-accepted-as-done`, `model:evidence-not-gathered`, `model:had-evidence-wrong-output`, ...), the divergence turn and evidence. When no turn-level rule fires, the reason is the failure cause's owner from the one shared taxonomy (`CAUSE_ATTRIBUTION`). Reads trace events only; zero tokens.
-- `mechanismActivity(trace)` / `compareActivity(before, after)` / `runsWithMechanism(runs, key)` — which harness mechanisms acted in a run (guards that did not pass, injected signals, strategy switches, contract requirements by source), and how that changed between two cohorts. Use it to check that a harness change you are measuring actually ran.
-- `aggregateCohort(...)` / `compareCohorts(...)` / `renderCohortDelta(...)` — aggregate and diff cohorts of runs.
-- `toTraceEvent(...)` (also exported from `@reactive-agents/trace/normalize`) — normalize an `AgentEvent` into a `TraceEvent`.
-- `validateRationale` / `isRationale` / `isTraceEvent` — type guards for `Rationale` and `TraceEvent`.
 
-## Part of Reactive Agents
+| Export | Use it when |
+|---|---|
+| `TraceRecorderService` / `TraceRecorderServiceLive({ dir })` | You record traces. `dir: null` keeps them in memory. |
+| `TraceBridgeLayer` | You subscribe the EventBus and convert `AgentEvent`s into `TraceEvent`s. |
+| `loadTrace(path)` / `traceStats(trace)` | You load a JSONL trace and compute iterations, tokens and tool calls. |
+| `analyzeRun` / `renderRunReport` | You want a full run analysis: failure modes, honesty checks, cost signals, reasoning trajectory. |
+| `analyzeInterventions` / `renderInterventionReport` | You want guard-intervention analysis. |
+| `analyzeCause` / `renderCause` / `tallyCauses` | You ask why a run ended as it did: a deterministic cause, confidence, supporting events and missing signals. |
+| `attributeFailure` / `renderAttribution` / `tallyAttributions` | You ask whether a failed run is the harness's fault or the model's (verdict `harness`, `model`, `environment` or `unattributed`, plus reason, divergence turn and evidence). |
+| `mechanismActivity` / `compareActivity` / `runsWithMechanism` | You check that a harness change you are measuring actually ran. |
+| `aggregateCohort` / `compareCohorts` / `renderCohortDelta` | You aggregate and diff cohorts of runs. |
+| `toTraceEvent` (also `@reactive-agents/trace/normalize`) | You normalize an `AgentEvent` into a `TraceEvent`. |
+| `validateRationale` / `isRationale` / `isTraceEvent` | You need type guards. |
 
-This package is part of [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) — the TypeScript AI agent framework built on Effect-TS. See the [Observability docs](https://docs.reactiveagents.dev) and the [full documentation](https://docs.reactiveagents.dev).
+## Documentation
+
+- [Decision tracing](https://docs.reactiveagents.dev/concepts/decision-tracing/)
+- [Observability](https://docs.reactiveagents.dev/features/observability/)
+- [`rax diagnose` CLI reference](https://docs.reactiveagents.dev/reference/cli/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+
+## License
+
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

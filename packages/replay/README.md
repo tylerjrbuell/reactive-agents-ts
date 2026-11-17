@@ -1,50 +1,72 @@
 # @reactive-agents/replay
 
-> Deterministic re-run of recorded reactive-agent traces with prompt/model overrides
+> Re-run a recorded Reactive Agents trace against a different model, prompt or temperature, serving recorded tool results back, and diff the outcome.
 
 [![npm](https://img.shields.io/npm/v/@reactive-agents/replay?color=CB3837&logo=npm)](https://www.npmjs.com/package/@reactive-agents/replay)
-[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev)
+[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev/features/snapshot-replay/)
 
-**Deterministic agent replay** for Reactive Agents. Record an agent run once, then re-run it against a different model, system prompt, or temperature **without re-calling any tools** — recorded tool results are served back by hash, so you isolate the change you actually care about. Get a structural diff of iterations, tool sequence, output, tokens, cost, and duration between the original and the replay. Ideal for **regression testing, prompt iteration, and model comparison** on real traces.
+> **Stability:** stable. The replay API (`loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces`, `computeArgsHash`) is listed as tier-1 in the stability reference.
 
 ## Install
+
 ```bash
 bun add @reactive-agents/replay
 # or: npm install @reactive-agents/replay
 ```
 
 ## Usage
-Load a recorded run, then replay it through a builder function with overrides. Tool calls resolve from the recorded tool table instead of executing.
 
-```typescript
-import { loadRecordedRun, replay } from "@reactive-agents/replay";
+Load a recorded run, replay it through an agent factory with overrides, and read the structural diff. Tool calls resolve from the recorded tool table (matched by args hash) instead of executing, so only the change you made moves.
 
-// 1. Load a recorded run (ULID resolved under ~/.reactive-agents/traces/, or a path).
-const run = await loadRecordedRun("latest");
+```ts
+import { loadRecordedRun, replay, type AgentRunOutcome } from "@reactive-agents/replay";
 
-// 2. Replay with overrides — the builder returns an agent with a run(task) method.
+// Your own agent: anything with run(task) returning an AgentRunOutcome.
+declare const myAgent: { run(task: string): Promise<AgentRunOutcome> };
+
+// A run ID (resolved under ~/.reactive-agents/traces/) or a path to a .jsonl trace.
+const run = await loadRecordedRun("<runId>");
+
 const result = await replay(
   run,
   async (ctx) => {
-    // build your agent using ctx.overrides / ctx.recordedRun, then:
-    return { run: async (task) => /* agent.run(task) */, dispose: async () => {} };
+    // Build your agent from ctx.overrides and ctx.recordedRun.
+    // Return an object with run(task) and optional dispose().
+    return {
+      run: async (task: string): Promise<AgentRunOutcome> => myAgent.run(task),
+      dispose: async () => {},
+    };
   },
   { model: "gpt-4o-mini", systemPrompt: "be concise", onMissingToolResult: "strict" },
 );
 
-// 3. Compare original vs. replay.
 console.log(result.diff.identical, result.diff.tokensDelta, result.diff.toolSequenceDiff);
 ```
 
+`myAgent` is declared above only so the block type-checks; swap in your own agent. The factory is where you wire `makeReplayToolLayer` so recorded results are served. A full runnable example lives in `src/e2e.test.ts` in the repository.
+
 ## API
-- `replay(recordedRun, builderFn, overrides?)` — re-execute a run through `builderFn`, returning `{ original, replay, diff }`. `overrides`: `{ systemPrompt?, model?, temperature?, onMissingToolResult?: "strict" | "lenient" }`.
-- `loadRecordedRun(idOrPath)` — parse a recorded JSONL trace into a `RecordedRun` (task, model, provider, config, trace, tool table).
-- `makeReplayController(...)` / `makeReplayToolLayer(...)` — lower-level pieces that serve recorded tool results back to the kernel.
-- `buildToolTable(...)` / `computeArgsHash(...)` — build the tool-result lookup table and hash tool args for matching.
-- `snapshotFromRecordedRun(...)` / `snapshotFromAgentResult(...)` — produce comparable `TraceSnapshot`s.
-- `diffTraces(a, b)` — structural `ReplayDiff` between two snapshots.
-- Types: `RecordedRun`, `RecordedToolResult`, `ReplayOverrides`, `ReplayResult`, `TraceSnapshot`, `ReplayDiff`, `ToolSeqEdit`, `BuilderFn`, `BuildContext`, `AgentRunOutcome`.
 
-## Part of Reactive Agents
+| Export | Use it when |
+|---|---|
+| `replay(recordedRun, builderFn, overrides?)` | You want `{ original, replay, diff }` for a recorded run. Overrides: `systemPrompt`, `model`, `temperature`, `onMissingToolResult` (`"strict"` or `"lenient"`). |
+| `loadRecordedRun(idOrPath)` | You need a `RecordedRun` (task, model, provider, config, trace, tool table) from a JSONL trace. |
+| `makeReplayController` / `makeReplayToolLayer` | You build the replay harness yourself and need recorded tool results served to the kernel. |
+| `makeReplayLLMLayer` / `buildLLMTable` | You want recorded model exchanges served back too. |
+| `buildToolTable` / `computeArgsHash` | You need the tool-result lookup table or the args hash used to match calls. |
+| `snapshotFromRecordedRun` / `snapshotFromAgentResult` | You want comparable `TraceSnapshot`s. |
+| `diffTraces(a, b)` | You want a structural `ReplayDiff` (iterations, tool sequence, output, tokens, cost, duration) between two snapshots. |
 
-This package is part of [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) — the TypeScript AI agent framework built on Effect-TS. See the [Observability docs](https://docs.reactiveagents.dev) and the [full documentation](https://docs.reactiveagents.dev).
+## Documentation
+
+- [Snapshot and replay](https://docs.reactiveagents.dev/features/snapshot-replay/)
+- [Decision tracing](https://docs.reactiveagents.dev/concepts/decision-tracing/)
+- [`@reactive-agents/diagnose` on npm](https://www.npmjs.com/package/@reactive-agents/diagnose) prints recorded-run metadata with `rax-diagnose replay-run <runId>`.
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+
+## License
+
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

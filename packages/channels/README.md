@@ -1,205 +1,71 @@
 # @reactive-agents/channels
 
-> External channel layer for [Reactive Agents](https://docs.reactiveagents.dev/).
+> Channel layer for Reactive Agents: one adapter contract for Signal, Telegram and webhooks, plus a fail-closed router that maps inbound messages to agents.
 
-The channels package provides the **inbound messaging surface** for agents: bot transports
-(Discord, Telegram Bot API, Signal, …), HTTPS webhooks, a trigger registry that maps inbound
-messages to agent invocations, and a session bridge that persists per-sender conversations into
-gateway chat mode.
+> **Stability:** unstable. The channel router shipped as its first slice; route and adapter shapes are still growing.
 
-This package is the missing half of `@reactive-agents/gateway`: the gateway runs the policies and
-schedule, channels carries the actual messages in and out.
-
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/channels @reactive-agents/gateway
+# or: npm install @reactive-agents/channels @reactive-agents/gateway
 ```
 
-Or install the umbrella:
+## Usage
 
-```bash
-bun add reactive-agents
-```
-
-## Design: bot-first
-
-First-class transports are **bot tokens + HTTPS webhooks** (Discord, Telegram Bot API, Slack
-Events API, etc.). Adapters normalize provider payloads into a shared `InboundMessage` shape.
-
-User-mode clients (e.g. Telegram MTProto / Telethon) belong in optional MCP adapters or custom
-transports — they are **not** the default path this package optimizes for.
-
-## What this package provides
-
-- **`ChannelAdapter` contract** — one interface for every platform: backpressured `inbound`
-  stream of `InboundEnvelope`, `send` returning a `DeliveryReceipt`, typed `ChannelError`s,
-  `ConnectionState`. Shared combinators: `withReconnect`, `makeOutboundRateLimiter`,
-  `makeInboundDedupe`. Conformance suite: `tests/conformance/`.
-- **`MessageChannel` interface** — legacy transport contract (deprecated; still accepted).
-- **`WebhookChannelAdapter`** — HTTPS webhook adapter (fail-closed HMAC with replay window).
-- **`TriggerRegistry`** — match inbound messages against `TriggerDefinition`s (regex, prefix,
-  predicate) and pick which agent + system prompt to run.
-- **`SessionBridge`** — owns the `(platform, senderId)` → `Session` mapping and merges trigger
-  agent overrides with the running agent's defaults.
-- **`ChannelService`** — orchestrates `adapters → policy → triggers → SessionBridge`; emits
-  `GatewayEvent`s into the gateway loop.
-
-## Quick example
-
-```typescript
+```ts
 import { ReactiveAgents } from "@reactive-agents/runtime";
-import { WebhookChannelAdapter } from "@reactive-agents/channels";
+import { WebhookChannelAdapter as Webhook } from "@reactive-agents/channels";
 
-const slackAdapter = new WebhookChannelAdapter({
-  id: "slack",
-  platform: "slack",
-  port: 3001,
-  path: "/slack/events",
-  secret: process.env.SLACK_SIGNING_SECRET,
+const webhook = new Webhook({
+  id: "ops",
+  platform: "webhook",
+  secret: process.env.CHANNEL_WEBHOOK_SECRET, // HMAC-SHA256; requests without a valid signature are rejected
+  onResponse: async (target, content) => {
+    // deliver the reply; throw with `status` / `retryAfterMs` for typed delivery errors
+  },
 });
+
+const channels = { adapters: [webhook] };
 
 const agent = await ReactiveAgents.create()
   .withName("ops-bot")
   .withProvider("anthropic")
-  .withModel("claude-sonnet-4-6")
-  .withMemory({ tier: "standard" })
-  .withGateway({
-    accessControl: {
-      mode: "chat",
-      accessPolicy: "allowlist",
-      allowedSenders: ["U_TYLER", "U_OPS"],
-    },
-  })
-  .withChannels({
-    adapters: [slackAdapter],
-    triggers: [
-      {
-        match: { kind: "prefix", value: "!status" },
-        agent: { systemPrompt: "Reply with a one-line ops summary." },
-      },
-    ],
-  })
+  .withGateway({ accessControl: { accessPolicy: "allowlist", allowedSenders: ["webhook:alice"] } })
+  .withChannels(channels)
   .build();
 
-await agent.start();   // adapters and gateway loop come up together
+await agent.start(); // adapters and gateway loop start together
+// Your HTTP server forwards requests to webhook.handleRequest({ body, headers }).
 ```
 
-## Inbound message shape
+Unknown senders are denied by default. Set `allowUnsigned: true` on the webhook adapter for local development only.
 
-```typescript
-interface InboundMessage {
-  readonly id: string;
-  readonly platform: string;        // 'discord' | 'telegram-bot' | 'slack' | 'signal' | ...
-  readonly channelId: string;
-  readonly senderId: string;
-  readonly senderName?: string;
-  readonly content: string;
-  readonly attachments?: Attachment[];
-  readonly replyTo?: string;
-  readonly metadata: Record<string, unknown>;
-  readonly timestamp: Date;
-}
-```
+## API
 
-Adapters are responsible for normalizing provider payloads into this shape.
+| Export | Use it when |
+|---|---|
+| `ChannelAdapter`, `InboundEnvelope`, `DeliveryReceipt`, `ChannelError` | You write an adapter or consume the shared contract. |
+| `withReconnect`, `makeOutboundRateLimiter`, `makeInboundDedupe` | You reuse the shared adapter combinators. |
+| `WebhookChannelAdapter`, `SignalChannelAdapter`, `TelegramChannelAdapter` | You connect a built-in transport. |
+| `createChannelRouter`, `matchRoute`, `explainRoute` | You route conversations to agents with per-route access rules; `explain` reports why a message would be answered. |
+| `makeSqliteRouterStore`, `makeMemoryRouterStore`, `RouterInbox`, `RouterOutbox`, `FollowUpTimers` | You need the router's stores, durable inbox, outbox and follow-up timers. |
+| `TriggerRegistry`, `SessionBridge`, `ChannelService` | You use the lower-level trigger, session and orchestration services. |
 
-## Triggers
+## Limitations
 
-A `TriggerDefinition` decides whether a message activates an agent and with what overrides:
-
-```typescript
-import type { TriggerDefinition } from "@reactive-agents/channels";
-
-const triggers: TriggerDefinition[] = [
-  {
-    match: { kind: "regex", pattern: /^@deploy\s+(\S+)/ },
-    agent: { systemPrompt: "You are a deploy bot." },
-  },
-  {
-    match: { kind: "predicate", fn: (msg) => msg.metadata.priority === "high" },
-    agent: { systemPrompt: "Treat as urgent. Be concise." },
-  },
-];
-```
-
-If no trigger matches, `defaultAgent` (passed to `.withChannels()`) is used.
-
-## Session bridge
-
-`SessionBridge` is the seam between channels and the gateway. It:
-
-- Hands each `(platform, senderId)` pair a stable session id.
-- Merges trigger-supplied agent overrides (system prompt, model, …) with the agent's defaults.
-- Emits inbound messages as `GatewayEvent`s for the gateway loop to evaluate against policies
-  (allowlist, rate limit, daily budget) before invoking the agent.
-
-Session **persistence** (window, compaction, TTL pruning, episodic memory injection) lives in
-`@reactive-agents/memory` (`SessionStoreService`) and is wired up automatically when
-`.withGateway({ accessControl: { mode: "chat" } })` is in effect.
-
-## WebhookChannelAdapter
-
-Minimal HTTPS adapter for any provider that supports outbound webhooks:
-
-```typescript
-import { WebhookChannelAdapter } from "@reactive-agents/channels";
-
-const adapter = new WebhookChannelAdapter({
-  id: "github-issues",
-  platform: "github",
-  secret: process.env.GITHUB_WEBHOOK_SECRET, // required: HMAC-SHA256 over "<timestamp>.<body>"
-  onResponse: async (target, content) => {
-    // deliver the reply; throw an error with `status` / `retryAfterMs` for typed failures
-  },
-});
-
-// Your HTTP server calls adapter.handleRequest({ body, headers }).
-```
-
-It implements the canonical `ChannelAdapter` contract (see `src/adapter.ts`) and the legacy
-`MessageChannel` shape. Requests without a valid `x-channels-signature` + `x-channels-timestamp`
-are rejected; set `allowUnsigned: true` only for local development.
-
-For full GitHub event semantics (signature verification, action filtering), prefer
-`createGitHubAdapter` from `@reactive-agents/gateway`.
-
-## Channel routing
-
-`createChannelRouter` decouples the connection from the agent: a channel is one connection, a
-route is one rule (match a conversation, pick a target agent, say who may talk), and the agent is
-anything your `AgentResolver` can build.
-
-```ts
-const router = yield* createChannelRouter({
-  channels: [telegram],
-  routes: [{ id: "support", match: { channelId: "telegram" }, target: { agentId: "support" }, allow: ["telegram:1001"] }],
-  agents: resolver, // builds a distinct agent per (routeId, role): owners get full tools, others the senderTools surface
-});
-yield* router.explain(envelope, "telegram"); // why would it answer, as whom, with which tools
-```
-
-Defaults are fail-closed: unknown senders are denied (the resolver is never called), non-owners
-get `ReadOnly`, unmatched messages are dropped and counted, `open` routes need cost and turn caps,
-and a second owner of the same account fails with `ChannelAlreadyOwned`. Dedupe and turn caps are
-in memory (reset on restart) in this release. `ChannelService` is unchanged and runs on the same
-engine as one implicit route.
-
-## Naming note
-
-The gateway's messaging configuration lives under
-`.withGateway({ accessControl: { ... } })` — renamed from `channels` to avoid clashing with this
-package. The two surfaces are intentionally separate: `accessControl` governs **who can talk to
-the agent**; `channels` governs **how messages get in and out**.
+- Discord, Slack and email adapters do not exist yet; use the webhook adapter or write one against the contract.
+- In-memory stores reset on restart; use the SQLite router store for durability.
 
 ## Documentation
 
-- Channels guide: [docs.reactiveagents.dev/guides/channels/](https://docs.reactiveagents.dev/guides/channels/)
-- Bot quickstart (Discord / Telegram / Slack): [docs.reactiveagents.dev/guides/bots/](https://docs.reactiveagents.dev/guides/bots/)
-- Related: [`@reactive-agents/runtime`](../runtime/README.md),
-  [`@reactive-agents/gateway`](../gateway/README.md),
-  [`@reactive-agents/memory`](../memory/README.md).
+- [Channel adapters](https://docs.reactiveagents.dev/guides/channel-adapters/): the adapter contract, building blocks and conformance suite.
+- [Messaging channels](https://docs.reactiveagents.dev/guides/messaging-channels/): Signal, Telegram, webhook and route setup.
+- [Gateway](https://docs.reactiveagents.dev/features/gateway/): policies, access control and chat mode that channels feed into.
 
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

@@ -1,18 +1,11 @@
 # @reactive-agents/svelte
 
-> Svelte stores for Reactive Agents — agentStream, agentRun
+> Svelte stores that stream a Reactive Agents run into your UI, token by token, from a Server-Sent Events endpoint.
 
 [![npm](https://img.shields.io/npm/v/@reactive-agents/svelte?color=CB3837&logo=npm)](https://www.npmjs.com/package/@reactive-agents/svelte)
-[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev)
+[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev/guides/web-integration/)
 
-> **Stability: experimental.** The SSE event contract may change in a minor release. Pin a version for production use.
-
-Svelte stores for LLM agents — stream agent output token-by-token into a
-reactive store, fire one-shot calls, or progressively render a structured JSON
-object as it streams. Built for chat UIs, copilots, and any Svelte app talking to
-an AI agent. These stores consume a Server-Sent Events (SSE) endpoint produced by
-`AgentStream.toSSE()` on the server, so token streaming works with plain `fetch`
-and no extra client deps.
+> **Stability:** unstable. The SSE event contract may change in a minor release. Pin a version.
 
 ## Install
 
@@ -23,10 +16,9 @@ bun add @reactive-agents/svelte
 
 ## Usage
 
-Server:
+Server, any route that returns the agent stream as SSE:
 
 ```ts
-// server route
 import { ReactiveAgents, AgentStream } from "reactive-agents";
 
 export async function POST(req: Request) {
@@ -36,7 +28,7 @@ export async function POST(req: Request) {
 }
 ```
 
-Client — streaming:
+Client:
 
 ```svelte
 <script lang="ts">
@@ -50,37 +42,27 @@ Client — streaming:
 {#if $agent.error}<p style="color: red">{$agent.error}</p>{/if}
 ```
 
-Client — structured object:
-
-```svelte
-<script lang="ts">
-  import { createStructuredStream } from "@reactive-agents/svelte";
-  const stream = createStructuredStream("/api/agent/structured");
-</script>
-
-<button on:click={() => stream.run("Generate a user profile")}>Run</button>
-{#if $stream.object.name}<p>Name: {$stream.object.name}</p>{/if}
-{#if $stream.status === "completed"}<pre>{JSON.stringify($stream.object, null, 2)}</pre>{/if}
-```
-
 ## API
 
-- `createAgentStream(endpoint, requestInit?)` — streaming store. Returns
-  `{ subscribe, run, cancel }`; the store value (`AgentStreamState`) holds
-  `{ text, events, status, error, output }`. `status` is
-  `"idle" | "streaming" | "completed" | "error"`.
-- `createAgent(endpoint, requestInit?)` — one-shot store. Returns
-  `{ subscribe, run }`; the store value (`AgentState`) holds
-  `{ output, loading, error }`. `run(prompt, body?)` resolves with the final
-  output string.
-- `createStructuredStream(endpoint, requestInit?)` — streams a JSON object,
-  surfacing a progressively-filled `object` in the store value
-  (`StructuredStreamState`). Returns `{ subscribe, run, cancel }`.
-- `parsePartialObject(buf)` — best-effort parse of a streaming JSON prefix into
-  a partial object (used internally by `createStructuredStream`).
-- Types: `AgentStreamState`, `AgentState`, `StructuredStreamState`,
-  `AgentStreamEvent`, `AgentHookState`, `UseAgentReturn`, `UseAgentStreamReturn`.
+| Export | Use it when |
+|---|---|
+| `createAgentStream(endpoint, requestInit?)` | You stream text. Store value `{ text, events, status, error, output }`; methods `run`, `cancel`. `status` is `"idle" \| "streaming" \| "completed" \| "error"`. |
+| `createAgent(endpoint, requestInit?)` | You want a one-shot call. Store value `{ output, loading, error }`; `run(prompt, body?)`. |
+| `createStructuredStream(endpoint, requestInit?)` | You render a JSON object as it streams (`$stream.object`). |
+| `createRun`, `createResumableRun`, `createInteractions` | You need the run state machine, durable reattach or human-in-the-loop answers. |
+| `runCost`, `runSteps` | You show live cost or the tool and step trace. |
+| `parsePartialObject(buf)` | You parse a streaming JSON prefix yourself. |
+| `AgentStreamState`, `AgentState`, `StructuredStreamState`, `RunState` | You need the types. |
 
-## Part of Reactive Agents
+## Documentation
 
-This package is part of [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) — the TypeScript AI agent framework built on Effect-TS. See the [Web Integration guide](https://docs.reactiveagents.dev/guides/web-integration/) and the [full docs](https://docs.reactiveagents.dev).
+- [Web integration guide](https://docs.reactiveagents.dev/guides/web-integration/)
+- [Agentic UI core](https://docs.reactiveagents.dev/features/agentic-ui-core/)
+
+## Runtime
+
+Svelte (`svelte >= 4.0.0`) in the browser. Server code that builds the agent needs Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+
+## License
+
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

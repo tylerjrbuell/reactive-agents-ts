@@ -1,105 +1,50 @@
 # @reactive-agents/prompts
 
-Prompt management for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
+> A versioned prompt template engine with built-in agent, reasoning and judge prompts for Reactive Agents.
 
-A version-controlled template engine with `{{variable}}` interpolation, type-safe variable bindings, and a built-in library of agent prompts covering reasoning strategies (ReAct, Plan-Execute, Tree-of-Thought, Reflexion), evaluation judges (accuracy, relevance, completeness, safety), and tier-adaptive system prompts (frontier vs. local models).
+> **Stability:** unstable. Template ids and variables may change between minors; `ExperimentService` (A/B variants) may change shape.
 
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/prompts
+# or: npm install @reactive-agents/prompts
 ```
 
-Or via the umbrella:
+The `reactive-agents` facade (`bun add reactive-agents`) re-exports the builder that enables this package.
 
-```bash
-bun add reactive-agents
-```
+## Usage
 
-## Features
-
-- **Template engine** — `{{variable}}` interpolation with required/optional variables, defaults, and type guards
-- **Built-in template library** — reasoning, verification, evaluation, and default agent system prompts
-- **Tier-adaptive variants** — separate `react-system-frontier`, `react-system-local`, `react-thought-frontier`, `react-thought-local` for cost-aware prompt routing
-- **Version-controlled** — every template carries a `version` integer; `PromptService` looks up the latest unless pinned
-- **Token estimator** — `estimateTokens()` for budget planning before render
-- **A/B experiments** — `ExperimentService` (unstable) for prompt variant evaluation
-
-## Quick Example
-
-```typescript
+```ts
+import { Effect } from "effect";
 import { interpolate } from "@reactive-agents/prompts";
 
-const rendered = interpolate(
-  "You are a {{role}} expert. Answer in {{language}}.",
-  { role: "TypeScript", language: "English" },
+const template = {
+  id: "custom.system",
+  name: "Custom System Prompt",
+  version: 1,
+  template: "You are a {{role}} expert. Answer in {{language}}.",
+  variables: [
+    { name: "role", required: true, type: "string" },
+    { name: "language", required: false, type: "string", defaultValue: "English" },
+  ],
+} as const;
+
+// interpolate takes a template object and returns Effect<string, VariableError>.
+const rendered = await Effect.runPromise(
+  interpolate(template, { role: "TypeScript", language: "English" }),
 );
 ```
 
-## Built-in Templates
+Through the builder, `.withPrompts()` registers every built-in template. Pass `{ templates: [...] }` to add your own:
 
-### Reasoning
-
-| Template                                  | Strategy / phase                          |
-| ----------------------------------------- | ----------------------------------------- |
-| `reactTemplate`                           | High-level ReAct loop prompt              |
-| `reactSystemTemplate`                     | ReAct system prompt                       |
-| `reactThoughtTemplate`                    | ReAct thought-step prompt                 |
-| `reactSystemFrontierTemplate` / `reactSystemLocalTemplate` | Tier-adaptive system variants |
-| `reactThoughtFrontierTemplate` / `reactThoughtLocalTemplate` | Tier-adaptive thought variants |
-| `planExecuteTemplate`                     | Plan-Execute high-level                   |
-| `planExecutePlanTemplate`                 | Plan phase                                |
-| `planExecuteExecuteTemplate`              | Execute phase                             |
-| `planExecuteReflectTemplate`              | Reflect phase                             |
-| `treeOfThoughtTemplate`                   | ToT high-level                            |
-| `treeOfThoughtExpandTemplate`             | Expand candidate thoughts                 |
-| `treeOfThoughtScoreTemplate`              | Score candidates                          |
-| `treeOfThoughtSynthesizeTemplate`         | Synthesize chosen branch                  |
-| `reflexionTemplate`                       | Reflexion high-level                      |
-| `reflexionGenerateTemplate`               | Generate attempt                          |
-| `reflexionCritiqueTemplate`               | Critique prior attempt                    |
-| `adaptiveClassifyTemplate`                | Classify task complexity for routing      |
-
-### Verification
-
-| Template            | Use                              |
-| ------------------- | -------------------------------- |
-| `factCheckTemplate` | Fact-check decomposed claims     |
-
-### Evaluation (judges)
-
-| Template                       | Dimension       |
-| ------------------------------ | --------------- |
-| `judgeAccuracyTemplate`        | Accuracy        |
-| `judgeRelevanceTemplate`       | Relevance       |
-| `judgeCompletenessTemplate`    | Completeness    |
-| `judgeSafetyTemplate`          | Safety          |
-| `judgeGenericTemplate`         | Generic rubric  |
-
-### Agent
-
-| Template                  | Use                                     |
-| ------------------------- | --------------------------------------- |
-| `defaultSystemTemplate`   | Default agent system prompt             |
-
-`allBuiltinTemplates` is a flat array of every template above — useful for bulk registration.
-
-## Builder Integration
-
-```typescript
+```ts
 import { ReactiveAgents } from "reactive-agents";
 
-// Enable all built-in templates
 const agent = await ReactiveAgents.create()
-  .withName("researcher")
-  .withProvider("anthropic", { model: "claude-sonnet-4-6" })
-  .withPrompts()
-  .build();
-
-// Or register custom templates at build time
-const customAgent = await ReactiveAgents.create()
   .withName("custom")
   .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
   .withPrompts({
     templates: [
       {
@@ -117,46 +62,28 @@ const customAgent = await ReactiveAgents.create()
   .build();
 ```
 
-## Direct Service Usage
+## API
 
-```typescript
-import { Effect } from "effect";
-import { PromptService, PromptServiceLive } from "@reactive-agents/prompts";
+| Export | Use it when |
+|---|---|
+| `PromptService`, `PromptServiceLive` | You register and compile templates in Effect code |
+| `interpolate`, `estimateTokens` | You render or size a template without the service |
+| `allBuiltinTemplates` | You bulk-register the built-in library (reasoning, verification, judge, default system prompts, tier variants) |
+| `createPromptLayer` | You build the runtime layer yourself |
+| `ExperimentService`, `ExperimentServiceLive` | You run A/B prompt experiments (unstable) |
+| `PromptTemplate`, `CompiledPrompt`, `PromptVariable` | You type templates |
+| `PromptError`, `TemplateNotFoundError`, `VariableError` | You handle tagged errors |
 
-const program = Effect.gen(function* () {
-  const prompts = yield* PromptService;
-  const compiled = yield* prompts.compile("react.system", {
-    role: "research assistant",
-    tools: ["web_search", "calculator"],
-  });
-  return compiled.text;
-});
-```
-
-## A/B Experiments (unstable)
-
-```typescript
-import { ExperimentService } from "@reactive-agents/prompts";
-// Variant assignment, outcome capture, results aggregation.
-// See AUDIT-overhaul-2026.md §11 #41 — surface may change in v0.10.x.
-```
-
-## Key Exports
-
-| Export                                           | Purpose                                        |
-| ------------------------------------------------ | ---------------------------------------------- |
-| `PromptService`, `PromptServiceLive`             | Template registration + compilation            |
-| `interpolate`, `estimateTokens`                  | Pure template-engine helpers                   |
-| `allBuiltinTemplates`                            | Bulk registration array                        |
-| `createPromptLayer`                              | Factory for the runtime layer                  |
-| `ExperimentService`, `ExperimentServiceLive`     | A/B experimentation (unstable)                 |
-| `PromptTemplate`, `CompiledPrompt`, `PromptVariable` | Schemas + types                            |
-| `PromptError`, `TemplateNotFoundError`, `VariableError` | Tagged errors                          |
+The full template list and experiment lifecycle live in the docs.
 
 ## Documentation
 
-Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)
+- [Prompts](https://docs.reactiveagents.dev/features/prompts/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

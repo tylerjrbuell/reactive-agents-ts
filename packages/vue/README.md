@@ -1,18 +1,11 @@
 # @reactive-agents/vue
 
-> Vue composables for Reactive Agents — useAgentStream, useAgent
+> Vue 3 composables that stream a Reactive Agents run into reactive refs, token by token, from a Server-Sent Events endpoint.
 
 [![npm](https://img.shields.io/npm/v/@reactive-agents/vue?color=CB3837&logo=npm)](https://www.npmjs.com/package/@reactive-agents/vue)
-[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev)
+[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev/guides/web-integration/)
 
-> **Stability: experimental.** The SSE event contract may change in a minor release. Pin a version for production use.
-
-Vue 3 composables for streaming AI agents — stream agent output token-by-token
-into reactive refs, fire one-shot calls, or progressively render a structured
-JSON object as it streams. Built for chat UIs, copilots, and any Vue app talking
-to an LLM agent. These composables consume a Server-Sent Events (SSE) endpoint
-produced by `AgentStream.toSSE()` on the server, so token streaming works with
-plain `fetch` and no extra client deps.
+> **Stability:** unstable. The SSE event contract may change in a minor release. Pin a version.
 
 ## Install
 
@@ -23,10 +16,9 @@ bun add @reactive-agents/vue
 
 ## Usage
 
-Server:
+Server, any route that returns the agent stream as SSE:
 
 ```ts
-// server route
 import { ReactiveAgents, AgentStream } from "reactive-agents";
 
 export async function POST(req: Request) {
@@ -36,7 +28,7 @@ export async function POST(req: Request) {
 }
 ```
 
-Client — streaming:
+Client:
 
 ```vue
 <script setup lang="ts">
@@ -52,36 +44,26 @@ const { text, status, error, run } = useAgentStream("/api/agent");
 </template>
 ```
 
-Client — structured object:
-
-```vue
-<script setup lang="ts">
-import { useStructuredObject } from "@reactive-agents/vue";
-const { object, status, run } = useStructuredObject("/api/agent/structured");
-</script>
-
-<template>
-  <button @click="run('Generate a user profile')">Run</button>
-  <p v-if="object.name">Name: {{ object.name }}</p>
-  <pre v-if="status === 'completed'">{{ JSON.stringify(object, null, 2) }}</pre>
-</template>
-```
-
 ## API
 
-- `useAgentStream(endpoint, requestInit?)` — streaming composable. Returns
-  readonly refs `{ text, events, status, error, output }` plus `run(prompt, body?)`
-  and `cancel()`. `status` is `"idle" | "streaming" | "completed" | "error"`.
-- `useAgent(endpoint, requestInit?)` — one-shot composable. Returns readonly
-  refs `{ output, loading, error }` plus `run(prompt, body?)` which resolves with
-  the final output string.
-- `useStructuredObject(endpoint, requestInit?)` — streams a JSON object,
-  surfacing a progressively-filled `object` ref. Returns
-  `{ object, text, status, error, run, cancel }`.
-- `parsePartialObject(buf)` — best-effort parse of a streaming JSON prefix into
-  a partial object (used internally by `useStructuredObject`).
-- Types: `AgentStreamEvent`, `AgentHookState`.
+| Export | Use it when |
+|---|---|
+| `useAgentStream(endpoint, requestInit?)` | You stream text. Returns readonly refs `{ text, events, status, error, output }` plus `run(prompt, body?)` and `cancel()`. `status` is `"idle" \| "streaming" \| "completed" \| "error"`. |
+| `useAgent(endpoint, requestInit?)` | You want a one-shot call. Returns `{ output, loading, error }` plus `run(prompt, body?)`. |
+| `useStructuredObject(endpoint, requestInit?)` | You render a JSON object as it streams. Returns `{ object, text, status, error, run, cancel }`. |
+| `parsePartialObject(buf)` | You parse a streaming JSON prefix yourself. |
+| `formatCost`, `formatTokens`, `statusOfRun`, `statusOfTurn` | You show cost, tokens or run status with the shared display vocabulary (re-exported from `@reactive-agents/ui-core`). |
+| `AgentStreamEvent`, `AgentHookState` | You need the types. |
 
-## Part of Reactive Agents
+## Documentation
 
-This package is part of [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) — the TypeScript AI agent framework built on Effect-TS. See the [Web Integration guide](https://docs.reactiveagents.dev/guides/web-integration/) and the [full docs](https://docs.reactiveagents.dev).
+- [Web integration guide](https://docs.reactiveagents.dev/guides/web-integration/)
+- [Agentic UI core](https://docs.reactiveagents.dev/features/agentic-ui-core/)
+
+## Runtime
+
+Vue 3 (`vue >= 3.0.0`) in the browser. Server code that builds the agent needs Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+
+## License
+
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

@@ -1,116 +1,68 @@
 # @reactive-agents/cost
 
-Cost management for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
+> Cost control for Reactive Agents: complexity routing, semantic caching, and budget enforcement for TypeScript agents.
 
-Routes tasks to the cheapest capable model using a 27-signal complexity router, caches semantically-similar requests, enforces budgets at four levels (per-request / per-session / daily / monthly), and tracks token + USD spend in real time. Pricing can be loaded from a static table or fetched dynamically (OpenRouter and provider APIs supported).
+> **Stability:** unstable. `.withCostTracking()` on the builder is stable; the routing primitives exported here are not yet a builder policy and may change.
 
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/cost
+# or: npm install @reactive-agents/cost
 ```
 
-Or via the umbrella:
+The facade (`bun add reactive-agents`) re-exports this package.
 
-```bash
-bun add reactive-agents
-```
+## Usage
 
-## Features
+Enable spend tracking and budgets from the builder:
 
-- **Complexity router** — 27 signals (length, code presence, multi-step phrasing, entity count, etc.) classify each task and select Haiku / Sonnet / Opus or local equivalents
-- **Semantic cache** — embedding-similarity lookup of prior responses, with cache-aware token discounts when the provider supports prompt caching
-- **Budget enforcer** — blocks a request before it spends if any of the four budget windows would be exceeded; emits `BudgetExceededError`
-- **Cost tracker** — accumulates token + USD spend per agent / session / day / month, persisted via `BudgetDb` (SQLite)
-- **Dynamic pricing** — `.withDynamicPricing()` on the builder fetches up-to-date model prices including OpenRouter; falls back to static table on failure
-- **Prompt compressor** — optional compression layer for context-heavy requests
-
-## Quick Example
-
-```typescript
+```ts
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
   .withName("budget-agent")
   .withProvider("anthropic")
-  .withDynamicPricing()
-  .withCostTracking({
-    perRequest: 0.10,    // USD
-    perSession: 1.00,
-    daily: 5.00,
-    monthly: 50.00,
-  })
+  .withCostTracking({ perRequest: 0.1, perSession: 1, daily: 5, monthly: 50 }) // USD
   .build();
 
-const result = await agent.run("Summarize this 200-word document");
-console.log(result.metadata.cost);      // { usd: 0.0003, tokens: 450 }
-console.log(result.metadata.modelUsed); // "claude-haiku-4-5-20251001" — auto-routed
-console.log(result.metadata.cacheHit);  // true | false
+const result = await agent.run("Summarize this document");
+console.log(result.metadata.cost);
 ```
 
-## Routing Logic
+Use the routing primitives directly:
 
-| Task signals (sample)                  | → Selected tier      |
-| -------------------------------------- | -------------------- |
-| Short, factual, single-turn            | Haiku (cheapest)     |
-| Code analysis, multi-step, structured  | Sonnet               |
-| Complex reasoning, research, long-form | Opus                 |
+```ts
+import { Effect } from "effect";
+import { analyzeComplexity } from "@reactive-agents/cost";
 
-The router uses heuristic classification by default; `analyzeComplexity()` exposes the full signal vector for callers who want LLM-assisted routing.
-
-## Direct API
-
-```typescript
-import {
-  analyzeComplexity,
-  routeToModel,
-  estimateCost,
-  makeBudgetEnforcer,
-  makeSemanticCache,
-} from "@reactive-agents/cost";
-
-const analysis = analyzeComplexity({
-  input: "Write a binary search tree in Rust",
-});
-const model = routeToModel(analysis, { provider: "anthropic" });
-
-const cost = estimateCost({
-  model,
-  inputTokens: 500,
-  outputTokens: 1200,
-});
+const analysis = await Effect.runPromise(analyzeComplexity("Write a binary search tree in Rust"));
+console.log(analysis.recommendedTier); // "haiku" | "sonnet" | "opus"
 ```
 
-## Budget Levels
+Omitted budget levels are not enforced beyond the framework defaults.
 
-| Level         | Window           | Persisted to |
-| ------------- | ---------------- | ------------ |
-| `perRequest`  | single LLM call  | in-memory    |
-| `perSession`  | one agent run    | in-memory    |
-| `daily`       | UTC day rollover | SQLite       |
-| `monthly`     | calendar month   | SQLite       |
+## API
 
-Each level can be omitted; only configured limits are enforced.
-
-## Key Exports
-
-| Export                            | Purpose                                            |
-| --------------------------------- | -------------------------------------------------- |
-| `CostService`, `CostServiceLive`  | Composite cost-management entry point              |
-| `analyzeComplexity`, `routeToModel` | 27-signal complexity router                      |
-| `makeSemanticCache`               | Embedding-similarity response cache                |
-| `makeBudgetEnforcer`, `makeBudgetDb` | 4-level budget enforcement + SQLite persistence |
-| `makeCostTracker`                 | Token + USD accumulator                            |
-| `makePromptCompressor`            | Context compression                                |
-| `estimateCost`, `estimateTokens`  | Pricing helpers                                    |
-| `createCostLayer`                 | Factory for the runtime layer                      |
-| `BudgetExceededError`, `RoutingError` | Tagged errors                                  |
+| Export | Use it when |
+|---|---|
+| `CostService`, `CostServiceLive`, `createCostLayer` | You compose cost management into an Effect runtime |
+| `analyzeComplexity`, `routeToModel` | You classify a task and pick a model tier |
+| `estimateCost`, `estimateTokens` | You price a call before making it |
+| `makeBudgetEnforcer`, `makeBudgetDb` | You enforce per-request, per-session, daily and monthly limits |
+| `makeCostTracker` | You accumulate token and USD spend |
+| `makeSemanticCache` | You cache responses by embedding similarity |
+| `makePromptCompressor` | You shrink context-heavy requests |
+| `BudgetExceededError`, `RoutingError` | You handle tagged cost errors |
 
 ## Documentation
 
-- Full docs: [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)
-- Cost guide: [docs.reactiveagents.dev/guides/cost-management/](https://docs.reactiveagents.dev/guides/cost-management/)
+- [Cost tracking](https://docs.reactiveagents.dev/features/cost-tracking/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+. Daily and monthly budgets persist to SQLite.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

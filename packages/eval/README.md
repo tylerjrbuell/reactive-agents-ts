@@ -1,127 +1,88 @@
 # @reactive-agents/eval
 
-Evaluation framework for [Reactive Agents](https://docs.reactiveagents.dev/) — benchmark agent quality, track regressions, and run automated test suites against an isolated frozen judge.
+> Evaluation suites for Reactive Agents: deterministic graders for typed results, a frozen LLM judge for the rest, and SQLite run history with regression checks.
 
-## Installation
+> **Stability:** unstable. Types and service shapes may change between minor versions.
+
+## Install
 
 ```bash
 bun add @reactive-agents/eval
+# or: npm install @reactive-agents/eval
 ```
 
-## Features
+## Usage
 
-- **5-dimension scoring** — `accuracy`, `relevance`, `completeness`, `safety`, `cost-efficiency`
-- **LLM-as-judge** — judge runs through `JudgeLLMService`, a tag isolated from the system-under-test (Rule 4: judge MUST differ from SUT)
-- **Evaluation suites** — `EvalSuite` describes cases + dimensions + suite metadata
-- **SQLite persistence** — `createEvalStore` for run history, regression diffs, comparison reports
-- **Dataset loader** — `DatasetService` for sharing evaluation corpora across suites
-- **CLI integration** — `rax eval` runs suites and writes reports
+Grade a typed agent result with no LLM call. Deterministic checks run first; an LLM judge is the fallback.
 
-## Suite Runner Contract
+```ts
+import { gradeOutput } from "@reactive-agents/eval";
 
-`runSuite(suite, agentConfig, agentRunner, config?)` requires three things:
+const grade = gradeOutput(
+  {
+    fields: { status: "ok" },
+    checks: [{ kind: "approx", path: "/total", value: 10, tolerance: 0.01 }],
+  },
+  JSON.stringify({ status: "ok", total: 10.004, note: "extra keys are ignored" }),
+);
 
-- **`suite`** — cases + dimensions + suite metadata (`EvalSuite`)
-- **`agentConfig`** — string identifying the system under test (used in result records and the Rule-4 guard)
-- **`agentRunner`** — caller-supplied function that invokes YOUR agent and returns its output + metrics. Pre-W6.5 this was hardcoded to a placeholder; callers now supply this themselves
-- **`config?`** — optional `EvalConfig`, including the judge model selection (must differ from the SUT)
+console.log(grade.verdict); // "pass" | "fail" | "inconclusive"
+```
 
-```typescript
-import {
-  EvalService,
-  createEvalLayer,
-  type SuiteAgentRunner,
-} from "@reactive-agents/eval";
+An expectation that declares nothing grades `inconclusive`, never `pass`. Output that is not JSON fails.
+
+To run a whole suite, supply your own agent runner. The judge is wired through `JudgeLLMService`, separate from the agent under test, and must be a different model:
+
+```ts
 import { Effect } from "effect";
+import { EvalService, type SuiteAgentRunner } from "@reactive-agents/eval";
 
-// Caller-supplied SUT runner. This invokes YOUR agent. It MUST NOT use the
-// JudgeLLMService — that Tag is reserved for the frozen judge per Rule 4 of
-// 00-RESEARCH-DISCIPLINE.md. Use LLMService or your agent builder layer here.
-const myAgentRunner: SuiteAgentRunner = (input) =>
-  Effect.gen(function* () {
-    const result = yield* runMyAgent(input); // your agent invocation
-    return {
-      actualOutput: result.output,
-      metrics: {
-        latencyMs: result.elapsedMs,
-        tokensUsed: result.tokens,
-        costUsd: result.costUsd,
-      },
-    };
-  });
+declare const runMyAgent: (input: string) => Effect.Effect<{ output: string }>;
+
+const agentRunner: SuiteAgentRunner = (input) =>
+  runMyAgent(input).pipe(Effect.map((r) => ({ actualOutput: r.output })));
 
 const program = Effect.gen(function* () {
-  const evalService = yield* EvalService;
-
-  const run = yield* evalService.runSuite(
+  const evals = yield* EvalService;
+  const run = yield* evals.runSuite(
     {
-      id: "qa-benchmark",
-      name: "QA Benchmark",
-      dimensions: ["accuracy", "relevance"],
-      cases: [
-        { id: "q1", input: "What is the capital of France?", expectedOutput: "Paris" },
-        { id: "q2", input: "Who wrote 'The Great Gatsby'?", expectedOutput: "F. Scott Fitzgerald" },
-      ],
+      id: "qa",
+      name: "QA",
+      description: "Basic factual questions",
+      dimensions: ["accuracy"],
+      cases: [{ id: "q1", name: "Capital of France", input: "Capital of France?", expectedOutput: "Paris" }],
     },
-    "anthropic/claude-sonnet-4-6",      // SUT identifier
-    myAgentRunner,
-    {
-      judge: {
-        model: "claude-haiku-4-5-20251001",     // judge MUST differ from SUT
-        provider: "anthropic",
-      },
-    },
+    "my-agent-v1", // identifier of the system under test
+    agentRunner,
   );
-
-  console.log(`avgScore: ${run.summary.avgScore}, passed: ${run.summary.passed}/${run.summary.totalCases}`);
+  console.log(run.summary.avgScore);
 });
 ```
 
-The judge LLM is wired separately via `JudgeLLMService` so the judge code path is fully isolated from the SUT. See `createEvalLayer` JSDoc for layer composition.
+Provide `createEvalLayer()` plus a `JudgeLLMService` implementation when running `program`; see the `createEvalLayer` JSDoc for composition. `makeEvalServicePersistentLive(createEvalStore("./eval.db"))` records every run to SQLite for comparison and `checkRegression`.
 
-## Dimensions
+## API
 
-| Dimension         | What it measures                                     | Scorer                  |
-| ----------------- | ---------------------------------------------------- | ----------------------- |
-| `accuracy`        | Factual correctness against expected output          | `scoreAccuracy`         |
-| `relevance`       | How well the response addresses the question         | `scoreRelevance`        |
-| `completeness`    | Coverage of all aspects of the expected answer       | `scoreCompleteness`     |
-| `safety`          | Absence of harmful, biased, or inappropriate content | `scoreSafety`           |
-| `cost-efficiency` | Token usage and cost relative to quality             | `scoreCostEfficiency`   |
-
-Each dimension scorer is a standalone Effect that takes the LLM tag + scoring params and returns a `DimensionScore`.
-
-## Persistence
-
-```typescript
-import { createEvalStore, makeEvalServicePersistentLive } from "@reactive-agents/eval";
-
-const store = createEvalStore("./eval-history.db");
-// `makeEvalServicePersistentLive(store)` wires automatic persistence
-// — every `runSuite` call writes to SQLite for diffing and regression checks.
-```
-
-`EvalStore` exposes `listRuns`, `getRun`, `compareRuns`, `getRegressions` for downstream tooling.
-
-## Key Exports
-
-| Export                                                                | Purpose                                          |
-| --------------------------------------------------------------------- | ------------------------------------------------ |
-| `EvalService`, `EvalServiceLive`, `makeEvalServiceLive`               | Suite runner with frozen-judge isolation         |
-| `makeEvalServicePersistentLive`                                       | Persistent variant wired to `EvalStore`          |
-| `JudgeLLMService`                                                     | Frozen-judge tag (Rule 4 isolation)              |
-| `DatasetService`, `DatasetServiceLive`                                | Dataset loader                                   |
-| `createEvalStore`                                                     | SQLite-backed history                            |
-| `createEvalLayer`                                                     | Factory for the runtime layer                    |
-| `scoreAccuracy`, `scoreRelevance`, `scoreCompleteness`, `scoreSafety`, `scoreCostEfficiency` | Per-dimension scorers   |
-| `SuiteAgentRunner`, `EvalSuite`, `EvalCase`, `EvalRun`, `EvalRunSummary`, `JudgeConfig`, `EvalConfig` | Schemas + types |
-| `EvalError`, `BenchmarkError`, `DatasetError`                         | Tagged errors                                    |
+| Export | Use it when |
+|---|---|
+| `gradeOutput`, `gradeStructured`, `gradeFields`, `gradeSchema` | You can compute the grade from data: field equality, numeric tolerance, contains, regex, length, type, schema validity. |
+| `gradeRubric`, `gradeCase` | A rubric-based judgment is needed after deterministic checks. |
+| `EvalService`, `makeEvalServicePersistentLive` | You run suites, compare runs or check regressions. |
+| `JudgeLLMService`, `JudgeFromLLMServiceLive` | You wire the frozen judge. |
+| `createEvalStore` | You want SQLite run history. |
+| `DatasetService` | You load evaluation corpora shared across suites. |
+| `scoreAccuracy`, `scoreRelevance`, `scoreCompleteness`, `scoreSafety`, `scoreCostEfficiency` | You score one dimension directly. |
+| `summarizeRepeats`, `confidenceInterval95`, `minimumDetectableEffect` | You aggregate repeated runs and need to know if a gap is noise. |
+| `EvalSuite`, `EvalCase`, `EvalRun`, `EvalConfig`, `SuiteAgentRunner` | You type suites, runs and runners. |
 
 ## Documentation
 
-- Full docs: [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)
-- Eval guide: [docs.reactiveagents.dev/guides/evaluation/](https://docs.reactiveagents.dev/guides/evaluation/)
+- [Eval](https://docs.reactiveagents.dev/features/eval/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+. The run store uses SQLite.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

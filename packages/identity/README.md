@@ -1,83 +1,56 @@
 # @reactive-agents/identity
 
-Cryptographic identity, authorization, and audit for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
+> Ed25519 agent certificates, role-based access control, audit logging and delegation for Reactive Agents.
 
-> **Stability note:** This package ships as `@unstable`. Scaffolding (Ed25519 certificates, RBAC, audit log, delegation chains) and the runtime layer are merged, but no in-tree consumer reads it yet. The audit verdict is DEFER, meaning the surface may change in v0.10.x without notice. See `AUDIT-overhaul-2026.md` §10.1 for context.
+> **Stability:** unstable. No `.withIdentity()` builder method exists and no in-tree consumer reads this package yet; the whole surface may change between minors.
 
-Provides Ed25519-signed agent certificates, role-based access control with permission checks, append-only audit logs, and signed delegation chains so an agent can act on behalf of another principal with a verifiable proof trail.
-
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/identity
+# or: npm install @reactive-agents/identity
 ```
 
-## Features
+## Usage
 
-- **Ed25519 agent certificates** — `@noble/ed25519` keypairs signed by an issuer, with expiry and capability scope
-- **RBAC permission manager** — role definitions, permission checks, deny-by-default
-- **Audit logger** — append-only log of authentication, authorization, and delegation events
-- **Delegation chains** — signed proof that agent A is acting on behalf of user U
-- **Default roles** — `DefaultRoles` constant exports a baseline role set
+Use the Effect service directly:
 
-## Quick Example (direct service usage)
-
-> **Builder integration note:** there is no `.withIdentity()` builder wither
-> (removed as a provide-and-forget layer; the ratchet test pins its absence).
-> Use this package directly via its Effect `Layer`, and `.withApprovalPolicy()`
-> for enforced run gates.
-
-```typescript
-import { ReactiveAgents } from "reactive-agents";
-
-const agent = await ReactiveAgents.create()
-  .withName("privileged-agent")
-  .withProvider("anthropic")
-  .build();
-```
-
-## Direct Service Usage
-
-```typescript
+```ts
 import { Effect } from "effect";
-import {
-  IdentityService,
-  IdentityServiceLive,
-  makeCertificateAuth,
-  makePermissionManager,
-} from "@reactive-agents/identity";
+import { IdentityService, IdentityServiceLive } from "@reactive-agents/identity";
 
 const program = Effect.gen(function* () {
-  const id = yield* IdentityService;
-  const cert = yield* id.issueCertificate({
-    subject: "agent-001",
-    roles: ["reader"],
-    ttlSeconds: 3600,
-  });
-  const ok = yield* id.authenticate(cert);
-  return { cert, ok };
+  const identity = yield* IdentityService;
+  const cert = yield* identity.issueCertificate("agent-001");
+  return yield* identity.authenticate(cert);
 });
 
-await Effect.runPromise(program.pipe(Effect.provide(IdentityServiceLive)));
+const auth = await Effect.runPromise(program.pipe(Effect.provide(IdentityServiceLive)));
+console.log(auth.authenticated);
 ```
 
-## Key Exports
+For enforced run gates inside an agent, use `.withApprovalPolicy()` on the builder instead.
 
-| Export                               | Purpose                                          |
-| ------------------------------------ | ------------------------------------------------ |
-| `IdentityService`, `IdentityServiceLive` | Composite identity entry point               |
-| `makeCertificateAuth`                | Ed25519 certificate authentication               |
-| `makePermissionManager`              | RBAC checks                                      |
-| `makeAuditLogger`                    | Append-only audit log                            |
-| `createIdentityLayer`                | Factory for the runtime layer                    |
-| `DefaultRoles`                       | Baseline role set                                |
-| `AgentIdentity`, `Certificate`, `Permission`, `Role`, `Delegation`, `AuditEntry` | Schemas + types |
-| `AuthenticationError`, `AuthorizationError`, `AuditError`, `DelegationError`, `CredentialError` | Tagged errors |
+## API
+
+| Export | Use it when |
+|---|---|
+| `IdentityService`, `IdentityServiceLive` | You want certificates, authorization, roles, audit and delegation in one service. |
+| `makeCertificateAuth` | You issue, rotate or verify Ed25519 certificates alone. |
+| `makePermissionManager` | You check roles and permissions, or delegate them. |
+| `makeAuditLogger` | You write and query an append-only audit log. |
+| `createIdentityLayer` | You build the runtime layer by hand. |
+| `DefaultRoles` | You want the baseline role set. |
+| `AuthenticationError`, `AuthorizationError`, `AuditError`, `DelegationError`, `CredentialError` | You handle the tagged errors. |
 
 ## Documentation
 
-Full documentation at [docs.reactiveagents.dev](https://docs.reactiveagents.dev/)
+- [Architecture overview](https://docs.reactiveagents.dev/concepts/architecture/). This package has no dedicated docs page yet.
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

@@ -1,50 +1,33 @@
 # @reactive-agents/llm-provider
 
-> LLM provider adapters for [Reactive Agents](https://docs.reactiveagents.dev/).
+> One `LLMService` interface (`complete`, `stream`, `embed`, structured output) over Anthropic, OpenAI, Gemini, Groq, xAI, Ollama and LiteLLM, for agents that should not care which model runs underneath.
 
-A unified `LLMService` interface (`complete`, `stream`, `embed`, structured output) with adapters
-for **Anthropic**, **OpenAI**, **Google Gemini**, **Groq**, **xAI (Grok)**, **Ollama**, **LiteLLM**,
-and a deterministic **test** provider. Groq and xAI are OpenAI-compatible and share the
-`makeOpenAICompatProvider` factory. Includes provider behavior adapters, calibration,
-retry/circuit-breaker/rate limiting, and a fallback chain.
+> **Stability:** stable. Provider selection and the raw provider layers are stable; adapter selection, calibration and capability resolution are `@unstable` and may change between minors.
 
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/llm-provider
+# or: npm install @reactive-agents/llm-provider
 ```
 
-Install the SDK for your chosen provider:
+Install the SDK for the provider you use:
 
 ```bash
-bun add @anthropic-ai/sdk           # Anthropic Claude
-bun add openai                      # OpenAI GPT-4o, o1 — also Groq & xAI (OpenAI-compatible)
-bun add @google/genai               # Google Gemini
-# Groq, xAI, Ollama, and LiteLLM use OpenAI-compatible / plain HTTP — reuse the openai SDK or none.
+bun add @anthropic-ai/sdk   # Anthropic
+bun add openai              # OpenAI (also used for Groq and xAI, which are OpenAI-compatible)
+bun add @google/genai       # Google Gemini
 ```
 
-## Supported providers
-
-| Provider    | Streaming | Native FC | Embeddings | Structured output | Notes |
-|-------------|-----------|-----------|------------|-------------------|-------|
-| `anthropic` | ✓         | ✓         | —          | ✓                 | claude-sonnet-4, claude-haiku-4-5, claude-opus-4 |
-| `openai`    | ✓         | ✓         | ✓          | ✓                 | gpt-4o, gpt-4o-mini, o1-* |
-| `gemini`    | ✓         | ✓         | ✓          | ✓                 | gemini-2.0-flash, gemini-2.5-pro |
-| `ollama`    | ✓         | ✓         | ✓          | ✓                 | any local model; thinking opt-in |
-| `litellm`   | ✓         | ✓         | ✓          | ✓                 | proxy to 100+ providers |
-| `test`      | ✓         | ✓         | ✓          | —                 | deterministic mock for unit tests |
-
-Default model per provider is exposed via `getProviderDefaultModel(provider)` /
-`PROVIDER_DEFAULT_MODELS`.
+Ollama and LiteLLM need no extra SDK. The `reactive-agents` facade (`bun add reactive-agents`) re-exports this package.
 
 ## Usage
 
-### Anthropic
-
-```typescript
+```ts
 import { createLLMProviderLayer, LLMService } from "@reactive-agents/llm-provider";
 import { Effect } from "effect";
 
+// Reads ANTHROPIC_API_KEY from the environment.
 const layer = createLLMProviderLayer("anthropic");
 
 const result = await Effect.runPromise(
@@ -58,160 +41,41 @@ const result = await Effect.runPromise(
 );
 ```
 
-### Google Gemini
+Providers: `anthropic`, `openai`, `gemini`, `groq`, `xai`, `ollama`, `litellm`, plus a deterministic `test` provider. LiteLLM is a proxy: point it at your LiteLLM server to reach whatever models that server exposes.
 
-```typescript
-import { createLLMProviderLayer, LLMService } from "@reactive-agents/llm-provider";
-import { Effect } from "effect";
+Credentials come from the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `GROQ_API_KEY`, `XAI_API_KEY`, `LITELLM_BASE_URL`, `LITELLM_API_KEY`, `OLLAMA_ENDPOINT`). They are read when the layer is built, not at import time.
 
-// Set GOOGLE_API_KEY in your environment
-const layer = createLLMProviderLayer("gemini");
+Deterministic tests need no API calls:
 
-const out = await Effect.runPromise(
-  Effect.gen(function* () {
-    const llm = yield* LLMService;
-    return yield* llm.complete({
-      messages: [{ role: "user", content: "Explain quantum entanglement." }],
-      model: { provider: "gemini", model: "gemini-2.5-pro" },
-    });
-  }).pipe(Effect.provide(layer)),
-);
-```
-
-### Streaming
-
-```typescript
-const events = yield* llm.stream({
-  messages: [{ role: "user", content: "Write a haiku." }],
-  model: { provider: "anthropic", model: "claude-haiku-4-5-20251001" },
-});
-for await (const ev of events) {
-  if (ev.type === "text-delta") process.stdout.write(ev.text);
-  if (ev.type === "tool-use-start") console.log("→ tool:", ev.name);
-}
-```
-
-## Native function calling
-
-All providers receive `tools` on **both** `complete()` and `stream()` calls and emit normalized
-`tool_use_start` / `tool_use_delta` events. Provider-specific quirks handled internally:
-
-- **Anthropic streaming** uses raw `streamEvent` (not helper events) to capture `inputJson`
-  before `contentBlock`.
-- **Gemini** walks `candidates[0].content.parts[]` directly (`chunk.text` strips functionCall
-  parts) and surfaces non-OK `finishReason` as explicit errors.
-- **Ollama streaming** flushes `chunk.message.tool_calls` on `chunk.done`.
-
-## Environment variables
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-GOOGLE_API_KEY=...
-OLLAMA_ENDPOINT=http://localhost:11434
-LITELLM_BASE_URL=http://localhost:4000
-LITELLM_API_KEY=...
-```
-
-`readLLMConfigFromEnv()` / `LLMConfigFromEnv` build `LLMConfig` from the environment automatically.
-`LLMConfigFromEnv` reads `process.env` lazily, when the layer is *built* (not when this
-module is imported) — a `.env` loaded after `import "reactive-agents"` is still honored
-(D-2026-09-08-O). `llmConfigFromEnv` is a `@deprecated` import-time snapshot kept only for
-API compatibility; prefer `readLLMConfigFromEnv()` for any one-off read.
-
-## Model presets
-
-```typescript
-import { ModelPresets } from "@reactive-agents/llm-provider";
-
-const preset = ModelPresets["claude-sonnet-4"];
-// { provider, model, costPer1MInput, costPer1MOutput, ... }
-```
-
-## Provider behavior adapters
-
-Per-tier hooks compose to give each provider/model the right prompting and recovery behavior.
-Seven hooks fire across the kernel lifecycle:
-
-| Hook | Purpose |
-|---|---|
-| `taskFraming` | Reframe task per provider/tier conventions |
-| `toolGuidance` | Inject tool-use guidance and exemplars |
-| `continuationHint` | Encourage long responses to keep going |
-| `errorRecovery` | Provider-specific repair on tool/parse errors |
-| `synthesisPrompt` | Tweak ICS curator output for the model |
-| `qualityCheck` | Provider-aware verifier hints |
-| `systemPromptPatch` | Final system-prompt patch |
-
-```typescript
-import { selectAdapter, defaultAdapter, midModelAdapter, localModelAdapter } from "@reactive-agents/llm-provider";
-
-const adapter = selectAdapter({ provider: "ollama", model: "qwen3:14b" });
-```
-
-## Calibration
-
-A three-tier calibration store records per-(provider, model) measured behavior (latency, alias
-frequency, success rate) and materializes an `ExperienceSummary` that drives
-`buildCalibratedAdapter` for adaptive prompting.
-
-```typescript
-import { runCalibrationProbes, buildCalibratedAdapter, loadCalibration } from "@reactive-agents/llm-provider";
-```
-
-## Resilience: retry, circuit breaker, rate limit, fallbacks
-
-```typescript
-import {
-  retryPolicy,
-  makeCircuitBreaker,
-  makeRateLimiter,
-  makeRateLimitedProvider,
-} from "@reactive-agents/llm-provider";
-```
-
-Provider fallback is configured on the builder, not in this package:
-
-```typescript
-const agent = await ReactiveAgents.create()
-  .withProvider("anthropic")
-  .withFallbacks({ providers: ["openai", "ollama"] })
-  .build();
-```
-
-## Capability port
-
-`Capability` (per-(provider, model) descriptor) supersedes the deprecated `ProviderCapabilities`;
-`ProviderCapabilities` remains exported for binary compatibility. Use `Capability` in new code.
-
-```typescript
-import { resolveCapability } from "@reactive-agents/llm-provider";
-const cap = await resolveCapability("ollama", "qwen3:14b");
-// { tier, contextWindow, supportsTools, toolCallDialect, tokenizer, ... }
-```
-
-## Test provider
-
-For deterministic testing without API calls:
-
-```typescript
+```ts
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 
-const layer = TestLLMServiceLayer({
-  "capital of France": "Paris is the capital of France.",
-});
+const layer = TestLLMServiceLayer([{ text: "Paris is the capital of France." }]);
 ```
 
-Per-turn tool-call sequences are configured via `TestTurn` / `ToolCallSpec`.
+## API
+
+| Export | Use it when |
+|---|---|
+| `createLLMProviderLayer(provider, ...)` | You need an Effect layer for a provider. |
+| `LLMService` | You call `complete`, `stream`, `embed` or structured output. |
+| `readLLMConfigFromEnv()` | You want the `LLMConfig` built from the environment. |
+| `getProviderDefaultModel(provider)` | You need the default model for a provider. |
+| `TestLLMServiceLayer` | You test without network calls; script turns with `TestTurn` and `ToolCallSpec`. |
+| `retryPolicy`, `makeCircuitBreaker`, `makeRateLimiter` | You add retry, circuit-breaking or rate limiting around a provider. |
+| `selectAdapter`, `buildCalibratedAdapter`, `loadCalibration` | You tune prompting and recovery per provider and model (`@unstable`). |
+| `resolveCapability(provider, model)` | You need the context window, tool support and dialect of a model. |
+
+Provider fallback chains are configured on the builder (`.withFallbacks({ providers: [...] })` in `@reactive-agents/runtime`), not in this package.
 
 ## Documentation
 
-- Provider guide: [docs.reactiveagents.dev/guides/providers/](https://docs.reactiveagents.dev/guides/providers/)
-- Calibration: [docs.reactiveagents.dev/guides/calibration/](https://docs.reactiveagents.dev/guides/calibration/)
-- Related: [`@reactive-agents/runtime`](../runtime/README.md),
-  [`@reactive-agents/reasoning`](../reasoning/README.md),
-  [`@reactive-agents/tools`](../tools/README.md).
+- [LLM providers](https://docs.reactiveagents.dev/features/llm-providers/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

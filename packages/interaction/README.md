@@ -1,114 +1,61 @@
 # @reactive-agents/interaction
 
-Interaction modes and human-in-the-loop primitives for the [Reactive Agents](https://docs.reactiveagents.dev/) framework.
+> Interaction modes, checkpoints and approval-pattern learning for agents that sometimes need a human, built as Effect services.
 
-Five autonomy modes, configurable checkpoints, approval gates, escalation rules, and a preference learner that adapts mode selection over time. Designed for agents that occasionally need human judgment — without forcing every run to be supervised.
+> **Stability:** unstable. Not listed as stable in the stability reference; the service shapes may change between minors.
 
-## Installation
+## Install
 
 ```bash
 bun add @reactive-agents/interaction
+# or: npm install @reactive-agents/interaction
 ```
 
-Or via the umbrella:
+The facade (`bun add reactive-agents`) re-exports this package.
 
-```bash
-bun add reactive-agents
-```
+## Usage
 
-## The 5 Modes
+The five modes are standalone Effect services. They do not intercept tool calls. For approval gates the builder enforces on runs, use `.withApprovalPolicy()` and `.withUserInteraction()` (see the durable approval guide below).
 
-| Mode            | Autonomy                       | When it activates                  |
-| --------------- | ------------------------------ | ---------------------------------- |
-| `autonomous`    | Full — no interruptions        | High confidence, routine tasks     |
-| `supervised`    | Periodic checkpoints           | Moderate confidence                |
-| `collaborative` | Human decides key steps        | Complex or ambiguous tasks         |
-| `consultative`  | Human approves before acting   | High-cost or risky operations      |
-| `interrogative` | Human provides all direction   | Information gathering only         |
-
-Modes transition automatically based on `ModeTransitionRule`s and `EscalationCondition`s — an autonomous agent can escalate to `consultative` when entropy spikes or estimated cost crosses a threshold, then de-escalate when confidence recovers.
-
-## Quick Example
-
-> **Builder integration (Wave 6.6 honesty note):** there is no
-> `.withInteraction()` builder wither — the example below previously called
-> one, which never existed. The 5 modes are standalone Effect services
-> (composed directly, as below). For gates the *builder* enforces on runs,
-> use `.withApprovalPolicy()` (per-tool approval, block or detach mode) and
-> `.withUserInteraction()` (durable `request_user_input` pauses) — those ride
-> the kernel approval gate; the mode services here do not intercept tool calls.
-
-```typescript
-import { ReactiveAgents } from "reactive-agents";
-
-const agent = await ReactiveAgents.create()
-  .withName("assistant")
-  .withProvider("anthropic", { model: "claude-sonnet-4-6" })
-  .withApprovalPolicy({
-    tools: ["file-write", "file-delete"],
-    onApprove: async ({ toolName }) => ({ approved: await askHuman(toolName) }),
-  })
-  .build();
-```
-
-## Direct Service Usage
-
-```typescript
-import { Effect } from "effect";
-import {
-  InteractionManager,
-  InteractionManagerLive,
-  CheckpointService,
-  ModeSwitcher,
-} from "@reactive-agents/interaction";
+```ts
+import { Effect, Layer } from "effect";
+import { EventBusLive } from "@reactive-agents/core";
+import { InteractionManager, createInteractionLayer } from "@reactive-agents/interaction";
 
 const program = Effect.gen(function* () {
   const interaction = yield* InteractionManager;
-  const switcher = yield* ModeSwitcher;
-
-  yield* switcher.switchTo("collaborative", { reason: "user-requested" });
-  const decision = yield* interaction.requestApproval({
-    action: "delete-file",
-    path: "/tmp/x",
-  });
-  return decision;
+  yield* interaction.switchMode("agent-1", "supervised");
+  return yield* interaction.getMode("agent-1");
 });
+
+const layer = createInteractionLayer().pipe(Layer.provide(EventBusLive));
+console.log(await Effect.runPromise(program.pipe(Effect.provide(layer))));
 ```
 
-## Preference Learning
+Modes: `autonomous`, `supervised`, `collaborative`, `consultative`, `interrogative`. Transitions follow `ModeTransitionRule` and `EscalationCondition` settings in `InteractionConfig`.
 
-The `PreferenceLearner` records approval/rejection patterns and surfaces them as `UserPreference` records that can bias future mode selection — e.g. learning that the user always approves `web-search` calls but always wants to confirm filesystem writes.
+## API
 
-```typescript
-import { PreferenceLearner } from "@reactive-agents/interaction";
-
-const prefs = yield* PreferenceLearner;
-yield* prefs.record({
-  action: "web-search",
-  decision: "approve",
-  context: { agentId, taskId },
-});
-const tolerance = yield* prefs.getTolerance(); // InterruptionTolerance
-```
-
-## Key Exports
-
-| Export                                            | Purpose                                          |
-| ------------------------------------------------- | ------------------------------------------------ |
-| `InteractionManager`, `InteractionManagerLive`    | Top-level orchestrator for modes + checkpoints   |
-| `ModeSwitcher`, `ModeSwitcherLive`                | Programmatic mode transitions                    |
-| `CheckpointService`, `CheckpointServiceLive`      | Approval-point persistence                       |
-| `NotificationService`, `NotificationServiceLive`  | Multi-channel notifications                      |
-| `CollaborationService`, `CollaborationServiceLive` | Bidirectional agent ↔ human messaging           |
-| `PreferenceLearner`, `PreferenceLearnerLive`      | Approval-pattern learner                         |
-| `createInteractionLayer`                          | Factory for the runtime layer                    |
-| `InteractionModeType`, `Checkpoint`, `Notification`, `InterruptRule`, `CollaborationSession`, `UserPreference` | Schemas + types |
-| `InteractionError`, `ModeError`, `CheckpointError`, `NotificationError`, `InputTimeoutError` | Tagged errors |
+| Export | Use it when |
+|---|---|
+| `createInteractionLayer` | You provide all interaction services to an Effect program (needs `EventBus`) |
+| `InteractionManager` | You want the top-level orchestrator for modes, notifications and checkpoints |
+| `ModeSwitcher` | You switch or evaluate modes only |
+| `CheckpointService` | You create and resolve approval checkpoints |
+| `NotificationService` | You send and read notifications |
+| `CollaborationService` | You run bidirectional agent and human sessions |
+| `PreferenceLearner` | You learn which actions a user auto-approves |
+| `InteractionError`, `ModeError`, `CheckpointError` | You handle tagged errors |
 
 ## Documentation
 
-- Full docs: [docs.reactiveagents.dev/guides/interaction-modes/](https://docs.reactiveagents.dev/guides/interaction-modes/)
+- [Interaction](https://docs.reactiveagents.dev/features/interaction/)
+- [Durable approval (HITL)](https://docs.reactiveagents.dev/guides/durable-hitl/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
 
 ## License
 
-MIT
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

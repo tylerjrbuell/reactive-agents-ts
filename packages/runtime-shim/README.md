@@ -1,18 +1,15 @@
 # @reactive-agents/runtime-shim
 
-Cross-runtime adapter for `reactive-agents`. Detects Bun vs Node.js at module load and dispatches to native primitives — Bun gets `Bun.*`, Node gets `node:*`. Same API surface on both runtimes.
+> One API for Bun and Node.js: SQLite, spawn, serve, glob, hash and file I/O, plus egress-safe fetch helpers, for Reactive Agents packages and apps.
 
-## What it shims
+> **Stability:** unstable. The pinned-fetch helpers (`fetchPinned`, `resolvePublicUrl`) are `@unstable`; the other primitives follow the same minor-version change policy.
 
-| Primitive | Bun path | Node path | Fallback |
-|-----------|----------|-----------|----------|
-| `Database` | `bun:sqlite` | `node:sqlite` (22.5+) | In-memory stub |
-| `spawn` | `Bun.spawn` | `node:child_process.spawn` | — |
-| `writeFile` / `readFile` | `Bun.write` / `Bun.file().text()` | `node:fs/promises` | — |
-| `hash` | `Bun.hash` (Wyhash) | SHA-256 truncated to 64 bits | — |
-| `serve` | `Bun.serve` | `node:http` + Fetch API adapter | — |
-| `glob` | `Bun.Glob` | `node:fs/promises.glob` | `readdir` for `*.ext` |
-| `isMain(import.meta.url)` | matches `Bun.main` path | compares `process.argv[1]` URL | — |
+## Install
+
+```bash
+bun add @reactive-agents/runtime-shim
+# or: npm install @reactive-agents/runtime-shim
+```
 
 ## Usage
 
@@ -23,31 +20,45 @@ const db = new Database(":memory:");
 db.exec("CREATE TABLE t (id INTEGER)");
 
 const proc = spawn(["echo", "hello"], { stdout: "pipe" });
-const exitCode = await proc.exited;
+await proc.exited;
 
 const key = hash("text").toString(36);
 
-const server = await serve({
-  port: 0,
-  fetch: (req) => new Response("ok"),
-});
+const server = await serve({ port: 0, fetch: () => new Response("ok") });
 
 if (isMain(import.meta.url)) {
-  // running as entry script
+  // running as the entry script
 }
 ```
 
-## Runtime support
+The runtime is detected once at import. Bun uses `Bun.*` and `bun:sqlite`; Node uses `node:*` built-ins.
 
-- Bun ≥ 1.1 (native fast paths)
-- Node.js ≥ 22.5 (real `node:sqlite` persistence + `node:fs.glob`)
-- Node.js ≥ 20 (stub Database, manual glob fallback)
-- Stackblitz WebContainer (Node-based, works with stub or real sqlite depending on Node version)
-- Cloudflare Workers / Deno (subset — Database stub + hash; spawn/serve/fs require runtime-specific shims; out of scope for v0.11)
+## API
 
-## Design notes
+| Export | Use it when |
+|---|---|
+| `Database` | You need SQLite (`bun:sqlite` or `node:sqlite`). |
+| `spawn` | You run a child process. |
+| `writeFile`, `readFile` | You read or write files. |
+| `hash` | You need a 64-bit content hash (`bigint`). Values differ between Bun and Node. |
+| `serve`, `secureServe` | You start an HTTP server. `serve` returns a `Promise`. |
+| `glob` | You match files by pattern. |
+| `isMain`, `isBun`, `isNode` | You branch on entry script or runtime. |
+| `assertPublicUrl`, `resolvePublicUrl`, `fetchPinned`, `PublicUrlError` | You fetch user-supplied URLs with SSRF protection. |
 
-- **Module-load detection.** `isBun` is set once at import time via `typeof globalThis.Bun !== "undefined"`. No per-call runtime check overhead.
-- **Sync require via `createRequire`.** No top-level await — consumers can import synchronously.
-- **API parity surface area is intentionally narrow.** Each primitive exposes only the methods reactive-agents actually uses. Wider Bun APIs (e.g. `Bun.file().stream()`) are not shimmed.
-- **`serve` is the only async primitive.** Returns `Promise<ServerLike>` because `node:http.listen` is async-only. Bun callers wrap in `Promise.resolve` for parity.
+## Limitations
+
+- On Node, `Database` uses `node:sqlite`, which has no FTS5. Search falls back to `LIKE`.
+- Only the methods Reactive Agents uses are shimmed. Wider Bun APIs are not.
+
+## Documentation
+
+- [Installation](https://docs.reactiveagents.dev/guides/installation/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+
+## License
+
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

@@ -1,51 +1,65 @@
 # @reactive-agents/compose
 
-> Prebuilt killswitch compositions for reactive agents.
+> Prebuilt killswitches that stop or terminate a Reactive Agents run when an iteration, token, cost, time, progress or tool-approval limit is crossed.
+
+> **Stability:** stable. Follows the Compose API tier in the [stability policy](https://docs.reactiveagents.dev/reference/stability/); `0.x` minors may still change option shapes, with a CHANGELOG note.
 
 [![npm](https://img.shields.io/npm/v/@reactive-agents/compose?color=CB3837&logo=npm)](https://www.npmjs.com/package/@reactive-agents/compose)
-[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev)
-
-A small library of ready-made **killswitches** — guard rails that abort or terminate a reactive-agent run when a budget, time, iteration, or progress limit is crossed. Each killswitch is a factory that returns a function applied to a `Harness`, hooking into its `before`/`after` phase taps. Useful for putting hard safety bounds on autonomous agents.
+[![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev/reference/compose-api/)
 
 ## Install
+
 ```bash
 bun add @reactive-agents/compose
 # or: npm install @reactive-agents/compose
 ```
 
+The `reactive-agents` facade also exposes these under `reactive-agents/compose/killswitches`.
+
 ## Usage
 
-A killswitch is `(harness: Harness) => void` — it registers phase hooks that return `{ abort, reason }` when their limit is hit:
+Each killswitch is a factory returning `(harness: Harness) => void`. Pass it to the builder's `.compose()`:
 
 ```ts
+import { ReactiveAgents } from "reactive-agents";
 import { maxIterations, budgetLimit, timeoutAfter } from "@reactive-agents/compose";
 
-// Each returns a function that wires hooks onto a Harness
-const stopRunaway = maxIterations(10);                       // stop after 10 think loops
-const capSpend    = budgetLimit({ maxTokens: 50_000 });      // stop when token budget exceeded
-const deadline    = timeoutAfter({ wallClock: "60s" });      // stop after wall-clock limit
-
-// Apply to a harness instance (Harness from @reactive-agents/core)
-stopRunaway(harness);
-capSpend(harness);
-deadline(harness);
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic") // needs ANTHROPIC_API_KEY
+  .compose(maxIterations(10))                      // stop after 10 think loops
+  .compose(budgetLimit({ maxTokens: 50_000 }))     // stop when the token budget is spent
+  .compose(timeoutAfter({ wallClock: "60s" }))     // stop after 60 seconds
+  .build();
 ```
 
-All killswitches accept `onTrigger: 'stop' | 'terminate'` (default `'stop'`) to choose between a graceful stop and a hard terminate.
+Every killswitch takes `onTrigger: "stop" | "terminate"` (default `"stop"`): `stop` ends the run gracefully, `terminate` ends it hard. `requireApprovalFor` uses `onDeny` for the same choice.
 
 ## API
 
-Killswitch factories (also exported from `@reactive-agents/compose/killswitches`):
+| Export | Use it when |
+|---|---|
+| `maxIterations(max \| { max, onTrigger? })` | You want a hard cap on reasoning iterations. |
+| `budgetLimit({ maxTokens?, maxCostUSD?, costPerToken?, onTrigger? })` | You want to stop on token or cost spend. Cost uses the run meter when present, else `costPerToken` (default `0.000001`). |
+| `timeoutAfter({ wallClock, onTrigger? })` | You want a wall-clock deadline (`"60s"`, `"5m"`, `"1h"` or milliseconds). |
+| `watchdog({ noProgressFor, onTrigger? })` | You want to stop a run that makes no progress (no completed tool batch or LLM exchange) for a window. |
+| `requireApprovalFor({ tools, approver, onDeny? })` | Named tools must pass a synchronous `approver` before they run; a denial aborts the run. |
+| `killswitches.list()` | You want the registered killswitch names. |
 
-- `budgetLimit({ maxTokens?, maxCostUSD?, costPerToken?, onTrigger? })` — abort when token/cost budget is exceeded.
-- `maxIterations(max | { max, onTrigger? })` — abort after N reasoning iterations.
-- `timeoutAfter({ wallClock, onTrigger? })` — abort after a wall-clock duration (`'60s'`, `'5m'`, or ms).
-- `watchdog({ noProgressFor, onTrigger? })` — abort when no tool progress is made within a window.
-- `requireApprovalFor({ tools, approver, onDeny? })` — abort when a guarded tool call is denied by the approver.
-- `killswitches.list()` — the registry of available killswitch names.
+Option types: `MaxIterationsOptions`, `BudgetLimitOptions`, `TimeoutAfterOptions`, `WatchdogOptions`, `RequireApprovalForOptions`. The factories are also exported from `@reactive-agents/compose/killswitches`.
 
-Each factory has a matching options type (`BudgetLimitOptions`, `MaxIterationsOptions`, `TimeoutAfterOptions`, `WatchdogOptions`, `RequireApprovalForOptions`).
+## Limitations
 
-## Part of Reactive Agents
+- Limits are checked at phase boundaries (before `think`, before `act`), so a run can overshoot a limit by up to one phase.
+- `requireApprovalFor` approvers are synchronous. For async approval, resolve it before building the killswitch.
 
-This package is part of [Reactive Agents](https://github.com/tylerjrbuell/reactive-agents-ts) — the TypeScript AI agent framework built on Effect-TS. See the [full documentation](https://docs.reactiveagents.dev).
+## Documentation
+
+- [Compose API reference](https://docs.reactiveagents.dev/reference/compose-api/)
+
+## Runtime
+
+Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+
+## License
+
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).
