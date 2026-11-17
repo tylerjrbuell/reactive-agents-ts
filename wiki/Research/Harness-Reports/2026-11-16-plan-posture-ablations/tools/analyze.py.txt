@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Pairwise arm comparison per tier. usage: analyze.py <refTag> <candTag> [model ...]
+tag = '<root>-<arm>-<mode>' (file stem is <tag>-<model with : -> _>.json)."""
+import json, sys, math, random, glob, os
+D = "/home/tylerbuell/campaign-traces/plan-posture/out"
+
+def load(tag, model):
+    p = f"{D}/{tag}-{model.replace(':','_').replace('/','_')}.json"
+    if not os.path.exists(p): return None
+    cells = [c for c in json.load(open(p))["cells"] if not c.get("voided")]
+    # keep latest per cellId
+    d = {}
+    for c in cells: d[c["cellId"]] = c
+    return list(d.values())
+
+def key(c): return (c["taskId"], c["run"])
+
+def stats(cs):
+    ok = [c for c in cs if not c.get("inconclusive")]
+    n = len(ok); k = sum(c["accuracy"] for c in ok)
+    return ok, n, k
+
+def boot_ci(diffs, B=4000):
+    if not diffs: return (float("nan"),) * 2
+    random.seed(1); m = []
+    for _ in range(B): m.append(sum(random.choice(diffs) for _ in diffs) / len(diffs))
+    m.sort(); return m[int(.025 * B)], m[int(.975 * B)]
+
+def compare(ref, cand, model):
+    a, b = load(ref, model), load(cand, model)
+    if a is None or b is None: return {"model": model, "missing": [t for t, x in ((ref, a), (cand, b)) if x is None]}
+    oa, na, ka = stats(a); ob, nb, kb = stats(b)
+    pa, pb = ka / na if na else float("nan"), kb / nb if nb else float("nan")
+    sig = math.sqrt(pa * (1 - pa) / na + pb * (1 - pb) / nb) if na and nb else float("nan")
+    lift = (pb - pa) * 100
+    # paired by (task,run)
+    ia = {key(c): c for c in oa}; ib = {key(c): c for c in ob}
+    common = sorted(set(ia) & set(ib))
+    dcalls = [ib[k]["llmCalls"] - ia[k]["llmCalls"] for k in common]
+    dtok = [(ib[k]["billedTokens"] or 0) - (ia[k]["billedTokens"] or 0) for k in common if ia[k]["billedTokens"] and ib[k]["billedTokens"]]
+    dacc = [ib[k]["accuracy"] - ia[k]["accuracy"] for k in common]
+    mean = lambda x: sum(x) / len(x) if x else float("nan")
+    ca, cb = mean([c["llmCalls"] for c in oa]), mean([c["llmCalls"] for c in ob])
+    ta = mean([c["billedTokens"] for c in oa if c["billedTokens"]]); tb = mean([c["billedTokens"] for c in ob if c["billedTokens"]])
+    runs_per_task = {}
+    for c in ob: runs_per_task[c["taskId"]] = runs_per_task.get(c["taskId"], 0) + 1
+    voided = lambda t: len([c for c in json.load(open(f"{D}/{t}-{model.replace(':','_').replace('/','_')}.json"))["cells"] if c.get("voided")])
+    trig = {}
+    for nm, cs in (("ref", oa), ("cand", ob)):
+        g = {}
+        for c in cs:
+            for gk, gv in c["trace"]["guards"].items(): g[gk] = g.get(gk, 0) + 1
+        trig[nm] = {k: v for k, v in g.items() if any(s in k for s in ("plan", "wrap", "budget", "recon", "refund", "tick"))}
+    per_task = {}
+    for c in oa: per_task.setdefault(c["taskId"], [0, 0, 0, 0]); per_task[c["taskId"]][0] += c["accuracy"]; per_task[c["taskId"]][1] += 1
+    for c in ob: per_task.setdefault(c["taskId"], [0, 0, 0, 0]); per_task[c["taskId"]][2] += c["accuracy"]; per_task[c["taskId"]][3] += 1
+    return {
+        "model": model, "nA": na, "nB": nb, "accA": round(pa, 3), "accB": round(pb, 3), "lift_pp": round(lift, 1), "sigma_pp": round(sig * 100, 1),
+        "z": round(lift / (sig * 100), 2) if sig else None,
+        "callsA": round(ca, 2), "callsB": round(cb, 2), "calls_change_pct": round((cb - ca) / ca * 100, 1) if ca else None,
+        "calls_paired_diff": round(mean(dcalls), 2), "calls_diff_ci95": [round(x, 2) for x in boot_ci(dcalls)],
+        "tokA": round(ta), "tokB": round(tb), "tok_change_pct": round((tb - ta) / ta * 100, 1) if ta else None,
+        "paired_n": len(common), "acc_paired_diff": round(mean(dacc), 3), "min_runs_per_task_B": min(runs_per_task.values()) if runs_per_task else 0,
+        "voidedA": voided(ref), "voidedB": voided(cand), "trigger_guards": trig,
+        "per_task_[A_ok,A_n,B_ok,B_n]": per_task,
+        "timeoutsA": sum(1 for c in oa if c["timedOut"]), "timeoutsB": sum(1 for c in ob if c["timedOut"]),
+    }
+
+if __name__ == "__main__":
+    ref, cand = sys.argv[1], sys.argv[2]
+    models = sys.argv[3:] or ["qwen3:latest", "cogito:14b"]
+    for m in models: print(json.dumps(compare(ref, cand, m), indent=1))

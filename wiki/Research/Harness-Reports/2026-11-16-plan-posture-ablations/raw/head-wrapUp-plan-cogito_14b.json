@@ -1,0 +1,1275 @@
+{
+  "meta": {
+    "arm": "wrapUp",
+    "mode": "plan",
+    "model": "cogito:14b",
+    "root": "/home/tylerbuell/pp-head",
+    "runs": 3,
+    "startedAt": "2026-11-17T07:15:15.394Z",
+    "env": {
+      "RA_WRAPUP_RESERVE": "1"
+    }
+  },
+  "cells": [
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-booking|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6900,
+      "llmCalls": 5,
+      "durationMs": 55843,
+      "planMs": 22455,
+      "planSteps": 7,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The booking has been successfully created for the listing L-105 in Lisbon. This listing meets all the specified criteria",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-coins|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.8,
+      "failedChecks": [
+        "total 33500"
+      ],
+      "billedTokens": 6358,
+      "llmCalls": 5,
+      "durationMs": 33390,
+      "planMs": 9445,
+      "planSteps": 6,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. The portfolio.json file has been created with the following structure:\n\n```jso",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-recon|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6457,
+      "llmCalls": 6,
+      "durationMs": 27521,
+      "planMs": 12567,
+      "planSteps": 6,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's a summary of the steps taken:\n\n1. Read the sites.json file to get all s",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 6,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 3
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-inventory|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "low-stock exact",
+        "totalUnits"
+      ],
+      "billedTokens": 5953,
+      "llmCalls": 5,
+      "durationMs": 32432,
+      "planMs": 10098,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All requirements have been completed successfully:\n\n1. **low-stock.txt** contains SKUs with quantities below 10, sorted ",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-notes6|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 7673,
+      "llmCalls": 5,
+      "durationMs": 42668,
+      "planMs": 8115,
+      "planSteps": 4,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All six files have been processed and the corresponding out-N.txt files have been created with the doubled integers. Her",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-merge|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "merged exact",
+        "changed keys"
+      ],
+      "billedTokens": 6475,
+      "llmCalls": 5,
+      "durationMs": 50177,
+      "planMs": 12657,
+      "planSteps": 7,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All requirements have been completed successfully:\n\n1. Merged the three config files in the specified order (base.json -",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-booking|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.3333333333333333,
+      "failedChecks": [
+        "listing L-105",
+        "total 355"
+      ],
+      "billedTokens": 6719,
+      "llmCalls": 5,
+      "durationMs": 41550,
+      "planMs": 10419,
+      "planSteps": 3,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Let me walk through the process step by step:\n\n1. **Filter Lisbon listings with rating \u2265 4.5 and maxGuests \u2265 2**:\n   - F",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-coins|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.8,
+      "failedChecks": [
+        "total 33500"
+      ],
+      "billedTokens": 6508,
+      "llmCalls": 5,
+      "durationMs": 35449,
+      "planMs": 9843,
+      "planSteps": 6,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All requirements have been completed. The portfolio.json file has been created with the following structure:\n\n```json\n{\n",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-recon|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6397,
+      "llmCalls": 6,
+      "durationMs": 26626,
+      "planMs": 12281,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed. Here's the summary of the steps taken:\n\n1. Read the sites.json file to get all site IDs \u2713\n2",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 6,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 3
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-inventory|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "low-stock exact",
+        "totalUnits"
+      ],
+      "billedTokens": 6007,
+      "llmCalls": 5,
+      "durationMs": 32886,
+      "planMs": 8190,
+      "planSteps": 6,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All requirements have been completed:\n\n1. low-stock.txt contains SKUs with quantities below 10, sorted alphabetically\n2.",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-notes6|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 8952,
+      "llmCalls": 6,
+      "durationMs": 45972,
+      "planMs": 8626,
+      "planSteps": 3,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All six files have been processed and the corresponding output files have been created with the doubled integers. Here's",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 6,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 3,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-merge|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "changed keys"
+      ],
+      "billedTokens": 7423,
+      "llmCalls": 6,
+      "durationMs": 56782,
+      "planMs": 27574,
+      "planSteps": 7,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Let me walk through the steps to complete the task:\n\n1. First, I read all three JSON files into memory:\n   - base.json: ",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 3,
+          "wire-request": 6,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-booking|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6839,
+      "llmCalls": 5,
+      "durationMs": 54273,
+      "planMs": 21555,
+      "planSteps": 6,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Let me address the remaining outstanding requirements:\n\n1. The listings file has been read.\n2. Filtered listings for Lis",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-coins|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.8,
+      "failedChecks": [
+        "total 33500"
+      ],
+      "billedTokens": 6512,
+      "llmCalls": 5,
+      "durationMs": 40402,
+      "planMs": 11086,
+      "planSteps": 6,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All requirements have been completed. The portfolio.json file has been created with the following structure:\n\n```json\n{\n",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-recon|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6285,
+      "llmCalls": 6,
+      "durationMs": 23215,
+      "planMs": 7306,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's a summary of the steps taken:\n\n1. Read the sites.json file to get all s",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 6,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 3
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-inventory|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.75,
+      "failedChecks": [
+        "low-stock exact"
+      ],
+      "billedTokens": 5980,
+      "llmCalls": 5,
+      "durationMs": 33415,
+      "planMs": 9475,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All requirements have been completed successfully:\n\n1. **low-stock.txt**: Contains SKUs with quantities below 10, sorted",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-notes6|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.8333333333333334,
+      "failedChecks": [
+        "out-6=108"
+      ],
+      "billedTokens": 14554,
+      "llmCalls": 6,
+      "durationMs": 92987,
+      "planMs": 8130,
+      "planSteps": 4,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed. All six files (out-1.txt through out-6.txt) have been created in the specified directory, e",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 30,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 6,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|cogito:14b|pp-merge|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "merged exact",
+        "changed keys"
+      ],
+      "billedTokens": 6342,
+      "llmCalls": 5,
+      "durationMs": 42396,
+      "planMs": 10353,
+      "planSteps": 6,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's a summary of what was done:\n\n1. Read base.json, env-prod.json, and env-",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    }
+  ]
+}

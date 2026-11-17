@@ -1,0 +1,1453 @@
+{
+  "meta": {
+    "arm": "wrapUp",
+    "mode": "plan",
+    "model": "qwen3:latest",
+    "root": "/home/tylerbuell/pp-head",
+    "runs": 3,
+    "startedAt": "2026-11-17T06:18:46.630Z",
+    "env": {
+      "RA_WRAPUP_RESERVE": "1"
+    }
+  },
+  "cells": [
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-coins|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 10864,
+      "llmCalls": 5,
+      "durationMs": 58466,
+      "planMs": 20086,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The `portfolio.json` file has been successfully created with the calculated values for each cryptocurrency holding and t",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-inventory|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 10445,
+      "llmCalls": 5,
+      "durationMs": 54799,
+      "planMs": 17344,
+      "planSteps": 3,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The three files have been successfully created in the specified directory:\n\n1. **low-stock.txt**  \n   Contains SKUs with",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-notes6|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "out-1=34",
+        "out-2=84",
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 10546,
+      "llmCalls": 4,
+      "durationMs": 55100,
+      "planMs": 18727,
+      "planSteps": 3,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task requires doubling integers from six files and writing the results to corresponding output files. Here's the cor",
+      "trace": {
+        "files": 2,
+        "llmRequests": 4,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 4,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 4,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 1,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-merge|0",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "changed keys"
+      ],
+      "billedTokens": 20524,
+      "llmCalls": 6,
+      "durationMs": 149169,
+      "planMs": 80218,
+      "planSteps": 9,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been successfully completed. Here's the summary:\n\n1. **Merged Configuration**:  \n   The three JSON files (`",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 3,
+          "wire-request": 6,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-coins|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.8,
+      "failedChecks": [
+        "total 33500"
+      ],
+      "billedTokens": 11259,
+      "llmCalls": 6,
+      "durationMs": 48312,
+      "planMs": 10278,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The `portfolio.json` file has been successfully created with the calculated USD values for each cryptocurrency holding a",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 6,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 3,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-inventory|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "low-stock exact",
+        "totalUnits"
+      ],
+      "billedTokens": 14865,
+      "llmCalls": 6,
+      "durationMs": 115917,
+      "planMs": 15845,
+      "planSteps": 5,
+      "execErr": "Execution timed out after 100000ms \u2014 Execution failed at phase \"think\". Enable .withObservability({ verbosity: \"debug\" }) for detailed logs.",
+      "timedOut": false,
+      "outputHead": "",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 6,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-notes6|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 12230,
+      "llmCalls": 5,
+      "durationMs": 62082,
+      "planMs": 14771,
+      "planSteps": 4,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All six files have been successfully processed. Each `out-N.txt` contains double the integer from its corresponding `not",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-merge|1",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "merged exact"
+      ],
+      "billedTokens": 13152,
+      "llmCalls": 5,
+      "durationMs": 79615,
+      "planMs": 13217,
+      "planSteps": 4,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's the breakdown:\n\n1. **Merged Configuration**:  \n   The three JSON files ",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-coins|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 13094,
+      "llmCalls": 6,
+      "durationMs": 55844,
+      "planMs": 6923,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The `portfolio.json` file has been successfully created with the calculated values based on holdings and prices. Here's ",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 8,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 6,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 3,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-inventory|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 10343,
+      "llmCalls": 5,
+      "durationMs": 53694,
+      "planMs": 18711,
+      "planSteps": 4,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The three files have been successfully created with the required content:\n\n1. **low-stock.txt**  \n   Contains SKUs with ",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-notes6|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "out-1=34",
+        "out-2=84",
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 9943,
+      "llmCalls": 4,
+      "durationMs": 49065,
+      "planMs": 9352,
+      "planSteps": 4,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All six files have been processed successfully. Each `out-N.txt` contains double the integer from its corresponding `not",
+      "trace": {
+        "files": 2,
+        "llmRequests": 4,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 4,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 4,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-merge|2",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "merged exact"
+      ],
+      "billedTokens": 15719,
+      "llmCalls": 5,
+      "durationMs": 106331,
+      "planMs": 14968,
+      "planSteps": 6,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been successfully completed. Here's the summary:\n\n1. **Merged Configuration**:  \n   The three JSON files (`",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-coins|3",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 3,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 13101,
+      "llmCalls": 6,
+      "durationMs": 66950,
+      "planMs": 23876,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The `portfolio.json` file has been successfully created with the calculated USD values for each cryptocurrency holding a",
+      "trace": {
+        "files": 2,
+        "llmRequests": 6,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 6,
+        "surfaces": [
+          "",
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 7,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 3,
+          "wire-request": 6,
+          "exit_gate": 4,
+          "dispatcher_early_stop": 1,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "terminal_status_override": 1,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-inventory|3",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 3,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 9337,
+      "llmCalls": 5,
+      "durationMs": 43443,
+      "planMs": 11200,
+      "planSteps": 4,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The three files have been successfully created in the specified directory:\n\n1. **low-stock.txt**  \n   Contains SKUs with",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-notes6|3",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 3,
+      "accuracy": 0,
+      "fraction": 0.8333333333333334,
+      "failedChecks": [
+        "out-6=108"
+      ],
+      "billedTokens": 15095,
+      "llmCalls": 5,
+      "durationMs": 71169,
+      "planMs": 12510,
+      "planSteps": 4,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All six files have been processed. Each `out-N.txt` contains exactly double the integer from its corresponding `notes-N.",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 24,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 3,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-merge|3",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 3,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "changed keys"
+      ],
+      "billedTokens": 14279,
+      "llmCalls": 5,
+      "durationMs": 122750,
+      "planMs": 22679,
+      "planSteps": 6,
+      "execErr": "Execution timed out after 100000ms \u2014 Execution failed at phase \"think\". Enable .withObservability({ verbosity: \"debug\" }) for detailed logs.",
+      "timedOut": false,
+      "outputHead": "",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-coins|4",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 4,
+      "accuracy": 0,
+      "fraction": 0.8,
+      "failedChecks": [
+        "total 33500"
+      ],
+      "billedTokens": 24579,
+      "llmCalls": 7,
+      "durationMs": 80857,
+      "planMs": 9336,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Okay, let me try to figure out how to solve this problem. The user wants a portfolio.json file that shows the USD value ",
+      "trace": {
+        "files": 2,
+        "llmRequests": 7,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 7,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall",
+          "file-read+file-write+recall",
+          "file-read+file-write+recall",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 25,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 7,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 5,
+          "dispatcher_early_stop": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-inventory|4",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 4,
+      "accuracy": 0,
+      "fraction": 0.75,
+      "failedChecks": [
+        "low-stock exact"
+      ],
+      "billedTokens": 9422,
+      "llmCalls": 5,
+      "durationMs": 43237,
+      "planMs": 8091,
+      "planSteps": 5,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The three required files have been successfully created in the specified directory:\n\n1. **low-stock.txt**  \n   Contains ",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-notes6|4",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 4,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "out-1=34",
+        "out-2=84",
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 8417,
+      "llmCalls": 4,
+      "durationMs": 33946,
+      "planMs": 9314,
+      "planSteps": 4,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All six files have been processed successfully. Each input integer was doubled and written to the corresponding output f",
+      "trace": {
+        "files": 2,
+        "llmRequests": 4,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 4,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 4,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "wrapUp|plan|qwen3:latest|pp-merge|4",
+      "arm": "wrapUp",
+      "mode": "plan",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 4,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "merged exact",
+        "changed keys"
+      ],
+      "billedTokens": 15929,
+      "llmCalls": 5,
+      "durationMs": 107047,
+      "planMs": 13494,
+      "planSteps": 6,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's the summary:\n\n1. **Merged JSON File**:  \n   The merged configuration fi",
+      "trace": {
+        "files": 2,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "",
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "plan",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          },
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": true,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "posture-applied": 2,
+          "wire-request": 5,
+          "exit_gate": 2,
+          "deliverable_decision": 2,
+          "terminal_decision": 2,
+          "plan_budget_raised": 1,
+          "tool_call_extracted": 2
+        },
+        "reconFindings": 0,
+        "catalogLine": true
+      },
+      "inconclusive": false
+    }
+  ]
+}

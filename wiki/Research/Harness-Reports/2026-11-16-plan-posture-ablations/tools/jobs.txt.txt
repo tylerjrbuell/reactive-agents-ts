@@ -1,0 +1,50 @@
+head qwen3:latest noBudget plan 18
+head cogito:14b noBudget plan 18
+head qwen3:latest D@4 plan 12 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge
+head cogito:14b D@4 plan 12 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge
+head qwen3:latest noBudget@4 plan 12 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge
+head cogito:14b noBudget@4 plan 12 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge
+head qwen3:latest wrapUp@4 plan 12 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge
+head cogito:14b wrapUp@4 plan 12 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge
+head qwen3:latest recon plan 18
+head cogito:14b recon plan 18
+wt qwen3:latest D plan 18
+wt cogito:14b D plan 18
+head qwen3:latest wrapUp plan 18
+head cogito:14b wrapUp plan 18
+head qwen3:latest D plan 18
+head cogito:14b D plan 18
+head qwen3:latest noCatalog plan 18
+head cogito:14b noCatalog plan 18
+head qwen3:latest D strategy:blueprint 12 --tasks pp-booking,pp-coins,pp-recon,pp-merge
+head cogito:14b D strategy:blueprint 12 --tasks pp-booking,pp-coins,pp-recon,pp-merge
+wt qwen3:latest D strategy:blueprint 12 --tasks pp-booking,pp-coins,pp-recon,pp-merge
+wt cogito:14b D strategy:blueprint 12 --tasks pp-booking,pp-coins,pp-recon,pp-merge
+head qwen3:latest D strategy:plan-execute-reflect 12 --tasks pp-booking,pp-coins,pp-recon,pp-merge
+head cogito:14b D strategy:plan-execute-reflect 12 --tasks pp-booking,pp-coins,pp-recon,pp-merge
+wt qwen3:latest D strategy:plan-execute-reflect 12 --tasks pp-booking,pp-coins,pp-recon,pp-merge
+wt cogito:14b D strategy:plan-execute-reflect 12 --tasks pp-booking,pp-coins,pp-recon,pp-merge
+head qwen3:latest lean plan 18
+head cogito:14b lean plan 18
+head qwen3:latest answerTurn plan 18
+head cogito:14b answerTurn plan 18
+head qwen3:latest D strategy:blueprint 18 --tasks pp-inventory,pp-notes6
+head cogito:14b D strategy:blueprint 18 --tasks pp-inventory,pp-notes6
+wt qwen3:latest D strategy:blueprint 18 --tasks pp-inventory,pp-notes6
+wt cogito:14b D strategy:blueprint 18 --tasks pp-inventory,pp-notes6
+head qwen3:latest D strategy:plan-execute-reflect 18 --tasks pp-inventory,pp-notes6
+head cogito:14b D strategy:plan-execute-reflect 18 --tasks pp-inventory,pp-notes6
+wt qwen3:latest D strategy:plan-execute-reflect 18 --tasks pp-inventory,pp-notes6
+wt cogito:14b D strategy:plan-execute-reflect 18 --tasks pp-inventory,pp-notes6
+head qwen3:latest D direct 18
+head cogito:14b D direct 18
+head qwen3:latest D plan 24 --tasks pp-recon --runs 9
+head qwen3:latest recon plan 24 --tasks pp-recon --runs 9
+head cogito:14b D plan 24 --tasks pp-recon --runs 9
+head cogito:14b recon plan 24 --tasks pp-recon --runs 9
+head qwen3:latest D@4 plan 24 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge --runs 6
+head cogito:14b D@4 plan 24 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge --runs 6
+head qwen3:latest noBudget@4 plan 24 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge --runs 6
+head cogito:14b noBudget@4 plan 24 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge --runs 6
+head qwen3:latest wrapUp@4 plan 24 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge --runs 6
+head cogito:14b wrapUp@4 plan 24 --tasks pp-notes6,pp-coins,pp-inventory,pp-merge --runs 6

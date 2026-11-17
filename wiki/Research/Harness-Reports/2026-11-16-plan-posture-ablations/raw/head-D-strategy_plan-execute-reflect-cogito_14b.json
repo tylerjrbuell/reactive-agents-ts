@@ -1,0 +1,788 @@
+{
+  "meta": {
+    "arm": "D",
+    "mode": "strategy:plan-execute-reflect",
+    "model": "cogito:14b",
+    "root": "/home/tylerbuell/pp-head",
+    "runs": 3,
+    "startedAt": "2026-11-17T08:11:10.509Z",
+    "env": {}
+  },
+  "cells": [
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-booking|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.6666666666666666,
+      "failedChecks": [
+        "total 355"
+      ],
+      "billedTokens": 6889,
+      "llmCalls": 5,
+      "durationMs": 38947,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "A booking has been made for a 3-night stay in Lisbon for 2 guests. The selected listing (L-105) meets the minimum requir",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-coins|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.2,
+      "failedChecks": [
+        "ETH 6000",
+        "SOL 2000",
+        "ADA 500",
+        "total 33500"
+      ],
+      "billedTokens": 3351,
+      "llmCalls": 3,
+      "durationMs": 24260,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The portfolio has been successfully calculated and written to portfolio.json. The holdings and their USD values are:\n\n- ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-recon|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "has 15432"
+      ],
+      "billedTokens": 17837,
+      "llmCalls": 10,
+      "durationMs": 100133,
+      "planMs": 0,
+      "planSteps": -1,
+      "execErr": "Execution timed out after 100000ms \u2014 Execution failed at phase \"think\". Enable .withObservability({ verbosity: \"debug\" }) for detailed logs.",
+      "timedOut": false,
+      "outputHead": "",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": null,
+        "toolCalls": 9,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {},
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-merge|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "changed keys"
+      ],
+      "billedTokens": 4271,
+      "llmCalls": 4,
+      "durationMs": 43407,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The three configuration files have been successfully merged into a single file at /home/tylerbuell/campaign-traces/plan-",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-booking|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.6666666666666666,
+      "failedChecks": [
+        "total 355"
+      ],
+      "billedTokens": 6738,
+      "llmCalls": 5,
+      "durationMs": 33198,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "A booking has been made for a 3-night stay in Lisbon for 2 guests. The selected listing (L-105) has a nightly rate of $1",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-coins|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.2,
+      "failedChecks": [
+        "ETH 6000",
+        "SOL 2000",
+        "ADA 500",
+        "total 33500"
+      ],
+      "billedTokens": 3358,
+      "llmCalls": 3,
+      "durationMs": 24729,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The portfolio has been successfully calculated and written to portfolio.json. Here are the current holdings and their US",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-recon|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "has 15432"
+      ],
+      "billedTokens": 19003,
+      "llmCalls": 11,
+      "durationMs": 100139,
+      "planMs": 0,
+      "planSteps": -1,
+      "execErr": "Execution timed out after 100000ms \u2014 Execution failed at phase \"think\". Enable .withObservability({ verbosity: \"debug\" }) for detailed logs.",
+      "timedOut": false,
+      "outputHead": "",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": null,
+        "toolCalls": 10,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {},
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-merge|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "changed keys"
+      ],
+      "billedTokens": 4221,
+      "llmCalls": 4,
+      "durationMs": 38528,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. The merged configuration file has been written to merged.json, and the changed",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-booking|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.6666666666666666,
+      "failedChecks": [
+        "total 355"
+      ],
+      "billedTokens": 6892,
+      "llmCalls": 5,
+      "durationMs": 31394,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The booking has been completed for a 3-night stay in Lisbon at listing L-105. The total cost is $405, which includes the",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-coins|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.8,
+      "failedChecks": [
+        "total 33500"
+      ],
+      "billedTokens": 3803,
+      "llmCalls": 3,
+      "durationMs": 37967,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The portfolio.json file has been created with the following values:\n\n- BTC: $25,000\n- ETH: $6,000\n- SOL: $2,000\n- ADA: $",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-inventory|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "low-stock exact",
+        "totalUnits"
+      ],
+      "billedTokens": 4957,
+      "llmCalls": 5,
+      "durationMs": 44482,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Task completed successfully. Three files have been created in the specified directory:\n\n1. low-stock.txt: Contains SKUs ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-notes6|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.3333333333333333,
+      "failedChecks": [
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 8783,
+      "llmCalls": 7,
+      "durationMs": 100156,
+      "planMs": 0,
+      "planSteps": -1,
+      "execErr": "Execution timed out after 100000ms \u2014 Execution failed at phase \"think\". Enable .withObservability({ verbosity: \"debug\" }) for detailed logs.",
+      "timedOut": false,
+      "outputHead": "",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": null,
+        "toolCalls": 13,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {},
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-inventory|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "low-stock exact",
+        "totalUnits"
+      ],
+      "billedTokens": 4813,
+      "llmCalls": 5,
+      "durationMs": 56801,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully in the specified working directory. Here's a summary of the results:\n\n1. **low-",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-notes6|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.8333333333333334,
+      "failedChecks": [
+        "out-4=126"
+      ],
+      "billedTokens": 7144,
+      "llmCalls": 8,
+      "durationMs": 81987,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. All six files (out-1.txt through out-6.txt) were created in the specified dire",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-inventory|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "low-stock exact",
+        "totalUnits"
+      ],
+      "billedTokens": 5108,
+      "llmCalls": 5,
+      "durationMs": 41733,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully with the following files created:\n\n1. **low-stock.txt**: Contains SKUs with qua",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|cogito:14b|pp-notes6|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.6666666666666666,
+      "failedChecks": [
+        "out-4=126",
+        "out-5=58"
+      ],
+      "billedTokens": 6977,
+      "llmCalls": 8,
+      "durationMs": 75832,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. For each of the six input files (notes-1.txt through notes-6.txt), correspondi",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    }
+  ]
+}

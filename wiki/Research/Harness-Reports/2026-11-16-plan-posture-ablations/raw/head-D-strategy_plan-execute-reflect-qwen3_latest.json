@@ -1,0 +1,863 @@
+{
+  "meta": {
+    "arm": "D",
+    "mode": "strategy:plan-execute-reflect",
+    "model": "qwen3:latest",
+    "root": "/home/tylerbuell/pp-head",
+    "runs": 3,
+    "startedAt": "2026-11-17T08:05:55.879Z",
+    "env": {}
+  },
+  "cells": [
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-booking|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6949,
+      "llmCalls": 4,
+      "durationMs": 29789,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The booking for a 3-night stay in Lisbon for 2 guests has been finalized. The selected listing, **L-105**, meets all cri",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-coins|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4952,
+      "llmCalls": 3,
+      "durationMs": 20983,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "{\n  \"BTC\": 25000,\n  \"ETH\": 6000,\n  \"SOL\": 2000,\n  \"ADA\": 500,\n  \"total\": 33500\n}",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-recon|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4728,
+      "llmCalls": 4,
+      "durationMs": 13999,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The site \"Harbor Cafe\" had **15,432 monthly visits**.  \n\n**Report generated successfully.**",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-merge|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 5799,
+      "llmCalls": 4,
+      "durationMs": 24119,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The merged configuration file `merged.json` has been successfully written to the working directory. The file contains th",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-booking|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 11465,
+      "llmCalls": 6,
+      "durationMs": 32001,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "[\n  {\n    \"id\": \"L-101\",\n    \"city\": \"Lisbon\",\n    \"nightly\": 95,\n    \"cleaningFee\": 20,\n    \"rating\": 4.2,\n    \"maxGues",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "plan-ref-normalized": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-coins|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4726,
+      "llmCalls": 3,
+      "durationMs": 18689,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The portfolio.json file has been successfully created with the following data:\n\n{\n  \"BTC\": 25000,\n  \"ETH\": 6000,\n  \"SOL\"",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-recon|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 12687,
+      "llmCalls": 7,
+      "durationMs": 55302,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "[\n  {\n    \"id\": \"s-14\",\n    \"name\": \"Alder Books\"\n  },\n  {\n    \"id\": \"s-17\",\n    \"name\": \"Harbor Cafe\"\n  },\n  {\n    \"id\"",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-merge|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6283,
+      "llmCalls": 4,
+      "durationMs": 29390,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The merged configuration file `merged.json` has been successfully written to the working directory. The following keys d",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-booking|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 5489,
+      "llmCalls": 3,
+      "durationMs": 19467,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The booking for Lisbon has been finalized. The selected listing (L-105) meets all criteria:  \n- **City**: Lisbon  \n- **N",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-coins|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4619,
+      "llmCalls": 3,
+      "durationMs": 17608,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "{\n  \"BTC\": 25000,\n  \"ETH\": 6000,\n  \"SOL\": 2000,\n  \"ADA\": 500,\n  \"total\": 33500\n}",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-recon|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 8551,
+      "llmCalls": 6,
+      "durationMs": 24945,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The report has been generated and saved to `/home/tylerbuell/campaign-traces/plan-posture/work/3845456-pp-recon-2/report",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-merge|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6040,
+      "llmCalls": 4,
+      "durationMs": 26662,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The merged configuration file `merged.json` has been successfully written to the working directory. The file `changed-ke",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-inventory|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 8508,
+      "llmCalls": 5,
+      "durationMs": 49520,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "**low-stock.txt**  \nSKU-A1  \nSKU-C3  \nSKU-E5  \nSKU-G7  \n\n**totals.json**  \n{\"totalUnits\": 140, \"skuCount\": 10}  \n\n**summ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-notes6|0",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "out-1=34",
+        "out-2=84",
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 4532,
+      "llmCalls": 2,
+      "durationMs": 24778,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The following files have been created with the doubled integers from their corresponding input files:\n\n- **out-1.txt**: ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-inventory|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 7359,
+      "llmCalls": 5,
+      "durationMs": 33812,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "**low-stock.txt**  \nSKU-A1  \nSKU-C3  \nSKU-E5  \nSKU-G7  \n\n**totals.json**  \n{\"totalUnits\": 140, \"skuCount\": 10}  \n\n**summ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-notes6|1",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "out-1=34",
+        "out-2=84",
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 5659,
+      "llmCalls": 2,
+      "durationMs": 35724,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "out-1.txt: 34  \nout-2.txt: 84  \nout-3.txt: 16  \nout-4.txt: 126  \nout-5.txt: 58  \nout-6.txt: 108",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-inventory|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 9357,
+      "llmCalls": 5,
+      "durationMs": 53151,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "**low-stock.txt**  \nSKU-A1  \nSKU-C3  \nSKU-E5  \nSKU-G7  \n\n**totals.json**  \n{\"totalUnits\": 140, \"skuCount\": 10}  \n\n**summ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:plan-execute-reflect|qwen3:latest|pp-notes6|2",
+      "arm": "D",
+      "mode": "strategy:plan-execute-reflect",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "out-1=34",
+        "out-2=84",
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 4389,
+      "llmCalls": 2,
+      "durationMs": 23268,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Here are the results for each file:\n\n- **out-1.txt**: 34  \n- **out-2.txt**: 84  \n- **out-3.txt**: 16  \n- **out-4.txt**: ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    }
+  ]
+}

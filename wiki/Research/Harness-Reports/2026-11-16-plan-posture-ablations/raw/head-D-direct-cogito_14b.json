@@ -1,0 +1,1049 @@
+{
+  "meta": {
+    "arm": "D",
+    "mode": "direct",
+    "model": "cogito:14b",
+    "root": "/home/tylerbuell/pp-head",
+    "runs": 3,
+    "startedAt": "2026-11-17T09:50:26.612Z",
+    "env": {}
+  },
+  "cells": [
+    {
+      "cellId": "D|direct|cogito:14b|pp-booking|0",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4022,
+      "llmCalls": 3,
+      "durationMs": 30392,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The booking has been completed successfully. The chosen listing (L-105) meets all the criteria: it's in Lisbon, has a ra",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-coins|0",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.8,
+      "failedChecks": [
+        "total 33500"
+      ],
+      "billedTokens": 3868,
+      "llmCalls": 3,
+      "durationMs": 19662,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The portfolio.json file has been successfully created with the following contents:\n\n```json\n{\n  \"BTC\": 25000,\n  \"ETH\": 6",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-recon|0",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 3943,
+      "llmCalls": 4,
+      "durationMs": 9385,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The report has been successfully created at /home/tylerbuell/campaign-traces/plan-posture/work/555937-pp-recon-0/report.",
+      "trace": {
+        "files": 1,
+        "llmRequests": 4,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 4,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 4,
+          "tool_call_extracted": 3,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-inventory|0",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "low-stock exact",
+        "totalUnits"
+      ],
+      "billedTokens": 3472,
+      "llmCalls": 3,
+      "durationMs": 19256,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's a summary of the actions taken:\n\n1. **low-stock.txt**: Created with the",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-notes6|0",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4941,
+      "llmCalls": 3,
+      "durationMs": 31073,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All six files have been processed and their doubled values have been written to the corresponding out-N.txt files. The r",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-merge|0",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "merged exact"
+      ],
+      "billedTokens": 3871,
+      "llmCalls": 3,
+      "durationMs": 29176,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's a summary of what was done:\n\n1. The three configuration files were merg",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-booking|1",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 3926,
+      "llmCalls": 3,
+      "durationMs": 19497,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The booking has been completed successfully. Here are the details:\n\n- Listing ID: L-105\n- Location: Lisbon\n- Rating: 4.5",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-coins|1",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.8,
+      "failedChecks": [
+        "total 33500"
+      ],
+      "billedTokens": 3765,
+      "llmCalls": 3,
+      "durationMs": 19296,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The portfolio.json file has been successfully created with the following structure:\n\n```json\n{\n  \"BTC\": 25000,\n  \"ETH\": ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-recon|1",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 3969,
+      "llmCalls": 4,
+      "durationMs": 10194,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The report has been generated successfully. The monthly visits for the site \"Harbor Cafe\" (site ID: s-17) are 15,432. Th",
+      "trace": {
+        "files": 1,
+        "llmRequests": 4,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 4,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 4,
+          "tool_call_extracted": 3,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-inventory|1",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "low-stock exact",
+        "totalUnits"
+      ],
+      "billedTokens": 3400,
+      "llmCalls": 3,
+      "durationMs": 18252,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's a summary of the actions taken:\n\n1. **low-stock.txt** was created, cont",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-notes6|1",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4922,
+      "llmCalls": 3,
+      "durationMs": 30648,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All six files have been processed and the corresponding out-N.txt files have been created with the doubled integers:\n\n- ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-merge|1",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "changed keys"
+      ],
+      "billedTokens": 3732,
+      "llmCalls": 3,
+      "durationMs": 21674,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully:\n\n1. The three config files were merged in the specified order (base.json, env-",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-booking|2",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-booking",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 3916,
+      "llmCalls": 3,
+      "durationMs": 18713,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The booking has been successfully created. Here are the details:\n\n- **Listing ID**: L-105\n- **Location**: Lisbon\n- **Nig",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-coins|2",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-coins",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.8,
+      "failedChecks": [
+        "total 33500"
+      ],
+      "billedTokens": 3782,
+      "llmCalls": 3,
+      "durationMs": 19370,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The portfolio.json file has been successfully created with the following values:\n\n- BTC: $25,000 (0.5 BTC * $50,000/USD)",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-recon|2",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-recon",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 3942,
+      "llmCalls": 4,
+      "durationMs": 9397,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The report has been successfully created at /home/tylerbuell/campaign-traces/plan-posture/work/555937-pp-recon-2/report.",
+      "trace": {
+        "files": 1,
+        "llmRequests": 4,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 4,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 4,
+          "tool_call_extracted": 3,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-inventory|2",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-inventory",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0.5,
+      "failedChecks": [
+        "low-stock exact",
+        "totalUnits"
+      ],
+      "billedTokens": 3463,
+      "llmCalls": 3,
+      "durationMs": 19610,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The three files have been successfully created in the specified directory:\n\n1. **low-stock.txt**: Contains the SKUs with",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-notes6|2",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-notes6",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 7318,
+      "llmCalls": 5,
+      "durationMs": 30542,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "All six files have been processed and the corresponding out-N.txt files have been created with the doubled integers:\n\n- ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 5,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 5,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 5,
+          "tool_call_extracted": 4,
+          "exit_gate": 2,
+          "dispatcher_early_stop": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|direct|cogito:14b|pp-merge|2",
+      "arm": "D",
+      "mode": "direct",
+      "model": "cogito:14b",
+      "root": "/home/tylerbuell/pp-head",
+      "taskId": "pp-merge",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "merged exact",
+        "changed keys"
+      ],
+      "billedTokens": 3868,
+      "llmCalls": 3,
+      "durationMs": 27077,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's a summary of what was done:\n\n1. Merged the three configuration files in",
+      "trace": {
+        "files": 1,
+        "llmRequests": 3,
+        "numCtx": [
+          32768
+        ],
+        "iterations": 3,
+        "surfaces": [
+          "file-read+file-write",
+          "file-read+file-write+recall+final-answer",
+          "file-read+file-write+recall+final-answer"
+        ],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "wire-request": 3,
+          "tool_call_extracted": 2,
+          "exit_gate": 1,
+          "deliverable_decision": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+#!/bin/bash
+# usage: sched.sh <jobs-file> <deadline HH:MM next-day or today epoch>   jobs-file lines: root model arm mode want-cells [extra args]
+# Round-robin over jobs, one <=590s invocation each per pass, until all jobs have >= want non-voided cells or the deadline passes.
+D=/home/tylerbuell/campaign-traces/plan-posture
+jobs=$1; deadline=$2
+done_count() { # root model arm mode
+  local n=${2//[\/:]/_}; local m=${4//[:\/]/_}; local f=$D/out/$1-$3-$m-$n.json
+  [ -f $f ] && python3 -c "
+import json;d={}
+for c in json.load(open('$f'))['cells']:
+    if not c.get('voided'): d[c['cellId']]=1
+print(len(d))" || echo 0
+}
+while :; do
+  all=1
+  while read -r root model arm mode want extra; do
+    [ -z "$root" ] && continue
+    [[ "$root" == \#* ]] && continue
+    have=$(done_count $root $model $arm $mode)
+    [ "$have" -ge "$want" ] && continue
+    all=0
+    if [ "$(date +%s)" -ge "$deadline" ]; then echo "DEADLINE reached"; exit 0; fi
+    if [ -f $D/STOP ]; then echo "STOP file"; exit 0; fi
+    $D/run.sh $root $model $arm $mode $extra --runs 3
+  done < $jobs
+  [ $all = 1 ] && { echo "ALL JOBS COMPLETE"; exit 0; }
+done

@@ -1,0 +1,51 @@
+== NOISE CONTROL: accuracy (runs 0-2, 6 tasks) per natural-family arm; noBudget/wrapUp are null-equivalent where trigger rate ~0
+qwen3:latest {'D': '12/18', 'noCatalog': '11/18', 'noBudget': '12/18', 'wrapUp': '13/17', 'recon': '7/12', 'lean': '10/18', 'answerTurn': '11/18'} wt-D: 11/18
+cogito:14b {'D': '10/18', 'noCatalog': '8/18', 'noBudget': '8/18', 'wrapUp': '7/18', 'recon': '8/13', 'lean': '8/18', 'answerTurn': '8/13'} wt-D: 8/18
+== M1 planToolCatalog (ref=catalog OFF, cand=D ON)  [lift = ON minus OFF]
+catalog on vs off                qwen3:latest  n=18/18 acc 0.61->0.67 lift +5.6pp sigma 16.0 z=0.35 | calls 5.17->5.44 (+5.4%, paired 0.28 ci95 [-0.39, 1.11]) | billed tok 10816->12000 (+10.9%) | timeouts 0/0 voided 0/3
+catalog on vs off                cogito:14b    n=18/18 acc 0.44->0.56 lift +11.1pp sigma 16.6 z=0.67 | calls 5.06->5.39 (+6.6%, paired 0.33 ci95 [-0.06, 0.89]) | billed tok 6396->6908 (+8.0%) | timeouts 0/0 voided 0/0
+== M2 planBudget natural family (ref=OFF, cand=D ON)
+budget on vs off natural         qwen3:latest  n=18/18 acc 0.67->0.67 lift +0.0pp sigma 15.7 z=0.0 | calls 5.11->5.44 (+6.5%, paired 0.33 ci95 [-0.17, 1.11]) | billed tok 11352->12000 (+5.7%) | timeouts 0/0 voided 0/3
+budget on vs off natural         cogito:14b    n=18/18 acc 0.44->0.56 lift +11.1pp sigma 16.6 z=0.67 | calls 5.28->5.39 (+2.1%, paired 0.11 ci95 [-0.17, 0.39]) | billed tok 6739->6908 (+2.5%) | timeouts 0/0 voided 0/0
+   trigger rate plan_budget_raised, D natural: {'qwen3:latest': (0.11, 18), 'cogito:14b': (0.11, 18)}
+== M2 planBudget tight (maxIter 4) (ref=OFF, cand=ON)
+budget on vs off tight           qwen3:latest  n=17/16 acc 0.41->0.38 lift -3.7pp sigma 17.0 z=-0.22 | calls 4.12->4.81 (+16.9%, paired 0.75 ci95 [0.44, 1.0]) | billed tok 9620->11049 (+14.9%) | timeouts 0/0 voided 0/0
+budget on vs off tight           cogito:14b    n=24/24 acc 0.29->0.25 lift -4.2pp sigma 12.8 z=-0.33 | calls 4.04->5.21 (+28.9%, paired 1.17 ci95 [1.0, 1.38]) | billed tok 5037->6852 (+36.0%) | timeouts 0/0 voided 0/0
+   trigger rate plan_budget_raised, D@4: {'qwen3:latest': (1.0, 16), 'cogito:14b': (1.0, 24)}
+   tight-family accuracy by arm: {'qwen3:latest': {'D': '6/16', 'noBudget': '7/17', 'wrapUp': '7/20'}, 'cogito:14b': {'D': '6/24', 'noBudget': '7/24', 'wrapUp': '6/24'}}
+== M3 wrapUp natural (ref=D, cand=wrapUp)
+wrapUp on vs D natural           qwen3:latest  n=18/17 acc 0.67->0.77 lift +9.8pp sigma 15.1 z=0.65 | calls 5.44->5.24 (-3.8%, paired -0.24 ci95 [-1.12, 0.35]) | billed tok 12000->10889 (-9.3%) | timeouts 0/0 voided 3/0
+wrapUp on vs D natural           cogito:14b    n=18/18 acc 0.56->0.39 lift -16.7pp sigma 16.4 z=-1.02 | calls 5.39->5.33 (-1.0%, paired -0.06 ci95 [-0.33, 0.22]) | billed tok 6908->7130 (+3.2%) | timeouts 0/0 voided 0/0
+== M3 wrapUp tight (ref=D@4, cand=wrapUp@4)
+wrapUp on vs D tight             qwen3:latest  n=16/20 acc 0.38->0.35 lift -2.5pp sigma 16.1 z=-0.15 | calls 4.81->5.2 (+8.1%, paired 0.38 ci95 [-0.06, 0.88]) | billed tok 11049->13157 (+19.1%) | timeouts 0/0 voided 0/0
+wrapUp on vs D tight             cogito:14b    n=24/24 acc 0.25->0.25 lift +0.0pp sigma 12.5 z=0.0 | calls 5.21->5.12 (-1.6%, paired -0.08 ci95 [-0.33, 0.12]) | billed tok 6852->6795 (-0.8%) | timeouts 0/0 voided 0/0
+   non-routine guards fired in wrapUp arms:
+   head-wrapUp-plan qwen3:latest {'terminal_status_override': 1, 'loop_guidance': 1, 'dispatcher_early_stop': 4, 'plan_budget_raised': 1}
+   head-wrapUp-plan cogito:14b {'dispatcher_early_stop': 3}
+   head-wrapUp@4-plan qwen3:latest {'plan_budget_raised': 20, 'dispatcher_early_stop': 11, 'terminal_status_override': 1}
+   head-wrapUp@4-plan cogito:14b {'plan_budget_raised': 24, 'dispatcher_early_stop': 8, 'terminal_status_override': 2}
+== M4 recon (ref=D, cand=recon): pp-recon only (runs 0-8) and all tasks (runs 0-2)
+recon on vs D (pp-recon)         qwen3:latest  n=9/9 acc 1.00->1.00 lift +0.0pp sigma 0.0 z=None | calls 6.0->6.33 (+5.6%, paired 0.33 ci95 [0.0, 0.89]) | billed tok 8510->9175 (+7.8%) | timeouts 0/0 voided 3/0
+recon on vs D (pp-recon)         cogito:14b    n=9/9 acc 1.00->1.00 lift +0.0pp sigma 0.0 z=None | calls 6.11->6.56 (+7.3%, paired 0.44 ci95 [0.11, 0.78]) | billed tok 6427->7085 (+10.2%) | timeouts 0/0 voided 0/0
+recon on vs D (all 6 tasks)      qwen3:latest  n=18/12 acc 0.67->0.58 lift -8.3pp sigma 18.1 z=-0.46 | calls 5.44->5.25 (-3.6%, paired -0.42 ci95 [-1.75, 0.75]) | billed tok 12000->9994 (-16.7%) | timeouts 0/0 voided 3/0
+recon on vs D (all 6 tasks)      cogito:14b    n=18/13 acc 0.56->0.61 lift +6.0pp sigma 17.9 z=0.33 | calls 5.39->5.46 (+1.3%, paired 0.08 ci95 [-0.15, 0.31]) | billed tok 6908->7021 (+1.6%) | timeouts 0/0 voided 0/0
+   recon arm qwen3:latest cells 18 cells with plan-finding 18 cells with bookkeeping_refund 18
+   recon arm cogito:14b cells 19 cells with plan-finding 6 cells with bookkeeping_refund 6
+== M5 levers (ref=D, cand=arm)
+lean vs D                        qwen3:latest  n=18/18 acc 0.67->0.56 lift -11.1pp sigma 16.1 z=-0.69 | calls 5.44->6.22 (+14.3%, paired 0.78 ci95 [-0.17, 1.78]) | billed tok 12000->11200 (-6.7%) | timeouts 0/0 voided 3/0
+lean vs D                        cogito:14b    n=18/18 acc 0.56->0.44 lift -11.1pp sigma 16.6 z=-0.67 | calls 5.39->5.28 (-2.1%, paired -0.11 ci95 [-0.33, 0.11]) | billed tok 6908->6773 (-2.0%) | timeouts 0/0 voided 0/0
+answerTurn vs D                  qwen3:latest  n=18/18 acc 0.67->0.61 lift -5.6pp sigma 16.0 z=-0.35 | calls 5.44->5.17 (-5.1%, paired -0.28 ci95 [-1.17, 0.39]) | billed tok 12000->10672 (-11.1%) | timeouts 0/0 voided 3/0
+answerTurn vs D                  cogito:14b    n=18/13 acc 0.56->0.61 lift +6.0pp sigma 17.9 z=0.33 | calls 5.39->5.15 (-4.4%, paired -0.23 ci95 [-0.46, 0.0]) | billed tok 6908->6470 (-6.4%) | timeouts 0/0 voided 0/0
+== M6 substrate (ref=HEAD, cand=HEAD+snapshot)
+plan posture: wt vs head         qwen3:latest  n=18/18 acc 0.67->0.61 lift -5.6pp sigma 16.0 z=-0.35 | calls 5.44->4.94 (-9.2%, paired -0.5 ci95 [-1.17, -0.06]) | billed tok 12000->10149 (-15.4%) | timeouts 0/0 voided 3/0
+plan posture: wt vs head         cogito:14b    n=18/18 acc 0.56->0.44 lift -11.1pp sigma 16.6 z=-0.67 | calls 5.39->5.28 (-2.1%, paired -0.11 ci95 [-0.33, 0.11]) | billed tok 6908->6804 (-1.5%) | timeouts 0/0 voided 0/0
+strategy blueprint: wt vs head   qwen3:latest  n=18/18 acc 0.67->0.72 lift +5.6pp sigma 15.3 z=0.36 | calls 3.56->3.61 (+1.6%, paired 0.06 ci95 [0.0, 0.17]) | billed tok 6258->6160 (-1.6%) | timeouts 0/0 voided 0/0
+strategy blueprint: wt vs head   cogito:14b    n=18/18 acc 0.06->0.17 lift +11.1pp sigma 10.3 z=1.08 | calls 4.11->4.28 (+4.1%, paired 0.17 ci95 [-0.06, 0.44]) | billed tok 4938->5355 (+8.5%) | timeouts 0/0 voided 0/0
+strategy plan-execute-reflect: wt vs head qwen3:latest  n=18/18 acc 0.83->0.83 lift +0.0pp sigma 12.4 z=0.0 | calls 4.0->4.17 (+4.2%, paired 0.17 ci95 [-0.5, 0.89]) | billed tok 6783->7254 (+6.9%) | timeouts 0/0 voided 0/0
+strategy plan-execute-reflect: wt vs head cogito:14b    n=16/18 acc 0.00->0.00 lift +0.0pp sigma 0.0 z=None | calls 5.69->5.44 (-4.3%, paired 0.0 ci95 [-0.62, 0.62]) | billed tok 7134->7033 (-1.4%) | timeouts 0/0 voided 0/0
+== M0 plan posture vs direct (ref=direct, cand=plan)
+plan->execute vs direct run      qwen3:latest  n=16/18 acc 0.69->0.67 lift -2.1pp sigma 16.1 z=-0.13 | calls 3.06->5.44 (+77.8%, paired 2.5 ci95 [1.94, 3.38]) | billed tok 6143->12000 (+95.3%) | timeouts 0/0 voided 0/3
+plan->execute vs direct run      cogito:14b    n=18/18 acc 0.50->0.56 lift +5.6pp sigma 16.6 z=0.33 | calls 3.28->5.39 (+64.4%, paired 2.11 ci95 [1.78, 2.39]) | billed tok 4118->6908 (+67.8%) | timeouts 0/0 voided 0/0
+== M3 wrapUp with planBudget OFF, tight (ref=noBudget@4, cand=nbWrapUp@4), runs 0-2
+wrapUp on (budget off) tight     qwen3:latest  n=12/12 acc 0.33->0.50 lift +16.7pp sigma 19.8 z=0.84 | calls 4.08->4.17 (+2.0%, paired 0.08 ci95 [0.0, 0.25]) | billed tok 9714->9576 (-1.4%) | timeouts 0/0 voided 0/0
+wrapUp on (budget off) tight     cogito:14b    n=12/12 acc 0.25->0.33 lift +8.3pp sigma 18.5 z=0.45 | calls 4.0->4.0 (+0.0%, paired 0.0 ci95 [0.0, 0.0]) | billed tok 5059->5006 (-1.1%) | timeouts 0/0 voided 0/0

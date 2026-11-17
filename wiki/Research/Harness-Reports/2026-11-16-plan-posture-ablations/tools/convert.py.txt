@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""Build a bench-session-shaped report for `rax eval gate`.
+usage: [MAXRUN=3] [TASKS=a,b] convert.py <out.json> <variantId=tag> [<variantId=tag> ...]   (tag as in analyze.py: '<root>-<arm>-<mode>')
+Voided cells are dropped; inconclusive cells are kept with scoreState=inconclusive. MAXRUN keeps runs < MAXRUN; TASKS restricts tasks."""
+import json, sys, os
+D = "/home/tylerbuell/campaign-traces/plan-posture/out"
+out = sys.argv[1]; pairs = [a.split("=", 1) for a in sys.argv[2:]]
+MAXRUN = int(os.environ.get("MAXRUN", "99")); TASKS = os.environ.get("TASKS"); TASKS = TASKS.split(",") if TASKS else None
+MODELS = ["qwen3:latest", "cogito:14b"]
+mean = lambda x: sum(x) / len(x) if x else 0.0
+reports = []
+for vid, tag in pairs:
+    for m in MODELS:
+        p = f"{D}/{tag}-{m.replace(':','_')}.json"
+        if not os.path.exists(p): continue
+        by = {}; d = {}
+        for c in json.load(open(p))["cells"]:
+            if c.get("voided") or c["run"] >= MAXRUN or (TASKS and c["taskId"] not in TASKS): continue
+            d[c["cellId"]] = c
+        for c in d.values(): by.setdefault(c["taskId"], []).append(c)
+        for t, cs in by.items():
+            cs = sorted(cs, key=lambda x: x["run"])
+            accs = [c["accuracy"] for c in cs]; mu = mean(accs)
+            tok = [c["billedTokens"] or 0 for c in cs]
+            runs = [{"runIndex": i, "dimensions": [{"dimension": "accuracy", "score": c["accuracy"], **({"scoreState": "inconclusive"} if c.get("inconclusive") else {})}],
+                     "tokensUsed": tok[i], "billedTokens": tok[i], "durationMs": c["durationMs"], "status": "error" if c.get("inconclusive") else "pass", "output": ""} for i, c in enumerate(cs)]
+            reports.append({"taskId": t, "modelVariantId": m, "variantId": vid, "variantLabel": vid, "runs": runs,
+                            "meanScores": [{"dimension": "accuracy", "score": mu}], "variance": mean([(a - mu) ** 2 for a in accs]),
+                            "meanTokens": mean(tok), "meanBilledTokens": mean(tok), "meanDurationMs": mean([c["durationMs"] for c in cs]),
+                            "passRate": 1, "solveRate": mu})
+json.dump({"sessionId": "plan-posture-ablation", "sessionVersion": "1", "gitSha": "pp-head-73b05b173", "taskReports": reports, "reproducibility": {}}, open(out, "w"), indent=1)
+print(f"{len(reports)} task reports")

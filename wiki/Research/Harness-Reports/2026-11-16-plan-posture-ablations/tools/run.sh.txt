@@ -1,0 +1,43 @@
+#!/bin/bash
+# usage: run.sh <rootname head|wt> <model> <arm[@maxIter]> <mode> [extra driver args]
+# One invocation <=590s. Appends one line to RUNLOG.md. Voids ONLY the cells whose trace window overlaps a foreign Ollama client request.
+D=/home/tylerbuell/campaign-traces/plan-posture
+R=/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-16-plan-posture-ablations
+rootn=$1; model=$2; armfull=$3; mode=$4; shift 4
+arm=${armfull%%@*}; drv=driver.ts
+if [[ "$armfull" == *@* ]]; then export PP_MAXITER=${armfull##*@}; drv=driver2.ts; else unset PP_MAXITER; fi
+root=/home/tylerbuell/pp-$rootn
+n=${model//[\/:]/_}; m=${mode//[:\/]/_}
+tag=$rootn-$armfull-$m-$n
+out=$D/out/$tag.json
+used=$(df --output=used -BM /tmp | tail -1 | tr -dc 0-9); free=$(df --output=avail -BG / | tail -1 | tr -dc 0-9)
+if [ "$used" -gt 6000 ] || [ "$free" -lt 20 ]; then echo "GUARD-TRIP tmp=$used free=$free"; exit 3; fi
+before=0; [ -f $out ] && before=$(python3 -c "import json;print(len(json.load(open('$out'))['cells']))")
+foreign=$(curl -s localhost:11434/api/ps | python3 -c "import json,sys;print(','.join(m['name'] for m in json.load(sys.stdin)['models'] if m['name']!='$model'))")
+T0=$(date +"%Y-%m-%d %H:%M:%S")
+timeout 590 bun $D/$drv --root $root --model $model --arm $arm --mode $mode --out $out --trace-root $D/traces/$tag "$@" >> $D/out/$tag.log 2>$D/out/$tag.last
+rc=$?
+journalctl -u ollama --since "$T0" -o short-unix 2>/dev/null | /usr/bin/grep -a GIN | /usr/bin/grep -a "systemone\| 503 " | awk '{print $1}' > $D/out/$tag.foreign
+sys=$(wc -l < $D/out/$tag.foreign)
+after=0; [ -f $out ] && after=$(python3 -c "import json;print(len(json.load(open('$out'))['cells']))")
+voided=$(python3 - "$out" "$before" "$D/traces/$tag" "$D/out/$tag.foreign" <<'EOF'
+import json,sys,glob,os
+p,b,tr,fp=sys.argv[1],int(sys.argv[2]),sys.argv[3],sys.argv[4]
+if not os.path.exists(p): print(0); sys.exit()
+d=json.load(open(p)); fe=[float(x) for x in open(fp).read().split()]
+n=0
+for c in d["cells"][b:]:
+    ts=[]
+    for f in glob.glob(f"{tr}/{c['taskId']}-r{c['run']}/*.jsonl"):
+        for l in open(f):
+            try: ts.append(json.loads(l)["timestamp"]/1000)
+            except Exception: pass
+    if not ts: continue
+    lo,hi=min(ts)-2,max(ts)+2
+    hit=[x for x in fe if lo<=x<=hi]
+    if hit: c["voided"]=True; c["voidReason"]=f"foreign-ollama-client x{len(hit)}"; n+=1
+json.dump(d,open(p,"w"),indent=2); print(n)
+EOF
+)
+last=$(tail -1 $D/out/$tag.last)
+echo "$(date +%H:%M) $tag rc=$rc cells $before->$after foreignReqs=$sys voidedCells=$voided foreignAtStart=[$foreign] | $last" | tee -a $R/RUNLOG.md

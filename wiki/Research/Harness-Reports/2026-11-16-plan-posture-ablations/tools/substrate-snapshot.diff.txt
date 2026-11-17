@@ -1,0 +1,856 @@
+diff --git a/apps/docs/src/content/docs/guides/plan-then-execute.md b/apps/docs/src/content/docs/guides/plan-then-execute.md
+index 4725158a2..bf1d5faf4 100644
+--- a/apps/docs/src/content/docs/guides/plan-then-execute.md
++++ b/apps/docs/src/content/docs/guides/plan-then-execute.md
+@@ -130,6 +130,25 @@ await agent.execute(plan) // the execute run is shown the findings once, as cont
+ 
+ `PlanRecorded` carries `findings`, and the Markdown, JSON and HTML plan formats include them. A plan with findings but no steps is still empty: findings never make a plan executable. `result.plan` keeps the findings, and a user-edited plan keeps them too. In a session, `session.plan.findings` holds what plan turns found and they seed later turns. `session.setPlan(steps)` keeps the held findings; `session.setPlan(plan)` takes the findings that plan states. To rebuild a session from stored state, pass `agent.session({ initialTodo, initialPlanFindings })`: the findings come back on `session.plan` and ride the next execute turn. Malformed rows are dropped.
+ 
++## Strategy planners: one context, one completion rule
++
++The `blueprint` and `plan-execute-reflect` strategies write their own plans (generate, patch and augment). Every one of those planner calls is built from the same context: plan only (never run the steps or answer), the tool catalog with each tool's parameters and its read or write effect, and the env date and timezone. The date rule appears when a tool takes a date: a date argument must come from the goal or from today's date, never invented. The interaction line appears only when the planner may ask or look something up.
++
++The plan's tool-call arguments are checked at plan time, against the tool schemas, before anything runs:
++
++| Finding | What the plan does |
++| --- | --- |
++| a step names a tool the catalog does not have | reported (`blueprint` then degrades to reactive, as before) |
++| a required argument has no value and no `{{from_step}}` reference | the step runs as a composite step: the model chooses the argument when the step runs |
++| a date in a date argument that the goal does not give (for example a baked `2024-11-21` on a 2026 run) | same: deferred to execute time, never baked. A relative phrase the goal used (`tomorrow`) is resolved against the env date instead |
++| a step typed `analysis` that names a tool | becomes a composite step scoped to that tool, so the tool can run |
++
++One `plan-args-validated` guard event lists the findings. A plan you pass yourself (`run(input, { plan })`) keeps its dates; only missing required arguments are deferred.
++
++A strategy run cannot finish `completed` with plan steps left open. Each step ends `done`, `skipped` or `failed`, listed in `result.metadata.planSteps`. A step that never ran (a deferred composite step, a tool named on an analysis step) is finished by the step executor before the answer is written. A step the run budget no longer allows stays open: the run is `partial`, `result.metadata.planIncomplete.open` names it, the verification warning says so, and a `plan-incomplete` guard event is published. In `plan-execute-reflect` a SATISFIED reflection on a plan with unrun steps sends the loop back to run them while refinements remain.
++
++When the step results are too long for the final synthesis call, the steps most relevant to the goal are kept whole within the model's evidence budget, the rest are named as not shown, and a `solve-evidence` guard event records what the call saw (steps, characters, budget).
++
+ ## Wrap-up reserve
+ 
+ Opt-in, off by default: set `.withHarness({ wrapUpReserve: true })` (or `RA_WRAPUP_RESERVE=1`; config wins) to hold back the last iterations of a run for the answer. The run-started config records the effective `wrapUpReserve` value.
+diff --git a/packages/reasoning/src/kernel/capabilities/reason/think.ts b/packages/reasoning/src/kernel/capabilities/reason/think.ts
+index 135f3c06f..2ef14aaf1 100644
+--- a/packages/reasoning/src/kernel/capabilities/reason/think.ts
++++ b/packages/reasoning/src/kernel/capabilities/reason/think.ts
+@@ -55,7 +55,7 @@ import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncatio
+ import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
+ import { LOOP_DETECTED_DEFAULT, guidanceFieldHasText, guidanceTurnCost, renderGuidance, type PendingGuidance } from "../../state/guidance-channel.js";
+ import { emitPostureApplied, isPlanPosture, planPostureGuidanceParts, registerPostureSignal, stampPostureRendered, toolIndexUniverse } from "../../policy/run-posture.js";
+-import { planToolCatalogLine } from "../../policy/plan-steps.js";
++import { buildPlanProducerContext } from "../../policy/plan-producer-context.js";
+ import { planFindingsLine, planTurnGuidance, planTurnTools, reconEligibleSchemas } from "../../policy/plan-recon.js";
+ import { provenanceBySanitizedName } from "./wire-facts.js";
+ import { checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
+@@ -605,7 +605,7 @@ export function handleThinking(
+     const planTurn = planTurnTools(input, { iteration: state.iteration, maxIterations: (state.meta.maxIterations as number | undefined) ?? 10, steps: state.steps });
+     const guidanceParts = planPosture
+       ? planPostureGuidanceParts(
+-          input.harness?.planToolCatalog === true ? planToolCatalogLine(input.allToolSchemas ?? input.availableToolSchemas, reconEligibleSchemas(input)) : undefined,
++          input.harness?.planToolCatalog === true ? buildPlanProducerContext({ schemas: input.allToolSchemas ?? input.availableToolSchemas, now: new Date(), reconTools: reconEligibleSchemas(input) }).catalogLine : undefined,
+           planTurnGuidance(planTurn),
+         )
+       : rendered.parts;
+diff --git a/packages/reasoning/src/strategies/blueprint.ts b/packages/reasoning/src/strategies/blueprint.ts
+index 25b1d6bc1..b4b4a6be7 100644
+--- a/packages/reasoning/src/strategies/blueprint.ts
++++ b/packages/reasoning/src/strategies/blueprint.ts
+@@ -40,7 +40,7 @@ import { Data, Effect } from "effect";
+ import { ExecutionError, IterationLimitError } from "../errors/errors.js";
+ import type { ReasoningConfig } from "../types/config.js";
+ import { LLMService } from "@reactive-agents/llm-provider";
+-import { obtainPlan } from "./planning/input-plan.js";
++import { obtainPlan, planningToolSchemas } from "./planning/input-plan.js";
+ import type { InputPlan } from "./planning/input-plan.js";
+ import type { Plan } from "../types/plan.js";
+ import type { ToolSummary } from "./planning/plan-prompts.js";
+@@ -65,13 +65,17 @@ import { executeBlueprintWorker, type BlueprintWorkerContext } from "./blueprint
+ import { verifyPlan } from "./blueprint/plan-verify.js";
+ import { executeReactive } from "./reactive.js";
+ import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
+-import { patchPlan, toToolSummary } from "./planning/plan-mutation.js";
++import { patchPlan } from "./planning/plan-mutation.js";
++import { finishOpenSteps } from "./blueprint/finish-open.js";
++import { emitSolveEvidence, selectSolveEvidence } from "./planning/solve-evidence.js";
++import { priorResultsBudgetChars } from "./planning/prior-results.js";
++import { settlePlanSteps } from "../kernel/policy/plan-completion.js";
+ import { formatPlanListing } from "./blueprint/progress-format.js";
+ import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
+ import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
+ import { makePlanChecklist } from "./planning/plan-checklist.js";
+ import { budgetStopReason, isBudgetExhausted } from "./budget/remaining-budget.js";
+-import { runStrategy, type StrategyEnd, type StrategyRun } from "./substrate/strategy-run.js";
++import { runStrategy, type StrategyEnd, type StrategyPaused, type StrategyRun } from "./substrate/strategy-run.js";
+ import type { StrategyServices } from "../kernel/utils/service-utils.js";
+ 
+ const STRATEGY = "blueprint" as const;
+@@ -218,7 +222,7 @@ const blueprintBody = (
+   input: BlueprintInput,
+   services: StrategyServices,
+   run: StrategyRun,
+-): Effect.Effect<StrategyEnd, ExecutionError | DegradeToReactive, LLMService | RunEnvelope> =>
++): Effect.Effect<StrategyEnd, ExecutionError | DegradeToReactive | StrategyPaused, LLMService | RunEnvelope> =>
+   Effect.gen(function* () {
+     const { llm, eventBus } = services;
+     const emitLog = run.emitLog;
+@@ -254,11 +258,7 @@ const blueprintBody = (
+     // planner sees real argument shapes (not just `name(params)`) — without these
+     // it invents arg names (e.g. file-write(filename) instead of file-write(path),
+     // the root of the gh-cli invalid-command failure).
+-    const planningToolSchemas =
+-      input.allToolSchemas && input.allToolSchemas.length > 0
+-        ? input.allToolSchemas
+-        : (input.availableToolSchemas ?? []);
+-    const toolSummaries: ToolSummary[] = planningToolSchemas.map(toToolSummary);
++    const planSchemas = planningToolSchemas(input);
+ 
+     // ── PLAN ──────────────────────────────────────────────────────────────────
+     yield* emitLog({ _tag: "phase_started", phase: "blueprint:plan", timestamp: new Date() });
+@@ -272,11 +272,12 @@ const blueprintBody = (
+ 
+     // A caller-supplied `input.plan` replaces the planner call (validated);
+     // otherwise the planner LLM runs. Real provider usage is accounted inside.
+-    let { plan } = yield* obtainPlan({
++    let { plan, context } = yield* obtainPlan({
+       input, goal, taskId, agentId: input.agentId ?? "reasoning-agent", planMode: "dag",
+-      strategy: STRATEGY, defaultTemperature: 0.4, pastPatterns, toolSummaries, run,
++      strategy: STRATEGY, defaultTemperature: 0.4, pastPatterns, run,
+       persona: "You are a planning agent. Decompose the goal into a structured tool plan.",
+     });
++    const toolSummaries: ToolSummary[] = [...context.tools];
+     // Keyed from_step refs to the grammar, then one producer copy per target
+     // file when a step's whole output feeds several.
+     yield* applyPlanRefNormalization(plan, taskId);
+@@ -410,8 +411,8 @@ const blueprintBody = (
+       // Full catalog (not the pruned subset) so the worker's healing pass and
+       // any composite sub-kernel know every planned tool's real schema —
+       // e.g. file-write(path, content) for arg-name repair.
+-      ...(planningToolSchemas.length > 0
+-        ? { availableToolSchemas: planningToolSchemas }
++      ...(planSchemas.length > 0
++        ? { availableToolSchemas: planSchemas }
+         : {}),
+       ...(input.resultCompression
+         ? { resultCompression: input.resultCompression }
+@@ -478,8 +479,8 @@ const blueprintBody = (
+             // Enrich the recovery prompt with the FULL tool catalog so the patch
+             // isn't tool-blind (else it re-invents tool names/arg shapes — the
+             // same root cause the retry exists to fix).
+-            ...(planningToolSchemas.length > 0
+-              ? { availableToolSchemas: planningToolSchemas }
++            ...(planSchemas.length > 0
++              ? { availableToolSchemas: planSchemas }
+               : {}),
+           },
+           llm,
+@@ -496,6 +497,7 @@ const blueprintBody = (
+             steps: [...preservedCompleted, ...patch.steps],
+             version: plan.version + 1,
+           };
++          plan = retryPlan; // the plan the worker now runs is the plan the run is judged on
+           yield* publishReasoningStep(eventBus, {
+             _tag: "ReasoningStepCompleted",
+             taskId,
+@@ -519,6 +521,26 @@ const blueprintBody = (
+       }
+     }
+ 
++    // ── REMAINDER (completion invariant) ──────────────────────────────────────
++    // Plan steps the worker does not run (deferred-argument composites, a tool
++    // named on an analysis step) are finished by the step executor, not shipped
++    // as done; what it cannot finish stays open and caps the run at `partial`.
++    const ranById = new Map(workerResult.steps.map((s) => [s.id, s]));
++    const finished = yield* finishOpenSteps({
++      services,
++      input: { ...input, forbiddenTools: forbiddenToolList, ledgerSink: run.ledgerSink },
++      plan,
++      steps: plan.steps.map((s) => ranById.get(s.id) ?? s),
++      toolSummaries,
++      emitLog,
++      run,
++    });
++    if (finished.length > 0) {
++      const finishedById = new Map(finished.map((s) => [s.id, s]));
++      const combined = plan.steps.flatMap((s) => finishedById.get(s.id) ?? ranById.get(s.id) ?? []);
++      workerResult = { ...workerResult, steps: combined, allSucceeded: combined.every((s) => s.status === "completed") };
++    }
++
+     for (const s of workerResult.steps) {
+       // Dispatched tool steps land as their canonical ledger pair (action step
+       // with metadata.toolCall + the primitive's observation step with
+@@ -590,9 +612,10 @@ const blueprintBody = (
+       return yield* Effect.fail(new DegradeToReactive());
+     }
+ 
+-    const stepResultTexts = completed.map(
+-      (s, idx) => `Step ${idx + 1} (${s.title}): ${s.fullResult ?? s.result}`,
+-    );
++    // What the solve call is shown: whole results within the model's budget,
++    // else the steps most relevant to the goal (planning/solve-evidence.ts).
++    const evidence = selectSolveEvidence(goal, completed, priorResultsBudgetChars(input.modelId));
++    const stepResultTexts = evidence.texts;
+ 
+     // ── SOLVE ───────────────────────────────────────────────────────────────────
+     // Single-substantive-step short-circuit (mirrors plan-execute.ts:415): when
+@@ -639,6 +662,7 @@ const blueprintBody = (
+       run.record(makeStep("thought", `[SOLVE] single-step short-circuit`));
+     } else if (stepResultTexts.length > 0 && !overBudget) {
+       yield* emitLog({ _tag: "phase_started", phase: "blueprint:solve", timestamp: new Date() });
++      yield* emitSolveEvidence(taskId, STRATEGY, evidence);
+ 
+       // `run.call` accounts the solver call; a failed call degrades to the
+       // joined worker results (no usage to account).
+@@ -718,10 +742,14 @@ const blueprintBody = (
+           : "partial"
+       : "partial";
+ 
+-    // D9 P7: steps the worker left to SOLVE (terminal analysis) are done once SOLVE answered.
++    // D9 P7: the pure analysis steps left to SOLVE are done once SOLVE answered; no other
++    // unrun step is (the terminal caps the run on what stays open, policy/plan-completion.ts).
+     const executedById = new Map(workerResult.steps.map((s) => [s.id, s]));
+-    yield* planChecklist.sync(plan.steps.map((s) =>
+-      executedById.get(s.id) ?? (finalStatus === "completed" ? { ...s, status: "completed" as const } : s)));
++    const settledSteps = settlePlanSteps(
++      plan.steps.map((s) => executedById.get(s.id) ?? s),
++      !!finalOutput && !solveFailedJoin && !budgetCappedJoin,
++    );
++    yield* planChecklist.sync(settledSteps);
+ 
+     // B2: blueprint runs no kernel and cannot abstain (the 0-LLM worker has no
+     // abstain path; the degrades hand the task to reactive). The substrate
+@@ -736,6 +764,7 @@ const blueprintBody = (
+       output: finalOutput,
+       status: finalStatus,
+       delivery: { runContract },
++      plan: settledSteps,
+       // H5/#40: the budget-capped join is a harness-authored terminal. The
+       // substrate ships budgetTerminalPartial + harnessAuthoredOutput, this
+       // warning, and the raw reason on the open-string channel (observability
+diff --git a/packages/reasoning/src/strategies/blueprint/plan-verify.ts b/packages/reasoning/src/strategies/blueprint/plan-verify.ts
+index b2ccacffe..1e068b2b2 100644
+--- a/packages/reasoning/src/strategies/blueprint/plan-verify.ts
++++ b/packages/reasoning/src/strategies/blueprint/plan-verify.ts
+@@ -26,6 +26,7 @@ import {
+ } from "../../types/plan.js";
+ import { fromStepRe } from "../../assembly/ref-grammar.js";
+ import { runHealingPipeline } from "@reactive-agents/tools";
++import { plansToolCall } from "../../kernel/policy/plan-args.js";
+ 
+ // ─── Result Types ───
+ 
+@@ -278,7 +279,7 @@ export const verifyPlan = (
+   if (requiredTools.length > 0) {
+     const plannedTools = new Set(
+       steps
+-        .filter((s) => s.type === "tool_call" && s.toolName)
++        .filter(plansToolCall)
+         .map((s) => s.toolName!),
+     );
+     const missingTools = requiredTools.filter((t) => !plannedTools.has(t));
+@@ -303,7 +304,7 @@ export const verifyPlan = (
+   const quantities = ctx.requiredToolQuantities ?? {};
+   for (const [toolName, requiredCount] of Object.entries(quantities)) {
+     const existingCount = steps.filter(
+-      (s) => s.type === "tool_call" && s.toolName === toolName,
++      (s) => plansToolCall(s) && s.toolName === toolName,
+     ).length;
+     const deficit = requiredCount - existingCount;
+     for (let i = 0; i < deficit; i++) {
+diff --git a/packages/reasoning/src/strategies/plan-execute.ts b/packages/reasoning/src/strategies/plan-execute.ts
+index c3cb20be8..c9c7567dd 100644
+--- a/packages/reasoning/src/strategies/plan-execute.ts
++++ b/packages/reasoning/src/strategies/plan-execute.ts
+@@ -75,6 +75,7 @@ import { scoreReflectionAndDispatch, type PEREntropyEntry } from "./plan-execute
+ import { reflectOnPlan } from "./plan-execute/reflect.js";
+ import { groundedAbstentionCause, joinedStepResults, planTerminalOutcome, unansweredPlanCause } from "./plan-execute/terminal-outcome.js";
+ import { PLANNER_PERSONA } from "./planning/shared-personas.js";
++import { unrunStepsFeedback } from "../kernel/policy/plan-completion.js";
+ import {
+   budgetStopReason,
+   isBudgetExhausted,
+@@ -292,14 +293,6 @@ export const executePlanExecute = (
+       requiredTools: input.requiredTools ?? [], toolSchemas: input.availableToolSchemas, toolService });
+     const reflectRequirements = runContract.requirements.map((r) => r.spec.description);
+ 
+-    // Convert tool schemas to ToolSummary for prompts (mark optional params with ?)
+-    const toolSummaries: ToolSummary[] = (
+-      input.availableToolSchemas ?? []
+-    ).map((t) => ({
+-      name: t.name,
+-      signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
+-    }));
+-
+     yield* emitLog({ _tag: "phase_started", phase: "plan-execute:plan", timestamp: new Date() });
+ 
+     // ── PLAN: Generate initial structured plan ──
+@@ -308,11 +301,13 @@ export const executePlanExecute = (
+     // Derive the real tier from the model id so the planner prompt matches the
+     // model's actual capability across all tiers.
+     // A caller-supplied `input.plan` skips the planner call (validated first).
+-    let { plan, planPrompt } = yield* obtainPlan({
++    let { plan, planPrompt, context } = yield* obtainPlan({
+       input, goal, taskId, agentId: input.agentId ?? "reasoning-agent", planMode,
+       strategy: "plan-execute-reflect", persona: PLANNER_PERSONA, defaultTemperature: 0.5,
+-      pastPatterns: [], toolSummaries, run,
++      pastPatterns: [], run,
+     });
++    // The step prompts' tool summaries are the planner's own catalog.
++    const toolSummaries: ToolSummary[] = [...context.tools];
+     yield* emitPhaseEnd({ emitLog, phase: "plan-execute:plan", startedAt: start, totalTokens: run.spend().tokens });
+ 
+     // ── Rationale enforcement (coax) ──────────────────────────────────────────
+@@ -621,6 +616,9 @@ export const executePlanExecute = (
+       let satisfied = isSatisfied(reflectionContent);
+       let reflectionForRefine = reflectionContent;
+       let repairGuidance: string | undefined;
++      // Completion invariant: a plan with steps that never ran is not satisfied; the next pass runs them.
++      const unrun = refinement < maxRefinements ? unrunStepsFeedback(plan.steps) : undefined;
++      if (satisfied && unrun) { satisfied = false; reflectionForRefine = `${unrun}\n${reflectionContent}`; }
+       // D9: a SATISFIED claim goes through the shared strategy exit gate (required-tool
+       // grounding, then delivery of the contract's files): one repair, then handoff.
+       const exit = !satisfied ? undefined : yield* proposeStrategyExit({
+@@ -769,6 +767,7 @@ export const executePlanExecute = (
+         : !finalOutput && !budgetStopped ? { error: unansweredPlanCause(plan.steps) } : {}),
+       ...(outcome !== undefined ? { outcome } : {}),
+       delivery: { runContract, decision: deliveryDecision },
++      plan: plan.steps,
+     };
+       }),
+     );
+diff --git a/packages/reasoning/src/strategies/plan-execute/plan-enforcement.ts b/packages/reasoning/src/strategies/plan-execute/plan-enforcement.ts
+index b61bbe24b..2b59aef48 100644
+--- a/packages/reasoning/src/strategies/plan-execute/plan-enforcement.ts
++++ b/packages/reasoning/src/strategies/plan-execute/plan-enforcement.ts
+@@ -12,7 +12,7 @@
+ import { Effect } from "effect";
+ import type { Plan, PlanStep } from "../../types/plan.js";
+ import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
+-import { fromStepRe } from "../../assembly/ref-grammar.js";
++import { plansToolCall, routeUnderspecifiedToolSteps } from "../../kernel/policy/plan-args.js";
+ import { applyFanOutSplit } from "../planning/fanout-split.js";
+ import { applyPlanRefNormalization } from "../planning/plan-refs.js";
+ 
+@@ -59,7 +59,7 @@ export const injectMissingRequiredToolSteps = (
+ ): void => {
+   if (requiredTools.length === 0) return;
+   const plannedTools = new Set(
+-    plan.steps.filter((s) => s.type === "tool_call" && s.toolName).map((s) => s.toolName!),
++    plan.steps.filter(plansToolCall).map((s) => s.toolName!),
+   );
+   const missingTools = requiredTools.filter((t) => !plannedTools.has(t));
+   if (missingTools.length === 0) return;
+@@ -98,50 +98,9 @@ export const injectMissingRequiredToolSteps = (
+   }
+ };
+ 
+-const isBlank = (value: unknown): boolean =>
+-  value === undefined || value === null || (typeof value === "string" && value.trim().length === 0);
+-
+-/** Render a known argument for a step instruction; `{{from_step:sN}}` becomes "the result of step sN". */
+-const describeKnownArg = (value: unknown): string => {
+-  if (typeof value !== "string") return JSON.stringify(value);
+-  const refs = [...value.matchAll(fromStepRe())].map((m) => m[1]!);
+-  return refs.length > 0 ? `the result of step ${refs.join(", ")}` : JSON.stringify(value);
+-};
+-
+-/**
+- * Turn each `tool_call` step that lacks a required argument (per the tool's
+- * schema) into a `composite` step scoped to that tool. A direct dispatch of
+- * such a step can only fail on the missing argument, and the steps that
+- * depend on it then run on nothing. As a composite step, one ReAct pass calls
+- * the tool and fills the argument from the goal and prior results. Known
+- * arguments move into the instruction and their step references into
+- * `dependsOn`. Steps for tools with no schema are left alone.
+- */
+-export const routeUnderspecifiedToolSteps = (plan: Plan, schemas: readonly ToolSchema[]): void => {
+-  const byName = new Map(schemas.map((s) => [s.name, s]));
+-  plan.steps = plan.steps.map((step) => {
+-    if (step.type !== "tool_call" || step.toolName === undefined) return step;
+-    const schema = byName.get(step.toolName);
+-    if (schema === undefined) return step;
+-    const args = step.toolArgs ?? {};
+-    const missing = schema.parameters.filter((p) => p.required === true && isBlank(args[p.name])).map((p) => p.name);
+-    if (missing.length === 0) return step;
+-    const known = Object.entries(args).filter(([, v]) => !isBlank(v));
+-    const refIds = known.flatMap(([, v]) =>
+-      typeof v === "string" ? [...v.matchAll(fromStepRe())].map((m) => m[1]!) : [],
+-    );
+-    const knownText =
+-      known.length > 0 ? ` Known arguments: ${known.map(([k, v]) => `${k} = ${describeKnownArg(v)}`).join("; ")}.` : "";
+-    const { toolArgs: _dropped, ...rest } = step;
+-    return {
+-      ...rest,
+-      type: "composite",
+-      toolHints: [step.toolName],
+-      instruction: `${step.instruction} Call ${step.toolName}; supply ${missing.join(", ")} from the goal.${knownText}`,
+-      dependsOn: [...new Set([...(step.dependsOn ?? []), ...refIds])],
+-    };
+-  });
+-};
++// A tool_call step missing a required argument runs as a composite step: the one
++// home for this repair is policy/plan-args.ts (it also defers ungrounded dates).
++export { routeUnderspecifiedToolSteps };
+ 
+ /**
+  * Pad the plan with synthetic `tool_call` steps so each tool in `quantities`
+@@ -153,7 +112,7 @@ export const injectQuantityDeficitSteps = (
+ ): void => {
+   for (const [toolName, requiredCount] of Object.entries(quantities)) {
+     const existingCount = plan.steps.filter(
+-      (s) => s.type === "tool_call" && s.toolName === toolName,
++      (s) => plansToolCall(s) && s.toolName === toolName,
+     ).length;
+     const deficit = requiredCount - existingCount;
+     for (let i = 0; i < deficit; i++) {
+diff --git a/packages/reasoning/src/strategies/plan-execute/synthesize.ts b/packages/reasoning/src/strategies/plan-execute/synthesize.ts
+index 7db06a579..62d2e8cb7 100644
+--- a/packages/reasoning/src/strategies/plan-execute/synthesize.ts
++++ b/packages/reasoning/src/strategies/plan-execute/synthesize.ts
+@@ -22,11 +22,13 @@ import type { ReasoningStep } from "../../types/index.js";
+ import type { Plan } from "../../types/plan.js";
+ import type { PlanExecuteInput } from "../plan-execute.js";
+ import { SYNTHESIZER_PERSONA } from "../planning/shared-personas.js";
++import { emitSolveEvidence, selectSolveEvidence } from "../planning/solve-evidence.js";
++import { priorResultsBudgetChars } from "../planning/prior-results.js";
+ 
+ export interface SynthesizeDeps {
+   readonly plan: Plan;
+   readonly goal: string;
+-  readonly input: Pick<PlanExecuteInput, "taskId" | "systemPrompt" | "temperature">;
++  readonly input: Pick<PlanExecuteInput, "taskId" | "systemPrompt" | "temperature" | "modelId">;
+   readonly llm: LLMService["Type"];
+   readonly eventBus: StrategyServices["eventBus"];
+   /** Records the `[SYNTHESIS]` trace step on the strategy run. */
+@@ -52,15 +54,18 @@ export const synthesizePlanAnswer = (
+     // emit every item. Intermediate analysis/reflection prompts kept the
+     // preview to protect local-tier context; synthesis needs the whole
+     // payload, mirroring reactive's in-loop recall of the stored result.
+-    const synthResultTexts = plan.steps
+-      .filter((s) => s.result || s.fullResult)
+-      .map((s, idx) => `Step ${idx + 1}: ${s.fullResult ?? s.result}`);
++    const withResults = plan.steps.filter((s) => s.result || s.fullResult);
++    const synthResultTexts = withResults.map((s, idx) => `Step ${idx + 1}: ${s.fullResult ?? s.result}`);
++    // What the call is shown: every result within the model's budget, else the
++    // steps most relevant to the goal, the rest named as not shown.
++    const evidence = selectSolveEvidence(goal, withResults, priorResultsBudgetChars(input.modelId), false);
++    yield* emitSolveEvidence(input.taskId ?? "plan-execute", "plan-execute-reflect", evidence);
+ 
+     const synthLlmResponse = yield* gatewayComplete(llm, { purpose: "synthesize" }, {
+         messages: [
+           {
+             role: "user",
+-            content: `Task: ${goal}\n\nExecution results:\n${synthResultTexts.join("\n")}\n\nSynthesize a clear, complete answer to the original task. Do NOT include internal details like tool names, JSON payloads, recipient numbers, or execution metadata — only user-facing content.\n\nEVIDENCE RULE: only state facts your tool results actually contain. If a requested attribute (a name, number, license, date, spec) is not in the results, say \"not found in sources\" for that item instead of guessing — invented specifics are worse than acknowledged gaps. Prefer fewer, verified items over a complete-looking but fabricated list.\n\nCOMPLETION CHECK: before finishing, re-read the Task and confirm every explicit requirement is addressed — each requested field, format, count, and any required meta-commentary (e.g. identifying conflicts, caveats, or unresolved items). If a requirement cannot be met from the results, state that explicitly instead of omitting it.`,
++            content: `Task: ${goal}\n\nExecution results:\n${evidence.texts.join("\n")}\n\nSynthesize a clear, complete answer to the original task. Do NOT include internal details like tool names, JSON payloads, recipient numbers, or execution metadata — only user-facing content.\n\nEVIDENCE RULE: only state facts your tool results actually contain. If a requested attribute (a name, number, license, date, spec) is not in the results, say \"not found in sources\" for that item instead of guessing — invented specifics are worse than acknowledged gaps. Prefer fewer, verified items over a complete-looking but fabricated list.\n\nCOMPLETION CHECK: before finishing, re-read the Task and confirm every explicit requirement is addressed — each requested field, format, count, and any required meta-commentary (e.g. identifying conflicts, caveats, or unresolved items). If a requirement cannot be met from the results, state that explicitly instead of omitting it.`,
+           },
+         ],
+         systemPrompt: withEnvContext(
+diff --git a/packages/reasoning/src/strategies/planning/input-plan.ts b/packages/reasoning/src/strategies/planning/input-plan.ts
+index 690bf66f0..baca2363d 100644
+--- a/packages/reasoning/src/strategies/planning/input-plan.ts
++++ b/packages/reasoning/src/strategies/planning/input-plan.ts
+@@ -14,7 +14,9 @@ import { fromCorePlan, isCorePlan, toCorePlan } from "../../types/plan-adapters.
+ import { resolveProfile } from "../../context/profile-resolver.js";
+ import { extractStructuredOutput, structuredCallSpend } from "../../structured-output/pipeline.js";
+ import { buildPlanGenerationPrompt } from "./plan-prompts.js";
+-import type { ToolSummary } from "./plan-prompts.js";
++import { buildPlanProducerContext, type PlanProducerContext } from "../../kernel/policy/plan-producer-context.js";
++import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
++import { applyPlanArgGrounding } from "./plan-arg-grounding.js";
+ import type { StrategyRun } from "../substrate/strategy-run.js";
+ 
+ /** A plan a caller hands to a strategy: portable core shape or strategy shape. */
+@@ -48,6 +50,9 @@ export interface ObtainPlanParams {
+     readonly temperature?: number;
+     readonly modelId?: string;
+     readonly requiredToolQuantities?: Readonly<Record<string, number>>;
++    /** The full dispatchable catalog (blueprint); preferred over the relevance subset. */
++    readonly allToolSchemas?: readonly ToolSchema[];
++    readonly availableToolSchemas?: readonly ToolSchema[];
+   };
+   readonly goal: string;
+   readonly taskId: string;
+@@ -57,26 +62,38 @@ export interface ObtainPlanParams {
+   readonly persona: string;
+   readonly defaultTemperature: number;
+   readonly pastPatterns: readonly string[];
+-  readonly toolSummaries: readonly ToolSummary[];
+   readonly run: Pick<StrategyRun, "account">;
+ }
+ 
++/** The catalog the planner plans over: the full dispatchable one when supplied, else the relevance subset. */
++export const planningToolSchemas = (input: Pick<ObtainPlanParams["input"], "allToolSchemas" | "availableToolSchemas">): readonly ToolSchema[] =>
++  input.allToolSchemas && input.allToolSchemas.length > 0 ? input.allToolSchemas : (input.availableToolSchemas ?? []);
++
+ /**
+  * The strategy's initial plan: the caller-supplied `input.plan` (validated, no
+- * planner call) or one generated by the planner LLM. `planPrompt` is empty for
+- * a supplied plan (nothing to retry).
++ * planner call) or one generated by the planner LLM. Either way its tool-call
++ * arguments are then validated at plan time (plan-arg-grounding.ts), so a
++ * missing or ungrounded argument is deferred to execute time instead of baked.
++ * `planPrompt` is empty for a supplied plan (nothing to retry). `context` is the
++ * shared planner context the plan was made from (its `tools` are the step
++ * prompts' tool summaries).
+  */
+ export const obtainPlan = (
+   p: ObtainPlanParams,
+-): Effect.Effect<{ readonly plan: Plan; readonly planPrompt: string }, ExecutionError, LLMService> => {
++): Effect.Effect<{ readonly plan: Plan; readonly planPrompt: string; readonly context: PlanProducerContext }, ExecutionError, LLMService> => {
+   const ctx: PlanContext = { taskId: p.taskId, agentId: p.agentId, goal: p.goal, planMode: p.planMode };
++  const schemas = planningToolSchemas(p.input);
++  const producer = buildPlanProducerContext({ schemas, now: new Date() });
++  const grounded = (plan: Plan, planPrompt: string, dates: boolean) =>
++    applyPlanArgGrounding(plan, schemas, dates ? producer : undefined, p.goal, p.taskId).pipe(Effect.as({ plan, planPrompt, context: producer }));
+   if (p.input.plan !== undefined) {
+-    return adoptInputPlan(p.input.plan, ctx, p.strategy).pipe(Effect.map((plan) => ({ plan, planPrompt: "" })));
++    return adoptInputPlan(p.input.plan, ctx, p.strategy).pipe(Effect.flatMap((plan) => grounded(plan, "", false)));
+   }
+   return Effect.gen(function* () {
+     const planPrompt = buildPlanGenerationPrompt({
+       goal: p.goal,
+-      tools: [...p.toolSummaries],
++      tools: [...producer.tools],
++      context: producer,
+       pastPatterns: [...p.pastPatterns],
+       modelTier: resolveProfile(p.input.modelId ?? "mid").tier,
+       requiredToolQuantities: p.input.requiredToolQuantities,
+@@ -98,6 +115,6 @@ export const obtainPlan = (
+     );
+     // Provider-reported planner usage; estimate only when none reported.
+     p.run.account(structuredCallSpend(planResult.usage, { prompt: planPrompt, raw: planResult.raw }));
+-    return { plan: hydratePlan(planResult.data, ctx), planPrompt };
++    return yield* grounded(hydratePlan(planResult.data, ctx), planPrompt, true);
+   });
+ };
+diff --git a/packages/reasoning/src/strategies/planning/plan-mutation.ts b/packages/reasoning/src/strategies/planning/plan-mutation.ts
+index ae49821bd..d7b7c1f24 100644
+--- a/packages/reasoning/src/strategies/planning/plan-mutation.ts
++++ b/packages/reasoning/src/strategies/planning/plan-mutation.ts
+@@ -35,7 +35,8 @@ import {
+   buildPatchPrompt,
+   buildAugmentPrompt,
+ } from "./plan-prompts.js";
+-import type { ToolSummary } from "./plan-prompts.js";
++import { buildPlanProducerContext, type PlanProducerContext } from "../../kernel/policy/plan-producer-context.js";
++import { applyPlanArgGrounding } from "./plan-arg-grounding.js";
+ import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
+ import { extractGoalText } from "./plan-text.js";
+ import { tokenSpendOf, type TokenSpend } from "../../kernel/run-budget.js";
+@@ -77,17 +78,19 @@ export interface PatchInput {
+   readonly temperature?: number;
+ }
+ 
+-/**
+- * Map a tool schema to the enriched ToolSummary the plan prompts render. The
+- * one builder for plan-execute and blueprint; parameters pass through whole
+- * (the renderer reads the fields it shows).
+- */
+-export const toToolSummary = (t: ToolSchema): ToolSummary => ({
+-  name: t.name,
+-  signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
+-  ...(t.description ? { description: t.description } : {}),
+-  ...(t.parameters.length > 0 ? { params: t.parameters } : {}),
+-});
++/** A replan's context and argument validation (the schemas come from the input, the clock from now). */
++const replanContext = (schemas: readonly ToolSchema[] | undefined) => buildPlanProducerContext({ schemas, now: new Date() });
++
++/** `steps` with their tool-call arguments validated (plan-arg-grounding.ts), as the plan's replan emits them. */
++const groundedSteps = (
++  steps: PlanStep[],
++  schemas: readonly ToolSchema[] | undefined,
++  context: Pick<PlanProducerContext, "today">,
++  plan: Pick<Plan, "goal" | "taskId">,
++): Effect.Effect<PlanStep[], never> => {
++  const holder = { steps };
++  return applyPlanArgGrounding(holder, schemas ?? [], context, plan.goal, plan.taskId).pipe(Effect.map(() => holder.steps));
++};
+ 
+ /** Minimal input shape consumed by `augmentPlan`. */
+ export interface AugmentInput {
+@@ -112,12 +115,13 @@ export function patchPlan(
+   Error,
+   LLMService
+ > {
+-  const patchTools = (input.availableToolSchemas ?? []).map(toToolSummary);
++  const context = replanContext(input.availableToolSchemas);
+   const patchPrompt = buildPatchPrompt(
+     extractGoalText(input.taskDescription),
+     plan.steps,
+-    patchTools,
++    [...context.tools],
+     guidance,
++    context,
+   );
+ 
+   return extractStructuredOutput({
+@@ -154,7 +158,10 @@ export function patchPlan(
+       }));
+       const spend = tokenSpendOf(structuredCallSpend(result.usage, { prompt: patchPrompt, raw: result.raw }));
+       // Replanned steps get the same keyed-ref rewrite (and event) as a fresh plan (plan-refs.ts).
+-      return normalizeReplanRefs(patchedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, ...spend })));
++      return normalizeReplanRefs(patchedSteps, plan.taskId).pipe(
++        Effect.flatMap((normalized) => groundedSteps(normalized, input.availableToolSchemas, context, plan)),
++        Effect.map((steps) => ({ steps, ...spend })),
++      );
+     }),
+     Effect.catchAll(() => Effect.succeed(null)),
+   );
+@@ -177,12 +184,7 @@ export function augmentPlan(
+   Error,
+   LLMService
+ > {
+-  const toolSummaries: ToolSummary[] = (
+-    input.availableToolSchemas ?? []
+-  ).map((t) => ({
+-    name: t.name,
+-    signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
+-  }));
++  const context = replanContext(input.availableToolSchemas);
+ 
+   const completedSteps = plan.steps
+     .filter((s) => s.status === "completed")
+@@ -196,7 +198,8 @@ export function augmentPlan(
+     goal,
+     completedSteps,
+     reflectionFeedback,
+-    tools: toolSummaries,
++    tools: [...context.tools],
++    context,
+   });
+ 
+   const nextSeq = plan.steps.length + 1;
+@@ -232,7 +235,10 @@ export function augmentPlan(
+         seq: nextSeq + idx,
+       }));
+       const spend = tokenSpendOf(structuredCallSpend(result.usage, { prompt: augmentPrompt, raw: result.raw }));
+-      return normalizeReplanRefs(augmentedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, ...spend })));
++      return normalizeReplanRefs(augmentedSteps, plan.taskId).pipe(
++        Effect.flatMap((normalized) => groundedSteps(normalized, input.availableToolSchemas, context, plan)),
++        Effect.map((steps) => ({ steps, ...spend })),
++      );
+     }),
+     Effect.catchAll(() => Effect.succeed(null)),
+   );
+diff --git a/packages/reasoning/src/strategies/planning/plan-prompts.ts b/packages/reasoning/src/strategies/planning/plan-prompts.ts
+index deca10c96..9d5a11768 100644
+--- a/packages/reasoning/src/strategies/planning/plan-prompts.ts
++++ b/packages/reasoning/src/strategies/planning/plan-prompts.ts
+@@ -11,6 +11,7 @@
+  */
+ 
+ import type { PlanStep } from "../../types/plan.js";
++import { renderPlanProducerContext, type PlanProducerContext } from "../../kernel/policy/plan-producer-context.js";
+ 
+ // ── Types ────────────────────────────────────────────────────────────────────
+ 
+@@ -31,11 +32,15 @@ export interface ToolSummary {
+     required?: boolean;
+     description?: string;
+   }>;
++  /** `read` / `write` marks what the tool does to the world (planner context); absent or `unknown` shows no mark. */
++  effect?: "read" | "write" | "unknown";
+ }
+ 
+ export interface PlanGenerationInput {
+   goal: string;
+   tools: ToolSummary[];
++  /** The shared planner context (posture, date, tool effects, interaction). Absent: no PLANNING CONTEXT block. */
++  context?: PlanProducerContext;
+   pastPatterns: string[];
+   modelTier: ModelTier;
+   /** Per-tool minimum call counts from the classifier (e.g. { "web-search": 4 }). */
+@@ -110,7 +115,7 @@ const PLAN_STEP_EXAMPLE = `{
+ function renderToolLines(tools: ToolSummary[]): string {
+   return tools
+     .map((t) => {
+-      let line = `- ${t.name}${t.signature}`;
++      let line = `- ${t.name}${t.signature}${t.effect === "read" || t.effect === "write" ? ` [${t.effect}]` : ""}`;
+       if (t.description) line += ` — ${t.description}`;
+       if (t.params && t.params.length > 0) {
+         const paramLines = t.params
+@@ -226,6 +231,9 @@ function buildPlanExample(tools: ToolSummary[]): string {
+ }`;
+ }
+ 
++/** The shared planner context as a block of its own (patch and augment prompts have no role sentence to carry the posture). */
++const contextBlock = (context: PlanProducerContext): string => [context.posture, renderPlanProducerContext(context)].filter((l) => l.length > 0).join("\n");
++
+ // ── buildPlanGenerationPrompt ────────────────────────────────────────────────
+ 
+ /**
+@@ -240,7 +248,7 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
+ 
+   // Section 1: Role & Goal
+   sections.push(
+-    `You are a planning agent. Decompose the goal into a structured plan.\n\n` +
++    `${input.context?.posture ?? "You are a planning agent. Decompose the goal into a structured plan."}\n\n` +
+     `PLANNING RULES:\n` +
+     `- Prefer "tool_call" steps — they execute instantly without LLM overhead.\n` +
+     `- When the goal asks for data about MULTIPLE distinct items (e.g. multiple currencies, products, users), create a SEPARATE tool_call step for each item — combined queries lose specificity.\n` +
+@@ -252,6 +260,10 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
+     `GOAL:\n${input.goal}`,
+   );
+ 
++  // Section 1b: the rest of the shared planner context (today's date and argument rule, tool effects, interaction), when it applies.
++  const contextLines = input.context ? renderPlanProducerContext(input.context) : "";
++  if (contextLines) sections.push(contextLines);
++
+   // Section 2: Available Tools — render description + per-param detail when
+   // available so the planner sees tool semantics (not just a bare signature).
+   // A name+signature alone forces weak models to invent argument shapes from
+@@ -322,6 +334,8 @@ export function buildPatchPrompt(
+   tools: ToolSummary[] = [],
+   /** Harness-written repair guidance (e.g. deliverables still missing at the delivery gate). */
+   guidance?: string,
++  /** The shared planner context; absent: no PLANNING CONTEXT block. */
++  context?: PlanProducerContext,
+ ): string {
+   const sections: string[] = [];
+ 
+@@ -330,6 +344,7 @@ export function buildPatchPrompt(
+     `The plan encountered a failure. Review the step statuses below and rewrite the failed and remaining steps.\n`,
+   );
+   if (guidance) sections.push(guidance);
++  if (context) sections.push(contextBlock(context));
+ 
+   if (tools.length > 0) {
+     sections.push(`AVAILABLE TOOLS:\n${renderToolLines(tools)}`);
+@@ -473,6 +488,8 @@ export interface AugmentInput {
+   completedSteps: Array<{ stepId: string; title: string; result?: string }>;
+   reflectionFeedback: string;
+   tools: ToolSummary[];
++  /** The shared planner context; absent: no PLANNING CONTEXT block. */
++  context?: PlanProducerContext;
+ }
+ 
+ /**
+@@ -497,12 +514,10 @@ export function buildAugmentPrompt(input: AugmentInput): string {
+   sections.push(`COMPLETED STEPS AND RESULTS:\n${stepLines}`);
+ 
+   sections.push(`REFLECTION FEEDBACK:\n${input.reflectionFeedback}`);
++  if (input.context) sections.push(contextBlock(input.context));
+ 
+   if (input.tools.length > 0) {
+-    const toolLines = input.tools
+-      .map((t) => `- ${t.name}${t.signature}`)
+-      .join("\n");
+-    sections.push(`AVAILABLE TOOLS:\n${toolLines}`);
++    sections.push(`AVAILABLE TOOLS:\n${renderToolLines(input.tools)}`);
+   }
+ 
+   sections.push(
+diff --git a/packages/reasoning/src/strategies/substrate/strategy-run.ts b/packages/reasoning/src/strategies/substrate/strategy-run.ts
+index 482efff5d..a5328ff10 100644
+--- a/packages/reasoning/src/strategies/substrate/strategy-run.ts
++++ b/packages/reasoning/src/strategies/substrate/strategy-run.ts
+@@ -69,6 +69,8 @@ import { addKnown, contributedHalf } from "../../kernel/utils/known-count.js";
+ import { usageSpend } from "../../kernel/run-budget.js";
+ import { passIterationShare, passIterationsUsed, type IterationBudget } from "../budget/iteration-budget.js";
+ import { defaultReasoningConfig } from "../../types/config.js";
++import { PLAN_INCOMPLETE_GUARD, planIncompleteReason, settlePlan, type PlanStepLike } from "../../kernel/policy/plan-completion.js";
++import { emitGuardFired } from "../../kernel/utils/diagnostics.js";
+ 
+ /**
+  * What a strategy run has spent so far, across kernel passes, direct calls and
+@@ -308,8 +310,41 @@ export type StrategyEnd =
+       readonly extraMetadata?: StrategyExtras;
+       /** D9: the contract the delivery is judged against, plus the strategy's own exit-gate decision if any (no kernel meta). */
+       readonly delivery?: StrategyDelivery;
++      /**
++       * The plan's steps as the run left them. The terminal records each step's
++       * ending (`planSteps`) and, while any step is still open, caps the run at
++       * `partial` with a verification warning and a `plan-incomplete` signal
++       * (`kernel/policy/plan-completion.ts`). Absent: the strategy has no plan.
++       */
++      readonly plan?: readonly PlanStepLike[];
+     });
+ 
++/** The `Result` arm of {@link StrategyEnd}. */
++type ResultEnd = Extract<StrategyEnd, { readonly _tag: "Result" }>;
++
++/**
++ * The completion invariant on a plan-carrying `Result`: record every step's
++ * ending, and with steps still open cap the status at `partial` and add the
++ * warning (an `Unverified` outcome, unless the strategy already decided its own).
++ */
++export function applyPlanInvariant(end: ResultEnd): { readonly end: ResultEnd; readonly open: readonly PlanStepLike[] } {
++  if (end.plan === undefined) return { end, open: [] };
++  const { steps, open } = settlePlan(end.plan);
++  const extraMetadata: StrategyExtras = {
++    ...end.extraMetadata,
++    planSteps: steps,
++    ...(open.length > 0 ? { planIncomplete: { open: open.map((s) => s.id) } } : {}),
++  };
++  if (open.length === 0) return { end: { ...end, extraMetadata }, open };
++  const capped: ResultEnd = {
++    ...end,
++    extraMetadata,
++    ...(end.status === "failed" ? {} : { status: "partial" as const }),
++    ...(end.outcome === undefined ? { outcome: { _tag: "Unverified" as const, warning: planIncompleteReason(open) } } : {}),
++  };
++  return { end: capped, open };
++}
++
+ /** A registered strategy name, as the result mint records it. */
+ export type StrategyName = Parameters<typeof finalizeStrategyResult>[0]["strategy"];
+ 
+@@ -627,7 +662,24 @@ export function runStrategy<E, R>(
+         extraMetadata: { llmCalls: spend.llmCalls, runLedger: ledger },
+       })));
+ 
++    /** The plan completion invariant (`applyPlanInvariant`), then the mint; open steps raise `plan-incomplete`. */
+     const terminal = (end: StrategyEnd, ledger: RunLedger): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> => {
++      if (end._tag !== "Result" || end.plan === undefined || pendingPause !== undefined) return mint(end, ledger);
++      const planned = applyPlanInvariant(end);
++      const minted = mint(planned.end, ledger);
++      return planned.open.length === 0
++        ? minted
++        : emitGuardFired({
++            taskId,
++            iteration: 0,
++            guard: PLAN_INCOMPLETE_GUARD,
++            outcome: "warn",
++            reason: planIncompleteReason(planned.open),
++            metadata: { open: planned.open.map((s) => s.id), strategy: spec.strategy },
++          }).pipe(Effect.zipRight(minted));
++    };
++
++    const mint = (end: StrategyEnd, ledger: RunLedger): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> => {
+       if (pendingPause !== undefined) return paused(pendingPause);
+       if (end._tag === "Delegated") return Effect.succeed(relayDelegated(spec.strategy, start, steps, spend, end));
+       if (end._tag === "KernelTerminal") {
+diff --git a/packages/reasoning/tests/strategies/strategy-overhead.test.ts b/packages/reasoning/tests/strategies/strategy-overhead.test.ts
+index 51a094102..e194ba93a 100644
+--- a/packages/reasoning/tests/strategies/strategy-overhead.test.ts
++++ b/packages/reasoning/tests/strategies/strategy-overhead.test.ts
+@@ -46,7 +46,9 @@ const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly to
+   direct: { llmCalls: 1, tokensUsed: 278 },
+   reactive: { llmCalls: 2, tokensUsed: 607 },
+   adaptive: { llmCalls: 2, tokensUsed: 607 },
+-  blueprint: { llmCalls: 1, tokensUsed: 1001 },
++  // 2026-11-16 tokens 1001 -> 999: the planner's role sentence is the shared plan-only
++  // posture (kernel/policy/plan-producer-context.ts), two tokens shorter.
++  blueprint: { llmCalls: 1, tokensUsed: 999 },
+   // 2026-11-05 tokens 1105 -> 1102 (and tree-of-thought 1571 -> 1569, reflexion
+   // 1830 -> 1829): shrink already present at HEAD 6a6a7f4d5 before the 2b
+   // follow-ups; lowered by the follow-up mission, cause not attributed.
+diff --git a/scripts/check-file-size.sh b/scripts/check-file-size.sh
+index 9f2d3c390..1aa8a5055 100755
+--- a/scripts/check-file-size.sh
++++ b/scripts/check-file-size.sh
+@@ -210,6 +210,7 @@ GIANT_BAR=1000
+ # 2026-11-16 plan/execute primitives: reactive-agent.ts 1973->1972, chat/engine.ts 656->655 (plan()/execute()/setTodo added, paid for by condensed JSDoc/bodies).
+ # 2026-11-16 plan follow-ups: chat/engine.ts 655->654 (buffered-turn to-do carry + step events + id getter added; #loaded JSDoc condensed to one line).
+ # 2026-11-16 plan input: plan-execute.ts 817->782 (planner call moved to strategies/planning/input-plan.ts obtainPlan, which also adopts a caller-supplied plan).
++# 2026-11-16 plan producer substrate: plan-execute.ts 782->781 (local tool-summary mapping deleted; planner context, unrun-step redirect and result plan wired through shared policy modules).
+ SIZE_BASELINE=(
+   "runtime/src/reactive-agent.ts:1972"
+   "runtime/src/chat/engine.ts:654"
+@@ -218,7 +219,7 @@ SIZE_BASELINE=(
+   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:796"
+   "reasoning/src/kernel/loop/runner.ts:848"
+   "reasoning/src/kernel/loop/iterate-pass.ts:263"
+-  "reasoning/src/strategies/plan-execute.ts:782"
++  "reasoning/src/strategies/plan-execute.ts:781"
+   "benchmarks/src/runner.ts:963"
+   "core/src/services/event-bus.ts:188"
+   "runtime/src/runtime.ts:1105"

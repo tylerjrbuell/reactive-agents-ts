@@ -1,0 +1,179 @@
+// Plan-posture ablation driver (ablation-warden, 2026-11-16). Lives outside the repo; copy kept in the report dir.
+// usage: bun driver.ts --root <worktree> --model <tag> --arm <D|noCatalog|noBudget|wrapUp|recon|lean|answerTurn> --mode <plan|direct|strategy:plan-execute-reflect|strategy:blueprint>
+//        --runs 3 --tasks a,b --out <abs json> --trace-root <abs dir> --budget-sec 560 [--pilot]
+// One process = one (arm,model,mode). Resumes by cell id (skips cells already in --out). Run-major order.
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+
+const WORK = "/home/tylerbuell/campaign-traces/plan-posture/work" // not /tmp (RAM-backed tmpfs)
+const arg = (n: string, d?: string): string | undefined => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : d }
+const root = arg("root")!, model = arg("model")!, armName = arg("arm", "D")!, mode = arg("mode", "plan")!
+const runs = Number(arg("runs", "3")), out = arg("out")!, traceRoot = arg("trace-root")!
+const budgetSec = Number(arg("budget-sec", "560")), cellTimeoutMs = Number(arg("cell-timeout-sec", "200")) * 1000
+const taskFilter = arg("tasks")?.split(",")
+
+// ── arms: env only (readFlag reads process.env at call time). Every flag the arms touch is cleared first.
+const FLAGS = ["RA_PLAN_TOOL_CATALOG", "RA_PLAN_BUDGET", "RA_WRAPUP_RESERVE", "RA_PLAN_RECON", "RA_BUDGET_ANSWER_TURN", "RA_LEAN_THINKING"]
+for (const f of FLAGS) delete process.env[f]
+const ARMS: Record<string, Record<string, string>> = {
+  D: {}, noCatalog: { RA_PLAN_TOOL_CATALOG: "0" }, noBudget: { RA_PLAN_BUDGET: "0" },
+  nbWrapUp: { RA_PLAN_BUDGET: "0", RA_WRAPUP_RESERVE: "1" }, wrapUp: { RA_WRAPUP_RESERVE: "1" }, recon: { RA_PLAN_RECON: "1" },
+  lean: { RA_LEAN_THINKING: "1" }, answerTurn: { RA_BUDGET_ANSWER_TURN: "1" },
+}
+if (!(armName in ARMS)) throw new Error(`unknown arm ${armName}`)
+Object.assign(process.env, ARMS[armName], { REACTIVE_AGENTS_NO_AUTO_SHADOW: "1" })
+
+// ── tasks ────────────────────────────────────────────────────────────────────
+interface Task { id: string; maxIterations: number; fixtures: Record<string, string>; prompt: (w: string) => string; grade: (w: string) => { checks: [string, boolean][] } }
+const rd = (p: string): string => (existsSync(p) ? readFileSync(p, "utf8") : "")
+const js = (p: string): unknown => { try { return JSON.parse(rd(p)) } catch { return undefined } }
+const near = (a: unknown, b: number): boolean => typeof a === "number" && Math.abs(a - b) <= 0.01
+
+const LISTINGS = [
+  { id: "L-101", city: "Lisbon", nightly: 95, cleaningFee: 20, rating: 4.2, maxGuests: 2 },
+  { id: "L-102", city: "Lisbon", nightly: 110, cleaningFee: 30, rating: 4.6, maxGuests: 4 },
+  { id: "L-103", city: "Lisbon", nightly: 90, cleaningFee: 15, rating: 4.8, maxGuests: 1 },
+  { id: "L-104", city: "Lisbon", nightly: 120, cleaningFee: 25, rating: 4.9, maxGuests: 3 },
+  { id: "L-105", city: "Lisbon", nightly: 105, cleaningFee: 40, rating: 4.5, maxGuests: 2 },
+  { id: "P-201", city: "Porto", nightly: 70, cleaningFee: 20, rating: 4.9, maxGuests: 2 },
+  { id: "P-202", city: "Porto", nightly: 85, cleaningFee: 10, rating: 4.7, maxGuests: 4 },
+  { id: "L-106", city: "Lisbon", nightly: 140, cleaningFee: 35, rating: 4.9, maxGuests: 6 },
+]
+const SITES = [{ id: "s-14", name: "Alder Books" }, { id: "s-17", name: "Harbor Cafe" }, { id: "s-23", name: "Harbor Cafe Annex" }, { id: "s-31", name: "Birch Cycles" }]
+const VISITS: Record<string, number> = { "s-14": 8120, "s-17": 15432, "s-23": 3011, "s-31": 9876 }
+const INV: [string, number][] = [["SKU-A1", 4], ["SKU-B2", 25], ["SKU-C3", 9], ["SKU-D4", 31], ["SKU-E5", 0], ["SKU-F6", 14], ["SKU-G7", 7], ["SKU-H8", 18], ["SKU-I9", 22], ["SKU-J0", 10]]
+const NOTES = [17, 42, 8, 63, 29, 54]
+
+const TASKS: Task[] = [
+  {
+    id: "pp-booking", maxIterations: 10,
+    fixtures: { "listings.json": JSON.stringify(LISTINGS, null, 2) },
+    prompt: (w) => `${w}/listings.json lists rental listings. Book a stay in Lisbon for 3 nights for 2 guests: choose the cheapest nightly rate among Lisbon listings with rating at least 4.5 and maxGuests at least 2. Write ${w}/booking.json as {"listingId": <id>, "nights": 3, "total": <nightly * 3 + cleaningFee>}.`,
+    grade: (w) => { const b = js(`${w}/booking.json`) as Record<string, unknown> | undefined; return { checks: [["listing L-105", b?.listingId === "L-105"], ["nights 3", b?.nights === 3], ["total 355", near(b?.total, 355)]] } },
+  },
+  {
+    id: "pp-coins", maxIterations: 8,
+    fixtures: { "prices/btc.json": '{"symbol":"BTC","usd":50000}', "prices/eth.json": '{"symbol":"ETH","usd":2000}', "prices/sol.json": '{"symbol":"SOL","usd":100}', "prices/ada.json": '{"symbol":"ADA","usd":0.5}', "holdings.csv": "symbol,amount\nBTC,0.5\nETH,3\nSOL,20\nADA,1000\n" },
+    prompt: (w) => `${w}/prices has one JSON file per coin (btc.json, eth.json, sol.json, ada.json) with its USD price. ${w}/holdings.csv lists how many units I hold of each. Write ${w}/portfolio.json: an object with the USD value of each holding keyed by symbol (BTC, ETH, SOL, ADA) and a "total" key with the sum of the four.`,
+    grade: (w) => { const p = js(`${w}/portfolio.json`) as Record<string, unknown> | undefined; return { checks: [["BTC 25000", near(p?.BTC, 25000)], ["ETH 6000", near(p?.ETH, 6000)], ["SOL 2000", near(p?.SOL, 2000)], ["ADA 500", near(p?.ADA, 500)], ["total 33500", near(p?.total, 33500)]] } },
+  },
+  {
+    id: "pp-recon", maxIterations: 10,
+    fixtures: { "sites.json": JSON.stringify(SITES, null, 2), ...Object.fromEntries(Object.entries(VISITS).map(([id, v]) => [`stats/${id}.json`, JSON.stringify({ site: id, monthlyVisits: v })])) },
+    prompt: (w) => `Write ${w}/report.txt stating the monthly visits of the site named exactly "Harbor Cafe". Site ids are listed in ${w}/sites.json and each site's numbers are in ${w}/stats/<id>.json. The report must contain the visits number.`,
+    grade: (w) => { const r = rd(`${w}/report.txt`).replace(/,/g, ""); return { checks: [["has 15432", /\b15432\b/.test(r)], ["not annex 3011", !/\b3011\b/.test(r)]] } },
+  },
+  {
+    id: "pp-inventory", maxIterations: 10,
+    fixtures: { "inventory.csv": "sku,qty\n" + INV.map(([s, q]) => `${s},${q}`).join("\n") + "\n" },
+    prompt: (w) => `${w}/inventory.csv lists SKUs and on-hand quantities. Produce three files in ${w}: (1) low-stock.txt: every SKU whose qty is below 10, one per line, sorted alphabetically; (2) totals.json: {"totalUnits": <sum of all qty>, "skuCount": <number of SKUs>}; (3) summary.md: a short note containing a section headed "## Reorder". Create the files; a plan alone is not the deliverable.`,
+    grade: (w) => {
+      const low = INV.filter(([, q]) => q < 10).map(([s]) => s).sort().join(","); const t = js(`${w}/totals.json`) as Record<string, unknown> | undefined
+      return { checks: [["low-stock exact", rd(`${w}/low-stock.txt`).split(/\r?\n/).map((s) => s.trim()).filter(Boolean).join(",") === low], ["totalUnits", t?.totalUnits === INV.reduce((a, [, q]) => a + q, 0)], ["skuCount", t?.skuCount === INV.length], ["Reorder heading", /^## Reorder/m.test(rd(`${w}/summary.md`))]] }
+    },
+  },
+  {
+    id: "pp-notes6", maxIterations: 6,
+    fixtures: Object.fromEntries(NOTES.map((n, i) => [`notes-${i + 1}.txt`, String(n)])),
+    prompt: (w) => `Six files in ${w}, notes-1.txt through notes-6.txt, each contain one integer. For each notes-N.txt, write ${w}/out-N.txt containing exactly double that integer (digits only). Finish all six.`,
+    grade: (w) => ({ checks: NOTES.map((n, i) => [`out-${i + 1}=${n * 2}`, rd(`${w}/out-${i + 1}.txt`).trim() === String(n * 2)] as [string, boolean]) }),
+  },
+  {
+    id: "pp-merge", maxIterations: 10,
+    fixtures: { "base.json": '{"name":"svc","port":8000,"debug":false,"retries":3,"region":"us-east"}', "env-prod.json": '{"port":443,"debug":false,"region":"eu-west"}', "env-local.json": '{"debug":true,"retries":0}' },
+    prompt: (w) => `Merge three config files in ${w}, later overriding earlier: base.json, then env-prod.json, then env-local.json. Write the merged object to ${w}/merged.json. Write ${w}/changed-keys.txt listing, one per line and sorted alphabetically, every key whose final value differs from base.json.`,
+    grade: (w) => { const m = js(`${w}/merged.json`) as Record<string, unknown> | undefined; const keys = ["debug", "name", "port", "region", "retries"]; return { checks: [["merged exact", JSON.stringify(m, keys) === JSON.stringify({ name: "svc", port: 443, debug: true, retries: 0, region: "eu-west" }, keys)], ["changed keys", rd(`${w}/changed-keys.txt`).split(/\r?\n/).map((s) => s.trim()).filter(Boolean).join(",") === "debug,port,region,retries"]] } },
+  },
+]
+
+// ── trace facts ──────────────────────────────────────────────────────────────
+interface TraceFacts { files: number; llmRequests: number; numCtx: number[]; iterations: number; surfaces: string[]; endStatus: string | null; toolCalls: number; flags: Record<string, unknown>[]; guards: Record<string, number>; reconFindings: number; catalogLine: boolean }
+function traceFacts(dir: string): TraceFacts {
+  const f: TraceFacts = { files: 0, llmRequests: 0, numCtx: [], iterations: 0, surfaces: [], endStatus: null, toolCalls: 0, flags: [], guards: {}, reconFindings: 0, catalogLine: false }
+  if (!existsSync(dir)) return f
+  for (const name of readdirSync(dir).filter((n) => n.endsWith(".jsonl")).sort()) {
+    f.files++
+    const text = readFileSync(join(dir, name), "utf8")
+    if (/tool: name/.test(text)) f.catalogLine = true
+    for (const line of text.split("\n")) {
+      if (!line.trim()) continue
+      let e: Record<string, unknown>; try { e = JSON.parse(line) as Record<string, unknown> } catch { continue }
+      const k = e.kind
+      if (k === "guard-fired") {
+        const g = String(e.guard); f.guards[g] = (f.guards[g] ?? 0) + 1
+        if (g === "wire-request") { f.llmRequests++; const n = ((e.metadata as { numCtx?: number } | undefined) ?? {}).numCtx; if (typeof n === "number" && !f.numCtx.includes(n)) f.numCtx.push(n) }
+      } else if (k === "tool-surface-resolved") { f.iterations++; const v = (e.visible ?? e.tools ?? e.names) as unknown; if (Array.isArray(v) && f.surfaces.length < 6) f.surfaces.push(v.map(String).join("+")) }
+      else if (k === "run-completed") f.endStatus = String(e.status ?? "")
+      else if (k === "run-started") { const c = (e.config ?? {}) as { mechanisms?: Record<string, unknown>; posture?: unknown }; f.flags.push({ posture: c.posture ?? "execute", ...Object.fromEntries(["planToolCatalog", "planBudget", "planRecon", "wrapUpReserve", "leanThinking", "budgetAnswerTurn"].map((x) => [x, (c.mechanisms ?? {})[x]])) }) }
+      else if (k === "tool-call-start") f.toolCalls++
+      if (k === "ledger-entry" && /plan-finding/.test(line)) f.reconFindings++
+    }
+  }
+  return f
+}
+
+// ── one cell ─────────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mod = await import(`${root}/packages/runtime/src/index.ts`) as { ReactiveAgents: { create(): any } }
+async function runCell(task: Task, run: number, cellDir: string): Promise<Record<string, unknown>> {
+  const work = join(WORK, `${process.pid}-${task.id}-${run}`)
+  rmSync(work, { recursive: true, force: true }); mkdirSync(work, { recursive: true })
+  for (const [p, c] of Object.entries(task.fixtures)) { mkdirSync(dirname(join(work, p)), { recursive: true }); writeFileSync(join(work, p), c) }
+  rmSync(cellDir, { recursive: true, force: true }); mkdirSync(cellDir, { recursive: true })
+  const t0 = performance.now()
+  let billed = 0, llmCalls = 0, sawLLM = false, planMs = 0, planSteps = -1, planErr: string | undefined, execErr: string | undefined, output = "", success: boolean | undefined
+  const strat = mode.startsWith("strategy:") ? mode.slice(9) : "reactive"
+  const builder = mod.ReactiveAgents.create().withName(`pp-${task.id}`).withProvider("ollama").withModel(model).withMaxIterations(task.maxIterations)
+    .withTools({ builtins: ["file-read", "file-write"], workspace: work }).withReasoning({ defaultStrategy: strat, enableStrategySwitching: false })
+    .withTracing({ dir: cellDir }).withKillSwitch().withTimeout(Math.round(cellTimeoutMs / 2))
+  const _log = console.log; console.log = () => {}
+  const agent = await builder.build(); console.log = _log
+  const unsub = await agent.subscribe((ev: { _tag: string; billedTokens?: number; tokensUsed?: number }) => { if (ev._tag === "LLMRequestCompleted") { billed += ev.billedTokens ?? ev.tokensUsed ?? 0; llmCalls++; sawLLM = true } })
+  const prompt = `Working directory for this task: ${work}\n\n${task.prompt(work)}`
+  const body = async (): Promise<void> => {
+    if (mode === "plan") {
+      const p0 = performance.now()
+      let plan: { steps: unknown[] } | undefined
+      try { plan = await agent.plan(prompt); planSteps = plan!.steps.length } catch (e) { planErr = e instanceof Error ? `${e.name}:${e.message}`.slice(0, 160) : String(e) }
+      planMs = performance.now() - p0
+      if (plan) { try { const r = await agent.execute(plan); output = r.output; success = r.success } catch (e) { execErr = e instanceof Error ? e.message.slice(0, 160) : String(e) } }
+    } else {
+      try { const r = await agent.run(prompt); output = r.output; success = r.success } catch (e) { execErr = e instanceof Error ? e.message.slice(0, 160) : String(e) }
+    }
+  }
+  let timedOut = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([body(), new Promise<void>((res) => { timer = setTimeout(() => { timedOut = true; res() }, cellTimeoutMs) })])
+  clearTimeout(timer)
+  if (timedOut) { try { await agent.terminate?.() } catch { /* no-op */ } }
+  const durationMs = performance.now() - t0
+  unsub(); try { await agent.dispose() } catch { /* no-op */ }
+  const g = task.grade(work).checks
+  const tf = traceFacts(cellDir)
+  rmSync(work, { recursive: true, force: true })
+  const passN = g.filter(([, ok]) => ok).length
+  return {
+    taskId: task.id, run, accuracy: passN === g.length ? 1 : 0, fraction: passN / g.length, failedChecks: g.filter(([, ok]) => !ok).map(([n]) => n),
+    billedTokens: sawLLM ? billed : null, llmCalls, durationMs: Math.round(durationMs), planMs: Math.round(planMs), planSteps, planErr, execErr, timedOut, success,
+    outputHead: output.slice(0, 120), trace: tf,
+    inconclusive: tf.files === 0 || llmCalls === 0,
+  }
+}
+
+// ── main ─────────────────────────────────────────────────────────────────────
+interface Results { meta: Record<string, unknown>; cells: Record<string, unknown>[] }
+const res: Results = existsSync(out) ? JSON.parse(readFileSync(out, "utf8")) : { meta: { arm: armName, mode, model, root, runs, startedAt: new Date().toISOString(), env: ARMS[armName] }, cells: [] }
+const persist = (): void => { mkdirSync(dirname(out), { recursive: true }); writeFileSync(`${out}.tmp`, JSON.stringify(res, null, 2)); renameSync(`${out}.tmp`, out) }
+const tasks = TASKS.filter((t) => !taskFilter || taskFilter.includes(t.id))
+const start = Date.now(); let ran = 0
+outer: for (let run = 0; run < runs; run++) for (const t of tasks) {
+  const id = `${armName}|${mode}|${model}|${t.id}|${run}`
+  if (res.cells.some((c) => c.cellId === id && !c.voided)) continue
+  if ((Date.now() - start) / 1000 + cellTimeoutMs / 1000 * 0.5 > budgetSec) break outer
+  const cell = await runCell(t, run, join(traceRoot, `${t.id}-r${run}`))
+  res.cells.push({ cellId: id, arm: armName, mode, model, root, ...cell }); persist(); ran++
+  console.error(`${id} acc=${cell.accuracy} frac=${(cell.fraction as number).toFixed(2)} calls=${cell.llmCalls} tok=${cell.billedTokens} ${Math.round((cell.durationMs as number) / 1000)}s steps=${cell.planSteps}${cell.timedOut ? " TIMEOUT" : ""}${cell.planErr ? " PLANERR" : ""}${cell.execErr ? " EXECERR" : ""}`)
+  if (arg("pilot")) break outer
+}
+console.error(JSON.stringify({ ran, remaining: tasks.length * runs - res.cells.filter((c) => !c.voided).length }))
+process.exit(0)

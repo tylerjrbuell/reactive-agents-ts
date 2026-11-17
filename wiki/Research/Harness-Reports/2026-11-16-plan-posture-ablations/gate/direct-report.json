@@ -1,0 +1,1468 @@
+{
+ "sessionId": "plan-posture-ablation",
+ "sessionVersion": "1",
+ "gitSha": "pp-head-73b05b173",
+ "taskReports": [
+  {
+   "taskId": "pp-booking",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5173,
+     "billedTokens": 5173,
+     "durationMs": 22530,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5310,
+     "billedTokens": 5310,
+     "durationMs": 19316,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5999,
+     "billedTokens": 5999,
+     "durationMs": 25806,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 5494.0,
+   "meanBilledTokens": 5494.0,
+   "meanDurationMs": 22550.666666666668,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-coins",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5175,
+     "billedTokens": 5175,
+     "durationMs": 19485,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 5802,
+     "billedTokens": 5802,
+     "durationMs": 37142,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5089,
+     "billedTokens": 5089,
+     "durationMs": 19135,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.6666666666666666
+    }
+   ],
+   "variance": 0.22222222222222224,
+   "meanTokens": 5355.333333333333,
+   "meanBilledTokens": 5355.333333333333,
+   "meanDurationMs": 25254.0,
+   "passRate": 1,
+   "solveRate": 0.6666666666666666
+  },
+  {
+   "taskId": "pp-recon",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 6665,
+     "billedTokens": 6665,
+     "durationMs": 20952,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5334,
+     "billedTokens": 5334,
+     "durationMs": 17295,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5355,
+     "billedTokens": 5355,
+     "durationMs": 17753,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 5784.666666666667,
+   "meanBilledTokens": 5784.666666666667,
+   "meanDurationMs": 18666.666666666668,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-inventory",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5588,
+     "billedTokens": 5588,
+     "durationMs": 26891,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5697,
+     "billedTokens": 5697,
+     "durationMs": 27575,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 5848,
+     "billedTokens": 5848,
+     "durationMs": 29446,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 5711.0,
+   "meanBilledTokens": 5711.0,
+   "meanDurationMs": 27970.666666666668,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-notes6",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 6621,
+     "billedTokens": 6621,
+     "durationMs": 40449,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 4373,
+     "billedTokens": 4373,
+     "durationMs": 20669,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 5497.0,
+   "meanBilledTokens": 5497.0,
+   "meanDurationMs": 30559.0,
+   "passRate": 1,
+   "solveRate": 0.0
+  },
+  {
+   "taskId": "pp-merge",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 12891,
+     "billedTokens": 12891,
+     "durationMs": 98020,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 7366,
+     "billedTokens": 7366,
+     "durationMs": 42816,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 10128.5,
+   "meanBilledTokens": 10128.5,
+   "meanDurationMs": 70418.0,
+   "passRate": 1,
+   "solveRate": 0.0
+  },
+  {
+   "taskId": "pp-booking",
+   "modelVariantId": "cogito:14b",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 4022,
+     "billedTokens": 4022,
+     "durationMs": 30392,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 3926,
+     "billedTokens": 3926,
+     "durationMs": 19497,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 3916,
+     "billedTokens": 3916,
+     "durationMs": 18713,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 3954.6666666666665,
+   "meanBilledTokens": 3954.6666666666665,
+   "meanDurationMs": 22867.333333333332,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-coins",
+   "modelVariantId": "cogito:14b",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 3868,
+     "billedTokens": 3868,
+     "durationMs": 19662,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 3765,
+     "billedTokens": 3765,
+     "durationMs": 19296,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 3782,
+     "billedTokens": 3782,
+     "durationMs": 19370,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 3805.0,
+   "meanBilledTokens": 3805.0,
+   "meanDurationMs": 19442.666666666668,
+   "passRate": 1,
+   "solveRate": 0.0
+  },
+  {
+   "taskId": "pp-recon",
+   "modelVariantId": "cogito:14b",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 3943,
+     "billedTokens": 3943,
+     "durationMs": 9385,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 3969,
+     "billedTokens": 3969,
+     "durationMs": 10194,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 3942,
+     "billedTokens": 3942,
+     "durationMs": 9397,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 3951.3333333333335,
+   "meanBilledTokens": 3951.3333333333335,
+   "meanDurationMs": 9658.666666666666,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-inventory",
+   "modelVariantId": "cogito:14b",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 3472,
+     "billedTokens": 3472,
+     "durationMs": 19256,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 3400,
+     "billedTokens": 3400,
+     "durationMs": 18252,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 3463,
+     "billedTokens": 3463,
+     "durationMs": 19610,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 3445.0,
+   "meanBilledTokens": 3445.0,
+   "meanDurationMs": 19039.333333333332,
+   "passRate": 1,
+   "solveRate": 0.0
+  },
+  {
+   "taskId": "pp-notes6",
+   "modelVariantId": "cogito:14b",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 4941,
+     "billedTokens": 4941,
+     "durationMs": 31073,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 4922,
+     "billedTokens": 4922,
+     "durationMs": 30648,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 7318,
+     "billedTokens": 7318,
+     "durationMs": 30542,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 5727.0,
+   "meanBilledTokens": 5727.0,
+   "meanDurationMs": 30754.333333333332,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-merge",
+   "modelVariantId": "cogito:14b",
+   "variantId": "direct",
+   "variantLabel": "direct",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 3871,
+     "billedTokens": 3871,
+     "durationMs": 29176,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 3732,
+     "billedTokens": 3732,
+     "durationMs": 21674,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 3868,
+     "billedTokens": 3868,
+     "durationMs": 27077,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 3823.6666666666665,
+   "meanBilledTokens": 3823.6666666666665,
+   "meanDurationMs": 25975.666666666668,
+   "passRate": 1,
+   "solveRate": 0.0
+  },
+  {
+   "taskId": "pp-booking",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 11284,
+     "billedTokens": 11284,
+     "durationMs": 53521,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 9907,
+     "billedTokens": 9907,
+     "durationMs": 42820,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 11272,
+     "billedTokens": 11272,
+     "durationMs": 59734,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 10821.0,
+   "meanBilledTokens": 10821.0,
+   "meanDurationMs": 52025.0,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-recon",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 9465,
+     "billedTokens": 9465,
+     "durationMs": 38824,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 8220,
+     "billedTokens": 8220,
+     "durationMs": 27434,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 8092,
+     "billedTokens": 8092,
+     "durationMs": 26009,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 8592.333333333334,
+   "meanBilledTokens": 8592.333333333334,
+   "meanDurationMs": 30755.666666666668,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-inventory",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 15240,
+     "billedTokens": 15240,
+     "durationMs": 109684,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 9755,
+     "billedTokens": 9755,
+     "durationMs": 47446,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 10922,
+     "billedTokens": 10922,
+     "durationMs": 41714,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.6666666666666666
+    }
+   ],
+   "variance": 0.22222222222222224,
+   "meanTokens": 11972.333333333334,
+   "meanBilledTokens": 11972.333333333334,
+   "meanDurationMs": 66281.33333333333,
+   "passRate": 1,
+   "solveRate": 0.6666666666666666
+  },
+  {
+   "taskId": "pp-notes6",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 8682,
+     "billedTokens": 8682,
+     "durationMs": 37379,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 26204,
+     "billedTokens": 26204,
+     "durationMs": 87668,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 9730,
+     "billedTokens": 9730,
+     "durationMs": 46865,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.3333333333333333
+    }
+   ],
+   "variance": 0.22222222222222224,
+   "meanTokens": 14872.0,
+   "meanBilledTokens": 14872.0,
+   "meanDurationMs": 57304.0,
+   "passRate": 1,
+   "solveRate": 0.3333333333333333
+  },
+  {
+   "taskId": "pp-coins",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 9666,
+     "billedTokens": 9666,
+     "durationMs": 47497,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 9277,
+     "billedTokens": 9277,
+     "durationMs": 37591,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 10399,
+     "billedTokens": 10399,
+     "durationMs": 48295,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 9780.666666666666,
+   "meanBilledTokens": 9780.666666666666,
+   "meanDurationMs": 44461.0,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-merge",
+   "modelVariantId": "qwen3:latest",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 17771,
+     "billedTokens": 17771,
+     "durationMs": 127100,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 13740,
+     "billedTokens": 13740,
+     "durationMs": 84888,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 16375,
+     "billedTokens": 16375,
+     "durationMs": 111545,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 15962.0,
+   "meanBilledTokens": 15962.0,
+   "meanDurationMs": 107844.33333333333,
+   "passRate": 1,
+   "solveRate": 0.0
+  },
+  {
+   "taskId": "pp-booking",
+   "modelVariantId": "cogito:14b",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 6723,
+     "billedTokens": 6723,
+     "durationMs": 52294,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 6637,
+     "billedTokens": 6637,
+     "durationMs": 39874,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 7330,
+     "billedTokens": 7330,
+     "durationMs": 42108,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 6896.666666666667,
+   "meanBilledTokens": 6896.666666666667,
+   "meanDurationMs": 44758.666666666664,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-coins",
+   "modelVariantId": "cogito:14b",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 6411,
+     "billedTokens": 6411,
+     "durationMs": 37430,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 6549,
+     "billedTokens": 6549,
+     "durationMs": 37561,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 6629,
+     "billedTokens": 6629,
+     "durationMs": 41397,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.3333333333333333
+    }
+   ],
+   "variance": 0.22222222222222224,
+   "meanTokens": 6529.666666666667,
+   "meanBilledTokens": 6529.666666666667,
+   "meanDurationMs": 38796.0,
+   "passRate": 1,
+   "solveRate": 0.3333333333333333
+  },
+  {
+   "taskId": "pp-recon",
+   "modelVariantId": "cogito:14b",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 7019,
+     "billedTokens": 7019,
+     "durationMs": 30579,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 6450,
+     "billedTokens": 6450,
+     "durationMs": 30455,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 6447,
+     "billedTokens": 6447,
+     "durationMs": 28166,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 6638.666666666667,
+   "meanBilledTokens": 6638.666666666667,
+   "meanDurationMs": 29733.333333333332,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-inventory",
+   "modelVariantId": "cogito:14b",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 6143,
+     "billedTokens": 6143,
+     "durationMs": 41017,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 5941,
+     "billedTokens": 5941,
+     "durationMs": 31644,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 5888,
+     "billedTokens": 5888,
+     "durationMs": 28893,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 5990.666666666667,
+   "meanBilledTokens": 5990.666666666667,
+   "meanDurationMs": 33851.333333333336,
+   "passRate": 1,
+   "solveRate": 0.0
+  },
+  {
+   "taskId": "pp-notes6",
+   "modelVariantId": "cogito:14b",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 8063,
+     "billedTokens": 8063,
+     "durationMs": 52149,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 7735,
+     "billedTokens": 7735,
+     "durationMs": 48463,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 1
+      }
+     ],
+     "tokensUsed": 8103,
+     "billedTokens": 8103,
+     "durationMs": 60805,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 1.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 7967.0,
+   "meanBilledTokens": 7967.0,
+   "meanDurationMs": 53805.666666666664,
+   "passRate": 1,
+   "solveRate": 1.0
+  },
+  {
+   "taskId": "pp-merge",
+   "modelVariantId": "cogito:14b",
+   "variantId": "plan",
+   "variantLabel": "plan",
+   "runs": [
+    {
+     "runIndex": 0,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 8247,
+     "billedTokens": 8247,
+     "durationMs": 67238,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 1,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 6464,
+     "billedTokens": 6464,
+     "durationMs": 53756,
+     "status": "pass",
+     "output": ""
+    },
+    {
+     "runIndex": 2,
+     "dimensions": [
+      {
+       "dimension": "accuracy",
+       "score": 0
+      }
+     ],
+     "tokensUsed": 7571,
+     "billedTokens": 7571,
+     "durationMs": 66786,
+     "status": "pass",
+     "output": ""
+    }
+   ],
+   "meanScores": [
+    {
+     "dimension": "accuracy",
+     "score": 0.0
+    }
+   ],
+   "variance": 0.0,
+   "meanTokens": 7427.333333333333,
+   "meanBilledTokens": 7427.333333333333,
+   "meanDurationMs": 62593.333333333336,
+   "passRate": 1,
+   "solveRate": 0.0
+  }
+ ],
+ "reproducibility": {}
+}

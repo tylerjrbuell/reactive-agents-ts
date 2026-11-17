@@ -1,0 +1,888 @@
+{
+  "meta": {
+    "arm": "D",
+    "mode": "strategy:blueprint",
+    "model": "qwen3:latest",
+    "root": "/home/tylerbuell/pp-wt",
+    "runs": 3,
+    "startedAt": "2026-11-17T07:55:42.481Z",
+    "env": {}
+  },
+  "cells": [
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-booking|0",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-booking",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "listing L-105",
+        "nights 3",
+        "total 355"
+      ],
+      "billedTokens": 7009,
+      "llmCalls": 3,
+      "durationMs": 21547,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": false,
+      "outputHead": "The cheapest eligible listing in Lisbon for 2 guests with a rating of at least 4.5 and capacity for 2 guests is **L-105*",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "failure",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-coins|0",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-coins",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4848,
+      "llmCalls": 3,
+      "durationMs": 16224,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Your portfolio has been calculated and saved to `portfolio.json`. Here's the breakdown:\n\n- **BTC**: $25,000  \n- **ETH**:",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-recon|0",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-recon",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4962,
+      "llmCalls": 4,
+      "durationMs": 13026,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The monthly visits for the site \"Harbor Cafe\" are **15,432**. The report has been successfully written to `/home/tylerbu",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-merge|0",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-merge",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6776,
+      "llmCalls": 4,
+      "durationMs": 30857,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The merged configuration file `merged.json` has been successfully created in the specified directory. The following keys",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-booking|1",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-booking",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "listing L-105",
+        "nights 3",
+        "total 355"
+      ],
+      "billedTokens": 7144,
+      "llmCalls": 3,
+      "durationMs": 18242,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": false,
+      "outputHead": "The cheapest eligible listing in Lisbon for 2 guests with a rating of at least 4.5 and capacity for 2 guests is **L-105*",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "failure",
+        "toolCalls": 2,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-coins|1",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-coins",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4987,
+      "llmCalls": 3,
+      "durationMs": 17831,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Your portfolio has been calculated and saved to `portfolio.json`. Here's the breakdown:\n\n- **BTC**: $25,000  \n- **ETH**:",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-recon|1",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-recon",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4956,
+      "llmCalls": 4,
+      "durationMs": 12474,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The monthly visits for the site \"Harbor Cafe\" are **15432**. The report has been successfully written to `/home/tylerbue",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-merge|1",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-merge",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6210,
+      "llmCalls": 4,
+      "durationMs": 24897,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The merged configuration file has been successfully written to `merged.json` with the following settings:  \n- `name`: \"s",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-booking|2",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-booking",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 8308,
+      "llmCalls": 4,
+      "durationMs": 20302,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The booking for a 3-night stay in Lisbon for 2 guests has been finalized. The selected listing (ID: L-105) meets all cri",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-coins|2",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-coins",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4966,
+      "llmCalls": 3,
+      "durationMs": 17107,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Your portfolio has been calculated and saved to `portfolio.json`. Here's the breakdown:\n\n- **BTC**: $25,000  \n- **ETH**:",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 6,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-recon|2",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-recon",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 4731,
+      "llmCalls": 4,
+      "durationMs": 10726,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The monthly visits for the site \"Harbor Cafe\" are **15,432**. This data has been recorded in `/home/tylerbuell/campaign-",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 3,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-merge|2",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-merge",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 6913,
+      "llmCalls": 4,
+      "durationMs": 31703,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The merged configuration file `merged.json` has been successfully written to the working directory. The following keys d",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 5,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-inventory|0",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-inventory",
+      "run": 0,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 7333,
+      "llmCalls": 5,
+      "durationMs": 34956,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "**low-stock.txt**  \nSKU-A1  \nSKU-C3  \nSKU-E5  \nSKU-G7  \n\n**totals.json**  \n{\"totalUnits\":140,\"skuCount\":10}  \n\n**summary",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-notes6|0",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-notes6",
+      "run": 0,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "out-1=34",
+        "out-2=84",
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 4715,
+      "llmCalls": 2,
+      "durationMs": 20702,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Here are the results for each file:\n\n- **out-1.txt**: 34  \n- **out-2.txt**: 84  \n- **out-3.txt**: 16  \n- **out-4.txt**: ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-inventory|1",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-inventory",
+      "run": 1,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 9210,
+      "llmCalls": 6,
+      "durationMs": 41923,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Three files have been created in the specified directory:\n\n1. **low-stock.txt**  \n   Contains SKUs with quantities below",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-notes6|1",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-notes6",
+      "run": 1,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "out-1=34",
+        "out-2=84",
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 4642,
+      "llmCalls": 2,
+      "durationMs": 20060,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Here are the results for each file:\n\n- **out-1.txt**: 34  \n- **out-2.txt**: 84  \n- **out-3.txt**: 16  \n- **out-4.txt**: ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-inventory|2",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-inventory",
+      "run": 2,
+      "accuracy": 1,
+      "fraction": 1,
+      "failedChecks": [],
+      "billedTokens": 8488,
+      "llmCalls": 5,
+      "durationMs": 41411,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "The task has been completed successfully. Here's the outcome:\n\n1. **low-stock.txt** contains the following SKUs (sorted ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 4,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    },
+    {
+      "cellId": "D|strategy:blueprint|qwen3:latest|pp-notes6|2",
+      "arm": "D",
+      "mode": "strategy:blueprint",
+      "model": "qwen3:latest",
+      "root": "/home/tylerbuell/pp-wt",
+      "taskId": "pp-notes6",
+      "run": 2,
+      "accuracy": 0,
+      "fraction": 0,
+      "failedChecks": [
+        "out-1=34",
+        "out-2=84",
+        "out-3=16",
+        "out-4=126",
+        "out-5=58",
+        "out-6=108"
+      ],
+      "billedTokens": 4676,
+      "llmCalls": 2,
+      "durationMs": 20281,
+      "planMs": 0,
+      "planSteps": -1,
+      "timedOut": false,
+      "success": true,
+      "outputHead": "Here are the results for each file:\n\n- **out-1.txt**: 34  \n- **out-2.txt**: 84  \n- **out-3.txt**: 16  \n- **out-4.txt**: ",
+      "trace": {
+        "files": 1,
+        "llmRequests": 0,
+        "numCtx": [],
+        "iterations": 0,
+        "surfaces": [],
+        "endStatus": "success",
+        "toolCalls": 12,
+        "flags": [
+          {
+            "posture": "execute",
+            "planToolCatalog": true,
+            "planBudget": true,
+            "planRecon": false,
+            "wrapUpReserve": false,
+            "leanThinking": false,
+            "budgetAnswerTurn": false
+          }
+        ],
+        "guards": {
+          "solve-evidence": 1,
+          "terminal_decision": 1
+        },
+        "reconFindings": 0,
+        "catalogLine": false
+      },
+      "inconclusive": false
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+import sys, json, math
+sys.path.insert(0, "/home/tylerbuell/campaign-traces/plan-posture")
+import analyze
+_orig = analyze.load
+MAXRUN = [99]; TASKS = [None]
+def _l(tag, model):
+    cs = _orig(tag, model)
+    return None if cs is None else [c for c in cs if (TASKS[0] is None or c["taskId"] in TASKS[0]) and c["run"] < MAXRUN[0]]
+analyze.load = _l
+def trig_rate(tag, model, guard, maxrun=99):
+    cs = [c for c in (_orig(tag, model) or []) if not c.get("inconclusive") and c["run"] < maxrun]
+    if not cs: return None
+    return round(sum(1 for c in cs if any(guard in g for g in c["trace"]["guards"])) / len(cs), 2), len(cs)
+def line(ref, cand, model, tasks=None, label="", maxrun=99):
+    MAXRUN[0] = maxrun; TASKS[0] = tasks
+    d = analyze.compare(ref, cand, model)
+    if "missing" in d: return f"{label} {model} MISSING {d['missing']}"
+    return (f"{label:32s} {model:13s} n={d['nA']}/{d['nB']} acc {d['accA']:.2f}->{d['accB']:.2f} lift {d['lift_pp']:+.1f}pp sigma {d['sigma_pp']} z={d['z']} | calls {d['callsA']}->{d['callsB']} ({d['calls_change_pct']:+}%, paired {d['calls_paired_diff']} ci95 {d['calls_diff_ci95']}) | billed tok {d['tokA']}->{d['tokB']} ({d['tok_change_pct']:+}%) | timeouts {d['timeoutsA']}/{d['timeoutsB']} voided {d['voidedA']}/{d['voidedB']}")
+def accs(tag, model, maxrun=99, tasks=None):
+    cs = [c for c in (_orig(tag, model) or []) if not c.get("inconclusive") and c["run"] < maxrun and (tasks is None or c["taskId"] in tasks)]
+    return f"{sum(c['accuracy'] for c in cs)}/{len(cs)}"
+if __name__ == "__main__":
+    M = ["qwen3:latest", "cogito:14b"]
+    FAM = ["pp-booking", "pp-coins", "pp-recon", "pp-inventory", "pp-notes6", "pp-merge"]
+    T4 = ["pp-notes6", "pp-coins", "pp-inventory", "pp-merge"]
+    print("== NOISE CONTROL: accuracy (runs 0-2, 6 tasks) per natural-family arm; noBudget/wrapUp are null-equivalent where trigger rate ~0")
+    for m in M: print(m, {a: accs(f"head-{a}-plan", m, 3) for a in ("D", "noCatalog", "noBudget", "wrapUp", "recon", "lean", "answerTurn")}, "wt-D:", accs("wt-D-plan", m, 3))
+    print("== M1 planToolCatalog (ref=catalog OFF, cand=D ON)  [lift = ON minus OFF]")
+    for m in M: print(line("head-noCatalog-plan", "head-D-plan", m, FAM, "catalog on vs off", 3))
+    print("== M2 planBudget natural family (ref=OFF, cand=D ON)")
+    for m in M: print(line("head-noBudget-plan", "head-D-plan", m, FAM, "budget on vs off natural", 3))
+    print("   trigger rate plan_budget_raised, D natural:", {m: trig_rate("head-D-plan", m, "plan_budget_raised", 3) for m in M})
+    print("== M2 planBudget tight (maxIter 4) (ref=OFF, cand=ON)")
+    for m in M: print(line("head-noBudget@4-plan", "head-D@4-plan", m, T4, "budget on vs off tight"))
+    print("   trigger rate plan_budget_raised, D@4:", {m: trig_rate("head-D@4-plan", m, "plan_budget_raised") for m in M})
+    print("   tight-family accuracy by arm:", {m: {a: accs(f"head-{a}@4-plan", m) for a in ("D", "noBudget", "wrapUp")} for m in M})
+    print("== M3 wrapUp natural (ref=D, cand=wrapUp)")
+    for m in M: print(line("head-D-plan", "head-wrapUp-plan", m, FAM, "wrapUp on vs D natural", 3))
+    print("== M3 wrapUp tight (ref=D@4, cand=wrapUp@4)")
+    for m in M: print(line("head-D@4-plan", "head-wrapUp@4-plan", m, T4, "wrapUp on vs D tight"))
+    print("   non-routine guards fired in wrapUp arms:")
+    for t in ("head-wrapUp-plan", "head-wrapUp@4-plan"):
+        for m in M:
+            g = {}
+            for c in (_orig(t, m) or []):
+                for k, v in c["trace"]["guards"].items(): g[k] = g.get(k, 0) + 1
+            print("  ", t, m, {k: v for k, v in g.items() if k not in ("wire-request", "posture-applied", "exit_gate", "deliverable_decision", "terminal_decision", "tool_call_extracted")})
+    print("== M4 recon (ref=D, cand=recon): pp-recon only (runs 0-8) and all tasks (runs 0-2)")
+    for m in M: print(line("head-D-plan", "head-recon-plan", m, ["pp-recon"], "recon on vs D (pp-recon)"))
+    for m in M: print(line("head-D-plan", "head-recon-plan", m, FAM, "recon on vs D (all 6 tasks)", 3))
+    for m in M:
+        cs = _orig("head-recon-plan", m) or []
+        print("   recon arm", m, "cells", len(cs), "cells with plan-finding", sum(1 for c in cs if c["trace"]["reconFindings"] > 0), "cells with bookkeeping_refund", sum(1 for c in cs if "bookkeeping_refund" in c["trace"]["guards"]))
+    print("== M5 levers (ref=D, cand=arm)")
+    for a in ("lean", "answerTurn"):
+        for m in M: print(line("head-D-plan", f"head-{a}-plan", m, FAM, f"{a} vs D", 3))
+    print("== M6 substrate (ref=HEAD, cand=HEAD+snapshot)")
+    for m in M: print(line("head-D-plan", "wt-D-plan", m, FAM, "plan posture: wt vs head", 3))
+    for s in ("blueprint", "plan-execute-reflect"):
+        for m in M: print(line(f"head-D-strategy_{s}", f"wt-D-strategy_{s}", m, None, f"strategy {s}: wt vs head"))
+    print("== M0 plan posture vs direct (ref=direct, cand=plan)")
+    for m in M: print(line("head-D-direct", "head-D-plan", m, FAM, "plan->execute vs direct run", 3))

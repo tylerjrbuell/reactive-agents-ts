@@ -1,0 +1,11 @@
+// Wrapper: forces every builder's maxIterations to PP_MAXITER (tight-budget family), then runs driver.ts unchanged.
+// The runtime module is imported by the same specifier driver.ts uses, so both see one module instance.
+const arg = (n: string): string | undefined => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : undefined }
+const mi = Number(process.env.PP_MAXITER)
+if (!Number.isFinite(mi) || mi <= 0) throw new Error("PP_MAXITER required")
+const mod = (await import(`${arg("root")}/packages/runtime/src/index.ts`)) as { ReactiveAgentBuilder: { prototype: { withMaxIterations(n: number): unknown } } }
+const proto = mod.ReactiveAgentBuilder.prototype
+const orig = proto.withMaxIterations
+proto.withMaxIterations = function (this: unknown, _n: number): unknown { return orig.call(this, mi) }
+console.error(`driver2: maxIterations forced to ${mi}`)
+await import("./driver.ts")
