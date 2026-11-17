@@ -20,7 +20,7 @@ export type InterruptAnswer = { readonly ok: true; readonly persisted: boolean; 
  * The toast for a Pause or Stop. `where` is where Continue shows up ("under the reply" for
  * chat, "on the Runs page" for a desk run).
  */
-export function interruptToast(kind: "pause" | "stop", answer: InterruptAnswer, where: string): InterruptToast {
+export function interruptToast(kind: "pause" | "stop", answer: InterruptAnswer, where: string, enable: string = "Turn on Durable runs (Lab · Execution)"): InterruptToast {
   const done = kind === "pause" ? "Paused" : "Stopped";
   if (!answer.ok) return { tone: "warning", title: `Could not ${kind} the run`, detail: "The server did not answer. Try again." };
   if (answer.stopped === false) return { tone: "warning", title: "Nothing was running", detail: "The run had already ended." };
@@ -28,12 +28,12 @@ export function interruptToast(kind: "pause" | "stop", answer: InterruptAnswer, 
   return {
     tone: "warning",
     title: "Stopped",
-    detail: "This run is not using Durable runs, so there is nothing to continue from. Turn on Durable runs (Lab · Execution) to pause and continue.",
+    detail: `This run is not using Durable runs, so there is nothing to continue from. ${enable} to pause and continue.`,
   };
 }
 
 /** The chat Pause toast: Continue appears under the reply. */
-export const pauseToast = (answer: InterruptAnswer): InterruptToast => interruptToast("pause", answer, "under the reply");
+export const pauseToast = (answer: InterruptAnswer): InterruptToast => interruptToast("pause", answer, "under the reply", "Turn on Durable runs with /durable");
 
 /** Read the server's Pause / Stop answer (`{ ok, persisted }`); a refusal or a body that is not JSON is `{ ok: false }`. */
 export async function interruptAnswerOf(res: Response): Promise<InterruptAnswer> {

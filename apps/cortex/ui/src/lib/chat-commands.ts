@@ -8,10 +8,10 @@ export type ChatCommandName =
   | "clear" | "compact" | "fork" | "rerun" | "rewind" | "copy" | "export" | "rename" | "help"
   | "model" | "provider" | "thinking" | "skill" | "skills" | "docs"
   | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals"
-  | "goal" | "plan" | "execute" | "go" | "loop" | "schedule" | "agent" | "mcp" | "btw";
+  | "durable" | "goal" | "plan" | "execute" | "go" | "loop" | "schedule" | "agent" | "mcp" | "btw";
 
 /** What `/cmd <partial>` offers as second-level choices. */
-export type ChatPicker = "model" | "thinking" | "skill" | "skill-once" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals" | "mcp" | "agent";
+export type ChatPicker = "model" | "thinking" | "skill" | "skill-once" | "doc" | "strategy" | "tools" | "terminal" | "workspace" | "iterations" | "approvals" | "durable" | "mcp" | "agent";
 
 export interface ChatCommand {
   readonly name: ChatCommandName;
@@ -48,6 +48,7 @@ export const CHAT_COMMANDS: readonly ChatCommand[] = [
   { name: "workspace", icon: "folder", summary: "Set the directory file tools and the shell work in", arg: "[/absolute/path]", needsTurns: false, picker: "workspace" },
   { name: "iterations", icon: "steps", summary: "Cap the steps one turn may take", arg: "[number]", needsTurns: false, picker: "iterations" },
   { name: "approvals", icon: "pause", summary: "Choose which tools and shell commands wait for your approval", arg: "[add <command>]", needsTurns: false, picker: "approvals" },
+  { name: "durable", icon: "retry", summary: "Make this chat resumable: Stop and Pause can be continued; approvals and questions pause durably", arg: "[on|off]", needsTurns: false, picker: "durable" },
   { name: "goal", icon: "goal", summary: "Pursue an objective across several turns (propose, then accept)", arg: "<objective|pause|resume|cancel|status>", needsTurns: false },
   { name: "plan", icon: "checklist", summary: "Plan mode: reasoning only, no tools, until you /execute (or show / hide the to-do dock)", arg: "[task | show | hide]", needsTurns: false },
   { name: "execute", icon: "play", summary: "Execute mode: the agent may use its tools again", arg: "[message]", needsTurns: false },

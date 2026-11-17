@@ -111,10 +111,10 @@ export function loopStopHint(
   const last = turns.at(-1);
   if (last?.role !== "assistant" || last.streaming === true) return undefined;
   if (last.runFailed?.terminatedBy?.startsWith("loop")) {
-    return "A loop guard stopped this run. To be able to continue a run like this, turn on Durable execution for this agent (Lab · Execution).";
+    return "A loop guard stopped this run. To be able to continue a run like this, turn on Durable runs with /durable.";
   }
   if (last.runFailed?.interruptedBy === "user") {
-    return "You stopped this reply and there is no saved run to continue from. Turn on Durable runs (Lab · Execution) to pause and continue a reply.";
+    return "You stopped this reply and there is no saved run to continue from. Turn on Durable runs with /durable to pause and continue a reply.";
   }
   return undefined;
 }

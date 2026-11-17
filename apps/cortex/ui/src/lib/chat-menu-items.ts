@@ -10,6 +10,7 @@ import type { ChatCommand, ParsedSlash } from "./chat-commands.js";
 import { isLiveConfigCommand } from "./chat-live-config.js";
 import { matchEntries, type EntryState } from "./config-menu-nav.js";
 import type { MenuItem } from "./chat-menu.js";
+import { DURABLE_RUNS_CHAT_DETAIL, durableRunsOn, durableRunsPatch } from "./durable-runs.js";
 import { agentControlEnabled } from "./proposal-view.js";
 import { AGENT_CONTROL_GROUPS, autoApplyControlGroups, enabledControlGroups, toggleAutoApplyPatch, toggleControlGroupPatch } from "./agent-control.js";
 import type { InlineTrigger } from "./chat-inline-commands.js";
@@ -250,6 +251,14 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
         }
       }
       return [...base, ...extra];
+    }
+    case "durable": {
+      const on = durableRunsOn(cfg);
+      return ([[true, "On", "Durable runs on"], [false, "Off", "Durable runs off"]] as const)
+        .filter(([, label]) => has(label))
+        .map(([want, label, what]) =>
+          configRow(want ? "on" : "off", "retry", label, () => ctx.apply(what, durableRunsPatch(ctx.cfg, want)), { active: want === on, detail: want ? DURABLE_RUNS_CHAT_DETAIL : "Stop ends the reply for good; approvals and questions wait live (default)" }),
+        );
     }
     case "approvals":
       return approvalRows(ctx, q, multiRow);

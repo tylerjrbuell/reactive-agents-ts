@@ -68,6 +68,24 @@ describe("/approvals rows", () => {
   });
 });
 
+describe("/durable panel", () => {
+  test("On and Off rows PATCH the same durableRuns shape the Builder writes; the current state is marked", () => {
+    const patches: Patch[] = [];
+    const p = picker("/durable ", { cfg: { durableRuns: { enabled: true, checkpointEvery: 2 } }, apply: (_w, patch) => void patches.push(patch) });
+    const rows = pickerItems(p.ctx);
+    expect(rows.map((r) => [r.key, r.active])).toEqual([["on", true], ["off", false]]);
+    void rows[1]!.run();
+    expect(patches).toEqual([{ durableRuns: { enabled: false, checkpointEvery: 2 } }]);
+    void pickerItems(picker("/durable ", { cfg: {}, apply: (_w, patch) => void patches.push(patch) }).ctx)[0]!.run();
+    expect(patches[1]).toEqual({ durableRuns: { enabled: true } });
+  });
+
+  test("the On row says what it does", () => {
+    const on = pickerItems(picker("/durable ", { cfg: {} }).ctx)[0]!;
+    expect(on.detail).toContain("Continue");
+  });
+});
+
 describe("/agent panel", () => {
   test("On and Off rows PATCH agentControl; the current state is marked", () => {
     const patches: Patch[] = [];

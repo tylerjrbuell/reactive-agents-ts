@@ -7,6 +7,7 @@
 import type { QuickBarChip, QuickBarChipContext } from "./chat-quickbar-chips.js";
 import { CHAT_DEFAULT_MAX_ITERATIONS, disclosureChoice, disclosureLabel, selectedTools } from "./chat-quickbar.js";
 import { approvalPolicyFrom, approvalSummary, asksBeforeRiskyToolsFrom } from "./approval-policy.js";
+import { durableRunsOn, durableRunsValue } from "./durable-runs.js";
 import type { IconName } from "./icons.js";
 
 type Cfg = Record<string, unknown>;
@@ -128,6 +129,12 @@ export function configGroups(chips: readonly QuickBarChip[], cfg: Cfg, ctx: Pick
       title: "Workspace",
       rows: [row("Directory", "/workspace ", "folder", "No workspace"), row("Documents", "/docs ", "book", "None")],
     },
-    { title: "Limits", rows: [row("Steps per turn", "/iterations ", "steps", `${CHAT_DEFAULT_MAX_ITERATIONS} steps`, onBar)] },
+    {
+      title: "Limits",
+      rows: [
+        row("Steps per turn", "/iterations ", "steps", `${CHAT_DEFAULT_MAX_ITERATIONS} steps`, onBar),
+        { label: "Durable runs", value: durableRunsValue(cfg), cmd: "/durable ", icon: "retry", on: durableRunsOn(cfg) },
+      ],
+    },
   ];
 }

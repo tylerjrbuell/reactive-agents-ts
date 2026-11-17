@@ -64,8 +64,14 @@ describe("configGroups", () => {
     const groups = configGroups(quickBarChips({}, ctx()), {}, ctx());
     expect(groups.map((g) => g.title)).toEqual(["Model", "Reasoning", "Tools", "Workspace", "Limits"]);
     expect(groups.flatMap((g) => g.rows.map((r) => r.cmd))).toEqual([
-      "/provider ", "/model ", "/thinking ", "/strategy ", "/skills ", "/agent ", "/tools ", "/terminal ", "/mcp ", "/tools disclosure", "/approvals ", "/workspace ", "/docs ", "/iterations ",
+      "/provider ", "/model ", "/thinking ", "/strategy ", "/skills ", "/agent ", "/tools ", "/terminal ", "/mcp ", "/tools disclosure", "/approvals ", "/workspace ", "/docs ", "/iterations ", "/durable ",
     ]);
+  });
+
+  test("Durable runs shows Off by default and On once set", () => {
+    const row = (cfg: Record<string, unknown>) => configGroups(quickBarChips(cfg, ctx()), cfg, ctx()).flatMap((g) => g.rows).find((r) => r.cmd === "/durable ");
+    expect(row({})).toMatchObject({ label: "Durable runs", value: "Off", on: false });
+    expect(row({ durableRuns: { enabled: true } })).toMatchObject({ value: "On", on: true });
   });
 
   test("rows show the current value and mark changed settings", () => {

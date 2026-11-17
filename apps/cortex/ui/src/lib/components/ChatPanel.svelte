@@ -592,7 +592,7 @@
       case "terminal":
       case "workspace":
       case "iterations":
-      case "approvals":
+      case "approvals": case "durable":
       case "mcp":
         return; // second-level picks are executed from the menu rows
       case "btw":

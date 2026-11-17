@@ -17,6 +17,12 @@ describe("interruptToast", () => {
     expect(t.title).toBe("Stopped");
   });
 
+  it("points a chat at /durable and a desk run at the Lab", () => {
+    expect(pauseToast({ ok: true, persisted: false }).detail).toContain("with /durable");
+    expect(pauseToast({ ok: true, persisted: false }).detail).not.toContain("Lab");
+    expect(deskInterruptToast("stop", { ok: true, persisted: false }).detail).toContain("Lab · Execution");
+  });
+
   it("reports a run that was not running and a server that did not answer", () => {
     expect(interruptToast("stop", { ok: true, persisted: false, stopped: false }, "x").title).toBe("Nothing was running");
     expect(interruptToast("stop", { ok: false }, "x").title).toBe("Could not stop the run");

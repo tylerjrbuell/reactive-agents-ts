@@ -30,4 +30,18 @@ describe("chat session config — builder tool-field parity", () => {
     expect(cfg.dynamicSubAgents).toEqual({ enabled: true, maxIterations: 2 });
     expect(cfg.additionalToolNames).toBe("my-tool");
   });
+
+  it("round-trips durableRuns through the session config PATCH (the chat /durable command)", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const svc = new ChatSessionService(db);
+    const id = await svc.createSession({ name: "durable", agentConfig: { provider: "test" } });
+    const stored = () => getChatSession(db, id)!.agentConfig as Record<string, unknown>;
+
+    expect(stored().durableRuns).toBeUndefined();
+    await svc.updateSessionConfig(id, { durableRuns: { enabled: true, checkpointEvery: 2 } });
+    expect(stored().durableRuns).toEqual({ enabled: true, checkpointEvery: 2 });
+    await svc.updateSessionConfig(id, { durableRuns: { enabled: false, checkpointEvery: 2 } });
+    expect(stored().durableRuns).toBeUndefined();
+  });
 });

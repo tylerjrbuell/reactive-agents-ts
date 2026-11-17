@@ -10,6 +10,7 @@
   import Select from "$lib/components/kit/Select.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
   import { ASK_MODES, askModeOf, withAskMode, type AskMode } from "$lib/user-interaction.js";
+  import { DURABLE_RUNS_HINT } from "$lib/durable-runs.js";
   import type { PanelAgentConfig } from "../types.js";
 
   interface Props {
@@ -109,7 +110,7 @@
         </div>
         <!-- Durable runs -->
         <Switch id="acp-durable-runs" label="Durable execution"
-          hint="Resumes after a crash, and keeps a run that waits for your approval across a restart. Turns reasoning on."
+          hint={DURABLE_RUNS_HINT}
           checked={config.durableRuns.enabled}
           onchange={(on) => (config = { ...config, durableRuns: { ...config.durableRuns, enabled: on } })} />
         <!-- Questions (request_user_input) -->

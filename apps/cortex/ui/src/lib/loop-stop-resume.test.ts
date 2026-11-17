@@ -90,7 +90,7 @@ describe("continueTarget: only a run that belongs to the latest reply", () => {
 describe("loopStopHint for a reply the person stopped", () => {
   const stopped: ContinueTurn = { role: "assistant", runFailed: { ending: "partial", interruptedBy: "user" } };
   it("points at Durable runs when there is no saved run to continue", () => {
-    expect(loopStopHint([stopped], false, undefined, true)).toContain("Durable runs (Lab · Execution)");
+    expect(loopStopHint([stopped], false, undefined, true)).toContain("Durable runs with /durable");
     expect(loopStopHint([stopped], false, undefined, false)).toBeUndefined();
     expect(loopStopHint([stopped], false, run(), true)).toBeUndefined();
   });
@@ -100,7 +100,7 @@ describe("loopStopHint", () => {
   const loopTurn: ContinueTurn = { role: "assistant", runFailed: { ending: "failed", terminatedBy: "loop_detected:repeat" } };
 
   it("points at Durable execution when a loop-stopped turn has nothing to continue", () => {
-    expect(loopStopHint([loopTurn], false, undefined, true)).toContain("Durable execution");
+    expect(loopStopHint([loopTurn], false, undefined, true)).toContain("Durable runs with /durable");
   });
 
   it("stays quiet while looking up, when Continue is offered, mid-turn, or for a non-loop ending", () => {
