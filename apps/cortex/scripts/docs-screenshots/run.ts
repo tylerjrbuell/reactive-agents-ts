@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import sharp from "sharp";
-import { MASKS, SHOTS, VIEWPORT, type Shot, type ShotContext } from "./shots.js";
+import { MASKS, SHOTS, VIEWPORT, type CropBox, type Shot, type ShotContext } from "./shots.js";
 
 const here = new URL(".", import.meta.url).pathname;
 const cortexRoot = resolve(here, "../..");
@@ -97,7 +97,7 @@ if (selected.length === 0) {
   process.exit(2);
 }
 
-type Result = { shot: Shot; png: Buffer; file: string; bytes: number };
+type Result = { shot: Shot; png: Buffer; file: string; bytes: number; crop?: CropBox };
 const results: Result[] = [];
 const pw = loadPlaywright();
 const browser = await pw.chromium.launch({ headless: true });
@@ -128,7 +128,8 @@ async function capture(shot: Shot, ctxInfo: Pick<ShotContext, "sessionId" | "run
   }
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
   // No toasts (they carry run ids), no caret. Dynamic text is replaced with fixed values (shots.ts MASKS).
-  await page.addStyleTag({ content: "*{caret-color:transparent!important}.z-toast{display:none!important}" });
+  // No chat speed readout either (tok/s, TTFT): it exists only when timing resolved, so it differs run to run.
+  await page.addStyleTag({ content: "*{caret-color:transparent!important}.z-toast{display:none!important}[data-testid=turn-speed]{display:none!important}" });
   await page.evaluate((masks) => {
     const rules = masks.map(([src, to]) => [new RegExp(src, "g"), to] as const);
     const fix = (s: string): string => rules.reduce((acc, [re, to]) => acc.replace(re, to), s);
@@ -159,6 +160,16 @@ async function capture(shot: Shot, ctxInfo: Pick<ShotContext, "sessionId" | "run
     .webp({ quality: 82, effort: 6 })
     .toBuffer();
   results.push({ shot, png: webp, file: `${shot.id}.webp`, bytes: webp.length });
+  if (shot.crop) {
+    // Readability crop: cut from the 2x capture (CSS px x 2), output at the crop's CSS width (about 960) so text stays legible.
+    const c = shot.crop;
+    const cropped = await sharp(png)
+      .extract({ left: c.x * 2, top: c.y * 2, width: c.width * 2, height: c.height * 2 })
+      .resize({ width: c.width })
+      .webp({ quality: 82, effort: 6 })
+      .toBuffer();
+    results.push({ shot, png: cropped, file: `${shot.id}--crop.webp`, bytes: cropped.length, crop: c });
+  }
   await ctx.close();
 }
 
@@ -214,7 +225,7 @@ for (const r of results) {
 }
 
 const manifestPath = join(outDir, "manifest.json");
-type Entry = { id: string; file: string | null; status: string; route: string; caption: string; alt: string; width: number; height: number; bytes: number | null; sha256: string | null; note?: string };
+type Entry = { id: string; file: string | null; status: string; route: string; caption: string; alt: string; width: number; height: number; bytes: number | null; sha256: string | null; note?: string; variantOf?: string; crop?: CropBox };
 const prior: Entry[] = existsSync(manifestPath) ? (JSON.parse(readFileSync(manifestPath, "utf8")) as { shots: Entry[] }).shots : [];
 const byId = new Map(prior.map((e) => [e.id, e] as const));
 // Workspace package.json files stay at a baseline version; the repo VERSION file is the real one (what /api/health reports).
@@ -223,7 +234,7 @@ const cortexVersion = existsSync(versionFile)
   ? readFileSync(versionFile, "utf8").trim()
   : (JSON.parse(readFileSync(join(cortexRoot, "package.json"), "utf8")) as { version: string }).version;
 for (const shot of SHOTS) {
-  const r = results.find((x) => x.shot.id === shot.id);
+  const r = results.find((x) => x.shot.id === shot.id && !x.crop);
   const cur = byId.get(shot.id);
   byId.set(shot.id, {
     id: shot.id,
@@ -238,6 +249,26 @@ for (const shot of SHOTS) {
     sha256: r ? createHash("sha256").update(r.png).digest("hex") : cur?.sha256 ?? null,
     ...(shot.note ? { note: shot.note } : {}),
   });
+  if (shot.crop) {
+    const cid = `${shot.id}--crop`;
+    const rc = results.find((x) => x.shot.id === shot.id && x.crop);
+    const curc = byId.get(cid);
+    byId.set(cid, {
+      id: cid,
+      file: rc ? rc.file : curc?.file ?? null,
+      status: shot.status,
+      route: shot.route,
+      caption: `${shot.caption} ${shot.crop.shows}`,
+      alt: `${shot.alt} Cropped to show: ${shot.crop.shows}`,
+      width: shot.crop.width,
+      height: shot.crop.height,
+      bytes: rc ? rc.bytes : curc?.bytes ?? null,
+      sha256: rc ? createHash("sha256").update(rc.png).digest("hex") : curc?.sha256 ?? null,
+      variantOf: shot.id,
+      crop: shot.crop,
+      note: `Readability crop of ${shot.id}: ${shot.crop.width}x${shot.crop.height} CSS px from (${shot.crop.x}, ${shot.crop.y}) of the full capture, for display at 480 to 820 px wide.`,
+    });
+  }
 }
 const manifest = {
   generatedBy: "bun run --cwd apps/cortex screenshots:docs",
@@ -245,7 +276,7 @@ const manifest = {
   capturedOn: new Date().toISOString().slice(0, 10),
   viewport: `${VIEWPORT.width}x${VIEWPORT.height} @2x, downscaled to ${VIEWPORT.width} wide`,
   data: "seeded demo data, scripted `test` provider, no keys, no network, HOME and data dir under a temp folder",
-  shots: SHOTS.map((s) => byId.get(s.id)!),
+  shots: SHOTS.flatMap((s) => [byId.get(s.id)!, ...(s.crop ? [byId.get(`${s.id}--crop`)!] : [])]),
 };
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(`manifest: ${manifestPath}`);

@@ -137,6 +137,54 @@ const out: Record<string, string> = {};
   out["approval"] = id;
 }
 
+// 5. Model page: a model with a SHIPPED calibration (qwen3:14b) plus recorded run observations, so the page shows learned
+// values and the "applied only when learned calibration is on" label. Written through the framework's own writers into
+// the demo HOME (~/.reactive-agents/observations, calibration.db). Synthetic counts, fixed timestamps (deterministic).
+{
+  const { appendObservation, CalibrationStore } = await import("@reactive-agents/reactive-intelligence");
+  const model = "qwen3:14b";
+  // 8 runs: none with parallel tool turns (the shipped prior says "reliable", so this learns "sequential-only"),
+  // every run's classifier-required tool was called (reliability "high").
+  for (let i = 0; i < 8; i++) {
+    appendObservation(model, {
+      at: `2026-11-1${i % 8}T10:00:00.000Z`,
+      parallelTurnCount: 0,
+      totalTurnCount: 4 + (i % 3),
+      dialect: "native-fc",
+      classifierRequired: ["file-read"],
+      classifierActuallyCalled: ["file-read"],
+      subagentInvoked: 0,
+      subagentSucceeded: 0,
+      argValidityRate: 1,
+      noCallStallTurns: 0,
+      unforcedToolWorkTurns: 3,
+      forcedCalls: 0,
+      forcedCallsCalled: 0,
+      forcedCallsSucceeded: 0,
+    });
+  }
+  new CalibrationStore(join(demoDir, ".reactive-agents", "calibration.db")).save({
+    modelId: model,
+    calibrationScores: [0.31, 0.28, 0.35, 0.3, 0.33, 0.29, 0.32, 0.34],
+    sampleCount: 8,
+    highEntropyThreshold: 0.62,
+    convergenceThreshold: 0.21,
+    calibrated: true,
+    lastUpdated: Date.UTC(2026, 10, 17, 10, 0, 0),
+    driftDetected: false,
+  });
+}
+
+// Fixed chat-list order: the list sorts by last_used_at, and the seed's own turns finish in a racy order (a stop or an
+// approval pause lands after the next chat was created), which reordered the sidebar between runs. One second apart.
+{
+  const now = Date.now();
+  const order = ["Publish the release notes", "Summarise every open issue", "Audit the docs folder", "Prepare the 0.5.0 release notes"];
+  order.forEach((name, i) => {
+    rt.rawDb.prepare(`UPDATE cortex_chat_sessions SET last_used_at = ? WHERE name = ?`).run(now - i * 1000, name);
+  });
+}
+
 console.log(JSON.stringify(out, null, 2));
 await svc.disposeAll();
 process.exit(0);

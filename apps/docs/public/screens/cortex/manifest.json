@@ -18,6 +18,27 @@
       "sha256": "325d742ce4fa0d946522f9c09a627a9db94774f4f80e77dc9285ac58a2beb12b"
     },
     {
+      "id": "chat-plan-card--crop",
+      "file": "chat-plan-card--crop.webp",
+      "status": "stable",
+      "route": "/chat",
+      "caption": "Plan mode: the agent proposes a plan, one line per step with the tool it will use. Edit it, then Execute. The editable plan card with its three steps, tool chips and the Execute button.",
+      "alt": "Cortex chat in Plan mode showing an editable three-step plan with tool chips for file-read, before it is executed. Cropped to show: The editable plan card with its three steps, tool chips and the Execute button.",
+      "width": 960,
+      "height": 600,
+      "bytes": 20986,
+      "sha256": "9617bbf6da4e9ee5eb8a696bf5757a87e19c568cd1f171ccc661f6e3a06755e5",
+      "variantOf": "chat-plan-card",
+      "crop": {
+        "x": 380,
+        "y": 225,
+        "width": 960,
+        "height": 600,
+        "shows": "The editable plan card with its three steps, tool chips and the Execute button."
+      },
+      "note": "Readability crop of chat-plan-card: 960x600 CSS px from (380, 225) of the full capture, for display at 480 to 820 px wide."
+    },
+    {
       "id": "chat-plan-executed",
       "file": "chat-plan-executed.webp",
       "status": "stable",
@@ -38,8 +59,29 @@
       "alt": "Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button.",
       "width": 1440,
       "height": 900,
-      "bytes": 41508,
-      "sha256": "7aa9cd08575b58ec945d494ad7014e27070e9235b64ae3fdbc25afaf8061fca1"
+      "bytes": 41032,
+      "sha256": "cf5b78ea9fd9dae001924eaaa1d7a88282124803eddeacdf56f5ea6bf0d28aaf"
+    },
+    {
+      "id": "chat-stopped-continue--crop",
+      "file": "chat-stopped-continue--crop.webp",
+      "status": "stable",
+      "route": "/chat",
+      "caption": "A durable run you stopped keeps its place. Continue resumes the same run without repeating finished work. The Stopped by you card with the finished tool, the note field and the Continue button.",
+      "alt": "Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button. Cropped to show: The Stopped by you card with the finished tool, the note field and the Continue button.",
+      "width": 960,
+      "height": 600,
+      "bytes": 19860,
+      "sha256": "5ba09e5104f7228c764c8696b12891e1947bf1f07f1131dd8312e49673609712",
+      "variantOf": "chat-stopped-continue",
+      "crop": {
+        "x": 380,
+        "y": 190,
+        "width": 960,
+        "height": 600,
+        "shows": "The Stopped by you card with the finished tool, the note field and the Continue button."
+      },
+      "note": "Readability crop of chat-stopped-continue: 960x600 CSS px from (380, 190) of the full capture, for display at 480 to 820 px wide."
     },
     {
       "id": "tools-lab",
@@ -52,6 +94,27 @@
       "height": 900,
       "bytes": 34028,
       "sha256": "76ddb26519fe29e5c7bdc18c452640f38c7cf666f839fd930239f80be7792af5"
+    },
+    {
+      "id": "tools-lab--crop",
+      "file": "tools-lab--crop.webp",
+      "status": "stable",
+      "route": "/lab#tools",
+      "caption": "Tools Lab: MCP servers with live connection status and each tool's input schema. The server list with each server's connection status, and the connected docs server's tools.",
+      "alt": "Cortex Tools Lab listing three MCP servers: two connected with their tools, one failed with its error. Cropped to show: The server list with each server's connection status, and the connected docs server's tools.",
+      "width": 860,
+      "height": 420,
+      "bytes": 19298,
+      "sha256": "6cc8e668995863abb0cdf7632e36e69375eb24d1a1cb517e3f09b949e77aeb3a",
+      "variantOf": "tools-lab",
+      "crop": {
+        "x": 24,
+        "y": 180,
+        "width": 860,
+        "height": 420,
+        "shows": "The server list with each server's connection status, and the connected docs server's tools."
+      },
+      "note": "Readability crop of tools-lab: 860x420 CSS px from (24, 180) of the full capture, for display at 480 to 820 px wide."
     },
     {
       "id": "tools-lab-narrow",
@@ -78,6 +141,27 @@
       "sha256": "22b95144acdc3d89c783c5fcc14ac25f515759dae8c5eb152c67a40d1b3b8e98"
     },
     {
+      "id": "channels-hub--crop",
+      "file": "channels-hub--crop.webp",
+      "status": "stable",
+      "route": "/lab#channels",
+      "caption": "Channels hub: Telegram, Signal and webhook channels, the agent each one routes to, and who may talk to it. The channel list with its add buttons and the first channel's settings.",
+      "alt": "Cortex channels hub with three channels, their routes to a saved agent, and access settings. Cropped to show: The channel list with its add buttons and the first channel's settings.",
+      "width": 960,
+      "height": 600,
+      "bytes": 27076,
+      "sha256": "24c1bec7686f8de69675f899064f25d62bae22b352a5e44432f2d77c519687f2",
+      "variantOf": "channels-hub",
+      "crop": {
+        "x": 20,
+        "y": 335,
+        "width": 960,
+        "height": 600,
+        "shows": "The channel list with its add buttons and the first channel's settings."
+      },
+      "note": "Readability crop of channels-hub: 960x600 CSS px from (20, 335) of the full capture, for display at 480 to 820 px wide."
+    },
+    {
       "id": "beacon",
       "file": "beacon.webp",
       "status": "stable",
@@ -86,8 +170,8 @@
       "alt": "Cortex Beacon first-run view: the neural mark in the middle of the page, 'Welcome to Cortex', and buttons to open a chat, build an agent or connect an app.",
       "width": 1440,
       "height": 900,
-      "bytes": 21664,
-      "sha256": "bf762a300deccd44cd7a6978a837a5d49adbbd70ade34d05685cc7ddbddc414f",
+      "bytes": 22070,
+      "sha256": "84db38b6e142b3342cc24ab156a77aa6d49af5750af2f21fa759163ce3dd3e8f",
       "note": "Motion on; every CSS animation is paused at 2.0 s so the frame is the same on every run. beacon-still is the reduced-motion version."
     },
     {
@@ -99,8 +183,8 @@
       "alt": "Cortex Beacon first-run view with the neural mark at rest and no animation.",
       "width": 1440,
       "height": 900,
-      "bytes": 22914,
-      "sha256": "3c847ada4ad446f3125e3a310e6c5f9d5d59df5abaef1591c2a842cd474ade2e",
+      "bytes": 23444,
+      "sha256": "ce1f030f988148dff95d71e789e4f5c5d14f8d25d64b77f4a8dcf29ca1c815f5",
       "note": "prefers-reduced-motion emulation; animations disabled at capture."
     },
     {
@@ -141,15 +225,37 @@
     },
     {
       "id": "model-calibration",
-      "file": null,
-      "status": "pending",
-      "route": "/models/anthropic/claude-sonnet-4-6",
-      "caption": "A model's page: capabilities, measured speed and spend, and how the harness adapts to it.",
-      "alt": "Cortex model page for a Claude model showing capabilities, speed, spend and the Calibration section, with notes on what applies only when learned calibration is on.",
+      "file": "model-calibration.webp",
+      "status": "stable",
+      "route": "/models/ollama/qwen3:14b",
+      "caption": "A model's page: capabilities, measured speed and spend, and how the harness adapts to it. Learned values are marked as applied only when learned calibration is on.",
+      "alt": "Cortex model page for qwen3:14b showing capabilities and the Calibration section, where values learned from recorded runs are labelled as applied only when learned calibration is on, next to the shipped values.",
       "width": 1440,
       "height": 1500,
-      "bytes": null,
-      "sha256": null
+      "bytes": 63476,
+      "sha256": "f3d99ce07692ce81571956106863567108e7487e402e062eeb63fb58fd80aba4",
+      "note": "Synthetic calibration data seeded into the demo home: a shipped calibration plus 8 recorded run observations (seed.ts)."
+    },
+    {
+      "id": "model-calibration--crop",
+      "file": "model-calibration--crop.webp",
+      "status": "stable",
+      "route": "/models/ollama/qwen3:14b",
+      "caption": "A model's page: capabilities, measured speed and spend, and how the harness adapts to it. Learned values are marked as applied only when learned calibration is on. The Calibration section, each setting marked Shipped or Learned, with the note that learned values apply only when learned calibration is on.",
+      "alt": "Cortex model page for qwen3:14b showing capabilities and the Calibration section, where values learned from recorded runs are labelled as applied only when learned calibration is on, next to the shipped values. Cropped to show: The Calibration section, each setting marked Shipped or Learned, with the note that learned values apply only when learned calibration is on.",
+      "width": 960,
+      "height": 600,
+      "bytes": 38700,
+      "sha256": "eed1a304767e1e38ae166eb897384f3e0acdef40235d826b00d8341216596e59",
+      "variantOf": "model-calibration",
+      "crop": {
+        "x": 240,
+        "y": 850,
+        "width": 960,
+        "height": 600,
+        "shows": "The Calibration section, each setting marked Shipped or Learned, with the note that learned values apply only when learned calibration is on."
+      },
+      "note": "Readability crop of model-calibration: 960x600 CSS px from (240, 850) of the full capture, for display at 480 to 820 px wide."
     },
     {
       "id": "chat-approval-card",
@@ -160,8 +266,8 @@
       "alt": "Cortex chat with a Waiting on you card for a file-write call showing its path and content parameters, with Approve, Deny and Dismiss buttons.",
       "width": 1440,
       "height": 900,
-      "bytes": 40048,
-      "sha256": "0ffe8e8921329e13173ec20b1f32b39d89de7349689f2c86647ea2fb162c7f0f"
+      "bytes": 37266,
+      "sha256": "e59bcb8fa6e373d2bc186d87722afbe90b6096ce208cfc73049135057583b578"
     },
     {
       "id": "chat-stop-cause",
@@ -172,8 +278,8 @@
       "alt": "Cortex chat showing a run that stopped at its step limit: a 'Ran out of budget' card with the work already done, a note field, a More steps field and a Continue button.",
       "width": 1440,
       "height": 900,
-      "bytes": 45698,
-      "sha256": "2abb9029abbc912153c4f4c4bf5712cc8f971d17566ba5e4a6971e4d08ba1cae"
+      "bytes": 39752,
+      "sha256": "514f4de8d1a752f772cb53d9b9126c13717c024b145f5c524c118b0ec819d7ab"
     },
     {
       "id": "run-cause",
@@ -184,9 +290,30 @@
       "alt": "Cortex run view for a run that hit its iteration limit, with the Why it ended card open: cause, what to try, decisive steps, and the trace below.",
       "width": 1440,
       "height": 900,
-      "bytes": 64214,
-      "sha256": "192bd9705e04d373f1bb51097f386b8cef0625704800cf42beb4ebd141a90943",
+      "bytes": 66110,
+      "sha256": "78bf40758d230bbc4b900e6309ee32eb92790956469093e88625ffed6080ab55",
       "note": "Diagnosis is the framework's (same engine as rax-diagnose cause) on a scripted run that was cut at its step limit. The per-loop speed readout (tok/s, first-token time) appears only when timing resolved, so it is hidden in the trace rows to keep the layout identical between runs."
+    },
+    {
+      "id": "run-cause--crop",
+      "file": "run-cause--crop.webp",
+      "status": "stable",
+      "route": "/run/:runId",
+      "caption": "The run view's Why it ended card: the cause, who is at fault, what to try, and the steps that decided it. The Why it ended card: the cause, what to try and the decisive steps.",
+      "alt": "Cortex run view for a run that hit its iteration limit, with the Why it ended card open: cause, what to try, decisive steps, and the trace below. Cropped to show: The Why it ended card: the cause, what to try and the decisive steps.",
+      "width": 984,
+      "height": 540,
+      "bytes": 27894,
+      "sha256": "2e82dd8c6d11cc7558dc166b5dab99eb196760ae73dea470c2cfee21c3031da2",
+      "variantOf": "run-cause",
+      "crop": {
+        "x": 16,
+        "y": 360,
+        "width": 984,
+        "height": 540,
+        "shows": "The Why it ended card: the cause, what to try and the decisive steps."
+      },
+      "note": "Readability crop of run-cause: 984x540 CSS px from (16, 360) of the full capture, for display at 480 to 820 px wide."
     }
   ]
 }

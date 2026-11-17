@@ -35,6 +35,16 @@ export interface ShotContext {
   runId(): string;
 }
 
+/** A readability crop: a box in CSS px at 1x of the full capture, about 960x600, around the part that carries the story. */
+export interface CropBox {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  /** One sentence for the manifest: what the crop shows (starts with a capital, ends with a period). */
+  readonly shows: string;
+}
+
 export interface Shot {
   readonly id: string;
   /** `stable`: UI is final, captured by default. `pending`: UI still moving; only with `--only` or `--include-pending`. */
@@ -54,6 +64,8 @@ export interface Shot {
    * (a speed shown once a timer resolved), which would change the layout between runs.
    */
   readonly hideText?: RegExp;
+  /** Also write `<id>--crop.webp`, a legible crop for small displays (the gallery). */
+  readonly crop?: CropBox;
   /** Written to the manifest: how the shot was made, when that is not obvious. */
   readonly note?: string;
   capture(ctx: ShotContext): Promise<void>;
@@ -78,6 +90,7 @@ export const SHOTS: readonly Shot[] = [
     route: "/chat",
     caption: "Plan mode: the agent proposes a plan, one line per step with the tool it will use. Edit it, then Execute.",
     alt: "Cortex chat in Plan mode showing an editable three-step plan with tool chips for file-read, before it is executed.",
+    crop: { x: 380, y: 225, width: 960, height: 600, shows: "The editable plan card with its three steps, tool chips and the Execute button." },
     async capture({ page, base, sessionId }) {
       await page.goto(`${base}/chat?session=${sessionId("Prepare the 0.5.0 release notes")}`);
       await page.getByText("Reasoning only: nothing has run").waitFor();
@@ -110,6 +123,7 @@ export const SHOTS: readonly Shot[] = [
     route: "/chat",
     caption: "A durable run you stopped keeps its place. Continue resumes the same run without repeating finished work.",
     alt: "Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button.",
+    crop: { x: 380, y: 190, width: 960, height: 600, shows: "The Stopped by you card with the finished tool, the note field and the Continue button." },
     async capture({ page, base, sessionId }) {
       await page.goto(`${base}/chat?session=${sessionId("Audit the docs folder")}`);
       await page.getByRole("button", { name: "Continue" }).waitFor();
@@ -122,6 +136,7 @@ export const SHOTS: readonly Shot[] = [
     route: "/lab#tools",
     caption: "Tools Lab: MCP servers with live connection status and each tool's input schema.",
     alt: "Cortex Tools Lab listing three MCP servers: two connected with their tools, one failed with its error.",
+    crop: { x: 24, y: 180, width: 860, height: 420, shows: "The server list with each server's connection status, and the connected docs server's tools." },
     async capture({ page, base }) {
       await page.goto(`${base}/lab#tools`);
       await openDocsServer(page);
@@ -149,6 +164,7 @@ export const SHOTS: readonly Shot[] = [
     height: 1500,
     caption: "Channels hub: Telegram, Signal and webhook channels, the agent each one routes to, and who may talk to it.",
     alt: "Cortex channels hub with three channels, their routes to a saved agent, and access settings.",
+    crop: { x: 20, y: 335, width: 960, height: 600, shows: "The channel list with its add buttons and the first channel's settings." },
     async capture({ page, base }) {
       await page.goto(`${base}/lab#channels`);
       await page.getByText("Support (Telegram)").first().waitFor({ timeout: 20_000 });
@@ -233,16 +249,18 @@ export const SHOTS: readonly Shot[] = [
   },
   {
     id: "model-calibration",
-    // Pending: the page labels learned values "applied only when learned calibration is on" only when it HAS learned
-    // values, which needs a model with a shipped calibration plus recorded runs in calibration.db. The hermetic home has
-    // neither (and must not borrow the real one), so this shot shows the empty state and does not show that label.
-    status: "pending",
-    route: "/models/anthropic/claude-sonnet-4-6",
+    // The page labels learned values "applied only when learned calibration is on" only when it HAS learned values.
+    // seed.ts writes synthetic observations and a calibration.db row for qwen3:14b (a model with a shipped calibration)
+    // into the demo HOME, so the label shows.
+    status: "stable",
+    route: "/models/ollama/qwen3:14b",
     height: 1500,
-    caption: "A model's page: capabilities, measured speed and spend, and how the harness adapts to it.",
-    alt: "Cortex model page for a Claude model showing capabilities, speed, spend and the Calibration section, with notes on what applies only when learned calibration is on.",
+    caption: "A model's page: capabilities, measured speed and spend, and how the harness adapts to it. Learned values are marked as applied only when learned calibration is on.",
+    alt: "Cortex model page for qwen3:14b showing capabilities and the Calibration section, where values learned from recorded runs are labelled as applied only when learned calibration is on, next to the shipped values.",
+    crop: { x: 240, y: 850, width: 960, height: 600, shows: "The Calibration section, each setting marked Shipped or Learned, with the note that learned values apply only when learned calibration is on." },
+    note: "Synthetic calibration data seeded into the demo home: a shipped calibration plus 8 recorded run observations (seed.ts).",
     async capture({ page, base }) {
-      await page.goto(`${base}/models/anthropic/claude-sonnet-4-6`);
+      await page.goto(`${base}/models/ollama/${encodeURIComponent("qwen3:14b")}`);
       await page.getByText("How the harness adapts to this model").waitFor();
       await settle(page);
     },
@@ -278,6 +296,7 @@ export const SHOTS: readonly Shot[] = [
     route: "/run/:runId",
     caption: "The run view's Why it ended card: the cause, who is at fault, what to try, and the steps that decided it.",
     alt: "Cortex run view for a run that hit its iteration limit, with the Why it ended card open: cause, what to try, decisive steps, and the trace below.",
+    crop: { x: 16, y: 360, width: 984, height: 540, shows: "The Why it ended card: the cause, what to try and the decisive steps." },
     note: "Diagnosis is the framework's (same engine as rax-diagnose cause) on a scripted run that was cut at its step limit. The per-loop speed readout (tok/s, first-token time) appears only when timing resolved, so it is hidden in the trace rows to keep the layout identical between runs.",
     hideText: /tok\/s · TTFT/,
     async capture({ page, base, runId }) {
@@ -285,6 +304,18 @@ export const SHOTS: readonly Shot[] = [
       await page.getByText("Why it ended").waitFor({ timeout: 20_000 });
       await page.getByText("Decisive steps").waitFor();
       await settle(page);
+      // The header's Speed tile exists only when timing resolved: hide the whole tile (label and value) so the header
+      // lays out the same on every run. Masks and hideText run after capture, so this is done here.
+      // A MutationObserver keeps it hidden if the tile renders after this point.
+      await page.evaluate(() => {
+        const hide = (): void => {
+          for (const el of Array.from(document.querySelectorAll("*"))) {
+            if (el.children.length === 0 && el.textContent?.trim() === "Speed" && el.parentElement) el.parentElement.style.setProperty("display", "none");
+          }
+        };
+        hide();
+        new MutationObserver(hide).observe(document.body, { childList: true, subtree: true, characterData: true });
+      });
     },
   },
 ];

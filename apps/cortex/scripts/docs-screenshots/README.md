@@ -32,6 +32,11 @@ captured; other manifest entries keep their last values.
 4. `run.ts` drives the built UI with Playwright at 1440x900 @2x, dark theme, UTC, a frozen browser clock, then writes
    WebP downscaled to 1440 wide (sharp, quality 82, budget 200 KB).
 
+Readability crops: a shot with `crop: { x, y, width, height, shows }` (CSS px at 1x, about 960x600) also writes
+`<id>--crop.webp`, cut from the 2x capture and shown at the crop's own width, so text stays legible when a page shows it at
+480 to 820 px wide (the home and README galleries). The manifest gets a `<id>--crop` entry with the shot's alt and caption plus
+`shows`, `variantOf` and the crop box. Full shots stay. Each file is held to 200 KB.
+
 Seeded chat states (`seed.ts`): a plan-mode chat (run for real by the Execute shot), a durable run the person stopped
 (a real Stop through the chat control), a run that spent its step budget (real, the framework's own stop), and a
 durable turn paused on a `file-write` approval.
@@ -39,9 +44,9 @@ durable turn paused on a `file-write` approval.
 ## Prerequisites
 
 - A built UI (`build:ui`).
-- `playwright-core` and a Chromium. The script uses the repo's `playwright-core` if installed, else the copy in the bun
-  cache (`~/.bun/install/cache/playwright-core`). Browsers come from `~/.cache/ms-playwright`
-  (`bunx playwright-core install chromium` if missing). Nothing is downloaded by the script.
+- `playwright-core` (a devDependency of `apps/cortex`, pinned to 1.61.1; `bun install` provides it, no browser is
+  downloaded) and a Chromium from `~/.cache/ms-playwright` (`bunx playwright-core install chromium` if missing). The bun
+  cache copy is only a fallback when the package is not installed. Nothing is downloaded by the script.
 - `sharp` (already in the repo's `node_modules`).
 
 ## Determinism rules
@@ -50,6 +55,9 @@ durable turn paused on a `file-write` approval.
 - Reduced motion on and animations disabled, except a shot with `motion: "full"`: its capture freezes every CSS animation
   at a fixed time (`freezeAnimations`, the Beacon uses 2.0 s). JS-driven motion would not be frozen: `--compare` catches it.
 - Browser clock frozen after the seed, so relative times read "just now".
+- The chat list order is pinned at the end of `seed.ts` (`last_used_at`, one second apart): the seed's own turns finish in a
+  racy order, which reordered the sidebar between runs. The chat speed readout (`data-testid="turn-speed"`) and the run view's
+  Speed tile exist only when timing resolved, so both are hidden.
 - Text that varies between runs (random ids, pids, secret tails, measured ms, event numbers) is replaced with fixed
   text by `MASKS` in `shots.ts`; a readout that exists only some of the time is hidden with a shot's `hideText`.
   If `--compare` reports a changed image, find the region (`magick compare ... -threshold`), add a rule, run again.
@@ -81,8 +89,10 @@ Rebuild the UI, run `screenshots:docs`, read every image back (no keys, tokens, 
 - `chat-plan-executed` runs the plan with Plan-execute-reflect: with the scripted provider, Auto ran as a plain Execute turn
   and Blueprint returned no per-step results. The plan card does not stay in the thread after the run in this flow; the shot
   shows the reply and the to-do list ticked off.
-- `model-calibration` is pending: the label "applied only when learned calibration is on" shows only for a model that has learned
-  values, which needs a shipped-calibration model plus recorded runs in `calibration.db`. The hermetic home has none.
+- `model-calibration` shows `ollama/qwen3:14b`, a model with a shipped calibration. `seed.ts` writes 8 synthetic run observations
+  (`appendObservation`) and one `calibration.db` row (`CalibrationStore.save`) into the demo home, never the real
+  `~/.reactive-agents`, so three settings read "Learned" and the page shows "applied only when learned calibration is on".
+  The values are made up to show the label; they say nothing about the model.
 - The run-cause diagnosis on a step-budget stop reads "At fault: Harness: tool call dropped" (the call the cap cut off). That is the
   framework's own answer, not a script artifact, but check the wording before using the image beside a claim.
 - Dark theme only.
