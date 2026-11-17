@@ -7,6 +7,7 @@ import {
   foldAdvisory,
   projectChecklist,
   isPlanEmpty,
+  findPlanDependencyProblem,
   planFromChecklist,
   planToChecklistSeed,
 } from "../src/index.js";
@@ -172,5 +173,36 @@ describe("plan events", () => {
     );
     expect(got?.steps).toHaveLength(1);
     expect(got?.source).toBe("user-edited");
+  });
+});
+
+describe("plan step dependsOn and args", () => {
+  it("planFromChecklist carries meta.dependsOn and meta.args per step id", () => {
+    const plan = planFromChecklist(snapshot([row("a", "done"), row("b", "pending")]), {
+      id: "p",
+      goal: "g",
+      createdAt: 1,
+      source: "model",
+      dependsOn: { b: ["a"], a: [] },
+      args: { b: { path: "x" } },
+    });
+    expect(plan.steps[0]).not.toHaveProperty("dependsOn");
+    expect(plan.steps[0]).not.toHaveProperty("args");
+    expect(plan.steps[1]?.dependsOn).toEqual(["a"]);
+    expect(plan.steps[1]?.args).toEqual({ path: "x" });
+    expect(Schema.is(PlanSchema)(plan)).toBe(true);
+  });
+
+  it("findPlanDependencyProblem accepts a DAG and names problems", () => {
+    const s = (id: string, dependsOn?: string[]) => ({
+      id,
+      title: id,
+      status: "pending" as const,
+      ...(dependsOn ? { dependsOn } : {}),
+    });
+    expect(findPlanDependencyProblem({ steps: [s("a"), s("b", ["a"]), s("c", ["a", "b"])] })).toBeUndefined();
+    expect(findPlanDependencyProblem({ steps: [s("a", ["x"])] })).toContain("unknown");
+    expect(findPlanDependencyProblem({ steps: [s("a", ["a"])] })).toContain("itself");
+    expect(findPlanDependencyProblem({ steps: [s("a", ["b"]), s("b", ["a"])] })).toContain("cycle");
   });
 });

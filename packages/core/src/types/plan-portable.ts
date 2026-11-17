@@ -1,5 +1,5 @@
 import { Either, Schema } from "effect";
-import { PlanSchema, PlanSourceSchema } from "./plan.js";
+import { PlanSchema, PlanSourceSchema, findPlanDependencyProblem } from "./plan.js";
 import type { Plan, PlanFinding, PlanSource, PlanStep, PlanStepStatus } from "./plan.js";
 
 /**
@@ -11,7 +11,10 @@ import type { Plan, PlanFinding, PlanSource, PlanStep, PlanStepStatus } from "./
 /** Current version of the portable plan formats (Markdown front-matter and JSON envelope). */
 export const PLAN_FORMAT_VERSION = 1;
 
-/** Why a portable plan could not be read. */
+/**
+ * Why a portable plan could not be read. A bad `dependsOn` graph (unknown id,
+ * self reference, cycle) reports `invalid-shape` with the detail in `message`.
+ */
 export type PlanParseReason = "no-steps" | "invalid-json" | "invalid-shape" | "unsupported-version";
 
 /** Tagged failure value from the plan parsers. */
@@ -74,7 +77,8 @@ const safeDecode = (s: string): string => {
  * Render a plan as Markdown: a front-matter block (`id`, `source`, `createdAt`,
  * `version`), a `# <goal>` heading, and one checklist line per step:
  * `- [ ] title  (tool: name) <!--id:...-->` with `x` done, `~` in progress,
- * `-` skipped. When the plan has findings, a `## Findings` section follows the
+ * `-` skipped. Step dependencies and tool args ride the id trailer:
+ * `<!--id:a;deps:b,c;args:<url-encoded JSON>-->`. When the plan has findings, a `## Findings` section follows the
  * steps, one line per finding: `- [tool] summary <!--id:...;at:...-->`.
  * Lossless with {@link planFromMarkdown}.
  */
@@ -92,7 +96,10 @@ export function planToMarkdown(plan: Plan): string {
   ];
   const lines = plan.steps.map((s) => {
     const tool = s.tool !== undefined ? `  (tool: ${escapeTool(s.tool)})` : "";
-    return `- [${STATUS_CHAR[s.status]}] ${escapeTitle(s.title)}${tool} <!--id:${encodeURIComponent(s.id)}-->`;
+    const deps =
+      s.dependsOn !== undefined && s.dependsOn.length > 0 ? `;deps:${s.dependsOn.map(encodeURIComponent).join(",")}` : "";
+    const args = s.args !== undefined ? `;args:${encodeURIComponent(JSON.stringify(s.args))}` : "";
+    return `- [${STATUS_CHAR[s.status]}] ${escapeTitle(s.title)}${tool} <!--id:${encodeURIComponent(s.id)}${deps}${args}-->`;
   });
   const findings = plan.findings ?? [];
   const findingLines =
@@ -156,6 +163,16 @@ export interface PlanFromMarkdownDefaults {
   readonly createdAt?: number;
 }
 
+/** Parse a JSON object of tool args; `undefined` when the text is not a plain object. */
+const parseArgs = (text: string): Record<string, unknown> | undefined => {
+  try {
+    const v: unknown = JSON.parse(text);
+    return typeof v === "object" && v !== null && !Array.isArray(v) ? Object.fromEntries(Object.entries(v)) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 const ID_TRAILER = /\s*<!--id:([^>]*)-->\s*$/;
 const TOOL_TRAILER = /\s\s\(tool: ((?:[^\\)]|\\[\s\S])*)\)\s*$/;
 const ITEM_LINE = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[([ xX~-])\]\s?)?([\s\S]*)$/;
@@ -214,9 +231,20 @@ export function planFromMarkdown(
     const status = m[1] !== undefined ? (statusOfChar(m[1]) ?? "pending") : "pending";
     let rest = m[2]!;
     let id: string | undefined;
+    let dependsOn: string[] | undefined;
+    let args: Record<string, unknown> | undefined;
     const idm = ID_TRAILER.exec(rest);
     if (idm) {
-      id = safeDecode(idm[1]!);
+      const [rawId, ...attrs] = idm[1]!.split(";");
+      id = safeDecode(rawId!);
+      for (const a of attrs) {
+        if (a.startsWith("deps:")) {
+          const ds = a.slice(5).split(",").filter((d) => d !== "").map(safeDecode);
+          if (ds.length > 0) dependsOn = ds;
+        } else if (a.startsWith("args:")) {
+          args = parseArgs(safeDecode(a.slice(5))) ?? args;
+        }
+      }
       rest = rest.slice(0, idm.index);
     }
     let tool: string | undefined;
@@ -230,7 +258,14 @@ export function planFromMarkdown(
     let finalId = id ?? `step-${steps.length + 1}`;
     for (let n = 2; used.has(finalId); n++) finalId = `${id ?? `step-${steps.length + 1}`}-${n}`;
     used.add(finalId);
-    steps.push({ id: finalId, title, status, ...(tool !== undefined ? { tool } : {}) });
+    steps.push({
+      id: finalId,
+      title,
+      status,
+      ...(tool !== undefined ? { tool } : {}),
+      ...(dependsOn !== undefined ? { dependsOn } : {}),
+      ...(args !== undefined ? { args } : {}),
+    });
   }
   if (steps.length === 0) return fail("no-steps", "No checklist or list items found in the Markdown.");
 
@@ -248,6 +283,8 @@ export function planFromMarkdown(
   const createdAt = Number.isFinite(created) ? created : (defaults.createdAt ?? 0);
   const src = Schema.decodeUnknownEither(PlanSourceSchema)(meta.source);
   const source: PlanSource = Either.isRight(src) ? src.right : "user-edited";
+  const problem = findPlanDependencyProblem({ steps });
+  if (problem !== undefined) return fail("invalid-shape", problem);
   return Either.right({
     id,
     goal: goal ?? "",
@@ -289,6 +326,8 @@ export function planFromJSON(json: string): Either.Either<Plan, PlanParseError> 
   }
   const decoded = Schema.decodeUnknownEither(PlanEnvelopeSchema)(raw);
   if (Either.isLeft(decoded)) return fail("invalid-shape", "JSON is not a valid plan envelope.");
+  const problem = findPlanDependencyProblem(decoded.right.plan);
+  if (problem !== undefined) return fail("invalid-shape", problem);
   return Either.right(decoded.right.plan);
 }
 
@@ -325,7 +364,8 @@ export function planToHtml(plan: Plan): string {
     .map(
       (s) =>
         `<li class="${s.status}"><span class="g" title="${esc(s.status)}">${GLYPH[s.status]}</span>` +
-        `<span class="t">${esc(s.title)}</span>${s.tool !== undefined ? ` <code>${esc(s.tool)}</code>` : ""}</li>`,
+        `<span class="t">${esc(s.title)}</span>${s.tool !== undefined ? ` <code>${esc(s.tool)}</code>` : ""}` +
+        `${s.dependsOn !== undefined && s.dependsOn.length > 0 ? ` <span class="meta">after ${esc(s.dependsOn.join(", "))}</span>` : ""}</li>`,
     )
     .join("\n");
   const findings = plan.findings ?? [];

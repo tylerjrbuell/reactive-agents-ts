@@ -201,3 +201,54 @@ describe("plan html", () => {
     expect(() => planToHtml({ id: "i", goal: "g", createdAt: 1e30, source: "model", steps: [] })).not.toThrow();
   });
 });
+
+describe("step dependsOn and args", () => {
+  const plan: Plan = {
+    id: "p",
+    goal: "g",
+    createdAt: 5,
+    source: "user-edited",
+    steps: [
+      { id: "a", title: "first", status: "done", args: { path: "a;b,c.txt", n: 2, nested: { k: [1, "x"] } } },
+      { id: "b c", title: "second", tool: "file-read", status: "pending", dependsOn: ["a"], args: {} },
+      { id: "d", title: "third", status: "pending", dependsOn: ["a", "b c"] },
+    ],
+  };
+
+  it("round-trips through Markdown and JSON", () => {
+    const md = planFromMarkdown(planToMarkdown(plan));
+    expect(Either.isRight(md) && md.right).toEqual(plan);
+    const js = planFromJSON(planToJSON(plan));
+    expect(Either.isRight(js) && js.right).toEqual(plan);
+  });
+
+  it("steps without deps/args keep the old trailer", () => {
+    const md = planToMarkdown({ ...plan, steps: [{ id: "a", title: "t", status: "pending" }] });
+    expect(md).toContain("<!--id:a-->");
+  });
+
+  it("HTML shows dependencies", () => {
+    expect(planToHtml(plan)).toContain("after a, b c");
+  });
+
+  const bad = (steps: Plan["steps"]): Plan => ({ ...plan, steps });
+  const cases: Array<[string, Plan["steps"]]> = [
+    ["unknown id", [{ id: "a", title: "t", status: "pending", dependsOn: ["zz"] }]],
+    ["self reference", [{ id: "a", title: "t", status: "pending", dependsOn: ["a"] }]],
+    [
+      "cycle",
+      [
+        { id: "a", title: "t", status: "pending", dependsOn: ["b"] },
+        { id: "b", title: "u", status: "pending", dependsOn: ["a"] },
+      ],
+    ],
+  ];
+  for (const [name, steps] of cases) {
+    it(`rejects ${name} on JSON and Markdown import`, () => {
+      const js = planFromJSON(planToJSON(bad(steps)));
+      expect(Either.isLeft(js) && js.left.reason).toBe("invalid-shape");
+      const md = planFromMarkdown(planToMarkdown(bad(steps)));
+      expect(Either.isLeft(md) && md.left.reason).toBe("invalid-shape");
+    });
+  }
+});

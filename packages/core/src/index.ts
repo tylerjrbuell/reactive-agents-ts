@@ -245,6 +245,7 @@ export {
   PlanSourceSchema,
   PlanStepStatusSchema,
   isPlanEmpty,
+  findPlanDependencyProblem,
   planFromChecklist,
   planToChecklistSeed,
 } from "./types/plan.js";

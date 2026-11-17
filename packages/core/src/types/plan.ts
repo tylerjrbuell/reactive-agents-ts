@@ -28,6 +28,17 @@ export const PlanStepSchema = Schema.Struct({
   tool: Schema.optional(Schema.String),
   /** Current status. */
   status: PlanStepStatusSchema,
+  /**
+   * Ids of steps that must finish before this one. Absent when the step has no
+   * prerequisites. Ids must name other steps of the same plan; portable imports
+   * reject unknown ids, self references and cycles (see `findPlanDependencyProblem`).
+   */
+  dependsOn: Schema.optional(Schema.Array(Schema.String)),
+  /**
+   * Arguments the step passes to its tool, as a JSON-serializable record. Absent
+   * when the step carries none. The values are opaque to core.
+   */
+  args: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
 });
 /** One step of a plan. */
 export type PlanStep = typeof PlanStepSchema.Type;
@@ -74,6 +85,38 @@ export type Plan = typeof PlanSchema.Type;
 /** True when the plan has no steps. An empty plan is valid data but cannot be executed. */
 export const isPlanEmpty = (plan: Pick<Plan, "steps">): boolean => plan.steps.length === 0;
 
+/**
+ * Check a plan's `dependsOn` graph. Returns a human-readable problem (unknown
+ * id, self reference or cycle) or `undefined` when the graph is valid.
+ */
+export function findPlanDependencyProblem(plan: Pick<Plan, "steps">): string | undefined {
+  const byId = new Map(plan.steps.map((s) => [s.id, s] as const));
+  for (const s of plan.steps) {
+    for (const d of s.dependsOn ?? []) {
+      if (d === s.id) return `Step "${s.id}" depends on itself.`;
+      if (!byId.has(d)) return `Step "${s.id}" depends on unknown step "${d}".`;
+    }
+  }
+  const state = new Map<string, "visiting" | "done">();
+  const visit = (id: string): string | undefined => {
+    const st = state.get(id);
+    if (st === "done") return undefined;
+    if (st === "visiting") return `Dependency cycle through step "${id}".`;
+    state.set(id, "visiting");
+    for (const d of byId.get(id)?.dependsOn ?? []) {
+      const r = visit(d);
+      if (r !== undefined) return r;
+    }
+    state.set(id, "done");
+    return undefined;
+  };
+  for (const s of plan.steps) {
+    const r = visit(s.id);
+    if (r !== undefined) return r;
+  }
+  return undefined;
+}
+
 /** Checklist-seed item shape (structurally the runtime `TodoSeedItem`). */
 export interface PlanChecklistSeedItem {
   readonly id: string;
@@ -91,6 +134,10 @@ export interface PlanFromChecklistMeta {
   readonly source: PlanSource;
   /** Tool hint per step id. Overrides the row's own `tool`; steps with neither get no `tool`. */
   readonly tools?: Readonly<Record<string, string>>;
+  /** Prerequisite step ids per step id. Steps without an entry (or with an empty list) get no `dependsOn`. */
+  readonly dependsOn?: Readonly<Record<string, ReadonlyArray<string>>>;
+  /** Tool arguments per step id. Steps without an entry get no `args`. */
+  readonly args?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   /** Recon findings to carry on the plan. Absent or empty = the plan has no `findings`. */
   readonly findings?: ReadonlyArray<PlanFinding>;
 }
@@ -111,7 +158,16 @@ export function planFromChecklist(snapshot: ChecklistSnapshot, meta: PlanFromChe
     .filter((row) => row.kind === "advisory")
     .map((row): PlanStep => {
       const tool = meta.tools?.[row.id] ?? row.tool;
-      return { id: row.id, title: row.title, status: stepStatusOfRow(row.status), ...(tool !== undefined ? { tool } : {}) };
+      const deps = meta.dependsOn?.[row.id];
+      const args = meta.args?.[row.id];
+      return {
+        id: row.id,
+        title: row.title,
+        status: stepStatusOfRow(row.status),
+        ...(tool !== undefined ? { tool } : {}),
+        ...(deps !== undefined && deps.length > 0 ? { dependsOn: deps } : {}),
+        ...(args !== undefined ? { args } : {}),
+      };
     });
   return {
     id: meta.id,

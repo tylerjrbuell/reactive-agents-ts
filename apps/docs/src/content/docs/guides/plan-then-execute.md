@@ -32,7 +32,7 @@ console.log(result.plan.steps) // same steps, each now "done", "in-progress" or 
 
 ## What a plan is
 
-A `Plan` is `{ id, goal, steps, createdAt, source }`. Each step is `{ id, title, tool?, status }` with status `"pending"`, `"in-progress"`, `"done"` or `"skipped"`. `source` says who wrote it: `"model"` (the model recorded it with the `todo` tool), `"harness-derived"` (the harness read the steps out of the model's reply) or `"user-edited"`.
+A `Plan` is `{ id, goal, steps, createdAt, source }`. Each step is `{ id, title, tool?, dependsOn?, args?, status }`. `dependsOn` lists the ids of steps that must finish first; `args` holds the tool arguments. Both survive the Markdown, JSON and HTML exports. Importing a plan whose `dependsOn` names an unknown step, itself, or forms a cycle fails with a `PlanParseError`. Status is `"pending"`, `"in-progress"`, `"done"` or `"skipped"`. `source` says who wrote it: `"model"` (the model recorded it with the `todo` tool), `"harness-derived"` (the harness read the steps out of the model's reply) or `"user-edited"`.
 
 A plan is the agent's advisory checklist, not a second store. A step that names a tool in its title as `tool: file-read` gets `tool: "file-read"`. The types, `isPlanEmpty`, `planFromChecklist` and `planToChecklistSeed` come from `@reactive-agents/core`.
 
