@@ -7,8 +7,10 @@
  * signing secret) is saved on its own through `lib/gateway-api.ts` and never enters the config.
  */
 
+import { CHANNEL_KIND_COPY, CHANNEL_KIND_ORDER, WEBHOOK_COPY, type ChannelKind } from "./channel-kind-copy.js";
+
 /** The adapters Cortex configures. */
-export type ChannelKind = "telegram" | "signal" | "webhook";
+export type { ChannelKind };
 
 /** Non-secret per-kind settings (same fields as the server's `CortexChannelSettings`). */
 export interface ChannelSettings {
@@ -43,29 +45,10 @@ export interface ChannelKindInfo {
 }
 
 /** The kinds in display order. */
-export const CHANNEL_KINDS: readonly ChannelKindInfo[] = [
-  {
-    kind: "telegram",
-    label: "Telegram",
-    blurb: "A bot made with BotFather. Cortex polls Telegram, so no public URL is needed.",
-    credential: { field: "token", label: "Bot token", hint: "From @BotFather (/newbot). Saved encrypted; never shown again.", placeholder: "123456789:AA..." },
-    senderExample: "telegram:123456789",
-  },
-  {
-    kind: "signal",
-    label: "Signal",
-    blurb: "A registered number reached through signal-cli (a running daemon, or spawned by Cortex).",
-    credential: { field: "account", label: "Account number", hint: "The registered number, with country code. Saved encrypted.", placeholder: "+15551234567" },
-    senderExample: "signal:+15551234567",
-  },
-  {
-    kind: "webhook",
-    label: "Webhook",
-    blurb: "Signed HTTP requests from your own service. Listens on a local port; put a tunnel or proxy in front.",
-    credential: { field: "secret", label: "Signing secret", hint: "Requests must carry an HMAC-SHA256 signature made with it. Saved encrypted.", placeholder: "whsec_..." },
-    senderExample: "webhook:user-42",
-  },
-];
+export const CHANNEL_KINDS: readonly ChannelKindInfo[] = CHANNEL_KIND_ORDER.map((kind) => {
+  const { label, blurb, credential, senderExample } = CHANNEL_KIND_COPY[kind];
+  return { kind, label, blurb, credential, senderExample };
+});
 
 const KIND_BY_ID = new Map(CHANNEL_KINDS.map((k) => [k.kind, k] as const));
 
@@ -146,7 +129,7 @@ export function channelIssues(c: ChannelEntry, credentialSaved: boolean): string
     if (c.settings.ingressPort === undefined) issues.push("Set the port the webhook listens on.");
     else if (!validPort(c.settings.ingressPort)) issues.push("The listen port must be between 1 and 65535.");
     const url = c.settings.replyUrl?.trim();
-    if (url && !/^https?:\/\/\S+$/i.test(url)) issues.push("The reply URL must start with http:// or https://.");
+    if (url && !/^https?:\/\/\S+$/i.test(url)) issues.push(WEBHOOK_COPY.callbackIssue);
   }
   return issues;
 }

@@ -112,7 +112,7 @@
         {:else}
           <table class="gw-table">
             <caption class="gw-sr">Channels of {a.name}</caption>
-            <thead><tr><th scope="col">Channel</th><th scope="col">Connection</th><th scope="col">Messages in</th><th scope="col">Replies sent</th><th scope="col">Send failures</th><th scope="col">Last message in</th><th scope="col">Last reply</th></tr></thead>
+            <thead><tr><th scope="col">Channel</th><th scope="col">Connection</th><th scope="col">Received</th><th scope="col">Sent</th><th scope="col">Send failures</th><th scope="col">Last received</th><th scope="col">Last sent</th></tr></thead>
             <tbody>
               {#each a.gateway.channels as c (c.id)}
                 {@const v = connectionView(c)}

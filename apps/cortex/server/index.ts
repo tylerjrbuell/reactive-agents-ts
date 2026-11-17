@@ -35,6 +35,7 @@ import { installOllamaEndpointStore, OllamaEndpointStore } from "./services/olla
 import { installProviderKeyStore, ProviderKeyStore } from "./services/provider-key-store.js";
 import { gatewayRouter } from "./api/gateway.js";
 import { channelHubRouter } from "./api/channel-hub.js";
+import { webhookChannelRouter } from "./api/webhook-channel.js";
 import { ChannelCredentials } from "./services/channel-credentials.js";
 import { dirname } from "node:path";
 import { capabilitiesRouter } from "./api/capabilities.js";
@@ -199,6 +200,7 @@ export async function startCortexServer(
     .use(agentsRouter(runtime.rawDb, runtime.gateway))
     .use(gatewayRouter(runtime.rawDb, runtime.gateway, new ChannelCredentials(providerKeys), { hub: runtime.hub }))
     .use(channelHubRouter(runtime.rawDb, runtime.hub, new ChannelCredentials(providerKeys)))
+    .use(webhookChannelRouter(runtime.rawDb, new ChannelCredentials(providerKeys), { hub: runtime.hub }))
     .use(toolsRouter(runtime.storeLayer, runtime.rawDb))
     .use(mcpServersRouter(runtime.rawDb))
     .use(skillsRouter(runtime.storeLayer, runtime.rawDb))

@@ -38,9 +38,9 @@ export function turnLimitWireFromDraft(d: TurnLimitDraft): { turnTimeoutMs?: num
 }
 
 /** Problems that would make the framework refuse the limit, in plain words. */
-export function turnLimitProblems(d: TurnLimitDraft): string[] {
+export function turnLimitProblems(d: TurnLimitDraft, message = "Turn limit must be 1 second or more."): string[] {
   const t = d.turnTimeoutSec.trim();
   if (t === "") return [];
   const n = Number(t);
-  return Number.isFinite(n) && n >= 1 ? [] : ["Turn limit must be 1 second or more."];
+  return Number.isFinite(n) && n >= 1 ? [] : [message];
 }

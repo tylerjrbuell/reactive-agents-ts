@@ -174,8 +174,8 @@ export function queueLimit(q: QueueStatus): string | null {
 /** How a recent-activity line reads, by kind. */
 export function activityLabel(kind: ActivityRow["kind"]): { tone: "ok" | "warn" | "bad" | "neutral"; label: string } {
   switch (kind) {
-    case "received": return { tone: "neutral", label: "Message in" };
-    case "sent": return { tone: "ok", label: "Reply sent" };
+    case "received": return { tone: "neutral", label: "Received" };
+    case "sent": return { tone: "ok", label: "Sent" };
     case "failed": return { tone: "bad", label: "Send failed" };
     case "queued": return { tone: "neutral", label: "Queued" };
     case "deferred": return { tone: "warn", label: "Deferred" };

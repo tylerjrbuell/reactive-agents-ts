@@ -67,7 +67,7 @@ describe("channelIssues", () => {
   it("a webhook needs a listen port, a sane reply URL and its secret", () => {
     const c = newChannel("webhook", "ch-cccc3333");
     expect(channelIssues(c, true)).toEqual(["Set the port the webhook listens on."]);
-    expect(channelIssues({ ...c, settings: { ingressPort: 7700, replyUrl: "ftp://x" } }, true)).toEqual(["The reply URL must start with http:// or https://."]);
+    expect(channelIssues({ ...c, settings: { ingressPort: 7700, replyUrl: "ftp://x" } }, true)).toEqual(["The callback URL must start with http:// or https://."]);
     expect(channelIssues({ ...c, settings: { ingressPort: 7700 } }, false)).toEqual(["No signing secret saved."]);
     expect(channelIssues({ ...c, settings: { ingressPort: 70000 } }, true)).toEqual(["The listen port must be between 1 and 65535."]);
   });

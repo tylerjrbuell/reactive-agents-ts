@@ -173,3 +173,42 @@ describe("telegram acknowledgement default", () => {
     expect([sig.ackOn, sig.ackSource]).toEqual([false, "canned"]);
   });
 });
+
+describe("webhook routes follow the capability table", () => {
+  const busy: HubRouteWire = {
+    ...saved,
+    match: { channelId: "ch-1", conversation: "dm", when: { _tag: "Mention" } },
+    maxTurnsPerSenderPerHour: 9,
+    maxTurnsPerHour: 30,
+    resetCommands: ["/new"],
+    failureNotice: false,
+    turnTimeoutMs: 45_000,
+    batchWindowMs: 500,
+  };
+
+  it("drops every conversation-only field but keeps the caps and the run limit", () => {
+    const r = routeFromDraft(draftFromRoute(busy), busy, "webhook");
+    expect(r.match).toEqual({ channelId: "ch-1" });
+    expect(r.maxTurnsPerSenderPerHour).toBeUndefined();
+    expect(r.resetCommands).toBeUndefined();
+    expect(r.failureNotice).toBeUndefined();
+    expect(r.batchWindowMs).toBeUndefined();
+    expect([r.owners, r.allow, r.deny, r.open]).toEqual([[], [], [], false]);
+    expect(r.maxTurnsPerHour).toBe(30);
+    expect(r.turnTimeoutMs).toBe(45_000);
+  });
+
+  it("a messaging route keeps them", () => {
+    const r = routeFromDraft(draftFromRoute(busy), busy, "telegram");
+    expect(r.match).toMatchObject({ conversation: "dm", when: { _tag: "Mention" } });
+    expect(r.maxTurnsPerSenderPerHour).toBe(9);
+    expect(r.failureNotice).toBe(false);
+  });
+
+  it("hidden fields never block a webhook save, and the agent is required without messaging words", () => {
+    const d = { ...newDraft("ch-1", "", "webhook"), id: "deploy-hook", when: "command" as const, maxTurnsPerSenderPerHour: "nope" };
+    expect(draftProblems(d, true, "webhook")).toEqual(["Pick the agent that runs when the webhook is called."]);
+    expect(draftProblems({ ...d, agentId: "a1" }, true, "webhook")).toEqual([]);
+    expect(draftProblems({ ...d, agentId: "a1", maxTurnsPerHour: "-1", turnTimeoutSec: "0" }, true, "webhook")).toEqual(["Runs per hour must be a number above zero.", "Run limit must be 1 second or more."]);
+  });
+});

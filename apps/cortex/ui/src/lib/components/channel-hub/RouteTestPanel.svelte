@@ -7,6 +7,9 @@
    */
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
   import { channelKindInfo } from "$lib/channels.js";
+  import { channelKindCopy } from "$lib/channel-kind-copy.js";
+  import { routeCapabilities } from "$lib/channel-route-capabilities.js";
+  import WebhookTestRequest from "$lib/components/channels/WebhookTestRequest.svelte";
   import { explainView, simulateView, type ProbeView } from "$lib/channel-hub.js";
   import { probeHub, type HubChannelRow } from "$lib/channel-hub-api.js";
   import Badge from "$lib/components/kit/Badge.svelte";
@@ -33,6 +36,9 @@
   let simulate = $state<ProbeView | null>(null);
 
   const chosen = $derived(channels.find((c) => c.id === (channelId || channels[0]?.id)));
+  const copy = $derived(channelKindCopy(chosen?.platform));
+  /** A webhook has no sender or conversation to try: its test is a signed request. */
+  const isCall = $derived(!routeCapabilities(chosen?.platform).conversation);
   const example = $derived(chosen ? channelKindInfo(chosen.platform).senderExample : "telegram:123456789");
 
   async function send() {
@@ -53,8 +59,8 @@
 </script>
 
 <section class="tp" aria-labelledby="tp-h">
-  <h3 id="tp-h">Send test message</h3>
-  <p class="tp-lead">Try a message as a sender and see which route takes it, with which tools, or why it is refused. Nothing is sent to the platform.</p>
+  <h3 id="tp-h">{copy.testTitle}</h3>
+  <p class="tp-lead">{copy.testLead}</p>
   {#if channels.length === 0}
     <p class="tp-muted">Add a channel first.</p>
   {:else}
@@ -62,10 +68,17 @@
       <Field id="tp-channel" label="Channel">
         <Select id="tp-channel" value={chosen?.id ?? ""} options={channels.map((c) => ({ value: c.id, label: c.label ?? channelKindInfo(c.platform).label, description: c.id }))} onchange={(v) => (channelId = v)} />
       </Field>
-      <Field id="tp-user" label="Sender" hint="Like {example}">
-        <Input id="tp-user" mono bind:value={userId} placeholder={example} describedBy="tp-user-hint" />
-      </Field>
+      {#if !isCall}
+        <Field id="tp-user" label="Sender" hint="Like {example}">
+          <Input id="tp-user" mono bind:value={userId} placeholder={example} describedBy="tp-user-hint" />
+        </Field>
+      {/if}
     </div>
+    {#if isCall && chosen}
+      {#key chosen.id}
+        <WebhookTestRequest channelId={chosen.id} />
+      {/key}
+    {:else}
     <Field id="tp-text" label="Message">
       <Input id="tp-text" bind:value={text} />
     </Field>
@@ -88,6 +101,7 @@
         {/if}
       {/each}
     </div>
+    {/if}
   {/if}
 </section>
 

@@ -5,6 +5,7 @@
    * `turnTimeoutSec` / `failureNotice` fields of the draft; rules live in `lib/channel-turn-limits.ts`.
    */
   import { TURN_TIMEOUT_DEFAULT_SEC, type TurnLimitDraft } from "$lib/channel-turn-limits.js";
+  import { channelKindCopy } from "$lib/channel-kind-copy.js";
   import Field from "$lib/components/kit/Field.svelte";
   import Input from "$lib/components/kit/Input.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
@@ -13,13 +14,16 @@
     draft: TurnLimitDraft;
     /** A webhook reply is the HTTP response, so there is no failure message to send. */
     showNotice: boolean;
+    /** The channel's platform, which picks the wording (`lib/channel-kind-copy.ts`). */
+    platform?: string;
   }
-  let { draft = $bindable(), showNotice }: Props = $props();
+  let { draft = $bindable(), showNotice, platform }: Props = $props();
+  const copy = $derived(channelKindCopy(platform));
 </script>
 
 <fieldset class="tl">
-  <legend>When a turn takes too long or fails</legend>
-  <Field id="tl-sec" label="Turn limit (seconds)" hint="A turn still running after this is stopped and counted as failed. Empty uses {TURN_TIMEOUT_DEFAULT_SEC}.">
+  <legend>{copy.turnLimitLegend}</legend>
+  <Field id="tl-sec" label={copy.turnLimitLabel} hint="{copy.turnLimitHint} {TURN_TIMEOUT_DEFAULT_SEC}.">
     <Input id="tl-sec" mono inputmode="decimal" bind:value={draft.turnTimeoutSec} placeholder={String(TURN_TIMEOUT_DEFAULT_SEC)} describedBy="tl-sec-hint" />
   </Field>
   {#if showNotice}

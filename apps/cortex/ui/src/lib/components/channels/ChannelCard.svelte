@@ -11,6 +11,8 @@
   import { confirmAction } from "$lib/stores/confirm-store.js";
   import { channelIssues, channelKindInfo, channelName, webhookRoute, type ChannelEntry, type ChannelSettings } from "$lib/channels.js";
   import { deleteCredential, fetchCredentials, saveCredential, testChannel, type CredentialField } from "$lib/gateway-api.js";
+  import { WEBHOOK_COPY } from "$lib/channel-kind-copy.js";
+  import WebhookConnectionPanel from "./WebhookConnectionPanel.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
   import Field from "$lib/components/kit/Field.svelte";
@@ -163,14 +165,14 @@
         </Field>
       {/if}
     {:else if channel.kind === "webhook"}
-      <Field id={fid("ingress")} label="Listen port" hint="Cortex listens on 127.0.0.1 at this port. Front it with a tunnel or proxy to reach it.">
-        <Input id={fid("ingress")} mono inputmode="numeric" value={channel.settings.ingressPort === undefined ? "" : String(channel.settings.ingressPort)} placeholder="7700" oninput={(e) => onChange({ settings: { ingressPort: num((e.currentTarget as HTMLInputElement).value) } })} describedBy="{fid('ingress')}-hint" />
+      <Field id={fid("ingress")} label={WEBHOOK_COPY.listenPort.label} hint={WEBHOOK_COPY.listenPort.hint}>
+        <Input id={fid("ingress")} mono inputmode="numeric" value={channel.settings.ingressPort === undefined ? "" : String(channel.settings.ingressPort)} placeholder={WEBHOOK_COPY.listenPort.placeholder} oninput={(e) => onChange({ settings: { ingressPort: num((e.currentTarget as HTMLInputElement).value) } })} describedBy="{fid('ingress')}-hint" />
       </Field>
-      <Field id={fid("route")} label="Path" hint="Senders POST here: {webhookRoute(channel)}">
+      <Field id={fid("route")} label={WEBHOOK_COPY.path.label} hint="{WEBHOOK_COPY.path.hint} {webhookRoute(channel)}">
         <Input id={fid("route")} mono value={channel.settings.route ?? ""} placeholder="/channels/{channel.id}" oninput={(e) => onChange({ settings: { route: (e.currentTarget as HTMLInputElement).value.trim() || undefined } })} describedBy="{fid('route')}-hint" />
       </Field>
-      <Field id={fid("reply")} label="Reply URL" hint="Where the agent's replies are POSTed as JSON. Leave empty to receive only.">
-        <Input id={fid("reply")} mono value={channel.settings.replyUrl ?? ""} placeholder="https://example.com/reply" oninput={(e) => onChange({ settings: { replyUrl: (e.currentTarget as HTMLInputElement).value.trim() || undefined } })} describedBy="{fid('reply')}-hint" />
+      <Field id={fid("reply")} label={WEBHOOK_COPY.callback.label} hint={WEBHOOK_COPY.callback.hint}>
+        <Input id={fid("reply")} mono value={channel.settings.replyUrl ?? ""} placeholder={WEBHOOK_COPY.callback.placeholder} oninput={(e) => onChange({ settings: { replyUrl: (e.currentTarget as HTMLInputElement).value.trim() || undefined } })} describedBy="{fid('reply')}-hint" />
       </Field>
     {/if}
   </div>
@@ -202,6 +204,10 @@
     <ul class="chan-issues" aria-label="What stops this channel from starting">
       {#each issues as issue (issue)}<li>{issue}</li>{/each}
     </ul>
+  {/if}
+
+  {#if channel.kind === "webhook"}
+    <WebhookConnectionPanel {channel} secretSaved={saved?.masked != null} onSecretChanged={() => void load()} />
   {/if}
 
   <div class="chan-test">

@@ -9,6 +9,8 @@
  * is left exactly as saved: `routeFromDraft(draft, saved)` starts from the saved route.
  */
 import { normalizeSender, senderProblem } from "./channel-access.js";
+import { channelKindCopy } from "./channel-kind-copy.js";
+import { routeCapabilities } from "./channel-route-capabilities.js";
 import { resetDraftFromWire, resetProblems, resetWireFromDraft, type ResetDraft } from "./channel-reset-commands.js";
 import { batchingDraftFromWire, batchingProblems, batchingWireFromDraft, type BatchingDraft, type MidRunMode } from "./channel-batching.js";
 import { pacingDraftFromWire, pacingProblems, pacingWireFromDraft, type PacingDraft } from "./channel-pacing.js";
@@ -199,9 +201,23 @@ const lines = (s: string): string[] => s.split("\n").map((l) => l.trim()).filter
  */
 export function routeFromDraft(d: RouteDraft, saved?: HubRouteWire, platform?: string): HubRouteWire {
   const wire = routeWithAll(d, saved);
-  if (platform !== "webhook") return wire;
-  const { senderTools: _s, ack: _a, batchWindowMs: _bw, midRun: _mr, minGapMs: _mg, ...rest } = wire;
-  return { ...rest, owners: [], allow: [], deny: [], open: false };
+  const caps = routeCapabilities(platform);
+  const { senderTools, ack, batchWindowMs, midRun, minGapMs, resetCommands, failureNotice, turnTimeoutMs, maxTurnsPerSenderPerHour, match, ...rest } = wire;
+  const { conversation, when, ...matchRest } = match;
+  return {
+    ...rest,
+    match: { ...matchRest, ...(caps.conversation && conversation ? { conversation } : {}), ...(caps.trigger && when ? { when } : {}) },
+    ...(caps.senderAccess ? {} : { owners: [], allow: [], deny: [], open: false }),
+    ...(caps.senderAccess && senderTools ? { senderTools } : {}),
+    ...(caps.ack && ack !== undefined ? { ack } : {}),
+    ...(caps.batching && batchWindowMs !== undefined ? { batchWindowMs } : {}),
+    ...(caps.batching && midRun !== undefined ? { midRun } : {}),
+    ...(caps.batching && minGapMs !== undefined ? { minGapMs } : {}),
+    ...(caps.reset && resetCommands !== undefined ? { resetCommands } : {}),
+    ...(caps.failureNotice && failureNotice !== undefined ? { failureNotice } : {}),
+    ...(caps.turnLimit && turnTimeoutMs !== undefined ? { turnTimeoutMs } : {}),
+    ...(caps.perSenderCap && maxTurnsPerSenderPerHour !== undefined ? { maxTurnsPerSenderPerHour } : {}),
+  };
 }
 
 function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
@@ -269,14 +285,16 @@ function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
 }
 
 /** Problems that would make the server refuse the draft, in plain words. Empty = looks savable. */
-export function draftProblems(d: RouteDraft, creating: boolean): string[] {
+export function draftProblems(d: RouteDraft, creating: boolean, platform?: string): string[] {
+  const caps = routeCapabilities(platform);
+  const copy = channelKindCopy(platform);
   const out: string[] = [];
   if (creating && !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(d.id.trim())) out.push("Give the route an id: letters, digits, dot, dash or underscore.");
   if (!d.channelId) out.push("Pick the channel this route listens on.");
-  if (!d.agentId) out.push("Pick the agent that answers.");
-  if (d.when === "command" && d.whenValue.trim() === "") out.push("Name the command (for example start).");
-  if (d.when === "keyword" && lines(d.whenValue).length === 0) out.push("Add at least one keyword.");
-  for (const list of [d.owners, d.allow, d.deny]) {
+  if (!d.agentId) out.push(copy.agentRequired);
+  if (caps.trigger && d.when === "command" && d.whenValue.trim() === "") out.push("Name the command (for example start).");
+  if (caps.trigger && d.when === "keyword" && lines(d.whenValue).length === 0) out.push("Add at least one keyword.");
+  for (const list of caps.senderAccess ? [d.owners, d.allow, d.deny] : []) {
     for (const e of list) {
       const p = senderProblem(e);
       if (p) out.push(p);
@@ -288,16 +306,19 @@ export function draftProblems(d: RouteDraft, creating: boolean): string[] {
       if (required) out.push(`${label} is required for an open route.`);
     } else if (!(n > 0)) out.push(`${label} must be a number above zero.`);
   };
-  positive("Cost per day", d.maxCostPerDayUsd, d.open);
-  positive("Turns per hour", d.maxTurnsPerHour, d.open);
-  positive("Turns per sender per hour", d.maxTurnsPerSenderPerHour, d.open);
+  const open = caps.senderAccess && d.open;
+  positive("Cost per day", d.maxCostPerDayUsd, open);
+  positive(copy.turnsPerHourLabel, d.maxTurnsPerHour, open);
+  if (caps.perSenderCap) positive("Turns per sender per hour", d.maxTurnsPerSenderPerHour, open);
   positive("Max iterations", d.maxIterations, false);
-  if (d.senderTools === "AgentDefault" && d.owners.length === 0) out.push("Full agent tools for senders needs at least one owner, who approves risky tools.");
-  out.push(...resetProblems(d));
-  out.push(...turnLimitProblems(d));
-  out.push(...batchingProblems(d));
-  out.push(...pacingProblems(d));
-  if (d.ackOn) {
+  if (caps.senderAccess && d.senderTools === "AgentDefault" && d.owners.length === 0) out.push("Full agent tools for senders needs at least one owner, who approves risky tools.");
+  if (caps.reset) out.push(...resetProblems(d));
+  if (caps.turnLimit) out.push(...turnLimitProblems(d, copy.turnLimitMin));
+  if (caps.batching) {
+    out.push(...batchingProblems(d));
+    out.push(...pacingProblems(d));
+  }
+  if (caps.ack && d.ackOn) {
     const after = toNum(d.ackAfterMs);
     if (after !== undefined && !(after >= 0)) out.push("Acknowledge after must be zero or more milliseconds.");
     if (d.ackSource === "model") {
@@ -352,7 +373,8 @@ export function widenConfirmCopy(routeId: string, tokens: readonly string[]): { 
 }
 
 /** One line of what a route does, for the list. */
-export function routeLine(r: HubRouteWire): string {
+export function routeLine(r: HubRouteWire, platform?: string): string {
+  if (!routeCapabilities(platform).conversation) return channelKindCopy(platform).routeScope;
   const m = r.match;
   const where = m.conversation === "dm" ? "direct messages" : m.conversation === "group" ? "groups" : "any conversation";
   const when = !m.when ? "" : m.when._tag === "Mention" ? ", when mentioned" : m.when._tag === "Command" ? `, /${m.when.name}` : `, keywords: ${m.when.patterns.join(", ")}`;
@@ -360,7 +382,8 @@ export function routeLine(r: HubRouteWire): string {
 }
 
 /** Who may talk through a route, in one clause. */
-export function accessClause(r: HubRouteWire): string {
+export function accessClause(r: HubRouteWire, platform?: string): string {
+  if (!routeCapabilities(platform).senderAccess) return "the signing secret";
   if (r.open) return "anyone";
   const n = (r.allow ?? []).length + (r.owners ?? []).length;
   return n === 0 ? "nobody yet" : `${n} sender${n === 1 ? "" : "s"}`;

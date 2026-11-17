@@ -9,6 +9,8 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { confirmAction } from "$lib/stores/confirm-store.js";
   import { channelKindInfo } from "$lib/channels.js";
+  import { channelKindCopy } from "$lib/channel-kind-copy.js";
+  import { routeCapabilities } from "$lib/channel-route-capabilities.js";
   import { accessClause, routeLine, type HubRouteWire } from "$lib/channel-hub.js";
   import { deleteHubRoute, saveHubRoute, type AgentChoice, type HubChannelRow, type HubLive } from "$lib/channel-hub-api.js";
   import Badge from "$lib/components/kit/Badge.svelte";
@@ -33,7 +35,8 @@
     const c = channels.find((x) => x.id === id);
     return c ? (c.label ?? channelKindInfo(c.platform).label) : id;
   };
-  const agentName = (id: string): string => agents.find((a) => a.agentId === id)?.name ?? id;
+  const platformOf = (id: string): string | undefined => channels.find((x) => x.id === id)?.platform;
+  const agentName =(id: string): string => agents.find((a) => a.agentId === id)?.name ?? id;
   const sorted = $derived([...routes].sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)));
   const liveOf = (id: string) => live?.routes.find((r) => r.id === id);
 
@@ -44,7 +47,7 @@
   }
 
   async function remove(route: HubRouteWire) {
-    const ok = await confirmAction({ title: `Delete route ${route.id}?`, message: "Messages that matched it fall through to the next route, or go unanswered.", confirmLabel: "Delete route" });
+    const ok = await confirmAction({ title: `Delete route ${route.id}?`, message: channelKindCopy(platformOf(route.match.channelId)).routeDeleteNote, confirmLabel: "Delete route" });
     if (!ok) return;
     const r = await deleteHubRoute(CORTEX_SERVER_URL, fetch, route.id);
     if (!r.ok) toast.error("Route not deleted", r.error);
@@ -63,21 +66,24 @@
     <ol class="hr-list">
       {#each sorted as r (r.id)}
         {@const l = liveOf(r.id)}
+        {@const caps = routeCapabilities(platformOf(r.match.channelId))}
         <li class="hr-row" class:hr-off={r.enabled === false}>
           <div class="hr-main">
             <div class="hr-flow">
               <strong>{channelName(r.match.channelId)}</strong>
               <span class="hr-arrow" aria-hidden="true">→</span>
-              <span class="hr-match">{routeLine(r)}</span>
+              <span class="hr-match">{routeLine(r, platformOf(r.match.channelId))}</span>
               <span class="hr-arrow" aria-hidden="true">→</span>
               <strong>{agentName(r.target.agentId)}</strong>
             </div>
             <div class="hr-badges">
               <Badge data tone="neutral">{r.id}</Badge>
-              <Badge tone={r.open ? "warn" : "neutral"}>Talk: {accessClause(r)}</Badge>
-              <Badge tone="neutral">{r.senderTools?._tag === "AgentDefault" ? "Full tools" : r.senderTools?._tag === "Allowlist" ? "Some tools" : "Read-only"}</Badge>
-              {#if (r.owners ?? []).length > 0}<Badge tone="io" data>{(r.owners ?? []).length} owner{(r.owners ?? []).length === 1 ? "" : "s"}</Badge>{/if}
-              {#if r.ack}<Badge tone="accent">Acknowledges</Badge>{/if}
+              <Badge tone={r.open ? "warn" : "neutral"}>{channelKindCopy(platformOf(r.match.channelId)).accessBadge}: {accessClause(r, platformOf(r.match.channelId))}</Badge>
+              {#if caps.senderAccess}
+                <Badge tone="neutral">{r.senderTools?._tag === "AgentDefault" ? "Full tools" : r.senderTools?._tag === "Allowlist" ? "Some tools" : "Read-only"}</Badge>
+                {#if (r.owners ?? []).length > 0}<Badge tone="io" data>{(r.owners ?? []).length} owner{(r.owners ?? []).length === 1 ? "" : "s"}</Badge>{/if}
+              {/if}
+              {#if caps.ack && r.ack}<Badge tone="accent">Acknowledges</Badge>{/if}
               {#if r.migratedFrom}<Badge tone="warn">Imported</Badge>{/if}
               {#if r.enabled !== false && l && !l.active}<Badge tone="bad">Not live</Badge>{/if}
             </div>
