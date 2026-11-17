@@ -30,6 +30,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { scanRepo } from "./stale-claims";
+import { pagesMissingTopic, runInventory } from "./ia-inventory";
 
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
 const LEDGER_PATH = resolve(import.meta.dir, "docs-sync-ledger.json");
@@ -158,6 +160,37 @@ for (const rule of ledger.rules) {
   console.error(`  ${rule.description}`);
   console.error(`  Doc paths to check: ${rule.docPaths.join(", ")}`);
   for (const c of codeCommits) console.error(`    ${c}`);
+}
+
+const staleClaims = scanRepo(REPO_ROOT);
+if (staleClaims.length > 0) {
+  drift = true;
+  console.error("✗ stale-public-claims: known-false or contradictory claims found");
+  for (const c of staleClaims) console.error(`    ${c.file}:${c.line} [${c.rule}] ${c.text}`);
+}
+
+// IA gate: a content page without `topic` frontmatter fails (features/cortex is a listed exemption,
+// see TOPIC_EXEMPT_PREFIXES). Everything else below is report-only (never sets `drift`): orphans,
+// duplicate titles and missing `related`. See wiki/Reference/Docs-IA-Proposal.md.
+try {
+  const ia = runInventory();
+  const noTopic = pagesMissingTopic(ia.pages);
+  if (noTopic.length > 0) {
+    drift = true;
+    console.error(`✗ ia-missing-topic: ${noTopic.length} page(s) lack \`topic\` frontmatter (controlled values in src/content.config.ts)`);
+    for (const s of noTopic) console.error(`    ${s === "" ? "/" : `/${s}/`}`);
+  }
+  const warn = (label: string, items: string[]): void => {
+    if (items.length === 0) return;
+    const shown = items.slice(0, 5).join(", ");
+    console.warn(`⚠ ia-${label}: ${items.length} (report-only) ${shown}${items.length > 5 ? ", ..." : ""}`);
+  };
+  const url = (slug: string): string => (slug === "" ? "/" : `/${slug}/`);
+  warn("orphans", ia.pages.filter((p) => p.orphan).map((p) => url(p.slug)));
+  warn("duplicate-titles", ia.titleGroups.map((g) => `"${g.title}" x${g.slugs.length}`));
+  warn("missing-related", ia.pages.filter((p) => !p.hasRelated && p.slug !== "404").map((p) => url(p.slug)));
+} catch (err) {
+  console.warn(`⚠ ia-inventory warnings skipped: ${err instanceof Error ? err.message : String(err)}`);
 }
 
 if (ledgerChanged) {

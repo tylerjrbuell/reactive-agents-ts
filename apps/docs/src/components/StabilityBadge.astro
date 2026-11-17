@@ -1,0 +1,21 @@
+---
+// The one stability badge. Labels and colours come from STABILITY_BADGE
+// (src/content/indicators.ts), the same map the sidebar uses. `stable` renders
+// subdued; the other tiers are prominent. Never hidden by the "Highlight
+// what's new" toggle.
+import { Badge } from "@astrojs/starlight/components";
+import { STABILITY_BADGE, type StabilityTier } from "../content/indicators";
+
+interface Props {
+  tier: StabilityTier;
+}
+const { tier } = Astro.props;
+const b = STABILITY_BADGE[tier];
+---
+
+<Badge
+  text={b.label}
+  variant={b.variant}
+  class:list={["ra-ind", "ra-ind-stability", `ra-ind-${tier}`]}
+  title={`Stability: ${b.label}`}
+/>

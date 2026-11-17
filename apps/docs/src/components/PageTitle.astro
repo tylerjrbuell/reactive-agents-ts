@@ -1,68 +1,79 @@
 ---
+import TryIt from "./TryIt.astro";
+import MarkerIcon from "./MarkerIcon.astro";
+import StabilityBadge from "./StabilityBadge.astro";
+import WhatsNewToggle from "./WhatsNewToggle.astro";
+import WhatChanged from "./WhatChanged.astro";
+import {
+  CURRENT_RELEASE,
+  extractHeadings,
+  extractSectionMarkers,
+  indicatorsFor,
+  pageMarkFor,
+  tocMarks,
+  type TocNode,
+  type IndicatorFrontmatter,
+} from "../content/indicators";
+
 const route = Astro.locals.starlightRoute;
 const data = route?.entry?.data ?? {};
 
-const lastCommit = data.lastCommit as
-  | { subject: string; hash: string; date: string }
-  | undefined;
-
-const changedSections = data.changedSections as string[] | undefined;
-
-const badge = data.badge as
-  | { text: string; variant: string }
-  | undefined;
-
-const daysAgo = lastCommit
-  ? Math.floor((Date.now() - new Date(lastCommit.date + "T00:00:00Z").getTime()) / 86_400_000)
-  : null;
-
-// Show "what changed" callout on pages that have a lastCommit and a New/Updated badge
-const showCallout = !!lastCommit && (badge?.text?.startsWith("New") || badge?.text === "Updated");
+const lastCommit = data.lastCommit as { hash: string; date: string } | undefined;
+const indicators = indicatorsFor(data as IndicatorFrontmatter, CURRENT_RELEASE);
+// Frontmatter marker, or section-only marks, with the section names in the tooltip.
+const pageMark = pageMarkFor(
+  data as IndicatorFrontmatter,
+  extractSectionMarkers((route?.entry as { body?: string } | undefined)?.body ?? ""),
+  CURRENT_RELEASE,
+);
 
 const commitUrl = lastCommit
   ? `https://github.com/tylerjrbuell/reactive-agents-ts/commit/${lastCommit.hash}`
   : undefined;
 
 const id = route?.entry?.id ?? "";
+
+// Entry pages that get the first-screen "Try it" block (TryIt.astro). One
+// list here instead of per-page markup. quickstart already opens with an
+// install walkthrough, so it is not listed.
+const TRY_IT_PAGES = new Set([
+  "guides/reasoning",
+  "guides/local-models",
+  "reference/cli",
+  "guides/choosing-strategies",
+  "guides/cost-optimization",
+  "guides/whats-new",
+  "guides/tools",
+  "guides/troubleshooting",
+  "cookbook/agent-tool-calling-mcp",
+  "cookbook/local-agent-ollama",
+]);
+const pageId = id.replace(/\.(mdx?|md)$/, "").replace(/\/index$/, "");
+const showTryIt = TRY_IT_PAGES.has(pageId);
+const { sections: changed } = tocMarks(
+  (route?.toc?.items ?? []) as TocNode[],
+  extractHeadings((route?.entry as { body?: string } | undefined)?.body ?? ""),
+  CURRENT_RELEASE,
+  pageId,
+);
 ---
 
 <h1 id="_top" class="ra-page-title" data-page-id={id}>
-  {data.title}
+  {data.title}{pageMark && <MarkerIcon marker={{ kind: pageMark.kind, version: pageMark.version }} label={pageMark.label} />}
 </h1>
 
-{lastCommit && (
-  <p class="ra-last-updated">
-    Last updated {daysAgo === 0 ? "today" : `${daysAgo} day${daysAgo === 1 ? "" : "s"} ago`}
-    {" · "}
-    <a href={commitUrl} target="_blank" rel="noopener noreferrer">
-      {lastCommit.hash.slice(0, 7)}
-    </a>
-  </p>
-)}
+<div class="ra-title-meta">
+  {indicators.stability && <StabilityBadge tier={indicators.stability} />}
+  {lastCommit && (
+    <span class="ra-last-updated">
+      Last updated {lastCommit.date}
+      {" · "}
+      <a href={commitUrl} target="_blank" rel="noopener noreferrer">{lastCommit.hash}</a>
+    </span>
+  )}
+  <WhatsNewToggle />
+</div>
 
-{showCallout && lastCommit && (
-  <details class="ra-updated-callout">
-    <summary>
-      <span class="ra-updated-icon">↑</span>
-      {daysAgo === 0
-        ? "Updated today"
-        : daysAgo === 1
-        ? "Updated yesterday"
-        : `Updated ${daysAgo} days ago`}
-    </summary>
-    <p class="ra-updated-detail">
-      <span class="ra-updated-subject">"{lastCommit.subject}"</span>
-      {" · "}
-      <a href={commitUrl} target="_blank" rel="noopener" class="ra-updated-hash">
-        {lastCommit.hash}
-      </a>
-      {" · "}
-      <span class="ra-updated-date">{lastCommit.date}</span>
-    </p>
-    {changedSections && changedSections.length > 0 && (
-      <ul class="ra-changed-sections">
-        {changedSections.map(s => <li>{s}</li>)}
-      </ul>
-    )}
-  </details>
-)}
+<WhatChanged sections={changed} />
+
+{showTryIt && <TryIt />}

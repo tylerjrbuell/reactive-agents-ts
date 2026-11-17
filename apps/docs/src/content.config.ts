@@ -3,6 +3,17 @@ import { z } from "astro/zod";
 import { docsSchema } from "@astrojs/starlight/schema";
 import { docsLoaderWithMeta } from "./content/docs-loader-with-meta";
 import { starlightSafeSkillsLoader } from "./content/skills-loader";
+import { STABILITY_TIERS } from "./content/indicators";
+
+/** Controlled `topic` values for the Related block (Docs-IA-Proposal section c). */
+const DOC_TOPICS = [
+  "getting-started", "reasoning", "tools", "mcp", "memory", "providers", "local-models",
+  "streaming", "context", "agents", "channels", "gateway", "web-ui", "durable-runs",
+  "safety", "cost", "observability", "quality", "cortex", "cli", "config-reference",
+  "concepts", "compare", "releases", "help",
+] as const;
+
+const versionString = z.string().regex(/^\d+\.\d+$/, 'use a minor version like "0.18"').optional();
 
 const skillFileSchema = z.object({
   content: z.string(),
@@ -21,26 +32,23 @@ export const collections = {
     loader: docsLoaderWithMeta(),
     schema: docsSchema({
       extend: z.object({
-        // Legacy new-page fields — kept for backward compat, replaced by badge system
-        isNew: z.boolean().optional(),
-        newUntil: z.string().optional(),
-        // Manually-authored: drives computeGitPageMetadata()'s badge priority
-        stability: z.enum(["stable", "unstable", "experimental", "deprecated"]).optional(),
-        // Everything below is computed at build time by docs-loader-with-meta.ts
-        // (git-page-metadata.ts) — never authored by hand, never persisted to
-        // source frontmatter.
-        recentlyChanged: z.boolean().optional(),
-        badge: z
-          .object({ text: z.string(), variant: z.string(), __auto: z.string().optional() })
-          .optional(),
-        lastCommit: z
-          .object({
-            subject: z.string(),
-            hash: z.string(),
-            date: z.string(),
-          })
-          .optional(),
-        changedSections: z.array(z.string()).optional(),
+        // Authored, release-based indicators (wiki/Reference/Docs-Indicators.md).
+        // `since`: release that introduced the page; `updated`: release that
+        // materially changed it. Version strings like "0.18". Markers expire when
+        // the release in the VERSION file moves on (indicators.ts); the loader
+        // fails the build on a malformed or future version.
+        since: versionString,
+        updated: versionString,
+        stability: z.enum(STABILITY_TIERS).optional(),
+        // Computed at build time by docs-loader-with-meta.ts (last-commit.ts),
+        // display only ("Last updated"). Never authored.
+        lastCommit: z.object({ hash: z.string(), date: z.string() }).optional(),
+        // Docs IA: one topic per page (controlled list, wiki/Reference/Docs-IA-Proposal.md
+        // section c) and up to 4 hand-picked related slugs (e.g. "guides/memory").
+        // RelatedPages.astro renders them; with no `related` it falls back to other
+        // pages that share the topic.
+        topic: z.enum(DOC_TOPICS).optional(),
+        related: z.array(z.string()).max(4).optional(),
         // Curated Q&A -> Schema.org FAQPage JSON-LD
         faq: z
           .array(z.object({ q: z.string(), a: z.string() }))

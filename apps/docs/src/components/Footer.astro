@@ -1,12 +1,15 @@
 ---
-// The subscribe form + Share-feedback trigger live in the right-hand page
-// sidebar (PageSidebar.astro). The feedback MODAL is a global singleton
-// rendered here so it is always in the DOM and openable from anywhere
-// (sidebar button, or a "👎 No" vote on the helpful widget).
+// The feedback MODAL is a global singleton rendered here so it is always in
+// the DOM and openable from anywhere (sidebar button, end-of-page block,
+// floating tab, or a "No" vote on the helpful widget). EndOfPage is the
+// width-independent home for install, Star, Discord, subscribe and feedback:
+// the right sidebar (PageSidebar.astro) only exists on wide screens.
 import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/Footer.astro";
 import FeedbackModal from "./FeedbackModal.astro";
+import EndOfPage from "./EndOfPage.astro";
 ---
 
 <Default {...Astro.props}><slot /></Default>
+<EndOfPage />
 <FeedbackModal />

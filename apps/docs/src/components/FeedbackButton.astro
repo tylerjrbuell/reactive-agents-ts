@@ -26,7 +26,7 @@
     if (!btn || btn.dataset.wired) return;
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
-      if (typeof window.__raOpenFeedback === "function") window.__raOpenFeedback();
+      if (typeof window.__raOpenFeedback === "function") window.__raOpenFeedback({ placement: "sidebar" });
     });
   }
   if (document.readyState === "loading") {

@@ -97,31 +97,47 @@
         padding-inline-start: 0.35rem;
     }
 
-    .sidebar-pane a,
-    .sidebar-pane summary {
-        min-width: 0;
-    }
+}
 
-    .sidebar-pane a {
-        display: flex;
-        align-items: baseline;
-        gap: 0.25rem;
-    }
+/* Sidebar row layout, desktop rail and mobile drawer alike. The row is a flex
+   line: [marker dot/ring] [label, shrinks and wraps at word boundaries]
+   [stability glyph]. The indicator slots are fixed-width (`flex: none`) and the
+   label has `min-width: 0`, so a long label never gets squeezed by an
+   indicator and indicators never wrap under the text. No text pills here:
+   stability and New/Updated are compact glyphs drawn from data attributes
+   (see "Release indicators"). */
+.sidebar-pane a,
+.sidebar-pane summary {
+    min-width: 0;
+}
 
-    .sidebar-pane a > span:first-child,
-    .sidebar-pane .group-label {
-        min-width: 0;
-    }
+.sidebar-pane a {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+}
 
-    .sidebar-pane a > span:first-child {
-        overflow-wrap: break-word;
-        word-break: normal;
-    }
+.sidebar-pane a > span:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
+}
 
-    .sidebar-pane a > :last-child,
-    .sidebar-pane .group-label > :last-child {
-        flex: 0 0 auto;
-    }
+.sidebar-pane .group-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+.sidebar-pane .group-label > .large {
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+.sidebar-pane .group-label > .sl-badge {
+    flex: none;
 }
 
 /* ── Typography ─────────────────────────────────────────────── */
@@ -1644,73 +1660,156 @@ body {
     color: var(--sl-color-gray-1);
 }
 
-/* ── NEW page indicator (subtle dot) ────────────────────────── */
-.ra-new-dot {
-    display: none;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--ra-cyan);
-    box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.6);
-    vertical-align: middle;
-    margin-left: 0.55em;
-    position: relative;
-    top: -0.15em;
-    animation: ra-new-dot-pulse 2.4s ease-in-out infinite;
+/* ── Indicator design tokens ─────────────────────────────────────
+   Every New/Updated/stability colour is derived from the site palette
+   (--ra-violet, --ra-cyan, --sl-color-accent, Starlight's semantic orange/red
+   and gray scale). No literal colours below this block. Light mode darkens the
+   cyan by mixing toward --sl-color-white (slate-900 in light) so a ring is
+   >= 4.5:1 on the page background; the violet already comes from the
+   light-theme accent. */
+:root {
+    --ra-ind-new: var(--ra-violet);
+    --ra-ind-updated: var(--ra-cyan);
+    --ra-ind-experimental: var(--ra-violet);
+    --ra-ind-unstable: var(--sl-color-orange);
+    --ra-ind-deprecated: var(--sl-color-red);
+    --ra-ind-stable: var(--sl-color-gray-3);
+    --ra-ind-glow: 0.28;
 }
-.ra-page-title--is-new .ra-new-dot {
+[data-theme='light'] {
+    --ra-ind-new: var(--sl-color-accent);
+    --ra-ind-updated: color-mix(in srgb, var(--ra-cyan) 62%, var(--sl-color-white));
+    --ra-ind-experimental: var(--sl-color-accent);
+    --ra-ind-glow: 0.2;
+}
+
+/* New/Updated icons. One shape language everywhere (sidebar link, TOC link,
+   page title, inline heading, hub rows, group roll-ups): filled violet dot
+   with a soft halo = new, cyan ring = updated. Shape differs as well as hue, so
+   the two never rely on colour alone. Authored markers only
+   (wiki/Reference/Docs-Indicators.md); the toggle hides them via the
+   data-ra-whats-new attribute on html. Alt text after `/` gives the pseudo
+   icon an accessible name; `title` is the tooltip. */
+.sidebar a[data-ra-new-content]::before,
+starlight-toc a[data-ra-new-content]::before,
+mobile-starlight-toc a[data-ra-new-content]::before,
+.ra-marker-icon,
+.sl-badge.ra-rollup {
     display: inline-block;
+    box-sizing: border-box;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    flex: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-
-@keyframes ra-new-dot-pulse {
-    0%,
-    100% {
-        box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.55);
-    }
-    50% {
-        box-shadow: 0 0 0 5px rgba(6, 182, 212, 0);
-    }
-}
-
-/* One dot marker for recently changed pages and sections in both nav surfaces. */
 .sidebar a[data-ra-new-content]::before,
 starlight-toc a[data-ra-new-content]::before,
 mobile-starlight-toc a[data-ra-new-content]::before {
-    content: '';
+    content: '' / attr(data-ra-marker-label);
+    margin-inline-end: 0.5em;
+    vertical-align: 0.05em;
+}
+/* Sidebar rows are flex: the dot sits in its own fixed slot, centred on the
+   first text line (line-height 1.4). */
+.sidebar-pane a[data-ra-new-content]::before {
+    margin-inline-end: 0;
+    margin-top: calc((1.4em - 0.5rem) / 2);
+    vertical-align: baseline;
+}
+.ra-marker-icon {
+    margin-inline-start: 0.45rem;
+    vertical-align: middle;
+    cursor: help;
+}
+a[data-ra-new-content='new']::before,
+.ra-marker-icon[data-ra-marker='new'],
+.sl-badge.ra-rollup-new {
+    background: var(--ra-ind-new);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ra-ind-new) calc(var(--ra-ind-glow) * 100%), transparent);
+}
+a[data-ra-new-content='updated']::before,
+.ra-marker-icon[data-ra-marker='updated'],
+.sl-badge.ra-rollup-updated {
+    background: transparent;
+    border: 2px solid var(--ra-ind-updated);
+}
+a:is(:hover, :focus-visible)[data-ra-new-content]::before,
+.ra-marker-icon:hover,
+summary:hover .sl-badge.ra-rollup {
+    transform: scale(1.25);
+}
+/* Roll-up badge on sidebar groups: Starlight renders it as a text badge, so
+   the text stays in the accessibility tree (visually hidden) and the box is
+   shrunk to the same dot/ring. Tooltip is set by NewContentMarkers.astro. */
+.sl-badge.ra-rollup {
+    padding: 0;
+    overflow: hidden;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    white-space: nowrap;
+    margin-inline-start: 0.1rem;
+    cursor: help;
+}
+.sl-badge.ra-rollup-new {
+    border: 0;
+}
+
+/* Stability. Sidebar: a compact glyph in the row's trailing slot, never a
+   text pill (a pill squeezes long labels into one word per line). The full
+   text badge lives on the page title only (<StabilityBadge>). Glyphs are
+   mask shapes tinted by the tier token: flask = experimental, warning
+   triangle = unstable, struck circle = deprecated. */
+.sidebar a[data-ra-stability]::after {
+    content: '' / attr(data-ra-stability-label);
     display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--ra-cyan);
-    margin-right: 0.5em;
-    vertical-align: 0.12em;
-    flex-shrink: 0;
-    box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.6);
-    animation: ra-new-dot-pulse 2.4s ease-in-out infinite;
+    flex: none;
+    width: 0.95rem;
+    height: 0.95rem;
+    margin-inline-start: auto;
+    margin-top: calc((1.4em - 0.95rem) / 2);
+    background-color: var(--ra-ind-stability-color, var(--ra-ind-stable));
+    -webkit-mask: var(--ra-ind-glyph) center / contain no-repeat;
+    mask: var(--ra-ind-glyph) center / contain no-repeat;
+    opacity: 0.9;
+}
+.sidebar a[data-ra-stability]:is(:hover, :focus-visible)::after {
+    opacity: 1;
+}
+.sidebar a[data-ra-stability='experimental'] {
+    --ra-ind-stability-color: var(--ra-ind-experimental);
+    --ra-ind-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 2h6v2h-1v5.6l5.3 8.9A2 2 0 0 1 17.6 22H6.4a2 2 0 0 1-1.7-3.5L10 9.6V4H9z'/%3E%3C/svg%3E");
+}
+.sidebar a[data-ra-stability='unstable'] {
+    --ra-ind-stability-color: var(--ra-ind-unstable);
+    --ra-ind-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 2 1 21h22zM11 9h2v6h-2zM11 17h2v2h-2z'/%3E%3C/svg%3E");
+}
+.sidebar a[data-ra-stability='deprecated'] {
+    --ra-ind-stability-color: var(--ra-ind-deprecated);
+    --ra-ind-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 3a7 7 0 0 1 5.3 11.6L7.4 6.7A7 7 0 0 1 12 5zm-5.3 2.4 9.9 9.9A7 7 0 0 1 6.7 7.4z'/%3E%3C/svg%3E");
+}
+/* The current-page row inverts to white-on-accent: keep the glyph legible. */
+.sidebar a[aria-current='page'][data-ra-stability]::after {
+    background-color: currentColor;
 }
 
-[data-theme='light'] .ra-new-dot,
-[data-theme='light'] .sidebar a[data-ra-new-content]::before,
-[data-theme='light'] starlight-toc a[data-ra-new-content]::before,
-[data-theme='light'] mobile-starlight-toc a[data-ra-new-content]::before {
-    background: var(--ra-violet-deep);
-    box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.5);
+/* Page-title stability badge (full text). Tier token drives border, tint and
+   text so it matches the sidebar glyph. */
+.sl-badge.ra-ind-stability {
+    --ra-ind-c: var(--ra-ind-stable);
+    color: var(--ra-ind-c);
+    border-color: color-mix(in srgb, var(--ra-ind-c) 55%, transparent);
+    background: color-mix(in srgb, var(--ra-ind-c) 12%, transparent);
 }
-
-@media (prefers-reduced-motion: reduce) {
-    .ra-new-dot,
-    .sidebar a[data-ra-new-content]::before,
-    starlight-toc a[data-ra-new-content]::before,
-    mobile-starlight-toc a[data-ra-new-content]::before {
-        animation: none;
-        box-shadow: 0 0 6px rgba(6, 182, 212, 0.55);
-    }
-    [data-theme='light'] .ra-new-dot,
-    [data-theme='light'] .sidebar a[data-ra-new-content]::before,
-    [data-theme='light'] starlight-toc a[data-ra-new-content]::before,
-    [data-theme='light'] mobile-starlight-toc a[data-ra-new-content]::before {
-        box-shadow: 0 0 6px rgba(124, 58, 237, 0.4);
-    }
+.sl-badge.ra-ind-stability.ra-ind-experimental {
+    --ra-ind-c: var(--ra-ind-experimental);
+}
+.sl-badge.ra-ind-stability.ra-ind-unstable {
+    --ra-ind-c: var(--ra-ind-unstable);
+}
+.sl-badge.ra-ind-stability.ra-ind-deprecated {
+    --ra-ind-c: var(--ra-ind-deprecated);
 }
 
 /* ── Email subscription form ─────────────────────────────────── */
@@ -2274,53 +2373,66 @@ mobile-starlight-toc a[data-ra-new-content]::before {
 .scroll-to-top-button {
     left: 47.5% !important;
 }
-/* ── Updated callout (PageTitle.astro) ──────────────────────── */
-.ra-updated-callout {
-    margin: -0.5rem 0 1.25rem;
-    border-left: 2px solid var(--sl-color-accent);
-    padding: 0.35rem 0.75rem;
-    border-radius: 0 4px 4px 0;
-    background: color-mix(in srgb, var(--sl-color-accent) 6%, transparent);
-    font-size: 0.8rem;
-    color: var(--sl-color-gray-2);
-}
-
-.ra-updated-callout summary {
-    cursor: pointer;
-    user-select: none;
-    list-style: none;
+/* ── Release indicators: stability tags + New/Updated markers ──
+   (wiki/Reference/Docs-Indicators.md). `.ra-ind-marker` is everything the
+   "Highlight what's new" toggle hides; `.ra-ind-stability` is never hidden. */
+.ra-title-meta {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 0.4rem;
-    font-weight: 500;
+    gap: 0.4rem 0.9rem;
+    margin: 0.25rem 0 0.75rem;
 }
-
-.ra-updated-callout summary::-webkit-details-marker {
-    display: none;
+.ra-title-meta .ra-last-updated {
+    margin: 0;
 }
-
-.ra-updated-icon {
-    font-size: 0.7rem;
-    color: var(--sl-color-accent);
+.ra-ind-stable {
+    opacity: 0.65;
 }
-
-.ra-updated-detail {
-    margin: 0.35rem 0 0;
-    color: var(--sl-color-gray-3);
-    font-size: 0.75rem;
+/* "What changed" line under the title: the marked sections as anchors. */
+.ra-whatchanged {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.15rem 0.35rem;
+    margin: 0 0 1rem;
+    padding: 0.4rem 0.7rem;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+    border: 1px solid var(--ra-hair);
+    border-inline-start: 3px solid var(--ra-ind-new);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--ra-ind-new) 6%, transparent);
 }
-
-.ra-updated-subject {
-    font-style: italic;
+.ra-whatchanged .ra-marker-icon {
+    margin-inline-start: 0;
+    align-self: center;
 }
-
-.ra-updated-hash {
-    font-family: var(--sl-font-mono, monospace);
+.ra-whatchanged-lead {
+    font-weight: 600;
+    color: var(--sl-color-white);
+}
+.ra-whatchanged a {
     color: var(--sl-color-accent-high);
-    text-decoration: none;
 }
-.ra-updated-hash:hover {
-    text-decoration: underline;
+.ra-whatchanged-more {
+    flex-basis: 100%;
+}
+.ra-whatchanged-more summary {
+    cursor: pointer;
+    color: var(--sl-color-gray-3);
+}
+.ra-whatchanged-more ul {
+    margin: 0.25rem 0 0;
+    padding-inline-start: 1.1rem;
+}
+html[data-ra-whats-new='off'] .ra-ind-marker,
+html[data-ra-whats-new='off'] .ra-marker-icon,
+html[data-ra-whats-new='off'] .sl-badge.ra-rollup,
+html[data-ra-whats-new='off'] .sidebar a[data-ra-new-content]::before,
+html[data-ra-whats-new='off'] starlight-toc a[data-ra-new-content]::before,
+html[data-ra-whats-new='off'] mobile-starlight-toc a[data-ra-new-content]::before {
+    display: none;
 }
 
 /* ── GitHub Star CTA (PageSidebar) ──────────────────────────── */
@@ -2401,23 +2513,6 @@ ol.ra-steps > li::before {
 
 ol.ra-steps > li:last-child {
     border-left-color: transparent;
-}
-
-.ra-changed-sections {
-    margin: 0.4rem 0 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-}
-.ra-changed-sections li {
-    font-size: 0.7rem;
-    color: var(--sl-color-gray-3);
-    background: var(--sl-color-gray-6);
-    border-radius: 3px;
-    padding: 0.1em 0.45em;
-    font-family: var(--sl-font-mono, monospace);
 }
 
 /* ================================================================
@@ -3713,5 +3808,183 @@ ol.ra-steps > li:last-child {
         border-top: 1px solid rgba(139, 92, 246, 0.12);
         justify-content: center;
         flex-wrap: wrap;
+    }
+}
+
+/* ================================================================
+   Conversion surfaces (Phase 1): TryIt, install snippet, end-of-page
+   block, floating feedback tab. Components: TryIt.astro,
+   InstallSnippet.astro, EndOfPage.astro.
+   ================================================================ */
+
+.ra-install {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0.5rem 0;
+}
+.ra-install-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0.4rem;
+    min-width: 0;
+}
+.ra-install-cmd {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 6px;
+    background: var(--sl-color-gray-6);
+    font-size: 0.8rem;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+.ra-install-label {
+    flex: 0 0 auto;
+    font-family: var(--sl-font-system, inherit);
+    font-size: 0.68rem;
+    color: var(--sl-color-gray-3);
+}
+.ra-install-copy {
+    flex: 0 0 auto;
+    min-width: 4.2rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sl-color-white);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.ra-install-copy:hover {
+    border-color: var(--sl-color-accent);
+}
+
+.ra-tryit {
+    margin: 0.75rem 0 1.25rem;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid color-mix(in srgb, var(--sl-color-accent) 40%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--sl-color-accent) 6%, transparent);
+}
+.ra-tryit-head {
+    margin: 0 !important;
+    font-size: 0.85rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+.ra-tryit-head span {
+    color: var(--sl-color-gray-3);
+    font-size: 0.75rem;
+}
+.ra-tryit-code {
+    margin: 0.35rem 0 !important;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 6px;
+    background: var(--sl-color-gray-6);
+    font-size: 0.72rem;
+    line-height: 1.45;
+    overflow-x: auto;
+}
+.ra-tryit-links {
+    margin: 0.25rem 0 0 !important;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 1rem;
+    font-size: 0.8rem;
+}
+.ra-tryit-primary {
+    font-weight: 700;
+}
+.ra-tryit-note {
+    color: var(--sl-color-gray-3);
+    font-size: 0.72rem;
+}
+
+.ra-endcap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1.25rem 2rem;
+    margin: 2.5rem 0 1rem;
+    padding: 1.25rem 0 0;
+    border-top: 1px solid var(--sl-color-gray-5);
+}
+.ra-endcap-col {
+    min-width: 0;
+}
+.ra-endcap-h {
+    margin: 0 0 0.4rem !important;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--sl-color-gray-3);
+}
+.ra-endcap-links {
+    margin: 0.5rem 0 0 !important;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    align-items: center;
+    font-size: 0.85rem;
+}
+.ra-endcap-primary {
+    font-weight: 700;
+}
+.ra-endcap .ra-endcap-star {
+    margin-bottom: 0;
+    width: fit-content;
+}
+.ra-endcap-fb {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--sl-color-text-accent);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.ra-fb-float {
+    position: fixed;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 999px;
+    background: var(--sl-color-bg-nav, var(--sl-color-black));
+    color: var(--sl-color-white);
+    font-size: 0.75rem;
+    font-weight: 600;
+    opacity: 0.9;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+}
+.ra-fb-float:hover {
+    opacity: 1;
+    border-color: var(--sl-color-accent);
+}
+.ra-fb-float--hidden {
+    display: none;
+}
+@media (max-width: 49.99rem) {
+    .ra-fb-float {
+        padding: 0.6rem;
+    }
+    .ra-fb-float-label {
+        display: none;
     }
 }

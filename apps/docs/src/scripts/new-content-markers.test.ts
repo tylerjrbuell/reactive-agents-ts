@@ -1,101 +1,92 @@
-// Run: bun test apps/docs/src/scripts/new-content-markers.test.ts --timeout 15000
+// Run: bun run repo test apps/docs/src/scripts/new-content-markers.test.ts
 import { describe, expect, it } from "bun:test";
-import { isRecentPageUpdate } from "../content/git-page-metadata.js";
-import {
-  applyPageMapMarkers,
-  applyTocSectionMarkers,
-  getNewContentPagePaths,
-  isChangedSectionLink,
-  isNewContentBadgeVariant,
-  isNewContentPageLink,
-  pagePathFromDocId,
-} from "./new-content-markers.js";
+import { applyHubMarkers, applyTocSectionMarkers, docsPathOf, parseMarkIndex, parseTocMarks } from "./new-content-markers.js";
 
-function makeLink(href: string, textContent: string, badgeVariants: readonly string[] = []) {
-  const attributes = new Map<string, string>();
+function link(href: string) {
+  const attrs = new Map<string, string>([["href", href]]);
   return {
-    href,
-    textContent,
-    querySelector: (selector: string) => selector === ".sl-badge" && badgeVariants.length > 0
-      ? { classList: { contains: (variant: string) => badgeVariants.includes(variant) } }
-      : null,
-    setAttribute: (name: string, value: string) => attributes.set(name, value),
-    removeAttribute: (name: string) => attributes.delete(name),
-    getAttribute: (name: string) => attributes.get(name) ?? null,
+    getAttribute: (n: string) => attrs.get(n) ?? null,
+    setAttribute: (n: string, v: string) => void attrs.set(n, v),
+    removeAttribute: (n: string) => void attrs.delete(n),
   };
 }
 
-describe("new content navigation markers", () => {
-  it("maps recent content pages even when stability overrides the visible badge", () => {
-    const paths = getNewContentPagePaths([
-      { id: "guides/new", data: { recentlyChanged: true, badge: { text: "New", __auto: "1" } } },
-      { id: "features/updated", data: { recentlyChanged: true, badge: { text: "Updated", __auto: "1" } } },
-      { id: "features/experimental", data: { recentlyChanged: true, badge: { text: "Experimental", __auto: "1" } } },
-      { id: "guides/manual", data: { recentlyChanged: false, badge: { text: "New" } } },
-      { id: "guides/old", data: {} },
+const marks = (o: Record<string, unknown>) => parseTocMarks(JSON.stringify(o));
+
+describe("TOC section markers", () => {
+  it("parses only well-formed entries, with kind and label", () => {
+    const m = marks({ a: { kind: "new", label: "New in 0.19" }, b: { kind: "bogus", label: "x" }, c: { kind: "new" }, d: { kind: "updated", label: "Updated in 0.19" } });
+    expect([...m.keys()]).toEqual(["a", "d"]);
+    expect(m.get("d")).toEqual({ kind: "updated", label: "Updated in 0.19" });
+    expect(parseTocMarks("not json").size).toBe(0);
+    expect(parseTocMarks(null).size).toBe(0);
+  });
+
+  it("marks TOC links by kind and clears stale ones", () => {
+    const a = link("#a");
+    const b = link("#b");
+    b.setAttribute("data-ra-new-content", "new");
+    applyTocSectionMarkers([a, b, link("/other/#a")], marks({ a: { kind: "updated", label: "Updated in 0.19" } }));
+    expect(a.getAttribute("data-ra-new-content")).toBe("updated");
+    expect(a.getAttribute("data-ra-marker-label")).toBe("Updated in 0.19");
+    expect(b.getAttribute("data-ra-new-content")).toBeNull();
+  });
+
+  it("decodes encoded hashes", () => {
+    const l = link("#caf%C3%A9");
+    applyTocSectionMarkers([l], new Map([["café", { kind: "new", label: "New" }]]));
+    expect(l.getAttribute("data-ra-new-content")).toBe("new");
+  });
+});
+
+describe("hub child markers", () => {
+  const index = {
+    "/guides/memory/": { kind: "updated", label: "Updated in 0.19: Inspecting and Editing Memory" },
+    "/guides/multimodal/": { kind: "new", label: "New in 0.19" },
+  } as const;
+  const hubLink = (href: string) => {
+    const attrs = new Map<string, string>([["href", href]]);
+    const after: unknown[] = [];
+    return {
+      after,
+      getAttribute: (n: string) => attrs.get(n) ?? null,
+      setAttribute: (n: string, v: string) => void attrs.set(n, v),
+      // The decorator calls `after(node)`.
+      afterFn: (node: unknown) => void after.push(node),
+    };
+  };
+  const wrap = (l: ReturnType<typeof hubLink>) => ({ ...l, after: l.afterFn });
+
+  it("normalises hrefs to docs paths and rejects external and hash-only links", () => {
+    expect(docsPathOf("/guides/memory#x")).toBe("/guides/memory/");
+    expect(docsPathOf("/guides/memory/?a=1")).toBe("/guides/memory/");
+    expect(docsPathOf("https://docs.reactiveagents.dev/guides/memory/", "https://docs.reactiveagents.dev")).toBe("/guides/memory/");
+    expect(docsPathOf("https://example.com/guides/memory/", "https://docs.reactiveagents.dev")).toBeNull();
+    expect(docsPathOf("#top")).toBeNull();
+    expect(docsPathOf("mailto:a@b.c")).toBeNull();
+    expect(docsPathOf("relative/path")).toBeNull();
+  });
+
+  it("decorates marked children once, with the section-bearing label, and skips self", () => {
+    const a = hubLink("/guides/memory/");
+    const b = hubLink("/guides/multimodal/#x");
+    const c = hubLink("/guides/tools/");
+    const self = hubLink("/guides/memory/");
+    const made: Array<[string, string]> = [];
+    const mk = (kind: "new" | "updated", label: string) => (made.push([kind, label]), { kind });
+    const links = [wrap(a), wrap(b), wrap(c)];
+    expect(applyHubMarkers(links, index, "/guides/hub/", mk)).toBe(2);
+    expect(made).toEqual([
+      ["updated", "Updated in 0.19: Inspecting and Editing Memory"],
+      ["new", "New in 0.19"],
     ]);
-
-    expect(paths).toEqual(["/guides/new/", "/features/updated/", "/features/experimental/"]);
+    expect(applyHubMarkers(links, index, "/guides/hub/", mk)).toBe(0); // idempotent
+    expect(applyHubMarkers([wrap(self)], index, "/guides/memory/", mk)).toBe(0);
   });
 
-  it("uses a separate recent-content window even when stability overrides the badge", () => {
-    const now = new Date("2026-10-10T12:00:00Z");
-
-    expect(isRecentPageUpdate("2026-09-25", now)).toBe(true);
-    expect(isRecentPageUpdate("2026-09-24", now)).toBe(false);
-    expect(isRecentPageUpdate(null, now)).toBe(false);
-  });
-
-  it("normalizes root and index document IDs to their navigation URLs", () => {
-    expect(pagePathFromDocId("index")).toBe("/");
-    expect(pagePathFromDocId("concepts/architecture/index")).toBe("/concepts/architecture/");
-    expect(pagePathFromDocId("guides/quickstart")).toBe("/guides/quickstart/");
-  });
-
-  it("marks only same-site links to recently changed pages", () => {
-    const paths = ["/features/new-page/"];
-
-    expect(isNewContentPageLink("/features/new-page/?ref=sidebar", "https://docs.test", paths)).toBe(true);
-    expect(isNewContentPageLink("https://other.test/features/new-page/", "https://docs.test", paths)).toBe(false);
-    expect(isNewContentPageLink("/features/old-page/", "https://docs.test", paths)).toBe(false);
-  });
-
-  it("applies page dots to recent sidebar links and clears stale dots", () => {
-    const recent = makeLink("https://docs.test/guides/new/", "New guide");
-    const curated = makeLink("https://docs.test/features/manual/", "Featured", ["success"]);
-    const old = makeLink("https://docs.test/guides/old/", "Old guide");
-    old.setAttribute("data-ra-new-content", "page");
-
-    applyPageMapMarkers([recent, curated, old], "https://docs.test", ["/guides/new/"]);
-
-    expect(recent.getAttribute("data-ra-new-content")).toBe("page");
-    expect(curated.getAttribute("data-ra-new-content")).toBe("page");
-    expect(old.getAttribute("data-ra-new-content")).toBeNull();
-  });
-
-  it("applies section dots only to changed TOC headings", () => {
-    const changed = makeLink("#local-judgment", "Local judgment");
-    const unchanged = makeLink("#overview", "Overview");
-    unchanged.setAttribute("data-ra-new-content", "section");
-
-    applyTocSectionMarkers([changed, unchanged], ["## Local judgment"]);
-
-    expect(changed.getAttribute("data-ra-new-content")).toBe("section");
-    expect(unchanged.getAttribute("data-ra-new-content")).toBeNull();
-  });
-
-  it("recognizes Starlight's visible New and Updated badge variants only", () => {
-    expect(isNewContentBadgeVariant("success")).toBe(true);
-    expect(isNewContentBadgeVariant("note")).toBe(true);
-    expect(isNewContentBadgeVariant("caution")).toBe(false);
-  });
-
-  it("matches changed TOC headings exactly after markdown and whitespace normalization", () => {
-    const changed = ["## Local judgment", "### Budget and run results"];
-
-    expect(isChangedSectionLink("Local judgment", changed)).toBe(true);
-    expect(isChangedSectionLink("  budget   and run results ", changed)).toBe(true);
-    expect(isChangedSectionLink("Local", changed)).toBe(false);
-    expect(isChangedSectionLink("", changed)).toBe(false);
+  it("parses the embedded index defensively", () => {
+    expect(parseMarkIndex(null)).toEqual({});
+    expect(parseMarkIndex("not json")).toEqual({});
+    expect(parseMarkIndex('{"/a/":{"kind":"new","label":"x"}}')).toEqual({ "/a/": { kind: "new", label: "x" } });
   });
 });

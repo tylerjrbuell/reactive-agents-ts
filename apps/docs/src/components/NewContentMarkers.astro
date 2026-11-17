@@ -1,55 +1,50 @@
 ---
-import { getCollection } from "astro:content";
-import { getNewContentPagePaths } from "../scripts/new-content-markers.js";
-
-const pages = await getCollection("docs");
-const pagePaths = getNewContentPagePaths(pages);
-const changedSections = Astro.locals.starlightRoute?.entry?.data?.changedSections ?? [];
-const serializedConfig = JSON.stringify({ pagePaths, changedSections })
-  .replace(/</g, "\\u003c")
-  .replace(/>/g, "\\u003e")
-  .replace(/&/g, "\\u0026");
+// Client-only. Marks TOC links for headings that carry a <Since> marker,
+// decorates hub/overview child lists with the New/Updated icon (data embedded
+// by route-middleware.ts as #ra-marker-index), and gives group roll-up badges
+// their tooltip. Page-level markers, sidebar glyphs and the title row are
+// rendered server-side (route-middleware.ts, PageTitle.astro).
 ---
-
-<script type="application/json" data-ra-new-content-config set:html={serializedConfig}></script>
 
 <script>
   import {
-    applyPageMapMarkers,
+    HUB_LINK_SELECTOR,
+    applyHubMarkers,
     applyTocSectionMarkers,
+    parseMarkIndex,
+    parseTocMarks,
   } from "../scripts/new-content-markers.js";
 
-  type NewContentMarkerConfig = {
-    readonly pagePaths: readonly string[];
-    readonly changedSections: readonly string[];
-  };
+  function makeIcon(kind: "new" | "updated", label: string): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "ra-marker-icon ra-ind ra-ind-marker";
+    el.setAttribute("role", "img");
+    el.setAttribute("data-ra-marker", kind);
+    el.setAttribute("aria-label", label);
+    el.title = label;
+    return el;
+  }
 
-  function readConfig(): NewContentMarkerConfig | undefined {
-    const node = document.querySelector<HTMLScriptElement>("[data-ra-new-content-config]");
-    if (!node?.textContent) return undefined;
+  function apply(): void {
+    applyTocSectionMarkers(
+      document.querySelectorAll<HTMLAnchorElement>("starlight-toc a[href], mobile-starlight-toc a[href]"),
+      parseTocMarks(document.getElementById("ra-toc-markers")?.textContent),
+    );
 
-    try {
-      return JSON.parse(node.textContent) as NewContentMarkerConfig;
-    } catch {
-      return undefined;
+    const index = parseMarkIndex(document.getElementById("ra-marker-index")?.textContent);
+    applyHubMarkers(
+      document.querySelectorAll<HTMLAnchorElement>(HUB_LINK_SELECTOR),
+      index,
+      location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`,
+      makeIcon,
+      location.origin,
+    );
+
+    for (const badge of document.querySelectorAll<HTMLElement>(".sl-badge.ra-rollup")) {
+      badge.title = badge.textContent ?? "";
     }
   }
 
-  function applyNewContentMarkers(): void {
-    const config = readConfig();
-    if (!config) return;
-
-    applyPageMapMarkers(
-      document.querySelectorAll<HTMLAnchorElement>(".sidebar a[href]"),
-      window.location.origin,
-      config.pagePaths,
-    );
-    applyTocSectionMarkers(
-      document.querySelectorAll<HTMLAnchorElement>("starlight-toc a[href], mobile-starlight-toc a[href]"),
-      config.changedSections,
-    );
-  }
-
-  document.addEventListener("astro:page-load", applyNewContentMarkers);
-  applyNewContentMarkers();
+  document.addEventListener("astro:page-load", apply);
+  apply();
 </script>

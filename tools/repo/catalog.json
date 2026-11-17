@@ -443,6 +443,48 @@
       "invoke": "bun run docs:sync:check"
     },
     {
+      "id": "apps/docs/scripts/check-package-readmes.ts",
+      "path": "apps/docs/scripts/check-package-readmes.ts",
+      "kind": "check",
+      "summary": "Audits public package READMEs against the README standard (--fail exits 1)",
+      "invoke": "bun apps/docs/scripts/check-package-readmes.ts"
+    },
+    {
+      "id": "apps/docs/scripts/check-readme-examples.ts",
+      "path": "apps/docs/scripts/check-readme-examples.ts",
+      "kind": "check",
+      "summary": "Type-checks ts code blocks in root and package READMEs against source",
+      "invoke": "bun apps/docs/scripts/check-readme-examples.ts"
+    },
+    {
+      "id": "apps/docs/scripts/derive-framework-facts.ts",
+      "path": "apps/docs/scripts/derive-framework-facts.ts",
+      "kind": "docs",
+      "summary": "Derives framework-facts.json from source and checks docs drift",
+      "invoke": "bun run --cwd apps/docs facts"
+    },
+    {
+      "id": "apps/docs/scripts/ia-inventory.ts",
+      "path": "apps/docs/scripts/ia-inventory.ts",
+      "kind": "docs",
+      "summary": "Generates the docs IA inventory (pages, topics, orphans, length)",
+      "invoke": "bun apps/docs/scripts/ia-inventory.ts"
+    },
+    {
+      "id": "apps/docs/scripts/indicators-suggest.ts",
+      "path": "apps/docs/scripts/indicators-suggest.ts",
+      "kind": "research",
+      "summary": "Lists pages and headings changed since the latest tag (since/updated tags)",
+      "invoke": "bun run --cwd apps/docs docs:indicators:suggest"
+    },
+    {
+      "id": "apps/docs/scripts/stale-claims.ts",
+      "path": "apps/docs/scripts/stale-claims.ts",
+      "kind": "check",
+      "summary": "Scans docs, skills and READMEs for stale claims and duplicated content",
+      "invoke": "bun run docs:sync:check"
+    },
+    {
       "id": "apps/docs/scripts/docs-sync-ledger.json",
       "path": "apps/docs/scripts/docs-sync-ledger.json",
       "kind": "docs",

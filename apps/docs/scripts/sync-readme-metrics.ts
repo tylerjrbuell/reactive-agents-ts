@@ -77,6 +77,38 @@ const rules: Rule[] = [
       },
     ],
   },
+  {
+    // Docs prose that quotes counts (docs IA mission, 2026-11-17): same
+    // metrics, same sync, so these cannot drift from metrics.json.
+    file: "apps/docs/src/content/docs/guides/faq.mdx",
+    subs: [
+      {
+        label: "faq tests across files",
+        pattern: /[\d,]+\+? tests across [\d,]+\+? files/,
+        replacement: `${fmt(metrics.tests)} tests across ${filesFloor(metrics.testFiles)} files`,
+      },
+      {
+        label: "faq package counts",
+        pattern: /\d+ packages on npm \(\d+ total in the monorepo, \d+ private\)/,
+        replacement: `${metrics.packages} packages on npm (${metrics.packagesTotal} total in the monorepo, ${metrics.packagesTotal - metrics.packages} private)`,
+      },
+    ],
+  },
+  {
+    file: "apps/docs/src/content/docs/guides/contributing.md",
+    subs: [
+      {
+        label: "contributing bun test count",
+        pattern: /# [\d,]+\+? tests — all must pass/,
+        replacement: `# ${fmt(metrics.tests)} tests — all must pass`,
+      },
+      {
+        label: "contributing build package count",
+        pattern: /for all \d+ packages/,
+        replacement: `for all ${metrics.packagesTotal} packages`,
+      },
+    ],
+  },
 ];
 
 // Removed 2026-08-16: "packages + apps inline" (headline package count

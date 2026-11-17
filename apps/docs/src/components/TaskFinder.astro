@@ -1,0 +1,63 @@
+---
+/**
+ * Home page "I want to..." task finder (Docs-IA-Proposal section d).
+ * One link per task, each to the one canonical page for that task. Every link
+ * fires `home_task_<n>` through umami-deep.js (catalog: wiki/Reference/Umami-Events.md).
+ * Add a task here only when a canonical page exists for it.
+ */
+const tasks = [
+  { text: "Build my first agent in 5 minutes", href: "/guides/quickstart/" },
+  { text: "Run on a local model with no API key", href: "/guides/local-models/" },
+  { text: "Pick a reasoning strategy", href: "/guides/choosing-strategies/" },
+  { text: "Give my agent tools or connect MCP servers", href: "/guides/tools/" },
+  { text: "Make a run resumable and add human approval", href: "/guides/durable-execution/" },
+  { text: "Control and track cost", href: "/features/cost-tracking/" },
+  { text: "See why a run ended or failed", href: "/concepts/decision-tracing/" },
+  { text: "Put an agent on Telegram or Signal", href: "/guides/messaging-channels/" },
+  { text: "Ship to production safely", href: "/guides/production-checklist/" },
+  { text: "Watch runs in a UI (Cortex Studio)", href: "/features/cortex/" },
+];
+---
+
+<section class="ra-tasks" aria-labelledby="ra-tasks-h">
+  <h2 id="ra-tasks-h" class="ra-tasks-h">I want to...</h2>
+  <ul class="ra-tasks-list">
+    {tasks.map((t, i) => (
+      <li><a href={t.href} data-ra-task={i + 1}>{t.text}</a></li>
+    ))}
+  </ul>
+</section>
+
+<style>
+  .ra-tasks {
+    max-width: 72rem;
+    margin: 1.5rem auto;
+    padding: 0 1rem;
+  }
+  .ra-tasks-h {
+    margin: 0 0 0.75rem;
+    font-size: var(--sl-text-xl);
+    border: 0;
+  }
+  .ra-tasks-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: 0.5rem 0.75rem;
+  }
+  .ra-tasks-list a {
+    display: block;
+    height: 100%;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.5rem;
+    text-decoration: none;
+    color: var(--sl-color-white);
+  }
+  .ra-tasks-list a:hover,
+  .ra-tasks-list a:focus-visible {
+    border-color: var(--sl-color-accent);
+  }
+</style>

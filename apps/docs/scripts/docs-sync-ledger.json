@@ -34,7 +34,8 @@
       ],
       "docPaths": [
         "README.md",
-        "apps/docs/src/content/docs/reference/builder-api.md"
+        "apps/docs/src/content/docs/reference/builder-api.md",
+        "apps/docs/src/content/docs/reference/builder-api/"
       ],
       "lastSha": "4075fc2e10ed1466ca95f202e707843fe609ffb4"
     },
@@ -45,7 +46,7 @@
         "packages/tools/src/skills/web-search.ts"
       ],
       "docPaths": [
-        "apps/docs/src/content/docs/guides/tools.mdx",
+        "apps/docs/src/content/docs/guides/tools/built-in-tools.mdx",
         "apps/docs/src/content/docs/reference/configuration.md",
         "apps/docs/src/content/docs/guides/installation.mdx",
         "apps/docs/src/content/docs/guides/quickstart.mdx",

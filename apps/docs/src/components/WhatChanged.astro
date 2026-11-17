@@ -1,0 +1,44 @@
+---
+// "What changed" line under the page title: the marked sections as anchor
+// links, so mobile readers without a visible table of contents still see what
+// is new. Shows the first MAX_VISIBLE; the rest collapse into "+N more". Hidden
+// by the "Highlight what's new" toggle (.ra-ind-marker).
+import MarkerIcon from "./MarkerIcon.astro";
+import { changedLead, type ChangedSection } from "../content/indicators";
+
+interface Props {
+  sections: readonly ChangedSection[];
+}
+const MAX_VISIBLE = 4;
+const { sections } = Astro.props;
+const lead = changedLead(sections);
+const shown = sections.slice(0, MAX_VISIBLE);
+const rest = sections.slice(MAX_VISIBLE);
+---
+
+{
+  lead && (
+    <div class="ra-whatchanged ra-ind-marker" data-ra-whatchanged>
+      <MarkerIcon marker={{ kind: lead.kind, version: sections[0]!.version }} label={lead.text} />
+      <span class="ra-whatchanged-lead">{lead.text}:</span>
+      {shown.map((s, i) => (
+        <>
+          {i > 0 && ", "}
+          <a href={`#${s.slug}`}>{s.text}</a>
+        </>
+      ))}
+      {rest.length > 0 && (
+        <details class="ra-whatchanged-more">
+          <summary>and {rest.length} more</summary>
+          <ul>
+            {rest.map((s) => (
+              <li>
+                <a href={`#${s.slug}`}>{s.text}</a>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  )
+}

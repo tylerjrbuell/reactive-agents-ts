@@ -1,27 +1,41 @@
 ---
+// The one inline "new / updated" marker, usable in a heading:
+//   ## Streaming <Since version="0.19" />
+//   ## Streaming <Since version="0.19" type="updated" />
+// Renders an icon (filled dot = new, ring = updated; tooltip "New in 0.19") and
+// nothing once the release moves past the indicator window
+// (src/content/indicators.ts), so markers expire on their own. Headings that
+// carry one get the same icon on their table-of-contents link
+// (new-content-markers.ts). `type="deprecated"` is a stability fact, not a
+// recency marker: a text pill that never expires and the toggle never hides.
+import MarkerIcon from "./MarkerIcon.astro";
+import { CURRENT_RELEASE, formatMinor, isInWindow, parseMinor } from "../content/indicators";
+
 interface Props {
   version?: string;
   type?: "new" | "updated" | "deprecated";
 }
 const { version, type = "new" } = Astro.props;
-const label = type === "deprecated" ? "Deprecated" : type === "updated" ? "Updated" : version ? `New in ${version}` : "New";
-const color = type === "deprecated" ? "var(--sl-color-red)" : type === "updated" ? "var(--sl-color-blue)" : "var(--sl-color-green)";
+const parsed = version ? parseMinor(version) : null;
+const showIcon = type !== "deprecated" && parsed !== null && isInWindow(version!, CURRENT_RELEASE);
 ---
-<span class="ra-since" style={`--ra-since-color: ${color}`}>{label}</span>
+
+{showIcon && <MarkerIcon marker={{ kind: type as "new" | "updated", version: formatMinor(parsed!) }} />}
+{type === "deprecated" && <span class="ra-since-deprecated ra-ind-stability">Deprecated</span>}
+
 <style>
-.ra-since {
-  display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ra-since-color);
-  border: 1px solid var(--ra-since-color);
-  border-radius: 3px;
-  padding: 0.05em 0.4em;
-  vertical-align: middle;
-  margin-inline-start: 0.35rem;
-  line-height: 1.4;
-  white-space: nowrap;
-}
+  .ra-since-deprecated {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--sl-color-red);
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    padding: 0.05em 0.4em;
+    vertical-align: middle;
+    margin-inline-start: 0.35rem;
+    line-height: 1.4;
+  }
 </style>

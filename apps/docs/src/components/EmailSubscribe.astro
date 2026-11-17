@@ -16,6 +16,8 @@ interface Props {
 }
 const { compact = false, sidebar = false } = Astro.props;
 const formId = sidebar ? "ra-sub-sidebar" : compact ? "ra-sub-footer" : "ra-sub-main";
+// Analytics placement label (see wiki/Reference/Umami-Events.md). Never the address.
+const placement = sidebar ? "sidebar" : compact ? "endcap" : "panel";
 ---
 
 {sidebar ? (
@@ -84,10 +86,14 @@ const formId = sidebar ? "ra-sub-sidebar" : compact ? "ra-sub-footer" : "ra-sub-
     </div>
 )}
 
-<script define:vars={{ formId }}>
+<script define:vars={{ formId, placement }}>
 (function () {
     const API = "https://api.reactiveagents.dev/v1/subscribe";
-
+    // umami-deep.js exposes window.__raTrack; a no-op until it loads. The
+    // email address is never passed to analytics, only the placement + status.
+    const track = (name, data) => {
+        if (typeof window.__raTrack === "function") window.__raTrack(name, data);
+    };
     function init() {
         const form = document.getElementById(formId);
         if (!form) return;
@@ -99,6 +105,7 @@ const formId = sidebar ? "ra-sub-sidebar" : compact ? "ra-sub-footer" : "ra-sub-
             e.preventDefault();
             const email = form.querySelector("input[name=email]").value.trim();
             if (!email) return;
+            track("subscribe_submit", { placement, path: location.pathname });
 
             if (btn) btn.setAttribute("disabled", "true");
             if (btn) btn.classList.add("ra-sub-btn--loading");
@@ -110,6 +117,12 @@ const formId = sidebar ? "ra-sub-sidebar" : compact ? "ra-sub-footer" : "ra-sub-
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ email }),
                 });
+
+                if (res.ok) {
+                    track("subscribe_success", { placement, path: location.pathname });
+                } else {
+                    track("subscribe_error", { placement, path: location.pathname, status: res.status });
+                }
 
                 if (res.ok) {
                     showMsg(msg, "Check your inbox — confirmation email sent.", "ok");
@@ -130,6 +143,7 @@ const formId = sidebar ? "ra-sub-sidebar" : compact ? "ra-sub-footer" : "ra-sub-
                     showMsg(msg, "Something went wrong. Try again or reach us on Discord.", "err");
                 }
             } catch (_) {
+                track("subscribe_error", { placement, path: location.pathname, status: 0 });
                 showMsg(msg, "Network error — check your connection and try again.", "err");
             } finally {
                 if (btn) btn.removeAttribute("disabled");

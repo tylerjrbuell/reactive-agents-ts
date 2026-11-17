@@ -1,0 +1,22 @@
+---
+// The New/Updated icon: filled dot = new, ring = updated (custom.css, design
+// tokens). No text; the tooltip and accessible name carry "New in 0.19", plus
+// the section names when given. The toggle hides it (`.ra-ind-marker`).
+import { markerLabel, type Marker } from "../content/indicators";
+
+interface Props {
+  marker: Marker;
+  /** Overrides the default "New in 0.19", e.g. "Updated in 0.19: Ollama Cloud". */
+  label?: string;
+}
+const { marker, label: given } = Astro.props;
+const label = given ?? markerLabel(marker);
+---
+
+<span
+  class="ra-marker-icon ra-ind ra-ind-marker"
+  role="img"
+  data-ra-marker={marker.kind}
+  aria-label={label}
+  title={label}
+></span>

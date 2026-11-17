@@ -9,12 +9,15 @@ export default defineConfig({
     // Docs now deploy to a custom domain at the root path.
     site: 'https://docs.reactiveagents.dev',
     base: '/',
+    // Cortex owns :4321 (its API port, wired into .withCortex()) and :5173 (Vite UI);
+    // docs dev and preview use :4300 so both run side by side.
+    server: { port: 4300 },
     integrations: [
         skills(),
         starlight({
             title: 'Reactive Agents',
             description:
-                'A composable TypeScript framework for building reliable LLM agents on a harness you fully control. The same code runs the full agent loop from a local 4B model to frontier APIs, on a typed, observable 12-phase engine. Built on Effect-TS.',
+                'TypeScript agents that can finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from. Built on Effect-TS.',
             social: [
                 {
                     icon: 'github',
@@ -66,7 +69,7 @@ export default defineConfig({
                 starlightLlmsTxt({
                     projectName: 'Reactive Agents',
                     description:
-                        'TypeScript AI agent framework — Effect-TS type-safe, 12-phase observable execution engine, 35 packages, runs on local Ollama through frontier APIs.',
+                        'TypeScript AI agent framework — Effect-TS type-safe, 12-phase observable execution engine, 33 published packages, runs on local Ollama through frontier APIs.',
                     optionalLinks: [
                         {
                             label: 'GitHub repo',
@@ -95,7 +98,17 @@ export default defineConfig({
                 },
             },
             customCss: ['./src/styles/custom.css'],
+            // Sidebar badges (stability, New/Updated) come from page frontmatter.
+            routeMiddleware: './src/route-middleware.ts',
             head: [
+                // "Highlight what's new" preference, applied before first paint so
+                // hidden markers never flash. Key/attribute mirror
+                // src/scripts/whats-new-toggle.ts (a test pins them together).
+                {
+                    tag: 'script',
+                    content:
+                        "try{if(localStorage.getItem('ra-whats-new')==='off')document.documentElement.setAttribute('data-ra-whats-new','off')}catch(e){}",
+                },
                 // MUST be first + non-deferred: a service worker that injects
                 // COOP/COEP client-side so the page is crossOriginIsolated. GitHub
                 // Pages can't send these headers, and the StackBlitz WebContainer
@@ -158,8 +171,8 @@ export default defineConfig({
             },
             // Curated, progressive information architecture. The onboarding path
             // ("Start Here") is ordered, not alphabetical, so a new reader is never
-            // dropped into a flat A–Z dump. Headline surfaces can carry curated badges;
-            // git-page-metadata supplies date-aware new-content markers automatically.
+            // dropped into a flat A–Z dump. Badges are never written here: stability
+            // and New/Updated come from page frontmatter via route-middleware.ts.
             sidebar: [
                 {
                     label: 'Get Started',
@@ -200,7 +213,22 @@ export default defineConfig({
                             label: 'Choosing a Strategy',
                             link: 'guides/choosing-strategies/',
                         },
-                        { label: 'Tools', link: 'guides/tools/' },
+                        {
+                            label: 'Plan Review',
+                            link: 'guides/plan-then-execute/',
+                        },
+                        {
+                            label: 'Tools',
+                            collapsed: true,
+                            items: [
+                                { label: 'Overview', link: 'guides/tools/' },
+                                { label: 'Built-in Tools', link: 'guides/tools/built-in-tools/' },
+                                { label: 'Custom Tools', link: 'guides/tools/custom-tools/' },
+                                { label: 'MCP Tools', link: 'guides/tools/mcp-tools/' },
+                                { label: 'Scoping and Policy', link: 'guides/tools/scoping-and-policy/' },
+                                { label: 'Execution and Results', link: 'guides/tools/execution-and-results/' },
+                            ],
+                        },
                         { label: 'Code Action', link: 'features/code-action/' },
                         { label: 'Prompts', link: 'features/prompts/' },
                         { label: 'Memory', link: 'guides/memory/' },
@@ -238,7 +266,17 @@ export default defineConfig({
                         },
                         {
                             label: 'Messaging Channels',
-                            link: 'guides/messaging-channels/',
+                            collapsed: true,
+                            items: [
+                                { label: 'Overview', link: 'guides/messaging-channels/' },
+                                { label: 'Telegram (bot)', link: 'guides/messaging-channels/telegram/' },
+                                { label: 'Signal (native)', link: 'guides/messaging-channels/signal/' },
+                                { label: 'Webhook Channel', link: 'guides/messaging-channels/webhook/' },
+                                { label: 'Routes', link: 'guides/messaging-channels/routes/' },
+                                { label: 'Reliability and Conversations', link: 'guides/messaging-channels/reliability/' },
+                                { label: 'Security and Troubleshooting', link: 'guides/messaging-channels/security-and-troubleshooting/' },
+                                { label: 'Legacy MCP Setups', link: 'guides/messaging-channels/legacy-mcp-setups/' },
+                            ],
                         },
                         {
                             label: 'Channel Adapters',
@@ -295,7 +333,6 @@ export default defineConfig({
                         {
                             label: 'Judgment Layer',
                             link: 'features/judgment-layer/',
-                            badge: { text: 'New', variant: 'success' },
                         },
                         {
                             label: 'Security Hardening',
@@ -345,7 +382,6 @@ export default defineConfig({
                         {
                             label: 'Harness Control Surface',
                             link: 'features/harness-control/',
-                            badge: { text: 'v0.16', variant: 'success' },
                         },
                         {
                             label: 'Harness Control Flow',
@@ -421,13 +457,37 @@ export default defineConfig({
                 {
                     label: 'API Reference',
                     collapsed: true,
-                    autogenerate: { directory: 'reference' },
+                    items: [
+                        { label: 'Cheatsheet', link: 'reference/cheatsheet/' },
+                        {
+                            label: 'Builder API',
+                            collapsed: true,
+                            items: [
+                                { label: 'Overview', link: 'reference/builder-api/' },
+                                { label: 'Core, Model and Profiles', link: 'reference/builder-api/core-and-model/' },
+                                { label: 'Reasoning, Tools and Skills', link: 'reference/builder-api/reasoning-and-tools/' },
+                                { label: 'Memory, Learning and Context', link: 'reference/builder-api/memory-and-context/' },
+                                { label: 'Safety, Quality and Approval', link: 'reference/builder-api/safety-and-quality/' },
+                                { label: 'Limits, Cost and Resilience', link: 'reference/builder-api/limits-cost-resilience/' },
+                                { label: 'Observability, Lifecycle and Testing', link: 'reference/builder-api/observability-and-lifecycle/' },
+                                { label: 'Multi-Agent, MCP and Gateway', link: 'reference/builder-api/integrations/' },
+                                { label: 'Agent: Running and Streaming', link: 'reference/builder-api/agent-runtime/' },
+                                { label: 'Agent: Chat, Sessions and Run Control', link: 'reference/builder-api/agent-sessions-and-control/' },
+                                { label: 'AgentResult and Debrief', link: 'reference/builder-api/agent-result/' },
+                            ],
+                        },
+                        { label: 'Configuration Reference', link: 'reference/configuration/' },
+                        { label: 'Compose API', link: 'reference/compose-api/' },
+                        { label: 'Harness Tag Reference', link: 'reference/harness-tags/' },
+                        { label: 'API Stability & Versioning', link: 'reference/stability/' },
+                    ],
                 },
                 {
                     label: 'Rax CLI',
                     items: [
                         { label: 'Meet Rax CLI', link: 'guides/cli-artisan/' },
                         { label: 'Command Reference', link: 'reference/cli/' },
+                        { label: 'rax diagnose', link: 'reference/cli/diagnose/' },
                     ],
                 },
                 {
@@ -445,8 +505,15 @@ export default defineConfig({
                         },
                         {
                             label: "What's New",
-                            link: 'guides/whats-new/',
-                            badge: { text: 'v0.18', variant: 'success' },
+                            collapsed: true,
+                            items: [
+                                { label: 'Latest and Unreleased', link: 'guides/whats-new/' },
+                                { label: 'v0.17', link: 'guides/whats-new/v0-17/' },
+                                { label: 'v0.15 and v0.16', link: 'guides/whats-new/v0-15-to-v0-16/' },
+                                { label: 'v0.13 and v0.14', link: 'guides/whats-new/v0-13-to-v0-14/' },
+                                { label: 'v0.11 and v0.12', link: 'guides/whats-new/v0-11-to-v0-12/' },
+                                { label: 'v0.5 to v0.10', link: 'guides/whats-new/v0-5-to-v0-10/' },
+                            ],
                         },
                         { label: 'Contributing', link: 'guides/contributing/' },
                     ],

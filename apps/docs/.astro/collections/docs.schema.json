@@ -628,11 +628,13 @@
     {
       "type": "object",
       "properties": {
-        "isNew": {
-          "type": "boolean"
+        "since": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$"
         },
-        "newUntil": {
-          "type": "string"
+        "updated": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$"
         },
         "stability": {
           "type": "string",
@@ -643,33 +645,9 @@
             "deprecated"
           ]
         },
-        "recentlyChanged": {
-          "type": "boolean"
-        },
-        "badge": {
-          "type": "object",
-          "properties": {
-            "text": {
-              "type": "string"
-            },
-            "variant": {
-              "type": "string"
-            },
-            "__auto": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "text",
-            "variant"
-          ]
-        },
         "lastCommit": {
           "type": "object",
           "properties": {
-            "subject": {
-              "type": "string"
-            },
             "hash": {
               "type": "string"
             },
@@ -678,12 +656,42 @@
             }
           },
           "required": [
-            "subject",
             "hash",
             "date"
           ]
         },
-        "changedSections": {
+        "topic": {
+          "type": "string",
+          "enum": [
+            "getting-started",
+            "reasoning",
+            "tools",
+            "mcp",
+            "memory",
+            "providers",
+            "local-models",
+            "streaming",
+            "context",
+            "agents",
+            "channels",
+            "gateway",
+            "web-ui",
+            "durable-runs",
+            "safety",
+            "cost",
+            "observability",
+            "quality",
+            "cortex",
+            "cli",
+            "config-reference",
+            "concepts",
+            "compare",
+            "releases",
+            "help"
+          ]
+        },
+        "related": {
+          "maxItems": 4,
           "type": "array",
           "items": {
             "type": "string"

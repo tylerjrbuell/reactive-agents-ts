@@ -1,16 +1,23 @@
 /**
- * Wraps Starlight's `docsLoader` to merge git-derived page metadata (badge,
- * lastCommit, changedSections — see `git-page-metadata.ts`) into each entry
- * at build time only. Never written back to the source .md/.mdx files, so
- * `bun run build` no longer diffs docs frontmatter on every run.
+ * Wraps Starlight's `docsLoader` to (1) merge each page's last commit
+ * (display only, see `last-commit.ts`) into its entry and (2) fail the build
+ * on invalid authored `since`/`updated` versions (see `indicators.ts`).
+ * Nothing is written back to source frontmatter.
  */
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { docsLoader } from "@astrojs/starlight/loaders";
 import type { Loader, LoaderContext } from "astro/loaders";
-import { computeGitPageMetadata } from "./git-page-metadata.js";
+import {
+  CURRENT_RELEASE,
+  redundantStabilityLabel,
+  validateVersions,
+  type IndicatorFrontmatter,
+} from "./indicators.js";
+import { loadLastCommits } from "./last-commit.js";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const CONTENT_DIR = join(REPO_ROOT, "apps/docs/src/content/docs");
 
 export function docsLoaderWithMeta(): Loader {
   const inner = docsLoader();
@@ -19,34 +26,31 @@ export function docsLoaderWithMeta(): Loader {
     async load(context: LoaderContext) {
       await inner.load(context);
 
+      const current = CURRENT_RELEASE;
+      const commits = loadLastCommits(REPO_ROOT, CONTENT_DIR);
+      const errors: string[] = [];
+
       for (const entry of context.store.values()) {
+        errors.push(...validateVersions(entry.id, entry.data as IndicatorFrontmatter, current));
+        const fm = entry.data as IndicatorFrontmatter & { title?: string; sidebar?: { label?: string } };
+        for (const [where, text] of [["title", fm.title], ["sidebar.label", fm.sidebar?.label]] as const) {
+          const bad = redundantStabilityLabel(`${entry.id} ${where}`, text, fm.stability);
+          if (bad) errors.push(bad);
+        }
         if (!entry.filePath) continue;
 
         const absFilePath = fileURLToPath(new URL(entry.filePath, context.config.root));
-        const stability = (entry.data as Record<string, unknown>).stability as string | undefined;
-        const meta = computeGitPageMetadata(absFilePath, REPO_ROOT, stability);
+        const lastCommit = commits.get(relative(REPO_ROOT, absFilePath));
+        if (!lastCommit) continue;
 
-        if (Object.keys(meta).length === 0) continue;
-
-        const data = { ...entry.data, ...meta };
-
-        // Don't re-run context.parseData on the merged object: entry.data has
-        // already been schema-validated (and transformed — e.g. Starlight's
-        // hero icon shorthand) by the inner loader. Re-parsing an
-        // already-transformed value against the same schema breaks it. We
-        // fully control `meta`'s shape (matches the declared extend schema),
-        // so a plain merge is safe.
-        //
-        // Must also generate a fresh digest: DataStore.set() silently no-ops
-        // when the passed digest matches the existing entry's stored digest
-        // (dedup-by-digest short-circuit) — reusing entry.digest unchanged
-        // means this merge would never actually take effect.
-        context.store.set({
-          ...entry,
-          data,
-          digest: context.generateDigest(data),
-        });
+        // Merge without re-parsing: entry.data is already schema-validated and
+        // transformed by the inner loader. A fresh digest is required, since
+        // DataStore.set() no-ops when the digest matches the stored entry.
+        const data = { ...entry.data, lastCommit };
+        context.store.set({ ...entry, data, digest: context.generateDigest(data) });
       }
+
+      if (errors.length > 0) throw new Error(`Invalid page indicators:\n${errors.join("\n")}`);
     },
   };
 }

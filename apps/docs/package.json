@@ -7,9 +7,12 @@
     "metrics": "bun run scripts/generate-metrics.ts",
     "metrics:sync-readme": "bun run scripts/sync-readme-metrics.ts",
     "metrics:check": "bun run scripts/sync-readme-metrics.ts --check",
+    "facts": "bun run scripts/derive-framework-facts.ts",
+    "facts:check": "bun run scripts/derive-framework-facts.ts --check",
+    "docs:indicators:suggest": "bun run scripts/indicators-suggest.ts",
     "golden-run": "bun run scripts/generate-golden-run.ts",
     "predev": "bun run scripts/generate-metrics.ts && bun run scripts/generate-golden-run.ts && bun run scripts/fetch-github-stats.ts",
-    "prebuild": "bun run scripts/generate-metrics.ts && bun run scripts/generate-golden-run.ts && bun run scripts/fetch-github-stats.ts",
+    "prebuild": "bun run scripts/derive-framework-facts.ts && bun run scripts/generate-metrics.ts && bun run scripts/generate-golden-run.ts && bun run scripts/fetch-github-stats.ts",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview"

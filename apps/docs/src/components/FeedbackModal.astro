@@ -5,7 +5,9 @@
  * trigger), and openable from anywhere via `window.__raOpenFeedback(ctx?)`.
  *
  * Openers:
- *   - the sidebar "Share feedback" button (FeedbackButton.astro)
+ *   - the sidebar "Share feedback" button (FeedbackButton.astro), the
+ *     end-of-page block and the floating tab (EndOfPage.astro), all via
+ *     `window.__raOpenFeedback({ placement })`
  *   - a "👎 No" vote on the "Was this page helpful?" widget (umami-deep.js)
  *
  * ctx.reason === "page-unhelpful" tailors the copy and tags the submission as
@@ -103,8 +105,15 @@
       if (message) message.setAttribute("placeholder", t.placeholder);
     }
 
+    function track(name, data) {
+      if (typeof window.__raTrack === "function") window.__raTrack(name, data);
+    }
+    let placement = "unknown";
+
     function open(ctx) {
       applyContext(ctx);
+      placement = (ctx && ctx.placement) || (ctx && ctx.reason === "page-unhelpful" ? "downvote" : "unknown");
+      track("feedback_open", { placement, path: location.pathname });
       lastFocused = document.activeElement;
       modal.removeAttribute("hidden");
       document.body.style.overflow = "hidden";
@@ -158,6 +167,7 @@
           }),
         });
         if (res.ok) {
+          track("feedback_submit", { placement, source, path: location.pathname });
           showMsg("Thanks — your feedback was sent. 🙌", "ok");
           form.reset();
           setTimeout(close, 1400);

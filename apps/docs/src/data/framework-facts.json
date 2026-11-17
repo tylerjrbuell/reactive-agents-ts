@@ -1,0 +1,314 @@
+{
+  "packages": [
+    {
+      "dir": "a2a",
+      "name": "@reactive-agents/a2a",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "benchmarks",
+      "name": "@reactive-agents/benchmarks",
+      "private": true,
+      "allUnstable": false
+    },
+    {
+      "dir": "channels",
+      "name": "@reactive-agents/channels",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "compose",
+      "name": "@reactive-agents/compose",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "core",
+      "name": "@reactive-agents/core",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "cost",
+      "name": "@reactive-agents/cost",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "create-reactive-agent",
+      "name": "create-reactive-agent",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "diagnose",
+      "name": "@reactive-agents/diagnose",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "eval",
+      "name": "@reactive-agents/eval",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "gateway",
+      "name": "@reactive-agents/gateway",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "guardrails",
+      "name": "@reactive-agents/guardrails",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "health",
+      "name": "@reactive-agents/health",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "identity",
+      "name": "@reactive-agents/identity",
+      "private": false,
+      "allUnstable": true
+    },
+    {
+      "dir": "interaction",
+      "name": "@reactive-agents/interaction",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "judge-server",
+      "name": "@reactive-agents/judge-server",
+      "private": true,
+      "allUnstable": false
+    },
+    {
+      "dir": "judgment",
+      "name": "@reactive-agents/judgment",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "llm-provider",
+      "name": "@reactive-agents/llm-provider",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "memory",
+      "name": "@reactive-agents/memory",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "observability",
+      "name": "@reactive-agents/observability",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "observe",
+      "name": "@reactive-agents/observe",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "prompts",
+      "name": "@reactive-agents/prompts",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "react",
+      "name": "@reactive-agents/react",
+      "private": false,
+      "allUnstable": true
+    },
+    {
+      "dir": "reactive-agents",
+      "name": "reactive-agents",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "reactive-intelligence",
+      "name": "@reactive-agents/reactive-intelligence",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "reasoning",
+      "name": "@reactive-agents/reasoning",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "replay",
+      "name": "@reactive-agents/replay",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "runtime",
+      "name": "@reactive-agents/runtime",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "runtime-shim",
+      "name": "@reactive-agents/runtime-shim",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "svelte",
+      "name": "@reactive-agents/svelte",
+      "private": false,
+      "allUnstable": true
+    },
+    {
+      "dir": "testing",
+      "name": "@reactive-agents/testing",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "tools",
+      "name": "@reactive-agents/tools",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "trace",
+      "name": "@reactive-agents/trace",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "ui-core",
+      "name": "@reactive-agents/ui-core",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "verification",
+      "name": "@reactive-agents/verification",
+      "private": false,
+      "allUnstable": false
+    },
+    {
+      "dir": "vue",
+      "name": "@reactive-agents/vue",
+      "private": false,
+      "allUnstable": true
+    }
+  ],
+  "strategies": {
+    "keys": [
+      "reactive",
+      "react",
+      "reflexion",
+      "plan-execute-reflect",
+      "tree-of-thought",
+      "adaptive",
+      "direct",
+      "code-action",
+      "blueprint",
+      "rewoo"
+    ],
+    "canonical": [
+      "reactive",
+      "reflexion",
+      "plan-execute-reflect",
+      "tree-of-thought",
+      "adaptive",
+      "direct",
+      "code-action",
+      "blueprint"
+    ],
+    "aliases": [
+      "react",
+      "rewoo"
+    ]
+  },
+  "providers": [
+    {
+      "key": "anthropic",
+      "defaultModel": "claude-sonnet-4-6"
+    },
+    {
+      "key": "openai",
+      "defaultModel": "gpt-4o"
+    },
+    {
+      "key": "ollama",
+      "defaultModel": "llama3.2"
+    },
+    {
+      "key": "gemini",
+      "defaultModel": "gemini-2.5-flash"
+    },
+    {
+      "key": "litellm",
+      "defaultModel": "gpt-4o"
+    },
+    {
+      "key": "groq",
+      "defaultModel": "openai/gpt-oss-120b"
+    },
+    {
+      "key": "xai",
+      "defaultModel": "grok-4"
+    },
+    {
+      "key": "test",
+      "defaultModel": "test-model"
+    }
+  ],
+  "phases": [
+    "bootstrap",
+    "guardrail",
+    "cost-route",
+    "strategy-select",
+    "think",
+    "act",
+    "observe",
+    "verify",
+    "memory-flush",
+    "cost-track",
+    "audit",
+    "complete"
+  ],
+  "cliCommands": [
+    "init",
+    "create",
+    "run",
+    "serve",
+    "discover",
+    "deploy",
+    "dev",
+    "eval",
+    "playground",
+    "inspect",
+    "bench",
+    "cortex",
+    "demo",
+    "examples",
+    "trace",
+    "skills",
+    "diagnose",
+    "mcp",
+    "ps",
+    "attach",
+    "version",
+    "help"
+  ]
+}

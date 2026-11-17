@@ -1,0 +1,108 @@
+---
+/**
+ * End-of-page block rendered on every docs page from Footer.astro. It exists
+ * because the right sidebar (star, newsletter, feedback) is hidden below ~1152 px
+ * and sits under a long TOC above that. Everything here works at any width:
+ * install snippet, Quickstart, Star on GitHub, Discord, newsletter, feedback.
+ * The splash home page already renders the full subscribe panel, so the form
+ * is skipped there.
+ *
+ * Also renders a small fixed "Feedback" tab (hidden while this block is in
+ * view). No popups, no overlays.
+ */
+import EmailSubscribe from "./EmailSubscribe.astro";
+import InstallSnippet from "./InstallSnippet.astro";
+import RelatedPages from "./RelatedPages.astro";
+import githubStats from "../data/github-stats.json";
+
+const GITHUB_URL = "https://github.com/tylerjrbuell/reactive-agents-ts";
+const DISCORD_URL = "https://discord.gg/Mp99vQam3Q";
+const route = Astro.locals.starlightRoute;
+const isSplash = route?.entry?.data?.template === "splash";
+const title = route?.entry?.data?.title ?? "";
+---
+
+<RelatedPages />
+
+<section class="ra-endcap" aria-label="Get started and stay in touch">
+  <div class="ra-endcap-col">
+    <p class="ra-endcap-h">Install</p>
+    <InstallSnippet placement="endcap" />
+    <p class="ra-endcap-links">
+      <a href="/guides/quickstart/" class="ra-endcap-primary">Quickstart</a>
+      <a href="/guides/installation/">Installation</a>
+    </p>
+  </div>
+
+  <div class="ra-endcap-col">
+    <p class="ra-endcap-h">Follow along</p>
+    <a href={GITHUB_URL} target="_blank" rel="noopener" class="ra-star-cta ra-endcap-star" data-ra-placement="endcap">
+      <span class="ra-star-icon">⭐</span>
+      <span class="ra-star-label">Star on GitHub</span>
+      {githubStats.stars > 0 && <span class="ra-star-count">{githubStats.stars}</span>}
+    </a>
+    <p class="ra-endcap-links">
+      <a href={DISCORD_URL} target="_blank" rel="noopener">Discord</a>
+      <button type="button" class="ra-endcap-fb" data-ra-feedback="endcap">Share feedback</button>
+      <a
+        href={`${GITHUB_URL}/issues/new`}
+        target="_blank"
+        rel="noopener"
+        data-ra-issue-link
+        data-ra-doc-title={title}
+      >Report an issue</a>
+    </p>
+  </div>
+
+  {!isSplash && (
+    <div class="ra-endcap-col ra-endcap-sub">
+      <EmailSubscribe compact />
+    </div>
+  )}
+</section>
+
+<button type="button" class="ra-fb-float" id="ra-fb-float" data-ra-feedback="floating" aria-haspopup="dialog" aria-controls="ra-fb-modal">
+  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+  <span class="ra-fb-float-label">Feedback</span>
+</button>
+
+<script>
+  function wire() {
+    // Feedback openers (delegated, bound once).
+    if (!document.documentElement.dataset.raFeedbackWired) {
+      document.documentElement.dataset.raFeedbackWired = "1";
+      document.addEventListener("click", (ev) => {
+        const target = ev.target as Element | null;
+        const btn = target?.closest?.<HTMLElement>("[data-ra-feedback]");
+        if (!btn) return;
+        window.__raOpenFeedback?.({ placement: btn.dataset.raFeedback });
+      });
+    }
+
+    // Prefill the GitHub issue link with this page's URL and title.
+    document.querySelectorAll<HTMLAnchorElement>("a[data-ra-issue-link]").forEach((a) => {
+      const base = a.href.split("?")[0];
+      const title = a.dataset.raDocTitle || document.title;
+      const params = new URLSearchParams({
+        title: `Docs: ${title}`,
+        body: `Page: ${location.href}\n\nWhat was wrong or missing?\n`,
+        labels: "documentation",
+      });
+      a.href = `${base}?${params.toString()}`;
+    });
+
+    // Hide the floating tab while the end-of-page block is on screen.
+    const float = document.getElementById("ra-fb-float");
+    const endcap = document.querySelector(".ra-endcap");
+    if (float && endcap && "IntersectionObserver" in window) {
+      new IntersectionObserver((entries) => {
+        float.classList.toggle("ra-fb-float--hidden", entries.some((e) => e.isIntersecting));
+      }).observe(endcap);
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", wire);
+  } else {
+    wire();
+  }
+</script>

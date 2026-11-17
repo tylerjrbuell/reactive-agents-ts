@@ -1,0 +1,99 @@
+---
+// Accessible switch that shows/hides New/Updated markers site-wide. Stability
+// badges are never affected. State lives in localStorage + a data attribute on
+// <html> (see src/scripts/whats-new-toggle.ts).
+---
+
+<button type="button" role="switch" aria-checked="true" class="ra-whatsnew-toggle" data-ra-whatsnew-toggle>
+  <span class="ra-whatsnew-track" aria-hidden="true"><span class="ra-whatsnew-thumb"></span></span>
+  <span class="ra-whatsnew-label">Highlight what's new</span>
+</button>
+
+<script>
+  import {
+    applyWhatsNewPref,
+    readWhatsNewPref,
+    syncSwitch,
+    writeWhatsNewPref,
+  } from "../scripts/whats-new-toggle.js";
+
+  function storage(): Storage | undefined {
+    try {
+      return window.localStorage;
+    } catch {
+      return undefined;
+    }
+  }
+
+  function init(): void {
+    const on = readWhatsNewPref(storage());
+    applyWhatsNewPref(document.documentElement, on);
+    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-ra-whatsnew-toggle]")) {
+      syncSwitch(button, on);
+      if (button.dataset.raBound) continue;
+      button.dataset.raBound = "1";
+      button.addEventListener("click", () => {
+        const next = button.getAttribute("aria-checked") !== "true";
+        writeWhatsNewPref(storage(), next);
+        applyWhatsNewPref(document.documentElement, next);
+        for (const b of document.querySelectorAll<HTMLButtonElement>("[data-ra-whatsnew-toggle]")) syncSwitch(b, next);
+        const track = (window as { __raTrack?: (name: string, data?: Record<string, unknown>) => void }).__raTrack;
+        track?.("whats_new_toggle", { state: next ? "on" : "off", path: location.pathname });
+      });
+    }
+  }
+
+  document.addEventListener("astro:page-load", init);
+  init();
+</script>
+
+<style>
+  .ra-whatsnew-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--sl-color-gray-2);
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .ra-whatsnew-toggle:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  .ra-whatsnew-track {
+    position: relative;
+    flex: none;
+    width: 1.75rem;
+    height: 1rem;
+    border-radius: 999px;
+    background: var(--sl-color-gray-5);
+    transition: background 0.15s ease;
+  }
+  .ra-whatsnew-thumb {
+    position: absolute;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    background: var(--sl-color-white);
+    transition: transform 0.15s ease;
+  }
+  [aria-checked="true"] > .ra-whatsnew-track {
+    background: var(--sl-color-accent);
+  }
+  [aria-checked="true"] > .ra-whatsnew-track .ra-whatsnew-thumb {
+    transform: translateX(0.75rem);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ra-whatsnew-track,
+    .ra-whatsnew-thumb {
+      transition: none;
+    }
+  }
+</style>

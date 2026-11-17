@@ -1,0 +1,26 @@
+---
+/**
+ * First-screen "Try it" block for the highest-traffic entry pages. Rendered by
+ * PageTitle.astro for the page ids in TRY_IT_PAGES (one list, no per-page
+ * markup). Snippet matches guides/quickstart + guides/local-models: Ollama
+ * provider, `createAgent`, `agent.run`. Keep it short; it must fit the first
+ * screen on a 390 px viewport.
+ */
+import InstallSnippet from "./InstallSnippet.astro";
+---
+
+<aside class="ra-tryit" aria-label="Try it in a minute">
+  <p class="ra-tryit-head">
+    <strong>Try it</strong>
+    <span>local model, no API key</span>
+  </p>
+  <InstallSnippet placement="tryit" />
+  <pre class="ra-tryit-code"><code>import &#123; createAgent &#125; from "reactive-agents";
+const agent = await createAgent(&#123; name: "hi", provider: "ollama", model: "qwen3:4b" &#125;);
+console.log((await agent.run("Say hello")).output);</code></pre>
+  <p class="ra-tryit-links">
+    <a href="/guides/quickstart/" class="ra-tryit-primary">Quickstart</a>
+    <a href="/guides/local-models/">Local models</a>
+    <span class="ra-tryit-note">Needs <code>ollama pull qwen3:4b</code></span>
+  </p>
+</aside>

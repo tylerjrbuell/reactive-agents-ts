@@ -29,6 +29,10 @@ jobs:
           # touched in the deploy commit get the badge. Full history = parity
           # with local.
           fetch-depth: 0
+          # The docs version (header chip, What's New badge, New/Updated
+          # window) is the latest reachable v* tag; see
+          # apps/docs/src/content/indicators.ts `deriveCurrentVersion`.
+          fetch-tags: true
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:

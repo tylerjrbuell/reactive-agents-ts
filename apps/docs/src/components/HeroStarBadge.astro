@@ -30,17 +30,16 @@
         badge.textContent = count
       }
 
-      // Sidebar CTA (every page)
-      const sidebarCta = document.querySelector('.ra-star-cta')
-      if (sidebarCta) {
-        let sidebarBadge = sidebarCta.querySelector('.ra-star-count')
-        if (!sidebarBadge) {
-          sidebarBadge = document.createElement('span')
-          sidebarBadge.className = 'ra-star-count'
-          sidebarCta.appendChild(sidebarBadge)
+      // Every star CTA on the page (header, sidebar, end-of-page block)
+      document.querySelectorAll('.ra-star-cta').forEach(cta => {
+        let badge = cta.querySelector('.ra-star-count')
+        if (!badge) {
+          badge = document.createElement('span')
+          badge.className = 'ra-star-count'
+          cta.appendChild(badge)
         }
-        sidebarBadge.textContent = count
-      }
+        badge.textContent = count
+      })
     } catch (err) {
       console.error('Failed to fetch GitHub stars:', err)
     }

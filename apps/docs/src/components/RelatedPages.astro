@@ -1,0 +1,122 @@
+---
+/**
+ * "Related" block, rendered at the end of every docs page from EndOfPage.astro.
+ * It replaces the hand-written "What's next" lists: one place, one rule.
+ *
+ * Source of truth is frontmatter (schema in src/content.config.ts):
+ *   topic:   one value from the controlled list (a page belongs to exactly one)
+ *   related: up to 4 slugs such as "guides/memory", in display order
+ *
+ * With no `related`, falls back to other pages that share the `topic`
+ * (sidebar order, then title), max 4. A page with neither renders nothing.
+ * An unknown slug in `related` fails the build, so a rename cannot leave a
+ * dead pointer behind (the links validator would not catch a missing page that
+ * is never linked as an href).
+ */
+import { getCollection } from "astro:content";
+
+const MAX = 4;
+const route = Astro.locals.starlightRoute;
+const entry = route?.entry;
+const data = entry?.data as { topic?: string; related?: string[]; title?: string } | undefined;
+
+const normalize = (id: string) => id.replace(/\.(mdx?|md)$/, "").replace(/\/index$/, "").replace(/^\/+|\/+$/g, "");
+const selfId = entry ? normalize(entry.id) : "";
+
+interface Item { id: string; title: string; description: string; via: "explicit" | "topic" }
+let items: Item[] = [];
+
+if (entry && data && (data.related?.length || data.topic)) {
+  const all = await getCollection("docs");
+  const byId = new Map(all.map((e) => [normalize(e.id), e]));
+  const toItem = (e: (typeof all)[number], via: Item["via"]): Item => ({
+    id: normalize(e.id),
+    title: e.data.title,
+    description: e.data.description ?? "",
+    via,
+  });
+
+  if (data.related?.length) {
+    for (const slug of data.related) {
+      const target = byId.get(normalize(slug));
+      if (!target) throw new Error(`[RelatedPages] ${selfId}: related slug "${slug}" does not exist`);
+      items.push(toItem(target, "explicit"));
+    }
+  } else if (data.topic) {
+    items = all
+      .filter((e) => normalize(e.id) !== selfId && e.data.topic === data.topic)
+      .sort(
+        (a, b) =>
+          (a.data.sidebar?.order ?? 999) - (b.data.sidebar?.order ?? 999) ||
+          a.data.title.localeCompare(b.data.title),
+      )
+      .slice(0, MAX)
+      .map((e) => toItem(e, "topic"));
+  }
+}
+
+const clip = (s: string) => (s.length > 120 ? s.slice(0, 117).trimEnd() + "..." : s);
+---
+
+{items.length > 0 && (
+  <nav class="ra-related" aria-label="Related pages" data-ra-placement="related">
+    <p class="ra-related-h">Related</p>
+    <ul class="ra-related-list">
+      {items.map((it) => (
+        <li>
+          <a href={`/${it.id}/`} data-ra-related-via={it.via}>
+            <span class="ra-related-title">{it.title}</span>
+            {it.description && <span class="ra-related-desc">{clip(it.description)}</span>}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+)}
+
+<style>
+  .ra-related {
+    margin-top: 2.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--sl-color-hairline);
+  }
+  .ra-related-h {
+    margin: 0 0 0.75rem;
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--sl-color-gray-3);
+  }
+  .ra-related-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 0.75rem;
+  }
+  .ra-related-list a {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    height: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.5rem;
+    text-decoration: none;
+  }
+  .ra-related-list a:hover,
+  .ra-related-list a:focus-visible {
+    border-color: var(--sl-color-accent);
+  }
+  .ra-related-title {
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+  .ra-related-desc {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+    line-height: 1.4;
+  }
+</style>
