@@ -28,3 +28,5 @@ Four calls the owner has not yet made. Each shipped with a default; none is irre
 - **To-do wrap-up turn** (7d273d564): one extra model call when a run ends with open to-dos. Not ablated; plan V5 recorded an earlier rejection of a similar verify-retry. Needs a cross-tier ablation before default-on is ratified.
 - **Learned calibration after 5 runs:** applies automatically; never ablated.
 - **Decide:** approve a benchmark spend for both, or flag them opt-in until measured.
+- **Decided 2026-11-17 (wrap-up):** opt-in until measured. `RA_TODO_WRAPUP=1` enables it (`6a94f6eeb`). A `.withHarness({ todoWrapUp })` field and a `run-started.config` entry are a runtime follow-up. Returning it to default-on needs a cross-tier ablation.
+- **Learned calibration:** still open.

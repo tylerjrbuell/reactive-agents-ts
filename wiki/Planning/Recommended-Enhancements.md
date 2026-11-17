@@ -635,3 +635,32 @@ No code-ready singleton remains above score ~3 without a design pass.
 - TU-1: RESOLVED as recommended — raw stays the headline, `billed` renders as a secondary value per turn, in the per-call tooltip, and in the Inspector Context tab.
 - TU-3: RESOLVED as recommended — cancelled/errored turns persist their partial reply, spent tokens and cost with `incomplete: true`; they count toward session spend but an empty incomplete reply never becomes model-visible history.
 - TU-4: still open. Must not violate the ratified "parent/session totals exclude sub-agents" decision. Recommendation is a separate row, never a rollup.
+
+## 2026-11-17 sweep — neglected high-leverage work (outside Cortex + docs sessions)
+
+**Scope:** excludes Cortex (`apps/cortex/**`) and docs (`apps/docs/**`), which have active sessions. Also excludes the 2026-11-16 active specs (always-on gateway primitives, plan-execute posture, planning unification), assumed in flight.
+
+**Sources read:** `bun run repo status` (exhaustive), open GH issues (17, exhaustive), `wiki/Hot.md` (exhaustive), `09-UNIFIED-PROGRAM.md` §7-8 (exhaustive), `2026-11-12-open-owner-decisions.md` (exhaustive), `2026-11-04-architecture-convergence-program.md` Phase 5/6 + Progress (exhaustive), DEBT-REGISTER (headers + open entries sampled), FM catalog (header grep only, sampled), Running Issues Log (headers only, sampled), Design-Specs 2026-11-1x (intros only). DISCOVER: `bun run typecheck` 70/70 green, 0 errors. Full `bun test` NOT run (13.6k tests, shared Ollama/dirty tree from parallel sessions); test baseline is **UNVERIFIED**.
+
+| ID | Item | Score (B·F·C) | Status | Evidence |
+|---|---|---|---|---|
+| REL | **Release lag.** 472 commits and 394 changesets on `dev` since v0.18.0 (2026-11-07), including the 2026-11-12 security fixes (shell sed/awk/find bypass, IPv6 SSRF forms, channels fail-closed). npm users run the vulnerable build. | **18** = 3·3·2 | VERIFIED | `git rev-list --count v0.18.0..dev` = 472; `ls .changeset/*.md` = 394; `origin/main` = `557671384` (2026-11-07) |
+| GATE | **Default-on mechanisms without ablation.** To-do wrap-up turn (`7d273d564`, one extra model call) and learned calibration after 5 runs ship default-on with no lift evidence, against 09 §2 law. Hot lists three more pending ablations. | **18** = 3·3·2 | VERIFIED (commit present; no ablation commit found in `git log --grep=ablat` since 11-11) | `wiki/Decisions/2026-11-12-open-owner-decisions.md` §4 |
+| ABST | **Q&A answers mislabelled `abstained`.** `gateFires` has no carve-out for runs with zero tools visible/required, so a plain prose answer delivered via a harness-forced terminal becomes `abstained`. | **12** = 2·2·3 | VERIFIED | `packages/reasoning/src/kernel/capabilities/sense/finalize-result.ts:565-569`; DEBT D-2026-10-29-ABSTAINED-OVERBROAD |
+| WIP | **20 active plans vs 09 §8 "WIP = 1".** Plan status is self-declared; completed plans stay `active`, so every agent session routes through stale state. | **12** = 2·2·3 | VERIFIED | `bun run repo status`: "20 active (exact), 3 proposed" |
+| PROF | **Tier profiles (09 §7 Step 4 / convergence Phase 5) not started.** `HarnessProfile` is five capability booleans with no model-tier dimension. Steps 1-3 (one loop, terminal, tool boundary) are done, so this is now unblocked; it is the program's stated axis and the "tier profile" plugin extension point depends on it. | **9** = 3·3·1 | VERIFIED | `packages/runtime/src/capabilities/profile.ts:42-47`; convergence program Progress table |
+| MCP | **RA agent as an MCP server (W7).** Only the client exists; no way to expose an agent to Claude Code, Cursor or other MCP hosts. Distribution and integration capability. | **8** = 2·2·2 | VERIFIED (absent) | `packages/tools/src/mcp/` = client, auth, registry, read-only classification only |
+| B6 | Transient-fault recovery policy (Phase 5). `recoveryFor` + `retry.ts` + `think-call-recovery.ts` exist; whether one typed gateway policy covers every call site is not checked. | — | UNVERIFIED (sampled out) | `packages/llm-provider/src/error-class.ts:212` |
+| EVID | τ-bench / long-horizon evidence (#48, #49, 0e caps never hit). | **4** = 2·2·1 | VERIFIED (issues open) | GH #48, #49 |
+
+**Needs go/no-go (prior decisions exist):**
+- GATE: owner decision §4 is open; options are benchmark spend or flip to opt-in until measured. Recommend opt-in now, ablate after (09 §2).
+- ABST: DEBT marks it a policy decision. Recommend skip the zero-evidence arm when no tools were visible or required; keep the give-up-phrasing arm.
+- PROF: per-tier default changes go through ablation-warden by plan rule.
+
+**Sprints:**
+- **Sprint 1 — ship and stay honest:** REL (release-warden, once parallel sessions reach a commit point), GATE (flip opt-in), ABST (kernel-warden, small), WIP (archive completed plans).
+- **Sprint 2 — the program axis:** PROF design + first tier profile behind ablation; audit B6 alongside since Phase 5 bundles them.
+- **Sprint 3 — reach:** MCP server package (expose `agent.run` as an MCP tool, streaming progress as notifications).
+
+No GH issues filed this pass (pending owner confirmation).

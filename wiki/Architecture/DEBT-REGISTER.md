@@ -891,7 +891,9 @@ answered the question itself and ended `abstained`. The UI status is correct; th
 defect. `discover-tools` is already vetted as pure cost (wiki/Decisions/2026-08-11-vet-and-amend-agentic-powerhouse-proposals.md).
 Disposition: do not expose `discover-tools` to children that have no discoverable tools; add a red-on-cut test.
 
-### D-2026-10-29-ABSTAINED-OVERBROAD — zero-evidence harness-forced terminals relabel ordinary Q&A answers `abstained` — OPEN (policy decision)
+### D-2026-10-29-ABSTAINED-OVERBROAD — zero-evidence harness-forced terminals relabel ordinary Q&A answers `abstained` — RESOLVED 2026-11-17 (`0ca931ae1`)
+
+**Resolution:** the strategy-run substrate records `toolsVisible` per pass (`offersDomainTool()` in `give-up-answer.ts`; meta tools do not count). When no domain tool was visible and none was required, the zero-evidence harness-forced arm no longer fires. The give-up-phrasing arm is unchanged. An unbacked success claim still abstains and is scrubbed on both arms. Pinned in `finalize-result-abstention.test.ts` (7 cases) and `strategy-run.test.ts` (3 cases), red-on-cut.
 
 **Class:** SILENT (mislabel).
 
