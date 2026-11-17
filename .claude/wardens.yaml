@@ -110,6 +110,22 @@ wardens:
       - bun run repo
       - find
 
+  docs-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bun run --cwd apps/docs
+      - bun test apps/docs
+      - bunx --cwd apps/docs astro
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - node
+      - git diff
+      - git status
+      - find
+
   eval-warden:
     kind: domain
     run:

@@ -87,6 +87,7 @@
       "docs": [
         "README.md",
         "apps/docs/src/content/docs/reference/builder-api.md",
+        "apps/docs/src/content/docs/reference/builder-api/",
         "AGENTS.md"
       ]
     },
@@ -158,6 +159,16 @@
       "owner": "runtime-warden",
       "checks": [],
       "docs": []
+    },
+    {
+      "glob": "packages/create-reactive-agent/README.md",
+      "owner": "docs-warden",
+      "checks": [
+        "check-docs-gates"
+      ],
+      "docs": [
+        "wiki/Reference/Package-README-Standard.md"
+      ]
     },
     {
       "glob": "packages/create-reactive-agent/**",
@@ -330,9 +341,21 @@
     },
     {
       "glob": "apps/docs/**",
-      "owner": null,
-      "reason": "no domain warden for apps/docs in the AGENTS.md ownership table",
-      "checks": [],
+      "owner": "docs-warden",
+      "checks": [
+        "check-docs-gates"
+      ],
+      "docs": [
+        "wiki/Reference/Umami-Events.md",
+        "wiki/Planning/Implementation-Plans/2026-11-17-docs-adoption-readiness.md"
+      ]
+    },
+    {
+      "glob": "README.md",
+      "owner": "docs-warden",
+      "checks": [
+        "check-docs-gates"
+      ],
       "docs": []
     },
     {
