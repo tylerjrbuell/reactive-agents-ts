@@ -210,6 +210,7 @@ GIANT_BAR=1000
 # 2026-11-16 plan/execute primitives: reactive-agent.ts 1973->1972, chat/engine.ts 656->655 (plan()/execute()/setTodo added, paid for by condensed JSDoc/bodies).
 # 2026-11-16 plan follow-ups: chat/engine.ts 655->654 (buffered-turn to-do carry + step events + id getter added; #loaded JSDoc condensed to one line).
 # 2026-11-16 plan input: plan-execute.ts 817->782 (planner call moved to strategies/planning/input-plan.ts obtainPlan, which also adopts a caller-supplied plan).
+# 2026-11-16 plan producer substrate: plan-execute.ts 782->781 (local tool-summary mapping deleted; planner context, unrun-step redirect and result plan wired through shared policy modules).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:1972"
   "runtime/src/chat/engine.ts:654"
@@ -218,7 +219,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:796"
   "reasoning/src/kernel/loop/runner.ts:848"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
-  "reasoning/src/strategies/plan-execute.ts:782"
+  "reasoning/src/strategies/plan-execute.ts:781"
   "benchmarks/src/runner.ts:963"
   "core/src/services/event-bus.ts:188"
   "runtime/src/runtime.ts:1105"

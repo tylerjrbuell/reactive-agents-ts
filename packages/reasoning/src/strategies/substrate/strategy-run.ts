@@ -69,6 +69,8 @@ import { addKnown, contributedHalf } from "../../kernel/utils/known-count.js";
 import { usageSpend } from "../../kernel/run-budget.js";
 import { passIterationShare, passIterationsUsed, type IterationBudget } from "../budget/iteration-budget.js";
 import { defaultReasoningConfig } from "../../types/config.js";
+import { PLAN_INCOMPLETE_GUARD, planIncompleteReason, settlePlan, type PlanStepLike } from "../../kernel/policy/plan-completion.js";
+import { emitGuardFired } from "../../kernel/utils/diagnostics.js";
 
 /**
  * What a strategy run has spent so far, across kernel passes, direct calls and
@@ -308,7 +310,40 @@ export type StrategyEnd =
       readonly extraMetadata?: StrategyExtras;
       /** D9: the contract the delivery is judged against, plus the strategy's own exit-gate decision if any (no kernel meta). */
       readonly delivery?: StrategyDelivery;
+      /**
+       * The plan's steps as the run left them. The terminal records each step's
+       * ending (`planSteps`) and, while any step is still open, caps the run at
+       * `partial` with a verification warning and a `plan-incomplete` signal
+       * (`kernel/policy/plan-completion.ts`). Absent: the strategy has no plan.
+       */
+      readonly plan?: readonly PlanStepLike[];
     });
+
+/** The `Result` arm of {@link StrategyEnd}. */
+type ResultEnd = Extract<StrategyEnd, { readonly _tag: "Result" }>;
+
+/**
+ * The completion invariant on a plan-carrying `Result`: record every step's
+ * ending, and with steps still open cap the status at `partial` and add the
+ * warning (an `Unverified` outcome, unless the strategy already decided its own).
+ */
+export function applyPlanInvariant(end: ResultEnd): { readonly end: ResultEnd; readonly open: readonly PlanStepLike[] } {
+  if (end.plan === undefined) return { end, open: [] };
+  const { steps, open } = settlePlan(end.plan);
+  const extraMetadata: StrategyExtras = {
+    ...end.extraMetadata,
+    planSteps: steps,
+    ...(open.length > 0 ? { planIncomplete: { open: open.map((s) => s.id) } } : {}),
+  };
+  if (open.length === 0) return { end: { ...end, extraMetadata }, open };
+  const capped: ResultEnd = {
+    ...end,
+    extraMetadata,
+    ...(end.status === "failed" ? {} : { status: "partial" as const }),
+    ...(end.outcome === undefined ? { outcome: { _tag: "Unverified" as const, warning: planIncompleteReason(open) } } : {}),
+  };
+  return { end: capped, open };
+}
 
 /** A registered strategy name, as the result mint records it. */
 export type StrategyName = Parameters<typeof finalizeStrategyResult>[0]["strategy"];
@@ -627,7 +662,24 @@ export function runStrategy<E, R>(
         extraMetadata: { llmCalls: spend.llmCalls, runLedger: ledger },
       })));
 
+    /** The plan completion invariant (`applyPlanInvariant`), then the mint; open steps raise `plan-incomplete`. */
     const terminal = (end: StrategyEnd, ledger: RunLedger): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> => {
+      if (end._tag !== "Result" || end.plan === undefined || pendingPause !== undefined) return mint(end, ledger);
+      const planned = applyPlanInvariant(end);
+      const minted = mint(planned.end, ledger);
+      return planned.open.length === 0
+        ? minted
+        : emitGuardFired({
+            taskId,
+            iteration: 0,
+            guard: PLAN_INCOMPLETE_GUARD,
+            outcome: "warn",
+            reason: planIncompleteReason(planned.open),
+            metadata: { open: planned.open.map((s) => s.id), strategy: spec.strategy },
+          }).pipe(Effect.zipRight(minted));
+    };
+
+    const mint = (end: StrategyEnd, ledger: RunLedger): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> => {
       if (pendingPause !== undefined) return paused(pendingPause);
       if (end._tag === "Delegated") return Effect.succeed(relayDelegated(spec.strategy, start, steps, spend, end));
       if (end._tag === "KernelTerminal") {

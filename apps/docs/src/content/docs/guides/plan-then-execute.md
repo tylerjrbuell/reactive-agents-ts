@@ -77,7 +77,7 @@ for await (const e of session.runStream("go", { density: "full" })) { /* seeded 
 
 ## Plan tool catalog
 
-Plan posture names the tools execution will have, by name (MCP tools grouped by server), so steps can say `tool: name`. A step's tool hint rides the plan into the seeded checklist, so the execute run can tell when a step's named tool has succeeded. It is on by default; the ablation is still pending. Turn it off with the harness config or the environment:
+Plan posture names the tools execution will have, by name (MCP tools grouped by server), so steps can say `tool: name`. A step's tool hint rides the plan into the seeded checklist, so the execute run can tell when a step's named tool has succeeded. It is on by default; the 2026-11-16 ablation measured no lift and no harm (+5.6 and +11.1pp on two local models, within noise, at roughly 8 to 11% more billed tokens). Turn it off with the harness config or the environment:
 
 ```ts
 const agent = await ReactiveAgents.create()
@@ -129,6 +129,25 @@ await agent.execute(plan) // the execute run is shown the findings once, as cont
 ```
 
 `PlanRecorded` carries `findings`, and the Markdown, JSON and HTML plan formats include them. A plan with findings but no steps is still empty: findings never make a plan executable. `result.plan` keeps the findings, and a user-edited plan keeps them too. In a session, `session.plan.findings` holds what plan turns found and they seed later turns. `session.setPlan(steps)` keeps the held findings; `session.setPlan(plan)` takes the findings that plan states. To rebuild a session from stored state, pass `agent.session({ initialTodo, initialPlanFindings })`: the findings come back on `session.plan` and ride the next execute turn. Malformed rows are dropped.
+
+## Strategy planners: one context, one completion rule
+
+The `blueprint` and `plan-execute-reflect` strategies write their own plans (generate, patch and augment). Every one of those planner calls is built from the same context: plan only (never run the steps or answer), the tool catalog with each tool's parameters and its read or write effect, and the env date and timezone. The date rule appears when a tool takes a date: a date argument must come from the goal or from today's date, never invented. The interaction line appears only when the planner may ask or look something up.
+
+The plan's tool-call arguments are checked at plan time, against the tool schemas, before anything runs:
+
+| Finding | What the plan does |
+| --- | --- |
+| a step names a tool the catalog does not have | reported (`blueprint` then degrades to reactive, as before) |
+| a required argument has no value and no `{{from_step}}` reference | the step runs as a composite step: the model chooses the argument when the step runs |
+| a date in a date argument that the goal does not give (for example a baked `2024-11-21` on a 2026 run) | same: deferred to execute time, never baked. A relative phrase the goal used (`tomorrow`) is resolved against the env date instead |
+| a step typed `analysis` that names a tool | becomes a composite step scoped to that tool, so the tool can run |
+
+One `plan-args-validated` guard event lists the findings. A plan you pass yourself (`run(input, { plan })`) keeps its dates; only missing required arguments are deferred.
+
+A strategy run cannot finish `completed` with plan steps left open. Each step ends `done`, `skipped` or `failed`, listed in `result.metadata.planSteps`. A step that never ran (a deferred composite step, a tool named on an analysis step) is finished by the step executor before the answer is written. A step the run budget no longer allows stays open: the run is `partial`, `result.metadata.planIncomplete.open` names it, the verification warning says so, and a `plan-incomplete` guard event is published. In `plan-execute-reflect` a SATISFIED reflection on a plan with unrun steps sends the loop back to run them while refinements remain.
+
+When the step results are too long for the final synthesis call, the steps most relevant to the goal are kept whole within the model's evidence budget, the rest are named as not shown, and a `solve-evidence` guard event records what the call saw (steps, characters, budget).
 
 ## Wrap-up reserve
 

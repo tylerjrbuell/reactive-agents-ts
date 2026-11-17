@@ -22,11 +22,13 @@ import type { ReasoningStep } from "../../types/index.js";
 import type { Plan } from "../../types/plan.js";
 import type { PlanExecuteInput } from "../plan-execute.js";
 import { SYNTHESIZER_PERSONA } from "../planning/shared-personas.js";
+import { emitSolveEvidence, selectSolveEvidence } from "../planning/solve-evidence.js";
+import { priorResultsBudgetChars } from "../planning/prior-results.js";
 
 export interface SynthesizeDeps {
   readonly plan: Plan;
   readonly goal: string;
-  readonly input: Pick<PlanExecuteInput, "taskId" | "systemPrompt" | "temperature">;
+  readonly input: Pick<PlanExecuteInput, "taskId" | "systemPrompt" | "temperature" | "modelId">;
   readonly llm: LLMService["Type"];
   readonly eventBus: StrategyServices["eventBus"];
   /** Records the `[SYNTHESIS]` trace step on the strategy run. */
@@ -52,15 +54,18 @@ export const synthesizePlanAnswer = (
     // emit every item. Intermediate analysis/reflection prompts kept the
     // preview to protect local-tier context; synthesis needs the whole
     // payload, mirroring reactive's in-loop recall of the stored result.
-    const synthResultTexts = plan.steps
-      .filter((s) => s.result || s.fullResult)
-      .map((s, idx) => `Step ${idx + 1}: ${s.fullResult ?? s.result}`);
+    const withResults = plan.steps.filter((s) => s.result || s.fullResult);
+    const synthResultTexts = withResults.map((s, idx) => `Step ${idx + 1}: ${s.fullResult ?? s.result}`);
+    // What the call is shown: every result within the model's budget, else the
+    // steps most relevant to the goal, the rest named as not shown.
+    const evidence = selectSolveEvidence(goal, withResults, priorResultsBudgetChars(input.modelId), false);
+    yield* emitSolveEvidence(input.taskId ?? "plan-execute", "plan-execute-reflect", evidence);
 
     const synthLlmResponse = yield* gatewayComplete(llm, { purpose: "synthesize" }, {
         messages: [
           {
             role: "user",
-            content: `Task: ${goal}\n\nExecution results:\n${synthResultTexts.join("\n")}\n\nSynthesize a clear, complete answer to the original task. Do NOT include internal details like tool names, JSON payloads, recipient numbers, or execution metadata — only user-facing content.\n\nEVIDENCE RULE: only state facts your tool results actually contain. If a requested attribute (a name, number, license, date, spec) is not in the results, say \"not found in sources\" for that item instead of guessing — invented specifics are worse than acknowledged gaps. Prefer fewer, verified items over a complete-looking but fabricated list.\n\nCOMPLETION CHECK: before finishing, re-read the Task and confirm every explicit requirement is addressed — each requested field, format, count, and any required meta-commentary (e.g. identifying conflicts, caveats, or unresolved items). If a requirement cannot be met from the results, state that explicitly instead of omitting it.`,
+            content: `Task: ${goal}\n\nExecution results:\n${evidence.texts.join("\n")}\n\nSynthesize a clear, complete answer to the original task. Do NOT include internal details like tool names, JSON payloads, recipient numbers, or execution metadata — only user-facing content.\n\nEVIDENCE RULE: only state facts your tool results actually contain. If a requested attribute (a name, number, license, date, spec) is not in the results, say \"not found in sources\" for that item instead of guessing — invented specifics are worse than acknowledged gaps. Prefer fewer, verified items over a complete-looking but fabricated list.\n\nCOMPLETION CHECK: before finishing, re-read the Task and confirm every explicit requirement is addressed — each requested field, format, count, and any required meta-commentary (e.g. identifying conflicts, caveats, or unresolved items). If a requirement cannot be met from the results, state that explicitly instead of omitting it.`,
           },
         ],
         systemPrompt: withEnvContext(

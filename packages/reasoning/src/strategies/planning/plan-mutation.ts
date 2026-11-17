@@ -35,7 +35,8 @@ import {
   buildPatchPrompt,
   buildAugmentPrompt,
 } from "./plan-prompts.js";
-import type { ToolSummary } from "./plan-prompts.js";
+import { buildPlanProducerContext, type PlanProducerContext } from "../../kernel/policy/plan-producer-context.js";
+import { applyPlanArgGrounding } from "../../kernel/policy/plan-args.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { extractGoalText } from "./plan-text.js";
 import { tokenSpendOf, type TokenSpend } from "../../kernel/run-budget.js";
@@ -77,17 +78,19 @@ export interface PatchInput {
   readonly temperature?: number;
 }
 
-/**
- * Map a tool schema to the enriched ToolSummary the plan prompts render. The
- * one builder for plan-execute and blueprint; parameters pass through whole
- * (the renderer reads the fields it shows).
- */
-export const toToolSummary = (t: ToolSchema): ToolSummary => ({
-  name: t.name,
-  signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
-  ...(t.description ? { description: t.description } : {}),
-  ...(t.parameters.length > 0 ? { params: t.parameters } : {}),
-});
+/** A replan's context and argument validation (the schemas come from the input, the clock from now). */
+const replanContext = (schemas: readonly ToolSchema[] | undefined) => buildPlanProducerContext({ schemas, now: new Date() });
+
+/** `steps` with their tool-call arguments validated (kernel/policy/plan-args.ts), as the plan's replan emits them. */
+const groundedSteps = (
+  steps: PlanStep[],
+  schemas: readonly ToolSchema[] | undefined,
+  context: Pick<PlanProducerContext, "today">,
+  plan: Pick<Plan, "goal" | "taskId">,
+): Effect.Effect<PlanStep[], never> => {
+  const holder = { steps };
+  return applyPlanArgGrounding(holder, schemas ?? [], context.today, plan.goal, plan.taskId).pipe(Effect.map(() => holder.steps));
+};
 
 /** Minimal input shape consumed by `augmentPlan`. */
 export interface AugmentInput {
@@ -112,12 +115,13 @@ export function patchPlan(
   Error,
   LLMService
 > {
-  const patchTools = (input.availableToolSchemas ?? []).map(toToolSummary);
+  const context = replanContext(input.availableToolSchemas);
   const patchPrompt = buildPatchPrompt(
     extractGoalText(input.taskDescription),
     plan.steps,
-    patchTools,
+    [...context.tools],
     guidance,
+    context,
   );
 
   return extractStructuredOutput({
@@ -154,7 +158,10 @@ export function patchPlan(
       }));
       const spend = tokenSpendOf(structuredCallSpend(result.usage, { prompt: patchPrompt, raw: result.raw }));
       // Replanned steps get the same keyed-ref rewrite (and event) as a fresh plan (plan-refs.ts).
-      return normalizeReplanRefs(patchedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, ...spend })));
+      return normalizeReplanRefs(patchedSteps, plan.taskId).pipe(
+        Effect.flatMap((normalized) => groundedSteps(normalized, input.availableToolSchemas, context, plan)),
+        Effect.map((steps) => ({ steps, ...spend })),
+      );
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );
@@ -177,12 +184,7 @@ export function augmentPlan(
   Error,
   LLMService
 > {
-  const toolSummaries: ToolSummary[] = (
-    input.availableToolSchemas ?? []
-  ).map((t) => ({
-    name: t.name,
-    signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
-  }));
+  const context = replanContext(input.availableToolSchemas);
 
   const completedSteps = plan.steps
     .filter((s) => s.status === "completed")
@@ -196,7 +198,8 @@ export function augmentPlan(
     goal,
     completedSteps,
     reflectionFeedback,
-    tools: toolSummaries,
+    tools: [...context.tools],
+    context,
   });
 
   const nextSeq = plan.steps.length + 1;
@@ -232,7 +235,10 @@ export function augmentPlan(
         seq: nextSeq + idx,
       }));
       const spend = tokenSpendOf(structuredCallSpend(result.usage, { prompt: augmentPrompt, raw: result.raw }));
-      return normalizeReplanRefs(augmentedSteps, plan.taskId).pipe(Effect.map((steps) => ({ steps, ...spend })));
+      return normalizeReplanRefs(augmentedSteps, plan.taskId).pipe(
+        Effect.flatMap((normalized) => groundedSteps(normalized, input.availableToolSchemas, context, plan)),
+        Effect.map((steps) => ({ steps, ...spend })),
+      );
     }),
     Effect.catchAll(() => Effect.succeed(null)),
   );

@@ -75,6 +75,7 @@ import { scoreReflectionAndDispatch, type PEREntropyEntry } from "./plan-execute
 import { reflectOnPlan } from "./plan-execute/reflect.js";
 import { groundedAbstentionCause, joinedStepResults, planTerminalOutcome, unansweredPlanCause } from "./plan-execute/terminal-outcome.js";
 import { PLANNER_PERSONA } from "./planning/shared-personas.js";
+import { unrunStepsFeedback } from "../kernel/policy/plan-completion.js";
 import {
   budgetStopReason,
   isBudgetExhausted,
@@ -292,14 +293,6 @@ export const executePlanExecute = (
       requiredTools: input.requiredTools ?? [], toolSchemas: input.availableToolSchemas, toolService });
     const reflectRequirements = runContract.requirements.map((r) => r.spec.description);
 
-    // Convert tool schemas to ToolSummary for prompts (mark optional params with ?)
-    const toolSummaries: ToolSummary[] = (
-      input.availableToolSchemas ?? []
-    ).map((t) => ({
-      name: t.name,
-      signature: `(${t.parameters.map((p) => (p.required ? p.name : `${p.name}?`)).join(", ")})`,
-    }));
-
     yield* emitLog({ _tag: "phase_started", phase: "plan-execute:plan", timestamp: new Date() });
 
     // ── PLAN: Generate initial structured plan ──
@@ -308,11 +301,13 @@ export const executePlanExecute = (
     // Derive the real tier from the model id so the planner prompt matches the
     // model's actual capability across all tiers.
     // A caller-supplied `input.plan` skips the planner call (validated first).
-    let { plan, planPrompt } = yield* obtainPlan({
+    let { plan, planPrompt, context } = yield* obtainPlan({
       input, goal, taskId, agentId: input.agentId ?? "reasoning-agent", planMode,
       strategy: "plan-execute-reflect", persona: PLANNER_PERSONA, defaultTemperature: 0.5,
-      pastPatterns: [], toolSummaries, run,
+      pastPatterns: [], run,
     });
+    // The step prompts' tool summaries are the planner's own catalog.
+    const toolSummaries: ToolSummary[] = [...context.tools];
     yield* emitPhaseEnd({ emitLog, phase: "plan-execute:plan", startedAt: start, totalTokens: run.spend().tokens });
 
     // ── Rationale enforcement (coax) ──────────────────────────────────────────
@@ -621,6 +616,9 @@ export const executePlanExecute = (
       let satisfied = isSatisfied(reflectionContent);
       let reflectionForRefine = reflectionContent;
       let repairGuidance: string | undefined;
+      // Completion invariant: a plan with steps that never ran is not satisfied; the next pass runs them.
+      const unrun = refinement < maxRefinements ? unrunStepsFeedback(plan.steps) : undefined;
+      if (satisfied && unrun) { satisfied = false; reflectionForRefine = `${unrun}\n${reflectionContent}`; }
       // D9: a SATISFIED claim goes through the shared strategy exit gate (required-tool
       // grounding, then delivery of the contract's files): one repair, then handoff.
       const exit = !satisfied ? undefined : yield* proposeStrategyExit({
@@ -769,6 +767,7 @@ export const executePlanExecute = (
         : !finalOutput && !budgetStopped ? { error: unansweredPlanCause(plan.steps) } : {}),
       ...(outcome !== undefined ? { outcome } : {}),
       delivery: { runContract, decision: deliveryDecision },
+      plan: plan.steps,
     };
       }),
     );

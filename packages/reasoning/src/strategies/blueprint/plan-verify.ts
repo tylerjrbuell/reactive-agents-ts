@@ -26,6 +26,7 @@ import {
 } from "../../types/plan.js";
 import { fromStepRe } from "../../assembly/ref-grammar.js";
 import { runHealingPipeline } from "@reactive-agents/tools";
+import { plansToolCall } from "../../kernel/policy/plan-args.js";
 
 // ─── Result Types ───
 
@@ -278,7 +279,7 @@ export const verifyPlan = (
   if (requiredTools.length > 0) {
     const plannedTools = new Set(
       steps
-        .filter((s) => s.type === "tool_call" && s.toolName)
+        .filter(plansToolCall)
         .map((s) => s.toolName!),
     );
     const missingTools = requiredTools.filter((t) => !plannedTools.has(t));
@@ -303,7 +304,7 @@ export const verifyPlan = (
   const quantities = ctx.requiredToolQuantities ?? {};
   for (const [toolName, requiredCount] of Object.entries(quantities)) {
     const existingCount = steps.filter(
-      (s) => s.type === "tool_call" && s.toolName === toolName,
+      (s) => plansToolCall(s) && s.toolName === toolName,
     ).length;
     const deficit = requiredCount - existingCount;
     for (let i = 0; i < deficit; i++) {

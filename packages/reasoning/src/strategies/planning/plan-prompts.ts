@@ -11,6 +11,7 @@
  */
 
 import type { PlanStep } from "../../types/plan.js";
+import { renderCatalog, renderPlanProducerContext, type PlanProducerContext } from "../../kernel/policy/plan-producer-context.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,11 +32,15 @@ export interface ToolSummary {
     required?: boolean;
     description?: string;
   }>;
+  /** `read` / `write` marks what the tool does to the world (planner context); absent or `unknown` shows no mark. */
+  effect?: "read" | "write" | "unknown";
 }
 
 export interface PlanGenerationInput {
   goal: string;
   tools: ToolSummary[];
+  /** The shared planner context (posture, date, tool effects, interaction). Absent: no PLANNING CONTEXT block. */
+  context?: PlanProducerContext;
   pastPatterns: string[];
   modelTier: ModelTier;
   /** Per-tool minimum call counts from the classifier (e.g. { "web-search": 4 }). */
@@ -101,31 +106,9 @@ const PLAN_STEP_EXAMPLE = `{
   ]
 }`;
 
-/**
- * Render an `AVAILABLE TOOLS` block with tool descriptions + per-param detail.
- * Shared by the plan generator and the patch (recovery) prompt so neither path
- * is tool-blind — a name+signature alone forces weak models to invent argument
- * shapes from priors (the gh-cli "--limit"/"commit" hallucinations).
- */
-function renderToolLines(tools: ToolSummary[]): string {
-  return tools
-    .map((t) => {
-      let line = `- ${t.name}${t.signature}`;
-      if (t.description) line += ` — ${t.description}`;
-      if (t.params && t.params.length > 0) {
-        const paramLines = t.params
-          .map((p) => {
-            const flags = p.required ? "required" : "optional";
-            const desc = p.description ? `: ${p.description}` : "";
-            return `    • ${p.name} (${p.type}, ${flags})${desc}`;
-          })
-          .join("\n");
-        line += `\n${paramLines}`;
-      }
-      return line;
-    })
-    .join("\n");
-}
+// The `AVAILABLE TOOLS` lines (generate, patch and augment prompts) come from
+// the one catalog renderer, `renderCatalog` (kernel/policy/plan-producer-context.ts).
+const renderToolLines = renderCatalog;
 
 /**
  * Build the few-shot example for the planner. When real tools are available it
@@ -226,6 +209,9 @@ function buildPlanExample(tools: ToolSummary[]): string {
 }`;
 }
 
+/** The shared planner context as a block of its own (patch and augment prompts have no role sentence to carry the posture). */
+const contextBlock = (context: PlanProducerContext): string => [context.posture, renderPlanProducerContext(context)].filter((l) => l.length > 0).join("\n");
+
 // ── buildPlanGenerationPrompt ────────────────────────────────────────────────
 
 /**
@@ -240,7 +226,7 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
 
   // Section 1: Role & Goal
   sections.push(
-    `You are a planning agent. Decompose the goal into a structured plan.\n\n` +
+    `${input.context?.posture ?? "You are a planning agent. Decompose the goal into a structured plan."}\n\n` +
     `PLANNING RULES:\n` +
     `- Prefer "tool_call" steps — they execute instantly without LLM overhead.\n` +
     `- When the goal asks for data about MULTIPLE distinct items (e.g. multiple currencies, products, users), create a SEPARATE tool_call step for each item — combined queries lose specificity.\n` +
@@ -251,6 +237,10 @@ export function buildPlanGenerationPrompt(input: PlanGenerationInput): string {
     `- Combine all text reasoning into one "analysis" step — never split reasoning into multiple analysis steps.\n\n` +
     `GOAL:\n${input.goal}`,
   );
+
+  // Section 1b: the rest of the shared planner context (today's date and argument rule, tool effects, interaction), when it applies.
+  const contextLines = input.context ? renderPlanProducerContext(input.context) : "";
+  if (contextLines) sections.push(contextLines);
 
   // Section 2: Available Tools — render description + per-param detail when
   // available so the planner sees tool semantics (not just a bare signature).
@@ -322,6 +312,8 @@ export function buildPatchPrompt(
   tools: ToolSummary[] = [],
   /** Harness-written repair guidance (e.g. deliverables still missing at the delivery gate). */
   guidance?: string,
+  /** The shared planner context; absent: no PLANNING CONTEXT block. */
+  context?: PlanProducerContext,
 ): string {
   const sections: string[] = [];
 
@@ -330,6 +322,7 @@ export function buildPatchPrompt(
     `The plan encountered a failure. Review the step statuses below and rewrite the failed and remaining steps.\n`,
   );
   if (guidance) sections.push(guidance);
+  if (context) sections.push(contextBlock(context));
 
   if (tools.length > 0) {
     sections.push(`AVAILABLE TOOLS:\n${renderToolLines(tools)}`);
@@ -473,6 +466,8 @@ export interface AugmentInput {
   completedSteps: Array<{ stepId: string; title: string; result?: string }>;
   reflectionFeedback: string;
   tools: ToolSummary[];
+  /** The shared planner context; absent: no PLANNING CONTEXT block. */
+  context?: PlanProducerContext;
 }
 
 /**
@@ -497,12 +492,10 @@ export function buildAugmentPrompt(input: AugmentInput): string {
   sections.push(`COMPLETED STEPS AND RESULTS:\n${stepLines}`);
 
   sections.push(`REFLECTION FEEDBACK:\n${input.reflectionFeedback}`);
+  if (input.context) sections.push(contextBlock(input.context));
 
   if (input.tools.length > 0) {
-    const toolLines = input.tools
-      .map((t) => `- ${t.name}${t.signature}`)
-      .join("\n");
-    sections.push(`AVAILABLE TOOLS:\n${toolLines}`);
+    sections.push(`AVAILABLE TOOLS:\n${renderToolLines(input.tools)}`);
   }
 
   sections.push(

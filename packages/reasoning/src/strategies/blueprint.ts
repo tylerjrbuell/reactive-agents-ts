@@ -40,7 +40,7 @@ import { Data, Effect } from "effect";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { obtainPlan } from "./planning/input-plan.js";
+import { obtainPlan, planningToolSchemas } from "./planning/input-plan.js";
 import type { InputPlan } from "./planning/input-plan.js";
 import type { Plan } from "../types/plan.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
@@ -65,13 +65,17 @@ import { executeBlueprintWorker, type BlueprintWorkerContext } from "./blueprint
 import { verifyPlan } from "./blueprint/plan-verify.js";
 import { executeReactive } from "./reactive.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
-import { patchPlan, toToolSummary } from "./planning/plan-mutation.js";
+import { patchPlan } from "./planning/plan-mutation.js";
+import { finishOpenSteps } from "./blueprint/finish-open.js";
+import { emitSolveEvidence, selectSolveEvidence } from "./planning/solve-evidence.js";
+import { priorResultsBudgetChars } from "./planning/prior-results.js";
+import { settlePlanSteps } from "../kernel/policy/plan-completion.js";
 import { formatPlanListing } from "./blueprint/progress-format.js";
 import { SYNTHESIZER_PERSONA } from "./planning/shared-personas.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { makePlanChecklist } from "./planning/plan-checklist.js";
 import { budgetStopReason, isBudgetExhausted } from "./budget/remaining-budget.js";
-import { runStrategy, type StrategyEnd, type StrategyRun } from "./substrate/strategy-run.js";
+import { runStrategy, type StrategyEnd, type StrategyPaused, type StrategyRun } from "./substrate/strategy-run.js";
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
 
 const STRATEGY = "blueprint" as const;
@@ -218,7 +222,7 @@ const blueprintBody = (
   input: BlueprintInput,
   services: StrategyServices,
   run: StrategyRun,
-): Effect.Effect<StrategyEnd, ExecutionError | DegradeToReactive, LLMService | RunEnvelope> =>
+): Effect.Effect<StrategyEnd, ExecutionError | DegradeToReactive | StrategyPaused, LLMService | RunEnvelope> =>
   Effect.gen(function* () {
     const { llm, eventBus } = services;
     const emitLog = run.emitLog;
@@ -254,11 +258,7 @@ const blueprintBody = (
     // planner sees real argument shapes (not just `name(params)`) — without these
     // it invents arg names (e.g. file-write(filename) instead of file-write(path),
     // the root of the gh-cli invalid-command failure).
-    const planningToolSchemas =
-      input.allToolSchemas && input.allToolSchemas.length > 0
-        ? input.allToolSchemas
-        : (input.availableToolSchemas ?? []);
-    const toolSummaries: ToolSummary[] = planningToolSchemas.map(toToolSummary);
+    const planSchemas = planningToolSchemas(input);
 
     // ── PLAN ──────────────────────────────────────────────────────────────────
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:plan", timestamp: new Date() });
@@ -272,11 +272,12 @@ const blueprintBody = (
 
     // A caller-supplied `input.plan` replaces the planner call (validated);
     // otherwise the planner LLM runs. Real provider usage is accounted inside.
-    let { plan } = yield* obtainPlan({
+    let { plan, context } = yield* obtainPlan({
       input, goal, taskId, agentId: input.agentId ?? "reasoning-agent", planMode: "dag",
-      strategy: STRATEGY, defaultTemperature: 0.4, pastPatterns, toolSummaries, run,
+      strategy: STRATEGY, defaultTemperature: 0.4, pastPatterns, run,
       persona: "You are a planning agent. Decompose the goal into a structured tool plan.",
     });
+    const toolSummaries: ToolSummary[] = [...context.tools];
     // Keyed from_step refs to the grammar, then one producer copy per target
     // file when a step's whole output feeds several.
     yield* applyPlanRefNormalization(plan, taskId);
@@ -410,8 +411,8 @@ const blueprintBody = (
       // Full catalog (not the pruned subset) so the worker's healing pass and
       // any composite sub-kernel know every planned tool's real schema —
       // e.g. file-write(path, content) for arg-name repair.
-      ...(planningToolSchemas.length > 0
-        ? { availableToolSchemas: planningToolSchemas }
+      ...(planSchemas.length > 0
+        ? { availableToolSchemas: planSchemas }
         : {}),
       ...(input.resultCompression
         ? { resultCompression: input.resultCompression }
@@ -478,8 +479,8 @@ const blueprintBody = (
             // Enrich the recovery prompt with the FULL tool catalog so the patch
             // isn't tool-blind (else it re-invents tool names/arg shapes — the
             // same root cause the retry exists to fix).
-            ...(planningToolSchemas.length > 0
-              ? { availableToolSchemas: planningToolSchemas }
+            ...(planSchemas.length > 0
+              ? { availableToolSchemas: planSchemas }
               : {}),
           },
           llm,
@@ -496,6 +497,7 @@ const blueprintBody = (
             steps: [...preservedCompleted, ...patch.steps],
             version: plan.version + 1,
           };
+          plan = retryPlan; // the plan the worker now runs is the plan the run is judged on
           yield* publishReasoningStep(eventBus, {
             _tag: "ReasoningStepCompleted",
             taskId,
@@ -517,6 +519,26 @@ const blueprintBody = (
           accountWorker(workerResult.llmUsage);
         }
       }
+    }
+
+    // ── REMAINDER (completion invariant) ──────────────────────────────────────
+    // Plan steps the worker does not run (deferred-argument composites, a tool
+    // named on an analysis step) are finished by the step executor, not shipped
+    // as done; what it cannot finish stays open and caps the run at `partial`.
+    const ranById = new Map(workerResult.steps.map((s) => [s.id, s]));
+    const finished = yield* finishOpenSteps({
+      services,
+      input: { ...input, forbiddenTools: forbiddenToolList, ledgerSink: run.ledgerSink },
+      plan,
+      steps: plan.steps.map((s) => ranById.get(s.id) ?? s),
+      toolSummaries,
+      emitLog,
+      run,
+    });
+    if (finished.length > 0) {
+      const finishedById = new Map(finished.map((s) => [s.id, s]));
+      const combined = plan.steps.flatMap((s) => finishedById.get(s.id) ?? ranById.get(s.id) ?? []);
+      workerResult = { ...workerResult, steps: combined, allSucceeded: combined.every((s) => s.status === "completed") };
     }
 
     for (const s of workerResult.steps) {
@@ -590,9 +612,10 @@ const blueprintBody = (
       return yield* Effect.fail(new DegradeToReactive());
     }
 
-    const stepResultTexts = completed.map(
-      (s, idx) => `Step ${idx + 1} (${s.title}): ${s.fullResult ?? s.result}`,
-    );
+    // What the solve call is shown: whole results within the model's budget,
+    // else the steps most relevant to the goal (planning/solve-evidence.ts).
+    const evidence = selectSolveEvidence(goal, completed, priorResultsBudgetChars(input.modelId));
+    const stepResultTexts = evidence.texts;
 
     // ── SOLVE ───────────────────────────────────────────────────────────────────
     // Single-substantive-step short-circuit (mirrors plan-execute.ts:415): when
@@ -639,6 +662,7 @@ const blueprintBody = (
       run.record(makeStep("thought", `[SOLVE] single-step short-circuit`));
     } else if (stepResultTexts.length > 0 && !overBudget) {
       yield* emitLog({ _tag: "phase_started", phase: "blueprint:solve", timestamp: new Date() });
+      yield* emitSolveEvidence(taskId, STRATEGY, evidence);
 
       // `run.call` accounts the solver call; a failed call degrades to the
       // joined worker results (no usage to account).
@@ -718,10 +742,14 @@ const blueprintBody = (
           : "partial"
       : "partial";
 
-    // D9 P7: steps the worker left to SOLVE (terminal analysis) are done once SOLVE answered.
+    // D9 P7: the pure analysis steps left to SOLVE are done once SOLVE answered; no other
+    // unrun step is (the terminal caps the run on what stays open, policy/plan-completion.ts).
     const executedById = new Map(workerResult.steps.map((s) => [s.id, s]));
-    yield* planChecklist.sync(plan.steps.map((s) =>
-      executedById.get(s.id) ?? (finalStatus === "completed" ? { ...s, status: "completed" as const } : s)));
+    const settledSteps = settlePlanSteps(
+      plan.steps.map((s) => executedById.get(s.id) ?? s),
+      !!finalOutput && !solveFailedJoin && !budgetCappedJoin,
+    );
+    yield* planChecklist.sync(settledSteps);
 
     // B2: blueprint runs no kernel and cannot abstain (the 0-LLM worker has no
     // abstain path; the degrades hand the task to reactive). The substrate
@@ -736,6 +764,7 @@ const blueprintBody = (
       output: finalOutput,
       status: finalStatus,
       delivery: { runContract },
+      plan: settledSteps,
       // H5/#40: the budget-capped join is a harness-authored terminal. The
       // substrate ships budgetTerminalPartial + harnessAuthoredOutput, this
       // warning, and the raw reason on the open-string channel (observability

@@ -46,7 +46,10 @@ const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly to
   direct: { llmCalls: 1, tokensUsed: 278 },
   reactive: { llmCalls: 2, tokensUsed: 607 },
   adaptive: { llmCalls: 2, tokensUsed: 607 },
-  blueprint: { llmCalls: 1, tokensUsed: 1001 },
+  // 2026-11-17 tokens 1001 -> 965: the planner's tool block is the shared dense catalog
+  // (renderCatalog) and its role sentence is the shared plan-only posture
+  // (kernel/policy/plan-producer-context.ts).
+  blueprint: { llmCalls: 1, tokensUsed: 965 },
   // 2026-11-05 tokens 1105 -> 1102 (and tree-of-thought 1571 -> 1569, reflexion
   // 1830 -> 1829): shrink already present at HEAD 6a6a7f4d5 before the 2b
   // follow-ups; lowered by the follow-up mission, cause not attributed.

@@ -55,7 +55,7 @@ import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncatio
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
 import { LOOP_DETECTED_DEFAULT, guidanceFieldHasText, guidanceTurnCost, renderGuidance, type PendingGuidance } from "../../state/guidance-channel.js";
 import { emitPostureApplied, isPlanPosture, planPostureGuidanceParts, registerPostureSignal, stampPostureRendered, toolIndexUniverse } from "../../policy/run-posture.js";
-import { planToolCatalogLine } from "../../policy/plan-steps.js";
+import { buildPlanProducerContext } from "../../policy/plan-producer-context.js";
 import { planFindingsLine, planTurnGuidance, planTurnTools, reconEligibleSchemas } from "../../policy/plan-recon.js";
 import { provenanceBySanitizedName } from "./wire-facts.js";
 import { checklistSystemLine, stepChecklistReminder } from "../reflect/checklist-reminder.js";
@@ -605,7 +605,7 @@ export function handleThinking(
     const planTurn = planTurnTools(input, { iteration: state.iteration, maxIterations: (state.meta.maxIterations as number | undefined) ?? 10, steps: state.steps });
     const guidanceParts = planPosture
       ? planPostureGuidanceParts(
-          input.harness?.planToolCatalog === true ? planToolCatalogLine(input.allToolSchemas ?? input.availableToolSchemas, reconEligibleSchemas(input)) : undefined,
+          input.harness?.planToolCatalog === true ? buildPlanProducerContext({ schemas: input.allToolSchemas ?? input.availableToolSchemas, now: new Date(), reconTools: reconEligibleSchemas(input) }).catalogLine : undefined,
           planTurnGuidance(planTurn),
         )
       : rendered.parts;
