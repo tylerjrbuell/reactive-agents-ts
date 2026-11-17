@@ -40,10 +40,9 @@ import { Data, Effect } from "effect";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
-import { LLMPlanOutputSchema, hydratePlan } from "../types/plan.js";
+import { obtainPlan } from "./planning/input-plan.js";
+import type { InputPlan } from "./planning/input-plan.js";
 import type { Plan } from "../types/plan.js";
-import { extractStructuredOutput, structuredCallSpend } from "../structured-output/pipeline.js";
-import { buildPlanGenerationPrompt } from "./planning/plan-prompts.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
 import { applyFanOutSplit } from "./planning/fanout-split.js";
 import { applyPlanRefNormalization } from "./planning/plan-refs.js";
@@ -95,6 +94,8 @@ interface BlueprintInput {
   readonly taskType: string;
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
+  /** Caller-supplied plan (core or strategy shape, `dependsOn` honored). Skips the planner call; validated first. */
+  readonly plan?: InputPlan;
   readonly availableToolSchemas?: readonly ToolSchema[];
   readonly allToolSchemas?: readonly ToolSchema[];
   readonly config: ReasoningConfig;
@@ -262,8 +263,6 @@ const blueprintBody = (
     // ── PLAN ──────────────────────────────────────────────────────────────────
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:plan", timestamp: new Date() });
 
-    const planTier = resolveProfile(input.modelId ?? "mid").tier;
-
     // memoryContext carries experience-tips (wired upstream) — feed them to the
     // planner as past patterns so the model bootstraps from what worked before.
     const pastPatterns =
@@ -271,50 +270,12 @@ const blueprintBody = (
         ? [input.memoryContext.trim()]
         : [];
 
-    const planPrompt = buildPlanGenerationPrompt({
-      goal,
-      tools: toolSummaries,
-      pastPatterns,
-      modelTier: planTier,
-      ...(input.requiredToolQuantities
-        ? { requiredToolQuantities: input.requiredToolQuantities }
-        : {}),
-    });
-
-    const planResult = yield* extractStructuredOutput({
-      schema: LLMPlanOutputSchema,
-      prompt: planPrompt,
-      systemPrompt: input.systemPrompt
-        ? `${input.systemPrompt}\nYou are a planning agent. Decompose the goal into a structured tool plan.`
-        : "You are a planning agent. Decompose the goal into a structured tool plan.",
-      strategy: "blueprint",
-      maxRetries: 2,
-      // GH #246: commanded temperature wins; unset keeps the 0.4 default.
-      temperature: input.temperature ?? 0.4,
-      maxTokens: 4096,
-      ...(input.taskId ? { traceContext: { taskId } } : {}),
-    }).pipe(
-      Effect.mapError(
-        (err) =>
-          new ExecutionError({
-            strategy: STRATEGY,
-            message: `Plan generation failed: ${err.message}`,
-            step: 0,
-            cause: err,
-          }),
-      ),
-    );
-    // Real provider usage summed over ALL pipeline attempts (run
-    // 01KX998PS2X3NW7JTAKBJMWPGN made 3 plan attempts and the len/4 estimate
-    // hid two of them, reporting 6,370 of 18,448 real tokens). The estimate
-    // remains only when the provider reported no usage.
-    run.account(structuredCallSpend(planResult.usage, { prompt: planPrompt, raw: planResult.raw }));
-
-    let plan: Plan = hydratePlan(planResult.data, {
-      taskId,
-      agentId: input.agentId ?? "reasoning-agent",
-      goal,
-      planMode: "dag",
+    // A caller-supplied `input.plan` replaces the planner call (validated);
+    // otherwise the planner LLM runs. Real provider usage is accounted inside.
+    let { plan } = yield* obtainPlan({
+      input, goal, taskId, agentId: input.agentId ?? "reasoning-agent", planMode: "dag",
+      strategy: STRATEGY, defaultTemperature: 0.4, pastPatterns, toolSummaries, run,
+      persona: "You are a planning agent. Decompose the goal into a structured tool plan.",
     });
     // Keyed from_step refs to the grammar, then one producer copy per target
     // file when a step's whole output feeds several.

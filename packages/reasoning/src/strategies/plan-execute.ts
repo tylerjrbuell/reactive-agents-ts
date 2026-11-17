@@ -39,7 +39,8 @@ import { makePlanChecklist } from "./planning/plan-checklist.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
 import { extractStructuredOutput, structuredCallSpend } from "../structured-output/pipeline.js";
-import { buildPlanGenerationPrompt } from "./planning/plan-prompts.js";
+import { obtainPlan } from "./planning/input-plan.js";
+import type { InputPlan } from "./planning/input-plan.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
 import {
   resolveStrategyServices,
@@ -51,7 +52,6 @@ import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
 import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { isSatisfied } from "../kernel/capabilities/verify/quality-utils.js";
-import { resolveProfile } from "../context/profile-resolver.js";
 import { enforceQualityGate } from "../kernel/loop/finalize.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -87,6 +87,8 @@ export interface PlanExecuteInput {
   readonly taskType: string;
   readonly memoryContext: string;
   readonly availableTools: readonly string[];
+  /** Caller-supplied plan (core or strategy shape). Skips the planner call; validated first. */
+  readonly plan?: InputPlan;
   /**
    * Opt-in audit gate (mirrors reactive / KernelInput.auditRationale, owner
    * decision 2026-06-04). When off (default), the planner rationale strict-retry
@@ -305,50 +307,13 @@ export const executePlanExecute = (
     // got the small-model planner verbosity, local lost its tighter treatment).
     // Derive the real tier from the model id so the planner prompt matches the
     // model's actual capability across all tiers.
-    const planTier = resolveProfile(input.modelId ?? "mid").tier;
-    const planPrompt = buildPlanGenerationPrompt({
-      goal,
-      tools: toolSummaries,
-      pastPatterns: [],
-      modelTier: planTier,
-      requiredToolQuantities: input.requiredToolQuantities,
+    // A caller-supplied `input.plan` skips the planner call (validated first).
+    let { plan, planPrompt } = yield* obtainPlan({
+      input, goal, taskId, agentId: input.agentId ?? "reasoning-agent", planMode,
+      strategy: "plan-execute-reflect", persona: PLANNER_PERSONA, defaultTemperature: 0.5,
+      pastPatterns: [], toolSummaries, run,
     });
-
-    const planResult = yield* extractStructuredOutput({
-      schema: LLMPlanOutputSchema,
-      prompt: planPrompt,
-      systemPrompt: input.systemPrompt
-        ? `${input.systemPrompt}\n${PLANNER_PERSONA}`
-        : PLANNER_PERSONA,
-      strategy: "plan-execute-reflect",
-      maxRetries: 2,
-      // GH #246: commanded temperature wins; unset keeps the 0.5 default.
-      temperature: input.temperature ?? 0.5,
-      maxTokens: 4096,
-      ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
-    }).pipe(
-      Effect.mapError(
-        (err) =>
-          new ExecutionError({
-            strategy: "plan-execute-reflect",
-            message: `Plan generation failed: ${err.message}`,
-            step: 0,
-            cause: err,
-          }),
-      ),
-    );
-
-    // Provider-reported planner usage (native + fallback attempts); estimate only when none reported.
-    run.account(structuredCallSpend(planResult.usage, { prompt: planPrompt, raw: planResult.raw }));
-
     yield* emitPhaseEnd({ emitLog, phase: "plan-execute:plan", startedAt: start, totalTokens: run.spend().tokens });
-
-    let plan: Plan = hydratePlan(planResult.data, {
-      taskId,
-      agentId: input.agentId ?? "reasoning-agent",
-      goal,
-      planMode,
-    });
 
     // ── Rationale enforcement (coax) ──────────────────────────────────────────
     // Every tool_call step must carry a non-empty rationale.why. The base
@@ -358,7 +323,7 @@ export const executePlanExecute = (
     // skip the full re-plan retry unless auditing is on. Saves a planner LLM
     // call on models that omit rationale (parallels the reactive rationale gate).
     const auditRationaleOn =
-      input.auditRationale === true || envelope.harness.auditRationale;
+      input.plan === undefined && (input.auditRationale === true || envelope.harness.auditRationale);
 
     let missing = auditRationaleOn ? stepsMissingRationale(plan) : [];
     if (missing.length > 0) {

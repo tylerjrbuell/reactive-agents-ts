@@ -103,6 +103,9 @@ export type { StrategyCatalogEntry } from "./services/strategy-catalog.js";
 export { executeReactive } from "./strategies/reactive.js";
 export { executeReflexion } from "./strategies/reflexion.js";
 export { executePlanExecute } from "./strategies/plan-execute.js";
+export { fromCorePlan, toCorePlan, isCorePlan } from "./types/plan-adapters.js";
+export { adoptInputPlan } from "./strategies/planning/input-plan.js";
+export type { InputPlan } from "./strategies/planning/input-plan.js";
 export { executeTreeOfThought } from "./strategies/tree-of-thought.js";
 export { executeAdaptive } from "./strategies/adaptive.js";
 export type { StrategyOutcome } from "./strategies/adaptive.js";
@@ -579,3 +582,13 @@ export {
   assemblyDebugEnabled,
   promptDumpPathPrefix,
 } from "./harness-flags.js";
+
+// ─── Loop-stop record + resume (public surface for runtime resume) ───
+export {
+  resumeFromStop,
+  isLoopStopped,
+  isLoopStopReason,
+  resumeMaxIterations,
+  loopResumeGuidanceText,
+} from "./kernel/loop/loop-stop.js";
+export type { LoopStopRecord, LoopStopToolDone } from "./kernel/loop/loop-stop.js";

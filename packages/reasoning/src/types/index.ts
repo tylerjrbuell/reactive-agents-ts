@@ -41,6 +41,7 @@ export {
   hydratePlan,
   resolveStepReferences,
 } from "./plan.js";
+export { fromCorePlan, toCorePlan, isCorePlan } from "./plan-adapters.js";
 export type {
   LLMPlanStep,
   LLMPlanOutput,
