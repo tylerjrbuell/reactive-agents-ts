@@ -43,6 +43,7 @@ import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import type { StrategyPaused, StrategyRun } from "../substrate/strategy-run.js";
 import { executeToolAndObserve } from "../../kernel/capabilities/act/tool-observe.js";
 import { FILE_TOOL_NAMES } from "../../kernel/capabilities/act/act.js";
+import { preflightGatedCall } from "../../kernel/capabilities/act/approval-gate.js";
 import type { KernelStateLike } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../types/index.js";
 import type { ReActKernelResult } from "../../kernel/state/kernel-state.js";
@@ -228,7 +229,10 @@ export function executeStep(
       const gateArgs = resolveStepReferences(step.toolArgs ?? {}, completedSteps);
       if (
         gatePolicy?.mode === "detach" &&
-        shouldGate(step.toolName!, gatePolicy, { iteration: stepIndex, args: gateArgs })
+        shouldGate(step.toolName!, gatePolicy, { iteration: stepIndex, args: gateArgs }) &&
+        // A step its tool's preflight refuses never pauses: it falls through to
+        // dispatch, which returns the refusal as a failed step result.
+        (yield* preflightGatedCall(toolService, step.toolName!, gateArgs, gatePolicy, stepIndex)) === undefined
       ) {
         return {
           output: pauseSentinel,
