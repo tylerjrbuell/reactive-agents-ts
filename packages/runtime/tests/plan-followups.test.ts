@@ -87,12 +87,12 @@ describe("provenance and tool hints (pure)", () => {
 
 const TURN1 = [
   { toolCall: { name: "todo", args: { action: "add", items: ["step one", "step two"] } } },
-  { text: "FINAL ANSWER: one" },
+  // Rows stay open at the final answer; the todo wrap-up turn is opt-in
+  // (RA_TODO_WRAPUP=1), so one final answer ends each turn.
   { text: "FINAL ANSWER: one" },
 ];
 const TURN2 = [
   { toolCall: { name: "todo", args: { action: "done", id: 1 } } },
-  { text: "FINAL ANSWER: two" },
   { text: "FINAL ANSWER: two" },
 ];
 

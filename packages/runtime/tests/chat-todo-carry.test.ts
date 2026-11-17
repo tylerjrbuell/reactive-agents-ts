@@ -69,14 +69,13 @@ describe("todo-seed helpers (pure)", () => {
 const TURN1 = [
   { toolCall: { name: "todo", args: { action: "add", items: ["step one", "step two", "step three"] } } },
   { toolCall: { name: "todo", args: { action: "done", id: 1 } } },
-  { text: "FINAL ANSWER: turn one" },
-  // Own rows are still open, so the harness holds the first final answer for one turn.
+  // Rows stay open at the final answer. The todo wrap-up turn is opt-in
+  // (RA_TODO_WRAPUP=1), so the first final answer ends the turn.
   { text: "FINAL ANSWER: turn one" },
 ];
 const TURN2 = [
   { toolCall: { name: "todo", args: { action: "done", id: 2 } } },
   { toolCall: { name: "todo", args: { action: "add", items: ["step four"] } } },
-  { text: "FINAL ANSWER: turn two" },
   { text: "FINAL ANSWER: turn two" },
 ];
 
