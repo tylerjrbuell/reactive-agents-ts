@@ -571,7 +571,12 @@ export class RouterEngine {
       if (route.maxTurnsPerHour !== undefined && !(yield* store.takeTurn(`${route.id}:*`, route.maxTurnsPerHour, HOUR_MS))) {
         return false;
       }
-      const perSender = route.maxTurnsPerSenderPerHour ?? DEFAULT_MAX_TURNS_PER_SENDER_PER_HOUR;
+      // A webhook caller is authenticated by the route signature, and most callers send no
+      // sender identity (userId "unknown"), so a default per-sender cap would throttle every
+      // caller as one bucket. Webhook routes get a per-sender cap only when they set one.
+      const perSender =
+        route.maxTurnsPerSenderPerHour ?? (platform === "webhook" ? undefined : DEFAULT_MAX_TURNS_PER_SENDER_PER_HOUR);
+      if (perSender === undefined) return true;
       return yield* store.takeTurn(`${route.id}:${sender}`, perSender, HOUR_MS);
     });
   }

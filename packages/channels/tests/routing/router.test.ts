@@ -341,6 +341,53 @@ describe("routing", () => {
       }),
     );
   });
+
+  const hookRoute = (over: Partial<RouteSpecInput> = {}): RouteSpecInput => ({
+    id: "hook",
+    match: { channelId: "chan" },
+    target: { agentId: "agent-hook" },
+    ...over,
+  });
+
+  test("a webhook route has no default per-sender cap: 10 requests without a sender are all routed", async () => {
+    const chan = makeScriptedAdapter({ id: "chan", platform: "webhook" });
+    await withRouter({ channels: [chan], routes: [hookRoute()], agents: makeFakeAgents().resolver }, (router) =>
+      Effect.gen(function* () {
+        const tags: string[] = [];
+        for (let i = 0; i < 10; i++) tags.push((yield* router.simulate(env({ platform: "webhook", userId: "unknown" }), "chan"))._tag);
+        expect(tags.every((t) => t === "Answered")).toBe(true);
+        expect((yield* router.status).dropped.rate).toBe(0);
+      }),
+    );
+  });
+
+  test("a webhook route with an explicit per-sender cap enforces it per senderId", async () => {
+    const chan = makeScriptedAdapter({ id: "chan", platform: "webhook" });
+    await withRouter(
+      { channels: [chan], routes: [hookRoute({ maxTurnsPerSenderPerHour: 2 })], agents: makeFakeAgents().resolver },
+      (router) =>
+        Effect.gen(function* () {
+          const send = (userId: string) => router.simulate(env({ platform: "webhook", userId }), "chan");
+          expect([(yield* send("a"))._tag, (yield* send("a"))._tag, (yield* send("a"))._tag]).toEqual(["Answered", "Answered", "Dropped"]);
+          expect((yield* send("b"))._tag).toBe("Answered");
+          expect((yield* send("b"))._tag).toBe("Answered");
+          expect((yield* send("b"))._tag).toBe("Dropped");
+        }),
+    );
+  });
+
+  test("a webhook route still honors the route-level turns-per-hour cap", async () => {
+    const chan = makeScriptedAdapter({ id: "chan", platform: "webhook" });
+    await withRouter(
+      { channels: [chan], routes: [hookRoute({ maxTurnsPerHour: 3 })], agents: makeFakeAgents().resolver },
+      (router) =>
+        Effect.gen(function* () {
+          const tags: string[] = [];
+          for (let i = 0; i < 4; i++) tags.push((yield* router.simulate(env({ platform: "webhook", userId: "unknown" }), "chan"))._tag);
+          expect(tags).toEqual(["Answered", "Answered", "Answered", "Dropped"]);
+        }),
+    );
+  });
 });
 
 describe("explain and simulate", () => {
