@@ -57,10 +57,10 @@ export interface CanvasSize {
 
 /**
  * One Field node's footprint plus breathing room, in px: the node is 168px
- * wide (label chip) and at most ~104px tall (tile, gap, name, status,
- * "sub-agent"). Slots are this size, so two slotted nodes never overlap.
+ * wide (label chip) and at most ~122px tall (tile, gap, name, status, run
+ * facts, model line). Slots are this size, so two slotted nodes never overlap.
  */
-export const FIELD_NODE = { width: 180, height: 116 } as const;
+export const FIELD_NODE = { width: 180, height: 132 } as const;
 
 /** Canvas the layout assumes before the Field has been measured. */
 export const DEFAULT_CANVAS: CanvasSize = { width: 1200, height: 560 };

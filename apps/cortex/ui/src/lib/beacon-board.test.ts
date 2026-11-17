@@ -159,7 +159,7 @@ describe("boardOf", () => {
     expect(b.agents[1]!.last).toBe("file-write refused: no workspace is set");
     expect(b.agents[2]!.last).toBe("Stopped before it finished");
     expect(b.agents[3]).toMatchObject({ last: "Explain hashes", model: "mimo", tokens: "2.5k tok" });
-    expect(b.counts).toEqual({ all: 4, "needs-you": 1, failed: 1, idle: 2 });
+    expect(b.counts).toEqual({ all: 4, running: 0, "needs-you": 1, failed: 1, idle: 2 });
   });
 
   it("an error line goes through the shared run-error rule (first line, no credentials)", () => {

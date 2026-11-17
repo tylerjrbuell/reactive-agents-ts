@@ -9,6 +9,8 @@
   import type { AgentNode } from "$lib/stores/agent-store.js";
   import { agentRunDeskTooltipText } from "$lib/stores/agent-store.js";
   import { fieldIconOf, fieldStatusLabel } from "$lib/beacon-board.js";
+  import { nudgeStep } from "$lib/beacon-drag.js";
+  import { fieldNodeInfo } from "$lib/beacon-field.js";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import Status from "$lib/components/kit/Status.svelte";
@@ -17,13 +19,18 @@
   interface Props {
     agent: AgentNode;
     status: StatusView;
+    /** Wall clock (ms epoch) so a live node's run time ticks. */
+    now?: number;
+    /** Arrow keys move the node by this step (Shift = larger); the Field wires it. */
+    onnudge?: (dx: number, dy: number) => void;
   }
-  let { agent, status }: Props = $props();
+  let { agent, status, now = Date.now(), onnudge }: Props = $props();
 
   const running = $derived(status.tone === "running");
   const label = $derived(fieldStatusLabel(agent, status));
   const icon = $derived(fieldIconOf(agent, status.tone));
   const runTooltip = $derived(agentRunDeskTooltipText(agent));
+  const info = $derived(fieldNodeInfo(agent, status, now));
 
   function open() {
     void goto(`/run/${agent.runId}`);
@@ -42,6 +49,12 @@
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         open();
+        return;
+      }
+      const step = nudgeStep(e.key, e.shiftKey);
+      if (step && onnudge) {
+        e.preventDefault();
+        onnudge(step.dx, step.dy);
       }
     }}
   >
@@ -52,7 +65,8 @@
     <span class="lbl">
       <span class="nm">{agent.name}</span>
       <Status tone={status.tone} label={label} class="st" />
-      {#if agent.parentRunId}<span class="sub">sub-agent</span>{/if}
+      {#if info.metaLine}<span class="meta">{info.metaLine}</span>{/if}
+      {#if info.modelLine}<span class="meta mdl">{info.modelLine}</span>{/if}
     </span>
   </div>
 </Tooltip>
@@ -103,5 +117,14 @@
     text-overflow: ellipsis;
   }
   .lbl :global(.st) { font-size: var(--cortex-t-2xs); max-width: 150px; white-space: nowrap; overflow: hidden; }
-  .sub { font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  .meta {
+    max-width: 150px;
+    font-family: var(--cortex-font-data);
+    font-size: var(--cortex-t-2xs);
+    color: var(--cortex-text-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta.mdl { color: var(--cortex-text-3); }
 </style>

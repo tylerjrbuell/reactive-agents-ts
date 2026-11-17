@@ -12,6 +12,7 @@ import type { AgentNode } from "./stores/agent-store.js";
 import { runErrorLine } from "./run-error.js";
 import { RUN_SOURCE_LABEL, runRowStatus, type RunSource } from "./runs-table.js";
 import { approvalDetail, waitingRunsOf, type PendingApprovalWire } from "./waiting-on-you.js";
+import { AGENT_FILTERS, AT_REST, matchesFilter, type AgentFilter } from "./beacon-filter.js";
 
 // ── View (Board / Field) ──────────────────────────────────────────────
 
@@ -130,31 +131,8 @@ export function needsYouByRun(
 
 // ── Board ─────────────────────────────────────────────────────────────
 
-/** The Agents grid's filter chips. */
-export type AgentFilter = "all" | "needs-you" | "failed" | "idle";
-
-/** Chip order and labels. "Idle" is every agent at rest that needs nothing: finished, stopped or idle. */
-export const AGENT_FILTERS: readonly { readonly id: AgentFilter; readonly label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "needs-you", label: "Needs you" },
-  { id: "failed", label: "Failed" },
-  { id: "idle", label: "Idle" },
-];
-
-const AT_REST: ReadonlySet<StatusTone> = new Set(["done", "stopped", "idle"]);
-
-function matchesFilter(tone: StatusTone, filter: AgentFilter): boolean {
-  switch (filter) {
-    case "all":
-      return true;
-    case "needs-you":
-      return tone === "attention";
-    case "failed":
-      return tone === "failed";
-    case "idle":
-      return AT_REST.has(tone);
-  }
-}
+// The Agents grid's filter chips and rules live in `beacon-filter.ts`, shared with the Field.
+export { AGENT_FILTERS, type AgentFilter };
 
 /** What a live card says the agent is doing now. */
 export interface LiveActivity {
@@ -294,7 +272,7 @@ export function boardOf(
     const wb = b.row.status.tone === "attention" ? 0 : 1;
     return wa - wb || b.at - a.at || a.row.runId.localeCompare(b.row.runId);
   });
-  const counts: Record<AgentFilter, number> = { all: rest.length, "needs-you": 0, failed: 0, idle: 0 };
+  const counts: Record<AgentFilter, number> = { all: rest.length, running: 0, "needs-you": 0, failed: 0, idle: 0 };
   for (const { row } of rest) {
     if (row.status.tone === "attention") counts["needs-you"]++;
     else if (row.status.tone === "failed") counts.failed++;

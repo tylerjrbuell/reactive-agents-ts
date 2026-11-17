@@ -156,7 +156,8 @@ describe("layoutPositions on a measured canvas", () => {
   });
 
   test("a dragged node keeps its spot and new nodes avoid it", () => {
-    const canvas = { width: 1214, height: 570 };
+    // The Field grows to fieldHeightFor, so every node has a slot (the node footprint is now 132px tall).
+    const canvas = { width: 1214, height: Math.max(570, fieldHeightFor(desk.length + 1, 1214)) };
     const free = layoutPositions(desk, parents(desk), new Map(), { canvas });
     const dragged = new Map<string, Pos>([["t05", free.get("crypto")!]]);
     const out = layoutPositions(desk, parents(desk), dragged, { canvas });

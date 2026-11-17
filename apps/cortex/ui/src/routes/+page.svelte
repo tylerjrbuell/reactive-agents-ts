@@ -29,6 +29,7 @@
     type AgentFilter,
     type BeaconView,
   } from "$lib/beacon-board.js";
+  import { NO_FILTER, readStoredFilter, storeFilter, type BeaconFilter } from "$lib/beacon-filter.js";
   import { pendingApprovals } from "$lib/stores/approval-watcher.js";
   import { pendingInteractions } from "$lib/stores/interaction-watcher.js";
   import type { AgentNode, AgentStore } from "$lib/stores/agent-store.js";
@@ -41,14 +42,21 @@
 
   let inputBarRef = $state<{ focus: () => void } | undefined>(undefined);
   let storedView = $state<BeaconView | undefined>(undefined);
-  let filter = $state<AgentFilter>("all");
+  /** One filter for Board and Field (status chip; the search applies on the Field), remembered per viewer. */
+  let filter = $state<BeaconFilter>(NO_FILTER);
+  /** The Board shows running agents as live cards, so its grid has no Running chip. */
+  const boardStatus = $derived<AgentFilter>(filter.status === "running" ? "all" : filter.status);
+  function setFilter(next: BeaconFilter) {
+    filter = next;
+    storeFilter(typeof localStorage === "undefined" ? null : localStorage, next);
+  }
   let now = $state(Date.now());
   /** The first REST load finished: before it, an empty list is not "no agents yet". */
   let loaded = $state(false);
 
   const view = $derived(resolveBeaconView($page.url.searchParams.get("view"), storedView));
   const needsYou = $derived(needsYouByRun($agentStore, $pendingApprovals, $pendingInteractions));
-  const board = $derived(boardOf($agentStore, needsYou, filter, now));
+  const board = $derived(boardOf($agentStore, needsYou, boardStatus, now));
   const empty = $derived(loaded && $agentStore.length === 0);
   const statusOf = (a: AgentNode) => beaconStatusOf(a, needsYou.has(a.runId));
 
@@ -81,6 +89,7 @@
   let clock: ReturnType<typeof setInterval> | null = null;
   onMount(() => {
     storedView = readStoredBeaconView(localStorage);
+    filter = readStoredFilter(localStorage);
     window.addEventListener("cortex:focus-input", handleFocusInput);
     // Live cards show run time; relative times in the grid tick too.
     clock = setInterval(() => (now = Date.now()), 1_000);
@@ -129,9 +138,9 @@
       <div class="body" class:field={view === "field"}>
         <div class="wrap inner">
           {#if view === "field"}
-            <BeaconCanvas agents={$agentStore} {statusOf} />
+            <BeaconCanvas agents={$agentStore} {statusOf} {filter} onfilter={setFilter} {now} />
           {:else}
-            <BeaconBoard {board} {filter} {now} onfilter={(f) => (filter = f)} />
+            <BeaconBoard {board} filter={boardStatus} {now} onfilter={(f) => setFilter({ ...filter, status: f })} />
           {/if}
         </div>
       </div>

@@ -90,7 +90,7 @@ describe("BeaconBoard", () => {
   const board: BoardModel = {
     live: [card],
     agents: [row({})],
-    counts: { all: 1, "needs-you": 0, failed: 0, idle: 1 },
+    counts: { all: 1, running: 0, "needs-you": 0, failed: 0, idle: 1 },
     total: 1,
   };
 
