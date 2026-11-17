@@ -168,9 +168,11 @@ describe("REACTIVE_AGENTS_RUNS_DIR", () => {
 
   it("replaces <home>/.reactive-agents and keeps the agent id contained", () => {
     process.env["REACTIVE_AGENTS_RUNS_DIR"] = join(dir, "base");
-    expect(defaultDurableRunsDir("agent-1", "/home/x")).toBe(join(resolve(dir, "base"), "agent-1"));
-    expect(defaultDurableRunsDir("../evil", "/home/x").startsWith(join(resolve(dir, "base"), ""))).toBe(true);
-    expect(defaultDurableRunsDir("../evil", "/home/x")).toBe(join(resolve(dir, "base"), "..%2Fevil"));
+    expect(defaultDurableRunsDir("agent-1")).toBe(join(resolve(dir, "base"), "agent-1"));
+    expect(defaultDurableRunsDir("../evil").startsWith(join(resolve(dir, "base"), ""))).toBe(true);
+    expect(defaultDurableRunsDir("../evil")).toBe(join(resolve(dir, "base"), "..%2Fevil"));
+    // an explicit home argument beats the env override
+    expect(defaultDurableRunsDir("agent-1", "/home/x")).toBe(join("/home/x", ".reactive-agents", "agent-1"));
   });
 
   it("empty value falls back to home", () => {

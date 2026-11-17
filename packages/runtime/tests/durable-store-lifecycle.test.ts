@@ -63,8 +63,31 @@ describe("RunStoreLive handle lifecycle", () => {
 });
 
 describe("defaultDurableRunsDir", () => {
+  const ENV = "REACTIVE_AGENTS_RUNS_DIR";
+  const saved = process.env[ENV];
+  const withEnv = (value: string | undefined, f: () => void): void => {
+    if (value === undefined) delete process.env[ENV];
+    else process.env[ENV] = value;
+    try {
+      f();
+    } finally {
+      if (saved === undefined) delete process.env[ENV];
+      else process.env[ENV] = saved;
+    }
+  };
+
   it("is ~/.reactive-agents/<agentId> by default", () => {
-    expect(defaultDurableRunsDir("agent-7")).toBe(join(homedir(), ".reactive-agents", "agent-7"));
+    withEnv(undefined, () => {
+      expect(defaultDurableRunsDir("agent-7")).toBe(join(homedir(), ".reactive-agents", "agent-7"));
+    });
+  });
+
+  it("explicit home beats REACTIVE_AGENTS_RUNS_DIR; env applies only when home is omitted", () => {
+    withEnv("/tmp/ra-env-base", () => {
+      expect(defaultDurableRunsDir("agent-7", "/srv/home")).toBe(join("/srv/home", ".reactive-agents", "agent-7"));
+      expect(defaultDurableRunsDir("agent-7")).toBe(join("/tmp/ra-env-base", "agent-7"));
+      expect(defaultDurableRunsDir("../x")).toBe(join("/tmp/ra-env-base", "..%2Fx"));
+    });
   });
 
   it("takes a home override", () => {

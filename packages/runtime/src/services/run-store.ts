@@ -33,13 +33,13 @@ import { parseLoopStopSummary, stopKindOf, type LoopStopSummary, type RunStopSum
  * store from outside (e.g. Cortex crash recovery) all call it, so they cannot
  * disagree on where a run lives.
  *
- * @param agentId - The agent id the runs belong to.
- * Env override: when `REACTIVE_AGENTS_RUNS_DIR` is set (non-empty), it replaces
- * `<home>/.reactive-agents` as the base directory, so tests and hosts can
- * isolate durable stores. The agent id segment is still contained.
+ * Precedence: an explicit `home` argument wins over everything; else a non-empty
+ * `REACTIVE_AGENTS_RUNS_DIR` replaces `<home>/.reactive-agents` as the base
+ * directory (so tests and hosts can isolate durable stores); else `os.homedir()`.
+ * The agent id segment is contained on every path.
  *
  * @param agentId - The agent id the runs belong to.
- * @param home - Home directory override (tests). Default: `os.homedir()`.
+ * @param home - Explicit home directory; when given it beats the env override. Default: env override, then `os.homedir()`.
  * @returns The absolute default directory for the agent's `runs.db`.
  *
  * @example
@@ -47,9 +47,12 @@ import { parseLoopStopSummary, stopKindOf, type LoopStopSummary, type RunStopSum
  * const dbPath = join(defaultDurableRunsDir("my-agent"), "runs.db");
  * ```
  */
-export const defaultDurableRunsDir = (agentId: string, home: string = homedir()): string => {
+export const defaultDurableRunsDir = (agentId: string, home?: string): string => {
   const override = process.env["REACTIVE_AGENTS_RUNS_DIR"];
-  const base = override !== undefined && override !== "" ? resolve(override) : join(home, ".reactive-agents");
+  const base =
+    home === undefined && override !== undefined && override !== ""
+      ? resolve(override)
+      : join(home ?? homedir(), ".reactive-agents");
   return join(base, safeAgentPathSegment(agentId));
 };
 
