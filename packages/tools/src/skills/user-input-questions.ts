@@ -1,4 +1,5 @@
-import { Either, Schema } from "effect";
+import { Either, JSONSchema, Schema } from "effect";
+import type { ToolParameter } from "../types.js";
 
 // ─── Structured questions for `request_user_input` ─────────────────────────
 //
@@ -73,6 +74,92 @@ export type AnswerError =
   | { readonly _tag: "OutOfRange"; readonly id: string; readonly message: string }
   | { readonly _tag: "TooLong"; readonly id: string; readonly message: string };
 
+// ─── Model-visible item schema ─────────────────────────────────────────────
+
+/** A JSON Schema object node, as carried in a tool parameter's `items`. */
+export type QuestionItemJsonSchema = NonNullable<ToolParameter["items"]>;
+
+/**
+ * The JSON Schema of one `questions` item, generated from {@link QuestionSchema}
+ * (the same source `parseRequest` decodes with), so the schema a model sees and
+ * the parser cannot drift. Drops the draft marker and the `unknown` title Effect
+ * emits for `default`. Pinned by tests/user-input-questions.test.ts.
+ */
+export function questionItemJsonSchema(): QuestionItemJsonSchema {
+  const made: unknown = JSONSchema.make(QuestionSchema);
+  const node = isRecord(made) ? made : {};
+  const props = isRecord(node.properties) ? node.properties : {};
+  const properties = Object.fromEntries(
+    Object.entries(props).map(([k, v]) => [k, k === "default" ? {} : v]),
+  );
+  return {
+    type: "object",
+    properties,
+    required: Array.isArray(node.required) ? node.required.filter((r): r is string => typeof r === "string") : [],
+    additionalProperties: false,
+  };
+}
+
+/** A valid `questions` call, shown when a request is rejected. */
+export const QUESTIONS_EXAMPLE =
+  `{"questions":[{"id":"scope","prompt":"Which scope?","type":"single-choice","options":[{"label":"Small","value":"small"},{"label":"Large","value":"large"}]}]}`;
+
+// ─── Request healing ───────────────────────────────────────────────────────
+
+/** Closed table: observed model-invented question types -> canonical type. */
+const TYPE_ALIASES: Readonly<Record<string, QuestionType>> = {
+  choice: "single-choice", select: "single-choice", radio: "single-choice", single: "single-choice",
+  single_choice: "single-choice", "single choice": "single-choice",
+  multiselect: "multi-choice", "multi-select": "multi-choice", multiple: "multi-choice", checkbox: "multi-choice",
+  multi_choice: "multi-choice", "multiple-choice": "multi-choice", multiple_choice: "multi-choice",
+  string: "text", input: "text", open: "text", freetext: "text",
+  confirm: "boolean", confirmation: "boolean", yesno: "boolean", "yes/no": "boolean", bool: "boolean",
+  int: "number", integer: "number", numeric: "number",
+};
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
+
+/** Options as strings, or objects with only a label or only a value -> `{label, value}`. */
+function healOptions(raw: unknown): unknown {
+  if (!Array.isArray(raw)) return raw;
+  return raw.map((o) => {
+    if (typeof o === "string" || typeof o === "number") return { label: String(o), value: String(o) };
+    if (!isRecord(o)) return o;
+    const label = nonEmpty(o.label) ? o.label : nonEmpty(o.value) ? o.value : undefined;
+    const value = nonEmpty(o.value) ? o.value : label;
+    return label === undefined || value === undefined ? o : { ...o, label, value };
+  });
+}
+
+/**
+ * Deterministic repair of an unambiguous `questions` call (live failure:
+ * `{prompt, kind:"choice", questions:[{options:["a","b"], type:"choice"}]}`).
+ * Only fills what has one reading: an alias type, string options, an id from the
+ * item's position, the top-level `prompt` for a lone question without one, a
+ * type implied by `options` (or by `kind:"confirmation"` for a lone question).
+ * Anything else is left for the parser to reject.
+ */
+function healQuestions(a: Readonly<Record<string, unknown>>): unknown {
+  const raw = isRecord(a.questions) ? [a.questions] : a.questions;
+  if (!Array.isArray(raw)) return raw;
+  const lone = raw.length === 1;
+  return raw.map((q, i) => {
+    if (!isRecord(q)) return q;
+    const out: Record<string, unknown> = { ...q };
+    if (!nonEmpty(out.id)) out.id = `q${i + 1}`;
+    if (!nonEmpty(out.prompt) && lone && nonEmpty(a.prompt)) out.prompt = a.prompt;
+    if (out.options !== undefined) out.options = healOptions(out.options);
+    const key = typeof out.type === "string" ? out.type.trim().toLowerCase() : undefined;
+    if (key !== undefined && Object.prototype.hasOwnProperty.call(TYPE_ALIASES, key)) out.type = TYPE_ALIASES[key];
+    else if (out.type === undefined) {
+      if (Array.isArray(out.options) && out.options.length > 0) out.type = "single-choice";
+      else if (lone && a.kind === "confirmation") out.type = "boolean";
+    }
+    return out;
+  });
+}
+
 // ─── Request parsing ───────────────────────────────────────────────────────
 
 const decodeQuestions = Schema.decodeUnknownEither(Schema.Array(QuestionSchema));
@@ -109,10 +196,11 @@ function checkQuestions(questions: readonly Question[]): string | undefined {
 export function parseRequest(args: unknown): Either.Either<StructuredRequest, string> {
   const a = (typeof args === "object" && args !== null ? args : {}) as Record<string, unknown>;
   if (a.questions !== undefined) {
-    const decoded = decodeQuestions(a.questions);
+    const decoded = decodeQuestions(healQuestions(a));
     if (Either.isLeft(decoded)) {
       return Either.left(
-        "invalid questions: each needs id, prompt and type (text | single-choice | multi-choice | boolean | number)",
+        "invalid questions: each needs id, prompt and type (text | single-choice | multi-choice | boolean | number). " +
+          `Valid call: ${QUESTIONS_EXAMPLE}`,
       );
     }
     const problem = checkQuestions(decoded.right);

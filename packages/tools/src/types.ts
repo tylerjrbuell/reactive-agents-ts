@@ -55,7 +55,16 @@ export const ToolParameterSchema = Schema.Struct({
    *
    * @example `{ type: "string" }`
    */
-  items: Schema.optional(Schema.Struct({ type: Schema.String })),
+  items: Schema.optional(
+    Schema.Struct({
+      type: Schema.String,
+      /** Object items: JSON Schema `properties` of each element (e.g. the `questions` item shape). */
+      properties: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+      /** Object items: names of the properties every element must carry. */
+      required: Schema.optional(Schema.Array(Schema.String)),
+      additionalProperties: Schema.optional(Schema.Boolean),
+    }),
+  ),
   /**
    * Value schema for open-map `type: "object"` parameters (string-keyed dictionaries).
    *

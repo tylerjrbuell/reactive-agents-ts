@@ -17,7 +17,7 @@ export type ParameterJsonSchema = {
   readonly type: ToolParameter["type"] | typeof FILE_CONTENT_JSON_TYPES;
   readonly description: string;
   readonly enum?: readonly string[];
-  readonly items?: { readonly type: string };
+  readonly items?: NonNullable<ToolParameter["items"]>;
   readonly additionalProperties?: { readonly type: "string" | "number" | "boolean" };
 };
 

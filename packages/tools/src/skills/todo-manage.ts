@@ -140,10 +140,37 @@ function editTitle(args: Readonly<Record<string, unknown>>): string {
 /** Only id-bearing keys: for `edit`, `items`/`text` carry the new title, not the target. */
 const idTargets = (args: Readonly<Record<string, unknown>>): Record<string, unknown> => ({ id: args.id, ids: args.ids });
 
+/**
+ * `edit` called with `items: [{id, text}, ...]` (live failure: a model sent the
+ * rename list as `items` with no top-level id/text): every entry names an id and
+ * a new title, so it is the same call as `patch` over those renames. Undefined
+ * when `items` is not that shape or a top-level id/text is present.
+ */
+function itemsAsPatchOps(args: Readonly<Record<string, unknown>>): readonly unknown[] | undefined {
+  if (args.id != null || args.ids != null || args.text != null || args.title != null) return undefined;
+  if (!Array.isArray(args.items) || args.items.length === 0) return undefined;
+  const ops: unknown[] = [];
+  for (const e of args.items) {
+    if (typeof e !== "object" || e === null || Array.isArray(e)) return undefined;
+    const o = e as Readonly<Record<string, unknown>>;
+    const text = o.text ?? o.title;
+    if (o.id == null || typeof text !== "string") return undefined;
+    ops.push({ id: o.id, text });
+  }
+  return ops;
+}
+
 /** `edit`: replace one item's title; status is kept. */
 export function editTodoItem(items: readonly AdvisoryItem[], args: Readonly<Record<string, unknown>>): TodoManageOutcome {
+  const batch = itemsAsPatchOps(args);
+  if (batch !== undefined) return patchTodoItems(items, batch);
   const title = editTitle(args);
-  if (title === "") return fail(`edit needs a non-empty text for the new title. ${EDIT_USAGE}`);
+  if (title === "") {
+    return fail(
+      `edit needs a non-empty text for the new title. ${EDIT_USAGE}. ` +
+        `To rename several items at once use todo({action:"edit", items:[{id:N, text:"new title"}, ...]}) or patch.`,
+    );
+  }
   const r = resolveTodoTargets(items, idTargets(args));
   if (!r.ok) return fail(`${r.error}\n${EDIT_USAGE}`);
   const [id, ...more] = r.ids;

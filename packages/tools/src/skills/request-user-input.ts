@@ -1,4 +1,5 @@
 import type { ToolDefinition } from "../types.js";
+import { questionItemJsonSchema } from "./user-input-questions.js";
 
 // ─── Tool Definition ───────────────────────────────────────────────────────
 //
@@ -25,9 +26,10 @@ export const requestUserInputTool: ToolDefinition = {
     {
       name: "questions",
       type: "array",
-      description: "Typed questions to ask in one call (see tool description). Preferred over kind/schema.",
+      description:
+        "Typed questions to ask in one call. Every item needs id, prompt and type; choice types also need options. Preferred over kind/schema.",
       required: false,
-      items: { type: "object" },
+      items: questionItemJsonSchema(),
     },
     {
       name: "prompt",

@@ -129,6 +129,8 @@ for (const p of await agent.listPendingApprovals()) {
 
 `.withUserInteraction()` lets the model call the `request_user_input` tool to ask the human for a form, choice, or confirmation.
 
+The preferred call is `questions: [{ id, prompt, type, options? }]` with `type` one of `text | single-choice | multi-choice | boolean | number`; the tool publishes this item schema to the model. The legacy `{ prompt, kind, schema }` form still works. A call that mixes the two is repaired when unambiguous (alias type, string options, missing id, top-level prompt for a lone question); otherwise it is rejected with a valid example.
+
 Live (no durable store): the run waits, the stream shows `InteractionRequested`, and the answer becomes the tool result of the same run:
 
 ```ts
