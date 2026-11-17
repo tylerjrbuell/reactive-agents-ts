@@ -125,7 +125,7 @@ export const AGENT_CONFIG_SECTIONS: readonly AgentConfigSection[] = [
     configPaths: [],
   },
   { id: "metatools", label: "Meta tools", icon: "wand_stars", keywords: "conductor brief find pulse recall harness suite wand stars", configPaths: ["metaTools"] },
-  { id: "reliability", label: "Reliability", icon: "shield", keywords: "fallback provider errors shield backup", configPaths: ["fallbacks"] },
+  { id: "reliability", label: "Reliability", icon: "shield", keywords: "fallback provider errors shield backup calibration learned community", configPaths: ["fallbacks", "calibration"] },
   {
     id: "observability",
     label: "Observability",

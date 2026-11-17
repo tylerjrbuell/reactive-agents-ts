@@ -63,7 +63,7 @@ describe("model calibration rows", () => {
     const rows = calibrationRows(view());
     expect(rows.map((r) => [r.label, r.value, r.sourceLabel])).toEqual([
       ["Tool result size", "2,000 characters", "Shipped calibration"],
-      ["Parallel tool calls", "One at a time", "Learned from your runs (shipped: Batches calls)"],
+      ["Parallel tool calls", "One at a time", "Learned from your runs, applied only when learned calibration is on (shipped: Batches calls)"],
       ["Act or answer", "Ask for a tool call after a miss", "Shipped calibration"],
     ]);
     expect(rows[1]!.raw).toBe("sequential-only");
@@ -73,6 +73,8 @@ describe("model calibration rows", () => {
   it("the note counts learned settings, and says when there is no calibration at all", () => {
     expect(calibrationNote(view())).toContain("1 setting learned from your runs.");
     expect(calibrationNote(view())).toContain("over 10 probe runs");
+    expect(calibrationNote(view())).toContain("A run applies them only when learned calibration is on");
+    expect(calibrationNote(view())).toContain("community profile only when community calibration is on");
     expect(calibrationNote(view({ settings: [{ key: "actOrAnswer", value: "retry", source: "shipped" }] }))).toContain(
       "Your runs have not changed any setting.",
     );

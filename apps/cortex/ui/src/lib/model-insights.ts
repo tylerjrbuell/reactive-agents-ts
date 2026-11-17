@@ -172,7 +172,7 @@ export function calibrationRows(view: ModelCalibrationView): CalibrationRow[] {
     source: s.source,
     sourceLabel:
       s.source === "learned"
-        ? `Learned from your runs${s.priorValue !== undefined ? ` (shipped: ${plain(s.key, s.priorValue)})` : ""}`
+        ? `Learned from your runs, applied only when learned calibration is on${s.priorValue !== undefined ? ` (shipped: ${plain(s.key, s.priorValue)})` : ""}`
         : "Shipped calibration",
   }));
 }
@@ -191,9 +191,9 @@ export function calibrationNote(view: ModelCalibrationView): string {
   const learned = view.settings.filter((s) => s.source === "learned").length;
   const tail =
     learned > 0
-      ? `${plural(learned, "setting")} learned from your runs.`
+      ? `${plural(learned, "setting")} learned from your runs. A run applies them only when learned calibration is on (Lab, All framework options, calibration).`
       : "Your runs have not changed any setting.";
-  return `${measured} ${tail} A run may also apply a community profile at start; it is not shown here.`.trim();
+  return `${measured} ${tail} A run applies a community profile only when community calibration is on; it is not shown here.`.trim();
 }
 
 /** The observation line: how much the framework has seen of this model locally. */

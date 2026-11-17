@@ -6,17 +6,21 @@
  *
  * Every value comes from a framework reader: `loadCalibration` (the shipped
  * or user-cached prior, llm-provider), `resolveModelCalibration` (runtime: the
- * prior merged with local observations, the same call a run with
- * `calibration: "auto"` makes), `loadObservations` (reactive-intelligence),
+ * prior merged with local observations), `loadObservations` (reactive-intelligence),
  * `CalibrationStore.load` (the conformal entropy thresholds) and
  * `readBanditArmStats` (the strategy-choice bandit's arms, same DB file).
  * Cortex never opens those files itself and never writes calibration.
  *
  * Provenance: the framework returns the merged calibration without saying
  * which tier set each field, so a field is `learned` when the resolved value
- * differs from the prior, `shipped` when it equals it. The community profile
- * a run may fetch at start (`communityCalibration`, on by default) is not
- * fetched here; `communityNote` says so on the page.
+ * differs from the prior, `shipped` when it equals it.
+ *
+ * Opt-in tiers: a run applies learned values only with
+ * `.withCalibration("auto", { learned: true })` and a community profile only
+ * with `{ community: true }`; both default off. This page has no agent, so it
+ * shows what learned calibration WOULD give and the UI labels those values as
+ * applying only when opted in (`model-insights.ts`). The community profile is
+ * never fetched here.
  */
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";

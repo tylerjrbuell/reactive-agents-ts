@@ -1,5 +1,6 @@
 <script lang="ts">
   import ConfigSection from "../ConfigSection.svelte";
+  import CalibrationTiers from "../CalibrationTiers.svelte";
   import type { PanelAgentConfig } from "../types.js";
 
   interface Props {
@@ -46,4 +47,5 @@
             </div>
           </div>
         {/if}
+        <CalibrationTiers bind:config />
 </ConfigSection>
