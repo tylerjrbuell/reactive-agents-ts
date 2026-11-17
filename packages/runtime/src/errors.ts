@@ -171,6 +171,18 @@ export class DurableConfigMismatchError extends Data.TaggedError(
 }> {}
 
 /**
+ * Thrown by `agent.resumeRun(runId, { note?, extraIterations? })` when the run did
+ * not end by a loop guard, so there is no loop stop to continue from. Plain
+ * `resumeRun(runId)` (no options) still resumes a crashed run as before.
+ */
+export class RunNotResumableError extends Data.TaggedError("RunNotResumableError")<{
+  /** The run id that could not be continued from a loop stop. */
+  readonly runId: string;
+  /** Why: the run's checkpoint is not a loop-stopped state. */
+  readonly reason: string;
+}> {}
+
+/**
  * Thrown by `agent.approveRun`/`denyRun` when the target run is not awaiting an
  * approval decision (no pending approval row) — e.g. already decided, already
  * completed, or never paused. Durable HITL (Phase D).

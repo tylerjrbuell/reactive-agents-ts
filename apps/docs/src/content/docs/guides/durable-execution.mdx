@@ -132,6 +132,35 @@ restored steps and message thread. The agent picks up where it left off. (Side
 effects from completed tools are therefore not repeated; in-flight work at the
 moment of the crash is re-attempted from the last checkpoint boundary.)
 
+### Continue a loop-stopped run
+
+A loop guard can end a run that was making no progress (the same call repeated, thoughts going in circles). On a durable agent that stop is not a dead end. The run leaves its final state as a checkpoint, and the result and the run row say so:
+
+```typescript
+const result = await agent.run("Find the release date and write it up");
+if (result.resumable) {
+  console.log(result.loopStop);
+  // → { reason: "loop_graceful", repeatedTool: "web-search",
+  //     toolsDone: [{ tool: "read-file", calls: 1 }], unfinished: ["write notes.md"], iteration: 4 }
+
+  const continued = await agent.resumeRun(result.runId!, {
+    note: "The notes file is in ./docs.", // optional: appended to the corrective guidance
+    extraIterations: 8,                   // optional: default 10
+  });
+}
+```
+
+`result.runId`, `result.loopStop` and `result.resumable` are set for durable runs. `listRuns()` rows carry the same `loopStop` and `resumable`, so a UI can offer Continue later. Resuming:
+
+- continues from the final checkpoint with guidance that names what was done, what is unfinished, and what not to repeat, with the original task as the goal;
+- does not re-run completed tool steps (their results are in the restored state) and does not re-trip on the old repeats;
+- gives the run a fresh iteration budget (`extraIterations`, default 10) because the stopped run's own cap is already spent;
+- checkpoints again, so a run that loops a second time can be continued again.
+
+`resumeRun(runId, { note?, extraIterations? })` fails `RunNotResumableError` when the run did not end by a loop guard. Plain `resumeRun(runId)` still resumes a crashed run.
+
+A durable chat turn that runs tools carries the same fields on its `ChatReply` (`runId`, `loopStop`, `resumable`). If the run failed, the history note for that turn says what was done and that Continue is available.
+
 ### Tool effects are recorded
 
 Checkpoints alone leave a gap: a side-effecting tool can succeed after the last checkpoint and before the next one commits. On a crash in that window the tool would run again on resume. With `.withDurableRuns()`, each tool call is recorded in a `run_effects` row:

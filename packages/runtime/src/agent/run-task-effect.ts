@@ -45,7 +45,9 @@ import {
     Fiber,
 } from 'effect'
 import { ManagedRuntime } from 'effect'
+import { join } from 'node:path'
 import { runFacadeEffect } from './run-facade-effect.js'
+import { surfaceLoopStop, tapLoopStop } from '../engine/loop-stop-resume.js'
 import { todoSeedMetadata, type TodoSeedItem } from '../chat/todo-seed.js'
 import { SKILLS_ACTIVATE_CONTEXT_KEY } from '../runtime-skills-layer.js'
 import {
@@ -212,6 +214,8 @@ export const buildRunTaskEffect = (
     const taskId = options?.taskId
         ? Schema.decodeSync(TaskId)(options.taskId)
         : generateTaskId()
+    // Remembers the run's last checkpoint (a loop-stopped run's terminal state) so the stop can be surfaced below.
+    const readLoopStop = tapLoopStop(options?.runState?.runController)
 
     // Steer the agent to emit schema-shaped JSON when a schema is configured.
     // This lets parse-first (below) skip the extra LLM extraction call on the
@@ -595,6 +599,13 @@ export const buildRunTaskEffect = (
                     .catch(() => result)
             )
         }),
+        // Durable runs: surface the run id and, when a loop guard stopped the run, its stop summary + resumable flag.
+        Effect.flatMap((result: AgentResult) =>
+            surfaceLoopStop(result, {
+                ...(options?.durableRunId !== undefined ? { runId: options.durableRunId } : {}),
+                ...(deps.durableResume !== undefined ? { dbPath: join(deps.durableResume.dir, 'runs.db') } : {}),
+                record: readLoopStop(),
+            })),
         Effect.mapError(
             (e: RuntimeErrors | TaskError | Error) =>
                 e instanceof Error ? e : new Error('message' in e ? (e as { message: string }).message : String(e))

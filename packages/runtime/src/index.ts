@@ -51,6 +51,7 @@ export {
   BehavioralContractViolationError,
   DurableRunNotFoundError,
   DurableConfigMismatchError,
+  RunNotResumableError,
   ToolsOptionError,
   UnsupportedModalityError,
   unwrapError,
@@ -103,6 +104,10 @@ export type { TaskInput, ModelInputCapabilities } from "./agent/task-input.js";
 
 // ─── Declarative front door (dual API — spec 2026-07-11) ───
 export { createAgent } from "./create-agent.js";
+
+// ─── Loop-stopped runs: summary on results/run rows + resume options ───
+export type { LoopStopSummary } from "./loop-stop-summary.js";
+export type { ResumeRunOptions } from "./engine/loop-stop-resume.js";
 
 // ─── Build validation (fail-fast config errors) ───
 export {

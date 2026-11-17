@@ -57,6 +57,10 @@ export function assembleToolReply(
     ...(result.status !== undefined ? { status: result.status } : {}),
     ...(result.pendingApproval !== undefined ? { pendingApproval: result.pendingApproval } : {}),
     ...(result.pendingInteraction !== undefined ? { pendingInteraction: result.pendingInteraction } : {}),
+    // The durable run behind this turn (the handle for resumeRun) and, when a loop guard stopped it, why + whether Continue works.
+    ...(result.runId !== undefined ? { runId: result.runId } : {}),
+    ...(result.loopStop !== undefined ? { loopStop: result.loopStop } : {}),
+    ...(result.resumable !== undefined ? { resumable: result.resumable } : {}),
     // A failed run is not an answer: say so, with its cause (paused runs are not failures).
     ...(!result.success && result.status === undefined
       ? { failed: true, ...(result.error !== undefined ? { error: result.error } : {}) }

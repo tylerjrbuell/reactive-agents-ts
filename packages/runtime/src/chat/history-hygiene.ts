@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { emitErrorSwallowed } from "@reactive-agents/core";
 import { detectToolCallShape } from "@reactive-agents/tools";
 import type { ChatMessage } from "../chat.js";
+import { loopStopNote, type LoopStopSummary } from "../loop-stop-summary.js";
 
 /** Observability tag carried on the swallowed-error trace event when a reply is skipped. */
 export const SHAPED_REPLY_SKIPPED_TAG = "ShapedAssistantReplySkipped";
@@ -31,12 +32,21 @@ export interface AssistantTurn {
   readonly content: string;
   readonly failed?: true;
   readonly error?: string;
+  /** The durable run behind a failed turn (`agent.resumeRun(runId)`). */
+  readonly runId?: string;
+  /** True when the failed run was loop-stopped and Continue (`resumeRun`) is available. */
+  readonly resumable?: true;
 }
 
-/** The history text that stands for a failed run: no answer was given, and why. */
-export function failedRunNote(cause: string | undefined): string {
+/**
+ * The history text that stands for a failed run: no answer was given, and why.
+ * A loop-stopped run (`stop`) also says what it had done and that Continue is
+ * available, so the next turn does not redo the finished steps.
+ */
+export function failedRunNote(cause: string | undefined, stop?: { readonly summary: LoopStopSummary; readonly resumable: boolean }): string {
   const reason = typeof cause === "string" && cause.trim().length > 0 ? cause.trim() : "unknown cause";
-  return `[previous run failed: ${reason}; no answer was given]`;
+  if (stop === undefined) return `[previous run failed: ${reason}; no answer was given]`;
+  return `[previous run failed: ${reason}; no answer was given. ${loopStopNote(stop.summary)}.${stop.resumable ? " Continue is available." : ""}]`;
 }
 
 /**
@@ -53,9 +63,19 @@ export function assistantTurnOf(run: {
   readonly success?: boolean;
   readonly status?: string;
   readonly error?: string;
+  readonly runId?: string;
+  readonly loopStop?: LoopStopSummary;
+  readonly resumable?: boolean;
 }): AssistantTurn {
   if (run.success !== false || run.status !== undefined) return { content: run.output };
-  return { content: failedRunNote(run.error), failed: true, ...(run.error !== undefined ? { error: run.error } : {}) };
+  const resumable = run.resumable === true && run.runId !== undefined;
+  return {
+    content: failedRunNote(run.error, run.loopStop !== undefined ? { summary: run.loopStop, resumable } : undefined),
+    failed: true,
+    ...(run.error !== undefined ? { error: run.error } : {}),
+    ...(run.runId !== undefined ? { runId: run.runId } : {}),
+    ...(resumable ? { resumable: true as const } : {}),
+  };
 }
 
 /**

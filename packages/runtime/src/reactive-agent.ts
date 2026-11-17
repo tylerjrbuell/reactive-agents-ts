@@ -31,7 +31,7 @@ import { makeSkillsFacade } from './agent/skills-facade.js'
 import { makeSchedulesApi, type SchedulesApi } from './agent/schedules-facade.js'
 import { makeMemoryHandle, type AgentMemoryHandle } from './agent/memory-facade.js'
 import { runFacadeEffect } from './agent/run-facade-effect.js'
-import { makeDurableFacade, type PendingInteraction, type RunDurableParams } from './agent/durable-facade.js'
+import { makeDurableFacade, maxIterationsCarry, type PendingInteraction, type ResumeRunOptions, type RunDurableParams } from './agent/durable-facade.js'
 import { buildRunTaskEffect, type RunTaskDeps, type RunTaskEffectOptions } from './agent/run-task-effect.js'
 import { makeSessionHistoryStore } from './agent/session-store.js'
 import { startStreamPump } from './agent/stream-pump.js'
@@ -922,8 +922,8 @@ export class ReactiveAgent<TOut = unknown> {
      * Delegates to `agent/durable-facade.ts` (moved from this file for #217); this shell, via `runFacadeEffect`, is the family's single Promise boundary (Task 10 / D1 bridge).
      * see `makeDurableFacade().resumeRun` there for the full JSDoc.
      */
-    async resumeRun(runId: string): Promise<AgentResult> {
-        return runFacadeEffect(this.runtime, this._durable().resumeRun(runId))
+    async resumeRun(runId: string, opts?: ResumeRunOptions): Promise<AgentResult> {
+        return runFacadeEffect(this.runtime, this._durable().resumeRun(runId, opts))
     }
 
     /**
@@ -1101,7 +1101,7 @@ export class ReactiveAgent<TOut = unknown> {
             ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
             durableRunId: params.runId,
             ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
-            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}), ...workspaceCarry(params.workspace), ...seedCarry(params), ...planPosture(params.posture),
+            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}), ...workspaceCarry(params.workspace), ...seedCarry(params), ...planPosture(params.posture), ...maxIterationsCarry(params),
             runState: {
                 runController: controller,
                 ...(params.modelOverride !== undefined ? { modelOverride: params.modelOverride } : {}),

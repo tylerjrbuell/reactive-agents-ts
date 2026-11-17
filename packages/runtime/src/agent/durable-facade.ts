@@ -74,7 +74,9 @@ import {
     decideInteractionRecord,
     getPendingInteractionAt,
 } from '../engine/durable-resume.js'
-import { ApprovalStateError, InteractionStateError, unwrapErrorWithSuggestion } from '../errors.js'
+import { ApprovalStateError, InteractionStateError, RunNotResumableError, unwrapErrorWithSuggestion } from '../errors.js'
+import { prepareLoopStopResume, type ResumeRunOptions } from '../engine/loop-stop-resume.js'
+export type { ResumeRunOptions }
 import { HumanGate, questionsOfSchema, type HumanGateAnswer, type HumanGateRequest } from '../engine/human-gate.js'
 import { captureCallerFileRoot, workspaceCarry, type RunStateSpec } from '../engine/start-run.js'
 import type { AgentResult } from '../builder/types.js'
@@ -230,7 +232,13 @@ export interface RunDurableParams {
     readonly planFindings?: readonly PlanFinding[]
     /** The caller's posture (`"plan"` ⇒ plan-only), carried like `initialTodo`. */
     readonly posture?: 'execute' | 'plan'
+    /** Iteration cap for this run (a loop-stop resume's `resumeMaxIterations`); rides `task.metadata.context.maxIterations`. */
+    readonly maxIterations?: number
 }
+
+/** Spread-ready forwarder of {@link RunDurableParams.maxIterations} into the run options (`{}` when absent). */
+export const maxIterationsCarry = (p: { readonly maxIterations?: number }): { readonly maxIterations?: number } =>
+    p.maxIterations !== undefined ? { maxIterations: p.maxIterations } : {}
 
 /** Explicit dependency surface — exactly the `ReactiveAgent` fields/methods the moved methods read. */
 export interface DurableFacadeDeps {
@@ -288,7 +296,15 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          * the run slot `resumeStateSlot`, and continues the run to completion. Completed tools are
          * NOT re-executed — their results live in the restored steps/messages.
          *
+         * A run a loop guard stopped (`result.resumable`, `listRuns()[i].resumable`)
+         * continues from its final checkpoint with corrective guidance (what was
+         * done, what is unfinished, what not to repeat; the original task is the
+         * goal) and a fresh iteration budget. `opts.note` is appended to that
+         * guidance; `opts.extraIterations` (default 10) bounds the continued run.
+         * Passing `opts` for a run that is not loop-stopped fails `RunNotResumableError`.
+         *
          * @param runId - The run id reported when the original run was created.
+         * @param opts - Loop-stop resume options (`note`, `extraIterations`).
          * @throws Error if the agent was not built with `.withDurableRuns()`.
          * @throws DurableRunNotFoundError if the run / checkpoint is unknown.
          * @throws DurableConfigMismatchError if the agent config changed since capture.
@@ -313,7 +329,7 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          * guarded region, so a failed `completed` mark routes through the
          * same catch-arm) is mirrored by construction below.
          */
-        resumeRun(runId: string): Effect.Effect<AgentResult, Error> {
+        resumeRun(runId: string, opts?: ResumeRunOptions): Effect.Effect<AgentResult, Error> {
             return Effect.gen(function* () {
                 if (!deps.durableResume) {
                     return yield* Effect.fail(
@@ -338,6 +354,36 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                         loadResumePayload({ runId, dbPath, currentConfigHash: configHash }),
                     ),
                 )
+
+                // 1b. A loop-stopped run continues through the durable wrapper (so it
+                //     checkpoints again and can be resumed again): corrective guidance,
+                //     the caller's note, and a fresh iteration budget. With options
+                //     (`note` / `extraIterations`) a run that is not loop-stopped is refused.
+                const stop = prepareLoopStopResume({
+                    stateJson: payload.stateJson,
+                    goal: payload.run.task,
+                    ...(opts?.note !== undefined ? { note: opts.note } : {}),
+                    ...(opts?.extraIterations !== undefined ? { extraIterations: opts.extraIterations } : {}),
+                })
+                if (stop !== undefined) {
+                    return yield* Effect.promise(() =>
+                        deps.runDurable({
+                            fileRoot,
+                            ...workspaceCarry(payload.run.workspace),
+                            input: payload.run.task,
+                            taskId: payload.taskId ?? runId,
+                            runId,
+                            task: payload.run.task,
+                            maxIterations: stop.maxIterations,
+                            resume: { stateJson: stop.stateJson },
+                        }),
+                    )
+                }
+                if (opts !== undefined) {
+                    return yield* Effect.fail(
+                        new RunNotResumableError({ runId, reason: 'the run did not end by a loop guard: there is no loop stop to continue' }),
+                    )
+                }
 
                 // 2. Reconcile the crashed run's tool-effect rows (GH #262):
                 //    succeeded rows fill `recoveredToolEffectsSlot` (the kernel act

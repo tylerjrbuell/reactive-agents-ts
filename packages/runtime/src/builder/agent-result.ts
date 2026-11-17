@@ -8,6 +8,7 @@
  */
 import type { OutputFormat, Plan, TerminatedBy, TrustReceipt } from '@reactive-agents/core'
 import type { AgentDebrief } from '../debrief.js'
+import type { LoopStopSummary } from '../loop-stop-summary.js'
 
 // ─── Result Types ────────────────────────────────────────────────────────────
 
@@ -344,6 +345,12 @@ export interface AgentResult {
     readonly evidenceDelta?: number
     /** Lifecycle status, absent on a normal run. A paused durable run is `"awaiting-approval"`/`"awaiting-interaction"`: not terminated, so no `terminatedBy`, and `success` is false. */
     readonly status?: "completed" | "awaiting-approval" | "awaiting-interaction" | "failed";
+    /** The durable run id (`.withDurableRuns()` agents): the handle for `resumeRun` / `approveRun` / `listRuns`. Absent on non-durable runs. */
+    readonly runId?: string;
+    /** Set when a loop guard stopped the run: why, the tool it repeated, what was already done, what is unfinished. */
+    readonly loopStop?: LoopStopSummary;
+    /** `true` when `agent.resumeRun(runId)` can continue this run (loop-stopped durable run with a final checkpoint). */
+    readonly resumable?: boolean;
     /** Present only when `status === "awaiting-approval"`. The paused gate + the durable runId to approve/deny. */
     readonly pendingApproval?: {
         readonly runId: string;

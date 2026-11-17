@@ -902,9 +902,9 @@ Run a task as an Effect for composition (see [Effect-TS primer](/concepts/effect
 
 Stream typed structured output field-by-field as it fills in. Requires `.withOutputSchema()`. Each yield carries a deep-partial of the schema type; the final yield is the validated object. See [Typed Structured Output](/guides/structured-output/).
 
-### `resumeRun(runId: string): Promise<AgentResult>`
+### `resumeRun(runId: string, opts?: { note?, extraIterations? }): Promise<AgentResult>`
 
-Resume a crashed or paused durable run from its last checkpoint. Requires `.withDurableRuns()`. See [Durable Execution](/guides/durable-execution/).
+Resume a crashed or paused durable run from its last checkpoint. Requires `.withDurableRuns()`. A run a loop guard stopped (`result.resumable`, or a `listRuns()` row with `resumable: true` and a `loopStop` summary) continues with corrective guidance and a fresh iteration budget: `note` is appended to the guidance, `extraIterations` (default 10) bounds the continued run. Passing `opts` for a run that did not loop-stop fails `RunNotResumableError`. See [Durable Execution](/guides/durable-execution/).
 
 ### `listRuns(filter?: { status? }): Promise<readonly RunRecord[]>`
 

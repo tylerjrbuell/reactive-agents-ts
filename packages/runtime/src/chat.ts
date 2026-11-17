@@ -49,6 +49,10 @@ export interface ChatMessage {
   failed?: boolean;
   /** The failure cause (`AgentResult.error`), present only when `failed` is `true`. */
   error?: string;
+  /** The durable run id behind a failed tool turn; the handle for `agent.resumeRun(runId)`. */
+  runId?: string;
+  /** `true` on a failed row whose run a loop guard stopped and `resumeRun(runId)` can continue (the host's Continue action). */
+  resumable?: boolean;
 }
 
 /**
@@ -138,6 +142,12 @@ export interface ChatReply {
   failed?: boolean;
   /** Tool-capable path only: the failure cause (`AgentResult.error`), present only when `failed` is `true`. */
   error?: string;
+  /** Tool-capable path on a `.withDurableRuns()` agent: the durable run id behind this turn (`agent.resumeRun(runId)`). */
+  runId?: AgentResult["runId"];
+  /** Tool-capable path: set when a loop guard stopped the turn's run (reason, repeated tool, tools done, unfinished). */
+  loopStop?: AgentResult["loopStop"];
+  /** Tool-capable path: `true` when `agent.resumeRun(runId)` can continue the turn's run (the host's Continue action). */
+  resumable?: AgentResult["resumable"];
 }
 
 /**

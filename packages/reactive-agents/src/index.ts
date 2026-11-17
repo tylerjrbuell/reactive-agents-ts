@@ -74,6 +74,7 @@ export {
   // Durable execution (track 1)
   DurableRunNotFoundError,
   DurableConfigMismatchError,
+  RunNotResumableError,
 
   // Multimodal task input (`agent.run([textPart, imagePart])`)
   UnsupportedModalityError,
@@ -95,6 +96,8 @@ export {
 
 export type {
   AgentResult,
+  LoopStopSummary,
+  ResumeRunOptions,
   TaskInput,
   ModelInputCapabilities,
   AgentResultMetadata,
