@@ -6,14 +6,14 @@
 
 **Agents you can control, audit and improve.**
 
-An agent harness you can compose like a framework, in TypeScript. The same code runs the full agent loop on a local 4B model or a frontier API, with tool-call healing, verification, and a signed evidence receipt for every run.
+TypeScript agents that can finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/reactive-agents?logo=npm&label=npm&color=CB3837)](https://www.npmjs.com/package/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Effect-TS](https://img.shields.io/badge/Effect--TS-3.x-7C3AED)](https://effect.website)
-[![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.0%20required-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
+[![Bun](https://img.shields.io/badge/Bun%20%E2%89%A51.1.0%20recommended%20%7C%20Node%2022.5%2B-FBF0DF?logo=bun&logoColor=000000)](https://bun.sh)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
 [![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in-Codespaces-black?logo=github)](https://codespaces.new/tylerjrbuell/reactive-agents-ts?quickstart=1)
 
@@ -28,7 +28,7 @@ Most agent frameworks pick one model tier, hide the loop behind an opaque runtim
 - 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay locally, with no SaaS dashboard required. *(Engine: [`packages/runtime/src/engine`](packages/runtime/src/engine); replay: [`packages/replay`](packages/replay).)*
 - 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the same code finish the agent loop on a local 4B Ollama model and on Claude, GPT, or Gemini, with no per-model rewrites. *(Healing: [`packages/tools/src/healing`](packages/tools/src/healing); termination owner: [`terminate.ts`](packages/reasoning/src/kernel/loop/terminate.ts); provider adapters: [`adapter.ts`](packages/llm-provider/src/adapter.ts).)*
 - 🧩 **Composable and controllable.** A typed builder of opt-in layers: start with a model, then add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for. *(Builder: [`packages/runtime/src/builder.ts`](packages/runtime/src/builder.ts).)*
-- 🧾 **Accountable.** Every run returns a signed `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust. *(Schema: [`packages/core/src/types/receipt.ts`](packages/core/src/types/receipt.ts).)*
+- 🧾 **Accountable.** Every run returns a `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust. Add `.withReceiptSigning()` (or set `RA_RECEIPT_KEY`) to sign it with Ed25519; unsigned by default. *(Schema: [`packages/core/src/types/receipt.ts`](packages/core/src/types/receipt.ts).)*
 
 Built on Effect-TS: schema-validated boundaries and tagged errors. A ratcheted migration (`scripts/check-string-errors.sh`) is draining the remaining string-thrown errors; the count can only go down.
 
@@ -160,13 +160,14 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 
 ### ✅ Confidence
 - **13,601 tests** across 2,200+ files, counted from the repo by `bun run --cwd apps/docs metrics`
+- **Pre-1.0 versioning**: while the version is `0.x`, minor releases may include breaking changes. Each is listed per release in the [changelog](CHANGELOG.md) and [What's New](https://docs.reactiveagents.dev/guides/whats-new/) with migration notes; the [stability tiers](https://docs.reactiveagents.dev/reference/stability/) say which surfaces are safest.
 - **Strict TypeScript**: Effect-TS schemas validate every service boundary; tagged errors on the converted packages, with the remaining string throws capped by a shrink-only CI ratchet
 
 ## Quick Start
 
 Install and run your first TypeScript AI agent in under 60 seconds.
 
-> **Recommended: [Bun](https://bun.sh) ≥1.0.0** for native SQLite, subprocess, and HTTP APIs. Node.js 22.5+ is also supported via `@reactive-agents/runtime-shim`, same code, both runtimes. Install Bun: `curl -fsSL https://bun.sh/install | bash`
+> **Recommended: [Bun](https://bun.sh) ≥1.1.0** for native SQLite, subprocess, and HTTP APIs. Node.js 22.5+ is also supported via `@reactive-agents/runtime-shim`, same code, both runtimes. Install Bun: `curl -fsSL https://bun.sh/install | bash`
 
 ```bash
 # Bun (recommended)
@@ -211,7 +212,7 @@ const agent = await createAgent({
   name: 'research-agent',
   provider: 'anthropic',
   model: 'claude-sonnet-4-6',
-  profile: 'balanced',                        // memory + RI + verifier + strategy switching
+  profile: 'balanced',                        // memory + RI + verifier
   tools: { allowedTools: ['web-search', 'file-write'] },
   budget: { tokenLimit: 100_000 },            // canonical budget killswitch
 })
@@ -220,7 +221,7 @@ const agent = await createAgent({
 Pick the profile that matches the workload:
 
 - **`"lean"`**: model and nothing else. For latency- and cost-sensitive paths, and benchmark ablations.
-- **`"balanced"`**: today's production defaults (memory, reactive intelligence, verifier, strategy switching).
+- **`"balanced"`**: today's production defaults (memory, reactive intelligence, verifier; strategy switching is opt-in).
 - **`"intelligent"`**: balanced plus skill persistence for cross-session compounding learning.
 
 ### Advanced: the fluent builder
@@ -239,7 +240,6 @@ let builder = ReactiveAgents.create()
 if (process.env.AUTONOMOUS) {
     builder = builder.withGateway({             // persistent autonomous harness
         heartbeat: { intervalMs: 1_800_000, policy: 'adaptive' },
-        crons: [{ schedule: '0 9 * * MON', instruction: 'Weekly review' }],
         policies: { dailyTokenBudget: 50_000 },
     })
 }
@@ -256,6 +256,10 @@ The full builder / config reference is generated from the schema, the single sou
 Use `agent.chat()` for single-turn Q&A or `agent.session()` for multi-turn conversations with adaptive routing: a direct LLM call for simple questions, the full ReAct loop for tool-capable ones.
 
 ```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create().withProvider('anthropic').build()
+
 // Single-turn chat
 const answer = await agent.chat("What's the status of the deployment?")
 
@@ -336,6 +340,9 @@ await fastest.dispose()
 Tokens arrive as they're generated via `AsyncGenerator`. Pass an `AbortSignal` to cancel mid-stream:
 
 ```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create().withProvider('anthropic').build()
 const controller = new AbortController()
 
 for await (const event of agent.runStream('Analyze this dataset', {
@@ -360,6 +367,16 @@ controller.abort()
 A durable run behaves like an OS process: inspect it live, fork it from a checkpoint, and read a graded evidence receipt on completion.
 
 ```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
+const agent = await ReactiveAgents.create()
+    .withProvider('anthropic')
+    .withReasoning()
+    .withDurableRuns()
+    .build()
+const task = 'What is 17 * 23?'
+const runId = 'run-id-from-a-previous-run'
+
 const handle = agent.runStream(task)          // needs .withReasoning() + .withDurableRuns()
 handle.inspect()                              // live: { iteration, stepsCount, lastThought, pendingToolCalls }
 handle.pause(); handle.resume()
@@ -492,29 +509,22 @@ Every phase supports `before`, `after`, and `on-error` lifecycle hooks. When obs
 
 ## Reasoning Strategies
 
-| Strategy                | How It Works                               | Best For                           |
-| ----------------------- | ------------------------------------------ | ----------------------------------- |
-| **ReAct**               | Think, act, observe loop                   | Tool use, step-by-step tasks       |
-| **Blueprint**           | ReWOO-style: plan once, execute in parallel, solve (alias `rewoo`) | Cheap runs on decomposable, tool-heavy tasks |
-| **Reflexion**           | Generate, critique, improve                | Quality-critical output            |
-| **Plan-Execute**        | Plan steps, execute, reflect, refine       | Structured multi-step work         |
-| **Tree-of-Thought**     | Branch, score, prune, synthesize           | Creative, open-ended problems      |
-| **Adaptive**            | Analyze the task, auto-select the best strategy | Mixed workloads                |
-| **Direct**              | Single LLM call, no reasoning loop         | Simple questions, minimal latency  |
-| **Code-Action** `@exp`  | LLM generates a TypeScript IIFE run in a Worker sandbox, tools exposed as async functions | Multi-tool orchestration, pure computation |
+The default is ReAct (a think, act, observe loop). Pick another strategy per agent, or let `adaptive` choose per task. What each strategy does, a decision tree for choosing one, per-strategy options and local-model fit are in [Choosing a Reasoning Strategy](https://docs.reactiveagents.dev/guides/choosing-strategies/).
 
 ```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
 // Auto-select the best strategy per task
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning({ defaultStrategy: 'adaptive' })
     .build()
 
-// Strategy switching is on by default; customize or disable explicitly
+// Strategy switching is opt-in; enable and tune it explicitly
 const agent2 = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning({
-        // enableStrategySwitching defaults to true
+        enableStrategySwitching: true,  // default: false
         maxStrategySwitches: 1,
         fallbackStrategy: 'plan-execute-reflect',
     })
@@ -543,6 +553,8 @@ Switch providers with one line; agent code stays the same.
 Optimize prompt construction and context compaction for your model tier:
 
 ```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
 const agent = await ReactiveAgents.create()
     .withProvider('ollama')
     .withModel('qwen3:4b')
@@ -564,6 +576,8 @@ const agent = await ReactiveAgents.create()
 Pin the exact context window the provider is given, instead of relying on the model's assumed maximum. Pass it via the `.withModel()` object form:
 
 ```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
 const agent = await ReactiveAgents.create()
     .withProvider('ollama')
     .withModel({ model: 'qwen3:4b', numCtx: 32768 }) // exact num_ctx sent to Ollama
@@ -688,109 +702,15 @@ const agent = await ReactiveAgents.create()
     .build()
 ```
 
-Or the `ToolBuilder` fluent API to build the tool definition without raw schema objects, with the Effect handler supplied at registration:
-
-```typescript
-import { ReactiveAgents } from 'reactive-agents'
-import { ToolBuilder } from '@reactive-agents/tools'
-import { Effect } from 'effect'
-
-const { definition } = ToolBuilder.create('web_search')
-    .description('Search the web for current information')
-    .param('query', 'string', 'Search query', { required: true })
-    .riskLevel('low')
-    .timeout(10_000)
-    .build()
-
-const agent = await ReactiveAgents.create()
-    .withProvider('anthropic')
-    .withReasoning()
-    .withTools({
-        tools: [
-            {
-                definition,
-                handler: (args) => Effect.succeed(`Results for: ${args.query}`),
-            },
-        ],
-    })
-    .build()
-```
-
-Or use raw schema objects directly:
-
-```typescript
-const agent = await ReactiveAgents.create()
-    .withProvider('anthropic')
-    .withReasoning()
-    .withTools({
-        tools: [
-            {
-                definition: {
-                    name: 'web_search',
-                    description: 'Search the web for current information',
-                    parameters: [
-                        {
-                            name: 'query',
-                            type: 'string',
-                            description: 'Search query',
-                            required: true,
-                        },
-                    ],
-                    riskLevel: 'low',
-                    timeoutMs: 10_000,
-                    requiresApproval: false,
-                    source: 'function',
-                },
-                handler: (args) => Effect.succeed(`Results for: ${args.query}`),
-            },
-        ],
-    })
-    .build()
-```
-
-### Dynamic Tool Registration
-
-Add or remove tools from a running agent at runtime:
-
-<!-- docs-skip-typecheck -->
-```typescript
-import { Effect } from 'effect'
-
-const agent = await ReactiveAgents.create()
-    .withName('adaptive-agent')
-    .withProvider('anthropic')
-    .withReasoning()
-    .withTools({ builtins: true })
-    .build()
-
-// Register a new tool at runtime
-await agent.registerTool(
-    {
-        name: 'custom_api',
-        description: 'Call the custom API',
-        parameters: [
-            {
-                name: 'endpoint',
-                type: 'string',
-                description: 'API endpoint',
-                required: true,
-            },
-        ],
-        riskLevel: 'low',
-        source: 'function',
-    },
-    (args) => Effect.succeed(`Response from ${args.endpoint}`)
-)
-
-// Later, remove it when no longer needed
-await agent.unregisterTool('custom_api')
-```
+Other ways to define tools (the `ToolBuilder` fluent API, raw schema objects, `agent.registerTool()` at runtime) are covered in the [Tools guide](https://docs.reactiveagents.dev/guides/tools/custom-tools/#registering-custom-tools).
 
 ### Dynamic Sub-Agent Spawning
 
 Use `.withDynamicSubAgents()` to let the model spawn ad-hoc sub-agents at runtime without pre-configuring named agent tools. This registers the built-in `spawn-agent` tool, which the model can invoke freely:
 
 ```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withModel('claude-sonnet-4-6')
@@ -808,12 +728,11 @@ Sub-agents receive a clean context window, inherit the parent's provider and mod
 
 ## MCP (Model Context Protocol)
 
-Connect any MCP-compatible server, including the 9,400+ public servers covering filesystem, GitHub, Slack, browsers, and databases. Use `.withMCP()` for each server you need:
+Connect any MCP-compatible server (stdio, SSE or streamable HTTP, including Docker Hub catalog names and OAuth-protected servers) with `.withMCP()`. MCP tools appear in the tool registry alongside custom tools.
 
 ```typescript
 import { ReactiveAgents } from 'reactive-agents'
 
-// stdio transport: subprocess communicates via JSON-RPC over stdin/stdout
 const agent = await ReactiveAgents.create()
     .withProvider('anthropic')
     .withReasoning()
@@ -823,45 +742,18 @@ const agent = await ReactiveAgents.create()
         command: 'bunx',
         args: ['-y', '@modelcontextprotocol/server-filesystem', '.'],
     })
-    .withMCP({
-        name: 'github',
-        transport: 'stdio',
-        command: 'bunx',
-        args: ['-y', '@modelcontextprotocol/server-github'],
-        env: { GITHUB_PERSONAL_ACCESS_TOKEN: process.env.GH_TOKEN ?? '' },
-    })
-    .build()
-
-// Streamable HTTP transport: modern cloud-hosted MCP servers
-const agent2 = await ReactiveAgents.create()
-    .withProvider('anthropic')
-    .withMCP({
-        name: 'stripe',
-        transport: 'streamable-http',
-        endpoint: 'https://mcp.stripe.com',
-        headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
-    })
     .build()
 ```
 
-MCP tools appear in the tool registry alongside custom tools; the LLM sees them all uniformly. Mix MCP servers with `ToolBuilder` custom tools in the same agent. See [full MCP docs](https://docs.reactiveagents.dev/guides/tools/).
-
-Skip the config for servers on [Docker Hub's `mcp/*` catalog](https://hub.docker.com/mcp) — pass the name instead:
-
-```typescript
-const agent = await ReactiveAgents.create()
-    .withProvider('anthropic')
-    .withMCP('brave-search', { env: { BRAVE_API_KEY: process.env.BRAVE_API_KEY! } })
-    .build()
-```
-
-The first use of an unapproved image throws `MCPApprovalRequiredError` rather than running it silently — approve it once with `approveMcpImage()` from `@reactive-agents/tools`, or pass `requireApproval: false` for a registry you've already vetted (e.g. CI).
+Transports, the Docker image approval flow, OAuth and read-only tools are in the [MCP section of the Tools guide](https://docs.reactiveagents.dev/guides/tools/mcp-tools/).
 
 ## Testing
 
 Built-in test scenario support for deterministic, offline tests:
 
 ```typescript
+import { ReactiveAgents } from 'reactive-agents'
+
 const agent = await ReactiveAgents.create()
     .withTestScenario([
         { match: 'capital of France', text: 'Paris is the capital of France.' },
