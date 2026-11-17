@@ -184,7 +184,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
               ...(body.terminalShellOptions ? { terminalShellOptions: body.terminalShellOptions } : {}),
               ...(body.workspace ? { workspace: body.workspace } : {}),
               ...(body.rawConfig && Object.keys(body.rawConfig).length > 0 ? { rawConfig: body.rawConfig } : {}),
-              ...(body.durableRuns?.enabled ? { durableRuns: body.durableRuns } : {}),
+              ...(body.durableRuns?.enabled !== undefined ? { durableRuns: body.durableRuns } : {}),
               // normalizeCortexAgentConfig moves a legacy durableRuns gate here.
               ...(body.approvalPolicy ? { approvalPolicy: body.approvalPolicy } : {}),
               ...(body.askBeforeRiskyTools === false ? { askBeforeRiskyTools: false } : {}),

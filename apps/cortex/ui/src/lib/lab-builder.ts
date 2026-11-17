@@ -186,7 +186,7 @@ export function builderConfigFromAgent(defaults: BuilderAgentConfig, sourceConfi
     taskContext: { ...defaults.taskContext, ...(sourceConfig.taskContext ?? {}) },
     healthCheck: sourceConfig.healthCheck ?? defaults.healthCheck,
     // Stored configs carry the approval gate in the server shape (or the old durableRuns one).
-    durableRuns: { enabled: sourceConfig.durableRuns?.enabled === true },
+    durableRuns: { enabled: sourceConfig.durableRuns?.enabled !== false },
     approvalPolicy: approvalPolicyFrom(sourceConfig as unknown as Record<string, unknown>),
     askBeforeRiskyTools: asksBeforeRiskyToolsFrom(sourceConfig as unknown as Record<string, unknown>),
     skills: {

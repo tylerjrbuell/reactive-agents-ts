@@ -88,6 +88,7 @@ import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-c
 import type { SessionControlPort } from "./chat-proposal-service.js";
 import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval, type ChatPendingInteraction } from "./chat-approvals.js";
 import { effectiveApprovalPolicy } from "./approval-policy.js";
+import { effectiveDurableRuns } from "./durable-default.js";
 import { ChatResume, chatDurableSource, type ResumableAgent } from "./chat-resume.js";
 import { ChatPlanRun, todoWithStatuses, type PlanRunnableAgent } from "./chat-plan-run.js";
 import { validateTodo } from "./chat-todo-validation.js";
@@ -1346,10 +1347,9 @@ let tokensUsed = 0;
       agentConfig.rawConfig && typeof agentConfig.rawConfig === "object" && !Array.isArray(agentConfig.rawConfig)
         ? (agentConfig.rawConfig as Record<string, unknown>)
         : undefined;
-    const durableRuns =
-      agentConfig.durableRuns && typeof agentConfig.durableRuns === "object" && (agentConfig.durableRuns as { enabled?: unknown }).enabled === true
-        ? (agentConfig.durableRuns as NonNullable<BuildCortexAgentParams["durableRuns"]>)
-        : undefined;
+    // Durable runs are on unless the person turned them off (durable-default.ts), so Stop / Pause / a crash
+    // leave a run Continue can resume. A tools-off chat has no tool calls to resume, so it builds none.
+    const durableRuns = effectiveDurableRuns(agentConfig, { eligible: enableTools });
     // The approval gate guards tool calls: a tools-off chat calls none, so it gets none.
     const approvalPolicy = enableTools ? effectiveApprovalPolicy(agentConfig) : undefined;
     // Workspace + shell options are tool-layer settings: a tools-off chat must not get a tool layer.

@@ -89,7 +89,7 @@ describe("durableApprovals live interactions", () => {
 
 describe("a chat turn asking a question live (no durable runs)", () => {
   it("streams the question, the desk answers it, and the same turn finishes with the answer", async () => {
-    const id = await svc.createSession({ agentConfig: { provider: "test", strategy: "reactive", maxIterations: 4, tools: ["file-read"], testScenario: SCENARIO } });
+    const id = await svc.createSession({ agentConfig: { provider: "test", strategy: "reactive", maxIterations: 4, tools: ["file-read"], durableRuns: { enabled: false }, testScenario: SCENARIO } });
     const events: AgentStreamEvent[] = [];
     for await (const ev of svc.chatStream(id, "help me choose")) {
       events.push(ev);

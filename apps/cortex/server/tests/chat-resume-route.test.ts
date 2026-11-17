@@ -51,6 +51,15 @@ describe("chat Continue routes", () => {
     expect(notStopped.status).toBe(409);
     expect(((await notStopped.json()) as { error: string }).error).toContain("Send a new message instead");
   });
+
+  it("the live /start form answers with the same statuses as the blocking one", async () => {
+    expect((await send("POST", "/api/chat/sessions/nope/resume/r1/start", {})).status).toBe(404);
+    const id = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true, durableRuns: { enabled: true, dir: tmpDir("chat-resume-route3") } } });
+    expect((await send("POST", `/api/chat/sessions/${id}/resume/r1/start`, { extraIterations: 0 })).status).toBe(400);
+    const notStopped = await send("POST", `/api/chat/sessions/${id}/resume/r1/start`, { note: "go on" });
+    expect(notStopped.status).toBe(409);
+    expect(((await notStopped.json()) as { error: string }).error).toContain("Send a new message instead");
+  });
 });
 
 describe("chat Stop and Pause routes", () => {
@@ -65,9 +74,13 @@ describe("chat Stop and Pause routes", () => {
 });
 
 describe("Continue follows the builder's Durable runs setting", () => {
-  it("chat is not durable unless the setting is on (live rails stay the default), and a set value reaches the build", async () => {
+  it("chat is durable by default, an explicit off stays off, a tools-off chat builds none, and a set value reaches the build", async () => {
     const plain = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true } });
-    expect(paramsOf(plain).durableRuns).toBeUndefined();
+    expect(paramsOf(plain).durableRuns).toEqual({ enabled: true });
+    const off = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true, durableRuns: { enabled: false } } });
+    expect(paramsOf(off).durableRuns).toBeUndefined();
+    const noTools = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: false } });
+    expect(paramsOf(noTools).durableRuns).toBeUndefined();
     const own = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true, durableRuns: { enabled: true, checkpointEvery: 3 } } });
     expect(paramsOf(own).durableRuns).toEqual({ enabled: true, checkpointEvery: 3 });
   });

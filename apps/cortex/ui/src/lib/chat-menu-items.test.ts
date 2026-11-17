@@ -76,8 +76,10 @@ describe("/durable panel", () => {
     expect(rows.map((r) => [r.key, r.active])).toEqual([["on", true], ["off", false]]);
     void rows[1]!.run();
     expect(patches).toEqual([{ durableRuns: { enabled: false, checkpointEvery: 2 } }]);
-    void pickerItems(picker("/durable ", { cfg: {}, apply: (_w, patch) => void patches.push(patch) }).ctx)[0]!.run();
-    expect(patches[1]).toEqual({ durableRuns: { enabled: true } });
+    const empty = pickerItems(picker("/durable ", { cfg: {}, apply: (_w, patch) => void patches.push(patch) }).ctx);
+    expect(empty.map((r) => [r.key, r.active])).toEqual([["on", true], ["off", false]]); // default is On
+    void empty[1]!.run();
+    expect(patches[1]).toEqual({ durableRuns: { enabled: false } }); // Off is written explicitly
   });
 
   test("the On row says what it does", () => {

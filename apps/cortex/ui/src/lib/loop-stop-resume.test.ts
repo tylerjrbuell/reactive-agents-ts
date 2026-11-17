@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   continueBody,
   continueChatRun,
+  startChatContinue,
   continueDeskRun,
   continueTarget,
   DEFAULT_EXTRA_ITERATIONS,
@@ -135,6 +136,19 @@ describe("clients", () => {
     expect(out).toEqual({ ok: true, success: false, resumable: true });
     expect(seen[0]!.url).toContain("/api/chat/sessions/s%201/resume/d%2F1");
     expect(seen[0]!.body).toEqual({ note: "go on", extraIterations: 20 });
+  });
+
+  it("starts a live Continue on the /start route and reports a refusal in the server's words", async () => {
+    const seen: { url: string; body: unknown }[] = [];
+    const ok = await startChatContinue("s 1", "d/1", { note: "go on" }, async (url, init) => {
+      seen.push({ url, body: JSON.parse(String(init?.body)) });
+      return new Response(JSON.stringify({ started: true, message: "Continue: go on" }), { status: 200 });
+    });
+    expect(ok).toEqual({ ok: true });
+    expect(seen[0]!.url).toContain("/api/chat/sessions/s%201/resume/d%2F1/start");
+    expect(seen[0]!.body).toEqual({ note: "go on" });
+    expect(await startChatContinue("s", "r", {}, reply(409, { error: "busy" }))).toEqual({ ok: false, status: 409, error: "busy" });
+    expect(await startChatContinue("s", "r", {}, async () => { throw new Error("offline"); })).toEqual({ ok: false, status: 0, error: "offline" });
   });
 
   it("returns the server's plain reason for a refusal and the failure text for a network error", async () => {

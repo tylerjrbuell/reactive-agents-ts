@@ -138,6 +138,7 @@ async function liveGatedSession(tag: string): Promise<{ id: string; target: stri
       maxIterations: 4,
       tools: ["file-write"],
       workspace,
+      durableRuns: { enabled: false }, // durable is the default; the live wait is the opt-out
       approvalPolicy: { mode: "detach", tools: ["file-write"] },
       testScenario: [{ toolCall: { name: "file-write", args: { path: target, content: "hi" } } }, { text: "wrote it" }],
     },

@@ -225,9 +225,9 @@ describe("normalizeCortexAgentConfig — v0.12 fields (saved-agent durable/struc
     const out = normalizeCortexAgentConfig({ provider: "ollama", approvalPolicy: { mode: "block", tools: [], commands: ["  "] } }) as Normalized;
     expect(out.approvalPolicy).toBeUndefined();
   });
-  test("drops durableRuns when disabled", () => {
+  test("keeps an explicit durableRuns off (durable is the default)", () => {
     const out = normalizeCortexAgentConfig({ provider: "ollama", durableRuns: { enabled: false } }) as { durableRuns?: unknown };
-    expect(out.durableRuns).toBeUndefined();
+    expect(out.durableRuns).toEqual({ enabled: false });
   });
   test("persists outputSchema", () => {
     const schema = { type: "object", properties: { a: { type: "string" } } };

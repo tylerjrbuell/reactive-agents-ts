@@ -157,8 +157,8 @@
         <!-- Approvals gate tool calls, so they sit with the tools they gate. -->
         <ApprovalPolicyFields bind:config />
         <p class="acp-hint" data-testid="approval-durable-note">
-          A run that waits for your approval stays live until you answer. To keep that wait across a restart, turn on durable execution under
-          {#if onShowSection}<button type="button" class="acp-linkbtn" onclick={() => onShowSection("execution")}>Execution</button>{:else}Execution{/if}.
+          With durable execution on (the default) a run that needs your approval pauses and waits for your answer, even across a restart. Turn it off under
+          {#if onShowSection}<button type="button" class="acp-linkbtn" onclick={() => onShowSection("execution")}>Execution</button>{:else}Execution{/if} to make it wait live in the chat instead.
         </p>
         </div>
 </ConfigSection>

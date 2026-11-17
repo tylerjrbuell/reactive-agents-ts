@@ -19,6 +19,7 @@ import { checkWorkspaceDir } from "../services/workspace-dir.js";
 import { checkInteractionAnswer, questionsOfPending } from "../services/interaction-answers.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
 import { effectiveApprovalPolicy } from "../services/approval-policy.js";
+import { effectiveDurableRuns } from "../services/durable-default.js";
 
 /**
  * Body schema for `POST /api/runs`: the run-launch inputs plus the shared
@@ -63,6 +64,7 @@ export function runBodyToLaunchParams(b: Static<typeof RunConfigBody>, workspace
   const variables = parseVariableDefs(b.variables);
   const tierModels = pickTierModels(b.modelRouting?.tierModels);
   const approvalPolicy = effectiveApprovalPolicy(b);
+  const durableRuns = effectiveDurableRuns(b);
   return {
     prompt: b.prompt,
     ...(b.provider         ? { provider:         b.provider }         : {}),
@@ -135,15 +137,7 @@ export function runBodyToLaunchParams(b: Static<typeof RunConfigBody>, workspace
         }
       : {}),
     ...(b.rawConfig && typeof b.rawConfig === "object" && Object.keys(b.rawConfig).length > 0 ? { rawConfig: b.rawConfig } : {}),
-    ...(b.durableRuns?.enabled
-      ? {
-          durableRuns: {
-            enabled: true,
-            ...(b.durableRuns.dir ? { dir: b.durableRuns.dir } : {}),
-            ...(b.durableRuns.checkpointEvery !== undefined ? { checkpointEvery: b.durableRuns.checkpointEvery } : {}),
-          },
-        }
-      : {}),
+    ...(durableRuns ? { durableRuns } : {}),
     ...(approvalPolicy ? { approvalPolicy } : {}),
     ...(workspace ? { workspace } : {}),
     ...(shellOptions ? { terminalShellOptions: shellOptions } : {}),

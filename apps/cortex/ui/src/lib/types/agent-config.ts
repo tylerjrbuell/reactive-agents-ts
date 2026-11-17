@@ -285,7 +285,8 @@ export function hydrateAgentConfig(raw: Record<string, unknown>): AgentConfig {
     ...cfg,
     terminalShellOptions: { ...defaultShellOptions(), ...obj(raw.terminalShellOptions) } as ShellOptions,
     guardrails: { ...base.guardrails, ...obj(raw.guardrails) } as AgentConfig["guardrails"],
-    durableRuns: { enabled: dr.enabled === true },
+    // On by default: a saved config with no durableRuns key reads as on (lib/durable-runs.ts).
+    durableRuns: { enabled: dr.enabled !== false },
     // Old saves kept the gate under durableRuns; approvalPolicyFrom reads both shapes.
     approvalPolicy: approvalPolicyFrom(raw),
     askBeforeRiskyTools: asksBeforeRiskyToolsFrom(raw),
@@ -315,7 +316,7 @@ export function defaultConfig(): AgentConfig {
     maxIterations: 10,
     minIterations: 0,
     strategySwitching: false,
-    durableRuns: { enabled: false },
+    durableRuns: { enabled: true },
     approvalPolicy: defaultApprovalPolicy(),
     askBeforeRiskyTools: true,
     outputSchema: "",

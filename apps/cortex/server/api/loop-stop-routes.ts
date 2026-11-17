@@ -4,6 +4,7 @@ import type { DeskRunDb } from "../services/crashed-runs.js";
 import { CortexRunnerService } from "../services/runner-service.js";
 import type { ChatSessionService } from "../services/chat-session-service.js";
 import { interruptChatTurn } from "../services/chat-run-control.js";
+import { DetachedTurns } from "../services/chat-detached-turn.js";
 import { findLoopStoppedRuns, loopStoppedSummaryOf, reopenRunRow, restoreRunRow } from "../services/loop-stopped-runs.js";
 import { errorText, parseResumeInput, ResumeGuard, resumeStatusOf } from "../services/loop-stop-resume.js";
 
@@ -26,8 +27,10 @@ const ContinueBody = t.Optional(t.Object({ note: t.Optional(t.Unknown()), extraI
  *   `agent.resumeRun`; the result lands as the session's next exchange
  *   (`{ reply, success, resumable }`). 400 bad input, 404 unknown session or run,
  *   409 busy / already continuing / not resumable (`RunNotResumableError`), 422 other.
+ * - `POST /api/chat/sessions/:id/resume/:runId/start`: the same Continue, run as a live
+ *   detached turn the page attaches to (`chat-resume-stream.ts`); the Chat panel uses this one.
  */
-export const chatResumeRoute = (svc: ChatSessionService) =>
+export const chatResumeRoute = (svc: ChatSessionService, detachedTurns: DetachedTurns = new DetachedTurns()) =>
   new Elysia({ prefix: "/api/chat" })
     .post("/sessions/:sessionId/chat/stop", ({ params }) => interruptChatTurn(svc, params.sessionId, "stop"))
     .post("/sessions/:sessionId/chat/pause", ({ params }) => interruptChatTurn(svc, params.sessionId, "pause"))
@@ -54,6 +57,36 @@ export const chatResumeRoute = (svc: ChatSessionService) =>
         if (out.ok) return out;
         set.status = resumeStatusOf(out.code);
         return { error: out.message };
+      },
+      { body: ContinueBody },
+    )
+    // Continue as a live turn: the run starts in the background as the session's turn (the same
+    // detached turn a chat message streams through), so `GET .../chat/active` and
+    // `.../chat/stream/active` show its progress as it works. Same checks and statuses as the POST
+    // above; answers as soon as the run has started: `{ started: true, message }`.
+    .post(
+      "/sessions/:sessionId/resume/:runId/start",
+      async ({ params, body, set }) => {
+        if (!svc.getSession(params.sessionId)) {
+          set.status = 404;
+          return { error: "Session not found" };
+        }
+        const input = parseResumeInput(body);
+        if (!input.ok) {
+          set.status = 400;
+          return { error: input.error };
+        }
+        if (detachedTurns.running(params.sessionId)) {
+          set.status = 409;
+          return { error: "A turn in this session is already running: reattach to it" };
+        }
+        const out = await svc.resume.startStream(params.sessionId, params.runId, input);
+        if (!out.ok) {
+          set.status = resumeStatusOf(out.code);
+          return { error: out.message };
+        }
+        detachedTurns.start(params.sessionId, out.message, out.events);
+        return { started: true as const, message: out.message };
       },
       { body: ContinueBody },
     );

@@ -4,15 +4,15 @@
    * timeout, error). When the latest assistant turn is a run that failed or was stopped and
    * the session's durable store holds a resumable run, the stop is shown under the thread
    * with a note field, a step grant and Continue. Continue calls the
-   * framework's `resumeRun` through the server; the reply lands in the thread as the next
-   * exchange (`chatStore.refreshActive`). A streamed turn carries no run stamp, so the
+   * framework's `resumeRun` through the server as a live turn: the thread fills in while the
+   * run works (`chatStore.resumeActiveTurn` attaches to it). A streamed turn carries no run stamp, so the
    * stored run is looked up after each turn ends. Rules: `lib/loop-stop-resume.ts`.
    */
   import { chatStore } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
   import ContinueStopped from "$lib/components/ContinueStopped.svelte";
   import {
-    continueChatRun,
+    startChatContinue,
     continueTarget,
     fetchChatResumable,
     loopStopHint,
@@ -64,15 +64,23 @@
   async function onContinue(runId: string, body: ContinueBody): Promise<void> {
     busyRun = runId;
     error = undefined;
-    const out = await continueChatRun(sessionId, runId, body);
-    busyRun = undefined;
+    // The run goes on in the background as the session's turn; the page attaches to it, so the
+    // reply fills in live (tool calls as they happen) with Stop and Pause working, and the
+    // finished exchange is read back when it ends. No silent wait.
+    const out = await startChatContinue(sessionId, runId, body);
     if (!out.ok) {
+      busyRun = undefined;
       error = out.error;
       return;
     }
     resumable = [];
-    if (!out.success && out.resumable) toast.info("The run stopped again", "You can continue it once more.");
-    await chatStore.refreshActive();
+    const attached = await chatStore.resumeActiveTurn(sessionId);
+    busyRun = undefined;
+    if (!attached) {
+      // The run ended before the page could attach: its stored exchange is in the history.
+      toast.info("The run continued", "Its reply is in the thread.");
+      await chatStore.refreshActive();
+    }
   }
 </script>
 

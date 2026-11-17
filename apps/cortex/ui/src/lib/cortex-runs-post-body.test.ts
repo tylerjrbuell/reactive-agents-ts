@@ -105,9 +105,15 @@ describe("cortexRunsPostBody", () => {
 
 
 describe("cortexRunsPostBody — durable execution", () => {
-  it("omits durableRuns when disabled", () => {
-    const body = cortexRunsPostBody("x", defaultConfig()) as { durableRuns?: unknown };
-    expect(body.durableRuns).toBeUndefined();
+  it("sends durableRuns on by default and an explicit off when the person turned it off", () => {
+    const on = cortexRunsPostBody("x", defaultConfig()) as { durableRuns?: unknown };
+    expect(on.durableRuns).toEqual({ enabled: true });
+    const off = cortexRunsPostBody("x", { ...defaultConfig(), durableRuns: { enabled: false } }) as { durableRuns?: unknown };
+    expect(off.durableRuns).toEqual({ enabled: false });
+  });
+  it("hydrates a saved config with no durableRuns key as on, and keeps an explicit off", () => {
+    expect(hydrateAgentConfig({}).durableRuns.enabled).toBe(true);
+    expect(hydrateAgentConfig({ durableRuns: { enabled: false } }).durableRuns.enabled).toBe(false);
   });
   it("sends the approval gate as the framework's top-level approvalPolicy (tools + command rules)", () => {
     const cfg = {

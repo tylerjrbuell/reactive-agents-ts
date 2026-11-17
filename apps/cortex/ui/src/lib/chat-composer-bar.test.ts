@@ -68,10 +68,10 @@ describe("configGroups", () => {
     ]);
   });
 
-  test("Durable runs shows Off by default and On once set", () => {
+  test("Durable runs shows On by default and Off once turned off", () => {
     const row = (cfg: Record<string, unknown>) => configGroups(quickBarChips(cfg, ctx()), cfg, ctx()).flatMap((g) => g.rows).find((r) => r.cmd === "/durable ");
-    expect(row({})).toMatchObject({ label: "Durable runs", value: "Off", on: false });
-    expect(row({ durableRuns: { enabled: true } })).toMatchObject({ value: "On", on: true });
+    expect(row({})).toMatchObject({ label: "Durable runs", value: "On", on: true });
+    expect(row({ durableRuns: { enabled: false } })).toMatchObject({ value: "Off", on: false });
   });
 
   test("rows show the current value and mark changed settings", () => {

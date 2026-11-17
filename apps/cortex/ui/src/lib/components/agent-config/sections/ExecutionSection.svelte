@@ -59,7 +59,7 @@
         {[
           config.timeout > 0 ? `${Math.round(config.timeout/1000)}s timeout` : null,
           config.retryPolicy.enabled ? `${config.retryPolicy.maxRetries} retries` : null,
-          config.durableRuns.enabled ? "durable" : null,
+          config.durableRuns.enabled ? null : "durable off",
         ].filter(Boolean).join(" · ") || "defaults"}
       </span>
   {/snippet}

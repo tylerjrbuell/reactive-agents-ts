@@ -784,10 +784,10 @@ describe("POST /api/runs — durableRuns passthrough (Phase E)", () => {
     );
 
     expect(captured.params?.approvalPolicy).toEqual({ mode: "detach", commands: ["git commit", "git push"] });
-    expect(captured.params?.durableRuns).toBeUndefined();
+    expect(captured.params?.durableRuns).toEqual({ enabled: true });
   });
 
-  it("omits durableRuns when not enabled", async () => {
+  it("builds durable by default (a body with no durableRuns key)", async () => {
     const captured = { params: null as LaunchParams | null };
     const db = new Database(":memory:");
     applySchema(db);
@@ -798,6 +798,23 @@ describe("POST /api/runs — durableRuns passthrough (Phase E)", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: "plain", provider: "test" }),
+      }),
+    );
+
+    expect(captured.params?.durableRuns).toEqual({ enabled: true });
+  });
+
+  it("omits durableRuns when the person turned it off", async () => {
+    const captured = { params: null as LaunchParams | null };
+    const db = new Database(":memory:");
+    applySchema(db);
+    const app = new Elysia().use(runsRouter(CortexStoreServiceLive(db), captureRunnerLayer(captured)));
+
+    await app.handle(
+      new Request("http://localhost/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "plain", provider: "test", durableRuns: { enabled: false } }),
       }),
     );
 

@@ -42,6 +42,7 @@ describe("chat session config — builder tool-field parity", () => {
     await svc.updateSessionConfig(id, { durableRuns: { enabled: true, checkpointEvery: 2 } });
     expect(stored().durableRuns).toEqual({ enabled: true, checkpointEvery: 2 });
     await svc.updateSessionConfig(id, { durableRuns: { enabled: false, checkpointEvery: 2 } });
-    expect(stored().durableRuns).toBeUndefined();
+    // Off is stored (durable is the default, so absent would mean on).
+    expect(stored().durableRuns).toEqual({ enabled: false, checkpointEvery: 2 });
   });
 });

@@ -61,7 +61,7 @@
     {#if !$hiddenApprovalCards.has(approvalCardKey(p))}
     <div class="card rail rail-attention">
       <p class="h"><Status tone="attention" label="Waiting on you" /></p>
-      <p class="what">The agent wants to run <span class="tool">{p.toolName}</span>.</p>
+      <p class="what">The agent wants to run <span class="tool">{p.toolName}</span>. The run is paused until you decide; approve to continue.</p>
       {#if approvalArgRows(p.args).length > 0}
         <dl class="args">
           {#each approvalArgRows(p.args) as row (row.key)}

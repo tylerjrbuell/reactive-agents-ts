@@ -210,7 +210,7 @@ export async function startCortexServer(
     .use(crashedRunsRouter(runtime.rawDb, runtime.runnerLayer))
     .use(chatRouter(chatSessionService, chatScheduleService, chatGoalService, chatProposalService, new ChatBtwService(runtime.rawDb), detachedTurns))
     .use(loopStoppedRunsRouter(runtime.rawDb, runtime.runnerLayer))
-    .use(chatResumeRoute(chatSessionService))
+    .use(chatResumeRoute(chatSessionService, detachedTurns))
     .use(chatModeRoute(chatSessionService))
     .use(chatPlanRoute(chatSessionService))
     .use(memoryRouter(memoryInspector, runtime.rawDb))

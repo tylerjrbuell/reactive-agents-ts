@@ -189,6 +189,28 @@ export function continueChatRun(sessionId: string, runId: string, body: Continue
   return postContinue(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/resume/${encodeURIComponent(runId)}`, body, fetchFn);
 }
 
+/**
+ * Start Continue as a live turn (`POST .../resume/:runId/start`): the run goes on in the
+ * background as the session's turn and answers at once, so the page attaches to it
+ * (`chatStore.resumeActiveTurn`) and the thread fills in while the run works. Never throws.
+ */
+export async function startChatContinue(
+  sessionId: string,
+  runId: string,
+  body: ContinueBody,
+  fetchFn: Fetch = realFetch,
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly status: number; readonly error: string }> {
+  try {
+    const url = `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/resume/${encodeURIComponent(runId)}/start`;
+    const res = await fetchFn(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) return { ok: false, status: res.status, error: json.error ?? `Server returned ${res.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** Desk runs a loop guard stopped; `[]` on any failure. */
 export async function fetchLoopStoppedRuns(fetchFn: Fetch = realFetch): Promise<LoopStoppedRunWire[]> {
   try {

@@ -20,7 +20,8 @@
 import { existsSync } from "node:fs";
 import { Effect } from "effect";
 import { listDurableRuns } from "@reactive-agents/runtime";
-import type { AgentResult, ReactiveAgent } from "@reactive-agents/runtime";
+import type { AgentResult, AgentStreamEvent, ReactiveAgent } from "@reactive-agents/runtime";
+import { resumeEventStream } from "./chat-resume-stream.js";
 import { durableRunsDbPath } from "./crashed-runs.js";
 import { ChatRunControl } from "./chat-run-control.js";
 import type { InterruptableAgent } from "./run-interrupt.js";
@@ -38,7 +39,7 @@ import {
 } from "./loop-stop-resume.js";
 
 /** The agent surface Continue (`resumeRun`) and Pause / Stop (`pauseRun`, `stopRun`, `activeRunIds`) need. */
-export type ResumableAgent = Pick<ReactiveAgent, "resumeRun"> & InterruptableAgent;
+export type ResumableAgent = Pick<ReactiveAgent, "resumeRun"> & Partial<Pick<ReactiveAgent, "subscribe">> & InterruptableAgent;
 
 /** Where a session's durable store lives. */
 export interface ChatDurableSource {
@@ -129,11 +130,74 @@ export class ChatResume {
    * resumable.
    */
   async resume(sessionId: string, runId: string, input: Extract<ParsedResumeInput, { ok: true }>): Promise<ChatResumeOutcome> {
+    const admitted = await this.admit(sessionId, runId);
+    if (!admitted.ok) return admitted;
+    try {
+      let result: AgentResult;
+      try {
+        result = await admitted.agent.resumeRun(runId, input.options);
+      } catch (e) {
+        return { ok: false, ...resumeFailureOf(e) };
+      }
+      this.store(sessionId, result, input);
+      // The cached engine did not see this exchange: rebuild its history from the DB.
+      await this.host.evict(sessionId);
+      return { ok: true, reply: replyOf(result), success: result.success, resumable: result.resumable === true };
+    } finally {
+      admitted.leave();
+    }
+  }
+
+  /**
+   * Continue a run as a live turn: the same checks and the same stored exchange as
+   * {@link resume}, but the run's progress and end come as stream events
+   * (`chat-resume-stream.ts`) for a detached turn to buffer, so the thread fills in
+   * while the run works. The turn guard and the run's slot are held until the stream
+   * ends or is dropped.
+   */
+  async startStream(
+    sessionId: string,
+    runId: string,
+    input: Extract<ParsedResumeInput, { ok: true }>,
+  ): Promise<{ readonly ok: true; readonly message: string; readonly events: AsyncGenerator<AgentStreamEvent> } | ({ readonly ok: false } & ResumeFailure)> {
+    const admitted = await this.admit(sessionId, runId);
+    if (!admitted.ok) return admitted;
+    const { agent, leave } = admitted;
+    const host = this.host;
+    const store = (result: AgentResult): void => this.store(sessionId, result, input);
+    async function* events(): AsyncGenerator<AgentStreamEvent> {
+      let stored = false;
+      try {
+        // The exchange is stored before the terminal event reaches any client.
+        yield* resumeEventStream(agent, runId, input.options, (end) => {
+          if ("result" in end) {
+            store(end.result);
+            stored = true;
+          }
+        });
+      } finally {
+        if (stored) await host.evict(sessionId).catch(() => undefined);
+        leave();
+      }
+    }
+    return { ok: true, message: continueMessage(input.options.note), events: events() };
+  }
+
+  /**
+   * The checks shared by both forms of Continue: the run is not already being continued,
+   * it is one of this chat's interrupted runs, no turn is in flight, and the agent builds.
+   * On success the run's slot and the turn guard are held; `leave` releases both.
+   */
+  private async admit(
+    sessionId: string,
+    runId: string,
+  ): Promise<{ readonly ok: true; readonly agent: ResumableAgent; readonly leave: () => void } | ({ readonly ok: false } & ResumeFailure)> {
     const slot = this.guard.claim(runId);
     if (!slot) return { ok: false, code: "busy", message: "This run is already being continued." };
     try {
       const listed = await this.list(sessionId);
       if (!listed.some((r) => r.runId === runId)) {
+        slot();
         return {
           ok: false,
           code: "not-resumable",
@@ -144,27 +208,33 @@ export class ChatResume {
       try {
         release = this.host.acquireTurn(sessionId);
       } catch (e) {
+        slot();
         return { ok: false, code: "busy", message: errorText(e) };
       }
       try {
-        let result: AgentResult;
-        try {
-          const agent = await this.host.agentFor(sessionId);
-          result = await agent.resumeRun(runId, input.options);
-        } catch (e) {
-          return { ok: false, ...resumeFailureOf(e) };
-        }
-        const reply = replyOf(result);
-        const outcome = result.success ? undefined : turnOutcomeOf(result);
-        this.host.persistExchange(sessionId, continueMessage(input.options.note), reply, result, [], withTurnOutcome(undefined, outcome));
-        // The cached engine did not see this exchange: rebuild its history from the DB.
-        await this.host.evict(sessionId);
-        return { ok: true, reply, success: result.success, resumable: result.resumable === true };
-      } finally {
+        const agent = await this.host.agentFor(sessionId);
+        return {
+          ok: true,
+          agent,
+          leave: () => {
+            release();
+            slot();
+          },
+        };
+      } catch (e) {
         release();
+        slot();
+        return { ok: false, ...resumeFailureOf(e) };
       }
-    } finally {
+    } catch (e) {
       slot();
+      return { ok: false, ...resumeFailureOf(e) };
     }
+  }
+
+  /** Store the continued run's result as the session's next exchange ("Continue" and the reply). */
+  private store(sessionId: string, result: AgentResult, input: Extract<ParsedResumeInput, { ok: true }>): void {
+    const outcome = result.success ? undefined : turnOutcomeOf(result);
+    this.host.persistExchange(sessionId, continueMessage(input.options.note), replyOf(result), result, [], withTurnOutcome(undefined, outcome));
   }
 }

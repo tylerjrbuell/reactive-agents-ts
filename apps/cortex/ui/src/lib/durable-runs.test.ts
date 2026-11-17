@@ -2,13 +2,14 @@ import { describe, expect, it } from "bun:test";
 import { DURABLE_RUNS_CHAT_DETAIL, durableRunsOn, durableRunsPatch, durableRunsValue } from "./durable-runs.js";
 
 describe("durable runs config", () => {
-  it("is off unless durableRuns.enabled is true", () => {
-    expect(durableRunsOn({})).toBe(false);
-    expect(durableRunsOn({ durableRuns: { enabled: false } })).toBe(false);
-    expect(durableRunsOn({ durableRuns: { enabled: "yes" } })).toBe(false);
+  it("is on unless durableRuns.enabled is literally false (a config with no key reads as on)", () => {
+    expect(durableRunsOn({})).toBe(true);
+    expect(durableRunsOn({ durableRuns: {} })).toBe(true);
+    expect(durableRunsOn({ durableRuns: { enabled: "no" } })).toBe(true);
     expect(durableRunsOn({ durableRuns: { enabled: true } })).toBe(true);
-    expect(durableRunsValue({})).toBe("Off");
-    expect(durableRunsValue({ durableRuns: { enabled: true } })).toBe("On");
+    expect(durableRunsOn({ durableRuns: { enabled: false } })).toBe(false);
+    expect(durableRunsValue({})).toBe("On");
+    expect(durableRunsValue({ durableRuns: { enabled: false } })).toBe("Off");
   });
 
   it("patches the same durableRuns shape the Builder writes and keeps other fields", () => {

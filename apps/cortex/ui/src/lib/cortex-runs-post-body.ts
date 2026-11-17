@@ -162,8 +162,8 @@ export function cortexRunsPostBody(
     ...(cfg.rawConfig && typeof cfg.rawConfig === "object" && Object.keys(cfg.rawConfig).length > 0
       ? { rawConfig: cfg.rawConfig }
       : {}),
-    // Durable execution (crash-resume).
-    ...(cfg.durableRuns?.enabled ? { durableRuns: { enabled: true as const } } : {}),
+    // Durable execution (crash-resume): on by default, so an off is sent explicitly (lib/durable-runs.ts).
+    durableRuns: { enabled: cfg.durableRuns?.enabled !== false },
     // Approval gate: the framework's top-level approvalPolicy (tools + shell command rules + mode).
     ...(() => {
       const approvalPolicy = approvalPolicyBody(cfg.approvalPolicy);

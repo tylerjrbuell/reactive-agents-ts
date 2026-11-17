@@ -36,6 +36,7 @@ import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } f
 import { parseCortexJudgmentConfig } from "./cortex-judgment.js";
 import { waitsLive, durableApprovals } from "./durable-approvals.js";
 import { effectiveApprovalPolicy } from "./approval-policy.js";
+import { effectiveDurableRuns } from "./durable-default.js";
 import { resolveTemplate, type VariableDef } from "./resolve-template.js";
 import { parseCortexGatewayConfig } from "./channel-config.js";
 import { GatewayChannelHost } from "./gateway-channel-host.js";
@@ -73,9 +74,7 @@ export function gatewayConfigToBuildParams(input: {
   const modelRouting = obj(config.modelRouting)?.enabled
     ? (config.modelRouting as NonNullable<BuildCortexAgentParams["modelRouting"]>)
     : undefined;
-  const durableRuns = obj(config.durableRuns)?.enabled
-    ? (config.durableRuns as NonNullable<BuildCortexAgentParams["durableRuns"]>)
-    : undefined;
+  const durableRuns = effectiveDurableRuns(config);
   // Headless: nobody watches a gateway agent, so the default gate refuses instead of waiting.
   const approvalPolicy = effectiveApprovalPolicy(config, { headless: true });
   const rawConfig = obj(config.rawConfig);

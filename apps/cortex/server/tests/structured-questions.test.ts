@@ -144,6 +144,7 @@ describe("a chat turn asking a structured question live", () => {
         strategy: "reactive",
         maxIterations: 4,
         tools: ["file-read"],
+        durableRuns: { enabled: false }, // durable is the default; the live question is the opt-out
         testScenario: [
           { toolCall: { name: "request_user_input", args: { prompt: "Deploy details", questions: QUESTIONS } } },
           { match: "stg", text: "Deploying to stg. FINAL." },
