@@ -2,9 +2,10 @@
  * @reactive-agents/react — React hooks for agent UI integration.
  *
  * @unstable All exports unstable. Zero in-repo consumers (Cortex UI uses its
- * own framework), zero tests, SSE contract hand-coupled to runtime via `_tag`
- * strings — runtime change breaks silently. May change in v0.10.x without
- * notice. See AUDIT-overhaul-2026.md §11 #42.
+ * own framework), SSE contract hand-coupled to runtime via `_tag` strings, so
+ * a runtime change can break it silently. Covered by unit tests, but the tier
+ * stays unstable: may change in any release without notice. See
+ * AUDIT-overhaul-2026.md §11 #42.
  *
  * Server setup (Next.js App Router example):
  * ```typescript
