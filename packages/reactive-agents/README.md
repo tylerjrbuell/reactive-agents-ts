@@ -142,6 +142,20 @@ Install separately when needed: [`gateway`](https://www.npmjs.com/package/@react
 
 Prefer a leaner install? Skip the umbrella: `bun add @reactive-agents/runtime @reactive-agents/llm-provider @reactive-agents/reasoning`. `ReactiveAgents.create()` is exported from `@reactive-agents/runtime`.
 
+Watch your agents run with Cortex: `bun add @reactive-agents/cortex`, then `rax cortex`.
+
+![Cortex chat in Plan mode showing an editable three-step plan with tool chips for file-read, before it is executed.](https://docs.reactiveagents.dev/screens/cortex/chat-plan-card.webp)
+*Plan mode: the agent proposes a plan, one line per step with the tool it will use. Edit it, then Execute.*
+
+![Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button.](https://docs.reactiveagents.dev/screens/cortex/chat-stopped-continue.webp)
+*A durable run you stopped keeps its place. Continue resumes the same run without repeating finished work.*
+
+![Cortex Tools Lab listing three MCP servers: two connected with their tools, one failed with its error.](https://docs.reactiveagents.dev/screens/cortex/tools-lab.webp)
+*Tools Lab: MCP servers with live connection status and each tool's input schema.*
+
+![Cortex run view for a run that hit its iteration limit, with the Why it ended card open: cause, what to try, decisive steps, and the trace below.](https://docs.reactiveagents.dev/screens/cortex/run-cause.webp)
+*The run view's Why it ended card: the cause, who is at fault, what to try, and the steps that decided it.*
+
 ## Documentation
 
 - [Quickstart](https://docs.reactiveagents.dev/guides/quickstart/)

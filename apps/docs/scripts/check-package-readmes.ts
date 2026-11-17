@@ -81,6 +81,13 @@ export function loadDocsSlugs(root: string = DOCS_ROOT): Set<string> {
   return new Set(walkContent(root).map((f) => slugOf(f, root)));
 }
 
+const PUBLIC_ROOT = join(DOCS_ROOT, "..", "..", "..", "public");
+
+/** Static assets (images under screens/ or with an image extension) are files in public/, not docs pages. */
+function isAssetRoute(route: string): boolean {
+  return route.startsWith("screens/") || /\.(webp|png|jpe?g|svg|gif)$/i.test(route);
+}
+
 function docsRoute(url: string): string | null {
   const m = url.match(/^https?:\/\/docs\.reactiveagents\.dev(\/[^\s)#?]*)?/i);
   if (!m) return null;
@@ -93,6 +100,7 @@ export function auditReadme(
   docsSlugs: ReadonlySet<string>,
   budget: number = BUDGET_OVERRIDES[pkg.dir] ?? DEFAULT_BUDGET_BYTES,
   stability: Readonly<Record<string, string>> = stabilityData.packages,
+  publicRoot: string = PUBLIC_ROOT,
 ): Finding[] {
   const f: Finding[] = [];
   const add = (rule: string, detail: string): void => void f.push({ pkg: pkg.dir, rule, detail });
@@ -161,8 +169,12 @@ export function auditReadme(
   const routes = urls.map(docsRoute).filter((r): r is string => r !== null);
   const pathRoutes = routes.filter((r) => r !== "");
   if (pathRoutes.length === 0) add("docs-link", "no link to a docs.reactiveagents.dev page (root links do not count)");
+  const pageRoutes = pathRoutes.filter((r) => !isAssetRoute(r));
+  if (pageRoutes.length === 0 && pathRoutes.length > 0) add("docs-link", "no link to a docs.reactiveagents.dev page (asset URLs do not count)");
   for (const r of new Set(pathRoutes)) {
-    if (!docsSlugs.has(r) && !STATIC_DOC_PATHS.has(r)) add("docs-link-broken", `/${r}/ is not a docs page`);
+    if (isAssetRoute(r)) {
+      if (!existsSync(join(publicRoot, r))) add("asset-missing", `/${r} not found under apps/docs/public/`);
+    } else if (!docsSlugs.has(r) && !STATIC_DOC_PATHS.has(r)) add("docs-link-broken", `/${r}/ is not a docs page`);
   }
 
   // relative links and wikilinks break on npm

@@ -1,0 +1,27 @@
+---
+/** A responsive grid of CortexShot figures: one column on phones, two from 720px. */
+import CortexShot from "./CortexShot.astro";
+
+interface Props {
+  ids: string[];
+}
+const { ids } = Astro.props;
+---
+<div class="cortex-gallery">
+  {ids.map((id) => <CortexShot id={id} />)}
+</div>
+<style>
+  .cortex-gallery {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem 1.25rem;
+  }
+  .cortex-gallery :global(.cortex-shot) {
+    margin: 0.5rem 0;
+  }
+  @media (min-width: 720px) {
+    .cortex-gallery {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>

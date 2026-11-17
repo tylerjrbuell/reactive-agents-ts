@@ -7,3 +7,5 @@ The npm README now states that Bun is recommended and Node.js 22.5+ is supported
 The README was also rewritten to the shared package template: shorter, with the unsourced healing and token-savings percentages and hand-typed counts removed, and strategy, tools and environment detail replaced by docs links.
 
 The quickstart snippets now opt in with `.withTools({ builtins: "research" })` instead of an empty `.withTools()`, and the pitch no longer claims signed receipts by default (they are unsigned unless `.withReceiptSigning()` or `RA_RECEIPT_KEY` is set).
+
+The README also shows four Cortex screenshots (absolute docs-site URLs, since npm does not resolve relative paths) with the `bun add @reactive-agents/cortex` then `rax cortex` start line.

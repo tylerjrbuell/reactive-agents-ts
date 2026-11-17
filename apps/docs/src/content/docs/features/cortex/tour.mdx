@@ -7,6 +7,7 @@ sidebar:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import CortexShot from "../../../../components/CortexShot.astro";
 
 Cortex has four top-bar views (Beacon, Chat, Runs, Lab) plus Settings. A run view opens from any run. Each section below says what the view is for and links to the page that covers it in depth.
 
@@ -65,9 +66,15 @@ Open any run from Runs, a chat turn or Beacon to get the step-debugger: vitals, 
 
 Multi-turn chats with a quick bar, a Config popover, slash commands, file tagging, attachments, a to-do dock and live approvals. See [Chat and composer](/features/cortex/chat-and-composer/).
 
+<CortexShot id="chat-plan-card" />
+
+<CortexShot id="chat-stopped-continue" />
+
 ## Lab
 
 The workshop: the **Builder** (every framework option as a form), **Saved agents**, **Skills**, **Memory**, **Tools** (sub-tabs **Servers**, **Custom tools**, **Catalog and test**) and **Prompts**. See [Lab builder](/features/cortex/lab-builder/) and [Memory and skills](/features/cortex/memory-and-skills/).
+
+<CortexShot id="tools-lab" />
 
 ## Settings and model pages
 

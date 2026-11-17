@@ -7,10 +7,13 @@ sidebar:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import CortexShot from "../../../../components/CortexShot.astro";
 
 ![Cortex run view.](../../../../assets/cortex-run-details.png)
 
 Open any run from the Runs list, a chat turn or Beacon. The header names the run, shows its status and links back to the chat that started it; its actions are the live controls (Pause, Stop, Terminate) while it runs, **Continue in chat**, **Edit and rerun**, **Export** (run JSON, raw trace JSONL, copy the trace or the answer) and a More menu (Replay, Rerun as is, Rename, Copy run id, Delete).
+
+<CortexShot id="run-cause" />
 
 ## Vitals
 

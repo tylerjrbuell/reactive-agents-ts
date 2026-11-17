@@ -76,14 +76,26 @@ See [full documentation](https://docs.reactiveagents.dev/) for the complete case
 
 A local studio for live debugging. Start it with `.withCortex()` or `rax run --cortex`.
 
+Watch your agents run: `bun add @reactive-agents/cortex`, then `rax cortex` (from a source checkout, `bun cortex`).
+
 <div align="center">
-  <img src="apps/docs/src/assets/cortex-beacon.png" alt="Cortex Beacon — live agent canvas with real-time cognitive state, entropy signal, and per-step token usage" width="800" />
-  <p><em>Beacon view: live agent canvas with cognitive state, entropy signal, and token usage per step</em></p>
+  <img src="apps/docs/public/screens/cortex/chat-plan-card.webp" alt="Cortex chat in Plan mode showing an editable three-step plan with tool chips for file-read, before it is executed." width="800" />
+  <p><em>Plan mode: the agent proposes a plan, one line per step with the tool it will use. Edit it, then Execute.</em></p>
 </div>
 
 <div align="center">
-  <img src="apps/docs/src/assets/cortex-run-details.png" alt="Cortex Run Details — vitals strip, full execution trace, and AI-generated debrief summary" width="800" />
-  <p><em>Run details: vitals strip, step-by-step execution trace, and AI-generated debrief summary</em></p>
+  <img src="apps/docs/public/screens/cortex/chat-stopped-continue.webp" alt="Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button." width="800" />
+  <p><em>A durable run you stopped keeps its place. Continue resumes the same run without repeating finished work.</em></p>
+</div>
+
+<div align="center">
+  <img src="apps/docs/public/screens/cortex/tools-lab.webp" alt="Cortex Tools Lab listing three MCP servers: two connected with their tools, one failed with its error." width="800" />
+  <p><em>Tools Lab: MCP servers with live connection status and each tool's input schema.</em></p>
+</div>
+
+<div align="center">
+  <img src="apps/docs/public/screens/cortex/run-cause.webp" alt="Cortex run view for a run that hit its iteration limit, with the Why it ended card open: cause, what to try, decisive steps, and the trace below." width="800" />
+  <p><em>The run view's Why it ended card: the cause, who is at fault, what to try, and the steps that decided it.</em></p>
 </div>
 
 [Full Cortex documentation with more screenshots →](https://docs.reactiveagents.dev/features/cortex/)
@@ -159,7 +171,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **13,601 tests** across 2,200+ files, counted from the repo by `bun run --cwd apps/docs metrics`
+- **13,601 tests** across 2,300+ files, counted from the repo by `bun run --cwd apps/docs metrics`
 - **Pre-1.0 versioning**: while the version is `0.x`, minor releases may include breaking changes. Each is listed per release in the [changelog](CHANGELOG.md) and [What's New](https://docs.reactiveagents.dev/guides/whats-new/) with migration notes; the [stability tiers](https://docs.reactiveagents.dev/reference/stability/) say which surfaces are safest.
 - **Strict TypeScript**: Effect-TS schemas validate every service boundary; tagged errors on the converted packages, with the remaining string throws capped by a shrink-only CI ratchet
 
@@ -792,7 +804,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (13,601 tests / 2,200+ files, ~3m)
+bun test                 # Run full test suite (13,601 tests / 2,300+ files, ~3m)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 

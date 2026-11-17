@@ -7,6 +7,7 @@ sidebar:
 ---
 
 import { Tabs, TabItem, Aside, Card, CardGrid } from "@astrojs/starlight/components";
+import CortexShot from "../../../../components/CortexShot.astro";
 
 ![Cortex Lab builder: section nav, settings and the Run this agent panel.](../../../../assets/cortex-lab-builder.png)
 
@@ -70,6 +71,10 @@ Attaching an MCP server makes all of its tools available; click a tool chip to l
 A run or chat turn with a schema shows its **Structured output** as a table of fields (Raw JSON is one click away), and a **How output was obtained** panel from the framework's report: whether the provider's schema-constrained call answered or prompt mode did, any repairs applied to the model's JSON, and the fields that failed as JSON Pointers. The panel opens by itself when no valid value was produced.
 
 **Ask me questions** (in **Execution**) lets the agent stop and ask you something (`request_user_input`). **Durable execution** (the **Execution** switch, on by default; an explicit off is saved and kept) makes a Stop, a Pause or a crash leave a run you can continue, and makes the question pause the run so it survives a restart: a chat shows it in the thread with a reply box, a desk run's question appears under **Waiting on you** and in the run header. With durable execution turned off the question is live instead: a chat shows it inline in the streaming turn and the same turn carries on with your answer. Default: chats ask, runs do not; set Yes or No to override. A chat with tools off has no tool layer, so it cannot ask.
+
+<CortexShot id="lab-durable-runs" />
+
+<CortexShot id="lab-calibration" />
 
 Desk runs, chat sessions and saved gateway agents build their agents from the same config. A setting that works in one of them works in all three.
 

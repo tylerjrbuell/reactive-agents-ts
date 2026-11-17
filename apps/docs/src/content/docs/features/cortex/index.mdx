@@ -7,6 +7,7 @@ sidebar:
 ---
 
 import { Tabs, TabItem, Aside, Card, CardGrid } from "@astrojs/starlight/components";
+import CortexShot from "../../../../components/CortexShot.astro";
 
 **Cortex** is the official local-first companion studio for Reactive Agents. Fire it up alongside any agent run and get an instant GUI — live reasoning traces, entropy signal charts, token/cost vitals, debrief summaries, a full trace panel, and an interactive chat interface — all persisted to SQLite so you can replay any run at any time.
 
@@ -29,6 +30,8 @@ rax run "Research the top 5 TypeScript testing frameworks" \
 ```
 
 Cortex opens your browser at `http://127.0.0.1:4321`. From a source checkout, `bun cortex` serves the API on `:4321` and the hot-reloading Vite UI on `http://localhost:5173`; connect agents with `.withCortex()` ([Connect your app](/features/cortex/connect-your-app/)).
+
+<CortexShot id="beacon" />
 
 ## In this section
 

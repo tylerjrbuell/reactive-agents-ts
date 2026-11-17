@@ -37,6 +37,7 @@ import RunDebrief from '../../components/RunDebrief.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
 import ScrollReveal from '../../components/ScrollReveal.astro'
 import TaskFinder from '../../components/TaskFinder.astro'
+import CortexGallery from '../../components/CortexGallery.astro'
 import metrics from '../../data/metrics.json'
 import demoGif from '../../assets/local-vs-frontier.gif'
 
@@ -109,6 +110,18 @@ No script, no actor. This plays back one real live run on `gemma4:e4b`, a ~4B-cl
 <p class="ra-demo-cta">
   Same task, your machine: <a href="/guides/local-models/">pull a local model and run it yourself</a>.
 </p>
+
+  </div>
+</div>
+
+<div id="cortex-in-action" class="ra-section-card ra-panel">
+  <div class="ra-panel-inner">
+
+## Cortex: watch your agents run
+
+Cortex is the local studio that ships with the framework. Chat in Plan mode, stop and continue a durable run, test MCP tools, and read why a run ended. Screenshots are generated from a seeded demo, not mocked up. `bunx @reactive-agents/cortex`, then [take the tour](/features/cortex/tour/).
+
+<CortexGallery ids={["chat-plan-card", "chat-stopped-continue", "tools-lab", "run-cause"]} />
 
   </div>
 </div>

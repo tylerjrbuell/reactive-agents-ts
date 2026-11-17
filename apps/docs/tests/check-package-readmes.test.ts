@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { auditAll, auditReadme, classifyLines, renderTable, sectionKeyOf } from "../scripts/check-package-readmes";
 
 const pkg = { dir: "widget", name: "@reactive-agents/widget", private: false };
@@ -124,5 +127,25 @@ describe("check-package-readmes", () => {
     expect(r.audited).not.toContain("benchmarks");
     expect(r.audited).toContain("core");
     expect(renderTable(r)).toContain("| package | findings | rules |");
+  });
+});
+
+describe("check-package-readmes asset URLs", () => {
+  const pub = mkdtempSync(join(tmpdir(), "readme-public-"));
+  mkdirSync(join(pub, "screens", "cortex"), { recursive: true });
+  writeFileSync(join(pub, "screens", "cortex", "run.webp"), "x");
+  const withImg = (url: string) => GOOD.replace("## Usage", `![shot](${url})\n\n## Usage`);
+  const run = (md: string) => auditReadme(pkg, md, slugs, undefined, tiers, pub).map((f) => f.rule);
+
+  it("passes an existing asset", () => {
+    expect(run(withImg("https://docs.reactiveagents.dev/screens/cortex/run.webp"))).toEqual([]);
+  });
+
+  it("flags a missing asset as asset-missing, not docs-link-broken", () => {
+    expect(run(withImg("https://docs.reactiveagents.dev/screens/cortex/gone.webp"))).toEqual(["asset-missing"]);
+  });
+
+  it("still flags a broken docs page link", () => {
+    expect(run(GOOD.replace("/guides/widgets/", "/guides/nope/"))).toEqual(["docs-link-broken"]);
   });
 });

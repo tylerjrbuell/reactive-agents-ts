@@ -7,6 +7,7 @@ sidebar:
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import CortexShot from "../../../../components/CortexShot.astro";
 
 A **Gateway process** agent is a saved agent that stays running without a browser. In the Lab you can connect it to messaging and see how it is doing. Channels apply to the gateway path only: desk runs and chat turns are built exactly as before.
 
@@ -76,6 +77,8 @@ The Gateway overview (`GET /api/gateway/status`) has a `hub` block: per channel 
 ## The Channels tab
 
 The **Channels** tab in the Lab edits the channel hub. It refreshes live state every few seconds and has four parts.
+
+<CortexShot id="channels-hub" />
 
 **Channels.** Add Telegram, Signal or webhook accounts. Each card shows:
 
