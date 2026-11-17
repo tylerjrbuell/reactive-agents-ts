@@ -29,6 +29,8 @@ const LIST_DIRECTORY_TOOL = "list-directory";
  */
 const TEACHING_PHRASES: readonly string[] = [
   "closest valid call",
+  // The tools package's missing-parameter error: `Valid call: tool({...})`.
+  "valid call:",
   "allowed commands",
   "valid:",
   "did you mean",

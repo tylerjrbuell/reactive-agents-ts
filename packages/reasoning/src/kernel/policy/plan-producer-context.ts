@@ -13,11 +13,14 @@
  *   - interaction : whether the planner may ask the user or run read-only recon.
  * `renderPlanProducerContext` is the model-visible block (strategy planner
  * prompts); `catalogLine` is the compact tool line plan-posture guidance uses.
- * Pure: the clock is a parameter (golden rule 5), no LLM, no fs.
+ * Deterministic: the clock is a parameter (golden rule 5), no LLM. The one fs
+ * read is the cached PATH scan behind a tool's `commands` line (shell-commands-text.ts).
  */
 import type { ToolParamSchema, ToolSchema } from "../capabilities/attend/tool-formatting.js";
 import { planToolCatalogLine } from "./plan-steps.js";
 import { isDateishParam } from "./plan-args.js";
+import { COMMANDS_LISTED_RULE, shellCommandsText } from "./shell-commands-text.js";
+import type { ShellCommandPolicy } from "@reactive-agents/tools";
 
 /**
  * What a plan producer is told about its role. It replaces the planner prompt's
@@ -67,6 +70,8 @@ export interface CatalogToolView {
   readonly description?: string;
   readonly params?: readonly ToolParamSchema[];
   readonly effect?: "read" | "write" | "unknown";
+  /** The executables a command-running tool may run; rendered as one `commands` line. */
+  readonly commandPolicy?: ShellCommandPolicy;
 }
 
 /**
@@ -106,7 +111,9 @@ export function renderCatalog(tools: readonly CatalogToolView[]): string {
             ].join(", ")})`;
       const blurb = toolBlurb(t.name, t.description);
       const notes = (params ?? []).filter((p) => p.description !== undefined && SHOWS_HOW.test(p.description)).map((p) => `\n    ${p.name}: ${p.description}`);
-      return `- ${t.name}${signature}${t.effect === "read" ? " [r]" : t.effect === "write" ? " [w]" : ""}${blurb !== undefined ? `: ${blurb}` : ""}${notes.join("")}`;
+      const commands = shellCommandsText(t.commandPolicy);
+      const commandsNote = commands !== undefined ? `\n    ${commands}` : "";
+      return `- ${t.name}${signature}${t.effect === "read" ? " [r]" : t.effect === "write" ? " [w]" : ""}${blurb !== undefined ? `: ${blurb}` : ""}${notes.join("")}${commandsNote}`;
     })
     .join("\n");
 }
@@ -123,6 +130,7 @@ const toCatalogTool =(t: ToolSchema): PlanCatalogTool => ({
   ...(t.description ? { description: t.description } : {}),
   ...(t.parameters.length > 0 ? { params: t.parameters } : {}),
   effect: t.effect ?? "unknown",
+  ...(t.commandPolicy !== undefined ? { commandPolicy: t.commandPolicy } : {}),
 });
 
 /** Build the context every plan producer plans from. */
@@ -158,6 +166,9 @@ export function renderPlanProducerContext(ctx: PlanProducerContext): string {
     );
   }
   if (ctx.tools.some((t) => t.effect !== "unknown")) lines.push("[r] tools look something up; [w] tools change state outside the plan.");
+  // Only when a tool lists its commands (the trivial task has none): the
+  // catalog already answers "is gh installed / can the shell run it".
+  if (ctx.tools.some((t) => shellCommandsText(t.commandPolicy) !== undefined)) lines.push(COMMANDS_LISTED_RULE);
   if (ctx.interaction.ask || ctx.interaction.recon) {
     lines.push(
       ctx.interaction.ask && ctx.interaction.recon

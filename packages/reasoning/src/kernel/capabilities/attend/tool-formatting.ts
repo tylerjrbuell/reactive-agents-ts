@@ -6,7 +6,7 @@
  * Extracted from tool-utils.ts. All functions are pure (no Effect dependencies).
  */
 
-import type { ToolParameter } from "@reactive-agents/tools";
+import type { ShellCommandPolicy, ToolParameter } from "@reactive-agents/tools";
 import { HEADER_OVERHEAD, guidanceCap, isGuidanceKey, renderRecordEnvelopePreview } from "./envelope-preview.js";
 import { orderObjectPreviewEntries } from "./object-preview.js";
 
@@ -95,6 +95,12 @@ export interface ToolSchema {
    * and absent never are.
    */
   readonly effect?: "read" | "write" | "unknown";
+  /**
+   * The executables a command-running tool may run (`ToolDefinition.commandPolicy`,
+   * tools package). Plan producers render it next to the tool so a planner never
+   * spends a step confirming a command exists (`policy/shell-commands-text.ts`).
+   */
+  readonly commandPolicy?: ShellCommandPolicy;
 }
 
 /** Format tool schemas for LLM consumption.

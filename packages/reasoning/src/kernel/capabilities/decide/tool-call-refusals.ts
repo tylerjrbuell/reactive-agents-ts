@@ -33,6 +33,8 @@ import { callNotReadyReason, type OfferState } from "../reason/tool-surface.js";
 import { recallKeyVisibleInWindow } from "../reason/think-guards.js";
 import { gateNativeToolCallsForRequiredTools, type GateRefusal, type QuotaBudgetConflict } from "./tool-gating.js";
 import { chargeToolCall, runToolCallCounts, type ToolCallCounts } from "./run-tool-call-counts.js";
+import { emptyArgsGuidance, emptyArgsRefusals } from "./empty-args-batch.js";
+import { contributeGuidance, textSignal } from "../../state/guidance-channel.js";
 
 /** The intervention actor and guard-fired name of a gate refusal. */
 export { TOOL_GATE_ACTOR };
@@ -85,6 +87,8 @@ export interface GatedTurn {
   readonly quotaBudgetConflict?: readonly QuotaBudgetConflict[];
   readonly refused: readonly GateRefusal<ToolCallSpec>[];
   readonly refusalSteps: readonly ReasoningStep[];
+  /** One corrective line for the next turn (an all-empty-arguments batch); rides `errorRecovery`. */
+  readonly guidance?: string;
 }
 
 /**
@@ -113,7 +117,11 @@ export function gateTurnToolCalls(
   return Effect.gen(function* () {
     // Stable tool list: a listed tool whose readiness rule fails is refused
     // here, before the other rules, and never runs.
-    const notReady = notReadyRefusals(state, input, allCalls);
+    // A batch that is all empty-argument calls is one model fault: the whole turn
+    // is refused (answered per call, one corrective guidance) before the readiness rule.
+    const surface = [...(input.allToolSchemas ?? []), ...(input.availableToolSchemas ?? [])];
+    const emptyArgs = emptyArgsRefusals(surface, allCalls);
+    const notReady = emptyArgs.length > 0 ? emptyArgs : notReadyRefusals(state, input, allCalls);
     const calls = notReady.length === 0 ? allCalls : allCalls.filter((c) => !notReady.some((r) => r.call === c));
     const caps = input.maxCallsPerTool;
     const counts = caps !== undefined ? yield* runToolCallCounts : null;
@@ -139,7 +147,8 @@ export function gateTurnToolCalls(
       for (const c of gate.effective) if (caps[c.name] !== undefined) chargeToolCall(counts, c.name);
     }
     yield* emitRefusals(state.taskId, state.iteration, gate.refused);
-    return { ...gate, refusalSteps: refusalSteps(gate.refused, state.iteration) };
+    const guidance = emptyArgsGuidance(gate.refused, surface);
+    return { ...gate, refusalSteps: refusalSteps(gate.refused, state.iteration), ...(guidance !== undefined ? { guidance } : {}) };
   });
 }
 
@@ -229,7 +238,9 @@ export function recordRefusedTurn(next: KernelState, thought: string, gated: Gat
   const refused = gated.refused
     .filter((r) => !answered.has(r.call.id))
     .map((r): RefusedCall => ({ call: { id: r.call.id, name: r.call.name, arguments: r.call.arguments }, content: refusalText(r) }));
-  if (refused.length === 0) return transitionState(next, { steps });
+  const pendingGuidance = gated.guidance === undefined ? undefined : contributeGuidance(next.pendingGuidance, textSignal("errorRecovery", gated.guidance));
+  const guided = pendingGuidance === undefined ? {} : { pendingGuidance };
+  if (refused.length === 0) return transitionState(next, { steps, ...guided });
   const assistant: KernelMessage = { role: "assistant", content: thought, toolCalls: refused.map((r) => r.call) };
-  return transitionState(next, { steps, messages: [...next.messages, assistant, ...refusalResults(refused)] });
+  return transitionState(next, { steps, messages: [...next.messages, assistant, ...refusalResults(refused)], ...guided });
 }

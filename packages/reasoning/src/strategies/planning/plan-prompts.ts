@@ -10,6 +10,7 @@
  * All functions are pure (no Effect, no LLM calls) — string template assembly only.
  */
 
+import type { ShellCommandPolicy } from "@reactive-agents/tools";
 import type { PlanStep } from "../../types/plan.js";
 import { renderCatalog, renderPlanProducerContext, type PlanProducerContext } from "../../kernel/policy/plan-producer-context.js";
 
@@ -34,6 +35,8 @@ export interface ToolSummary {
   }>;
   /** `read` / `write` marks what the tool does to the world (planner context); absent or `unknown` shows no mark. */
   effect?: "read" | "write" | "unknown";
+  /** A command-running tool's allowed executables; `renderCatalog` shows them as one `commands` line. */
+  commandPolicy?: ShellCommandPolicy;
 }
 
 export interface PlanGenerationInput {

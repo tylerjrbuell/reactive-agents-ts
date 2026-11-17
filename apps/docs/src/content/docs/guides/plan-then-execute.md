@@ -164,6 +164,8 @@ await agent.execute(plan) // the execute run is shown the findings once, as cont
 
 The `blueprint` and `plan-execute-reflect` strategies write their own plans (generate, patch and augment). Every one of those planner calls is built from the same context: plan only (never run the steps or answer), the tool catalog with each tool's parameters and its read or write effect, and the env date and timezone. The date rule appears when a tool takes a date: a date argument must come from the goal or from today's date, never invented. The interaction line appears only when the planner may ask or look something up.
 
+A command-running tool (`shell-execute` with `terminal: true`) also lists its allowed executables in the catalog: which are on the host's PATH (checked without spawning a process), which are allowed but not installed, and which are not enabled. With a Docker sandbox the PATH split is skipped, because the container's PATH is not the host's. The planner is told not to plan a step only to check that a tool or command exists, so it no longer plans `gh --version` just to confirm shell access. Plan posture lists the same commands in its `Execute-phase tools:` line; `shell-execute` is plannable by name there but still not callable in the plan turn. See the [Tools guide](/guides/tools/) for the command policy.
+
 The plan's tool-call arguments are checked at plan time, against the tool schemas, before anything runs:
 
 | Finding | What the plan does |

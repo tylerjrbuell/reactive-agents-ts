@@ -60,6 +60,7 @@ describe("getRecoveryHint: an error that already teaches gets no generic hint", 
     ["todo", "Invalid action 'begin'. Valid: add | start | done | list"],
     ["file-write", "Invalid arguments. Closest valid call: file-write({\"path\": \"a.md\", \"content\": \"...\"})"],
     ["web-search", "Invalid parameter 'q'. Did you mean 'query'?"],
+    ["shell-execute", "Missing required parameter \"command\". Valid call: shell-execute({\"command\":\"git log --oneline -5\"})"],
     ["file-edit", "File edit failed: required field missing. Read the file first and copy the block verbatim."],
     ["file-read", "Path is a directory, not found as a file. Use list-directory to see its entries."],
   ];

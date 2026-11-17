@@ -14,6 +14,7 @@
 import { isNearDuplicateTitle, planStepToolHint } from "@reactive-agents/core";
 import type { ToolSchema } from "../capabilities/attend/tool-formatting.js";
 import { META_TOOLS } from "../state/kernel-constants.js";
+import { COMMANDS_LISTED_RULE, shellCommandsText } from "./shell-commands-text.js";
 
 /** Most steps a derived checklist holds. */
 export const MAX_DERIVED_STEPS = 12;
@@ -157,7 +158,7 @@ const firstSentence = (s: string): string => clip(clean(s).split(/(?<=[.!?])\s/)
  * capped at {@link MAX_CATALOG_TOOLS}. `undefined` when there is nothing to list.
  */
 export function planToolCatalogLine(
-  schemas: readonly Pick<ToolSchema, "name" | "description">[] | undefined,
+  schemas: readonly Pick<ToolSchema, "name" | "description" | "commandPolicy">[] | undefined,
   reconTools: readonly Pick<ToolSchema, "name">[] = [],
 ): string | undefined {
   const tools = (schemas ?? []).filter((t) => !META_TOOLS.has(t.name));
@@ -165,8 +166,11 @@ export function planToolCatalogLine(
   const own: string[] = [];
   const servers = new Map<string, string[]>();
   const recon = new Set(reconTools.map((t) => t.name));
+  let listsCommands = false;
   for (const t of tools.slice(0, MAX_CATALOG_TOOLS)) {
-    const d = firstSentence(t.description);
+    const commands = shellCommandsText(t.commandPolicy);
+    if (commands !== undefined) listsCommands = true;
+    const d = [firstSentence(t.description), ...(commands !== undefined ? [commands] : [])].filter((x) => x.length > 0).join("; ");
     const mark = recon.has(t.name) ? "read; " : "";
     const entry = d.length > 0 ? `${t.name} (${mark}${d})` : recon.has(t.name) ? `${t.name} (read)` : t.name;
     const slash = t.name.indexOf("/");
@@ -183,5 +187,5 @@ export function planToolCatalogLine(
   const hidden = tools.length - Math.min(tools.length, MAX_CATALOG_TOOLS);
   const more = hidden > 0 ? `; and ${hidden} more` : "";
   const callable = recon.size > 0 ? "You cannot call these now except those marked (read), which are recon tools; " : "You cannot call these now; ";
-  return `Execute-phase tools: ${parts.join(". ")}${more}. ${callable}reference them in steps as \`tool: name\`.`;
+  return `Execute-phase tools: ${parts.join(". ")}${more}. ${callable}reference them in steps as \`tool: name\`.${listsCommands ? ` ${COMMANDS_LISTED_RULE}` : ""}`;
 }

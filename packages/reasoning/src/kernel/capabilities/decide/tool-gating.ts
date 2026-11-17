@@ -102,7 +102,9 @@ export type GateRefusalKind =
   | "strict-dependency"
   | "quota-conflict"
   /** Stable tool list: the tool is listed but its readiness rule does not hold yet (tool-surface.ts). */
-  | "not-ready";
+  | "not-ready"
+  /** Every call of the turn had empty arguments though its tool requires some (empty-args-batch.ts). */
+  | "empty-args";
 
 /**
  * A call the gate did not pass to Act, with the rule and a model-facing reason
