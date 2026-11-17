@@ -19,6 +19,7 @@ import type { CurrentTurnOption } from "../agent/history-block.js";
 import type { AgentStreamEvent } from "../stream-types.js";
 import { ENVIRONMENT_UPDATE_CONTEXT_KEY, type EnvironmentUpdateOption } from "./environment-snapshot.js";
 import { skillsCarry, type SkillsRunOption } from "../runtime-skills-layer.js";
+import { planExecCarry, type PlanExecOption } from "../agent/plan-executor.js";
 
 /**
  * One to-do row persisted between turns. Structurally identical to the
@@ -35,7 +36,7 @@ export interface TodoSeedItem {
 }
 
 /** Options-bag mixin: a turn/run that starts from a prior to-do list. */
-export interface TodoSeedOption extends PlanFindingsOption {
+export interface TodoSeedOption extends PlanFindingsOption, PlanExecOption {
   /** The conversation's latest to-do list; becomes the run's seeded advisory list. */
   readonly initialTodo?: readonly TodoSeedItem[];
 }
@@ -213,6 +214,7 @@ export const todoTurnPorts = (carry: TodoCarry): TodoSeedOption & TodoReportOpti
 export const seedCarry = (o: TodoSeedOption | undefined): TodoSeedOption => ({
   ...(o?.initialTodo ? { initialTodo: o.initialTodo } : {}),
   ...(o?.planFindings && o.planFindings.length > 0 ? { planFindings: o.planFindings } : {}),
+  ...planExecCarry(o),
 });
 
 /** The seed a turn starts from: the held list and the held plan findings (each only when non-empty). */

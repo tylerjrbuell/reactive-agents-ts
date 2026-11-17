@@ -443,6 +443,8 @@ describe("HarnessConfigSchema <-> HarnessConfig bidirectional drift guard", () =
       computeOffload: true,
       planToolCatalog: true,
       planBudget: true,
+      autoTick: true,
+      bookkeepingRefund: true,
       planRecon: true,
       llmRecoveryBudget: true,
       // disclosureMode is set only by `.withTools({ disclosure })`, never by

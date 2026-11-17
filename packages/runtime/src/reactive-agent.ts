@@ -97,7 +97,7 @@ import {
 } from './chat.js'
 import { ChatEngine, nextSessionId } from './chat/engine.js'
 import { turnCarryMetadata, planPosture, originCarry, seedCarry, type TurnCarryOption, type PostureOption, type OriginOption, type TodoSeedOption } from './chat/todo-seed.js'
-import { planFacade, executeFacade, type PlanRunOptions, type PlanRunOption } from './agent/plan-facade.js'
+import { planFacade, executeFacade, type PlanRunOptions, type PlanRunOption, type PlanExecuteOptions } from './agent/plan-facade.js'
 import type { EnvironmentUpdateOption } from './chat/environment-snapshot.js'
 import { makeChatComplete, makeChatPublishMode, makeChatPublishPlan, makeChatPublishTurn, makeChatToolIntent, makeSessionRunStreamTask, makeSessionRunTask, sessionEnvironmentOption, sessionEnvironmentPorts } from './agent/chat-capabilities.js'
 import type { AgentDebrief } from './debrief.js'
@@ -799,8 +799,8 @@ export class ReactiveAgent<TOut = unknown> {
 
     /** Run `input` under plan posture (planning tools only) and return the typed `Plan`; rejects `PlanNoStepsError` when it has no steps. */
     plan(input: TaskInput, options?: PlanRunOptions): Promise<Plan> { return planFacade(this, input, options) }
-    /** Run `plan.goal` seeded from the plan's checklist; `result.plan` carries per-step status. */
-    execute(plan: Plan, options?: PlanRunOptions): Promise<AgentResult & { readonly plan: Plan }> { return executeFacade(this, plan.goal, plan, options) }
+    /** Run `plan.goal` from the plan (loop, `blueprint` or `plan-execute-reflect`, chosen by the plan and `options.strategy`); `result.plan` carries per-step status; a bad plan rejects `PlanInvalidError`. */
+    execute(plan: Plan, options?: PlanExecuteOptions): Promise<AgentResult & { readonly plan: Plan }> { return executeFacade(this, plan.goal, plan, options) }
 
     /**
      * Serve this agent over the A2A protocol. Returns once the port is bound.

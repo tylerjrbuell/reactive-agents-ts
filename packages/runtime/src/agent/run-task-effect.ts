@@ -49,6 +49,7 @@ import { join } from 'node:path'
 import { runFacadeEffect } from './run-facade-effect.js'
 import { surfaceLoopStop, tapLoopStop } from '../engine/loop-stop-resume.js'
 import { todoSeedMetadata, type TodoSeedItem } from '../chat/todo-seed.js'
+import { planExecContext, type PlanExecution } from './plan-executor.js'
 import { SKILLS_ACTIVATE_CONTEXT_KEY } from '../runtime-skills-layer.js'
 import {
     generateTaskId,
@@ -111,6 +112,8 @@ export interface RunTaskEffectOptions {
     readonly initialTodo?: readonly TodoSeedItem[]
     /** Recon findings of the plan being executed; ride `task.metadata.context.planFindings` to `rails.planFindings`. */
     readonly planFindings?: readonly PlanFinding[]
+    /** A plan to run in a strategy; rides `task.metadata.context.planExec` (see `plan-executor.ts`). */
+    readonly planExec?: PlanExecution
     /** The typed current turn (input before history was folded in); rides `task.metadata.currentTurn`. */
     readonly currentTurn?: TaskCurrentTurn
     readonly durableRunId?: string
@@ -234,10 +237,11 @@ export const buildRunTaskEffect = (
         metadata: {
             tags: [],
             ...(options?.currentTurn ? { currentTurn: options.currentTurn } : {}),
-            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length || options?.initialTodo?.length || options?.planFindings?.length
+            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length || options?.initialTodo?.length || options?.planFindings?.length || options?.planExec
                 ? {
                       context: {
                           ...todoSeedMetadata(options.initialTodo, options.planFindings).context,
+                          ...planExecContext(options),
                           ...(options.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
                           ...(options.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}),
                           ...(options.posture === 'plan' ? { posture: options.posture } : {}),

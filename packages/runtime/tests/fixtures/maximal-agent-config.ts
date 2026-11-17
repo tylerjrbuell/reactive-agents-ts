@@ -100,6 +100,8 @@ export const MAXIMAL_CONFIG: AgentConfig = {
       computeOffload: true,
       planToolCatalog: true,
       planBudget: false,
+      autoTick: false,
+      bookkeepingRefund: false,
       planRecon: true,
       llmRecoveryBudget: 3,
     },

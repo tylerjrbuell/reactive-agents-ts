@@ -12,13 +12,17 @@
  *     loop stop.
  *   - {@link tapLoopStop} / {@link surfaceLoopStop} read the stop off a durable
  *     run's checkpoint rail as it ends, stamp it on the run row and surface it
- *     (with the run id and a `resumable` flag) on the `AgentResult`.
+ *     (with the run id and a `resumable` flag) on the `AgentResult`. A run with
+ *     no checkpoint rail (non-durable, chat tool turns) surfaces the stop the
+ *     strategy relayed on `result.metadata.extensions.loopStop` ({@link loopStopOfResult}),
+ *     without a `resumable` flag.
  *
  * Completed steps ride the restored state verbatim, so no completed tool step
  * is re-run.
  */
 import { Effect } from "effect";
 import {
+  appendGuidanceText,
   deserializeKernelState,
   isLoopStopped,
   resumeFromStop,
@@ -80,16 +84,9 @@ export const prepareLoopStopResume = (params: {
   if (state === undefined || !isLoopStopped(state)) return undefined;
   const resumed = resumeFromStop(state, { goal: params.goal });
   const note = params.note?.trim();
-  const guidance = resumed.pendingGuidance;
   const withNote: KernelState =
     note !== undefined && note.length > 0
-      ? {
-          ...resumed,
-          pendingGuidance: {
-            ...guidance,
-            errorRecovery: `${guidance?.errorRecovery ?? ""}\nThe user adds: ${note}`.trim(),
-          },
-        }
+      ? { ...resumed, pendingGuidance: appendGuidanceText(resumed.pendingGuidance, "errorRecovery", `The user adds: ${note}`) }
       : resumed;
   return {
     stateJson: serializeKernelState(withNote),
@@ -114,6 +111,17 @@ export const tapLoopStop = (controller: RunControllerLike | undefined): (() => L
   return () => (last === undefined ? undefined : loopStopOfState(last));
 };
 
+/** True for a plain loop-stop record (the shape the kernel relays; a malformed value is dropped). */
+const isLoopStopRecord = (v: unknown): v is LoopStopRecord =>
+  typeof v === "object" && v !== null && typeof Reflect.get(v, "reason") === "string" && typeof Reflect.get(v, "iteration") === "number" &&
+  Array.isArray(Reflect.get(v, "toolsDone")) && Array.isArray(Reflect.get(v, "unfinished"));
+
+/** The stop record a strategy relayed on `result.metadata.extensions.loopStop`, when well formed. */
+export const loopStopOfResult = (result: Pick<AgentResult, "metadata">): LoopStopRecord | undefined => {
+  const raw = result.metadata?.extensions?.["loopStop"];
+  return isLoopStopRecord(raw) ? raw : undefined;
+};
+
 /**
  * Stamp the run id on the result and, for a loop-stopped durable run, the stop
  * summary + `resumable` flag; the same summary goes on the run row. Best-effort
@@ -123,7 +131,8 @@ export const surfaceLoopStop = (
   result: AgentResult,
   params: { readonly runId?: string; readonly dbPath?: string; readonly record: LoopStopRecord | undefined },
 ): Effect.Effect<AgentResult> => {
-  const { runId, dbPath, record } = params;
+  const { runId, dbPath } = params;
+  const record = params.record ?? loopStopOfResult(result);
   const withRunId = runId !== undefined ? { ...result, runId } : result;
   if (record === undefined) return Effect.succeed(withRunId);
   const loopStop = summarizeLoopStop(record);

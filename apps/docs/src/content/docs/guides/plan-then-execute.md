@@ -57,6 +57,36 @@ The result is the normal `AgentResult` plus `result.plan`: the plan with each st
 
 A run with no plan, or with an empty plan, is identical to a run today. `execute()` of an empty plan runs the goal with no seed.
 
+## Running a plan in a strategy
+
+The plan is one artifact; the executor is a choice. `agent.execute(plan, { strategy? })` and `agent.run(input, { plan })` pick it from the plan and the strategy setting:
+
+| Plan and setting | Executor |
+| --- | --- |
+| `strategy: "blueprint"` or `"plan-execute-reflect"` in the options | that strategy adopts your plan instead of planning |
+| The agent's own strategy is `blueprint` or `plan-execute-reflect` | the same, with no option needed |
+| Some step has `dependsOn` or `args` (an executable DAG) | `blueprint`: the steps run as a 0-LLM DAG, then one solve call |
+| Free steps (titles, optional `tool` hints) | the ReAct loop with the plan seeded as its checklist, as before |
+
+```ts
+const plan = await agent.plan("Compare the two reports")
+const [first, second, ...rest] = plan.steps
+const edited = {
+  ...plan,
+  source: "user-edited" as const,
+  steps: [first, { ...second, dependsOn: [first.id], args: { path: "b.md" } }, ...rest], // add a dependency and a tool argument
+}
+
+const result = await agent.execute(edited) // runs in blueprint (rich plan)
+result.plan.steps // each step "done", "skipped", "in-progress" or "pending"
+```
+
+`result.plan` is the plan the strategy ended with (its steps may have been repaired or extended), keeping your plan's `id`, `goal` and `source`. A tool hint alone does not make a plan rich: `blueprint` needs `args` to call a tool without a model.
+
+A plan that cannot run fails before any run starts, with `PlanInvalidError` (exported from `@reactive-agents/runtime`): it is not a valid `Plan`, or its `dependsOn` names an unknown step, itself, or forms a cycle. `error.reason` says which.
+
+The seeded-plan loop has two harness kill switches, both on by default: `autoTick` marks a step done when its hinted tool just succeeded, and `bookkeepingRefund` stops a `todo`-only round from using up `maxIterations` (at most half the budget is refunded). Turn them off with `.withHarness({ autoTick: false, bookkeepingRefund: false })` or `RA_AUTO_TICK=0` / `RA_BOOKKEEPING_REFUND=0`. The run-started config records both.
+
 ## Chat sessions
 
 Sessions already have a mode (`session.setMode("plan" | "execute")`). The same plan is there as well:

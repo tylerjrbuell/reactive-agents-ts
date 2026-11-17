@@ -439,6 +439,51 @@ describe("run-started config + origin", () => {
     }
   });
 
+  test("autoTick and bookkeepingRefund are recorded as mechanisms: default ON; explicit config and env turn each off, explicit config beats env", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const build = (harness?: { autoTick?: boolean; bookkeepingRefund?: boolean }) => {
+      const b = ReactiveAgents.create()
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" });
+      return (harness ? b.withHarness(harness) : b).build();
+    };
+    const prior = { tick: process.env.RA_AUTO_TICK, refund: process.env.RA_BOOKKEEPING_REFUND };
+    delete process.env.RA_AUTO_TICK;
+    delete process.env.RA_BOOKKEEPING_REFUND;
+    try {
+      const dflt = await build();
+      const dfltMech = await mechanismsOf(dflt.run("auto-tick default pin"));
+      await dflt.dispose();
+      expect([dfltMech?.autoTick, dfltMech?.bookkeepingRefund]).toEqual([true, true]);
+
+      const off = await build({ autoTick: false, bookkeepingRefund: false });
+      const offMech = await mechanismsOf(off.run("auto-tick explicit-off pin"));
+      await off.dispose();
+      expect([offMech?.autoTick, offMech?.bookkeepingRefund]).toEqual([false, false]);
+
+      process.env.RA_AUTO_TICK = "0";
+      process.env.RA_BOOKKEEPING_REFUND = "0";
+      const env = await build();
+      const envMech = await mechanismsOf(env.run("auto-tick env pin"));
+      await env.dispose();
+      expect([envMech?.autoTick, envMech?.bookkeepingRefund]).toEqual([false, false]);
+
+      const explicitOn = await build({ autoTick: true, bookkeepingRefund: true });
+      const onMech = await mechanismsOf(explicitOn.run("auto-tick explicit-on pin"));
+      await explicitOn.dispose();
+      expect([onMech?.autoTick, onMech?.bookkeepingRefund]).toEqual([true, true]);
+    } finally {
+      delete process.env.RA_AUTO_TICK;
+      delete process.env.RA_BOOKKEEPING_REFUND;
+      if (prior.tick !== undefined) process.env.RA_AUTO_TICK = prior.tick;
+      if (prior.refund !== undefined) process.env.RA_BOOKKEEPING_REFUND = prior.refund;
+    }
+  });
+
   test("planRecon is recorded as a mechanism: default OFF; explicit config and RA_PLAN_RECON=1 turn it on", async () => {
     const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
       const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");

@@ -93,6 +93,20 @@ export const HarnessConfigSchema = Schema.Struct({
    */
   planBudget: Schema.optional(Schema.Boolean),
   /**
+   * Auto-tick: on a seeded-plan run, a step whose tool hint names a tool that
+   * just succeeded (and that no other unchecked step names) is marked done by
+   * the harness, so the model spends no turn on the bookkeeping. Default ON;
+   * `false` or `RA_AUTO_TICK=0` turns it off.
+   */
+  autoTick: Schema.optional(Schema.Boolean),
+  /**
+   * Bookkeeping refund: on a seeded-plan run a round that only called `todo`
+   * (or, with `planRecon`, only recon tools) does not count against
+   * `maxIterations`; at most half the budget is refunded. Default ON; `false`
+   * or `RA_BOOKKEEPING_REFUND=0` turns it off.
+   */
+  bookkeepingRefund: Schema.optional(Schema.Boolean),
+  /**
    * Plan recon: under plan posture the model may call tools whose effect is
    * `read` (bounded: 6 calls per run, 2 per tool) to look up facts the plan
    * needs. Each successful result is recorded as a plan finding (`Plan.findings`)

@@ -83,6 +83,7 @@ import type { AgentResult } from '../builder/types.js'
 import type { RunRecord, RunStatus } from '../services/run-store.js'
 import { safeParseJson } from './_json.js'
 import type { TodoSeedItem } from '../chat/todo-seed.js'
+import type { PlanExecution } from './plan-executor.js'
 
 /**
  * Reconcile a crashed run's tool-effect rows for resume (GH #262).
@@ -230,6 +231,8 @@ export interface RunDurableParams {
     readonly initialTodo?: readonly TodoSeedItem[]
     /** Recon findings of the plan being executed (`run(task, { plan })`), carried like `initialTodo`. */
     readonly planFindings?: readonly PlanFinding[]
+    /** The plan to run in a strategy (`run(task, { plan })`), carried like `initialTodo`. */
+    readonly planExec?: PlanExecution
     /** The caller's posture (`"plan"` ⇒ plan-only), carried like `initialTodo`. */
     readonly posture?: 'execute' | 'plan'
     /** Iteration cap for this run (a loop-stop resume's `resumeMaxIterations`); rides `task.metadata.context.maxIterations`. */

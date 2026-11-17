@@ -62,7 +62,9 @@ export {
 } from "./errors.js";
 export { StructuredOutputError, OutputSchemaError } from "./errors/structured-output-error.js";
 export { PlanNoStepsError } from "./errors/plan-no-steps-error.js";
-export type { PlanRunOptions, PlanRunOption, PlanStepInput } from "./agent/plan-facade.js";
+export { PlanInvalidError } from "./errors/plan-invalid-error.js";
+export type { PlanRunOptions, PlanRunOption, PlanStepInput, PlanExecuteOptions } from "./agent/plan-facade.js";
+export type { PlanExecutorStrategy } from "./agent/plan-executor.js";
 export { SubAgentInputError, SubAgentParametersError } from "./errors/sub-agent-parameters-error.js";
 export { isJsonSchemaObject, type JsonSchemaObject, type OutputSchemaInput, type AnyOutputSchema } from "./engine/finalize/json-schema-contract.js";
 export type { DeepPartial, OutputSchemaOptions } from "./builder/types.js";

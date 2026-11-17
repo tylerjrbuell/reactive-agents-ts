@@ -86,6 +86,7 @@ export {
   StructuredOutputError,
   OutputSchemaError,
   PlanNoStepsError,
+  PlanInvalidError,
   SubAgentInputError,
   SubAgentParametersError,
   isJsonSchemaObject,

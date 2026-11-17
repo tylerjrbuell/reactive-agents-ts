@@ -21,6 +21,7 @@ import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { readPosture, readTodoSeed } from "../../../chat/todo-seed.js";
+import { adoptedPlan, readPlanExec } from "../../../agent/plan-executor.js";
 import { readPlanFindings } from "../../../chat/plan-findings.js";
 import { readEnvironmentUpdate } from "../../../chat/environment-snapshot.js";
 
@@ -308,6 +309,8 @@ export const runReasoningThink = (
     });
 
     const currentTurnText = typedCurrentTurnText(task.metadata);
+    // The caller's plan, when the selected strategy adopts it (blueprint / plan-execute-reflect; `plan-executor.ts`).
+    const suppliedPlan = adoptedPlan(readPlanExec(task), effectiveStrategyName);
     const executeRequest: ReasoningExecuteRequest = {
       taskDescription: extractTaskText(task.input),
       // Producer-typed current turn (no inlined history); KernelInput.currentTurnText. Absent ⇒ marker parsing.
@@ -319,6 +322,7 @@ export const runReasoningThink = (
       availableToolSchemas,
       allToolSchemas,
       strategy: effectiveStrategy,
+      ...(suppliedPlan !== undefined ? { plan: suppliedPlan } : {}),
       contextProfile: c.maxIterations !== undefined
         ? { ...(config.contextProfile ?? {}), maxIterations: c.maxIterations }
         : config.contextProfile,
@@ -421,7 +425,8 @@ export const runReasoningThink = (
       envelope: buildRunEnvelopeFromConfig(config, {
         approvalDecision,
         interactionResponse,
-        initialAdvisory: readTodoSeed(task),
+        // A strategy that adopts the supplied plan seeds its own checklist from it; the seed would add every row twice.
+        initialAdvisory: suppliedPlan === undefined ? readTodoSeed(task) : undefined,
         planFindings: readPlanFindings(task),
         environmentUpdate: readEnvironmentUpdate(task),
         posture: readPosture(task),

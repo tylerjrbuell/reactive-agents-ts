@@ -17,6 +17,7 @@ import { Effect } from "effect";
 import { extractIntentText } from "../util.js";
 import { StrategySelectorService } from "@reactive-agents/reactive-intelligence";
 import type { Phase } from "../phase.js";
+import { executorStrategy, readPlanExec } from "../../agent/plan-executor.js";
 
 const StrategySelectorTag = StrategySelectorService;
 
@@ -49,6 +50,8 @@ export const strategySelect: Phase = {
               .pipe(Effect.catchAll(() => Effect.succeed(fallback)))
           : fallback;
 
-      return { ...ctx, selectedStrategy: strategy };
+      // A supplied plan (`agent.execute(plan)`) picks its executor: blueprint / plan-execute-reflect, or the loop (no override).
+      const planned = executorStrategy(readPlanExec(deps.task), strategy);
+      return { ...ctx, selectedStrategy: planned ?? strategy };
     }),
 };

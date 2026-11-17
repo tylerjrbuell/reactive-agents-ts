@@ -9,8 +9,11 @@
  *                         checklist on the EventBus and returns the `Plan`
  *                         (the kernel's terminal step guarantees steps or an
  *                         explicit none; none rejects with `PlanNoStepsError`);
- *  - {@link executeFacade} seeds a run from a plan's checklist (the follow-the-list
- *                         guidance rides that seed) and reports `result.plan` with
+ *  - {@link executeFacade} validates the plan at the boundary (`PlanInvalidError`),
+ *                         seeds a run from its checklist (the follow-the-list
+ *                         guidance rides that seed), hands the plan to the executor
+ *                         `plan-executor.ts` picks (loop, blueprint or
+ *                         plan-execute-reflect) and reports `result.plan` with
  *                         per-step status, publishing `PlanStepStatusChanged`.
  *
  * Pure parts ({@link toolHintOf}, {@link planFromWatch}, {@link stepChanges},
@@ -36,14 +39,18 @@ import { taskInputText, type TaskInput } from "./task-input.js";
 import type { TodoSeedItem } from "../chat/todo-seed.js";
 import type { ChatMessage } from "../chat.js";
 import { planSourceOf, watchChecklist, type PlanRuntime, type PlanWatchResult } from "./plan-watch.js";
+import { invalidPlan, mergeFinalPlan, planFromExtensions, type PlanExecOption, type PlanExecution, type PlanResultLike, type PlanStrategyOption } from "./plan-executor.js";
 
-/** What the facade adds to the caller's run options: the task id it watches, the posture and the seed. */
-export interface PlanRunSeed {
+/** What the facade adds to the caller's run options: the task id it watches, the posture, the seed and the supplied plan. */
+export interface PlanRunSeed extends PlanExecOption {
   readonly taskId: string;
   readonly posture?: "plan";
   readonly initialTodo?: readonly TodoSeedItem[];
   readonly planFindings?: readonly PlanFinding[];
 }
+
+/** Options of `agent.execute(plan, options?)`: the run options plus the executor to run the plan in. */
+export type PlanExecuteOptions = PlanRunOptions & PlanStrategyOption;
 
 /** What the facade needs of the agent (the agent passes itself): its runtime, its id and its own `run()`. */
 export interface PlanHost<R, O extends object> {
@@ -168,23 +175,31 @@ export async function planFacade<R extends { readonly output: string }>(
  * checklist and report `plan` with per-step status. An empty plan runs unseeded
  * (identical to a run without a plan) and reports itself unchanged.
  */
-export async function executeFacade<R, O extends object>(
+export async function executeFacade<R extends PlanResultLike, O extends object>(
   host: PlanHost<R, O>,
   input: TaskInput,
   plan: Plan,
-  options?: O,
+  options?: O & PlanStrategyOption,
 ): Promise<R & { readonly plan: Plan }> {
+  const invalid = invalidPlan(plan);
+  if (invalid !== undefined) throw invalid;
+  const strategy = options?.strategy;
   const taskId = String(generateTaskId());
   const seed = planToChecklistSeed(plan);
+  // The executor (blueprint / plan-execute-reflect / the loop) is chosen in the engine (`plan-executor.ts`).
+  const planExec: PlanExecution | undefined = isPlanEmpty(plan) ? undefined : { plan, ...(strategy !== undefined ? { strategy } : {}) };
   const watch = await watchChecklist(host.runtime, taskId);
   let result: R;
   try {
-    result = await host.run(input, { ...options, taskId, ...(seed.length > 0 ? { initialTodo: seed } : {}), ...(plan.findings && plan.findings.length > 0 ? { planFindings: plan.findings } : {}) } as O & PlanRunSeed);
+    result = await host.run(input, { ...options, taskId, ...(seed.length > 0 ? { initialTodo: seed } : {}), ...(plan.findings && plan.findings.length > 0 ? { planFindings: plan.findings } : {}), ...(planExec !== undefined ? { planExec } : {}) } as O & PlanRunSeed);
   } finally {
     await watch.stop();
   }
   // The plan keeps its findings: an execute run records none of its own.
-  const after = isPlanEmpty(plan) ? plan : planFromWatch({ ...watch.result(), findings: plan.findings ?? [] }, { id: plan.id, goal: plan.goal, createdAt: plan.createdAt, source: plan.source, findings: plan.findings }, plan.steps);
+  const watched = isPlanEmpty(plan) ? plan : planFromWatch({ ...watch.result(), findings: plan.findings ?? [] }, { id: plan.id, goal: plan.goal, createdAt: plan.createdAt, source: plan.source, findings: plan.findings }, plan.steps);
+  // A strategy that owns a plan reports its final one (`extensions.plan`); the checklist watch fills in only what it left open.
+  const final = planFromExtensions(result);
+  const after = final !== undefined && !isPlanEmpty(plan) ? mergeFinalPlan(final, watched, plan) : watched;
   const stamp = { agentId: host.agentId, taskId, timestamp: Date.now() };
   for (const event of stepChanges(plan, after, stamp)) await publish(host.runtime, event);
   return { ...result, plan: after };
