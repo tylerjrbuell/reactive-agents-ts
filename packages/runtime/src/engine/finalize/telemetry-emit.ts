@@ -9,6 +9,10 @@
  * diff, subagent invocations, tool arg validity rate, and local observation
  * persistence.
  *
+ * The upload is opt-in (see ../telemetry-gate.ts): with no telemetry setting
+ * no TelemetryClient is built (so no install id is created) and nothing is
+ * sent. The local run observation is disk-only and is written either way.
+ *
  * Lifted from execution-engine.ts post-W23-6a-8 (2358-LOC checkpoint).
  */
 import { Effect } from "effect";
@@ -20,8 +24,8 @@ import {
   classifyTaskCategory as classifyTaskCategoryFn,
   lookupModel as lookupModelFn,
   loadObservations,
-  telemetryOptedOut,
 } from "@reactive-agents/reactive-intelligence";
+import { isRunTelemetryEnabled, telemetryEndpoint } from "../telemetry-gate.js";
 import {
   buildTrajectoryFingerprint,
   abstractifyToolName,
@@ -150,21 +154,40 @@ export const emitTelemetryRunReport = (
     // A paused run (no outcome yet) sends nothing; the resumed run reports when it ends.
     if (runOutcome !== undefined && config.enableReactiveIntelligence && entropyLog.length > 0) {
       try {
-        const riOpts = config.reactiveIntelligenceOptions as Record<string, unknown> | undefined;
-        const telemetryCfg = riOpts?.telemetry;
-        const telemetryEnabled = !telemetryOptedOut() &&
-          (telemetryCfg === undefined || telemetryCfg === true ||
-          (typeof telemetryCfg === "object" && telemetryCfg !== null && (telemetryCfg as Record<string, unknown>).enabled !== false));
+        // Upload is opt-in (../telemetry-gate.ts, owner decision 2026-11-17).
+        const telemetryEnabled = isRunTelemetryEnabled(config.reactiveIntelligenceOptions);
+
+        const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
+        const toolsUsed = [...new Set(toolCallLog.map(t => t.toolName))];
+
+        // Derive subagent invocations from toolCallLog.
+        // Custom agent tool names come from the builder's agentTools config.
+        const customAgentToolNames = (config as { agentToolNames?: readonly string[] }).agentToolNames ?? [];
+        const subagentInvocations = toolCallLog
+          .filter((e) => isSubagentCall(e.toolName, customAgentToolNames))
+          .map((e) => ({ delegated: true, succeeded: e.success }));
+
+        // Arguments ride ToolCallCompleted.args when the emitter carries them
+        // (the collector copies them onto the log). Calls whose emitter dropped
+        // the args are UNKNOWN, not invalid: score only calls that carry args,
+        // and report 1.0 (no evidence of invalid args) when none do — scoring
+        // missing args as `{}` would read as 0% validity.
+        const callsWithArgs = toolCallLog.filter((e) => e.arguments !== undefined);
+        const toolArgValidityRate =
+          callsWithArgs.length === 0
+            ? 1
+            : computeArgValidityRate(
+                callsWithArgs.map((e) => ({ toolName: e.toolName, arguments: e.arguments })),
+              );
+
+        // Act-or-answer counts relayed by the kernel; `{}` (fields absent) without a tally.
+        const actOrAnswer = readActOrAnswerCounts(rr?.metadata);
 
         if (telemetryEnabled) {
-          const endpoint = typeof telemetryCfg === "object" && telemetryCfg !== null
-            ? ((telemetryCfg as Record<string, unknown>).endpoint as string | undefined) : undefined;
-          const client = new TelemetryClientImpl(endpoint);
+          const client = new TelemetryClientImpl(telemetryEndpoint(config.reactiveIntelligenceOptions));
 
-          const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
           const modelEntry = lookupModelFn(modelId, undefined, String(config.provider ?? ""));
           const taskText = extractTaskText(task.input);
-          const toolsUsed = [...new Set(toolCallLog.map(t => t.toolName))];
           const strategySwitched = !!rr?.metadata?.strategyFallback;
 
           const outcome = runOutcome;
@@ -192,29 +215,6 @@ export const emitTelemetryRunReport = (
             effectiveRequiredTools ?? [],
             toolCallLog.map((e) => e.toolName),
           );
-
-          // Derive subagent invocations from toolCallLog.
-          // Custom agent tool names come from the builder's agentTools config.
-          const customAgentToolNames = (config as { agentToolNames?: readonly string[] }).agentToolNames ?? [];
-          const subagentInvocations = toolCallLog
-            .filter((e) => isSubagentCall(e.toolName, customAgentToolNames))
-            .map((e) => ({ delegated: true, succeeded: e.success }));
-
-          // Arguments ride ToolCallCompleted.args when the emitter carries them
-          // (the collector copies them onto the log). Calls whose emitter dropped
-          // the args are UNKNOWN, not invalid: score only calls that carry args,
-          // and report 1.0 (no evidence of invalid args) when none do — scoring
-          // missing args as `{}` would read as 0% validity.
-          const callsWithArgs = toolCallLog.filter((e) => e.arguments !== undefined);
-          const toolArgValidityRate =
-            callsWithArgs.length === 0
-              ? 1
-              : computeArgValidityRate(
-                  callsWithArgs.map((e) => ({ toolName: e.toolName, arguments: e.arguments })),
-                );
-
-          // Act-or-answer counts relayed by the kernel; `{}` (fields absent) without a tally.
-          const actOrAnswer = readActOrAnswerCounts(rr?.metadata);
 
           client.send({
             id: ctx.taskId,
@@ -268,33 +268,35 @@ export const emitTelemetryRunReport = (
             // Act-or-answer (forced tool call) outcomes
             ...actOrAnswer,
           });
+        }
 
-          // After client.send({...}) completes, persist a local observation (best-effort, never blocks).
-          try {
-            const observation = buildRunObservation({
-              modelId,
-              toolCallLog: toolCallLog.map((t) => ({
-                turn: t.iteration,
-                toolName: t.toolName,
-              })),
-              totalTurns: ctx.iteration,
-              dialect: dialectObserved,
-              classifierRequired: effectiveRequiredTools ?? [],
-              classifierActuallyCalled: toolsUsed,
-              subagentInvoked: subagentInvocations.length,
-              subagentSucceeded: subagentInvocations.filter((x) => x.succeeded).length,
-              argValidityRate: toolArgValidityRate,
-              actOrAnswer,
-            });
-            // The scripted test provider writes only to an explicit dir, never
-            // the user's real ~/.reactive-agents/observations.
-            const observationsDir = process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"];
-            if (String(config.provider) !== "test" || observationsDir !== undefined) {
-              persistRunObservation(modelId, observation, { baseDir: observationsDir });
-            }
-          } catch {
-            // Observer failure must not affect the run
+        // Persist a local observation (disk only, never uploaded; best-effort,
+        // never blocks). Written whether or not the upload above is on: local
+        // calibration learns from it.
+        try {
+          const observation = buildRunObservation({
+            modelId,
+            toolCallLog: toolCallLog.map((t) => ({
+              turn: t.iteration,
+              toolName: t.toolName,
+            })),
+            totalTurns: ctx.iteration,
+            dialect: dialectObserved,
+            classifierRequired: effectiveRequiredTools ?? [],
+            classifierActuallyCalled: toolsUsed,
+            subagentInvoked: subagentInvocations.length,
+            subagentSucceeded: subagentInvocations.filter((x) => x.succeeded).length,
+            argValidityRate: toolArgValidityRate,
+            actOrAnswer,
+          });
+          // The scripted test provider writes only to an explicit dir, never
+          // the user's real ~/.reactive-agents/observations.
+          const observationsDir = process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"];
+          if (String(config.provider) !== "test" || observationsDir !== undefined) {
+            persistRunObservation(modelId, observation, { baseDir: observationsDir });
           }
+        } catch {
+          // Observer failure must not affect the run
         }
       } catch {
         // Telemetry must never affect agent — silent failure

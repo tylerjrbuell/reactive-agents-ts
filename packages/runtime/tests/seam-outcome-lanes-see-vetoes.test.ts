@@ -73,6 +73,8 @@ afterEach(() => {
 const task: Task = makeTask({ id: "t1", type: "research", input: "Search the web and summarize." });
 const config = makeRuntimeConfig({
   enableReactiveIntelligence: true,
+  // Telemetry is opt-in (2026-11-17); these cells read the RunReport.
+  reactiveIntelligenceOptions: { telemetry: true },
   enableMemory: true,
   provider: "anthropic",
   defaultModel: MODEL,

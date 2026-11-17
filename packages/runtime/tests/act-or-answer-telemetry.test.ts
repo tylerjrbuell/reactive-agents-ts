@@ -60,7 +60,13 @@ async function emit(extensions?: Record<string, unknown>) {
       emitTelemetryRunReport({
         ctx: makeExecutionContext({ selectedModel: MODEL, iteration: 2 }),
         task: makeTask(),
-        config: makeRuntimeConfig({ enableReactiveIntelligence: true, provider: "anthropic", defaultModel: MODEL }),
+        // Telemetry is opt-in (2026-11-17); these cells read the RunReport.
+        config: makeRuntimeConfig({
+          enableReactiveIntelligence: true,
+          reactiveIntelligenceOptions: { telemetry: true },
+          provider: "anthropic",
+          defaultModel: MODEL,
+        }),
         obs: null,
         rr: { output: "ok", metadata: extensions === undefined ? {} : { extensions } },
         terminatedByRaw: "final_answer",

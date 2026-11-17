@@ -1917,11 +1917,11 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * (token, structural, semantic, behavioral, context pressure) and publishes
      * EntropyScored events to the EventBus for observability.
      *
-     * Reactive Intelligence is enabled by default. Pass `false` to disable it.
+     * Reactive Intelligence is enabled by default. Pass `false` to disable it. Anonymous run telemetry is OFF unless opted in.
      *
      * @example .withReactiveIntelligence(false) // disable RI
      * @example .withReactiveIntelligence({ controller: { earlyStop: true } })
-     * @example .withReactiveIntelligence({ notice: false }) // silence the one-time telemetry banner (telemetry itself still runs)
+     * @example .withReactiveIntelligence({ telemetry: true }) // opt in to anonymous run telemetry (or env REACTIVE_AGENTS_TELEMETRY=1; DO_NOT_TRACK=1 always wins)
      * @see {@link HarnessProfile.balanced} (RI default-on) /
      *   {@link HarnessProfile.lean} (RI off) — composable presets. Config
      *   overrides also flow through `.compose(...)` or the

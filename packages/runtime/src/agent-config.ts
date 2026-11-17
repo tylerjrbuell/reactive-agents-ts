@@ -527,6 +527,7 @@ export const ReactiveIntelligenceConfigSchema = Schema.Struct({
       ),
     }),
   ),
+  /** Anonymous run telemetry. Opt-in: absent = off. Env `DO_NOT_TRACK` overrides `true`. */
   telemetry: Schema.optional(
     Schema.Union(
       Schema.Boolean,

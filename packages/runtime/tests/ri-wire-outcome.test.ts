@@ -60,7 +60,13 @@ describe("telemetry RunReport for an abstained run", () => {
         emitTelemetryRunReport({
           ctx: makeExecutionContext({ selectedModel: MODEL, iteration: 1 }),
           task: makeTask(),
-          config: makeRuntimeConfig({ enableReactiveIntelligence: true, provider: "anthropic", defaultModel: MODEL }),
+          // Telemetry is opt-in (2026-11-17); this cell reads the RunReport.
+          config: makeRuntimeConfig({
+            enableReactiveIntelligence: true,
+            reactiveIntelligenceOptions: { telemetry: true },
+            provider: "anthropic",
+            defaultModel: MODEL,
+          }),
           obs: null,
           rr: { output: "", status: "abstained", metadata: {} },
           terminatedByRaw: "abstained",
