@@ -13,7 +13,6 @@
  * `runs.db` with SQL.
  */
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Database } from "bun:sqlite";
 
@@ -40,7 +39,9 @@ export function isDurableBuild(p: Pick<BuildCortexAgentParams, "durableRuns" | "
  * the framework's `defaultDurableRunsDir` (`~/.reactive-agents/<agentId>/`, or
  * under `REACTIVE_AGENTS_RUNS_DIR` when set), the same resolver the write path uses.
  */
-export function durableRunsDbPath(agentId: string, dir?: string, home: string = homedir()): string {
+export function durableRunsDbPath(agentId: string, dir?: string, home?: string): string {
+  // `home` is passed on only when the caller gave one: an explicit home beats
+  // REACTIVE_AGENTS_RUNS_DIR in the framework resolver, so no homedir() default here.
   return join(dir && dir.trim() !== "" ? dir : defaultDurableRunsDir(agentId, home), "runs.db");
 }
 
