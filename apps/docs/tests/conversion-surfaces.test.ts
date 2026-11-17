@@ -60,3 +60,28 @@ describe("conversion surfaces", () => {
     expect(i).toContain("npm install reactive-agents");
   });
 });
+
+describe("narrow-width header and overflow guards (Starlight 0.43)", () => {
+  const header = read("src/components/Header.astro");
+  const css = read("src/styles/custom.css");
+
+  it("keeps the Get started and Star CTAs unconditionally visible", () => {
+    expect(header).toMatch(/class="ra-header-cta"/);
+    expect(header).toMatch(/ra-star-cta ra-header-star/);
+    // No rule may hide either CTA at any width.
+    expect(header).not.toMatch(/\.ra-header-cta\s*\{[^}]*display:\s*none/);
+    expect(header).not.toMatch(/\.ra-header-star\s*\{[^}]*display:\s*none/);
+  });
+
+  it("hides the Playground button below 64rem so it never sits under the menu button", () => {
+    // The unlayered `display: inline-flex` beats Starlight's layered sl-hidden utility.
+    expect(header).toMatch(
+      /@media \(max-width: 63\.99rem\)\s*\{\s*\.ra-playground-btn\s*\{\s*display:\s*none;/,
+    );
+  });
+
+  it("wraps long inline code and clips reveal-transform overhang in page content", () => {
+    expect(css).toMatch(/\.sl-markdown-content :not\(pre, th\) > code[^{]*\{\s*overflow-wrap:\s*anywhere;/);
+    expect(css).toMatch(/\.sl-markdown-content \{\s*overflow-x:\s*clip;/);
+  });
+});

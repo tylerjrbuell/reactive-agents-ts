@@ -206,6 +206,15 @@ const PLAYGROUND_URL = '/playground/'
 		filter: brightness(1.1);
 		transform: translateY(-1px);
 	}
+	/* The unlayered display above beats Starlight's layered `sl-hidden` utility,
+	   so hide the Playground button explicitly below 64rem: on phones it would
+	   sit under Starlight's fixed menu button, and between 50rem and 64rem it
+	   pushes the social/theme controls past the right edge. */
+	@media (max-width: 63.99rem) {
+		.ra-playground-btn {
+			display: none;
+		}
+	}
 	.ra-playground-btn svg {
 		flex-shrink: 0;
 	}

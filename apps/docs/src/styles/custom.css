@@ -156,6 +156,13 @@ html {
 body {
     overflow-x: hidden;
 }
+/* `body { overflow-x: hidden }` only stops user scrolling: the viewport still
+   reports (and can be scripted to) the wider scrollWidth. `clip` on the content
+   column removes the pre-reveal translateX overhang from layout overflow
+   without creating a scroll container (sticky and anchors keep working). */
+.sl-markdown-content {
+    overflow-x: clip;
+}
 
 /* ── Animations ─────────────────────────────────────────────── */
 @keyframes ra-title-flow {
@@ -997,6 +1004,13 @@ body {
     white-space: normal;
     word-break: break-word;
     overflow-wrap: break-word;
+}
+
+/* Long inline identifiers in prose, lists and asides (e.g. a
+   `HarnessProfile.lean()/balanced()/intelligent()` run) must wrap instead of
+   pushing the page wider than a phone viewport. */
+.sl-markdown-content :not(pre, th) > code:not(:where(.not-content *)) {
+    overflow-wrap: anywhere;
 }
 
 /* Inline code in headers: stay on one line with the rest of the header */
