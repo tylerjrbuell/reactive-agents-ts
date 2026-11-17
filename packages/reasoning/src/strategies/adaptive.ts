@@ -95,6 +95,8 @@ interface AdaptiveInput {
   readonly taskClassification?: TaskClassification;
   /** A caller-supplied plan: forwarded to the sub-strategy; routes to plan-execute-reflect unless blueprint is selected. */
   readonly plan?: import("./planning/input-plan.js").InputPlan;
+  /** Plan only: routes to blueprint or plan-execute-reflect (never reactive) and does not fall back after the partial plan-only result. */
+  readonly planOnly?: boolean;
   // FM-I (#195): cross-cutting fields forwarded verbatim to the dispatched
   // sub-strategy (via `{ ...input }` spread). Declared here so the forward is
   // type-visible — at runtime the spread already carried them, but the type
@@ -308,8 +310,10 @@ export const executeAdaptive = (
     }
 
     // A supplied plan needs a strategy that adopts it (blueprint or plan-execute).
-    if (input.plan !== undefined && selectedStrategy !== "blueprint" && selectedStrategy !== "plan-execute-reflect") {
-      run.record(makeStep("thought", `[ADAPTIVE] Plan supplied: ${selectedStrategy} → plan-execute-reflect (adopts the plan)`));
+    // Plan-only needs one too: only they have a planner-only mode.
+    const planOnly = input.planOnly === true;
+    if ((input.plan !== undefined || planOnly) && selectedStrategy !== "blueprint" && selectedStrategy !== "plan-execute-reflect") {
+      run.record(makeStep("thought", `[ADAPTIVE] ${planOnly ? "Plan-only" : "Plan supplied"}: ${selectedStrategy} → plan-execute-reflect (${planOnly ? "plans, runs nothing" : "adopts the plan"})`));
       selectedStrategy = "plan-execute-reflect";
     }
 
@@ -327,7 +331,8 @@ export const executeAdaptive = (
     // An abstention falls back too (it reported `partial` before it had its own status).
     let finalSubResult = subResult;
     let fallbackOccurred = false;
-    if ((subResult.status === "partial" || subResult.status === "abstained") && selectedStrategy !== "reactive") {
+    // A plan-only result is `partial` by design: falling back to reactive would run the task.
+    if (!planOnly && (subResult.status === "partial" || subResult.status === "abstained") && selectedStrategy !== "reactive") {
       fallbackOccurred = true;
       run.record(makeStep(
         "thought",

@@ -185,6 +185,12 @@ When the step results are too long for the final synthesis call, the steps most 
 
 The plan the run ended with comes back in core shape in `result.metadata.extensions.plan`, each step carrying its final status (`done`, `skipped`, `in-progress`, `pending`; a `failed` step reads `skipped`, core has no failed state). A plan you supplied keeps its `source`.
 
+### Plan only
+
+`ReasoningService.execute({ ..., planOnly: true })` makes `blueprint` and `plan-execute-reflect` stop once the plan exists. It is the planner without the run: the planner call (or none, for a supplied `plan`), the deterministic plan repair, plan-time argument grounding and, in `blueprint`, VERIFY. No tool runs, and no solve or synthesis call is made. `adaptive` routes a plan-only run to one of the two (a pick of reactive, reflexion or tree-of-thought becomes `plan-execute-reflect`) and never falls back to reactive, since the plan-only result is `partial` by design. Any other strategy fails with an `ExecutionError` rather than running the task.
+
+The result is `status: "partial"` with `output: null`, `metadata.planOnly: true`, `metadata.rawTerminatedBy: "plan-only"` and the plan in `metadata.extensions.plan` (core shape, every step `pending`). It does not raise `plan-incomplete`: that rule judges a plan the run set out to execute. In `blueprint`, a plan VERIFY rejects is returned too, with the reasons in `metadata.verificationWarning`, instead of degrading to reactive (which would run tools).
+
 ## Wrap-up reserve
 
 Opt-in, off by default: set `.withHarness({ wrapUpReserve: true })` (or `RA_WRAPUP_RESERVE=1`; config wins) to hold back the last iterations of a run for the answer. The run-started config records the effective `wrapUpReserve` value. When the reserve takes the last think call it publishes a `wrap_up_reserve` guard event (the budget answer turn publishes `budget_answer_turn`), so a trace shows whether it fired.

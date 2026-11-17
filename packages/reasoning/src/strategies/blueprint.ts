@@ -67,6 +67,7 @@ import { executeReactive } from "./reactive.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { patchPlan } from "./planning/plan-mutation.js";
 import { finishOpenSteps } from "./blueprint/finish-open.js";
+import { planOnlyEnd } from "./planning/plan-only.js";
 import { emitSolveEvidence, selectSolveEvidence } from "./planning/solve-evidence.js";
 import { priorResultsBudgetChars } from "./planning/prior-results.js";
 import { settlePlanSteps } from "../kernel/policy/plan-completion.js";
@@ -100,6 +101,8 @@ interface BlueprintInput {
   readonly availableTools: readonly string[];
   /** Caller-supplied plan (core or strategy shape, `dependsOn` honored). Skips the planner call; validated first. */
   readonly plan?: InputPlan;
+  /** Stop after PLAN + VERIFY: no tool runs, no SOLVE, no reactive degrade; the plan returns pending (`planning/plan-only.ts`). */
+  readonly planOnly?: boolean;
   readonly availableToolSchemas?: readonly ToolSchema[];
   readonly allToolSchemas?: readonly ToolSchema[];
   readonly config: ReasoningConfig;
@@ -187,7 +190,8 @@ export const executeBlueprint = (
     // tool unattended is not an acceptable degrade, and hard-failing would break
     // adaptive routing (which can pick blueprint), so route to the gate-capable
     // reactive strategy instead and say so in the trace. (2026-07-22)
-    if (envelope.rails.approvalPolicy?.mode === "detach") {
+    // (Plan-only runs no tool, so there is nothing to gate: it never degrades.)
+    if (envelope.rails.approvalPolicy?.mode === "detach" && input.planOnly !== true) {
       yield* makeStrategyEmitLog("reasoning/src/strategies/blueprint.ts:emitLog")({
         _tag: "metric",
         name: "blueprint_degraded_to_reactive",
@@ -345,6 +349,17 @@ const blueprintBody = (
       kernelPass: "blueprint:verify",
     });
     yield* emitPhaseEnd({ emitLog, phase: "blueprint:verify", startedAt: start });
+
+    // Plan-only: the verified plan is the product. An invalid plan is returned
+    // with its reasons as the warning, never degraded to reactive (that would run tools).
+    if (input.planOnly === true) {
+      return planOnlyEnd({
+        plan: verification.plan,
+        supplied: input.plan,
+        runContract,
+        ...(verification.status === "invalid" ? { warning: `Plan invalid: ${verification.reasons.join("; ")}` } : {}),
+      });
+    }
 
     // Degrade: an unfixable plan would execute observation-free garbage. Fall
     // back to reactive (it has mid-course observation) on the SAME input.

@@ -37,6 +37,8 @@ export type StrategyFn = (input: {
   readonly allToolSchemas?: readonly ToolSchema[];
   /** A caller-supplied plan (core or strategy shape): blueprint and plan-execute-reflect adopt it instead of planning. */
   readonly plan?: InputPlan;
+  /** Stop after the plan (blueprint, plan-execute-reflect; adaptive routes to one of them): returns it pending in `metadata.extensions.plan`, runs no tool. */
+  readonly planOnly?: boolean;
   readonly config: ReasoningConfig;
   readonly systemPrompt?: string;
   readonly taskId?: string;

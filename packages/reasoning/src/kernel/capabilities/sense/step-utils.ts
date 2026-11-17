@@ -247,10 +247,13 @@ export function buildStrategyResult(params: {
     params.status === "abstained" ||
     params.extraMetadata?.["terminatedBy"] === "abstained" ||
     params.kernelMeta?.terminatedBy === "abstained";
+  // A plan-only run (`planOnly`, strategies/planning/plan-only.ts) ships the plan, not
+  // output: it keeps its own `partial` rather than reading as a failure. Never `completed`.
+  const planOnly = params.extraMetadata?.["planOnly"] === true && params.status === "partial";
   const effectiveStatus: ReasoningStatus =
     abstained && params.status !== "failed"
       ? "abstained"
-      : hasSubstantiveOutput || abstained
+      : hasSubstantiveOutput || abstained || planOnly
         ? params.status
         : "failed";
 

@@ -22,15 +22,9 @@ import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import type { ReasoningConfig } from "../types/config.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { PlanStoreService } from "@reactive-agents/memory";
-import {
-  LLMPlanOutputSchema,
-  hydratePlan,
-  computeWaves,
-} from "../types/plan.js";
-import {
-  stepsMissingRationale,
-  repairGeneratedPlan,
-} from "./plan-execute/plan-enforcement.js";
+import { computeWaves } from "../types/plan.js";
+import { repairGeneratedPlan } from "./plan-execute/plan-enforcement.js";
+import { coaxPlanRationale } from "./plan-execute/rationale-coax.js";
 import type { Plan, PlanStep } from "../types/plan.js";
 import { proposeStrategyExit, type StrategyExitResult } from "../kernel/loop/strategy-exit-gate.js";
 import { unfinishedBlock } from "../kernel/loop/strategy-exit-gate.js";
@@ -38,8 +32,8 @@ import { judgeStrategyDelivery } from "../kernel/capabilities/verify/strategy-de
 import { makePlanChecklist } from "./planning/plan-checklist.js";
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
-import { extractStructuredOutput, structuredCallSpend } from "../structured-output/pipeline.js";
 import { obtainPlan, finalCorePlan } from "./planning/input-plan.js";
+import { planOnlyEnd } from "./planning/plan-only.js";
 import type { InputPlan } from "./planning/input-plan.js";
 import type { ToolSummary } from "./planning/plan-prompts.js";
 import {
@@ -90,6 +84,8 @@ export interface PlanExecuteInput {
   readonly availableTools: readonly string[];
   /** Caller-supplied plan (core or strategy shape). Skips the planner call; validated first. */
   readonly plan?: InputPlan;
+  /** Stop after the plan (generated or supplied, repaired): no tool runs, no synthesis; the plan returns pending (`planning/plan-only.ts`). */
+  readonly planOnly?: boolean;
   /**
    * Opt-in audit gate (mirrors reactive / KernelInput.auditRationale, owner
    * decision 2026-06-04). When off (default), the planner rationale strict-retry
@@ -310,60 +306,18 @@ export const executePlanExecute = (
     const toolSummaries: ToolSummary[] = [...context.tools];
     yield* emitPhaseEnd({ emitLog, phase: "plan-execute:plan", startedAt: start, totalTokens: run.spend().tokens });
 
-    // ── Rationale enforcement (coax) ──────────────────────────────────────────
-    // Every tool_call step must carry a non-empty rationale.why. The base
-    // prompt marks rationale MANDATORY but small models sometimes still omit
-    // it. One retry with a stronger reminder typically recovers compliance.
-    // Opt-in audit gate: rationale.why is audit-only (debrief), not execution —
-    // skip the full re-plan retry unless auditing is on. Saves a planner LLM
-    // call on models that omit rationale (parallels the reactive rationale gate).
-    const auditRationaleOn =
-      input.plan === undefined && (input.auditRationale === true || envelope.harness.auditRationale);
-
-    let missing = auditRationaleOn ? stepsMissingRationale(plan) : [];
-    if (missing.length > 0) {
-      const reminderPrompt = `${planPrompt}\n\n[STRICT RETRY] Your previous plan omitted "rationale" on one or more tool_call steps. EVERY tool_call step MUST include a "rationale": { "why": "<≤280 chars, specific to this call>" } object. Plans without rationale on tool_call steps are rejected. Regenerate the entire plan now, including rationale on every tool_call step.`;
-      const retryResult = yield* extractStructuredOutput({
-        schema: LLMPlanOutputSchema,
-        prompt: reminderPrompt,
-        systemPrompt: `${input.systemPrompt ? `${input.systemPrompt}\n` : ""}${PLANNER_PERSONA} Rationale on tool_call steps is mandatory.`,
-        strategy: "plan-execute-reflect",
-        maxRetries: 1,
-        // GH #246: commanded temperature wins; unset keeps the 0.3 default.
-        temperature: input.temperature ?? 0.3,
-        maxTokens: 4096,
-        ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}),
-      }).pipe(
-        // Accounted like the planner call.
-        Effect.tap((r) => Effect.sync(() => run.account(structuredCallSpend(r.usage, { prompt: reminderPrompt, raw: r.raw })))),
-        Effect.map((r) => hydratePlan(r.data, {
-          taskId,
-          agentId: input.agentId ?? "reasoning-agent",
-          goal,
-          planMode,
-        })),
-        Effect.catchAll(() => Effect.succeed(plan)), // substrate-ok: planner retry is a direct structured call, no run.pass inside
-      );
-      const retryMissing = stepsMissingRationale(retryResult);
-      if (retryMissing.length < missing.length) {
-        plan = retryResult;
-        missing = retryMissing;
-      }
-      if (missing.length > 0) {
-        yield* emitLog({
-          _tag: "metric",
-          name: "plan_rationale_missing",
-          value: missing.length,
-          unit: "steps",
-          timestamp: new Date(),
-        });
-      }
-    }
+    // Rationale enforcement (coax, plan-execute/rationale-coax.ts): audit-only, never for a supplied plan.
+    plan = yield* coaxPlanRationale({
+      plan, planPrompt, planContext: { taskId, agentId: input.agentId ?? "reasoning-agent", goal, planMode },
+      auditOn: input.plan === undefined && (input.auditRationale === true || envelope.harness.auditRationale),
+      systemPrompt: input.systemPrompt, temperature: input.temperature, taskId: input.taskId, emitLog, run,
+    });
 
     // ── Deterministic plan repair (plan-execute/plan-enforcement.ts) ──────────
     // Fan-out producers split per file, every required tool gets a step,
     // quantities are padded, an underspecified tool_call runs as a composite.
     yield* repairGeneratedPlan(plan, input, taskId);
+    if (input.planOnly === true) return planOnlyEnd({ plan, supplied: input.plan, runContract });
 
     // Persist plan to store (if available)
     if (Option.isSome(planStoreOpt)) {

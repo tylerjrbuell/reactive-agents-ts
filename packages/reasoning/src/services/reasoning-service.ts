@@ -10,7 +10,8 @@ import type { ReasoningConfig } from "../types/config.js";
 import { defaultReasoningConfig } from "../types/config.js";
 import { StrategyRegistry, type StrategyFn } from "./strategy-registry.js";
 import { selectStrategyName } from "./strategy-selection.js";
-import type { ReasoningErrors } from "../errors/errors.js";
+import { ExecutionError, type ReasoningErrors } from "../errors/errors.js";
+import { canPlanOnly } from "../strategies/planning/plan-only.js";
 import type { ContextProfile } from "../context/context-profile.js";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ToolService } from "@reactive-agents/tools";
@@ -64,6 +65,15 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
        * The final plan returns in `metadata.extensions.plan` (core shape).
        */
       readonly plan?: import("../strategies/planning/input-plan.js").InputPlan;
+      /**
+       * Plan only: blueprint / plan-execute-reflect stop after the plan (adaptive
+       * routes to one of them). No tool runs and nothing is synthesized; the plan
+       * (every step pending) returns in `metadata.extensions.plan`, with
+       * `metadata.planOnly === true` and `rawTerminatedBy: "plan-only"`.
+       * Other strategies have no planner-only mode: `execute` fails with an
+       * `ExecutionError` rather than running the task.
+       */
+      readonly planOnly?: boolean;
       /** Context profile for model-adaptive context engineering */
       readonly contextProfile?: Partial<ContextProfile>;
       /** LLM provider name (e.g. "ollama", "anthropic") — used to auto-derive default
@@ -227,6 +237,15 @@ export const ReasoningServiceLive = (
             // The plan-drive is a PURE dispatch-time compile (DAG law); see
             // strategy-selection.ts for the interaction rationale.
             const strategyName: ReasoningStrategy = selectStrategyName(params, config);
+            // Plan-only has no meaning for a strategy without a planner: refuse
+            // rather than silently run the task.
+            if (params.planOnly === true && !canPlanOnly(strategyName)) {
+              return yield* Effect.fail(new ExecutionError({
+                strategy: strategyName,
+                message: `planOnly needs a strategy with a planner (blueprint, plan-execute-reflect or adaptive); got "${strategyName}".`,
+                step: 0,
+              }));
+            }
 
             // ── Get strategy function from registry ──
             const strategyFn = yield* registry.get(strategyName);

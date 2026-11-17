@@ -264,12 +264,17 @@ export type StrategyExtras = Readonly<Record<string, unknown>> & {
  *   the joined step results instead (e.g. blueprint's failed SOLVE call).
  *   Becomes `harnessAuthoredOutput` (only when the output is non-empty) and
  *   `warning` appended to the verification warning; no budget marker.
+ * - `PlanOnly`: the strategy was asked for the plan alone (`planOnly`) and
+ *   stopped after planning. Becomes `rawTerminatedBy: "plan-only"` and
+ *   `planOnly: true`; the optional `warning` (a plan defect) joins the
+ *   verification warning. The status is `partial` and nothing is harness-authored.
  */
 export type StrategyOutcome =
   | { readonly _tag: "Abstained"; readonly reason: string; readonly missing: readonly string[] }
   | { readonly _tag: "BudgetStopped"; readonly rawReason: string; readonly warning: string }
   | { readonly _tag: "Unverified"; readonly warning: string }
-  | { readonly _tag: "HarnessJoined"; readonly warning: string };
+  | { readonly _tag: "HarnessJoined"; readonly warning: string }
+  | { readonly _tag: "PlanOnly"; readonly warning?: string };
 
 /**
  * How a strategy run ends.
@@ -494,6 +499,11 @@ function outcomeRelay(outcome: StrategyOutcome, priorWarning: unknown, hasOutput
           ...(hasOutput ? { harnessAuthoredOutput: true } : {}),
           verificationWarning: appendWarning(outcome.warning),
         },
+      };
+    case "PlanOnly":
+      return {
+        rawTerminatedBy: "plan-only",
+        markers: { planOnly: true, ...(outcome.warning !== undefined ? { verificationWarning: appendWarning(outcome.warning) } : {}) },
       };
   }
 }
