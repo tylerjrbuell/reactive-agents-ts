@@ -77,6 +77,8 @@ reactive-intelligence, so adding these would overload it.
 3. Dispatch the parked fixes: replay ordering → harness-warden; guardrails PII regex →
    tools-warden.
 
+> **Update 2026-11-17:** the dx trigger was met (`apps/cli` 9 main-thread commits) and `tools/repo` no longer stays with the main thread. Both are drafted as wardens in [[2026-11-17-dev-efficiency-and-new-wardens]].
+
 ## Open questions for the owner
 
 - Approve eval-warden, or fold eval/judgment into harness-warden instead?

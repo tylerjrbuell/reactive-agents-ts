@@ -93,8 +93,7 @@
     },
     {
       "glob": "apps/cli/**",
-      "owner": null,
-      "reason": "apps/cli has no domain warden in the AGENTS.md ownership table",
+      "owner": "dx-warden",
       "checks": [],
       "docs": [
         "README.md",
@@ -123,11 +122,32 @@
     },
     {
       "glob": "tools/repo/**",
-      "owner": null,
-      "reason": "internal dev CLI; no warden in the AGENTS.md ownership table",
+      "owner": "tooling-warden",
       "checks": [
         "catalog-coverage"
       ],
+      "docs": [
+        ".agents/skills/repo-tool/SKILL.md"
+      ]
+    },
+    {
+      "glob": "scripts/**",
+      "owner": "tooling-warden",
+      "checks": [
+        "catalog-coverage"
+      ],
+      "docs": []
+    },
+    {
+      "glob": ".githooks/**",
+      "owner": "tooling-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": ".github/**",
+      "owner": "tooling-warden",
+      "checks": [],
       "docs": []
     },
     {
@@ -173,7 +193,25 @@
     {
       "glob": "packages/create-reactive-agent/**",
       "owner": null,
-      "reason": "no domain warden for packages/create-reactive-agent in the AGENTS.md ownership table",
+      "reason": "split by file: dx-warden owns src/, tests/ and package.json; docs-warden owns README.md",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/create-reactive-agent/src/**",
+      "owner": "dx-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/create-reactive-agent/tests/**",
+      "owner": "dx-warden",
+      "checks": [],
+      "docs": []
+    },
+    {
+      "glob": "packages/create-reactive-agent/package.json",
+      "owner": "dx-warden",
       "checks": [],
       "docs": []
     },
@@ -191,20 +229,6 @@
     },
     {
       "glob": "docker/**",
-      "owner": "gateway-warden",
-      "checks": [],
-      "docs": []
-    },
-    {
-      "glob": "apps/cli/src/commands/deploy/**",
-      "owner": "gateway-warden",
-      "checks": [],
-      "docs": [
-        "apps/docs/src/content/docs/reference/cli.md"
-      ]
-    },
-    {
-      "glob": "apps/cli/tests/deploy.test.ts",
       "owner": "gateway-warden",
       "checks": [],
       "docs": []
@@ -360,15 +384,13 @@
     },
     {
       "glob": "apps/examples/**",
-      "owner": null,
-      "reason": "no domain warden for apps/examples in the AGENTS.md ownership table",
+      "owner": "dx-warden",
       "checks": [],
       "docs": []
     },
     {
       "glob": "apps/stackblitz/**",
-      "owner": null,
-      "reason": "no domain warden for apps/stackblitz in the AGENTS.md ownership table",
+      "owner": "dx-warden",
       "checks": [],
       "docs": []
     },

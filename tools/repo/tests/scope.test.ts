@@ -285,8 +285,8 @@ describe("scope no-owner vs unowned", () => {
     expect(r.noOwner).toEqual([{ file: "packages/core/x.ts", reason: "none" }])
     expect(r.unowned).toEqual(["README.md"])
     const c = capture()
-    await main(["scope", "tools/repo/src/cli.ts", "package.json"], c.s)
-    expect(c.out()).toContain("no-owner:\n  tools/repo/src/cli.ts (reason:")
+    await main(["scope", "apps/advocate/README.md", "package.json"], c.s)
+    expect(c.out()).toContain("no-owner:\n  apps/advocate/README.md (reason:")
     expect(c.out()).toContain("unowned:\n  package.json")
   })
   test("harness reports map to harness-warden", () => {

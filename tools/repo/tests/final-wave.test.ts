@@ -237,7 +237,7 @@ describe("scope path normalization", () => {
   test("absolute repo path works; outside path is labelled", async () => {
     const c = capture()
     expect(await main(["scope", join(REPO_ROOT, "tools/repo/src/cli.ts"), "/etc/hosts"], c.s)).toBe(0)
-    expect(c.out()).toContain("no-owner")
+    expect(c.out()).toContain("owners:\n  tooling-warden")
     expect(c.out()).not.toContain("unowned")
     expect(c.out()).toContain("outside repo: /etc/hosts")
   })

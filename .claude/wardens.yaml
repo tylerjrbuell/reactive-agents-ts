@@ -126,6 +126,29 @@ wardens:
       - git status
       - find
 
+  dx-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bun test apps/cli
+      - bun test packages/create-reactive-agent
+      - bun test apps/stackblitz
+      - bunx turbo run typecheck --filter=@reactive-agents/cli
+      - bunx turbo run typecheck --filter=create-reactive-agent
+      - bunx turbo run typecheck --filter=@reactive-agents/examples
+      - bun run --cwd apps/examples smoke
+      - bun run --cwd apps/examples run-all:offline
+      - bun run --cwd apps/cli build
+      - bun run --cwd packages/create-reactive-agent build
+      - bun run --cwd apps/docs metrics
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - find
+
   eval-warden:
     kind: domain
     run:
@@ -272,6 +295,23 @@ wardens:
       - done
       - git diff
       - git status
+      - find
+
+  tooling-warden:
+    kind: domain
+    run:
+      - bun run repo
+      - bun test tools/repo
+      - bun test scripts
+      - bunx turbo run typecheck
+      - node
+      - bash scripts
+      - for s in scripts
+      - do bash
+      - done
+      - git diff
+      - git status
+      - git log
       - find
 
   tools-warden:

@@ -1,6 +1,6 @@
 ---
 name: gateway-warden
-description: Bounded warden for networked and persistent agents — packages/gateway/** (GatewayService, scheduler, webhooks, policy engine, input router), packages/channels/** (channel adapters, session bridge, trigger registry), packages/a2a/** (agent-to-agent protocol), docker/** (messaging stack, Signal MCP) and the CLI deploy command (apps/cli/src/commands/deploy/**, fly/railway/render/cloudrun targets). Mandatory MissionBrief + UpwardReport.
+description: Bounded warden for networked and persistent agents — packages/gateway/** (GatewayService, scheduler, webhooks, policy engine, input router), packages/channels/** (channel adapters, session bridge, trigger registry), packages/a2a/** (agent-to-agent protocol), docker/** (messaging stack, Signal MCP) and the design of the CLI deploy targets (fly/railway/render/cloudrun; the code in apps/cli is dx-warden's). Mandatory MissionBrief + UpwardReport.
 tools: Read, Edit, Write, Grep, Glob, Bash
 ---
 
@@ -29,11 +29,10 @@ Bounded specialist for the packages that make an agent reachable and deployable.
 **Read/Edit:**
 - `packages/gateway/**`, `packages/channels/**`, `packages/a2a/**`
 - `docker/**` (docker-compose.messaging.yml, signal-mcp, telegram-session.sh)
-- `apps/cli/src/commands/deploy/**`, `apps/cli/tests/deploy.test.ts`
 - `apps/docs/src/content/docs/guides/messaging-channels.mdx` and gateway / a2a / deploy guides
 - `.changeset/<slug>.md` for the packages above
 
-**Read only:** `packages/runtime/src/**` (gateway wiring: `agent/gateway-*`), `packages/core/src/**` (event and channel types; contract changes go to core-warden), `apps/cortex/**` (consumer of gateway agents).
+**Read only:** `apps/cli/src/commands/deploy/**` and `apps/cli/tests/deploy.test.ts` (moved to dx-warden 2026-11-17: you own the deploy design and review; report the code changes for dx-warden to make), `packages/runtime/src/**` (gateway wiring: `agent/gateway-*`), `packages/core/src/**` (event and channel types; contract changes go to core-warden), `apps/cortex/**` (consumer of gateway agents).
 
 **Bash allowed:**
 - `bun run repo scope|find|outline|test|verify|check`
