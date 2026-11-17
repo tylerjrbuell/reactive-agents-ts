@@ -454,7 +454,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `LLM_DEFAULT_TEMPERATURE` | All providers | `0.7` | Default sampling temperature |
 | `LLM_MAX_RETRIES` | All providers | `3` | LLM request retry attempts |
 | `LLM_TIMEOUT_MS` | All providers | `30000` | LLM request timeout in milliseconds |
-| `REACTIVE_AGENTS_RUNS_DIR` | Durable runs | `~/.reactive-agents` | Base directory for durable run stores (`<base>/<agentId>/runs.db`); replaces `~/.reactive-agents`. An explicit `.withDurableRuns({ dir })` still wins. Use it to isolate stores in tests and hosts |
+| `REACTIVE_AGENTS_RUNS_DIR` | Durable runs | `~/.reactive-agents` | Base directory for durable run stores (`<base>/<agentId>/runs.db`); replaces `~/.reactive-agents`. An explicit `.withDurableRuns({ dir })` still wins, as does an explicit `home` argument to `defaultDurableRunsDir`. Use it to isolate stores in tests and hosts |
 
 ## Hardcoded Defaults
 
