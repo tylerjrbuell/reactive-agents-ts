@@ -19,10 +19,14 @@
   import { planEdited, planProgressLine, type DraftStep } from "$lib/plan-edit.js";
   import { EMPTY_CATALOG, loadQuickbarCatalog, type QuickbarCatalog } from "$lib/chat-quickbar-data.js";
   import { planToolOptions } from "$lib/plan-tool-options.js";
+  import Select from "$lib/components/kit/Select.svelte";
+  import { extrasEdited, extrasOfSteps, planProblem, pruneExtras, type ExtrasMap } from "$lib/plan-extras.js";
+  import { PLAN_STRATEGY_OPTIONS, choiceOfValue, strategyNote, type PlanStrategyChoice } from "$lib/plan-strategy.js";
+  import type { PlanExecuteHandler } from "$lib/stores/chat-mode-store.js";
 
   interface Props {
-    /** Run the plan: record `edited` (when the user changed it), switch to Execute, send the follow-up turn. */
-    onExecute?: (edited?: readonly DraftStep[]) => void | Promise<void>;
+    /** Run the plan: record `edited` (when the user changed it), switch to Execute, run it in the chosen strategy. Resolves the line to show when it failed. */
+    onExecute?: PlanExecuteHandler;
     /** The assistant turn's id: keeps input ids unique when several cards are on the page. */
     turnId: number;
     children: Snippet;
@@ -39,8 +43,25 @@
   const saved = $derived<readonly DraftStep[]>($chatPlan?.steps ?? []);
   const steps = $derived(draft ?? saved);
   const findings = $derived(findingsOfPlan($chatPlan));
-  const dirty = $derived(draft !== null && planEdited(saved, draft));
+  // Each step's dependsOn / args ride beside the steps (`lib/plan-extras.ts`).
+  let extrasDraft = $state<ExtrasMap | null>(null);
+  const savedExtras = $derived(extrasOfSteps($chatPlan?.steps ?? []));
+  const extras = $derived(extrasDraft ?? savedExtras);
+  const dirty = $derived((draft !== null && planEdited(saved, draft)) || (extrasDraft !== null && extrasEdited(savedExtras, extrasDraft)));
+  // Whether the edited graph can run is the framework's check (`findPlanDependencyProblem`); the server's `PlanInvalidError` reason lands in `runError`.
+  const problem = $derived(planProblem(steps, extras));
+  let runError = $state<string | undefined>(undefined);
+  let strategy = $state<PlanStrategyChoice>("auto");
   let busy = $state(false);
+  const reset = () => {
+    draft = null;
+    extrasDraft = null;
+  };
+  function changeSteps(next: readonly DraftStep[]) {
+    draft = next;
+    const kept = pruneExtras(extras, next);
+    if (kept !== extras) extrasDraft = kept; // a removed step takes its entry and the prerequisites on it
+  }
 
   // The tool dropdown offers what the session offers: the quick bar's own catalog and rules.
   let catalog = $state<QuickbarCatalog>(EMPTY_CATALOG);
@@ -52,18 +73,20 @@
 
   async function run() {
     busy = true;
+    runError = undefined;
     try {
-      await onExecute?.(dirty ? (draft ?? undefined) : undefined);
-      draft = null;
+      const failed = await onExecute?.(dirty ? steps : undefined, { strategy, extras });
+      if (failed === undefined) reset();
+      else runError = failed;
     } finally {
       busy = false;
     }
   }
   async function save() {
-    if (draft === null) return;
+    if (!dirty) return;
     busy = true;
     try {
-      if (await savePlan(draft)) draft = null;
+      if (await savePlan(steps, undefined, extras)) reset();
     } finally {
       busy = false;
     }
@@ -74,13 +97,19 @@
   <header class="head">
     <Icon name="checklist" size="sm" /><span>Plan</span>
     <span class="sub">{editable ? "Reasoning only: nothing has run" : planProgressLine(steps)}</span>
-    <PlanTransferMenu idBase="plan-{turnId}" canExport={saved.length > 0} canImport={editable} dirty={dirty} onimported={() => (draft = null)} />
+    <PlanTransferMenu idBase="plan-{turnId}" canExport={saved.length > 0} canImport={editable} dirty={dirty} onimported={reset} />
   </header>
 
   {#if steps.length > 0 || editable}
     <div class="steps">
-      <PlanChecklist idBase="plan-{turnId}" {steps} {editable} {toolChoices} onchange={(next) => (draft = next)} />
+      <PlanChecklist idBase="plan-{turnId}" {steps} {editable} {toolChoices} {extras} onchange={changeSteps} onextras={(next) => (extrasDraft = next)} />
     </div>
+  {/if}
+
+  {#if editable && problem}
+    <p class="problem" role="alert" data-testid="plan-problem">{problem}</p>
+  {:else if runError}
+    <p class="problem" role="alert" data-testid="plan-run-error">{runError}</p>
   {/if}
 
   <PlanFindings findings={findings} {editable} onchange={(next) => void saveFindings(next)} />
@@ -96,9 +125,10 @@
 
   {#if editable}
     <footer class="foot">
-      <Button variant="primary" icon="play" disabled={busy} onclick={() => void run()} data-testid="plan-execute" title="Record this plan, switch to Execute and send “Execute the plan.”">Execute</Button>
-      {#if dirty}<Button disabled={busy} onclick={() => void save()} data-testid="plan-save" title="Keep the edits without executing">Save plan</Button>{/if}
-      <span class="note">{dirty ? "Edited: Execute records your changes first." : "Edit the steps, or reply to adjust the plan."}</span>
+      <Button variant="primary" icon="play" disabled={busy || problem !== undefined} onclick={() => void run()} data-testid="plan-execute" title="Record this plan, switch to Execute and run it">Execute</Button>
+      <Select id="plan-{turnId}-strategy" class="strategy" value={strategy} options={PLAN_STRATEGY_OPTIONS} aria-label="Execute strategy" onchange={(v) => (strategy = choiceOfValue(v))} />
+      {#if dirty}<Button disabled={busy || problem !== undefined} onclick={() => void save()} data-testid="plan-save" title="Keep the edits without executing">Save plan</Button>{/if}
+      <span class="note" data-testid="plan-strategy-note">{strategyNote(strategy, extras)}{dirty ? " Execute records your changes first." : ""}</span>
     </footer>
   {/if}
 </section>
@@ -124,4 +154,6 @@
   .reply .body { margin-top: 6px; }
   .foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .note { font-size: var(--cortex-t-xs); color: var(--cortex-text-2); }
+  .problem { margin: 0; font-size: var(--cortex-t-xs); color: var(--cortex-bad); }
+  .foot :global(.strategy) { flex: 0 0 190px; min-width: 0; }
 </style>

@@ -33,6 +33,21 @@ describe("PlanChecklist", () => {
     expect(html).toContain('value="Read config"');
   });
 
+  test("read-only: dependsOn and args show as chips by step position", async () => {
+    const html = markup(await renderComponent(file, { steps, idBase: "t", extras: { "2": { dependsOn: ["1"], args: { path: "a" } } } }));
+    expect(html).toContain("after 1");
+    expect(html).toContain('data-testid="plan-step-args"');
+  });
+
+  test("editable: each step has a folded dependencies-and-args editor with the other steps to tick and a JSON field", async () => {
+    const html = markup(await renderComponent(file, { steps, idBase: "t", editable: true, extras: { "2": { dependsOn: ["1"], args: { path: "a" } } } }));
+    expect(html).toContain('data-testid="plan-step-extras"');
+    expect(html).not.toMatch(/<details[^>]*\sopen/);
+    expect(html).toContain("Step 2 waits for");
+    expect(html).toMatch(/<input type="checkbox"[^>]*checked[^>]*>\s*<span>1\. Read config/);
+    expect(html).toContain('"path": "a"');
+  });
+
   test("editable: the tool is a dropdown (not free text) that keeps a hinted name visible", async () => {
     const html = markup(await renderComponent(file, { steps, idBase: "t", editable: true }));
     expect(html).toMatch(/<button[^>]*role="combobox"[^>]*aria-label="Step 2 tool"[^]*?file-write/);

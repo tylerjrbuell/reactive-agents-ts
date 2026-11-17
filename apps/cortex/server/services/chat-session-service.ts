@@ -89,6 +89,7 @@ import type { SessionControlPort } from "./chat-proposal-service.js";
 import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval, type ChatPendingInteraction } from "./chat-approvals.js";
 import { effectiveApprovalPolicy } from "./approval-policy.js";
 import { ChatResume, chatDurableSource } from "./chat-resume.js";
+import { ChatPlanRun, todoWithStatuses, type PlanRunnableAgent } from "./chat-plan-run.js";
 import { validateTodo } from "./chat-todo-validation.js";
 
 /**
@@ -178,7 +179,7 @@ export interface CachedChatSession {
   /** Memories each run recalled (see `chat-turn-recall.ts`). */
   readonly recallActivity?: RecallActivityLog;
   /** The same agent's durable approve/deny surface (see `chat-approvals.ts`). */
-  readonly approvable?: ApprovableAgent;
+  readonly approvable?: ApprovableAgent & PlanRunnableAgent;
 }
 
 /** Dispose a cached chat agent (tears down MCP containers); never throws. */
@@ -275,23 +276,18 @@ export class ChatSessionService {
       const split = result ? { inputTokens: result.metadata.inputTokens, outputTokens: result.metadata.outputTokens } : undefined;
       this.persistTurn(id, userMessage, reply, result?.metadata.tokensUsed ?? 0, toolsUsed, trace, by, result ? turnCostOf(result.metadata.cost, undefined) : undefined, result?.taskId, undefined, split);
     };
-    this.approvals = new ChatApprovals(db, {
-      acquireTurn: (id) => this.acquireTurn(id),
-      agentFor: (id) => this.approvableAgentFor(id),
-      agentIdFor: (id) => getChatSession(this.db, id)?.stableAgentId,
-      persistExchange,
-      evict: (id) => this.evictSession(id),
-    });
+    // What every durable rail takes the same way: the turn guard, the session's agent, the exchange writer, eviction.
+    const rail = { acquireTurn: (id: string) => this.acquireTurn(id), agentFor: (id: string) => this.approvableAgentFor(id), persistExchange, evict: (id: string) => this.evictSession(id) };
+    this.approvals = new ChatApprovals(db, { ...rail, agentIdFor: (id) => getChatSession(this.db, id)?.stableAgentId });
     // Continue lists loop-stopped runs from the durable store (the builder's Durable runs setting).
-    this.resume = new ChatResume({
-      durableSourceOf: (id) => chatDurableSource(getChatSession(this.db, id)),
-      acquireTurn: (id) => this.acquireTurn(id),
-      agentFor: (id) => this.approvableAgentFor(id),
-      persistExchange,
-      evict: (id) => this.evictSession(id),
-    });
+    this.resume = new ChatResume({ ...rail, durableSourceOf: (id) => chatDurableSource(getChatSession(this.db, id)) });
     this.plans = new ChatSessionPlans(db, { live: this.sessions, acquireTurn: (id) => this.acquireTurn(id), build: (id, cfg, stable) => this.getOrBuildSession(id, normalizeCortexAgentConfig(cfg), stable) });
+    // Run the saved plan in a framework strategy (chat-plan-run.ts); the statuses it ends with go back onto the stored rows.
+    this.planRun = new ChatPlanRun({ ...rail, planOf: (id) => this.plans.read(id), historyOf: (id) => turnsToChatMessages(getChatTurns(this.db, id)), recordStatuses: (id, plan) => setChatTodo(this.db, id, todoWithStatuses(getChatTodo(this.db, id), plan)) });
   }
+
+  /** Runs the session's plan in a framework strategy (see `chat-plan-run.ts`). */
+  readonly planRun: ChatPlanRun;
 
   /** Turns paused on a durable approval gate: listing, approve / deny / dismiss (see `chat-approvals.ts`). */
   readonly approvals: ChatApprovals;
@@ -300,7 +296,7 @@ export class ChatSessionService {
   readonly resume: ChatResume;
 
   /** The session's agent for approve/deny: the cached one, or rebuilt from the stored config. */
-  private async approvableAgentFor(sessionId: string): Promise<ApprovableAgent> {
+  private async approvableAgentFor(sessionId: string): Promise<ApprovableAgent & PlanRunnableAgent> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
     const entry = await this.getOrBuildSession(sessionId, normalizeCortexAgentConfig(row.agentConfig), row.stableAgentId);

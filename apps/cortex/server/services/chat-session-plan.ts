@@ -8,14 +8,15 @@
  */
 import { planStepToolHint, type Plan, type PlanFinding, type PlanStep } from "@reactive-agents/core";
 import { resolveStepTools, withTitleToolHints } from "./chat-plan-tools.js";
-import { getChatPlanMeta, getChatTodoWithHints, setChatPlanMeta, type StoredPlanMeta } from "../db/chat-plan-queries.js";
+import { cleanStepExtras, dependencyProblemOf, extrasOfSteps, pruneExtras, withExtras, type PlanExtras, type PlanStepExtras } from "./chat-plan-extras.js";
+import { extrasOfMeta, getChatPlanMeta, getChatTodoWithHints, setChatPlanMeta, type StoredPlanMeta } from "../db/chat-plan-queries.js";
 import { getChatSession, setChatTodo, type StoredTodoItem } from "../db/chat-queries.js";
 import { CortexNotFoundError } from "../errors.js";
 
 type Db = Parameters<typeof setChatTodo>[0];
 
-/** One step as an editor sends it. */
-export interface PlanStepBody {
+/** One step as an editor sends it (`dependsOn` and `args` ride beside the to-do row: `chat-plan-extras.ts`). */
+export interface PlanStepBody extends PlanStepExtras {
   readonly id?: string;
   readonly title: string;
   readonly tool?: string;
@@ -51,8 +52,14 @@ export function cleanPlanSteps(
     if (s.status !== undefined && !STATUSES.has(s.status)) return { ok: false, error: `Invalid plan: unknown step status "${s.status}"` };
     if (id !== "" && seen.has(id)) return { ok: false, error: `Invalid plan: duplicate step id "${id}"` };
     if (id !== "") seen.add(id);
-    steps.push({ title, ...(id !== "" ? { id } : {}), ...(tool !== "" ? { tool } : {}), ...(s.status !== undefined ? { status: s.status } : {}) });
+    const extras = cleanStepExtras(s);
+    if (!extras.ok) return extras;
+    if (id === "" && (extras.extras.dependsOn !== undefined || extras.extras.args !== undefined)) return { ok: false, error: "Invalid plan: a step with dependsOn or args needs an id" };
+    steps.push({ title, ...(id !== "" ? { id } : {}), ...(tool !== "" ? { tool } : {}), ...(s.status !== undefined ? { status: s.status } : {}), ...extras.extras });
   }
+  // The framework's own dependency rules (unknown id, self reference, cycle), so a bad edit is refused before it is saved.
+  const problem = dependencyProblemOf(steps);
+  if (problem !== undefined) return { ok: false, error: `Invalid plan: ${problem}` };
   return { ok: true, steps };
 }
 
@@ -74,7 +81,7 @@ export function planOfStored(sessionId: string, todo: readonly StoredTodoItem[],
   // The rows say who wrote them (the framework's rule): a model plan whose rows the harness derived is harness-derived.
   const source = author === "model" && todo.some((i) => i.origin === "harness-derived") ? "harness-derived" : author;
   const findings = meta?.findings ?? [];
-  return { id: meta?.id ?? `plan-${sessionId}`, goal: meta?.goal ?? "", steps, createdAt: meta?.createdAt ?? 0, source, ...(findings.length > 0 ? { findings } : {}) };
+  return withExtras({ id: meta?.id ?? `plan-${sessionId}`, goal: meta?.goal ?? "", steps, createdAt: meta?.createdAt ?? 0, source, ...(findings.length > 0 ? { findings } : {}) }, extrasOfMeta(meta));
 }
 
 /** The to-do list a (re)built session seeds from: the stored rows with their tool hints, older rows migrated. */
@@ -87,12 +94,24 @@ export function planSeedOf(db: Db, sessionId: string): { initialTodo?: StoredTod
   return { ...(initialTodo.length > 0 ? { initialTodo } : {}), ...(initialPlanFindings.length > 0 ? { initialPlanFindings } : {}) };
 }
 
-/** Persist the session's list (hints and origin ride its rows) and plan meta (after a turn and after an edit). */
-export function persistSessionPlan(db: Db, sessionId: string, session: Pick<PlanSessionLike, "plan" | "todo">): void {
+/**
+ * Persist the session's list (hints and origin ride its rows) and plan meta (after a turn and after an edit).
+ * `extras` are an edit's `dependsOn` / `args`; without them (a turn) the stored ones stay, kept only for the steps the plan still has.
+ */
+export function persistSessionPlan(db: Db, sessionId: string, session: Pick<PlanSessionLike, "plan" | "todo">, extras?: PlanExtras): void {
   setChatTodo(db, sessionId, session.todo());
   const plan = session.plan;
   if (plan === undefined) return setChatPlanMeta(db, sessionId, null);
-  setChatPlanMeta(db, sessionId, { id: plan.id, goal: plan.goal, source: plan.source, createdAt: plan.createdAt, ...(plan.findings && plan.findings.length > 0 ? { findings: plan.findings } : {}) });
+  const kept = pruneExtras(extras ?? extrasOfMeta(getChatPlanMeta(db, sessionId)), plan.steps.map((s) => s.id));
+  setChatPlanMeta(db, sessionId, {
+    id: plan.id,
+    goal: plan.goal,
+    source: plan.source,
+    createdAt: plan.createdAt,
+    ...(plan.findings && plan.findings.length > 0 ? { findings: plan.findings } : {}),
+    ...(Object.keys(kept.dependsOn).length > 0 ? { dependsOn: kept.dependsOn } : {}),
+    ...(Object.keys(kept.args).length > 0 ? { args: kept.args } : {}),
+  });
 }
 
 /**
@@ -105,7 +124,7 @@ export function withGoal(current: Plan | undefined, sessionId: string, steps: re
     ...(findings !== undefined ? { findings } : {}),
     id: current?.id ?? `plan-${sessionId}`,
     goal,
-    steps: steps.map((s, i): PlanStep => ({ id: s.id ?? `step-${i + 1}`, title: s.title, status: s.status ?? "pending", ...(s.tool !== undefined ? { tool: s.tool } : {}) })),
+    steps: steps.map((s, i): PlanStep => ({ id: s.id ?? `step-${i + 1}`, title: s.title, status: s.status ?? "pending", ...(s.tool !== undefined ? { tool: s.tool } : {}), ...(s.dependsOn !== undefined ? { dependsOn: s.dependsOn } : {}), ...(s.args !== undefined ? { args: s.args } : {}) })),
     createdAt: current?.createdAt ?? 0,
     source: "user-edited",
   };
@@ -129,7 +148,8 @@ export class ChatSessionPlans {
   read(sessionId: string): Plan | null {
     const live = this.deps.live.get(sessionId)?.session.plan;
     if (live === undefined) return planOfStored(sessionId, getChatTodoWithHints(this.db, sessionId), getChatPlanMeta(this.db, sessionId));
-    return withTitleToolHints(live); // a rebuilt session is seeded with the stored findings (`planSeedOf`)
+    // A rebuilt session is seeded with the stored findings (`planSeedOf`); the step extras the rows cannot carry come from the meta.
+    return withExtras(withTitleToolHints(live), extrasOfMeta(getChatPlanMeta(this.db, sessionId)));
   }
 
   /**
@@ -150,8 +170,9 @@ export class ChatSessionPlans {
       const plan = session.setPlan(
         fullPlan ? withGoal(session.plan, sessionId, resolved, goal ?? session.plan?.goal ?? getChatPlanMeta(this.db, sessionId)?.goal ?? "", findings) : resolved,
       );
-      persistSessionPlan(this.db, sessionId, session);
-      return plan;
+      const extras = extrasOfSteps(resolved);
+      persistSessionPlan(this.db, sessionId, session, extras);
+      return withExtras(plan, extras);
     } finally {
       release();
     }

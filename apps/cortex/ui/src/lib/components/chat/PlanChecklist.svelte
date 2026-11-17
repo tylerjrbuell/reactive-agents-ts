@@ -13,18 +13,24 @@
   import Select from "$lib/components/kit/Select.svelte";
   import type { SelectOption } from "$lib/select.js";
   import { addStep, moveStep, removeStep, setStepTitle, setStepTool, stepStatusLabel, type DraftStep } from "$lib/plan-edit.js";
+  import { dependsLabel, NO_EXTRAS, setArgs, toggleDependsOn, type ExtrasMap } from "$lib/plan-extras.js";
+  import PlanStepExtrasEditor from "./PlanStepExtrasEditor.svelte";
 
   interface Props {
     steps: readonly DraftStep[];
     editable?: boolean;
     /** The edited list (editable only). */
     onchange?: (next: readonly DraftStep[]) => void;
+    /** Each step's `dependsOn` / `args` (`lib/plan-extras.ts`); shown read-only as chips, editable in a fold under the step. */
+    extras?: ExtrasMap;
+    /** The edited extras (editable only). */
+    onextras?: (next: ExtrasMap) => void;
     /** Unique per card on the page: prefixes the input ids. */
     idBase: string;
     /** The tools a step may name (`lib/plan-tool-options.ts`); "No tool" clears the hint. */
     toolChoices?: readonly SelectOption[];
   }
-  const { steps, editable = false, onchange, idBase, toolChoices }: Props = $props();
+  const { steps, editable = false, onchange, extras = NO_EXTRAS, onextras, idBase, toolChoices }: Props = $props();
 
   const ICON = { pending: "circle", "in-progress": "retry", done: "check-circle", skipped: "skip-forward" } as const;
   let newTitle = $state("");
@@ -54,9 +60,20 @@
           <IconButton icon="down" size="sm" label="Move step {i + 1} down" disabled={i === steps.length - 1} onclick={() => onchange?.(moveStep(steps, step.id, 1))} />
           <IconButton icon="trash" size="sm" label="Remove step {i + 1}" onclick={() => onchange?.(removeStep(steps, step.id))} />
         </span>
+        <PlanStepExtrasEditor
+          stepId={step.id}
+          position={i + 1}
+          {steps}
+          extras={extras[step.id] ?? {}}
+          {idBase}
+          ontoggle={(dep) => onextras?.(toggleDependsOn(extras, step.id, dep))}
+          onargs={(args) => onextras?.(setArgs(extras, step.id, args))}
+        />
       {:else}
         <span class="title">{step.title}</span>
         {#if step.tool}<span class="tool">{step.tool}</span>{/if}
+        {#if extras[step.id]?.dependsOn}<span class="tool" data-testid="plan-step-after">{dependsLabel(steps, extras[step.id]?.dependsOn)}</span>{/if}
+        {#if extras[step.id]?.args}<span class="tool" data-testid="plan-step-args">args</span>{/if}
       {/if}
     </li>
   {/each}
@@ -71,7 +88,7 @@
 
 <style>
   .steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
-  .step { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--cortex-t-sm); line-height: var(--cortex-lh-ui); }
+  .step { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; font-size: var(--cortex-t-sm); line-height: var(--cortex-lh-ui); }
   .ico { display: inline-flex; flex: none; color: var(--cortex-text-3); }
   .step[data-status="done"] .ico { color: var(--cortex-ok); }
   .step[data-status="in-progress"] .ico { color: var(--cortex-accent); }

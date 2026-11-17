@@ -1,11 +1,13 @@
 import { Elysia, t } from "elysia";
 import { cleanPlanSteps, type ChatSessionPlans } from "../services/chat-session-plan.js";
 import { cleanPlanFindings } from "../services/chat-plan-findings.js";
+import type { ChatPlanRun } from "../services/chat-plan-run.js";
 import { exportPlan, importPlan, isPlanExportFormat, PLAN_IMPORT_MAX_CHARS } from "../services/chat-plan-portable.js";
 
 /** The slice of the chat service the plan routes use (`ChatSessionService.plans`, `getSession`). */
 export interface ChatPlanHost {
   readonly plans: Pick<ChatSessionPlans, "read" | "write">;
+  readonly planRun: Pick<ChatPlanRun, "run">;
   getSession(sessionId: string): unknown;
 }
 
@@ -26,6 +28,14 @@ const messageOf = (e: unknown): string => (typeof e === "object" && e !== null &
  * - `POST /api/chat/sessions/:id/plan/parse` `{ text }` -> `{ plan }` or 422 `{ error, reason }`:
  *   reads Markdown or a JSON envelope without changing anything; the client applies the result
  *   through the PUT above.
+ * - `POST /api/chat/sessions/:id/plan/execute` `{ strategy? }` -> `{ reply, success, plan }`: runs the
+ *   saved plan through the framework's `agent.execute(plan, { strategy })` (`blueprint` or
+ *   `plan-execute-reflect`; absent, the framework chooses by the plan) and lands the result as the
+ *   session's next exchange; `plan` carries each step's final status. 404 unknown session or no plan,
+ *   409 while a turn runs, 422 `{ error, reason }` when the framework refuses the plan
+ *   (`PlanInvalidError`), 422 `{ error }` on any other failure.
+ *
+ * A step's `dependsOn` (ids) and `args` (a JSON object) ride the plan wire both ways.
  */
 export const chatPlanRoute = (svc: ChatPlanHost) =>
   new Elysia({ prefix: "/api/chat" })
@@ -74,6 +84,20 @@ export const chatPlanRoute = (svc: ChatPlanHost) =>
       },
       { body: t.Object({ text: t.String() }) },
     )
+    .post(
+      "/sessions/:sessionId/plan/execute",
+      async ({ params, body, set }) => {
+        if (!svc.getSession(params.sessionId)) {
+          set.status = 404;
+          return { error: `Chat session ${params.sessionId} not found` };
+        }
+        const out = await svc.planRun.run(params.sessionId, body.strategy);
+        if (out.ok) return { reply: out.reply, success: out.success, plan: out.plan };
+        set.status = out.code === "no-plan" ? 404 : out.code === "busy" ? 409 : 422;
+        return out.code === "invalid-plan" ? { error: out.message, reason: out.reason } : { error: out.message };
+      },
+      { body: t.Object({ strategy: t.Optional(t.Union([t.Literal("blueprint"), t.Literal("plan-execute-reflect")])) }) },
+    )
     .put(
       "/sessions/:sessionId/plan",
       async ({ params, body, set }) => {
@@ -105,6 +129,9 @@ export const chatPlanRoute = (svc: ChatPlanHost) =>
               title: t.String(),
               tool: t.Optional(t.String()),
               status: t.Optional(t.Union([t.Literal("pending"), t.Literal("in-progress"), t.Literal("done"), t.Literal("skipped")])),
+              // Step ids this step waits for, and the JSON arguments it passes its tool (`chat-plan-extras.ts`).
+              dependsOn: t.Optional(t.Array(t.String())),
+              args: t.Optional(t.Record(t.String(), t.Unknown())),
             }),
           ),
         }),

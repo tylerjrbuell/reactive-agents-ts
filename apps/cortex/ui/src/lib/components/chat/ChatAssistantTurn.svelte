@@ -4,7 +4,7 @@
   import ChatTranscript from "$lib/components/ChatTranscript.svelte";
   import ChatTurnActions from "$lib/components/ChatTurnActions.svelte";
   import ChatModePlanCard from "./ChatModePlanCard.svelte";
-  import type { DraftStep } from "$lib/plan-edit.js";
+  import type { PlanExecuteHandler } from "$lib/stores/chat-mode-store.js";
   import SkillActivationRow from "$lib/components/SkillActivationRow.svelte";
   import ChatTokenUsage from "$lib/components/ChatTokenUsage.svelte";
   import ModelLink from "$lib/components/ModelLink.svelte";
@@ -38,8 +38,8 @@
     onFork: (turnId: number) => void | Promise<void>;
     /** Plan mode, latest finished reply: render it as the plan card with its Execute action. */
     planCard?: boolean;
-    /** Record the edited plan (when changed), switch to Execute and send the follow-up turn. */
-    onExecutePlan?: (edited?: readonly DraftStep[]) => void | Promise<void>;
+    /** Record the edited plan (when changed), switch to Execute and run it in the picked strategy. */
+    onExecutePlan?: PlanExecuteHandler;
     /** The plan turn that was executed: a read-only plan card with the plan's live status. */
     pastPlanCard?: boolean;
   }

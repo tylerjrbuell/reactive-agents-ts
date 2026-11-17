@@ -6,25 +6,25 @@
  * plan route), an export through `exportPlanAs`. Kept out of `chat-store.ts` (one concern each).
  */
 import { derived, get, writable } from "svelte/store";
-import type { PlanWire } from "@reactive-agents/ui-core";
 import { chatStore } from "./chat-store.js";
 import { toast } from "./toast-store.js";
-import { exportSessionPlan, fetchSessionPlan, parseSessionPlan, putSessionPlan } from "../plan-api.js";
+import { exportSessionPlan, fetchSessionPlan, parseSessionPlan, putSessionPlan, type CortexPlanWire } from "../plan-api.js";
 import { toPlanBody, type DraftStep } from "../plan-edit.js";
+import { extrasOfSteps, NO_EXTRAS, type ExtrasMap } from "../plan-extras.js";
 import type { PlanFindingView } from "../plan-findings.js";
 import { importFailureLine, importTextBlank, importTextTooLarge, type PlanExportItem } from "../plan-transfer.js";
 import { saveTextFile } from "../chat-download.js";
 
 /** Plans by session id; `null` = the server says there is none. */
-const plans = writable<Readonly<Record<string, PlanWire | null>>>({});
+const plans = writable<Readonly<Record<string, CortexPlanWire | null>>>({});
 
 /** The active session's plan; `undefined` until loaded, `null` when it has none. */
-export const chatPlan = derived([chatStore, plans], ([$chat, $plans]): PlanWire | null | undefined =>
+export const chatPlan = derived([chatStore, plans], ([$chat, $plans]): CortexPlanWire | null | undefined =>
   $chat.activeSessionId === null ? undefined : $plans[$chat.activeSessionId],
 );
 
 /** Remember a session's plan (the server's answer to a read or an edit). */
-export function setPlanFor(sessionId: string, plan: PlanWire | null): void {
+export function setPlanFor(sessionId: string, plan: CortexPlanWire | null): void {
   plans.update((p) => ({ ...p, [sessionId]: plan }));
 }
 
@@ -36,11 +36,11 @@ export async function refreshChatPlan(): Promise<void> {
   if (res.ok) setPlanFor(sid, res.plan);
 }
 
-/** Save the edited steps as the session's plan. Resolves true when the server recorded them. */
-export async function savePlan(steps: readonly DraftStep[], goal?: string): Promise<boolean> {
+/** Save the edited steps (and their `dependsOn` / `args`) as the session's plan. Resolves true when the server recorded them. */
+export async function savePlan(steps: readonly DraftStep[], goal?: string, extras: ExtrasMap = NO_EXTRAS): Promise<boolean> {
   const sid = get(chatStore).activeSessionId;
   if (sid === null) return false;
-  const res = await putSessionPlan(sid, toPlanBody(steps), goal);
+  const res = await putSessionPlan(sid, toPlanBody(steps, extras), goal);
   if (!res.ok) {
     toast.error("Could not save the plan", res.error);
     return false;
@@ -57,7 +57,7 @@ export async function saveFindings(findings: readonly PlanFindingView[]): Promis
   const sid = get(chatStore).activeSessionId;
   const plan = sid === null ? undefined : get(plans)[sid];
   if (sid === null || !plan) return false;
-  const res = await putSessionPlan(sid, toPlanBody(plan.steps), undefined, findings);
+  const res = await putSessionPlan(sid, toPlanBody(plan.steps, extrasOfSteps(plan.steps)), undefined, findings);
   if (!res.ok) {
     toast.error("Could not update the findings", res.error);
     return false;
@@ -81,7 +81,8 @@ export async function importPlanText(text: string): Promise<ImportOutcome> {
   if (importTextTooLarge(text)) return { ok: false, message: "That file is too large to be a plan." };
   const parsed = await parseSessionPlan(sid, text);
   if (!parsed.ok) return { ok: false, message: importFailureLine(parsed) };
-  const res = await putSessionPlan(sid, toPlanBody(parsed.plan.steps), parsed.plan.goal);
+  // The file's `dependsOn` and `args` (the framework's portable formats carry them) ride with its steps.
+  const res = await putSessionPlan(sid, toPlanBody(parsed.plan.steps, extrasOfSteps(parsed.plan.steps)), parsed.plan.goal);
   if (!res.ok) return { ok: false, message: res.error };
   setPlanFor(sid, res.plan);
   return { ok: true, steps: parsed.plan.steps.length };

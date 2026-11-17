@@ -1,4 +1,5 @@
 import type { Plan, PlanFinding } from "@reactive-agents/core";
+import { extrasOfStored, type PlanExtras } from "../services/chat-plan-extras.js";
 import { findingsOfStored } from "../services/chat-plan-findings.js";
 import { getChatTodo, type setChatTodo, type StoredTodoItem } from "./chat-queries.js";
 
@@ -21,7 +22,14 @@ export interface StoredPlanMeta {
   readonly tools: Readonly<Record<string, string>>;
   /** Recon findings the plan carries (`Plan.findings`); absent when it has none. */
   readonly findings?: readonly PlanFinding[];
+  /** Prerequisite step ids per step id (`PlanStep.dependsOn`); the to-do row cannot carry them. Absent when none. */
+  readonly dependsOn?: PlanExtras["dependsOn"];
+  /** Tool arguments per step id (`PlanStep.args`); absent when none. */
+  readonly args?: PlanExtras["args"];
 }
+
+/** The step extras a stored meta holds (none for no meta). */
+export const extrasOfMeta = (meta: StoredPlanMeta | null): PlanExtras => ({ dependsOn: meta?.dependsOn ?? {}, args: meta?.args ?? {} });
 
 const SOURCES: ReadonlySet<string> = new Set(["model", "harness-derived", "user-edited"]);
 
@@ -41,7 +49,17 @@ export function getChatPlanMeta(db: Db, sessionId: string): StoredPlanMeta | nul
       ? Object.fromEntries(Object.entries(raw.tools).filter((e): e is [string, string] => typeof e[1] === "string"))
       : {};
     const findings = findingsOfStored(raw.findings);
-    return { id: raw.id, goal: raw.goal, source: raw.source as Plan["source"], createdAt: raw.createdAt, tools, ...(findings.length > 0 ? { findings } : {}) };
+    const extras = extrasOfStored(raw.dependsOn, raw.args);
+    return {
+      id: raw.id,
+      goal: raw.goal,
+      source: raw.source as Plan["source"],
+      createdAt: raw.createdAt,
+      tools,
+      ...(findings.length > 0 ? { findings } : {}),
+      ...(Object.keys(extras.dependsOn).length > 0 ? { dependsOn: extras.dependsOn } : {}),
+      ...(Object.keys(extras.args).length > 0 ? { args: extras.args } : {}),
+    };
   } catch {
     return null;
   }

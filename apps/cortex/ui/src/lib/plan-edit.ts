@@ -5,6 +5,7 @@
  * `PlanRecorded`) is the framework's.
  */
 import type { PlanDraftStep, PlanStepStatusWire } from "@reactive-agents/ui-core";
+import { NO_EXTRAS, type ExtrasMap, type StepExtras } from "./plan-extras.js";
 
 export {
   addStep,
@@ -21,14 +22,21 @@ export {
 /** One step in the editor (the same shape the framework plan holds). */
 export type DraftStep = PlanDraftStep;
 
-/** A step as the plan route takes it. */
-export interface PlanStepBody {
+/** A step as the plan route takes it (`dependsOn` and `args`: `lib/plan-extras.ts`). */
+export interface PlanStepBody extends StepExtras {
   readonly id: string;
   readonly title: string;
   readonly tool?: string;
   readonly status: PlanStepStatusWire;
 }
 
-/** The body the plan route takes for these steps. */
-export const toPlanBody = (steps: readonly DraftStep[]): readonly PlanStepBody[] =>
-  steps.map((s) => ({ id: s.id, title: s.title, status: s.status, ...(s.tool !== undefined ? { tool: s.tool } : {}) }));
+/** The body the plan route takes for these steps and their extras. */
+export const toPlanBody = (steps: readonly DraftStep[], extras: ExtrasMap = NO_EXTRAS): readonly PlanStepBody[] =>
+  steps.map((s) => ({
+    id: s.id,
+    title: s.title,
+    status: s.status,
+    ...(s.tool !== undefined ? { tool: s.tool } : {}),
+    ...(extras[s.id]?.dependsOn !== undefined ? { dependsOn: extras[s.id]?.dependsOn } : {}),
+    ...(extras[s.id]?.args !== undefined ? { args: extras[s.id]?.args } : {}),
+  }));

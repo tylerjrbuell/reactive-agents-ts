@@ -6,15 +6,19 @@
 import type { PlanWire } from "@reactive-agents/ui-core";
 import { CORTEX_SERVER_URL } from "./constants.js";
 import type { PlanStepBody } from "./plan-edit.js";
+import type { WireStep } from "./plan-extras.js";
 import type { PlanFindingView } from "./plan-findings.js";
 
+/** The plan as Cortex's server sends it: the ui-core wire plan whose steps may carry `dependsOn` and `args`. */
+export type CortexPlanWire = Omit<PlanWire, "steps"> & { readonly steps: readonly WireStep[] };
+
 /** A plan call's result: the plan (`null` while the session has none) or a person-readable reason. */
-export type PlanResult = { readonly ok: true; readonly plan: PlanWire | null } | { readonly ok: false; readonly error: string };
+export type PlanResult = { readonly ok: true; readonly plan: CortexPlanWire | null } | { readonly ok: false; readonly error: string };
 
 const url = (sessionId: string, suffix = ""): string => `${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/plan${suffix}`;
 
 async function settle(res: Response): Promise<PlanResult> {
-  const body = (await res.json().catch(() => ({}))) as { plan?: PlanWire | null; error?: string };
+  const body = (await res.json().catch(() => ({}))) as { plan?: CortexPlanWire | null; error?: string };
   if (!res.ok) return { ok: false, error: body.error ?? `HTTP ${res.status}` };
   return { ok: true, plan: body.plan ?? null };
 }
@@ -69,16 +73,36 @@ export async function exportSessionPlan(sessionId: string, format: PlanFormat): 
 export type PlanParseReasonWire = "no-steps" | "invalid-json" | "invalid-shape" | "unsupported-version";
 
 /** The result of reading pasted or uploaded plan text. Nothing is saved by it. */
-export type PlanParseResult = { readonly ok: true; readonly plan: PlanWire } | { readonly ok: false; readonly error: string; readonly reason?: PlanParseReasonWire };
+export type PlanParseResult = { readonly ok: true; readonly plan: CortexPlanWire } | { readonly ok: false; readonly error: string; readonly reason?: PlanParseReasonWire };
 
 /** Read Markdown or a JSON envelope as a plan (the server uses the framework's parsers). */
 export async function parseSessionPlan(sessionId: string, text: string): Promise<PlanParseResult> {
   try {
     const res = await fetch(url(sessionId, "/parse"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-    const body = (await res.json().catch(() => ({}))) as { plan?: PlanWire; error?: string; reason?: PlanParseReasonWire };
+    const body = (await res.json().catch(() => ({}))) as { plan?: CortexPlanWire; error?: string; reason?: PlanParseReasonWire };
     if (!res.ok || body.plan === undefined) return { ok: false, error: body.error ?? `HTTP ${res.status}`, ...(body.reason !== undefined ? { reason: body.reason } : {}) };
     return { ok: true, plan: body.plan };
   } catch (e) {
     return { ok: false, error: String(e) };
+  }
+}
+
+/** What running the plan in a strategy came to: the reply landed in the thread, or why it did not. */
+export type PlanRunResult =
+  | { readonly ok: true; readonly success: boolean; readonly plan: CortexPlanWire | null }
+  | { readonly ok: false; readonly status: number; readonly error: string; /** The framework's `PlanInvalidError.reason`, when it refused the plan. */ readonly reason?: string };
+
+/**
+ * Run the saved plan through the framework's `agent.execute(plan, { strategy })`. `strategy` absent
+ * leaves the executor to the framework. The reply lands in the session's thread server side.
+ */
+export async function runSessionPlan(sessionId: string, strategy: "blueprint" | "plan-execute-reflect" | undefined): Promise<PlanRunResult> {
+  try {
+    const res = await fetch(url(sessionId, "/execute"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(strategy === undefined ? {} : { strategy }) });
+    const body = (await res.json().catch(() => ({}))) as { success?: boolean; plan?: CortexPlanWire | null; error?: string; reason?: string };
+    if (!res.ok) return { ok: false, status: res.status, error: body.error ?? `HTTP ${res.status}`, ...(body.reason !== undefined ? { reason: body.reason } : {}) };
+    return { ok: true, success: body.success !== false, plan: body.plan ?? null };
+  } catch (e) {
+    return { ok: false, status: 0, error: String(e) };
   }
 }
