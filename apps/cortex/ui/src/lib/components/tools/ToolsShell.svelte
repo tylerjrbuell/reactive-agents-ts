@@ -53,7 +53,10 @@
   .tsh :global(.tsh-skel .chat-skeleton) { height: 58px; border-radius: var(--cortex-r-ctl); }
 
   @media (max-width: 1000px) {
-    .tsh { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; min-height: 0; }
+    /* Stacked: height follows the content (flex: none, auto rows), so the list track never collapses
+       below its rows and the detail pane cannot paint over it. */
+    .tsh { flex: none; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: auto; min-height: 0; }
+    .tsh-left, .tsh-right { min-height: auto; }
     .tsh-rows { flex: none; max-height: 280px; }
     .tsh-right { overflow-y: visible; }
   }

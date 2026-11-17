@@ -322,6 +322,13 @@ describe("Lab > Tools polish pins", () => {
     expect(css).toContain("min-width: 120px");
   });
 
+  test("the stacked narrow layout sizes to its content so the list cannot collapse under the detail pane", () => {
+    const css = source("ToolsShell.svelte");
+    const narrow = css.slice(css.indexOf("@media (max-width: 1000px)"));
+    expect(narrow).toMatch(/\.tsh \{[^}]*flex: none;[^}]*grid-auto-rows: auto/);
+    expect(narrow).toMatch(/\.tsh-left, \.tsh-right \{ min-height: auto; \}/);
+  });
+
   test("all three tabs sit in the one shell and use its row card", () => {
     for (const f of ["ServersTab", "CustomToolsTab", "CatalogTab"]) expect(source(`${f}.svelte`)).toContain("<ToolsShell");
     for (const f of ["ServerList", "ToolCatalogList", "CustomToolsTab"]) expect(source(`${f}.svelte`)).toContain('class="tsh-row"');
