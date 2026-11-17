@@ -377,6 +377,52 @@ export type PlatformAgentEvent =
       readonly sourceId: string;
     }
   | {
+      /** An outbound channel send failed for good (non-retryable error or attempts exhausted). Carries no message text. */
+      readonly _tag: "ChannelSendFailed";
+      /** Id of the adapter the send went through. */
+      readonly adapterId: string;
+      /** Conversation (channel id) the message was addressed to. */
+      readonly conversationId: string;
+      /** Delivery attempts made before giving up. */
+      readonly attempts: number;
+      /** Channel error classification of the final failure (e.g. a rate-limit or auth kind). */
+      readonly kind: string;
+      /** Whether the final error was classed retryable. */
+      readonly retryable: boolean;
+      /** True when the failure came from running out of retries rather than a non-retryable error. */
+      readonly exhausted: boolean;
+    }
+  | {
+      /** A follow-up timer was scheduled for a route. */
+      readonly _tag: "ChannelFollowUpScheduled";
+      /** Id of the route the timer re-enters when it fires. */
+      readonly routeId: string;
+      /** Id of the timer. */
+      readonly timerId: string;
+      /** Epoch milliseconds the timer is due. Absent when the producer does not know it. */
+      readonly dueAt?: number;
+    }
+  | {
+      /** A follow-up timer fired and re-entered its route. */
+      readonly _tag: "ChannelFollowUpFired";
+      /** Id of the route the timer belongs to. */
+      readonly routeId: string;
+      /** Id of the timer. */
+      readonly timerId: string;
+      /** Epoch milliseconds the timer was due. Absent when not recorded (the channels producer omits it today). */
+      readonly dueAt?: number;
+    }
+  | {
+      /** A pending follow-up timer was cancelled before firing. */
+      readonly _tag: "ChannelFollowUpCancelled";
+      /** Id of the route the timer belongs to. */
+      readonly routeId: string;
+      /** Id of the timer. */
+      readonly timerId: string;
+      /** Epoch milliseconds the timer was due. Absent when not recorded (the channels producer omits it today). */
+      readonly dueAt?: number;
+    }
+  | {
       /** A routed message was dropped before an agent turn ran. */
       readonly _tag: "ChannelTurnDropped";
       /** Id of the route that dropped the message. */

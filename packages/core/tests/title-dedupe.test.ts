@@ -63,3 +63,20 @@ describe("channel inbox event members", () => {
     expect(events.map((e) => e._tag)).toHaveLength(5);
   });
 });
+
+describe("channel send and follow-up event members", () => {
+  test("compile with their payloads", () => {
+    const events: AgentEvent[] = [
+      { _tag: "ChannelSendFailed", adapterId: "a", conversationId: "c", attempts: 3, kind: "rate_limited", retryable: true, exhausted: true },
+      { _tag: "ChannelFollowUpScheduled", routeId: "r", timerId: "t", dueAt: 1700000000000 },
+      { _tag: "ChannelFollowUpFired", routeId: "r", timerId: "t" },
+      { _tag: "ChannelFollowUpCancelled", routeId: "r", timerId: "t" },
+    ];
+    expect(events.map((e) => e._tag)).toHaveLength(4);
+  });
+  test("required fields are enforced", () => {
+    // @ts-expect-error timerId is required
+    const bad: AgentEvent = { _tag: "ChannelFollowUpFired", routeId: "r" };
+    expect(bad._tag).toBe("ChannelFollowUpFired");
+  });
+});

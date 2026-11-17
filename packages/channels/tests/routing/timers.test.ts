@@ -160,8 +160,8 @@ describe("follow-up timers through the router", () => {
         expect(turns[1]).toBe("Follow-up you scheduled: check the build");
         await waitFor(() => chan.sends.length === 2);
         expect(chan.sends[1]?.text).toBe("re:Follow-up you scheduled: check the build");
-        await waitFor(() => events.some((e) => e._tag === "Custom" && e.type === "ChannelFollowUpFired"));
-        expect(events.some((e) => e._tag === "Custom" && e.type === "ChannelFollowUpScheduled")).toBe(true);
+        await waitFor(() => events.some((e) => e._tag === "ChannelFollowUpFired"));
+        expect(events.some((e) => e._tag === "ChannelFollowUpScheduled")).toBe(true);
         await waitFor(() => events.filter((e) => e._tag === "ChannelTurnCompleted").length === 2);
         // Marked fired once handled, so the poller does not wake it again.
         await new Promise<void>((r) => setTimeout(r, 100));

@@ -273,17 +273,14 @@ export class OutboxDispatcher {
         }
         yield* mark((s, rowId) => s.failed(rowId, error.kind), "failed");
         yield* self.deps.emit({
-          _tag: "Custom",
-          // Becomes a core `ChannelSendFailed` member (same name) once core adds it. No message text.
-          type: "ChannelSendFailed",
-          payload: {
-            adapterId,
-            conversationId: message.conversation.channelId,
-            attempts: attempt,
-            kind: error.kind,
-            retryable: error.retryable,
-            exhausted: error.retryable,
-          },
+          _tag: "ChannelSendFailed",
+          adapterId,
+          conversationId: message.conversation.channelId,
+          attempts: attempt,
+          kind: error.kind,
+          retryable: error.retryable,
+          // Reaching here with a retryable error means the attempt budget ran out.
+          exhausted: error.retryable && attempt >= self.maxAttempts,
         });
         return yield* Effect.fail(error);
       }

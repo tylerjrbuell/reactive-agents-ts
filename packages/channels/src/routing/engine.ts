@@ -356,7 +356,7 @@ export class RouterEngine {
     const self = this;
     const timers = this.deps.timers;
     return Effect.gen(function* () {
-      yield* self.emit({ _tag: "Custom", type: "ChannelFollowUpFired", payload: { routeId: row.routeId, timerId: row.id } });
+      yield* self.emit({ _tag: "ChannelFollowUpFired", routeId: row.routeId, timerId: row.id });
       yield* self.handleInbound(row.adapterId, timerMessage(row));
       if (timers) {
         yield* timers.store.fired(row.id).pipe(
@@ -377,14 +377,14 @@ export class RouterEngine {
       schedule: (request) =>
         port.schedule(request).pipe(
           Effect.tap((timer) =>
-            this.emit({ _tag: "Custom", type: "ChannelFollowUpScheduled", payload: { routeId: binding.routeId, timerId: timer.id, dueAt: timer.dueAt } }),
+            this.emit({ _tag: "ChannelFollowUpScheduled", routeId: binding.routeId, timerId: timer.id, dueAt: timer.dueAt }),
           ),
         ),
       cancel: (id) =>
         port.cancel(id).pipe(
           Effect.tap((found) =>
             found
-              ? this.emit({ _tag: "Custom", type: "ChannelFollowUpCancelled", payload: { routeId: binding.routeId, timerId: id } })
+              ? this.emit({ _tag: "ChannelFollowUpCancelled", routeId: binding.routeId, timerId: id })
               : Effect.void,
           ),
         ),

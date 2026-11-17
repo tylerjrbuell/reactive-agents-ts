@@ -92,11 +92,11 @@ describe("outbox through the router", () => {
     const chan = flaky(makeScriptedAdapter({ id: "chan" }), [channelError("chan", "auth")]);
     await runRouter(chan, { outbox: { maxAttempts: 3, baseBackoffMs: 1 }, events }, async (status) => {
       chan.push(env({ id: "m1", text: "hi" }));
-      await waitFor(() => events.some((e) => e._tag === "Custom" && e.type === "ChannelSendFailed"));
+      await waitFor(() => events.some((e) => e._tag === "ChannelSendFailed"));
       expect(chan.tries()).toBe(1);
       expect(chan.sends.length).toBe(0);
-      const failed = events.find((e) => e._tag === "Custom" && e.type === "ChannelSendFailed");
-      expect(failed && failed._tag === "Custom" ? failed.payload : undefined).toEqual({
+      expect(events.find((e) => e._tag === "ChannelSendFailed")).toEqual({
+        _tag: "ChannelSendFailed",
         adapterId: "chan",
         conversationId: "chat-1",
         attempts: 1,
@@ -113,10 +113,9 @@ describe("outbox through the router", () => {
     const chan = flaky(makeScriptedAdapter({ id: "chan" }), [network(), network(), network(), network()]);
     await runRouter(chan, { outbox: { maxAttempts: 2, baseBackoffMs: 1 }, events }, async () => {
       chan.push(env({ id: "m1", text: "hi" }));
-      await waitFor(() => events.some((e) => e._tag === "Custom" && e.type === "ChannelSendFailed"));
+      await waitFor(() => events.some((e) => e._tag === "ChannelSendFailed"));
       expect(chan.tries()).toBe(2);
-      const failed = events.find((e) => e._tag === "Custom" && e.type === "ChannelSendFailed");
-      expect(failed && failed._tag === "Custom" ? failed.payload : undefined).toMatchObject({ attempts: 2, exhausted: true });
+      expect(events.find((e) => e._tag === "ChannelSendFailed")).toMatchObject({ attempts: 2, exhausted: true });
     });
   });
 
@@ -136,7 +135,7 @@ describe("outbox through the router", () => {
     const chan = flaky(makeScriptedAdapter({ id: "chan" }), [channelError("chan", "forbidden")]);
     await runRouter(chan, { agents: failing, events }, async (status) => {
       chan.push(env({ id: "m1", text: "hi" }));
-      await waitFor(() => events.some((e) => e._tag === "Custom" && e.type === "ChannelSendFailed"));
+      await waitFor(() => events.some((e) => e._tag === "ChannelSendFailed"));
       expect((await status()).outbox?.["failed"]).toBe(1);
     });
   });
