@@ -93,7 +93,8 @@
   {:else}
     {#each agents as a (a.agentId)}
       {@const host = hostView(a.gateway.phase)}
-      {@const queue = queueSentence(a.gateway.queue, a.gateway.phase === "running")}
+      <!-- The inbound queue belongs to the agent's own gateway loop (stats exist only then); a hub-hosted agent has none, so no "0 waiting". -->
+      {@const queue = queueSentence(a.gateway.queue, a.gateway.phase === "running" && a.gateway.stats !== null)}
       {@const limit = queueLimit(a.gateway.queue)}
       <section class="gw-card" aria-labelledby="gw-{a.agentId}">
         <div class="gw-card-h">

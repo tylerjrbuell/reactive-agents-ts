@@ -5,7 +5,7 @@
  * each row opens the same slash picker its chip always did.
  */
 import type { QuickBarChip, QuickBarChipContext } from "./chat-quickbar-chips.js";
-import { CHAT_DEFAULT_MAX_ITERATIONS, disclosureChoice, disclosureLabel, effectiveIterations, selectedTools } from "./chat-quickbar.js";
+import { CHAT_DEFAULT_MAX_ITERATIONS, disclosureChoice, disclosureLabel, selectedTools } from "./chat-quickbar.js";
 import { approvalPolicyFrom, approvalSummary, asksBeforeRiskyToolsFrom } from "./approval-policy.js";
 import type { IconName } from "./icons.js";
 
@@ -17,7 +17,7 @@ export const CHAT_DEFAULT_STRATEGY = "reactive";
 /** Most chips the bar shows beside the Config button; the rest wait in the popover. */
 export const MAX_BAR_CHIPS = 4;
 
-/** Whether a chip belongs on the bar: the model always, then only settings that differ from the defaults. */
+/** Whether a chip belongs on the bar: the model always, then only settings the session stores (a pick equal to the default stays visible). */
 export function chipOnBar(chip: QuickBarChip, cfg: Cfg, ctx: Pick<QuickBarChipContext, "thinkingChoice" | "modelThinking">): boolean {
   switch (chip.cmd) {
     case "/model ":
@@ -28,9 +28,10 @@ export function chipOnBar(chip: QuickBarChip, cfg: Cfg, ctx: Pick<QuickBarChipCo
     case "/thinking ":
       return ctx.thinkingChoice !== "auto" && ctx.modelThinking !== false;
     case "/strategy ":
-      return (typeof cfg.strategy === "string" && cfg.strategy !== "" ? cfg.strategy : CHAT_DEFAULT_STRATEGY) !== CHAT_DEFAULT_STRATEGY;
+      // A stored choice stays on the bar even when it equals the default: picking a value must not make its chip vanish.
+      return typeof cfg.strategy === "string" && cfg.strategy !== "";
     case "/iterations ":
-      return effectiveIterations(cfg) !== CHAT_DEFAULT_MAX_ITERATIONS;
+      return typeof cfg.maxIterations === "number" && cfg.maxIterations > 0;
     default:
       return chip.on === true;
   }

@@ -152,6 +152,16 @@ describe("routes", () => {
     expect(after.body.routes[0]?.midRun).toBeUndefined();
   });
 
+  it("minGapMs survives save and read back; null clears it; out-of-range values are refused", async () => {
+    const id = await makeChannel();
+    expect((await call("POST", "/api/channels/routes", { route: route(id, { minGapMs: 2500 }) })).status).toBe(201);
+    type Listed = { routes: { minGapMs?: number }[] };
+    expect((await call<Listed>("GET", "/api/channels")).body.routes[0]?.minGapMs).toBe(2500);
+    expect((await call("PATCH", "/api/channels/routes/r1", { route: { minGapMs: 60_001 } })).status).toBe(400);
+    expect((await call("PATCH", "/api/channels/routes/r1", { route: { minGapMs: null } })).status).toBe(200);
+    expect((await call<Listed>("GET", "/api/channels")).body.routes[0]?.minGapMs).toBeUndefined();
+  });
+
   it("an edit detaches a migrated route from the agent config", async () => {
     createGatewayAgent(db, "gw-2", "Bot2", JSON.stringify({ provider: "test", channels: [{ id: "ch-cccc3333", kind: "telegram" }], gateway: { accessControl: { accessPolicy: "allowlist", allowedSenders: ["telegram:9"] } } }), null, "gateway");
     await hub.migrateNow();

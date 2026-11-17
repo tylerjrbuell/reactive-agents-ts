@@ -27,6 +27,8 @@ import {
 } from "../services/channel-config.js";
 import type { ChannelCredentials } from "../services/channel-credentials.js";
 import type { ChannelHub } from "../services/channel-hub.js";
+import { runTotalsByAgent, shownRunTotals } from "../db/agent-run-totals.js";
+import { hubAccessFor } from "../services/gateway-hub-overlay.js";
 
 const Kind = t.Union([t.Literal("telegram"), t.Literal("signal"), t.Literal("webhook")]);
 
@@ -60,28 +62,31 @@ export const gatewayRouter = (db: Database, gateway: GatewayProcessManager, cred
     .get("/status", async () => {
       const procs = new Map(gateway.listProcesses().map((p) => [p.agentId, p]));
       const rows = getGatewayAgents(db).filter((r) => r.agent_type === "gateway");
+      // One hub read for the whole page: hub-hosted channels report from it (a host alone has no adapters for them).
+      const hub = deps.hub ? await deps.hub.status() : null;
+      const runTotals = runTotalsByAgent(db);
       const agents = await Promise.all(
         rows.map(async (row) => {
           const config = parseJson(row.config);
           const proc = procs.get(row.agent_id);
-          const hosted = await gateway.channels.status(row.agent_id, config);
+          const hosted = await gateway.channels.status(row.agent_id, config, hub);
           return {
             agentId: row.agent_id,
             name: row.name,
             status: row.status,
             /** Cortex's own cron for one-shot fires (`schedule`); framework crons are under `gateway.schedules`. */
             schedule: row.schedule,
-            runCount: row.run_count,
-            lastRunAt: row.last_run_at,
+            runCount: shownRunTotals(row, runTotals.get(row.agent_id)).runCount,
+            lastRunAt: shownRunTotals(row, runTotals.get(row.agent_id)).lastRunAt,
             processRunning: proc?.running ?? false,
             lastFiredAt: proc?.lastFiredAt ?? null,
-            access: summarizeAccess(parseCortexGatewayConfig(config.gateway)),
+            access: hubAccessFor(row.agent_id, hub, summarizeAccess(parseCortexGatewayConfig(config.gateway))),
             gateway: hosted,
           };
         }),
       );
       // The hub block: channels and routes the channel hub runs (phase "disabled" under `CORTEX_CHANNEL_HUB=off`; null without a hub).
-      return { agents, hub: deps.hub ? await deps.hub.status() : null };
+      return { agents, hub };
     })
     .get("/channels/:channelId/credentials", ({ params, query, set }) => {
       if (!creds) return unavailable(set);

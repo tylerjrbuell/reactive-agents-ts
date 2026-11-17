@@ -95,6 +95,9 @@ export interface HubChannelView {
   readonly received: number;
   readonly sent: number;
   readonly failed: number;
+  /** Latest routed message / answered turn for this channel, from the recent activity feed (null when none is in it). Simulated messages never count. */
+  readonly lastInboundAt: number | null;
+  readonly lastSentAt: number | null;
   readonly migratedFrom: string | null;
 }
 
@@ -130,7 +133,8 @@ export interface HubStatus {
   readonly rejected: readonly RejectedRoute[];
   /** Who holds each account right now (channel, pid): the page links a duplicate to its owner. */
   readonly leases: readonly LeaseHolder[];
-  readonly router: Pick<RouterStatus, "unrouted" | "dropped" | "activeSessions" | "inbox"> | null;
+  /** `inbox` / `outbox` / `timers` (counts per status) are present only when the router's store keeps them. */
+  readonly router: Pick<RouterStatus, "unrouted" | "dropped" | "activeSessions" | "inbox" | "outbox" | "timers"> | null;
   readonly activity: readonly HubActivity[];
   readonly migration: { readonly warnings: readonly MigrationWarning[]; readonly legacy: MigrationPlan["legacy"] };
 }
@@ -485,9 +489,15 @@ export class ChannelHub {
     const liveRoutes = new Set(this.running ? [...loaded.routes.filter((r) => !this.inactiveRoutes.has(r.id)).map((r) => r.id)] : []);
     const enabledPerChannel = new Set(loaded.routes.filter((r) => r.enabled).map((r) => r.match.channelId));
 
+    const feed = this.tracker.snapshot();
+    const channelOfRoute = new Map(loaded.records.map((r) => [r.id, r.channelId] as const));
+    // Newest first, so the first live match per channel is the latest one.
+    const lastAt = (kind: "matched" | "answered", channelId: string): number | null =>
+      feed.find((a) => a.kind === kind && !a.simulated && (a.channelId ?? (a.routeId ? channelOfRoute.get(a.routeId) : undefined)) === channelId)?.at ?? null;
+
     const channels = await Promise.all(
       listChannels(db).map(async (c): Promise<HubChannelView> => {
-        const base = { id: c.id, platform: c.platform, label: c.label, enabled: c.enabled, migratedFrom: c.migratedFrom };
+        const base = { id: c.id, platform: c.platform, label: c.label, enabled: c.enabled, migratedFrom: c.migratedFrom, lastInboundAt: lastAt("matched", c.id), lastSentAt: lastAt("answered", c.id) };
         const stats = byId.get(c.id);
         const counts = { received: stats?.messagesReceived ?? 0, sent: stats?.messagesSent ?? 0, failed: stats?.deliveryFailures ?? 0 };
         const skip = this.skipped.get(c.id);
@@ -538,8 +548,17 @@ export class ChannelHub {
       rejected: loaded.rejected,
       leases: listLeaseHolders(db),
       // `inbox` (envelope counts per status) exists only when the router's store keeps a durable inbox.
-      router: router ? { unrouted: router.unrouted, dropped: router.dropped, activeSessions: router.activeSessions, ...(router.inbox ? { inbox: router.inbox } : {}) } : null,
-      activity: this.tracker.snapshot(),
+      router: router
+        ? {
+            unrouted: router.unrouted,
+            dropped: router.dropped,
+            activeSessions: router.activeSessions,
+            ...(router.inbox ? { inbox: router.inbox } : {}),
+            ...(router.outbox ? { outbox: router.outbox } : {}),
+            ...(router.timers ? { timers: router.timers } : {}),
+          }
+        : null,
+      activity: feed,
       migration: { warnings: this.lastPlan.warnings, legacy: this.lastPlan.legacy },
     };
   }

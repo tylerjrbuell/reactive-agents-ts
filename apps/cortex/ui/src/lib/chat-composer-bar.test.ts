@@ -24,8 +24,19 @@ describe("composerBar", () => {
     expect(barCmds(cfg, ctx({ thinkingChoice: "off" }))).toEqual(["/model ", "/thinking ", "/strategy ", "/tools "]);
   });
 
-  test("the default strategy and the default step cap stay hidden even when stored", () => {
-    expect(barCmds({ strategy: "reactive", maxIterations: 16 })).toEqual(["/model "]);
+  test("a stored strategy or step cap stays on the bar even when it equals the default", () => {
+    expect(barCmds({ strategy: "reactive", maxIterations: 16 })).toEqual(["/model ", "/strategy ", "/iterations "]);
+  });
+
+  test("the step chip shows for any valid value, preset or not, and hides only when unset", () => {
+    for (const n of [1, 10, 16, 20, 50, 200]) {
+      const cfg = { maxIterations: n };
+      const c = ctx();
+      const chip = composerBar(quickBarChips(cfg, c), cfg, c).shown.find((x) => x.cmd === "/iterations ");
+      expect(chip?.text).toBe(`${n} steps`);
+    }
+    expect(barCmds({})).toEqual(["/model "]);
+    expect(barCmds({ maxIterations: 0 })).toEqual(["/model "]);
   });
 
   test("a model with no thinking mode never shows a thinking chip", () => {

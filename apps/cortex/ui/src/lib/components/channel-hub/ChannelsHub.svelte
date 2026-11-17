@@ -13,6 +13,7 @@
   import { takeNewRouteRequest } from "$lib/stores/channels-intent.js";
   import { CHANNEL_KINDS, channelKindInfo, type ChannelKind } from "$lib/channels.js";
   import InboxStatus from "./InboxStatus.svelte";
+  import QueueStatus from "./QueueStatus.svelte";
   import { createHubChannel, deleteHubChannel, fetchAgentChoices, fetchHub, fetchHubLive, type AgentChoice, type HubChannelRow, type HubLive, type HubSnapshot } from "$lib/channel-hub-api.js";
   import type { HubRouteWire } from "$lib/channel-hub.js";
   import { duplicateAccounts } from "$lib/channel-hub-view.js";
@@ -109,6 +110,7 @@
         <Badge tone={live.phase === "running" ? "ok" : live.phase === "failed" ? "bad" : "neutral"}>Hub {live.phase}</Badge>
         {#if !live.durableStore}<Badge tone="warn">Caps reset on restart</Badge>{/if}
         <InboxStatus inbox={live.inbox} />
+        <QueueStatus outbox={live.outbox} timers={live.timers} />
       {/if}
     </div>
   </header>

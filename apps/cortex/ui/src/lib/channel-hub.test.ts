@@ -60,6 +60,14 @@ describe("draft <-> route", () => {
     d.ackText = "One\nTwo";
     expect(routeFromDraft(d).ack).toMatchObject({ text: ["One", "Two"] });
   });
+  it("minGapMs survives a draft round trip, is dropped when blank, and never goes to a webhook route", () => {
+    const paced: HubRouteWire = { ...saved, minGapMs: 2500 };
+    expect(routeFromDraft(draftFromRoute(paced), paced).minGapMs).toBe(2500);
+    expect(routeFromDraft({ ...draftFromRoute(paced), minGapMs: "" }, paced).minGapMs).toBeUndefined();
+    expect(routeFromDraft(draftFromRoute(paced), paced, "webhook").minGapMs).toBeUndefined();
+    expect(draftProblems({ ...draftFromRoute(paced), minGapMs: "60001" }, false).join(" ")).toContain("Minimum gap");
+  });
+
   it("a webhook route leaves out senderTools and ack (the framework refuses the keys, not only non-defaults)", () => {
     const d = { ...newDraft("ch-w", "gw-1"), id: "hook", ackOn: true };
     const r = routeFromDraft(d, undefined, "webhook");

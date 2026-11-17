@@ -35,6 +35,25 @@ describe("GET /api/agents", () => {
     gateway.destroy();
   });
 
+  it("run count and last run come from the runs table, so channel-hub runs count and agree with the stats", async () => {
+    const db = new Database(":memory:");
+    const { app, gateway } = makeApp(db);
+    // A hub-hosted agent: its runs are recorded (cortex_runs) but the cron launcher's stored counter never moved.
+    createGatewayAgent(db, "gateway-hub1", "Telegram Agent", JSON.stringify({ prompt: "Go" }), null, "gateway");
+    for (const [i, status] of (["completed", "completed", "failed"] as const).entries()) {
+      db.prepare("INSERT INTO cortex_runs (run_id, agent_id, started_at, status, tokens_used, cost_usd) VALUES (?, 'gateway-hub1', ?, ?, 100, 0.01)").run(`r${i}`, 1000 + i, status);
+    }
+
+    const list = (await (await app.handle(new Request("http://localhost/api/agents"))).json()) as Array<{ agentId: string; runCount: number; lastRunAt: number | null }>;
+    const stats = (await (await app.handle(new Request("http://localhost/api/agents/gateway-hub1/stats"))).json()) as { runCount: number };
+    expect(list[0]).toMatchObject({ runCount: 3, lastRunAt: 1002 });
+    expect(list[0]?.runCount).toBe(stats.runCount);
+    const one = (await (await app.handle(new Request("http://localhost/api/agents/gateway-hub1"))).json()) as { runCount: number };
+    expect(one.runCount).toBe(3);
+
+    gateway.destroy();
+  });
+
   it("returns agents with processRunning field", async () => {
     const db = new Database(":memory:");
     const { app, gateway } = makeApp(db);

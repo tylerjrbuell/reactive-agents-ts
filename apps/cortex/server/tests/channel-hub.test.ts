@@ -122,7 +122,8 @@ describe("one poller per bot token", () => {
   it("the legacy host skips a channel the hub owns (removing the guard makes the account open twice)", async () => {
     const opens = { n: 0 };
     createGatewayAgent(db, "gateway-1", "Bot", JSON.stringify(agentConfig()), null, "gateway");
-    const { hub } = makeHub(scriptedChannel(CH, "telegram:tok", opens));
+    const hubChannel = scriptedChannel(CH, "telegram:tok", opens);
+    const { hub } = makeHub(hubChannel);
     const legacy = new GatewayChannelHost(
       db,
       ingestLayer(db) as never,
@@ -135,7 +136,28 @@ describe("one poller per bot token", () => {
     await legacy.sync("gateway-1", "Bot", agentConfig());
     await new Promise((r) => setTimeout(r, 600)); // the legacy host opens adapters on its own fibers
     expect(opens.n).toBe(1);
-    expect((await legacy.status("gateway-1", agentConfig())).channels[0]).toMatchObject({ state: "skipped", reason: expect.stringContaining("channel hub") });
+    // No hub status handed over: the row says where the state lives instead of inventing a failure.
+    expect((await legacy.status("gateway-1", agentConfig())).channels[0]).toMatchObject({ state: "not-started", reason: expect.stringContaining("channel hub") });
+  }, 60_000);
+
+  it("the Gateway overview reports a hub-hosted channel from the hub's live status (connected, counters, listening)", async () => {
+    createGatewayAgent(db, "gateway-1", "Bot", JSON.stringify(agentConfig()), null, "gateway");
+    const ch = scriptedChannel(CH);
+    const { hub } = makeHub(ch);
+    const legacy = new GatewayChannelHost(db, ingestLayer(db) as never, gatewayConfigToBuildParams, () => ({ adapters: [], webhooks: [], skipped: [] }));
+    hosts.push(legacy);
+    legacy.setHubOwnership((id) => hub.owns(id));
+    await hub.start();
+    await legacy.sync("gateway-1", "Bot", agentConfig());
+    expect((await converse(ch, "1", "hello", "m1"))?.text).toBe("hello from the agent");
+
+    const s = await legacy.status("gateway-1", agentConfig(), await hub.status());
+    expect(s.phase).toBe("running");
+    expect(s.channels[0]).toMatchObject({ state: "connected", error: null, sent: 1, reason: expect.stringContaining("channel hub") });
+    expect(s.channels[0]?.received).toBeGreaterThanOrEqual(1);
+    expect(s.channels[0]?.lastInboundAt).not.toBeNull();
+    expect(s.channels[0]?.lastSentAt).not.toBeNull();
+    expect(s.activity.map((a) => a.kind)).toEqual(expect.arrayContaining(["received", "sent"]));
   }, 60_000);
 
   it("a hub that failed to start still owns its channels (never hand them to a second poller)", async () => {

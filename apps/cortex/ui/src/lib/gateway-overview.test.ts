@@ -38,6 +38,15 @@ describe("connectionView", () => {
   });
 });
 
+describe("a hub-hosted channel that is connected", () => {
+  const hosted = row({ state: "connected", reason: "Hosted by the channel hub. Its state is under Routes.", received: 3, sent: 2 });
+  it("reads Connected and counts as listening, never as needing attention", () => {
+    expect(connectionView(hosted)).toEqual({ tone: "running", label: "Connected" });
+    expect(hostView("running").label).toBe("Listening");
+    expect(overviewTotals([agent([hosted])])).toEqual({ agents: 1, listening: 1, connected: 1, problems: 0 });
+  });
+});
+
 describe("hostView / runView / activityLabel", () => {
   it("names the host phases", () => {
     expect(hostView("running").label).toBe("Listening");

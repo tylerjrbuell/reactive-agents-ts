@@ -7,6 +7,7 @@ import { call, isRecord, json, type ApiResult, type Fetcher } from "./gateway-ap
 import type { ChannelKind, ChannelSettings } from "./channels.js";
 import type { HubRouteWire } from "./channel-hub.js";
 import { parseInboxCounts, type InboxCountsWire } from "./channel-inbox.js";
+import { parseOutboxCounts, parseTimerCounts, type OutboxCountsWire, type TimerCountsWire } from "./channel-router-queues.js";
 
 /** One credential field as the hub reports it (mask only). */
 export interface HubCredentialMask {
@@ -59,6 +60,10 @@ export interface HubLive {
   readonly durableStore: boolean;
   /** Envelope counts per status; null when the router's store keeps no durable inbox. */
   readonly inbox: InboxCountsWire | null;
+  /** Outgoing message counts per status; null when the router keeps no durable outbox. */
+  readonly outbox: OutboxCountsWire | null;
+  /** Follow-up timer counts per status; null when the router runs without follow-up timers. */
+  readonly timers: TimerCountsWire | null;
   readonly channels: readonly HubChannelLive[];
   readonly routes: readonly { readonly id: string; readonly active: boolean; readonly reason: string | null; readonly roleNote: string | null }[];
 }
@@ -104,6 +109,8 @@ const parseLive = (v: unknown): HubLive | null => {
     leases: Array.isArray(v.leases) ? v.leases.filter(isRecord).filter((l) => typeof l.channelId === "string").map((l) => ({ channelId: String(l.channelId), pid: Number(l.pid ?? 0) })) : [],
     durableStore: v.durableStore === true,
     inbox: parseInboxCounts(v.router),
+    outbox: parseOutboxCounts(v.router),
+    timers: parseTimerCounts(v.router),
     channels: v.channels.filter(isRecord).map((c) => ({
       id: String(c.id),
       state: String(c.state ?? "not-started"),

@@ -11,6 +11,7 @@
 import { normalizeSender, senderProblem } from "./channel-access.js";
 import { resetDraftFromWire, resetProblems, resetWireFromDraft, type ResetDraft } from "./channel-reset-commands.js";
 import { batchingDraftFromWire, batchingProblems, batchingWireFromDraft, type BatchingDraft, type MidRunMode } from "./channel-batching.js";
+import { pacingDraftFromWire, pacingProblems, pacingWireFromDraft, type PacingDraft } from "./channel-pacing.js";
 import { turnLimitDraftFromWire, turnLimitProblems, turnLimitWireFromDraft, type TurnLimitDraft } from "./channel-turn-limits.js";
 
 /** What non-owner senders may do, as the framework's tagged union. */
@@ -53,6 +54,8 @@ export interface HubRouteWire {
   batchWindowMs?: number;
   /** What a message that arrives during a running turn does (framework default: queue). */
   midRun?: MidRunMode;
+  /** Least gap (ms, 0 to 60 000) between two messages sent into one conversation. See `channel-pacing.ts`. */
+  minGapMs?: number;
   maxTurnsPerSenderPerHour?: number;
   maxTurnsPerHour?: number;
   maxCostPerDayUsd?: number;
@@ -74,7 +77,7 @@ export const MODEL_TIMEOUT_RANGE = { min: 1, max: 30_000 } as const;
 export type MatchWhen = "any" | "mention" | "command" | "keyword";
 
 /** The editor's flat form of a route. Numbers are strings while typed. */
-export interface RouteDraft extends ResetDraft, TurnLimitDraft, BatchingDraft {
+export interface RouteDraft extends ResetDraft, TurnLimitDraft, BatchingDraft, PacingDraft {
   id: string;
   enabled: boolean;
   channelId: string;
@@ -137,6 +140,7 @@ export function newDraft(channelId = "", agentId = "", platform?: string): Route
     ...resetDraftFromWire(undefined),
     ...turnLimitDraftFromWire({}),
     ...batchingDraftFromWire({}),
+    ...pacingDraftFromWire({}),
   };
 }
 
@@ -175,6 +179,7 @@ export function draftFromRoute(r: HubRouteWire): RouteDraft {
     ...resetDraftFromWire(r.resetCommands),
     ...turnLimitDraftFromWire(r),
     ...batchingDraftFromWire(r),
+    ...pacingDraftFromWire(r),
   };
 }
 
@@ -195,7 +200,7 @@ const lines = (s: string): string[] => s.split("\n").map((l) => l.trim()).filter
 export function routeFromDraft(d: RouteDraft, saved?: HubRouteWire, platform?: string): HubRouteWire {
   const wire = routeWithAll(d, saved);
   if (platform !== "webhook") return wire;
-  const { senderTools: _s, ack: _a, batchWindowMs: _bw, midRun: _mr, ...rest } = wire;
+  const { senderTools: _s, ack: _a, batchWindowMs: _bw, midRun: _mr, minGapMs: _mg, ...rest } = wire;
   return { ...rest, owners: [], allow: [], deny: [], open: false };
 }
 
@@ -235,6 +240,7 @@ function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
     failureNotice: _fn,
     batchWindowMs: _bw,
     midRun: _mr,
+    minGapMs: _mg,
     ...rest
   } = base;
   const resetCommands = resetWireFromDraft(d);
@@ -258,6 +264,7 @@ function routeWithAll(d: RouteDraft, saved?: HubRouteWire): HubRouteWire {
     ...(resetCommands ? { resetCommands } : {}),
     ...turnLimitWireFromDraft(d),
     ...batchingWireFromDraft(d),
+    ...pacingWireFromDraft(d),
   };
 }
 
@@ -289,6 +296,7 @@ export function draftProblems(d: RouteDraft, creating: boolean): string[] {
   out.push(...resetProblems(d));
   out.push(...turnLimitProblems(d));
   out.push(...batchingProblems(d));
+  out.push(...pacingProblems(d));
   if (d.ackOn) {
     const after = toNum(d.ackAfterMs);
     if (after !== undefined && !(after >= 0)) out.push("Acknowledge after must be zero or more milliseconds.");

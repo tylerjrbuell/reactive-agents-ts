@@ -8,6 +8,7 @@ import {
   deleteGatewayAgent,
   getAgentStats,
 } from "../db/queries.js";
+import { runTotalsByAgent, shownRunTotals, type AgentRunTotals } from "../db/agent-run-totals.js";
 import type { GatewayProcessManager } from "../services/gateway-process-manager.js";
 import { migrateLegacyCliToolsInConfig } from "../services/legacy-cli-tools.js";
 import { parseCortexChannels } from "../services/channel-config.js";
@@ -28,8 +29,9 @@ function parseConfig(raw: string): Record<string, unknown> {
   catch { return {}; }
 }
 
-function rowToDto(row: ReturnType<typeof getGatewayAgent>) {
+function rowToDto(row: ReturnType<typeof getGatewayAgent>, totals?: AgentRunTotals) {
   if (!row) return null;
+  const shown = shownRunTotals(row, totals);
   const normalizedType: "gateway" | "ad-hoc" =
     row.agent_type === "ad-hoc" || row.agent_id.startsWith("agent-")
       ? "ad-hoc"
@@ -40,8 +42,8 @@ function rowToDto(row: ReturnType<typeof getGatewayAgent>) {
     config:    parseConfig(row.config),
     type:      normalizedType,
     status:    row.status,
-    runCount:  row.run_count,
-    lastRunAt: row.last_run_at,
+    runCount:  shown.runCount,
+    lastRunAt: shown.lastRunAt,
     schedule:  row.schedule,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -54,7 +56,8 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
 
     // ── List ───────────────────────────────────────────────────────────────
     .get("/", () => {
-      const agents = getGatewayAgents(db).map(rowToDto);
+      const totals = runTotalsByAgent(db);
+      const agents = getGatewayAgents(db).map((row) => rowToDto(row, totals.get(row.agent_id)));
       // Enrich with live process state
       const procs = new Map(gateway.listProcesses().map((p) => [p.agentId, p]));
       return agents.map((a) => {
@@ -68,7 +71,7 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
     .get("/:agentId", ({ params, set }) => {
       const row = getGatewayAgent(db, params.agentId);
       if (!row) { set.status = 404; return { error: "Not found" }; }
-      const dto = rowToDto(row);
+      const dto = rowToDto(row, runTotalsByAgent(db).get(row.agent_id));
       const proc = gateway.listProcesses().find((p) => p.agentId === params.agentId);
       return { ...dto, processRunning: proc?.running ?? false };
     })

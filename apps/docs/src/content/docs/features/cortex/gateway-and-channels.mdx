@@ -101,8 +101,13 @@ If a channel is saved for an account the hub already holds, the page says so and
 | Turn limit, Tell the sender when a turn fails | How many seconds one turn may run (empty = 120) and whether the sender gets a fixed failure message (on by default); see "When a turn fails". |
 | Batch window, While a turn is running | Batch window (milliseconds, 0 to 30000, empty or 0 = off) joins messages one sender sends in a burst into one turn. While a turn is running chooses what a new message in that conversation does: wait its turn (default), join the running turn, or stop it and restart from the combined messages. Both are hidden on webhook routes. |
 | Start-over commands | `/new` and `/reset` by default. When a route owner sends one as the whole message, that conversation starts fresh and its saved history is cleared; the agent never sees the command. Leave blank for the default, list your own, or turn it off. Other senders' `/new` is ordinary text. |
+| Pacing | Minimum gap between messages (milliseconds, 0 to 60000, empty or 0 = off): the least wait between two messages sent into one conversation, replies, acknowledgements and notices alike, so a chatty agent does not flood a chat. Hidden on webhook routes. |
 
-Webhook routes are authorised by the channel's signing secret, so the editor hides owners, allow and deny lists, open access, sender tools, acknowledgements, the batch window and the mid-turn choice for them.
+Webhook routes are authorised by the channel's signing secret, so the editor hides owners, allow and deny lists, open access, sender tools, acknowledgements, the batch window, the mid-turn choice and pacing for them.
+
+The hub header also shows the router's **Outbox** (pending, sent, failed) and **Follow-up timers** (pending, fired, cancelled) counts when the router keeps them. Cortex's own store keeps neither today, so they stay hidden rather than show zeros.
+
+The Gateway tab reports a channel the hub hosts from the hub's live status: its connection state, messages in, replies sent, send failures, and the time of the last message and reply. An agent whose channels all live in the hub shows as listening while the hub runs, its recent activity includes the hub's traffic, and who may message it comes from the routes that point at it, not from its own saved allowlist.
 
 Adding an owner, turning on **Open to anyone** or choosing **The agent's full tools** widens access. The editor asks through a confirm dialog that names the change, sends the matching `confirm` tokens, and the server records the change in the audit trail. If the server finds a widening change the editor did not predict, it answers 409 and the same dialog opens. The server refuses to save an open route without caps. Nothing a sender writes can add an owner or change a route.
 

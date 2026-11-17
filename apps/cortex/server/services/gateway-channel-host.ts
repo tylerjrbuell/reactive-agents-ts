@@ -29,6 +29,8 @@ import { mountWebhookIngress } from "./channel-ingress.js";
 import { enabledChannels, parseCortexChannels, parseCortexGatewayConfig, type CortexChannelEntry, type CortexGatewayConfig } from "./channel-config.js";
 import { installedChannelCredentials } from "./channel-credentials.js";
 import { normalizeCortexAgentConfig } from "./cortex-agent-config.js";
+import type { HubStatus } from "./channel-hub.js";
+import { hubActivityFor, hubChannelState, hubDenied, hubHostPhase, mergeActivity } from "./gateway-hub-overlay.js";
 import { GatewayEventTracker, type GatewayTrackerSnapshot } from "./gateway-status.js";
 import { CortexIngestService } from "./ingest-service.js";
 
@@ -178,20 +180,24 @@ export class GatewayChannelHost {
   }
 
   /** Live report for one agent; an agent that is not hosted still reports its saved channels as `not-started`. */
-  async status(agentId: string, configRaw: Record<string, unknown>): Promise<HostedGatewayStatus> {
+  async status(agentId: string, configRaw: Record<string, unknown>, hub: HubStatus | null = null): Promise<HostedGatewayStatus> {
     const entries = parseCortexChannels(configRaw.channels);
+    // Channels the hub hosts are reported from the hub's own status (`gateway-hub-overlay.ts`), not as zeros.
+    const hubViews = new Map((hub?.channels ?? []).map((c) => [c.id, c] as const));
+    const hubIds = new Set(entries.filter((e) => this.hubOwns(e.id)).map((e) => e.id));
     const h = this.hosted.get(agentId);
     const snap = this.trackers.get(agentId)?.snapshot();
     const running = h?.agent && h.phase === "running" ? h.agent : null;
     // The framework's own accessors: per-adapter state and counters, the live queue and the run stats.
     const adapterInfo = new Map((running?.channelStatus()?.adapters ?? []).map((a) => [a.id, a] as const));
     const gw = running ? await running.gatewayStatus() : null;
-    const channels = await Promise.all(entries.map((e) => this.channelState(e, h, adapterInfo.get(e.id))));
+    const channels = await Promise.all(
+      entries.map((e) => (hubIds.has(e.id) ? hubChannelState(e, hubViews.get(e.id)) : this.channelState(e, h, adapterInfo.get(e.id)))),
+    );
     const q = gw?.inboundQueue;
+    const phase = hubHostPhase({ phase: h?.phase ?? "idle", error: h?.error ?? null, startedAt: h?.startedAt ?? null }, hubIds.size, hub);
     return {
-      phase: h?.phase ?? "idle",
-      error: h?.error ?? null,
-      startedAt: h?.startedAt ?? null,
+      ...phase,
       channels,
       schedules: await this.schedules(h),
       queue: {
@@ -201,8 +207,8 @@ export class GatewayChannelHost {
         capacity: q?.capacity ?? h?.gateway?.queue?.capacity ?? null,
         overflow: q?.overflow ?? h?.gateway?.queue?.overflow ?? null,
       },
-      denied: snap?.denied ?? 0,
-      activity: snap?.activity ?? [],
+      denied: (snap?.denied ?? 0) + (hub ? hubDenied(hub, hubIds) : 0),
+      activity: hub && hubIds.size > 0 ? mergeActivity(snap?.activity ?? [], hubActivityFor(hub, hubIds)) : (snap?.activity ?? []),
       stats: gw ? { ...gw.stats } : null,
     };
   }
@@ -222,7 +228,6 @@ export class GatewayChannelHost {
       lastSentAt: info?.lastSentAt ?? null,
       lastFailure: info?.lastError?.kind ?? null,
     };
-    if (this.hubOwns(e.id)) return { ...base, state: "skipped", error: null, reason: "Hosted by the channel hub. Its state is under Routes." };
     const skipReason = h?.skipped.get(e.id);
     if (skipReason) return { ...base, state: "skipped", error: null, reason: skipReason };
     const adapter = h?.adapters.find((a) => a.id === e.id);
