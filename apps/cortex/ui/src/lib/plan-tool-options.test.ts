@@ -32,6 +32,14 @@ describe("planToolOptions", () => {
     expect(o.some((x) => x.group === "Files")).toBe(false);
   });
 
+  test("a tool of a switched-off server is never offered, and a hint naming it stays under the unavailable heading, not under Tools", () => {
+    const withOff: QuickbarCatalog = { ...catalog, disabledMcpServers: [{ serverId: "old", name: "Old", tools: ["legacy_tool"] }] };
+    const o = planToolOptions({ tools: ["file-read", "legacy_tool"], mcpServerIds: ["gh", "old"] }, withOff, ["legacy_tool"]);
+    expect(o.some((x) => x.group === "Old")).toBe(false);
+    expect(pairs(o).filter(([g]) => g === OWN_TOOLS_GROUP).map(([, v]) => v)).toEqual(["file-read"]);
+    expect(pairs(o)).toContainEqual([UNAVAILABLE_TOOLS_GROUP, "legacy_tool"]);
+  });
+
   test("a hinted name the session does not offer stays visible under its own heading, once", () => {
     const o = planToolOptions({ tools: ["file-read"], mcpServerIds: [] }, catalog, ["shell-execute", "file-read", "shell-execute", ""]);
     expect(pairs(o).filter(([g]) => g === UNAVAILABLE_TOOLS_GROUP)).toEqual([[UNAVAILABLE_TOOLS_GROUP, "shell-execute"]]);

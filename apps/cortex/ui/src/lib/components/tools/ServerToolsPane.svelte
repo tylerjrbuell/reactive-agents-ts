@@ -40,7 +40,7 @@
     <div class="tp-bar">
       <label class="sr-only" for="tp-search">Search tools</label>
       <input id="tp-search" type="search" class="cx-control tp-search" bind:value={search} placeholder="Search tools" />
-      <Select id="tp-filter" value={filter} options={TOOL_FILTERS} onchange={(v) => (filter = TOOL_FILTERS.find((f) => f.value === v)?.value ?? filter)} />
+      <Select id="tp-filter" class="tp-filter" value={filter} options={TOOL_FILTERS} onchange={(v) => (filter = TOOL_FILTERS.find((f) => f.value === v)?.value ?? filter)} />
     </div>
     {#if shown.length === 0}
       <p class="tp-note">No tool matches.</p>
@@ -66,7 +66,10 @@
   .tp-skel { display: grid; gap: 8px; }
   .tp-skel :global(.chat-skeleton) { height: 44px; border-radius: var(--cortex-r-ctl); }
   .tp-bar { display: flex; gap: 8px; align-items: center; }
-  .tp-search { flex: 1; min-width: 0; }
+  /* The search takes the room; the filter keeps its own width (both are width: 100% controls, which squeezed the search to an empty square). */
+  .tp-search { flex: 1 1 0; min-width: 120px; width: auto; }
+  .tp-bar :global(.tp-filter) { flex: 0 0 168px; width: 168px; }
+  @media (max-width: 600px) { .tp-bar { flex-wrap: wrap; } .tp-bar :global(.tp-filter) { flex: 1 1 100%; width: auto; } }
   .tp-note { margin: 0; font-size: var(--cortex-t-sm); color: var(--cortex-text-3); }
   .tp-note.bad { color: var(--cortex-bad); }
   .tp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

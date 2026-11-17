@@ -3,7 +3,9 @@
   import { tooltip } from "$lib/actions/tooltip.js";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
+  import McpDisabledNote from "$lib/components/McpDisabledNote.svelte";
   import McpServerAttach from "$lib/components/McpServerAttach.svelte";
+  import { availableMcpServers, disabledInUse } from "$lib/mcp-servers-view.js";
   import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
   import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
   import WebSearchProvidersField from "$lib/components/WebSearchProvidersField.svelte";
@@ -41,6 +43,11 @@
     config = { ...config, tools };
   }
 
+  /** What an agent can use (enabled servers); a switched-off server is never offered here. */
+  const availableServers = $derived(availableMcpServers(mcpCatalog));
+  /** Switched-off servers this config still lists: the build skips them, so the note says so. */
+  const skippedServers = $derived(disabledInUse(mcpCatalog, config.mcpServerIds ?? []));
+
   /**
    * Selected names no chip above shows (`calculator` from an old config): listed
    * so they can be removed. MCP names (`server/tool`) wait for the MCP list.
@@ -51,7 +58,8 @@
       {
         builtinTools: AVAILABLE_TOOLS.map((t) => ({ name: t.id })),
         toolsets: {},
-        mcpServers: mcpCatalog.map((s) => ({ tools: s.tools.map((t) => t.toolName) })),
+        // Enabled servers only: a name from a switched-off server stays selected but is listed below to remove.
+        mcpServers: availableServers.map((s) => ({ tools: s.tools.map((t) => t.toolName) })),
       },
     ).filter((n) => mcpCatalog.length > 0 || !n.includes("/")),
   );
@@ -128,7 +136,7 @@
                 </button>
               {/each}
             </div>
-            <p class="acp-hint">Selected in this config but not a tool Cortex lists (an old or imported config, or a removed MCP server). Click to remove.</p>
+            <p class="acp-hint">Selected in this config but not a tool Cortex lists (an old or imported config, or a removed or switched-off MCP server). Click to remove.</p>
           </div>
         {/if}
         <div class="acp-field">
@@ -144,7 +152,8 @@
             Merged with the picks at run time. Use exact tool registration names (Lab · Tools lists MCP and custom tools).
           </p>
         </div>
-        <McpServerAttach bind:config servers={mcpCatalog} onRefresh={loadMcpCatalog} />
+        <McpServerAttach bind:config servers={availableServers} onRefresh={loadMcpCatalog} />
+        <McpDisabledNote servers={skippedServers} onChanged={loadMcpCatalog} />
         <!-- Approvals gate tool calls, so they sit with the tools they gate. -->
         <ApprovalPolicyFields bind:config />
         <p class="acp-hint" data-testid="approval-durable-note">

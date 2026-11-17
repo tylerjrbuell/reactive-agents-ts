@@ -50,8 +50,12 @@ export const fetchServerTools = (ctx: ApiCtx, serverId: string): Promise<ApiResu
   call(ctx, `/api/mcp-servers/${encodeURIComponent(serverId)}/tools`, undefined, (j) => (Array.isArray(j.tools) ? (j.tools as McpToolDetail[]) : []));
 
 /** POST /:id/test: connect, list and release. Never writes the tool cache; a failed test is an answer, not an error. */
-export const testServer = (ctx: ApiCtx, serverId: string): Promise<ApiResult<TestReply>> =>
-  call(ctx, `/api/mcp-servers/${encodeURIComponent(serverId)}/test`, send("POST"), (j): TestReply =>
+export const testServer = (ctx: ApiCtx, serverId: string, opts: { readonly timeoutMs?: number; readonly signal?: AbortSignal } = {}): Promise<ApiResult<TestReply>> =>
+  call(
+    ctx,
+    `/api/mcp-servers/${encodeURIComponent(serverId)}/test${opts.timeoutMs !== undefined ? `?timeoutMs=${Math.floor(opts.timeoutMs)}` : ""}`,
+    { ...send("POST"), ...(opts.signal !== undefined ? { signal: opts.signal } : {}) },
+    (j): TestReply =>
     j.ok === true
       ? { ok: true, toolCount: typeof j.toolCount === "number" ? j.toolCount : 0, checkedAt: typeof j.checkedAt === "number" ? j.checkedAt : Date.now() }
       : { ok: false, error: typeof j.error === "string" ? j.error : "The test failed." },

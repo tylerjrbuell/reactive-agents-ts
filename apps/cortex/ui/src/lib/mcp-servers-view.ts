@@ -55,6 +55,38 @@ export interface ServerListRow {
   readonly checkedText: string | undefined;
   /** Disabled rows are dimmed and offer Enable. */
   readonly dimmed: boolean;
+  /** A background check of this server is running: the chip reads "Checking…". */
+  readonly checking: boolean;
+}
+
+/** A saved state older than this is checked again when the page opens. */
+export const STALE_AFTER_MS = 10 * 60_000;
+/** Background checks that run at once. */
+export const PROBE_CONCURRENCY = 2;
+/** Time cap of one background check (the manual Test keeps the long cap). */
+export const PROBE_TIMEOUT_MS = 15_000;
+
+/** True when an enabled server was never checked or its last check is older than `maxAgeMs`. Disabled servers are never stale. */
+export function isStale(row: Pick<McpListRow, "enabled" | "lastCheckedAt">, now: number, maxAgeMs: number = STALE_AFTER_MS): boolean {
+  if (row.enabled === false) return false;
+  return row.lastCheckedAt == null || now - row.lastCheckedAt > maxAgeMs;
+}
+
+/**
+ * The server ids to check now, never-checked first then the oldest check first. `skip` holds ids that
+ * are running or were already tried this visit (one in-flight probe per server, no retry storm).
+ * `force` (Recheck all) takes every enabled server, fresh or not.
+ */
+export function probeQueue(
+  rows: readonly Pick<McpListRow, "serverId" | "enabled" | "lastCheckedAt">[],
+  now: number,
+  skip: ReadonlySet<string> = new Set(),
+  force = false,
+): string[] {
+  return rows
+    .filter((r) => r.enabled !== false && !skip.has(r.serverId) && (force || isStale(r, now)))
+    .sort((a, b) => (a.lastCheckedAt ?? 0) - (b.lastCheckedAt ?? 0))
+    .map((r) => r.serverId);
 }
 
 /** "3 tools", "1 tool", "No tools yet". */
@@ -62,19 +94,51 @@ export function toolCountText(n: number): string {
   return n === 0 ? "No tools yet" : `${n} tool${n === 1 ? "" : "s"}`;
 }
 
+/**
+ * The servers an agent can use: enabled ones only (`enabled` absent = on, an older server build).
+ * Every agent-facing list (Builder and chat attach list, the `/mcp` menu, the quick bar, the plan
+ * step dropdown, tool discovery) reads this; a switched-off server shows only in Lab > Tools.
+ */
+export function availableMcpServers<T extends { readonly enabled?: boolean }>(rows: readonly T[]): T[] {
+  return rows.filter((r) => r.enabled !== false);
+}
+
+/** The switched-off servers (the complement of `availableMcpServers`). */
+export function disabledMcpServers<T extends { readonly enabled?: boolean }>(rows: readonly T[]): T[] {
+  return rows.filter((r) => r.enabled === false);
+}
+
+/** Switched-off servers a config still lists in `mcpServerIds` (the framework build skips them). */
+export function disabledInUse<T extends { readonly serverId: string; readonly enabled?: boolean }>(rows: readonly T[], mcpServerIds: readonly string[]): T[] {
+  return disabledMcpServers(rows).filter((r) => mcpServerIds.includes(r.serverId));
+}
+
+/** "Uses a disabled server (skipped): a, b" (plural-aware). */
+export function disabledInUseText(names: readonly string[]): string {
+  return `Uses ${names.length === 1 ? "a disabled server" : "disabled servers"} (skipped): ${names.join(", ")}`;
+}
+
+/** The server to show: the current pick while it still exists, else the first one; null for an empty list. */
+export function autoSelectId(rows: readonly Pick<McpListRow, "serverId">[], current: string | null): string | null {
+  if (current !== null && rows.some((r) => r.serverId === current)) return current;
+  return rows[0]?.serverId ?? null;
+}
+
 /** The list row for a saved server: state chip, tool count and last check. */
-export function serverListRow(row: McpListRow, now: number = Date.now()): ServerListRow {
+export function serverListRow(row: McpListRow, now: number = Date.now(), checking = false): ServerListRow {
   const s = mcpServerStatus(row, now);
   const checkedText = row.lastCheckedAt != null && row.enabled !== false ? `checked ${formatRelativeTime(row.lastCheckedAt, now)}` : undefined;
+  const isChecking = checking && row.enabled !== false;
   return {
     serverId: row.serverId,
     name: row.name,
     status: s.status,
-    label: s.label,
-    tone: statusTone(s.status),
+    label: isChecking ? "Checking…" : s.label,
+    tone: isChecking ? "idle" : statusTone(s.status),
     toolText: toolCountText(row.tools.length),
     checkedText,
     dimmed: s.status === "disabled",
+    checking: isChecking,
   };
 }
 

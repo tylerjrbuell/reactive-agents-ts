@@ -67,7 +67,10 @@
 </div>
 
 <style>
-  .cx-tabs { display: flex; gap: 16px; border-bottom: 1px solid var(--cortex-line); overflow-x: auto; }
+  /* overflow-x makes overflow-y compute to auto, and the selected tab's -1px margin then adds a 1px
+     vertical scroll: the stray dark bar at the row's right edge. Clip the vertical axis. */
+  .cx-tabs { display: flex; gap: 16px; border-bottom: 1px solid var(--cortex-line); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .cx-tabs::-webkit-scrollbar { display: none; }
   [role="tab"] {
     appearance: none;
     display: inline-flex;
@@ -87,6 +90,8 @@
   }
   [role="tab"]:hover { color: var(--cortex-text); }
   [role="tab"][aria-selected="true"] { color: var(--cortex-text); border-bottom-color: var(--cortex-accent); }
-  [role="tab"]:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; border-radius: 4px; }
-  .cx-tab-n { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
+  /* Inset: the row clips the vertical axis, so an outer ring would be cut off. */
+  [role="tab"]:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: -2px; border-radius: 4px; }
+  /* Geist digits with tabular figures: JetBrains Mono's slashed zero reads as an 8 at this size. */
+  .cx-tab-n { font-family: var(--cortex-font-ui); font-size: var(--cortex-t-xs); font-variant-numeric: tabular-nums; color: var(--cortex-text-3); }
 </style>

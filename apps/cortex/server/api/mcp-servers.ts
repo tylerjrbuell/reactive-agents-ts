@@ -26,6 +26,7 @@ import {
   mcpSecretUpdateProblem,
   restoreMaskedMcpConfig,
 } from "../services/mcp-secrets.js";
+import { makeMcpServerTester, type McpServerTester } from "../services/mcp-server-test.js";
 import { defaultMcpProbeDeps, probeMcpServer, type McpProbeDeps } from "../services/mcp-probe.js";
 
 /** `input_schema_json` text back to the schema object (null when absent or not an object). */
@@ -63,7 +64,11 @@ const secretEdit = t.Optional(
   }),
 );
 
-export const mcpServersRouter = (db: Database, probeDeps: McpProbeDeps = defaultMcpProbeDeps) =>
+export const mcpServersRouter = (
+  db: Database,
+  probeDeps: McpProbeDeps = defaultMcpProbeDeps,
+  testServer: McpServerTester = makeMcpServerTester(db, probeDeps),
+) =>
   new Elysia({ prefix: "/api/mcp-servers" })
     .get("/", () => {
       const servers = listMcpServers(db);
@@ -216,39 +221,31 @@ export const mcpServersRouter = (db: Database, probeDeps: McpProbeDeps = default
     )
     /**
      * Test the connection: connect, list tools, release the transport. Writes the status fields only,
-     * never the tool cache. A failed probe is still HTTP 200 with `ok: false` (the test ran).
+     * never the tool cache. A failed probe is still HTTP 200 with `ok: false` (the test ran). The page's
+     * background checks pass `timeoutMs` (a shorter cap); one probe per server runs at a time
+     * (`services/mcp-server-test.ts`).
      */
     .post(
       "/:serverId/test",
-      async ({ params, set }) => {
-        const row = getMcpServer(db, params.serverId);
-        if (!row) {
+      async ({ params, query, set }) => {
+        const out = await testServer(params.serverId, query.timeoutMs === undefined ? {} : { timeoutMs: query.timeoutMs });
+        if (out === null) {
           set.status = 404;
           return { error: "MCP server not found" };
         }
-        const cfg = parseMcpConfig(row);
-        // Name and transport only: endpoints and command lines often carry tokens in the query string or args.
-        cortexLog("info", "mcp", `test "${cfg.name}" transport=${cfg.transport}`);
-        const result = await probeMcpServer(cfg, probeDeps, { alwaysCleanup: true });
-        const checkedAt = Date.now();
-        if (!result.ok) {
-          recordMcpCheck(db, params.serverId, { status: "error", error: result.error }, checkedAt);
-          cortexLog("warn", "mcp", `test "${cfg.name}" failed`);
-          return { ok: false as const, error: result.error, checkedAt };
-        }
-        recordMcpCheck(db, params.serverId, { status: "ok" }, checkedAt);
+        if (!out.ok) return { ok: false as const, error: out.error, checkedAt: out.checkedAt };
         return {
           ok: true as const,
-          checkedAt,
-          toolCount: result.tools.length,
-          tools: result.tools.map((x) => ({
+          checkedAt: out.checkedAt,
+          toolCount: out.tools.length,
+          tools: out.tools.map((x) => ({
             toolName: x.toolName,
             description: x.description,
             ...(x.inputSchema !== undefined ? { inputSchema: x.inputSchema } : {}),
           })),
         };
       },
-      { params: t.Object({ serverId: t.String() }) },
+      { params: t.Object({ serverId: t.String() }), query: t.Object({ timeoutMs: t.Optional(t.Numeric()) }) },
     )
     .post(
       "/:serverId/refresh-tools",

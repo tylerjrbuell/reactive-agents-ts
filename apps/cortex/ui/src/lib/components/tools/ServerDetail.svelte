@@ -9,6 +9,7 @@
   import Status from "$lib/components/kit/Status.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
   import Tabs from "$lib/components/kit/Tabs.svelte";
+  import CheckingChip from "$lib/components/tools/CheckingChip.svelte";
   import ServerToolsPane from "$lib/components/tools/ServerToolsPane.svelte";
   import ServerOptionsPane from "$lib/components/tools/ServerOptionsPane.svelte";
   import ServerCredentialsPane from "$lib/components/tools/ServerCredentialsPane.svelte";
@@ -28,6 +29,8 @@
     /** An options or credentials save is running. */
     saving: boolean;
     now?: number;
+    /** A background check of this server is running. */
+    checking?: boolean;
     /** Bumped after each credentials save so typed values clear (the stored ones stay write-only). */
     credentialsVersion?: number;
     onTest: () => void;
@@ -38,10 +41,10 @@
     onSaveOptions: (draft: McpDraft) => void | Promise<void>;
     onSaveCredentials: (payload: NonNullable<ReturnType<typeof secretsPayload>>) => void | Promise<void>;
   }
-  const { row, tools, toolsError = null, testResult, testing, refreshing, saving, now = Date.now(), credentialsVersion = 0, onTest, onRefresh, onToggleEnabled, onEdit, onRemove, onSaveOptions, onSaveCredentials }: Props = $props();
+  const { row, tools, toolsError = null, testResult, testing, refreshing, saving, now = Date.now(), checking = false, credentialsVersion = 0, onTest, onRefresh, onToggleEnabled, onEdit, onRemove, onSaveOptions, onSaveCredentials }: Props = $props();
 
   let tab = $state<DetailTab>("tools");
-  const view = $derived(serverListRow(row, now));
+  const view = $derived(serverListRow(row, now, checking));
   const failure = $derived(failureOf(row));
   const enabled = $derived(row.enabled !== false);
   const keysOf = (v: unknown): string => (v !== null && typeof v === "object" ? Object.keys(v).join(",") : "");
@@ -53,7 +56,7 @@
   <header class="sd-h">
     <div class="sd-title">
       <h3>{row.name}</h3>
-      <Status tone={view.tone} label={view.label} />
+      {#if view.checking}<CheckingChip />{:else}<Status tone={view.tone} label={view.label} />{/if}
       <span class="sd-meta">{view.toolText}{view.checkedText ? ` · ${view.checkedText}` : ""}</span>
     </div>
     <div class="sd-actions">

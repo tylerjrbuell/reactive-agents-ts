@@ -476,7 +476,7 @@
   const modelThinking = $derived(models.find((m) => m.value === model)?.thinking ?? null);
 
   // The composer bar: the model chip + settings changed from the defaults; the rest sit in its Config popover.
-  const chipCtx: QuickBarChipContext = $derived({ provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, availableSkillCount: skillList?.length ?? 0, documentCount: docs.length, shellPresets: catalog.shellPresets, mcpServers: catalog.mcpServers, mcpDiscovery: catalog.mcpDiscovery });
+  const chipCtx: QuickBarChipContext = $derived({ provider, model, modelThinking, thinkingChoice, strategyLabel, pinnedSkillCount: pinned.length, availableSkillCount: skillList?.length ?? 0, documentCount: docs.length, shellPresets: catalog.shellPresets, mcpServers: catalog.mcpServers, mcpDiscovery: catalog.mcpDiscovery, disabledMcpServers: catalog.disabledMcpServers });
   const allChips = $derived(quickBarChips(cfg, chipCtx));
   const bar = $derived(composerBar(allChips, cfg, chipCtx));
   // The Config rows' current values, shown next to each setting's slash alias in the one command list.

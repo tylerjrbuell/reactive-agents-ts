@@ -1,5 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { TOOLS_TABS, toolsTabCounts } from "./tools-tabs.js";
+import { customToolsOf, TOOLS_TABS, toolsTabCounts } from "./tools-tabs.js";
+
+describe("customToolsOf", () => {
+  test("only the Lab's own tools: kind custom and a lab: id (MCP and built-in entries are not counted)", () => {
+    const catalog = [
+      { kind: "custom", id: "lab:a" },
+      { kind: "custom", id: "mcp:x/y" },
+      { kind: "mcp", id: "lab:b" },
+      { kind: "builtin", id: "file-read" },
+    ];
+    expect(customToolsOf(catalog)).toEqual([{ kind: "custom", id: "lab:a" }]);
+    expect(customToolsOf([])).toEqual([]);
+  });
+});
 
 describe("Lab > Tools sub-tabs", () => {
   test("three tabs: Servers, Custom tools, Catalog and test (the mixed Create tool panel is gone)", () => {

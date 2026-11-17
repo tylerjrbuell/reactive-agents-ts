@@ -339,6 +339,20 @@ describe("/mcp rows", () => {
     expect(calls).toEqual([`toggle:git:${JSON.stringify({ tools: [], mcpServerIds: ["s2"], enableTools: true })}`]);
   });
 
+  test("a switched-off server is not in the menu (the catalog's mcpServers holds enabled ones)", () => {
+    const withOff = { ...catalog, disabledMcpServers: [{ serverId: "s3", name: "off", tools: ["off/write"] }] };
+    const { ctx } = picker("/mcp ", { catalog: withOff });
+    expect(pickerItems(ctx).map((r) => r.key)).toEqual(["mcp:s1", "mcp:s2", "add"]);
+  });
+
+  test("/tools lists a selected tool of a switched-off server as unavailable, with its own words", () => {
+    const withOff = { ...EMPTY_CATALOG, disabledMcpServers: [{ serverId: "s3", name: "off", tools: ["off/write"] }] };
+    const { ctx } = picker("/tools ", { catalog: withOff, cfg: { tools: ["off/write", "calculator"], enableTools: true } });
+    const rows = pickerItems(ctx);
+    expect(rows.find((r) => r.key === "tool:off/write")?.hint).toBe("server disabled");
+    expect(rows.find((r) => r.key === "tool:calculator")?.hint).toBe("not in the catalog");
+  });
+
   test("the add row puts `/mcp add ` in the composer", () => {
     const { ctx, calls } = picker("/mcp ", { catalog });
     void pickerItems(ctx).find((r) => r.key === "add")!.run();

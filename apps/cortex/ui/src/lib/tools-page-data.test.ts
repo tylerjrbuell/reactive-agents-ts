@@ -72,6 +72,13 @@ describe("server actions", () => {
     expect(await refreshServerTools(fake(200, { tools: [{}, {}] }), "s")).toEqual({ ok: true, value: 2 });
   });
 
+  test("a background check asks for the short cap in the query; the manual Test sends none", async () => {
+    const seen: Seen[] = [];
+    await testServer(fake(200, { ok: true, toolCount: 0 }, seen), "s", { timeoutMs: 15_000 });
+    await testServer(fake(200, { ok: true, toolCount: 0 }, seen), "s");
+    expect(seen.map((s) => s.url)).toEqual(["http://c/api/mcp-servers/s/test?timeoutMs=15000", "http://c/api/mcp-servers/s/test"]);
+  });
+
   test("enable and secrets send the documented bodies", async () => {
     const seen: Seen[] = [];
     expect(await setServerEnabled(fake(200, { ok: true, enabled: false }, seen), "s", false)).toEqual({ ok: true, value: false });

@@ -6,6 +6,7 @@
    */
   import EmptyState from "$lib/components/kit/EmptyState.svelte";
   import ToolCatalogList from "$lib/components/tools/ToolCatalogList.svelte";
+  import ToolsShell from "$lib/components/tools/ToolsShell.svelte";
   import ToolInspector from "$lib/components/tools/ToolInspector.svelte";
   import ToolTryPanel from "$lib/components/tools/ToolTryPanel.svelte";
   import { filterCatalog, type CatalogEntry } from "$lib/tool-workshop.js";
@@ -22,7 +23,8 @@
   let search = $state("");
   let selectedId = $state<string | null>(null);
   const filtered = $derived(filterCatalog([...catalog], search));
-  const selected = $derived(catalog.find((t) => t.id === selectedId) ?? null);
+  /** The picked tool, or the first listed one while nothing is picked, so the pane is never empty when tools exist. */
+  const selected = $derived(catalog.find((t) => t.id === selectedId) ?? filtered[0] ?? null);
 
   function exportEntry(entry: CatalogEntry) {
     const blob = new Blob([JSON.stringify(entry, null, 2)], { type: "application/json" });
@@ -43,23 +45,31 @@
   }
 </script>
 
-<div class="cg">
-  <ToolCatalogList bind:search {loading} entries={filtered} {selectedId} onSelect={(e) => (selectedId = e.id)} />
-  <section class="cg-detail" aria-label="Tool">
+<ToolsShell listLabel="Catalog">
+  {#snippet bar()}
+    <label class="sr-only" for="tw-tool-search">Search tools</label>
+    <input id="tw-tool-search" type="search" class="cx-control" bind:value={search} placeholder="Search tools" />
+  {/snippet}
+  {#snippet meta()}
+    {#if !loading}<span>{filtered.length === catalog.length ? `${catalog.length} tools` : `${filtered.length} of ${catalog.length} tools`}</span>{/if}
+  {/snippet}
+  {#snippet list()}
+    <ToolCatalogList {loading} entries={filtered} selectedId={selected?.id ?? null} onSelect={(e) => (selectedId = e.id)} />
+  {/snippet}
+  {#snippet detail()}
     {#if !selected}
-      <div class="cg-empty"><EmptyState icon="tool" title="Pick a tool" description="Its parameters show here, with a panel to call it." /></div>
+      {#if !loading}<EmptyState icon="tool" title="Pick a tool" description="Its parameters show here, with a panel to call it." />{/if}
     {:else}
-      <ToolInspector tool={selected} onExport={() => exportEntry(selected)} onCopySchema={() => copySchema(selected)} />
-      {#key selected.id}
-        <ToolTryPanel tool={selected} {ctx} onRan={onChanged} />
-      {/key}
+      <div class="cg-card">
+        <ToolInspector tool={selected} onExport={() => exportEntry(selected)} onCopySchema={() => copySchema(selected)} />
+        {#key selected.id}
+          <ToolTryPanel tool={selected} {ctx} onRan={onChanged} />
+        {/key}
+      </div>
     {/if}
-  </section>
-</div>
+  {/snippet}
+</ToolsShell>
 
 <style>
-  .cg { flex: 1; min-height: 420px; display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 16px; }
-  .cg-detail { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-panel); background: var(--cortex-surface-1); }
-  .cg-empty { flex: 1; display: grid; place-items: center; padding: 24px; }
-  @media (max-width: 1000px) { .cg { grid-template-columns: 1fr; } }
+  .cg-card { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-panel); background: var(--cortex-surface-1); }
 </style>

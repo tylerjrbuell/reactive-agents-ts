@@ -34,7 +34,8 @@ export function planToolOptions(cfg: Record<string, unknown>, catalog: QuickbarC
 
   if (toolsOn(cfg)) {
     const mcpCfg = { tools: strings(cfg.tools), mcpServerIds: strings(cfg.mcpServerIds) };
-    const mcpNames = new Set(catalog.mcpServers.flatMap((s) => s.tools));
+    // A tool of a switched-off server is not offered (`catalog.mcpServers` holds enabled servers only) and is not an own tool either.
+    const mcpNames = new Set([...catalog.mcpServers, ...(catalog.disabledMcpServers ?? [])].flatMap((s) => s.tools));
     const labels = new Map(catalog.builtinTools.map((t) => [t.name, t.label] as const));
     for (const name of selectedTools(cfg)) {
       if (!mcpNames.has(name)) add(name, labels.get(name) ?? name, OWN_TOOLS_GROUP);

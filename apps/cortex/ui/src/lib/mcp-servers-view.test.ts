@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
   ADD_MODES,
+  autoSelectId,
+  availableMcpServers,
   bareToolName,
+  disabledInUse,
+  disabledInUseText,
+  disabledMcpServers,
+  isStale,
+  probeQueue,
+  PROBE_CONCURRENCY,
+  PROBE_TIMEOUT_MS,
+  STALE_AFTER_MS,
   failureOf,
   filterServers,
   filterServerTools,
@@ -140,5 +150,77 @@ describe("input schema", () => {
     expect(schemaTooltip(undefined)).toBe("No parameters");
     expect(schemaTooltip({ type: "object" })).toBe("No parameters");
     expect(schemaTooltip({ properties: [] })).toBe("No parameters");
+  });
+});
+
+describe("background status checks", () => {
+  test("the rules: 10 minutes stale, 2 at once, 15 seconds each", () => {
+    expect([STALE_AFTER_MS, PROBE_CONCURRENCY, PROBE_TIMEOUT_MS]).toEqual([600_000, 2, 15_000]);
+  });
+
+  test("isStale: never checked or older than 10 minutes; fresh is not; disabled never", () => {
+    expect(isStale({ lastCheckedAt: null }, NOW)).toBe(true);
+    expect(isStale({}, NOW)).toBe(true);
+    expect(isStale({ lastCheckedAt: NOW - STALE_AFTER_MS - 1 }, NOW)).toBe(true);
+    expect(isStale({ lastCheckedAt: NOW - STALE_AFTER_MS }, NOW)).toBe(false);
+    expect(isStale({ lastCheckedAt: NOW - 1000 }, NOW)).toBe(false);
+    expect(isStale({ enabled: false, lastCheckedAt: null }, NOW)).toBe(false);
+  });
+
+  test("probeQueue picks stale enabled servers, never-checked first then oldest, skipping running ones", () => {
+    const rows = [
+      row({ serverId: "fresh", lastCheckedAt: NOW - 1000 }),
+      row({ serverId: "old", lastCheckedAt: NOW - 3_600_000 }),
+      row({ serverId: "never" }),
+      row({ serverId: "off", enabled: false }),
+      row({ serverId: "busy" }),
+      row({ serverId: "older", lastCheckedAt: NOW - 7_200_000 }),
+    ];
+    expect(probeQueue(rows, NOW, new Set(["busy"]))).toEqual(["never", "older", "old"]);
+  });
+
+  test("probeQueue with force (Recheck all) takes every enabled server, still skipping running ones and never disabled ones", () => {
+    const rows = [row({ serverId: "a", lastCheckedAt: NOW - 1000 }), row({ serverId: "b", enabled: false }), row({ serverId: "c", lastCheckedAt: NOW - 5000 })];
+    expect(probeQueue(rows, NOW, new Set(["c"]), true)).toEqual(["a"]);
+    expect(probeQueue([], NOW, new Set(), true)).toEqual([]);
+  });
+
+  test("a checking row reads Checking… with a neutral tone (never the running tone); disabled rows never check", () => {
+    const r = serverListRow(row({ lastStatus: "ok", lastCheckedAt: NOW - 60_000, tools: [{ toolName: "a" }] }), NOW, true);
+    expect([r.label, r.tone, r.checking]).toEqual(["Checking…", "idle", true]);
+    expect(r.toolText).toBe("1 tool");
+    expect(r.checkedText).toBe("checked 1 minute ago");
+    const off = serverListRow(row({ enabled: false }), NOW, true);
+    expect([off.label, off.checking]).toEqual(["Disabled", false]);
+    expect(serverListRow(row({ lastStatus: "ok" }), NOW).checking).toBe(false);
+  });
+
+  test("autoSelectId keeps a pick that still exists, else the first server, else nothing", () => {
+    const rows = [row({ serverId: "a" }), row({ serverId: "b" })];
+    expect(autoSelectId(rows, "b")).toBe("b");
+    expect(autoSelectId(rows, null)).toBe("a");
+    expect(autoSelectId(rows, "gone")).toBe("a");
+    expect(autoSelectId([], "a")).toBeNull();
+  });
+});
+
+describe("agent-facing MCP servers (disabled ones are never offered)", () => {
+  const rows = [row({ serverId: "a", name: "on" }), row({ serverId: "b", name: "off", enabled: false }), row({ serverId: "c", name: "old", enabled: undefined })];
+
+  test("availableMcpServers keeps enabled rows (absent = on); disabledMcpServers is the complement", () => {
+    expect(availableMcpServers(rows).map((r) => r.serverId)).toEqual(["a", "c"]);
+    expect(disabledMcpServers(rows).map((r) => r.serverId)).toEqual(["b"]);
+    expect(availableMcpServers([])).toEqual([]);
+  });
+
+  test("disabledInUse lists only the switched-off servers a config still names", () => {
+    expect(disabledInUse(rows, ["a", "b"]).map((r) => r.serverId)).toEqual(["b"]);
+    expect(disabledInUse(rows, ["a", "c"])).toEqual([]);
+    expect(disabledInUse(rows, [])).toEqual([]);
+  });
+
+  test("the note words one or several servers", () => {
+    expect(disabledInUseText(["files"])).toBe("Uses a disabled server (skipped): files");
+    expect(disabledInUseText(["a", "b"])).toBe("Uses disabled servers (skipped): a, b");
   });
 });

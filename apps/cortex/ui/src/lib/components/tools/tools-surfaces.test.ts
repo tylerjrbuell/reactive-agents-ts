@@ -4,6 +4,7 @@
  * shell's three tabs and the shared attach list with its effects strip.
  */
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderComponent } from "../kit/test-render.js";
 import type { McpListRow, McpToolDetail } from "$lib/tool-workshop.js";
@@ -43,7 +44,7 @@ describe("Tools shell", () => {
 });
 
 describe("ServerList", () => {
-  const base = { servers: [] as McpListRow[], loading: false, selectedId: null, onSelect: noop, onAdd: noop, onImport: noop, now: NOW };
+  const base = { servers: [] as McpListRow[], loading: false, selectedId: null, onSelect: noop, now: NOW };
 
   test("loading: a skeleton, no empty state", async () => {
     const html = markup(await renderComponent(dir("ServerList.svelte"), { ...base, loading: true }));
@@ -51,12 +52,13 @@ describe("ServerList", () => {
     expect(html).not.toContain("No MCP servers yet");
   });
 
-  test("empty: Add server, Import JSON and the example line", async () => {
+  test("empty: points at the one Add server action in the header, names the three ways, shows the example line, adds no button", async () => {
     const html = markup(await renderComponent(dir("ServerList.svelte"), base));
     expect(text(html)).toContain("No MCP servers yet");
-    expect(text(html)).toContain("Add server");
-    expect(text(html)).toContain("Import JSON");
+    expect(text(html)).toContain("Add server above");
+    expect(text(html)).toContain("mcpServers");
     expect(text(html)).toContain("npx -y @modelcontextprotocol/server-filesystem .");
+    expect(html).not.toContain("<button");
   });
 
   test("rows: state chip, tool count, last check; disabled rows are dimmed", async () => {
@@ -74,8 +76,17 @@ describe("ServerList", () => {
     expect(t).toContain("Disabled");
     expect(t).toContain("Not checked");
     expect(t).toContain("No tools yet");
-    expect(html.match(/class="sl-row[^"]*\bdim\b/g)?.length).toBe(1);
+    expect(html.match(/class="tsh-row[^"]*\bdim\b/g)?.length).toBe(1);
     expect(html).toMatch(/aria-current="true"/);
+  });
+
+  test("a server with a background check running reads Checking…, others keep their chip", async () => {
+    const servers = [row({ lastStatus: null, lastCheckedAt: null }), row({ serverId: "s2", name: "db" })];
+    const html = markup(await renderComponent(dir("ServerList.svelte"), { ...base, servers, checking: new Set(["s1"]) }));
+    expect(html.match(/data-testid="server-checking"/g)?.length).toBe(1);
+    expect(text(html)).toContain("Checking…");
+    expect(text(html)).toContain("Connected");
+    expect(text(html)).not.toContain("Not checked");
   });
 });
 
@@ -183,12 +194,31 @@ describe("ServersTab", () => {
     const empty = markup(await renderComponent(dir("ServersTab.svelte"), { ctx, servers: [], loading: false, onChanged: noop }));
     expect(text(empty)).toContain("No MCP servers yet");
     expect(text(empty)).toContain("Add server");
+    expect(empty.match(/cx-btn-primary/g)?.length).toBe(1);
   });
 
-  test("with servers and none picked: the list and a Pick a server prompt", async () => {
-    const html = markup(await renderComponent(dir("ServersTab.svelte"), { ctx, servers: [row()], loading: false, onChanged: noop }));
-    expect(text(html)).toContain("Pick a server");
-    expect(text(html)).toContain("files");
+  test("with servers and none picked: the first one is shown, never a Pick a server prompt", async () => {
+    const html = markup(await renderComponent(dir("ServersTab.svelte"), { ctx, servers: [row(), row({ serverId: "s2", name: "db" })], loading: false, onChanged: noop }));
+    expect(text(html)).not.toContain("Pick a server");
+    expect(html).toContain('data-testid="server-detail"');
+    expect(html).toContain('aria-label="Server files"');
+    expect(html).toMatch(/aria-current="true"/);
+  });
+
+  test("the list header holds the search, the one primary action, the count and Recheck all", async () => {
+    const html = markup(await renderComponent(dir("ServersTab.svelte"), { ctx, servers: [row(), row({ serverId: "s2", name: "db" })], loading: false, onChanged: noop }));
+    const bar = html.slice(html.indexOf("tsh-bar"), html.indexOf("tsh-rows"));
+    expect(bar).toContain('id="sl-search"');
+    expect(text(bar)).toContain("Add server");
+    expect(text(bar)).toContain("2 servers");
+    expect(text(bar)).toContain("Recheck all");
+    expect(html.match(/cx-btn-primary/g)?.length).toBe(1);
+  });
+
+  test("a disabled-only list shows its first server without checking anything", async () => {
+    const html = markup(await renderComponent(dir("ServersTab.svelte"), { ctx, servers: [row({ enabled: false })], loading: false, onChanged: noop }));
+    expect(html).toContain('data-testid="server-disabled-card"');
+    expect(html).not.toContain('data-testid="server-checking"');
   });
 });
 
@@ -240,6 +270,60 @@ describe("Catalog and Custom tabs", () => {
     const html = markup(await renderComponent(dir("CustomToolsTab.svelte"), { ctx, catalog, loading: false, onChanged: noop }));
     expect(text(html)).toContain("mine");
     expect(text(html)).not.toContain("files/read");
-    expect(html).toMatch(/class="ct-row[^"]*\bdim\b/);
+    expect(html).toMatch(/class="tsh-row[^"]*\bdim\b/);
+  });
+
+  test("custom tab: the sub-tab count and the list read the same filter (an MCP entry is never counted)", async () => {
+    const catalog = [entry({}), entry({ id: "lab:t1", kind: "custom", name: "mine", displayName: "mine" })];
+    const html = markup(await renderComponent(dir("CustomToolsTab.svelte"), { ctx, catalog, loading: false, onChanged: noop }));
+    expect(text(html)).toContain("1 custom tool");
+    expect(html.match(/class="tsh-row[ "]/g)?.length).toBe(1);
+    const none = markup(await renderComponent(dir("CustomToolsTab.svelte"), { ctx, catalog: [entry({})], loading: false, onChanged: noop }));
+    expect(text(none)).toContain("0 custom tools");
+  });
+
+  test("custom tab shows its first tool, and the header holds search and New tool", async () => {
+    const catalog = [entry({ id: "lab:t1", kind: "custom", name: "mine", displayName: "mine" })];
+    const html = markup(await renderComponent(dir("CustomToolsTab.svelte"), { ctx, catalog, loading: false, onChanged: noop }));
+    const bar = html.slice(html.indexOf("tsh-bar"), html.indexOf("tsh-rows"));
+    expect(bar).toContain('id="ct-search"');
+    expect(text(bar)).toContain("New tool");
+    expect(text(html)).not.toContain("Pick a custom tool");
+    expect(html).toMatch(/aria-current="true"/);
+  });
+
+  test("catalog tab: search and count in the same header, the first tool shown", async () => {
+    const catalog = [entry({}), entry({ id: "mcp:s1:y", name: "files/write", displayName: "files/write" })];
+    const html = markup(await renderComponent(dir("CatalogTab.svelte"), { ctx, catalog, loading: false, onChanged: noop }));
+    const bar = html.slice(html.indexOf("tsh-bar"), html.indexOf("tsh-rows"));
+    expect(bar).toContain('id="tw-tool-search"');
+    expect(text(bar)).toContain("2 tools");
+    expect(text(html)).not.toContain("Pick a tool");
+    expect(html.match(/class="tsh-row[ "]/g)?.length).toBe(2);
+  });
+});
+
+describe("Lab > Tools polish pins", () => {
+  const source = (rel: string) => readFileSync(join(import.meta.dir, rel), "utf8");
+
+  test("the tab row clips its vertical axis (overflow-x alone made a stray 1px scrollbar) and hides its own scrollbar", () => {
+    const css = source("../kit/Tabs.svelte");
+    expect(css).toMatch(/\.cx-tabs \{[^}]*overflow-x: auto;[^}]*overflow-y: hidden/);
+  });
+
+  test("the tab count is set in the UI face at 12px or more, so a zero cannot read as an 8", () => {
+    const css = source("../kit/Tabs.svelte");
+    expect(css).toMatch(/\.cx-tab-n \{[^}]*font-family: var\(--cortex-font-ui\)[^}]*font-size: var\(--cortex-t-xs\)/);
+  });
+
+  test("the server tools filter keeps its own width so the search cannot collapse to an empty square", () => {
+    const css = source("ServerToolsPane.svelte");
+    expect(css).toMatch(/\.tp-bar :global\(\.tp-filter\) \{ flex: 0 0 168px/);
+    expect(css).toContain("min-width: 120px");
+  });
+
+  test("all three tabs sit in the one shell and use its row card", () => {
+    for (const f of ["ServersTab", "CustomToolsTab", "CatalogTab"]) expect(source(`${f}.svelte`)).toContain("<ToolsShell");
+    for (const f of ["ServerList", "ToolCatalogList", "CustomToolsTab"]) expect(source(`${f}.svelte`)).toContain('class="tsh-row"');
   });
 });

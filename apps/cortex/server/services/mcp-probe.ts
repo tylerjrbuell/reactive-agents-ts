@@ -45,6 +45,16 @@ const secretValuesOf = (cfg: MCPServerConfig): string[] => {
 export const scrubMcpError = (err: unknown, cfg: MCPServerConfig): string =>
   secretValuesOf(cfg).reduce((text, secret) => text.split(secret).join(MCP_SECRET_MASK), sanitizedCause(err));
 
+/** "15 seconds", "10 minutes": the time cap in the words a failure line uses. */
+export const timeoutWords = (ms: number): string => {
+  if (ms >= 60_000) {
+    const m = ms / 60_000;
+    return `${m} minute${m === 1 ? "" : "s"}`;
+  }
+  const s = Math.round(ms / 1000);
+  return `${s} second${s === 1 ? "" : "s"}`;
+};
+
 /**
  * Run discovery against `cfg` within the time cap. On expiry the transport is killed so the
  * subprocess does not leak. With `alwaysCleanup` the transport is also released afterwards
@@ -68,7 +78,7 @@ export async function probeMcpServer(
   try {
     const settled = await Promise.race([discovery, timeout]);
     if (settled === "timeout") {
-      return { ok: false, error: `MCP tool discovery timed out after ${deps.timeoutMs / 60_000} minutes` };
+      return { ok: false, error: `MCP tool discovery timed out after ${timeoutWords(deps.timeoutMs)}` };
     }
     return { ok: true, tools: settled };
   } catch (e) {

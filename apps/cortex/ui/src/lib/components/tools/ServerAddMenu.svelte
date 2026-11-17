@@ -24,7 +24,7 @@
 
 <div class="am" use:clickOutside={{ onclose: () => (open = false), ignore: [trigger] }}>
   <span bind:this={trigger} class="am-trigger">
-    <Button variant="primary" icon="plus" aria-haspopup="menu" aria-expanded={open} onclick={() => (open = !open)}>Add server</Button>
+    <Button variant="primary" size="field" icon="plus" aria-haspopup="menu" aria-expanded={open} onclick={() => (open = !open)}>Add server</Button>
   </span>
   {#if open}
     <ul class="am-menu" role="menu" aria-label="Add a server">

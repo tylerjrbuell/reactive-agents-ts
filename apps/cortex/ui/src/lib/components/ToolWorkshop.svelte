@@ -12,7 +12,7 @@
   import ServersTab from "$lib/components/tools/ServersTab.svelte";
   import { fetchCatalog, fetchServers, type ApiCtx } from "$lib/tools-page-data.js";
   import { tabId, tabPanelId } from "$lib/tablist.js";
-  import { TOOLS_TABS, toolsTabCounts, type ToolsTab } from "$lib/tools-tabs.js";
+  import { customToolsOf, TOOLS_TABS, toolsTabCounts, type ToolsTab } from "$lib/tools-tabs.js";
   import type { CatalogEntry, McpListRow } from "$lib/tool-workshop.js";
 
   interface Props {
@@ -33,7 +33,7 @@
     loading = false;
   }
 
-  const items = $derived(toolsTabCounts(TOOLS_TABS, { servers: servers.length, custom: catalog.filter((t) => t.kind === "custom" && t.id.startsWith("lab:")).length, catalog: catalog.length }, loading));
+  const items = $derived(toolsTabCounts(TOOLS_TABS, { servers: servers.length, custom: customToolsOf(catalog).length, catalog: catalog.length }, loading));
 
   onMount(() => void reload());
 </script>

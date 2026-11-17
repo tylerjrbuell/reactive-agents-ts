@@ -6,6 +6,7 @@ import { agentControlEnabled } from "./proposal-view.js";
 import { enabledControlGroups } from "./agent-control.js";
 import { effectiveIterations, selectedTools, terminalChoice, terminalLabel, toolsOn } from "./chat-quickbar.js";
 import { mcpToolAvailable } from "./tool-selection.js";
+import { disabledInUseText } from "./mcp-servers-view.js";
 import type { McpDiscoveryState } from "./mcp-tool-discovery.js";
 import { workspaceLabel } from "./workspace-api.js";
 import { shellOffLabel, shellPickReason, shellState, type ShellPresets } from "./shell-from-picks.js";
@@ -40,6 +41,8 @@ export type QuickBarChipContext = {
   mcpServers?: readonly { serverId: string; name: string; tools: readonly string[] }[];
   /** Tool listing state per MCP server id (`mcp-tool-discovery.ts`); absent = not attempted. */
   mcpDiscovery?: Readonly<Record<string, McpDiscoveryState>>;
+  /** Switched-off servers (`QuickbarCatalog.disabledMcpServers`): `mcpServers` holds enabled ones only. */
+  disabledMcpServers?: readonly { serverId: string; name: string; tools: readonly string[] }[];
 };
 
 /**
@@ -48,13 +51,23 @@ export type QuickBarChipContext = {
  * name selected = every tool of the server; some named = only those (`tool-selection.ts`).
  * A server still being listed or that failed to connect says so instead of adding nothing.
  */
-export function toolsChip(cfg: Record<string, unknown>, servers: readonly { serverId: string; name: string; tools: readonly string[] }[], discovery: Readonly<Record<string, McpDiscoveryState>> = {}): QuickBarChip {
-  const ids = Array.isArray(cfg.mcpServerIds) ? cfg.mcpServerIds.filter((i): i is string => typeof i === "string") : [];
+export function toolsChip(
+  cfg: Record<string, unknown>,
+  servers: readonly { serverId: string; name: string; tools: readonly string[] }[],
+  discovery: Readonly<Record<string, McpDiscoveryState>> = {},
+  disabled: readonly { serverId: string; name: string; tools: readonly string[] }[] = [],
+): QuickBarChip {
+  const allIds = Array.isArray(cfg.mcpServerIds) ? cfg.mcpServerIds.filter((i): i is string => typeof i === "string") : [];
+  // A switched-off server is skipped by the framework build: it adds no tools, and the tooltip says so.
+  const skipped = disabled.filter((s) => allIds.includes(s.serverId));
+  const ids = allIds.filter((id) => !skipped.some((s) => s.serverId === id));
   const attached = ids.map((id) => servers.find((s) => s.serverId === id) ?? { serverId: id, name: "MCP server", tools: [] as string[] });
-  const mcpNames = new Set(attached.flatMap((s) => s.tools));
+  // Names from servers not offered (listed attached, or switched off) are not this session's own tools.
+  const mcpNames = new Set([...attached, ...disabled].flatMap((s) => s.tools));
   const own = selectedTools(cfg).filter((t) => !mcpNames.has(t));
   const selection = { tools: selectedTools(cfg), mcpServerIds: ids };
   const lines = [...own];
+  if (skipped.length > 0) lines.push(disabledInUseText(skipped.map((s) => s.name)));
   let mcpCount = 0;
   let pending = 0;
   for (const s of attached) {
@@ -70,7 +83,7 @@ export function toolsChip(cfg: Record<string, unknown>, servers: readonly { serv
   }
   if (!toolsOn(cfg)) return { text: "Tools off", icon: "tool", cmd: "/tools ", title: "Choose tools" };
   const total = own.length + mcpCount;
-  if (own.length === 0 && attached.length === 0) return { text: "No tools", icon: "tool", cmd: "/tools ", title: "Choose tools", on: false };
+  if (own.length === 0 && attached.length === 0) return { text: "No tools", icon: "tool", cmd: "/tools ", title: skipped.length > 0 ? `Tools: ${lines.join("; ")}` : "Choose tools", on: false };
   const shown = own.slice(0, 2).join(", ");
   const rest = total - Math.min(own.length, 2);
   const text = [shown, rest > 0 ? (shown === "" ? `${rest} MCP` : `+${rest}`) : "", pending > 0 && rest === 0 ? "MCP…" : ""].filter(Boolean).join(" ");
@@ -120,7 +133,7 @@ export function quickBarChips(cfg: Record<string, unknown>, ctx: QuickBarChipCon
     ...(provider
       ? [
           { text: ctx.strategyLabel, icon: "strategy", cmd: "/strategy ", title: "Change the reasoning strategy" },
-          toolsChip(cfg, ctx.mcpServers ?? [], ctx.mcpDiscovery),
+          toolsChip(cfg, ctx.mcpServers ?? [], ctx.mcpDiscovery, ctx.disabledMcpServers),
           shellChip(cfg, ctx.shellPresets ?? {}),
           {
             text: workspace ? workspaceLabel(workspace) : "No workspace",

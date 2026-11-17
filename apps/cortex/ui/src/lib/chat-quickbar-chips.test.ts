@@ -44,6 +44,16 @@ describe("quickBarChips", () => {
       expect(chip.on).toBe(true);
     });
 
+    test("a switched-off server still named in the config adds nothing and the tooltip says it is skipped", () => {
+      const off = [{ serverId: "s9", name: "files", tools: ["files/read"] }];
+      const chip = toolsChip({ tools: ["web-search", "files/read"], mcpServerIds: ["s1", "s9"], enableTools: true }, { disabledMcpServers: off });
+      expect(chip.text).toBe("web-search +3");
+      expect(chip.title).toBe("Tools: web-search; Uses a disabled server (skipped): files; umami: 3 tools (stats, events, pages)");
+      const only = toolsChip({ mcpServerIds: ["s9"], enableTools: true }, { disabledMcpServers: off });
+      expect(only.text).toBe("No tools");
+      expect(only.title).toBe("Tools: Uses a disabled server (skipped): files");
+    });
+
     test("explicit server/tool entries restrict that server", () => {
       const chip = toolsChip({ tools: ["web-search", "umami/stats"], mcpServerIds: ["s1"], enableTools: true });
       expect(chip.text).toBe("web-search +1");

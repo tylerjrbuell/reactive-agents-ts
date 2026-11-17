@@ -14,7 +14,9 @@
   import CustomToolEditor from "$lib/components/tools/CustomToolEditor.svelte";
   import ToolTryPanel from "$lib/components/tools/ToolTryPanel.svelte";
   import { createCustomTool, deleteCustomTool, patchCustomTool, type ApiCtx } from "$lib/tools-page-data.js";
-  import type { CatalogEntry, CatalogParam } from "$lib/tool-workshop.js";
+  import ToolsShell from "$lib/components/tools/ToolsShell.svelte";
+  import { filterCatalog, type CatalogEntry, type CatalogParam } from "$lib/tool-workshop.js";
+  import { customToolsOf } from "$lib/tools-tabs.js";
 
   interface Props {
     ctx: ApiCtx;
@@ -25,12 +27,15 @@
   }
   const { ctx, catalog, loading, onChanged }: Props = $props();
 
-  const custom = $derived(catalog.filter((t) => t.kind === "custom" && t.id.startsWith("lab:")));
+  const custom = $derived(customToolsOf(catalog));
+  let search = $state("");
+  const shown = $derived(filterCatalog([...custom], search));
   let selectedId = $state<string | null>(null);
   /** `new` = the editor creates; `edit` = it edits the selected tool. */
   let mode = $state<"view" | "new" | "edit">("view");
   let saving = $state(false);
-  const selected = $derived(custom.find((t) => t.id === selectedId) ?? null);
+  /** The picked tool, or the first while nothing is picked (not while a new tool is being made). */
+  const selected = $derived(custom.find((t) => t.id === selectedId) ?? (mode === "new" ? null : (custom[0] ?? null)));
   const toolIdOf = (t: CatalogEntry): string => t.id.slice(4);
 
   async function save(body: { name?: string; description?: string; parameters?: CatalogParam[] }) {
@@ -69,31 +74,43 @@
   }
 </script>
 
-<div class="ct">
-  <div class="ct-left">
-    <div class="ct-bar"><Button variant="primary" icon="plus" onclick={() => { mode = "new"; selectedId = null; }}>New tool</Button></div>
+<ToolsShell listLabel="Custom tools">
+  {#snippet bar()}
+    {#if custom.length > 0}
+      <label class="sr-only" for="ct-search">Search custom tools</label>
+      <input id="ct-search" type="search" class="cx-control" bind:value={search} placeholder="Search custom tools" />
+    {/if}
+    <Button variant="primary" size="field" icon="plus" onclick={() => { mode = "new"; selectedId = null; }}>New tool</Button>
+  {/snippet}
+  {#snippet meta()}
+    {#if !loading}<span>{custom.length} custom tool{custom.length === 1 ? "" : "s"}</span>{/if}
+  {/snippet}
+  {#snippet list()}
     {#if loading}
-      <div class="ct-skel" role="status" aria-label="Loading tools">
+      <div class="tsh-skel" role="status" aria-label="Loading tools">
         {#each [0, 1, 2] as i (i)}<div class="chat-skeleton" style:animation-delay="{i * 120}ms"></div>{/each}
       </div>
     {:else if custom.length === 0}
-      <p class="ct-note">No custom tools yet. A custom tool is a quick prototype: define its parameters, then try it with a request JSON.</p>
+      <p class="tsh-note">No custom tools yet.</p>
+    {:else if shown.length === 0}
+      <p class="tsh-note">No tool matches.</p>
     {:else}
       <ul class="ct-list">
-        {#each custom as t (t.id)}
+        {#each shown as t (t.id)}
           <li>
-            <button type="button" class="ct-row" class:dim={t.disabled} aria-current={selectedId === t.id && mode !== "new" ? "true" : undefined} onclick={() => { selectedId = t.id; mode = "view"; }}>
-              <span class="ct-name">{t.displayName}</span>
-              {#if t.disabled}<Badge tone="neutral">Disabled</Badge>{/if}
+            <button type="button" class="tsh-row" class:dim={t.disabled} aria-current={selected?.id === t.id ? "true" : undefined} onclick={() => { selectedId = t.id; mode = "view"; }}>
+              <span class="ct-top">
+                <span class="ct-name">{t.displayName}</span>
+                {#if t.disabled}<Badge tone="neutral">Disabled</Badge>{/if}
+              </span>
               <span class="ct-desc">{t.description}</span>
             </button>
           </li>
         {/each}
       </ul>
     {/if}
-  </div>
-
-  <div class="ct-right">
+  {/snippet}
+  {#snippet detail()}
     {#if mode === "new"}
       <Panel title="New custom tool">
         <CustomToolEditor tool={null} {saving} onSave={save} onCancel={() => (mode = "view")} />
@@ -113,7 +130,7 @@
         {/snippet}
         <p class="ct-desc-full">{selected.description}</p>
         {#if selected.parameters.length === 0}
-          <p class="ct-note">No parameters.</p>
+          <p class="tsh-note">No parameters.</p>
         {:else}
           <ul class="ct-params">
             {#each selected.parameters as p (p.name)}
@@ -127,32 +144,20 @@
         {/key}
       </Panel>
     {:else if !loading}
-      <EmptyState icon="code" title="Pick a custom tool" description="Edit its parameters or try it here. New tool adds one." />
+      <EmptyState icon="code" title={custom.length === 0 ? "Prototype a tool" : "Pick a custom tool"} description={custom.length === 0 ? "A custom tool is a quick prototype: New tool defines its parameters, then you try it here with a request JSON." : "Edit its parameters or try it here. New tool adds one."} />
     {/if}
-  </div>
-</div>
+  {/snippet}
+</ToolsShell>
 
 <style>
-  .ct { flex: 1; min-height: 360px; display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 16px; }
-  .ct-left { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-  .ct-bar { display: flex; justify-content: flex-end; }
-  .ct-skel { display: grid; gap: 8px; }
-  .ct-skel :global(.chat-skeleton) { height: 52px; border-radius: var(--cortex-r-ctl); }
-  .ct-note { margin: 0; font-size: var(--cortex-t-sm); color: var(--cortex-text-3); line-height: var(--cortex-lh-ui); }
-  .ct-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; overflow-y: auto; }
-  .ct-row { display: grid; gap: 4px; width: 100%; padding: 10px 12px; text-align: left; border: 1px solid var(--cortex-line); border-radius: var(--cortex-r-ctl); background: var(--cortex-surface-1); font-family: var(--cortex-font-ui); cursor: pointer; }
-  .ct-row:hover { background: var(--cortex-surface-2); }
-  .ct-row[aria-current="true"] { border-color: color-mix(in srgb, var(--cortex-accent) 45%, transparent); background: var(--cortex-accent-tint); }
-  .ct-row:focus-visible { outline: 2px solid var(--cortex-focus); outline-offset: 2px; }
-  .ct-row.dim { opacity: 0.75; }
-  .ct-name { font-family: var(--cortex-font-data); font-size: var(--cortex-t-sm); color: var(--cortex-text); }
+  .ct-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .ct-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .ct-name { font-family: var(--cortex-font-data); font-size: var(--cortex-t-sm); color: var(--cortex-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ct-desc { font-size: var(--cortex-t-xs); color: var(--cortex-text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ct-right { min-width: 0; min-height: 0; overflow-y: auto; }
   .ct-desc-full { margin: 0 0 8px; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
   .ct-params { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 4px; font-size: var(--cortex-t-xs); }
   .ct-pname { font-family: var(--cortex-font-data); color: var(--cortex-text); }
   .ct-ptype { font-family: var(--cortex-font-data); font-size: var(--cortex-t-2xs); color: var(--cortex-text-3); }
   .ct-pdesc { color: var(--cortex-text-2); }
   .ct-h { margin: 8px 0; font-size: var(--cortex-t-sm); font-weight: 600; color: var(--cortex-text); }
-  @media (max-width: 1000px) { .ct { grid-template-columns: 1fr; } }
 </style>

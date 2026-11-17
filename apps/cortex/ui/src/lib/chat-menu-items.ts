@@ -209,8 +209,13 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
         rows.push(multiRow(`tool:${t.name}`, "tool", t.name, t.name, () => toggleToolPatch(ctx.cfg, t.name), { active: toolNames.includes(t.name), hint: "tool" }));
       }
       // Selected names with no row above (an old config's `calculator`): listed so they can be unticked.
+      const offTools = new Set((catalog.disabledMcpServers ?? []).flatMap((s) => s.tools));
       for (const name of unlistedTools(cfg, catalog).filter((n) => has(n))) {
-        rows.push(multiRow(`tool:${name}`, "tool", name, name, () => toggleToolPatch(ctx.cfg, name), { active: true, hint: "not in the catalog", detail: "Selected in this chat but not a tool Cortex lists; untick to remove it" }));
+        rows.push(
+          offTools.has(name)
+            ? multiRow(`tool:${name}`, "tool", name, name, () => toggleToolPatch(ctx.cfg, name), { active: true, hint: "server disabled", detail: "Selected in this chat but its MCP server is switched off, so an agent skips it; untick to remove it or enable the server in Lab > Tools" })
+            : multiRow(`tool:${name}`, "tool", name, name, () => toggleToolPatch(ctx.cfg, name), { active: true, hint: "not in the catalog", detail: "Selected in this chat but not a tool Cortex lists; untick to remove it" }),
+        );
       }
       const mcpIds = Array.isArray(cfg.mcpServerIds) ? (cfg.mcpServerIds as string[]) : [];
       for (const s of catalog.mcpServers.filter((s) => has(s.name, s.serverId))) {

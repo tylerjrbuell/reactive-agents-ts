@@ -4,6 +4,7 @@
    * selected server's detail pane. Holds only the page state and the wiring: view rules are in
    * `lib/mcp-servers-view.ts`, every call in `lib/tools-page-data.ts`.
    */
+  import { untrack } from "svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { confirmAction } from "$lib/stores/confirm-store.js";
   import EmptyState from "$lib/components/kit/EmptyState.svelte";
@@ -15,7 +16,10 @@
   import ServerForm from "$lib/components/tools/ServerForm.svelte";
   import ServerImport from "$lib/components/tools/ServerImport.svelte";
   import ServerList from "$lib/components/tools/ServerList.svelte";
-  import type { AddMode, TestReply } from "$lib/mcp-servers-view.js";
+  import ToolsShell from "$lib/components/tools/ToolsShell.svelte";
+  import Button from "$lib/components/kit/Button.svelte";
+  import { runProbeQueue } from "$lib/mcp-probe-runner.js";
+  import { autoSelectId, PROBE_CONCURRENCY, PROBE_TIMEOUT_MS, probeQueue, type AddMode, type TestReply } from "$lib/mcp-servers-view.js";
   import {
     deleteServer,
     fetchServerTools,
@@ -51,13 +55,15 @@
   let testResult = $state<TestReply | null>(null);
   let credentialsVersion = $state(0);
 
-  const selected = $derived(servers.find((s) => s.serverId === selectedId) ?? null);
+  /** The picked server, or the first one while nothing is picked, so the pane is never empty when servers exist. */
+  const selectedKey = $derived(autoSelectId(servers, selectedId));
+  const selected = $derived(servers.find((s) => s.serverId === selectedKey) ?? null);
 
   async function loadTools(serverId: string) {
     tools = null;
     toolsError = null;
     const r = await fetchServerTools(ctx, serverId);
-    if (selectedId !== serverId) return;
+    if (selectedKey !== serverId) return;
     if (r.ok) tools = r.value;
     else toolsError = r.error;
   }
@@ -66,8 +72,53 @@
     selectedId = serverId;
     addMode = null;
     testResult = null;
-    void loadTools(serverId);
   }
+
+  // Load the tool list of whichever server is shown (the first one on arrival).
+  $effect(() => {
+    const id = selectedKey;
+    if (id !== null) untrack(() => void loadTools(id));
+  });
+
+  // Background status checks: enabled servers never checked or checked over 10 minutes ago, 2 at a
+  // time, each capped at 15 s, one per server, stopped when the tab goes away. A server tried once
+  // this visit is not retried until Recheck all, so a failing save cannot loop.
+  let checking = $state<ReadonlySet<string>>(new Set());
+  let clock = $state(Date.now());
+  const attempted = new Set<string>();
+  const leaving = new AbortController();
+
+  function startChecks(force: boolean) {
+    if (loading || leaving.signal.aborted) return;
+    const now = Date.now();
+    clock = now;
+    const ids = probeQueue(servers, now, force ? checking : new Set([...checking, ...attempted]), force);
+    if (ids.length === 0) return;
+    for (const id of ids) attempted.add(id);
+    checking = new Set([...checking, ...ids]);
+    void runProbeQueue({
+      ids,
+      limit: PROBE_CONCURRENCY,
+      signal: leaving.signal,
+      onStart: () => undefined,
+      onSettle: (id) => {
+        const next = new Set(checking);
+        next.delete(id);
+        checking = next;
+      },
+      check: async (id, signal) => {
+        await testServer(ctx, id, { timeoutMs: PROBE_TIMEOUT_MS, signal });
+        if (!signal.aborted) await onChanged();
+      },
+    });
+  }
+
+  $effect(() => {
+    void servers;
+    void loading;
+    untrack(() => startChecks(false));
+  });
+  $effect(() => () => leaving.abort());
 
   function startAdd(mode: AddMode) {
     addMode = mode;
@@ -92,7 +143,7 @@
     const r = await refreshServerTools(ctx, serverId);
     if (!r.ok) toast.warning(`${name} saved, tools not listed`, r.error);
     await onChanged();
-    if (selectedId === serverId) void loadTools(serverId);
+    if (selectedKey === serverId) void loadTools(serverId);
   }
 
   async function saveForm() {
@@ -106,12 +157,14 @@
     toast.success(editing ? "Server updated" : "Server added");
     const name = draft.name.trim();
     const wasNew = editing === null;
+    // A new server is listed by `discover` below; keep the background check off it.
+    if (wasNew && r.value) attempted.add(r.value);
     closeAdd();
     await onChanged();
     if (wasNew && r.value) {
       select(r.value);
       void discover(r.value, name);
-    } else if (selectedId) void loadTools(selectedId);
+    } else if (selectedKey) void loadTools(selectedKey);
   }
 
   async function runImport() {
@@ -120,6 +173,7 @@
     busy = null;
     if (!r.ok) return void toast.error("Import failed", r.error);
     toast.success("Servers imported", `${r.value.length} server${r.value.length === 1 ? "" : "s"}. Listing their tools.`);
+    for (const s of r.value) attempted.add(s.serverId);
     closeAdd();
     await onChanged();
     const first = r.value[0];
@@ -188,15 +242,24 @@
   }
 </script>
 
-<div class="st">
-  <div class="st-left">
-    <div class="st-bar">
-      <ServerAddMenu onPick={startAdd} />
-    </div>
-    <ServerList {servers} {loading} selectedId={selected?.serverId ?? null} bind:search onSelect={select} onAdd={() => startAdd("quick")} onImport={() => startAdd("import")} />
-  </div>
-
-  <div class="st-right">
+<ToolsShell listLabel="Servers">
+  {#snippet bar()}
+    {#if servers.length > 0}
+      <label class="sr-only" for="sl-search">Search servers</label>
+      <input id="sl-search" type="search" class="cx-control" bind:value={search} placeholder="Search servers" />
+    {/if}
+    <ServerAddMenu onPick={startAdd} />
+  {/snippet}
+  {#snippet meta()}
+    {#if !loading && servers.length > 0}
+      <span>{servers.length} server{servers.length === 1 ? "" : "s"}</span>
+      <Button size="sm" variant="ghost" icon="retry" disabled={checking.size > 0} onclick={() => startChecks(true)}>Recheck all</Button>
+    {/if}
+  {/snippet}
+  {#snippet list()}
+    <ServerList {servers} {loading} selectedId={selected?.serverId ?? null} {search} {checking} now={clock} onSelect={select} />
+  {/snippet}
+  {#snippet detail()}
     {#if addMode}
       <Panel title={addMode === "quick" ? "Quick line" : addMode === "import" ? "Import JSON" : editing ? `Edit ${editing.name}` : "Add by form"}>
         {#snippet actions()}<IconButton icon="x" label="Close" onclick={closeAdd} />{/snippet}
@@ -219,6 +282,8 @@
           testing={busy === "test"}
           refreshing={busy === "refresh"}
           saving={busy === "pane"}
+          checking={checking.has(selected.serverId)}
+          now={clock}
           {credentialsVersion}
           onTest={() => test(selected)}
           onRefresh={() => refresh(selected)}
@@ -229,17 +294,12 @@
           onSaveCredentials={(p) => saveCredentials(selected, p)}
         />
       {/key}
-    {:else if !loading && servers.length > 0}
-      <EmptyState icon="server" title="Pick a server" description="Its tools, options and credentials show here, with Test and Refresh tools." />
+    {:else if !loading}
+      <EmptyState icon="server" title="No server to show" description="Add one and its tools, options and credentials show here, with Test and Refresh tools." />
     {/if}
-  </div>
-</div>
+  {/snippet}
+</ToolsShell>
 
 <style>
-  .st { flex: 1; min-height: 360px; display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 16px; }
-  .st-left { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-  .st-bar { display: flex; justify-content: flex-end; }
-  .st-right { min-width: 0; min-height: 0; overflow-y: auto; }
   .st-note { margin: 0 0 10px; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }
-  @media (max-width: 1000px) { .st { grid-template-columns: 1fr; } }
 </style>
