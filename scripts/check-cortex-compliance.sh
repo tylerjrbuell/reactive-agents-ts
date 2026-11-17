@@ -99,33 +99,41 @@ code_lines() {
   ' 2>/dev/null
 }
 
-# Number of regex matches (-o, so two on a line count twice) in the code lines of the files.
-count() {
-  code_lines "$2" | grep -oE "$1" 2>/dev/null | wc -l | tr -d ' '
+# Number of regex matches (-o, so two on a line count twice) in already comment-stripped code text.
+# The code text of each file set is computed once (speed: this gate runs on every commit).
+count_in() {
+  printf '%s\n' "$2" | grep -oE "$1" 2>/dev/null | wc -l | tr -d ' '
 }
 
 ANY_RE='(\bas any\b|:[[:space:]]*any([[:space:]]*[]);,>=|&[]|$)|<any>|@ts-ignore|@ts-expect-error)'
-SERVER_NO_LOG="$(printf '%s\n' "$SERVER_FILES" | grep -v '/server/cortex-log\.ts$')"
-SERVER_NO_ENV="$(printf '%s\n' "$SERVER_FILES" | grep -v '/server/env-config\.ts$')"
+SERVER_CODE="$(code_lines "$SERVER_FILES")"
+UI_CODE="$(code_lines "$UI_FILES")"
+# console.* and process.env are allowed in exactly one home file each: count the whole set, then subtract the home.
+LOG_CODE="$(code_lines "$(printf '%s\n' "$SERVER_FILES" | grep '/server/cortex-log\.ts$')")"
+ENV_CODE="$(code_lines "$(printf '%s\n' "$SERVER_FILES" | grep '/server/env-config\.ts$')")"
+CONSOLE_RE='console\.(log|warn|error|info|debug)\('
 
-SERVER_ANY=$(count "$ANY_RE" "$SERVER_FILES")
-UI_ANY=$(count "$ANY_RE" "$UI_FILES")
-SERVER_AS_UNKNOWN_AS=$(count 'as unknown as' "$SERVER_FILES")
-UI_AS_UNKNOWN_AS=$(count 'as unknown as' "$UI_FILES")
-NEW_ERROR=$(count 'new Error\(' "$SERVER_FILES")
-INSTANCEOF=$(count 'instanceof (Error|[A-Za-z]*Error)' "$SERVER_FILES")
-CONSOLE=$(count 'console\.(log|warn|error|info|debug)\(' "$SERVER_NO_LOG")
-PROCESS_ENV=$(count 'process\.env' "$SERVER_NO_ENV")
-BUN_SQLITE=$(count 'from "bun:sqlite"' "$SERVER_FILES")
+SERVER_ANY=$(count_in "$ANY_RE" "$SERVER_CODE")
+UI_ANY=$(count_in "$ANY_RE" "$UI_CODE")
+SERVER_AS_UNKNOWN_AS=$(count_in 'as unknown as' "$SERVER_CODE")
+UI_AS_UNKNOWN_AS=$(count_in 'as unknown as' "$UI_CODE")
+NEW_ERROR=$(count_in 'new Error\(' "$SERVER_CODE")
+INSTANCEOF=$(count_in 'instanceof (Error|[A-Za-z]*Error)' "$SERVER_CODE")
+CONSOLE=$(( $(count_in "$CONSOLE_RE" "$SERVER_CODE") - $(count_in "$CONSOLE_RE" "$LOG_CODE") ))
+PROCESS_ENV=$(( $(count_in 'process\.env' "$SERVER_CODE") - $(count_in 'process\.env' "$ENV_CODE") ))
+BUN_SQLITE=$(count_in 'from "bun:sqlite"' "$SERVER_CODE")
+
+# "<lines> <path>" for every scanned file, in one wc call (no per-file forks).
+file_sizes() {
+  printf '%s\n%s\n' "$SERVER_FILES" "$UI_FILES" | grep -v '^$' | xargs -r wc -l | grep -v ' total$'
+}
 
 if [ "$MEASURE" -eq 1 ]; then
   echo "SERVER_ANY=$SERVER_ANY UI_ANY=$UI_ANY SERVER_AS_UNKNOWN_AS=$SERVER_AS_UNKNOWN_AS UI_AS_UNKNOWN_AS=$UI_AS_UNKNOWN_AS"
   echo "NEW_ERROR=$NEW_ERROR INSTANCEOF=$INSTANCEOF CONSOLE=$CONSOLE PROCESS_ENV=$PROCESS_ENV BUN_SQLITE=$BUN_SQLITE"
-  for f in $(printf '%s\n%s\n' "$SERVER_FILES" "$UI_FILES"); do
-    [ -f "$f" ] || continue
-    n=$(wc -l < "$f" | tr -d ' ')
+  while read -r n f; do
     [ "$n" -ge "$GIANT_BAR" ] && echo "SIZE ${f#$CORTEX_DIR/}:$n"
-  done
+  done < <(file_sizes)
   exit 0
 fi
 
@@ -152,16 +160,14 @@ ratchet "bun:sqlite imports" "$BUN_SQLITE" "$BUN_SQLITE_BASELINE" "Take the data
 ledger_ceiling() {
   local entry
   for entry in "${SIZE_LEDGER[@]}"; do
-    if [ "${entry%%:*}" = "$1" ]; then echo "${entry##*:}"; return 0; fi
+    if [ "${entry%%:*}" = "$1" ]; then ceiling="${entry##*:}"; return 0; fi
   done
   return 1
 }
 SEEN=""
-for f in $(printf '%s\n%s\n' "$SERVER_FILES" "$UI_FILES"); do
-  [ -f "$f" ] || continue
+while read -r n f; do
   rel="${f#$CORTEX_DIR/}"
-  n=$(wc -l < "$f" | tr -d ' ')
-  if ceiling=$(ledger_ceiling "$rel"); then
+  if ledger_ceiling "$rel"; then
     SEEN="$SEEN $rel"
     if [ "$n" -gt "$ceiling" ]; then
       fail "$rel GREW to $n LOC (ceiling $ceiling). Put new behavior in a new module; the giant only wires it."
@@ -171,7 +177,7 @@ for f in $(printf '%s\n%s\n' "$SERVER_FILES" "$UI_FILES"); do
   elif [ "$n" -ge "$GIANT_BAR" ]; then
     fail "$rel is $n LOC (>= $GIANT_BAR) and not in SIZE_LEDGER. New giants are forbidden at birth: split it."
   fi
-done
+done < <(file_sizes)
 for entry in "${SIZE_LEDGER[@]}"; do
   case " $SEEN " in
     *" ${entry%%:*} "*) ;;
