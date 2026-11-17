@@ -11,9 +11,11 @@ sends an **anonymous run report** after each run to help improve model
 calibration profiles, and shows a one-time notice per process linking here.
 This page is the complete, honest inventory of what that report contains.
 
-Local run observations (used by local calibration) are still written to
-`~/.reactive-agents/observations` whether or not you opt in; they never leave
-your machine.
+Local run observations (used by the opt-in learned calibration tier) are still
+written to `~/.reactive-agents/observations` whether or not you opt in; they
+never leave your machine. The opt-in community calibration profile is a
+separate, receive-only request; see
+[Model Calibration](/features/llm-providers/#model-calibration).
 
 ## What is collected (only if you opt in)
 

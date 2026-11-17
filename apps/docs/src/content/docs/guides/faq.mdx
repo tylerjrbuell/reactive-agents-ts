@@ -100,7 +100,7 @@ Local Ollama models (4B+) can run the same tool-calling agent loop as paid front
 
 - The **Healing Pipeline** repairs malformed tool calls (name aliases, param aliases, paths, type coercion) before they fail
 - The **TextParseDriver** handles models without native function-calling via XML / JSON / pseudo-code cascade
-- The **calibration system** learns each model's tool-call dialect after 5 runs
+- The **calibration system** adapts the harness to each model (parallel tool calls, tool-result size, whether forcing a tool call helps). Shipped profiles apply by default; learning from your own runs and the community profile are opt-in ([Model Calibration](/features/llm-providers/#model-calibration))
 
 **Catch:** Local inference is slower (1-5 s/response on 14B vs 100 ms on a fast frontier API), and you need ~9 GB RAM for `qwen3:14b` / `cogito:14b`. The 4 GB `gemma4:e4b` is a faster, lighter option that still handles tool-calling well.
 

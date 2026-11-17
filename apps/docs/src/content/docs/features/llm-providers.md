@@ -319,11 +319,59 @@ import { localModelAdapter, midModelAdapter, defaultAdapter } from "@reactive-ag
 
 **Calibration composes with the tier adapter — it no longer replaces it.** A model that has a calibration file keeps *all* of its tier-adapter hooks (`continuationHint`, `errorRecovery`, `synthesisPrompt`, `qualityCheck`) and *additionally* gains its calibrated profile overrides (e.g. `toolResultMaxChars`). Calibration is additive: earlier releases dropped every tier hook when a calibration file was present, which strictly weakened the harness for calibrated models.
 
+## Model Calibration
+
+Models differ. One takes parallel tool calls, another only one at a time. One needs tool output kept short, another uses a recall tool well. A calibration is a small per-model profile that lets the harness adapt to those differences instead of treating every model alike. It is how a 4B local model and a frontier model can run the same agent loop.
+
+### What a calibration changes
+
+The harness reads these fields today:
+
+| Field | What it changes in a run |
+| --- | --- |
+| `parallelCallCapability` | `"sequential-only"` or `"partial"` caps how many tool calls the blueprint strategy batches per turn (1 or 2). |
+| `observationHandling` | `"uses-recall"` forces the recall tool on for that model. |
+| `optimalToolResultChars` | Sets the tool-result size limit (`toolResultMaxChars`) in the model's context profile. |
+| `classifierReliability` | `"low"` makes the harness distrust its required-tool classifier; the adaptive strategy skips classifier evaluation. |
+| `actOrAnswer` | `"proactive"`, `"retry"` or `"off"`: whether a stalled turn is answered by forcing a tool call. An explicit harness setting wins ([Harness Control](/features/harness-control/)). |
+| `toolCallDialect` | Feeds the local provider's decision on whether the model supports native tool calling. A `"none"` claim from a single run is ignored. |
+
+`steeringCompliance` and `systemPromptAttention` are recorded in calibration files but change nothing in a run today.
+
 ### Where a calibration comes from
 
-With calibration on (`.withCalibration("auto")`, the default when reasoning is enabled), a model's calibration resolves in three tiers: the calibration file shipped with the framework, then the community profile (when fetched), then this machine's local run observations (`~/.reactive-agents/observations/`, once at least 5 runs are recorded). A model with no shipped file still learns: after 5 recorded runs it resolves to the framework defaults plus the learned fields.
+With calibration on (`.withCalibration("auto")`, the default when reasoning is enabled), a model resolves in tiers, each overriding the one before for the fields it declares: **shipped**, then **community**, then **learned**.
 
-`resolveModelCalibrationWithProvenance(modelId)` returns the calibration and the source of each field (`"shipped"`, `"community"`, `"learned"` or `"default"`):
+1. **Shipped** (always on): the calibration file the framework ships for the model. A model with no file gets framework defaults.
+2. **Community** (opt-in): a shared profile for the model, fetched at run start.
+3. **Learned** (opt-in): this machine's own recorded runs.
+
+Both extra tiers are off by default. Turn them on explicitly:
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withProvider("ollama")
+  .withModel("qwen3:4b")
+  .withReasoning()
+  .withCalibration("auto", { learned: true, community: true })
+  .build();
+```
+
+**Learned.** Every run records a small observation on disk (`~/.reactive-agents/observations`, or the directory in `REACTIVE_AGENTS_OBSERVATIONS_DIR`), whether or not this tier is on. Nothing is uploaded. With `learned: true`, once a model has 5 recorded runs (the last 50 per model are kept), what was observed replaces `parallelCallCapability` (share of runs with parallel tool turns: 80% or more is `"reliable"`, under 20% `"sequential-only"`, else `"partial"`), `classifierReliability` (`"low"` when at least 40% of runs required a tool that was never called) and `actOrAnswer`. Turn it on for models the framework ships no file for: with it, such a model resolves to the framework defaults plus what was learned; without it, it runs on generic defaults.
+
+**Community.** With `community: true`, the framework sends one `GET https://api.reactiveagents.dev/v1/profiles/<model-id>` at run start. The model id is the only thing in the request: no prompt, output, tool or run data, and no body. Like any HTTP request it reveals your IP address to the server. The reply is cached for 24 hours in `~/.reactive-agents/community-profiles/`, so most runs send nothing; a 404, a failure or an offline machine falls back to the stale cache, then to the shipped file. `DO_NOT_TRACK=1` or `REACTIVE_AGENTS_TELEMETRY=0` blocks the request even with the option on. For a proxy or mirror set `REACTIVE_AGENTS_TELEMETRY_PROFILES_URL` (full URL) or `REACTIVE_AGENTS_TELEMETRY_BASE_URL`. This is separate from the opt-in run reports on the [Telemetry](/telemetry/) page.
+
+### Modes
+
+`.withCalibration(mode, options?)` takes:
+
+- `"auto"`: resolve tiers as above. `options` is `{ learned?: boolean; community?: boolean }`, both default `false`.
+- `"skip"`: no calibration lookup, pure tier-based adapters. Honored even when reasoning is enabled.
+- A `ModelCalibration` object: used as given, for example one produced by the calibration probe suite. `options` are ignored.
+
+There is no `"off"` mode.
+
+`resolveModelCalibrationWithProvenance(modelId)` returns the calibration and the source of each field (`"shipped"`, `"community"`, `"learned"` or `"default"`). Called directly it applies local observations by default; an agent run only does so when `learned` is on.
 
 ```typescript
 import { resolveModelCalibrationWithProvenance } from "@reactive-agents/runtime";

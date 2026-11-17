@@ -96,7 +96,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - **8 reasoning strategies**: ReAct, Blueprint (ReWOO-style plan-once-execute-parallel), Reflexion, Plan-Execute, Tree-of-Thought, Adaptive (meta-strategy), Direct, Code-Action (@experimental)
 - **Context synthesis**: fast-template or deep-LLM transcript shaping per iteration, emitted as `ContextSynthesized` on the EventBus
 - **Reactive intelligence**: an entropy sensor and reactive controller detect stalls, loops, and context pressure, and trigger early-stop, compression, or a strategy switch
-- **Adaptive calibration**: three-tier live learning (shipped prior, community profile, local posterior) with per-run observations
+- **Adaptive calibration**: per-model profiles adapt the harness. The shipped profile applies by default; community and learned tiers are opt-in via `.withCalibration("auto", { learned: true, community: true })`
 
 ### 💾 Memory & Skills
 - **4-layer memory**: working, episodic, semantic (vector + FTS5), procedural, backed by `bun:sqlite` with background consolidation and decay
