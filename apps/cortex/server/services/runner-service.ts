@@ -24,7 +24,7 @@ import type { CortexJudgmentConfig } from "./cortex-judgment.js";
 import { resolveLaunchPayload } from "./resolve-template.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
 import type { VariableDef } from "./resolve-template.js";
-import type { ReactiveAgent } from "@reactive-agents/runtime";
+import type { ReactiveAgent, ResumeRunOptions } from "@reactive-agents/runtime";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { CrashedRun } from "./crashed-runs.js";
 import { structuredOutputExtractedEvent } from "./structured-output-event.js";
@@ -258,9 +258,9 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
     /**
      * Resume a desk run a crash left mid-run (`findCrashedRuns`): rebuild its agent
      * from the stored launch config under the same agent id and call the
-     * framework's `agent.resumeRun(durableRunId)`. Events land on the same Cortex run.
+     * framework's `agent.resumeRun(durableRunId, opts)` (`opts`: loop-stop `{ note?, extraIterations? }`). Events land on the same Cortex run.
      */
-    readonly resumeCrashed: (crashed: CrashedRun) => Effect.Effect<{ agentId: string; runId: string }, CortexError>;
+    readonly resumeCrashed: (crashed: CrashedRun, opts?: ResumeRunOptions) => Effect.Effect<{ agentId: string; runId: string }, CortexError>;
     readonly pause: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly resume: (runId: RunId) => Effect.Effect<void, CortexError>;
     readonly stop: (runId: RunId) => Effect.Effect<void, CortexError>;
@@ -455,7 +455,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
         .pipe(Effect.catchAll((e) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:277", tag: errorTag(e) })));
 
     return {
-      resumeCrashed: (crashed) =>
+      resumeCrashed: (crashed, resumeOpts) =>
         Effect.gen(function* () {
           const { runId, agentId, durableRunId, launch } = crashed;
           if ((yield* Ref.get(activeRef)).has(runId)) {
@@ -487,7 +487,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
           cortexLog("info", "runner", "resuming crashed durable run", { agentId, runId, durableRunId });
           // The framework continues under the checkpoint's task id (= this Cortex run id).
           void agent
-            .resumeRun(durableRunId)
+            .resumeRun(durableRunId, resumeOpts)
             .catch((err) => {
               cortexLogRunnerExecution("agent.resumeRun rejected", { agentId, runId, durableRunId, ...formatErrorDetails(err) });
               Effect.runFork(ingestFailure(agentId, runId, startedAt, err));

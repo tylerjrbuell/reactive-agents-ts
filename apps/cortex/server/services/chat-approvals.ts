@@ -62,7 +62,9 @@ export interface PauseCarrier {
 }
 
 /** The agent surface resolution needs. */
-export type ApprovableAgent = Pick<ReactiveAgent, "approveRun" | "denyRun" | "respondToInteraction">;
+export type ApprovableAgent = Pick<ReactiveAgent, "approveRun" | "denyRun" | "respondToInteraction"> &
+  /** Continue a loop-stopped run (`chat-resume.ts`): the same durable agent resumes it. */
+  Pick<ReactiveAgent, "resumeRun">;
 
 /** What chat approvals need from the chat session service (injected; no hidden globals). */
 export interface ChatApprovalHost {

@@ -16,6 +16,7 @@
   import RunsToolbar from "$lib/components/runs/RunsToolbar.svelte";
   import WaitingOnYou from "$lib/components/runs/WaitingOnYou.svelte";
   import CrashedRuns from "$lib/components/runs/CrashedRuns.svelte";
+  import LoopStoppedRuns from "$lib/components/runs/LoopStoppedRuns.svelte";
   import { toast } from "$lib/stores/toast-store.js";
   import { loadCapabilities, strategyOptions } from "$lib/capabilities.js";
   import { createWsClient } from "$lib/stores/ws-client.js";
@@ -185,6 +186,7 @@
       {:else}
         <WaitingOnYou {runs} />
         <CrashedRuns />
+        <LoopStoppedRuns />
 
         <RunsToolbar bind:search bind:status bind:sort {counts} {totals} />
 

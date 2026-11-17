@@ -6,7 +6,7 @@ import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure 
 import type { Database } from "bun:sqlite";
 import { generateTaskId, type RunPosture } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
-import { AgentSession, getCapabilityManifest, type ChatMessage, type ChatOptions, type AgentStreamEvent, type GoalRunEventSlice, type TaskInput } from "@reactive-agents/runtime";
+import { AgentSession, getCapabilityManifest, type AgentResult, type ChatMessage, type ChatOptions, type AgentStreamEvent, type GoalRunEventSlice, type TaskInput } from "@reactive-agents/runtime";
 import {
   createChatSession,
   getChatSession,
@@ -88,6 +88,8 @@ import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-c
 import type { SessionControlPort } from "./chat-proposal-service.js";
 import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval, type ChatPendingInteraction } from "./chat-approvals.js";
 import { effectiveApprovalPolicy } from "./approval-policy.js";
+import { ChatResume, chatDurableSource } from "./chat-resume.js";
+import { validateTodo } from "./chat-todo-validation.js";
 
 /**
  * Strategy names + aliases the framework registers (capability manifest), so a new strategy
@@ -136,22 +138,6 @@ export function turnsToChatMessages(turns: ChatTurnRow[]): ChatMessage[] {
     out.push({ role: t.role, content: t.role === "assistant" ? historyContentOf(t) : t.content, timestamp: t.ts });
   }
   return out;
-}
-
-const TODO_MAX_ITEMS = 100;
-const TODO_STATUS_SET: ReadonlySet<string> = new Set(["pending", "in_progress", "completed"]);
-
-/** Validate + normalise a user-supplied to-do list: stable unique ids, non-empty titles, known statuses. */
-function validateTodo(items: readonly StoredTodoItem[]): StoredTodoItem[] {
-  if (!Array.isArray(items) || items.length > TODO_MAX_ITEMS) throw new Error("Invalid to-do list");
-  const seen = new Set<string>();
-  return items.map((it) => {
-    const id = typeof it?.id === "string" ? it.id.trim() : "";
-    const title = typeof it?.title === "string" ? it.title.trim() : "";
-    if (!id || !title || !TODO_STATUS_SET.has(it.status) || seen.has(id)) throw new Error("Invalid to-do list item");
-    seen.add(id);
-    return { id, title, status: it.status };
-  });
 }
 
 export type CortexChatResult = {
@@ -281,16 +267,27 @@ export class ChatSessionService {
     this.titler = opts?.title ?? ((u, r, cfg) => this.titleWithAgent(u, r, cfg));
     this.summarizer = opts?.summarize ?? ((turns, cfg) => this.summarizeWithAgent(turns, cfg));
     this.maxCachedSessions = opts?.maxCachedSessions ?? resolveMaxCachedSessions();
+    // One exchange writer for both durable rails: an approved / answered run (chat-approvals.ts) and a
+    // Continued loop-stopped run (chat-resume.ts), with the run's tokens, cost, run id and failed outcome.
+    const persistExchange = (id: string, userMessage: string, reply: string, result: AgentResult | undefined, toolsUsed: readonly string[], trace?: StoredTurnTrace): void => {
+      const row = getChatSession(this.db, id);
+      const by = row ? producedBy(normalizeCortexAgentConfig(row.agentConfig)) : undefined;
+      const split = result ? { inputTokens: result.metadata.inputTokens, outputTokens: result.metadata.outputTokens } : undefined;
+      this.persistTurn(id, userMessage, reply, result?.metadata.tokensUsed ?? 0, toolsUsed, trace, by, result ? turnCostOf(result.metadata.cost, undefined) : undefined, result?.taskId, undefined, split);
+    };
     this.approvals = new ChatApprovals(db, {
       acquireTurn: (id) => this.acquireTurn(id),
       agentFor: (id) => this.approvableAgentFor(id),
       agentIdFor: (id) => getChatSession(this.db, id)?.stableAgentId,
-      persistExchange: (id, userMessage, reply, result, toolsUsed) => {
-        const row = getChatSession(this.db, id);
-        const by = row ? producedBy(normalizeCortexAgentConfig(row.agentConfig)) : undefined;
-        const split = result ? { inputTokens: result.metadata.inputTokens, outputTokens: result.metadata.outputTokens } : undefined;
-        this.persistTurn(id, userMessage, reply, result?.metadata.tokensUsed ?? 0, toolsUsed, undefined, by, result ? turnCostOf(result.metadata.cost, undefined) : undefined, result?.taskId, undefined, split);
-      },
+      persistExchange,
+      evict: (id) => this.evictSession(id),
+    });
+    // Continue lists loop-stopped runs from the durable store (the builder's Durable runs setting).
+    this.resume = new ChatResume({
+      durableSourceOf: (id) => chatDurableSource(getChatSession(this.db, id)),
+      acquireTurn: (id) => this.acquireTurn(id),
+      agentFor: (id) => this.approvableAgentFor(id),
+      persistExchange,
       evict: (id) => this.evictSession(id),
     });
     this.plans = new ChatSessionPlans(db, { live: this.sessions, acquireTurn: (id) => this.acquireTurn(id), build: (id, cfg, stable) => this.getOrBuildSession(id, normalizeCortexAgentConfig(cfg), stable) });
@@ -298,6 +295,9 @@ export class ChatSessionService {
 
   /** Turns paused on a durable approval gate: listing, approve / deny / dismiss (see `chat-approvals.ts`). */
   readonly approvals: ChatApprovals;
+
+  /** Loop-stopped runs of a session: listing and Continue (see `chat-resume.ts`). */
+  readonly resume: ChatResume;
 
   /** The session's agent for approve/deny: the cached one, or rebuilt from the stored config. */
   private async approvableAgentFor(sessionId: string): Promise<ApprovableAgent> {

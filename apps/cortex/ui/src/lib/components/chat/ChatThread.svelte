@@ -1,6 +1,7 @@
 <script lang="ts">
   import { chatStore, type ChatTurn } from "$lib/stores/chat-store.js";
   import ChatApprovalCards from "$lib/components/ChatApprovalCards.svelte";
+  import ChatContinueCard from "$lib/components/ChatContinueCard.svelte";
   import ChatInteractionCards from "$lib/components/ChatInteractionCards.svelte";
   import ChatLiveApproval from "$lib/components/ChatLiveApproval.svelte";
   import ChatLiveInteraction from "$lib/components/ChatLiveInteraction.svelte";
@@ -178,6 +179,7 @@
       {/each}
     {/if}
     <ChatApprovalCards {sessionId} />
+    <ChatContinueCard {sessionId} />
     {#each liveOrphans as approval (approval.runId)}
       <ChatLiveApproval {approval} />
     {/each}

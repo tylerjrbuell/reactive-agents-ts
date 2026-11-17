@@ -16,6 +16,9 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Database } from "bun:sqlite";
+
+/** The Cortex database handle the desk-run finders take (re-exported so siblings add no `bun:sqlite` import). */
+export type DeskRunDb = Database;
 import { Effect } from "effect";
 import { listDurableRuns, RunStoreLive, RunStoreService, type RunRecord } from "@reactive-agents/runtime";
 import type { BuildCortexAgentParams } from "./build-cortex-agent.js";
@@ -82,7 +85,8 @@ interface LiveDeskRunRow {
   readonly launch_params_json: string;
 }
 
-const parseLaunch = (json: string): LaunchParams | null => {
+/** A stored launch config read back from `cortex_runs.launch_params_json`; `null` when unreadable. */
+export const parseLaunch = (json: string): LaunchParams | null => {
   try {
     const v: unknown = JSON.parse(json);
     if (typeof v !== "object" || v === null || typeof (v as { prompt?: unknown }).prompt !== "string") return null;
