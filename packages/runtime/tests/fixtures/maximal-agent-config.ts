@@ -325,6 +325,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
     recallConfig: { previewLength: 200, autoFullThreshold: 1_000, maxEntries: 50, maxTotalBytes: 65_536 },
   },
   debrief: true,
+  calibration: { mode: "auto", learned: true, community: true },
   agentTools: [
     {
       name: "researcher",

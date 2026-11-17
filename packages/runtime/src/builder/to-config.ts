@@ -104,6 +104,8 @@ export interface BuilderStateForSerialization {
   _rateLimiterConfig?: { requestsPerMinute?: number; tokensPerMinute?: number; maxConcurrent?: number };
   _skillPersistence?: boolean;
   _debrief?: boolean;
+  _calibration?: import("../types.js").CalibrationMode;
+  _calibrationOptions?: import("./withers/calibration.js").CalibrationOptions;
   _durableRuns?: import("../builder/types.js").DurableRunsOptions;
   _approvalPolicy?: import("@reactive-agents/reasoning").AuthoredApprovalPolicy;
   _userInteraction?: false | { readonly timeoutMs?: number };
@@ -440,6 +442,16 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
   // Skill persistence
   if (state._skillPersistence !== undefined) config["skillPersistence"] = state._skillPersistence;
   if (state._debrief !== undefined) config["debrief"] = state._debrief;
+
+  // Calibration: only an explicit `.withCalibration("auto" | "skip", options)`.
+  // A `ModelCalibration` object is code-only; the tiers apply to "auto" alone.
+  if (state._calibration === "auto" || state._calibration === "skip") {
+    config["calibration"] = defined({
+      mode: state._calibration,
+      learned: state._calibrationOptions?.learned,
+      community: state._calibrationOptions?.community,
+    });
+  }
 
   // Durable runs (crash-resume)
   if (state._durableRuns) config["durableRuns"] = { ...state._durableRuns };

@@ -65,6 +65,7 @@ export type BuilderMethod =
   | "withRateLimiting"
   | "withSkillPersistence"
   | "withDebrief"
+  | "withCalibration"
   | "withDurableRuns"
   | "withApprovalPolicy"
   | "withUserInteraction"
@@ -399,6 +400,11 @@ export function agentConfigToBuilderCalls(config: AgentConfig): readonly Builder
   if (config.rateLimiting) push(call("withRateLimiting", config.rateLimiting));
   if (config.skillPersistence !== undefined) push(call("withSkillPersistence", config.skillPersistence));
   if (config.debrief !== undefined) push(call("withDebrief", config.debrief));
+  if (config.calibration) {
+    const { mode, ...tiers } = config.calibration;
+    const opts = defined(tiers);
+    push(Object.keys(opts).length > 0 ? call("withCalibration", mode, opts) : call("withCalibration", mode));
+  }
   if (config.durableRuns) push(call("withDurableRuns", config.durableRuns));
 
   // Approval policy (data half; requireFor / onApprove are code-only)

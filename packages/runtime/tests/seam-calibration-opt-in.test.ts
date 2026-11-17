@@ -17,6 +17,7 @@ import { resolveCalibration } from "../src/engine/phases/agent-loop/setup/calibr
 import { withCalibrationTiers } from "../src/builder/withers/calibration";
 import { asBuilderState } from "../src/builder/withers/_state";
 import { ReactiveAgents } from "../src/builder";
+import { agentConfigFromJSON, agentConfigToBuilder, agentConfigToJSON } from "../src/agent-config";
 
 const ENV_KEYS = ["DO_NOT_TRACK", "REACTIVE_AGENTS_TELEMETRY", "REACTIVE_AGENTS_OBSERVATIONS_DIR"] as const;
 
@@ -154,4 +155,36 @@ describe("calibration tiers are opt-in", () => {
     }
     expect(requested.filter((u) => u.includes(encodeURIComponent(model)))).toEqual([]);
   }, 20000);
+});
+
+// Agent-as-data: `toConfig()` -> JSON -> `agentConfigToBuilder()` must keep the
+// calibration mode and both opt-in tiers. Before the `calibration` config key
+// existed, the round trip dropped them and a reloaded agent ran on defaults.
+describe("calibration options round-trip through AgentConfig", () => {
+  const reload = async (builder: ReturnType<typeof ReactiveAgents.create>) =>
+    agentConfigToBuilder(agentConfigFromJSON(agentConfigToJSON(builder.toConfig())));
+
+  test(".withCalibration('auto', { learned, community }) survives toConfig -> JSON -> builder", async () => {
+    const src = ReactiveAgents.create()
+      .withName("cal-pin")
+      .withProvider("anthropic")
+      .withCalibration("auto", { learned: true, community: true });
+    expect(src.toConfig().calibration).toEqual({ mode: "auto", learned: true, community: true });
+    const rebuilt = await reload(src);
+    const state = asBuilderState(rebuilt);
+    expect(state._calibration).toBe("auto");
+    expect(state._calibrationOptions).toEqual({ learned: true, community: true });
+    expect(rebuilt.toConfig()).toEqual(src.toConfig());
+  });
+
+  test("an explicit .withCalibration('skip') survives the round trip", async () => {
+    const src = ReactiveAgents.create().withName("cal-skip").withProvider("anthropic").withCalibration("skip");
+    expect(src.toConfig().calibration).toEqual({ mode: "skip" });
+    expect(asBuilderState(await reload(src))._calibration).toBe("skip");
+  });
+
+  test("a builder that never called .withCalibration emits no calibration key", () => {
+    const cfg = ReactiveAgents.create().withName("cal-default").withProvider("anthropic").toConfig();
+    expect("calibration" in cfg).toBe(false);
+  });
 });

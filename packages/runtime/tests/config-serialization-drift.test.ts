@@ -66,8 +66,10 @@ const NON_BUILDER_ROUNDTRIP = new Set<string>([
 //     not orthogonal data; serializing them alongside the fields they mutate
 //     would produce contradictory configs.
 //   - Runtime/secrets/integration: withEnvironment (secrets), withChannels,
-//     withCortex, withTracing, withTelemetry, withCalibration (runtime-probed).
-//   - Partly code-only: withApprovalPolicy (requireFor/onApprove), withDocuments
+//     withCortex, withTracing, withTelemetry.
+//   - Partly code-only: withCalibration (a `ModelCalibration` object; the
+//     "auto"/"skip" mode and learned/community tiers ARE data since 2026-11-17),
+//     withApprovalPolicy (requireFor/onApprove), withDocuments
 //     (shared `store`), withAgentTool (`agent.parameters`), withTools terminal
 //     (blockedPatterns/onAudit/dockerEscalation). Their data halves ARE covered.
 // When promoting one of these to data: add it to the schema + MAXIMAL_CONFIG +

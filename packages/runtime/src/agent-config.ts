@@ -710,6 +710,13 @@ export const RateLimitingConfigSchema = Schema.Struct({
   maxConcurrent: Schema.optional(Schema.Number),
 });
 
+/** Data form of `.withCalibration(mode, { learned, community })`; a `ModelCalibration` object stays code-only. */
+export const CalibrationConfigSchema = Schema.Struct({
+  mode: Schema.Literal("auto", "skip"),
+  learned: Schema.optional(Schema.Boolean),
+  community: Schema.optional(Schema.Boolean),
+});
+
 /** Durable run persistence (crash-resume) configuration. */
 export const DurableRunsConfigSchema = Schema.Struct({
   dir: Schema.optional(Schema.String),
@@ -837,6 +844,8 @@ export const AgentConfigSchema = Schema.Struct({
   skillPersistence: Schema.optional(Schema.Boolean),
   /** Synthesize and store a post-run debrief. Default: follows memory (on with `.withMemory()`, off otherwise); set it to override either way. */
   debrief: Schema.optional(Schema.Boolean),
+  /** Per-model calibration: `mode` plus the opt-in `learned` / `community` tiers. Absent = auto when reasoning is on, tiers off. */
+  calibration: Schema.optional(CalibrationConfigSchema),
   /** Durable run persistence (crash-resume) configuration. */
   durableRuns: Schema.optional(DurableRunsConfigSchema),
   /** Approval policy: mode, gated tool names and shell command rules. */

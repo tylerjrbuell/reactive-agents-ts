@@ -141,7 +141,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   withLayers: { kind: "overlay", overlayReason: "Effect Layer DI escape hatch (not data)", description: "Provide custom Effect layers." },
   withReplayLLM: { kind: "overlay", overlayReason: "deterministic replay test rig (not data)", description: "Replay recorded LLM responses." },
   withTestScenario: { kind: "overlay", overlayReason: "test-scenario rig (not data)", description: "Load a test scenario." },
-  withCalibration: { kind: "overlay", overlayReason: "runtime-probed calibration (not static data)", description: "Model calibration mode." },
+  withCalibration: { kind: "config", configKeys: ["calibration"], description: "Model calibration mode + opt-in learned/community tiers." },
   withContextProfile: { kind: "overlay", overlayReason: "cross-field side-effect profile (not orthogonal data)", description: "Context window profile." },
   withLeanHarness: { kind: "overlay", overlayReason: "cross-field profile patch — use withProfile(lean())", description: "Lean-harness mode." },
 
