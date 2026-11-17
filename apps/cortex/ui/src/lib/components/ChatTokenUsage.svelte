@@ -41,7 +41,7 @@
   </span>
 {/if}
 {#if speed}
-  <span class="usage" use:tooltip={speed.title} data-testid="turn-speed">{speed.text}</span>
+  <span class="usage speed" use:tooltip={speed.title} data-testid="turn-speed">{speed.text}</span>
 {/if}
 
 <style>
@@ -55,5 +55,10 @@
     color: var(--cortex-text-3);
     white-space: nowrap;
     cursor: default;
+  }
+  /* Separator and gap from the usage text beside it, drawn in CSS so it is not read as content. */
+  .speed::before {
+    content: "·";
+    margin-left: 4px;
   }
 </style>
