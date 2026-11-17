@@ -71,6 +71,8 @@ Cortex runs one channel router for every configured channel. A **channel** is a 
 
 The Gateway overview (`GET /api/gateway/status`) has a `hub` block: per channel state, per route counters and the reason behind each role, and the recent router activity.
 
+**Numbers survive a restart.** A restart does not zero the overview. For a channel the hub hosts, received, sent and failed counts and the last received and last sent times come from the durable inbox and outbox (so they cover what the framework keeps, 7 days or 50,000 rows). The per-route counters (matched, refused, answered, failed, dropped, cost) and the recent activity feed are saved in the Cortex database as they happen, and the hub loads them when it starts. When a count cannot be recovered (the in-memory inbox, a channel an agent hosts on its own) the overview says "since restart" next to it instead of showing a bare zero.
+
 ## The Channels tab
 
 The **Channels** tab in the Lab edits the channel hub. It refreshes live state every few seconds and has four parts.

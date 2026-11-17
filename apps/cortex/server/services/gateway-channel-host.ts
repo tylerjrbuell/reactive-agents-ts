@@ -53,6 +53,11 @@ export interface ChannelLiveState {
   readonly failed: number;
   readonly lastInboundAt: number | null;
   readonly lastSentAt: number | null;
+  /**
+   * Where the counts above come from: `stored` = durable rows that survive a restart (hub channels with the
+   * durable inbox), `restart` = counted since the host or hub started. Absent reads as `restart`.
+   */
+  readonly countsFrom?: "stored" | "restart";
   /** Failure class of the latest failed delivery (`auth`, `rate_limited`, ...). */
   readonly lastFailure: string | null;
 }

@@ -35,6 +35,15 @@ export interface RouteCounters {
   readonly costUsd: number;
 }
 
+/** Where the feed and counters survive a restart (`db/hub-activity-queries.ts`). Optional: without it they live in memory. */
+export interface HubActivityStore {
+  readonly append: (a: HubActivity) => void;
+  readonly bump: (routeId: string, delta: RouteCounters) => void;
+  /** Oldest first, at most `limit` lines. */
+  readonly loadFeed: (limit: number) => readonly HubActivity[];
+  readonly loadCounters: () => ReadonlyMap<string, RouteCounters>;
+}
+
 const LIMIT = 50;
 const zero: RouteCounters = { matched: 0, denied: 0, answered: 0, failed: 0, dropped: 0, costUsd: 0 };
 
@@ -64,15 +73,25 @@ export class HubActivityTracker {
   constructor(
     private readonly now: () => number = Date.now,
     private readonly turnTimeoutMsOf: (routeId: string) => number | undefined = () => undefined,
-  ) {}
+    private readonly store?: HubActivityStore,
+  ) {
+    // Seed from what an earlier run recorded; live events add to it.
+    if (store) {
+      this.feed = [...store.loadFeed(LIMIT)];
+      for (const [routeId, c] of store.loadCounters()) this.counters.set(routeId, c);
+    }
+  }
 
   private note(a: Omit<HubActivity, "at" | "simulated"> & { readonly simulated?: boolean | undefined }): void {
-    this.feed.push({ ...a, at: this.now(), simulated: a.simulated === true });
+    const line: HubActivity = { ...a, at: this.now(), simulated: a.simulated === true };
+    this.feed.push(line);
+    this.store?.append(line);
     if (this.feed.length > LIMIT) this.feed.splice(0, this.feed.length - LIMIT);
   }
 
   private bump(routeId: string, add: Partial<RouteCounters>): void {
     const cur = this.counters.get(routeId) ?? zero;
+    this.store?.bump(routeId, { ...zero, ...add });
     this.counters.set(routeId, {
       matched: cur.matched + (add.matched ?? 0),
       denied: cur.denied + (add.denied ?? 0),

@@ -25,6 +25,8 @@ export interface ChannelStatusRow {
   readonly failed: number;
   readonly lastInboundAt: number | null;
   readonly lastSentAt: number | null;
+  /** `stored` = counts survive a restart (durable rows); `restart` or absent = counted since the host or hub started. */
+  readonly countsFrom?: "stored" | "restart";
   readonly lastFailure: string | null;
 }
 
@@ -109,6 +111,17 @@ export function connectionView(row: Pick<ChannelStatusRow, "state" | "enabled">)
     case "skipped": return { tone: "failed", label: "Not started" };
     case "not-started": return { tone: "idle", label: "Not running" };
   }
+}
+
+/**
+ * The line under the channel table when some counts restart from zero with the server. A count that cannot
+ * be recovered is said to be "since restart" rather than shown as if nothing ever happened; null when every
+ * shown count comes from stored rows (or there is no channel).
+ */
+export function countsNote(channels: readonly Pick<ChannelStatusRow, "enabled" | "countsFrom">[]): string | null {
+  const shown = channels.filter((c) => c.enabled);
+  if (shown.length === 0) return null;
+  return shown.some((c) => c.countsFrom !== "stored") ? "Received, sent and failure counts for some channels are since the last restart." : null;
 }
 
 /** The hosted gateway's own state. */

@@ -322,6 +322,31 @@ export function applySchema(db: Database): void {
       heartbeat   INTEGER NOT NULL
     );
 
+    -- The hub's recent-activity feed and per-route counters, so a restart shows what happened instead of
+    -- zeros (services/channel-hub-activity.ts folds router events into both). Classifications, route ids
+    -- and counts only: no message text, no secrets. The feed is bounded (newest rows kept).
+    CREATE TABLE IF NOT EXISTS cortex_hub_activity (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      at         INTEGER NOT NULL,
+      kind       TEXT    NOT NULL,
+      channel_id TEXT,
+      route_id   TEXT,
+      detail     TEXT    NOT NULL,
+      ack_reason TEXT,
+      ack_ms     INTEGER,
+      simulated  INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS cortex_hub_route_counters (
+      route_id TEXT PRIMARY KEY,
+      matched  INTEGER NOT NULL DEFAULT 0,
+      denied   INTEGER NOT NULL DEFAULT 0,
+      answered INTEGER NOT NULL DEFAULT 0,
+      failed   INTEGER NOT NULL DEFAULT 0,
+      dropped  INTEGER NOT NULL DEFAULT 0,
+      cost_usd REAL    NOT NULL DEFAULT 0
+    );
+
     -- Who changed which route and when (owners added, open, AgentDefault). No message text, no secrets.
     CREATE TABLE IF NOT EXISTS cortex_channel_audit (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -11,7 +11,7 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { updateChannel, type ChannelEntry, type ChannelSettings } from "$lib/channels.js";
   import { patchHubChannel, type HubChannelLive, type HubChannelRow, type HubLease } from "$lib/channel-hub-api.js";
-  import { duplicateSentence, liveChannelView, type DuplicateInfo } from "$lib/channel-hub-view.js";
+  import { countsSuffix, duplicateSentence, liveChannelView, type DuplicateInfo } from "$lib/channel-hub-view.js";
   import ChannelCard from "$lib/components/channels/ChannelCard.svelte";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Button from "$lib/components/kit/Button.svelte";
@@ -63,6 +63,7 @@
     <Badge data tone="neutral">{live?.received ?? 0} in</Badge>
     <Badge data tone="neutral">{live?.sent ?? 0} out</Badge>
     {#if (live?.failed ?? 0) > 0}<Badge data tone="bad">{live?.failed} failed</Badge>{/if}
+    {#if countsSuffix(live)}<Badge tone="neutral">{countsSuffix(live)}</Badge>{/if}
     <Badge tone={view.lease.tone}>{view.lease.label}</Badge>
     <Badge data tone="neutral">{routeCount} route{routeCount === 1 ? "" : "s"}</Badge>
     {#if row.migratedFrom}<Badge tone="warn">Imported from an agent</Badge>{/if}

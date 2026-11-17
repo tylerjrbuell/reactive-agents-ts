@@ -1,8 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { duplicateAccounts, duplicateSentence, liveChannelView } from "./channel-hub-view.js";
+import { countsSuffix, duplicateAccounts, duplicateSentence, liveChannelView } from "./channel-hub-view.js";
 import type { HubChannelLive } from "./channel-hub-api.js";
 
-const live = (over: Partial<HubChannelLive> = {}): HubChannelLive => ({ id: "ch-a", state: "connected", error: null, reason: null, conflict: false, received: 0, sent: 0, failed: 0, ...over });
+const live = (over: Partial<HubChannelLive> = {}): HubChannelLive => ({ id: "ch-a", state: "connected", error: null, reason: null, conflict: false, received: 0, sent: 0, failed: 0, countsFrom: "stored", ...over });
+
+describe("countsSuffix", () => {
+  it("counts that restart with the server say so; stored counts and no report say nothing", () => {
+    expect(countsSuffix(live({ countsFrom: "restart" }))).toBe("since restart");
+    expect(countsSuffix(live({ countsFrom: "stored" }))).toBeNull();
+    expect(countsSuffix(undefined)).toBeNull();
+  });
+});
 
 describe("liveChannelView", () => {
   it("off wins over everything", () => expect(liveChannelView("ch-a", live({ state: "failed" }), false, 1)).toMatchObject({ tone: "stopped", label: "Off" }));

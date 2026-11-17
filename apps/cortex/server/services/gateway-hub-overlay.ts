@@ -21,7 +21,7 @@ const ACTIVITY_LIMIT = 50;
 export function hubChannelState(entry: CortexChannelEntry, view: HubChannelView | undefined): ChannelLiveState {
   const base = { id: entry.id, kind: entry.kind, label: entry.label ?? null, enabled: entry.enabled };
   if (!view) {
-    return { ...base, state: "not-started", error: null, reason: HUB_NOTE, received: 0, sent: 0, failed: 0, lastInboundAt: null, lastSentAt: null, lastFailure: null };
+    return { ...base, state: "not-started", error: null, reason: HUB_NOTE, received: 0, sent: 0, failed: 0, lastInboundAt: null, lastSentAt: null, countsFrom: "restart", lastFailure: null };
   }
   const counters = {
     received: view.received,
@@ -29,6 +29,7 @@ export function hubChannelState(entry: CortexChannelEntry, view: HubChannelView 
     failed: view.failed,
     lastInboundAt: view.lastInboundAt,
     lastSentAt: view.lastSentAt,
+    countsFrom: view.countsFrom,
     lastFailure: view.error?.kind ?? null,
   };
   // `idle` (enabled, no enabled route) is not a connection state the overview knows: it is "not running" with the hub's reason.

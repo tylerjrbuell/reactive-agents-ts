@@ -41,7 +41,9 @@ import { buildChannelAdapters, type BuiltChannels } from "./channel-adapters.js"
 import { CHANNEL_KINDS, parseCortexChannels, type CortexChannelEntry, type ChannelKind } from "./channel-config.js";
 import { installedChannelCredentials } from "./channel-credentials.js";
 import { sanitizedCause } from "./channel-hub-failure.js";
-import { HubActivityTracker, type HubActivity, type RouteCounters } from "./channel-hub-activity.js";
+import { HubActivityTracker, type HubActivity, type HubActivityStore, type RouteCounters } from "./channel-hub-activity.js";
+import { makeHubActivityStore } from "../db/hub-activity-queries.js";
+import { storedChannelStats } from "./channel-hub-durable-stats.js";
 import { applyMigration, planMigration, type MigrationAgent, type MigrationPlan, type MigrationResult, type MigrationWarning } from "./channel-hub-migration.js";
 import { makeHubResolver, type HubResolver, type HubResolverDeps } from "./channel-hub-resolver.js";
 import { listLeaseHolders, loadValidRoutes, makeDbLeases, makeDurableRouteMeter, makeDurableRouterStore, type DurableRouterStore, type LeaseHolder, type RejectedRoute } from "./channel-hub-store.js";
@@ -98,7 +100,13 @@ export interface HubChannelView {
   readonly received: number;
   readonly sent: number;
   readonly failed: number;
-  /** Latest routed message / answered turn for this channel, from the recent activity feed (null when none is in it). Simulated messages never count. */
+  /**
+   * Where `received` / `sent` / `failed` and the last times come from: `stored` = the framework's durable inbox
+   * and outbox (they survive a restart; the framework prunes old rows), `restart` = the adapter's own counters,
+   * which count only since the hub started (an in-memory inbox, or no durable rows yet).
+   */
+  readonly countsFrom: "stored" | "restart";
+  /** Latest message received / reply sent for this channel (null when none is known). Simulated messages never count. */
   readonly lastInboundAt: number | null;
   readonly lastSentAt: number | null;
   readonly migratedFrom: string | null;
@@ -130,6 +138,8 @@ export interface HubStatus {
   readonly startedAt: number | null;
   /** False means dedupe and caps reset on restart; always true in Cortex. */
   readonly durableStore: boolean;
+  /** `stored` = the activity feed and route counters are saved in the Cortex db; `restart` = they live in memory (a `:memory:` db). */
+  readonly activityFrom: "stored" | "restart";
   readonly channels: readonly HubChannelView[];
   readonly routes: readonly HubRouteView[];
   /** Route rows the store refused to load (invalid), with the plain reason. */
@@ -169,6 +179,9 @@ interface Running {
   readonly signature: string;
 }
 
+/** A db with no file: nothing outlives the process. */
+const isMemoryDb = (db: Database): boolean => db.filename === "" || db.filename === ":memory:";
+
 const kindOf = (platform: string): ChannelKind | undefined => CHANNEL_KINDS.find((k) => k === platform);
 
 const entryOf = (c: ChannelRecord): CortexChannelEntry | undefined => {
@@ -198,13 +211,15 @@ export class ChannelHub {
   private startedAt: number | null = null;
   private skipped = new Map<string, string>();
   private inactiveRoutes = new Map<string, string>();
-  private tracker = this.newTracker();
+  private tracker: HubActivityTracker;
   private lastPlan: MigrationPlan = { channels: [], routes: [], warnings: [], legacy: [] };
   private chain: Promise<void> = Promise.resolve();
   private readonly store: DurableRouterStore;
   /** The store the running router uses: `store` plus the durable inbox, outbox and timers when they opened. */
   private hubStore: HubStore | null = null;
   private readonly durableInbox: boolean;
+  /** Feed and route counters that outlive a restart; each new tracker is seeded from it. */
+  private readonly activityStore: HubActivityStore;
   private readonly resolver: HubResolver;
   private readonly leases: AccountLeases;
   private readonly enabled: boolean;
@@ -215,6 +230,8 @@ export class ChannelHub {
     this.enabled = opts.enabled ?? hubEnabledFromEnv(env);
     this.phase = this.enabled ? "idle" : "disabled";
     this.store = makeDurableRouterStore(opts.db);
+    this.activityStore = makeHubActivityStore(opts.db);
+    this.tracker = this.newTracker();
     this.durableInbox = opts.durableInbox ?? durableInboxFromEnv(env);
     this.leases = opts.leases ?? makeDbLeases(opts.db);
     this.resolver = makeHubResolver({
@@ -238,10 +255,14 @@ export class ChannelHub {
 
   /** A feed that reads each route's saved turn limit, so a timeout line says how long the limit was. */
   private newTracker(): HubActivityTracker {
-    return new HubActivityTracker(Date.now, (routeId) => {
-      const limit: unknown = getRoute(this.opts.db, routeId)?.body.turnTimeoutMs;
-      return typeof limit === "number" ? limit : undefined;
-    });
+    return new HubActivityTracker(
+      Date.now,
+      (routeId) => {
+        const limit: unknown = getRoute(this.opts.db, routeId)?.body.turnTimeoutMs;
+        return typeof limit === "number" ? limit : undefined;
+      },
+      this.activityStore,
+    );
   }
 
   /** Whether the hub hosts `channelId`: the single-poller rule. True even when the hub failed to start (a failed hub must not hand a channel to a second poller). */
@@ -519,11 +540,16 @@ export class ChannelHub {
     const lastAt = (kind: "matched" | "answered", channelId: string): number | null =>
       feed.find((a) => a.kind === kind && !a.simulated && (a.channelId ?? (a.routeId ? channelOfRoute.get(a.routeId) : undefined)) === channelId)?.at ?? null;
 
+    // Durable rows outlive a restart; the adapter's counters do not. Prefer the rows whenever the framework store is on.
+    const stored = this.durableInbox && !isMemoryDb(db) ? storedChannelStats(db) : null;
     const channels = await Promise.all(
       listChannels(db).map(async (c): Promise<HubChannelView> => {
-        const base = { id: c.id, platform: c.platform, label: c.label, enabled: c.enabled, migratedFrom: c.migratedFrom, lastInboundAt: lastAt("matched", c.id), lastSentAt: lastAt("answered", c.id) };
         const stats = byId.get(c.id);
-        const counts = { received: stats?.messagesReceived ?? 0, sent: stats?.messagesSent ?? 0, failed: stats?.deliveryFailures ?? 0 };
+        const row = stored?.get(c.id);
+        const base = { id: c.id, platform: c.platform, label: c.label, enabled: c.enabled, migratedFrom: c.migratedFrom, lastInboundAt: stored ? row?.lastInboundAt ?? null : lastAt("matched", c.id), lastSentAt: stored ? row?.lastSentAt ?? null : lastAt("answered", c.id) };
+        const counts = stored
+          ? { received: row?.received ?? 0, sent: row?.sent ?? 0, failed: row?.failed ?? 0, countsFrom: "stored" as const }
+          : { received: stats?.messagesReceived ?? 0, sent: stats?.messagesSent ?? 0, failed: stats?.deliveryFailures ?? 0, countsFrom: "restart" as const };
         const skip = this.skipped.get(c.id);
         if (skip) return { ...base, ...counts, state: "skipped", error: null, reason: skip, conflict: false };
         const adapter = this.running?.adapters.find((a) => a.id === c.id);
@@ -567,6 +593,7 @@ export class ChannelHub {
       error: this.error,
       startedAt: this.startedAt,
       durableStore: router?.durableStore ?? this.store.durable,
+      activityFrom: isMemoryDb(db) ? "restart" : "stored",
       channels,
       routes,
       rejected: loaded.rejected,

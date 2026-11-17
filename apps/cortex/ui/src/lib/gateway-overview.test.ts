@@ -3,6 +3,7 @@ import {
   accessLine,
   activityLabel,
   connectionView,
+  countsNote,
   hostView,
   nextFireLabel,
   overviewTotals,
@@ -106,6 +107,14 @@ describe("overviewTotals / accessLine / when", () => {
   it("accessLine states the fail-closed default", () => {
     expect(accessLine({ mode: "deny-all", allowed: 0, blocked: 0 })).toContain("Nobody can message");
   });
+  it("countsNote says 'since the last restart' only when an enabled channel's counts are not stored", () => {
+    expect(countsNote([{ enabled: true, countsFrom: "stored" }])).toBeNull();
+    expect(countsNote([{ enabled: true, countsFrom: "stored" }, { enabled: true, countsFrom: "restart" }])).toContain("since the last restart");
+    expect(countsNote([{ enabled: true }])).toContain("since the last restart");
+    expect(countsNote([{ enabled: false, countsFrom: "restart" }])).toBeNull();
+    expect(countsNote([])).toBeNull();
+  });
+
   it("when reads never for a missing time", () => {
     expect(when(null)).toBe("never");
     expect(when(undefined)).toBe("never");

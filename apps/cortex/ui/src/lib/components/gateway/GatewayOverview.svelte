@@ -21,6 +21,7 @@
     queueSentence,
     runView,
     when,
+    countsNote,
     type GatewayAgentStatus,
   } from "$lib/gateway-overview.js";
   import { channelKindInfo } from "$lib/channels.js";
@@ -135,6 +136,7 @@
               {/each}
             </tbody>
           </table>
+          {#if countsNote(a.gateway.channels)}<p class="gw-muted">{countsNote(a.gateway.channels)}</p>{/if}
         {/if}
 
         <div class="gw-cols">

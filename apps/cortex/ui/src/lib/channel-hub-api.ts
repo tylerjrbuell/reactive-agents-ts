@@ -44,6 +44,8 @@ export interface HubChannelLive {
   readonly received: number;
   readonly sent: number;
   readonly failed: number;
+  /** `stored` = survives a restart (the framework's durable inbox and outbox); `restart` = counted since the hub started. */
+  readonly countsFrom: "stored" | "restart";
 }
 
 /** Who holds an account right now (channel and process; never the account itself). */
@@ -120,6 +122,7 @@ const parseLive = (v: unknown): HubLive | null => {
       received: Number(c.received ?? 0),
       sent: Number(c.sent ?? 0),
       failed: Number(c.failed ?? 0),
+      countsFrom: c.countsFrom === "stored" ? "stored" : "restart",
     })),
     routes: v.routes.filter(isRecord).map((r) => ({
       id: String(r.id),

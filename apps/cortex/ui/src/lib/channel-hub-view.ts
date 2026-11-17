@@ -20,6 +20,11 @@ export function leaseView(channelId: string, leases: readonly HubLease[]): LiveC
   return mine ? { tone: "ok", label: `Holds its account (pid ${mine.pid})` } : { tone: "neutral", label: "No account lease" };
 }
 
+/** "since restart" when the in / out / failed counts restart from zero with the server; null when they come from stored rows (or there is no report yet). */
+export function countsSuffix(live: Pick<HubChannelLive, "countsFrom"> | undefined): string | null {
+  return live && live.countsFrom !== "stored" ? "since restart" : null;
+}
+
 /** Tone, label and problem sentence for one channel. `live` is absent while the hub has not reported it. */
 export function liveChannelView(channelId: string, live: HubChannelLive | undefined, enabled: boolean, routeCount: number, leases: readonly HubLease[] = []): LiveChannelView {
   const lease = leaseView(channelId, leases);

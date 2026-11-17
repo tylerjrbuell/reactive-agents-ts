@@ -7,7 +7,7 @@ const entry: CortexChannelEntry = { id: "ch-1", kind: "telegram", label: "Cortex
 
 const view = (over: Partial<HubChannelView> = {}): HubChannelView => ({
   id: "ch-1", platform: "telegram", label: "CortexBot", enabled: true, state: "connected", error: null, reason: null, conflict: false,
-  received: 4, sent: 3, failed: 1, lastInboundAt: 1000, lastSentAt: 2000, migratedFrom: null, ...over,
+  received: 4, sent: 3, failed: 1, countsFrom: "restart", lastInboundAt: 1000, lastSentAt: 2000, migratedFrom: null, ...over,
 });
 
 const route = (over: Partial<HubRouteView> = {}): HubRouteView => ({
@@ -17,7 +17,7 @@ const route = (over: Partial<HubRouteView> = {}): HubRouteView => ({
 });
 
 const hub = (over: Partial<HubStatus> = {}): HubStatus => ({
-  enabled: true, phase: "running", error: null, startedAt: 500, durableStore: true, channels: [view()], routes: [route()], rejected: [], leases: [],
+  enabled: true, phase: "running", error: null, startedAt: 500, durableStore: true, activityFrom: "stored", channels: [view()], routes: [route()], rejected: [], leases: [],
   router: null, activity: [], migration: { warnings: [], legacy: [] }, ...over,
 });
 
