@@ -171,8 +171,9 @@ describe("REPO_HOOKS=off prefix", () => {
   const payload = (command: string): string => JSON.stringify({ tool_input: { command } })
   test("prefix lets one piped bun test through; without it, denied", () => {
     const r = mirrorRepo()
-    expect(preBash(r, payload("bun test a | tail -3"), {})).toContain("deny")
-    expect(preBash(r, payload("REPO_HOOKS=off bun test a | tail -3"), {})).toBeUndefined()
+    // `--bail` keeps it outside the rewritable shape, so the plain call is denied, not rewritten.
+    expect(preBash(r, payload("bun test a --bail | tail -3"), {})).toContain("deny")
+    expect(preBash(r, payload("REPO_HOOKS=off bun test a --bail | tail -3"), {})).toBeUndefined()
   })
 })
 

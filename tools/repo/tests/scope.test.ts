@@ -212,8 +212,8 @@ describe("repo scope", () => {
   })
   test("unowned file listed, no dispatch line", async () => {
     const c = capture()
-    expect(await main(["scope", "README.md"], c.s)).toBe(0)
-    expect(c.out()).toContain("unowned:\n  README.md")
+    expect(await main(["scope", "package.json"], c.s)).toBe(0)
+    expect(c.out()).toContain("unowned:\n  package.json")
     expect(c.out()).not.toContain("next:")
   })
   test("unknown flag exits 2", async () => {
@@ -285,9 +285,9 @@ describe("scope no-owner vs unowned", () => {
     expect(r.noOwner).toEqual([{ file: "packages/core/x.ts", reason: "none" }])
     expect(r.unowned).toEqual(["README.md"])
     const c = capture()
-    await main(["scope", "packages/core/src/index.ts", "README.md"], c.s)
-    expect(c.out()).toContain("no-owner:\n  packages/core/src/index.ts (reason:")
-    expect(c.out()).toContain("unowned:\n  README.md")
+    await main(["scope", "tools/repo/src/cli.ts", "package.json"], c.s)
+    expect(c.out()).toContain("no-owner:\n  tools/repo/src/cli.ts (reason:")
+    expect(c.out()).toContain("unowned:\n  package.json")
   })
   test("harness reports map to harness-warden", () => {
     expect(scopeFiles(["wiki/Research/Harness-Reports/a.md"], loadOwnership(REPO)).owners).toEqual(["harness-warden"])

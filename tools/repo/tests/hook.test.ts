@@ -5,6 +5,7 @@ import { join, resolve } from "node:path"
 import { main, type Streams } from "../src/cli.ts"
 import { preBash } from "../src/commands/hook.ts"
 import { classifyBash, loadRules, ruleProblems } from "../src/lib/hook-rules.ts"
+import { bashTimeoutFor, rewritePipedTest } from "../src/lib/test-rewrite.ts"
 import { mirrorRepo } from "./mirror.ts"
 
 const REPO = resolve(import.meta.dir, "..", "..", "..")
@@ -138,6 +139,48 @@ describe("override", () => {
   })
 })
 
+describe("piped bun test rewrite", () => {
+  const R = "/repo"
+  const cmd = (c: string): string | undefined => rewritePipedTest(c, R)?.command
+  test("plain shapes become repo test", () => {
+    expect(cmd("bun test a b | tail -30")).toBe("bun run repo test a b")
+    expect(cmd("cd /repo; bun test packages/x --timeout 15000 2>&1 | tail -5")).toBe("bun run repo test packages/x --timeout 15000")
+    expect(cmd("cd /repo/ && timeout 590 bun test p/x.test.ts --timeout=20000 | grep -E 'pass|fail' | head -4")).toBe(
+      "bun run repo test p/x.test.ts --timeout 20000 --max-seconds 590",
+    )
+    expect(cmd(`bun test p -t "eq fails" | tail`)).toBe("bun run repo test p -t 'eq fails'")
+    expect(cmd("cd /repo/packages/trace && bun test tests/a.test.ts 2>&1 | /usr/bin/grep -a fail")).toBe(
+      "bun run repo test packages/trace/tests/a.test.ts",
+    )
+    expect(cmd("bun test /repo/packages/x/a.test.ts | tail")).toBe("bun run repo test packages/x/a.test.ts")
+  })
+  test("anything else is left to the deny", () => {
+    for (const c of [
+      "bun test | tail",
+      "bun test a --bail | tail",
+      "cd packages/core; bun test a | tail",
+      "bun test a | tail; git status",
+      "bun test a && echo ok | tail",
+      "bun test a | sort",
+      "bun test a | tail > out.txt",
+      "bun test $(ls x) | tail",
+      "FOO=1 bun test a | tail",
+      "cd /repo/packages/x; bun test seam | tail",
+      "cd /elsewhere; bun test a | tail",
+    ])
+      expect(cmd(c)).toBeUndefined()
+  })
+  test("hook allows with updatedInput, keeps other input and raises the Bash timeout", () => {
+    const r = mirrorRepo()
+    const out = preBash(r, JSON.stringify({ tool_input: { command: cmdPiped, description: "d", timeout: 1000 } }), {})
+    const doc = JSON.parse(out as string) as { hookSpecificOutput: { permissionDecision: string; updatedInput: Record<string, unknown> } }
+    expect(doc.hookSpecificOutput.permissionDecision).toBe("allow")
+    expect(doc.hookSpecificOutput.updatedInput).toEqual({ command: "bun run repo test a", description: "d", timeout: bashTimeoutFor(600) })
+    const line = JSON.parse(readFileSync(join(r, ".repo-logs", "denies.jsonl"), "utf8").trim().split("\n").at(-1) as string) as Record<string, string>
+    expect(line.mode).toBe("rewrite")
+  })
+})
+
 describe("fail open / closed", () => {
   test("malformed rules.json: hook allows and logs; check --all exits 1", async () => {
     const r = root("{ not json", true)
@@ -152,7 +195,8 @@ describe("fail open / closed", () => {
     expect(preBash(root(undefined), "garbage", {})).toBeUndefined()
   })
   test("deny JSON shape", () => {
-    const out = preBash(mirrorRepo(), payload(cmdPiped), {})
+    // `--bail` is outside the rewritable shape, so the deny stands.
+    const out = preBash(mirrorRepo(), payload("bun test a --bail | tail"), {})
     const doc = JSON.parse(out as string) as { hookSpecificOutput: Record<string, string> }
     expect(doc.hookSpecificOutput.hookEventName).toBe("PreToolUse")
     expect(doc.hookSpecificOutput.permissionDecision).toBe("deny")

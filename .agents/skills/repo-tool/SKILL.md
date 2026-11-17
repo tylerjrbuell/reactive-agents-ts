@@ -14,7 +14,7 @@ description: Use at the start of any repo work and whenever a hook denies a comm
 3. `bun run repo find "<q>" [--wiki|--code|--scripts]` - locate; then `bun run repo outline <file>` and Read a range.
 4. `bun run repo place <path>` before creating a file (`place --kind plan` = where a kind goes).
 5. Edit with Edit/Write. No `sed -i`, no scripted replace.
-6. `bun run repo test <paths>` - scoped tests, summary printed, full log saved. Never pipe `bun test`.
+6. `bun run repo test <paths> [-t <name>]` - scoped tests; prints counts, failing names and each failure's error, expected/received and location; full log saved. Never pipe `bun test` (the hook rewrites a plain piped call to this command and denies the rest).
 7. `bun run repo verify <pkg-dir>` - tests + typecheck + narrow gates for one package.
 8. `bun run repo check --all` before commit/handoff (`--only <id>` for one gate).
 

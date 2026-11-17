@@ -7,6 +7,7 @@ import { classifyBash, leadingAssignments, loadRules } from "../lib/hook-rules.t
 import { allowedReason } from "../lib/allow-paths.ts"
 import { isHookExempt, loadPlacement, placeFile, renderPlacementText } from "../lib/placement.ts"
 import { resolveRoot } from "../lib/root.ts"
+import { bashTimeoutFor, rewritePipedTest, type TestRewrite } from "../lib/test-rewrite.ts"
 
 export { classifyBash } from "../lib/hook-rules.ts"
 export type { HookDecision, HookRule } from "../lib/hook-rules.ts"
@@ -57,6 +58,32 @@ function verdictJson(
   })
 }
 
+/** The rule whose plain matches are rewritten to `bun run repo test` instead of denied. */
+const PIPED_TEST_RULE = "no-piped-test"
+
+/**
+ * Allow a piped `bun test` call as its `bun run repo test` equivalent (PreToolUse `updatedInput`),
+ * raising the Bash timeout to cover the run. Logged to `denies.jsonl` with mode `rewrite`.
+ * Saves the agent a denied turn: the deny would only have told it to run this command.
+ */
+function rewriteJson(root: string, stdin: string, command: string, fixed: TestRewrite): string {
+  log(root, "denies.jsonl", { hook: "pre-bash", ruleId: PIPED_TEST_RULE, mode: "rewrite", target: command.slice(0, TARGET_LOG_CAP) })
+  const doc = JSON.parse(stdin) as { tool_input?: Record<string, unknown> }
+  const input = doc.tool_input ?? {}
+  const prior = typeof input.timeout === "number" ? input.timeout : 0
+  return JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "allow",
+      permissionDecisionReason: `piped bun test rewritten to: ${fixed.command}`,
+      updatedInput: { ...input, command: fixed.command, timeout: Math.max(prior, bashTimeoutFor(fixed.maxSeconds)) },
+      additionalContext:
+        `[repo hook] Ran \`${fixed.command}\` instead of the piped \`bun test\` (rules.json#${PIPED_TEST_RULE}). ` +
+        "It prints counts, failing names and error excerpts, and logs the full output. Call it directly next time.",
+    },
+  })
+}
+
 /**
  * Handle one PreToolUse payload. Returns the JSON to print (a deny, or a warn's advice), or undefined to allow silently.
  * `REPO_HOOKS=off` allows everything. Fails open: any internal error allows the call and is appended to `.repo-logs/hook-errors.jsonl`.
@@ -76,6 +103,10 @@ export function preBash(root: string, stdin: string, env: Readonly<Record<string
       for (const o of verdict.overrides ?? [])
         log(root, "overrides.jsonl", { ruleId: o.ruleId, reason: o.reason, command: command.slice(0, COMMAND_LOG_CAP) })
       return undefined
+    }
+    if (verdict.decision === "deny" && verdict.ruleId === PIPED_TEST_RULE) {
+      const fixed = rewritePipedTest(command, root)
+      if (fixed !== undefined) return rewriteJson(root, stdin, command, fixed)
     }
     return verdictJson(root, "pre-bash", { ruleId: verdict.ruleId, mode: verdict.decision, text: verdict.reason }, command)
   } catch (e) {

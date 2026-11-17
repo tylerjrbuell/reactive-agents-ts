@@ -16,7 +16,7 @@ function capture(): { s: Streams; out: () => string; err: () => string } {
 describe("summarizeBunTest", () => {
   test("counts from footer", () => {
     const log = "bun test v1.3.10\n\n 136 pass\n 2 skip\n 0 fail\nRan 138 tests across 3 files. [1.20s]\n"
-    expect(summarizeBunTest(log)).toEqual({ pass: 136, fail: 0, skip: 2, failures: [] })
+    expect(summarizeBunTest(log)).toEqual({ pass: 136, fail: 0, skip: 2, failures: [], details: {} })
   })
   test("fail names in order, duration stripped", () => {
     const log = [
@@ -41,6 +41,39 @@ describe("summarizeBunTest", () => {
   test("error: lines do not duplicate (fail) lines", () => {
     const s = summarizeBunTest("error: expect(received).toBe(expected)\n(fail) a > b [1ms]\n 0 pass\n 1 fail\n")
     expect(s.failures).toEqual(["a > b"])
+  })
+  test("details carry the assertion, diff and first frame of each failure", () => {
+    const log = [
+      "3 |   test(\"eq\", () => { expect(1 + 1).toBe(3) })",
+      "                                       ^",
+      "error: expect(received).toBe(expected)",
+      "",
+      "Expected: 3",
+      "Received: 2",
+      "",
+      "      at <anonymous> (/r/x.test.ts:3:42)",
+      "      at other (/r/y.ts:1:1)",
+      "(fail) s > eq [1.00ms]",
+      "error: expect(received).toEqual(expected)",
+      "@@ -1,3 +1,3 @@",
+      "-   \"a\": 2,",
+      "+   \"a\": 1,",
+      "- Expected  - 1",
+      "+ Received  + 1",
+      "(fail) s > obj",
+      "(fail) s > no block",
+      " 0 pass",
+      " 3 fail",
+    ].join("\n")
+    const s = summarizeBunTest(log)
+    expect(s.details["s > eq"]).toEqual([
+      "error: expect(received).toBe(expected)",
+      "Expected: 3",
+      "Received: 2",
+      "at /r/x.test.ts:3:42",
+    ])
+    expect(s.details["s > obj"]).toEqual(["error: expect(received).toEqual(expected)", "-   \"a\": 2,", "+   \"a\": 1,"])
+    expect(s.details["s > no block"]).toBeUndefined()
   })
 })
 
