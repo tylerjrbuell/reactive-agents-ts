@@ -25,8 +25,10 @@
  * bypasses the primitive. Sandbox strategies that run tools past the gate
  * (code-action) cannot honour per-call approval and refuse the run outright.
  */
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
+import { preflightToolCall, type ToolDefinition } from "@reactive-agents/tools";
 import { shouldGate, type ApprovalGateConfig } from "../decide/tool-gating.js";
+import type { ToolServiceInstance } from "../../state/kernel-state.js";
 
 /** A human's decision on one gated call. `reason` is surfaced in the deny observation. */
 export interface ApprovalDecision {
@@ -177,6 +179,55 @@ export function resolveBlockApproval(
       approved: false,
       message: `[Tool "${toolName}" was denied by the approval handler.${reasonSuffix} Blocked — the call did not run.]`,
     };
+  });
+}
+
+const hasPreflight = (def: object): def is Pick<ToolDefinition, "preflight"> =>
+  "preflight" in def && typeof def.preflight === "function";
+
+/**
+ * The tool's own refusal for a call that would be put to approval, or
+ * `undefined` to proceed. A call the tool is certain to refuse at execution
+ * (shell command outside the allowlist) must never reach a human: the refusal
+ * goes straight back to the model. Only gated calls are checked (ungated calls
+ * keep today's path); no policy, no tool service, a tool without `preflight`,
+ * or an unknown tool all proceed. The text comes from the tool — no tool
+ * logic is duplicated here.
+ */
+export function preflightGatedCall(
+  toolService: Option.Option<ToolServiceInstance>,
+  toolName: string,
+  args: Record<string, unknown>,
+  policy: ApprovalGateConfig | undefined,
+  iteration: number,
+): Effect.Effect<string | undefined, never> {
+  if (policy === undefined || Option.isNone(toolService)) return Effect.succeed(undefined);
+  if (!shouldGate(toolName, policy, { iteration, args })) return Effect.succeed(undefined);
+  return toolService.value.getTool(toolName).pipe(
+    // `getTool` is typed narrowly; the real definition may carry `preflight`.
+    Effect.map((def) => (hasPreflight(def) ? preflightToolCall(def, args) : undefined)),
+    Effect.catchAll(() => Effect.succeed(undefined)),
+  );
+}
+
+/**
+ * The first call in `calls` that must pause for approval (detach mode): gated,
+ * and not already refused by its tool's preflight. A preflight-refused call
+ * never pauses the run — it flows on to the dispatch primitive, which returns
+ * the refusal as a failed observation.
+ */
+export function firstDetachGatedCall<C extends { readonly name: string; readonly arguments: Record<string, unknown> }>(
+  calls: readonly C[],
+  policy: ApprovalGateConfig,
+  iteration: number,
+  toolService: Option.Option<ToolServiceInstance>,
+): Effect.Effect<C | undefined, never> {
+  return Effect.gen(function* () {
+    for (const c of calls) {
+      if (!shouldGate(c.name, policy, { iteration, args: c.arguments })) continue;
+      if ((yield* preflightGatedCall(toolService, c.name, c.arguments, policy, iteration)) === undefined) return c;
+    }
+    return undefined;
   });
 }
 

@@ -35,7 +35,7 @@ import {
 import { getRunSlot, recoveredToolEffectsSlot, runControllerSlot } from "@reactive-agents/core/internal/run-scope";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { executeNativeToolCall, extractObservationFacts, truncateForStatusLine } from "./tool-execution.js";
-import { resolveBlockApproval } from "./approval-gate.js";
+import { preflightGatedCall, resolveBlockApproval } from "./approval-gate.js";
 import { makeStep } from "../sense/step-utils.js";
 import { META_TOOLS } from "../../state/kernel-constants.js";
 import { type RunLedger } from "../../ledger/run-ledger.js";
@@ -585,6 +585,26 @@ export function executeToolAndObserve(
     // path that flows through this primitive — kernel single, plan-execute,
     // blueprint, any future caller — inherits the gate. The kernel PARALLEL-batch
     // path bypasses this primitive (executeNativeToolCall) and gates in act.ts.
+    // 1c'. Preflight: a gated call its tool is certain to refuse (shell command
+    // outside the allowlist) is never put to approval — the tool's own refusal
+    // returns as a failed observation, so the model adapts at once.
+    const preflightRefusal = yield* preflightGatedCall(
+      toolService, toolName, args, envelope?.rails.approvalPolicy, ctx.iteration,
+    );
+    if (preflightRefusal !== undefined) {
+      return {
+        obsStep: makeStep("observation", preflightRefusal, {
+          toolCallId: ctx.callId,
+          observationResult: makeObservationResult(toolName, false, preflightRefusal),
+        }),
+        content: preflightRefusal,
+        success: false,
+        durationMs: 0,
+        healed,
+        healedArgs: args,
+      } satisfies ToolObserveResult;
+    }
+
     const approval = yield* resolveBlockApproval(
       toolName,
       args,

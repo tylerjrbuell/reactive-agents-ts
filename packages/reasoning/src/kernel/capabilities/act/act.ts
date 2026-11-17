@@ -57,7 +57,8 @@ import {
 import { contributeGuidance, textSignal } from "../../state/guidance-channel.js";
 import { runPhaseHooks, killswitchTerminatedBy } from "../../../kernel/loop/phase-hooks.js";
 import { emitToCompose, sentinelDeliverable } from "@reactive-agents/core";
-import { planNextMoveBatches, shouldGate } from "../decide/tool-gating.js";
+import { planNextMoveBatches } from "../decide/tool-gating.js";
+import { firstDetachGatedCall } from "./approval-gate.js";
 import { terminate } from "../../../kernel/loop/terminate.js";
 import { effectiveMissingRequired } from "../verify/requirement-state.js";
 // Required-tool answers read the run's evidence through this turn's steps, never a steps scan.
@@ -260,9 +261,7 @@ export function handleActing(
       // checkpoint; the engine persists `awaiting-approval` and returns control.
       const approvalPolicy = input.approvalPolicy;
       if (approvalPolicy?.mode === "detach" && !state.meta.approvalBypass) {
-        const gated = normalizedPendingCalls.find((c) =>
-          shouldGate(c.name, approvalPolicy, { iteration: state.iteration, args: c.arguments }),
-        );
+        const gated = yield* firstDetachGatedCall(normalizedPendingCalls, approvalPolicy, state.iteration, toolService);
         if (gated) {
           const paused = transitionState(state, {
             meta: {

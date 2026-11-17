@@ -199,6 +199,7 @@ GIANT_BAR=1000
 # 2026-11-12 agent.schedules(): reactive-agent.ts 2017->2016 (schedules() delegate to agent/schedules-facade.ts added; gatewayStatus example JSDoc condensed).
 # 2026-11-11 multimodal task input: reactive-agent.ts 2025->2017 (withHistoryBlock moved to agent/history-block.ts, widened to TaskInput; run()/runStream() preflight modality check +4), chat/engine.ts 673->670 (turn/streamTurn take TaskInput; one JSDoc condensed).
 # 2026-11-11 live ask-user rail: act.ts 1124->1098 (request_user_input handling moved to act/user-interaction.ts handleUserInteraction, which also answers inline via RunEnvelope.rails.askUser; the pause terminate() stays in act.ts).
+# 2026-11-17 approval preflight: act.ts 1098->1097 (detach gate find() moved to act/approval-gate.ts firstDetachGatedCall, which skips tool-preflight-refused calls).
 # 2026-11-12 channelStatus(): reactive-agent.ts 2016->2012 (+channelStatus delegate and import; gatewayStatus JSDoc condensed to one line).
 # 2026-11-12 event-bus.ts 224->188 (handler isolation moved to core/src/services/event-handler-isolation.ts). Keep '#' out of the SIZE_BASELINE array: the fixture test's patch regex stops at the first '#'.
 # 2026-11-13 benchmarks/src/runner.ts 964->963 (run end-status spread through runEndStatusField).
@@ -231,7 +232,7 @@ SIZE_BASELINE=(
   "llm-provider/src/providers/local.ts:1139"
   "runtime/src/builder/types.ts:1061"
   "llm-provider/src/types.ts:978"
-  "reasoning/src/kernel/capabilities/act/act.ts:1098"
+  "reasoning/src/kernel/capabilities/act/act.ts:1097"
   "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1116"
   "reasoning/src/strategies/tree-of-thought.ts:904"
