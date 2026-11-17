@@ -51,6 +51,16 @@ describe("endingSupersededByContinue (one card per stop)", () => {
     expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "timeout" }, "timeout")).toBe(true);
   });
 
+  it("drops the note of a stop or pause by the person when the Continue card is offered for it", () => {
+    expect(endingSupersededByContinue({ ending: "partial", interruptedBy: "user" }, "user-stopped")).toBe(true);
+    expect(endingSupersededByContinue({ ending: "interrupted", interruptedBy: "user" }, "user-paused")).toBe(true);
+    // Not offered (non-durable chat): the inline note and Retry stay.
+    expect(endingSupersededByContinue({ ending: "partial", interruptedBy: "user" }, undefined)).toBe(false);
+    // A user-stop card does not replace a note about something else.
+    expect(endingSupersededByContinue({ ending: "interrupted", interruptedBy: "disconnect" }, "user-stopped")).toBe(false);
+    expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "max_iterations" }, "user-stopped")).toBe(false);
+  });
+
   it("keeps the note when nothing is offered, the reason differs, or the stop is an error or the person's", () => {
     expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "max_iterations" }, undefined)).toBe(false);
     expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "max_iterations" }, "loop")).toBe(false);

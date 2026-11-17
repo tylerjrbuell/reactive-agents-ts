@@ -17,6 +17,15 @@ describe("ChatRunEndingNote vs the Continue card", () => {
     expect(html).not.toContain('data-testid="chat-run-ending"');
   });
 
+  test("a stop by the person: the Continue card replaces the inline note; without it the note and Retry stay", async () => {
+    const stopped = { ending: "partial" as const, interruptedBy: "user" as const, unfinished: [] };
+    const kept = await renderComponent(file, { outcome: stopped, onRetry: () => {} });
+    expect(kept).toContain("Stopped by you");
+    expect(kept).toContain("Retry");
+    const dropped = await renderComponent(file, { outcome: stopped, continueOffered: "user-stopped" });
+    expect(dropped).not.toContain('data-testid="chat-run-ending"');
+  });
+
   test("a different stop kind keeps its note", async () => {
     const html = await renderComponent(file, { outcome, continueOffered: "error" });
     expect(html).toContain('data-testid="chat-run-ending"');

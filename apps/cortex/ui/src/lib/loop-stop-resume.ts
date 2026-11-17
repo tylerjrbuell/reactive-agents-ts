@@ -159,6 +159,8 @@ export interface EndingStop {
   readonly ending?: string | undefined;
   readonly terminatedBy?: string | undefined;
   readonly error?: string | undefined;
+  /** Who stopped it, when the person did. */
+  readonly interruptedBy?: string | undefined;
 }
 
 const STOP_REASON: Readonly<Partial<Record<RunStopKind, RegExp>>> = {
@@ -175,6 +177,10 @@ const STOP_REASON: Readonly<Partial<Record<RunStopKind, RegExp>>> = {
  */
 export function endingSupersededByContinue(outcome: EndingStop, offered: RunStopKind | undefined): boolean {
   if (offered === undefined) return false;
+  // The person's own Stop / Pause: the Continue card already says "Stopped by you" / "Paused by you".
+  if (offered === "user-stopped" || offered === "user-paused") {
+    return outcome.interruptedBy === "user" && (outcome.ending === "partial" || outcome.ending === "interrupted");
+  }
   if (outcome.ending !== "failed" && outcome.ending !== "partial") return false;
   const same = STOP_REASON[offered];
   if (same === undefined) return false;
