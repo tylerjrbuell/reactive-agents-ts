@@ -9,7 +9,7 @@ import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import { turnModelOf } from "../chat-live-config.js";
 import type { ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent } from "@reactive-agents/ui-core";
 import type { AttachmentMeta, RecalledMemoryView, RunSkillsView, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
-import { metaOf, requestOf, type DraftAttachment } from "../composer-attachments.js";
+import { metaOf, requestOf, taggedDraftsOf, type DraftAttachment } from "../composer-attachments.js";
 import { keepThumbs } from "./composer-attachments.js";
 import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
 import { todoFromChecklist, type TodoItem } from "../todo-dock.js";
@@ -509,7 +509,7 @@ function createChatStore() {
     const lastUser = [...get({ subscribe }).activeTurns].reverse().find((t) => t.role === "user");
     if (!lastUser) return;
     const text = await rewind(lastUser.id);
-    if (text) await sendMessageStream(text);
+    if (text) await sendMessageStream(text, { attachments: taggedDraftsOf(lastUser) });
   }
 
   async function clearContext(): Promise<void> {

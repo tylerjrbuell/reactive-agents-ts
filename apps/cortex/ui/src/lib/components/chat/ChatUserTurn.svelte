@@ -5,6 +5,7 @@
   import Badge from "$lib/components/kit/Badge.svelte";
   import ChatSentAttachments from "$lib/components/chat/ChatSentAttachments.svelte";
   import { endingBadge } from "$lib/turn-ending.js";
+  import { userTurnView } from "$lib/chat-edit-restore.js";
   import { fade } from "svelte/transition";
 
   interface Props {
@@ -22,6 +23,8 @@
   }
   const { turn, index: i, entering, idle, onCopy, strategyLabel, onEdit, onRewind }: Props = $props();
   const TONE = { error: "bad", warn: "warn", quiet: "neutral" } as const;
+  // Tags show as chips; an attached-file block in the text never renders (chat-edit-restore.ts).
+  const view = $derived(userTurnView(turn));
 </script>
 
 <!-- A quiet right-aligned bubble; time and actions under it (spec section 8). -->
@@ -40,8 +43,8 @@
       {/if}
     </div>
   {/if}
-  {#if turn.attachments && turn.attachments.length > 0}<ChatSentAttachments attachments={turn.attachments} />{/if}
-  <div class="bubble">{turn.content}</div>
+  {#if view.attachments.length > 0}<ChatSentAttachments attachments={view.attachments} />{/if}
+  <div class="bubble">{view.text}</div>
   <ChatTurnActions
     {turn}
     showActions={!turn.streaming && idle}

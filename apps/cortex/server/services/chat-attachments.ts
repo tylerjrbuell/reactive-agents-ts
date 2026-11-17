@@ -2,8 +2,9 @@
  * Builds a chat turn's input from the composer: the typed message, uploaded
  * pictures / audio / text files, and tagged workspace files.
  *
- * Text (tagged files and uploaded text files) is placed in the prompt as bounded
- * context with a visible "N KB of M KB" note when cut; pictures and audio become
+ * Uploaded text files are placed in the prompt as bounded context with a visible
+ * "N KB of M KB" note when cut; a tagged workspace file is a pointer (path, size, how
+ * to read it) unless tiny, see `chat-file-pointer.ts`; pictures and audio become
  * typed content parts for the model. The model's input capabilities are checked
  * first, so an unsupported kind is refused with a plain message before any run
  * starts (the runtime's `UnsupportedModalityError` is the backstop). Tagged files
@@ -24,6 +25,7 @@ import {
   type AttachmentMeta,
 } from "@reactive-agents/ui-core";
 import { looksBinary, readWorkspaceText } from "./workspace-files.js";
+import { POINTER_INLINE_MAX_BYTES, workspaceFileBlock } from "./chat-file-pointer.js";
 
 /** One file uploaded from the composer (base64, no data-URL prefix). */
 export interface AttachmentUpload {
@@ -121,12 +123,14 @@ export function buildTurnInput(args: {
   let inlined = 0;
   const budgetFor = (): number => Math.max(0, Math.min(ATTACHMENT_CAPS.inlineBytes, ATTACHMENT_CAPS.inlineTotalBytes - inlined));
 
+  // A tagged file is a pointer, or inline when tiny (chat-file-pointer.ts); the read keeps the confinement,
+  // secret and binary refusals. Only the inlined bytes count against the prompt budget.
   for (const f of files) {
-    const read = readWorkspaceText(args.workspaceRoot ?? "", f, budgetFor());
+    const read = readWorkspaceText(args.workspaceRoot ?? "", f, POINTER_INLINE_MAX_BYTES);
     if (!read.ok) return refuse(400, "bad-file", `${f}: ${read.error}`);
-    inlined += read.shownBytes;
-    blocks.push(fileContextBlock(read.path, read.text, read.totalBytes, read.shownBytes));
-    meta.push({ kind: "workspace-file", name: read.path.slice(read.path.lastIndexOf("/") + 1), path: read.path, bytes: read.totalBytes, ...(read.truncated ? { shownBytes: read.shownBytes } : {}) });
+    if (read.totalBytes <= POINTER_INLINE_MAX_BYTES) inlined += read.shownBytes;
+    blocks.push(workspaceFileBlock({ path: read.path, totalBytes: read.totalBytes, text: read.text }));
+    meta.push({ kind: "workspace-file", name: read.path.slice(read.path.lastIndexOf("/") + 1), path: read.path, bytes: read.totalBytes });
   }
 
   for (const u of uploads) {

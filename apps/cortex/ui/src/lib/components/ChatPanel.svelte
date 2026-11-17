@@ -57,6 +57,7 @@
   import ChatVoiceBar from "$lib/components/chat/ChatVoiceBar.svelte";
   import ChatMentionMenu from "$lib/components/chat/ChatMentionMenu.svelte";
   import { createAttachController } from "$lib/stores/composer-attachments.js";
+  import { restoreEdit } from "$lib/chat-edit-restore.js";
   import { mentionTrigger, removeMention } from "$lib/mention-trigger.js";
   import { fetchInputCapabilities, type WorkspaceFileHit } from "$lib/chat-files.js";
   import type { InputCapabilitiesLike } from "@reactive-agents/ui-core";
@@ -387,7 +388,6 @@
     });
   });
 
-
   /**
    * Apply a config patch; takes effect on the next turn because the server rebuilds the agent.
    * Allowed during a run (chat-live-config.ts): the running turn keeps its settings.
@@ -713,11 +713,11 @@
       await chatStore.rewind(turnId);
     });
 
-  /** Edit & resend: rewind to the message, drop its text back into the input (a draft in the input is set aside, not lost). */
+  /** Edit & resend: rewind to the message, put its text and tag chips back (a draft in the input is set aside, not lost). */
   const editFrom = (turnId: number) =>
     runAction("Edit", async () => {
-      const text = await chatStore.rewind(turnId);
-      swapDraft(text);
+      const before = turns;
+      restoreEdit(before, turnId, await chatStore.rewind(turnId), swapDraft, (f) => attach.addWorkspaceFile(f));
       inputEl?.focus();
     });
 

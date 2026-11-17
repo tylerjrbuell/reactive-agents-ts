@@ -12,6 +12,7 @@ import {
   type AttachmentMeta,
   type InputCapabilitiesLike,
 } from "@reactive-agents/ui-core";
+import { tagsOfTurn, type TurnLike } from "./chat-edit-restore.js";
 
 /** One chip in the composer. */
 export interface DraftAttachment {
@@ -67,6 +68,11 @@ export function addTagged(items: readonly DraftAttachment[], file: { readonly pa
   if (full) return { items, error: full };
   const name = file.path.slice(file.path.lastIndexOf("/") + 1);
   return { items: [...items, { id, kind: "workspace-file", name, path: file.path, bytes: file.bytes }] };
+}
+
+/** Chips for the tagged workspace files a sent message carried (Rerun sends them again; the server re-reads the path). */
+export function taggedDraftsOf(turn: TurnLike): readonly DraftAttachment[] {
+  return tagsOfTurn([turn], turn.id).map((f) => ({ id: `tag-${f.path}`, kind: "workspace-file", name: f.path.slice(f.path.lastIndexOf("/") + 1), path: f.path, bytes: f.bytes }));
 }
 
 /** The `attachments` part of the stream request, or undefined when nothing is attached. */

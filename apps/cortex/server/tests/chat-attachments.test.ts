@@ -65,14 +65,15 @@ describe("buildTurnInput", () => {
     expect(r).toMatchObject({ ok: false, code: "unsupported-type" });
   });
 
-  it("tagged workspace files are inlined with a visible N KB of M KB note when cut", () => {
+  it("a small tagged file is inlined in an attached-file block; a large one is only a pointer", () => {
     const r = buildTurnInput({ ...base, workspaceRoot: root, message: "review", attachments: { files: ["src/a.ts", "big.md"] } });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const text = r.input as string;
-    expect(text).toContain("[File: src/a.ts (20 B)]");
-    expect(text).toContain("(64 KB of 293 KB, cut)");
-    expect(r.meta[1]).toMatchObject({ kind: "workspace-file", path: "big.md", bytes: 300_000, shownBytes: 65_536 });
+    expect(text).toContain("--- Attached file: src/a.ts (20 B) ---\n```\nexport const a = 1;\n\n```");
+    expect(text).toContain("--- Attached file: big.md (293 KB) ---\nWorkspace path ./big.md.");
+    expect(text).not.toContain("yyyy");
+    expect(r.meta[1]).toEqual({ kind: "workspace-file", name: "big.md", path: "big.md", bytes: 300_000 });
   });
 
   it("tagged files need a workspace and never leave it", () => {
