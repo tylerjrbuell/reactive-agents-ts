@@ -12,6 +12,7 @@
   import ChatRunEndingNote from "$lib/components/ChatRunEndingNote.svelte";
   import ChatRunFailedNote from "$lib/components/ChatRunFailedNote.svelte";
   import { abstentionInAnswer, bareEnding } from "$lib/turn-ending.js";
+  import type { RunStopKind } from "$lib/run-stop.js";
   import ChatStructuredOutput from "$lib/components/ChatStructuredOutput.svelte";
   import ChatLiveInteraction from "$lib/components/ChatLiveInteraction.svelte";
   import StructuredResult from "$lib/components/StructuredResult.svelte";
@@ -28,8 +29,10 @@
     answerCopy?: boolean;
     /** Retry from the ending note of a turn that did not finish (the latest turn only). */
     onRetry?: () => void;
+    /** Stop kind of the Continue card offered for this turn: it replaces a generic ending note for the same stop (one card per stop). */
+    continueOffered?: RunStopKind;
   }
-  const { turn, planHidden = false, answerCopy = true, onRetry }: Props = $props();
+  const { turn, planHidden = false, answerCopy = true, onRetry, continueOffered }: Props = $props();
 
   // The turn read as the agent talking (ui-core `buildTurnTranscript`): prose between
   // iterations, tool work between prose collapsed to one row each, then the answer.
@@ -159,7 +162,7 @@
     </div>
   {/if}
   {#if ending && !turn.streaming}
-    <ChatRunEndingNote outcome={ending.outcome} reasonInAnswer={abstentionInAnswer(answer?.text, ending.outcome)} {onRetry} />
+    <ChatRunEndingNote outcome={ending.outcome} reasonInAnswer={abstentionInAnswer(answer?.text, ending.outcome)} {onRetry} {continueOffered} />
   {:else if bareEnding(turn)}
     <!-- Ended with no recorded outcome (older rows): still a cause line and Retry, never a bare tick. -->
     <ChatRunFailedNote error={undefined} {onRetry} />

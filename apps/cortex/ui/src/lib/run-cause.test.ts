@@ -4,6 +4,7 @@ import {
   causeOpenByDefault,
   causeSteps,
   confidenceLabel,
+  faultView,
   fetchRunCause,
   reasonWords,
   unavailableNote,
@@ -38,6 +39,23 @@ const report: RunCauseReport = {
 };
 
 describe("run cause view rules", () => {
+  test("a step-limit stop that ended on a dropped tool call reads as a step limit, not a harness fault", () => {
+    const stop: Extract<RunCauseReport, { available: true }> = {
+      ...report,
+      cause: "budget-cap",
+      subCause: "cap-cutoff",
+      attribution: { ...report.attribution, verdict: "harness", reason: "harness:tool-call-dropped" },
+    };
+    const v = faultView(stop);
+    expect(v.label).toBe("Step limit");
+    expect(v.text).toBe("The run reached its step limit before the model's last tool call could run. Raise the step limit or Continue.");
+    expect(v.text).not.toContain("Harness");
+    // A token budget or any other cause keeps the framework's owner and reason.
+    expect(faultView({ ...stop, subCause: "token-budget" }).text).toBe("Harness: tool call dropped");
+    expect(faultView({ ...stop, cause: "tool-protocol" }).label).toBe("Harness");
+    expect(faultView(report)).toEqual({ label: "Environment", tone: "io", text: "Environment: tool failure" });
+  });
+
   test("What to try lists the framework's next actions as given; none for no diagnosis or an older server", () => {
     expect(whatToTry({ ...report, nextActions: ["Check the tool's endpoint.", "Retry."] })).toEqual(["Check the tool's endpoint.", "Retry."]);
     expect(whatToTry(report)).toEqual([]);

@@ -16,6 +16,7 @@
   import { statusOfTurn } from "@reactive-agents/ui-core";
   import { fade } from "svelte/transition";
   import { voice } from "$lib/stores/voice.js";
+  import { continueOffer } from "$lib/stores/chat-continue-offer.js";
 
   interface Props {
     turn: ChatTurn;
@@ -92,7 +93,7 @@
   </header>
 
   {#snippet transcript()}
-    <ChatTranscript {turn} {planHidden} answerCopy={false} onRetry={canRetry ? () => void onRerun() : undefined} />
+    <ChatTranscript {turn} {planHidden} answerCopy={false} onRetry={canRetry ? () => void onRerun() : undefined} continueOffered={isLast ? $continueOffer : undefined} />
   {/snippet}
   {#if planCard && onExecutePlan}
     <ChatModePlanCard turnId={turn.id} onExecute={onExecutePlan}>{@render transcript()}</ChatModePlanCard>

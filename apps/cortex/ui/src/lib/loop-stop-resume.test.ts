@@ -6,6 +6,7 @@ import {
   continueDeskRun,
   continueTarget,
   DEFAULT_EXTRA_ITERATIONS,
+  endingSupersededByContinue,
   fetchChatResumable,
   fetchLoopStoppedRuns,
   loopStopHint,
@@ -38,6 +39,25 @@ describe("iteration grant and request body", () => {
     expect(continueBody("", "10")).toEqual({ ok: true, body: {} });
     expect(continueBody("  use the cache ", "20")).toEqual({ ok: true, body: { note: "use the cache", extraIterations: 20 } });
     expect(continueBody("x", "0").ok).toBe(false);
+  });
+});
+
+describe("endingSupersededByContinue (one card per stop)", () => {
+  it("drops the generic failed note when the Continue card names the same step limit", () => {
+    expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "max_iterations", error: "max_iterations" }, "budget")).toBe(true);
+    expect(endingSupersededByContinue({ ending: "partial", terminatedBy: "max_iterations" }, "budget")).toBe(true);
+    expect(endingSupersededByContinue({ ending: "failed", error: "Run did not finish (max_iterations)" }, "budget")).toBe(true);
+    expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "loop_detected:repeat" }, "loop")).toBe(true);
+    expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "timeout" }, "timeout")).toBe(true);
+  });
+
+  it("keeps the note when nothing is offered, the reason differs, or the stop is an error or the person's", () => {
+    expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "max_iterations" }, undefined)).toBe(false);
+    expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "max_iterations" }, "loop")).toBe(false);
+    expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "llm_error" }, "error")).toBe(false);
+    expect(endingSupersededByContinue({ ending: "failed", terminatedBy: "max_iterations" }, "crash")).toBe(false);
+    expect(endingSupersededByContinue({ ending: "interrupted", terminatedBy: "max_iterations" }, "budget")).toBe(false);
+    expect(endingSupersededByContinue({ ending: "abstained", terminatedBy: "max_iterations" }, "budget")).toBe(false);
   });
 });
 

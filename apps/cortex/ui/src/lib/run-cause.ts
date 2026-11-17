@@ -94,6 +94,35 @@ export function reasonWords(reason: string): string {
   return id.replace(/-/g, " ");
 }
 
+/** Iteration-limit sub-causes of `budget-cap` (the framework's; token and cost budgets are other sub-causes). */
+const ITERATION_CAP_SUBCAUSES: ReadonlySet<string> = new Set(["cap-cutoff", "no-progress-at-cap", "unknown-progress"]);
+
+/**
+ * Who is at fault, in words a first-time reader will not take for a bug. The framework's
+ * attribution fields stay as they are; this only words one case: a run that hit its
+ * iteration limit while the model's last tool call was still waiting is not a harness
+ * fault, so the card says what happened and what to do instead of "Harness: tool call
+ * dropped". Every other verdict keeps the framework's owner and reason.
+ */
+export function faultView(report: Extract<RunCauseReport, { available: true }>): { readonly label: string; readonly tone: CauseTone; readonly text: string } {
+  const a = report.attribution;
+  if (
+    a.verdict === "harness" &&
+    a.reason === "harness:tool-call-dropped" &&
+    report.cause === "budget-cap" &&
+    report.subCause !== undefined &&
+    ITERATION_CAP_SUBCAUSES.has(report.subCause)
+  ) {
+    return {
+      label: "Step limit",
+      tone: "warn",
+      text: "The run reached its step limit before the model's last tool call could run. Raise the step limit or Continue.",
+    };
+  }
+  const who = attributionView(a.verdict);
+  return { label: who.label, tone: who.tone, text: `${who.label}: ${reasonWords(a.reason)}` };
+}
+
 /** One step the card lists: an evidence event, linkable when its loop is a trace row. */
 export interface CauseStep {
   readonly key: string;

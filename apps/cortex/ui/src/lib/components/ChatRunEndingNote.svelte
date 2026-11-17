@@ -9,6 +9,8 @@
    */
   import type { TurnOutcome } from "@reactive-agents/ui-core";
   import { endingNote } from "$lib/turn-ending.js";
+  import { endingSupersededByContinue } from "$lib/loop-stop-resume.js";
+  import type { RunStopKind } from "$lib/run-stop.js";
   import ChatRunFailedNote from "$lib/components/ChatRunFailedNote.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import Button from "$lib/components/kit/Button.svelte";
@@ -19,12 +21,17 @@
     onRetry?: () => void;
     /** The answer above already gives the abstention's reason (ui-core `reasonInAnswer`): do not repeat it. */
     reasonInAnswer?: boolean;
+    /** Stop kind of the Continue card offered for this turn: for the same stop it is the one card, so this note is not drawn. */
+    continueOffered?: RunStopKind;
   }
-  const { outcome, onRetry, reasonInAnswer = false }: Props = $props();
+  const { outcome, onRetry, reasonInAnswer = false, continueOffered }: Props = $props();
   const note = $derived(endingNote(outcome, { reasonInAnswer }));
+  const superseded = $derived(endingSupersededByContinue(outcome, continueOffered));
 </script>
 
-{#if note?.kind === "failed"}
+{#if superseded}
+  <!-- The Continue card says why the run stopped and offers the next step. -->
+{:else if note?.kind === "failed"}
   <div data-testid="chat-run-ending" data-ending="failed"><ChatRunFailedNote error={outcome.error} {onRetry} /></div>
 {:else if note}
   <div data-testid="chat-run-ending" data-ending={note.kind} data-tone={note.tone} class="ending" role="note">

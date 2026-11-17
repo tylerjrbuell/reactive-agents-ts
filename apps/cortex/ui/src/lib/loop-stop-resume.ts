@@ -154,6 +154,33 @@ export function continueTarget(
   return runsOfLatestReply(turns, resumable).sort((a, b) => b.updatedAt - a.updatedAt)[0];
 }
 
+/** The slice of a turn's ending the one-card rule reads. */
+export interface EndingStop {
+  readonly ending?: string | undefined;
+  readonly terminatedBy?: string | undefined;
+  readonly error?: string | undefined;
+}
+
+const STOP_REASON: Readonly<Partial<Record<RunStopKind, RegExp>>> = {
+  budget: /max[_ -]?iterations?|budget/i,
+  loop: /^loop|loop[_ -]detected/i,
+  timeout: /time[_ -]?out|timed out/i,
+};
+
+/**
+ * One card per stop: the Continue card (stop kind chip, what was done, Continue) is the more
+ * specific one, so when it is offered for a turn that failed or stopped part-way for the SAME
+ * reason, the generic "Run error" note under the reply is dropped. A stop for another reason
+ * (an error, a different terminator) keeps its note. The turn's header badge always stays.
+ */
+export function endingSupersededByContinue(outcome: EndingStop, offered: RunStopKind | undefined): boolean {
+  if (offered === undefined) return false;
+  if (outcome.ending !== "failed" && outcome.ending !== "partial") return false;
+  const same = STOP_REASON[offered];
+  if (same === undefined) return false;
+  return same.test(outcome.terminatedBy ?? outcome.error ?? "");
+}
+
 /** Server answer to a Continue: the run finished (maybe stopped again), or the server's reason. */
 export type ContinueResult =
   | { readonly ok: true; readonly success: boolean; readonly resumable: boolean }

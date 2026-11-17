@@ -10,6 +10,7 @@
    */
   import { chatStore } from "$lib/stores/chat-store.js";
   import { toast } from "$lib/stores/toast-store.js";
+  import { continueOffer } from "$lib/stores/chat-continue-offer.js";
   import ContinueStopped from "$lib/components/ContinueStopped.svelte";
   import {
     startChatContinue,
@@ -60,6 +61,12 @@
 
   const target = $derived(continueTarget(turns, sending, resumable));
   const hint = $derived(loopStopHint(turns, sending, target, lookedUp));
+
+  // Publish the offered stop so the latest reply shows one card per stop, not this one and its own error note.
+  $effect(() => {
+    continueOffer.set(target?.kind);
+    return () => continueOffer.set(undefined);
+  });
 
   async function onContinue(runId: string, body: ContinueBody): Promise<void> {
     busyRun = runId;

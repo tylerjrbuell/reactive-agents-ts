@@ -9,9 +9,9 @@
   import Badge from "$lib/components/kit/Badge.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
   import {
-    attributionView,
     causeSteps,
     confidenceLabel,
+    faultView,
     fetchRunCause,
     reasonWords,
     unavailableNote,
@@ -64,7 +64,7 @@
 
   const steps = $derived(report ? causeSteps(report, loops) : []);
   const tryNext = $derived(report ? whatToTry(report) : []);
-  const who = $derived(report?.available ? attributionView(report.attribution.verdict) : null);
+  const who = $derived(report?.available ? faultView(report) : null);
   const failedRun = $derived(report?.available === true && report.attribution.verdict !== "not-failed");
 </script>
 
@@ -94,7 +94,7 @@
             {#if failedRun && who}
               <dt>At fault</dt>
               <dd>
-                <span>{who.label}: {reasonWords(report.attribution.reason)}</span>
+                <span>{who.text}</span>
                 <span class="dim">{confidenceLabel(report.attribution.confidence)}</span>
                 {#if report.attribution.divergenceLoop !== undefined && loops.has(report.attribution.divergenceLoop)}
                   {@const n = report.attribution.divergenceLoop}

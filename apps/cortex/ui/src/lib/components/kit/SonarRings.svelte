@@ -35,7 +35,7 @@
     position: relative;
     display: inline-grid;
     place-items: center;
-    --cx-sonar-peak: 0.22;
+    --cx-sonar-peak: 0.32;
     --cx-sonar-dur: 4.5s;
   }
   .cx-sonar-live {
@@ -80,15 +80,15 @@
       animation: none;
       will-change: auto;
     }
-    .cx-sonar-ring:nth-child(1) { transform: scale(1.1); opacity: 0.2; }
-    .cx-sonar-ring:nth-child(2) { transform: scale(1.7); opacity: 0.12; }
-    .cx-sonar-ring:nth-child(3) { transform: scale(2.3); opacity: 0.06; }
+    .cx-sonar-ring:nth-child(1) { transform: scale(1.1); opacity: 0.3; }
+    .cx-sonar-ring:nth-child(2) { transform: scale(1.7); opacity: 0.18; }
+    .cx-sonar-ring:nth-child(3) { transform: scale(2.3); opacity: 0.09; }
   }
   :global(html[data-motion="reduce"]) .cx-sonar-ring {
     animation: none;
     will-change: auto;
   }
-  :global(html[data-motion="reduce"]) .cx-sonar-ring:nth-child(1) { transform: scale(1.1); opacity: 0.2; }
-  :global(html[data-motion="reduce"]) .cx-sonar-ring:nth-child(2) { transform: scale(1.7); opacity: 0.12; }
-  :global(html[data-motion="reduce"]) .cx-sonar-ring:nth-child(3) { transform: scale(2.3); opacity: 0.06; }
+  :global(html[data-motion="reduce"]) .cx-sonar-ring:nth-child(1) { transform: scale(1.1); opacity: 0.3; }
+  :global(html[data-motion="reduce"]) .cx-sonar-ring:nth-child(2) { transform: scale(1.7); opacity: 0.18; }
+  :global(html[data-motion="reduce"]) .cx-sonar-ring:nth-child(3) { transform: scale(2.3); opacity: 0.09; }
 </style>

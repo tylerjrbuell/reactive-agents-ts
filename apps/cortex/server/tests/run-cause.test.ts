@@ -55,6 +55,24 @@ function tokenBudgetStop(runId: string): Ev[] {
   ];
 }
 
+/** The iteration cap ended the run while the model's last native call (file-read) had never run. */
+function stepLimitDroppedCall(runId: string): Ev[] {
+  const e = at(runId);
+  return [
+    e(-1, { kind: "run-started", task: "read the notes", model: "m", provider: "test", config: {} }),
+    e(4, {
+      kind: "llm-exchange", provider: "test", model: "m", requestKind: "stream", purpose: "think", systemPrompt: "s",
+      messages: [{ role: "user", content: "read the notes" }], toolSchemaNames: ["file-read"],
+      response: { content: "", toolCalls: [{ name: "file-read", arguments: { path: "/w/notes.md" } }] },
+    }),
+    e(4, {
+      kind: "guard-fired", guard: "terminal_decision", outcome: "terminate", reason: "max_iterations",
+      metadata: { terminatedBy: "max_iterations", status: "failed", authority: "harness", iterationCap: { counter: "iteration", observed: 5, threshold: 5, llmCalls: 5, capped: true } },
+    }),
+    e(-1, { kind: "run-completed", status: "failure", terminatedBy: "max_iterations", error: "max_iterations", totalTokens: 10, totalCostUsd: 0, durationMs: 5 }),
+  ];
+}
+
 /** A clean success. */
 function success(runId: string): Ev[] {
   const e = at(runId);
@@ -85,6 +103,17 @@ describe("run cause (framework trace diagnosis)", () => {
     expect(r.subCause).toBe("token-budget");
     expect(r.headline).toBe("The run used up its token budget");
     expect(r.headline).not.toBe(causeDescription("budget-cap"));
+  });
+
+  test("a step-limit stop on an unreached tool call: the framework fields the UI words a step limit from", async () => {
+    write("CAP1", stepLimitDroppedCall("CAP1"));
+    const r = await causeOf("CAP1");
+    if (!r.available) throw new Error("expected a report");
+    // `lib/run-cause.ts` `faultView` words exactly this pair; if the framework moves it, that rule must follow.
+    expect(r.cause).toBe("budget-cap");
+    expect(["cap-cutoff", "no-progress-at-cap", "unknown-progress"]).toContain(r.subCause ?? "");
+    expect(r.attribution.verdict).toBe("harness");
+    expect(r.attribution.reason).toBe("harness:tool-call-dropped");
   });
 
   test("a guardrail-aborted run's headline says a guardrail blocked it", async () => {

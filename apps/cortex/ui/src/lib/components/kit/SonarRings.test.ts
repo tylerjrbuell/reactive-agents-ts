@@ -25,6 +25,18 @@ describe("SonarRings (Beacon first-run ambient rings)", () => {
     expect(hero).not.toContain("cx-sonar");
   });
 
+  test("idle rings are visible on the dark canvas but stay calmer than the live ones", async () => {
+    const css = await Bun.file(kit("SonarRings")).text();
+    const idle = Number(/\.cx-sonar \{[^}]*--cx-sonar-peak: ([\d.]+)/.exec(css)?.[1]);
+    const live = Number(/\.cx-sonar-live \{[^}]*--cx-sonar-peak: ([\d.]+)/.exec(css)?.[1]);
+    expect(idle).toBe(0.32);
+    expect(live).toBeGreaterThan(idle);
+    // Reduced motion draws the same three rings still, in the same fading order.
+    const still = [...css.matchAll(/nth-child\(\d\) \{ transform: scale\([\d.]+\); opacity: ([\d.]+); \}/g)].map((m) => Number(m[1]));
+    expect(still.slice(0, 3)).toEqual([0.3, 0.18, 0.09]);
+    expect(still.slice(3, 6)).toEqual([0.3, 0.18, 0.09]);
+  });
+
   test("reduced motion: still rings at fixed radii, no animation, for OS and app setting", async () => {
     const css = (await Bun.file(kit("SonarRings")).text()).slice((await Bun.file(kit("SonarRings")).text()).indexOf("<style>"));
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
