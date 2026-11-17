@@ -481,7 +481,7 @@
       "id": "apps/docs/scripts/skills-dist.mjs",
       "path": "apps/docs/scripts/skills-dist.mjs",
       "kind": "build",
-      "summary": "Post-build: serves skills under both well-known paths and asserts every SKILL.md exists",
+      "summary": "Post-build: serves skills at both well-known paths, asserts each SKILL.md",
       "invoke": "bun run --cwd apps/docs build"
     },
     {
