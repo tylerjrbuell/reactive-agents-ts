@@ -585,6 +585,8 @@ const store = await Effect.runPromise(
 // .withChannels({ adapters, routes, agents, store })
 ```
 
+With `.withChannels` you can skip opening the store yourself: `inbox: { path: "./.agent/router.db" }` (plus the optional `retentionMaxAgeMs`, `retentionMaxRows`, `maxAttempts`, `leaseTtlMs`) opens the SQLite store when the router starts and closes it after the router stops. If you also pass `store`, the explicit store wins and the host logs a warning.
+
 - **One row per accepted message**, with a status: `received`, `running`, `done`, `failed` or `dropped`, plus the dedupe key (adapter id and the platform's message id), attempt count and last error. A denied sender, an unrouted message or a rate drop is recorded `dropped`, a failed turn `failed`.
 - **Dedupe survives restart.** A redelivered message that was already accepted is refused, answered or not.
 - **Crash recovery.** At start the router returns turns a dead process left `running` to `received` and runs them again, oldest first, up to `maxAttempts` (default 3). A message that runs out of attempts becomes `failed`; the router publishes `ChannelInboxRetried` and `ChannelInboxFailed` events (payloads carry no message text). `leaseTtlMs` (default 0) is how old a `running` row must be to count as orphaned: the account lease already guarantees one router per inbox, so raise it only if several processes share one file. A replayed message runs as its own turn, without batching.
@@ -615,14 +617,16 @@ const route: RouteSpecInput = {
 - **`midRun: "queue"`** (default): a message that arrives while a turn runs waits in the bounded per-conversation queue and runs as its own turn.
 - **`midRun: "fold"`**: the message joins the running turn. A resolver that supports it calls `turn.takeFolded()` at a safe boundary (between tool calls) and receives the new texts once. Texts nobody drains run as one follow-up turn right after, so a resolver that ignores `takeFolded` behaves like a combined queue.
 - **`midRun: "interrupt"`**: the message cancels the running turn with a typed `turn_interrupted` error (published as `ChannelTurnCompleted` with `ok: false`; the sender gets no failure notice) and a new turn starts from the original and new text joined. Partial work stays in the session history. The turn rate cap is not charged again for the restart.
+- **With `.withChannels()` routes** the built-in resolver implements both. Routes using `fold` or `interrupt` run each conversation on its own agent instance and stream the turn. `fold`: the messages that arrived mid-turn are attached to the result of the next custom tool call (`{ result, userMessages }`); a turn that only calls built-in tools drains nothing and the router runs the leftovers as one follow-up turn. `interrupt`: the running stream is aborted through its signal.
 - Folded and interrupting messages are bounded by the same conversation queue size, and past it they are dropped as backpressure. Router simulations skip both fields. Webhook routes reject them, because the reply is the HTTP response.
 
 ### Reliable sends: the outbox (`outbox`, `minGapMs`)
 
-Every message the strict router sends (replies, acks, failure notices, `router.deliver`) goes through an outbox. By default it behaves as before: one attempt, no pacing. Opt in to retries and pacing. `outbox` and `followUp` (next section) are options of `createChannelRouter`; the `.withChannels` builder does not pass them through yet.
+Every message the strict router sends (replies, acks, failure notices, `router.deliver`) goes through an outbox. By default it behaves as before: one attempt, no pacing. Opt in to retries and pacing. `outbox` and `followUp` (next section) are options of `createChannelRouter` and of `.withChannels`, which passes them through.
 
 ```typescript
-// createChannelRouter({ ..., outbox: { maxAttempts: 4, baseBackoffMs: 500, maxBackoffMs: 30_000 } })
+// .withChannels({ ..., outbox: { maxAttempts: 4, baseBackoffMs: 500, maxBackoffMs: 30_000 } })
+// (or createChannelRouter({ ..., outbox }))
 // or per route: { id: "main", ..., minGapMs: 1200 }
 ```
 
@@ -647,7 +651,7 @@ import { createChannelRouter, makeFollowUpTool } from "@reactive-agents/channels
 //   open: (req) => { const tool = req.followUp ? makeFollowUpTool(req.followUp) : undefined; ... }
 ```
 
-- **The tool.** `makeFollowUpTool(port)` returns a `follow-up` tool definition (`name`, `description`, `parameters`, `execute`) shaped like a tools-package definition. `{ in: "90m", note }` or `{ at: "2026-11-20T09:00:00Z", note }` sets a timer; `{ cancel: id }` cancels one; no arguments lists the pending ones. It never fails: a refused request comes back as `{ ok: false, reason, error }` so the agent can adapt. The resolver (or the runtime builder) registers the tool on the agent it opens.
+- **The tool.** `makeFollowUpTool(port)` returns a `follow-up` tool definition (`name`, `description`, `parameters`, `execute`) shaped like a tools-package definition. `{ in: "90m", note }` or `{ at: "2026-11-20T09:00:00Z", note }` sets a timer; `{ cancel: id }` cancels one; no arguments lists the pending ones. It never fails: a refused request comes back as `{ ok: false, reason, error }` so the agent can adapt. The resolver registers the tool on the agent it opens. With `.withChannels({ followUp })` the runtime resolver does this for you: each conversation runs on its own agent instance (built when the session opens, disposed when it closes) with the `follow-up` tool bound to that conversation. A `ReadOnly` sender surface never gets the tool; an `AgentDefault` surface does, and an `Allowlist` surface only when it names `follow-up`.
 - **Bounds.** At most `maxPending` timers per conversation (default 5), no further out than `maxHorizonMs` (default 7 days), no nearer than `minDelayMs` (default 5 s), notes up to 500 characters. An agent can only set, list and cancel its own conversation's timers.
 - **Waking.** A poller (`pollMs`, default 1000) turns each due timer into an inbound message `Follow-up you scheduled: <note>` for that conversation. It takes the normal path: dedupe on `timer-<id>`, the sender's access and role, the turn-rate caps, the conversation queue. The timer re-enters the route that created it, whatever the route's `when` filter says, and counts as the sender who was in the session when it was created; if access has changed since, it is denied. A wake-up in a group passes the mention rule (the agent addressed itself) but not `groups: "off"`.
 - **Restart safe.** A timer that came due while the process was down fires on the first poll. A crash between the wake-up and the `fired` mark fires it again, and dedupe refuses the duplicate. Delivery is at least once.

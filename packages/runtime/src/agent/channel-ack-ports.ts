@@ -48,7 +48,7 @@ export interface StreamedTurn {
  */
 export const drainWithNarration = async (
   stream: AsyncIterable<AgentStreamEvent>,
-  onProgress: (text: string) => void,
+  onProgress: ((text: string) => void) | undefined,
 ): Promise<StreamedTurn> => {
   let pre = "";
   let toolSeen = false;
@@ -58,7 +58,7 @@ export const drainWithNarration = async (
     } else if (event._tag === "ToolCallStarted" && !toolSeen) {
       toolSeen = true;
       const narration = pre.trim();
-      if (narration.length > 0) {
+      if (narration.length > 0 && onProgress) {
         try {
           onProgress(narration);
         } catch {

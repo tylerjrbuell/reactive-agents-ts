@@ -12,6 +12,7 @@ import {
   createChannelRouter,
   isChannelAdapter,
   makeRouteMeter,
+  makeSqliteRouterStore,
   RoutingError,
 } from "@reactive-agents/channels";
 import type { ChannelAdapter, ChannelRouter } from "@reactive-agents/channels";
@@ -52,10 +53,30 @@ export const startChannelRouterHost = async (deps: ChannelRouterHostDeps): Promi
     }
     adapters.push(a);
   }
+  // Per-turn folding and the follow-up tool bind to one conversation, so those agents are per conversation.
+  const perConversation = config.followUp !== undefined || (config.routes ?? []).some((r) => r.midRun === "fold" || r.midRun === "interrupt");
   const resolver = makeChannelAgentResolver({
     agents: config.agents ?? {},
     ...(config.persistSessions !== undefined ? { persist: config.persistSessions } : {}),
     ...(deps.build ? { build: deps.build } : {}),
+    ...(perConversation ? { perConversation: true } : {}),
+  });
+  if (config.inbox && config.store) {
+    deps.log("warn", "withChannels: both `store` and `inbox` set; the explicit `store` wins and `inbox` is ignored");
+  }
+  const routerEffect = Effect.gen(function* () {
+    const store = config.store ?? (config.inbox ? yield* makeSqliteRouterStore(config.inbox) : undefined);
+    return yield* createChannelRouter({
+      channels: adapters,
+      routes: config.routes ?? [],
+      agents: resolver,
+      ...(store ? { store } : {}),
+      ...(config.leases ? { leases: config.leases } : {}),
+      ...(config.meter ? { meter: makeRouteMeter(config.meter) } : {}),
+      ...(config.outbox ? { outbox: config.outbox } : {}),
+      ...(config.followUp !== undefined ? { followUp: config.followUp } : {}),
+      ...(deps.eventBus ? { eventBus: deps.eventBus } : {}),
+    });
   });
   // disposeAll always runs, even when closing the router scope fails.
   const disposeAfter = async (close: () => Promise<void>): Promise<void> => {
@@ -67,17 +88,7 @@ export const startChannelRouterHost = async (deps: ChannelRouterHostDeps): Promi
   };
   let started: Started<ChannelRouter>;
   try {
-    started = await startScoped(
-      createChannelRouter({
-        channels: adapters,
-        routes: config.routes ?? [],
-        agents: resolver,
-        ...(config.store ? { store: config.store } : {}),
-        ...(config.leases ? { leases: config.leases } : {}),
-        ...(config.meter ? { meter: makeRouteMeter(config.meter) } : {}),
-        ...(deps.eventBus ? { eventBus: deps.eventBus } : {}),
-      }),
-    );
+    started = await startScoped(routerEffect);
   } catch (error) {
     // startScoped already closed the router scope; dispose any agents built before the failure.
     await Effect.runPromise(resolver.disposeAll);

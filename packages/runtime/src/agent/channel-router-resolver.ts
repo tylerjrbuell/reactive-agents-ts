@@ -14,6 +14,7 @@ import { RoutingError } from "@reactive-agents/channels";
 import type { AgentResolver, OpenSessionRequest, RoutedReply, RoutedSession } from "@reactive-agents/channels";
 import type { ReactiveAgentBuilder } from "../builder.js";
 import { narrowToolSurface } from "./channel-tool-narrowing.js";
+import { installConversationTools, type TurnSlot } from "./channel-turn-boundary.js";
 import { drainWithNarration, makeAcknowledge, toChannelHandle } from "./channel-ack-ports.js";
 import type { AgentStreamEvent } from "../stream-types.js";
 
@@ -28,7 +29,10 @@ export interface ChannelAgentHandle {
     readonly chat: (text: string) => Promise<{ readonly message: string; readonly tokens?: number; readonly cost?: number }>;
     readonly end: () => Promise<void>;
     /** Optional. Full-density stream of one turn; used to forward pre-tool narration. */
-    readonly runStream?: (text: string, options: { readonly density: "full" }) => AsyncIterable<AgentStreamEvent>;
+    readonly runStream?: (
+      text: string,
+      options: { readonly density: "full"; readonly signal?: AbortSignal },
+    ) => AsyncIterable<AgentStreamEvent>;
   };
   /**
    * Optional side completion (no tools, no history, outside the session's turn gate). Present means
@@ -62,6 +66,12 @@ export interface ChannelAgentResolverOptions {
   readonly persist?: boolean;
   /** Test seam: how a narrowed builder becomes an agent. Default `builder.build()`. */
   readonly build?: (builder: ReactiveAgentBuilder) => Promise<ChannelAgentHandle>;
+  /**
+   * Build one agent per conversation (disposed when its session closes) instead of one per
+   * (route, role). Needed for the `follow-up` tool and `midRun: "fold"`/`"interrupt"`, which bind to
+   * one conversation. Default `false`.
+   */
+  readonly perConversation?: boolean;
 }
 
 /** The resolver plus the teardown for the agents it built. */
@@ -77,19 +87,27 @@ const resolveFailed = (req: OpenSessionRequest, message: string, cause?: unknown
 export const makeChannelAgentResolver = (options: ChannelAgentResolverOptions): ChannelAgentResolver => {
   const build = options.build ?? ((b: ReactiveAgentBuilder) => b.build().then(toChannelHandle));
   const built = new Map<string, Promise<ChannelAgentHandle>>();
+  const perConversation = options.perConversation === true;
 
-  const agentFor = (req: OpenSessionRequest): Effect.Effect<ChannelAgentHandle, RoutingError> => {
+  const agentFor = (req: OpenSessionRequest, slot: TurnSlot): Effect.Effect<ChannelAgentHandle, RoutingError> => {
     const factory = options.agents[req.target.agentId];
     if (factory === undefined) {
       return Effect.fail(resolveFailed(req, `route ${req.routeId}: no agent registered for target "${req.target.agentId}"`));
     }
-    const key = `${req.routeId}:${req.role}`;
+    const key = perConversation ? `${req.routeId}:${req.role}:${req.conversationKey}` : `${req.routeId}:${req.role}`;
     return Effect.tryPromise({
       try: () => {
         const cached = built.get(key);
         if (cached) return cached;
         const builder = factory();
         narrowToolSurface(builder, req.toolExposure);
+        if (perConversation) {
+          installConversationTools(builder, {
+            exposure: req.toolExposure,
+            slot,
+            ...(req.followUp ? { followUp: req.followUp } : {}),
+          });
+        }
         const pending = build(builder);
         built.set(key, pending);
         pending.catch(() => built.delete(key));
@@ -101,8 +119,20 @@ export const makeChannelAgentResolver = (options: ChannelAgentResolverOptions): 
 
   const open: AgentResolver["open"] = (req) =>
     Effect.gen(function* () {
-      const agent = yield* agentFor(req);
+      const slot: TurnSlot = { takeFolded: undefined };
+      const agent = yield* agentFor(req, slot);
       const sessionId = `${req.routeId}:${req.role}:${req.conversationKey}`;
+      // A per-conversation agent lives and dies with its session.
+      if (perConversation) {
+        const key = `${req.routeId}:${req.role}:${req.conversationKey}`;
+        yield* Effect.addFinalizer(() =>
+          Effect.promise(async () => {
+            const pending = built.get(key);
+            built.delete(key);
+            await (pending ? pending.then((a) => a.dispose()) : Promise.resolve()).catch(() => undefined);
+          }),
+        );
+      }
       const session = req.stateless ? undefined : agent.session({ id: sessionId, persist: options.persist ?? true });
       // A rejecting (or sync-throwing) `end()` is a swallowed, audible failure: it must not die the
       // scope close and strand the remaining sessions.
@@ -123,28 +153,36 @@ export const makeChannelAgentResolver = (options: ChannelAgentResolverOptions): 
       return {
         send: (turn) =>
           Effect.tryPromise({
-            try: async (): Promise<RoutedReply> => {
-              if (session && turn.onProgress && session.runStream) {
-                const r = await drainWithNarration(session.runStream(turn.text, { density: "full" }), turn.onProgress);
-                return { text: r.text, agentId: agent.agentId, tokens: r.tokens, costUsd: r.cost };
-              }
-              if (session) {
-                const r = await session.chat(turn.text);
+            try: async (signal): Promise<RoutedReply> => {
+              // The fiber's interruption (`turn_interrupted`, shutdown) aborts the streamed turn.
+              slot.takeFolded = turn.takeFolded;
+              try {
+                // Streaming is the abortable path; plain `chat` stays for routes that need neither.
+                const streamed = turn.onProgress !== undefined || turn.takeFolded !== undefined || perConversation;
+                if (session && streamed && session.runStream) {
+                  const r = await drainWithNarration(session.runStream(turn.text, { density: "full", signal }), turn.onProgress);
+                  return { text: r.text, agentId: agent.agentId, tokens: r.tokens, costUsd: r.cost };
+                }
+                if (session) {
+                  const r = await session.chat(turn.text);
+                  return {
+                    text: r.message,
+                    agentId: agent.agentId,
+                    ...(r.tokens !== undefined ? { tokens: r.tokens } : {}),
+                    ...(r.cost !== undefined ? { costUsd: r.cost } : {}),
+                  };
+                }
+                const r = await agent.run(turn.text);
                 return {
-                  text: r.message,
-                  agentId: agent.agentId,
-                  ...(r.tokens !== undefined ? { tokens: r.tokens } : {}),
-                  ...(r.cost !== undefined ? { costUsd: r.cost } : {}),
+                  text: r.output,
+                  agentId: r.agentId,
+                  tokens: r.metadata.tokensUsed,
+                  costUsd: r.metadata.cost,
+                  runId: r.taskId,
                 };
+              } finally {
+                slot.takeFolded = undefined;
               }
-              const r = await agent.run(turn.text);
-              return {
-                text: r.output,
-                agentId: r.agentId,
-                tokens: r.metadata.tokensUsed,
-                costUsd: r.metadata.cost,
-                runId: r.taskId,
-              };
             },
             catch: turnFailed,
           }),
