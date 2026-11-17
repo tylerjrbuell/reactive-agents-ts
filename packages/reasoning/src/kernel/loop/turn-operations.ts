@@ -71,7 +71,8 @@ import { proposeBrokenToolExit } from "./broken-tool-exit.js";
 import { applyInputOrderGuidance } from "./iterate-input-order-seam.js";
 import { applyComputeOffloadGuidance } from "./iterate-compute-offload-seam.js";
 import { applyFollowPlanGuidance } from "./iterate-follow-plan-seam.js";
-import { emitBookkeepingRefund, proposeBookkeepingRefund } from "./iterate-bookkeeping-refund-seam.js";
+import { bookkeepingRefundsIssued, emitBookkeepingRefund, proposeBookkeepingRefund } from "./iterate-bookkeeping-refund-seam.js";
+import { emitPlanBudgetExtended, proposePlanBudgetExtension } from "./plan-budget.js";
 
 /** Values one operation hands a later one within a single pass (reset per pass). */
 export interface TurnPassLocals {
@@ -502,6 +503,14 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
         t.currentOptions = refund.options;
         t.prevActionCount = t.state.steps.length;
         yield* emitBookkeepingRefund(t.state, t.currentOptions, toolsThisStep);
+      }
+      // Near the plan budget's first-stage bound: the rest only on progress (plan-budget.ts).
+      const extension = proposePlanBudgetExtension({ state: t.state, options: t.currentOptions, refunds: bookkeepingRefundsIssued(t.state) });
+      if (extension !== undefined) {
+        t.state = extension.state;
+        t.currentOptions = extension.options;
+        t.prevActionCount = t.state.steps.length;
+        yield* emitPlanBudgetExtended(t.state, t.currentOptions, extension.from, extension.to);
       }
       return NEXT;
     }),

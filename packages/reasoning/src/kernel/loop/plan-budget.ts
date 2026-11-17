@@ -7,7 +7,16 @@
 // (iterate-bookkeeping-refund-seam.ts) kept it going. The harness sizes the
 // budget from the plan instead, once, at run start, and says so.
 //
-//   effective = clamp(configured, unchecked + reserve, hardCap)
+//   effective = clamp(configured, unchecked + reserve, hardCap)   (the TARGET)
+//   stage1    = configured + max(1, ceil((effective - configured) / 2))
+//
+// STAGED (2026-11-17; ablation 2026-11-16-plan-posture-ablations: the whole raise
+// bought no accuracy and cost +15% to +36% tokens when it fired): the run starts
+// with `stage1`. Near that bound the second stage (up to `effective`) is granted
+// ONLY IF the run made progress since the raise: a checklist row completed or a
+// tool step succeeded. A stalled run ends at stage 1 instead of burning the rest.
+// Refunds ride on top (the carrier bound is stage + refunds); the total never
+// passes `hardCap`.
 //   reserve   = max(2, ceil(unchecked * 0.25))      (the answer turn and slack)
 //   hardCap   = max(configured, min(60, configured * 3))
 //
@@ -45,6 +54,10 @@ declare module "../state/kernel-state.js" {
     readonly configuredMaxIterations?: number;
     /** The most the bound may reach (raise plus refunds), set only when the plan raised it. */
     readonly planBudgetHardCap?: number;
+    /** The plan-sized bound (before refunds) the run may reach on progress; set while a second stage is open. */
+    readonly planBudgetTarget?: number;
+    /** Progress baseline at the last raise: steps recorded and checklist rows completed then. */
+    readonly planBudgetMark?: { readonly steps: number; readonly completed: number };
   }
 }
 
@@ -64,6 +77,8 @@ export interface PlanBudget {
   readonly reserve: number;
   readonly effective: number;
   readonly hardCap: number;
+  /** The first-stage bound the run starts with (<= effective). */
+  readonly stage1: number;
 }
 
 /** The budget a plan of `steps` unchecked steps needs, or undefined when `configured` already covers it. Pure. */
@@ -73,8 +88,18 @@ export function planBudget(configured: number, steps: number): PlanBudget | unde
   const hardCap = Math.max(configured, Math.min(PLAN_BUDGET_ABSOLUTE_CEILING, configured * PLAN_BUDGET_MULTIPLIER));
   const effective = Math.min(steps + reserve, hardCap);
   if (effective <= configured) return undefined;
-  return { configured, steps, reserve, effective, hardCap };
+  const stage1 = Math.min(effective, configured + Math.max(1, Math.ceil((effective - configured) / 2)));
+  return { configured, steps, reserve, effective, hardCap, stage1 };
 }
+
+/** Checklist rows completed right now. */
+const completedPlanSteps = (state: KernelState): number =>
+  viewItems(startRound(), state.ledger).filter((i) => i.status === "completed").length;
+
+/** Progress since `mark`: a row completed, or a tool step that succeeded. */
+export const planBudgetProgressed = (state: KernelState, mark: { readonly steps: number; readonly completed: number }): boolean =>
+  completedPlanSteps(state) > mark.completed ||
+  state.steps.slice(mark.steps).some((s) => s.type === "observation" && s.metadata?.observationResult?.success === true);
 
 /** Unchecked seeded steps right now (own-run checklist facts not completed). */
 export const uncheckedPlanSteps = (state: KernelState): number =>
@@ -98,25 +123,28 @@ export function proposePlanBudget(args: {
   if (budget === undefined) return undefined;
   const step = makeStep(
     "harness_signal",
-    `iteration budget raised to ${budget.effective} for the plan (${budget.steps} unchecked steps; configured ${budget.configured})`,
+    `iteration budget raised to ${budget.stage1} for the plan (${budget.steps} unchecked steps; configured ${budget.configured}${budget.stage1 < budget.effective ? `; extends to ${budget.effective} on progress` : ""})`,
     {
       intervention: {
         actor: PLAN_BUDGET_ACTOR,
         authorityClass: authorityOf(PLAN_BUDGET_ACTOR),
         evidence: `${budget.steps} unchecked plan steps + ${budget.reserve} reserve vs maxIterations ${budget.configured}; hard cap ${budget.hardCap}`,
-        whatChanged: `plan-budget: maxIterations ${budget.configured} -> ${budget.effective}`,
+        whatChanged: `plan-budget: maxIterations ${budget.configured} -> ${budget.stage1}`,
         iter: state.iteration,
       },
     },
   );
   return {
     // `meta.maxIterations` is what ReasoningIterationProgress reports: keep it the effective bound.
-    state: transitionState(state, { steps: [...state.steps, step], meta: { ...state.meta, maxIterations: budget.effective } }),
+    state: transitionState(state, { steps: [...state.steps, step], meta: { ...state.meta, maxIterations: budget.stage1 } }),
     options: {
       ...options,
-      maxIterations: budget.effective,
+      maxIterations: budget.stage1,
       configuredMaxIterations: budget.configured,
       planBudgetHardCap: budget.hardCap,
+      ...(budget.stage1 < budget.effective
+        ? { planBudgetTarget: budget.effective, planBudgetMark: { steps: state.steps.length + 1, completed: completedPlanSteps(state) } }
+        : {}),
     },
     budget,
   };
@@ -133,13 +161,75 @@ export const emitPlanBudgetRaised = (
     iteration: state.iteration,
     guard: PLAN_BUDGET_GUARD,
     outcome: "pass",
-    reason: `iteration budget raised to ${budget.effective} for a ${budget.steps}-step plan`,
+    reason: `iteration budget raised to ${budget.stage1} for a ${budget.steps}-step plan`,
     metadata: {
+      stage: 1,
       configured: budget.configured,
       steps: budget.steps,
       effective: budget.effective,
+      stage1: budget.stage1,
       hardCap: budget.hardCap,
     },
+  });
+
+/** Iterations left at which the second-stage check runs. */
+const STAGE_CHECK_REMAINING = 2;
+
+/**
+ * Stage two: near the first-stage bound, grant the rest of the plan-sized budget
+ * only when the run progressed since the raise. Undefined when no second stage is
+ * open, the bound is not near, or the run stalled (it then ends at stage 1).
+ * `refunds` is the bookkeeping refunds already folded into `options.maxIterations`.
+ */
+export function proposePlanBudgetExtension(args: {
+  readonly state: KernelState;
+  readonly options: KernelRunOptions;
+  readonly refunds: number;
+}): { readonly state: KernelState; readonly options: KernelRunOptions; readonly from: number; readonly to: number } | undefined {
+  const { state, options, refunds } = args;
+  const { planBudgetTarget: target, planBudgetMark: mark, planBudgetHardCap: hardCap } = options;
+  if (target === undefined || mark === undefined) return undefined;
+  if (state.status === "done" || state.status === "failed") return undefined;
+  if (state.iteration < options.maxIterations - STAGE_CHECK_REMAINING) return undefined;
+  if (!planBudgetProgressed(state, mark)) return undefined;
+  const from = options.maxIterations;
+  const to = Math.max(from, Math.min(target + refunds, hardCap ?? target + refunds));
+  const step = makeStep("harness_signal", `iteration budget extended to ${to} (the plan progressed since the raise)`, {
+    intervention: {
+      actor: PLAN_BUDGET_ACTOR,
+      authorityClass: authorityOf(PLAN_BUDGET_ACTOR),
+      evidence: `a step completed or a tool succeeded since the raise; target ${target}`,
+      whatChanged: `plan-budget: maxIterations ${from} -> ${to}`,
+      iter: state.iteration,
+    },
+  });
+  return {
+    state: transitionState(state, { steps: [...state.steps, step], meta: { ...state.meta, maxIterations: to } }),
+    options: {
+      ...options,
+      maxIterations: to,
+      planBudgetTarget: undefined,
+      planBudgetMark: undefined,
+    },
+    from,
+    to,
+  };
+}
+
+/** Trace the second-stage grant. */
+export const emitPlanBudgetExtended = (
+  state: KernelState,
+  options: KernelRunOptions,
+  from: number,
+  to: number,
+): Effect.Effect<void, never> =>
+  emitGuardFired({
+    taskId: options.taskId ?? state.taskId,
+    iteration: state.iteration,
+    guard: PLAN_BUDGET_GUARD,
+    outcome: "pass",
+    reason: `iteration budget extended to ${to} after progress`,
+    metadata: { stage: 2, from, to, configured: options.configuredMaxIterations },
   });
 
 /**

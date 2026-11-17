@@ -246,12 +246,27 @@ describe("structured request_user_input — act phase", () => {
 
   // Live Cortex plan trace 01M7N75MCD0EGQ00SSTF3NA81R: mimo-v2.6 mixed the legacy
   // `prompt`/`kind` keys with a `questions` entry lacking id/prompt and a "choice" type.
-  it("a mixed legacy/structured call is rejected with a worked example the model can copy", async () => {
-    const s = await act({
-      prompt: "Which git repository should I inspect?",
-      kind: "choice",
-      questions: [{ options: ["The repository I'm currently in", "I'll specify a path"], type: "choice" }],
-    });
+  // The tools layer now heals this call (prompt promoted, id synthesized, choice -> single-choice).
+  it("a mixed legacy/structured call is healed: it parses and the user is asked", async () => {
+    const asked: AskUserRequest[] = [];
+    const s = await act(
+      {
+        prompt: "Which git repository should I inspect?",
+        kind: "choice",
+        questions: [{ options: ["The repository I'm currently in", "I'll specify a path"], type: "choice" }],
+      },
+      (req) => {
+        asked.push(req);
+        return Effect.succeed({ answered: true, value: "I'll specify a path" });
+      },
+    );
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.questions[0]).toMatchObject({ prompt: "Which git repository should I inspect?", type: "single-choice" });
+    expect(toolResultOf(s)?.content ?? "").not.toContain("The request was rejected");
+  });
+
+  it("a genuinely ambiguous call (entries with no prompt and no options, no top-level prompt) is rejected with a worked example", async () => {
+    const s = await act({ questions: [{ type: "text" }] });
     expect(s.status).toBe("thinking");
     const content = toolResultOf(s)?.content ?? "";
     expect(content).toContain("The request was rejected: invalid questions: each needs id, prompt and type");

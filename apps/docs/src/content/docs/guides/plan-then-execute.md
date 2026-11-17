@@ -1,5 +1,5 @@
 ---
-title: Plan Then Execute
+title: Plan Review with agent.plan()
 stability: experimental
 description: >-
   Ask an agent for a plan first, review or edit it, then execute it. The plan is
@@ -7,6 +7,8 @@ description: >-
 sidebar:
   order: 28
 ---
+
+> **Not the `plan-execute-reflect` strategy.** This page covers `agent.plan()` and `agent.execute(plan)`, an experimental way to review a plan before it runs. The `plan-execute-reflect` reasoning strategy is a different feature: see [Choosing a Strategy](/guides/choosing-strategies/).
 
 Some tasks deserve a look before they run. `agent.plan(input)` reasons through
 the task **without running any capability tool** and returns a `Plan`: a goal and
@@ -121,7 +123,7 @@ const agent = await ReactiveAgents.create()
 
 ## Plan-sized iteration budget
 
-A run seeded from a plan gets enough iterations to finish it. The configured `maxIterations` is the floor. When the unchecked steps plus a reserve of max(2, 25%) need more, the bound is raised once at run start, to at most min(60, 3x the configured value). Unseeded runs, and plans that already fit, are unchanged. Cost, token and time limits are not touched. The raise is recorded as a `plan-budget-raised` signal and the `planBudget` mechanism appears in the run-started config. It is on by default. Turn it off with the harness config or the environment:
+A run seeded from a plan gets enough iterations to finish it. The configured `maxIterations` is the floor. When the unchecked steps plus a reserve of max(2, 25%) need more, the plan-sized target is steps + reserve, at most min(60, 3x the configured value). The raise is staged: the run starts with half of the way to the target (for 18 open steps and `maxIterations` 10: 17, target 23). Near that bound the rest is granted only if the run made progress since the raise (a checklist row completed or a tool step succeeded). A run that stalls ends at the first stage instead of spending the whole budget. Bookkeeping refunds are counted on top, and the total never passes the hard cap. Unseeded runs, and plans that already fit, are unchanged. Cost, token and time limits are not touched. The raise is recorded as a `plan-budget` signal (and a `plan_budget_raised` guard event with `stage` 1 or 2) and the `planBudget` mechanism appears in the run-started config. It is on by default. Turn it off with the harness config or the environment:
 
 ```ts
 const agent = await ReactiveAgents.create()
