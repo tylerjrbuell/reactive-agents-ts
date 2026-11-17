@@ -262,6 +262,7 @@ export {
   type ResolveModelCalibrationOptions,
   type ResolveModelCalibrationAsyncOptions,
 } from "./calibration-resolver.js";
+export type { CalibrationOptions } from "./builder/withers/calibration.js";
 
 // ─── Capability Cost Registry (MOVE-2) ───
 export {

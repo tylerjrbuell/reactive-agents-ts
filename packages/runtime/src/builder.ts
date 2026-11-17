@@ -152,6 +152,7 @@ import { unwrapError } from './errors.js'
 import type { ContextProfile, HarnessConfig } from '@reactive-agents/reasoning'
 import type { StrategySynthesisFields } from './reasoning-synthesis-fields.js'
 import type { CalibrationMode } from './types.js'
+import { applyWithCalibration, type CalibrationOptions } from './builder/withers/calibration.js'
 import type { ResultCompressionConfig } from '@reactive-agents/tools'
 import type { RemoteAgentClient } from '@reactive-agents/tools'
 import type { PromptTemplate } from '@reactive-agents/prompts'
@@ -597,6 +598,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     // `undefined` = never set (auto-enabled when reasoning is on). An explicit
     // `.withCalibration("skip")` is honored as a real opt-out. See P0-9.
     private _calibration?: CalibrationMode
+    private _calibrationOptions?: CalibrationOptions
     private _leanHarness: boolean = false
     /**
      * Declarative budget caps consumed by the Arbitrator's pre-intent guard
@@ -634,24 +636,15 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     // ─── Calibration ───
 
     /**
-     * Configure per-model calibration for this agent.
-     *
-     * - `"skip"`: no lookup, pure tier-based adapters. Honored even when
-     *   reasoning is enabled — an explicit opt-out (P0-9).
-     * - `"auto"`: load pre-baked or user-cached calibration for the resolved modelId.
-     * - `ModelCalibration` object: provide calibration data directly (e.g. after running
-     *   the calibration probe suite).
-     *
-     * Default when unset: calibration auto-enables (`"auto"`) if reasoning is
-     * active, otherwise none.
-     *
-     * Calibration mode is also resolved automatically from the model id;
-     * explicit override here is most useful with the calibration probe
-     * harness. Composable equivalent: `HarnessProfile.balanced()` ships
-     * registry-driven calibration defaults.
+     * Configure per-model calibration: `"skip"`, `"auto"` (shipped calibration)
+     * or a `ModelCalibration` object. Unset = `"auto"` when reasoning is on.
+     * `options` opts in to the learned and community tiers (both off by default):
+     * `.withCalibration("auto", { learned: true, community: true })`.
+     * Delegates to `applyWithCalibration` in `builder/withers/calibration.ts`,
+     * where the full public-contract JSDoc lives.
      */
-    withCalibration(mode: CalibrationMode): this {
-        this._calibration = mode
+    withCalibration(mode: CalibrationMode, options?: CalibrationOptions): this {
+        applyWithCalibration(asBuilderState(this), mode, options)
         return this
     }
 
@@ -2114,6 +2107,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         _behavioralContract: self._behavioralContract,
         _budgetLimits: self._budgetLimits,
         _calibration: self._calibration,
+        _calibrationOptions: self._calibrationOptions,
         _circuitBreakerConfig: self._circuitBreakerConfig,
         _consolidationConfig: self._consolidationConfig,
         _contextProfile: self._contextProfile,

@@ -51,6 +51,7 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { TelemetryConfig } from "@reactive-agents/observability";
 import type { DocumentSpec } from "../../context-ingestion.js";
 import type { CalibrationMode } from "../../types.js";
+import type { CalibrationOptions } from "./calibration.js";
 import type { BudgetLimits } from "../../builder.js";
 import type { GroundingOptions, DurableRunsOptions, ModelRoutingOptions } from "../types.js";
 import type { StreamDensity } from "../../stream-types.js";
@@ -213,6 +214,8 @@ export interface BuilderState {
   // reasoning is on); an explicit `"skip"` is a real opt-out. See P0-9 /
   // resolveCalibrationSetting.
   _calibration?: CalibrationMode;
+  /** `.withCalibration(mode, options)` opt-in tiers; absent = both off. */
+  _calibrationOptions?: CalibrationOptions;
   _leanHarness: boolean;
 
   // RAG
@@ -388,6 +391,7 @@ const _assertBuilderStateViewShape = (
   _riHooks: self['_riHooks'],
   _metaTools: self['_metaTools'],
   _calibration: self['_calibration'],
+  _calibrationOptions: self['_calibrationOptions'],
   _leanHarness: self['_leanHarness'],
   _documents: self['_documents'],
   _documentStore: self['_documentStore'],

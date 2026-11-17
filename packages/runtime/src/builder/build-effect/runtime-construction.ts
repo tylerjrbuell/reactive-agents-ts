@@ -35,6 +35,7 @@ import type { TestTurn, LLMService } from "@reactive-agents/llm-provider";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import { builtinTools, shellExecuteTool } from "@reactive-agents/tools";
 import { configureApprovalPolicy } from "./approval-autofeed.js";
+import { withCalibrationTiers, type CalibrationOptions } from "../withers/calibration.js";
 import type { TelemetryConfig } from "@reactive-agents/observability";
 import type {
   ProviderName,
@@ -239,6 +240,7 @@ export interface BuilderRuntimeStateView {
     { readonly input: number; readonly output: number }
   >;
   readonly _calibration?: CalibrationMode;
+  readonly _calibrationOptions?: CalibrationOptions;
   readonly _metaTools?: import("../../types.js").MetaToolsConfig | false;
   readonly _cortexUrl: string | null;
   readonly _leanHarness: boolean;
@@ -599,11 +601,16 @@ export const buildBaseRuntimeAndEngine = (
       outputValidatorOptions: state._outputValidatorOptions,
       customTermination: state._customTermination,
       enableReactiveIntelligence: state._enableReactiveIntelligence,
-      reactiveIntelligenceOptions: resolveReactiveIntelligenceOptions(
-        state._reactiveIntelligenceOptions,
-        state._enableReactiveIntelligence,
-        state._provider,
-        process.env.NODE_ENV,
+      // The opt-in calibration tiers ride this channel to the engine's
+      // calibration setup; unchanged when `.withCalibration` set none.
+      reactiveIntelligenceOptions: withCalibrationTiers(
+        resolveReactiveIntelligenceOptions(
+          state._reactiveIntelligenceOptions,
+          state._enableReactiveIntelligence,
+          state._provider,
+          process.env.NODE_ENV,
+        ),
+        state._calibrationOptions,
       ),
       // Presence of the config IS the gate: `.withSkills()` with no args means
       // workspace discovery (skills spec step 2).

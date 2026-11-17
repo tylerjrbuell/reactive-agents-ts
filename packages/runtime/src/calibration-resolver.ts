@@ -11,9 +11,28 @@ import {
 export interface ResolveModelCalibrationOptions {
   readonly communityProfile?: Partial<ModelCalibration>;
   readonly observationsBaseDir?: string;
-  /** Apply local run observations (tier 3). Default `true`; `false` resolves shipped + community only. */
+  /**
+   * Apply local run observations (tier 3). Default `true` for this direct
+   * call; `false` resolves shipped + community only. An agent run passes
+   * `false` unless `.withCalibration("auto", { learned: true })` opted in.
+   */
   readonly localObservations?: boolean;
 }
+
+/**
+ * The opt-in calibration tier flags as they travel in a run's
+ * `reactiveIntelligenceOptions` to the engine's calibration setup
+ * (`engine/phases/agent-loop/setup/calibration.ts`). Set by
+ * `.withCalibration("auto", { learned, community })`. Absent or `false` = off.
+ * A type alias (not an interface) so it stays assignable to the
+ * `Record<string, unknown>` options channel.
+ */
+export type CalibrationTierFlags = {
+  /** Apply local run observations (the learned tier). */
+  readonly learnedCalibration?: boolean;
+  /** Fetch the community profile (the community tier). */
+  readonly communityCalibration?: boolean;
+};
 
 export interface ResolveModelCalibrationAsyncOptions extends ResolveModelCalibrationOptions {
   /** When true, fetch a community profile from the telemetry API. */

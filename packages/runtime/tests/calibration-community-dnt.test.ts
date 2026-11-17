@@ -2,9 +2,10 @@
  * Community calibration honors the environment telemetry opt-out.
  *
  * `calibration: "auto"` fetches a community profile from the profile endpoint
- * by default. A user who set `DO_NOT_TRACK` or `REACTIVE_AGENTS_TELEMETRY=0`
- * asked for no outbound framework calls, so `resolveCalibration` must not
- * make that request. The default (no opt-out) is unchanged.
+ * only when opted in (`communityCalibration: true`, set by
+ * `.withCalibration("auto", { community: true })`). Even then, a user who set
+ * `DO_NOT_TRACK` or `REACTIVE_AGENTS_TELEMETRY=0` asked for no outbound
+ * framework calls, so `resolveCalibration` must not make that request.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
@@ -39,16 +40,30 @@ describe("resolveCalibration: community fetch vs telemetry opt-out", () => {
     }
   });
 
+  // Community calibration is opt-in; these runs opt in, so only the
+  // environment opt-out can stop the request.
   const run = (modelId: string) =>
     Effect.runPromise(
-      resolveCalibration({ calibration: "auto", provider: "test", defaultModel: modelId }),
+      resolveCalibration({
+        calibration: "auto",
+        provider: "test",
+        defaultModel: modelId,
+        reactiveIntelligenceOptions: { communityCalibration: true },
+      }),
     );
 
   const uniqueModel = (tag: string) => `dnt-probe-${tag}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  test("default (no opt-out): the community profile is requested", async () => {
+  test("opted in, no env opt-out: the community profile is requested", async () => {
     await run(uniqueModel("default"));
     expect(requested.length).toBe(1);
+  });
+
+  test("not opted in: no community request", async () => {
+    await Effect.runPromise(
+      resolveCalibration({ calibration: "auto", provider: "test", defaultModel: uniqueModel("off") }),
+    );
+    expect(requested).toEqual([]);
   });
 
   test("DO_NOT_TRACK=1: no community request", async () => {

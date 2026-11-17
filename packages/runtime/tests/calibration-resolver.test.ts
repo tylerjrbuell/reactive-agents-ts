@@ -98,11 +98,13 @@ describe("resolveModelCalibrationWithProvenance", () => {
 
   it("the engine's test provider ignores home-dir observations unless a dir is set", async () => {
     for (let i = 0; i < 5; i++) appendObservation("totally-unknown:model", run, { baseDir: testRoot });
+    // Learned calibration is opt-in; this run opts in, so only the
+    // test-provider observations-dir gate decides.
     const config: Parameters<typeof resolveEngineCalibration>[0] = {
       calibration: "auto",
       provider: "test",
       defaultModel: "totally-unknown:model",
-      reactiveIntelligenceOptions: { communityCalibration: false },
+      reactiveIntelligenceOptions: { communityCalibration: false, learnedCalibration: true },
     };
     const prev = process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"];
     try {
