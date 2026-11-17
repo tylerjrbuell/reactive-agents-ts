@@ -146,6 +146,12 @@ export interface MaxIterationCapSources {
   readonly tierHint: number | undefined;
   /** True when `configCap` was user-declared via `.withMaxIterations()` / `.withReasoning({ maxIterations })`. */
   readonly explicit: boolean | undefined;
+  /**
+   * True when the run resumes a prior kernel state (`input.resumeState`). The
+   * runtime then sends the per-run RESUME cap (spent iterations + a fresh
+   * allowance) as `contextProfile.maxIterations`; see rule 0 below.
+   */
+  readonly resumed?: boolean;
 }
 
 /** Result of {@link resolveMaxIterationCap}. */
@@ -165,7 +171,12 @@ const positiveOrUndefined = (n: number | undefined): number | undefined =>
 /**
  * Resolve the effective reactive iteration cap.
  *
- * Precedence (2026-10-23 explicit-cap fix, introspective harness loop —
+ * Precedence (rule 0 added 2026-11-17, Cortex Continue):
+ *   0. On a RESUME (`resumed: true`) a `tierHint` above the otherwise-resolved
+ *      cap is the runtime's per-run resume cap and wins, even over an explicit
+ *      cap (the resumed state already spent that cap). Non-resumed runs skip it.
+ *
+ * Then (2026-10-23 explicit-cap fix, introspective harness loop —
  * wiki/Research/Harness-Reports/introspective-2026-10-24-02-*):
  *   1. An EXPLICIT user cap (`maxIterationsExplicit: true`) ALWAYS wins — the
  *      tier hint cannot steal it down. Pre-fix, `Math.min(hint, configCap)`
@@ -184,6 +195,12 @@ export function resolveMaxIterationCap(
 ): MaxIterationCapResolution {
   const configCap = positiveOrUndefined(sources.configCap);
   const tierHint = positiveOrUndefined(sources.tierHint);
+
+  // (0) Resume cap: the runtime's raised per-run cap beats any lower resolved cap.
+  if (sources.resumed === true && tierHint !== undefined) {
+    const base = resolveMaxIterationCap({ ...sources, resumed: false }).maxIterations;
+    if (tierHint > base) return { maxIterations: tierHint, clamped: false };
+  }
 
   // (1) Explicit user cap always wins — no min with the tier hint.
   if (sources.explicit === true && configCap !== undefined) {
@@ -241,6 +258,7 @@ export const executeReactive = (
       configCap: input.config.strategies.reactive.maxIterations,
       tierHint: input.contextProfile?.maxIterations,
       explicit: input.config.strategies.reactive.maxIterationsExplicit,
+      resumed: input.resumeState !== undefined,
     });
     if (clamped) {
       // The tier hint lowered the effective cap below the config face value.
