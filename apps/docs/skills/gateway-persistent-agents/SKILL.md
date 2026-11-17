@@ -116,6 +116,8 @@ webhooks: [
 
 Ingress is fail-closed: POST only (405), bodies over 1 MiB get 413, a sender that stalls the body for 10 s gets 408, more than 64 in-flight requests get 503, a webhook with no secret refuses every request, and a bad signature is 401. Put a reverse proxy with TLS in front of a public URL.
 
+For the `WebhookChannelAdapter` (served at `/channels/<id>`), `adapter.connectionInfo({ baseUrl })` from `@reactive-agents/channels` returns the URL, signing header (`x-channels-signature`, hex HMAC-SHA256 over `"<timestamp>.<body>"`, plus `x-channels-timestamp`), replay rules and curl/node/openssl examples. `signRequest(secret, body)` builds the headers a sender must attach.
+
 ### Durable schedules
 
 Every `crons` entry lives in a `ScheduleRegistry` (stable id, `nextFireAt`, `lastRun`, per-fire history of the last 20 runs). Give the registry a SQLite `path` and schedules survive restarts:

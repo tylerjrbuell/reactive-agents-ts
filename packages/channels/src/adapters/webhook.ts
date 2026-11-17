@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { Clock, Duration, Effect, Queue, Redacted, Stream, type Scope } from "effect";
 import type {
   ChannelAdapter,
@@ -22,6 +22,14 @@ import {
   classifyChannelFailure,
   type ChannelError,
 } from "../errors.js";
+import {
+  signWebhookPayload,
+  webhookConnectionInfo,
+  WEBHOOK_DEFAULT_REPLAY_WINDOW_MS,
+  WEBHOOK_SIGNATURE_HEADER,
+  WEBHOOK_TIMESTAMP_HEADER,
+  type WebhookConnectionInfo,
+} from "./webhook-connection.js";
 import type {
   Attachment,
   ChannelSubscription,
@@ -118,7 +126,7 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
           ? Redacted.make(config.secret)
           : config.secret;
     this.allowUnsigned = config.allowUnsigned === true;
-    this.replayWindowMs = config.replayWindowMs ?? 300_000;
+    this.replayWindowMs = config.replayWindowMs ?? WEBHOOK_DEFAULT_REPLAY_WINDOW_MS;
     this.enqueueTimeoutMs = config.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
     this.onResponse = config.onResponse;
     this.queue = Effect.runSync(Queue.bounded<InboundEnvelope>(config.inboundCapacity ?? 256));
@@ -143,6 +151,18 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
    */
   get isSubscribed(): boolean {
     return this.started || (this.handler !== undefined && !this.unsub);
+  }
+
+  /**
+   * How to call this adapter: ingress path, signing header, algorithm, signed bytes, replay rules
+   * and copy-paste examples, generated from the constants verification uses.
+   */
+  connectionInfo(opts: { readonly baseUrl?: string } = {}): WebhookConnectionInfo {
+    return webhookConnectionInfo({
+      channelId: this.id,
+      replayWindowMs: this.replayWindowMs,
+      ...(opts.baseUrl !== undefined ? { baseUrl: opts.baseUrl } : {}),
+    });
   }
 
   // ── ChannelAdapter ──────────────────────────────────────────────────────
@@ -217,17 +237,15 @@ export class WebhookChannelAdapter implements ChannelAdapter, MessageChannel {
       const now = yield* Clock.currentTimeMillis;
 
       if (self.secret) {
-        const sig = headers["x-channels-signature"];
+        const sig = headers[WEBHOOK_SIGNATURE_HEADER];
         if (!sig) return yield* reject("missing_signature");
-        const rawTs = headers["x-channels-timestamp"];
+        const rawTs = headers[WEBHOOK_TIMESTAMP_HEADER];
         if (!rawTs) return yield* reject("missing_timestamp");
         const tsMs = parseTimestampMs(rawTs);
         if (tsMs === undefined || Math.abs(now - tsMs) > self.replayWindowMs) {
           return yield* reject("stale_timestamp");
         }
-        const expected = createHmac("sha256", Redacted.value(self.secret))
-          .update(`${rawTs}.${req.body}`)
-          .digest("hex");
+        const expected = signWebhookPayload(self.secret, rawTs, req.body);
         const a = Buffer.from(sig, "utf8");
         const b = Buffer.from(expected, "utf8");
         if (a.length !== b.length || !timingSafeEqual(a, b)) return yield* reject("invalid_signature");

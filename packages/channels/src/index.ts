@@ -77,6 +77,7 @@ export {
 export { makeFileLeases, makeMemoryLeases, defaultLeaseDir, type AccountLeases } from "./routing/lease.js";
 export { createChannelRouter, type ChannelRouter, type ChannelRouterOptions } from "./routing/router.js";
 export * from "./adapters/webhook.js";
+export * from "./adapters/webhook-connection.js";
 export * from "./adapters/signal.js";
 export * from "./adapters/signal-protocol.js";
 export * from "./adapters/signal-transport.js";
