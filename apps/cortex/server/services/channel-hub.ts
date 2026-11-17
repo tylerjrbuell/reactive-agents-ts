@@ -36,7 +36,7 @@ import {
 } from "@reactive-agents/channels";
 import { cortexLog } from "../cortex-log.js";
 import { getGatewayAgents, getGatewayAgent } from "../db/queries.js";
-import { getChannel, getRoute, listChannels, parseRouteTarget, type ChannelRecord } from "../db/channel-hub-queries.js";
+import { getChannel, getRoute, listChannels, parseRouteTarget, routeToSpecInput, type ChannelRecord } from "../db/channel-hub-queries.js";
 import { buildChannelAdapters, type BuiltChannels } from "./channel-adapters.js";
 import { CHANNEL_KINDS, parseCortexChannels, type CortexChannelEntry, type ChannelKind } from "./channel-config.js";
 import { installedChannelCredentials } from "./channel-credentials.js";
@@ -45,6 +45,7 @@ import { HubActivityTracker, type HubActivity, type RouteCounters } from "./chan
 import { applyMigration, planMigration, type MigrationAgent, type MigrationPlan, type MigrationResult, type MigrationWarning } from "./channel-hub-migration.js";
 import { makeHubResolver, type HubResolver, type HubResolverDeps } from "./channel-hub-resolver.js";
 import { listLeaseHolders, loadValidRoutes, makeDbLeases, makeDurableRouteMeter, makeDurableRouterStore, type DurableRouterStore, type LeaseHolder, type RejectedRoute } from "./channel-hub-store.js";
+import { durableInboxFromEnv, openHubStore, type HubStore } from "./channel-hub-durable-inbox.js";
 import { mountWebhookIngress } from "./channel-ingress.js";
 import { ChannelHubStartError } from "../errors.js";
 import type { ToBuildParams } from "./gateway-channel-host.js";
@@ -74,6 +75,8 @@ export interface ChannelHubOptions {
   readonly onBuilt?: HubResolverDeps["onBuilt"];
   /** Test seam passed to the resolver: each built agent (a test reads its persisted session history). */
   readonly onAgent?: HubResolverDeps["onAgent"];
+  /** The framework's durable SQLite inbox, outbox and follow-up timers on the Cortex db file. Default: on (`CORTEX_CHANNEL_INBOX=memory` turns it off). */
+  readonly durableInbox?: boolean;
   /** Meter options (`maxMessagesPerDay`, `reserveUsd`); default none. */
   readonly meter?: Parameters<typeof makeDurableRouteMeter>[1];
 }
@@ -199,15 +202,20 @@ export class ChannelHub {
   private lastPlan: MigrationPlan = { channels: [], routes: [], warnings: [], legacy: [] };
   private chain: Promise<void> = Promise.resolve();
   private readonly store: DurableRouterStore;
+  /** The store the running router uses: `store` plus the durable inbox, outbox and timers when they opened. */
+  private hubStore: HubStore | null = null;
+  private readonly durableInbox: boolean;
   private readonly resolver: HubResolver;
   private readonly leases: AccountLeases;
   private readonly enabled: boolean;
   private readonly makeAdapters: (entries: readonly CortexChannelEntry[]) => BuiltChannels;
 
   constructor(private readonly opts: ChannelHubOptions) {
-    this.enabled = opts.enabled ?? hubEnabledFromEnv(process.env);
+    const env = process.env;
+    this.enabled = opts.enabled ?? hubEnabledFromEnv(env);
     this.phase = this.enabled ? "idle" : "disabled";
     this.store = makeDurableRouterStore(opts.db);
+    this.durableInbox = opts.durableInbox ?? durableInboxFromEnv(env);
     this.leases = opts.leases ?? makeDbLeases(opts.db);
     this.resolver = makeHubResolver({
       db: opts.db,
@@ -393,15 +401,23 @@ export class ChannelHub {
 
     let ingress: Scope.CloseableScope | null = null;
     const scope = Effect.runSync(Scope.make());
+    const hubStore = await openHubStore(this.opts.db, this.store, this.durableInbox);
+    this.hubStore = hubStore;
     try {
       if (webhooks.length > 0) ingress = await mountWebhookIngress(webhooks);
       const exit = await Effect.runPromiseExit(
         Scope.extend(
           createChannelRouter({
             channels: adapters,
-            routes: activeRoutes.map((r): RouteSpecInput => encodeRoute(r)),
+            // The route as saved: re-encoding a decoded spec would add the default `senderTools`, which the framework refuses on a webhook route.
+            routes: activeRoutes.map((r): RouteSpecInput => {
+              const rec = loaded.records.find((x) => x.id === r.id);
+              return rec ? routeToSpecInput(rec) : encodeRoute(r);
+            }),
             agents: this.resolver,
-            store: this.store,
+            store: hubStore.store,
+            // Timers are durable with the SQLite store; without it the router would keep them in memory, so they stay off.
+            ...(hubStore.durableInbox ? { followUp: true as const } : {}),
             leases: this.leases,
             meter: makeDurableRouteMeter(this.opts.db, this.opts.meter),
             eventBus: { publish: (e) => Effect.sync(() => this.tracker.observe(e)) },
@@ -421,7 +437,14 @@ export class ChannelHub {
       await Effect.runPromise(Scope.close(scope, Exit.void)).catch(() => undefined);
       if (ingress) await Effect.runPromise(Scope.close(ingress, Exit.void)).catch(() => undefined);
       await Effect.runPromise(this.resolver.disposeAll).catch(() => undefined);
+      await this.closeHubStore();
     }
+  }
+
+  private async closeHubStore(): Promise<void> {
+    const h = this.hubStore;
+    this.hubStore = null;
+    await h?.close().catch(() => undefined);
   }
 
   private async stopRouter(): Promise<void> {
@@ -432,6 +455,7 @@ export class ChannelHub {
       if (r.ingress) await Effect.runPromise(Scope.close(r.ingress, Exit.void)).catch(() => undefined);
       await Effect.runPromise(this.resolver.disposeAll).catch(() => undefined);
     }
+    await this.closeHubStore();
     if (this.enabled) this.phase = "idle";
     this.startedAt = null;
   }
