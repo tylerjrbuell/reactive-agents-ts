@@ -53,6 +53,8 @@ function mint(params: {
   rawTerminatedBy?: string;
   steps?: readonly ReasoningStep[];
   kernelMeta?: Record<string, unknown>;
+  toolsVisible?: boolean;
+  requiredTools?: readonly string[];
 }) {
   return Effect.runPromise(
     provideTestEnvelope(
@@ -65,7 +67,8 @@ function mint(params: {
         totalTokens: 10,
         totalCost: 0,
         taskId: "abstention-test",
-        requiredTools: [],
+        requiredTools: params.requiredTools ?? [],
+        ...(params.toolsVisible !== undefined ? { toolsVisible: params.toolsVisible } : {}),
         runLedger: [],
         repairCapabilities: { perIteration: true },
         ...(params.kernelMeta !== undefined ? { kernelMeta: params.kernelMeta as never } : {}),
@@ -301,6 +304,107 @@ describe("finalizeStrategyResult: give-up honesty gate", () => {
     expect(md.abstention).toBeDefined();
     // The model's prose is kept; only the verdict changes (wire-or-delete honesty).
     expect(String(result.output).startsWith("Sales breakdown by item")).toBe(true);
+  });
+});
+
+// ── D-2026-10-29-ABSTAINED-OVERBROAD: a run with no tools to ground on ────────
+// A plain Q&A run (no domain tool visible, none required) has nothing to
+// ground, so "zero grounded evidence" says nothing about it. A substantive
+// answer it delivers on a harness-forced terminal is not an abstention. The
+// give-up arm and the success-claim scrub still apply. RED on the old code:
+// the zero-evidence arm relabelled the plain answer `abstained`.
+describe("finalizeStrategyResult: no-tools run is not abstained by the zero-evidence arm", () => {
+  const PLAIN = "Paris is the capital of France; it has been the seat of government since the 10th century.";
+  const md = (r: { metadata: unknown }) => r.metadata as Record<string, unknown>;
+
+  it("no tools visible + none required + max_iterations + substantive prose => not abstained", async () => {
+    const result = await mint({
+      output: PLAIN,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "max_iterations",
+      steps: [step("thought", "hmm")],
+      toolsVisible: false,
+    });
+    expect(md(result).terminatedBy).toBe("end_turn");
+    expect(md(result).abstention).toBeUndefined();
+    expect(result.status).not.toBe("abstained");
+    expect(result.output).toBe(PLAIN);
+  });
+
+  it("same on a loop_graceful terminal with a completed claim", async () => {
+    const result = await mint({
+      output: PLAIN,
+      status: "completed",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "loop_graceful",
+      steps: [step("thought", "hmm")],
+      toolsVisible: false,
+    });
+    expect(md(result).terminatedBy).toBe("end_turn");
+    expect(result.status).toBe("completed");
+  });
+
+  it("give-up text on a no-tools run is still abstained", async () => {
+    const result = await mint({
+      output: GIVE_UP,
+      status: "completed",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "max_iterations",
+      steps: [step("thought", "hmm")],
+      toolsVisible: false,
+    });
+    expect(md(result).terminatedBy).toBe("abstained");
+    expect(result.output).toBe(GIVE_UP);
+  });
+
+  it("a success claim on a no-tools harness-forced run is still abstained and scrubbed", async () => {
+    const result = await mint({
+      output: "The message was successfully sent to #general. 🚀",
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "max_iterations",
+      steps: [step("thought", "hmm")],
+      toolsVisible: false,
+    });
+    expect(md(result).terminatedBy).toBe("abstained");
+    expect(result.output).toBe("");
+  });
+
+  it("tools visible + ungrounded + harness-forced => still abstained", async () => {
+    const result = await mint({
+      output: PLAIN,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "max_iterations",
+      steps: [step("thought", "hmm")],
+      toolsVisible: true,
+    });
+    expect(md(result).terminatedBy).toBe("abstained");
+  });
+
+  it("no tools visible but a required tool declared => still abstained", async () => {
+    const result = await mint({
+      output: PLAIN,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "max_iterations",
+      steps: [step("thought", "hmm")],
+      toolsVisible: false,
+      requiredTools: ["web-search"],
+    });
+    expect(md(result).terminatedBy).toBe("abstained");
+  });
+
+  it("tool visibility unknown (not reported) => the zero-evidence arm fires as before", async () => {
+    const result = await mint({
+      output: PLAIN,
+      status: "partial",
+      terminatedBy: "end_turn",
+      rawTerminatedBy: "max_iterations",
+      steps: [step("thought", "hmm")],
+    });
+    expect(md(result).terminatedBy).toBe("abstained");
   });
 });
 

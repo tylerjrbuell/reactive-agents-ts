@@ -70,6 +70,20 @@ const HARNESS_FORCED_TERMINALS: ReadonlySet<string> = new Set([
   "dispatcher-early-stop",
 ]);
 
+/**
+ * Does this tool list offer the model at least one DOMAIN tool (a tool that
+ * can produce grounded evidence)? Harness-scoped tools and framework meta
+ * tools (`todo`, `recall`, `final-answer`, ...) do not count: they never
+ * ground a run. A run where this is false for every pass had nothing to
+ * ground on, so the give-up gate's zero-evidence arm says nothing about it
+ * (D-2026-10-29-ABSTAINED-OVERBROAD).
+ */
+export function offersDomainTool(
+  schemas: readonly { readonly name: string; readonly scope?: "domain" | "harness" }[] | undefined,
+): boolean {
+  return (schemas ?? []).some((s) => s.scope !== "harness" && !META_TOOLS.has(s.name));
+}
+
 /** True when the raw kernel terminal names a HARNESS-forced end. */
 export function isHarnessForcedTerminal(rawTerminatedBy: string | undefined): boolean {
   if (rawTerminatedBy === undefined) return false;

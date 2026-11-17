@@ -30,6 +30,7 @@ import { runPass, type PassResult } from "../../kernel/loop/run-pass.js";
 import { deriveTerminatedBy } from "../../kernel/loop/react-kernel.js";
 import { unfinishedEvidence } from "../../kernel/loop/exit-gate.js";
 import { kernelPause, type KernelPause } from "../../kernel/capabilities/sense/step-utils.js";
+import { offersDomainTool } from "../../kernel/capabilities/sense/give-up-answer.js";
 import {
   finalizePausedStrategyResult,
   finalizeStrategyResult,
@@ -579,8 +580,10 @@ export function runStrategy<E, R>(
     let pendingPause: KernelPause | undefined;
     // Iterations every kernel pass of this run used (the run's iteration budget draw).
     let iterationsSpent = 0;
+    // Whether any kernel pass offered a domain tool; undefined until a pass runs.
+    let toolsVisible: boolean | undefined;
 
-    const add = (s: Partial<StrategySpend>): void => {
+    const add =(s: Partial<StrategySpend>): void => {
       spend = {
         tokens: spend.tokens + (s.tokens ?? 0),
         inputTokens: addKnown(spend.inputTokens, contributedHalf(s.inputTokens, s.tokens)),
@@ -610,6 +613,7 @@ export function runStrategy<E, R>(
             ...(runContract !== undefined && input.seedRunContract === undefined ? { seedRunContract: runContract } : {}),
             ...(seed !== undefined && input.seedRunLedger === undefined ? { seedRunLedger: seed } : {}),
           };
+          toolsVisible = toolsVisible === true || offersDomainTool(seeded.availableToolSchemas);
           const result = yield* runPass(kernel, seeded, options);
           runContract = runContract ?? result.state.meta.runContract;
           actOrAnswerTallies.push(actOrAnswerTally(result.state));
@@ -672,6 +676,8 @@ export function runStrategy<E, R>(
       requiredTools: spec.requiredTools ?? [],
       runLedger: ledger,
       repairCapabilities: spec.repairCapabilities ?? { perIteration: true },
+      // Tool evidence a strategy recorded outside a pass means tools were in play.
+      ...(toolsVisible !== undefined ? { toolsVisible: toolsVisible || recordedEvidence.length > 0 } : {}),
     });
     const totals = () => ({
       start,

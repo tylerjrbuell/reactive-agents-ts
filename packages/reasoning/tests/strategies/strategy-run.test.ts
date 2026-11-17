@@ -132,6 +132,45 @@ describe("runStrategy — one trajectory per run", () => {
     expect(result.status).toBe("failed");
   });
 
+  // D-2026-10-29-ABSTAINED-OVERBROAD: the substrate reports whether any pass
+  // offered a domain tool, so the terminal's zero-evidence arm skips a plain
+  // Q&A run. RED-ON-CUT: drop the substrate's `toolsVisible` and the no-tools
+  // case abstains like the tools case.
+  describe("tool visibility reaches the terminal", () => {
+    const PLAIN = "Five. Adding two and three gives five, which is the whole answer to this question.";
+    const runWith = (schemas: readonly { name: string; description: string; parameters: readonly never[] }[]) =>
+      Effect.runPromise(provideTestEnvelope(
+        runStrategy({ strategy: "reflexion", logSite: "test" }, (run) =>
+          Effect.gen(function* () {
+            yield* run.pass(reactKernel, { task: "Sum 2 and 3", availableToolSchemas: schemas }, passOptions);
+            return {
+              _tag: "Result" as const,
+              output: PLAIN,
+              status: "partial" as const,
+              kernelMeta: { terminatedBy: "max_iterations" },
+            };
+          }),
+        ).pipe(Effect.provide(TestLLMServiceLayer([{ match: "Sum", text: "FINAL ANSWER: 5" }]))),
+        buildRunEnvelope({}),
+      ));
+
+    it("no pass offered a domain tool: an ungrounded harness-forced answer is not abstained", async () => {
+      const result = await runWith([]);
+      expect((result.metadata as { terminatedBy?: string }).terminatedBy).not.toBe("abstained");
+      expect(result.output).toBe(PLAIN);
+    });
+
+    it("a pass offered a domain tool: the same answer is abstained", async () => {
+      const result = await runWith([{ name: "add", description: "Add two numbers", parameters: [] }]);
+      expect((result.metadata as { terminatedBy?: string }).terminatedBy).toBe("abstained");
+    });
+
+    it("meta tools alone do not count as visible tools", async () => {
+      const result = await runWith([{ name: "todo", description: "checklist", parameters: [] }]);
+      expect((result.metadata as { terminatedBy?: string }).terminatedBy).not.toBe("abstained");
+    });
+  });
+
   it("a strategy-decided abstention becomes the abstained claim with its descriptor and status", async () => {
     const program = runStrategy({ strategy: "plan-execute-reflect", logSite: "test" }, () =>
       Effect.succeed({
@@ -343,11 +382,13 @@ describe("runStrategy — one ledger, one status cap, pause-safe concurrency", (
       ));
     const capped = await runWith(true);
     const free = await runWith(false);
-    // The contributing pass relays its budget-limit terminator; with no grounded
-    // evidence the give-up gate labels the run an abstention (its own status
-    // since 2026-11-10). Either way the `completed` claim does not survive.
-    expect(capped.status).toBe("abstained");
-    expect((capped.metadata as Record<string, unknown>).terminatedBy).toBe("abstained");
+    // The contributing pass relays its budget-limit terminator and caps the
+    // claim at `partial`. No pass offered a tool, so there was nothing to
+    // ground: the give-up gate's zero-evidence arm does not relabel the plain
+    // answer `abstained` (D-2026-10-29-ABSTAINED-OVERBROAD). Either way the
+    // `completed` claim does not survive.
+    expect(capped.status).toBe("partial");
+    expect((capped.metadata as Record<string, unknown>).terminatedBy).toBe("end_turn");
     expect(free.status).toBe("completed");
   });
 

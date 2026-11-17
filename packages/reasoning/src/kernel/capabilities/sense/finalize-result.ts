@@ -290,6 +290,12 @@ export interface StrategyTerminalInput {
   /** The run ledger: the one tool-evidence source and the contract-vs-evidence record. */
   readonly runLedger: RunLedger;
   readonly repairCapabilities: RepairCapabilities;
+  /**
+   * Whether any kernel pass of the run offered the model a domain tool.
+   * `false` = none did, so the run had nothing to ground on and the give-up
+   * gate's zero-evidence arm skips it. Absent = unknown (the arm applies).
+   */
+  readonly toolsVisible?: boolean;
   /** Present only on a judged strategy-computed terminal (no kernel meta). */
   readonly delivery?: StrategyDelivery;
 }
@@ -562,11 +568,18 @@ export function finalizeStrategyResult(
           ? metaRawTerminal
           : undefined;
     const giveUpArm = isGiveUpAnswer(resolvedText);
+    // D-2026-10-29-ABSTAINED-OVERBROAD: with no domain tool offered and none
+    // required, the run had nothing to ground on, so zero evidence is no
+    // signal: a plain Q&A answer on a harness-forced terminal is not an
+    // abstention. A success claim there still is (fabrication net).
+    const nothingToGround = params.toolsVisible === false && requiredTools.length === 0;
+    const harnessForcedArm =
+      isHarnessForcedTerminal(rawTerminal) && (!nothingToGround || looksLikeSuccessClaim(resolvedText));
     const gateFires =
       resolved.status !== "failed" &&
       rawTerminatedBy !== "abstained" &&
       !hasGroundedEvidence(params.steps) &&
-      (isHarnessForcedTerminal(rawTerminal) || giveUpArm);
+      (harnessForcedArm || giveUpArm);
     // (b) content-scrub: on the HARNESS-FORCED arm, ungrounded prose that CLAIMS
     // the task/action was completed (a fabricated success claim, e.g.
     // "successfully sent … 🚀") would ship the lie on an abstained verdict, so it
