@@ -80,6 +80,7 @@ describe("terminal pipeline — one entry", () => {
       "plan-checklist",
       "budget-exhausted",
       "terminal-decision",
+      "loop-stop",
     ]);
   });
 

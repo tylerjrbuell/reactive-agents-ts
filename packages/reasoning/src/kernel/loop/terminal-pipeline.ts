@@ -54,6 +54,7 @@ import { runOutputQualityGate } from "./runner-output-quality-gate.js";
 import { emitTerminalDecision } from "./runner-helpers/terminal-decision.js";
 import { publishBudgetExhaustedAtTerminal } from "./budget-exhausted-terminal.js";
 import { runPlanChecklistStep } from "./plan-checklist-step.js";
+import { runLoopStopStep } from "./loop-stop.js";
 
 /**
  * Terminal kinds the answer-shaping steps must leave alone, read once at entry.
@@ -110,6 +111,7 @@ export const KERNEL_TERMINAL_STEPS = [
   "plan-checklist",
   "budget-exhausted",
   "terminal-decision",
+  "loop-stop",
 ] as const;
 
 export type KernelTerminalStepName = (typeof KERNEL_TERMINAL_STEPS)[number];
@@ -172,6 +174,8 @@ const STEPS: { readonly [K in KernelTerminalStepName]: TerminalStep } = {
   // Observe the already-decided terminal decision (emit-only; no control flow).
   "terminal-decision": (state, ctx) =>
     emitTerminalDecision({ state, taskId: ctx.currentOptions.taskId ?? state.taskId }),
+  // A loop-guard stop leaves a typed stop record and a final checkpoint, so it can be resumed (loop-stop.ts).
+  "loop-stop": (state) => runLoopStopStep(state),
 };
 
 /** What the pipeline entry needs to settle a pending tool batch (`pending-batch.ts`). */

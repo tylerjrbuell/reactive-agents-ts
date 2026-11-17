@@ -44,6 +44,7 @@ import {
 import type { KernelState, KernelInput, KernelRunOptions } from "../../../kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import { unresolvedThoughtSet } from "./unresolved-steps.js";
+import { stepsSinceLoopResume } from "./loop-resume-epoch.js";
 export { lastDeliverableThought, lastDeliverableText } from "./unresolved-steps.js";
 
 /**
@@ -200,13 +201,15 @@ export function classifyActions(steps: readonly ReasoningStep[]): ReadonlyMap<Re
  * Returns the message + the ACTUAL pattern id, or null if none.
  */
 export function detectLoopPattern(
-  steps: readonly ReasoningStep[],
+  allSteps: readonly ReasoningStep[],
   maxSameTool: number,
   maxRepeatedThought: number,
   maxConsecutiveThoughts: number,
   opts?: LoopDetectorOptions,
 ): LoopDetection | null {
   let loop: LoopDetection | null = null;
+  // A resumed loop stop starts a new epoch: the steps that tripped the guard do not count again.
+  const steps = stepsSinceLoopResume(allSteps);
 
   // Every ACTION step is classified against the observation that answered it
   // (law #5: one predicate, state-delta aware).

@@ -765,8 +765,14 @@ export function proposeExit(args: {
       state = transitionState(state, {
         status: "failed",
         error: `${proposal.failure.error}\nOutstanding: ${outstanding.join("; ")}`,
-        ...(proposal.failure.stampReason === true
-          ? { meta: { ...state.meta, terminatedBy: proposal.reason } }
+        ...(proposal.failure.stampReason === true || proposal.extraMeta !== undefined
+          ? {
+              meta: {
+                ...state.meta,
+                ...(proposal.extraMeta ?? {}),
+                ...(proposal.failure.stampReason === true ? { terminatedBy: proposal.reason } : {}),
+              },
+            }
           : {}),
       });
       return disposed(decision, state);

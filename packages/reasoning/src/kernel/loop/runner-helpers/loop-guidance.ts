@@ -24,6 +24,7 @@
 import { Effect } from "effect";
 import { authorityOf } from "../../capabilities/decide/authority.js";
 import { classifyActions, type LoopDetection } from "../../capabilities/reflect/loop-detector.js";
+import { stepsSinceLoopResume } from "../../capabilities/reflect/loop-resume-epoch.js";
 import { makeStep } from "../../capabilities/sense/step-utils.js";
 import { contributeGuidance } from "../../state/guidance-channel.js";
 import { transitionState, type KernelState } from "../../state/kernel-state.js";
@@ -46,7 +47,9 @@ export function loopGuidanceBudget(maxIterations: number, longHorizon: boolean):
 }
 
 /** Guidance cycles issued since the last progress action (0 once the run progresses). */
-export function loopGuidanceCycles(steps: readonly KernelState["steps"][number][]): number {
+export function loopGuidanceCycles(allSteps: readonly KernelState["steps"][number][]): number {
+  // A resumed loop stop starts a new epoch: guidance issued before it is no longer spent.
+  const steps = stepsSinceLoopResume(allSteps);
   const verdicts = classifyActions(steps);
   let cycles = 0;
   for (let i = steps.length - 1; i >= 0; i--) {

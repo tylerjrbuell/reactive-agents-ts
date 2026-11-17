@@ -24,7 +24,6 @@ import type {
 } from "../../kernel/capabilities/decide/tool-gating.js";
 import type { HarnessPipeline, KernelStateLike } from "@reactive-agents/core";
 import type { RunBudgetMeter } from "../run-budget.js";
-
 // ── Cross-package state bridge ───────────────────────────────────────────────
 // `KernelStateLike` (core) is a deliberately loose structural type that avoids
 // a core→reasoning circular dependency: its `meta` is `Readonly<Record<string,
@@ -70,6 +69,7 @@ export interface KernelMeta {
   readonly controllerDecisions?: readonly ControllerDecisionLike[];
   /** Per-pass act-or-answer counts (`capabilities/reason/act-or-answer.ts`), written in every mode. */
   readonly actOrAnswerTally?: import("../capabilities/reason/act-or-answer-tally.js").ActOrAnswerTallyState;
+  readonly loopStop?: import("../loop/loop-stop.js").LoopStopRecord; // why a loop guard stopped the run (loop/loop-stop.ts)
 
   // ── Iteration control ──
   readonly maxIterations?: number;

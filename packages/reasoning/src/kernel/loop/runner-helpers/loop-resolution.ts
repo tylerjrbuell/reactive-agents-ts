@@ -54,6 +54,7 @@ import {
   type ExitProposal,
 } from "../exit-gate.js";
 import type { TerminateReason } from "../terminate-reason.js";
+import { buildLoopStopRecord } from "../loop-stop.js";
 import {
   assembleDeliverable,
   deliverableTerminationReason,
@@ -140,7 +141,7 @@ export function resolveDetectedLoop(
           state,
           proposal: {
             proposedBy: "loop_resolution", kind, reason, deliverable,
-            extraMeta: { terminalSite: "loop-resolution" },
+            extraMeta: { terminalSite: "loop-resolution", loopStop: buildLoopStopRecord(state, { reason, detection: det }) },
             failure: { error: loopError, stampReason: true },
             detail: loopMsg,
             guardEvent: { guard: "loop_resolution", ...event },
