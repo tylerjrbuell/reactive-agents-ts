@@ -10,6 +10,14 @@ import {
     RunStoreService,
     type RunStatus as RunStoreStatus,
 } from "./services/run-store.js";
+import type { RunStopKind, RunStopSummary } from "./loop-stop-summary.js";
+import {
+    classifyEnd,
+    persistInterrupt,
+    type EndedRun,
+    type RunSnapshot,
+    type UserStopKind,
+} from "./engine/run-interrupt.js";
 
 // Re-export for consumers who import from runtime rather than core
 export type { RunControllerLike };
@@ -67,7 +75,7 @@ const MAX_RESULT_CONTENT_CHARS = 16_384;
 export function installDurableCheckpointing(
     controller: RunControllerLike,
     deps: DurableCheckpointDeps,
-): { finish: (success: boolean) => Promise<void>; flush: () => Promise<void> } {
+): DurableCheckpointing {
     const { runId, runStoreLayer, checkpointEvery } = deps;
     const every = checkpointEvery >= 1 ? checkpointEvery : 1;
 
@@ -75,17 +83,17 @@ export function installDurableCheckpointing(
     // errors (catchAllDefect below), so every entry settles via fulfillment —
     // the `.catch` here is defensive only, guarding against a future change
     // that reintroduces a rejection path from leaving a dangling entry.
-    const inflight = new Set<Promise<void>>();
+    const inflight = new Set<Promise<unknown>>();
 
-    const runWrite = (
-        effect: Effect.Effect<void, never, RunStoreService>,
+    const runWrite = <A = void>(
+        effect: Effect.Effect<A, never, RunStoreService>,
         site: string,
-    ): Promise<void> => {
+    ): Promise<A | undefined> => {
         const write = Effect.runPromise(
             effect.pipe(
                 Effect.provide(runStoreLayer),
                 Effect.catchAllDefect((defect) =>
-                    emitErrorSwallowed({ site, tag: errorTag(defect) }),
+                    emitErrorSwallowed({ site, tag: errorTag(defect) }).pipe(Effect.as(undefined)),
                 ),
             ),
         );
@@ -169,27 +177,90 @@ export function installDurableCheckpointing(
         }
     };
 
+    // The last state the kernel noted (every iteration, pre- and post-phase;
+    // the thunk is lazy, so remembering it costs one reference per iteration).
+    // An interruption persists it as the run's final checkpoint.
+    let lastNoted: { readonly thunk: () => string; readonly iteration: number } | undefined;
+    const innerNote = controller.noteCheckpoint?.bind(controller);
+    controller.noteCheckpoint = (thunk: () => string, iteration: number): void => {
+        lastNoted = { thunk, iteration };
+        innerNote?.(thunk, iteration);
+    };
+    const snapshot = (): RunSnapshot | undefined => {
+        if (lastNoted === undefined) return undefined;
+        try {
+            return { serialized: lastNoted.thunk(), iteration: lastNoted.iteration };
+        } catch {
+            return undefined;
+        }
+    };
+
     const flush = (): Promise<void> =>
         Promise.allSettled([...inflight]).then(() => undefined);
 
+    const finish = async (success: boolean): Promise<void> => {
+        // Await the last checkpoint's durability BEFORE flipping status —
+        // otherwise a reader (resume, or agent.fork()) could observe a
+        // `completed`/`failed` run whose latest checkpoint is still in
+        // flight or lost to a crash.
+        await flush();
+        const status: RunStoreStatus = success ? "completed" : "failed";
+        await runWrite(
+            Effect.gen(function* () {
+                const store = yield* RunStoreService;
+                yield* store.setStatus(runId, status);
+            }),
+            "runtime/src/run-controller.ts:setStatus",
+        );
+    };
+
+    const interrupt = async (
+        kind: RunStopKind,
+        reason: string,
+        stop?: RunStopSummary,
+    ): Promise<RunStopSummary | undefined> => {
+        await flush();
+        const final = stop === undefined ? snapshot() : undefined;
+        return runWrite(
+            persistInterrupt({ runId, kind, reason, ...(final !== undefined ? { snapshot: final } : {}), ...(stop !== undefined ? { stop } : {}) }),
+            "runtime/src/run-controller.ts:persistInterrupt",
+        );
+    };
+
     return {
         flush,
-        finish: async (success: boolean): Promise<void> => {
-            // Await the last checkpoint's durability BEFORE flipping status —
-            // otherwise a reader (resume, or agent.fork()) could observe a
-            // `completed`/`failed` run whose latest checkpoint is still in
-            // flight or lost to a crash.
-            await flush();
-            const status: RunStoreStatus = success ? "completed" : "failed";
-            await runWrite(
-                Effect.gen(function* () {
-                    const store = yield* RunStoreService;
-                    yield* store.setStatus(runId, status);
-                }),
-                "runtime/src/run-controller.ts:setStatus",
-            );
+        interrupt,
+        settle: async (result: EndedRun): Promise<RunStopSummary | undefined> => {
+            const requested = controller instanceof RunController ? controller.requestedStop() : undefined;
+            const ended = classifyEnd(result, requested);
+            if (ended === undefined) {
+                await finish(true);
+                return undefined;
+            }
+            return interrupt(ended.kind, ended.reason, ended.stop);
         },
+        finish,
     };
+}
+
+/** What {@link installDurableCheckpointing} hands the run's end. */
+export interface DurableCheckpointing {
+    /** Await every checkpoint / status write started so far. */
+    readonly flush: () => Promise<void>;
+    /** Flush, then mark the run `completed` or `failed` (no stop record, no final snapshot). */
+    readonly finish: (success: boolean) => Promise<void>;
+    /**
+     * Leave the run continuable: flush, persist the last noted state as the
+     * final checkpoint, the stop record (`stop` when the run already carries
+     * one, otherwise built from the journal) and the status the kind implies.
+     */
+    readonly interrupt: (kind: RunStopKind, reason: string, stop?: RunStopSummary) => Promise<RunStopSummary | undefined>;
+    /**
+     * End the run from its result: an interruption ({@link classifyEnd}: a
+     * requested stop, a loop stop, a failed result) is {@link interrupt}ed
+     * (the stop record written is returned), anything else is `finish(true)`.
+     */
+    readonly settle: (result: EndedRun) => Promise<RunStopSummary | undefined>;
 }
 
 /**
@@ -314,13 +385,27 @@ export class RunController implements RunControllerLike { // RunControllerLike f
         this._pausePromise = null;
     }
 
-    stop(): void {
+    /**
+     * The stop a person asked for: `stop(kind)` records it (`user-stopped` by
+     * default), a hard `terminate()` counts as `user-stopped`. `undefined`
+     * while nothing was requested. A durable run's end reads it
+     * ({@link installDurableCheckpointing}'s `settle`).
+     */
+    requestedStop(): UserStopKind | undefined {
+        if (this._status === "terminated") return "user-stopped";
+        return this._stopRequested ? this._stopKind : undefined;
+    }
+
+    private _stopKind: UserStopKind = "user-stopped";
+
+    stop(kind: UserStopKind = "user-stopped"): void {
         if (
             this._status === "terminated" ||
             this._status === "completed" ||
             this._status === "stopped"
         )
             return;
+        this._stopKind = kind;
         this._stopRequested = true;
         this._status = "stopped";
         // Release any pending pause so checkpoint() can observe the stop

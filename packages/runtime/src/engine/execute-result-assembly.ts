@@ -227,6 +227,8 @@ export function assembleTaskResult(
       // Top-level keys still never pass untyped.
       ...(rr?.metadata?.extensions !== undefined ? { extensions: rr.metadata.extensions } : {}),
       ...(rr?.metadata?.strategyFallback === true ? { strategyFallback: true } : {}),
+      // A plan-only run (`agent.plan({ strategy })`) says so: its plan is in `extensions.plan`, nothing else ran.
+      ...(rr?.metadata !== undefined && Reflect.get(rr.metadata, "planOnly") === true ? { planOnly: true } : {}),
       ...(ctx.metadata.budgetExceeded ? { budgetExceeded: true } : {}),
       complexity: ctx.metadata.taskComplexity ?? classifyComplexity(
         ctx.iteration,

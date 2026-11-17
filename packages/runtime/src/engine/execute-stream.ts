@@ -42,7 +42,8 @@ import type { AgentStreamEvent, StreamDensity } from "../stream-types.js";
 import type { RuntimeErrors } from "../errors.js";
 import type { EbLike } from "./runtime-context.js";
 import { RunStoreLive, RunStoreService, defaultDurableRunsDir, durableConfigHash } from "../services/run-store.js";
-import { installDurableCheckpointing } from "../run-controller.js";
+import { installDurableCheckpointing, RunController, type DurableCheckpointing } from "../run-controller.js";
+import type { ActiveRuns } from "./active-runs.js";
 import { deriveReceiptModelId } from "../builder/helpers.js";
 import { deriveTaskOutcome, deriveMetadataToolCalls, terminalOutcomeFields } from "./finalize/derive-outcome.js";
 import { resolveReceiptSigningKey, signReceipt } from "../receipt-signing.js";
@@ -146,6 +147,8 @@ export interface ExecuteStreamOptions {
    * open a per-run journal before any event flows. No-op otherwise.
    */
   onRunId?: (runId: string) => void;
+  /** The agent's live-run registry: a durable run registers here so `agent.pauseRun` / `stopRun` can reach it. */
+  activeRuns?: ActiveRuns;
   /**
    * Agentic-UI kit (Task 13): stamps the durable run row's `user_id`/`org_id`
    * columns so per-identity inbox filtering works. Durable path only.
@@ -429,7 +432,9 @@ export const makeExecuteStream =
       // RunStore, plus a `finish(success)` to flip the run status at the end.
       // Absent the opt-in this whole block is skipped: no store, no run row, no
       // db file, and the controller's `onCheckpoint` stays undefined (zero cost).
-      let durableFinish: ((success: boolean) => Promise<void>) | undefined;
+      let durableInstalled: DurableCheckpointing | undefined;
+      // Releases this run from the agent's live-run registry once its end is persisted.
+      let releaseActive: () => void = () => undefined;
       // Durable checkpoint hardening (Arc 1 Task 4): `flush()` awaits every
       // checkpoint write started so far. We gate BOTH terminal events
       // (StreamCompleted and StreamError) on it below so a downstream reader
@@ -485,8 +490,11 @@ export const makeExecuteStream =
           runStoreLayer,
           checkpointEvery,
         });
-        durableFinish = installed.finish;
+        durableInstalled = installed;
         durableFlush = installed.flush;
+        if (options.runController instanceof RunController) {
+          releaseActive = options.activeRuns?.register(runId, options.runController) ?? releaseActive;
+        }
       }
 
       const producerFiber = yield* execute(task).pipe(
@@ -510,6 +518,7 @@ export const makeExecuteStream =
           // ordinary answer. The benchmark reads `completed.abstention` (and falls
           // back to `metadata.terminatedBy`), so every abstention-trap task scored
           // 0 through the streaming path regardless of harness behaviour.
+          const streamTerminatedBy = (taskResult as { terminatedBy?: TerminatedBy }).terminatedBy;
           const streamAbstention = projectAbstention(
             taskResult as { terminatedBy?: TerminatedBy; abstention?: { reason: string; missing: readonly string[] } },
           );
@@ -674,7 +683,16 @@ export const makeExecuteStream =
           const flushStep: Effect.Effect<void> =
             !paused && !pausedInteraction
               ? Effect.promise(() =>
-                  durableFinish ? durableFinish(true).catch(() => undefined) : Promise.resolve(),
+                  durableInstalled
+                    ? durableInstalled
+                        .settle({
+                          success: taskResult.success,
+                          ...(streamTerminatedBy !== undefined ? { terminatedBy: streamTerminatedBy } : {}),
+                          ...(typeof taskResult.error === "string" ? { error: taskResult.error } : {}),
+                          metadata: baseMetadata,
+                        })
+                        .then(() => undefined, () => undefined)
+                    : Promise.resolve(),
                 )
               : durableFlush
                 ? Effect.promise(() => durableFlush!())
@@ -740,7 +758,7 @@ export const makeExecuteStream =
           // writes the "failed" status internally; `.catch()` keeps a
           // status-write failure from ever failing the stream.
           const flushStep: Effect.Effect<void> = Effect.promise(() =>
-            durableFinish ? durableFinish(false).catch(() => undefined) : Promise.resolve(),
+            durableInstalled ? durableInstalled.interrupt("error", cause).then(() => undefined, () => undefined) : Promise.resolve(),
           );
           const offer = flushStep.pipe(Effect.zipRight(liveGate.failed(cause)), Effect.zipRight(Queue.offer(queue, errorEvent)));
           if (!eb) return offer;
@@ -769,6 +787,7 @@ export const makeExecuteStream =
         // after this publishes no cancel. Interrupted: the abort listener does.
         Effect.tap(() => runTerminal?.settle ?? Effect.void),
         Effect.ensuring(runTerminal?.release ?? Effect.void),
+        Effect.ensuring(Effect.sync(() => releaseActive())),
         Effect.forkDaemon,
       );
 
@@ -791,9 +810,23 @@ export const makeExecuteStream =
       const ctlSignal = options?.runController?.signal;
       if (ctlSignal) {
         // After the interrupt, a run still open gets its one terminal bus event.
+        // A durable run aborted before it ended on its own is left continuable
+        // (`user-stopped`, final checkpoint from its last finished iteration).
         const interruptProducer = (): void => {
           Effect.runFork(
-            Fiber.interrupt(producerFiber).pipe(Effect.zipRight(runTerminal?.publishIfOpen ?? Effect.void)),
+            Fiber.poll(producerFiber).pipe(
+              Effect.flatMap((ended) =>
+                Fiber.interrupt(producerFiber).pipe(
+                  Effect.zipRight(
+                    Option.isNone(ended) && durableInstalled !== undefined
+                      ? Effect.promise(() => durableInstalled!.interrupt("user-stopped", "terminated").catch(() => undefined))
+                      : Effect.void,
+                  ),
+                  Effect.zipRight(Effect.sync(() => releaseActive())),
+                  Effect.zipRight(runTerminal?.publishIfOpen ?? Effect.void),
+                ),
+              ),
+            ),
           );
         };
         if (ctlSignal.aborted) {

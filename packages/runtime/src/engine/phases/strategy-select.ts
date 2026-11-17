@@ -17,7 +17,7 @@ import { Effect } from "effect";
 import { extractIntentText } from "../util.js";
 import { StrategySelectorService } from "@reactive-agents/reactive-intelligence";
 import type { Phase } from "../phase.js";
-import { executorStrategy, readPlanExec } from "../../agent/plan-executor.js";
+import { executorStrategy, readPlanExec, readPlanOnly } from "../../agent/plan-executor.js";
 
 const StrategySelectorTag = StrategySelectorService;
 
@@ -52,6 +52,7 @@ export const strategySelect: Phase = {
 
       // A supplied plan (`agent.execute(plan)`) picks its executor: blueprint / plan-execute-reflect, or the loop (no override).
       const planned = executorStrategy(readPlanExec(deps.task), strategy);
-      return { ...ctx, selectedStrategy: planned ?? strategy };
+      // `agent.plan({ strategy })` names the strategy whose planner runs (it wins over the selector; adaptive would spend a classify call).
+      return { ...ctx, selectedStrategy: readPlanOnly(deps.task) ?? planned ?? strategy };
     }),
 };

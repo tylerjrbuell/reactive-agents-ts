@@ -21,7 +21,7 @@ import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { readPosture, readTodoSeed } from "../../../chat/todo-seed.js";
-import { adoptedPlan, readPlanExec } from "../../../agent/plan-executor.js";
+import { adoptedPlan, readPlanExec, readPlanOnly } from "../../../agent/plan-executor.js";
 import { readPlanFindings } from "../../../chat/plan-findings.js";
 import { readEnvironmentUpdate } from "../../../chat/environment-snapshot.js";
 
@@ -323,6 +323,8 @@ export const runReasoningThink = (
       allToolSchemas,
       strategy: effectiveStrategy,
       ...(suppliedPlan !== undefined ? { plan: suppliedPlan } : {}),
+      // `agent.plan({ strategy })`: the strategy's planner only; the plan returns in `metadata.extensions.plan`.
+      ...(readPlanOnly(task) !== undefined ? { planOnly: true } : {}),
       contextProfile: c.maxIterations !== undefined
         ? { ...(config.contextProfile ?? {}), maxIterations: c.maxIterations }
         : config.contextProfile,

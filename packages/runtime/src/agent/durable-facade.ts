@@ -64,6 +64,8 @@ import { toolEffectIdentityKey } from '@reactive-agents/core'
 import type { EffectReceiptRecord, InteractionQuestion, PlanFinding, ToolEffectRecord } from '@reactive-agents/core'
 import { join } from 'node:path'
 import type { ToolEffectRow } from '../services/run-store.js'
+import type { DurableResumeConfig } from './run-durable.js'
+import { prepareResume } from '../engine/run-resume.js'
 import {
     loadResumePayload,
     loadForkPayload,
@@ -217,7 +219,12 @@ export interface RunDurableParams {
         readonly stateJson: string
         readonly decision?: { gateId: string; status: 'approved' | 'denied'; reason?: string }
         readonly interaction?: { interactionId: string; valueJson: string }
+        /** Tool effects a continued run already made (`resumeRun`): served from the journal, not run again. */
+        readonly recovered?: ReturnType<typeof reconcileToolEffects>
     }
+    /** The run's owner, kept when a resume recreates the run row. */
+    readonly userId?: string
+    readonly orgId?: string
     /** Per-run model override (Arc 1 Task 6) — bound as run slot `modelOverrideSlot`. */
     readonly modelOverride?: string
     /** Fork lineage (Arc 1 Task 6) — stamped onto the created run row. */
@@ -233,6 +240,8 @@ export interface RunDurableParams {
     readonly planFindings?: readonly PlanFinding[]
     /** The plan to run in a strategy (`run(task, { plan })`), carried like `initialTodo`. */
     readonly planExec?: PlanExecution
+    /** Run only this strategy's planner (`agent.plan({ strategy })`), carried like `planExec`. */
+    readonly planOnly?: PlanExecution['strategy']
     /** The caller's posture (`"plan"` ⇒ plan-only), carried like `initialTodo`. */
     readonly posture?: 'execute' | 'plan'
     /** Iteration cap for this run (a loop-stop resume's `resumeMaxIterations`); rides `task.metadata.context.maxIterations`. */
@@ -245,7 +254,7 @@ export const maxIterationsCarry = (p: { readonly maxIterations?: number }): { re
 
 /** Explicit dependency surface — exactly the `ReactiveAgent` fields/methods the moved methods read. */
 export interface DurableFacadeDeps {
-    readonly durableResume?: { readonly dir: string; readonly configHash: string }
+    readonly durableResume?: DurableResumeConfig
     readonly agentId: string
     /**
      * The agent's ManagedRuntime. Since Task 10 (D1 bridge) the facade
@@ -299,12 +308,18 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          * the run slot `resumeStateSlot`, and continues the run to completion. Completed tools are
          * NOT re-executed — their results live in the restored steps/messages.
          *
-         * A run a loop guard stopped (`result.resumable`, `listRuns()[i].resumable`)
-         * continues from its final checkpoint with corrective guidance (what was
-         * done, what is unfinished, what not to repeat; the original task is the
-         * goal) and a fresh iteration budget. `opts.note` is appended to that
-         * guidance; `opts.extraIterations` (default 10) bounds the continued run.
-         * Passing `opts` for a run that is not loop-stopped fails `RunNotResumableError`.
+         * Any run that did not complete continues (`result.resumable`,
+         * `listRuns()[i].resumable`): one stopped by the user (`pauseRun` /
+         * `stopRun` / abort), ended by an error, a spent budget or a timeout, or
+         * a crash, from its last finished iteration; one a loop guard stopped
+         * from its final checkpoint with corrective guidance (what was done,
+         * what is unfinished, what not to repeat; the original task is the goal)
+         * and a fresh iteration budget (default 10 iterations). Completed tool
+         * calls are served from the effect journal, never run again; a failed
+         * one re-runs. `opts.note` is passed to the run as guidance;
+         * `opts.extraIterations` bounds the continued run. The continued run is
+         * a durable run again (checkpointed, live-registered, pausable).
+         * Passing `opts` for a run that already completed fails `RunNotResumableError`.
          *
          * @param runId - The run id reported when the original run was created.
          * @param opts - Loop-stop resume options (`note`, `extraIterations`).
@@ -358,102 +373,74 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                     ),
                 )
 
-                // 1b. A loop-stopped run continues through the durable wrapper (so it
-                //     checkpoints again and can be resumed again): corrective guidance,
-                //     the caller's note, and a fresh iteration budget. With options
-                //     (`note` / `extraIterations`) a run that is not loop-stopped is refused.
-                const stop = prepareLoopStopResume({
-                    stateJson: payload.stateJson,
-                    goal: payload.run.task,
-                    ...(opts?.note !== undefined ? { note: opts.note } : {}),
-                    ...(opts?.extraIterations !== undefined ? { extraIterations: opts.extraIterations } : {}),
-                })
-                if (stop !== undefined) {
-                    return yield* Effect.promise(() =>
-                        deps.runDurable({
-                            fileRoot,
-                            ...workspaceCarry(payload.run.workspace),
-                            input: payload.run.task,
-                            taskId: payload.taskId ?? runId,
-                            runId,
-                            task: payload.run.task,
-                            maxIterations: stop.maxIterations,
-                            resume: { stateJson: stop.stateJson },
-                        }),
-                    )
-                }
-                if (opts !== undefined) {
+                // 1b. With options, a run that already completed has nothing to continue.
+                if (opts !== undefined && payload.run.status === 'completed' && payload.run.stop === undefined) {
                     return yield* Effect.fail(
-                        new RunNotResumableError({ runId, reason: 'the run did not end by a loop guard: there is no loop stop to continue' }),
+                        new RunNotResumableError({ runId, reason: 'the run completed: there is nothing to continue' }),
                     )
                 }
 
-                // 2. Reconcile the crashed run's tool-effect rows (GH #262):
+                // 2. Reconcile the stopped run's tool-effect rows (GH #262):
                 //    succeeded rows fill `recoveredToolEffectsSlot` (the kernel act
                 //    phase injects their results WITHOUT re-executing), all
                 //    recovery-bearing rows thread the trust receipt, and the
                 //    terminal-less `executing` rows keep their ambiguity
-                //    inspectable in the store.
-                const { recoveredMap, receiptEffects } = reconcileToolEffects(
-                    payload.toolEffects,
-                payload.checkpointIteration,
-                )
+                //    inspectable in the store. A failed call is never recovered:
+                //    the failing step re-runs.
+                const recovered = reconcileToolEffects(payload.toolEffects, payload.checkpointIteration)
 
-                // 3. Re-run to completion with the restored state + the recovered
-                //    effects bound into the run scope at the run entry.
-                //    - reasoning-think reads resumeStateSlot, deserializes, and
-                //      forwards it as KernelInput.resumeState so the runner
-                //      continues mid-stream.
-                //    - The kernel act phase reads recoveredToolEffectsSlot before
-                //      each dispatch; a matching succeeded record means the
-                //      effect already happened. No map is bound when nothing was
-                //      recorded (runs with no recorded effects resume at zero cost).
-                const withRecovery = deps.buildRunTaskEffect(payload.run.task, {
-                    // One run, one task id: continue under the id the checkpoint
-                    // was captured under, so lifecycle and kernel events agree.
-                    taskId: payload.taskId ?? runId,
-                    fileRoot,
-                    // The run's own workspace survives the pause (run > builder > ambient).
-                    ...workspaceCarry(payload.run.workspace),
-                    ...(receiptEffects.length > 0 ? { recoveredToolEffects: receiptEffects } : {}),
-                    runState: {
-                        resumeState: payload.stateJson,
-                        ...(recoveredMap.size > 0 ? { recoveredToolEffects: recoveredMap } : {}),
-                    },
+                // 3. Continue the run through the durable wrapper (it checkpoints
+                //    again, registers as live, and can be paused or resumed again)
+                //    from the restored state: corrective guidance for a loop stop,
+                //    a plain "continue" for a user stop, the caller's note, and an
+                //    iteration cap when `extraIterations` bounds it. Completed
+                //    steps ride the state; completed tool calls ride the journal.
+                const next = prepareResume({
+                    stateJson: payload.stateJson,
+                    goal: payload.run.task,
+                    ...(payload.run.stop !== undefined ? { stop: payload.run.stop } : {}),
+                    ...(opts?.note !== undefined ? { note: opts.note } : {}),
+                    ...(opts?.extraIterations !== undefined ? { extraIterations: opts.extraIterations } : {}),
                 })
-                // The pre-bridge async try/catch region (verbatim scoping):
-                // BOTH the pipeline run and the `completed` status mark are
-                // guarded; a rejection anywhere in the region marks the run
-                // `failed` (its own boundary kept inside the catch arm) and
-                // re-raises the unwrapped error. `deps.runtime.runPromise`
-                // keeps its inner boundary (a rejecting pipeline reached
-                // callers as THAT call's wrapper pre-bridge, which is what
-                // `unwrapErrorWithSuggestion` receives as input in both
-                // shapes); the status marks keep the global default-runtime
-                // boundary: parenting and event sequencing unchanged.
-                return yield* Effect.gen(function* () {
-                    const result = yield* Effect.promise(() =>
-                        deps.runtime.runPromise(withRecovery),
-                    )
-                    yield* Effect.promise(() =>
-                        Effect.runPromise(
-                            markRunStatus({ dbPath, runId, status: 'completed' }),
-                        ),
-                    )
-                    return result
-                }).pipe(
-                    Effect.catchAllDefect((e) =>
-                        Effect.gen(function* () {
-                            yield* Effect.promise(() =>
-                                Effect.runPromise(
-                                    markRunStatus({ dbPath, runId, status: 'failed' }),
-                                ),
-                            )
-                            return yield* Effect.fail(unwrapErrorWithSuggestion(e))
-                        }),
-                    ),
+                return yield* Effect.promise(() =>
+                    deps.runDurable({
+                        fileRoot,
+                        ...workspaceCarry(payload.run.workspace),
+                        input: payload.run.task,
+                        // One run, one task id: continue under the id the checkpoint
+                        // was captured under, so lifecycle and kernel events agree.
+                        taskId: payload.taskId ?? runId,
+                        runId,
+                        task: payload.run.task,
+                        ...(next.maxIterations !== undefined ? { maxIterations: next.maxIterations } : {}),
+                        ...(payload.run.userId !== undefined ? { userId: payload.run.userId } : {}),
+                        ...(payload.run.orgId !== undefined ? { orgId: payload.run.orgId } : {}),
+                        resume: { stateJson: next.stateJson, recovered },
+                    }),
                 )
             })
+        },
+
+        /**
+         * Ask a live durable run of this agent to pause at its next iteration
+         * boundary. The run's final checkpoint is written, its row becomes
+         * `paused` and its own `run()` / `runStream()` call ends; continue it
+         * with `resumeRun(runId)`. A tool already running finishes first and is
+         * journaled. Resolves once the pause is persisted; `false` when this
+         * agent has no live run with that id (finished, or live elsewhere).
+         */
+        pauseRun(runId: string): Effect.Effect<boolean> {
+            return Effect.promise(() => deps.durableResume?.activeRuns?.request(runId, 'user-paused') ?? Promise.resolve(false))
+        },
+
+        /** Like {@link pauseRun}, but the row becomes `stopped` (a stop the user chose, not a pause). Continue with `resumeRun(runId)`. */
+        stopRun(runId: string): Effect.Effect<boolean> {
+            return Effect.promise(() => deps.durableResume?.activeRuns?.request(runId, 'user-stopped') ?? Promise.resolve(false))
+        },
+
+        /** Ids of the durable runs live in this agent now (tells a crashed `running` row from a live one). */
+        activeRunIds(): readonly string[] {
+            return deps.durableResume?.activeRuns?.ids() ?? []
         },
 
         /**

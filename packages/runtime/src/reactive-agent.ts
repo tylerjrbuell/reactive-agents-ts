@@ -31,7 +31,7 @@ import { makeSkillsFacade } from './agent/skills-facade.js'
 import { makeSchedulesApi, type SchedulesApi } from './agent/schedules-facade.js'
 import { makeMemoryHandle, type AgentMemoryHandle } from './agent/memory-facade.js'
 import { runFacadeEffect } from './agent/run-facade-effect.js'
-import { makeDurableFacade, maxIterationsCarry, type PendingInteraction, type ResumeRunOptions, type RunDurableParams } from './agent/durable-facade.js'
+import { makeDurableFacade, type PendingInteraction, type ResumeRunOptions, type RunDurableParams } from './agent/durable-facade.js'
 import { buildRunTaskEffect, type RunTaskDeps, type RunTaskEffectOptions } from './agent/run-task-effect.js'
 import { makeSessionHistoryStore } from './agent/session-store.js'
 import { startStreamPump } from './agent/stream-pump.js'
@@ -39,7 +39,6 @@ import { armAbortTerminal, bareBuilderFailure, driveApprovals, mapRunBoundaryErr
 import { a2aResultToEffect } from './agent/a2a-executor.js'
 import type { ExecutionContext } from './types.js'
 import type { RuntimeErrors } from './errors.js'
-import { unwrapErrorWithSuggestion } from './errors.js'
 import type { ToolDefinition } from '@reactive-agents/tools'
 import type { Task, TaskResult, TaskError, Plan } from '@reactive-agents/core'
 import { generateTaskId, AgentId, TaskId, isPlanEmpty } from '@reactive-agents/core'
@@ -48,11 +47,6 @@ import {
     CapabilityRegistry,
     type CapabilityAuditReport,
 } from './capabilities/registry.js'
-import {
-    createDurableRun,
-    persistApprovalPauseAt,
-    persistInteractionPauseAt,
-} from './engine/durable-resume.js'
 import type { RunRecord, RunStatus } from './services/run-store.js'
 import type { AgentEvent } from '@reactive-agents/core'
 import { workspaceCarry, type WorkspaceOption } from './engine/start-run.js'
@@ -74,8 +68,8 @@ import {
     type JudgeRankResult,
 } from './judgment-rank.js'
 import type { AgentStreamEvent, StreamDensity } from './stream-types.js'
-import { RunController, installDurableCheckpointing, type RunHandle } from './run-controller.js'
-import { RunStoreLive } from './services/run-store.js'
+import { RunController, type RunHandle } from './run-controller.js'
+import { runDurableRun, type DurableResumeConfig } from './agent/run-durable.js'
 import { checkTaskInputModality, taskInputText, toTaskInputPayload, type TaskInput } from './agent/task-input.js'
 import { withHistoryBlock, currentTurnCarry } from './agent/history-block.js'
 // withHistoryBlock lives in agent/history-block.ts (multimodal-aware); re-exported for existing importers.
@@ -223,7 +217,7 @@ export class ReactiveAgent<TOut = unknown> {
             systemPrompt?: string
         },
         /** @internal Durable resume context from `.withDurableRuns()` — checkpoint dir + identity configHash. */
-        private readonly _durableResume?: { readonly dir: string; readonly configHash: string },
+        private readonly _durableResume?: DurableResumeConfig,
         /** @internal Opt-in typed structured output config from `.withOutputSchema()`. Absent = off. */
         private readonly _outputSchemaConfig?: {
             readonly contract: SchemaContract<unknown>
@@ -1065,92 +1059,26 @@ export class ReactiveAgent<TOut = unknown> {
      * runId) and `approveRun`/`denyRun` (existing runId + resume locals), so a
      * re-pause on resume persists too.
      */
-    private async runDurable(params: RunDurableParams): Promise<AgentResult> {
-        const { dir, configHash } = this._durableResume!
-        const dbPath = join(dir, 'runs.db')
-        const { mkdirSync } = await import('node:fs')
-        mkdirSync(dir, { recursive: true })
-        const runStoreLayer = RunStoreLive(dbPath)
+    private runDurable(params: RunDurableParams): Promise<AgentResult> {
+        return runDurableRun({ durableResume: this._durableResume!, agentId: this.agentId, runtime: this.runtime, buildRunTaskEffect: (i, o) => this.buildRunTaskEffect(i, o) }, params)
+    }
 
-        // 1. Create (or replace) the run row.
-        await Effect.runPromise(
-            createDurableRun({
-                dbPath,
-                runId: params.runId,
-                agentId: this.agentId,
-                task: params.task,
-                configHash,
-                ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
-                ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}), ...workspaceCarry(params.workspace),
-            }),
-        )
+    /**
+     * Pause a live durable run at its next iteration boundary (see `makeDurableFacade().pauseRun`). Continue it with `resumeRun(runId)`.
+     * Resolves once the pause is persisted; `false` when this agent has no live run with that id.
+     */
+    async pauseRun(runId: string): Promise<boolean> {
+        return runFacadeEffect(this.runtime, this._durable().pauseRun(runId))
+    }
 
-        // 2. RunController + durable checkpointing (the kernel captures the paused
-        //    state at iteration+1 so resume restores `awaitingApprovalFor`).
-        const controller = new RunController(new AbortController())
-        const { finish } = installDurableCheckpointing(controller, {
-            runId: params.runId,
-            runStoreLayer,
-            checkpointEvery: 1,
-        })
+    /** Stop a live durable run at its next iteration boundary; like `pauseRun`, but the row reads `stopped`. Continue it with `resumeRun(runId)`. */
+    async stopRun(runId: string): Promise<boolean> {
+        return runFacadeEffect(this.runtime, this._durable().stopRun(runId))
+    }
 
-        // 3. Run the pipeline; the controller (+ resume state when resuming)
-        //    is bound into the run scope by the run entry.
-        const resume = params.resume
-        const pipeline = this.buildRunTaskEffect(params.input, {
-            ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
-            durableRunId: params.runId,
-            ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
-            ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}), ...workspaceCarry(params.workspace), ...seedCarry(params), ...planPosture(params.posture), ...maxIterationsCarry(params),
-            runState: {
-                runController: controller,
-                ...(params.modelOverride !== undefined ? { modelOverride: params.modelOverride } : {}),
-                ...(resume ? { resumeState: resume.stateJson } : {}),
-                ...(resume?.decision ? { approvalDecision: resume.decision } : {}),
-                ...(resume?.interaction ? { interactionResponse: resume.interaction } : {}),
-            },
-        })
-
-        try {
-            const result = await this.runtime.runPromise(pipeline)
-            if (result.status === 'awaiting-approval' && result.pendingApproval) {
-                // Paused — persist (status + pending row). Do NOT finish: the run
-                // intentionally stays `awaiting-approval` until approve/deny.
-                await Effect.runPromise(
-                    persistApprovalPauseAt({
-                        dbPath,
-                        runId: params.runId,
-                        gate: {
-                            gateId: result.pendingApproval.gateId,
-                            toolName: result.pendingApproval.toolName,
-                            args: result.pendingApproval.args,
-                        },
-                    }),
-                )
-            } else if (result.status === 'awaiting-interaction' && result.pendingInteraction) {
-                // Agentic-UI interaction rail (Task 10): paused for user input —
-                // persist (status + pending interaction row). Do NOT finish: the
-                // run stays `awaiting-interaction` until respondToInteraction.
-                await Effect.runPromise(
-                    persistInteractionPauseAt({
-                        dbPath,
-                        runId: params.runId,
-                        interaction: {
-                            interactionId: result.pendingInteraction.interactionId,
-                            kind: result.pendingInteraction.kind,
-                            prompt: result.pendingInteraction.prompt,
-                            schemaJson: JSON.stringify(result.pendingInteraction.schema ?? {}),
-                        },
-                    }),
-                )
-            } else {
-                await finish(true)
-            }
-            return result
-        } catch (e) {
-            await finish(false)
-            throw unwrapErrorWithSuggestion(e)
-        }
+    /** Ids of the durable runs live in this agent now (tells a crashed `running` row from a live one). */
+    activeRunIds(): readonly string[] {
+        return this._durable().activeRunIds()
     }
 
     /**
@@ -1314,6 +1242,7 @@ export class ReactiveAgent<TOut = unknown> {
                 density,
                 runController: controller,
                 ...(options?.onRunId !== undefined ? { onRunId: options.onRunId } : {}),
+                ...(this._durableResume?.activeRuns !== undefined ? { activeRuns: this._durableResume.activeRuns } : {}),
                 ...(options?.identity !== undefined ? { identity: options.identity } : {}), ...workspaceCarry(options?.workspace),
             })
         )

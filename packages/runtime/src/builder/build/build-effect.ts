@@ -12,6 +12,7 @@
 
 import { Effect, Layer } from 'effect'
 import { defaultDurableRunsDir, durableConfigHash } from '../../services/run-store.js'
+import { makeActiveRuns } from '../../engine/active-runs.js'
 import { buildSubAgentSystemPrompt } from '../helpers.js'
 import {
     buildBaseRuntimeAndEngine,
@@ -344,6 +345,7 @@ export const runBuilderBuildEffect = <TOut>(
                           systemPrompt: composedSystemPrompt,
                           provider: state._provider,
                       }),
+                      activeRuns: makeActiveRuns(),
                   }
                 : undefined,
             outputSchemaConfig: state._outputSchemaConfig,

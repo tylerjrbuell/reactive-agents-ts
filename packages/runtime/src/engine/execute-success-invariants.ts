@@ -96,6 +96,15 @@ export function deriveExecutionSuccess(
     return { terminatedByRaw, dialectObserved, executionSucceeded: false };
   }
 
+  // A plan-only run (`agent.plan({ strategy })`) delivered exactly what it was
+  // asked for: the plan, in `metadata.extensions.plan`. Its status is `partial`
+  // and its output empty by design, so the empty-partial rule below (and the
+  // deliverable / required-tool vetoes, which judge a run that did the work)
+  // must not judge it.
+  if (rr?.metadata !== undefined && Reflect.get(rr.metadata, "planOnly") === true) {
+    return { terminatedByRaw, dialectObserved, executionSucceeded: true };
+  }
+
   // Reactive strategy often reports partial + max_iterations whenever the kernel did not
   // reach state "done", even if the last LLM turn produced a usable string. Treat
   // completed, or partial with non-empty output, as success; empty partial as failure.

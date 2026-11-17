@@ -108,7 +108,7 @@ export type { TaskInput, ModelInputCapabilities } from "./agent/task-input.js";
 export { createAgent } from "./create-agent.js";
 
 // ─── Loop-stopped runs: summary on results/run rows + resume options ───
-export type { LoopStopSummary } from "./loop-stop-summary.js";
+export type { LoopStopSummary, RunStopSummary, RunStopKind } from "./loop-stop-summary.js";
 export type { ResumeRunOptions } from "./engine/loop-stop-resume.js";
 
 // ─── Build validation (fail-fast config errors) ───

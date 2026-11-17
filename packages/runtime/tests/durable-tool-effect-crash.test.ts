@@ -302,11 +302,14 @@ describe("durable runs — tool-effect crash-window recovery (GH #262)", () => {
           expect(effects[0]!.status).toBe("ambiguous-then-replayed");
           expect(effects[0]!.effectId).toBe(rows[0]!.effect_id);
 
-          // The ambiguity stays inspectable at rest (no terminal write ever
-          // landed for that effect id).
+          // The resumed run is a durable run again (it checkpoints and journals
+          // its effects), so the live replay writes the terminal outcome onto
+          // the same effect row: the ambiguity is resolved at rest, and the
+          // receipt above still records that it was replayed.
           const after = queryEffectRows(dir, originalRunId!);
           expect(after.length).toBe(1);
-          expect(after[0]!.status).toBe("executing");
+          expect(after[0]!.status).toBe("succeeded");
+          expect(after[0]!.effect_id).toBe(rows[0]!.effect_id);
         } finally {
           await resumeAgent.dispose();
         }

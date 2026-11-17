@@ -904,7 +904,11 @@ Stream typed structured output field-by-field as it fills in. Requires `.withOut
 
 ### `resumeRun(runId: string, opts?: { note?, extraIterations? }): Promise<AgentResult>`
 
-Resume a crashed or paused durable run from its last checkpoint. Requires `.withDurableRuns()`. A run a loop guard stopped (`result.resumable`, or a `listRuns()` row with `resumable: true` and a `loopStop` summary) continues with corrective guidance and a fresh iteration budget: `note` is appended to the guidance, `extraIterations` (default 10) bounds the continued run. Passing `opts` for a run that did not loop-stop fails `RunNotResumableError`. See [Durable Execution](/guides/durable-execution/).
+Resume any durable run that did not complete from its last checkpoint: stopped or paused by the user, ended by an error, a spent budget or a timeout, a loop stop, or a crash (`result.resumable`, or a `listRuns()` row with `resumable: true` and a typed `stop` record). Requires `.withDurableRuns()`. Completed tool calls are served from the effect journal, never run again. A loop stop continues with corrective guidance and a fresh iteration budget (default 10); `note` is passed to the run as guidance, `extraIterations` bounds the continued run. Passing `opts` for a run that already completed fails `RunNotResumableError`. See [Durable Execution](/guides/durable-execution/).
+
+### `pauseRun(runId: string): Promise<boolean>` / `stopRun(runId: string): Promise<boolean>`
+
+Ask a live durable run of this agent to stop at its next iteration boundary. A tool already running finishes first. The final checkpoint and a typed stop record are written and the row becomes `paused` (`pauseRun`) or `stopped` (`stopRun`); continue it with `resumeRun(runId)`. Resolves `true` once persisted, `false` when this agent has no live run with that id. `activeRunIds(): readonly string[]` lists the live ones (tells a crashed `running` row from a live one).
 
 ### `listRuns(filter?: { status? }): Promise<readonly RunRecord[]>`
 

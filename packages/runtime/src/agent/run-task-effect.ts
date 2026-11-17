@@ -114,6 +114,8 @@ export interface RunTaskEffectOptions {
     readonly planFindings?: readonly PlanFinding[]
     /** A plan to run in a strategy; rides `task.metadata.context.planExec` (see `plan-executor.ts`). */
     readonly planExec?: PlanExecution
+    /** Run only this strategy's planner (`agent.plan({ strategy })`); rides `task.metadata.context.planOnly`. */
+    readonly planOnly?: PlanExecution['strategy']
     /** The typed current turn (input before history was folded in); rides `task.metadata.currentTurn`. */
     readonly currentTurn?: TaskCurrentTurn
     readonly durableRunId?: string
@@ -237,7 +239,7 @@ export const buildRunTaskEffect = (
         metadata: {
             tags: [],
             ...(options?.currentTurn ? { currentTurn: options.currentTurn } : {}),
-            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length || options?.initialTodo?.length || options?.planFindings?.length || options?.planExec
+            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length || options?.initialTodo?.length || options?.planFindings?.length || options?.planExec || options?.planOnly
                 ? {
                       context: {
                           ...todoSeedMetadata(options.initialTodo, options.planFindings).context,

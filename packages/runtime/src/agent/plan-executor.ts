@@ -33,6 +33,8 @@ export interface PlanExecution {
 /** Options-bag mixin: the run executes a supplied plan in a strategy (set by `agent.execute`, `run(input, { plan })`). */
 export interface PlanExecOption {
   readonly planExec?: PlanExecution;
+  /** Run the strategy's planner only (`agent.plan({ strategy })`): no tool runs, the plan returns in `metadata.extensions.plan`. */
+  readonly planOnly?: PlanExecutorStrategy;
 }
 
 /** Options-bag mixin: pick the executor of `agent.execute(plan, { strategy })`. */
@@ -63,12 +65,26 @@ export function invalidPlan(plan: unknown): PlanInvalidError | undefined {
   return problem === undefined ? undefined : new PlanInvalidError({ reason: problem });
 }
 
-/** Spread-ready forwarder of the options' supplied plan (`{}` when absent: bytes identical). */
-export const planExecCarry = (o: PlanExecOption | undefined): PlanExecOption => (o?.planExec !== undefined ? { planExec: o.planExec } : {});
+/** Key under `task.metadata.context` that carries the plan-only strategy into the engine. */
+export const PLAN_ONLY_CONTEXT_KEY = "planOnly";
 
-/** Spread into `task.metadata.context`: the supplied plan under {@link PLAN_EXEC_CONTEXT_KEY}, or nothing. */
-export const planExecContext = (o: PlanExecOption | undefined): Record<string, unknown> =>
-  o?.planExec !== undefined && !isPlanEmpty(o.planExec.plan) ? { [PLAN_EXEC_CONTEXT_KEY]: o.planExec } : {};
+/** Spread-ready forwarder of the options' supplied plan and plan-only strategy (`{}` when absent: bytes identical). */
+export const planExecCarry = (o: PlanExecOption | undefined): PlanExecOption => ({
+  ...(o?.planExec !== undefined ? { planExec: o.planExec } : {}),
+  ...(o?.planOnly !== undefined ? { planOnly: o.planOnly } : {}),
+});
+
+/** Spread into `task.metadata.context`: the supplied plan under {@link PLAN_EXEC_CONTEXT_KEY} and the plan-only strategy under {@link PLAN_ONLY_CONTEXT_KEY}, or nothing. */
+export const planExecContext = (o: PlanExecOption | undefined): Record<string, unknown> => ({
+  ...(o?.planExec !== undefined && !isPlanEmpty(o.planExec.plan) ? { [PLAN_EXEC_CONTEXT_KEY]: o.planExec } : {}),
+  ...(o?.planOnly !== undefined ? { [PLAN_ONLY_CONTEXT_KEY]: o.planOnly } : {}),
+});
+
+/** The strategy whose planner alone this run runs (`agent.plan({ strategy })`), read back off a task. */
+export const readPlanOnly = (task: Pick<Task, "metadata">): PlanExecutorStrategy | undefined => {
+  const raw: unknown = task.metadata?.context?.[PLAN_ONLY_CONTEXT_KEY];
+  return isPlanExecutorStrategy(raw) ? raw : undefined;
+};
 
 /** Read the supplied plan back off a task. Undefined when absent or empty. */
 export function readPlanExec(task: Pick<Task, "metadata">): PlanExecution | undefined {

@@ -31,7 +31,7 @@ import {
   buildFinalAnswerOutputDescription,
   toolEffect,
 } from "@reactive-agents/tools";
-import type { ToolDefinition, ToolEffect, ToolParameter } from "@reactive-agents/tools";
+import type { ShellCommandPolicy, ToolDefinition, ToolEffect, ToolParameter } from "@reactive-agents/tools";
 import {
   asksForComputedAggregate,
   extractOutputFormat,
@@ -73,6 +73,8 @@ export type ToolSchema = {
    * `read` tools; the kernel never guesses an effect from a name.
    */
   effect?: ToolEffect;
+  /** From `ToolDefinition.commandPolicy`: the executables a command-running tool may run (plan producers render it). */
+  commandPolicy?: ShellCommandPolicy;
 };
 
 /**
@@ -89,6 +91,7 @@ export const toKernelToolSchema = (t: ToolDefinition): ToolSchema => ({
   ...(t.riskLevel !== undefined ? { riskLevel: t.riskLevel } : {}),
   ...(t.mutatesExternalState !== undefined ? { mutatesExternalState: t.mutatesExternalState } : {}),
   effect: toolEffect(t),
+  ...(t.commandPolicy !== undefined ? { commandPolicy: t.commandPolicy } : {}),
   parameters: [...(t.parameters ?? [])],
 });
 

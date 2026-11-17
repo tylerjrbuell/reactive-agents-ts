@@ -21,7 +21,7 @@ import { Database, hash, type DatabaseLike } from "@reactive-agents/runtime-shim
 import { chmodSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { parseLoopStopSummary, type LoopStopSummary } from "../loop-stop-summary.js";
+import { parseLoopStopSummary, stopKindOf, type LoopStopSummary, type RunStopSummary } from "../loop-stop-summary.js";
 
 /**
  * The default durable-runs directory of an agent: `~/.reactive-agents/<agentId>`.
@@ -93,7 +93,9 @@ export type RunStatus =
   | "awaiting-approval"
   | "awaiting-interaction"
   | "completed"
-  | "failed";
+  | "failed"
+  /** Ended by the user (`pauseRun` / `stopRun` / abort) or a loop guard; resumable from its final checkpoint. */
+  | "stopped";
 
 export interface RunRecord {
   readonly runId: string;
@@ -125,7 +127,18 @@ export interface RunRecord {
    * recreates the row and clears it.
    */
   readonly loopStop?: LoopStopSummary;
-  /** True when `agent.resumeRun(runId)` can continue this run: it is loop-stopped with a final checkpoint. */
+  /**
+   * Why the run did not complete, of any kind (`kind`: user-paused, user-stopped,
+   * error, crash, loop, budget, timeout), what it had done and what was open.
+   * Present while the run is stopped; a resume recreates the row and clears it.
+   */
+  readonly stop?: RunStopSummary;
+  /**
+   * True when `agent.resumeRun(runId)` can continue this run: it did not
+   * complete and has a checkpoint (or a loop stop). A `running` row with a
+   * checkpoint also reads resumable (a crashed run never writes a final status):
+   * a host tells it from a live one with `agent.activeRuns()`.
+   */
   readonly resumable?: boolean;
 }
 
@@ -206,6 +219,11 @@ export interface RunStore {
   readonly setLoopStop: (
     runId: string,
     summary: LoopStopSummary,
+  ) => Effect.Effect<void, never>;
+  /** Record why a run did not complete, of any kind (see {@link RunRecord.stop}). Idempotent. */
+  readonly setStop: (
+    runId: string,
+    summary: RunStopSummary,
   ) => Effect.Effect<void, never>;
   /** Upsert the serialized snapshot for one iteration (idempotent per iteration). */
   readonly putCheckpoint: (
@@ -349,11 +367,17 @@ interface RunRow {
   forked_at_iteration: number | null;
   workspace: string | null;
   loop_stop_json: string | null;
+  has_checkpoint: number;
 }
+
+/** Statuses a run can end in without being resumable by `resumeRun` (completed, or waiting on its own approve/respond rail). */
+const NOT_RESUMABLE: ReadonlySet<string> = new Set(["completed", "awaiting-approval", "awaiting-interaction"]);
 
 /** Map a `runs` row to its public record. */
 const runRecordOf = (row: RunRow): RunRecord => {
-  const loopStop = parseLoopStopSummary(row.loop_stop_json);
+  const stop = parseLoopStopSummary(row.loop_stop_json);
+  const loopStop = stop !== undefined && stopKindOf(stop) === "loop" ? stop : undefined;
+  const resumable = stop !== undefined || (row.has_checkpoint === 1 && !NOT_RESUMABLE.has(row.status));
   return {
   runId: row.run_id,
   agentId: row.agent_id,
@@ -366,13 +390,15 @@ const runRecordOf = (row: RunRow): RunRecord => {
   forkedFrom: row.forked_from ?? undefined,
   forkedAtIteration: row.forked_at_iteration ?? undefined,
   workspace: row.workspace ?? undefined,
-  ...(loopStop !== undefined ? { loopStop, resumable: true } : {}),
+  ...(loopStop !== undefined ? { loopStop } : {}),
+  ...(stop !== undefined ? { stop } : {}),
+  ...(resumable ? { resumable: true } : {}),
   };
 };
 
 /** Columns selected for a {@link RunRow}. */
 const RUN_COLUMNS =
-  "run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id, forked_from, forked_at_iteration, workspace, loop_stop_json";
+  "run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id, forked_from, forked_at_iteration, workspace, loop_stop_json, EXISTS(SELECT 1 FROM run_checkpoints c WHERE c.run_id = runs.run_id) AS has_checkpoint";
 
 interface ApprovalRow {
   run_id: string;
@@ -558,6 +584,12 @@ function openRunStoreDb(dbPath: string): DatabaseLike {
 /** The RunStore operations over an open database. */
 function makeRunStore(db: DatabaseLike): RunStore {
     const now = (): number => Date.now();
+    const setStop = (runId: string, summary: RunStopSummary): Effect.Effect<void, never> =>
+      Effect.sync(() => {
+        db.query(
+          `UPDATE runs SET loop_stop_json = ?, updated_at = ? WHERE run_id = ?`,
+        ).run(JSON.stringify(summary), now(), runId);
+      });
 
     return {
       createRun: ({ runId, agentId, task, configHash, userId, orgId, forkedFrom, forkedAtIteration, workspace }) =>
@@ -589,12 +621,9 @@ function makeRunStore(db: DatabaseLike): RunStore {
           ).run(status, now(), runId);
         }),
 
-      setLoopStop: (runId, summary) =>
-        Effect.sync(() => {
-          db.query(
-            `UPDATE runs SET loop_stop_json = ?, updated_at = ? WHERE run_id = ?`,
-          ).run(JSON.stringify(summary), now(), runId);
-        }),
+      setLoopStop: (runId, summary) => setStop(runId, { ...summary, kind: summary.kind ?? "loop" }),
+
+      setStop: (runId, summary) => setStop(runId, summary),
 
       putCheckpoint: (runId, iteration, stateJson) =>
         Effect.sync(() => {

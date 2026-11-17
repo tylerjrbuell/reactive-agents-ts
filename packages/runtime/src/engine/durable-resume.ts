@@ -250,6 +250,9 @@ export const createDurableRun = (params: {
   readonly forkedAtIteration?: number;
   /** The run's own working directory — see {@link RunRecord.workspace}. */
   readonly workspace?: string;
+  /** The run's owner, kept when a resume recreates the row. */
+  readonly userId?: string;
+  readonly orgId?: string;
 }): Effect.Effect<void, never> =>
   Effect.gen(function* () {
     const store = yield* RunStoreService;
@@ -258,6 +261,8 @@ export const createDurableRun = (params: {
       agentId: params.agentId,
       task: params.task,
       configHash: params.configHash,
+      ...(params.userId !== undefined ? { userId: params.userId } : {}),
+      ...(params.orgId !== undefined ? { orgId: params.orgId } : {}),
       ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
       ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}),
       // Absolute, so a resume from another process/cwd lands in the same directory.

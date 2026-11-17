@@ -9,6 +9,7 @@
  */
 import { Layer, ManagedRuntime, type Effect } from "effect";
 import { ReactiveAgent } from "../../reactive-agent.js";
+import type { DurableResumeConfig } from "../../agent/run-durable.js";
 import { bindGatewayOptions } from "../../agent/gateway-runner.js";
 import type { ExecutionContext } from "../../types.js";
 import type { StreamDensity } from "../../stream-types.js";
@@ -104,7 +105,7 @@ export interface AgentInstantiationDeps {
    * `configHash` (via `durableConfigHash`), so `agent.resume(runId)` can open
    * the RunStore and guard against a config drift.
    */
-  readonly durableResume?: { readonly dir: string; readonly configHash: string };
+  readonly durableResume?: DurableResumeConfig;
   /** Opt-in typed structured output config from `.withOutputSchema()`. Absent = off. */
   readonly outputSchemaConfig?: { readonly contract: SchemaContract<unknown>; readonly options: OutputSchemaOptions };
   /**

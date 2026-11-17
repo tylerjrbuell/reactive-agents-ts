@@ -157,7 +157,38 @@ if (result.resumable) {
 - gives the run a fresh iteration budget (`extraIterations`, default 10) because the stopped run's own cap is already spent;
 - checkpoints again, so a run that loops a second time can be continued again.
 
-`resumeRun(runId, { note?, extraIterations? })` fails `RunNotResumableError` when the run did not end by a loop guard. Plain `resumeRun(runId)` still resumes a crashed run.
+`resumeRun(runId, { note?, extraIterations? })` fails `RunNotResumableError` when the run already completed. Plain `resumeRun(runId)` still resumes a crashed run.
+
+### Stop, pause and continue any run
+
+A loop stop is one kind of stop. Every durable run that does not complete is continuable from where it was, whatever ended it. The run row carries a typed `stop` record and a status:
+
+| How it ended | `row.status` | `row.stop.kind` |
+| --- | --- | --- |
+| `agent.pauseRun(runId)` | `paused` | `user-paused` |
+| `agent.stopRun(runId)`, `handle.stop()`, `handle.terminate()` | `stopped` | `user-stopped` |
+| a loop guard | `stopped` | `loop` |
+| the iteration budget ran out | `failed` | `budget` |
+| a timeout | `failed` | `timeout` |
+| an error | `failed` | `error` |
+| the process died | `running` (stale) | none |
+
+`row.resumable` is true for every row that did not complete and has a checkpoint (a `running` row with a checkpoint is a crashed run unless `agent.activeRunIds()` lists it as live). `result.stop` and `result.resumable` say the same on a run's own result. A user stop still returns the synthesized answer; `result.stop` is what tells you the run is unfinished.
+
+```typescript
+const running = agent.run("Research and write up the release");
+// later, from anywhere in the same process:
+await agent.pauseRun(runId);        // takes effect at the next iteration boundary; resolves once persisted
+const row = (await agent.listRuns()).find((r) => r.runId === runId);
+// row.status === "paused", row.stop.kind === "user-paused", row.resumable === true
+const resumed = await agent.resumeRun(runId, { note: "Skip the benchmarks." });
+```
+
+- A pause or stop lands at the next iteration boundary. A tool that is already running finishes first and its result is journaled, so it never runs again on resume.
+- The final checkpoint is the state after the last finished iteration, so resume repeats no completed step or tool call. A failed tool call is not recorded as done and runs again.
+- A resumed run is a durable run again: it checkpoints, shows in `agent.activeRunIds()` and can be paused or stopped again.
+- Resuming a user stop or pause adds a plain "continue where you left off"; a loop stop adds corrective guidance; an error, spent budget or timeout resumes the state as it is. `note` and `extraIterations` work for all of them.
+- The cost on the hot path is one remembered reference per iteration. The final snapshot is serialized once, when the run is interrupted.
 
 A durable chat turn that runs tools carries the same fields on its `ChatReply` (`runId`, `loopStop`, `resumable`). If the run failed, the history note for that turn says what was done and that Continue is available.
 

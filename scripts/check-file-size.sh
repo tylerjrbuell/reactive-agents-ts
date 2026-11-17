@@ -212,8 +212,9 @@ GIANT_BAR=1000
 # 2026-11-16 plan input: plan-execute.ts 817->782 (planner call moved to strategies/planning/input-plan.ts obtainPlan, which also adopts a caller-supplied plan).
 # 2026-11-17 plan-only mode: plan-execute.ts 781->735 (rationale coax moved verbatim to plan-execute/rationale-coax.ts; planOnly early return added).
 # 2026-11-16 plan producer substrate: plan-execute.ts 782->781 (local tool-summary mapping deleted; planner context, unrun-step redirect and result plan wired through shared policy modules).
+# 2026-11-17 durable interrupt/resume: reactive-agent.ts 1972->1901 (runDurable body moved verbatim to agent/run-durable.ts, which also carries the interrupt + live-registry wiring; pauseRun/stopRun/activeRunIds delegates added).
 SIZE_BASELINE=(
-  "runtime/src/reactive-agent.ts:1972"
+  "runtime/src/reactive-agent.ts:1901"
   "runtime/src/chat/engine.ts:654"
   "runtime/src/builder.ts:2200"
   "runtime/src/execution-engine.ts:955"

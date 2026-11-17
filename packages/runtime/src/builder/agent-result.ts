@@ -8,7 +8,7 @@
  */
 import type { OutputFormat, Plan, TerminatedBy, TrustReceipt } from '@reactive-agents/core'
 import type { AgentDebrief } from '../debrief.js'
-import type { LoopStopSummary } from '../loop-stop-summary.js'
+import type { LoopStopSummary, RunStopSummary } from '../loop-stop-summary.js'
 
 // ─── Result Types ────────────────────────────────────────────────────────────
 
@@ -349,7 +349,14 @@ export interface AgentResult {
     readonly runId?: string;
     /** Set when a loop guard stopped the run: why, the tool it repeated, what was already done, what is unfinished. */
     readonly loopStop?: LoopStopSummary;
-    /** `true` when `agent.resumeRun(runId)` can continue this run (loop-stopped durable run with a final checkpoint). */
+    /**
+     * Set when a durable run did not complete (stopped or paused by the user, a
+     * loop stop, a spent budget, a timeout, an error): its kind, what was done
+     * and what was open. A user stop still carries the synthesized answer and
+     * `success: true`; this is the truth that the run is unfinished.
+     */
+    readonly stop?: RunStopSummary;
+    /** `true` when `agent.resumeRun(runId)` can continue this run (a durable run that did not complete and has a checkpoint). */
     readonly resumable?: boolean;
     /** Present only when `status === "awaiting-approval"`. The paused gate + the durable runId to approve/deny. */
     readonly pendingApproval?: {

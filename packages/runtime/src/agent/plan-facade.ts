@@ -39,7 +39,7 @@ import { taskInputText, type TaskInput } from "./task-input.js";
 import type { TodoSeedItem } from "../chat/todo-seed.js";
 import type { ChatMessage } from "../chat.js";
 import { planSourceOf, watchChecklist, type PlanRuntime, type PlanWatchResult } from "./plan-watch.js";
-import { invalidPlan, mergeFinalPlan, planFromExtensions, type PlanExecOption, type PlanExecution, type PlanResultLike, type PlanStrategyOption } from "./plan-executor.js";
+import { invalidPlan, mergeFinalPlan, planFromExtensions, type PlanExecOption, type PlanExecution, type PlanExecutorStrategy, type PlanResultLike, type PlanStrategyOption } from "./plan-executor.js";
 
 /** What the facade adds to the caller's run options: the task id it watches, the posture, the seed and the supplied plan. */
 export interface PlanRunSeed extends PlanExecOption {
@@ -65,6 +65,13 @@ export interface PlanRunOptions {
   readonly history?: readonly ChatMessage[];
   /** Caller origin recorded on `run-started.origin`. */
   readonly origin?: RunOrigin;
+  /**
+   * `agent.plan()` only: plan with this strategy's own planner (`"blueprint"`
+   * or `"plan-execute-reflect"`) instead of the posture loop. No tool runs;
+   * the plan comes from the strategy (every step pending). The strategy is
+   * named, not selected (no classify call).
+   */
+  readonly strategy?: PlanExecutorStrategy;
 }
 
 /** Options-bag mixin: `agent.run(input, { plan })` executes seeded from the plan. */
@@ -149,12 +156,13 @@ const publish = (runtime: PlanRuntime, event: AgentEvent): Promise<void> =>
  * `agent.plan()`: run `input` under plan posture, return the recorded `Plan`.
  * Rejects with {@link PlanNoStepsError} when the run left no steps.
  */
-export async function planFacade<R extends { readonly output: string }>(
+export async function planFacade<R extends PlanResultLike & { readonly output: string }>(
   host: PlanHost<R, PlanRunOptions>,
   input: TaskInput,
   options?: PlanRunOptions,
 ): Promise<Plan> {
   const taskId = String(generateTaskId());
+  if (options?.strategy !== undefined) return strategyPlan(host, input, options, options.strategy, taskId);
   const watch = await watchChecklist(host.runtime, taskId);
   let result: R;
   try {
@@ -166,6 +174,29 @@ export async function planFacade<R extends { readonly output: string }>(
   const goal = taskInputText(input);
   const plan = planFromWatch(seen, { id: `plan-${taskId}`, goal, createdAt: Date.now(), source: planSourceOf(seen.snapshot), findings: seen.findings });
   if (isPlanEmpty(plan)) throw new PlanNoStepsError({ goal, reply: result.output });
+  await publish(host.runtime, { _tag: "PlanRecorded", planId: plan.id, steps: plan.steps, source: plan.source, ...(plan.findings ? { findings: plan.findings } : {}), agentId: host.agentId, taskId, timestamp: Date.now() });
+  return plan;
+}
+
+/**
+ * `agent.plan(input, { strategy })`: the strategy's own planner (reasoning
+ * `planOnly`) produces the plan; the run's result is `partial` with
+ * `metadata.planOnly` and the plan in `metadata.extensions.plan` (core `Plan`,
+ * every step pending). The engine does not judge that empty output
+ * (`execute-success-invariants.ts`); this reads the plan off the result.
+ */
+async function strategyPlan<R extends PlanResultLike & { readonly output: string }>(
+  host: PlanHost<R, PlanRunOptions>,
+  input: TaskInput,
+  options: PlanRunOptions,
+  strategy: PlanExecutorStrategy,
+  taskId: string,
+): Promise<Plan> {
+  const { strategy: _named, ...rest } = options;
+  const result = await host.run(input, { ...rest, taskId, planOnly: strategy });
+  const plan = planFromExtensions(result);
+  const goal = taskInputText(input);
+  if (plan === undefined || isPlanEmpty(plan)) throw new PlanNoStepsError({ goal, reply: result.output });
   await publish(host.runtime, { _tag: "PlanRecorded", planId: plan.id, steps: plan.steps, source: plan.source, ...(plan.findings ? { findings: plan.findings } : {}), agentId: host.agentId, taskId, timestamp: Date.now() });
   return plan;
 }
