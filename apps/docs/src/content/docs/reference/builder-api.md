@@ -75,7 +75,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withAudit` | `features.audit` | config | Per-tool-call rationale auditing. |
 | `withBehavioralContracts` | _overlay — behavioral-contract overlay (folds into withContract)_ | overlay | Behavioral contracts. |
 | `withBudget` | `budget` | config | Declarative token/cost budget caps. |
-| `withCalibration` | _overlay — runtime-probed calibration (not static data)_ | overlay | Model calibration mode. |
+| `withCalibration` | `calibration` | config | Model calibration mode + opt-in learned/community tiers. |
 | `withChannels` | `channelRoutes` | config | Messaging channels and routes. |
 | `withCircuitBreaker` | `circuitBreaker` | config | Circuit-breaker thresholds (false disables). |
 | `withContextProfile` | _overlay — cross-field side-effect profile (not orthogonal data)_ | overlay | Context window profile. |

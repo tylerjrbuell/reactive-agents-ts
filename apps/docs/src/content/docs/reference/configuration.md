@@ -55,6 +55,9 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `budget.costLimit` | `number` | no |  |
 | `budget.tokenLimit` | `number` | no |  |
 | `budget.warningRatio` | `number` | no |  |
+| `calibration.community` | `boolean` | no |  |
+| `calibration.learned` | `boolean` | no |  |
+| `calibration.mode` | `auto` \| `skip` | **yes** |  |
 | `channelRoutes` | `array` | no |  |
 | `circuitBreaker` | `false` \| `object` | no |  |
 | `costTracking.daily` | `number` | no |  |
