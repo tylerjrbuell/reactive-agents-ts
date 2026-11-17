@@ -1,9 +1,10 @@
 /**
- * Chat Continue: a chat turn whose run a loop guard stopped can be continued.
+ * Chat Continue: a chat turn whose run was interrupted (stopped or paused by the
+ * user, a loop guard, a spent budget, a timeout, an error) can be continued.
  *
- * Chat agents are built with durable runs, so a tool turn checkpoints. When a
- * loop guard ends it, the framework leaves the run resumable in the durable
- * store (`RunRecord.loopStop`, `resumable`). This module:
+ * Chat agents are built with durable runs, so a tool turn checkpoints. When a run
+ * ends without completing, the framework leaves it resumable in the durable
+ * store (`RunRecord.resumable`, `stop`). This module:
  *   - lists a session's resumable runs by reading the store directly through the
  *     framework reader (`listDurableRuns`), without building the session's agent
  *     (a streamed turn has no run stamp, so the store is the one source for both
@@ -21,6 +22,8 @@ import { Effect } from "effect";
 import { listDurableRuns } from "@reactive-agents/runtime";
 import type { AgentResult, ReactiveAgent } from "@reactive-agents/runtime";
 import { durableRunsDbPath } from "./crashed-runs.js";
+import { ChatRunControl } from "./chat-run-control.js";
+import type { InterruptableAgent } from "./run-interrupt.js";
 import { replyOf } from "./chat-approvals.js";
 import { turnOutcomeOf, withTurnOutcome, type StoredTurnTrace } from "./chat-turn-trace.js";
 import {
@@ -34,8 +37,8 @@ import {
   type ResumeFailure,
 } from "./loop-stop-resume.js";
 
-/** The agent surface a Continue needs. */
-export type ResumableAgent = Pick<ReactiveAgent, "resumeRun">;
+/** The agent surface Continue (`resumeRun`) and Pause / Stop (`pauseRun`, `stopRun`, `activeRunIds`) need. */
+export type ResumableAgent = Pick<ReactiveAgent, "resumeRun"> & InterruptableAgent;
 
 /** Where a session's durable store lives. */
 export interface ChatDurableSource {
@@ -67,6 +70,8 @@ export interface ChatResumeHost {
   acquireTurn(sessionId: string): () => void;
   /** The session's agent: the cached one, or rebuilt from the stored config. */
   agentFor(sessionId: string): Promise<ResumableAgent>;
+  /** The session's cached agent only (never built): what is running now, for Pause / Stop and for leaving live runs out of the list. */
+  liveAgentOf(sessionId: string): InterruptableAgent | undefined;
   /** Persist one exchange (user message + reply) with the run's result and turn trace. */
   persistExchange(
     sessionId: string,
@@ -86,21 +91,26 @@ export type ChatResumeOutcome =
       readonly ok: true;
       readonly reply: string;
       readonly success: boolean;
-      /** The continued run stopped on a loop guard again: Continue is offered once more. */
+      /** The continued run was interrupted again: Continue is offered once more. */
       readonly resumable: boolean;
     }
   | ({ readonly ok: false } & ResumeFailure);
 
 export class ChatResume {
+  /** Pause / Stop of the session's running durable turn (`chat-run-control.ts`). */
+  readonly control: ChatRunControl;
+
   constructor(
     private readonly host: ChatResumeHost,
     private readonly guard: ResumeGuard = new ResumeGuard(),
-  ) {}
+  ) {
+    this.control = new ChatRunControl(host);
+  }
 
   /**
-   * Resumable loop-stopped runs of a session, newest first. Reads the durable
-   * store without opening it when the file does not exist, so looking never
-   * creates a store or builds an agent.
+   * Resumable runs of a session (any kind of interruption), newest first, leaving out
+   * the runs live in the session's agent now. Reads the durable store without opening
+   * it when the file does not exist, so looking never creates a store or builds an agent.
    */
   async list(sessionId: string): Promise<ResumableRunWire[]> {
     const source = this.host.durableSourceOf(sessionId);
@@ -108,7 +118,7 @@ export class ChatResume {
     const dbPath = durableRunsDbPath(source.agentId, source.dir);
     if (!existsSync(dbPath)) return [];
     const records = await Effect.runPromise(listDurableRuns({ dbPath }));
-    return resumableRunsOf(records.filter((r) => r.agentId === source.agentId));
+    return resumableRunsOf(records.filter((r) => r.agentId === source.agentId), this.control.liveRunIds(sessionId));
   }
 
   /**
@@ -127,7 +137,7 @@ export class ChatResume {
         return {
           ok: false,
           code: "not-resumable",
-          message: "That run is not stopped on a loop guard in this chat, so it cannot be continued. Send a new message instead.",
+          message: "That run is not an interrupted run of this chat, so it cannot be continued. Send a new message instead.",
         };
       }
       let release: () => void;

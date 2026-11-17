@@ -43,6 +43,8 @@
   let search = $state("");
   let status = $state<RunStatusFilter>("all");
   let sort = $state<RunSort>("started-desc");
+  /** Desk runs the framework can continue (any interrupted kind), from the strip above the table. */
+  let resumableIds = $state<ReadonlySet<string>>(new Set());
   let now = $state(Date.now());
 
   // ── Pins (localStorage) ──────────────────────────────────────────────
@@ -151,9 +153,9 @@
   // A run paused on an approval or a question publishes no terminal event, so
   // its stored status stays `live`: show it as "Waiting on you", not Running.
   const shown = $derived(withWaitingStatus(runs, waitingRunsOf(runs, $pendingApprovals, $pendingInteractions)));
-  const view = $derived(sortRuns(filterRuns(shown, search, status), sort));
+  const view = $derived(sortRuns(filterRuns(shown, search, status, resumableIds), sort));
   const groups = $derived(groupRuns(view, pinned));
-  const counts = $derived(statusCounts(filterRuns(shown, search, "all")));
+  const counts = $derived(statusCounts(filterRuns(shown, search, "all"), resumableIds));
   const totals = $derived(runTotals(view));
   const empty = $derived(!loading && !error && runs.length === 0);
   const pair = $derived(comparePair(selected));
@@ -186,7 +188,7 @@
       {:else}
         <WaitingOnYou {runs} />
         <CrashedRuns />
-        <LoopStoppedRuns />
+        <LoopStoppedRuns onChange={(ids) => (resumableIds = ids)} />
 
         <RunsToolbar bind:search bind:status bind:sort {counts} {totals} />
 

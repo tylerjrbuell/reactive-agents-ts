@@ -1,8 +1,9 @@
 <script lang="ts">
   /**
-   * Continue for a chat turn a loop guard stopped. When the latest assistant turn is a run
-   * that failed and the session's durable store holds a loop-stopped run, the stop is shown
-   * under the thread with a note field, a step grant and Continue. Continue calls the
+   * Continue for an interrupted chat turn (stopped or paused by you, loop guard, budget,
+   * timeout, error). When the latest assistant turn is a run that failed or was stopped and
+   * the session's durable store holds a resumable run, the stop is shown under the thread
+   * with a note field, a step grant and Continue. Continue calls the
    * framework's `resumeRun` through the server; the reply lands in the thread as the next
    * exchange (`chatStore.refreshActive`). A streamed turn carries no run stamp, so the
    * stored run is looked up after each turn ends. Rules: `lib/loop-stop-resume.ts`.
@@ -77,7 +78,7 @@
 
 {#if target}
   <div class="card rail rail-attention" data-testid="chat-continue" data-run-id={target.runId}>
-    <ContinueStopped stop={target.loopStop} busy={busyRun === target.runId} {error} onContinue={(b) => void onContinue(target.runId, b)} />
+    <ContinueStopped kind={target.kind} stop={target.stop} busy={busyRun === target.runId} {error} onContinue={(b) => void onContinue(target.runId, b)} />
   </div>
 {:else if hint}
   <p class="hint" data-testid="chat-continue-hint">{hint}</p>

@@ -12,9 +12,9 @@ const mockRunnerLayer = Layer.succeed(CortexRunnerService, {
   resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
   start: () =>
     Effect.succeed({ agentId: "test-runner-agent", runId: "01HZTEST000000000000000000" }),
-  pause: () => Effect.void,
+  pause: () => Effect.succeed("not-live" as const),
   resume: () => Effect.void,
-  stop: () => Effect.void,
+  stop: () => Effect.succeed("not-live" as const),
   terminate: () => Effect.void,
   getActive: () => Effect.succeed(new Map()),
   listPendingApprovals: () => Effect.succeed([]),

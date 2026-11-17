@@ -1,37 +1,35 @@
 <script lang="ts">
   /**
-   * What a loop guard stopped and how to continue it: the reason in plain words, the tool it
-   * repeated, the tools already done (they do not run again) and the rows left, then an
-   * optional note for the agent, how many more steps to allow, and Continue. Shared by the
-   * chat thread (`ChatContinueCard`) and Runs (`runs/LoopStoppedRuns`); the host owns the
-   * request. Rules and wording: `lib/loop-stop-resume.ts`.
+   * Why a run did not finish and how to continue it: a chip from the stop's kind (paused or
+   * stopped by you, loop guard, budget, timeout, error, interrupted), the reason in plain
+   * words, the tools already done (they do not run again) and the rows left, then an optional
+   * note for the agent, how many more steps to allow, and Continue. Shared by the chat thread
+   * (`ChatContinueCard`) and Runs (`runs/LoopStoppedRuns`); the host owns the request. Wording:
+   * `lib/run-stop.ts`; input rules: `lib/loop-stop-resume.ts`.
    */
   import Button from "$lib/components/kit/Button.svelte";
   import Status from "$lib/components/kit/Status.svelte";
-  import {
-    continueBody,
-    DEFAULT_EXTRA_ITERATIONS,
-    loopStopFacts,
-    loopStopHeadline,
-    MAX_EXTRA_ITERATIONS,
-    type ContinueBody,
-    type LoopStopWire,
-  } from "$lib/loop-stop-resume.js";
+  import { continueBody, DEFAULT_EXTRA_ITERATIONS, MAX_EXTRA_ITERATIONS, type ContinueBody } from "$lib/loop-stop-resume.js";
+  import { stopFacts, stopHeadline, stopKindChip, type RunStopKind, type StopWire } from "$lib/run-stop.js";
 
   interface Props {
-    stop: LoopStopWire;
+    /** Why the run is not finished (the stop's `kind`; `crash` when the framework wrote no stop). */
+    kind: RunStopKind;
+    /** What it had done and what was open; absent for a crash. */
+    stop?: StopWire | undefined;
     /** A Continue is running: the form is replaced by its status and taps are ignored. */
     busy?: boolean;
     /** Why the last Continue was refused (the server's plain wording). */
     error?: string | undefined;
     onContinue: (body: ContinueBody) => void;
   }
-  const { stop, busy = false, error, onContinue }: Props = $props();
+  const { kind, stop, busy = false, error, onContinue }: Props = $props();
 
   let note = $state("");
   let extra = $state(String(DEFAULT_EXTRA_ITERATIONS));
   let inputError = $state<string | undefined>(undefined);
-  const facts = $derived(loopStopFacts(stop));
+  const facts = $derived(stopFacts(stop));
+  const chip = $derived(stopKindChip(kind));
 
   function submit(): void {
     if (busy) return;
@@ -46,8 +44,8 @@
 </script>
 
 <div class="stop" data-testid="continue-stopped">
-  <p class="h"><Status tone="attention" label="Stopped by a loop guard" /></p>
-  <p class="why">{loopStopHeadline(stop)}</p>
+  <p class="h"><Status tone={chip.tone} label={chip.label} /></p>
+  <p class="why">{stopHeadline(kind, stop)}</p>
   {#if facts.length > 0}
     <dl class="facts">
       {#each facts as f (f.label)}

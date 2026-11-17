@@ -1,24 +1,31 @@
 /**
- * Continue a loop-stopped run: the pure rules Cortex puts around the framework's
- * `agent.resumeRun(runId, { note?, extraIterations? })` (runtime 73b05b173).
+ * Continue an interrupted run: the pure rules Cortex puts around the framework's
+ * `agent.resumeRun(runId, { note?, extraIterations? })`.
  *
- * A run a loop guard ended is left resumable in the durable store: its
- * `RunRecord` carries `loopStop` (why, repeated tool, tools done, unfinished
- * rows) and `resumable: true`. Cortex owns no resume logic: it reads those
- * records, validates what the person typed, calls the framework, and maps the
+ * Any durable run that did not complete is left resumable in the durable store:
+ * its `RunRecord` carries `resumable: true` and, once it ended, `stop` (kind:
+ * user-paused, user-stopped, loop, budget, timeout, error; what was done; what
+ * is unfinished). A crash writes no stop (kind `crash`: the row stays `running`
+ * with a checkpoint). Cortex owns no resume logic: it reads those records,
+ * validates what the person typed, calls the framework, and maps the
  * framework's typed failures onto plain 4xx wording. The chat path
- * (`chat-resume.ts`) and the desk-run path (`loop-stopped-runs.ts`) share this.
+ * (`chat-resume.ts`) and the desk-run path (`loop-stopped-runs.ts`, a name that
+ * predates the general interrupt; it now lists every kind) share this.
  */
-import type { LoopStopSummary, ResumeRunOptions, RunRecord } from "@reactive-agents/runtime";
+import type { ResumeRunOptions, RunRecord, RunStopKind, RunStopSummary, RunStoreStatus } from "@reactive-agents/runtime";
 
-/** One resumable loop-stopped run, as the REST API returns it. */
+/** One resumable run, as the REST API returns it. */
 export interface ResumableRunWire {
   /** The durable run id (`resumeRun` takes this). */
   readonly runId: string;
   readonly task: string;
   readonly updatedAt: number;
-  /** Why the loop guard stopped the run and what it had already done. */
-  readonly loopStop: LoopStopSummary;
+  /** The durable row status (`running` for a crash, `paused`, `stopped`, `failed`). */
+  readonly status: RunStoreStatus;
+  /** Why the run is not finished: the stop's kind, or `crash` when nothing wrote a stop. */
+  readonly kind: RunStopKind;
+  /** What the run had done and what was open, when the framework recorded a stop. */
+  readonly stop?: RunStopSummary;
 }
 
 /** Most extra iterations one Continue may grant (the framework default is 10). */
@@ -27,14 +34,27 @@ export const MAX_EXTRA_ITERATIONS = 100;
 export const MAX_RESUME_NOTE_CHARS = 2_000;
 
 /**
- * The loop-stopped, resumable runs among a store's records, newest first. A run
- * waiting on a person, still running, or finished normally is never offered.
+ * The resumable runs among a store's records (`resumable === true`, any kind of
+ * interruption), newest first. `liveRunIds` (`agent.activeRunIds()` of the live
+ * agent) are left out: a `running` row with a checkpoint reads resumable, and
+ * only that list tells a crash from a run going right now. A run waiting on a
+ * person or finished normally is never resumable.
  */
-export function resumableRunsOf(records: readonly RunRecord[]): ResumableRunWire[] {
+export function resumableRunsOf(records: readonly RunRecord[], liveRunIds: readonly string[] = []): ResumableRunWire[] {
   return records
-    .flatMap((r) =>
-      r.resumable === true && r.loopStop !== undefined
-        ? [{ runId: r.runId, task: r.task, updatedAt: r.updatedAt, loopStop: r.loopStop }]
+    .flatMap((r): ResumableRunWire[] =>
+      r.resumable === true && !liveRunIds.includes(r.runId)
+        ? [
+            {
+              runId: r.runId,
+              task: r.task,
+              updatedAt: r.updatedAt,
+              status: r.status,
+              // A summary from before kinds existed is a loop stop; no summary at all is a crash.
+              kind: r.stop === undefined ? "crash" : (r.stop.kind ?? "loop"),
+              ...(r.stop !== undefined ? { stop: r.stop } : {}),
+            },
+          ]
         : [],
     )
     .sort((a, b) => b.updatedAt - a.updatedAt);
@@ -113,7 +133,7 @@ export function resumeFailureOf(e: unknown): ResumeFailure {
     case "RunNotResumableError":
       return {
         code: "not-resumable",
-        message: "This run did not end on a loop stop, or it was already continued, so there is nothing to continue. Send a new message instead.",
+        message: "This run finished or was already continued, so there is nothing to continue. Send a new message instead.",
       };
     case "DurableRunNotFoundError":
       return { code: "not-found", message: "That run is no longer in the saved run store." };

@@ -88,7 +88,7 @@ import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-c
 import type { SessionControlPort } from "./chat-proposal-service.js";
 import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval, type ChatPendingInteraction } from "./chat-approvals.js";
 import { effectiveApprovalPolicy } from "./approval-policy.js";
-import { ChatResume, chatDurableSource } from "./chat-resume.js";
+import { ChatResume, chatDurableSource, type ResumableAgent } from "./chat-resume.js";
 import { ChatPlanRun, todoWithStatuses, type PlanRunnableAgent } from "./chat-plan-run.js";
 import { validateTodo } from "./chat-todo-validation.js";
 
@@ -179,7 +179,7 @@ export interface CachedChatSession {
   /** Memories each run recalled (see `chat-turn-recall.ts`). */
   readonly recallActivity?: RecallActivityLog;
   /** The same agent's durable approve/deny surface (see `chat-approvals.ts`). */
-  readonly approvable?: ApprovableAgent & PlanRunnableAgent;
+  readonly approvable?: ApprovableAgent & PlanRunnableAgent & ResumableAgent;
 }
 
 /** Dispose a cached chat agent (tears down MCP containers); never throws. */
@@ -280,7 +280,7 @@ export class ChatSessionService {
     const rail = { acquireTurn: (id: string) => this.acquireTurn(id), agentFor: (id: string) => this.approvableAgentFor(id), persistExchange, evict: (id: string) => this.evictSession(id) };
     this.approvals = new ChatApprovals(db, { ...rail, agentIdFor: (id) => getChatSession(this.db, id)?.stableAgentId });
     // Continue lists loop-stopped runs from the durable store (the builder's Durable runs setting).
-    this.resume = new ChatResume({ ...rail, durableSourceOf: (id) => chatDurableSource(getChatSession(this.db, id)) });
+    this.resume = new ChatResume({ ...rail, durableSourceOf: (id) => chatDurableSource(getChatSession(this.db, id)), liveAgentOf: (id) => this.sessions.get(id)?.approvable });
     this.plans = new ChatSessionPlans(db, { live: this.sessions, acquireTurn: (id) => this.acquireTurn(id), build: (id, cfg, stable) => this.getOrBuildSession(id, normalizeCortexAgentConfig(cfg), stable) });
     // Run the saved plan in a framework strategy (chat-plan-run.ts); the statuses it ends with go back onto the stored rows.
     this.planRun = new ChatPlanRun({ ...rail, planOf: (id) => this.plans.read(id), historyOf: (id) => turnsToChatMessages(getChatTurns(this.db, id)), recordStatuses: (id, plan) => setChatTodo(this.db, id, todoWithStatuses(getChatTodo(this.db, id), plan)) });
@@ -296,7 +296,7 @@ export class ChatSessionService {
   readonly resume: ChatResume;
 
   /** The session's agent for approve/deny: the cached one, or rebuilt from the stored config. */
-  private async approvableAgentFor(sessionId: string): Promise<ApprovableAgent & PlanRunnableAgent> {
+  private async approvableAgentFor(sessionId: string): Promise<ApprovableAgent & PlanRunnableAgent & ResumableAgent> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
     const entry = await this.getOrBuildSession(sessionId, normalizeCortexAgentConfig(row.agentConfig), row.stableAgentId);

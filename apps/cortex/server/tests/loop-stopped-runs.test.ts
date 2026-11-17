@@ -60,7 +60,7 @@ describe("loop-stopped desk runs", () => {
     });
     const app = loopStoppedRunsRouter(runtime.rawDb, fakeRunner, undefined, new ResumeGuard());
     const get = async () =>
-      (await (await app.handle(new Request("http://localhost/api/loop-stopped-runs"))).json()) as { runs: { runId: string; launch?: unknown; loopStop: unknown }[] };
+      (await (await app.handle(new Request("http://localhost/api/loop-stopped-runs"))).json()) as { runs: { runId: string; launch?: unknown; kind: string; status: string; stop?: unknown }[] };
     expect((await get()).runs).toEqual([]);
 
     // 2. The framework records a loop stop on its durable record.
@@ -75,7 +75,7 @@ describe("loop-stopped desk runs", () => {
     );
     const listed = await get();
     expect(listed.runs).toHaveLength(1);
-    expect(listed.runs[0]).toMatchObject({ runId, agentId, loopStop: STOP });
+    expect(listed.runs[0]).toMatchObject({ runId, agentId, kind: "loop", stop: { ...STOP, kind: "loop" } });
     expect(listed.runs[0]!.launch).toBeUndefined();
 
     // 3. Bad input is a 400 and starts nothing.

@@ -26,15 +26,42 @@ const rec = (over: Partial<RunRecord>): RunRecord => ({
 const stop = { reason: "loop_detected:repeat", repeatedTool: "web-search", toolsDone: [{ tool: "web-search", calls: 3 }], unfinished: ["write report"], iteration: 7 };
 
 describe("resumableRunsOf", () => {
-  it("offers only loop-stopped resumable runs, newest first", () => {
+  it("offers every resumable run (any kind), newest first, and never one the framework does not flag", () => {
     const out = resumableRunsOf([
-      rec({ runId: "old", updatedAt: 1, loopStop: stop, resumable: true }),
-      rec({ runId: "new", updatedAt: 5, loopStop: stop, resumable: true }),
+      rec({ runId: "old", updatedAt: 1, stop: { ...stop, kind: "loop" }, resumable: true }),
+      rec({ runId: "new", updatedAt: 5, stop: { ...stop, kind: "loop" }, resumable: true }),
       rec({ runId: "plain", updatedAt: 9 }),
-      rec({ runId: "flagless", updatedAt: 9, loopStop: stop }),
+      rec({ runId: "flagless", updatedAt: 9, stop }),
     ]);
     expect(out.map((r) => r.runId)).toEqual(["new", "old"]);
-    expect(out[0]!.loopStop).toEqual(stop);
+    expect(out[0]).toMatchObject({ kind: "loop", status: "failed", stop: { ...stop, kind: "loop" } });
+  });
+
+  it("labels each run by its stop kind: user stop, user pause, budget, timeout, error", () => {
+    const kinds = ["user-stopped", "user-paused", "budget", "timeout", "error"] as const;
+    const out = resumableRunsOf(
+      kinds.map((kind, i) => rec({ runId: kind, updatedAt: i, status: kind === "user-paused" ? "paused" : "stopped", stop: { ...stop, kind }, resumable: true })),
+    );
+    expect(Object.fromEntries(out.map((r) => [r.runId, r.kind]))).toEqual(Object.fromEntries(kinds.map((k) => [k, k])));
+    expect(out.find((r) => r.runId === "user-paused")?.status).toBe("paused");
+  });
+
+  it("reads a stop from before kinds existed as a loop stop, and a run with no stop record as a crash", () => {
+    const [crash, legacy] = resumableRunsOf([
+      rec({ runId: "legacy", updatedAt: 1, stop, resumable: true }),
+      rec({ runId: "crash", updatedAt: 2, status: "running", resumable: true }),
+    ]);
+    expect(crash).toMatchObject({ runId: "crash", kind: "crash", status: "running" });
+    expect(crash!.stop).toBeUndefined();
+    expect(legacy).toMatchObject({ runId: "legacy", kind: "loop" });
+  });
+
+  it("leaves out the runs live in the agent now (a running row with a checkpoint reads resumable)", () => {
+    const out = resumableRunsOf(
+      [rec({ runId: "live", status: "running", resumable: true }), rec({ runId: "crashed", status: "running", resumable: true })],
+      ["live"],
+    );
+    expect(out.map((r) => r.runId)).toEqual(["crashed"]);
   });
 });
 

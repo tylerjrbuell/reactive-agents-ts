@@ -36,9 +36,9 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
   return Layer.succeed(CortexRunnerService, {
     resumeCrashed: () => Effect.succeed({ agentId: "a", runId: "r" }),
     start: (params) => { captured.params = params; return Effect.succeed({ agentId: "x", runId: "y" }); },
-    pause: () => Effect.void,
+    pause: () => Effect.succeed("not-live" as const),
     resume: () => Effect.void,
-    stop: () => Effect.void,
+    stop: () => Effect.succeed("not-live" as const),
     terminate: () => Effect.void,
     getActive: () => Effect.succeed(new Map()),
     listPendingApprovals: () => Effect.succeed([]),

@@ -186,8 +186,9 @@ export const runsRouter = (
     .post("/:runId/pause", async ({ params, set }) => {
       const program = Effect.gen(function* () {
         const runner = yield* CortexRunnerService;
-        yield* runner.pause(params.runId as RunId);
-        return { ok: true as const };
+        // `persisted`: a durable run ended with a saved place to continue from (Continue is offered).
+        const outcome = yield* runner.pause(params.runId as RunId);
+        return { ok: true as const, persisted: outcome === "persisted", outcome };
       });
       try {
         return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
@@ -199,8 +200,8 @@ export const runsRouter = (
     .post("/:runId/stop", async ({ params, set }) => {
       const program = Effect.gen(function* () {
         const runner = yield* CortexRunnerService;
-        yield* runner.stop(params.runId as RunId);
-        return { ok: true as const };
+        const outcome = yield* runner.stop(params.runId as RunId);
+        return { ok: true as const, persisted: outcome === "persisted", outcome };
       });
       try {
         return await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));

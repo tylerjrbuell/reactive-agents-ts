@@ -37,6 +37,10 @@ describe("filterRuns", () => {
     expect(filterRuns(rows, "", "stopped").map((r) => r.runId)).toEqual(["r3"]);
     expect(filterRuns(rows, "", "all")).toHaveLength(4);
   });
+  it("the Can continue segment keeps only runs in the resumable set (none before it loads)", () => {
+    expect(filterRuns(rows, "", "resumable", new Set(["r2", "r3"])).map((r) => r.runId)).toEqual(["r2", "r3"]);
+    expect(filterRuns(rows, "", "resumable")).toEqual([]);
+  });
   it("searches names, chats and models", () => {
     expect(filterRuns(rows, "market", "all").map((r) => r.runId)).toEqual(["r2"]);
     expect(filterRuns(rows, "multiplication", "all").map((r) => r.runId)).toEqual(["r3"]);
@@ -46,7 +50,10 @@ describe("filterRuns", () => {
 
 describe("statusCounts", () => {
   it("counts each segment, stopped runs apart from running ones (B3)", () => {
-    expect(statusCounts(rows)).toEqual({ all: 4, running: 1, attention: 0, done: 1, failed: 1, stopped: 1 });
+    expect(statusCounts(rows)).toEqual({ all: 4, running: 1, attention: 0, done: 1, failed: 1, stopped: 1, resumable: 0 });
+  });
+  it("counts the runs the framework can continue apart from their status", () => {
+    expect(statusCounts(rows, new Set(["r2", "r3", "gone"])).resumable).toBe(2);
   });
 });
 

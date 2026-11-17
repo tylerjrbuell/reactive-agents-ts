@@ -128,6 +128,26 @@ export async function requestTurnStop(sessionId: string): Promise<boolean> {
   }
 }
 
+/** What the server answers to a chat Pause: whether a turn ended and whether the run was saved so it can continue. */
+export type PauseAnswer = { readonly ok: true; readonly stopped: boolean; readonly persisted: boolean } | { readonly ok: false };
+
+/**
+ * Pause the session's running turn: the framework ends the durable run at its next step
+ * with a saved place to continue from, and the server ends the streamed turn (the stream
+ * closes on its own). Never throws. `persisted: false` means the run was not durable (it
+ * was stopped, with nothing to continue from).
+ */
+export async function requestTurnPause(sessionId: string): Promise<PauseAnswer> {
+  try {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/chat/pause`, { method: "POST" });
+    if (!res.ok) return { ok: false };
+    const body = (await res.json()) as { stopped?: boolean; persisted?: boolean };
+    return { ok: true, stopped: body.stopped === true, persisted: body.persisted === true };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /**
  * Consume one chat SSE stream, folding every event into the assistant turn via
  * `apply`, then finalize the turn. Never throws for stream-level failures — they

@@ -1,26 +1,16 @@
 /**
- * Continue a run a loop guard stopped (Cortex chat and Runs). The framework leaves
- * such a run resumable in its durable store (`RunRecord.loopStop`) and Cortex only
- * renders what it recorded and calls `resumeRun` through the server: the rules here
- * are wording, input checks and the "is Continue offered" decision. Server side:
- * `services/loop-stop-resume.ts`, `chat-resume.ts`, `loop-stopped-runs.ts`.
+ * Continue an interrupted run (Cortex chat and Runs). The framework leaves every run
+ * that did not complete resumable in its durable store (`RunRecord.resumable`, `stop`)
+ * and Cortex only renders what it recorded and calls `resumeRun` through the server:
+ * the rules here are input checks, the "is Continue offered" decision and the clients.
+ * Wording of why a run stopped: `run-stop.ts`. Server side:
+ * `services/loop-stop-resume.ts`, `chat-resume.ts`, `loop-stopped-runs.ts` (names from
+ * when only loop stops were listed; they cover every kind now).
  * Rendering: `components/ContinueStopped.svelte`, `ChatContinueCard.svelte`,
  * `components/runs/LoopStoppedRuns.svelte`.
  */
 import { CORTEX_SERVER_URL } from "./constants.js";
-
-/** Why a loop guard stopped a run and what it had already done (the framework's `LoopStopSummary`). */
-export interface LoopStopWire {
-  readonly reason: string;
-  /** The tool the run kept repeating, when the trailing actions repeat one call. */
-  readonly repeatedTool?: string;
-  /** Tools that already returned substantive results (not re-run on Continue), with call counts. */
-  readonly toolsDone: readonly { readonly tool: string; readonly calls: number }[];
-  /** Titles of checklist rows still open at the stop. */
-  readonly unfinished: readonly string[];
-  /** The iteration the run stopped at. */
-  readonly iteration: number;
-}
+import type { DurableRunStatus, RunStopKind, StopWire } from "./run-stop.js";
 
 /** One resumable chat run (`GET /api/chat/sessions/:id/resumable`). */
 export interface ResumableRunWire {
@@ -28,10 +18,15 @@ export interface ResumableRunWire {
   readonly runId: string;
   readonly task: string;
   readonly updatedAt: number;
-  readonly loopStop: LoopStopWire;
+  /** The durable row status (`running` for a crash, `paused`, `stopped`, `failed`). */
+  readonly status: DurableRunStatus;
+  /** Why the run is not finished: the stop's kind, `crash` when nothing wrote a stop. */
+  readonly kind: RunStopKind;
+  /** What it had done and what was open; absent for a crash. */
+  readonly stop?: StopWire;
 }
 
-/** One loop-stopped desk run (`GET /api/loop-stopped-runs`). */
+/** One interrupted desk run (`GET /api/loop-stopped-runs`; the path predates the general interrupt). */
 export interface LoopStoppedRunWire {
   /** Cortex run id. */
   readonly runId: string;
@@ -39,58 +34,18 @@ export interface LoopStoppedRunWire {
   readonly name: string | null;
   readonly startedAt: number;
   readonly durableRunId: string;
-  /** The loop the run stopped at (the stop's iteration). */
+  /** The iteration the run stopped at (the stop's iteration). */
   readonly checkpointIteration: number;
   readonly updatedAt: number;
-  readonly loopStop: LoopStopWire;
+  readonly status: DurableRunStatus;
+  readonly kind: RunStopKind;
+  readonly stop?: StopWire;
 }
 
 /** The framework's default grant for one Continue (`DEFAULT_RESUME_ITERATIONS`); shown, and sent only when changed. */
 export const DEFAULT_EXTRA_ITERATIONS = 10;
 /** Most extra iterations one Continue may grant (the server's limit). */
 export const MAX_EXTRA_ITERATIONS = 100;
-
-/** The stop reason in plain words: what the loop guard saw, not its internal name. */
-export function loopStopHeadline(stop: Pick<LoopStopWire, "reason">): string {
-  const r = stop.reason;
-  if (r.startsWith("loop_detected")) return "The agent kept repeating the same step, so it was stopped.";
-  if (r === "loop_graceful") return "The agent was going in circles, so it was stopped.";
-  if (r === "dispatcher-early-stop") return "The run was stopped early because it was not making progress.";
-  return `The run was stopped (${r}).`;
-}
-
-const DONE_SHOWN = 6;
-const LEFT_SHOWN = 5;
-
-/** One labelled group of the stop card: a short list of mono values or titles. */
-export interface LoopStopFact {
-  readonly label: string;
-  readonly items: readonly string[];
-  /** Values are tool names (machine text) rather than prose. */
-  readonly mono: boolean;
-}
-
-const capped = (all: readonly string[], shown: number): string[] =>
-  all.length > shown ? [...all.slice(0, shown), `and ${all.length - shown} more`] : [...all];
-
-/**
- * What the stop card lists under its headline: the tool it repeated, the tools
- * already done (not re-run on Continue) and the rows still open. Empty groups
- * are left out.
- */
-export function loopStopFacts(stop: LoopStopWire): LoopStopFact[] {
-  const facts: LoopStopFact[] = [];
-  if (stop.repeatedTool) facts.push({ label: "Kept repeating", items: [stop.repeatedTool], mono: true });
-  if (stop.toolsDone.length > 0) {
-    facts.push({
-      label: "Already done",
-      items: capped(stop.toolsDone.map((t) => (t.calls > 1 ? `${t.tool} x${t.calls}` : t.tool)), DONE_SHOWN),
-      mono: true,
-    });
-  }
-  if (stop.unfinished.length > 0) facts.push({ label: "Left to do", items: capped(stop.unfinished, LEFT_SHOWN), mono: false });
-  return facts;
-}
 
 /** The iteration grant a person typed, or why it is not usable. */
 export type ParsedExtra = { readonly ok: true; readonly value: number } | { readonly ok: false; readonly error: string };
@@ -154,10 +109,10 @@ export function loopStopHint(
 
 /**
  * The run Continue is offered for: only when no turn is in flight, the latest
- * assistant turn is a run that failed or stopped part-way (not an abstention and
- * not one the person stopped), and the session has a loop-stopped run to continue
- * (the newest). A streamed turn carries no run stamp, so the stored run is what
- * links them.
+ * assistant turn is a run that failed or stopped part-way (not an abstention; a turn
+ * the person stopped counts: the framework keeps it resumable) and the session has
+ * a resumable run to continue (the newest). A streamed turn carries no run stamp, so
+ * the stored run is what links them.
  */
 export function continueTarget(
   turns: readonly ContinueTurn[],
@@ -168,7 +123,7 @@ export function continueTarget(
   const last = turns.at(-1);
   if (last?.role !== "assistant" || last.streaming === true) return undefined;
   const ending = last.runFailed?.ending;
-  if (last.runFailed === undefined || ending === "abstained" || ending === "interrupted") return undefined;
+  if (last.runFailed === undefined || ending === "abstained") return undefined;
   return [...resumable].sort((a, b) => b.updatedAt - a.updatedAt)[0];
 }
 

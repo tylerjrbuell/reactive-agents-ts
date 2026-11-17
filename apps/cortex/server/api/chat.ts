@@ -690,10 +690,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
         body: t.Object({ message: t.String(), posture: t.Optional(t.String()) }),
       },
     )
-    // Stop the session's streamed turn. The run is aborted server-side and the turn is
-    // stored as interrupted by the user; a client that only drops the stream reads as a
-    // disconnect (chat-turn-stop.ts).
-    .post("/sessions/:sessionId/chat/stop", ({ params }) => ({ stopped: svc.stopTurn(params.sessionId) }))
+    // Stop / Pause of the streamed turn: `api/loop-stop-routes.ts` (`chatResumeRoute`).
     // The session's streamed turn that is still running (a reloaded page asks, then attaches).
     // `message` is the user message the turn answers: it is stored with the turn only when it ends.
     .get("/sessions/:sessionId/chat/active", ({ params }) => {

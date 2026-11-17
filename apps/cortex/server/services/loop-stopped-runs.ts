@@ -1,7 +1,9 @@
 /**
- * Loop-stopped desk runs: runs a loop guard ended that the framework left
- * resumable in the durable store (`RunRecord.loopStop`, `resumable`). The Runs
- * list offers Continue on them; Continue calls the framework's
+ * Interrupted desk runs: runs that ended without completing (stopped or paused by
+ * the user, a loop guard, a spent budget, a timeout, an error) that the framework
+ * left resumable in the durable store (`RunRecord.resumable`, `stop`). The file
+ * keeps its name from when only loop stops were listed; it lists every kind now.
+ * The Runs list offers Continue on them; Continue calls the framework's
  * `agent.resumeRun(durableRunId, { note?, extraIterations? })` on an agent
  * rebuilt from the run's stored launch config under the same agent id (runner
  * `resumeCrashed`, shared with crash resume), so the store, the config hash and
@@ -17,10 +19,14 @@ import { listDurableRuns } from "@reactive-agents/runtime";
 import { durableRunsDbPath, isDurableBuild, parseLaunch, type CrashedRun, type DeskRunDb } from "./crashed-runs.js";
 import { resumableRunsOf, type ResumableRunWire } from "./loop-stop-resume.js";
 
-/** A desk run a loop guard stopped, with what Continue rebuilds its agent from. */
+/** An interrupted desk run, with what Continue rebuilds its agent from. */
 export interface LoopStoppedRun extends CrashedRun {
-  /** The stop: reason, repeated tool, tools already done, unfinished rows. */
-  readonly loopStop: ResumableRunWire["loopStop"];
+  /** The durable row status (`paused`, `stopped`, `failed`, ...). */
+  readonly status: ResumableRunWire["status"];
+  /** Why the run did not finish (`user-paused`, `user-stopped`, `loop`, `budget`, `timeout`, `error`, `crash`). */
+  readonly kind: ResumableRunWire["kind"];
+  /** What it had done and what was open, when the framework recorded a stop. */
+  readonly stop?: ResumableRunWire["stop"];
 }
 
 /** Wire shape of a loop-stopped run (`GET /api/loop-stopped-runs`): no launch config. */
@@ -51,8 +57,8 @@ export interface FindLoopStoppedRunsOptions {
 }
 
 /**
- * Durable desk runs not running now whose store holds a loop-stopped, resumable
- * record. A run whose store file does not exist is skipped without opening it,
+ * Durable desk runs not running now whose store holds a resumable record (any
+ * kind of interruption). A run whose store file does not exist is skipped without opening it,
  * so looking never creates a store.
  */
 export const findLoopStoppedRuns = (
@@ -83,10 +89,12 @@ export const findLoopStoppedRuns = (
         name: row.display_name,
         startedAt: row.started_at,
         durableRunId: stopped.runId,
-        checkpointIteration: stopped.loopStop.iteration,
+        checkpointIteration: stopped.stop?.iteration ?? 0,
         updatedAt: stopped.updatedAt,
         launch,
-        loopStop: stopped.loopStop,
+        status: stopped.status,
+        kind: stopped.kind,
+        ...(stopped.stop !== undefined ? { stop: stopped.stop } : {}),
       });
     }
     return out;

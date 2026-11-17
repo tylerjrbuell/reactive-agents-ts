@@ -53,6 +53,17 @@ describe("chat Continue routes", () => {
   });
 });
 
+describe("chat Stop and Pause routes", () => {
+  it("answer with the interrupt outcome; a session with nothing running is not-live and stopped:false", async () => {
+    const id = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true, durableRuns: { enabled: true, dir: tmpDir("chat-interrupt-route") } } });
+    for (const action of ["stop", "pause"]) {
+      const res = await send("POST", `/api/chat/sessions/${id}/chat/${action}`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ stopped: false, persisted: false, outcome: "not-live" });
+    }
+  });
+});
+
 describe("Continue follows the builder's Durable runs setting", () => {
   it("chat is not durable unless the setting is on (live rails stay the default), and a set value reaches the build", async () => {
     const plain = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true } });

@@ -8,6 +8,8 @@ import { foldRunStrategy, initialRunStrategy, runStrategyOf, type RunStrategySta
 import { throughputSampleOf } from "../llm-throughput.js";
 import { effectiveBound, planBudgetEffective } from "../plan-budget.js";
 import { abortStatusOf } from "../run-live-status.js";
+import { deskInterruptToast, interruptAnswerOf, type InterruptAnswer } from "../run-controls.js";
+import { toast } from "./toast-store.js";
 
 /**
  * `stopped`: ended from outside (desk Stop, or a chat turn stopped or left mid-run).
@@ -538,12 +540,20 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
 
   void init();
 
+  /** Tell the person what a Pause / Stop did (a durable run was saved so Continue works, or only stopped). */
+  function announce(kind: "pause" | "stop", answer: InterruptAnswer): void {
+    const t = deskInterruptToast(kind, answer);
+    if (t.tone === "success") toast.success(t.title, t.detail);
+    else toast.warning(t.title, t.detail);
+  }
+
   async function pause() {
     try {
-      await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/pause`, {
-        method: "POST",
-      });
-      state.update((s) => ({ ...s, status: "paused" }));
+      const answer = await interruptAnswerOf(await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/pause`, { method: "POST" }));
+      // A durable run ends at its next step and reads stopped from its own events; an in-process
+      // pause (no Durable runs) holds the run, and Resume releases it.
+      if (!(answer.ok && answer.persisted)) state.update((s) => ({ ...s, status: "paused" }));
+      announce("pause", answer);
     } catch {
       /* network / server error */
     }
@@ -562,9 +572,9 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
 
   async function stop() {
     try {
-      await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/stop`, {
-        method: "POST",
-      });
+      const answer = await interruptAnswerOf(await fetchFn(`${CORTEX_SERVER_URL}/api/runs/${encodeURIComponent(runId)}/stop`, { method: "POST" }));
+      // Only a saved stop earns a toast: a plain stop of a run without Durable runs is what Stop always did.
+      if (answer.ok && answer.persisted) announce("stop", answer);
     } catch {
       /* network / server error */
     }

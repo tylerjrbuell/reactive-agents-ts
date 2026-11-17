@@ -49,8 +49,8 @@ export function runRowStatus(row: { readonly status: string; readonly ending?: s
   return runHeaderStatus(row.status, quietEnding(row.ending));
 }
 
-/** The status segment: every run, or one tone of the shared vocabulary. */
-export type RunStatusFilter = "all" | Exclude<StatusTone, "idle">;
+/** The status segment: every run, one tone of the shared vocabulary, or the runs the framework can continue (`resumable`). */
+export type RunStatusFilter = "all" | Exclude<StatusTone, "idle"> | "resumable";
 
 /** Segment order and labels (sentence case, spec section 6). */
 export const RUN_STATUS_FILTERS: readonly { readonly id: RunStatusFilter; readonly label: string }[] = [
@@ -60,7 +60,11 @@ export const RUN_STATUS_FILTERS: readonly { readonly id: RunStatusFilter; readon
   { id: "done", label: "Finished" },
   { id: "failed", label: "Failed" },
   { id: "stopped", label: "Stopped" },
+  { id: "resumable", label: "Can continue" },
 ];
+
+/** No run ids: the default for the resumable set (a list that has not loaded offers nothing). */
+const NO_RUNS: ReadonlySet<string> = new Set();
 
 /** Sort orders the table offers. */
 export type RunSort = "started-desc" | "started-asc" | "tokens-desc" | "cost-desc";
@@ -101,10 +105,10 @@ export function runNameOf(row: RunRow): string {
 const lc = (s: string | undefined): string => (s ?? "").toLowerCase();
 
 /** Rows matching the search text (id, agent, name, chat, provider, model, strategy) and the status segment. */
-export function filterRuns(rows: readonly RunRow[], search: string, status: RunStatusFilter): RunRow[] {
+export function filterRuns(rows: readonly RunRow[], search: string, status: RunStatusFilter, resumable: ReadonlySet<string> = NO_RUNS): RunRow[] {
   const q = search.trim().toLowerCase();
   return rows.filter((r) => {
-    if (status !== "all" && runRowStatus(r).tone !== status) return false;
+    if (status === "resumable" ? !resumable.has(r.runId) : status !== "all" && runRowStatus(r).tone !== status) return false;
     if (!q) return true;
     return [r.runId, r.agentId, r.displayName, r.chatSessionName, r.agentRecordName, r.provider, r.model, r.strategy].some((f) =>
       lc(f).includes(q),
@@ -134,11 +138,12 @@ export function groupRuns(rows: readonly RunRow[], pinned: ReadonlySet<string>):
 }
 
 /** Run count per segment. */
-export function statusCounts(rows: readonly RunRow[]): Record<RunStatusFilter, number> {
-  const counts: Record<RunStatusFilter, number> = { all: rows.length, running: 0, attention: 0, done: 0, failed: 0, stopped: 0 };
+export function statusCounts(rows: readonly RunRow[], resumable: ReadonlySet<string> = NO_RUNS): Record<RunStatusFilter, number> {
+  const counts: Record<RunStatusFilter, number> = { all: rows.length, running: 0, attention: 0, done: 0, failed: 0, stopped: 0, resumable: 0 };
   for (const r of rows) {
     const tone = runRowStatus(r).tone;
     if (tone !== "idle") counts[tone]++;
+    if (resumable.has(r.runId)) counts.resumable++;
   }
   return counts;
 }

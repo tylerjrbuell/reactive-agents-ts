@@ -10,7 +10,7 @@ import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
 import { CortexIngestService } from "./ingest-service.js";
-import { waitsLive, durableApprovals, type ApprovalDecision, type PendingApprovalRow } from "./durable-approvals.js";
+import { waitsLive, durableApprovals, type PendingApprovalRow } from "./durable-approvals.js";
 import { CortexStoreService } from "./store-service.js";
 import { cortexLog, cortexLogRunnerExecution, formatErrorDetails } from "../cortex-log.js";
 import type {
@@ -27,6 +27,7 @@ import type { VariableDef } from "./resolve-template.js";
 import type { ReactiveAgent, ResumeRunOptions } from "@reactive-agents/runtime";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { CrashedRun } from "./crashed-runs.js";
+import { decideApproval, interruptLiveRun, settledWithin, type InterruptOutcome } from "./run-interrupt.js";
 import { structuredOutputExtractedEvent } from "./structured-output-event.js";
 
 export interface LaunchParams {
@@ -261,9 +262,11 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
      * framework's `agent.resumeRun(durableRunId, opts)` (`opts`: loop-stop `{ note?, extraIterations? }`). Events land on the same Cortex run.
      */
     readonly resumeCrashed: (crashed: CrashedRun, opts?: ResumeRunOptions) => Effect.Effect<{ agentId: string; runId: string }, CortexError>;
-    readonly pause: (runId: RunId) => Effect.Effect<void, CortexError>;
+    /** Pause a run: a durable run ends at its next step with a saved place to continue from (`persisted`); other runs pause in process (`not-live`). */
+    readonly pause: (runId: RunId) => Effect.Effect<InterruptOutcome, CortexError>;
     readonly resume: (runId: RunId) => Effect.Effect<void, CortexError>;
-    readonly stop: (runId: RunId) => Effect.Effect<void, CortexError>;
+    /** Stop a run; same outcome words as `pause`. */
+    readonly stop: (runId: RunId) => Effect.Effect<InterruptOutcome, CortexError>;
     /** Immediately abort an in-flight run (interrupts the agent fiber) and tear
      * down its resources now, rather than waiting for a phase boundary. */
     readonly terminate: (runId: RunId) => Effect.Effect<void, CortexError>;
@@ -305,29 +308,9 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
   }
 >() {}
 
-/** Approve/deny through the shared registry. An unknown run is a logged no-op (it may have resolved already). */
-const decideApproval = (runId: RunId, decision: ApprovalDecision, reason?: string, gateId?: string): Effect.Effect<void, CortexError> =>
-  Effect.gen(function* () {
-    const out = yield* Effect.promise(() => durableApprovals.decide(String(runId), decision, reason, gateId));
-    if (out.ok) return;
-    if (out.code === "not-found") {
-      cortexLog("debug", "runner", `${decision === "approved" ? "approve" : "deny"}: run not pending approval`, { runId });
-      return;
-    }
-    return yield* Effect.fail(
-      new CortexError({ message: `${decision === "approved" ? "approveRun" : "denyRun"} failed: ${out.message}` }),
-    );
-  });
-
 /** This server's URL for the launch log (events go straight to ingest, not over HTTP). */
 const defaultCortexHttpUrl = (): string =>
   process.env.CORTEX_URL?.replace(/^ws/, "http") ?? `http://127.0.0.1:${process.env.CORTEX_PORT ?? "4321"}`;
-
-/** `true` when `settled` resolves within `ms`, `false` on timeout (no `settled`: `true`). */
-const settledWithin = (settled: Promise<void> | undefined, ms: number): Effect.Effect<boolean> =>
-  settled
-    ? Effect.race(Effect.promise(() => settled).pipe(Effect.as(true)), Effect.sleep(`${ms} millis`).pipe(Effect.as(false)))
-    : Effect.succeed(true);
 
 /** Build the runner layer with custom Stop / Terminate timing (`CortexRunnerServiceLive` uses the defaults). */
 export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) => {
@@ -681,13 +664,19 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
 
       pause: (runId) =>
         Effect.gen(function* () {
-          const m = yield* Ref.get(activeRef);
-          const entry = m.get(String(runId));
+          const entry = (yield* Ref.get(activeRef)).get(String(runId));
           if (!entry) {
             cortexLog("debug", "runner", "pause: run not active (already finished?)", { runId });
-            return;
+            return "not-live" as const;
+          }
+          // A durable run ends at its next iteration boundary with a saved place to continue from (`pauseRun`).
+          if (entry.agent.activeRunIds().length > 0) {
+            if (entry.control) entry.control.requested ??= "stop";
+            const out = yield* Effect.promise(() => interruptLiveRun(entry.agent, "pause", stopGraceMs));
+            if (out !== "not-live") return out;
           }
           yield* Effect.promise(() => entry.agent.pause()).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:306", tag: errorTag(err) })));
+          return "not-live" as const;
         }),
 
       resume: (runId) =>
@@ -703,13 +692,19 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
 
       stop: (runId) =>
         Effect.gen(function* () {
-          const m = yield* Ref.get(activeRef);
-          const entry = m.get(String(runId));
+          const entry = (yield* Ref.get(activeRef)).get(String(runId));
           if (!entry) {
             cortexLog("debug", "runner", "stop: run not active", { runId });
-            return;
+            return "not-live" as const;
           }
           if (entry.control) entry.control.requested ??= "stop";
+          // A durable run ends at its next iteration boundary with a saved place to continue from (`stopRun`);
+          // one past the grace window is ended like Terminate (the framework still keeps it continuable).
+          if (entry.agent.activeRunIds().length > 0) {
+            const out = yield* Effect.promise(() => interruptLiveRun(entry.agent, "stop", stopGraceMs));
+            if (out === "pending") yield* endRun(entry);
+            if (out !== "not-live") return out;
+          }
           yield* Effect.promise(() => entry.agent.stop("Cortex UI stop")).pipe(
             Effect.catchAll((err) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:329", tag: errorTag(err) })),
           );
@@ -725,6 +720,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
               }),
             ),
           );
+          return "not-live" as const;
         }),
 
       terminate: (runId) =>

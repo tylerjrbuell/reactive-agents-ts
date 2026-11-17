@@ -3,6 +3,7 @@ import { Effect, type Layer } from "effect";
 import type { DeskRunDb } from "../services/crashed-runs.js";
 import { CortexRunnerService } from "../services/runner-service.js";
 import type { ChatSessionService } from "../services/chat-session-service.js";
+import { interruptChatTurn } from "../services/chat-run-control.js";
 import { findLoopStoppedRuns, loopStoppedSummaryOf, reopenRunRow, restoreRunRow } from "../services/loop-stopped-runs.js";
 import { errorText, parseResumeInput, ResumeGuard, resumeStatusOf } from "../services/loop-stop-resume.js";
 
@@ -10,11 +11,17 @@ import { errorText, parseResumeInput, ResumeGuard, resumeStatusOf } from "../ser
 const ContinueBody = t.Optional(t.Object({ note: t.Optional(t.Unknown()), extraIterations: t.Optional(t.Unknown()) }));
 
 /**
- * Continue a loop-stopped chat turn (`services/chat-resume.ts`).
+ * Pause, stop and continue an interrupted chat turn (`services/chat-resume.ts`,
+ * `chat-run-control.ts`).
  *
- * - `GET /api/chat/sessions/:id/resumable`: the session's loop-stopped runs the
- *   framework left resumable, newest first (`{ runs: ResumableRunWire[] }`). Read
- *   from the durable store; never builds the session's agent.
+ * - `POST /api/chat/sessions/:id/chat/stop` and `.../chat/pause`: end the streamed
+ *   turn as the user; a durable run is first ended through the framework
+ *   (`agent.stopRun` / `pauseRun`) so it can be continued
+ *   (`{ stopped, persisted, outcome }`).
+ * - `GET /api/chat/sessions/:id/resumable`: the session's resumable runs (any kind
+ *   of interruption: `kind`, `status`, `stop`), newest first, leaving out the runs
+ *   live in its agent (`{ runs: ResumableRunWire[] }`). Read from the durable store;
+ *   never builds the session's agent.
  * - `POST /api/chat/sessions/:id/resume/:runId` `{ note?, extraIterations? }`:
  *   `agent.resumeRun`; the result lands as the session's next exchange
  *   (`{ reply, success, resumable }`). 400 bad input, 404 unknown session or run,
@@ -22,6 +29,8 @@ const ContinueBody = t.Optional(t.Object({ note: t.Optional(t.Unknown()), extraI
  */
 export const chatResumeRoute = (svc: ChatSessionService) =>
   new Elysia({ prefix: "/api/chat" })
+    .post("/sessions/:sessionId/chat/stop", ({ params }) => interruptChatTurn(svc, params.sessionId, "stop"))
+    .post("/sessions/:sessionId/chat/pause", ({ params }) => interruptChatTurn(svc, params.sessionId, "pause"))
     .get("/sessions/:sessionId/resumable", async ({ params, set }) => {
       if (!svc.getSession(params.sessionId)) {
         set.status = 404;
@@ -50,10 +59,11 @@ export const chatResumeRoute = (svc: ChatSessionService) =>
     );
 
 /**
- * Continue a loop-stopped desk run (`services/loop-stopped-runs.ts`).
+ * Continue an interrupted desk run (`services/loop-stopped-runs.ts`; the path keeps
+ * its name from when only loop stops were listed).
  *
- * - `GET /api/loop-stopped-runs`: durable desk runs a loop guard stopped
- *   (`{ runs: LoopStoppedRunSummary[] }`, the stop and no launch config).
+ * - `GET /api/loop-stopped-runs`: durable desk runs that ended without completing
+ *   (`{ runs: LoopStoppedRunSummary[] }`: `kind`, `status`, `stop`; no launch config).
  * - `POST /api/loop-stopped-runs/:runId/resume` `{ note?, extraIterations? }`:
  *   rebuild the run's agent and call the framework's `resumeRun`; `{ agentId,
  *   runId }` (the same Cortex run). 404 when the run is not a resumable
@@ -114,7 +124,7 @@ export const loopStoppedRunsRouter = (
           }
           if (!out) {
             set.status = 404;
-            return { error: "Not a run stopped on a loop guard that can be continued" };
+            return { error: "Not an interrupted run that can be continued" };
           }
           return out;
         } catch (e) {

@@ -14,6 +14,7 @@
   import { draftSkills } from "$lib/chat-composer-input.js";
   import { tick } from "svelte";
   import ChatModeToggle from "$lib/components/chat/ChatModeToggle.svelte";
+  import ChatPauseButton from "$lib/components/chat/ChatPauseButton.svelte";
   import { isModeShortcut, modeHint, nextMode, type ChatMode } from "$lib/chat-mode.js";
 
   interface Props {
@@ -165,6 +166,7 @@
         defaultSaveType="task"
         onSelect={(body) => void insertPrompt(body)}
       />
+      {#if sendAction === "stop"}<ChatPauseButton />{/if}
       <button
         type="button"
         class="send"

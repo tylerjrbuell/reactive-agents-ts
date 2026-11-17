@@ -150,9 +150,9 @@ function captureRunnerLayer(captured: { params: LaunchParams | null }) {
       captured.params = params;
       return Effect.succeed({ agentId: "x", runId: "y" });
     },
-    pause: () => Effect.void,
+    pause: () => Effect.succeed("not-live" as const),
     resume: () => Effect.void,
-    stop: () => Effect.void,
+    stop: () => Effect.succeed("not-live" as const),
     terminate: () => Effect.void,
     getActive: () => Effect.succeed(new Map()),
     listPendingApprovals: () => Effect.succeed([]),

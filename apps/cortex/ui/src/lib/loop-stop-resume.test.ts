@@ -6,17 +6,17 @@ import {
   continueTarget,
   DEFAULT_EXTRA_ITERATIONS,
   fetchChatResumable,
-  loopStopFacts,
-  loopStopHeadline,
+  fetchLoopStoppedRuns,
   loopStopHint,
   MAX_EXTRA_ITERATIONS,
   parseExtraIterations,
   type ContinueTurn,
-  type LoopStopWire,
+  type LoopStoppedRunWire,
   type ResumableRunWire,
 } from "./loop-stop-resume.js";
+import type { StopWire } from "./run-stop.js";
 
-const stop = (over: Partial<LoopStopWire> = {}): LoopStopWire => ({
+const stop = (over: Partial<StopWire> = {}): StopWire => ({
   reason: "loop_detected:repeat",
   repeatedTool: "web-search",
   toolsDone: [{ tool: "web-search", calls: 3 }, { tool: "file-read", calls: 1 }],
@@ -24,31 +24,7 @@ const stop = (over: Partial<LoopStopWire> = {}): LoopStopWire => ({
   iteration: 7,
   ...over,
 });
-const run = (over: Partial<ResumableRunWire> = {}): ResumableRunWire => ({ runId: "d1", task: "t", updatedAt: 1, loopStop: stop(), ...over });
-
-describe("loop-stop wording", () => {
-  it("says what the guard saw in plain words", () => {
-    expect(loopStopHeadline({ reason: "loop_detected:repeat" })).toContain("repeating the same step");
-    expect(loopStopHeadline({ reason: "loop_graceful" })).toContain("going in circles");
-    expect(loopStopHeadline({ reason: "dispatcher-early-stop" })).toContain("not making progress");
-    expect(loopStopHeadline({ reason: "weird" })).toBe("The run was stopped (weird).");
-  });
-
-  it("lists the repeated tool, the tools done with counts, and what is left", () => {
-    expect(loopStopFacts(stop())).toEqual([
-      { label: "Kept repeating", items: ["web-search"], mono: true },
-      { label: "Already done", items: ["web-search x3", "file-read"], mono: true },
-      { label: "Left to do", items: ["write report", "send summary"], mono: false },
-    ]);
-  });
-
-  it("leaves empty groups out and caps long lists", () => {
-    expect(loopStopFacts(stop({ repeatedTool: undefined, toolsDone: [], unfinished: [] }))).toEqual([]);
-    const many = Array.from({ length: 9 }, (_, i) => `row ${i}`);
-    const left = loopStopFacts(stop({ unfinished: many })).find((f) => f.label === "Left to do")!;
-    expect(left.items).toEqual([...many.slice(0, 5), "and 4 more"]);
-  });
-});
+const run = (over: Partial<ResumableRunWire> = {}): ResumableRunWire => ({ runId: "d1", task: "t", updatedAt: 1, status: "stopped", kind: "loop", stop: stop(), ...over });
 
 describe("iteration grant and request body", () => {
   it("reads empty as the default and refuses anything but a whole number in range", () => {
@@ -81,9 +57,15 @@ describe("continueTarget", () => {
     expect(continueTarget([{ role: "assistant", streaming: true, runFailed: { ending: "failed" } }], false, resumable)).toBeUndefined();
   });
 
-  it("never offers it for an abstention or a turn the person stopped", () => {
+  it("never offers it for an abstention", () => {
     expect(continueTarget([{ role: "assistant", runFailed: { ending: "abstained" } }], false, resumable)).toBeUndefined();
-    expect(continueTarget([{ role: "assistant", runFailed: { ending: "interrupted" } }], false, resumable)).toBeUndefined();
+  });
+
+  it("offers it on a turn the person stopped: the framework keeps that run resumable (needs the stored run)", () => {
+    const stopped: ContinueTurn = { role: "assistant", runFailed: { ending: "interrupted" } };
+    const mine = [run({ runId: "by-user", kind: "user-stopped", status: "stopped", updatedAt: 3 })];
+    expect(continueTarget([{ role: "user" }, stopped], false, mine)?.runId).toBe("by-user");
+    expect(continueTarget([{ role: "user" }, stopped], false, [])).toBeUndefined();
   });
 });
 
@@ -109,6 +91,12 @@ describe("clients", () => {
     expect(await fetchChatResumable("s 1", reply(200, { runs: [run()] }))).toHaveLength(1);
     expect(await fetchChatResumable("s1", reply(404, { error: "no" }))).toEqual([]);
     expect(await fetchChatResumable("s1", async () => { throw new Error("down"); })).toEqual([]);
+  });
+
+  it("reads the interrupted desk runs with their kind and status", async () => {
+    const row: LoopStoppedRunWire = { runId: "r1", agentId: "a", name: null, startedAt: 1, durableRunId: "d1", checkpointIteration: 2, updatedAt: 3, status: "paused", kind: "user-paused" };
+    expect(await fetchLoopStoppedRuns(reply(200, { runs: [row] }))).toEqual([row]);
+    expect(await fetchLoopStoppedRuns(reply(500, {}))).toEqual([]);
   });
 
   it("posts the note and grant to the chat route and reports a run that stopped again", async () => {

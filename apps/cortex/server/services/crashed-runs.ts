@@ -44,13 +44,15 @@ export function durableRunsDbPath(agentId: string, dir?: string, home: string = 
   return join(dir && dir.trim() !== "" ? dir : join(home, ".reactive-agents", agentId), "runs.db");
 }
 
-/** Durable statuses a crash leaves behind: the run was going, nobody is waiting on a person. */
-const CRASH_STATUSES: ReadonlySet<string> = new Set(["running", "paused"]);
-
-/** The newest record a crash left mid-run, if any. Pure. */
+/**
+ * The newest record the framework reports resumable (`RunRecord.resumable`: it did not
+ * complete and has a checkpoint or a stop record; a run waiting on a person is not), if any.
+ * The desk row is still `live` with nothing running it, so this is a crash (or an end
+ * Cortex never recorded). Pure.
+ */
 export function pickCrashedDurableRun(records: readonly RunRecord[]): RunRecord | undefined {
   return [...records]
-    .filter((r) => CRASH_STATUSES.has(r.status))
+    .filter((r) => r.resumable === true)
     .sort((a, b) => b.updatedAt - a.updatedAt)[0];
 }
 

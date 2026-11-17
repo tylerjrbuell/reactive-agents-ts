@@ -3,7 +3,7 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import { join } from "node:path";
 import { Effect } from "effect";
-import { RunNotResumableError, RunStoreLive, RunStoreService, type AgentResult } from "@reactive-agents/runtime";
+import { RunNotResumableError, RunStoreLive, RunStoreService, type AgentResult, type RunStopKind } from "@reactive-agents/runtime";
 import { ChatResume, type ChatResumeHost, type ResumableAgent } from "../services/chat-resume.js";
 import { ResumeGuard } from "../services/loop-stop-resume.js";
 import type { StoredTurnTrace } from "../services/chat-turn-trace.js";
@@ -13,16 +13,28 @@ afterAll(() => rmTmpDirs());
 
 const STOP = { reason: "loop_detected:repeat", repeatedTool: "web-search", toolsDone: [{ tool: "web-search", calls: 3 }], unfinished: ["write report"], iteration: 7 };
 
-const seed = (dir: string, runs: readonly { runId: string; agentId: string; stopped: boolean }[]) =>
+const seed = (dir: string, runs: readonly { runId: string; agentId: string; stopped: boolean; kind?: RunStopKind }[]) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const store = yield* RunStoreService;
       for (const r of runs) {
         yield* store.createRun({ runId: r.runId, agentId: r.agentId, task: `task of ${r.runId}`, configHash: "h" });
-        if (r.stopped) yield* store.setLoopStop(r.runId, STOP);
+        if (r.stopped && r.kind === undefined) yield* store.setLoopStop(r.runId, STOP);
+        if (r.stopped && r.kind !== undefined) {
+          yield* store.setStop(r.runId, { ...STOP, kind: r.kind });
+          yield* store.setStatus(r.runId, r.kind === "user-paused" ? "paused" : "stopped");
+        }
       }
     }).pipe(Effect.provide(RunStoreLive(join(dir, "runs.db")))),
   );
+
+/** An agent with nothing running that resumes through `resumeRun` (the interrupt methods are not under test here). */
+const idleAgent = (resumeRun: ResumableAgent["resumeRun"], liveIds: readonly string[] = []): ResumableAgent => ({
+  resumeRun,
+  activeRunIds: () => liveIds,
+  pauseRun: async () => false,
+  stopRun: async () => false,
+});
 
 const result = (over: Partial<AgentResult>): AgentResult =>
   ({
@@ -40,19 +52,21 @@ interface Harness {
   readonly persisted: { sessionId: string; userMessage: string; reply: string; trace: StoredTurnTrace | undefined }[];
   readonly evicted: string[];
   setAgent(agent: ResumableAgent): void;
+  /** The session's live (cached) agent, as `activeRunIds()` reports its running runs. */
+  setLive(agent: ResumableAgent | undefined): void;
 }
 
 const harness = (dir: string, opts: { busy?: boolean; agentId?: string | undefined } = {}): Harness => {
   const calls: Harness["calls"] = [];
   const persisted: Harness["persisted"] = [];
   const evicted: string[] = [];
-  let agent: ResumableAgent = {
-    resumeRun: async (runId, options) => {
-      calls.push({ runId, options });
-      return result({});
-    },
-  };
+  let agent: ResumableAgent = idleAgent(async (runId, options) => {
+    calls.push({ runId, options });
+    return result({});
+  });
+  let live: ResumableAgent | undefined;
   const host: ChatResumeHost = {
+    liveAgentOf: () => live,
     durableSourceOf: (id) => (id === "s1" && opts.agentId !== undefined ? { agentId: opts.agentId, dir } : id === "s1" ? { agentId: "chat-1", dir } : undefined),
     acquireTurn: () => {
       if (opts.busy) throw new Error("A turn is already running");
@@ -66,7 +80,7 @@ const harness = (dir: string, opts: { busy?: boolean; agentId?: string | undefin
       evicted.push(id);
     },
   };
-  return { resume: new ChatResume(host, new ResumeGuard()), calls, persisted, evicted, setAgent: (a) => (agent = a) };
+  return { resume: new ChatResume(host, new ResumeGuard()), calls, persisted, evicted, setAgent: (a) => (agent = a), setLive: (a) => (live = a) };
 };
 
 describe("ChatResume.list", () => {
@@ -80,7 +94,33 @@ describe("ChatResume.list", () => {
     const h = harness(dir);
     const runs = await h.resume.list("s1");
     expect(runs.map((r) => r.runId)).toEqual(["mine-stopped"]);
-    expect(runs[0]!.loopStop).toEqual(STOP);
+    expect(runs[0]).toMatchObject({ kind: "loop", status: "running", stop: { ...STOP, kind: "loop" } });
+  });
+
+  it("lists a user stop and a user pause with their kinds (not only loop stops)", async () => {
+    const dir = tmpDir("chat-resume-kinds");
+    await seed(dir, [
+      { runId: "by-user", agentId: "chat-1", stopped: true, kind: "user-stopped" },
+      { runId: "paused", agentId: "chat-1", stopped: true, kind: "user-paused" },
+      { runId: "budget", agentId: "chat-1", stopped: true, kind: "budget" },
+    ]);
+    const runs = await harness(dir).resume.list("s1");
+    expect(Object.fromEntries(runs.map((r) => [r.runId, [r.kind, r.status]]))).toEqual({
+      "by-user": ["user-stopped", "stopped"],
+      paused: ["user-paused", "paused"],
+      budget: ["budget", "stopped"],
+    });
+  });
+
+  it("leaves out a run the session's live agent is running now", async () => {
+    const dir = tmpDir("chat-resume-live");
+    await seed(dir, [
+      { runId: "going", agentId: "chat-1", stopped: true, kind: "user-stopped" },
+      { runId: "ended", agentId: "chat-1", stopped: true, kind: "user-stopped" },
+    ]);
+    const h = harness(dir);
+    h.setLive(idleAgent(async () => result({}), ["going"]));
+    expect((await h.resume.list("s1")).map((r) => r.runId)).toEqual(["ended"]);
   });
 
   it("is empty with no store, an unknown session, or a session without a stable agent id", async () => {
@@ -108,9 +148,7 @@ describe("ChatResume.resume", () => {
     const dir = tmpDir("chat-resume-again");
     await seed(dir, [{ runId: "r1", agentId: "chat-1", stopped: true }]);
     const h = harness(dir);
-    h.setAgent({
-      resumeRun: async () => result({ success: false, output: "", error: "loop detected", resumable: true, loopStop: STOP }),
-    });
+    h.setAgent(idleAgent(async () => result({ success: false, output: "", error: "loop detected", resumable: true, loopStop: STOP })));
     const out = await h.resume.resume("s1", "r1", { ok: true, options: {} });
     expect(out).toMatchObject({ ok: true, success: false, resumable: true });
     expect(h.persisted[0]!.userMessage).toBe("Continue");
@@ -131,11 +169,11 @@ describe("ChatResume.resume", () => {
     const dir = tmpDir("chat-resume-err");
     await seed(dir, [{ runId: "r1", agentId: "chat-1", stopped: true }]);
     const h = harness(dir);
-    h.setAgent({
-      resumeRun: async (runId) => {
+    h.setAgent(
+      idleAgent(async (runId) => {
         throw new RunNotResumableError({ runId, reason: "already continued" });
-      },
-    });
+      }),
+    );
     const out = await h.resume.resume("s1", "r1", { ok: true, options: {} });
     expect(out).toMatchObject({ ok: false, code: "not-resumable" });
     expect(h.persisted).toEqual([]);
@@ -155,12 +193,14 @@ describe("ChatResume.resume", () => {
     await seed(dir, [{ runId: "r1", agentId: "chat-1", stopped: true }]);
     const h = harness(dir);
     let finish: (r: AgentResult) => void = () => {};
-    h.setAgent({
-      resumeRun: () =>
-        new Promise<AgentResult>((resolve) => {
-          finish = resolve;
-        }),
-    });
+    h.setAgent(
+      idleAgent(
+        () =>
+          new Promise<AgentResult>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
     const first = h.resume.resume("s1", "r1", { ok: true, options: {} });
     await new Promise((r) => setTimeout(r, 30));
     const second = await h.resume.resume("s1", "r1", { ok: true, options: {} });

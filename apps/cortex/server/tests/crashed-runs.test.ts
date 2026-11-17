@@ -39,8 +39,8 @@ describe("crashed-run helpers", () => {
   it("picks the newest run a crash left mid-run, never one waiting on a person or finished", () => {
     expect(
       pickCrashedDurableRun([
-        rec({ runId: "old", updatedAt: 1 }),
-        rec({ runId: "new", status: "paused", updatedAt: 5 }),
+        rec({ runId: "old", updatedAt: 1, resumable: true }),
+        rec({ runId: "new", status: "paused", updatedAt: 5, resumable: true }),
         rec({ runId: "gate", status: "awaiting-approval", updatedAt: 9 }),
         rec({ runId: "done", status: "completed", updatedAt: 10 }),
       ])?.runId,
