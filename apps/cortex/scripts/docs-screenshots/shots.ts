@@ -26,6 +26,8 @@ export const MASKS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\b\d+(\.\d+)? tok\/s/, "0 tok/s"],
 ];
 
+export type Dataset = "empty" | "demo" | "board" | "chat";
+
 export interface ShotContext {
   readonly page: Page;
   readonly base: string;
@@ -55,8 +57,12 @@ export interface Shot {
   readonly width?: number;
   readonly height?: number;
   readonly scheme?: "dark" | "light";
-  /** `empty`: a Cortex with no data (first-run views). Default `demo`: the seeded one. */
-  readonly dataset?: "empty" | "demo";
+  /**
+   * `empty`: a Cortex with no data (first-run views). Default `demo`: the seeded one. `board`: the same seed as `demo`,
+   * in its own run so shots that run agents (the plan Execute shot) cannot change what Beacon lists. `chat`: two chats,
+   * one finished turn and one empty (seed-chat.ts).
+   */
+  readonly dataset?: Dataset;
   /** `full`: motion on (the capture must then freeze the animation at a fixed frame). Default `reduced`. */
   readonly motion?: "reduced" | "full";
   /**
@@ -316,6 +322,89 @@ export const SHOTS: readonly Shot[] = [
         hide();
         new MutationObserver(hide).observe(document.body, { childList: true, subtree: true, characterData: true });
       });
+    },
+  },
+  {
+    id: "beacon-board",
+    status: "stable",
+    dataset: "board",
+    route: "/",
+    caption: "Beacon with agents: every agent the desk has seen, with its status, where it came from, its last line, model and tokens.",
+    alt: "Cortex Beacon Board view listing the demo agents: runs that finished, one paused on an approval, one stopped by the person and one that ran out of its step budget.",
+    async capture({ page, base }) {
+      await page.goto(`${base}/`);
+      await page.getByText("Needs you").first().waitFor({ timeout: 20_000 });
+      await settle(page);
+    },
+  },
+  {
+    id: "beacon-field",
+    status: "stable",
+    dataset: "board",
+    route: "/?view=field",
+    caption: "Beacon's Field view: the same agents as nodes on a dot grid, each with its status, model, run time and tokens.",
+    alt: "Cortex Beacon Field view: agents as nodes on a dot grid, each labelled with its name and status.",
+    async capture({ page, base }) {
+      await page.goto(`${base}/?view=field`);
+      await page.getByText("Needs you").first().waitFor({ timeout: 20_000 });
+      await settle(page);
+    },
+  },
+  {
+    id: "chat-session",
+    status: "stable",
+    dataset: "chat",
+    route: "/chat",
+    caption: "A finished chat turn: the tool the agent called, its answer, and the actions under the reply.",
+    alt: "Cortex chat with one finished turn: the user's question, the file-read tool call, the assistant's markdown answer and the row of actions under it.",
+    async capture({ page, base, sessionId }) {
+      await page.goto(`${base}/chat?session=${sessionId("Summarise the changelog")}`);
+      await page.getByText("The latest release is").first().waitFor({ timeout: 20_000 });
+      await settle(page);
+    },
+  },
+  {
+    id: "chat-composer",
+    status: "stable",
+    dataset: "chat",
+    route: "/chat",
+    caption: "The chat composer: quick-bar chips for the model, tools and step limit, the message box, and the attach, dictate, voice and prompt buttons.",
+    alt: "Cortex chat composer in a new chat: quick-bar chips, the message box with its keyboard hints, the Plan and Execute switch, and the attach, dictate, voice mode and prompt library buttons.",
+    crop: { x: 370, y: 650, width: 960, height: 250, shows: "The composer: quick-bar chips, Config, the message box, the Plan and Execute switch and the action buttons." },
+    async capture({ page, base, sessionId }) {
+      await page.goto(`${base}/chat?session=${sessionId("New chat")}`);
+      await page.getByPlaceholder("Message the agent").waitFor({ timeout: 20_000 });
+      await settle(page);
+    },
+  },
+  {
+    id: "chat-config-popover",
+    status: "stable",
+    dataset: "chat",
+    route: "/chat",
+    caption: "The Config menu: one list for the chat's commands and settings. Each setting shows its current value, and typing / opens the same list.",
+    alt: "Cortex chat with the Config menu open above the composer: a list of commands such as compact, clear, fork and rewind, then settings such as model and provider with their current values.",
+    crop: { x: 370, y: 350, width: 960, height: 550, shows: "The Config menu open above the composer, with commands and settings and their current values." },
+    note: "Config opens the composer's slash-command list (the same one typing / opens); the older grouped popover no longer exists.",
+    async capture({ page, base, sessionId }) {
+      await page.goto(`${base}/chat?session=${sessionId("New chat")}`);
+      await page.getByPlaceholder("Message the agent").waitFor({ timeout: 20_000 });
+      await page.getByRole("button", { name: "Config" }).click();
+      await page.getByText("/provider").first().waitFor({ timeout: 10_000 });
+      await settle(page);
+    },
+  },
+  {
+    id: "settings-voice",
+    status: "stable",
+    dataset: "empty",
+    route: "/settings#voice",
+    caption: "Settings, Voice: the listening and reading engines, mic behaviour, language and speed. Browser engines need nothing installed.",
+    alt: "Cortex Settings page at the Voice section: section list on the left, then one row per voice setting such as Listening engine, Mic button, Language and Reading engine.",
+    async capture({ page, base }) {
+      await page.goto(`${base}/settings#voice`);
+      await page.getByText("Listening engine").first().waitFor({ timeout: 20_000 });
+      await settle(page);
     },
   },
 ];

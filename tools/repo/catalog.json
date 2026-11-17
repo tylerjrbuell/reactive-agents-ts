@@ -513,6 +513,13 @@
       "invoke": "bun run --cwd apps/cortex screenshots:docs"
     },
     {
+      "id": "apps/cortex/scripts/docs-screenshots/seed-chat.ts",
+      "path": "apps/cortex/scripts/docs-screenshots/seed-chat.ts",
+      "kind": "test-support",
+      "summary": "Seeds the two-chat dataset for the chat screenshots (demo Cortex)",
+      "invoke": "bun run --cwd apps/cortex screenshots:docs"
+    },
+    {
       "id": "apps/cortex/scripts/docs-screenshots/fake-mcp.ts",
       "path": "apps/cortex/scripts/docs-screenshots/fake-mcp.ts",
       "kind": "test-support",

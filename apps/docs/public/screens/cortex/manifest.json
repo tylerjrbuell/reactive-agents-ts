@@ -314,6 +314,121 @@
         "shows": "The Why it ended card: the cause, what to try and the decisive steps."
       },
       "note": "Readability crop of run-cause: 984x540 CSS px from (16, 360) of the full capture, for display at 480 to 820 px wide."
+    },
+    {
+      "id": "beacon-board",
+      "file": "beacon-board.webp",
+      "status": "stable",
+      "route": "/",
+      "caption": "Beacon with agents: every agent the desk has seen, with its status, where it came from, its last line, model and tokens.",
+      "alt": "Cortex Beacon Board view listing the demo agents: runs that finished, one paused on an approval, one stopped by the person and one that ran out of its step budget.",
+      "width": 1440,
+      "height": 900,
+      "bytes": 22740,
+      "sha256": "c7df187eff62e4ae6c73805da82a08b03bf4d3d24221c6edf7603f5ff8eb62b4"
+    },
+    {
+      "id": "beacon-field",
+      "file": "beacon-field.webp",
+      "status": "stable",
+      "route": "/?view=field",
+      "caption": "Beacon's Field view: the same agents as nodes on a dot grid, each with its status, model, run time and tokens.",
+      "alt": "Cortex Beacon Field view: agents as nodes on a dot grid, each labelled with its name and status.",
+      "width": 1440,
+      "height": 900,
+      "bytes": 29450,
+      "sha256": "c0cfadb18f3a3a5bf0401157687227ae1a87b50a0e59a723c49a4d04b535e68e"
+    },
+    {
+      "id": "chat-session",
+      "file": "chat-session.webp",
+      "status": "stable",
+      "route": "/chat",
+      "caption": "A finished chat turn: the tool the agent called, its answer, and the actions under the reply.",
+      "alt": "Cortex chat with one finished turn: the user's question, the file-read tool call, the assistant's markdown answer and the row of actions under it.",
+      "width": 1440,
+      "height": 900,
+      "bytes": 31718,
+      "sha256": "7075e7617688704e88448d8e962aac086384ff36636dedaf36a472bf60cd89ab"
+    },
+    {
+      "id": "chat-composer",
+      "file": "chat-composer.webp",
+      "status": "stable",
+      "route": "/chat",
+      "caption": "The chat composer: quick-bar chips for the model, tools and step limit, the message box, and the attach, dictate, voice and prompt buttons.",
+      "alt": "Cortex chat composer in a new chat: quick-bar chips, the message box with its keyboard hints, the Plan and Execute switch, and the attach, dictate, voice mode and prompt library buttons.",
+      "width": 1440,
+      "height": 900,
+      "bytes": 30876,
+      "sha256": "9ccf90cf4d1b61c906043faa6ded6a70a77eaf28023eb443ab802c7804c0cf1f"
+    },
+    {
+      "id": "chat-composer--crop",
+      "file": "chat-composer--crop.webp",
+      "status": "stable",
+      "route": "/chat",
+      "caption": "The chat composer: quick-bar chips for the model, tools and step limit, the message box, and the attach, dictate, voice and prompt buttons. The composer: quick-bar chips, Config, the message box, the Plan and Execute switch and the action buttons.",
+      "alt": "Cortex chat composer in a new chat: quick-bar chips, the message box with its keyboard hints, the Plan and Execute switch, and the attach, dictate, voice mode and prompt library buttons. Cropped to show: The composer: quick-bar chips, Config, the message box, the Plan and Execute switch and the action buttons.",
+      "width": 960,
+      "height": 250,
+      "bytes": 6708,
+      "sha256": "03404a47fd62b42c39c6db8772ee151b9f9d6d646ca1c15e32617aca9768ae4c",
+      "variantOf": "chat-composer",
+      "crop": {
+        "x": 370,
+        "y": 650,
+        "width": 960,
+        "height": 250,
+        "shows": "The composer: quick-bar chips, Config, the message box, the Plan and Execute switch and the action buttons."
+      },
+      "note": "Readability crop of chat-composer: 960x250 CSS px from (370, 650) of the full capture, for display at 480 to 820 px wide."
+    },
+    {
+      "id": "chat-config-popover",
+      "file": "chat-config-popover.webp",
+      "status": "stable",
+      "route": "/chat",
+      "caption": "The Config menu: one list for the chat's commands and settings. Each setting shows its current value, and typing / opens the same list.",
+      "alt": "Cortex chat with the Config menu open above the composer: a list of commands such as compact, clear, fork and rewind, then settings such as model and provider with their current values.",
+      "width": 1440,
+      "height": 900,
+      "bytes": 41338,
+      "sha256": "c33f5e23e363f81e286087a60712ff6e5385877775f971d5bed56b5d4faaf0ef",
+      "note": "Config opens the composer's slash-command list (the same one typing / opens); the older grouped popover no longer exists."
+    },
+    {
+      "id": "chat-config-popover--crop",
+      "file": "chat-config-popover--crop.webp",
+      "status": "stable",
+      "route": "/chat",
+      "caption": "The Config menu: one list for the chat's commands and settings. Each setting shows its current value, and typing / opens the same list. The Config menu open above the composer, with commands and settings and their current values.",
+      "alt": "Cortex chat with the Config menu open above the composer: a list of commands such as compact, clear, fork and rewind, then settings such as model and provider with their current values. Cropped to show: The Config menu open above the composer, with commands and settings and their current values.",
+      "width": 960,
+      "height": 550,
+      "bytes": 25576,
+      "sha256": "83b10743a38011ca1a5a4e9e571ef3d2862964a1f0fb4d81a5aa7f1394598208",
+      "variantOf": "chat-config-popover",
+      "crop": {
+        "x": 370,
+        "y": 350,
+        "width": 960,
+        "height": 550,
+        "shows": "The Config menu open above the composer, with commands and settings and their current values."
+      },
+      "note": "Readability crop of chat-config-popover: 960x550 CSS px from (370, 350) of the full capture, for display at 480 to 820 px wide."
+    },
+    {
+      "id": "settings-voice",
+      "file": "settings-voice.webp",
+      "status": "stable",
+      "route": "/settings#voice",
+      "caption": "Settings, Voice: the listening and reading engines, mic behaviour, language and speed. Browser engines need nothing installed.",
+      "alt": "Cortex Settings page at the Voice section: section list on the left, then one row per voice setting such as Listening engine, Mic button, Language and Reading engine.",
+      "width": 1440,
+      "height": 900,
+      "bytes": 55776,
+      "sha256": "2567e046499d9e2169103f9fba0dc2527b967a39c0fa2767806bf9e31242f039"
     }
   ]
 }

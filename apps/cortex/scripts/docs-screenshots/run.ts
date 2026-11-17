@@ -9,11 +9,11 @@
  */
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import sharp from "sharp";
-import { MASKS, SHOTS, VIEWPORT, type CropBox, type Shot, type ShotContext } from "./shots.js";
+import { MASKS, SHOTS, VIEWPORT, type CropBox, type Dataset, type Shot, type ShotContext } from "./shots.js";
 
 const here = new URL(".", import.meta.url).pathname;
 const cortexRoot = resolve(here, "../..");
@@ -174,17 +174,23 @@ async function capture(shot: Shot, ctxInfo: Pick<ShotContext, "sessionId" | "run
 }
 
 /** One demo Cortex, wiped and seeded for `dataset`, with the shots that need it. */
-async function runDataset(dataset: "empty" | "demo", shots: readonly Shot[]): Promise<void> {
+async function runDataset(dataset: Dataset, shots: readonly Shot[]): Promise<void> {
   if (shots.length === 0) return;
   rmSync(demoDir, { recursive: true, force: true });
   mkdirSync(demoDir, { recursive: true });
   // Chats first (a pending approval is restored when the server boots), then the server, then the HTTP seeds.
-  if (dataset === "demo") await sh("seed.ts", "seed");
+  const seeded = dataset === "demo" || dataset === "board";
+  if (seeded) await sh("seed.ts", "seed");
+  if (dataset === "chat") await sh("seed-chat.ts", "seed-chat");
   const server = await startServer();
   try {
     const ids = new Map<string, string>();
     let failedRunId = "";
-    if (dataset === "demo") {
+    if (dataset === "chat") {
+      const list = (await (await fetch(`${base}/api/chat/sessions`)).json()) as Array<{ sessionId: string; name: string }>;
+      for (const s of list) ids.set(s.name, s.sessionId);
+    }
+    if (seeded) {
       await sh("seed-http.ts", "seed-http");
       const list = (await (await fetch(`${base}/api/chat/sessions`)).json()) as Array<{ sessionId: string; name: string }>;
       for (const s of list) ids.set(s.name, s.sessionId);
@@ -211,7 +217,9 @@ async function runDataset(dataset: "empty" | "demo", shots: readonly Shot[]): Pr
 
 try {
   await runDataset("empty", selected.filter((s) => s.dataset === "empty"));
-  await runDataset("demo", selected.filter((s) => s.dataset !== "empty"));
+  await runDataset("demo", selected.filter((s) => s.dataset === undefined || s.dataset === "demo"));
+  await runDataset("board", selected.filter((s) => s.dataset === "board"));
+  await runDataset("chat", selected.filter((s) => s.dataset === "chat"));
 } finally {
   await browser.close();
 }
@@ -278,7 +286,9 @@ const manifest = {
   data: "seeded demo data, scripted `test` provider, no keys, no network, HOME and data dir under a temp folder",
   shots: SHOTS.flatMap((s) => [byId.get(s.id)!, ...(s.crop ? [byId.get(`${s.id}--crop`)!] : [])]),
 };
-writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+// Atomic: write beside it, then rename, so an interrupted run never leaves half a manifest.
+writeFileSync(`${manifestPath}.tmp`, `${JSON.stringify(manifest, null, 2)}\n`);
+renameSync(`${manifestPath}.tmp`, manifestPath);
 console.log(`manifest: ${manifestPath}`);
 
 // `--compare DIR`: byte-compare every image this run wrote with the same file in DIR (a previous run).

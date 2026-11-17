@@ -24,8 +24,11 @@ captured; other manifest entries keep their last values.
 1. Wipes the demo dir (`/tmp/cortex-docs-demo`, `DEMO_DIR`). Every process is spawned with `HOME` set to it:
    Bun reads `HOME` for `os.homedir()` once, at start, so setting it later does nothing. `demo-server.ts` and
    `seed.ts` refuse to run unless `homedir()` is the demo dir (fail closed). Provider key env vars are removed.
-2. Shots are grouped by dataset: `empty` (a Cortex with no data: the Beacon first-run view) first, then `demo`.
-3. For `demo`: `seed.ts` writes chat states BEFORE the server starts (a pending approval is restored from the durable
+2. Shots are grouped by dataset, each wiped and seeded on its own: `empty` (no data: the Beacon first-run view and
+   Settings), `demo`, `board` (the `demo` seed in a separate run, so the plan Execute shot's runs cannot change what Beacon
+   lists) and `chat` (`seed-chat.ts`: two chats, one finished turn with a tool call and one empty, kept apart so the
+   other chat shots' sidebar does not change).
+3. For `demo` and `board`: `seed.ts` writes chat states BEFORE the server starts (a pending approval is restored from the durable
    store when the server boots), then `demo-server.ts` starts Cortex on port 4399 (`DEMO_PORT`), then `seed-http.ts` adds
    what needs the API: two MCP servers that connect (`fake-mcp.ts` over stdio) and one that fails, a webhook channel that
    runs plus Telegram and Signal channels saved switched off.
@@ -40,6 +43,12 @@ Readability crops: a shot with `crop: { x, y, width, height, shows }` (CSS px at
 Seeded chat states (`seed.ts`): a plan-mode chat (run for real by the Execute shot), a durable run the person stopped
 (a real Stop through the chat control), a run that spent its step budget (real, the framework's own stop), and a
 durable turn paused on a `file-write` approval.
+
+The manifest is written to a temp file and renamed, so an interrupted run never leaves a half file.
+
+Shots that replace the old hand-taken docs images: `beacon-board`, `beacon-field`, `chat-session`, `chat-composer`,
+`chat-config-popover` (Config opens the composer's slash-command list, the same one typing `/` opens) and `settings-voice`
+(default settings, no keys).
 
 ## Prerequisites
 
