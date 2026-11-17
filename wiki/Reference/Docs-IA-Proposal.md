@@ -31,7 +31,7 @@ Remaining splits (DONE 2026-11-17): same method as the tools split (reader task,
 - `guides/messaging-channels` (7.2k) became a 0.5k hub plus telegram, signal, webhook, routes, reliability, security-and-troubleshooting, legacy-mcp-setups. The `gateway-duplicate` guard now treats the hub and children as the home. Two pointer headings kept (Sender Access Control, Acknowledging slow turns) for `features/cortex/gateway-and-channels`.
 - `guides/whats-new` (11.2k) keeps Unreleased and v0.18 plus an index table of every earlier release (3.1k); older releases moved verbatim to 5 archive pages by minor (v0-17, v0-15-to-v0-16, v0-13-to-v0-14, v0-11-to-v0-12, v0-5-to-v0-10), one collapsed sidebar group.
 - `reference/cli` (4.1k) moved `rax diagnose` (2.2k) to `/reference/cli/diagnose/`, leaving a pointer under the same heading (1.9k). Listed once, in the Rax CLI group.
-- `OVERSIZE_EXCEPTIONS` now lists only `features/cortex/chat-and-composer` (cortex-warden's page).
+- `features/cortex/chat-and-composer` (5.85k) became a 0.6k hub plus four children under `/features/cortex/chat-and-composer/`: sessions-and-turns, composer-and-config, plan-and-execute, stop-compact-and-control (each at most 2.3k words; one collapsed sidebar group, topic `cortex`). Split by reader task; every original line kept verbatim (checked line by line), headings and anchors unchanged, with one new heading ("Stopping and continuing a turn") over the two stop bullets and a short intro on the composer page. The hub URL is unchanged, so no redirects. Inbound links from tour, approvals-and-questions and goals-plans-loops now point at the child that holds the answer. `OVERSIZE_EXCEPTIONS` is empty; `findOversizePage` takes an injectable list so the mechanism stays tested.
 - Topic tagging: 74 more pages got `topic` (and `related`, max 4, for hubs and canonical pages); only `features/cortex/**` (13 pages) lacks it. Gate `ia-missing-topic` is now failing in `check-docs-sync.ts` with `TOPIC_EXEMPT_PREFIXES = ["features/cortex"]` in `ia-inventory.ts`. `ia-missing-related` stays report-only.
 
 
@@ -223,7 +223,11 @@ Actions: `keep`, `move` (file path changes, redirect needed), `merge-into` (cont
 | `/features/code-action/` | keep | self | Build > Capabilities |  |
 | `/features/cortex/` | keep | self | Cortex | top-level group instead of nested under How It Works |
 | `/features/cortex/approvals-and-questions/` | keep | self | Cortex |  |
-| `/features/cortex/chat-and-composer/` | split | self | Cortex | 5476 words; see section e |
+| `/features/cortex/chat-and-composer/` | split (DONE 2026-11-17) | self (hub) | Cortex | hub 617 words (router, slash commands at a glance); children below |
+| `/features/cortex/chat-and-composer/sessions-and-turns/` | new | self | Cortex | turn transcript, run endings, cost, goals and to-do, failed turns, rich answers, environment changes |
+| `/features/cortex/chat-and-composer/composer-and-config/` | new | self | Cortex | composer chips, quick bar and Config popover, skills, documents, @ tagging, attachments |
+| `/features/cortex/chat-and-composer/plan-and-execute/` | new | self | Cortex | Plan or Execute toggle, plan card, dependencies and args, strategies, recon findings |
+| `/features/cortex/chat-and-composer/stop-compact-and-control/` | new | self | Cortex | pause, stop, continue, stop causes, compact, agent control, approvals card |
 | `/features/cortex/connect-your-app/` | keep | self | Cortex | move to position 2 (setup before tour) |
 | `/features/cortex/gateway-and-channels/` | keep | self | Cortex | 3126 words; UI only, explain framework behavior by pointer to guides/messaging-channels |
 | `/features/cortex/goals-plans-loops/` | keep | self | Cortex | absorbs chat-and-composer "Plan and Execute mode" |

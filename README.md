@@ -79,22 +79,22 @@ A local studio for live debugging. Start it with `.withCortex()` or `rax run --c
 Watch your agents run: `bun add @reactive-agents/cortex`, then `rax cortex` (from a source checkout, `bun cortex`).
 
 <div align="center">
-  <img src="apps/docs/public/screens/cortex/chat-plan-card.webp" alt="Cortex chat in Plan mode showing an editable three-step plan with tool chips for file-read, before it is executed." width="800" />
+  <img src="apps/docs/public/screens/cortex/chat-plan-card--crop.webp" alt="Cortex chat in Plan mode showing an editable three-step plan with tool chips for file-read, before it is executed." width="800" />
   <p><em>Plan mode: the agent proposes a plan, one line per step with the tool it will use. Edit it, then Execute.</em></p>
 </div>
 
 <div align="center">
-  <img src="apps/docs/public/screens/cortex/chat-stopped-continue.webp" alt="Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button." width="800" />
+  <img src="apps/docs/public/screens/cortex/chat-stopped-continue--crop.webp" alt="Cortex chat showing 'Stopped by you' with the tool already done, an optional note for the agent, and a Continue button." width="800" />
   <p><em>A durable run you stopped keeps its place. Continue resumes the same run without repeating finished work.</em></p>
 </div>
 
 <div align="center">
-  <img src="apps/docs/public/screens/cortex/tools-lab.webp" alt="Cortex Tools Lab listing three MCP servers: two connected with their tools, one failed with its error." width="800" />
+  <img src="apps/docs/public/screens/cortex/tools-lab--crop.webp" alt="Cortex Tools Lab listing three MCP servers: two connected with their tools, one failed with its error." width="800" />
   <p><em>Tools Lab: MCP servers with live connection status and each tool's input schema.</em></p>
 </div>
 
 <div align="center">
-  <img src="apps/docs/public/screens/cortex/run-cause.webp" alt="Cortex run view for a run that hit its iteration limit, with the Why it ended card open: cause, what to try, decisive steps, and the trace below." width="800" />
+  <img src="apps/docs/public/screens/cortex/run-cause--crop.webp" alt="Cortex run view for a run that hit its iteration limit, with the Why it ended card open: cause, what to try, decisive steps, and the trace below." width="800" />
   <p><em>The run view's Why it ended card: the cause, who is at fault, what to try, and the steps that decided it.</em></p>
 </div>
 

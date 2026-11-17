@@ -4,34 +4,54 @@
  * from public/screens/cortex/manifest.json (written by
  * `bun run --cwd apps/cortex screenshots:docs`), so docs never hard-code them.
  * Unknown id: build fails. Pending shot (no file): renders nothing.
+ *
+ * `variant="crop"` shows the `<id>--crop` readability variant (the part of the
+ * screen that tells the story, at its own larger scale). A missing crop fails
+ * the build rather than silently falling back to the small full capture.
+ *
+ * Click-to-zoom: the image sits in starlight-image-zoom's `<starlight-image-zoom-zoomable>`
+ * wrapper with its keyboard-reachable zoom button. The plugin only wraps Markdown
+ * images by itself; components must opt in like this. Its dialog (native
+ * `<dialog>`: Escape closes, focus is trapped) is mounted on every page by the
+ * MarkdownContent override, splash pages included.
  */
 import manifest from "../../public/screens/cortex/manifest.json";
 
 interface Props {
   id: string;
+  /** "crop" selects the `<id>--crop` readability variant. */
+  variant?: "crop";
   /** Hero image: eager load instead of lazy. */
   hero?: boolean;
   /** Hide the caption (the surrounding page already explains it). */
   bare?: boolean;
 }
-const { id, hero = false, bare = false } = Astro.props;
-const shot = manifest.shots.find((s) => s.id === id);
+const { id, variant, hero = false, bare = false } = Astro.props;
+const shotId = variant === "crop" ? `${id}--crop` : id;
+const shot = manifest.shots.find((s) => s.id === shotId);
 if (!shot) {
-  throw new Error(`CortexShot: id "${id}" not found in public/screens/cortex/manifest.json`);
+  throw new Error(`CortexShot: id "${shotId}" not found in public/screens/cortex/manifest.json`);
 }
 const src = shot.file ? `${import.meta.env.BASE_URL.replace(/\/$/, "")}/screens/cortex/${shot.file}` : null;
 ---
 {
   src && shot.status === "stable" && (
-    <figure class="cortex-shot" data-shot={id}>
-      <img
-        src={src}
-        alt={shot.alt}
-        width={shot.width}
-        height={shot.height}
-        loading={hero ? "eager" : "lazy"}
-        decoding="async"
-      />
+    <figure class="cortex-shot" data-shot={shotId}>
+      <starlight-image-zoom-zoomable>
+        <img
+          src={src}
+          alt={shot.alt}
+          width={shot.width}
+          height={shot.height}
+          loading={hero ? "eager" : "lazy"}
+          decoding="async"
+        />
+        <button class="starlight-image-zoom-control" aria-label={`Zoom image: ${shot.alt}`}>
+          <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24">
+            <use href="#starlight-image-zoom-icon-zoom" />
+          </svg>
+        </button>
+      </starlight-image-zoom-zoomable>
       {!bare && <figcaption>{shot.caption}</figcaption>}
     </figure>
   )

@@ -249,18 +249,21 @@ export function findStrategyTables(text: string): number[] {
  * (their size when listed, rounded up to 100). The list may only shrink: a listed page that grows
  * past its cap fails, and a listed page that drops under the ceiling must be removed from the list.
  */
-export const OVERSIZE_EXCEPTIONS: Readonly<Record<string, number>> = {
-  "features/cortex/chat-and-composer": 5700, // cortex-warden's page; split with the Cortex overhaul
-};
+export const OVERSIZE_EXCEPTIONS: Readonly<Record<string, number>> = {};
 const CONTENT_PAGE = /apps\/docs\/src\/content\/docs\/(.+)\.mdx?$/;
 
 /** `checkStale` (repo scan only; unit fixtures are tiny) also flags a listed exception that now fits. */
-export function findOversizePage(file: string, text: string, checkStale = false): StaleClaim[] {
+export function findOversizePage(
+  file: string,
+  text: string,
+  checkStale = false,
+  exceptions: Readonly<Record<string, number>> = OVERSIZE_EXCEPTIONS,
+): StaleClaim[] {
   const m = CONTENT_PAGE.exec(file.replace(/\\/g, "/"));
   if (!m) return [];
   const slug = m[1].replace(/\/index$/, "");
   const words = wordCount(splitFrontmatter(text).body);
-  const cap = OVERSIZE_EXCEPTIONS[slug];
+  const cap = exceptions[slug];
   const at = (rule: string, msg: string): StaleClaim[] => [{ file, line: 1, rule, text: msg }];
   if (cap === undefined) {
     return words > LONG_PAGE_WORDS

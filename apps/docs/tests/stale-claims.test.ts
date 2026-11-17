@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
-import { findOversizePage, scanRepo, scanText } from "../scripts/stale-claims";
+import { findOversizePage, OVERSIZE_EXCEPTIONS, scanRepo, scanText } from "../scripts/stale-claims";
 
 const rules = (t: string) => scanText("x.md", t).map((c) => c.rule);
 
@@ -144,11 +144,17 @@ describe("stale-claims guard", () => {
       expect(scanText(P + "guides/new-page.mdx", page(3600)).map((c) => c.rule)).toEqual(["page-too-long"]);
     });
     it("lets a listed exception shrink but not grow, and demands removal once it fits", () => {
-      const cli = P + "features/cortex/chat-and-composer.mdx"; // the one remaining listed exception (cap 5700)
-      expect(scanText(cli, page(5400))).toEqual([]);
-      expect(scanText(cli, page(6200)).map((c) => c.rule)).toEqual(["page-too-long"]);
-      expect(scanText(cli, page(3000))).toEqual([]);
-      expect(findOversizePage(cli, page(3000), true).map((c) => c.rule)).toEqual(["oversize-exception-stale"]);
+      // No page is listed any more (chat-and-composer was split 2026-11-17), so exercise the
+      // mechanism with an injected exception list.
+      const ex = { "features/cortex/example": 5700 };
+      const big = P + "features/cortex/example.mdx";
+      expect(findOversizePage(big, page(5400), false, ex)).toEqual([]);
+      expect(findOversizePage(big, page(6200), false, ex).map((c) => c.rule)).toEqual(["page-too-long"]);
+      expect(findOversizePage(big, page(3000), false, ex)).toEqual([]);
+      expect(findOversizePage(big, page(3000), true, ex).map((c) => c.rule)).toEqual(["oversize-exception-stale"]);
+    });
+    it("lists no oversize exceptions", () => {
+      expect(Object.keys(OVERSIZE_EXCEPTIONS)).toEqual([]);
     });
     it("ignores files outside the content collection", () => {
       expect(scanText("apps/docs/skills/x/SKILL.md", page(9000))).toEqual([]);

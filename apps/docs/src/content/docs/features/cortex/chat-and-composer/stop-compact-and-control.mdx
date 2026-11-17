@@ -1,0 +1,38 @@
+---
+title: Stop, continue, compact and agent control
+description: >-
+  Pause, stop and continue a Cortex chat turn, why a run stopped, compacting a long chat, and letting the agent propose changes to its own session.
+sidebar:
+  order: 4
+topic: cortex
+related:
+  - features/cortex/chat-and-composer
+  - features/cortex/approvals-and-questions
+  - guides/durable-execution
+---
+
+import CortexShot from "../../../../../components/CortexShot.astro";
+
+## Stopping and continuing a turn
+
+- **Pause, stop and continue a turn** — while a reply streams, **Pause** (beside **Stop**) ends the run at its next step and saves where it was, and the turn reads **paused by you**; **Stop** does the same and marks the turn **stopped by you**. A run that hit its iteration cap says so ("reached its iteration limit") rather than naming a spending limit. When any tool turn ends without finishing (you paused or stopped it, a loop guard saw the agent repeat a step, it ran out of budget or time, or it hit an error), the closing note is followed by a card whose chip says why (**Paused by you**, **Stopped by you**, **Stopped by a loop guard**, **Ran out of budget**, **Timed out**, **Stopped by an error**): the reason in plain words, the tools already done (they do not run again) and the items left. Add an optional note for the agent, choose **More steps** (default 10), and press **Continue**. The same run carries on from its last finished step, and its reply streams into the thread as the next exchange (shown as "Continue" or "Continue: your note"): the reply fills in and each tool call appears as it happens, with **Pause** and **Stop** working while it runs, instead of a silent wait until the end. If it is interrupted again the card comes back. Pause, Stop and Continue need **Durable runs**, which are **on by default** for every chat (and desk run and gateway agent) with tools; a chat with tools off has nothing to resume, so it builds none. Turn them off in a chat with `/durable` (it applies from your next message), or in the Lab under **Execution** for a saved agent. Chats and saved agents saved before this default have no setting stored and now read as on; only an explicit off stays off. With it off, Stop still ends the reply, and Pause ends it as a plain **stopped by you** (the toast says there is nothing to continue from, and the turn never reads "paused"). The card appears only when the agent's saved runs hold an interrupted run of that latest reply; a reply you stopped with no saved run, and a turn that stopped on a loop guard, show a hint to turn on Durable runs instead of a Continue button. The items left are listed one per line (five, then "and N more"). With it on, approvals and questions pause the turn durably instead of waiting live (the framework cannot hold both): the card says the run is paused until you decide, and your answer continues it. A run whose agent setup (model, tools, settings) changed since it stopped cannot be continued: the card says so and you send a new message instead.
+
+<CortexShot id="chat-stopped-continue" variant="crop" />
+
+- **Stopped and interrupted turns** — **Stop** ends the reply on the server: the turn reads **stopped by you** with the answer so far and **Retry**. A run you stop or pause is a partial result, never a failure: it shows **Stopped** in Runs, raises a neutral "stopped" toast instead of an error, and the next message keeps your answer so far in the conversation history. Leaving the page or closing the tab mid-reply stops the run too, and the turn reads **interrupted** with that cause when you come back. Either way the partial text and the tokens already spent are kept, and the run shows as **Stopped** in Runs instead of staying live. Chat runs a restart left open are closed when Cortex starts.
+
+<CortexShot id="chat-stop-cause" />
+
+## Compacting and agent control
+
+- **`/compact [keepLast]`** — summarises the older exchanges into one summary row. The summary follows fixed sections (Goal, Decisions, Facts & identifiers, Files & artifacts, Open questions, Next steps); a summary that does not follow them is kept under "Summary (unstructured)". Long chats are trimmed (head and tail kept) before summarising. The context meter updates to an estimate of what the next turn sends; with no known context window it shows the token estimate only. You can edit the summary text afterwards.
+- **`/agent on`** ("Let the agent manage this chat") sets `agentControl: true` in the session config. It is **off by default**, per session, and `/agent off` reverts it. While on, an "Agent control" chip shows above the composer.
+- **Let the agent change...** With Agent control on, `/agent` (Config · Agent control) lists one switch per kind of change, all **off** until you tick them: **Tools** (add or remove a tool or toolset, enable an MCP server you already configured), **Limits and strategy** (max steps, strategy, context budget), **Memory** (turn a tier on or off), **System prompt**, **Approvals** (ask before risky tools), **Workspace folder**, and **Conversation** (to-do list, compact, fork, rewind). The model, thinking, skill, document, goal and loop proposals need no extra switch. The agent can read the current setup with `describe-session`.
+- **Every change is a proposal you Apply.** A proposal card shows a before and after diff, and a "gives the agent more reach" note when it loosens something. A **stricter** change (fewer tools, lower limits, memory off, ask-before-risky-tools on) can apply on its own only if you also tick **Apply stricter ... changes automatically** for that group; a looser change always waits for your Apply. When the chat reads outside content (web tools, MCP servers, added documents) a proposal carries a warning that a page may have steered it, and such a proposal never applies on its own.
+- **Banners belong to the chat.** Clearing, compacting or rewinding removes the proposals with the messages they came from. A repeated identical proposal shows once. Applied and dismissed proposals shrink to one line; use the **x** on the row to remove it.
+
+Approvals pause a turn the same way; the card and its reply box are in [Approvals and questions](/features/cortex/approvals-and-questions/).
+
+<CortexShot id="chat-approval-card" />
+
+Part of [Chat and composer](/features/cortex/chat-and-composer/).

@@ -1,14 +1,31 @@
 ---
-/** A responsive grid of CortexShot figures: one column on phones, two from 720px. */
+/**
+ * Cortex screenshots in one block.
+ *  - `layout="grid"` (default): one column on phones, two from 720px.
+ *  - `layout="carousel"`: one row that scrolls sideways with scroll-snap (CSS only, no JS).
+ *    Each slide is wide enough to read, the next one peeks in as the scroll hint, and the
+ *    strip is keyboard-scrollable. The first image loads eagerly, the rest lazily.
+ * `variant="crop"` shows each shot's `--crop` readability variant. Every image zooms on click.
+ */
 import CortexShot from "./CortexShot.astro";
 
 interface Props {
   ids: string[];
+  variant?: "crop";
+  layout?: "grid" | "carousel";
+  /** Accessible name of the carousel region. */
+  label?: string;
 }
-const { ids } = Astro.props;
+const { ids, variant, layout = "grid", label = "Cortex screenshots" } = Astro.props;
+const carousel = layout === "carousel";
 ---
-<div class="cortex-gallery">
-  {ids.map((id) => <CortexShot id={id} />)}
+<div
+  class:list={["cortex-gallery", carousel && "cortex-gallery--carousel"]}
+  role={carousel ? "region" : undefined}
+  aria-label={carousel ? `${label} (scroll sideways)` : undefined}
+  tabindex={carousel ? 0 : undefined}
+>
+  {ids.map((id, i) => <CortexShot id={id} variant={variant} hero={carousel && i === 0} />)}
 </div>
 <style>
   .cortex-gallery {
@@ -23,5 +40,23 @@ const { ids } = Astro.props;
     .cortex-gallery {
       grid-template-columns: 1fr 1fr;
     }
+  }
+  .cortex-gallery--carousel {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 0.25rem;
+    padding: 0.25rem 0.25rem 0.75rem;
+    overscroll-behavior-x: contain;
+  }
+  .cortex-gallery--carousel :global(.cortex-shot) {
+    flex: 0 0 min(88%, 720px);
+    scroll-snap-align: start;
+    margin: 0;
+  }
+  .cortex-gallery--carousel:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
   }
 </style>

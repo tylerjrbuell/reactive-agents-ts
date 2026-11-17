@@ -24,20 +24,20 @@ Companion: [[Docs-IA-Proposal]]. Plan: [[2026-11-17-docs-adoption-readiness]] Ph
 
 | Metric | Value |
 |---|---|
-| Pages | 140 |
+| Pages | 144 |
 | Orphans (404 page excluded: framework-owned) | 0 |
-| Pages with zero inbound content links (sidebar-only) | 4 |
+| Pages with zero inbound content links (sidebar-only) | 3 |
 | Pages not in the sidebar (excl. home) | 0 |
 | Pages in more than one sidebar group | 1 |
 | Duplicate-title groups | 0 |
 | Near-duplicate page pairs | 10 |
-| Pages over 3500 words | 1 |
+| Pages over 3500 words | 0 |
 | Median click depth (excl. home) | 2 |
 | Max click depth | 3 |
 | Unreachable from home | 1 |
 | Broken or redirected internal links | 34 |
-| Pages missing `topic` frontmatter | 15 |
-| Pages missing `related` frontmatter | 25 |
+| Pages missing `topic` frontmatter | 14 |
+| Pages missing `related` frontmatter | 24 |
 
 ## Orphans
 
@@ -48,7 +48,6 @@ None.
 - /concepts/agent-lifecycle/
 - /cookbook/status-display/
 - /guides/introduction/
-- /telemetry/
 
 ## Not in the sidebar (has inbound links)
 
@@ -65,7 +64,7 @@ None.
 ## Near-duplicate pairs
 
 - /cookbook/judgment-recipes/ / /features/judgment-layer/: containment 0.12, shared H2 0
-- /features/cortex/chat-and-composer/ / /features/cortex/memory-and-skills/: containment 0.37, shared H2 0
+- /features/cortex/chat-and-composer/composer-and-config/ / /features/cortex/memory-and-skills/: containment 0.37, shared H2 0
 - /features/cortex/lab-builder/ / /features/cortex/memory-and-skills/: containment 0.46, shared H2 0
 - /features/cortex/run-view-and-traces/ / /features/cortex/tour/: containment 0.15, shared H2 0
 - /guides/reactive-agents-vs-agent-sdks/ / /guides/reactive-agents-vs-langgraph/: containment 0.11, shared H2 3
@@ -77,7 +76,7 @@ None.
 
 ## Pages over 3500 words
 
-- /features/cortex/chat-and-composer/: 5606 words
+None.
 
 ## Broken or redirected links
 
@@ -133,6 +132,9 @@ None.
 - /cookbook/status-display/: depth 3, linkDepth unreachable
 - /cookbook/streaming-responses/: depth 3, linkDepth 3
 - /features/benchmarks/: depth 3, linkDepth 3
+- /features/cortex/chat-and-composer/composer-and-config/: depth 3, linkDepth 3
+- /features/cortex/chat-and-composer/plan-and-execute/: depth 3, linkDepth 3
+- /features/cortex/chat-and-composer/sessions-and-turns/: depth 3, linkDepth 3
 - /features/harness-control/: depth 3, linkDepth 3
 - /features/harness-control-flow/: depth 3, linkDepth 3
 - /features/resilience/: depth 3, linkDepth 3
@@ -153,7 +155,7 @@ None.
 
 | Path | Title | Type | Words | Sidebar (group #pos) | In | Out | Depth | LinkDepth | Flags |
 |---|---|---|---|---|---|---|---|---|---|
-| / | Reactive Agents | home | 2335 | NONE | 0 | 23 | 0 | 0 | links(6) |
+| / | Reactive Agents | home | 2419 | NONE | 0 | 24 | 0 | 0 | links(6) |
 | /404/ | Page Not Found | root | 193 | NONE | 0 | 6 | - | - |  |
 | /concepts/agent-lifecycle/ | Agent Lifecycle | concepts | 891 | How It Works #2 | 0 | 0 | 3 | - |  |
 | /concepts/architecture/ | Architecture | concepts | 740 | How It Works #1 | 5 | 2 | 2 | 2 |  |
@@ -172,52 +174,56 @@ None.
 | /cookbook/local-agent-ollama/ | Build a Local AI Agent with Ollama in TypeScript | cookbook | 1229 | Cookbook #15 | 1 | 3 | 3 | 7 |  |
 | /cookbook/multi-agent-patterns/ | Multi-Agent Patterns | cookbook | 989 | Cookbook #4 | 3 | 4 | 3 | 3 |  |
 | /cookbook/nextjs-ai-agent/ | Add an AI Agent to a Next.js App | cookbook | 863 | Cookbook #17 | 3 | 2 | 3 | 4 |  |
-| /cookbook/observability-metrics/ | Observability & Metrics | cookbook | 891 | Cookbook #11 | 2 | 3 | 3 | 3 |  |
+| /cookbook/observability-metrics/ | Observability & Metrics | cookbook | 928 | Cookbook #11 | 2 | 3 | 3 | 3 |  |
 | /cookbook/production-deployment/ | Production Deployment | cookbook | 809 | Cookbook #6 | 4 | 8 | 2 | 2 |  |
 | /cookbook/status-display/ | Status Display (TUI) | cookbook | 899 | Cookbook #12 | 0 | 3 | 3 | - |  |
 | /cookbook/streaming-responses/ | Streaming Responses | cookbook | 410 | Cookbook #7 | 2 | 3 | 3 | 3 |  |
 | /cookbook/testing-agents/ | Testing Agents | cookbook | 1598 | Cookbook #3 | 7 | 3 | 2 | 2 |  |
 | /cookbook/workspace-and-skills/ | Workspace-Scoped Coding Agent | cookbook | 339 | Cookbook #14 | 2 | 1 | 1 | 1 |  |
 | /features/a2a-protocol/ | A2A Protocol | features | 1405 | Build #21 | 8 | 3 | 2 | 2 |  |
-| /features/agentic-ui-core/ | Agentic UI Core | features | 778 | Build #23 | 2 | 3 | 2 | 3 |  |
+| /features/agentic-ui-core/ | Agentic UI Core | features | 1725 | Build #23 | 2 | 3 | 2 | 3 |  |
 | /features/benchmarks/ | Benchmarks | features | 557 | vs. Alternatives #1 | 1 | 2 | 3 | 3 |  |
 | /features/code-action/ | Code-Action Strategy | features | 347 | Build #5 | 2 | 1 | 2 | 3 |  |
 | /features/cortex/ | Cortex Studio | features | 334 | How It Works > Cortex Studio #1 | 10 | 17 | 1 | 1 |  |
-| /features/cortex/approvals-and-questions/ | Approvals and questions | features | 1174 | How It Works > Cortex Studio #10 | 5 | 2 | 2 | 2 |  |
-| /features/cortex/chat-and-composer/ | Chat and composer | features | 5606 | How It Works > Cortex Studio #3 | 5 | 4 | 2 | 2 | long near-dup(1) |
-| /features/cortex/connect-your-app/ | Connect your app | features | 578 | How It Works > Cortex Studio #14 | 1 | 1 | 2 | 2 |  |
-| /features/cortex/gateway-and-channels/ | Gateway and channels | features | 3315 | How It Works > Cortex Studio #7 | 3 | 4 | 2 | 2 |  |
-| /features/cortex/goals-plans-loops/ | Goals, plans and loops | features | 991 | How It Works > Cortex Studio #4 | 4 | 1 | 2 | 2 |  |
-| /features/cortex/judgments-and-evals/ | Judgments and evals | features | 406 | How It Works > Cortex Studio #9 | 3 | 4 | 2 | 2 |  |
-| /features/cortex/lab-builder/ | Lab builder | features | 2644 | How It Works > Cortex Studio #6 | 5 | 4 | 2 | 2 | near-dup(1) |
-| /features/cortex/local-setup-recipes/ | Local setup recipes | features | 602 | How It Works > Cortex Studio #13 | 2 | 1 | 2 | 2 |  |
-| /features/cortex/memory-and-skills/ | Memory and skills | features | 832 | How It Works > Cortex Studio #8 | 4 | 2 | 2 | 2 | near-dup(2) |
-| /features/cortex/run-view-and-traces/ | Run view and traces | features | 1307 | How It Works > Cortex Studio #5 | 4 | 2 | 2 | 2 | near-dup(1) |
-| /features/cortex/settings-and-keys/ | Settings and keys | features | 1588 | How It Works > Cortex Studio #12 | 5 | 2 | 2 | 2 |  |
-| /features/cortex/tour/ | Cortex tour | features | 1482 | How It Works > Cortex Studio #2 | 1 | 5 | 2 | 2 | near-dup(1) |
-| /features/cortex/voice/ | Voice | features | 1393 | How It Works > Cortex Studio #11 | 4 | 1 | 2 | 2 |  |
+| /features/cortex/approvals-and-questions/ | Approvals and questions | features | 1341 | How It Works > Cortex Studio #9 | 6 | 3 | 2 | 2 |  |
+| /features/cortex/chat-and-composer/ | Chat and composer | features | 574 | How It Works > Cortex Studio > Chat and composer #1 | 9 | 8 | 2 | 2 |  |
+| /features/cortex/chat-and-composer/composer-and-config/ | Composer, Config and attachments | features | 2202 | How It Works > Cortex Studio > Chat and composer #3 | 1 | 1 | 3 | 3 | near-dup(1) |
+| /features/cortex/chat-and-composer/plan-and-execute/ | Plan and Execute mode | features | 729 | How It Works > Cortex Studio > Chat and composer #4 | 2 | 2 | 3 | 3 |  |
+| /features/cortex/chat-and-composer/sessions-and-turns/ | Chat sessions and turns | features | 1402 | How It Works > Cortex Studio > Chat and composer #2 | 1 | 1 | 3 | 3 |  |
+| /features/cortex/chat-and-composer/stop-compact-and-control/ | Stop, continue, compact and agent control | features | 969 | How It Works > Cortex Studio > Chat and composer #5 | 3 | 2 | 2 | 2 |  |
+| /features/cortex/connect-your-app/ | Connect your app | features | 578 | How It Works > Cortex Studio #13 | 1 | 1 | 2 | 2 |  |
+| /features/cortex/gateway-and-channels/ | Gateway and channels | features | 3315 | How It Works > Cortex Studio #6 | 3 | 4 | 2 | 2 |  |
+| /features/cortex/goals-plans-loops/ | Goals, plans and loops | features | 993 | How It Works > Cortex Studio #3 | 5 | 2 | 2 | 2 |  |
+| /features/cortex/judgments-and-evals/ | Judgments and evals | features | 406 | How It Works > Cortex Studio #8 | 3 | 4 | 2 | 2 |  |
+| /features/cortex/lab-builder/ | Lab builder | features | 2680 | How It Works > Cortex Studio #5 | 5 | 4 | 2 | 2 | near-dup(1) |
+| /features/cortex/local-setup-recipes/ | Local setup recipes | features | 602 | How It Works > Cortex Studio #12 | 2 | 1 | 2 | 2 |  |
+| /features/cortex/memory-and-skills/ | Memory and skills | features | 832 | How It Works > Cortex Studio #7 | 4 | 2 | 2 | 2 | near-dup(2) |
+| /features/cortex/run-view-and-traces/ | Run view and traces | features | 1307 | How It Works > Cortex Studio #4 | 4 | 2 | 2 | 2 | near-dup(1) |
+| /features/cortex/settings-and-keys/ | Settings and keys | features | 1660 | How It Works > Cortex Studio #11 | 5 | 3 | 2 | 2 |  |
+| /features/cortex/tour/ | Cortex tour | features | 1490 | How It Works > Cortex Studio #2 | 2 | 6 | 1 | 1 | near-dup(1) |
+| /features/cortex/voice/ | Voice | features | 1393 | How It Works > Cortex Studio #10 | 4 | 1 | 2 | 2 |  |
 | /features/cost-tracking/ | Cost Tracking | features | 1425 | Ship to Production #7 | 8 | 6 | 2 | 2 |  |
 | /features/create-reactive-agent/ | create-reactive-agent | features | 609 | Get Started #4 | 3 | 3 | 1 | 1 |  |
 | /features/debrief-chat/ | Debrief & Chat | features | 1120 | How It Works #13 | 6 | 4 | 2 | 2 |  |
 | /features/eval/ | Evaluation Framework | features | 2356 | Ship to Production #8 | 7 | 4 | 2 | 2 |  |
 | /features/gateway/ | Agent Gateway | features | 3266 | Build #20 | 10 | 4 | 2 | 2 |  |
-| /features/harness-control/ | Harness Control Surface | features | 1378 | How It Works #8 | 1 | 3 | 3 | 3 |  |
+| /features/harness-control/ | Harness Control Surface | features | 1378 | How It Works #8 | 2 | 3 | 3 | 3 |  |
 | /features/harness-control-flow/ | Harness Control Flow | features | 594 | How It Works #9 | 4 | 2 | 3 | 3 |  |
 | /features/intelligent-context-synthesis/ | Intelligent Context Synthesis | features | 476 | How It Works #10 | 3 | 2 | 2 | 2 |  |
 | /features/interaction/ | Interaction Modes | features | 572 | Ship to Production #5 | 3 | 3 | 2 | 2 |  |
 | /features/judgment-layer/ | Judgment Layer | features | 3417 | Ship to Production #10 | 6 | 1 | 2 | 3 | near-dup(1) |
-| /features/llm-providers/ | LLM Providers | features | 2512 | Build #1 | 8 | 4 | 2 | 2 |  |
+| /features/llm-providers/ | LLM Providers | features | 3052 | Build #1 | 11 | 6 | 2 | 2 |  |
 | /features/local-model-performance/ | Local Model Performance | features | 583 | Build #18 | 2 | 4 | 2 | 2 |  |
-| /features/observability/ | Observability | features | 1746 | Ship to Production #12 | 10 | 3 | 2 | 2 |  |
-| /features/observe/ | OpenTelemetry Tracing | features | 671 | Ship to Production #14 | 6 | 2 | 2 | 2 |  |
-| /features/process-model/ | The Process Model | features | 1875 | Build #11 | 7 | 6 | 2 | 2 |  |
+| /features/observability/ | Observability | features | 1828 | Ship to Production #12 | 10 | 4 | 2 | 2 |  |
+| /features/observe/ | OpenTelemetry Tracing | features | 716 | Ship to Production #14 | 7 | 3 | 2 | 2 |  |
+| /features/process-model/ | The Process Model | features | 1875 | Build #11 | 8 | 6 | 2 | 2 |  |
 | /features/prompts/ | Prompt Templates | features | 754 | Build #6 | 1 | 3 | 2 | 2 |  |
-| /features/reactive-intelligence/ | Reactive Intelligence | features | 1447 | How It Works #7 | 7 | 5 | 2 | 2 | links(1) |
+| /features/reactive-intelligence/ | Reactive Intelligence | features | 1503 | How It Works #7 | 7 | 6 | 2 | 2 | links(1) |
 | /features/resilience/ | Resilience & Caching | features | 719 | How It Works #11 | 3 | 3 | 3 | 3 |  |
 | /features/snapshot-replay/ | Snapshot & Replay | features | 808 | Ship to Production #15 | 6 | 3 | 1 | 1 |  |
 | /features/streaming/ | Streaming | features | 2407 | Build #10 | 8 | 5 | 2 | 2 |  |
 | /features/verification/ | Verification | features | 997 | How It Works #12 | 2 | 4 | 3 | 3 |  |
-| /guides/agent-skills/ | Agent Skills | guides | 1374 | Build #16 | 7 | 2 | 1 | 1 |  |
+| /guides/agent-skills/ | Agent Skills | guides | 1463 | Build #16 | 8 | 2 | 1 | 1 |  |
 | /guides/build-ai-agents-typescript/ | How to Build AI Agents in TypeScript | guides | 963 | Get Started #7 | 1 | 20 | 2 | 6 |  |
 | /guides/channel-adapters/ | Channel Adapters | guides | 1146 | Build #19 | 2 | 3 | 2 | 3 |  |
 | /guides/choosing-a-stack/ | Choosing a Stack | guides | 662 | Get Started #6 | 12 | 6 | 1 | 1 |  |
@@ -227,16 +233,16 @@ None.
 | /guides/contributing/ | Contributing | guides | 677 | Help & More #5 | 1 | 3 | 2 | 2 |  |
 | /guides/cost-optimization/ | Cost Optimization | guides | 1032 | Ship to Production #6 | 3 | 6 | 2 | 2 |  |
 | /guides/deploying-agents/ | Deploying Agents | guides | 679 | Ship to Production #2 | 3 | 2 | 2 | 3 |  |
-| /guides/durable-execution/ | Durable Execution | guides | 1807 | Ship to Production #3 | 10 | 4 | 2 | 2 | links(2) |
-| /guides/durable-hitl/ | Human-in-the-Loop Approval | guides | 1923 | Ship to Production #4 | 15 | 2 | 2 | 2 |  |
+| /guides/durable-execution/ | Durable Execution | guides | 1971 | Ship to Production #3 | 11 | 4 | 2 | 2 | links(2) |
+| /guides/durable-hitl/ | Human-in-the-Loop Approval | guides | 1923 | Ship to Production #4 | 16 | 2 | 2 | 2 |  |
 | /guides/examples/ | Examples Catalog | guides | 1327 | Help & More #3 | 5 | 3 | 1 | 1 |  |
-| /guides/faq/ | FAQ | guides | 1212 | Help & More #1 | 2 | 9 | 1 | 1 |  |
+| /guides/faq/ | FAQ | guides | 1242 | Help & More #1 | 2 | 10 | 1 | 1 |  |
 | /guides/guardrails/ | Guardrails | guides | 1255 | Ship to Production #9 | 6 | 3 | 2 | 2 |  |
 | /guides/hooks/ | Lifecycle Hooks | guides | 621 | Build #13 | 3 | 4 | 2 | 2 |  |
 | /guides/installation/ | Installation | guides | 911 | Get Started #2 | 4 | 7 | 1 | 1 |  |
-| /guides/introduction/ | Introduction | guides | 626 | Get Started #1 | 0 | 5 | 2 | - |  |
-| /guides/local-models/ | Local Models Guide | guides | 1522 | Build #17 | 17 | 6 | 1 | 1 |  |
-| /guides/memory/ | Memory | guides | 1823 | Build #7 | 9 | 4 | 2 | 2 |  |
+| /guides/introduction/ | Introduction | guides | 644 | Get Started #1 | 0 | 5 | 2 | - |  |
+| /guides/local-models/ | Local Models Guide | guides | 1548 | Build #17 | 17 | 6 | 1 | 1 |  |
+| /guides/memory/ | Memory | guides | 1823 | Build #7 | 10 | 4 | 2 | 2 |  |
 | /guides/messaging-channels/ | Messaging Channels | guides | 489 | Build > Messaging Channels #1 | 15 | 11 | 2 | 2 |  |
 | /guides/messaging-channels/legacy-mcp-setups/ | Legacy MCP setups (Signal and Telegram) | guides | 850 | Build > Messaging Channels #8 | 2 | 3 | 3 | 3 |  |
 | /guides/messaging-channels/reliability/ | Reliability and conversation control | guides | 2122 | Build > Messaging Channels #6 | 2 | 2 | 3 | 3 |  |
@@ -247,60 +253,60 @@ None.
 | /guides/messaging-channels/webhook/ | Webhook channel (HTTP) | guides | 250 | Build > Messaging Channels #4 | 1 | 1 | 3 | 3 |  |
 | /guides/migrating-from-langchain/ | Migrating from LangChain.js | guides | 806 | vs. Alternatives #2 | 4 | 3 | 1 | 1 |  |
 | /guides/multimodal/ | Multimodal Input | guides | 603 | Build #9 | 1 | 4 | 2 | 2 |  |
-| /guides/plan-then-execute/ | Plan Review with agent.plan() | guides | 2739 | Build #4 | 2 | 2 | 2 | 3 |  |
+| /guides/plan-then-execute/ | Plan Review with agent.plan() | guides | 2741 | Build #4 | 3 | 2 | 2 | 2 |  |
 | /guides/playground/ | Interactive Playground | guides | 865 | Help & More #4 | 2 | 0 | 1 | 1 |  |
 | /guides/production-checklist/ | Production Deployment Checklist | guides | 1138 | Ship to Production #1 | 11 | 7 | 1 | 1 |  |
-| /guides/quickstart/ | Quickstart | guides | 1167 | Get Started #3 | 16 | 13 | 1 | 1 |  |
+| /guides/quickstart/ | Quickstart | guides | 1169 | Get Started #3 | 16 | 13 | 1 | 1 |  |
 | /guides/reactive-agents-vs-agent-sdks/ | Reactive Agents vs the OpenAI / Claude Agent SDKs | guides | 1009 | vs. Alternatives #6 | 3 | 6 | 3 | 5 | near-dup(3) |
 | /guides/reactive-agents-vs-langgraph/ | Reactive Agents vs LangGraph | guides | 1257 | vs. Alternatives #3 | 5 | 5 | 3 | 4 | near-dup(3) |
 | /guides/reactive-agents-vs-mastra/ | Reactive Agents vs Mastra | guides | 1480 | vs. Alternatives #4 | 4 | 4 | 3 | 5 | near-dup(3) |
 | /guides/reactive-agents-vs-vercel-ai-sdk/ | Reactive Agents vs Vercel AI SDK | guides | 1279 | vs. Alternatives #5 | 4 | 4 | 3 | 5 | near-dup(3) |
 | /guides/reasoning/ | Reasoning | guides | 2270 | Build #2 | 9 | 4 | 2 | 3 |  |
 | /guides/security-hardening/ | Security Hardening | guides | 815 | Ship to Production #11 | 6 | 7 | 2 | 2 |  |
-| /guides/structured-output/ | Typed Structured Output | guides | 2275 | Build #8 | 9 | 3 | 2 | 2 | links(4) |
+| /guides/structured-output/ | Typed Structured Output | guides | 2298 | Build #8 | 9 | 4 | 2 | 2 | links(4) |
 | /guides/sub-agents/ | Working with Sub-Agents | guides | 1879 | Build #15 | 6 | 3 | 2 | 2 |  |
 | /guides/tools/ | Tools | guides | 587 | Build > Tools #1 | 14 | 8 | 1 | 1 |  |
-| /guides/tools/built-in-tools/ | Built-in tools | guides | 2683 | Build > Tools #2 | 2 | 0 | 2 | 2 |  |
+| /guides/tools/built-in-tools/ | Built-in tools | guides | 2697 | Build > Tools #2 | 2 | 0 | 2 | 2 |  |
 | /guides/tools/custom-tools/ | Custom tools | guides | 1178 | Build > Tools #3 | 3 | 4 | 2 | 2 |  |
 | /guides/tools/execution-and-results/ | Execution and results | guides | 704 | Build > Tools #6 | 4 | 0 | 2 | 2 |  |
-| /guides/tools/mcp-tools/ | MCP tools | guides | 2252 | Build > Tools #4 | 7 | 2 | 2 | 2 |  |
+| /guides/tools/mcp-tools/ | MCP tools | guides | 2252 | Build > Tools #4 | 8 | 2 | 2 | 2 |  |
 | /guides/tools/scoping-and-policy/ | Scoping and policy | guides | 1500 | Build > Tools #5 | 5 | 1 | 2 | 2 |  |
 | /guides/troubleshooting/ | Troubleshooting | guides | 1557 | Help & More #2 | 5 | 1 | 2 | 2 |  |
 | /guides/web-integration/ | Web Framework Integration | guides | 961 | Build #22 | 6 | 4 | 2 | 3 |  |
-| /guides/whats-new/ | What's New | guides | 2995 | Help & More > What's New #1 | 9 | 33 | 1 | 1 |  |
+| /guides/whats-new/ | What's New | guides | 3222 | Help & More > What's New #1 | 9 | 35 | 1 | 1 |  |
 | /guides/whats-new/v0-11-to-v0-12/ | v0.11 and v0.12 release notes | guides | 1988 | Help & More > What's New #5 | 1 | 20 | 2 | 2 |  |
 | /guides/whats-new/v0-13-to-v0-14/ | v0.13 and v0.14 release notes | guides | 2128 | Help & More > What's New #4 | 1 | 10 | 2 | 2 |  |
 | /guides/whats-new/v0-15-to-v0-16/ | v0.15 and v0.16 release notes | guides | 1262 | Help & More > What's New #3 | 1 | 3 | 2 | 2 |  |
 | /guides/whats-new/v0-17/ | v0.17 release notes | guides | 1515 | Help & More > What's New #2 | 1 | 17 | 2 | 2 |  |
 | /guides/whats-new/v0-5-to-v0-10/ | v0.5 to v0.10 release notes | guides | 1136 | Help & More > What's New #6 | 1 | 21 | 2 | 2 | links(19) |
 | /guides/your-first-agent/ | Your First Agent | guides | 1082 | Get Started #5 | 5 | 8 | 2 | 2 |  |
-| /reference/builder-api/ | ReactiveAgentBuilder | reference | 1925 | API Reference > Builder API #1 | 35 | 12 | 1 | 1 |  |
+| /reference/builder-api/ | ReactiveAgentBuilder | reference | 1923 | API Reference > Builder API #1 | 35 | 12 | 1 | 1 |  |
 | /reference/builder-api/agent-result/ | AgentResult and debrief | reference | 1689 | API Reference > Builder API #11 | 2 | 2 | 2 | 2 |  |
 | /reference/builder-api/agent-runtime/ | ReactiveAgent: running and streaming | reference | 1579 | API Reference > Builder API #9 | 4 | 6 | 2 | 2 |  |
 | /reference/builder-api/agent-sessions-and-control/ | ReactiveAgent: chat, sessions and run control | reference | 1448 | API Reference > Builder API #10 | 1 | 7 | 2 | 2 |  |
-| /reference/builder-api/core-and-model/ | Core, model and profiles | reference | 651 | API Reference > Builder API #2 | 1 | 4 | 2 | 2 |  |
+| /reference/builder-api/core-and-model/ | Core, model and profiles | reference | 685 | API Reference > Builder API #2 | 1 | 4 | 2 | 2 |  |
 | /reference/builder-api/integrations/ | Multi-agent, MCP and gateway | reference | 726 | API Reference > Builder API #8 | 1 | 3 | 2 | 2 |  |
 | /reference/builder-api/limits-cost-resilience/ | Limits, cost and resilience | reference | 691 | API Reference > Builder API #6 | 1 | 2 | 2 | 2 |  |
 | /reference/builder-api/memory-and-context/ | Memory, learning and context | reference | 294 | API Reference > Builder API #4 | 1 | 1 | 2 | 2 |  |
 | /reference/builder-api/observability-and-lifecycle/ | Observability, lifecycle and testing | reference | 367 | API Reference > Builder API #7 | 1 | 5 | 2 | 2 |  |
 | /reference/builder-api/reasoning-and-tools/ | Reasoning, tools and skills | reference | 1787 | API Reference > Builder API #3 | 3 | 3 | 2 | 2 |  |
-| /reference/builder-api/safety-and-quality/ | Safety, quality and approval | reference | 1000 | API Reference > Builder API #5 | 1 | 6 | 2 | 2 |  |
-| /reference/cheatsheet/ | API Cheatsheet | reference | 1175 | API Reference #1 | 5 | 7 | 1 | 1 |  |
-| /reference/cli/ | CLI Reference | reference | 1715 | Rax CLI #2 | 9 | 3 | 1 | 1 |  |
+| /reference/builder-api/safety-and-quality/ | Safety, quality and approval | reference | 1056 | API Reference > Builder API #5 | 1 | 6 | 2 | 2 |  |
+| /reference/cheatsheet/ | API Cheatsheet | reference | 1192 | API Reference #1 | 5 | 7 | 1 | 1 |  |
+| /reference/cli/ | CLI Reference | reference | 2342 | Rax CLI #2 | 9 | 8 | 1 | 1 |  |
 | /reference/cli/diagnose/ | rax diagnose | reference | 2147 | Rax CLI #3 | 3 | 2 | 2 | 2 |  |
 | /reference/compose-api/ | Compose API | reference | 678 | API Reference #3 | 5 | 3 | 1 | 1 | links(2) |
-| /reference/configuration/ | Configuration Reference | reference | 2179 | API Reference #2 | 8 | 6 | 2 | 2 |  |
+| /reference/configuration/ | Configuration Reference | reference | 2252 | API Reference #2 | 8 | 7 | 2 | 2 |  |
 | /reference/harness-tags/ | Harness Tag Reference | reference | 410 | API Reference #4 | 3 | 0 | 1 | 1 |  |
-| /reference/stability/ | API Stability & Versioning | reference | 1434 | API Reference #5 | 4 | 2 | 1 | 1 |  |
-| /telemetry/ | Telemetry | root | 262 | Ship to Production #13 | 0 | 0 | 2 | - |  |
+| /reference/stability/ | API Stability & Versioning | reference | 1649 | API Reference #5 | 6 | 4 | 1 | 1 |  |
+| /telemetry/ | Telemetry | root | 384 | Ship to Production #13 | 5 | 1 | 2 | 2 |  |
 
 ## Link graph (inbound sources and outbound targets)
 
 ### /
 
-- description: Agents you can control, audit and improve. An agent harness you can compose like a framework, the TypeScript agentic harness framework for building reliable LLM agents. The same code runs the full agent loop on a local 4B model or a frontier API, on a harness you fully control, with tool-call healing, verification, and a signed evidence receipt for every run. Built on Effect-TS.
+- description: Agents you can control, audit and improve. TypeScript agents that can finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from. Built on Effect-TS.
 - inbound (0): none
-- outbound (23): /cookbook/composition-recipes/, /cookbook/workspace-and-skills/, /features/cortex/, /features/create-reactive-agent/, /features/snapshot-replay/, /guides/agent-skills/, /guides/choosing-a-stack/, /guides/examples/, /guides/faq/, /guides/installation/, /guides/local-models/, /guides/migrating-from-langchain/, /guides/playground/, /guides/production-checklist/, /guides/quickstart/, /guides/tools/, /guides/whats-new/, /reference/builder-api/, /reference/cheatsheet/, /reference/cli/, /reference/compose-api/, /reference/harness-tags/, /reference/stability/
+- outbound (24): /cookbook/composition-recipes/, /cookbook/workspace-and-skills/, /features/cortex/, /features/cortex/tour/, /features/create-reactive-agent/, /features/snapshot-replay/, /guides/agent-skills/, /guides/choosing-a-stack/, /guides/examples/, /guides/faq/, /guides/installation/, /guides/local-models/, /guides/migrating-from-langchain/, /guides/playground/, /guides/production-checklist/, /guides/quickstart/, /guides/tools/, /guides/whats-new/, /reference/builder-api/, /reference/cheatsheet/, /reference/cli/, /reference/compose-api/, /reference/harness-tags/, /reference/stability/
 
 ### /404/
 
@@ -479,14 +485,38 @@ None.
 ### /features/cortex/approvals-and-questions/
 
 - description: Gate tool calls and shell commands behind your approval, answer agent questions, and handle sub-agent requests, live or durable.
-- inbound (5): /features/cortex/, /features/cortex/chat-and-composer/, /features/cortex/gateway-and-channels/, /features/cortex/lab-builder/, /guides/whats-new/
-- outbound (2): /features/cortex/chat-and-composer/, /features/cortex/lab-builder/
+- inbound (6): /features/cortex/, /features/cortex/chat-and-composer/, /features/cortex/chat-and-composer/stop-compact-and-control/, /features/cortex/gateway-and-channels/, /features/cortex/lab-builder/, /guides/whats-new/
+- outbound (3): /features/cortex/chat-and-composer/, /features/cortex/chat-and-composer/stop-compact-and-control/, /features/cortex/lab-builder/
 
 ### /features/cortex/chat-and-composer/
 
 - description: Chat sessions: the composer, slash commands (/mcp, /btw), @ file tagging, attachments, the Config popover and the conversation to-do dock.
-- inbound (5): /features/cortex/, /features/cortex/approvals-and-questions/, /features/cortex/goals-plans-loops/, /features/cortex/tour/, /guides/whats-new/
-- outbound (4): /features/cortex/approvals-and-questions/, /features/cortex/goals-plans-loops/, /features/cortex/memory-and-skills/, /features/cortex/voice/
+- inbound (9): /features/cortex/, /features/cortex/approvals-and-questions/, /features/cortex/chat-and-composer/composer-and-config/, /features/cortex/chat-and-composer/plan-and-execute/, /features/cortex/chat-and-composer/sessions-and-turns/, /features/cortex/chat-and-composer/stop-compact-and-control/, /features/cortex/goals-plans-loops/, /features/cortex/tour/, /guides/whats-new/
+- outbound (8): /features/cortex/approvals-and-questions/, /features/cortex/chat-and-composer/composer-and-config/, /features/cortex/chat-and-composer/plan-and-execute/, /features/cortex/chat-and-composer/sessions-and-turns/, /features/cortex/chat-and-composer/stop-compact-and-control/, /features/cortex/goals-plans-loops/, /features/cortex/memory-and-skills/, /features/cortex/voice/
+
+### /features/cortex/chat-and-composer/composer-and-config/
+
+- description: The Cortex composer: quick-bar chips, the Config popover and slash command surface, skills, documents, @ file tagging and picture, audio and file attachments.
+- inbound (1): /features/cortex/chat-and-composer/
+- outbound (1): /features/cortex/chat-and-composer/
+
+### /features/cortex/chat-and-composer/plan-and-execute/
+
+- description: The Plan \| Execute toggle in Cortex chat: the editable plan card, dependencies and args, Execute strategies, plan recon findings and the events a plan produces.
+- inbound (2): /features/cortex/chat-and-composer/, /features/cortex/goals-plans-loops/
+- outbound (2): /features/cortex/chat-and-composer/, /features/cortex/goals-plans-loops/
+
+### /features/cortex/chat-and-composer/sessions-and-turns/
+
+- description: What a Cortex chat turn shows and records: the transcript, run endings, cost, goals and to-do, failed turns, rich answers and what changes between turns.
+- inbound (1): /features/cortex/chat-and-composer/
+- outbound (1): /features/cortex/chat-and-composer/
+
+### /features/cortex/chat-and-composer/stop-compact-and-control/
+
+- description: Pause, stop and continue a Cortex chat turn, why a run stopped, compacting a long chat, and letting the agent propose changes to its own session.
+- inbound (3): /features/cortex/approvals-and-questions/, /features/cortex/chat-and-composer/, /features/cortex/tour/
+- outbound (2): /features/cortex/approvals-and-questions/, /features/cortex/chat-and-composer/
 
 ### /features/cortex/connect-your-app/
 
@@ -503,8 +533,8 @@ None.
 ### /features/cortex/goals-plans-loops/
 
 - description: Supervised goals, planning mode, timed loops and schedules, and agent proposals in Cortex chat.
-- inbound (4): /features/cortex/, /features/cortex/chat-and-composer/, /features/cortex/judgments-and-evals/, /guides/whats-new/
-- outbound (1): /features/cortex/chat-and-composer/
+- inbound (5): /features/cortex/, /features/cortex/chat-and-composer/, /features/cortex/chat-and-composer/plan-and-execute/, /features/cortex/judgments-and-evals/, /guides/whats-new/
+- outbound (2): /features/cortex/chat-and-composer/, /features/cortex/chat-and-composer/plan-and-execute/
 
 ### /features/cortex/judgments-and-evals/
 
@@ -540,13 +570,13 @@ None.
 
 - description: Provider keys, defaults, storage and the request guard (CORTEX_ALLOWED_HOSTS) that protects a Cortex server with no login.
 - inbound (5): /features/cortex/, /features/cortex/connect-your-app/, /features/cortex/tour/, /guides/security-hardening/, /guides/whats-new/
-- outbound (2): /features/cortex/lab-builder/, /features/cortex/voice/
+- outbound (3): /features/cortex/lab-builder/, /features/cortex/voice/, /features/llm-providers/
 
 ### /features/cortex/tour/
 
 - description: A walk through the five places in Cortex: Beacon, Chat, Runs, the run view and the Lab.
-- inbound (1): /features/cortex/
-- outbound (5): /features/cortex/chat-and-composer/, /features/cortex/lab-builder/, /features/cortex/memory-and-skills/, /features/cortex/run-view-and-traces/, /features/cortex/settings-and-keys/
+- inbound (2): /, /features/cortex/
+- outbound (6): /features/cortex/chat-and-composer/, /features/cortex/chat-and-composer/stop-compact-and-control/, /features/cortex/lab-builder/, /features/cortex/memory-and-skills/, /features/cortex/run-view-and-traces/, /features/cortex/settings-and-keys/
 
 ### /features/cortex/voice/
 
@@ -587,7 +617,7 @@ None.
 ### /features/harness-control/
 
 - description: Typed, per-agent configuration for the harness mechanisms that decide how much the harness spends per model turn and how much it hides from the model.
-- inbound (1): /guides/whats-new/v0-15-to-v0-16/
+- inbound (2): /features/llm-providers/, /guides/whats-new/v0-15-to-v0-16/
 - outbound (3): /features/harness-control-flow/, /guides/local-models/, /guides/reasoning/
 
 ### /features/harness-control-flow/
@@ -617,8 +647,8 @@ None.
 ### /features/llm-providers/
 
 - description: Multi-provider LLM support — Anthropic, OpenAI, Google Gemini, Groq, xAI, Ollama, LiteLLM, and custom providers.
-- inbound (8): /features/local-model-performance/, /guides/local-models/, /guides/multimodal/, /guides/whats-new/, /guides/whats-new/v0-13-to-v0-14/, /guides/whats-new/v0-17/, /guides/whats-new/v0-5-to-v0-10/, /reference/builder-api/core-and-model/
-- outbound (4): /cookbook/testing-agents/, /features/cost-tracking/, /guides/local-models/, /reference/configuration/
+- inbound (11): /features/cortex/settings-and-keys/, /features/local-model-performance/, /guides/faq/, /guides/local-models/, /guides/multimodal/, /guides/whats-new/, /guides/whats-new/v0-13-to-v0-14/, /guides/whats-new/v0-17/, /guides/whats-new/v0-5-to-v0-10/, /reference/builder-api/core-and-model/, /telemetry/
+- outbound (6): /cookbook/testing-agents/, /features/cost-tracking/, /features/harness-control/, /guides/local-models/, /reference/configuration/, /telemetry/
 
 ### /features/local-model-performance/
 
@@ -630,18 +660,18 @@ None.
 
 - description: Distributed tracing, metrics, structured logging, and agent state snapshots.
 - inbound (10): /cookbook/observability-metrics/, /cookbook/status-display/, /features/cortex/, /features/harness-control-flow/, /features/observe/, /guides/cost-optimization/, /guides/hooks/, /guides/production-checklist/, /guides/whats-new/, /guides/whats-new/v0-5-to-v0-10/
-- outbound (3): /cookbook/observability-metrics/, /features/cortex/, /features/observe/
+- outbound (4): /cookbook/observability-metrics/, /features/cortex/, /features/observe/, /telemetry/
 
 ### /features/observe/
 
 - description: Export OpenInference-compliant OTel spans from every agent run — compatible with Jaeger, Grafana Tempo, Langfuse, and any OTLP backend.
-- inbound (6): /cookbook/composition-recipes/, /cookbook/observability-metrics/, /features/observability/, /guides/quickstart/, /guides/whats-new/v0-11-to-v0-12/, /guides/whats-new/v0-17/
-- outbound (2): /cookbook/observability-metrics/, /features/observability/
+- inbound (7): /cookbook/composition-recipes/, /cookbook/observability-metrics/, /features/observability/, /guides/quickstart/, /guides/whats-new/, /guides/whats-new/v0-11-to-v0-12/, /guides/whats-new/v0-17/
+- outbound (3): /cookbook/observability-metrics/, /features/observability/, /reference/stability/
 
 ### /features/process-model/
 
 - description: Agents are processes: inspect a live run, pause and fork it from any checkpoint, and get a signed trust receipt grading how the answer was produced.
-- inbound (7): /concepts/architecture/, /features/debrief-chat/, /features/snapshot-replay/, /features/verification/, /guides/whats-new/v0-17/, /reference/builder-api/agent-result/, /reference/builder-api/safety-and-quality/
+- inbound (8): /concepts/architecture/, /features/debrief-chat/, /features/snapshot-replay/, /features/verification/, /guides/whats-new/v0-17/, /reference/builder-api/agent-result/, /reference/builder-api/safety-and-quality/, /reference/cli/
 - outbound (6): /concepts/architecture/, /features/debrief-chat/, /features/snapshot-replay/, /guides/durable-execution/, /guides/durable-hitl/, /reference/builder-api/
 
 ### /features/prompts/
@@ -654,7 +684,7 @@ None.
 
 - description: Real-time entropy sensing, adaptive control, and local learning for smarter agent reasoning.
 - inbound (7): /features/cortex/, /features/harness-control-flow/, /features/interaction/, /features/local-model-performance/, /guides/whats-new/v0-5-to-v0-10/, /reference/builder-api/observability-and-lifecycle/, /reference/configuration/
-- outbound (5): /features/harness-control-flow/, /features/interaction/, /features/local-model-performance/, /guides/agent-skills/, /guides/choosing-strategies/
+- outbound (6): /features/harness-control-flow/, /features/interaction/, /features/local-model-performance/, /guides/agent-skills/, /guides/choosing-strategies/, /telemetry/
 
 ### /features/resilience/
 
@@ -683,7 +713,7 @@ None.
 ### /guides/agent-skills/
 
 - description: Two skill systems — Developer Skills for coding agents building with the framework, and Living Skills for agents running inside the framework.
-- inbound (7): /, /features/cortex/memory-and-skills/, /features/reactive-intelligence/, /guides/memory/, /guides/sub-agents/, /reference/builder-api/agent-runtime/, /reference/builder-api/agent-sessions-and-control/
+- inbound (8): /, /features/cortex/memory-and-skills/, /features/reactive-intelligence/, /guides/memory/, /guides/sub-agents/, /reference/builder-api/agent-runtime/, /reference/builder-api/agent-sessions-and-control/, /reference/cli/
 - outbound (2): /guides/context-engineering/, /guides/sub-agents/
 
 ### /guides/build-ai-agents-typescript/
@@ -743,13 +773,13 @@ None.
 ### /guides/durable-execution/
 
 - description: Persist agent runs to disk and resume a crashed or paused run from its last checkpoint — kill the process, restart, finish the job.
-- inbound (10): /cookbook/workspace-and-skills/, /features/interaction/, /features/process-model/, /guides/durable-hitl/, /guides/structured-output/, /guides/whats-new/, /guides/whats-new/v0-11-to-v0-12/, /reference/builder-api/agent-sessions-and-control/, /reference/builder-api/safety-and-quality/, /reference/cheatsheet/
+- inbound (11): /cookbook/workspace-and-skills/, /features/interaction/, /features/process-model/, /guides/durable-hitl/, /guides/structured-output/, /guides/whats-new/, /guides/whats-new/v0-11-to-v0-12/, /reference/builder-api/agent-sessions-and-control/, /reference/builder-api/safety-and-quality/, /reference/cheatsheet/, /reference/cli/
 - outbound (4): /features/interaction/, /features/snapshot-replay/, /guides/durable-hitl/, /guides/reasoning/
 
 ### /guides/durable-hitl/
 
 - description: Have a person approve or deny high-risk tool calls: live in process, or durably from any process with gates that survive process death.
-- inbound (15): /cookbook/building-tools/, /features/agentic-ui-core/, /features/process-model/, /features/streaming/, /guides/durable-execution/, /guides/production-checklist/, /guides/security-hardening/, /guides/tools/custom-tools/, /guides/web-integration/, /guides/whats-new/, /guides/whats-new/v0-11-to-v0-12/, /reference/builder-api/agent-runtime/, /reference/builder-api/agent-sessions-and-control/, /reference/builder-api/safety-and-quality/, /reference/cheatsheet/
+- inbound (16): /cookbook/building-tools/, /features/agentic-ui-core/, /features/process-model/, /features/streaming/, /guides/durable-execution/, /guides/production-checklist/, /guides/security-hardening/, /guides/tools/custom-tools/, /guides/web-integration/, /guides/whats-new/, /guides/whats-new/v0-11-to-v0-12/, /reference/builder-api/agent-runtime/, /reference/builder-api/agent-sessions-and-control/, /reference/builder-api/safety-and-quality/, /reference/cheatsheet/, /reference/stability/
 - outbound (2): /guides/durable-execution/, /reference/builder-api/
 
 ### /guides/examples/
@@ -762,7 +792,7 @@ None.
 
 - description: Honest answers to "should I use this?" — production readiness, gotchas, comparisons, what we don't do well yet.
 - inbound (2): /, /guides/contributing/
-- outbound (9): /concepts/effect-ts/, /guides/contributing/, /guides/migrating-from-langchain/, /guides/production-checklist/, /guides/quickstart/, /guides/troubleshooting/, /guides/whats-new/, /reference/cheatsheet/, /reference/stability/
+- outbound (10): /concepts/effect-ts/, /features/llm-providers/, /guides/contributing/, /guides/migrating-from-langchain/, /guides/production-checklist/, /guides/quickstart/, /guides/troubleshooting/, /guides/whats-new/, /reference/cheatsheet/, /reference/stability/
 
 ### /guides/guardrails/
 
@@ -797,7 +827,7 @@ None.
 ### /guides/memory/
 
 - description: How agent memory works in Reactive Agents.
-- inbound (9): /cookbook/builder-stacks/, /cookbook/production-deployment/, /features/debrief-chat/, /guides/build-ai-agents-typescript/, /guides/context-engineering/, /guides/production-checklist/, /guides/whats-new/, /guides/your-first-agent/, /reference/builder-api/agent-sessions-and-control/
+- inbound (10): /cookbook/builder-stacks/, /cookbook/production-deployment/, /features/debrief-chat/, /guides/build-ai-agents-typescript/, /guides/context-engineering/, /guides/production-checklist/, /guides/whats-new/, /guides/your-first-agent/, /reference/builder-api/agent-sessions-and-control/, /reference/cli/
 - outbound (4): /features/debrief-chat/, /guides/agent-skills/, /guides/context-engineering/, /guides/sub-agents/
 
 ### /guides/messaging-channels/
@@ -863,7 +893,7 @@ None.
 ### /guides/plan-then-execute/
 
 - description: Ask an agent for a plan first, review or edit it, then execute it. The plan is a typed object backed by the agent's checklist, and it works with no UI.
-- inbound (2): /guides/choosing-strategies/, /reference/builder-api/reasoning-and-tools/
+- inbound (3): /guides/choosing-strategies/, /reference/builder-api/reasoning-and-tools/, /reference/stability/
 - outbound (2): /guides/choosing-strategies/, /guides/tools/
 
 ### /guides/playground/
@@ -924,7 +954,7 @@ None.
 
 - description: Extract a schema-validated TypeScript object from every agent run — with provenance, per-field confidence, and streaming partial objects as tokens arrive.
 - inbound (9): /features/streaming/, /guides/introduction/, /guides/multimodal/, /guides/whats-new/, /guides/whats-new/v0-11-to-v0-12/, /guides/whats-new/v0-13-to-v0-14/, /guides/whats-new/v0-17/, /reference/builder-api/agent-runtime/, /reference/builder-api/safety-and-quality/
-- outbound (3): /guides/durable-execution/, /guides/reasoning/, /guides/tools/
+- outbound (4): /guides/durable-execution/, /guides/reasoning/, /guides/tools/, /reference/stability/
 
 ### /guides/sub-agents/
 
@@ -959,7 +989,7 @@ None.
 ### /guides/tools/mcp-tools/
 
 - description: Connect Model Context Protocol servers: stdio, streamable-http, SSE and WebSocket transports, Docker and registry servers, OAuth 2.1, multiple servers and read-only marking.
-- inbound (7): /cookbook/agent-tool-calling-mcp/, /cookbook/building-tools/, /guides/security-hardening/, /guides/tools/, /guides/whats-new/v0-17/, /reference/builder-api/integrations/, /reference/configuration/
+- inbound (8): /cookbook/agent-tool-calling-mcp/, /cookbook/building-tools/, /guides/security-hardening/, /guides/tools/, /guides/whats-new/v0-17/, /reference/builder-api/integrations/, /reference/cli/, /reference/configuration/
 - outbound (2): /guides/messaging-channels/, /reference/builder-api/agent-runtime/
 
 ### /guides/tools/scoping-and-policy/
@@ -984,7 +1014,7 @@ None.
 
 - description: The current release and what is on dev, with an index of every earlier release.
 - inbound (9): /, /404/, /guides/faq/, /guides/whats-new/v0-11-to-v0-12/, /guides/whats-new/v0-13-to-v0-14/, /guides/whats-new/v0-15-to-v0-16/, /guides/whats-new/v0-17/, /guides/whats-new/v0-5-to-v0-10/, /reference/stability/
-- outbound (33): /cookbook/workspace-and-skills/, /features/a2a-protocol/, /features/cortex/, /features/cortex/approvals-and-questions/, /features/cortex/chat-and-composer/, /features/cortex/gateway-and-channels/, /features/cortex/goals-plans-loops/, /features/cortex/settings-and-keys/, /features/debrief-chat/, /features/eval/, /features/gateway/, /features/llm-providers/, /features/observability/, /features/streaming/, /guides/durable-execution/, /guides/durable-hitl/, /guides/guardrails/, /guides/local-models/, /guides/memory/, /guides/messaging-channels/, /guides/multimodal/, /guides/security-hardening/, /guides/structured-output/, /guides/sub-agents/, /guides/tools/, /guides/tools/built-in-tools/, /guides/tools/custom-tools/, /guides/whats-new/v0-11-to-v0-12/, /guides/whats-new/v0-13-to-v0-14/, /guides/whats-new/v0-15-to-v0-16/, /guides/whats-new/v0-17/, /guides/whats-new/v0-5-to-v0-10/, /reference/cli/
+- outbound (35): /cookbook/workspace-and-skills/, /features/a2a-protocol/, /features/cortex/, /features/cortex/approvals-and-questions/, /features/cortex/chat-and-composer/, /features/cortex/gateway-and-channels/, /features/cortex/goals-plans-loops/, /features/cortex/settings-and-keys/, /features/debrief-chat/, /features/eval/, /features/gateway/, /features/llm-providers/, /features/observability/, /features/observe/, /features/streaming/, /guides/durable-execution/, /guides/durable-hitl/, /guides/guardrails/, /guides/local-models/, /guides/memory/, /guides/messaging-channels/, /guides/multimodal/, /guides/security-hardening/, /guides/structured-output/, /guides/sub-agents/, /guides/tools/, /guides/tools/built-in-tools/, /guides/tools/custom-tools/, /guides/whats-new/v0-11-to-v0-12/, /guides/whats-new/v0-13-to-v0-14/, /guides/whats-new/v0-15-to-v0-16/, /guides/whats-new/v0-17/, /guides/whats-new/v0-5-to-v0-10/, /reference/cli/, /telemetry/
 
 ### /guides/whats-new/v0-11-to-v0-12/
 
@@ -1098,7 +1128,7 @@ None.
 
 - description: Command reference for Rax, the CLI for Reactive Agents.
 - inbound (9): /, /cookbook/status-display/, /features/cortex/, /guides/cli-artisan/, /guides/whats-new/, /guides/whats-new/v0-17/, /guides/whats-new/v0-5-to-v0-10/, /reference/cheatsheet/, /reference/cli/diagnose/
-- outbound (3): /guides/cli-artisan/, /guides/examples/, /reference/cli/diagnose/
+- outbound (8): /features/process-model/, /guides/agent-skills/, /guides/cli-artisan/, /guides/durable-execution/, /guides/examples/, /guides/memory/, /guides/tools/mcp-tools/, /reference/cli/diagnose/
 
 ### /reference/cli/diagnose/
 
@@ -1116,7 +1146,7 @@ None.
 
 - description: Lookup of builder options, their defaults and environment variables, plus the declarative createAgent config
 - inbound (8): /cookbook/builder-stacks/, /cookbook/production-deployment/, /features/llm-providers/, /guides/installation/, /reference/builder-api/, /reference/builder-api/core-and-model/, /reference/builder-api/observability-and-lifecycle/, /reference/cheatsheet/
-- outbound (6): /cookbook/builder-stacks/, /features/reactive-intelligence/, /guides/context-engineering/, /guides/reasoning/, /guides/tools/mcp-tools/, /reference/builder-api/
+- outbound (7): /cookbook/builder-stacks/, /features/reactive-intelligence/, /guides/context-engineering/, /guides/reasoning/, /guides/tools/mcp-tools/, /reference/builder-api/, /telemetry/
 
 ### /reference/harness-tags/
 
@@ -1127,12 +1157,12 @@ None.
 ### /reference/stability/
 
 - description: SemVer commitments, stability tiers, what's stable vs experimental as of v0.18, and the deprecation policy.
-- inbound (4): /, /features/create-reactive-agent/, /features/snapshot-replay/, /guides/faq/
-- outbound (2): /guides/choosing-strategies/, /guides/whats-new/
+- inbound (6): /, /features/create-reactive-agent/, /features/observe/, /features/snapshot-replay/, /guides/faq/, /guides/structured-output/
+- outbound (4): /guides/choosing-strategies/, /guides/durable-hitl/, /guides/plan-then-execute/, /guides/whats-new/
 
 ### /telemetry/
 
-- description: Exactly what anonymous data Reactive Intelligence telemetry collects, what it never collects, and every way to turn it off.
-- inbound (0): none
-- outbound (0): none
+- description: Anonymous run telemetry is off by default. Exactly what it collects if you opt in, what it never collects, and how opt-in and opt-out interact.
+- inbound (5): /features/llm-providers/, /features/observability/, /features/reactive-intelligence/, /guides/whats-new/, /reference/configuration/
+- outbound (1): /features/llm-providers/
 

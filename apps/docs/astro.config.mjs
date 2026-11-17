@@ -408,7 +408,17 @@ export default defineConfig({
                             items: [
                                 { label: 'Overview', link: 'features/cortex/' },
                                 { label: 'Tour', link: 'features/cortex/tour/' },
-                                { label: 'Chat and composer', link: 'features/cortex/chat-and-composer/' },
+                                {
+                                    label: 'Chat and composer',
+                                    collapsed: true,
+                                    items: [
+                                        { label: 'Overview', link: 'features/cortex/chat-and-composer/' },
+                                        { label: 'Sessions and turns', link: 'features/cortex/chat-and-composer/sessions-and-turns/' },
+                                        { label: 'Composer, Config and attachments', link: 'features/cortex/chat-and-composer/composer-and-config/' },
+                                        { label: 'Plan and Execute', link: 'features/cortex/chat-and-composer/plan-and-execute/' },
+                                        { label: 'Stop, compact and control', link: 'features/cortex/chat-and-composer/stop-compact-and-control/' },
+                                    ],
+                                },
                                 { label: 'Goals, plans and loops', link: 'features/cortex/goals-plans-loops/' },
                                 { label: 'Run view and traces', link: 'features/cortex/run-view-and-traces/' },
                                 { label: 'Lab builder', link: 'features/cortex/lab-builder/' },
