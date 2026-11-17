@@ -16,8 +16,26 @@ const exampleValue = (param: ToolParameter): unknown => {
   }
   if (param.type === "number") return 1;
   if (param.type === "boolean") return true;
-  if (param.type === "array") return [];
+  if (param.type === "array") return exampleArray(param);
   return {};
+};
+
+/**
+ * Sample array for an example call. A literal JSON array in the description
+ * ("e.g. [\"BTC\", \"ETH\"]") is the best sample; otherwise one placeholder
+ * element of the declared item type. Never `[]`: an empty array teaches nothing.
+ */
+const exampleArray = (param: ToolParameter): unknown[] => {
+  const literal = /e\.g\.\s*(\[[^\]]*\])/.exec(param.description);
+  if (literal?.[1] !== undefined) {
+    try {
+      const parsed: unknown = JSON.parse(literal[1]);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 2);
+    } catch {
+      // not valid JSON: fall through to the placeholder
+    }
+  }
+  return param.items?.type === "string" ? [`<${param.name}>`] : [];
 };
 
 /**

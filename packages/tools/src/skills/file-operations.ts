@@ -13,6 +13,7 @@ import {
   readDirectoryListing,
   stripRepeatedRootPrefix,
 } from "./file-read-heals.js";
+import { existingSuffixUnder, healRootedPath } from "./file-path-heal.js";
 
 // ─── File-root sandbox ──────────────────────────────────────────────────────
 // file-read / file-write resolve RELATIVE paths against — and confine them to —
@@ -31,31 +32,7 @@ export { withFileRoot, getFileRoot } from "./file-root.js";
 // path actually exists under the root, names that path outright, so the next
 // call can be the right one.
 
-/** Longest suffix of `rejected`'s components that exists under `base`, as a
- * "./"-prefixed relative path — or undefined. Probes at most `maxProbes`
- * suffixes (deepest first, so "./data/logs.txt" beats "./logs.txt" when both
- * exist). */
-async function existingSuffixUnder(
-  base: string,
-  rejected: string,
-  maxProbes = 4,
-): Promise<string | undefined> {
-  const parts = rejected.split(/[\\/]+/).filter((p) => p.length > 0 && p !== "." && p !== "..");
-  const deepest = Math.min(parts.length, maxProbes);
-  for (let take = deepest; take >= 1; take--) {
-    const candidate = parts.slice(parts.length - take).join("/");
-    const probe = path.resolve(base, candidate);
-    // The probe itself must stay confined — a candidate that escapes is no fix.
-    if (!isWithinRoot(base, probe)) continue;
-    try {
-      await fs.access(probe);
-      return `./${candidate}`;
-    } catch {
-      // keep shrinking the suffix
-    }
-  }
-  return undefined;
-}
+// existingSuffixUnder + the read-path heal live in ./file-path-heal.ts.
 
 /**
  * Resolve `filePath` against the active file root and confine it there.
@@ -157,12 +134,31 @@ export const fileReadHandler = (
       // process.cwd(); the bench/sandbox sets a temp dir via withFileRoot) and
       // confine the result to it. The rejection is corrective — see confinePath.
       const root = getFileRoot();
-      let resolved = await confinePath(filePath);
       const notes: string[] = [];
+      let resolved: string;
+      try {
+        resolved = await confinePath(filePath);
+      } catch (refusal) {
+        // Foreign root (./file-path-heal.ts): heal only a path that exists
+        // nowhere itself but has a suffix under the root; else refuse as before.
+        const healed = await healRootedPath(root, filePath);
+        if (healed === undefined) throw refusal;
+        resolved = healed.path;
+        notes.push(healed.note);
+      }
 
       // Trap heals (./file-read-heals.ts): a path repeating the end of the
       // root is read with the repeat stripped; a directory returns its listing.
       let stat = await fs.stat(resolved).catch(() => undefined);
+      if (stat === undefined && notes.length === 0) {
+        // Doubled root given as an absolute path inside the root.
+        const healed = await healRootedPath(root, filePath);
+        if (healed !== undefined) {
+          resolved = healed.path;
+          stat = await fs.stat(resolved).catch(() => undefined);
+          notes.push(healed.note);
+        }
+      }
       const stripped = stat === undefined ? stripRepeatedRootPrefix(root, filePath) : undefined;
       if (stripped !== undefined) {
         const retry = await confinePath(stripped);
@@ -175,7 +171,7 @@ export const fileReadHandler = (
       }
       if (stat?.isDirectory() === true) {
         const entries = await readDirectoryListing(resolved);
-        return { note: DIRECTORY_READ_NOTE, root, path: resolved, entries };
+        return { note: [DIRECTORY_READ_NOTE, ...notes].join("; "), root, path: resolved, entries };
       }
 
       // A missing file is not a transient fault. Retrying ENOENT only burned
@@ -255,11 +251,29 @@ export const listDirectoryHandler = (
 
       const allowedBase = getFileRoot();
       // Corrective rejection — see confinePath.
-      const resolved = await confinePath(requested);
+      let resolved: string;
+      let note: string | undefined;
+      try {
+        resolved = await confinePath(requested);
+      } catch (refusal) {
+        const healed = await healRootedPath(allowedBase, requested);
+        if (healed === undefined) throw refusal;
+        resolved = healed.path;
+        note = healed.note;
+      }
+      if (note === undefined && (await fs.stat(resolved).catch(() => undefined)) === undefined) {
+        const healed = await healRootedPath(allowedBase, requested);
+        if (healed !== undefined) {
+          resolved = healed.path;
+          note = healed.note;
+        }
+      }
 
       // Sorted by codepoint; shared with file-read's directory heal.
       const entries = await readDirectoryListing(resolved);
-      return { root: allowedBase, path: resolved, entries };
+      return note === undefined
+        ? { root: allowedBase, path: resolved, entries }
+        : { root: allowedBase, path: resolved, entries, note };
     },
     catch: (e) =>
       new ToolExecutionError({

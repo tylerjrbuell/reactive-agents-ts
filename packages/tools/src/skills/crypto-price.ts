@@ -182,11 +182,11 @@ export const cryptoPriceHandler = (
 ): Effect.Effect<CryptoPriceResult, ToolExecutionError> =>
   Effect.tryPromise({
     try: async () => {
-      const rawCoins = (
-        Array.isArray(args.coins)
-          ? args.coins
-          : String(args.coins).split(",").map((s) => s.trim()).filter(Boolean)
-      ) as string[];
+      // A bare string, or a list whose element is "BTC,ETH" (a lone string the
+      // healer wrapped), is split into symbols; symbols never contain spaces/commas.
+      const rawCoins = (Array.isArray(args.coins) ? args.coins : [args.coins])
+        .flatMap((c) => String(c).split(/[,\s]+/))
+        .filter(Boolean);
       const currency = ((args.currency as string | undefined) ?? "usd").toLowerCase();
 
       const requested = rawCoins.map((c) => c.toUpperCase().trim());

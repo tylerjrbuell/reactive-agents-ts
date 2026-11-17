@@ -86,7 +86,9 @@ function typeCompatible(value: unknown, paramType: string): boolean {
     case "object":
       return isPlainObject(value)
     case "array":
-      return Array.isArray(value)
+      // A lone string under a wrong key is one item (or a comma list) for an
+      // array parameter; the type coercer / handler turns it into the array.
+      return Array.isArray(value) || (typeof value === "string" && value.trim().length > 0)
     default:
       // Unrecognised schema type — the exactly-one/exactly-one gate below is
       // the real safety rail, so don't block on an unknown type string.

@@ -15,6 +15,7 @@
 // deterministic: real tmp dirs, no model, no network.
 import { describe, expect, it } from "bun:test";
 import { Effect } from "effect";
+import { errorMessage } from "@reactive-agents/core";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,11 +35,21 @@ async function sandboxWithLogs(): Promise<string> {
 const readIn = (root: string, path: string) =>
   withFileRoot(root, () => Effect.runPromise(Effect.flip(fileReadHandler({ path }))));
 
+// file-read now HEALS an invented absolute path when a suffix of it exists under
+// the root (2026-11-17, skill-learning phase 0; see recurring-fault-guards.test.ts).
+// The corrective message is still what confinePath throws, which file-write,
+// grep and every non-healed case surface, so those pins assert it directly.
+const confineIn = (root: string, path: string) =>
+  withFileRoot(root, () => confinePath(path).then(
+    () => ({ message: "expected a traversal refusal" }),
+    (e: unknown) => ({ message: errorMessage(e) }),
+  ));
+
 describe("corrective traversal rejection: hallucinated absolute paths", () => {
   it("names the existing in-root file when the basename matches (the issue's exact shape)", async () => {
     const root = await sandboxWithLogs();
     for (const invented of ["/home/user/logs.txt", "/app/logs.txt", "/logs.txt"]) {
-      const err = await readIn(root, invented);
+      const err = await confineIn(root, invented);
       expect(err.message).toContain("Path traversal");
       expect(err.message).toContain(root);
       expect(err.message).toContain('"./logs.txt"');
@@ -50,7 +61,7 @@ describe("corrective traversal rejection: hallucinated absolute paths", () => {
     const root = await mkdtemp(join(tmpdir(), "corrective-guard-"));
     await mkdir(join(root, "data"), { recursive: true });
     await writeFile(join(root, "data", "logs.txt"), "x\n");
-    const err = await readIn(root, "/home/user/data/logs.txt");
+    const err = await confineIn(root, "/home/user/data/logs.txt");
     expect(err.message).toContain('"./data/logs.txt"');
   });
 

@@ -142,6 +142,9 @@ export function normalizeTodoAction(raw: string): { readonly action: string; rea
   return canonical !== undefined ? { action: canonical, healedFrom: raw } : { action: raw };
 }
 
+/** An `action` that is a phrase ("Verify crypto.md quality"), not a one-word verb. */
+const isSentenceAction = (raw: string): boolean => /\S\s+\S/.test(raw.trim());
+
 const ADVISORY_ICON: Record<ChecklistItemStatus, string> = {
   pending: "[ ]",
   in_progress: "[~]",
@@ -240,6 +243,10 @@ export function applyTodoChecklistAction(
     } else {
       action = rawAction; // unknown: teach below
     }
+  } else if (isSentenceAction(key) && healedArgs.id == null && healedArgs.ids == null &&extractAddItems(healedArgs.items, healedArgs.tools).length > 0) {
+    // The model wrote a task title into `action` next to the list it meant to add.
+    action = "add";
+    healedFrom = rawAction;
   } else {
     const n = normalizeTodoAction(rawAction);
     action = n.action;
@@ -415,7 +422,8 @@ function applyCanonicalTodoAction(
     case "list":
       return { rendered: renderTodoChecklist(items, posture), ok: true, changes: [], finalItems: items };
     default: {
-      const near = closestValid(action, TODO_VALID_ACTIONS);
+      // A sentence is not a misspelt verb: name `add` instead of a substring match.
+      const near = isSentenceAction(action) ? "add" : closestValid(action, TODO_VALID_ACTIONS);
       const example = TODO_EXAMPLES[near] ?? `todo({action:"${near}", id:N})`;
       return fail(
         `Unknown action "${action}". Valid: ${TODO_VALID_ACTIONS.join(" | ")}.\n` +
