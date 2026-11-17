@@ -2,8 +2,8 @@
   /**
    * One-line MCP server add for Lab Tools: paste a command (`npx -y @scope/server`) or a
    * URL (`https://host/mcp`); the server is saved and its tools listed. The same parser
-   * and calls as the chat's `/mcp add` (`lib/mcp-quick-add.ts`). The manual form below
-   * stays for headers, env and the rest.
+   * and calls as the chat's `/mcp add` (`lib/mcp-quick-add.ts`). The Form entry of the
+   * Add server menu stays for headers, env and the rest.
    */
   import Button from "$lib/components/kit/Button.svelte";
   import Input from "$lib/components/kit/Input.svelte";
@@ -27,7 +27,7 @@
       const s = await addMcpServer(parsed.body);
       line = "";
       await onAdded();
-      if (s.discoveryError) toast.warning(`${s.name} saved, tools not listed`, `${s.discoveryError}. Use Refresh tools on it below.`);
+      if (s.discoveryError) toast.warning(`${s.name} saved, tools not listed`, `${s.discoveryError}. Use Refresh tools on the server in the list.`);
       else toast.success(`${s.name} added`, `${s.tools.length} tool${s.tools.length === 1 ? "" : "s"}. Turn it on in a chat with /mcp.`);
     } catch (e) {
       toast.error("Could not add the server", e instanceof Error ? e.message : String(e));

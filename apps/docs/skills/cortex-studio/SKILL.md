@@ -48,7 +48,7 @@ The connection is best-effort: if Cortex is down, the agent runs normally and lo
 
 - **Beacon** (`/`): live agents. **Runs** (`/runs`): history, compare, resume. **Run view** (`/run/<id>`): trace, Why it ended, inspector tabs.
 - **Chat** (`/chat`): quick bar and Config popover; `/mcp`, `/btw`, `/goal`, `/plan`, `/go`, `/loop`, `/schedule`, `/agent on`, `/compact`; `@` tags workspace files; the paperclip attaches pictures, audio and text files.
-- **Lab** (`/lab`): Builder, Saved agents, Skills, Memory, Tools, Prompts. Export an agent as TypeScript or JSON.
+- **Lab** (`/lab`): Builder, Saved agents, Skills, Memory, Tools, Prompts. Export an agent as TypeScript or JSON. Tools has three sub-tabs: Servers (MCP: state, Test, Enable switch, tools, options, write-only credentials), Custom tools (create and edit), Catalog and test.
 - **Settings** (`/settings`): provider keys (encrypted on the server, never returned to the browser), voice, storage.
 
 ## Safety rules

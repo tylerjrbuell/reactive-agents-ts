@@ -61,7 +61,7 @@ Requests tagged `Sec-Fetch-Site: cross-site` are refused, which closes cross-sit
 
 ### Other guards
 
-- **Tool playground approval.** `POST /api/tools/invoke` answers 409 for tools the framework gates with `requiresApproval` (`code-execute`, `file-write`, `file-edit`, docker and shell) until the body carries `approved: true`. The Tool Workshop asks you to confirm first.
+- **Tool playground approval.** `POST /api/tools/invoke` answers 409 for tools the framework gates with `requiresApproval` (`code-execute`, `file-write`, `file-edit`, docker and shell) until the body carries `approved: true`. The Lab's **Catalog and test** and **Custom tools** panels ask you to confirm first. MCP credentials are write-only too: the server's **Credentials** tab shows **Set** for a stored key, never its value.
 - **MCP secrets are write-only.** `GET /api/mcp-servers` masks `env` and `headers` values and OAuth secrets. Saving a config that still holds a masked value keeps the stored one. `PUT /api/mcp-servers/:id/secrets` sets, replaces or removes single `env` / `headers` keys (`{ env: { set, remove }, headers: { set, remove } }`); the response lists key names, never values, and a probe's stored error has the server's own credentials scrubbed.
 - **Outbound URL validation.** The Ollama endpoint and the voice base URLs accept http(s) only, no embedded credentials, and no link-local or cloud-metadata host (including names that resolve to one). Model discovery and voice calls never follow redirects.
 - **Private storage.** `.cortex/` is created `0700` and the database (and its `-wal` / `-shm`) `0600`.

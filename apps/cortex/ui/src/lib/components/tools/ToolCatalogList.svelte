@@ -28,7 +28,7 @@
         <button type="button" class="row" aria-current={selectedId === entry.id ? "true" : undefined} onclick={() => onSelect(entry)}>
           <span class="badges">
             <Badge tone={kindTone(entry.kind)}>{kindLabel(entry.kind)}</Badge>
-            {#if entry.disabled}<Badge tone="bad">Off</Badge>{/if}
+            {#if entry.disabled}<Badge tone="neutral">Disabled</Badge>{/if}
           </span>
           <span class="name">{entry.displayName}</span>
           <span class="desc">{entry.description}</span>

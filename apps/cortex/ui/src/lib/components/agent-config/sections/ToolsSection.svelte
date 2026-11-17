@@ -3,13 +3,12 @@
   import { tooltip } from "$lib/actions/tooltip.js";
   import Badge from "$lib/components/kit/Badge.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
-  import Button from "$lib/components/kit/Button.svelte";
-  import Tooltip from "$lib/components/Tooltip.svelte";
+  import McpServerAttach from "$lib/components/McpServerAttach.svelte";
   import ShellWorkspaceFields from "$lib/components/ShellWorkspaceFields.svelte";
   import ToolDisclosureField from "$lib/components/ToolDisclosureField.svelte";
   import WebSearchProvidersField from "$lib/components/WebSearchProvidersField.svelte";
   import ApprovalPolicyFields from "../ApprovalPolicyFields.svelte";
-  import { mcpAvailableCount, mcpServerMode, mcpToolAvailable, toggleMcpServerAttached, toggleMcpTool } from "$lib/tool-selection.js";
+  import { mcpToolAvailable } from "$lib/tool-selection.js";
   import { disclosureChoice, unlistedTools } from "$lib/chat-quickbar.js";
   import type { ToolPick } from "$lib/builder-tool-picks.js";
   import type { McpCatalogRow, PanelAgentConfig } from "../types.js";
@@ -63,24 +62,14 @@
     if (config.terminalTools) names.add("shell-execute");
     // Tools of an attached server count even when none is named: they are all available.
     for (const srv of mcpCatalog) {
+      if (srv.enabled === false) continue; // a switched-off server is never started
       for (const t of srv.tools) if (mcpToolAvailable(config, asServer(srv), t.toolName)) names.add(t.toolName);
     }
     return names.size;
   });
 
-  // Attaching a server makes all its tools available (the framework adds them to the allowlist);
-  // a chip click excludes or restores one tool (rules and edge cases: lib/tool-selection.ts).
+  // Attach rules (attached = every tool, naming tools = a subset): lib/tool-selection.ts, wired in McpServerAttach.
   const asServer = (srv: McpCatalogRow) => ({ serverId: srv.serverId, tools: srv.tools.map((t) => t.toolName) });
-  const availableIn = (srv: McpCatalogRow) => mcpAvailableCount(config, asServer(srv));
-
-  function toggleMcpRegistryTool(srv: McpCatalogRow, fullToolName: string) {
-    config = { ...config, ...toggleMcpTool(config, asServer(srv), fullToolName) };
-  }
-
-  /** One click on a server name attaches it (every tool available) or detaches it. */
-  function toggleMcpServer(srv: McpCatalogRow) {
-    config = { ...config, ...toggleMcpServerAttached(config, asServer(srv)) };
-  }
 </script>
 
 <ConfigSection id="tools" icon="tool" title="Tools" {open} {onToggle}>
@@ -155,46 +144,7 @@
             Merged with the picks at run time. Use exact tool registration names (Lab · Tools lists MCP and custom tools).
           </p>
         </div>
-        <div class="acp-group">
-          <div class="flex items-center justify-between gap-2">
-            <span class="config-label mb-0">MCP tools</span>
-            <Button size="sm" variant="ghost" icon="retry" onclick={() => loadMcpCatalog()}>Refresh list</Button>
-          </div>
-          {#if mcpCatalog.length === 0}
-            <p class="acp-hint">No MCP servers saved. Add one under Lab · Tools.</p>
-          {:else}
-            {#each mcpCatalog as srv (srv.serverId)}
-              <div class="acp-card">
-                {#if srv.tools.length > 0}
-                  <div class="flex items-center justify-between gap-2">
-                    <Tooltip text={mcpServerMode(config, asServer(srv)) === "off" ? "Use this server: all its tools become available" : "Stop using this server"}><button type="button" onclick={() => toggleMcpServer(srv)}
-                      class="acp-linkbtn" aria-pressed={mcpServerMode(config, asServer(srv)) !== "off"}>{srv.name}</button></Tooltip>
-                    <span class="acp-data">{availableIn(srv)}/{srv.tools.length} available</span>
-                  </div>
-                  {#if mcpServerMode(config, asServer(srv)) === "all"}
-                    <p class="acp-hint">Every tool is available. Click a tool to leave it out.</p>
-                  {:else if mcpServerMode(config, asServer(srv)) === "subset"}
-                    <p class="acp-hint">Only the highlighted tools are available. Click a tool to add or remove it.</p>
-                  {/if}
-                {:else}
-                  <div class="acp-data">{srv.name}</div>
-                {/if}
-                {#if srv.tools.length === 0}
-                  <p class="acp-hint">No tools cached. Run Refresh tools in Lab · Tools.</p>
-                {:else}
-                  <div class="acp-chips">
-                    {#each srv.tools as mt (mt.toolName)}
-                      {@const active = mcpToolAvailable(config, asServer(srv), mt.toolName)}
-                      <Tooltip text={mt.description ?? ""}><button type="button" class="acp-toolchip" aria-pressed={active} onclick={() => toggleMcpRegistryTool(srv, mt.toolName)}>
-                        {mt.toolName.startsWith(`${srv.name}/`) ? mt.toolName.slice(srv.name.length + 1) : mt.toolName}
-                      </button></Tooltip>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            {/each}
-          {/if}
-        </div>
+        <McpServerAttach bind:config servers={mcpCatalog} onRefresh={loadMcpCatalog} />
         <!-- Approvals gate tool calls, so they sit with the tools they gate. -->
         <ApprovalPolicyFields bind:config />
         <p class="acp-hint" data-testid="approval-durable-note">

@@ -6,8 +6,6 @@ import { formatRelativeTime } from "@reactive-agents/ui-core";
 
 /** Where a catalog tool comes from. */
 export type ToolKind = "built-in" | "meta" | "mcp" | "custom";
-/** User-creatable origins: one create panel, no separate page per type. */
-export type CreateKind = "custom" | "mcp";
 
 /** One declared tool parameter (GET /api/tools/catalog). */
 export type CatalogParam = {

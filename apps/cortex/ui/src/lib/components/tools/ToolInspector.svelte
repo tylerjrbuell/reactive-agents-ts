@@ -8,12 +8,9 @@
     /** The selected catalog tool. */
     tool: CatalogEntry;
     onExport: () => void;
-    /** Custom tools only. */
-    onToggleDisabled: () => void | Promise<void>;
-    onDelete: () => void | Promise<void>;
     onCopySchema: () => void | Promise<void>;
   }
-  const { tool: selected, onExport, onToggleDisabled, onDelete, onCopySchema }: Props = $props();
+  const { tool: selected, onExport, onCopySchema }: Props = $props();
 </script>
 
 <div class="insp">
@@ -22,19 +19,18 @@
       <div class="name-line">
         <h3>{selected.displayName}</h3>
         <Badge tone={kindTone(selected.kind)}>{kindLabel(selected.kind)}</Badge>
-        {#if selected.disabled}<Badge tone="bad">Off</Badge>{/if}
+        {#if selected.disabled}<Badge tone="neutral">Disabled</Badge>{/if}
       </div>
       <p class="desc">{selected.description}</p>
+      {#if selected.disabled}
+        <p class="warn">{selected.kind === "mcp" ? "Its server is switched off, so agents never get this tool. You can still test it here." : "Switched off, so agents never get this tool. You can still test it here."}</p>
+      {/if}
       {#if selected.executableHint && !selected.executable}
         <p class="warn">{selected.executableHint}</p>
       {/if}
     </div>
     <div class="actions">
       <Button size="sm" icon="external" onclick={onExport}>Export</Button>
-      {#if selected.kind === "custom"}
-        <Button size="sm" onclick={onToggleDisabled}>{selected.disabled ? "Enable" : "Disable"}</Button>
-        <Button size="sm" variant="danger" icon="trash" onclick={onDelete}>Delete</Button>
-      {/if}
     </div>
   </div>
 
@@ -55,7 +51,7 @@
     {#if selected.parameters.length === 0}
       <p class="none">
         {#if selected.kind === "mcp"}
-          No parameters cached. Open Create tool, pick the MCP server and run Refresh tools.
+          No parameters cached. Open Servers, pick the server and run Refresh tools.
         {:else}
           This tool takes no parameters.
         {/if}

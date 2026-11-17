@@ -80,16 +80,6 @@ export const toolsRouter =(storeLayer: Layer.Layer<CortexStoreService>, db: Data
         }),
       },
     )
-    // Duplicate of POST /api/mcp-servers/import-json, removed. The Tool Workshop still calls this path
-    // as a fallback until the Tools Lab UI repoints; delete this alias with that change.
-    .post(
-      "/mcp-import-json",
-      ({ set }) => {
-        set.status = 410;
-        return { error: "Moved: use POST /api/mcp-servers/import-json" };
-      },
-      { body: t.Object({ json: t.String() }) },
-    )
     .post(
       "/lab-custom",
       async ({ body, set }) => {

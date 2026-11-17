@@ -21,6 +21,10 @@ export type McpCatalogRow = {
   serverId: string;
   name: string;
   tools: { toolName: string; description?: string }[];
+  /** The saved config (credentials masked): the attach list reads `readOnly` from it. */
+  config?: Record<string, unknown>;
+  /** False when switched off in Lab > Tools > Servers; absent on an older server build (on). */
+  enabled?: boolean;
 };
 
 /** A strategy option in the Reasoning section. */
