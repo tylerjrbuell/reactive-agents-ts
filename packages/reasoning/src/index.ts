@@ -20,8 +20,9 @@ export type { StrategyEffectiveness } from "./types/effectiveness.js";
  * tag (Q5 grandfather decision); `TrustLevel` schema, derivation helpers, and
  * the grandfather constants are all post-v0.9.0 surfaces.
  *
- * @unstable Sprint 3.x surface; not external-validated. May change in v0.10.x
- * without notice. See AUDIT-overhaul-2026.md §10.1 reasoning + §11 #15.
+ * @unstable Sprint 3.x surface; not external-validated. May change in any
+ * minor release without notice. The package itself is "stable (scoped)" in
+ * apps/docs/src/data/stability.json; this surface is outside that scope.
  */
 export type { ObservationResult, TrustLevel } from "./types/observation.js";
 export {

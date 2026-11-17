@@ -2,7 +2,7 @@
 
 > Agent2Agent (A2A) protocol for TypeScript: Agent Cards plus a JSON-RPC 2.0 server and client, so independent agents can discover and delegate to each other over HTTP.
 
-> **Stability:** unstable. The wire format and JSON-RPC method names may change as the A2A spec evolves.
+> **Stability:** experimental. A2A is an opt-in protocol surface, and the wire format and JSON-RPC method names may change as the A2A spec evolves.
 
 [![npm](https://img.shields.io/npm/v/@reactive-agents/a2a?color=CB3837&logo=npm)](https://www.npmjs.com/package/@reactive-agents/a2a)
 [![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev/features/a2a-protocol/)

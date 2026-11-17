@@ -23,9 +23,7 @@ export { createTestLLM } from "./helpers/agent.js";
  * ─── Stream Assertions ───
  * Helpers for asserting against streamed `StreamEvent` sequences.
  *
- * @unstable Limited (≤2) runtime test consumers; AUDIT verdict for testing is
- * SHRINK. May change in v0.10.x.
- * See AUDIT-overhaul-2026.md §10.1 (testing SHRINK) and §11 #40.
+ * @unstable Few runtime test consumers; the surface may change in any release.
  */
 export { expectStream } from "./assertions/stream.js";
 export type { StreamExpectation } from "./assertions/stream.js";
@@ -47,9 +45,7 @@ export { expectTrace } from "./harness/expect-trace.js";
  * `runScenario` / `runCounterfactual` — declarative scenario execution and
  * counterfactual replay against the harness.
  *
- * @unstable Limited (≤2) runtime test consumers; AUDIT verdict for testing is
- * SHRINK. May change in v0.10.x.
- * See AUDIT-overhaul-2026.md §10.1 (testing SHRINK) and §11 #40.
+ * @unstable Few runtime test consumers; the surface may change in any release.
  */
 export { runScenario, runCounterfactual } from "./harness/scenario.js";
 export type {
@@ -63,9 +59,8 @@ export type {
  * Tier-1 deterministic scenario gate: capture/diff outcomes vs a recorded
  * baseline, scenario discovery, health (flake-rate) bookkeeping.
  *
- * @unstable Tier-1 Gate has zero CI invocations; mark unstable until at least
- * one CI run produces a baseline diff. AUDIT verdict for testing is SHRINK.
- * See AUDIT-overhaul-2026.md §10.1 (testing SHRINK) and §11 #40.
+ * @unstable The gate runs in CI (`bun run gate:check`) but its baseline and
+ * runner API are still settling and may change in any release.
  */
 export {
   runGate,

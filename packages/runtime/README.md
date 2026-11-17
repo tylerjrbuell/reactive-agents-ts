@@ -2,7 +2,7 @@
 
 > The execution engine and fluent builder behind Reactive Agents: assemble an agent from opt-in layers and run it through a hookable 12-phase lifecycle.
 
-> **Stability:** stable. `ReactiveAgents.create()` and the `.with*()` chain are tier-1 stable; individual newer withers carry their own `@unstable` or `@experimental` tags.
+> **Stability:** stable. `ReactiveAgents.create()` and the `.with*()` chain are tier-1 stable; where a single export is less settled than its package it carries an `@unstable` JSDoc tag, and the tier itself is recorded in the stability reference.
 
 ## Install
 

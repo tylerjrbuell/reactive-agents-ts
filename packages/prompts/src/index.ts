@@ -68,9 +68,9 @@ export { PromptService, PromptServiceLive } from "./services/prompt-service.js";
  * A/B prompt experimentation: variant assignment, outcome capture, results
  * aggregation. Sits alongside `PromptService` for prompt-engineering loops.
  *
- * @unstable Only one example consumer; AUDIT verdict for prompts is KEEP but
- * this surface is unvalidated. May change in v0.10.x.
- * See AUDIT-overhaul-2026.md §10.1 (prompts KEEP) and §11 #41.
+ * @unstable Only one example consumer; this surface is unvalidated. May change
+ * in any minor release. The prompts package tier is "unstable" in
+ * apps/docs/src/data/stability.json.
  */
 export {
   ExperimentService,

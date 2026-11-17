@@ -2,7 +2,7 @@
 
 > TypeScript agents that finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from.
 
-> **Stability:** stable. `ReactiveAgents.create()` and the `.with*()` chain are tier-1 stable; individual newer surfaces are tagged `@unstable` or `@experimental` (see the stability reference).
+> **Stability:** stable. `ReactiveAgents.create()` and the `.with*()` chain are tier-1 stable; where a single export is less settled than its package it carries an `@unstable` JSDoc tag, and the tier itself is recorded in the stability reference.
 
 [![npm version](https://img.shields.io/npm/v/reactive-agents?logo=npm&color=CB3837)](https://www.npmjs.com/package/reactive-agents)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE)

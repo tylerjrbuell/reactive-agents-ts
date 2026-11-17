@@ -23,11 +23,10 @@ export { DEFAULT_CAPABILITIES } from "./capabilities.js";
  * Per-(provider, model) capability descriptor. Orthogonal to
  * {@link ProviderCapabilities}; covers context window, tokenizer, tier,
  * and tool-call dialect. Resolution (probe → static-table → fallback)
- * ships in S1.3.
+ * lives in `capability-resolver.ts`.
  *
- * @unstable Added post-v0.9.0 on `refactor/overhaul`. Surface may change in
- * v0.10.x without notice. Track stabilization in
- * `docs/spec/docs/AUDIT-overhaul-2026.md` §11 #15.
+ * @unstable Surface may change without notice. Tier recorded in
+ * `apps/docs/src/content/docs/reference/stability.md`.
  */
 export {
   CapabilitySchema,
@@ -63,7 +62,7 @@ export {
 } from "./capability-reported.js";
 export type { ReportedModelMetadata } from "./capability-reported.js";
 /**
- * Capability resolver (Phase 1 S1.3) — three-tier lookup: cached probe →
+ * Capability resolver — three-tier lookup: cached probe →
  * static table → conservative fallback. Ollama provider consumes this to
  * drive options.num_ctx per (provider, model).
  *
@@ -305,8 +304,7 @@ export { validateAndRepairMessages } from "./validation.js";
  * 2026-07-19 after their sole call sites died in `279b61fb` (see adapter.ts
  * header).
  *
- * @unstable Phase 1 surface. `selectAdapter` resolution + tier dispatch may change
- * in v0.10.x. See AUDIT-overhaul-2026.md §11 #15.
+ * @unstable `selectAdapter` resolution + tier dispatch may change without notice.
  */
 export {
   type ProviderAdapter,
@@ -323,8 +321,7 @@ export {
  * Three-tier calibration store + alias accumulation (N≥3 gate) + ExperienceSummary
  * materialization. Drives `buildCalibratedAdapter` selection.
  *
- * @unstable Sprint 3.x surface; not external-validated. May change in v0.10.x.
- * See AUDIT-overhaul-2026.md §11 #15 + M7 mechanism verdict.
+ * @unstable Not externally validated. May change without notice.
  */
 export {
   ModelCalibrationSchema,

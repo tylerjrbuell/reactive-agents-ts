@@ -5,7 +5,7 @@ import type { ContentBlock, ToolMessageBlock } from "./content-blocks.js";
 
 /**
  * Schema for LLM provider selection.
- * Supported providers: anthropic, openai, ollama, gemini, litellm, custom.
+ * Supported providers: anthropic, openai, ollama, gemini, litellm, groq, xai, custom.
  *
  * @example
  * ```typescript
@@ -21,7 +21,7 @@ export const LLMProviderType = Schema.Literal(
   "ollama",
   /** Google Gemini models. Requires GOOGLE_API_KEY. */
   "gemini",
-  /** LiteLLM proxy — unified gateway to 40+ model providers. */
+  /** LiteLLM proxy — one gateway endpoint; upstream providers are set by the proxy's own config. */
   "litellm",
   /** Groq LPU inference (OpenAI-compatible). Requires GROQ_API_KEY. */
   "groq",
@@ -37,7 +37,7 @@ export const LLMProviderType = Schema.Literal(
  * - "openai": GPT models via OpenAI API
  * - "ollama": Local models via Ollama
  * - "gemini": Google Gemini models
- * - "litellm": LiteLLM proxy (40+ model providers)
+ * - "litellm": LiteLLM proxy (upstream providers configured in the proxy)
  * - "groq": Groq LPU inference (OpenAI-compatible)
  * - "xai": xAI Grok models (OpenAI-compatible)
  * - "custom": User-defined provider adapter

@@ -2,7 +2,7 @@
 
 > Ed25519 agent certificates, role-based access control, audit logging and delegation for Reactive Agents.
 
-> **Stability:** unstable. No `.withIdentity()` builder method exists and no in-tree consumer reads this package yet; the whole surface may change between minors.
+> **Stability:** experimental. No builder wither exists (`.withIdentity()` does not exist); you use the services directly, and no in-tree consumer reads this package yet.
 
 ## Install
 
