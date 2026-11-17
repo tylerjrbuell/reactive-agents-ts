@@ -159,3 +159,18 @@ describe("chatStream on a failed run", () => {
     expect(history).toBe("[The previous run produced: produce the file ./report.md.]");
   });
 });
+
+describe("recordRunErrors: a user stop is not a failure", () => {
+  it("does not record the generic stop note as the run's cause", async () => {
+    const { agent, emit } = fakeAgent();
+    const { log } = await recordRunErrors(agent);
+    emit({
+      _tag: "AgentCompleted",
+      taskId: "stopped",
+      success: false,
+      error: "The run was stopped on request before it finished.",
+      outcome: { status: "partial", outstanding: ["stopped_by_request"] },
+    });
+    expect(log.errorOf("stopped")).toBeUndefined();
+  });
+});

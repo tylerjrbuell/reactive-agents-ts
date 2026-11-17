@@ -4,6 +4,7 @@ import {
   finishTurnTrace,
   foldTurnTrace,
   initialTurnTrace,
+  splitUnfinished,
   turnOutcomeOf as readTurnOutcome,
   type AttachmentMeta,
   type InterruptedBy,
@@ -42,7 +43,7 @@ export interface StoredTurnOutcome {
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
   /** Partial runs: the items left unfinished. */
   readonly unfinished?: readonly string[];
-  /** Interrupted turns: who stopped it. */
+  /** Interrupted turns, and a partial the user stopped (`"user"`): who stopped it. */
   readonly interruptedBy?: InterruptedBy;
 }
 
@@ -100,10 +101,12 @@ export type StoredTurnTrace = Omit<TurnTrace, "outcome"> & {
 export function turnOutcomeOf(event: RunCompletionLike, busError?: string): StoredTurnOutcome | undefined {
   const o = readTurnOutcome(event);
   if (o.ending !== "failed" && o.ending !== "partial" && o.ending !== "abstained") return undefined;
-  const error = storedRunError(o.error) ?? busError;
+  // A user stop is a partial with no cause: the bus's generic note is not one.
+  const error = o.interruptedBy === "user" ? undefined : (storedRunError(o.error) ?? busError);
   return {
     success: false,
     ending: o.ending,
+    ...(o.ending === "partial" && o.interruptedBy ? { interruptedBy: o.interruptedBy } : {}),
     ...(o.terminatedBy ? { terminatedBy: o.terminatedBy } : {}),
     ...(error ? { error } : {}),
     ...(o.abstention ? { abstention: o.abstention } : {}),
@@ -139,7 +142,7 @@ export function readStoredOutcome(raw: unknown): StoredTurnOutcome | undefined {
     ...(str(o["error"]) ? { error: o["error"] } : {}),
     ...(ab && str(ab["reason"]) ? { abstention: { reason: ab["reason"], ...(missing.length > 0 ? { missing } : {}) } } : {}),
     ...(unfinished.length > 0 ? { unfinished } : {}),
-    ...(ending === "interrupted" && by !== undefined ? { interruptedBy: by } : {}),
+    ...((ending === "interrupted" || ending === "partial") && by !== undefined ? { interruptedBy: by } : {}),
   };
 }
 
@@ -178,6 +181,12 @@ export function historyContentOf(turn: { readonly content: string; readonly trac
     if (turn.content.trim().length > 0) return turn.content;
     const produced = (turn.trace?.deliverables ?? []).filter((d) => d.produced).map((d) => d.spec);
     return produced.length > 0 ? `[The previous run produced: ${produced.join("; ")}.]` : turn.content;
+  }
+  if (outcome.ending === "partial" && outcome.interruptedBy === "user") {
+    // The user's own stop: the answer so far is real work, kept in history with a marker.
+    const mark = "[The user stopped this reply here; the answer above is the work so far.]";
+    const answer = (splitUnfinished(turn.content)?.draft ?? turn.content).trim();
+    return answer.length > 0 ? `${answer}\n\n${mark}` :"[The user stopped the previous reply before any answer was written.]";
   }
   const how = outcome.terminatedBy && outcome.terminatedBy !== "abstained" ? ` (${outcome.terminatedBy})` : "";
   if (outcome.ending === "abstained") {

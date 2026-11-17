@@ -35,7 +35,7 @@ export const desktopNotifier = createDesktopNotifier({
 /** Notice for a run's end (the same `RunEndToast` the in-app toast uses). */
 export function runEndNotice(end: RunEndToast): DesktopNotice {
   return {
-    kind: end.kind === "success" ? "run-finished" : "run-failed",
+    kind: end.kind === "error" ? "run-failed" : "run-finished",
     key: end.key,
     title: end.title,
     ...(end.message ? { body: end.message } : {}),

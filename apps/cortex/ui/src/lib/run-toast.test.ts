@@ -27,3 +27,15 @@ describe("runEndToast", () => {
     expect(runEndToast({ type: "AgentStarted", runId: "r3", name: "a", payload: {} })).toBeNull();
   });
 });
+
+describe("runEndToast: a run the user stopped", () => {
+  it("is a neutral 'stopped' toast with no error message, not 'failed'", () => {
+    const t = runEndToast({
+      type: "AgentCompleted",
+      runId: "r9",
+      name: "agent",
+      payload: { success: false, error: "The run was stopped on request before it finished.", outcome: { status: "partial", outstanding: ["stopped_by_request"] } },
+    });
+    expect(t).toEqual({ kind: "info", title: "agent stopped", href: "/run/r9", key: "run-end:r9" });
+  });
+});

@@ -49,3 +49,10 @@ describe("run view status (B3)", () => {
     expect(isRunSettled("paused")).toBe(false);
   });
 });
+
+describe("run view status: a run the user stopped", () => {
+  it("AgentCompleted success:false with a user-stop record reads stopped; a loop stop reads failed", () => {
+    expect(deriveStatus("live", msg("AgentCompleted", { success: false, stop: { kind: "user-paused" } }))).toBe("stopped");
+    expect(deriveStatus("live", msg("AgentCompleted", { success: false, stop: { kind: "loop" } }))).toBe("failed");
+  });
+});

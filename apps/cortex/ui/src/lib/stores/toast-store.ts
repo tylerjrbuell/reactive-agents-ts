@@ -95,8 +95,9 @@ function makeToastStore() {
     warning: (title: string, message?: string) =>
       add({ kind: "warning", title, message, durationMs: 5000 }),
 
-    info: (title: string, message?: string, action?: Toast["action"]) =>
-      add({ kind: "info", title, message, durationMs: 4000, action }),
+    /** `key`: a later toast with the same key replaces this one (e.g. one toast per run). */
+    info: (title: string, message?: string, action?: Toast["action"], key?: string) =>
+      add({ kind: "info", title, message, durationMs: 4000, action, key }),
 
     connection: (title: string, message?: string, action?: Toast["action"]) =>
       add({ kind: "connection", title, message, durationMs: 5000, action }),

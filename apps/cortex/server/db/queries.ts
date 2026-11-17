@@ -1,7 +1,7 @@
 import type { Database, SQLQueryBindings } from "bun:sqlite";
 import type { CortexIngestMessage, RunSummary } from "../types.js";
 import { deleteChatSessionsForRun } from "./chat-queries.js";
-import { runEndingOf } from "../services/run-ending.js";
+import { completedStatusOf, runEndingOf } from "../services/run-ending.js";
 
 export function insertEvent(
   db: Database,
@@ -541,7 +541,8 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
         );
         break;
       case "AgentCompleted":
-        status = p.success === false ? (keepsEnding(status) ? status : "failed") : "completed";
+        // A user stop is `stopped`; a failure keeps an earlier stop/block.
+        status = completedStatusOf(p) === "failed" && keepsEnding(status) ? status : completedStatusOf(p);
         ending = runEndingOf(p);
         completedAt = row.ts;
         break;

@@ -21,7 +21,7 @@ import {
 import type { CortexIngestMessage, CortexLiveMessage } from "../types.js";
 import { CORTEX_DESK_LIVE_AGENT_ID } from "../types.js";
 import { CortexError } from "../errors.js";
-import { runEndingOf } from "./run-ending.js";
+import { completedStatusOf, runEndingOf } from "./run-ending.js";
 import { strategyClaimsOf } from "@reactive-agents/ui-core";
 
 /** An `AgentEvent` as the loose record the run-fold helpers and wire payloads read (the one cast, in one place). */
@@ -110,7 +110,8 @@ const deriveRunStats = (
   if (event._tag === "AgentCompleted") {
     const e = event as { success?: boolean; totalTokens?: number; durationMs?: number; error?: string };
     // Only explicit false is failure — omitted `success` is treated as completed (matches desk UX; some paths omit the flag).
-    const status = e.success === false ? "failed" : "completed";
+    // A run the user stopped or paused reports `success: false` too, but it is `stopped`, not failed.
+    const status = completedStatusOf(eventRecord(event));
     return {
       status,
       // How it ended (abstained / partial / failed): an abstention is `failed` by status.
@@ -121,7 +122,8 @@ const deriveRunStats = (
       ...(typeof e.totalTokens === "number" && e.totalTokens > 0
         ? { tokensUsedTotal: e.totalTokens }
         : {}),
-      ...(typeof e.error === "string" && e.error ? { errorMessage: e.error } : {}),
+      // A stopped run's `error` is a generic note, not a cause.
+      ...(status !== "stopped" && typeof e.error === "string" && e.error ? { errorMessage: e.error } : {}),
     };
   }
   // The run's effect failed, crashed or was interrupted without AgentCompleted (e.g. an

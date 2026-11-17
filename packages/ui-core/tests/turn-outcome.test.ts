@@ -5,6 +5,9 @@ import {
   foldTurnTrace,
   initialRunState,
   initialTurnTrace,
+  isUserStopKind,
+  isUserStopResult,
+  USER_STOP_CRITERION,
   persistedTurnTranscriptOf,
   reduceRunState,
   splitUnfinished,
@@ -138,5 +141,37 @@ describe("run machine exposes the ending", () => {
     expect(s.status).toBe("completed");
     expect(s.error).toBe("Strategy execution failed (reactive): llm_error");
     expect(s.outcome?.ending).toBe("failed");
+  });
+});
+
+describe("a run the user stopped is a partial, never a failure", () => {
+  const generic = "The run was stopped on request before it finished.";
+  test("outstanding stopped_by_request on outcome: partial, by the user, answer so far, no cause", () => {
+    const o = turnOutcomeOf({
+      success: false,
+      output: "Half the report.",
+      error: generic,
+      outcome: { status: "partial", outstanding: [USER_STOP_CRITERION] },
+    });
+    expect(o).toEqual({ ending: "partial", draft: "Half the report.", interruptedBy: "user" });
+  });
+  test("the empty-output stop is still a partial with an empty draft", () => {
+    const o = turnOutcomeOf({ success: false, output: "", error: generic, stop: { kind: "user-stopped" } });
+    expect(o).toEqual({ ending: "partial", draft: "", interruptedBy: "user" });
+  });
+  test("the Unfinished list and metadata criteria mark it too; other open items stay", () => {
+    expect(
+      turnOutcomeOf({ success: false, output: "So far.\nUnfinished:\n- stopped_by_request\n- write tests" }),
+    ).toEqual({ ending: "partial", draft: "So far.", interruptedBy: "user", unfinished: ["write tests"] });
+    expect(
+      isUserStopResult({ success: false, output: "x", metadata: { outstandingCriteria: [USER_STOP_CRITERION] } }),
+    ).toBe(true);
+  });
+  test("a pause is a user stop; a loop stop and a success are not", () => {
+    expect(isUserStopResult({ success: false, stop: { kind: "user-paused" } })).toBe(true);
+    expect(isUserStopResult({ success: false, stop: { kind: "loop" } })).toBe(false);
+    expect(isUserStopResult({ success: true, stop: { kind: "user-stopped" } })).toBe(false);
+    expect(turnOutcomeOf({ success: false, output: "", error: "boom" }).ending).toBe("failed");
+    expect(isUserStopKind("user-stopped") && isUserStopKind("user-paused") && !isUserStopKind("error")).toBe(true);
   });
 });

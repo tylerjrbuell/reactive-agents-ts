@@ -1,7 +1,9 @@
+import { isUserStopResult } from "@reactive-agents/ui-core";
+
 /**
  * A run list row's status after a live event, mirroring the server's
  * `deriveRunStats` / `updateRunStats` rules: `AgentCompleted` sets completed or
- * failed, `TaskFailed` sets failed, `ExecutionCancelled` (a chat turn stopped or
+ * failed (stopped when the user stopped or paused the run: an honest partial), `TaskFailed` sets failed, `ExecutionCancelled` (a chat turn stopped or
  * left mid-run), `AgentStopped` (desk Stop) and `AgentTerminated` (desk
  * Terminate) set stopped, `AgentAborted` (the run's effect failed without an
  * `AgentCompleted`) sets failed, stopped when its `reason` is a user stop or
@@ -17,7 +19,9 @@ export function runStatusAfter(
   const next =
     type === "AgentCompleted"
       ? payload.success === false
-        ? "failed"
+        ? isUserStopResult(payload)
+          ? "stopped"
+          : "failed"
         : "completed"
       : type === "TaskFailed"
         ? "failed"

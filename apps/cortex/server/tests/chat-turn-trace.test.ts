@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { TurnTraceRecorder, readStoredOutcome, turnOutcomeOf, withTurnOutcome } from "../services/chat-turn-trace.js";
+import { TurnTraceRecorder, historyContentOf, readStoredOutcome, turnOutcomeOf, withTurnOutcome } from "../services/chat-turn-trace.js";
 import { appendChatTurn, createChatSession, getChatTurns } from "../db/chat-queries.js";
 import { openDatabase } from "../db/schema.js";
 
@@ -126,5 +126,29 @@ describe("TurnTraceRecorder", () => {
       success: true,
     } as unknown as Parameters<TurnTraceRecorder["record"]>[0]);
     expect(r.finish()).toEqual({ reasoningSteps: [], toolCalls: [], strategy: "plan-execute-reflect", durationMs: 42_000 });
+  });
+});
+
+describe("a user-stopped turn is a partial by the user", () => {
+  const stopped = {
+    success: false,
+    output: "Half the answer.",
+    error: "The run was stopped on request before it finished.",
+    outcome: { status: "partial", outstanding: ["stopped_by_request"] },
+  };
+  test("stored as partial with interruptedBy user and no cause, even with a bus error", () => {
+    const stored = turnOutcomeOf(stopped, "bus generic note");
+    expect(stored).toEqual({ success: false, ending: "partial", interruptedBy: "user" });
+    expect(readStoredOutcome(JSON.parse(JSON.stringify(stored)))).toEqual(stored);
+  });
+  test("history keeps the answer so far with the stop marker, not a failure note", () => {
+    const outcome = turnOutcomeOf(stopped)!;
+    const text = historyContentOf({ content: "Half the answer.", trace: { reasoningSteps: [], toolCalls: [], outcome } });
+    expect(text).toBe("Half the answer.\n\n[The user stopped this reply here; the answer above is the work so far.]");
+    expect(text).not.toContain("failed");
+  });
+  test("a stop that wrote nothing still says so", () => {
+    const outcome = turnOutcomeOf({ ...stopped, output: "" })!;
+    expect(historyContentOf({ content: "", trace: { reasoningSteps: [], toolCalls: [], outcome } })).toContain("stopped the previous reply");
   });
 });

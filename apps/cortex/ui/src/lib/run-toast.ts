@@ -1,8 +1,9 @@
+import { isUserStopResult } from "@reactive-agents/ui-core";
 import { runErrorLine } from "./run-error.js";
 
-/** The toast a run's end deserves. */
+/** The toast a run's end deserves (`info`: a run the user stopped, neither a success nor an error). */
 export type RunEndToast = {
-  readonly kind: "success" | "error";
+  readonly kind: "success" | "error" | "info";
   readonly title: string;
   /** The run's cause (first line, redacted) on a failure. */
   readonly message?: string;
@@ -27,6 +28,8 @@ export function runEndToast(msg: {
   const message = runErrorLine(msg.payload.error);
   if (msg.type === "AgentCompleted") {
     if (msg.payload.success !== false) return { kind: "success", title: `${msg.name} completed`, href, key };
+    // A stop the user asked for is a partial result, not an error: a neutral toast, no cause.
+    if (isUserStopResult(msg.payload)) return { kind: "info", title: `${msg.name} stopped`, href, key };
     return { kind: "error", title: `${msg.name} failed`, ...(message ? { message } : {}), href, key };
   }
   if (msg.type === "TaskFailed") {

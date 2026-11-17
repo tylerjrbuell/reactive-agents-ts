@@ -5,6 +5,7 @@
  * re-attaches. The caller still gets a `CortexChatResult` when the turn ends.
  */
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import { isUserStopResult } from "@reactive-agents/ui-core";
 import type { DetachedTurns } from "./chat-detached-turn.js";
 import { ChatTurnFailedError } from "../errors.js";
 import {
@@ -48,7 +49,8 @@ export function makeDetachedRunner(
 
     if (failure !== undefined) throw new ChatTurnFailedError({ message: failure });
     if (done === undefined) throw new ChatTurnFailedError({ message: "The turn ended without a result" });
-    if (done.success === false && done.status === undefined && done.error) throw new ChatTurnFailedError({ message: done.error });
+    // A turn the user stopped is a partial (its answer so far is the reply), not a failure.
+    if (done.success === false && done.status === undefined && done.error && !isUserStopResult(done)) throw new ChatTurnFailedError({ message: done.error });
 
     const assessed = host.drainTurnAssessments(sessionId);
     const turnEvents =

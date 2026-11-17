@@ -66,3 +66,45 @@ describe("run ending", () => {
     expect(summary(db, "old-abs")).toMatchObject({ status: "failed", ending: "abstained" });
   });
 });
+
+describe("a run the user stopped (honest partial, success:false)", () => {
+  const stopped = {
+    _tag: "AgentCompleted",
+    taskId: "t",
+    agentId: "a",
+    success: false,
+    totalIterations: 1,
+    totalTokens: 10,
+    durationMs: 100,
+    output: "Half the report.",
+    error: "The run was stopped on request before it finished.",
+    outcome: { status: "partial", outstanding: ["stopped_by_request"] },
+  };
+
+  it("ingest sets status stopped, ending partial, and no error message (not failed)", async () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    const layer = CortexIngestServiceLive(db).pipe(Layer.provide(CortexEventBridgeLive));
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* CortexIngestService;
+        yield* svc.handleEvent("a", "r-stop", msg("r-stop", stopped));
+      }).pipe(Effect.provide(layer)),
+    );
+    expect(summary(db, "r-stop")).toMatchObject({ status: "stopped", ending: "partial" });
+    expect(summary(db, "r-stop")?.errorMessage ?? null).toBeNull();
+  });
+
+  it("recompute derives stopped for it, and a loop stop stays failed", () => {
+    const db = new Database(":memory:");
+    applySchema(db);
+    upsertRun(db, "a", "r-stop");
+    upsertRun(db, "a", "r-loop");
+    insertEvent(db, msg("r-stop", stopped), 0);
+    insertEvent(db, msg("r-loop", { ...stopped, outcome: undefined, stop: { kind: "loop" } }), 0);
+    recomputeRunStats(db, "r-stop");
+    recomputeRunStats(db, "r-loop");
+    expect(summary(db, "r-stop")).toMatchObject({ status: "stopped", ending: "partial" });
+    expect(summary(db, "r-loop")?.status).toBe("failed");
+  });
+});

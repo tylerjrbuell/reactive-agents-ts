@@ -4,7 +4,7 @@
 import { writable } from "svelte/store";
 import { createWsClient } from "./ws-client.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
-import { foldRunStrategy, initialRunStrategy, runStrategyOf, type RunStrategyState, type StructuredOutputReportWire, type ThroughputSample } from "@reactive-agents/ui-core";
+import { foldRunStrategy, initialRunStrategy, isUserStopResult, runStrategyOf, type RunStrategyState, type StructuredOutputReportWire, type ThroughputSample } from "@reactive-agents/ui-core";
 import { throughputSampleOf } from "../llm-throughput.js";
 import { effectiveBound, planBudgetEffective } from "../plan-budget.js";
 import { abortStatusOf } from "../run-live-status.js";
@@ -335,7 +335,7 @@ export function deriveStatus(current: RunStatus, msg: CortexLiveMsg): RunStatus 
   if (current === "stopped" && (msg.type === "TaskFailed" || msg.type === "AgentCompleted" || msg.type === "DebriefCompleted")) {
     return current;
   }
-  if (msg.type === "AgentCompleted") return pSuccess(msg.payload) ? "completed" : "failed";
+  if (msg.type === "AgentCompleted") return pSuccess(msg.payload) ? "completed" : isUserStopResult(msg.payload) ? "stopped" : "failed";
   if (msg.type === "TaskFailed") return "failed";
   // The run's effect failed without AgentCompleted (e.g. an output guardrail block).
   if (msg.type === "AgentAborted") return isRunSettled(current) ? current : abortStatusOf(msg.payload);
@@ -421,7 +421,8 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
 
       // Extract error message from failure events
       let errorMessage = s.errorMessage;
-      if (msg.type === "AgentCompleted" && msg.payload.success === false && typeof msg.payload.error === "string") {
+      // A stop the user asked for carries only a generic note: not an error.
+      if (msg.type === "AgentCompleted" && msg.payload.success === false && typeof msg.payload.error === "string" && !isUserStopResult(msg.payload)) {
         errorMessage = msg.payload.error;
       } else if (msg.type === "AgentAborted" && typeof msg.payload.error === "string" && msg.payload.error && errorMessage === null) {
         errorMessage = msg.payload.error;

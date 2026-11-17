@@ -39,3 +39,11 @@ describe("runStatusAfter (B3: stopped runs leave the live list)", () => {
     expect(runStatusAfter("live", "ReasoningStepCompleted", {})).toBeUndefined();
   });
 });
+
+describe("runStatusAfter: a run the user stopped", () => {
+  test("AgentCompleted success:false with stopped_by_request sets stopped, not failed", () => {
+    const payload = { success: false, stop: { kind: "user-stopped" } };
+    expect(runStatusAfter("live", "AgentCompleted", payload)).toBe("stopped");
+    expect(runStatusAfter("live", "AgentCompleted", { success: false, stop: { kind: "loop" } })).toBe("failed");
+  });
+});

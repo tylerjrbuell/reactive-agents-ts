@@ -143,3 +143,31 @@ describe("bareEnding", () => {
     expect(bareEnding({})).toBe(false);
   });
 });
+
+describe("a turn the user stopped reads as partial by you, never a failure", () => {
+  const done = {
+    success: false,
+    output: "Half the answer.",
+    error: "The run was stopped on request before it finished.",
+    outcome: { status: "partial", outstanding: ["stopped_by_request"] },
+  };
+  test("the badge is quiet 'stopped by you' and the note has no cause or unfinished row", () => {
+    const { runFailed } = completionEnding(done);
+    expect(runFailed).toMatchObject({ ending: "partial", interruptedBy: "user" });
+    expect(runFailed?.error).toBeUndefined();
+    expect(endingBadge(runFailed!)).toMatchObject({ label: "stopped by you", tone: "quiet" });
+    const note = endingNote(chatTurnOutcome({ content: "Half the answer.", runFailed })!);
+    expect(note).toMatchObject({ tone: "quiet", items: [] });
+    expect(note?.line).toBeUndefined();
+  });
+  test("a stored outcome keeps interruptedBy on a partial; stopped_by_request is not listed as unfinished", () => {
+    const stored = storedRunEnding({ ending: "partial", interruptedBy: "user", unfinished: ["stopped_by_request"] });
+    expect(stored.interruptedBy).toBe("user");
+    expect(chatTurnOutcome({ content: "x", runFailed: stored })?.unfinished).toBeUndefined();
+  });
+  test("the desk run ending is the same partial", () => {
+    const o = runEnding([{ type: "AgentCompleted", payload: done }]);
+    expect(o).toMatchObject({ ending: "partial", interruptedBy: "user", draft: "Half the answer." });
+    expect(o?.error).toBeUndefined();
+  });
+});

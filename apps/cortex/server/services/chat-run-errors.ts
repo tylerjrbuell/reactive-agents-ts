@@ -9,6 +9,7 @@
  * `StreamCompleted`, so the error is recorded by the time the turn ends.
  */
 import type { AgentEvent } from "@reactive-agents/core";
+import { isUserStopResult } from "@reactive-agents/ui-core";
 import type { SubscribableAgent } from "./chat-ingest.js";
 
 /** Runs remembered per session; older entries are dropped first. */
@@ -42,6 +43,8 @@ export async function recordRunErrors(
     // model's last narration instead of a cause (trace 01M73GND, runtime defect).
     if (e._tag !== "ReasoningFailed" && e._tag !== "AgentCompleted" && e._tag !== "TaskFailed") return;
     if (e._tag === "AgentCompleted" && e.success !== false) return;
+    // A stop the user asked for is a partial, not a failure: its generic note is no cause.
+    if (e._tag === "AgentCompleted" && isUserStopResult({ success: e.success, outcome: e.outcome, metadata: e.metadata, output: e.output, stop: e.stop, loopStop: e.loopStop })) return;
     const taskId = typeof e.taskId === "string" ? e.taskId : undefined;
     const error = storedRunError(e.error);
     if (taskId === undefined || error === undefined || errors.has(taskId)) return;

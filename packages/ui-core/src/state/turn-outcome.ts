@@ -59,7 +59,7 @@ export interface TurnOutcome {
   readonly unfinished?: readonly string[];
   /** Declared deliverables from the receipt, when the run declared any. */
   readonly deliverables?: readonly TurnDeliverable[];
-  /** Interrupted turns: who stopped it, when known. */
+  /** Interrupted turns, and a partial the user stopped (`"user"`): who stopped it, when known. */
   readonly interruptedBy?: InterruptedBy;
 }
 
@@ -82,12 +82,46 @@ export interface RunCompletionLike {
   readonly pendingApproval?: unknown;
   readonly pendingInteraction?: unknown;
   readonly metadata?: unknown;
+  /** `AgentResult.stop` (the durable run's stop record): its `kind` marks a user stop or pause. */
+  readonly stop?: unknown;
+  /** `AgentResult.loopStop`: the same stop record on results that carry it there. */
+  readonly loopStop?: unknown;
   /**
    * Set when the turn never completed: `"user"` (stopped), `"disconnect"` (the
    * client went away) or `true` (unknown). A `StreamCancelled.reason` can be
    * passed as is. Absent or `false` on a run that completed.
    */
   readonly interrupted?: unknown;
+}
+
+/** The outstanding criterion the framework leaves on a run the user stopped (`stopped_by_request`). */
+export const USER_STOP_CRITERION = "stopped_by_request";
+
+/**
+ * Whether a stop record's `kind` is one a person asked for: `user-stopped` or
+ * `user-paused`. Every other kind (`loop`, `budget`, `error`, ...) is a failure
+ * or a guard, not the user's choice.
+ */
+export function isUserStopKind(kind: unknown): kind is "user-stopped" | "user-paused" {
+  return kind === "user-stopped" || kind === "user-paused";
+}
+
+/**
+ * Whether a finished result is a run the user stopped or paused. The framework
+ * ships that as an honest partial: `success: false`, `stopped_by_request`
+ * outstanding (on `outcome.outstanding`, `metadata.outstandingCriteria` or the
+ * `Unfinished:` list), and a stop record whose kind is `user-stopped` /
+ * `user-paused`. Any one of those marks it. `success` must be `false`: a run
+ * that finished its work while the stop was in flight is a success.
+ */
+export function isUserStopResult(c: RunCompletionLike): boolean {
+  if (c.success !== false) return false;
+  if (isUserStopKind(record(c.stop)?.["kind"]) || isUserStopKind(record(c.loopStop)?.["kind"])) return true;
+  const outcome = record(c.outcome);
+  if (strings(outcome?.["outstanding"]).includes(USER_STOP_CRITERION)) return true;
+  if (strings(record(c.metadata)?.["outstandingCriteria"]).includes(USER_STOP_CRITERION)) return true;
+  const split = typeof c.output === "string" ? splitUnfinished(c.output) : undefined;
+  return split?.unfinished.includes(USER_STOP_CRITERION) ?? false;
 }
 
 /**
@@ -180,6 +214,8 @@ const abstentionOf = (v: unknown): TurnOutcome["abstention"] | undefined => {
  * - Abstained: `terminatedBy: "abstained"`, an `abstention` object, or
  *   `outcome.status: "abstained"`. The reason is `abstention.reason`, else `error`.
  * - Succeeded: `success` is not `false`.
+ * - Stopped by the user: `success: false` and {@link isUserStopResult}: ending
+ *   `partial` with `interruptedBy: "user"`, the answer so far as `draft`, no `error`.
  * - Partial: `success: false` and the output holds a draft plus an `Unfinished:`
  *   list, or `outcome.status: "partial"` (items then come from
  *   `outcome.outstanding` / `metadata.outstandingCriteria`).
@@ -224,6 +260,18 @@ export function turnOutcomeOf(c: RunCompletionLike): TurnOutcome {
 
   const output = typeof c.output === "string" ? c.output : "";
   const split = splitUnfinished(output);
+  if (isUserStopResult(c)) {
+    // The person's own stop: the answer so far, no cause, nothing to blame.
+    const { error: _cause, ...rest } = base;
+    const left = (split?.unfinished ?? strings(outcome?.["outstanding"])).filter((x) => x !== USER_STOP_CRITERION);
+    return {
+      ending: "partial",
+      ...rest,
+      draft: split?.draft ?? output.trim(),
+      interruptedBy: "user",
+      ...(left.length > 0 ? { unfinished: left } : {}),
+    };
+  }
   if (split !== undefined) return { ending: "partial", ...base, draft: split.draft, unfinished: split.unfinished };
   if (outcome?.["status"] === "partial" && output.trim().length > 0) {
     const listed = strings(outcome["outstanding"]);

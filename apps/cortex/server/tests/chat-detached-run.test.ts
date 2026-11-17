@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
+import type { AgentStreamEvent } from "@reactive-agents/runtime";
 import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { getChatTurns } from "../db/chat-queries.js";
@@ -87,5 +88,29 @@ describe("goal segments stream live", () => {
     const sse = await (await get(app, `/api/chat/sessions/${id}/chat/stream/active`)).text();
     expect(sse).toContain('"_tag":"StreamCompleted"');
     expect(sse).toContain('"_tag":"TextDelta"');
+  });
+});
+
+describe("makeDetachedRunner: a user-stopped turn", () => {
+  it("returns the answer so far instead of throwing ChatTurnFailedError", async () => {
+    const stream = async function* (): AsyncGenerator<AgentStreamEvent> {
+      yield {
+        _tag: "StreamCompleted",
+        output: "Half the report.",
+        success: false,
+        error: "The run was stopped on request before it finished.",
+        outcome: { status: "partial", outstanding: ["stopped_by_request"] },
+        metadata: { duration: 1, cost: 0, tokensUsed: 3, stepsCount: 1 },
+      } as unknown as AgentStreamEvent;
+    };
+    const host = {
+      isBusy: () => false,
+      approvals: { hasPending: () => false },
+      chatStream: () => stream(),
+      beginTurnAssessments: () => undefined,
+      drainTurnAssessments: () => [],
+    } as unknown as Parameters<typeof makeDetachedRunner>[0];
+    const result = await makeDetachedRunner(host, new DetachedTurns())("s1", "go");
+    expect(result.reply).toBe("Half the report.");
   });
 });
