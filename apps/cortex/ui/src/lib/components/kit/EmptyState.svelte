@@ -18,6 +18,10 @@
     hero?: boolean;
     /** Hero mark size in px (96 by default; 132 for the Beacon first run). */
     markSize?: number;
+    /** Hero only: a run is starting now, so the mark shows its one sonar ring. */
+    markLive?: boolean;
+    /** Hero only: a small status line under the headline (e.g. "Awaiting connections"). */
+    status?: Snippet;
     /** Gradient headline (hero only; the text is 30px, above the 22px floor). */
     brand?: boolean;
     /** Hero only: a word after the title set in the gradient wordmark (`Welcome to` + `Cortex`). */
@@ -34,6 +38,8 @@
     icon,
     hero = false,
     markSize = 96,
+    markLive = false,
+    status,
     brand = false,
     brandWord,
     body,
@@ -44,8 +50,9 @@
 
 <div class="cx-empty {className}" class:cx-empty-hero={hero}>
   {#if hero}
-    <NeuralMark size={markSize} hero />
+    <NeuralMark size={markSize} hero live={markLive} />
     <h2 class:brand-grad={brand}>{title}{#if brandWord}{" "}<span class="brand-grad">{brandWord}</span>{/if}</h2>
+    {#if status}{@render status()}{/if}
   {:else}
     {#if icon}<span class="cx-empty-icon"><Icon name={icon} size="lg" /></span>{/if}
     <h3>{title}</h3>

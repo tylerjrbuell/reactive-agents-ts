@@ -55,6 +55,8 @@
   .cx-btn {
     display: inline-flex;
     align-items: center;
+    /* Never squash: in a scrolling column flex (Lab "Run this agent") a shrinkable button collapsed to a ~14px clipped pill. */
+    flex-shrink: 0;
     gap: 6px;
     border-radius: var(--cortex-r-ctl);
     border: 1px solid var(--cortex-line-strong);

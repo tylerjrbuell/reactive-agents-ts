@@ -517,6 +517,7 @@ code, pre, .font-mono {
 .cx-control {
   width: 100%;
   height: var(--cortex-control-h);
+  flex-shrink: 0;
   padding: 0 10px;
   border-radius: var(--cortex-r-ctl);
   border: 1px solid var(--cortex-line-strong);

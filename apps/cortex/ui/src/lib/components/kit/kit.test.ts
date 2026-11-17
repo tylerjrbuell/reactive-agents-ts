@@ -30,6 +30,11 @@ describe("Button", () => {
     expect(disabled).toContain("disabled");
     expect(disabled).toContain('aria-describedby="x"');
   });
+
+  test("never shrinks: a button in a scrolling column flex keeps its height (Lab Run this agent was a 14px clipped pill)", () => {
+    expect(readFileSync(kit("Button"), "utf8")).toMatch(/\.cx-btn\s*\{[^}]*flex-shrink:\s*0/);
+    expect(readFileSync(join(import.meta.dir, "../../../app.css"), "utf8")).toMatch(/\.cx-control\s*\{[^}]*flex-shrink:\s*0/);
+  });
 });
 
 describe("IconButton", () => {
