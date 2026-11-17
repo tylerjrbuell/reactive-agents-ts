@@ -2,7 +2,7 @@
 type: reference
 tags: [analytics, umami, docs-site]
 created: 2026-05-06
-updated: 2026-09-06
+updated: 2026-11-17
 ---
 
 # Umami Events — Docs Site Tracking Catalog
@@ -144,6 +144,106 @@ Fires when a user clicks 👍 Yes or 👎 No on the auto-injected "Was this page
 | `vote` | string | `"yes"` or `"no"` |
 
 **Use it for:** the most direct content-quality signal. Sort all pages by no-vote ratio → that's your prioritized improvement list.
+
+---
+
+## Conversion CTA events (added 2026-11-17)
+
+Baseline and rationale: [[2026-11-17-docs-conversion-baseline]]. CTA surfaces (all widths): header "Get started" + star, the first-screen "Try it" block on entry pages (`TryIt.astro`), the end-of-page block on every page (`EndOfPage.astro`), the right sidebar on wide screens, and a floating Feedback tab. `placement` values: `header`, `hero`, `tryit`, `endcap`, `sidebar`, `nav`, `content`, plus `panel` and `floating`/`button`/`downvote` where noted. The email address is never sent in any event.
+
+### `star_cta_click`
+
+Fires on any "Star on GitHub" link: header, hero button, end-of-page block, sidebar. Replaces the older `github_star_cta` (still emitted for continuity, deprecated: remove after one release).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `from` | string | Page path |
+| `placement` | string | `header`, `hero`, `endcap`, `sidebar` |
+
+### `quickstart_click`
+
+Fires on any link to `/guides/quickstart/`, wherever it sits.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `from` | string | Page path |
+| `placement` | string | `header`, `hero`, `tryit`, `endcap`, `nav`, `content` |
+
+### `install_copy`
+
+Fires when an install-snippet Copy button is pressed (Try-it block, end-of-page block), or when an expressive-code block that holds a `reactive-agents` install command is copied (`placement: "content"`). `code_copy` still fires for every code block as before.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `from` | string | Page path |
+| `placement` | string | `tryit`, `endcap`, `content` |
+
+### `subscribe_view`
+
+Fires once per page load when a subscribe form first scrolls into view (IntersectionObserver). Denominator for the subscribe conversion rate.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `path` | string | Page path |
+| `placement` | string | `sidebar`, `endcap`, `panel` (home page panel) |
+
+### `subscribe_submit` / `subscribe_success` / `subscribe_error`
+
+Fired from the `EmailSubscribe` submit handler: `subscribe_submit` when a non-empty address is submitted, then exactly one of `subscribe_success` (HTTP 2xx, confirmation email sent) or `subscribe_error` (any other status, or network failure `status: 0`; a 409 "already subscribed" counts as an error here).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `path` | string | Page path |
+| `placement` | string | `sidebar`, `endcap`, `panel` |
+| `status` | number | `subscribe_error` only: HTTP status, `0` for network failure |
+
+### `feedback_open`
+
+Fires when the feedback modal opens.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `path` | string | Page path |
+| `placement` | string | `sidebar`, `endcap`, `floating`, `downvote` (opened by a "No" vote), `unknown` |
+
+### `feedback_submit`
+
+Fires when the feedback endpoint accepts a message (HTTP 2xx). Message text and email are never sent.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `path` | string | Page path |
+| `placement` | string | as `feedback_open` |
+| `source` | string | `feedback-button` or `page-downvote` (the modal's payload tag) |
+
+### `docs_related_click`
+
+Fires when a link in the end-of-page "Related" block is clicked (`RelatedPages.astro`).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `from` | string | Page path the block sits on |
+| `target` | string | Destination path |
+| `via` | string | `explicit` (frontmatter `related`) or `topic` (fallback by shared `topic`) |
+
+### `home_task_1` to `home_task_10`
+
+Fires when a task-finder entry on the home page is clicked (`TaskFinder.astro`). One event name per entry, numbered in display order.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `target` | string | Destination path |
+
+### `whats_new_toggle`
+
+Fires when a visitor flips the "Highlight what's new" switch (page title row, every page, every width). The preference persists in `localStorage` (`ra-whats-new`); OFF hides New/Updated markers only, never stability tags. See [[Docs-Indicators]].
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `state` | string | `on` or `off`, the state after the click |
+| `path` | string | Page path |
+
+**Funnel query:** per placement, `subscribe_view` -> `subscribe_submit` -> `subscribe_success`; `feedback_open` -> `feedback_submit`; `star_cta_click` and `quickstart_click` per `placement` against pageviews of the same page. Use `get_event_stats`/`get_event_properties` in the Umami MCP.
 
 ---
 

@@ -1,5 +1,7 @@
 # Show HN Post (Draft)
 
+> **STALE as of 2026-11-17. Do not post as written.** The numbers and claims below predate the current release (v0.18.0). Outdated: package count (draft says 19; now 35 in the monorepo, 33 public, see `apps/docs/src/data/metrics.json`), reasoning strategy count (draft says 5; now 8), provider count (draft says 6; now 8), test count (draft says 1,381; now 13,000+ per `metrics.json`) and any Bun-only framing (Bun is recommended; Node 22.5+ is supported via `@reactive-agents/runtime-shim`). The rewrite is Phase 6 of [[2026-11-17-docs-adoption-readiness]].
+
 **Title (60 chars max):**
 Show HN: Reactive Agents – composable TypeScript AI agent framework
 
