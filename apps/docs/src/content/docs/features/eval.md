@@ -1,6 +1,6 @@
 ---
 title: Evaluation Framework
-stability: experimental
+stability: unstable
 description: >-
   LLM-as-judge scoring, EvalStore persistence, regression detection, and custom
   dimensions via @reactive-agents/eval.

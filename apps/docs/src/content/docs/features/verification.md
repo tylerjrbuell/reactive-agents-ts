@@ -1,5 +1,6 @@
 ---
 title: Verification
+stability: unstable
 description: >-
   Fact-checking and output quality verification using semantic entropy, fact
   decomposition, NLI, and hallucination detection.

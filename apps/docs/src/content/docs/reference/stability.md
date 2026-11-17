@@ -15,13 +15,13 @@ Reactive Agents follows **Semantic Versioning** (`major.minor.patch`). The frame
 
 ## Stability tiers
 
-Every public surface falls into one of three tiers. Tier is declared by JSDoc tag on the export — `@stable`, `@unstable`, `@experimental` — and summarized below.
+Every public surface falls into one of three tiers. The tier is recorded on this page and, per package, in the repo's `stability.json` (each package README repeats it, and a check keeps them equal). Where a single export is less settled than its package, it carries an `@unstable` JSDoc tag. Stable has no per-export tag. A "stable (scoped)" package (`llm-provider`, `reasoning`, `runtime`, `tools`) is stable only for the entry points named in the list below; the rest of that package follows the unstable list.
 
 | Tier | Promise | Breaks allowed |
 |---|---|---|
-| **Stable** (`@stable`) | Intended to stay source-compatible across `0.x` minor bumps; exceptions are listed per release. Behavior changes get a deprecation warning + one minor cycle before removal. | Patch versions only fix bugs. |
-| **Unstable** (`@unstable`) | API may change between minor versions with a CHANGELOG note. Suitable for production if you pin exactly. | Yes, between minors, with a migration note. |
-| **Experimental** (`@experimental`) | Active R&D. May change shape between any release. Use at your own risk; expect to update code on each upgrade. | Anytime, including patch. |
+| **Stable** | Intended to stay source-compatible across `0.x` minor bumps; exceptions are listed per release. Behavior changes get a deprecation warning + one minor cycle before removal. | Patch versions only fix bugs. |
+| **Unstable** | API may change between minor versions with a CHANGELOG note. Suitable for production if you pin exactly. | Yes, between minors, with a migration note. |
+| **Experimental** | Active R&D. May change shape between any release. Use at your own risk; expect to update code on each upgrade. | Anytime, including patch. |
 
 ## What's stable as of v0.18
 
@@ -29,19 +29,17 @@ The following surfaces are tier-1 stable: the safest to depend on. We aim to kee
 
 - **Entry points** — `createAgent(config)` (declarative front door) and `ReactiveAgents.create()` + the `.with*()` chain syntax. Both are the same API in two syntaxes, generated from and validated against `AgentConfigSchema` (the single source of truth); anything expressible in one is expressible in the other.
 - **Provider selection** — `.withProvider("anthropic" | "openai" | "gemini" | "groq" | "xai" | "ollama" | "litellm" | "test")`, `.withModel(model)` (string) / `.withModel({ provider, model, numCtx? })` (object), and the `LLMProvider` interface
-- **Reasoning core** — `.withReasoning()` with the documented `ReasoningOptions` shape; the canonical strategies — `reactive` (ReAct), `reflexion`, `plan-execute-reflect`, `tree-of-thought`, and `adaptive` (auto-routes among them). `direct` (single-shot) is the no-reasoning fallback. `blueprint` is also registered (aliases: `react` → `reactive`, `rewoo` → `blueprint`; full registry in [Choosing a Reasoning Strategy](/guides/choosing-strategies/)); `code-action` is `@experimental` — see below.
+- **Reasoning core** — `.withReasoning()` with the documented `ReasoningOptions` shape; the canonical strategies — `reactive` (ReAct), `reflexion`, `plan-execute-reflect`, `tree-of-thought`, and `adaptive` (auto-routes among them). `direct` (single-shot) is the no-reasoning fallback. `blueprint` is also registered (aliases: `react` → `reactive`, `rewoo` → `blueprint`; full registry in [Choosing a Reasoning Strategy](/guides/choosing-strategies/)); `code-action` is experimental — see below.
 - **Tool surface** — `.withTools()`, `defineTool()` / `tool()`, MCP attachment via `.withMCP()`, and the `Tool` interface
 - **Typed structured output** *(new in 0.12)* — `.withOutputSchema(schema, options?)` and the result fields `result.object` / `result.objectError`; `agent.streamObject(task)` yielding `{ object: DeepPartial<T> }`. Standard Schema (Zod / Valibot / ArkType) and Effect Schema are all accepted.
-- **Durable execution** *(new in 0.12)* — `.withDurableRuns()` plus `agent.resumeRun(runId)` and `agent.listRuns({ status? })`
 - **Harness composition** *(new in 0.12)* — `HarnessProfile.lean() | balanced() | intelligent()` applied via `.withProfile(...)`. Supersedes `.withLeanHarness()`, which remains functional.
 - **Event bus** — All event tags consumed by the public observability layer (`ToolCallStarted`, `ToolCallCompleted`, `LLMExchangeEmitted`, `StrategySwitched`, `VerifierVerdictEmitted`, plus the 30+ tags listed in `event-bus.ts`)
 - **Lifecycle hooks** — `.withHook(hook)` accepting a `LifecycleHook` (a plain sync/async function or the Effect form) for the 12 phases and `before` / `after` / `on-error` timings
-- **Compose API** — `.compose()` (alias: `.withHarness()`) for harness composition; `.on()`, `.tap()`, `.before()`, `.after()`, `.onError()` transforms and hooks; all 12-phase composition and tag pattern matching
 - **Snapshot & Replay** — `@reactive-agents/replay` package: `loadRecordedRun`, `replay`, `makeReplayController`, `makeReplayToolLayer`, `diffTraces`, `computeArgsHash`. The `ToolCallCompleted` event payload's `args`, `result`, `error`, `resultTruncated` fields are also stable.
 - **AgentResult shape** — `.run()` and `.runStream()` return values
 - **Raw provider clients** — `AnthropicProviderLive`, `OpenAIProviderLive`, `LocalProviderLive`, `GeminiProviderLive`, `GroqProviderLive`, `XAIProviderLive`, `LiteLLMProviderLive` exported as standalone Effect Layers (you can skip the harness entirely)
 
-## What's `@unstable` as of v0.18
+## What's unstable as of v0.18
 
 These work, but the **shape may change** in a later minor. Pin exact versions if you depend on them.
 
@@ -61,14 +59,21 @@ These work, but the **shape may change** in a later minor. Pin exact versions if
 - **Arbitrator** — `.withCustomTermination(predicate)` is stable for boolean overrides; a full `withArbitrator(impl)` for replacing the termination pipeline is not shipped yet.
 - **Verifier strategy** — `.withVerification(options)` accepts options today; a replaceable verifier impl is not shipped yet.
 - **Cost router policy** — `.withCostTracking()` records spend (stable); the complexity-routing primitives in `@reactive-agents/cost` (`analyzeComplexity`, `routeToModel`) are exported but the policy is not yet a builder method.
-- **Strategy switcher heuristic** — toggleable via `ReasoningOptions.strategySwitching` (stable); the heuristic itself is not yet replaceable.
+- **Strategy switcher** — toggled via `ReasoningOptions.enableStrategySwitching`, which has been off by default since v0.18 (it did not pay for its extra tokens in the 2026-11-05 ablation); the heuristic itself is not replaceable.
 - **Calibration field schema** — fields are growing; consumer count is small. Expect additions and possible renames.
+- **Compose API** *(`@reactive-agents/compose`)* — `.compose()` and the callback form of `.withHarness((h) => ...)` (the same call), the `.on()`, `.tap()`, `.before()`, `.after()`, `.onError()` transforms and hooks, 12-phase composition, tag pattern matching, and the `killswitches` helpers (`maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`). Listed stable until v0.18; moved down because the killswitches were reworked in October 2026 and the package has few tests. `.withHarness({ ... })` with a config object is a separate call (typed harness-mechanism settings) whose fields are still growing.
+- **Durable execution** — `.withDurableRuns()`, `agent.resumeRun(runId)` and `agent.listRuns({ status? })`. Moved down from stable: the durable code kept changing through v0.17 and v0.18. The durable human-in-the-loop gates (see [Durable HITL](/guides/durable-hitl/)) are unstable too.
+- **`create-reactive-agent`** — the scaffolder. Templates and generated project shape change with each minor.
 
-## What's `@experimental` as of v0.18
+## What's experimental as of v0.18
 
 Use at your own risk. Will change.
 
 - **`code-action` strategy** — the LLM emits a TypeScript IIFE run in a Worker sandbox; sandbox contract and tool-binding shape may change
+- **`agent.plan()`** — plan-then-execute review (see [Plan then execute](/guides/plan-then-execute/)); new in 0.19
+- **`@reactive-agents/identity`** — dormant: no `.withIdentity()` builder method and nothing in the runtime reads it yet
+- **`@reactive-agents/judgment`** — opt-in via `.withJudgment()`, added in v0.17
+- **`@reactive-agents/reactive-intelligence`** — default-on, but the last ablation is from 2026-05-23; the package stays experimental until it is re-verified
 - **A2A protocol surface** (`packages/a2a`) — serving is shipped (`.withA2A()`, `rax serve`) and hardened (request-size cap, bounded task store, egress-guarded discovery), but the wire format and JSON-RPC method names may change as the spec evolves
 - **Cortex channel hub** (`apps/cortex`) — one channel router for all messaging channels, with channels and routes stored in the Cortex database, `/api/channels` endpoints and `CORTEX_CHANNEL_HUB=off` to restore per-agent hosting. The storage schema and endpoints are not frozen.
 - **Sub-agent delegation API** — the delegation surface (`.withAgentTool()`, `.withRemoteAgent()`, `.withDynamicSubAgents()`) is functional but its shape is still under iteration
@@ -91,12 +96,12 @@ We will **never** silently change the behavior of a stable API. If a bugfix chan
 
 | Risk tolerance | Recommendation |
 |---|---|
-| Production app, low-touch upgrades | Pin patch versions (`"reactive-agents": "0.18.0"`). Consume only `@stable` APIs. |
-| Active development, monthly upgrades | Pin minor (`"~0.18.0"`). Read the CHANGELOG before bumping. `@unstable` OK if covered by your tests. |
-| Following main, contributing | Pin to a commit SHA or use `workspace:*`. `@experimental` is fair game. |
+| Production app, low-touch upgrades | Pin patch versions (`"reactive-agents": "0.18.0"`). Consume only stable-tier APIs. |
+| Active development, monthly upgrades | Pin minor (`"~0.18.0"`). Read the CHANGELOG before bumping. Unstable surfaces are OK if covered by your tests. |
+| Following main, contributing | Pin to a commit SHA or use `workspace:*`. Experimental surfaces are fair game. |
 
 ## What we want feedback on
 
-If you've adopted Reactive Agents and want a specific component promoted from `@unstable` to `@stable`, [open an issue](https://github.com/tylerjrbuell/reactive-agents-ts/issues). The promotion criteria are: 30+ days at current shape with no reported design issues, and at least one production user.
+If you've adopted Reactive Agents and want a specific component promoted from unstable to stable, [open an issue](https://github.com/tylerjrbuell/reactive-agents-ts/issues). The promotion criteria are: 30+ days at current shape with no reported design issues, and at least one production user.
 
 We'd rather under-promise on stability today than break your code tomorrow.

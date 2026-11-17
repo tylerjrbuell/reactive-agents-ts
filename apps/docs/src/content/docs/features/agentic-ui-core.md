@@ -1,6 +1,6 @@
 ---
 title: Agentic UI Core
-stability: experimental
+stability: unstable
 description: >-
   The headless, framework-agnostic engine behind the React, Vue, and Svelte
   bindings — versioned wire protocol, resumable stream client, run state

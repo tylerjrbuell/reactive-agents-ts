@@ -1,5 +1,6 @@
 ---
 title: LLM Providers
+stability: stable
 description: >-
   Multi-provider LLM support — Anthropic, OpenAI, Google Gemini, Groq, xAI,
   Ollama, LiteLLM, and custom providers.

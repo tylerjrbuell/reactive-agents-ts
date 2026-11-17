@@ -1,5 +1,6 @@
 ---
 title: Agent Gateway
+stability: unstable
 description: >-
   Persistent autonomous agent harness with adaptive heartbeats, cron scheduling,
   webhooks, and a composable policy engine.

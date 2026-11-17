@@ -1,6 +1,6 @@
 ---
 type: reference
-status: draft
+status: applied
 created: 2026-11-17
 tags: [docs, stability, audit, trust, packages]
 ---
@@ -152,6 +152,33 @@ Private packages (benchmarks, judge-server) are out of scope; benchmarks carries
 - **J6 tools/runtime/reasoning "stable (scoped)".** Package-wide stable is false for tools (removals in four consecutive minors). Keep the scoped README wording; do not drop the tier to unstable, which would make the stable list inconsistent. Owner may prefer a two-field JSON (`tier`, `scope`).
 - **J7 promotion candidates.** verification (1 commit since v0.15), prompts (0), health (0), runtime-shim base primitives (13 dependents): low churn but fail bar (b) or carry `@unstable` sub-surfaces. Do not promote now; revisit at v0.20 with consumer evidence.
 - **J8 tag mechanism.** Reword (recommended) or tag everything. A tier page that cites tags that do not exist is a trust defect already.
+
+## 6b. Applied (2026-11-17, docs-warden)
+
+Owner decisions: compose stable to unstable (J1); durable runs stable to unstable, `.withOutputSchema` stays stable (J2); A2A experimental everywhere (M1); identity experimental (J4); reactive-intelligence unchanged, experimental (J3); channels unstable (J5); tools/runtime/reasoning/llm-provider stay "stable (scoped)" (J6); no promotions (J7); mechanism text reworded, no tags added (J8).
+
+Tier changes:
+
+| Item | Old | New | Evidence |
+|---|---|---|---|
+| `stability.json` a2a | unstable | experimental | M1 |
+| `stability.json` compose | stable | unstable | J1: 4 test files, killswitch rework Oct 2026 |
+| `stability.json` identity | unstable | experimental | J4: dormant, no wither |
+| `stability.md` durable runs | stable | unstable | J2: 22 commits since v0.17 |
+| `stability.md` compose API | stable | unstable | J1 |
+| `stability.md` new entries | none | `agent.plan()`, `judgment`, `identity`, `reactive-intelligence` (experimental); durable HITL gates, `create-reactive-agent` (unstable) | M3, M8, M13 |
+| page `features/eval`, `features/observe`, `features/agentic-ui-core` | experimental | unstable | M5-M7, match package |
+| page `guides/durable-execution`, `guides/durable-hitl` | experimental | unstable | J2, M3 |
+| page `guides/structured-output` | experimental | stable (note: provenance/confidence/abstention are unstable) | J2, M4 |
+| 8 untiered feature pages | none | `gateway`, `cost-tracking`, `interaction`, `observability`, `prompts`, `verification`, `create-reactive-agent`: unstable; `llm-providers`: stable | M18, from package tier |
+
+Text fixes in `stability.md`: tier mechanism (M11), `enableStrategySwitching` and its off-by-default (M9), `.withHarness()` alias scope (M10). `features/observe.mdx` no longer says `@stable as of v0.11`.
+
+Left untiered, no evidence for a tier: `features/streaming`, `features/resilience`, `features/harness-control`, `features/intelligent-context-synthesis`, `features/debrief-chat` (no single owning package; mixed surfaces). Cortex pages under `features/cortex/**` (cortex-warden) carry no tier; cortex-warden decides, and any tier it adds must also be mapped in `stability.json`.
+
+Guard: `stability.json` now has `pagePackages` (page slug to package) and `pageTiers` (page slug to feature tier). `findDrift` in `apps/docs/scripts/derive-framework-facts.ts` fails when a page's `stability:` differs from the mapped tier, when a mapped page has none, or when a page declares a tier without a mapping. Pinned in `apps/docs/tests/framework-facts.test.ts` (mutated-input cases, revert-once style).
+
+Remaining for other owners: JSDoc refresh (5.3: react/svelte/vue "zero tests", reasoning/prompts/llm-provider/testing "v0.10.x", identity `@experimental`), `packages/reactive-agents` and `packages/runtime` README wording on tags (5.2), `stability.md` heading "as of v0.18" refresh at release (M17). READMEs for a2a, compose, identity, create-reactive-agent already match `stability.json`.
 
 ## 7. Not done
 

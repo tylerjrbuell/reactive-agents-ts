@@ -18,7 +18,7 @@
  *   allUnstable   package index.ts JSDoc "@unstable All exports unstable"
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 export const REPO_ROOT = resolve(import.meta.dir, "../../..");
 const FACTS_PATH = join(REPO_ROOT, "apps/docs/src/data/framework-facts.json");
@@ -126,17 +126,37 @@ export interface DocsCorpus {
   readonly reference: string;
   /** apps/docs/src/data/stability.json parsed */
   readonly stability: Readonly<Record<string, string>>;
+  /** page slug (path under src/content/docs, no extension) to its frontmatter `stability:`; only pages that declare one */
+  readonly pageStability: Readonly<Record<string, string>>;
+  /** stability.json `pagePackages`: page slug to the package dir whose tier it carries */
+  readonly pagePackages: Readonly<Record<string, string>>;
+  /** stability.json `pageTiers`: page slug to a feature-level tier with no package of its own */
+  readonly pageTiers: Readonly<Record<string, string>>;
 }
 
 export function readCorpus(root: string = REPO_ROOT): DocsCorpus {
   const docs = join(root, "apps/docs/src/content/docs");
   const walk = (dir: string): string[] =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : /\.mdx?$/.test(e.name) ? [join(dir, e.name)] : []));
+  const sj = JSON.parse(readFileSync(join(root, "apps/docs/src/data/stability.json"), "utf8")) as {
+    packages: Record<string, string>;
+    pagePackages?: Record<string, string>;
+    pageTiers?: Record<string, string>;
+  };
+  const pageStability: Record<string, string> = {};
+  for (const p of walk(docs)) {
+    const fm = readFileSync(p, "utf8").match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "";
+    const tier = fm.match(/^stability:\s*["']?([a-z]+)["']?\s*$/m)?.[1];
+    if (tier) pageStability[relative(docs, p).replace(/\\/g, "/").replace(/\.mdx?$/, "")] = tier;
+  }
   return {
     cli: readFileSync(join(docs, "reference/cli.md"), "utf8"),
     providers: readFileSync(join(docs, "features/llm-providers.md"), "utf8"),
     reference: walk(join(docs, "reference")).map((p) => readFileSync(p, "utf8")).join("\n"),
-    stability: (JSON.parse(readFileSync(join(root, "apps/docs/src/data/stability.json"), "utf8")) as { packages: Record<string, string> }).packages,
+    stability: sj.packages,
+    pageStability,
+    pagePackages: sj.pagePackages ?? {},
+    pageTiers: sj.pageTiers ?? {},
   };
 }
 
@@ -188,6 +208,22 @@ export function findDrift(f: FrameworkFacts, c: DocsCorpus, knownUndocumentedCli
   }
   for (const p of f.packages) {
     if (p.allUnstable && c.stability[p.dir] === "stable") out.push(`packages: ${p.dir} declares "@unstable All exports unstable" but stability.json says stable`);
+  }
+
+  // Pages: a page's frontmatter `stability:` must equal the tier of the package
+  // (pagePackages) or feature (pageTiers) it describes, and every page that
+  // declares a tier must be mapped, so a conflict cannot hide on an unmapped page.
+  const mapped = new Set([...Object.keys(c.pagePackages), ...Object.keys(c.pageTiers)]);
+  for (const [slug, dir] of Object.entries(c.pagePackages)) {
+    const want = c.stability[dir];
+    if (want === undefined) out.push(`pages: ${slug} maps to package "${dir}", which has no tier in stability.json`);
+    else if (c.pageStability[slug] !== want) out.push(`pages: ${slug} says stability "${c.pageStability[slug] ?? "(none)"}" but package ${dir} is ${want} in stability.json`);
+  }
+  for (const [slug, want] of Object.entries(c.pageTiers)) {
+    if (c.pageStability[slug] !== want) out.push(`pages: ${slug} says stability "${c.pageStability[slug] ?? "(none)"}" but stability.json pageTiers says ${want}`);
+  }
+  for (const slug of Object.keys(c.pageStability)) {
+    if (!mapped.has(slug)) out.push(`pages: ${slug} declares stability "${c.pageStability[slug]}" but is in neither pagePackages nor pageTiers of stability.json`);
   }
   return out;
 }

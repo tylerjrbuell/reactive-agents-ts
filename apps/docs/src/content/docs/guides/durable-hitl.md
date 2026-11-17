@@ -1,6 +1,6 @@
 ---
 title: Human-in-the-Loop Approval
-stability: experimental
+stability: unstable
 description: >-
   Have a person approve or deny high-risk tool calls: live in process, or
   durably from any process with gates that survive process death.

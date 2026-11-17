@@ -1,6 +1,6 @@
 ---
 title: Typed Structured Output
-stability: experimental
+stability: stable
 description: >-
   Extract a schema-validated TypeScript object from every agent run — with
   provenance, per-field confidence, and streaming partial objects as tokens
@@ -33,6 +33,8 @@ Two engines handle the extraction depending on what your stack supports:
   differentiator for research or data-extraction agents.
 
 The mode is auto-selected by default and can be overridden.
+
+**Stability:** `.withOutputSchema()`, `result.object` / `result.objectError` and `agent.streamObject()` are stable. Grounded mode's provenance, per-field confidence and abstention fields are unstable (see [API Stability](/reference/stability/)).
 
 Works across all supported providers and tiers — Anthropic, OpenAI, Gemini,
 Groq, xAI, and local Ollama models (qwen, gemma, etc.) — making it a practical option

@@ -96,6 +96,21 @@ describe("docs vs code drift", () => {
     expect(findDrift(facts, withCorpus({ stability: { ...corpus.stability, benchmarks: "stable" } }))).toEqual([expect.stringContaining("private package")]);
   });
 
+  it("flags a page whose frontmatter stability disagrees with its package or feature tier", () => {
+    expect(findDrift(facts, corpus)).toEqual([]);
+    // package-mapped page: package tier changes, page does not
+    expect(findDrift(facts, withCorpus({ stability: { ...corpus.stability, eval: "stable" } }))).toEqual([expect.stringContaining("pages: features/eval")]);
+    // page frontmatter changes against its package
+    expect(findDrift(facts, withCorpus({ pageStability: { ...corpus.pageStability, "features/a2a-protocol": "unstable" } }))).toEqual([expect.stringContaining("pages: features/a2a-protocol")]);
+    // feature-level tier
+    expect(findDrift(facts, withCorpus({ pageStability: { ...corpus.pageStability, "guides/durable-execution": "stable" } }))).toEqual([expect.stringContaining("pageTiers says unstable")]);
+    // mapped page lost its tier
+    const { "features/gateway": _gone, ...noGateway } = corpus.pageStability;
+    expect(findDrift(facts, withCorpus({ pageStability: noGateway }))).toEqual([expect.stringContaining('"(none)"')]);
+    // unmapped page declaring a tier
+    expect(findDrift(facts, withCorpus({ pageStability: { ...corpus.pageStability, "guides/faq": "experimental" } }))).toEqual([expect.stringContaining("neither pagePackages nor pageTiers")]);
+  });
+
   it("flags 'All exports unstable' in code beside a stable tier in the table", () => {
     const f = withFacts({ packages: facts.packages.map((p) => (p.dir === "react" ? { ...p, allUnstable: true } : p)) });
     expect(findDrift(f, withCorpus({ stability: { ...corpus.stability, react: "stable" } }))).toEqual([expect.stringContaining("All exports unstable")]);

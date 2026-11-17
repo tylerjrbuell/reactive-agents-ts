@@ -1,5 +1,6 @@
 ---
 title: Observability
+stability: unstable
 description: 'Distributed tracing, metrics, structured logging, and agent state snapshots.'
 sidebar:
   order: 8

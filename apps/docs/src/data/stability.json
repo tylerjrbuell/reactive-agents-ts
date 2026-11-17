@@ -1,9 +1,9 @@
 {
-  "$comment": "Stability tier per public package dir. Source of truth for package READMEs (guard: scripts/check-package-readmes.ts) and mirrors src/content/docs/reference/stability.md. Edit here and in the README together; a mismatch is a finding. Docs pages carry their own `stability:` frontmatter.",
+  "$comment": "Stability tier per public package dir. Source of truth for package READMEs (guard: scripts/check-package-readmes.ts) and mirrors src/content/docs/reference/stability.md. Edit here and in the README together; a mismatch is a finding. A scoped 'stable' (llm-provider, reasoning, runtime, tools) means the documented entry points only; see stability.md. `pagePackages` maps a docs page (path under src/content/docs, no extension) to the package whose tier it must carry; `pageTiers` pins page-level feature tiers that have no package of their own. Guard: scripts/derive-framework-facts.ts findDrift ('pages:'): every page frontmatter `stability:` must equal the mapped tier, and a page with a `stability:` must be mapped.",
   "packages": {
-    "a2a": "unstable",
+    "a2a": "experimental",
     "channels": "unstable",
-    "compose": "stable",
+    "compose": "unstable",
     "core": "unstable",
     "cost": "unstable",
     "create-reactive-agent": "unstable",
@@ -12,7 +12,7 @@
     "gateway": "unstable",
     "guardrails": "unstable",
     "health": "unstable",
-    "identity": "unstable",
+    "identity": "experimental",
     "interaction": "unstable",
     "judgment": "experimental",
     "llm-provider": "stable",
@@ -34,5 +34,31 @@
     "ui-core": "unstable",
     "verification": "unstable",
     "vue": "unstable"
+  },
+  "pagePackages": {
+    "features/a2a-protocol": "a2a",
+    "features/agentic-ui-core": "ui-core",
+    "features/cost-tracking": "cost",
+    "features/create-reactive-agent": "create-reactive-agent",
+    "features/eval": "eval",
+    "features/gateway": "gateway",
+    "features/interaction": "interaction",
+    "features/judgment-layer": "judgment",
+    "features/llm-providers": "llm-provider",
+    "features/observability": "observability",
+    "features/observe": "observe",
+    "features/prompts": "prompts",
+    "features/reactive-intelligence": "reactive-intelligence",
+    "features/snapshot-replay": "replay",
+    "features/verification": "verification",
+    "guides/channel-adapters": "channels",
+    "guides/messaging-channels": "channels"
+  },
+  "pageTiers": {
+    "features/code-action": "experimental",
+    "guides/durable-execution": "unstable",
+    "guides/durable-hitl": "unstable",
+    "guides/plan-then-execute": "experimental",
+    "guides/structured-output": "stable"
   }
 }

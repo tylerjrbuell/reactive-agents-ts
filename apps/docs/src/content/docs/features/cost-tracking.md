@@ -1,5 +1,6 @@
 ---
 title: Cost Tracking
+stability: unstable
 description: 'Model routing, budget enforcement, semantic caching, and cost analytics.'
 sidebar:
   order: 6
