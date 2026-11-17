@@ -341,6 +341,7 @@ export const runBuilderBuildEffect = <TOut>(
             durableResume: state._durableRuns
                 ? {
                       dir: state._durableRuns.dir ?? defaultDurableRunsDir(agentId),
+                      retention: state._durableRuns.retention,
                       configHash: durableConfigHash({
                           systemPrompt: composedSystemPrompt,
                           provider: state._provider,

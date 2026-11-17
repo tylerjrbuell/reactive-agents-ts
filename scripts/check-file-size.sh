@@ -216,7 +216,7 @@ GIANT_BAR=1000
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:1901"
   "runtime/src/chat/engine.ts:654"
-  "runtime/src/builder.ts:2200"
+  "runtime/src/builder.ts:2194"
   "runtime/src/execution-engine.ts:955"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:796"
   "reasoning/src/kernel/loop/runner.ts:848"
@@ -228,7 +228,7 @@ SIZE_BASELINE=(
   "benchmarks/src/tasks/real-world.ts:1531"
   "reasoning/src/kernel/state/kernel-state.ts:1292"
   "llm-provider/src/providers/local.ts:1139"
-  "runtime/src/builder/types.ts:1062"
+  "runtime/src/builder/types.ts:1061"
   "llm-provider/src/types.ts:978"
   "reasoning/src/kernel/capabilities/act/act.ts:1098"
   "reasoning/src/strategies/reflexion.ts:987"
@@ -236,7 +236,7 @@ SIZE_BASELINE=(
   "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1065"
   "tools/src/skills/shell-execution.ts:833"
-  "runtime/src/types.ts:1049"
+  "runtime/src/types.ts:1048"
   "observability/src/exporters/console-exporter.ts:1042"
   "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:577"
 )

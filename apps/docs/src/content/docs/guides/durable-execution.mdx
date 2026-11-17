@@ -6,6 +6,12 @@ description: >-
   checkpoint — kill the process, restart, finish the job.
 sidebar:
   order: 26
+topic: durable-runs
+updated: "0.18"
+related:
+  - guides/durable-hitl
+  - features/process-model
+  - guides/production-checklist
 ---
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
@@ -72,6 +78,22 @@ Declarative `durableRuns` / builder `withDurableRuns` options:
 |---|---|---|
 | `dir` | `~/.reactive-agents/<agentId>` | Directory for the SQLite run store (`runs.db`). |
 | `checkpointEvery` | `1` | Persist a snapshot every N iterations. |
+| `retention.keepCompleted` | `50` | Keep the newest N `completed` runs and delete older ones. `0` removes the count limit. |
+| `retention.maxAgeDays` | `30` | Delete `completed` runs older than N days. `0` removes the age limit. |
+| `retention.compactCheckpoints` | `true` | For `completed` runs, keep only the final checkpoint and drop tool-effect rows. Set `false` to keep every iteration's checkpoint, which `agent.fork()` can restart from. |
+
+### Retention
+
+A checkpoint is a full kernel-state snapshot, so an unbounded store grows by hundreds of KB per tool-using turn. The store prunes itself when a durable run starts on the streaming path (`runStream` and the run-control plane), using the defaults above unless you set `retention`. Only runs with status `completed` are ever deleted or compacted. A run you can still resume (`stopped`, `paused`, `failed`, `awaiting-approval`, `awaiting-interaction`, or `running` with a checkpoint) is never touched, whatever its age or the count. A prune failure is swallowed and never fails the run.
+
+```typescript
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withDurableRuns({ retention: { keepCompleted: 200, maxAgeDays: 90, compactCheckpoints: false } })
+  .build();
+```
 
 To read an agent's store from another process (a dashboard, a supervisor),
 resolve the default directory with `defaultDurableRunsDir(agentId)` instead of

@@ -104,7 +104,7 @@ export interface BuilderStateForSerialization {
   _rateLimiterConfig?: { requestsPerMinute?: number; tokensPerMinute?: number; maxConcurrent?: number };
   _skillPersistence?: boolean;
   _debrief?: boolean;
-  _durableRuns?: { dir?: string; checkpointEvery?: number };
+  _durableRuns?: import("../builder/types.js").DurableRunsOptions;
   _approvalPolicy?: import("@reactive-agents/reasoning").AuthoredApprovalPolicy;
   _userInteraction?: false | { readonly timeoutMs?: number };
   _ollamaTimeoutMs?: number;

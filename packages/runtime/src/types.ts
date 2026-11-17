@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { DurableRetentionSchema } from "./services/run-store-retention.js";
 import {
   ContextProfileSchema,
   SynthesisConfigJsonSchema,
@@ -726,16 +727,14 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
    * recompiles the per-run `HarnessPlan`.
    */
   adaptiveHarness: Schema.optional(Schema.Boolean),
-  /**
-   * Opt-in durable run persistence (Phase B). Absent ⇒ off (zero overhead).
-   * Populated by `.withDurableRuns()`; when set, the runtime persists a
-   * serialized kernel-state snapshot to a SQLite RunStore every
-   * `checkpointEvery` iterations so a crashed run can be resumed (Phase C).
-   */
+  /** Opt-in durable run persistence (`.withDurableRuns()`): kernel-state snapshots
+   *  to a SQLite RunStore every `checkpointEvery` iterations, pruned by `retention`.
+   *  Absent ⇒ off (zero overhead). */
   durableRuns: Schema.optional(
     Schema.Struct({
       dir: Schema.optional(Schema.String),
       checkpointEvery: Schema.optional(Schema.Number),
+      retention: Schema.optional(DurableRetentionSchema),
     })
   ),
   /** Dynamic strategy switching configuration. When enabled, the kernel automatically

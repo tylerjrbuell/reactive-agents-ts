@@ -524,13 +524,12 @@ export interface OutputSchemaOptions {
  * ```
  */
 export interface DurableRunsOptions {
-    /**
-     * Directory for the `runs.db` SQLite file.
-     * Default: `~/.reactive-agents/<agentId>/`.
-     */
+    /** Directory for `runs.db`. Default: `~/.reactive-agents/<agentId>/` (base overridable by `REACTIVE_AGENTS_RUNS_DIR`). */
     readonly dir?: string;
     /** Persist a checkpoint every N iterations. Default 1. */
     readonly checkpointEvery?: number;
+    /** Bound store growth: prune/compact finished runs (default 50 runs / 30 days; resumable runs never pruned). */
+    readonly retention?: import('../services/run-store-retention.js').DurableRetention;
 }
 
 /**

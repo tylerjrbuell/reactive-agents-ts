@@ -47,6 +47,24 @@ if (!process.env.REACTIVE_AGENTS_TRACE_DIR) {
 }
 
 /**
+ * Durable-run store isolation (2026-11-17): Cortex now defaults Durable runs on, so tests that
+ * build tool-using sessions wrote ~100 `<agentId>/runs.db` dirs into the real
+ * ~/.reactive-agents. Point the framework's base-dir override at a per-process temp dir.
+ * An explicit outer REACTIVE_AGENTS_RUNS_DIR still wins.
+ */
+if (!process.env.REACTIVE_AGENTS_RUNS_DIR) {
+  const runsDir = mkdtempSync(join(tmpdir(), "ra-test-runs-"));
+  process.env.REACTIVE_AGENTS_RUNS_DIR = runsDir;
+  process.on("exit", () => {
+    try {
+      rmSync(runsDir, { recursive: true, force: true });
+    } catch {
+      // best-effort cleanup
+    }
+  });
+}
+
+/**
  * Hermetic provider keys (owner decision 2026-11-12): unit tests must never
  * reach a live model by accident because a developer's `.env` holds keys.
  * Strip every provider/service credential unless the run opts in with

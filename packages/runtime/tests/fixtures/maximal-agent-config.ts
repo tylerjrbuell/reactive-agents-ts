@@ -302,7 +302,11 @@ export const MAXIMAL_CONFIG: AgentConfig = {
   circuitBreaker: { failureThreshold: 4, cooldownMs: 20_000, halfOpenRequests: 2 },
   rateLimiting: { requestsPerMinute: 30, tokensPerMinute: 50_000, maxConcurrent: 5 },
   skillPersistence: true,
-  durableRuns: { dir: "/tmp/drift-guard-runs", checkpointEvery: 2 },
+  durableRuns: {
+    dir: "/tmp/drift-guard-runs",
+    checkpointEvery: 2,
+    retention: { keepCompleted: 20, maxAgeDays: 7, compactCheckpoints: false },
+  },
   approvalPolicy: { mode: "detach", tools: ["file-write"], commands: ["git push"], timeoutMs: 60_000 },
   userInteraction: { timeoutMs: 120_000 },
   thinking: { enabled: true, effort: "high", budgetTokens: 8_000 },

@@ -20,7 +20,8 @@ import { join } from 'node:path'
 import { Effect } from 'effect'
 import { unwrapErrorWithSuggestion } from '../errors.js'
 import { RunController, installDurableCheckpointing } from '../run-controller.js'
-import { RunStoreLive } from '../services/run-store.js'
+import { RunStoreLive, RunStoreService } from '../services/run-store.js'
+import type { DurableRetention } from '../services/run-store-retention.js'
 import { createDurableRun, persistApprovalPauseAt, persistInteractionPauseAt } from '../engine/durable-resume.js'
 import { workspaceCarry } from '../engine/start-run.js'
 import type { ActiveRuns } from '../engine/active-runs.js'
@@ -32,6 +33,8 @@ import { maxIterationsCarry, type DurableFacadeDeps, type RunDurableParams } fro
 export interface DurableResumeConfig {
     readonly dir: string
     readonly configHash: string
+    /** Retention policy for finished runs (absent: the bounded default). */
+    readonly retention?: DurableRetention
     /** The agent's live-run registry (absent on a config built without one: its runs cannot be paused by id). */
     readonly activeRuns?: ActiveRuns
 }
@@ -71,6 +74,14 @@ export const runDurableRun = async (deps: RunDurableDeps, params: RunDurablePara
             ...(params.userId !== undefined ? { userId: params.userId } : {}),
             ...(params.orgId !== undefined ? { orgId: params.orgId } : {}),
         }),
+    )
+
+    // Bound the store: prune finished runs (fail-soft, resumable runs untouched).
+    await Effect.runPromise(
+        Effect.flatMap(RunStoreService, (store) => store.prune(deps.durableResume.retention)).pipe(
+            Effect.provide(runStoreLayer),
+            Effect.catchAllCause(() => Effect.void),
+        ),
     )
 
     // 2. RunController + durable checkpointing (the kernel captures the paused

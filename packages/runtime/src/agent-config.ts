@@ -6,6 +6,7 @@
  * via agentConfigToBuilder.
  */
 import { Schema } from "effect";
+import { DurableRetentionSchema } from "./services/run-store-retention.js";
 import type { WebSearchConfig } from "@reactive-agents/tools";
 import { ReasoningStrategy } from "@reactive-agents/core";
 import { LLMProviderType } from "@reactive-agents/llm-provider";
@@ -713,6 +714,7 @@ export const RateLimitingConfigSchema = Schema.Struct({
 export const DurableRunsConfigSchema = Schema.Struct({
   dir: Schema.optional(Schema.String),
   checkpointEvery: Schema.optional(Schema.Number),
+  retention: Schema.optional(DurableRetentionSchema),
 });
 
 /**

@@ -20,7 +20,8 @@ import { Context, Effect, Layer } from "effect";
 import { Database, hash, type DatabaseLike } from "@reactive-agents/runtime-shim";
 import { chmodSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { pruneRunStoreDb, type DurableRetention, type PruneResult } from "./run-store-retention.js";
 import { parseLoopStopSummary, stopKindOf, type LoopStopSummary, type RunStopSummary } from "../loop-stop-summary.js";
 
 /**
@@ -33,6 +34,11 @@ import { parseLoopStopSummary, stopKindOf, type LoopStopSummary, type RunStopSum
  * disagree on where a run lives.
  *
  * @param agentId - The agent id the runs belong to.
+ * Env override: when `REACTIVE_AGENTS_RUNS_DIR` is set (non-empty), it replaces
+ * `<home>/.reactive-agents` as the base directory, so tests and hosts can
+ * isolate durable stores. The agent id segment is still contained.
+ *
+ * @param agentId - The agent id the runs belong to.
  * @param home - Home directory override (tests). Default: `os.homedir()`.
  * @returns The absolute default directory for the agent's `runs.db`.
  *
@@ -41,8 +47,11 @@ import { parseLoopStopSummary, stopKindOf, type LoopStopSummary, type RunStopSum
  * const dbPath = join(defaultDurableRunsDir("my-agent"), "runs.db");
  * ```
  */
-export const defaultDurableRunsDir = (agentId: string, home: string = homedir()): string =>
-  join(home, ".reactive-agents", safeAgentPathSegment(agentId));
+export const defaultDurableRunsDir = (agentId: string, home: string = homedir()): string => {
+  const override = process.env["REACTIVE_AGENTS_RUNS_DIR"];
+  const base = override !== undefined && override !== "" ? resolve(override) : join(home, ".reactive-agents");
+  return join(base, safeAgentPathSegment(agentId));
+};
 
 /**
  * Contain an agent id to a single inert path segment so it can never escape
@@ -341,6 +350,13 @@ export interface RunStore {
   readonly listToolEffects: (
     runId: string,
   ) => Effect.Effect<readonly ToolEffectRow[], never>;
+  /**
+   * Apply a retention policy to FINISHED (`completed`) runs: compact their
+   * checkpoints and delete those past the count/age bounds. Resumable and
+   * active runs are never touched. Fail-soft: a failure is swallowed and
+   * reported as `undefined`, it never fails the caller.
+   */
+  readonly prune: (policy?: DurableRetention) => Effect.Effect<PruneResult | undefined, never>;
 }
 
 export class RunStoreService extends Context.Tag("RunStoreService")<
@@ -592,6 +608,15 @@ function makeRunStore(db: DatabaseLike): RunStore {
       });
 
     return {
+      prune: (policy) =>
+        Effect.sync(() => {
+          try {
+            return pruneRunStoreDb(db, policy, now());
+          } catch {
+            return undefined; // retention is housekeeping: never fail a run
+          }
+        }),
+
       createRun: ({ runId, agentId, task, configHash, userId, orgId, forkedFrom, forkedAtIteration, workspace }) =>
         Effect.sync(() => {
           const ts = now();

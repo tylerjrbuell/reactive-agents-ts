@@ -476,6 +476,8 @@ export const makeExecuteStream =
             // approveRun/denyRun/resumeRun run in this directory again.
             ...(workspaceDir !== undefined ? { workspace: workspaceDir } : {}),
           });
+          // Bound the store: prune finished runs (fail-soft; resumable runs untouched).
+          yield* store.prune(config.durableRuns?.retention);
         }).pipe(
           Effect.provide(runStoreLayer),
           Effect.catchAllCause((cause) =>
