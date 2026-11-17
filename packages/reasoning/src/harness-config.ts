@@ -40,6 +40,7 @@ import {
   compactCallConstraintsEnabled,
   budgetAnswerTurnEnabled,
   wrapUpReserveEnabled,
+  todoWrapUpEnabled,
   leanThinkingEnabled,
   computeOffloadEnabled,
   planToolCatalogEnabled,
@@ -357,6 +358,15 @@ export interface ResolvedHarness {
   readonly budgetAnswerTurn?: true;
   /** Wrap-up reserve (see `HarnessConfig.wrapUpReserve`). Present only when on. */
   readonly wrapUpReserve?: true;
+  /**
+   * Todo wrap-up. When the model's final answer would be accepted while todo
+   * rows it opened are still open, the harness holds the answer for one
+   * bounded turn and names the open rows, so the model can close or explain
+   * them. Never checks a row for the model. Costs one model call. Default OFF
+   * until an ablation measures it; env-only for now (`RA_TODO_WRAPUP=1`), no
+   * `HarnessConfig` field yet. Present only when on.
+   */
+  readonly todoWrapUp?: true;
   /** Lean thinking (see `HarnessConfig.leanThinking`). Present only when on. */
   readonly leanThinking?: true;
   /** Compute offload (see `HarnessConfig.computeOffload`). Present only when on. */
@@ -474,6 +484,7 @@ export function resolveHarnessConfig(
       : {}),
     ...(pick(config.budgetAnswerTurn, budgetAnswerTurnEnabled()) ? { budgetAnswerTurn: true as const } : {}),
     ...(pick(config.wrapUpReserve, wrapUpReserveEnabled()) ? { wrapUpReserve: true as const } : {}),
+    ...(todoWrapUpEnabled() ? { todoWrapUp: true as const } : {}),
     ...(pick(config.leanThinking, leanThinkingEnabled()) ? { leanThinking: true as const } : {}),
     ...(pick(config.computeOffload, computeOffloadEnabled()) ? { computeOffload: true as const } : {}),
     ...(pick(config.planToolCatalog, planToolCatalogEnabled()) ? { planToolCatalog: true as const } : {}),

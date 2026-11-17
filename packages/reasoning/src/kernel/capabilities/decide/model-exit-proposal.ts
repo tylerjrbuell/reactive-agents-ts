@@ -68,7 +68,13 @@ export function disposeModelExit(
   const maxIterations = (state.meta.maxIterations as number | undefined) ?? 10;
   // Todo wrap-up: the gate would accept (nothing outstanding) but todo rows are
   // still open: one bounded turn to reconcile them (todo-wrap-up.ts).
-  if (origin.proposedBy === "model" && outstandingItems(state, input, deliverable).length === 0) {
+  // Opt-in (`harness.todoWrapUp`, `RA_TODO_WRAPUP=1`): it costs a model call
+  // and has no ablation yet (09 §2 lift law).
+  if (
+    input.harness?.todoWrapUp === true &&
+    origin.proposedBy === "model" &&
+    outstandingItems(state, input, deliverable).length === 0
+  ) {
     const wrapUp = stepTodoWrapUp(state, maxIterations);
     if (wrapUp !== undefined) return Effect.succeed({ decision: "deny", state: wrapUp });
   }

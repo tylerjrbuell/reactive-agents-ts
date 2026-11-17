@@ -261,6 +261,18 @@ export function wrapUpReserveEnabled(): boolean {
 }
 
 /**
+ * Todo wrap-up: when the model's final answer would be accepted while todo
+ * rows are still open, the harness holds it for one bounded turn to reconcile
+ * them (`kernel/capabilities/decide/todo-wrap-up.ts`). Costs a model call.
+ * Default OFF until an ablation measures it (09 §2 lift law; owner decision
+ * wiki/Decisions/2026-11-12-open-owner-decisions.md §4).
+ * `RA_TODO_WRAPUP=1` enables it.
+ */
+export function todoWrapUpEnabled(): boolean {
+  return readFlag("RA_TODO_WRAPUP") === "1";
+}
+
+/**
  * Plan budget: a run seeded with a plan checklist gets its iteration bound
  * raised at run start to fit the unchecked steps plus a reserve, capped
  * (`kernel/loop/plan-budget.ts`). Default ON (seeded runs only);

@@ -247,8 +247,9 @@ describe("todo -> checklist-item ledger facts", () => {
         { name: "todo", args: { action: "done", id: 2 } },
         { name: "final-answer", args: { output: "all done", format: "text", summary: "s", confidence: "high" } },
       ),
-      // Row 1 is still open, so the first final-answer is held for one wrap-up
-      // turn (decide/todo-wrap-up.ts); the model then finishes without closing it.
+      // Row 1 stays open. The todo wrap-up turn (decide/todo-wrap-up.ts) is
+      // opt-in and off here, so the first final-answer ends the run; this turn
+      // is only consumed when the wrap-up holds the answer.
       FINAL,
     ]);
     expect(pass.state.status).toBe("done");

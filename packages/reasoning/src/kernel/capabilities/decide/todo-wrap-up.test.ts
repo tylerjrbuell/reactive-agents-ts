@@ -2,8 +2,9 @@
 //
 // A final answer written while todo rows are open gets ONE bounded reconcile
 // turn (todo-wrap-up.ts, wired in model-exit-proposal.ts). Never auto-checks,
-// never twice, never without room.
-import { describe, expect, it } from "bun:test";
+// never twice, never without room. OPT-IN (`harness.todoWrapUp`,
+// `RA_TODO_WRAPUP=1`): default OFF until an ablation measures it.
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { EventBusLive, foldAdvisory } from "@reactive-agents/core";
@@ -20,6 +21,7 @@ import { appendEntry } from "../../ledger/run-ledger.js";
 import { makeStep } from "../sense/step-utils.js";
 import { stepTodoWrapUp, todoWrapUpAwaitingReply, todoWrapUpIssued, todoWrapUpText } from "./todo-wrap-up.js";
 import { ownItems } from "../reflect/checklist-reminder.js";
+import { resolveHarnessConfig } from "../../../harness-config.js";
 
 const SCHEMAS = [
   { name: "gather1", description: "gather", parameters: [{ name: "q", type: "string", required: true }] },
@@ -49,12 +51,14 @@ const pad = (): string => {
 const todo = (args: Record<string, unknown>) => ({ text: pad(), toolCall: { name: "todo", args } });
 const final = (): { text: string } => ({ text: "Done — the answer is 42." });
 
-const input = (): KernelInput =>
+const WRAP_UP_ON = { ...resolveHarnessConfig(), todoWrapUp: true as const };
+const input = (wrapUp: boolean): KernelInput =>
   ({
     task: "Plan and finish the work.",
     availableToolSchemas: SCHEMAS,
     metaTools: { todo: true },
     contextProfile: { tier: "local" },
+    ...(wrapUp ? { harness: WRAP_UP_ON } : {}),
   }) as KernelInput;
 const opts = (maxIterations = 12): KernelRunOptions => ({
   maxIterations,
@@ -63,9 +67,9 @@ const opts = (maxIterations = 12): KernelRunOptions => ({
   taskId: "todo-wrap-up-test",
   modelId: "llama3.2:3b",
 });
-const run = (turns: Parameters<typeof TestLLMServiceLayer>[0], maxIterations = 12) =>
+const run = (turns: Parameters<typeof TestLLMServiceLayer>[0], maxIterations = 12, wrapUp = true) =>
   Effect.runPromise(
-    runPass(reactKernel, input(), opts(maxIterations)).pipe(
+    runPass(reactKernel, input(wrapUp), opts(maxIterations)).pipe(
       Effect.provide(Layer.mergeAll(TestLLMServiceLayer(turns), toolLayer, EventBusLive)),
     ),
   );
@@ -74,7 +78,36 @@ const wrapUps = (s: KernelState) => s.steps.filter((x) => x.metadata?.interventi
 const statuses = (s: KernelState) =>
   foldAdvisory((s.ledger ?? []).flatMap((e) => (e.kind === "checklist-item" ? [e] : []))).map((i) => i.status);
 
-describe("todo wrap-up before finish (real kernel run)", () => {
+describe("todo wrap-up is opt-in (default OFF)", () => {
+  const prior = process.env.RA_TODO_WRAPUP;
+  beforeEach(() => {
+    delete process.env.RA_TODO_WRAPUP;
+  });
+  afterEach(() => {
+    if (prior === undefined) delete process.env.RA_TODO_WRAPUP;
+    else process.env.RA_TODO_WRAPUP = prior;
+  });
+
+  // RED-ON-CUT: drop the `harness.todoWrapUp` check in model-exit-proposal.ts
+  // and the open row holds the answer for a wrap-up turn here.
+  it("flag off: an open row at the final answer gets no wrap-up turn; the answer ends the run", async () => {
+    const pass = await run([todo({ action: "add", items: ["only item"] }), final(), final()], 12, false);
+    expect(wrapUps(pass.state).length).toBe(0);
+    expect(statuses(pass.state)).toEqual(["pending"]);
+    expect(pass.state.status).toBe("done");
+    expect(pass.state.llmCalls).toBe(2);
+  }, 30_000);
+
+  it("resolves off by default, on only via RA_TODO_WRAPUP=1", () => {
+    expect("todoWrapUp" in resolveHarnessConfig()).toBe(false);
+    process.env.RA_TODO_WRAPUP = "true";
+    expect("todoWrapUp" in resolveHarnessConfig()).toBe(false);
+    process.env.RA_TODO_WRAPUP = "1";
+    expect(resolveHarnessConfig().todoWrapUp).toBe(true);
+  });
+});
+
+describe("todo wrap-up before finish (real kernel run, flag on)", () => {
   it("open row at final answer -> one extra turn -> model closes it -> finishes", async () => {
     const pass = await run([
       todo({ action: "add", items: ["only item"] }),

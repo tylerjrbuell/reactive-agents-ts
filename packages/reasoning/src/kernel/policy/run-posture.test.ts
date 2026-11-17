@@ -411,9 +411,12 @@ describe("run posture: plan (kernel) — planning meta tools only, durable check
   });
 
   it("execute run seeded with an unchecked checklist renders ONE follow-the-plan line; all-done or empty seeds render none (byte-identical)", async () => {
+    // Two turns (a tool call, then the answer): the line renders on the second
+    // think turn. One scripted answer used to get its second turn from the todo
+    // wrap-up, which is opt-in now.
     const guidanceLines = async (initialAdvisory: KernelInput["initialAdvisory"]) => {
       const { events } = await run(
-        [SUMMARY],
+        [{ text: pad(), toolCalls: [{ name: "crypto-price", args: { coin: "BTC" } }] }, SUMMARY],
         undefined,
         baseInput({ requiredTools: [], ...(initialAdvisory ? { initialAdvisory } : {}) }),
       );
