@@ -107,6 +107,13 @@
       "invoke": "bun apps/docs/scripts/generate-golden-run.ts"
     },
     {
+      "id": "apps/docs/scripts/golden-run-freshness.ts",
+      "path": "apps/docs/scripts/golden-run-freshness.ts",
+      "kind": "check",
+      "summary": "Fail when the landing golden run is missing its capture block or stale",
+      "invoke": "bun run docs:sync:check"
+    },
+    {
       "id": "apps/docs/scripts/generate-metrics.ts",
       "path": "apps/docs/scripts/generate-metrics.ts",
       "kind": "docs",

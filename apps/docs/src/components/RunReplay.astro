@@ -14,34 +14,18 @@
  * golden-run.json's timeline/toolCalls/receipt.
  */
 import data from '../data/golden-run.json'
+import { builderSnippet } from './highlight-builder'
 
-const { model, task, run, receipt, capturedAt, timeline, phases } = data
+const { model, task, run, receipt, capturedAt, capture, timeline, phases } = data
 const r = receipt!
 const produced = r.deliverables.filter((d: { produced: boolean }) => d.produced).length
 const total = r.deliverables.length
 const durationS = (run.wallMs / 1000).toFixed(1)
 
-// The exact builder chain that produced this run — copied verbatim from
-// packages/benchmarks/scripts/capture-golden-run.ts (keep in sync by hand if that script
-// changes). Trimmed of the hook-registration loop, which is capture-only
-// instrumentation, not part of what a reader would actually write.
-const AGENT_CODE = [
-    `<span class="rk">const</span> agent = <span class="rk">await</span> ReactiveAgents.<span class="rm">create</span>()`,
-    `  .<span class="rm">withProvider</span>(<span class="rs">"ollama"</span>)`,
-    `  .<span class="rm">withModel</span>(<span class="rs">"gemma4:e4b"</span>)`,
-    `  .<span class="rm">withReasoning</span>()`,
-    `  .<span class="rm">withTools</span>({ builtins: <span class="rk">true</span> })`,
-    `  .<span class="rm">withObservability</span>()`,
-    `  .<span class="rm">withThinking</span>(<span class="rk">true</span>)     <span class="rc">// surface real model reasoning</span>`,
-    `  .<span class="rm">withMemory</span>()        <span class="rc">// debrief depends on memory being enabled</span>`,
-    `  .<span class="rm">build</span>()`,
-    ``,
-    `<span class="rk">const</span> task = <span class="rs">\`Compare the moon counts of Jupiter, Saturn, and Mars.</span>`,
-    `<span class="rs">Write a markdown report to ./report.md and the raw data</span>`,
-    `<span class="rs">as a JSON array to ./data.json.\`</span>`,
-    ``,
-    `<span class="rk">const</span> result = <span class="rk">await</span> agent.<span class="rm">run</span>(task)`,
-]
+// The displayed builder chain is the capture's own builderLines (single source:
+// packages/benchmarks/scripts/golden-run-builder.ts), highlighted deterministically.
+// Nothing here is hand-copied; recapture and regenerate to change it.
+const codeLines = builderSnippet(capture.builderLines, task.prompt)
 
 const PHASE_LABEL: Record<string, string> = {
     bootstrap: 'bootstrap',
@@ -71,9 +55,15 @@ const PHASE_LABEL: Record<string, string> = {
             <button type="button" class="ra-replay-btn" data-replay-btn>↻ Replay</button>
         </div>
 
-        <pre class="ra-hero-code ra-replay-code" data-replay-panel="code" hidden><code>{AGENT_CODE.map((l) => (
-            <div class="rl" set:html={l} />
-        ))}</code></pre>
+        <div data-replay-panel="code" hidden>
+            <pre class="ra-hero-code ra-replay-code"><code>{codeLines.map((l) => (
+                <div class="rl" set:html={l} />
+            ))}</code></pre>
+            <p class="ra-hero-vcap">
+                Receipt signing is opt-in; it is enabled in this capture only, with a throwaway key made for the recording.
+                Without <code>.withReceiptSigning()</code> receipts are unsigned.
+            </p>
+        </div>
 
         <div class="ra-replay-grid" data-replay-panel="trace">
             <div class="ra-trace-body ra-replay-feed" data-replay-feed>
@@ -146,6 +136,9 @@ const PHASE_LABEL: Record<string, string> = {
         </div>
     </div>
 
+    <p class="ra-hero-vcap" data-golden-recorded>
+        Recorded {capturedAt} on v{capture.frameworkVersion} with {model.id} via {model.provider === 'ollama' ? 'Ollama' : model.provider}.
+    </p>
     <p class="ra-hero-vcap">
         Real-time playback: this took the model ~{durationS}s, so the replay takes ~{durationS}s too. Not sped up, not a mockup,
         a <a href="#the-proof">real receipt</a> from a ~4B local model. Click any tool call to expand its real result,

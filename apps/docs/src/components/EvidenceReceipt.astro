@@ -11,7 +11,8 @@
  */
 import data from '../data/golden-run.json'
 
-const { task, model, run, toolCalls, receipt, capturedAt } = data
+const { task, model, run, toolCalls, receipt, capturedAt, capture } = data
+const signature = (receipt as { signature?: { alg: string } }).signature ?? null
 const producedCount = receipt.deliverables.filter((d) => d.produced).length
 
 const rawJson = JSON.stringify(
@@ -53,6 +54,7 @@ const rawJson = JSON.stringify(
                 <div><span class="rm-k">iterations</span><span class="rm-v">{run.iterations}</span></div>
                 <div><span class="rm-k">terminated by</span><span class="rm-v">{receipt.terminatedBy}</span></div>
                 <div><span class="rm-k">verifier</span><span class="rm-v rm-good">{receipt.verifierVerdict ?? 'n/a'}</span></div>
+                <div><span class="rm-k">signature</span><span class="rm-v">{signature ? signature.alg : 'unsigned'}</span></div>
             </div>
 
             <!-- Deliverables -->
@@ -90,9 +92,15 @@ const rawJson = JSON.stringify(
 
             <!-- Provenance footnote -->
             <p class="ra-receipt-foot">
-                <code>verdict</code> grades the evidence trail, not the answer's truth. Add
-                tamper-proof provenance with <code>.withReceiptSigning()</code>, an Ed25519
-                signature over the receipt bytes, self-contained public key embedded.
+                <code>verdict</code> grades the evidence trail, not the answer's truth.
+                {signature ? (
+                    <>This receipt is <strong>{signature.alg}-signed</strong> only because signing was enabled for this capture
+                    with <code>.withReceiptSigning()</code>. Signing is opt-in: receipts are unsigned by default.
+                    The signature covers the receipt bytes and embeds the public key, so it is self-contained.</>
+                ) : (
+                    <>This receipt is unsigned. Add tamper-proof provenance with <code>.withReceiptSigning()</code>
+                    (opt-in; receipts are unsigned by default).</>
+                )}
             </p>
 
             <details class="ra-receipt-raw">
@@ -102,7 +110,7 @@ const rawJson = JSON.stringify(
         </div>
     </div>
     <figcaption class="ra-receipt-cap">
-        The <strong>same real run</strong> captured {capturedAt} on <code>{model.id}</code>,
+        The <strong>same real run</strong> recorded {capturedAt} on v{capture.frameworkVersion} with <code>{model.id}</code>,
         a ~4B-class local model, that powers every evidence section on this page.
         <a href="/features/verification/">How verification works →</a>
     </figcaption>

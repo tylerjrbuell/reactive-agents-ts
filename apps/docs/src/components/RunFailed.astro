@@ -1,0 +1,104 @@
+---
+/**
+ * RunFailed — the failure counterpart to RunReplay: the SAME agent with its
+ * iteration cap forced low, so the run fails on purpose, and what
+ * `rax-diagnose cause` says about it. Static markup, no JS.
+ *
+ * Honesty contract: every value comes from src/data/golden-run-failed.json
+ * (generated from the committed capture). The failed run's metadata.iterations
+ * is deliberately not shown beside the cap: the two counters measure different
+ * things (see the capture README), so the page shows the cap and the tool's
+ * own cause text instead.
+ */
+import data from '../data/golden-run-failed.json'
+
+const { model, run, receipt, capture, timeline, diagnose, capturedAt } = data
+const r = receipt!
+const produced = r.deliverables.filter((d: { produced: boolean }) => d.produced).length
+const total = r.deliverables.length
+const durationS = (run.wallMs / 1000).toFixed(1)
+const secs = (ms: number): string => `+${(ms / 1000).toFixed(1)}s`
+---
+
+<figure class="ra-failrun" data-golden-failed>
+    <p class="ra-failrun-label">
+        Same agent, capped at <strong>{run.maxIterations} iterations</strong> on purpose to force a failure.
+        Recorded {capturedAt} on v{capture.frameworkVersion} with {model.id} via {model.provider === 'ollama' ? 'Ollama' : model.provider}.
+    </p>
+
+    <div class="ra-hero-win">
+        <div class="ra-hero-winbar">
+            <span class="ra-hero-winttl">failed run · {durationS}s · {run.tokensUsed.toLocaleString()} tokens</span>
+        </div>
+        <div class="ra-trace-body ra-failrun-body">
+            <ol class="ra-failrun-timeline" aria-label="Timeline of the failed run">
+                {timeline.map((e) => (
+                    <li class:list={['ra-failrun-ev', e.kind === 'tool' && 'ra-failrun-ev--tool']}>
+                        <span class="ra-failrun-t">{secs(e.atMs)}</span>
+                        {e.kind === 'tool'
+                            ? <span><span class="ra-trace-tool">{e.tool}</span> <span class="ra-trace-args">{e.argsPreview}</span></span>
+                            : <span class="ra-failrun-phase">{e.phase}</span>}
+                    </li>
+                ))}
+            </ol>
+            <p class="ra-trace-row ra-trace-out">
+                <span class="ra-trace-label">verdict</span>
+                <span class="ra-trace-val">{r.verdict} · {produced}/{total} deliverables produced · terminated by {r.terminatedBy} (cap {run.maxIterations}) · verifier {r.verifierVerdict}</span>
+            </p>
+        </div>
+    </div>
+
+    <p class="ra-failrun-cap">
+        <code>rax-diagnose cause</code> on this run's trace, verbatim:
+    </p>
+    <pre class="ra-failrun-term"><code>{diagnose.cause}</code></pre>
+
+    {diagnose.attribute && (
+        <details class="ra-failrun-attr">
+            <summary>Also: the <code>rax-diagnose attribute</code> output</summary>
+            <p class="ra-failrun-cap">
+                The tool's own output, verbatim. It reads this as a probable premature stop because it cannot know the cap was set low on purpose.
+            </p>
+            <pre class="ra-failrun-term"><code>{diagnose.attribute}</code></pre>
+        </details>
+    )}
+
+    <figcaption class="ra-failrun-cap">
+        A failed run still returns a receipt with verdict <code>{r.verdict}</code>, not a plausible-looking answer.
+        <a href="/reference/cli/diagnose/">How rax-diagnose works →</a>
+    </figcaption>
+</figure>
+
+<style>
+    .ra-failrun { margin: 1.5rem 0 0; }
+    .ra-failrun-label,
+    .ra-failrun-cap { font-size: 0.78rem; color: var(--sl-color-gray-3); margin: 0.6rem 0; }
+    .ra-failrun-body { min-height: 0; }
+    .ra-failrun-timeline {
+        list-style: none;
+        margin: 0 0 0.8rem;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+        font-family: 'Geist Mono', ui-monospace, monospace;
+        font-size: 0.68rem;
+    }
+    .ra-failrun-ev { display: flex; gap: 0.6rem; margin: 0; flex-wrap: wrap; }
+    .ra-failrun-t { color: var(--sl-color-gray-4); min-width: 3.6rem; }
+    .ra-failrun-phase { color: var(--sl-color-gray-3); }
+    .ra-failrun-term {
+        margin: 0;
+        padding: 0.8rem 1rem;
+        overflow-x: auto;
+        font-family: 'Geist Mono', ui-monospace, monospace;
+        font-size: 0.7rem;
+        line-height: 1.5;
+        border: 1px solid var(--sl-color-gray-5);
+        border-radius: 10px;
+        background: var(--sl-color-black);
+        white-space: pre;
+    }
+    .ra-failrun-attr { margin-top: 0.6rem; font-size: 0.8rem; }
+    .ra-failrun-attr summary { cursor: pointer; color: var(--sl-color-gray-2); }
+</style>

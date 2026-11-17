@@ -27,9 +27,11 @@
  *   bun run docs:sync:check --ack <id[,id...]> # force-advance specific rule(s): "reviewed, no doc change needed"
  *   bun run docs:sync:check --ack-all          # force-advance every rule to HEAD
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { CURRENT_VERSION } from "../src/content/indicators";
+import { goldenRunProblems } from "./golden-run-freshness";
 import { scanRepo } from "./stale-claims";
 import { pagesMissingTopic, runInventory } from "./ia-inventory";
 
@@ -167,6 +169,28 @@ if (staleClaims.length > 0) {
   drift = true;
   console.error("✗ stale-public-claims: known-false or contradictory claims found");
   for (const c of staleClaims) console.error(`    ${c.file}:${c.line} [${c.rule}] ${c.text}`);
+}
+
+// Golden-run freshness: the home page replays a live capture; it must carry capture provenance
+// and be at most two minors behind the derived current version.
+{
+  const dataDir = resolve(import.meta.dir, "../src/data");
+  const problems: string[] = [];
+  for (const file of ["golden-run.json", "golden-run-failed.json"]) {
+    const path = resolve(dataDir, file);
+    if (!existsSync(path)) {
+      if (file === "golden-run.json") problems.push(`${file}: missing; run bun apps/docs/scripts/generate-golden-run.ts`);
+      continue;
+    }
+    problems.push(...goldenRunProblems(file, JSON.parse(readFileSync(path, "utf-8")), CURRENT_VERSION));
+  }
+  if (problems.length > 0) {
+    drift = true;
+    console.error("✗ golden-run-freshness: home page capture is stale or incomplete");
+    for (const p of problems) console.error(`    ${p}`);
+  } else {
+    console.log("✓ golden-run-freshness: capture within 2 minors of the current version");
+  }
 }
 
 // IA gate: a content page without `topic` frontmatter fails (features/cortex is a listed exemption,

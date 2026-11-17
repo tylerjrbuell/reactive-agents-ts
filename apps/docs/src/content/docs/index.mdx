@@ -32,6 +32,7 @@ import EmailSubscribe from '../../components/EmailSubscribe.astro'
 import PreferredSourceBadge from '../../components/PreferredSourceBadge.astro'
 import EvidenceReceipt from '../../components/EvidenceReceipt.astro'
 import RunReplay from '../../components/RunReplay.astro'
+import RunFailed from '../../components/RunFailed.astro'
 import RunPhases from '../../components/RunPhases.astro'
 import RunDebrief from '../../components/RunDebrief.astro'
 import FeatureCarousel from '../../components/FeatureCarousel.astro'
@@ -106,6 +107,12 @@ import demoGif from '../../assets/local-vs-frontier.gif'
 No script, no actor. This plays back one real live run on `gemma4:e4b`, a ~4B-class local model with no API key, paced from its actual timing: the task it got, every phase and tool call it made in order, and what it produced. Everything below this point (phases fired, the trust receipt, the debrief) is synthesized from this exact same run.
 
 <RunReplay />
+
+### And when it fails
+
+Runs fail too. Here is the same agent with its iteration budget cut to force a failure, and what `rax-diagnose cause` reports about it.
+
+<RunFailed />
 
 <p class="ra-demo-cta">
   Same task, your machine: <a href="/guides/local-models/">pull a local model and run it yourself</a>.
