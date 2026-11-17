@@ -7,14 +7,34 @@
  * Model: gemma4:e4b via Ollama (~4B-class local, no API key) — matches the
  * model already cited in the existing receipt for narrative consistency.
  *
- * Output: /tmp/golden-run.json (result + hook log), plus whatever
+ * Env: GOLDEN_MODE=success|failed (failed = iteration cap GOLDEN_MAX_ITER, default 2), GOLDEN_OUT=<path>.
+ * Output: $GOLDEN_OUT, default /tmp/golden-run.json (result + hook log), plus whatever
  * ~/.reactive-agents/traces/<runId>.jsonl the framework writes automatically
  * (tracing is on by default).
  */
 import { mkdtempSync, writeFileSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
 import { ReactiveAgents } from "@reactive-agents/runtime";
+import { GOLDEN_MODEL, GOLDEN_PROVIDER, GOLDEN_TASK, applyGoldenBuilder, goldenBuilderLines } from "./golden-run-builder.js";
+
+const repoRoot = join(import.meta.dirname, "../../..");
+const sh = (cmd: string): string => {
+  try {
+    return execSync(cmd, { cwd: repoRoot, encoding: "utf-8" }).trim();
+  } catch {
+    return "unknown";
+  }
+};
+const ollamaVersion = async (): Promise<string> => {
+  try {
+    const r = await fetch("http://localhost:11434/api/version");
+    return ((await r.json()) as { version?: string }).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+};
 
 const workDir = mkdtempSync(join(tmpdir(), "ra-golden-"));
 
@@ -42,21 +62,14 @@ const PHASES = [
 ] as const;
 
 async function main() {
-  let builder = ReactiveAgents.create()
-    .withProvider("ollama")
-    .withModel("gemma4:e4b")
-    .withReasoning()
-    .withTools({ builtins: true })
-    .withObservability()
-    // gemma4:e4b advertises a `thinking` capability. Without this the model
-    // returns tool calls with no visible reasoning, so every captured thought
-    // step has empty content and the run's reasoning is invisible. With it,
-    // the Ollama adapter's thinking trace lands on step.metadata.thinking
-    // (see think.ts thoughtMeta) — real model reasoning, capturable.
-    .withThinking(true)
-    // Debrief synthesis is memory-gated (see debrief.ts) — needed to capture
-    // a real result.debrief alongside the receipt from the same run.
-    .withMemory();
+  // Throwaway Ed25519 key, in memory only. Never written, printed or committed.
+  const pair = (await crypto.subtle.generateKey("Ed25519", true, ["sign", "verify"])) as CryptoKeyPair;
+  const privateKeyJwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+
+  const mode = process.env.GOLDEN_MODE === "failed" ? "failed" : "success";
+  const maxIterations = mode === "failed" ? Number(process.env.GOLDEN_MAX_ITER ?? "2") : undefined;
+  // The chain lives in golden-run-builder.ts so the docs snippet cannot drift.
+  let builder = applyGoldenBuilder(ReactiveAgents.create(), { privateKeyJwk, maxIterations });
 
   for (const phase of PHASES) {
     for (const timing of ["before", "after"] as const) {
@@ -77,7 +90,7 @@ async function main() {
 
   const agent = await builder.build();
 
-  const task = `Compare the moon counts of Jupiter, Saturn, and Mars. Write a markdown report to ./report.md and the raw data as a JSON array to ./data.json.`;
+  const task = GOLDEN_TASK;
 
   process.chdir(workDir);
   const t0 = Date.now();
@@ -87,7 +100,16 @@ async function main() {
   const out = {
     task,
     workDir,
-    model: { id: "gemma4:e4b", provider: "ollama", tier: "local" },
+    model: { id: GOLDEN_MODEL, provider: GOLDEN_PROVIDER, tier: "local" },
+    capture: {
+      mode,
+      maxIterations: maxIterations ?? null,
+      capturedAt: new Date().toISOString().slice(0, 10),
+      frameworkVersion: sh("cat VERSION"),
+      gitDescribe: sh("git describe --always"),
+      ollamaVersion: await ollamaVersion(),
+      builderLines: goldenBuilderLines(),
+    },
     wallMs,
     hookLog,
     result: {
@@ -100,8 +122,9 @@ async function main() {
     },
   };
 
-  writeFileSync("/tmp/golden-run.json", JSON.stringify(out, null, 2));
-  console.log("[golden-run] wrote /tmp/golden-run.json");
+  const outPath = process.env.GOLDEN_OUT ?? "/tmp/golden-run.json";
+  writeFileSync(outPath, JSON.stringify(out, null, 2));
+  console.log("[golden-run] wrote", outPath);
   console.log("[golden-run] runId:", (result.metadata as { runId?: string })?.runId);
   console.log("[golden-run] verdict:", result.receipt?.verdict);
   console.log("[golden-run] hookLog entries:", hookLog.length);

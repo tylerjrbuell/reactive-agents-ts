@@ -114,6 +114,13 @@
       "invoke": "bun run docs:sync:check"
     },
     {
+      "id": "packages/benchmarks/scripts/golden-run-builder.ts",
+      "path": "packages/benchmarks/scripts/golden-run-builder.ts",
+      "kind": "research",
+      "summary": "Builder config shared by the golden-run capture and the docs snippet",
+      "invoke": "bun packages/benchmarks/scripts/capture-golden-run.ts"
+    },
+    {
       "id": "apps/docs/scripts/generate-metrics.ts",
       "path": "apps/docs/scripts/generate-metrics.ts",
       "kind": "docs",
