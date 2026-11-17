@@ -73,9 +73,15 @@ export type ExporterConfig = {
   readonly file?: FileExporterOptions | false;
 
   /**
-   * Verbosity level for structured log output.
+   * Verbosity level for structured log output. An explicit value always wins.
    *
-   * @default "normal"
+   * When absent, the default depends on stdout (see {@link resolveVerbosity}):
+   * an interactive terminal gets `"normal"`; a non-TTY stdout (server, pipe,
+   * CI, an app embedding the library) resolves to `"minimal"` for narration
+   * while warning and error log entries still print, so an embedded agent
+   * stays quiet unless something goes wrong.
+   *
+   * @default "normal" on a TTY, warnings/errors only otherwise
    */
   readonly verbosity?: VerbosityLevel;
 
@@ -469,6 +475,49 @@ export class ObservabilityService extends Context.Tag("ObservabilityService")<
 // ─── Live Implementation ───
 
 /**
+ * Host facts the service reads at construction. Injectable so tests can pin
+ * both TTY states; production callers omit it.
+ */
+export type ObservabilityEnvironment = {
+  /**
+   * Whether stdout is an interactive terminal. Absent: reads
+   * `process.stdout.isTTY` (works on Bun and Node).
+   */
+  readonly stdoutIsTTY?: () => boolean;
+};
+
+/** `true` when stdout is an interactive terminal (Bun and Node). */
+export const stdoutIsTTY = (): boolean => Boolean(process.stdout?.isTTY);
+
+/**
+ * Resolve the effective verbosity. An explicit level always wins. When unset,
+ * an interactive terminal gets `"normal"` and a non-TTY stdout (server, pipe,
+ * CI, embedding app) gets `"minimal"`, so a library embedded in an app does not
+ * narrate phases to its host's stdout. Exported so every default-verbosity site
+ * applies one policy.
+ *
+ * @param explicit - The configured level, or `undefined` when none was set.
+ * @param isTTY - Whether stdout is an interactive terminal.
+ */
+export const resolveVerbosity = (
+  explicit: VerbosityLevel | undefined,
+  isTTY: boolean,
+): VerbosityLevel => explicit ?? (isTTY ? "normal" : "minimal");
+
+const LEVEL_RANK = { debug: 0, info: 1, warn: 2, error: 3 } as const;
+
+/** Raise a console exporter's `minLevel` to at least `"warn"`, keeping a stricter user setting. */
+const warningsOnlyConsoleOptions = (
+  options: ConsoleExporterOptions | undefined,
+): ConsoleExporterOptions => {
+  const userLevel = options?.minLevel ?? "debug";
+  return {
+    ...options,
+    minLevel: LEVEL_RANK[userLevel] >= LEVEL_RANK.warn ? userLevel : "warn",
+  };
+};
+
+/**
  * Live implementation of ObservabilityService.
  *
  * Creates a fully wired observability layer with tracing, logging, metrics,
@@ -488,11 +537,20 @@ export class ObservabilityService extends Context.Tag("ObservabilityService")<
  * });
  * ```
  */
-export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
+export const ObservabilityServiceLive = (
+  exporterConfig: ExporterConfig = {},
+  environment: ObservabilityEnvironment = {},
+) =>
   Layer.effect(
     ObservabilityService,
     Effect.gen(function* () {
-      const verbosityLevel: VerbosityLevel = exporterConfig.verbosity ?? "normal";
+      const isTTY = (environment.stdoutIsTTY ?? stdoutIsTTY)();
+      const verbosityLevel: VerbosityLevel = resolveVerbosity(exporterConfig.verbosity, isTTY);
+      // Unset verbosity on a non-TTY stdout: narration is off ("minimal") but
+      // warn/error entries still print. Explicit "minimal" stays fully silent.
+      const warningsOnly = exporterConfig.verbosity === undefined && !isTTY;
+      const consoleOptions =
+        typeof exporterConfig.console === "object" ? exporterConfig.console : undefined;
 
       // Setup OTLP exporter before tracer so global OTel provider is registered
       const otlpShutdown = exporterConfig.otlp
@@ -504,11 +562,14 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
       // every obs.info/debug/warn/error call still prints live regardless of
       // verbosity, since makeStructuredLogger's liveWriter has no verbosity
       // concept of its own (it fires unconditionally per log entry).
-      const liveWriter = exporterConfig.live && verbosityLevel !== "minimal"
-        ? makeLiveLogWriter(
-            typeof exporterConfig.console === "object" ? exporterConfig.console : undefined,
-          )
-        : undefined;
+      // The warnings-only default is the exception: it streams warn/error live.
+      const liveWriter = !exporterConfig.live
+        ? undefined
+        : warningsOnly
+          ? makeLiveLogWriter(warningsOnlyConsoleOptions(consoleOptions))
+          : verbosityLevel !== "minimal"
+            ? makeLiveLogWriter(consoleOptions)
+            : undefined;
 
       const tracer = yield* makeTracer;
       const redactors: readonly Redactor[] = [
@@ -569,7 +630,7 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
       const consoleExp =
         exporterConfig.console !== false
           ? makeConsoleExporter(
-              typeof exporterConfig.console === "object" ? exporterConfig.console : {},
+              warningsOnly ? warningsOnlyConsoleOptions(consoleOptions) : (consoleOptions ?? {}),
             )
           : null;
       const fileExp =
@@ -617,7 +678,11 @@ export const ObservabilityServiceLive = (exporterConfig: ExporterConfig = {}) =>
               Ref.get(childrenRef),
             ]);
 
-            if (consoleExp && verbosityLevel !== "minimal") {
+            if (consoleExp && warningsOnly) {
+              // Warnings-only default: no spans, no dashboard. Logs print here
+              // unless the live writer already streamed them.
+              if (!liveWriter) consoleExp.exportLogs(logs);
+            } else if (consoleExp && verbosityLevel !== "minimal") {
               // Kept in live mode too: the live writer prints only a subset of
               // entries (e.g. the sub-agent `[obs]` completion line is not live).
               consoleExp.exportLogs(logs);

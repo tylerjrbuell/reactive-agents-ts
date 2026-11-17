@@ -15,7 +15,8 @@ import { MetricsCollectorLive } from "../src/metrics/metrics-collector.js";
  */
 export const makeObservabilityTestLayer = (
   config?: Parameters<typeof ObservabilityServiceLive>[0],
+  environment?: Parameters<typeof ObservabilityServiceLive>[1],
 ) =>
-  ObservabilityServiceLive(config).pipe(
+  ObservabilityServiceLive(config, environment).pipe(
     Layer.provide(MetricsCollectorLive.pipe(Layer.provide(EventBusLive))),
   );

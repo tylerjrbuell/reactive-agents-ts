@@ -24,7 +24,7 @@ import {
   buildFinalAnswerOutputDescription,
 } from "@reactive-agents/tools";
 import { extractOutputFormat } from "@reactive-agents/reasoning";
-import { ChildDashboardRegistry, ObservableLogger, makeObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
+import { ChildDashboardRegistry, ObservableLogger, makeStatusRenderer, effectLoggerBridgeLayer } from "@reactive-agents/observability";
 import { PlanStoreService, ProceduralMemoryService } from "@reactive-agents/memory";
 import { classifyTaskCategory as classifyTaskCategoryFn, skillFragmentToProceduralEntry } from "@reactive-agents/reactive-intelligence";
 import { resolveModelCalibration, resolveModelCalibrationAsync } from "./calibration-resolver.js";
@@ -71,7 +71,7 @@ import { mintTraceLinkage } from "./engine/finalize/trace-linkage.js";
 // ─── Execution-cluster decomposition (GH #221 W26) ───
 // Verbatim cluster extractions lifted out of this file; each module's header
 // doc names the cluster and the former line range.
-import { bindExecutionObservability } from "./engine/execute-obs-wiring.js";
+import { bindExecutionObservability, makeExecutionLogger } from "./engine/execute-obs-wiring.js";
 import { registerExecutionEventCollectors } from "./engine/execute-event-collectors.js";
 import { resolveContractAndKillSwitch } from "./engine/execute-killswitch-bridge.js";
 import { makeLifecycleGuard } from "./engine/execute-lifecycle-guard.js";
@@ -150,7 +150,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
 
             // ── Observability + EventBus acquisition, verbosity + prefix binding ──
             // Bodies extracted to engine/execute-obs-wiring.ts (GH #221 W26).
-            const { obs, verbosity, isNormal, isVerbose, isDebug, logModelIO, lp, eb } =
+            const { obs, verbosity, liveWarningsOnly, isNormal, isVerbose, isDebug, logModelIO, lp, eb } =
               yield* bindExecutionObservability(config);
             /**
              * "Am I the ROOT execution?" — a sub-agent always runs through this
@@ -769,8 +769,8 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               minLevel: config.logging?.minLevel,
               // Thread real VerbosityLevel through to ObservableLogger so "minimal"
               // can actually suppress live console output (not just dashboard output).
-              // Safe to pass unconditionally; verbosity defaults to "normal" when
-              // observability is not enabled, preserving original logging behavior.
+              // Unset verbosity is "normal" on a TTY; off a TTY it is "minimal" and
+              // makeExecutionLogger still prints warnings/errors (liveWarningsOnly).
               verbosity,
               // Same depth/name-tagged prefix already wrapped onto `obs.info/debug`
               // above — ObservableLogger is a SEPARATE live-print pipeline (its own
@@ -779,7 +779,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
               // structured INFO lines correctly show "│ <name> ·".
               logPrefix: lp || undefined,
             };
-            const logger = yield* makeObservableLogger(loggerConfig);
+            const logger = yield* makeExecutionLogger(loggerConfig, liveWarningsOnly);
 
             // Create renderer (no-op when not in status mode). `eb` (acquired
             // above, Phase 0.2) lets the renderer track sub-agent

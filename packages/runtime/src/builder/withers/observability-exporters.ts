@@ -17,7 +17,7 @@ import type { BuilderState } from './_state.js'
  * tool usage, costs, and alerts. Configure verbosity and live streaming via options.
  *
  * @param options - Observability configuration
- * @param options.verbosity - "minimal" | "normal" | "verbose" | "debug". Default: "normal"
+ * @param options.verbosity - "minimal" | "normal" | "verbose" | "debug". Default: "normal" when stdout is a TTY; otherwise warnings and errors only
  * @param options.live - Stream logs in real-time. Default: false
  * @param options.file - Path for JSONL file export. Default: undefined
  * @param options.logModelIO - Log full model prompts and responses. Default: false

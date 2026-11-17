@@ -69,8 +69,8 @@ describe("ObservabilityService verbosity level", () => {
     expect(v).toBe("minimal");
   });
 
-  test("verbosity defaults to 'normal'", async () => {
-    const layer = ObservabilityServiceLive();
+  test("verbosity defaults to 'normal' on a TTY", async () => {
+    const layer = ObservabilityServiceLive({}, { stdoutIsTTY: () => true });
     const v = await Effect.runPromise(
       ObservabilityService.pipe(
         Effect.flatMap((obs) => Effect.sync(() => obs.verbosity())),
@@ -78,6 +78,17 @@ describe("ObservabilityService verbosity level", () => {
       ),
     );
     expect(v).toBe("normal");
+  });
+
+  test("verbosity defaults to 'minimal' when stdout is not a TTY", async () => {
+    const layer = ObservabilityServiceLive({}, { stdoutIsTTY: () => false });
+    const v = await Effect.runPromise(
+      ObservabilityService.pipe(
+        Effect.flatMap((obs) => Effect.sync(() => obs.verbosity())),
+        Effect.provide(layer),
+      ),
+    );
+    expect(v).toBe("minimal");
   });
 });
 

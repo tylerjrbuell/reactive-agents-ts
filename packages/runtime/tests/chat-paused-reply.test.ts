@@ -20,6 +20,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ReactiveAgents } from "../src/builder.js";
+import { withStdoutTTY } from "./_helpers-tty.js";
 import { makeObservableLogger, ObservableLogger } from "@reactive-agents/observability";
 import { completionVerb, finalizeRun, isPausedResult } from "../src/engine/finalize/run-finalize.js";
 
@@ -57,7 +58,10 @@ describe("ChatReply on a durable pause (tool path)", () => {
       lines.push(args.map(String).join(" "));
     });
     try {
-      const reply = await agent.session().chat("Use the risky tool with input go", { useTools: true });
+      // The completion line prints by default only on a TTY; pin it.
+      const reply = await withStdoutTTY(true, () =>
+        agent.session().chat("Use the risky tool with input go", { useTools: true }),
+      );
       expect(reply.status).toBe("awaiting-approval");
       expect(reply.pendingApproval?.toolName).toBe("risky-tool");
       expect(typeof reply.pendingApproval?.runId).toBe("string");

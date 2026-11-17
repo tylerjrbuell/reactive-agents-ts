@@ -139,8 +139,8 @@ describe("ObservabilityServiceLive with live: true", () => {
     expect(verbosity).toBe("verbose");
   });
 
-  test("verbosity defaults to normal when not specified", async () => {
-    const layer = makeObservabilityTestLayer();
+  test("verbosity defaults to normal when not specified on a TTY", async () => {
+    const layer = makeObservabilityTestLayer(undefined, { stdoutIsTTY: () => true });
     const verbosity = await Effect.runPromise(
       Effect.gen(function* () {
         const obs = yield* ObservabilityService;

@@ -8,6 +8,7 @@
 import { describe, expect, it, afterEach } from "bun:test";
 import type { AgentEvent } from "@reactive-agents/core";
 import { ReactiveAgents } from "../../src/index.js";
+import { withStdoutTTY } from "../_helpers-tty.js";
 
 const realLog = console.log;
 afterEach(() => {
@@ -143,7 +144,9 @@ describe("sub-agent observability (G1)", () => {
       ])
       .build();
 
-    await parent.run("Delegate a research task to a sub-agent.");
+    // Narration prints by default only on a TTY; pin it so this test does not
+    // depend on the runner's stdout.
+    await withStdoutTTY(true, () => parent.run("Delegate a research task to a sub-agent."));
     await parent.dispose();
 
     console.log = realLog;

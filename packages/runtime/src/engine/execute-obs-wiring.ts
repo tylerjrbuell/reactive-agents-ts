@@ -20,7 +20,15 @@
 import { Effect } from "effect";
 import type { ReactiveAgentsConfig } from "../types.js";
 import { EventBus } from "@reactive-agents/core";
-import { ObservabilityService } from "@reactive-agents/observability";
+import {
+  ObservabilityService,
+  makeObservableLogger,
+  resolveVerbosity,
+  stdoutIsTTY,
+  type LogEvent,
+  type ObservabilityEnvironment,
+  type ObservableLoggerService,
+} from "@reactive-agents/observability";
 import type { EbLike, ObsLike } from "./runtime-context.js";
 import { asObsLike } from "./runtime-context.js";
 
@@ -30,6 +38,12 @@ export type ExecutionVerbosity = "minimal" | "normal" | "verbose" | "debug";
 export interface ObsWiring {
   readonly obs: ObsLike | null;
   readonly verbosity: ExecutionVerbosity;
+  /**
+   * `true` when no verbosity was set and stdout is not a TTY: narration is
+   * off (`verbosity` resolves to "minimal"), but warning and error log events
+   * still print live. See {@link makeExecutionLogger}.
+   */
+  readonly liveWarningsOnly: boolean;
   readonly isNormal: boolean;
   readonly isVerbose: boolean;
   readonly isDebug: boolean;
@@ -39,8 +53,20 @@ export interface ObsWiring {
   readonly eb: EbLike | null;
 }
 
+/**
+ * Acquire observability + EventBus for one execution and bind its verbosity.
+ *
+ * Verbosity: the ObservabilityService's level when present, else the
+ * configured `observabilityVerbosity`, else the stdout-dependent default from
+ * `resolveVerbosity` ("normal" on a TTY, "minimal" otherwise). Only stdout
+ * printing depends on it; EventBus publishing never does.
+ *
+ * @param config - The engine config fields this reads.
+ * @param environment - Host facts; tests inject `stdoutIsTTY`.
+ */
 export const bindExecutionObservability = (
-  config: ReactiveAgentsConfig,
+  config: Pick<ReactiveAgentsConfig, "observabilityVerbosity" | "logModelIO" | "logPrefix">,
+  environment: ObservabilityEnvironment = {},
 ): Effect.Effect<ObsWiring, never> =>
   Effect.gen(function* () {
     // ── H1: Acquire ObservabilityService optionally ──
@@ -56,12 +82,16 @@ export const bindExecutionObservability = (
     // widened slice of ObservabilityService, see runtime-context.ts) — cast
     // to the real 4-tier union here, matching the existing precedent at
     // this file's other obs.verbosity() call site (progress-logger setup).
-    const verbosity = ((obs?.verbosity?.() as
+    // Unset verbosity follows stdout: a server, pipe or CI job (no TTY) gets
+    // "minimal" narration with warnings/errors still printed live.
+    const isTTY = (environment.stdoutIsTTY ?? stdoutIsTTY)();
+    const verbosity = (obs?.verbosity?.() as
       | "minimal"
       | "normal"
       | "verbose"
       | "debug"
-      | undefined) ?? config.observabilityVerbosity) ?? "normal";
+      | undefined) ?? resolveVerbosity(config.observabilityVerbosity, isTTY);
+    const liveWarningsOnly = config.observabilityVerbosity === undefined && !isTTY;
     const isNormal = verbosity !== "minimal";
     const isVerbose = verbosity === "verbose" || verbosity === "debug";
     const isDebug = verbosity === "debug";
@@ -101,5 +131,37 @@ export const bindExecutionObservability = (
     );
     const eb: EbLike | null = ebOpt._tag === "Some" ? ebOpt.value : null;
 
-    return { obs, verbosity, isNormal, isVerbose, isDebug, logModelIO, lp, eb };
+    return { obs, verbosity, liveWarningsOnly, isNormal, isVerbose, isDebug, logModelIO, lp, eb };
+  });
+
+/** Warning and error log events: the ones that still print in warnings-only mode. */
+const isWarningOrError = (event: LogEvent): boolean =>
+  event._tag === "warning" ||
+  event._tag === "error" ||
+  (event._tag === "log" && (event.level === "warn" || event.level === "error"));
+
+/**
+ * Build the execution's ObservableLogger. With `liveWarningsOnly` and a live
+ * logger, a subscriber prints warning/error events to stdout (the logger
+ * itself sits at "minimal" and prints nothing). Buffering and subscribers are
+ * unchanged, so run summaries and any event consumer see every event.
+ *
+ * @param loggerConfig - Passed to `makeObservableLogger` unchanged.
+ * @param liveWarningsOnly - From {@link bindExecutionObservability}.
+ */
+export const makeExecutionLogger = (
+  loggerConfig: Parameters<typeof makeObservableLogger>[0],
+  liveWarningsOnly: boolean,
+): Effect.Effect<ObservableLoggerService, never> =>
+  Effect.gen(function* () {
+    const logger = yield* makeObservableLogger(loggerConfig);
+    if (liveWarningsOnly && loggerConfig.live) {
+      const prefix = loggerConfig.logPrefix ?? "";
+      yield* logger.subscribe((event, formatted) =>
+        isWarningOrError(event)
+          ? Effect.sync(() => { console.log(`${prefix}${formatted}`); })
+          : Effect.void,
+      );
+    }
+    return logger;
   });

@@ -296,7 +296,7 @@ describe("ObservabilityService flush() (Phase 0.3)", () => {
       const TestLayer = makeObservabilityTestLayer({
         console: { showSpans: true, showLogs: true, showMetrics: true },
         file: false,
-      });
+      }, { stdoutIsTTY: () => true });
 
       await Effect.runPromise(
         Effect.provide(

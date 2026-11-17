@@ -81,8 +81,14 @@ export type {
 export {
   ObservabilityService,
   ObservabilityServiceLive,
+  resolveVerbosity,
+  stdoutIsTTY,
 } from "./observability-service.js";
-export type { ExporterConfig, VerbosityLevel } from "./observability-service.js";
+export type {
+  ExporterConfig,
+  ObservabilityEnvironment,
+  VerbosityLevel,
+} from "./observability-service.js";
 
 // ─── Runtime ───
 export { createObservabilityLayer } from "./runtime.js";
