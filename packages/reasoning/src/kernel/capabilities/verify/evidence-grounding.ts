@@ -433,17 +433,37 @@ function extractTableRowTitles(text: string): string[] {
   return titles;
 }
 
-/** Extract bold titles from bullet/numbered list items (`- **Title** — ...`). */
-const BOLD_LIST_ITEM_RE = /^\s*(?:[-*]|\d+[.)])\s+\*\*([^*]+)\*\*/gm;
+/** Extract bold titles from bullet/numbered list items (`- **Title** — ...`).
+ *  Group 2 captures a colon right after the closing `**` (`**Title**:`). */
+const BOLD_LIST_ITEM_RE = /^\s*(?:[-*]|\d+[.)])\s+\*\*([^*]+)\*\*(\s*:)?/gm;
 function extractBoldListTitles(text: string): string[] {
   return [...text.matchAll(BOLD_LIST_ITEM_RE)]
-    .map((m) => m[1].trim())
     // A title ending in ":" reads as "label: elaboration" — a category or
     // section header the model synthesized to organize its OWN answer, not
     // a standalone named-entity claim scraped from evidence (live false
     // positive, 2026-08-21: "**Improved Onboarding & Clarity:**" in a
     // legitimate commit-summary report, flagged as an invented entity).
-    .filter((title) => !title.endsWith(":"));
+    // The colon may sit inside the bold or right after it (`**Step One**:`);
+    // both are the same label shape (2026-11-17 launch smoke test).
+    .filter((m) => m[2] === undefined && !m[1].trim().endsWith(":"))
+    .map((m) => m[1].trim());
+}
+
+/**
+ * True when a candidate is shaped like a named entity rather than a label.
+ * The guard's target is a wholesale-invented NAMED item — an episode title,
+ * headline or product line ("Mike and the Forgotten Path"), which is a
+ * multi-word phrase. A lone word in a list position ("**Multiplication**",
+ * "**Summary**", "| Total |") is the model's own step or section label for
+ * organizing its answer; it is not a researched claim and naturally never
+ * appears verbatim in tool output (2026-11-17 launch smoke test: a correct
+ * arithmetic answer labelled "Multiplication / Division / Addition" was
+ * warned as invented). Structural, not a word list. Known recall cost: a
+ * list of invented single-word names is no longer flagged — accepted under
+ * this guard's precision-over-recall rule (it is warn-only, check 4e).
+ */
+function isEntityShaped(candidate: string): boolean {
+  return candidate.length >= 4 && /[a-zA-Z]{3,}/.test(candidate) && /\S\s+\S/.test(candidate.trim());
 }
 
 /**
@@ -469,6 +489,9 @@ function extractBoldListTitles(text: string): string[] {
  *   first-cell, or bolded bullet/numbered-list titles) — free-form prose
  *   claims are not policed here (that would need real NER, an LLM call, which
  *   this file deliberately avoids).
+ * - Only counts ENTITY-SHAPED candidates (multi-word, see `isEntityShaped`) and
+ *   skips "label: elaboration" items — the model's own step/section labels
+ *   are not researched claims.
  * - Requires >=2 candidates before firing at all — a single listed item is
  *   too little signal (could be a legitimate one-row summary).
  * - Fires only when ALL candidates are ungrounded (zero overlap with the
@@ -483,7 +506,7 @@ export function detectFabricatedListedEntities(
   evidence: string,
 ): { readonly ok: true } | { readonly ok: false; readonly violations: readonly string[] } {
   const candidates = [...extractTableRowTitles(output), ...extractBoldListTitles(output)].filter(
-    (t) => t.length >= 4 && /[a-zA-Z]{3,}/.test(t),
+    isEntityShaped,
   );
   if (candidates.length < 2) return { ok: true };
 

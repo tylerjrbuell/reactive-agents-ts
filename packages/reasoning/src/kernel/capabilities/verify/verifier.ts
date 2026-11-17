@@ -300,10 +300,42 @@ const CHECK_NAME_EXPLANATIONS: Readonly<Record<string, string>> = {
   "output-not-contradicted-test-claim": "the output's claim contradicted the actual tool result",
   "output-not-unbacked-action-claim": "the output said an action was done, but the tool that does it never ran",
   "evidence-grounded": "a number in the output didn't match the tool evidence",
+  "output-not-fabricated-listed-entities": "some named items in the answer don't appear in the tool evidence",
 };
 
 export function humanizeVerifierFailure(checkName: string): string | undefined {
   return CHECK_NAME_EXPLANATIONS[checkName];
+}
+
+/**
+ * The user-facing warning line for a failed terminal verdict. A `warn`
+ * verdict is advisory — the answer ships unchanged — so its line says
+ * "advisory", never "rejected" (2026-11-17 launch smoke test: a correct
+ * answer printed "terminal output rejected (severity=warn)"). Reject and
+ * escalate verdicts keep the "rejected" wording. The raw check-id summary
+ * rides in `context` when a plain-English explanation leads the message.
+ */
+export function terminalVerdictLogMessage(verdict: VerificationResult): {
+  readonly message: string;
+  readonly context?: string;
+} {
+  const severity = resolveResultSeverity(verdict);
+  const advisory = severity === "warn";
+  const firstFailedCheck = verdict.checks.find((c) => !c.passed);
+  const friendlyReason = firstFailedCheck ? humanizeVerifierFailure(firstFailedCheck.name) : undefined;
+  if (friendlyReason === undefined) {
+    return {
+      message: advisory
+        ? `[verifier] advisory (severity=${severity}): ${verdict.summary}`
+        : `[verifier] terminal output rejected (severity=${severity}): ${verdict.summary}`,
+    };
+  }
+  return {
+    message: advisory
+      ? `Advisory check on the model's answer (answer kept): ${friendlyReason}.`
+      : `The model's answer needed a second look: ${friendlyReason}.`,
+    context: `[verifier] severity=${severity}: ${verdict.summary}`,
+  };
 }
 
 /**

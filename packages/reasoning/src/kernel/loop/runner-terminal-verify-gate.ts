@@ -21,7 +21,7 @@ import { authorityOf } from "../../kernel/capabilities/decide/authority.js";
 import {
   resolveResultSeverity,
   verifyAndEmit,
-  humanizeVerifierFailure,
+  terminalVerdictLogMessage,
   type Verifier,
 } from "../../kernel/capabilities/verify/verifier.js";
 import { VERIFIER_REJECTION_PREFIX, VERIFIER_ESCALATION_PREFIX } from "../verifier-message-prefixes.js";
@@ -345,15 +345,13 @@ export function runTerminalVerifierGate(args: {
         // docstring) — the raw check-id/reason string still rides along in
         // `context`, which only the verbose/non-status log formats render, so
         // debugging detail isn't lost, just no longer the first thing a user
-        // sees on a TTY status line.
-        const firstFailedCheck = verdict.checks.find((c) => !c.passed);
-        const friendlyReason = firstFailedCheck ? humanizeVerifierFailure(firstFailedCheck.name) : undefined;
+        // sees on a TTY status line. A warn verdict reads "advisory", never
+        // "rejected" (see `terminalVerdictLogMessage`).
+        const verdictLog = terminalVerdictLogMessage(verdict);
         yield* emitLog({
           _tag: "warning",
-          message: friendlyReason
-            ? `The model's answer needed a second look: ${friendlyReason}.`
-            : `[verifier] terminal output rejected (severity=${verdictSeverity}): ${verdict.summary}`,
-          context: friendlyReason ? `[verifier] severity=${verdictSeverity}: ${verdict.summary}` : undefined,
+          message: verdictLog.message,
+          context: verdictLog.context,
           timestamp: new Date(),
         });
         //   - escalate : structural failure (harness fallback, shallow give-up).

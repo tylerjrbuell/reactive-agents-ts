@@ -213,6 +213,38 @@ describe("detectFabricatedListedEntities (2026-08-15 scratch.ts research-task fi
   });
   // Original colon-free detection (scratch.ts titles have no trailing ":")
   // preserved by "flags a bulleted list of bold titles..." above.
+
+  // ── 2026-11-17 launch smoke test (create-reactive-agent with-tools, qwen3:14b) ──
+  // Task "Compute (123 * 456) + (789 / 3) and explain the result.", evidence =
+  // one code-execute result. A correct answer that labels its derivation
+  // steps "**Multiplication**", "**Division**", "**Addition**" was warned as
+  // "3 listed items ... likely invented". Those are the model's own step
+  // labels, not researched named entities.
+  it("does NOT flag single-word bold step labels over an arithmetic derivation (launch smoke repro)", () => {
+    const out =
+      "The result of (123 * 456) + (789 / 3) is **56351**.\n\n" +
+      "1. **Multiplication**\n   123 × 456 = 56,088\n" +
+      "2. **Division**\n   789 ÷ 3 = 263\n" +
+      "3. **Addition**\n   56,088 + 263 = 56,351\n\n" +
+      "So the final result is 56,351.";
+    const evidence = '{"stdout":"56351.0\\n","exitCode":0}';
+    expect(detectFabricatedListedEntities(out, evidence).ok).toBe(true);
+  });
+
+  it("does NOT flag multi-word bold labels followed by a colon outside the bold (label: elaboration)", () => {
+    const out =
+      "1. **Step One**: multiply 123 by 456 to get 56,088.\n" +
+      "2. **Step Two**: divide 789 by 3 to get 263.\n" +
+      "3. **Final Sum**: add them for 56,351.";
+    expect(detectFabricatedListedEntities(out, '{"stdout":"56351.0"}').ok).toBe(true);
+  });
+
+  it("still flags invented multi-word titles that carry an em-dash description", () => {
+    const out =
+      "1. **Mike and the Forgotten Path** — a hiker survives a fall.\n" +
+      "2. **The River's Embrace** — a rafting trip goes wrong.";
+    expect(detectFabricatedListedEntities(out, "search snippets, no episode list").ok).toBe(false);
+  });
 });
 
 describe("validateNumericGrounding (tolerant value-match)", () => {

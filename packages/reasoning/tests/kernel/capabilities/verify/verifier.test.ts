@@ -10,7 +10,9 @@ import {
   defaultVerifier,
   contextFromObservation,
   humanizeVerifierFailure,
+  terminalVerdictLogMessage,
   type VerificationContext,
+  type VerificationResult,
   type Verifier,
 } from "../../../../src/kernel/capabilities/verify/verifier.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
@@ -598,6 +600,7 @@ describe("humanizeVerifierFailure", () => {
       "output-not-fabricated-measurement",
       "output-not-contradicted-test-claim",
       "evidence-grounded",
+      "output-not-fabricated-listed-entities",
     ];
     for (const name of knownCheckNames) {
       expect(humanizeVerifierFailure(name)).toBeDefined();
@@ -606,6 +609,49 @@ describe("humanizeVerifierFailure", () => {
 
   it("returns undefined for an unknown check name so callers fall back to the raw summary", () => {
     expect(humanizeVerifierFailure("some-future-check")).toBeUndefined();
+  });
+});
+
+// 2026-11-17 launch smoke test: a warn-only verdict (check 4e) printed
+// "[verifier] terminal output rejected (severity=warn)" on a correct answer
+// that was shipped unchanged. "rejected" must only appear when the verdict
+// actually rejects.
+describe("terminalVerdictLogMessage", () => {
+  const failingVerdict = (
+    name: string,
+    severity: "warn" | "reject" | "escalate",
+  ): VerificationResult => ({
+    verified: false,
+    checks: [{ name, passed: false, severity, reason: "r" }],
+    summary: `final-answer: failed at ${name} (r)`,
+    action: "final-answer",
+    softFail: severity === "warn",
+    severity,
+  });
+
+  it("never says 'rejected' for a warn-severity verdict on an unmapped check", () => {
+    const m = terminalVerdictLogMessage(failingVerdict("some-future-check", "warn"));
+    expect(m.message).not.toContain("rejected");
+    expect(m.message).toContain("advisory");
+    expect(m.message).toContain("some-future-check");
+  });
+
+  it("never says 'rejected' for the warn-only listed-entities check (launch smoke repro)", () => {
+    const m = terminalVerdictLogMessage(failingVerdict("output-not-fabricated-listed-entities", "warn"));
+    expect(m.message).not.toContain("rejected");
+    expect(m.message).toContain("Advisory");
+    expect(m.message).toContain("answer kept");
+  });
+
+  it("keeps 'rejected' when the verdict actually rejects", () => {
+    const m = terminalVerdictLogMessage(failingVerdict("some-future-check", "reject"));
+    expect(m.message).toContain("rejected");
+  });
+
+  it("uses the plain-English explanation for mapped checks, raw summary in context", () => {
+    const m = terminalVerdictLogMessage(failingVerdict("scaffold-leak", "reject"));
+    expect(m.message).toContain("internal framework text leaked");
+    expect(m.context).toContain("scaffold-leak");
   });
 });
 
