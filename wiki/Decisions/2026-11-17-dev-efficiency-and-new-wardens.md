@@ -1,6 +1,6 @@
 ---
 type: decision
-status: proposed
+status: accepted
 created: 2026-11-17
 tags: [decision, wardens, dev-tooling, friction, ownership]
 ---
@@ -44,7 +44,11 @@ Drafted on the owner's request. Primers, `wardens.yaml` entries and `ownership.j
 - **Job:** the first ten minutes: keyless scaffold that typechecks and runs, examples on the current builder API, quiet and private CLI defaults, truthful `--help`. Launch-critical for Show HN / Reddit.
 - **Ownership move:** `apps/cli/src/commands/deploy/**` and `tests/deploy.test.ts` move from gateway-warden to dx-warden (the wardens doctor treats nested globs as overlapping, so the CLI cannot be split by directory). gateway-warden keeps the deploy *design* workstream and reviews deploy code changes.
 
-## Open decisions for the owner
+## Owner decisions (2026-11-17)
+
+The owner approved acting on all items ("dispatch wardens now and tackle these improvements"). The two wardens are ratified. `no-cd-prefix` is deleted. `check-cortex-compliance` is made faster, or moves to CI only if that cannot be done without dropping assertions. The concurrency cap is tooling-warden's first mission. The dev-stack and stash items went to the Cortex and docs sessions.
+
+## Items as originally proposed
 
 1. **Ratify tooling-warden** (or fold into harness-warden).
 2. **Ratify dx-warden**, including the deploy-code move from gateway-warden.
