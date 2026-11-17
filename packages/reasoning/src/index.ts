@@ -589,6 +589,8 @@ export type { PendingGuidance, GuidanceSignal, GuidanceTextKind } from "./kernel
 
 // ─── Loop-stop record + resume (public surface for runtime resume) ───
 export {
+  buildLoopStopRecord,
+  buildStopRecordFromSerialized,
   resumeFromStop,
   isLoopStopped,
   isLoopStopReason,
@@ -596,3 +598,5 @@ export {
   loopResumeGuidanceText,
 } from "./kernel/loop/loop-stop.js";
 export type { LoopStopRecord, LoopStopToolDone } from "./kernel/loop/loop-stop.js";
+export { isUserStopReason } from "./kernel/loop/terminate-reason.js";
+export { USER_STOP_CRITERION } from "./kernel/state/terminal-outcome.js";

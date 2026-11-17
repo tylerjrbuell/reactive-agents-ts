@@ -27,6 +27,7 @@ import { resolveCompletionStatus } from "./completion-status.js";
 import { deriveTerminalAuthority, type TerminalAuthority } from "./terminal-authority.js";
 import type { DeliverableDecision, DeliverableProvenance } from "../loop/runner-helpers/deliverable-decision.js";
 import { entriesOfKind, type RunLedger } from "../ledger/run-ledger.js";
+import { isUserStopReason } from "../loop/terminate-reason.js";
 
 /** Id of the always-present question-answered floor requirement. */
 const ANSWER_REQUIREMENT_ID = "answer";
@@ -166,6 +167,24 @@ export function deriveTerminalOutcome(args: {
       : null,
     outstanding,
     ...(meta.errorClass !== undefined ? { errorClass: meta.errorClass } : {}),
+  };
+}
+
+/** Outstanding-criterion id a person's stop request leaves on the result (the work was cut short). */
+export const USER_STOP_CRITERION = "stopped_by_request";
+
+/**
+ * The envelope a person's stop request contributes: partial, with the
+ * {@link USER_STOP_CRITERION} outstanding, so the runtime's outstanding-criteria
+ * veto reports the run as not-success while the answer so far ships. Clean
+ * `completed` for every other reason (identity under the envelope join).
+ */
+export function userStopEnvelope(terminatedBy: string | undefined): CompletionEnvelope {
+  if (!isUserStopReason(terminatedBy)) return { completionStatus: "completed" };
+  return {
+    completionStatus: "partial",
+    outstandingCriteria: [USER_STOP_CRITERION],
+    verificationWarning: "the run was stopped on request before it finished; the answer is the work so far",
   };
 }
 

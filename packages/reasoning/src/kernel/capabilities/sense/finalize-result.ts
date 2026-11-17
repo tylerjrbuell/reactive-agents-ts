@@ -56,9 +56,10 @@ import {
   readStatusCap,
   type CompletionEnvelope,
 } from "../../state/completion-envelope.js";
-import { deliverableDecisionEnvelope, deriveTerminalOutcome, type TerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
+import { deliverableDecisionEnvelope, deriveTerminalOutcome, userStopEnvelope, type TerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
 import { deriveTerminalAuthority } from "../../state/terminal-authority.js";
+import { isUserStopReason } from "../../loop/terminate-reason.js";
 import { emitStrategyTerminalDecision } from "./strategy-terminal-decision.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
 import type { KernelMeta } from "../../state/kernel-state.js";
@@ -629,9 +630,12 @@ export function finalizeStrategyResult(
     const budgetStopped =
       params.extraMetadata?.["budgetTerminalPartial"] === true ||
       (stopReason !== undefined && deriveTerminalAuthority({ terminatedBy: stopReason }) === "budget");
+    // A person's stop request: the answer so far ships as an honest partial
+    // (user-stop envelope below); the strategy's own delivery judgment is moot.
+    const userStopped = !abstained && !paused && isUserStopReason(stopReason);
     const strategyDecision = strategyDeliveryDecision(
       params,
-      { paused, abstained, budgetStopped, status: gated.status },
+      { paused, abstained, budgetStopped: budgetStopped || userStopped, status: gated.status },
       typeof gated.output === "string" ? gated.output : "",
     );
     const decisionEnvelope = deliverableDecisionEnvelope(
@@ -642,10 +646,11 @@ export function finalizeStrategyResult(
       contractCoverageEnvelope(params.kernelMeta, params.runLedger, resolvedText),
       decisionEnvelope,
       strategyDecisionCoverage(strategyDecision),
+      userStopped ? userStopEnvelope(stopReason) : { completionStatus: "completed" },
     ]);
     const cappedStatus = abstained ? gated.status : capStatusToEnvelope(gated.status, coverage);
     const finalResult =
-      cappedStatus === gated.status && !(decisionRefused && !abstained)
+      cappedStatus === gated.status && !((decisionRefused || userStopped) && !abstained)
         ? gated
         : buildStrategyResult({
             ...params,
@@ -727,7 +732,9 @@ export function finalizeStrategyResult(
           ? (gateFires || parrotsHarnessText ? "give-up-gate" : undefined)
           : decisionRefused
             ? "gate-verdict"
-            : cappedStatus !== gated.status
+            : userStopped
+              ? "user-stop"
+              : cappedStatus !== gated.status
               ? "contract-coverage"
               : enforced
                 ? "fabrication-guard"

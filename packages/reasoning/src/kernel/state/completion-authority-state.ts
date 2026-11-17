@@ -14,6 +14,8 @@ export interface CompletionAuthorityMeta {
   readonly assessment?: RunAssessment;
   readonly harnessAuthoredOutput?: boolean;
   readonly budgetTerminalPartial?: boolean;
+  /** Raw terminal reason; read only to recognize a person's stop request (`isUserStopReason`). */
+  readonly terminatedBy?: string;
   readonly verificationWarning?: string;
   /** The terminal gate's decision about the deliverable (Plan 8 K1) — `accepted:false` is a refused ship. */
   readonly deliverableDecision?: {

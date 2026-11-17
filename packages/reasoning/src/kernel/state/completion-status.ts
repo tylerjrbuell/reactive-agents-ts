@@ -29,6 +29,7 @@
 
 import type { CompletionAuthorityMeta, CompletionAuthorityState } from "./completion-authority-state.js";
 import type { ReasoningStatus } from "../../types/reasoning.js";
+import { isUserStopReason } from "../loop/terminate-reason.js";
 
 /**
  * Did the harness ship output the terminal verifier did not bless?
@@ -69,6 +70,9 @@ export function resolveCompletionStatus(state: CompletionAuthorityState): Reason
   // decision 2026-11-10). It ships no output, so the record of the abstention
   // decides, never an output marker.
   if (state.meta.abstention !== undefined) return "abstained";
+  // A person's stop request ends the run before its work is done: the answer so
+  // far ships, labeled partial (never `completed`).
+  if (isUserStopReason(state.meta.terminatedBy)) return "partial";
   return shippedUnverified(state.meta) ? "partial" : "completed";
 }
 

@@ -61,10 +61,11 @@ export function runTerminalVerifierGate(args: {
   readonly isAwaitingInteraction: boolean;
   readonly isAbstained: boolean;
   readonly isBudgetTerminal: boolean;
+  readonly isUserStop: boolean;
 }): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
     let { state } = args;
-    const { verifier, effectiveInput, taskIntent, currentOptions, emitLog, isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal } = args;
+    const { verifier, effectiveInput, taskIntent, currentOptions, emitLog, isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal, isUserStop } = args;
 
     // ── 9.0. Sprint 3.5 — Verifier gate before shipping any output ───────────
     // Per North Star §3 (Verify capability) — the harness MUST verify the
@@ -110,6 +111,7 @@ export function runTerminalVerifierGate(args: {
       !isAwaitingInteraction &&
       !isAbstained &&
       !isBudgetTerminal &&
+      !isUserStop &&
       // An exit-gate handoff already decided (refused): the model's draft plus
       // its Unfinished list ships as a labelled partial, never re-judged.
       state.meta.deliverableDecision?.exitGate?.gateDecision !== "handoff"

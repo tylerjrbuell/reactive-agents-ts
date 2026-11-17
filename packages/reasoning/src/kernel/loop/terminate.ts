@@ -33,6 +33,7 @@ import { deliverableEvidenceVerified, provenanceOf } from "./runner-helpers/deli
 // `from "../terminate.js"` type importers keep resolving.
 export type { TerminateReason } from "./terminate-reason.js";
 import type { TerminateReason } from "./terminate-reason.js";
+import { isUserStopReason } from "./terminate-reason.js";
 
 export type TerminateOptions = {
   /**
@@ -136,6 +137,8 @@ function applyTerminalPostConditionGate(
     opts.reason === "awaiting-interaction" ||
     opts.reason === "abstained" ||
     opts.reason === "budget_terminal" ||
+    // A person's stop: an honest partial that keeps the answer so far (never demoted).
+    isUserStopReason(opts.reason) ||
     opts.extraMeta?.deliverableDecision?.exitGate?.gateDecision === "handoff"
   )
     return null;

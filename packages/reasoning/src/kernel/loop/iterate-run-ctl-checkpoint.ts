@@ -41,6 +41,20 @@ export function runPassBoundaryCheckpoint(args: {
           // exit the loop here, before the next provider call, but the reason
           // differs so `state.meta.terminatedBy` doesn't mislabel an abort as
           // a graceful stop (see terminate-reason.ts).
+          // The kernel writes its OWN final checkpoint for the stop (same rail
+          // and ordering as the loop-stop / paused-state checkpoints: iteration
+          // + 1 always wins `latestCheckpoint`). It is the live pass-boundary
+          // state, so `resumeRun` continues exactly where the run stopped; the
+          // per-iteration write below never runs on a stop pass.
+          if (_runCtl.onCheckpoint) {
+            try {
+              _runCtl.onCheckpoint(serializeKernelState(state), state.iteration + 1);
+            } catch (err) {
+              yield* Effect.logWarning(
+                `[durable-checkpoint] stop-state onCheckpoint threw at iteration ${state.iteration}: ${String(err)}`,
+              );
+            }
+          }
           const exit = proposeHarnessExit(state, {
             proposedBy: "harness",
             end: {

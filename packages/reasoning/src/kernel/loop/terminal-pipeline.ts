@@ -55,6 +55,7 @@ import { emitTerminalDecision } from "./runner-helpers/terminal-decision.js";
 import { publishBudgetExhaustedAtTerminal } from "./budget-exhausted-terminal.js";
 import { runPlanChecklistStep } from "./plan-checklist-step.js";
 import { runLoopStopStep } from "./loop-stop.js";
+import { isUserStopReason } from "./terminate-reason.js";
 
 /**
  * Terminal kinds the answer-shaping steps must leave alone, read once at entry.
@@ -72,6 +73,8 @@ export interface TerminalFences {
   readonly isAwaitingInteraction: boolean;
   readonly isAbstained: boolean;
   readonly isBudgetTerminal: boolean;
+  /** A person's stop request: the answer so far ships as a labeled partial, never failed for unmet requirements or re-judged. */
+  readonly isUserStop: boolean;
 }
 
 /** Read the {@link TerminalFences} off a finished loop's state. Pure. */
@@ -82,6 +85,7 @@ export function terminalFences(state: KernelState): TerminalFences {
     isAwaitingInteraction: by === "awaiting-interaction",
     isAbstained: by === "abstained",
     isBudgetTerminal: by === "budget_terminal",
+    isUserStop: isUserStopReason(by),
   };
 }
 

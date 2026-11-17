@@ -61,6 +61,7 @@ const gate = (state: KernelState, verifier: Verifier) =>
       isAwaitingInteraction: false,
       isAbstained: false,
       isBudgetTerminal: false,
+      isUserStop: false,
     }).pipe(Effect.provide(TestLLMServiceLayer([]))),
   );
 

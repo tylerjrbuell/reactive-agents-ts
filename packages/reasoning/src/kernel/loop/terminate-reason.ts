@@ -93,6 +93,16 @@ export type TemplatedTerminateReason =
 export type RawTerminatedBy = TerminateReason | TemplatedTerminateReason;
 
 /**
+ * True when a raw `terminatedBy` names a person's stop request (`stop_requested`
+ * graceful, `terminate_requested` hard). The run ended before its work was done
+ * and kept its answer so far: an honest PARTIAL, never a success
+ * (`resolveCompletionStatus`, the mint's user-stop envelope).
+ */
+export function isUserStopReason(terminatedBy: unknown): boolean {
+  return terminatedBy === "stop_requested" || terminatedBy === "terminate_requested";
+}
+
+/**
  * True when a raw `terminatedBy` names a durable pause (`awaiting-approval` /
  * `awaiting-interaction`). A paused run ends `status:"done"` with a pause
  * sentinel as its output, but it has produced no answer: observers must not

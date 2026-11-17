@@ -50,10 +50,11 @@ export function runOutputQualityGate(args: {
   readonly isAwaitingInteraction: boolean;
   readonly isAbstained: boolean;
   readonly isBudgetTerminal: boolean;
+  readonly isUserStop: boolean;
 }): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
     let { state } = args;
-    const { effectiveInput, taskIntent, emitLog, isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal } = args;
+    const { effectiveInput, taskIntent, emitLog, isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal, isUserStop } = args;
 
     // ── 9. Output quality gate ────────────────────────────────────────────
     // Route all successful outputs through the canonical finalization pipeline.
@@ -66,6 +67,7 @@ export function runOutputQualityGate(args: {
       !isAwaitingInteraction &&
       !isAbstained &&
       !isBudgetTerminal &&
+      !isUserStop &&
       // Plan 8 item 3: a handoff already ran its ONE synthesis; never a second.
       state.meta.deliverableDecision?.exitGate?.gateDecision !== "handoff"
     ) {

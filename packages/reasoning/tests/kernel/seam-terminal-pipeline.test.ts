@@ -92,7 +92,10 @@ describe("terminal pipeline — one entry", () => {
       isAwaitingInteraction: false,
       isAbstained: false,
       isBudgetTerminal: true,
+      isUserStop: false,
     });
+    expect(terminalFences(at("stop_requested")).isUserStop).toBe(true);
+    expect(terminalFences(at("terminate_requested")).isUserStop).toBe(true);
     expect(terminalFences(at("awaiting-approval")).isAwaitingApproval).toBe(true);
     expect(terminalFences(at("awaiting-interaction")).isAwaitingInteraction).toBe(true);
     expect(terminalFences(at("abstained")).isAbstained).toBe(true);

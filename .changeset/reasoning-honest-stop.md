@@ -1,0 +1,5 @@
+---
+"@reactive-agents/reasoning": minor
+---
+
+A run a person stops (`stop_requested`, or a hard `terminate_requested`) is now reported as an honest partial instead of a success. The result keeps the answer so far, carries status `partial` with `outstandingCriteria: ["stopped_by_request"]` (so the runtime reports `success: false`), and its terminal outcome has `terminatedBy: "stop_requested"`, authority `user-stop`. The terminal verify, required-tools and quality gates leave a stopped run alone, and unmet post-conditions no longer turn a stop into a failure that discards the answer. On a stop the kernel also writes its own final checkpoint (the live state, one iteration past, through the same rail as the loop-stop checkpoint), so the run resumes from exactly where it stopped. `buildLoopStopRecord` is now exported and works for any stop reason (user stop, budget, timeout, error), reading the unfinished rows from the checklist or a supplied run ledger; `buildStopRecordFromSerialized`, `isUserStopReason` and `USER_STOP_CRITERION` are exported alongside it.

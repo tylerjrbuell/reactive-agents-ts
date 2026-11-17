@@ -39,7 +39,8 @@ import {
 import { LOOP_RESUME_ACTOR } from "../capabilities/reflect/loop-resume-epoch.js";
 import { ownItems } from "../capabilities/reflect/checklist-reminder.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
-import { serializeKernelState } from "../state/kernel-codec.js";
+import type { RunLedger } from "../ledger/run-ledger.js";
+import { deserializeKernelState, serializeKernelState } from "../state/kernel-codec.js";
 import { contributeGuidance } from "../state/guidance-channel.js";
 import { transitionState, type KernelState } from "../state/kernel-state.js";
 
@@ -106,6 +107,12 @@ function repeatedCallOf(steps: KernelState["steps"]): Pick<LoopStopRecord, "repe
  * Build the stop record from a state. Pure and deterministic. `prior` (a record
  * stamped earlier, e.g. with the detector's pattern at the loop-resolution site)
  * keeps its `pattern`; everything else is re-read from the final state.
+ *
+ * Not only for loop guards: any stop reason (a user stop, a budget, a timeout,
+ * an error) gets the same record. `unfinished` is read from the checklist rows
+ * in `from.ledger` (default `state.ledger`; the run-scoped ledger carries plan
+ * rows a pass's own ledger may not), and the repeated-call read applies only to
+ * loop-guard reasons (a repeat is not a finding for any other stop).
  */
 export function buildLoopStopRecord(
   state: KernelState,
@@ -114,6 +121,7 @@ export function buildLoopStopRecord(
     readonly detection?: LoopDetection | null;
     readonly prior?: LoopStopRecord;
     readonly goal?: string;
+    readonly ledger?: RunLedger;
   } = {},
 ): LoopStopRecord {
   const verdicts = classifyActions(state.steps);
@@ -125,17 +133,35 @@ export function buildLoopStopRecord(
   }
   const pattern = from.detection?.pattern ?? from.prior?.pattern;
   const goal = from.goal ?? from.prior?.goal ?? state.meta.entropy?.taskDescription;
+  const reason = from.reason ?? from.prior?.reason ?? state.meta.terminatedBy ?? "loop_graceful";
   return {
-    reason: from.reason ?? from.prior?.reason ?? state.meta.terminatedBy ?? "loop_graceful",
+    reason,
     ...(pattern !== undefined ? { pattern: { id: pattern.id, name: pattern.name } } : {}),
-    ...repeatedCallOf(state.steps),
+    ...(isLoopStopReason(reason) ? repeatedCallOf(state.steps) : {}),
     iteration: state.iteration,
     toolsDone: [...calls].map(([tool, n]) => ({ tool, calls: n })),
-    unfinished: ownItems(state.ledger)
+    unfinished: ownItems(from.ledger ?? state.ledger)
       .filter((i) => i.status === "pending" || i.status === "in_progress")
       .map((i) => i.title),
     ...(goal !== undefined && goal.length > 0 ? { goal } : {}),
   };
+}
+
+/**
+ * The stop record of a SERIALIZED kernel state (a durable checkpoint / noted
+ * snapshot), for a caller that holds the codec string and no live state: any
+ * stop reason, same shape as {@link buildLoopStopRecord}. `undefined` when the
+ * string is not a decodable kernel state.
+ */
+export function buildStopRecordFromSerialized(
+  serialized: string,
+  from: Parameters<typeof buildLoopStopRecord>[1] = {},
+): LoopStopRecord | undefined {
+  try {
+    return buildLoopStopRecord(deserializeKernelState(serialized), from);
+  } catch {
+    return undefined;
+  }
 }
 
 /** Stamp the record on a loop-stopped state; identity for any other state. */

@@ -40,9 +40,10 @@ export function applyRequiredToolsFinalCheck(args: {
   readonly isAwaitingInteraction: boolean;
   readonly isAbstained: boolean;
   readonly isBudgetTerminal: boolean;
+  readonly isUserStop: boolean;
 }): KernelState {
   let state = args.state;
-  const { currentInput, currentOptions, requiredTools, isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal } = args;
+  const { currentInput, currentOptions, requiredTools, isAwaitingApproval, isAwaitingInteraction, isAbstained, isBudgetTerminal, isUserStop } = args;
 
     // ── 8. Post-loop required tools check ───────────────────────────────────
     // Final safety net: if the loop exited without failure but required quotas
@@ -54,7 +55,8 @@ export function applyRequiredToolsFinalCheck(args: {
       !isAwaitingApproval &&
       !isAwaitingInteraction &&
       !isAbstained &&
-      !isBudgetTerminal
+      !isBudgetTerminal &&
+      !isUserStop
     ) {
       const effectiveToolsUsed = buildEffectiveToolsUsed(state);
       const missingTools = missingRequiredToolsForInput(state, currentInput);
