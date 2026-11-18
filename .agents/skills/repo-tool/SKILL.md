@@ -14,7 +14,7 @@ description: Use at the start of any repo work and whenever a hook denies a comm
 3. `bun run repo find "<q>" [--wiki|--code|--scripts]` - locate; then `bun run repo outline <file>` and Read a range.
 4. `bun run repo place <path>` before creating a file (`place --kind plan` = where a kind goes).
 5. Edit with Edit/Write. No `sed -i`, no scripted replace.
-6. `bun run repo test <paths> [-t <name>]` - scoped tests; prints counts, failing names and each failure's error, expected/received and location; full log saved. Never pipe `bun test` (the hook rewrites a plain piped call to this command and denies the rest).
+6. `bun run repo test <paths> [-t <name>]` - scoped tests; prints counts, failing names and each failure's error, expected/received and location; full log saved. Never pipe `bun test` (the hook rewrites a plain piped call to this command and denies the rest). A `N error` in the counts is an unhandled error outside any test (file load, between tests): the run fails and names it `unhandled error in <file>: <message>`. Full suite: `bun run repo test --all` (one run per `packages/<x>`, `apps/<x>`, `tools/<x>` and `scripts`, queued on the test slots, totals plus each failed chunk; Bash `timeout` 600000). Do not run `repo test packages` as one run: it exceeds the 600 s cap.
 7. `bun run repo verify <pkg-dir>` - tests + typecheck + narrow gates for one package.
 8. `bun run repo check --all` before commit/handoff (`--only <id>` for one gate).
 

@@ -198,7 +198,7 @@ describe("timeout output", () => {
   test("only fail, log; no counts", () => {
     const lines = describeRun({
       exit: 143,
-      summary: { pass: null, fail: null, skip: null, failures: [], details: {} },
+      summary: { pass: null, fail: null, skip: null, errors: null, failures: [], details: {} },
       log: ".repo-logs/test-x.log",
       failed: true,
       timedOut: true,
