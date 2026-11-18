@@ -45,7 +45,7 @@ const agent = await createAgent({
 
 const result = await agent.run("Your task here");
 console.log(result.output);
-console.log(result.metadata.stepsCount, result.metadata.strategyUsed);
+console.log(result.metadata.iterations, result.metadata.strategyUsed); // iterations = kernel turns
 ```
 
 ### Same agent — fluent builder

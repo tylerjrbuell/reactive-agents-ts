@@ -33,7 +33,8 @@ const agent = await ReactiveAgents.create()
     // Plain function — no Effect import needed.
     // Return nothing to observe, or return the (modified) context to change it.
     handler: (ctx) => {
-      console.log(`Iteration ${ctx.metadata.stepsCount}`);
+      // think/act/observe hooks receive { phase, iteration, state }.
+      console.log(`Iteration ${ctx.iteration}`);
     },
   })
   .build();
@@ -49,7 +50,7 @@ observe. Throwing (or a rejected promise / failed Effect) raises a `HookError`.
 
 | Phase | When It Runs | Common Hook Use Cases |
 |-------|-------------|----------------------|
-| `bootstrap` | Before anything else | Load external config, validate preconditions |
+| `bootstrap` | Before anything else (once per run) | Load external config, validate preconditions |
 | `guardrail` | Input safety check | Log blocked inputs, custom filtering |
 | `cost-route` | Model tier selection | Override routing decisions |
 | `strategy-select` | Strategy selection | Log which strategy was chosen |
@@ -88,6 +89,14 @@ The handler receives the current `ExecutionContext`. Return the (possibly modifi
 
 Agent-visible working memory is the **`recall`** meta-tool (Conductor's Suite), not a field on this context.
 
+### Per-turn phases receive a different context
+
+`think`, `act` and `observe` are fired by the reasoning kernel once per turn. A hook on one of these phases receives `{ phase, iteration, state }`, not an `ExecutionContext`: there is no `ctx.metadata`, `ctx.toolResults` or `ctx.cost`. Read the turn number from `ctx.iteration`, and the run so far from `ctx.state` (`steps`, `toolsUsed`, `tokens`, `taskId`, `status`, `output`). Every other phase is fired once by the engine with the `ExecutionContext` described above.
+
+A run that uses the reasoning kernel gets no synthetic `act` or `observe` fire after the kernel finishes; those hooks fire only for real turns. Each phase has one firing owner, so `bootstrap` fires once per run and `complete` `before` hooks run before `complete` `after` hooks.
+
+`result.metadata.iterations` is the run's kernel turn count (summed over every reasoning pass). `result.metadata.stepsCount` is larger on tool runs because thought, action and observation each count as a step.
+
 ## Ordering
 
 Hooks registered for the same phase and timing run **sequentially in registration order**. If a hook fails:
@@ -106,9 +115,8 @@ Hooks registered for the same phase and timing run **sequentially in registratio
   phase: "think",
   timing: "before",
   handler: (ctx) => {
-    const step = ctx.metadata.stepsCount + 1;
-    const max = ctx.maxIterations ?? 10;
-    console.log(`Step ${step}/${max}`);
+    // think hooks receive { phase, iteration, state } — no ctx.metadata.
+    console.log(`Turn ${ctx.iteration}`);
     // Return nothing — just observing.
   },
 })
@@ -138,9 +146,14 @@ Hooks registered for the same phase and timing run **sequentially in registratio
   phase: "act",
   timing: "after",
   handler: (ctx) => {
-    const last = ctx.toolResults.at(-1) as { toolName?: string } | undefined;
-    const toolName = last?.toolName ?? "unknown";
-    auditLog.append({ event: "tool_call", tool: toolName, taskId: ctx.taskId, timestamp: Date.now() });
+    // act hooks receive { phase, iteration, state }; state.toolsUsed is the set of tools called so far.
+    auditLog.append({
+      event: "tool_turn",
+      tools: [...ctx.state.toolsUsed],
+      taskId: ctx.state.taskId,
+      iteration: ctx.iteration,
+      timestamp: Date.now(),
+    });
     // Return nothing — just observing.
   },
 })
@@ -154,7 +167,7 @@ Hooks registered for the same phase and timing run **sequentially in registratio
   phase: "think",
   timing: "on-error",
   handler: (ctx) => {
-    console.error(`Think phase failed at step ${ctx.metadata.stepsCount}. Check your prompt or model.`);
+    console.error(`Think phase failed at turn ${ctx.iteration}. Check your prompt or model.`);
     // Return nothing — just observing the error.
   },
 })

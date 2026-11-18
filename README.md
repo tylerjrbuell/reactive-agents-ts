@@ -412,6 +412,7 @@ From the terminal: `rax ps` lists durable runs, `rax attach <runId>` tails one. 
 
 Intercept any of the 12 execution phases with before, after, or error hooks:
 
+<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from 'effect'
 import { ReactiveAgents } from 'reactive-agents'
@@ -424,9 +425,8 @@ const agent = await ReactiveAgents.create()
         phase: 'think',
         timing: 'after',
         handler: (ctx) => {
-            console.log(
-                `Step ${ctx.metadata.stepsCount}: ${ctx.metadata.strategyUsed}`
-            )
+            // think/act/observe hooks receive { phase, iteration, state }
+            console.log(`Turn ${ctx.iteration}: ${ctx.state.strategy}`)
             return Effect.succeed(ctx)
         },
     })
@@ -434,17 +434,14 @@ const agent = await ReactiveAgents.create()
         phase: 'act',
         timing: 'after',
         handler: (ctx) => {
-            const last = ctx.toolResults.at(-1) as
-                | { toolName?: string }
-                | undefined
-            if (last?.toolName) console.log(`Tool called: ${last.toolName}`)
+            console.log(`Tools used so far: ${[...ctx.state.toolsUsed]}`)
             return Effect.succeed(ctx)
         },
     })
     .build()
 ```
 
-Available phases (12): `bootstrap`, `guardrail`, `cost-route`, `strategy-select`, `think`, `act`, `observe`, `verify`, `memory-flush`, `cost-track`, `audit`, `complete`. Each supports `before`, `after`, and `on-error` timing.
+Available phases (12): `bootstrap`, `guardrail`, `cost-route`, `strategy-select`, `think`, `act`, `observe`, `verify`, `memory-flush`, `cost-track`, `audit`, `complete`. Each supports `before`, `after`, and `on-error` timing. `think`, `act` and `observe` fire once per kernel turn and receive `{ phase, iteration, state }` (no `ctx.metadata`); the other phases fire once per run with the `ExecutionContext`.
 
 ## How it compares
 

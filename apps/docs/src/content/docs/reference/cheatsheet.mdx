@@ -107,7 +107,7 @@ const agent = await ReactiveAgents.create()
 | `.withRetryPolicy({ maxRetries, backoffMs })` | Retry on transient LLM failures |
 | `.withFallbacks({ providers })` | Ordered provider cascade — falls back to the next provider on any error |
 | `.withErrorHandler(fn)` | Global error callback |
-| `.withMinIterations(n)` | Force at least N reasoning steps |
+| `.withMinIterations(n)` | Continue until the run reaches N kernel turns (`metadata.iterations`); stops early if a continuation adds no turn |
 | `.withVerificationStep({ mode: "reflect" })` | LLM self-review; on a REVISE verdict it re-runs once with the feedback so the answer is actually revised |
 | `.withOutputValidator(fn)` | Retry until output passes a predicate |
 | `.withCustomTermination(fn)` | User-defined "done" check |
@@ -171,7 +171,7 @@ Phases: `bootstrap` · `guardrail` · `cost-route` · `strategy-select` · `thin
   debrief?: { summary, keyFindings, metrics },
   terminatedBy: "final_answer_tool" | "final_answer" | "max_iterations" | "guard_stop" | "end_turn" | "llm_error" | "abstained",
   abstention?: { reason, missing },  // present iff terminatedBy === "abstained"
-  metadata: { duration, cost, tokensUsed, stepsCount, strategyUsed },
+  metadata: { duration, cost, tokensUsed, iterations, stepsCount, strategyUsed },
 }
 ```
 

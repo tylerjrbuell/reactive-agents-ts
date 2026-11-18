@@ -31,7 +31,8 @@ interface AgentResult {
         llmCalls?: number // LLM calls up to the result (sub-agents included); excludes background debrief synthesis
         strategyUsed?: string // Reasoning strategy that finished the run (if reasoning enabled)
         strategySwitches?: { from: string; to: string; iteration?: number }[] // Every mid-run strategy switch, in order; absent when the run never switched
-        stepsCount: number // Number of reasoning steps / iterations
+        iterations?: number // Kernel model turns, summed over every reasoning pass (a pass with no kernel counts 1)
+        stepsCount: number // Reasoning steps recorded; thought, action and observation each count, so this exceeds iterations on tool runs
         confidence?: 'high' | 'medium' | 'low' // From final-answer tool
         // Honest-partial markers (present when the harness authored the shipped output)
         harnessAuthoredOutput?: boolean // true only when a non-empty output was assembled by the harness, not written by the model (for example a budget-stopped plan joining its completed steps). Absent on failed and abstained runs: their output is ""
