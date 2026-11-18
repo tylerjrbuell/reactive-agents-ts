@@ -60,12 +60,6 @@ const rules: Rule[] = [
   {
     file: "README.md",
     subs: [
-      // "5,028 tests across 556 files" prose
-      {
-        label: "tests across files prose",
-        pattern: /\*\*[\d,]+\+? tests\*\* across [\d,]+\+? files/,
-        replacement: `**${testsFloor(metrics.tests)} tests** across ${filesFloor(metrics.testFiles)} files`,
-      },
       // bun test command help "(5,028 tests / 556 files, ~65s)"
       {
         label: "bun test help comment",
@@ -120,6 +114,9 @@ const rules: Rule[] = [
 // trimmed to defensible structural-differentiator rows only; a raw test-count
 // row read as a bragging metric, not a comparison). Both patterns no longer
 // have a corresponding line in README.md by design, not by drift.
+// Removed 2026-11-18: "tests across files prose" (the README launch slim cut
+// the Features > Confidence list; the hero table row and the bun test help
+// comment still carry the synced count).
 
 let driftDetected = false;
 
