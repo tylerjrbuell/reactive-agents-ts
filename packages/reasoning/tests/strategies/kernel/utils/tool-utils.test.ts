@@ -13,7 +13,6 @@ import {
 } from "../../../../src/kernel/capabilities/attend/tool-formatting.js";
 import {
   gateNativeToolCallsForRequiredTools,
-  buildToolElaborationInjection,
   planNextMoveBatches,
 } from "../../../../src/kernel/capabilities/decide/tool-gating.js";
 
@@ -344,30 +343,6 @@ describe("gateNativeToolCallsForRequiredTools", () => {
     );
     expect(r.effective.map((c) => c.id)).toEqual(["a"]);
     expect(r.blockedOptionalBatch).toBe(false);
-  });
-});
-
-describe("buildToolElaborationInjection", () => {
-  it("returns empty string when disabled", () => {
-    const result = buildToolElaborationInjection(
-      [{ name: "web-search", parameters: [{ name: "query" }] }],
-      { enabled: false },
-    );
-    expect(result).toBe("");
-  });
-
-  it("builds a lightweight elaboration section when enabled", () => {
-    const result = buildToolElaborationInjection(
-      [
-        { name: "web-search", parameters: [{ name: "query" }, { name: "maxResults" }] },
-        { name: "file-write", parameters: [{ name: "path" }, { name: "content" }] },
-      ],
-      { enabled: true, maxHintsPerTool: 2 },
-    );
-    expect(result).toContain("Tool Elaboration");
-    expect(result).toContain("web-search");
-    expect(result).toContain("file-write");
-    expect(result).toContain("required args:");
   });
 });
 

@@ -73,6 +73,15 @@ export function buildSanitizedReverseMap(
 // ── buildSystemPrompt ─────────────────────────────────────────────────────────
 
 /**
+ * The one sentence that invites batching independent tool calls. The default
+ * mid / large / frontier prompt ends with it; the opt-in parallel tool hint
+ * (`reason/parallel-tool-hint.ts`) adds the same sentence where the base prompt
+ * lacks it (the local tier, a custom system prompt).
+ */
+export const PARALLEL_CALLS_SENTENCE =
+  "When a task requires multiple independent lookups or actions, issue all tool calls in the same response — they execute in parallel.";
+
+/**
  * Build the system prompt text.
  * Tier-adaptive: frontier/large models get detailed reasoning guidance;
  * mid models get standard guidance; local models get minimal prompt.
@@ -114,7 +123,7 @@ export function buildSystemPrompt(
       ? "You are a helpful assistant. Use the provided tools when needed to complete tasks."
       : "You are a helpful assistant.";
   }
-  const PARALLEL_HINT = " When a task requires multiple independent lookups or actions, issue all tool calls in the same response — they execute in parallel.";
+  const PARALLEL_HINT = ` ${PARALLEL_CALLS_SENTENCE}`;
 
   if (t === "frontier" || t === "large") {
     return hasTools

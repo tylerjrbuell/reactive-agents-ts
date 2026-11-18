@@ -43,6 +43,11 @@ export interface PrepareThinkGatewayCallParams {
   readonly toolChoice?: CompletionRequest["toolChoice"]
   /** Lean thinking (lean-thinking.ts): `false` = this turn's request carries `thinking: false`. Absent otherwise. */
   readonly thinking?: false
+  /**
+   * Lean final turn (lean-final-turn.ts): the think budget is resolved WITHOUT
+   * the thinking allowance (the turn runs with thinking off). Absent otherwise.
+   */
+  readonly answerOnlyBudget?: true
 }
 
 /**
@@ -89,7 +94,7 @@ export function prepareThinkGatewayCall(params: PrepareThinkGatewayCallParams) {
     const thinkIntent: LlmCallIntent = {
       purpose: "think",
       tier: profile.tier,
-      thinkingModel: profile.thinkingModel === true,
+      thinkingModel: profile.thinkingModel === true && params.answerOnlyBudget !== true,
       ...(economizeBand ? { paceBand: economizeBand } : {}),
       ...(state.maxOutputTokensOverride !== undefined
         ? { budgetTokens: state.maxOutputTokensOverride }

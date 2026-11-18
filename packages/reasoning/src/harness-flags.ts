@@ -311,6 +311,29 @@ export function leanThinkingEnabled(): boolean {
 }
 
 /**
+ * Parallel tool hint: the system prompt invites batching independent tool calls
+ * in one reply (`kernel/capabilities/reason/parallel-tool-hint.ts`). Default
+ * OFF pending an ablation. `RA_PARALLEL_TOOL_HINT=1` enables it for models
+ * whose calibration rates parallel calls `reliable`; `RA_PARALLEL_TOOL_HINT=always`
+ * enables it regardless of calibration. Any other value: off.
+ */
+export function parallelToolHintMode(): true | "always" | undefined {
+  const raw = readFlag("RA_PARALLEL_TOOL_HINT");
+  return raw === "1" ? true : raw === "always" ? "always" : undefined;
+}
+
+/**
+ * Lean final turn: when the run contract's tool work is all done and only the
+ * answer is left, the next think call ships with no tools, thinking off and the
+ * think budget without the thinking allowance
+ * (`kernel/capabilities/reason/lean-final-turn.ts`). Default OFF pending an
+ * ablation. `RA_LEAN_FINAL_TURN=1` enables it.
+ */
+export function leanFinalTurnEnabled(): boolean {
+  return readFlag("RA_LEAN_FINAL_TURN") === "1";
+}
+
+/**
  * Compute offload: a task that asks for a numeric aggregate over data it reads
  * keeps `code-execute` on the tool surface and gets one advisory line once data
  * was read without a successful `code-execute` call

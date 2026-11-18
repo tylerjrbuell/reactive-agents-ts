@@ -42,6 +42,8 @@ import {
   wrapUpReserveEnabled,
   todoWrapUpEnabled,
   leanThinkingEnabled,
+  parallelToolHintMode,
+  leanFinalTurnEnabled,
   computeOffloadEnabled,
   planToolCatalogEnabled,
   planBudgetEnabled,
@@ -188,6 +190,27 @@ export interface HarnessConfig {
    * Default OFF pending a live ablation. (`RA_LEAN_THINKING=1`)
    */
   readonly leanThinking?: boolean;
+  /**
+   * Parallel tool hint. The system prompt gains one line inviting the model to
+   * make independent tool calls together in one reply (the kernel already runs
+   * every call of a reply before the next turn). `true` shows it only when the
+   * model's calibration rates parallel calls `reliable`; `"always"` shows it
+   * whatever the calibration says. Native function calling only; never on a
+   * tools-withheld turn, under plan posture, or when parallel tool calls are
+   * turned off (`nextMovesPlanning.enabled: false`).
+   * Default OFF pending an ablation. (`RA_PARALLEL_TOOL_HINT=1` / `=always`)
+   */
+  readonly parallelToolHint?: boolean | "always";
+  /**
+   * Lean final turn. When the run contract declared tool work (a required
+   * tool, a file, an action), all of it is done and only the answer is left,
+   * the next think call ships with no tools, `thinking: false`, and the think
+   * output budget without the thinking allowance. If that reply is not the
+   * final answer, the following call has its tools again; the lean turn
+   * applies again only after another tool call. Native function calling only.
+   * Default OFF pending an ablation. (`RA_LEAN_FINAL_TURN=1`)
+   */
+  readonly leanFinalTurn?: boolean;
   /**
    * Compute offload. When the task text asks for a numeric aggregate over data
    * the run reads (an aggregate verb AND a data-source reference), `code-execute`
@@ -369,6 +392,10 @@ export interface ResolvedHarness {
   readonly todoWrapUp?: true;
   /** Lean thinking (see `HarnessConfig.leanThinking`). Present only when on. */
   readonly leanThinking?: true;
+  /** Parallel tool hint (see `HarnessConfig.parallelToolHint`). Present only when on: `true` = calibration-gated, `"always"` = forced. */
+  readonly parallelToolHint?: true | "always";
+  /** Lean final turn (see `HarnessConfig.leanFinalTurn`). Present only when on. */
+  readonly leanFinalTurn?: true;
   /** Compute offload (see `HarnessConfig.computeOffload`). Present only when on. */
   readonly computeOffload?: true;
   /** Plan tool catalog (see `HarnessConfig.planToolCatalog`). Present when on (the default). */
@@ -436,6 +463,11 @@ export function resolveHarnessConfig(
   );
   const promptDump = pickOptional(config.promptDumpPathPrefix, promptDumpPathPrefix());
   const llmRecoveryBudget = clampRecoveryBudget(config.llmRecoveryBudget);
+  // `false` = off; `true` = calibration-gated; `"always"` = forced; unset = env.
+  const parallelHint =
+    config.parallelToolHint === undefined ? parallelToolHintMode()
+    : config.parallelToolHint === false ? undefined
+    : config.parallelToolHint;
 
   // Finding 5 (harness-control-surface final fix wave): `harness-flags.ts`
   // couples `toolDiscovery`'s and `verboseRules`' env-layer DEFAULTS to
@@ -486,6 +518,8 @@ export function resolveHarnessConfig(
     ...(pick(config.wrapUpReserve, wrapUpReserveEnabled()) ? { wrapUpReserve: true as const } : {}),
     ...(todoWrapUpEnabled() ? { todoWrapUp: true as const } : {}),
     ...(pick(config.leanThinking, leanThinkingEnabled()) ? { leanThinking: true as const } : {}),
+    ...(parallelHint !== undefined ? { parallelToolHint: parallelHint } : {}),
+    ...(pick(config.leanFinalTurn, leanFinalTurnEnabled()) ? { leanFinalTurn: true as const } : {}),
     ...(pick(config.computeOffload, computeOffloadEnabled()) ? { computeOffload: true as const } : {}),
     ...(pick(config.planToolCatalog, planToolCatalogEnabled()) ? { planToolCatalog: true as const } : {}),
     ...(pick(config.planBudget, planBudgetEnabled()) ? {} : { planBudget: false as const }),

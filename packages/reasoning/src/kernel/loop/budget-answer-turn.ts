@@ -30,7 +30,7 @@
  * `budget_answer_turn` guard-fired event naming the reservation.
  */
 import { Effect } from "effect";
-import { deliverableToContent } from "@reactive-agents/core";
+import { deliverableToContent, type Deliverable } from "@reactive-agents/core";
 import { transitionState, type KernelInput, type KernelState } from "../state/kernel-state.js";
 import { contributeGuidance } from "../state/guidance-channel.js";
 import { emitGuardFired } from "../utils/diagnostics.js";
@@ -71,17 +71,30 @@ export function budgetAnswerTurnRecord(
   if (state.status !== "thinking" || !isLastThinkCall(state, maxIterations)) return undefined;
   const llmCalls = state.llmCalls ?? 0;
   if (lastExitGateRecord(state.steps)?.answerTurnAt === llmCalls) return undefined; // already reserved
+  const judged = toolWorkSettled(state, input);
+  if (judged === undefined) return undefined;
+  const outstanding = outstandingItems(state, input, judged);
+  if (outstanding.length === 0) return undefined;
+  return { proposedBy: "max_iterations", gateDecision: "deny-once", reason: "max_iterations", outstanding, answerTurnAt: llmCalls };
+}
+
+/**
+ * The judged deliverable when no TOOL work is left, so only the answer can be
+ * outstanding: the run holds validated tool evidence, the contract has no
+ * blocking item (a required tool, a write target), and no action the task asks
+ * for is undone. Undefined otherwise. Pure. Shared by the budget answer turn
+ * and the lean final turn (`reason/lean-final-turn.ts`).
+ */
+export function toolWorkSettled(state: KernelState, input: KernelInput): Deliverable | undefined {
   if (collectValidatedObservations(state).length === 0) return undefined; // no evidence to answer from
   const judged = assembleDeliverable(state);
-  // Tool work left (a required tool, a write target): the last call keeps its tools.
+  // Tool work left (a required tool, a write target): the call keeps its tools.
   if (contractOutstanding(state, input, deliverableToContent(judged)).length > 0) return undefined;
   // An answer-only contract can miss an action the task asks for ("file a
   // report using the report tool"): while one is undone, the call keeps its tools.
   const tools = (input.availableToolSchemas ?? []).map((t) => t.name);
   if (requestedActionTools(input.task, tools, succeededToolNames(state.steps)).length > 0) return undefined;
-  const outstanding = outstandingItems(state, input, judged);
-  if (outstanding.length === 0) return undefined;
-  return { proposedBy: "max_iterations", gateDecision: "deny-once", reason: "max_iterations", outstanding, answerTurnAt: llmCalls };
+  return judged;
 }
 
 /**

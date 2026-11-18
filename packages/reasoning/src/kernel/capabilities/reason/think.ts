@@ -74,6 +74,8 @@ import { answerTurnPending, emitAnswerTurn, guidanceForAnswerTurn } from "./answ
 import { buildWireParameterSchema } from "./wire-parameter-schema.js";
 import { callThinkActOrAnswer, planProactiveActOrAnswer, settleActOrAnswer } from "./act-or-answer.js";
 import { decideLeanThinking } from "./lean-thinking.js";
+import { decideLeanFinalTurn, guidanceForLeanFinalTurn } from "./lean-final-turn.js";
+import { parallelToolHintLine } from "./parallel-tool-hint.js";
 import { compactToolDescription, type ToolSchema } from "../attend/tool-formatting.js";
 import { normalizeThinkResponse } from "./normalize-think-response.js";
 import { dispatchThinkResponse, type ThinkTurnParams } from "./dispatch-think-response.js";
@@ -206,9 +208,12 @@ export function handleThinking(
     // The exit gate's answer turn also withholds tools for its one call (answer-turn.ts).
     const struck = shouldWithholdTools(state);
     const answerTurn = !struck && answerTurnPending(state);
-    const withholdTools = struck || answerTurn;
+    // Lean final turn (harness switch, default OFF): tool work settled → no tools, thinking off, bounded budget.
+    const lean = yield* decideLeanFinalTurn({ state, context, enabled: h.leanFinalTurn === true && !struck && !answerTurn });
+    state = lean.state;
+    const withholdTools = struck || answerTurn || lean.taken;
     const turnGuidance: PendingGuidance = { ...(pending ?? {}), environmentUpdate: envStep.notice, checklistReminder };
-    const guidance = struck ? guidanceForToolsWithheld(turnGuidance) : answerTurn ? guidanceForAnswerTurn(turnGuidance) : turnGuidance;
+    const guidance = struck ? guidanceForToolsWithheld(turnGuidance) : answerTurn ? guidanceForAnswerTurn(turnGuidance) : lean.taken ? guidanceForLeanFinalTurn(turnGuidance) : turnGuidance;
     let loopDetectedMessage: string | undefined;
     if (guidance.loopDetected && pipeline) {
       const defaultNudge = LOOP_DETECTED_DEFAULT;
@@ -536,6 +541,8 @@ export function handleThinking(
     if (toolIndexText) parts.push(toolIndexText);
     const checklistLine = checklistSystemLine(todoVisible && !withholdTools,input.checklistGuidance?.systemLine === true);
     if (checklistLine) parts.push(checklistLine);
+    const parallelHint = yield* parallelToolHintLine({ state, context, h, toolsWithheld: withholdTools, surface: gatedToolSchemas, systemPrompt: systemPromptText });
+    if (parallelHint) parts.push(parallelHint);
     // Hotfix 0.5-1 (2026-07-07): GuidanceContext was previously assembled
     // (and pendingGuidance cleared) but never passed to assembly — every
     // guidance-channel signal was a silent no-op.
@@ -717,7 +724,7 @@ export function handleThinking(
     const projectedState = state;
     // Lean thinking (harness switch, default OFF): a tool-selection turn on a thinking model asks for thinking off.
     const leanThinking = yield* decideLeanThinking({ state, context, enabled: h.leanThinking === true, toolsWithheld: withholdTools, domainToolsOnWire: llmTools.length });
-    const prepare = { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas), ...(leanThinking ? { thinking: false as const } : {}) };
+    const prepare = { state, context, h, llmTools, systemPromptWithDriver, messagesForRequest, toolProvenance: provenanceBySanitizedName(wireToolSchemas), ...(leanThinking || lean.taken ? { thinking: false as const } : {}), ...(lean.taken ? { answerOnlyBudget: true as const } : {}) };
     // Act-or-answer (harness switch, default OFF → both calls below are no-ops
     // around callThinkWithRecovery): "proactive" forces the first request
     // of a turn that must act; a prose turn while tool work is outstanding is

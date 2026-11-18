@@ -117,37 +117,10 @@ export type GateRefusal<T> = {
   readonly reason: string;
 };
 
-// ── Tool Elaboration ──────────────────────────────────────────────────────────
-
-function describeToolBehavior(name: string): readonly string[] {
-  const lowered = name.toLowerCase();
-  if (lowered.includes("search") || lowered.includes("http") || lowered.includes("fetch") || lowered.includes("get")) {
-    return [
-      "Use for read-only lookup and data retrieval.",
-      "Independent calls can be grouped before the next think step.",
-      "Prefer concrete, narrow arguments to reduce noisy observations.",
-    ];
-  }
-  if (lowered.includes("read") || lowered.includes("list") || lowered.includes("query")) {
-    return [
-      "Use for read-only inspection.",
-      "Safe candidate for short-term batched execution.",
-      "Return focused slices over broad payloads when possible.",
-    ];
-  }
-  if (lowered.includes("write") || lowered.includes("delete") || lowered.includes("update") || lowered.includes("create")) {
-    return [
-      "Has side effects; execute with explicit intent.",
-      "Avoid batching with other mutating calls unless ordering is guaranteed.",
-      "Confirm target path/resource arguments before invocation.",
-    ];
-  }
-  return [
-    "Use only when arguments are complete and specific.",
-    "Prefer one clear objective per call.",
-    "If multiple independent calls are needed, batch only safe read-like calls.",
-  ];
-}
+// buildToolElaborationInjection + describeToolBehavior deleted (2026-11-18): no
+// caller ever rendered them. The one batching invitation is
+// PARALLEL_CALLS_SENTENCE (attend/context-utils.ts), added by the opt-in
+// parallel tool hint (reason/parallel-tool-hint.ts) where the base prompt lacks it.
 
 export function isParallelBatchSafeTool(name: string): boolean {
   // Explicitly safe tools — dispatching multiple in parallel is always correct.
@@ -236,29 +209,6 @@ export function shouldInjectDriverInstructions(
 ): boolean {
   if (mode === "text-parse") return true;
   return toolSchemaDetail !== "names-only" && toolSchemaDetail !== "names-and-types";
-}
-
-export function buildToolElaborationInjection(
-  toolSchemas: readonly { readonly name: string; readonly parameters?: readonly { readonly name: string }[] }[],
-  config?: ToolElaborationInjectionConfig,
-): string {
-  if (!config?.enabled || toolSchemas.length === 0) return "";
-  const maxHints = Math.max(1, config.maxHintsPerTool ?? 2);
-  const lines = toolSchemas.map((tool) => {
-    const hints = describeToolBehavior(tool.name).slice(0, maxHints);
-    const args = (tool.parameters ?? []).map((p) => p.name).join(", ");
-    const argsLine = args.length > 0 ? `required args: ${args}` : "required args: none";
-    return [
-      `- ${tool.name}`,
-      `  - ${argsLine}`,
-      ...hints.map((h) => `  - ${h}`),
-    ].join("\n");
-  });
-  return [
-    "## Tool Elaboration (lightweight)",
-    "Use these tool-specific hints to choose precise calls and avoid dead iterations.",
-    ...lines,
-  ].join("\n");
 }
 
 export function planNextMoveBatches<T extends { readonly name: string }>(
