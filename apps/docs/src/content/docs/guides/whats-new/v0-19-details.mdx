@@ -1,0 +1,51 @@
+---
+title: v0.19 security hardening and Cortex
+description: >-
+  Detail for v0.19.0: every security hardening change and the Cortex changes (November 2026).
+sidebar:
+  order: 0
+topic: releases
+related:
+  - guides/whats-new
+  - guides/security-hardening
+  - features/cortex
+---
+
+The headline, new defaults, breaking changes and the upgrade checklist for v0.19.0 are on [What's New](/guides/whats-new/). This page carries the security hardening and Cortex detail for the same release.
+
+## Security hardening
+
+Behavior changes first. Each one can break an existing setup. See [Security Hardening](/guides/security-hardening/) for the full trust-boundary summary.
+
+- **SDK server needs a bearer key.** The server `rax deploy --mode sdk` generates requires `Authorization: Bearer <RAX_API_KEY>` on `/chat` and `/chat/stream`. With `RAX_API_KEY` unset, a random key is generated and printed once at startup. Bodies over 1 MiB are rejected and the wildcard CORS header is gone, so browser apps on other origins need a gateway in front. `/health`, `/ready` and the agent card stay open.
+- **Cortex off loopback needs `CORTEX_TOKEN`.** Binding with `CORTEX_HOST=0.0.0.0` now refuses to start without it. Cross-site requests (`Sec-Fetch-Site: cross-site`) are refused. See [Settings and keys](/features/cortex/settings-and-keys/#access-token).
+- **File tools refuse secret paths.** `file-read`, `file-write`, `file-edit`, `list-directory` and `grep` refuse credential paths inside the file root (`.env`, `.env.*`, `.ssh`, `.cortex`, `secret.key`, `provider-keys.json`, ...), including through symlinks. Hosts opt out explicitly with `withSecretPathAccess`.
+- **Shell escapes closed.** `shell-execute` parses `sed` and `awk` programs and refuses any construct that can run commands or write files, refuses `sort --compress-program`, and path-checks option values (`sort --output=/tmp/x`). File tools resolve symlinks before confining a path, and `grep` globs can no longer leave the file root.
+- **Empty webhook secrets fail closed.** An empty or whitespace webhook or Telegram `secretToken` is treated as unset instead of accepting any signature.
+- **SSRF guard covers more address forms.** `assertPublicUrl` now applies the private, loopback and metadata rules to IPv4-mapped, IPv4-compatible, NAT64 and 6to4 IPv6 forms, and blocks `localhost.` and `*.localhost`. `http-get` and A2A agent-card discovery connect to the address they validated (`fetchPinned`), closing the DNS-rebinding gap.
+- **A2A client.** `auth: { type: "apiKey" }` sends `Authorization: Bearer <apiKey>` (the scheme the built-in server accepts), requests have a timeout and response size cap, and JSON-RPC calls no longer follow redirects.
+- **Approval rules see through wrappers.** A `"git push"` rule still matches `git -C dir push`, `env git push`, `xargs`, `timeout` and `sudo -u x`. `shell-execute` forwards `gh` and `gws` credentials only when that command is granted.
+- **Owner-only file modes.** New trace, log and exporter directories are `0700` and files `0600`. The same holds for durable-run storage (`runs.db`), memory directories, the memory SQLite file and `memory.md`, scratchpad spill files and `.cortex/`. Existing files keep their current permissions. Agent ids are contained to one path segment in the durable-runs and memory directories.
+- **Redaction covers modern key formats.** Traces, logs and OTel output redact `sk-proj-` keys, OpenRouter, fine-grained GitHub, Slack, Stripe, Groq and xAI keys, PEM private-key blocks, `Basic` credentials and `password=` / `secret=` / `token=` assignments.
+- **Dependencies.** `effect` is pinned to 3.22.4 workspace-wide (AsyncLocalStorage advisory) and `@modelcontextprotocol/sdk` is `^1.32.2`. `client_credentials` and `private_key_jwt` MCP auth accept an optional `expectedIssuer`.
+- **Smaller fixes.** A2A and channels bound request bytes and task and session stores; `rax deploy` scaffolds write a `.dockerignore` for `.git` and `.env*`; MCP docker HTTP mode binds `127.0.0.1`; `http-get` drops credential headers on cross-origin redirects.
+
+## Cortex
+
+Chat composer with a Config popover, `/mcp` and `/btw` commands, a Context tab (active skills and recalled memories), judgments, rich answers, `@` file tags, attachments, and voice (dictation, read aloud, voice mode). See [Cortex](/features/cortex/).
+
+- **Asks before risky tools by default.** Writing files, running code and the full shell wait for your approval in chat and desk runs; gateway agents refuse them. Turn it off with **Ask before risky tools** in Lab Tools or `/approvals` in chat. The framework's own default is unchanged. See [Approvals and questions](/features/cortex/approvals-and-questions/).
+- **One command surface.** Typing `/` and the Config button open the same anchored list, with each setting beside its slash command and current value. Esc goes back one level, then closes. See [Chat and composer](/features/cortex/chat-and-composer/).
+- **One styled `Select`.** Every pick list uses it: search from nine options, grouped options, keyboard support. The Beacon settings panel closes on an outside click or Esc.
+- **Tagged files no longer flood goals:** at most 8 deliverable goals.
+- **Live goal output.** Goal segments, schedule fires and loop ticks stream into the open chat like a typed turn, and a reload reattaches. A picked file the browser can no longer read shows a "Not attached" toast. See [Goals, plans and loops](/features/cortex/goals-plans-loops/).
+- **Channels and a Gateway tab.** The Lab connects a saved Gateway process agent to Telegram, Signal or a signed webhook with encrypted write-only credentials, an access-control editor and **Test connection**, and a Gateway tab shows connection state and activity. See [Gateway and channels](/features/cortex/gateway-and-channels/).
+- **Durable runs are on by default in Cortex.** Chats, desk runs and gateway agents are built with durable runs unless you turn them off, so a Stop, a Pause or a crash leaves a run you can **Continue** without losing progress. The framework default stays off. Cortex uses the framework's retention defaults (the newest 50 completed runs within 30 days), and `REACTIVE_AGENTS_RUNS_DIR` moves the run store. See [Approvals and questions](/features/cortex/approvals-and-questions/).
+- **The channel hub survives a restart.** The durable inbox, outbox and follow-up timers live in the Cortex database, so a redelivered message does not run twice and a pending reply is sent. Gateway metrics persist too. `CORTEX_CHANNEL_INBOX=memory` restores the in-memory hub.
+- **Approvals.** A shell command the tool would refuse is refused before Cortex asks, so you are no longer asked to approve a call that cannot run. Approve and Deny answer at once and the turn keeps streaming, and long parameters have **Show full parameters** (secrets masked). Tool arguments show while a call runs.
+- **Chat file tags are pointers.** A tagged `@file` reaches the agent as its path and size (files of 2 KB or less are still inlined), and **Edit message** restores the tag chips.
+- **Beacon Field.** Repeatable drag, arrow-key moves, the Board's status filter and search, folding of sub-agents, richer nodes and a legend. The sonar rings are back on the Beacon hero.
+- **Opt-in calibration in the Builder.** **Learned calibration** and **Community calibration** switches under Reliability are off by default and write `.withCalibration("auto", { learned, community })`. The Model page shows spend and the model's calibration, marked Shipped or Learned.
+- **`dev-stack start|stop|status`.** `bun run dev-stack start --port 4399 --ui-port 4398` (in `apps/cortex`) runs a second, detached instance; `stop` ends only the processes it started. See [Local setup recipes](/features/cortex/local-setup-recipes/).
+
+Restart Cortex after upgrading to pick these up.

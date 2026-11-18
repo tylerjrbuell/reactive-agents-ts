@@ -524,6 +524,7 @@ export default defineConfig({
                             collapsed: true,
                             items: [
                                 { label: 'Latest', link: 'guides/whats-new/' },
+                                { label: 'v0.19 security and Cortex', link: 'guides/whats-new/v0-19-details/' },
                                 { label: 'v0.18', link: 'guides/whats-new/v0-18/' },
                                 { label: 'v0.17', link: 'guides/whats-new/v0-17/' },
                                 { label: 'v0.15 and v0.16', link: 'guides/whats-new/v0-15-to-v0-16/' },
