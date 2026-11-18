@@ -298,7 +298,10 @@ await using agent = await ReactiveAgents.create()
     phase: "think",
     timing: "after",
     handler: (ctx) => {
-      console.log(`Iteration ${ctx.iteration}, tokens: ${ctx.tokensUsed}`);
+      // think receives { phase, iteration, state } per kernel turn
+      if (!("metadata" in ctx)) {
+        console.log(`Iteration ${ctx.iteration}, tokens: ${ctx.state.tokens}`);
+      }
       return Effect.succeed(ctx);
     },
   })

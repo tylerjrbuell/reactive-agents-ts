@@ -240,7 +240,10 @@ agent.withHook({
   phase: "think",
   timing: "before",
   handler: (ctx) => {
-    console.log(`Iteration ${ctx.iteration}, tokens: ${ctx.tokensUsed}, cost: $${ctx.cost}`);
+    // think receives { phase, iteration, state } per kernel turn; engine phases get the full ExecutionContext
+    if (!("metadata" in ctx)) {
+      console.log(`Iteration ${ctx.iteration}, tokens: ${ctx.state.tokens}`);
+    }
     return Effect.succeed(ctx);
   },
 });

@@ -166,7 +166,8 @@ const agent = await ReactiveAgents.create()
     phase: "think",
     timing: "on-error",
     handler: (ctx) => {
-      alerting.notify(`Agent ${ctx.agentId} failed during think phase`);
+      // think on-error receives { phase, iteration } (no agentId); use the agent name you already have.
+      alerting.notify(`Agent failed during think phase, turn ${ctx.iteration}`);
       return Effect.succeed(ctx);
     },
   })

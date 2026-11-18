@@ -265,7 +265,10 @@ const agent = await ReactiveAgents.create()
     phase: "think",
     timing: "after",
     handler: (ctx) => {
-      console.log(`[think] Response: ${ctx.metadata.lastResponse}`);
+      // think hooks receive { phase, iteration, state } on each kernel turn (no ctx.metadata)
+      if (!("metadata" in ctx)) {
+        console.log(`[think] turn ${ctx.iteration}, tokens so far: ${ctx.state.tokens}`);
+      }
       return ctx;
     },
   })

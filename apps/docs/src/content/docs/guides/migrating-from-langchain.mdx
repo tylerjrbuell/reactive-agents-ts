@@ -196,14 +196,17 @@ const agent = await ReactiveAgents.create()
     phase: "act",
     timing: "after",
     handler: (ctx) => {
-      console.log("Tool finished:", ctx.toolResults);
+      // act hooks receive { phase, iteration, state } on each kernel turn
+      if (!("metadata" in ctx)) {
+        console.log(`Turn ${ctx.iteration}, tools used:`, [...ctx.state.toolsUsed]);
+      }
       return Effect.succeed(ctx);
     },
   })
   .build();
 ```
 
-Hooks receive a typed `ExecutionContext` and must return `Effect.succeed(ctx)` (or a modified context) to continue execution. Returning a failed Effect cancels the current phase.
+Engine phases receive a typed `ExecutionContext`; `think`, `act` and `observe` receive `{ phase, iteration, state }` on each kernel turn. A hook can return `Effect.succeed(ctx)`, the context, or nothing to continue execution. Returning a failed Effect cancels the current phase.
 
 ---
 

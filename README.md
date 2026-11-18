@@ -412,7 +412,6 @@ From the terminal: `rax ps` lists durable runs, `rax attach <runId>` tails one. 
 
 Intercept any of the 12 execution phases with before, after, or error hooks:
 
-<!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from 'effect'
 import { ReactiveAgents } from 'reactive-agents'
@@ -425,8 +424,10 @@ const agent = await ReactiveAgents.create()
         phase: 'think',
         timing: 'after',
         handler: (ctx) => {
-            // think/act/observe hooks receive { phase, iteration, state }
-            console.log(`Turn ${ctx.iteration}: ${ctx.state.strategy}`)
+            // think/act/observe hooks receive { phase, iteration, state } per kernel turn
+            if (!('metadata' in ctx)) {
+                console.log(`Turn ${ctx.iteration}: ${ctx.state.strategy}`)
+            }
             return Effect.succeed(ctx)
         },
     })
@@ -434,7 +435,9 @@ const agent = await ReactiveAgents.create()
         phase: 'act',
         timing: 'after',
         handler: (ctx) => {
-            console.log(`Tools used so far: ${[...ctx.state.toolsUsed]}`)
+            if (!('metadata' in ctx)) {
+                console.log(`Tools used so far: ${[...ctx.state.toolsUsed]}`)
+            }
             return Effect.succeed(ctx)
         },
     })
