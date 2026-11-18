@@ -56,18 +56,8 @@ const CASES: {
   abortIf: (ctx: PendingCtx) => boolean;
   dedup: boolean;
 }[] = [
-  {
-    label: "single-call before-act (mid-loop)",
-    when: "before", phase: "act", order: "write-first",
-    abortIf: (c) => c.state.meta.pendingToolCalls?.[0]?.name === "web-search",
-    dedup: false,
-  },
-  {
-    label: "round-level before-act",
-    when: "before", phase: "act", order: "search-first",
-    abortIf: (c) => (c.state.meta.pendingToolCalls?.length ?? 0) > 1,
-    dedup: true,
-  },
+  // before-act exits are pinned separately below: since 2026-11-18 the hooks
+  // run before any call of the round executes, so there is no round state.
   { label: "after-act", when: "after", phase: "act", order: "search-first", abortIf: () => true, dedup: true },
   { label: "before-observe", when: "before", phase: "observe", order: "search-first", abortIf: () => true, dedup: true },
   { label: "after-observe", when: "after", phase: "observe", order: "search-first", abortIf: () => true, dedup: true },
@@ -125,4 +115,41 @@ describe("act killswitch exits carry the round's state (D-2026-10-28-ACT-EXIT)",
       expect(dedup).toBe(c.dedup);
     });
   }
+
+  // before-act-gate.ts: the hooks run once per call before ANY call of the
+  // round executes. A before-act exit keeps the earlier rounds' state and
+  // carries nothing from its own round, whose calls never ran.
+  it("before-act exit: no call of the round runs, even ones ahead of the denied call; earlier rounds survive", async () => {
+    const reg = new RegistrationHarness();
+    reg.before("act", (ctx) => {
+      const pending = ctx.state.meta["pendingToolCalls"];
+      const first: unknown = Array.isArray(pending) ? pending[0] : undefined;
+      const name = typeof first === "object" && first !== null && "name" in first ? first.name : undefined;
+      return ctx.iteration >= 1 && name === "web-search" ? { abort: "stop", reason: "test-killswitch" } : undefined;
+    });
+    const harnessPipeline = new HarnessPipeline(reg._collected as ConstructorParameters<typeof HarnessPipeline>[0]);
+    const pass = await Effect.runPromise(
+      runPass(
+        reactKernel,
+        { task: "Search then write.", availableToolSchemas: SCHEMAS, contextProfile: { tier: "local" }, harnessPipeline } as KernelInput,
+        { maxIterations: 6, strategy: "reactive", kernelType: "react", taskId: "round-exit-test", modelId: "llama3.2:3b" } as KernelRunOptions,
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            TestLLMServiceLayer([turn(search), turn(write, { name: "web-search", args: { q: "fresh-query" } }), { text: "Done." }]),
+            toolLayer,
+            EventBusLive,
+          ),
+        ),
+      ),
+    );
+    const s = pass.state;
+    expect(s.meta.terminatedBy).toBe("test-killswitch");
+    // The first round's search survives.
+    expect(s.toolsUsed.has("web-search")).toBe(true);
+    // The denied round's file-write sat AHEAD of the denied search and still never ran.
+    expect(s.toolsUsed.has("file-write")).toBe(false);
+    expect(s.steps.some((st) => st.metadata?.observationResult?.toolName === "file-write")).toBe(false);
+    expect((s.ledger ?? []).some((e) => e.kind === "artifact")).toBe(false);
+  });
 });

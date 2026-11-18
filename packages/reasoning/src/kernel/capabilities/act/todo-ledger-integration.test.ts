@@ -280,6 +280,12 @@ describe("todo -> checklist-item ledger facts", () => {
       );
       expect(pass.state.meta.terminatedBy).toBe("test-killswitch");
       const facts = checklistFacts(pass.state.ledger);
+      // before-act runs before any call of the round (act/before-act-gate.ts):
+      // the todo calls never ran, so nothing was staged.
+      if (when === "before" && phase === "act") {
+        expect(facts).toEqual([]);
+        return;
+      }
       expect(facts.length).toBe(2);
       expect(foldAdvisory(facts).map((i) => [i.id, i.status])).toEqual([
         ["1", "completed"],

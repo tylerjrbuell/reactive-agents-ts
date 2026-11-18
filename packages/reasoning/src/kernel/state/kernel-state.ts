@@ -155,8 +155,8 @@ export interface KernelMeta {
   readonly pendingNativeToolCalls?: readonly ToolCallSpec[];
   /**
    * Wave 6.3: the NORMALIZED pending calls for THIS act pass (native +
-   * text-extracted, args normalized) — set by act.ts immediately before the
-   * before-act hooks run so `requireApprovalFor`-class killswitches see every
+   * text-extracted, args healed) — set per call by act/before-act-gate.ts while
+   * the before-act hooks run so `requireApprovalFor`-class killswitches see every
    * call regardless of tool-call dialect. `pendingNativeToolCalls` above is
    * native-FC-only; a text-parse run leaves it empty and a hook reading only
    * it silently approves everything.

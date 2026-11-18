@@ -24,7 +24,7 @@ import { Data, Effect, Ref } from "effect";
 import type { CompletionResponse } from "@reactive-agents/llm-provider";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ExecutionError } from "../../errors/errors.js";
-import type { ReasoningStatus, ReasoningStep } from "../../types/index.js";
+import type { ReasoningMetadata, ReasoningStatus, ReasoningStep } from "../../types/index.js";
 import { gatewayComplete, type GatewayRequest, type LlmCallIntent } from "../../kernel/llm-gateway.js";
 import { runPass, type PassResult } from "../../kernel/loop/run-pass.js";
 import { deriveTerminatedBy } from "../../kernel/loop/react-kernel.js";
@@ -544,6 +544,20 @@ export function relayDelegated(
   return { ...child, strategy, steps: relayedSteps, metadata };
 }
 
+/**
+ * Stamp the run's kernel turn count on its result: this run's own passes plus
+ * a delegated child's count (relayed in the child's metadata). Unchanged when
+ * neither ran a kernel pass. `stepsCount` is never touched.
+ */
+export function withKernelIterations<R extends { readonly metadata: ReasoningMetadata }>(
+  result: R,
+  own: number | undefined,
+): R {
+  const relayed = result.metadata.kernelIterations;
+  if (own === undefined && relayed === undefined) return result;
+  return { ...result, metadata: { ...result.metadata, kernelIterations: (relayed ?? 0) + (own ?? 0) } };
+}
+
 /** One contributing pass's envelope, remembered with its pass for exclusion. */
 interface PassEnvelope {
   readonly pass: PassResult;
@@ -580,6 +594,8 @@ export function runStrategy<E, R>(
     let pendingPause: KernelPause | undefined;
     // Iterations every kernel pass of this run used (the run's iteration budget draw).
     let iterationsSpent = 0;
+    // Kernel turns (`state.iteration`) summed over passes; undefined until a pass runs.
+    let kernelIterations: number | undefined;
     // Whether any kernel pass offered a domain tool; undefined until a pass runs.
     let toolsVisible: boolean | undefined;
 
@@ -627,6 +643,7 @@ export function runStrategy<E, R>(
           });
           yield* Ref.update(ledgerRef, (l) => absorbPassLedger(l, passLedgerAfterSeed(result.state.ledger, seeded.seedRunLedger)));
           iterationsSpent += passIterationsUsed(result.state);
+          kernelIterations = (kernelIterations ?? 0) + result.state.iteration;
           if (passOptions?.contributes !== false) {
             envelopes.push({ pass: result, envelope: envelopeFromKernelState(result.state) });
           }
@@ -828,6 +845,7 @@ export function runStrategy<E, R>(
     return yield* body(run).pipe(
       Effect.flatMap((end) => settledLedger.pipe(Effect.flatMap((ledger) => terminal(end, ledger)))),
       Effect.catchIf(isPaused, (p) => paused(p.pause)),
+      Effect.map((result) => withKernelIterations(result, kernelIterations)),
     );
   }).pipe(
     // A strategy run is a run: called directly (not through ReasoningService),

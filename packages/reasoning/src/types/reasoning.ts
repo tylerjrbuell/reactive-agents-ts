@@ -36,6 +36,13 @@ export const ReasoningMetadataSchema = Schema.Struct({
   /** Cumulative completion tokens (optional — providers/strategies may not split). */
   outputTokens: Schema.optional(Schema.Number),
   stepsCount: Schema.Number,
+  /**
+   * Kernel turns the run took, summed over every kernel pass (the kernel's own
+   * `state.iteration`). One tool turn is one iteration, while it adds three
+   * steps (thought, action, observation) to `stepsCount`. Absent when no kernel
+   * pass ran (e.g. a strategy that only made direct LLM calls).
+   */
+  kernelIterations: Schema.optional(Schema.Number),
   confidence: Schema.Number, // 0-1
   effectiveness: Schema.optional(Schema.Number), // 0-1 (learned)
   selectedStrategy: Schema.optional(ReasoningStrategy), // for adaptive
