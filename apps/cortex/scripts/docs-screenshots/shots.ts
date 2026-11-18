@@ -342,8 +342,8 @@ export const SHOTS: readonly Shot[] = [
     status: "stable",
     dataset: "board",
     route: "/?view=field",
-    caption: "Beacon's Field view: the same agents as nodes on a dot grid, each with its status, model, run time and tokens.",
-    alt: "Cortex Beacon Field view: agents as nodes on a dot grid, each labelled with its name and status.",
+    caption: "Beacon's Field view: status chips and search above, the same agents as draggable nodes with status, run time, tokens and model, and a legend counting agents by status.",
+    alt: "Cortex Beacon Field view: a filter bar with status chips and a search box, three agent nodes on a dot grid showing status, run time, tokens and model, and a status legend underneath.",
     async capture({ page, base }) {
       await page.goto(`${base}/?view=field`);
       await page.getByText("Needs you").first().waitFor({ timeout: 20_000 });

@@ -1,7 +1,7 @@
 {
   "generatedBy": "bun run --cwd apps/cortex screenshots:docs",
   "cortexVersion": "0.18.0",
-  "capturedOn": "2026-11-17",
+  "capturedOn": "2026-11-18",
   "viewport": "1440x900 @2x, downscaled to 1440 wide",
   "data": "seeded demo data, scripted `test` provider, no keys, no network, HOME and data dir under a temp folder",
   "shots": [
@@ -332,12 +332,12 @@
       "file": "beacon-field.webp",
       "status": "stable",
       "route": "/?view=field",
-      "caption": "Beacon's Field view: the same agents as nodes on a dot grid, each with its status, model, run time and tokens.",
-      "alt": "Cortex Beacon Field view: agents as nodes on a dot grid, each labelled with its name and status.",
+      "caption": "Beacon's Field view: status chips and search above, the same agents as draggable nodes with status, run time, tokens and model, and a legend counting agents by status.",
+      "alt": "Cortex Beacon Field view: a filter bar with status chips and a search box, three agent nodes on a dot grid showing status, run time, tokens and model, and a status legend underneath.",
       "width": 1440,
       "height": 900,
-      "bytes": 29450,
-      "sha256": "c0cfadb18f3a3a5bf0401157687227ae1a87b50a0e59a723c49a4d04b535e68e"
+      "bytes": 29438,
+      "sha256": "111e957f6d15706646eaf05bb5cad759a35f581fb1af4836d380d8da60252922"
     },
     {
       "id": "chat-session",
