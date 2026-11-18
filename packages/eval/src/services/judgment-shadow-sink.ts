@@ -15,10 +15,14 @@
  * Loss direction (review note): every method degrades to empty on error, so
  * a full disk or locked DB silently UNDER-samples. That fail direction is
  * safe for the sink's purpose — missing traffic blocks inversion (the gate
- * needs n≥30), it can never fabricate agreement. Measured auto-shadow cost
+ * needs n≥30), it can never fabricate agreement.
+ *
+ * Auto-shadow is opt-in (since 2026-11-18): a default `build()` records
+ * nothing here. Opt in with `.withJudgment({ shadow: true, model?, baseUrl? })`
+ * or `REACTIVE_AGENTS_AUTO_SHADOW=1`; `REACTIVE_AGENTS_NO_AUTO_SHADOW=1` and
+ * `.withJudgment(false)` win over the env opt-in. Measured cost when on
  * (2026-10-15, qwen3:4b trivial task): ~+6s wall (+3x) from serialized local
- * shadow calls; real multi-step runs dilute it. Opt out with
- * REACTIVE_AGENTS_NO_AUTO_SHADOW=1.
+ * shadow calls; real multi-step runs dilute it.
  */
 import { Context, Effect } from "effect";
 import type { EventBus, JudgmentShadow } from "@reactive-agents/core";
