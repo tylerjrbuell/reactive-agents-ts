@@ -1,109 +1,75 @@
-# @reactive-agents/cli — `rax`
+# @reactive-agents/cli
 
-**The Reactive Agents eXecutable** — CLI for scaffolding, running, and inspecting AI agents.
+> `rax`, the Reactive Agents command line: scaffold a project, run an agent from a prompt, and inspect recorded runs.
 
-[![npm downloads](https://img.shields.io/npm/dm/%40reactive-agents%2Fcli?logo=npm)](https://www.npmjs.com/package/@reactive-agents/cli)
+> **Stability:** unstable. Command names, flags and output can change between minor versions until 1.0.
 
-## Installation
+## Install
 
 ```bash
-# Global install
 bun add -g @reactive-agents/cli
-
-# Or run without installing
-bunx @reactive-agents/cli --help
+# or: npm install -g @reactive-agents/cli
 ```
+
+Or run it without installing:
+
+```bash
+bunx @reactive-agents/cli --help
+# or: npx @reactive-agents/cli --help
+```
+
+The `rax` binary runs on Bun, so Bun must be on your `PATH` even when you install it with npm. See [Runtime](#runtime).
+
+## Usage
+
+See an agent work with no setup. Without an API key or a local Ollama, `rax demo` prints a recorded run and tells you which key to set:
+
+```bash
+rax demo
+```
+
+Scaffold a project, then run a one-off prompt:
+
+```bash
+rax init my-agent --template with-tools
+export ANTHROPIC_API_KEY=sk-ant-...
+rax run "Summarize the state of fusion energy" --provider anthropic
+```
+
+`rax init` uses the same templates as [`create-reactive-agent`](https://www.npmjs.com/package/create-reactive-agent). It picks the provider from the API key in your environment and falls back to Ollama.
+
+Every command prints its options with `--help`, for example `rax run --help`.
 
 ## Commands
 
-```bash
-rax init <name> [--template minimal|standard|full]
-  Scaffold a new Reactive Agents project
+| Command | What it does |
+|---|---|
+| `rax demo` | Zero-config demo. Live with Ollama or an Anthropic, OpenAI or Google key; recorded output otherwise. |
+| `rax init <name> [--template <name>]` | Scaffold a project. Templates: `minimal` (default), `with-tools`, `streaming`, `with-structured-output`, `with-approval-gates`, `with-memory`, `cloudflare-worker`. |
+| `rax create agent <name> [--recipe basic\|researcher\|coder\|orchestrator]` | Generate an agent file in your project. |
+| `rax run <prompt> [--provider <name>] [--model <id>] [--tools] [--reasoning] [--stream] [--cortex]` | Run an agent once and print the result. Providers: `anthropic` (default), `openai`, `ollama`, `gemini`, `litellm`, `groq`, `xai`, `test`. |
+| `rax playground [--provider <name>] [--stream] [--memory]` | Interactive agent REPL. Uses the `test` provider by default. |
+| `rax dev [--entry <path>] [--no-watch]` | Run your agent entrypoint in watch mode. |
+| `rax serve [--port <n>] [--name <name>]` | Serve an agent over A2A. |
+| `rax cortex [--port <n>] [--no-open]` | Launch the Cortex studio. Needs `@reactive-agents/cortex` installed. Pair it with `rax run ... --cortex`. |
+| `rax eval run --suite <name>` | Run an evaluation suite. |
+| `rax trace inspect <path>`, `rax trace compare <a> <b>` | Read or compare JSONL trace files. |
+| `rax diagnose <sub>` | Inspect recorded runs (for example `list`, `replay`, `grep`, `diff`, `debrief`). |
+| `rax ps`, `rax attach <runId>` | List durable runs, or follow one until it ends. |
+| `rax deploy up\|down\|status\|logs [--target <target>]` | Build and deploy an agent container. Targets: `local`, `fly`, `railway`, `render`, `cloudrun`, `digitalocean`. |
+| `rax version` | Print the version. |
 
-rax create agent <name> [--recipe basic|researcher|coder|orchestrator]
-  Generate an agent file in your project
-
-rax run <prompt> [--provider anthropic|openai|ollama|gemini|litellm|test] [--model <model>] [--name <name>] [--stream] [--cortex]
-  Run an agent with a prompt and print the result. `--cortex` calls `.withCortex()` so events stream
-  to a local Cortex studio. Launch the studio with `rax cortex` (after `bun add @reactive-agents/cortex`)
-  or, in the source repo, with `bun cortex`. Override the ingest base URL with `CORTEX_URL` (default
-  `http://127.0.0.1:4321`).
-
-rax cortex [--port <n>] [--no-open] [--help]
-  Launch the Cortex companion studio (UI + API for visual agent inspection). Requires
-  `@reactive-agents/cortex` to be installed (lazy peer dep — `bun add @reactive-agents/cortex`).
-
-rax dev [--entry src/index.ts] [--no-watch]
-  Run your local agent entrypoint in watch mode
-
-rax eval run --suite <name>
-  Run an evaluation suite
-
-rax playground
-  Launch an interactive agent REPL session
-
-rax inspect <agent-id> [--logs-tail 200] [--json]
-  Inspect local deployment signals and recent matching logs
-
-rax deploy up [--target local|fly|railway|render|cloudrun|digitalocean] [--mode daemon|sdk] [--dry-run]
-  Build + deploy agent container through provider adapters
-
-rax deploy down [--target <target>]
-  Stop deployment (target auto-detected from config)
-
-rax deploy status [--target <target>]
-  Show deployment status (target auto-detected from config)
-
-rax deploy logs [-f] [--target <target>]
-  Tail deployment logs (target auto-detected from config)
-
-rax version
-  Print version
-```
-
-## Deploy Provider Contracts
-
-Deploy adapters are validated with CLI contract tests so upstream CLI changes can trigger early patches.
-
-```bash
-bun test apps/cli/tests/cli-contracts.test.ts
-RUN_SLOW_TESTS=1 bun test apps/cli/tests/cli-contracts.test.ts
-```
-
-Baseline contract checks include:
-
-- Docker `>= 20`, Compose `>= 2`
-- `gcloud >= 380.0.0`
-- `doctl >= 1.72.0`
-- Fly/Railway/Render command and flag availability for adapter-invoked subcommands
-
-Containerized fallback CLIs (`flyctl`, `gcloud`, `doctl`) are supported when Docker is available.
-
-## Examples
-
-```bash
-# Scaffold a new project with all features
-rax init my-ai-app --template full
-cd my-ai-app
-bun install
-
-# Generate a research agent
-rax create agent researcher --recipe researcher
-
-# Run a one-off prompt
-export ANTHROPIC_API_KEY=sk-ant-...
-rax run "Summarize the state of fusion energy" --provider anthropic
-
-# Cortex studio: visual UI + API for inspecting agents. Two ways:
-# (a) From any project — install once, run anywhere:
-bun add @reactive-agents/cortex
-rax cortex
-# (b) From the source repo — server + Vite UI in dev mode:
-# git clone https://github.com/tylerjrbuell/reactive-agents-ts && cd reactive-agents-ts && bun install && bun cortex
-# Then in another terminal, stream run events into the studio:
-rax run "Research topic X" --cortex --provider anthropic
-```
+`rax --help` lists every command, including `skills`, `mcp`, `discover`, `inspect`, `bench` and `examples`.
 
 ## Documentation
 
-Full documentation at [docs.reactiveagents.dev/reference/cli/](https://docs.reactiveagents.dev/reference/cli/)
+- [CLI reference](https://docs.reactiveagents.dev/reference/cli/)
+- [Quickstart](https://docs.reactiveagents.dev/guides/quickstart/)
+
+## Runtime
+
+The `rax` binary needs Bun >= 1.1.0 on your `PATH` (its entry is `#!/usr/bin/env bun`). Projects it scaffolds run on Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+
+## License
+
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).

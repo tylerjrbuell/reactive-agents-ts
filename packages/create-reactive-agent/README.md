@@ -9,7 +9,7 @@
 
 ## Install
 
-You normally do not install it. Run it through your package manager's `create` command:
+Nothing to install. One command creates a project:
 
 ```bash
 npm create reactive-agent my-agent
@@ -17,12 +17,7 @@ npm create reactive-agent my-agent
 # or: pnpm create reactive-agent my-agent
 ```
 
-To call it from code, add the package:
-
-```bash
-bun add create-reactive-agent
-# or: npm install create-reactive-agent
-```
+To call the scaffolder from your own code, see [Programmatic use](#programmatic-use).
 
 ## Usage
 
@@ -46,25 +41,6 @@ cp .env.example .env   # then set the provider key (for example ANTHROPIC_API_KE
 ```
 
 The stub holds a `your-key-here` placeholder. The generated project treats that placeholder as a missing key: it prints one line and exits 1 instead of sending it to the provider. Ollama needs no key.
-
-The same scaffold from code:
-
-```ts
-import { scaffold } from "create-reactive-agent";
-
-const result = await scaffold({
-  dir: "./my-agent",
-  projectName: "my-agent",
-  template: "minimal",
-  provider: "anthropic",
-  packageManager: "bun",
-});
-
-console.log(result.files);     // paths written, relative to dir
-console.log(result.nextSteps); // commands to run next
-```
-
-`scaffold` throws if the target directory exists and is not empty.
 
 ### Templates
 
@@ -94,6 +70,34 @@ The `cloudflare-worker` project ships a `wrangler.toml` with `compatibility_flag
 | `--yes` | Skip prompts, accept defaults |
 | `--help` | Show help |
 | `--version` | Print version |
+
+## Programmatic use
+
+Only needed when a tool or script of yours generates projects. Add the package:
+
+```bash
+bun add create-reactive-agent
+# or: npm install create-reactive-agent
+```
+
+Then call `scaffold`:
+
+```ts
+import { scaffold } from "create-reactive-agent";
+
+const result = await scaffold({
+  dir: "./my-agent",
+  projectName: "my-agent",
+  template: "minimal",
+  provider: "anthropic",
+  packageManager: "bun",
+});
+
+console.log(result.files);     // paths written, relative to dir
+console.log(result.nextSteps); // commands to run next
+```
+
+`scaffold` throws if the target directory exists and is not empty.
 
 ## API
 
