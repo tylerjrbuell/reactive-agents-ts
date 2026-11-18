@@ -1,5 +1,5 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { providerEnvVar, providerDisplayName } from "../lib/provider-config.js";
+import { KEY_PLACEHOLDER, providerEnvVar, providerDisplayName } from "../lib/provider-config.js";
 import { ownPackageVersionRange } from "../lib/own-version.js";
 
 export function renderSharedFiles(
@@ -70,7 +70,7 @@ export function renderSharedFiles(
 
   const envVar = providerEnvVar(opts.provider);
   const envContent = envVar
-    ? `# ${providerDisplayName(opts.provider)} credentials\n${envVar}=your-key-here\n`
+    ? `# ${providerDisplayName(opts.provider)} credentials\n${envVar}=${KEY_PLACEHOLDER}\n`
     : `# Ollama runs locally — no API key needed.\n# Make sure Ollama is running: https://ollama.com\n`;
 
   const gitignore =
@@ -127,8 +127,8 @@ export function renderEnvGuard(opts: ScaffoldOptions): string {
 }
 
 `;
-  return `${envLoad}if (!process.env.${envVar}) {
-  console.error("Missing ${envVar}: copy .env.example to .env (or export the variable), then run the start script again.");
+  return `${envLoad}if (!process.env.${envVar} || process.env.${envVar} === "${KEY_PLACEHOLDER}") {
+  console.error("Missing ${envVar}: copy .env.example to .env and replace ${KEY_PLACEHOLDER} with your key (or export the variable), then run the start script again.");
   process.exit(1);
 }`;
 }

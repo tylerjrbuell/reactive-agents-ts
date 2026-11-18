@@ -5,6 +5,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { renderTemplate } from "../src/templates/index.js";
 import { scaffold } from "../src/lib/scaffold.js";
+import { KEY_PLACEHOLDER } from "../src/lib/provider-config.js";
 import type { ScaffoldOptions, TemplateName } from "../src/types.js";
 
 // W0.2: the scaffolded project must load `.env` (not crash-wall on a keyless
@@ -150,5 +151,28 @@ describe("keyless smoke (W0.2)", () => {
     // Not the crash walls this replaces:
     expect(stderr).not.toMatch(/loadEnvFile is not a function/);
     expect(stderr).not.toMatch(/\.env: not found/);
+
+    // `.env` copied from `.env.example` without editing still holds the
+    // placeholder: the guard must catch it instead of letting the run reach
+    // the provider and die on a 401 stack trace.
+    const placeholder = Bun.spawnSync({
+      cmd: [process.execPath, "src/index.ts"],
+      cwd: result.dir,
+      env: {
+        PATH: process.env.PATH ?? "",
+        HOME: process.env.HOME ?? "",
+        ANTHROPIC_API_KEY: KEY_PLACEHOLDER,
+      },
+    });
+    expect(placeholder.exitCode).toBe(1);
+    expect(placeholder.stderr.toString()).toContain(GUARD_MARKER);
+    expect(placeholder.stderr.toString()).toContain(KEY_PLACEHOLDER);
   }, 20000);
+
+  test("next steps copy .env.example instead of writing the placeholder as the key", async () => {
+    const result = await scaffold(baseOpts({ template: "minimal" }));
+    const joined = result.nextSteps.join("\n");
+    expect(joined).toContain("cp .env.example .env");
+    expect(joined).not.toContain(`=${KEY_PLACEHOLDER}`);
+  });
 });

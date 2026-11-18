@@ -49,7 +49,9 @@ function buildNextSteps(opts: ScaffoldOptions): readonly string[] {
 
   const envVar = providerEnvVar(opts.provider);
   if (envVar) {
-    steps.push(`echo "${envVar}=your-key-here" > .env`);
+    // Not `echo "KEY=your-key-here" > .env`: pasted verbatim, that writes the
+    // placeholder as the key. Copy the stub, then set the real value.
+    steps.push(`cp .env.example .env   # then set ${envVar} in .env`);
   } else if (opts.provider === "ollama") {
     steps.push("# Ensure Ollama is running: https://ollama.com");
   }

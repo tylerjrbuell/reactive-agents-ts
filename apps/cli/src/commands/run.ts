@@ -51,7 +51,7 @@ const HELP = `
     --provider <name>     ${providerList(", ")} (default: anthropic)
     --model <model>       Model identifier
     --name <name>         Agent name (default: cli-agent)
-    --tools               Enable tool calling
+    --tools               Enable the built-in tools (files, web, code)
     --reasoning           Enable reasoning strategies
     --mcp-config <path>   Path to MCP server config JSON
     --verbose, -v         Show phase-by-phase execution details
@@ -124,7 +124,7 @@ export async function runAgent(args: string[]): Promise<void> {
     console.error(kv("--provider <name>", providerList(", ")));
     console.error(kv("--model <model>", "Model identifier"));
     console.error(kv("--name <name>", "Agent name (default: cli-agent)"));
-    console.error(kv("--tools", "Enable tool calling"));
+    console.error(kv("--tools", "Enable the built-in tools (files, web, code)"));
     console.error(kv("--reasoning", "Enable reasoning strategies"));
     console.error(kv("--mcp-config <path>", "Path to MCP server config JSON"));
     console.error(kv("--verbose, -v", "Show phase-by-phase execution details"));
@@ -179,8 +179,27 @@ export async function runAgent(args: string[]): Promise<void> {
   }
 
   if (enableTools) {
-    builder = builder.withTools();
+    // Built-ins are opt-in in the framework: a bare `.withTools()` gives the
+    // model no capability tools, so `--tools` would enable nothing.
+    builder = builder.withTools({ builtins: true });
   }
+
+  // `--verbose` promises phase-by-phase detail. Off a TTY the framework is
+  // quiet unless a verbosity is set, so state it explicitly.
+  if (verbose) {
+    builder = builder.withObservability({ verbosity: "verbose" });
+  } else if (quiet) {
+    builder = builder.withObservability({ verbosity: "minimal" });
+  }
+
+  // On a TTY the framework draws its own live status line. `--quiet` promises
+  // output only, and `--stream` writes tokens to the same terminal, so both
+  // turn the status renderer off through its documented host switch.
+  if (quiet || stream) {
+    process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE = "true";
+  }
+  const frameworkStatusLine =
+    Boolean(process.stdout.isTTY) && process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE !== "true";
 
   if (enableReasoning) {
     builder = builder.withReasoning();
@@ -228,7 +247,9 @@ export async function runAgent(args: string[]): Promise<void> {
       }
     }
 
-    const execSpin = quiet || stream ? null : createSpinner("Executing...");
+    // The framework's status line already shows progress on a TTY; a second
+    // spinner on the same terminal interleaves with it.
+    const execSpin = quiet || stream || frameworkStatusLine ? null : createSpinner("Executing...");
     const result = stream
       ? await (async () => {
           if (!quiet) {

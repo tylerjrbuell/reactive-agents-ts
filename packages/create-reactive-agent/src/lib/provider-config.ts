@@ -1,5 +1,12 @@
 import type { Provider } from "../types.js";
 
+/**
+ * The stub value written into `.env.example` / `.dev.vars`. The generated key
+ * guard treats it as unset: a `.env` copied without editing would otherwise
+ * pass the guard and die on a provider 401 with a stack trace.
+ */
+export const KEY_PLACEHOLDER = "your-key-here";
+
 export function providerEnvVar(p: Provider): string | null {
   switch (p) {
     case "anthropic":
