@@ -7,7 +7,13 @@
  */
 import { droppedMetaToolsNotice } from "../meta-tools-resolution.js";
 import { emitBuilderNotice } from "../builder-notice.js";
-import { ToolBuilder, type RagMemoryStore, type ToolDefinition } from '@reactive-agents/tools';
+import {
+  ToolBuilder,
+  type ToolExecutionError,
+  toToolError,
+  type RagMemoryStore,
+  type ToolDefinition,
+} from '@reactive-agents/tools';
 import { Effect, Either } from "effect";
 import { resolveWorkspaceDir } from "../../engine/start-run.js";
 import type { ReactiveAgentBuilder } from "../../builder.js";
@@ -322,12 +328,45 @@ export const applyWithMetaTools = (
   }
 };
 
+/** Tag check for an already-typed tool failure (passed through unchanged). */
+const isToolExecutionError = (e: unknown): e is ToolExecutionError =>
+  typeof e === "object" && e !== null && (e as { _tag?: unknown })._tag === "ToolExecutionError";
+
+/**
+ * Run a ToolBuilder handler as an Effect, the way `defineTool` runs its
+ * handler: an Effect return runs as-is, a Promise is awaited, a plain value
+ * is the result. A throw, a rejection or a failed Effect becomes a
+ * `ToolExecutionError` in the error channel.
+ */
+const runToolBuilderHandler = (
+  handler: (args: Record<string, unknown>) => unknown,
+  toolName: string,
+  args: Record<string, unknown>,
+): Effect.Effect<unknown, ToolExecutionError> => {
+  const toError = toToolError(toolName, `Tool "${toolName}"`);
+  return Effect.suspend(() => {
+    const out = handler(args);
+    const effect: Effect.Effect<unknown, unknown> = Effect.isEffect(out)
+      ? (out as Effect.Effect<unknown, unknown>)
+      : Effect.tryPromise({ try: () => Promise.resolve(out), catch: (e) => e });
+    return effect;
+  }).pipe(
+    Effect.catchAllDefect((d) => Effect.fail(d)),
+    Effect.mapError((e) => (isToolExecutionError(e) ? e : toError(e))),
+  );
+};
+
 /**
  * Convert a `ToolBuilder` instance into a `{ definition, handler }` entry
  * suitable for `.withTools({ tools: [...] })`.
  *
- * Wraps the `ToolBuilder` handler (which receives `...args` and returns a
- * plain value) in the Effect-returning form expected by the tool registry.
+ * The handler may return an Effect, a Promise or a plain value; the entry's
+ * handler yields that value (an Effect is run, not returned as the result).
+ * A throw, rejection or failed Effect fails with `ToolExecutionError`.
+ *
+ * Still needed next to `ToolBuilder.build()`: `build()` output fits
+ * `.withTools()` directly only when the handler returns an Effect. Use this
+ * for plain-value and async handlers.
  * Throws if the builder has no `.handler()` configured.
  *
  * @example
@@ -349,7 +388,10 @@ export const applyWithMetaTools = (
  */
 export function toolBuilderToEntry(
   tb: ToolBuilder,
-): { readonly definition: ToolDefinition; readonly handler: (args: Record<string, unknown>) => Effect.Effect<unknown, any> } {
+): {
+  readonly definition: ToolDefinition;
+  readonly handler: (args: Record<string, unknown>) => Effect.Effect<unknown, ToolExecutionError>;
+} {
   const built = tb.build();
   const handler = built.handler;
   if (!handler) {
@@ -359,7 +401,8 @@ export function toolBuilderToEntry(
   }
   return {
     definition: built.definition,
-    handler: (args: Record<string, unknown>) => Effect.succeed(handler(args)),
+    handler: (args: Record<string, unknown>) =>
+      runToolBuilderHandler(handler, built.definition.name, args),
   };
 }
 
