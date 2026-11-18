@@ -185,6 +185,22 @@ describe("summarizeBunTest formats", () => {
     const s = summarizeBunTest("✗ a > b [1ms]\n(fail) a > b [1ms]\n 0 pass\n 1 fail\n")
     expect(s.failures).toEqual(["a > b"])
   })
+  test("with (fail) lines present, ✗ program output is not a failure name", () => {
+    // Shape of the 2026-11-18 root `bun test` log: the framework logs `✗ [error] ...` lines during passing tests.
+    const log = [
+      "✗ [error] controller_early_stop_ungrounded: grounding (file-write)",
+      "error: expect(received).toBe(expected)",
+      'Expected: "http://localhost:11434/v1/systemone"',
+      "      at <anonymous> (/r/packages/judgment/tests/ollama-backend.test.ts:75:34)",
+      "(fail) makeOllamaBackend > posts to the endpoint [2.00ms]",
+      "✗ [error] Daily spend $26.00 exceeds limit $25.00",
+      " 9 pass",
+      " 1 fail",
+    ].join("\n")
+    const s = summarizeBunTest(log)
+    expect(s.failures).toEqual(["makeOllamaBackend > posts to the endpoint"])
+    expect(Object.keys(s.details)).toEqual(["makeOllamaBackend > posts to the endpoint"])
+  })
 })
 
 describe("repo test", () => {

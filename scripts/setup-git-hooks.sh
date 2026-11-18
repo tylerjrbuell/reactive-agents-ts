@@ -10,4 +10,4 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 chmod +x "$REPO_ROOT"/.githooks/*
 git -C "$REPO_ROOT" config core.hooksPath .githooks
 
-echo "git hooks: core.hooksPath -> .githooks (commit-msg, pre-commit)"
+echo "git hooks: core.hooksPath -> .githooks (commit-msg, pre-commit, pre-push, reference-transaction)"

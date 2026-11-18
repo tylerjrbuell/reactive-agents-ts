@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
@@ -133,7 +134,6 @@ describe("regressions", () => {
       "cmd 2>> .repo-logs/a.log",
       `echo x >> ${REPO}/.repo-logs/a.log`,
       "echo x >> /tmp/claude-1000/scratchpad/new.ts",
-      "echo x >> .superpowers/sdd/p/progress.md",
       'echo x >> "$W/progress.md"',
       "echo $((a >> 2))",
       "tee packages/x/src/a.ts < x",
@@ -143,6 +143,23 @@ describe("regressions", () => {
       "cd ~/memory; printf '%s\\n' x >> MEMORY.md",
     ])
       expect(deny(c)).toBeUndefined()
+  })
+  test("appends under a nested .gitignore are allowed (fixture repo, not this checkout's untracked files)", () => {
+    // Built from the test's own temp root: an ignore file that exists only on one machine
+    // (e.g. an untracked `.superpowers/sdd/.gitignore`) passed locally and failed on CI.
+    const r = mkdtempSync(join(tmpdir(), "repo-hook-git-"))
+    dirs.push(r)
+    expect(spawnSync("git", ["init", "-q", r]).status).toBe(0)
+    mkdirSync(join(r, "work", "sdd"), { recursive: true })
+    writeFileSync(join(r, "work", "sdd", ".gitignore"), "*\n")
+    const ctx = { root: r }
+    const ruleOf = (c: string): string | undefined => {
+      const v = classifyBash(c, rules, {}, ctx)
+      return v.decision === "deny" ? v.ruleId : undefined
+    }
+    expect(ruleOf("echo x >> work/sdd/p/progress.md")).toBeUndefined()
+    expect(ruleOf(`echo x >> ${r}/work/sdd/p/progress.md`)).toBeUndefined()
+    expect(ruleOf("echo x >> work/src/a.ts")).toBe("no-shell-append")
   })
   test("alternative lists up to 3 paths", () => {
     expect(reasonOf("bun test a b c d | tail")).toContain("`bun run repo test a b c`")

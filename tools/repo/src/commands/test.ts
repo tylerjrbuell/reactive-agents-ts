@@ -47,6 +47,8 @@ const KILL_GRACE_MS = 5000
 /**
  * Run a command with stdout+stderr sent straight to `logPath` (no pipe), colour disabled.
  * Past `maxSeconds` the child gets SIGTERM, then SIGKILL after 5s; `timedOut` is set.
+ * `exactEnv`, when given, is the child's whole environment (no `process.env`, no colour flags):
+ * `repo ci` uses it to run steps in a scrubbed, CI-like env.
  */
 export function spawnLogged(
   cmd: string,
@@ -55,13 +57,14 @@ export function spawnLogged(
   logPath: string,
   maxSeconds: number = DEFAULT_MAX_SECONDS,
   extraEnv: Readonly<Record<string, string>> = {},
+  exactEnv?: Readonly<Record<string, string>>,
 ): Promise<{ code: number; timedOut: boolean }> {
   const fd = openSync(logPath, "w")
   return new Promise((done) => {
     const child = spawn(cmd, [...args], {
       cwd,
       stdio: ["ignore", fd, fd],
-      env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", ...extraEnv },
+      env: exactEnv !== undefined ? { ...exactEnv, ...extraEnv } : { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", ...extraEnv },
     })
     let timedOut = false
     let killer: ReturnType<typeof setTimeout> | undefined

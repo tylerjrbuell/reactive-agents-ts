@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# reference-transaction hook: log pushes that skipped the pre-push CI mirror (`git push --no-verify`).
+#
+# git runs no hook for a --no-verify push, but it still updates the remote-tracking ref afterwards.
+# When refs/remotes/<remote>/<branch> moves to the exact tip of the local <branch> and pre-push never
+# logged that commit, the push skipped the hook: append it to .repo-logs/push-skips.jsonl.
+# (A fetch moves the remote ref to a commit the local branch does not have yet, so it is not logged.)
+#
+# Runs on every ref update: pure bash, no network, and it ALWAYS exits 0 (a non-zero exit in the
+# "prepared" state would abort the ref update).
+
+state=${1:-}
+lines=()
+while read -r _old new ref; do lines+=("$new $ref"); done
+[[ "$state" == committed ]] || exit 0
+
+for l in "${lines[@]-}"; do
+  new=${l%% *}
+  ref=${l#* }
+  [[ "$ref" == refs/remotes/*/* && ! "$new" =~ ^0+$ ]] || continue
+  branch=${ref#refs/remotes/*/}
+  [[ "$(git rev-parse --verify --quiet "refs/heads/$branch" 2>/dev/null)" == "$new" ]] || continue
+  # Already seen: pre-push ran for it, or this skip is logged (git can report one push twice).
+  grep -qsF "\"sha\":\"$new\"" .repo-logs/pre-push.jsonl .repo-logs/push-skips.jsonl && continue
+  mkdir -p .repo-logs 2>/dev/null || exit 0
+  printf '{"ts":"%s","sha":"%s","ref":"%s","note":"pushed without pre-push (--no-verify)"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$new" "$ref" >> .repo-logs/push-skips.jsonl 2>/dev/null
+done
+exit 0

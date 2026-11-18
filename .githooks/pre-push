@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# pre-push hook: run the local CI mirror (`bun run repo ci`) on each commit being pushed.
+#
+# `repo ci` reads .github/workflows/ci.yml and runs its steps on a fresh `git clone --local` of the
+# commit with a CI-like env (no .env, no API keys, CI=true, temp HOME, Ollama unreachable), so a push
+# that is green here is green on the runner. A full run takes several minutes; a commit that already
+# passed a full `bun run repo ci` (recorded in .repo-logs/ci-verified.jsonl) is not run again, so
+# running `bun run repo ci` first and then `git push` costs no second run.
+#
+# Exit: a failing CI step blocks the push. A crash of the tool itself (exit 2/3) allows it (hooks
+# fail open) and says so. Skip: `git push --no-verify`; git does not run this hook then, so the
+# reference-transaction hook logs the skipped push to .repo-logs/push-skips.jsonl instead.
+# Every run is logged to .repo-logs/pre-push.jsonl.
+
+set -uo pipefail
+
+logs=.repo-logs
+mkdir -p "$logs"
+verified="$logs/ci-verified.jsonl"
+
+log() { # sha rc seconds note
+  printf '{"ts":"%s","sha":"%s","rc":%s,"seconds":%s,"note":"%s"}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" >> "$logs/pre-push.jsonl"
+}
+
+shas=()
+while read -r _lref lsha _rref _rsha; do
+  [[ -z "${lsha:-}" || "$lsha" =~ ^0+$ ]] && continue   # branch delete
+  c=$(git rev-parse --verify --quiet "$lsha^{commit}") || continue   # tag of a non-commit
+  [[ " ${shas[*]-} " == *" $c "* ]] || shas+=("$c")
+done
+
+if ! command -v bun >/dev/null 2>&1 || [[ ! -f tools/repo/src/cli.ts ]]; then
+  echo "pre-push: bun or tools/repo missing, CI mirror skipped; push allowed" >&2
+  exit 0
+fi
+
+for sha in "${shas[@]-}"; do
+  [[ -z "$sha" ]] && continue
+  short=${sha:0:9}
+  if [[ -f "$verified" ]] && grep -qF "\"sha\":\"$sha\"" "$verified"; then
+    echo "pre-push: $short already passed bun run repo ci, not re-run" >&2
+    log "$sha" 0 0 "already-verified"
+    continue
+  fi
+  echo "pre-push: bun run repo ci --rev $short (full CI mirror; skip with git push --no-verify, logged)" >&2
+  start=$SECONDS
+  rc=0
+  bun tools/repo/src/cli.ts ci --rev "$sha" >&2 || rc=$?
+  secs=$((SECONDS - start))
+  elapsed="$((secs / 60))m$((secs % 60))s"
+  if [[ $rc -eq 0 ]]; then
+    echo "pre-push: CI mirror passed for $short in $elapsed" >&2
+    log "$sha" 0 "$secs" "pass"
+  elif [[ $rc -eq 1 ]]; then
+    echo "pre-push: CI mirror FAILED for $short in $elapsed; push blocked (CI would fail)" >&2
+    log "$sha" 1 "$secs" "fail"
+    exit 1
+  else
+    echo "pre-push: repo ci errored (exit $rc) after $elapsed; push allowed (fail open)" >&2
+    log "$sha" "$rc" "$secs" "tool-error"
+  fi
+done
+exit 0

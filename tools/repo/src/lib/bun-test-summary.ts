@@ -49,7 +49,12 @@ function detailLine(l: string, haveFrame: boolean): string | undefined {
  */
 export function summarizeBunTest(log: string): TestSummary {
   const lines = log.replace(ANSI, "").split(/\r?\n/)
-  const failures: string[] = []
+  let failures: string[] = []
+  /**
+   * Names from `(fail)` lines and unhandled-error blocks. When any exist they are the whole list: a bare
+   * `✗ text` line is then program output (e.g. a logger's `✗ [error] ...`), not a test result.
+   */
+  const authoritative = new Set<string>()
   const errors: string[] = []
   const details: Record<string, readonly string[]> = {}
   let block: string[] = []
@@ -73,6 +78,7 @@ export function summarizeBunTest(log: string): TestSummary {
       if (u && u[1] !== undefined) {
         unhandled = false
         const name = `unhandled error in ${file ?? "unknown file"}: ${u[1]}`
+        authoritative.add(name)
         if (!failures.includes(name)) failures.push(name)
         // Same array as `block`: the frame lines that follow are appended to this failure's details.
         block = [`error: ${u[1]}`]
@@ -82,8 +88,10 @@ export function summarizeBunTest(log: string): TestSummary {
         continue
       }
     }
-    const f = /^\s*\(fail\)\s+(.*?)(?:\s+\[[\d.]+m?s\])?\s*$/.exec(l) ?? /^\s*[✗✘×]\s+(.*?)(?:\s+\[[\d.]+m?s\])?\s*$/.exec(l)
+    const failLine = /^\s*\(fail\)\s+(.*?)(?:\s+\[[\d.]+m?s\])?\s*$/.exec(l)
+    const f = failLine ?? /^\s*[✗✘×]\s+(.*?)(?:\s+\[[\d.]+m?s\])?\s*$/.exec(l)
     if (f && f[1] !== undefined) {
+      if (failLine) authoritative.add(f[1])
       if (!failures.includes(f[1])) failures.push(f[1])
       if (!owned && block.length > 0 && details[f[1]] === undefined) details[f[1]] = block
       block = []
@@ -104,6 +112,10 @@ export function summarizeBunTest(log: string): TestSummary {
     if (d === undefined) continue
     if (d.startsWith("at ")) haveFrame = true
     block.push(d)
+  }
+  if (authoritative.size > 0) {
+    failures = failures.filter((n) => authoritative.has(n))
+    for (const k of Object.keys(details)) if (!authoritative.has(k)) delete details[k]
   }
   const fail = count(lines, "fail")
   const pass = count(lines, "pass")

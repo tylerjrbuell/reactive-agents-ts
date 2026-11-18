@@ -8,9 +8,9 @@
 2. `bun run repo scope <files>` — owner/warden, checks and docs a change touches (no args = your diff).
 3. `bun run repo find "<q>" [--wiki|--code|--scripts]`, then `bun run repo outline <file>` and Read a range. `bun run repo place <path>` before creating a file.
 4. Edit with Edit/Write; then `bun run repo test <paths>` and `bun run repo verify <pkg-dir>`.
-5. `bun run repo check --all` before commit/handoff.
+5. `bun run repo check --all` before commit/handoff; `bun run repo ci` before push.
 
-Required: steps 4–5 before claiming done. Optional: 1–3 (use instead of ad-hoc greps). Hooks enforce the shell rules; when one denies, take the printed alternative.
+Required: 4–5 before claiming done. Optional: 1–3. Hooks enforce the shell rules; when one denies, take the printed alternative.
 
 **Which CLI:** `bun run repo` works on this repo · `rax` uses the framework (user CLI, never for repo checks) · `rax-diagnose` explains a recorded run (`rax-diagnose cause <runId|path>`).
 
@@ -124,7 +124,7 @@ Bun ≥1.1.0 recommended; Node.js 22.5+ supported via `@reactive-agents/runtime-
 
 ## Terminal Execution Rules
 
-Hooks deny piped `bun test`, scripted edits (`sed -i`, scripted replace) and recursive shell grep. Use `bun run repo test <paths>` (summary printed, log saved). Raw unpiped `bun test` needs `--timeout 15000`; `.stop(true)` servers in teardown.
+Hooks deny piped `bun test`, scripted edits (`sed -i`) and recursive shell grep. Use `bun run repo test <paths>`. Raw unpiped `bun test` needs `--timeout 15000`; `.stop(true)` servers in teardown.
 
 ## Vision Alignment
 
@@ -139,6 +139,7 @@ bun install
 bun run repo test <paths>     # scoped tests
 bun run repo verify <pkg-dir> # tests + typecheck + gates, one package
 bun run repo check --all      # all registered gates
+bun run repo ci               # CI mirror: fresh clone, no keys
 bun run typecheck             # workspace TypeScript
 bun run build                 # all packages + apps (build:packages, build:apps, build:clean, clean)
 bun run docs:dev              # docs site (docs:build, docs:preview)
@@ -209,7 +210,7 @@ Schemas (contract v2, vendored from [`wardens`](https://github.com/tylerjrbuell/
 
 ## Git Hooks
 
-`bun install` runs `scripts/setup-git-hooks.sh` (re-run if hooks don't fire). `.githooks/commit-msg` rejects Claude/Anthropic `Co-Authored-By:` trailers; `.githooks/pre-commit` blocks the real `.env` and API-key prefixes and runs fast `repo check --changed` (`git commit --no-verify` escapes). Keep hooks sub-second; repo-wide checks go in CI / `bun run repo check --all`.
+`bun install` runs `scripts/setup-git-hooks.sh` (re-run if hooks don't fire). `.githooks/commit-msg` rejects Claude/Anthropic `Co-Authored-By:` trailers; `.githooks/pre-commit` blocks the real `.env` and API-key prefixes and runs fast `repo check --changed` (`git commit --no-verify` escapes), kept sub-second. `.githooks/pre-push` runs `bun run repo ci` (minutes; skips commits it passed, so agents run it first in the background; `--no-verify` is logged).
 
 **Stackblitz:** never add `workspace:*` deps under `apps/stackblitz/`.
 
@@ -229,7 +230,7 @@ Live list: `wiki/Architecture/DEBT-REGISTER.md` (query it; do not read it whole)
 8. **Never manually bump versions or `npm publish`** — the tag-driven flow (`bun run release:dry` → `git tag vX.Y.Z` → publish.yml) stamps versions at tag time; workspace package.json files stay at the 0.10.6 baseline by design.
 9. **`PendingGuidance` replaces `steeringNudge`** — harness signals (required tools pending, loop detected, ICS/oracle guidance) are now accumulated in `state.pendingGuidance` and rendered by `think.ts` into the system prompt's `Guidance:` section each turn. Do NOT inject stray `USER` messages for mid-loop guidance; set `pendingGuidance` fields instead.
 10. **One entropy scorer per thought** — kernel-runner strategies are scored inline by `runReactiveObserver`; the engine/RI event collectors must skip them (`scoresEntropyInline` from `@reactive-agents/core`). Scoring both paths into the shared per-task trajectory with mismatched iteration labels fabricates "diverging" shapes (FM-C3). All entropy sources are disorder-oriented (higher = more uncertain); never feed a quality metric into the composite uninverted.
-11. **No AI co-author trailers in commits, ever** — `Co-Authored-By: Claude ...` / `... @anthropic.com` is forbidden in this repo (shows publicly on GitHub's contributors graph, misattributes authorship). Enforced by a `commit-msg` hook (`.githooks/commit-msg`) that hard-rejects any such trailer regardless of which tool/harness tried to add it. See the Git Hooks section above.
+11. **No AI co-author trailers in commits, ever** — `Co-Authored-By: Claude ...` / `... @anthropic.com` is forbidden in this repo (shows publicly on GitHub's contributors graph, misattributes authorship). Enforced by `.githooks/commit-msg` for every tool (see Git Hooks).
 12. **Termination/outcome logic goes in the shared substrate, never per-strategy.** Strategies are being converged (Plan 8, `wiki/Planning/Implementation-Plans/2026-11-02-harness-convergence.md`). New termination or outcome behavior belongs in the shared finalize/terminal path or in typed run-envelope rails, with `rails.posture` as the template. The shared path is `finalizeStrategyResult`, `emitTerminalDecision`, `strategy-terminal-decision.ts`, and the terminal verify gate. Debug entry point: `rax-diagnose cause <runId|path>`; `run-started.config` records the mechanisms a run ran with.
 
 ## Project Skills Index
