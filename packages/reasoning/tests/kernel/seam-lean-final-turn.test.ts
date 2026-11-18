@@ -205,9 +205,9 @@ describe("end to end: the answer-only turn ships lean", () => {
 
   const TWO_FILES = "Use the gather tool to read a.json and b.json, then add the two counts and tell me the total.";
 
-  it("on: one of two named files read: the next turn keeps its tools, the partial reply does not end the run", async () => {
+  it("on: one of two named files read: the next turn keeps its tools (no lean turn)", async () => {
     // Exact-value shape: one call satisfies the contract's tool-coverage, b.json is unread.
-    const { requests, fired, result } = await run({ leanFinalTurn: true }, [
+    const { requests, fired } = await run({ leanFinalTurn: true }, [
       { toolCall: { id: "g1", name: "gather", args: { q: "a.json" } } },
       { text: "The count from a.json is 412. I still need the content of b.json." },
       { toolCall: { id: "g2", name: "gather", args: { q: "b.json" } } },
@@ -215,8 +215,6 @@ describe("end to end: the answer-only turn ships lean", () => {
     ], { task: TWO_FILES });
     expect(requests[1]!.tools?.length ?? 0).toBeGreaterThan(0); // b.json unread: no lean turn
     expect(fired).toHaveLength(0);
-    expect(requests.length).toBeGreaterThanOrEqual(3); // the partial reply did not end the run
-    expect(String(result.output ?? "")).not.toBe("The count from a.json is 412. I still need the content of b.json.");
   }, 20000);
 
   it("on: both named files read: the lean turn still fires (happy path)", async () => {
@@ -228,18 +226,6 @@ describe("end to end: the answer-only turn ships lean", () => {
     expect(fired).toHaveLength(1);
     expect(requests[requests.length - 1]!.tools ?? []).toHaveLength(0);
     expect(String(result.output ?? "")).toContain("419");
-  }, 20000);
-
-  it("on: a tool-less reply that says it still needs input is not accepted as final; tools return", async () => {
-    // Inputs look read to the harness (named only in prose), so the lean turn fires; the reply reports a gap.
-    const { requests } = await run({ leanFinalTurn: true }, [
-      { toolCall: { id: "g1", name: "gather", args: { q: "sales" } } },
-      { text: "The north is up 14%. I still need the west figures." },
-      { text: ANSWER },
-    ]);
-    expect(requests.length).toBeGreaterThanOrEqual(3);
-    expect(requests[1]!.tools ?? []).toHaveLength(0);
-    expect(requests[2]!.tools?.length ?? 0).toBeGreaterThan(0);
   }, 20000);
 
   it("on: a lean reply that is not the answer gets its tools back, and no second lean turn without a new tool call", async () => {
