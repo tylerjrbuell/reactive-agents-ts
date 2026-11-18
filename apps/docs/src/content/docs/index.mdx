@@ -68,11 +68,11 @@ import demoGif from '../../assets/local-vs-frontier.gif'
 
 ## What you get that other frameworks don't
 
-- **Same code, local or frontier.** The agent loop finishes the job on a 4B Ollama model and on Claude, GPT, or Gemini; only the model line changes. [See the demo](/guides/examples/#demos).
-- **A receipt for every run.** Each run returns a claim-to-evidence record with a verdict. Sign it with Ed25519 via `.withReceiptSigning()` (unsigned by default). [Builder reference](/reference/builder-api/safety-and-quality/).
-- **Explain any failed run.** Every run writes a trace by default, and `rax-diagnose cause <runId>` names why it failed. Replay re-runs a recorded run from its trace with tool results held fixed (model calls stay live unless you add a replay LLM layer). [rax-diagnose](/reference/cli/diagnose/) · [Snapshot & replay](/features/snapshot-replay/).
+- **Same code, local or frontier.** The agent loop finishes the job on a 4B Ollama model and on Claude, GPT, or Gemini; only the model line changes. Model-adaptive context profiles, tool-call healing, output verification and a single-owner termination oracle do the work. [See the demo](/guides/examples/#demos).
+- **A receipt for every run.** Each run returns a claim-to-evidence record with a verdict. Sign it with Ed25519 via `.withReceiptSigning()` (unsigned by default). Set `RA_RECEIPT_KEY` instead to sign without code changes. [Builder reference](/reference/builder-api/safety-and-quality/).
+- **Explain any failed run.** A deterministic 12-phase execution engine puts `before` / `after` / `on-error` hooks on every phase, and every prompt, tool call and reasoning step is a typed event you can inspect and steer locally. Every run writes a trace by default, and `rax-diagnose cause <runId>` names why it failed. Replay re-runs a recorded run from its trace with tool results held fixed (model calls stay live unless you add a replay LLM layer). [rax-diagnose](/reference/cli/diagnose/) · [Snapshot & replay](/features/snapshot-replay/).
 - **Survives a crash.** With `.withDurableRuns()`, a run checkpoints each step and a fresh process resumes it. Durable runs are opt-in in the framework (Cortex turns them on for its own runs). [Durable execution](/guides/durable-execution/).
-- **Private and quiet by default.** No telemetry unless you opt in (`DO_NOT_TRACK` always wins), output is quiet when piped, and optional capabilities such as memory, guardrails, cost routing, and durability only run when you add them with a `.with*()` call. [Observability](/features/observability/).
+- **Private and quiet by default.** No telemetry unless you opt in (`DO_NOT_TRACK` always wins), output is quiet when piped, and optional capabilities such as memory, guardrails, cost routing, and durability only run when you add them with a `.with*()` call. Reactive Intelligence (the entropy sensor and controller) is on by default and does not send data anywhere. [Observability](/features/observability/).
 - **Cortex, a local studio.** Watch runs live, inspect traces, and build agents on your machine. No hosted dashboard. [Cortex](/features/cortex/).
 
   </div>
@@ -398,7 +398,7 @@ If you're going to spend the time anyway, spend it on **your agent's logic** —
 
 ## Why Reactive Agents?
 
-Everything below is evidence for four things: **transparent** (nothing happens off the record), **reliable** (the same code finishes on any model tier), **composable** (you own the loop, nothing runs uninvited), and **accountable** (every run returns proof, not just prose).
+Everything below backs the six points above: the same code on any model tier, a receipt for every run, traces you can diagnose, crash-resume, quiet defaults and a local studio.
 
 <CardGrid stagger>
     <Card title="Type-Safe from End to End" icon="seti:typescript">
@@ -408,7 +408,7 @@ Everything below is evidence for four things: **transparent** (nothing happens o
         every service boundary honest on every PR.
     </Card>
     <Card title="Composable Layer Architecture" icon="puzzle">
-        **13 capability layers, every one opt-in.** Each is an independent Effect
+        **13 capability layers, composed one `.with*()` call at a time.** Each is an independent Effect
         `Layer` with explicit dependencies. Memory without guardrails? Reasoning
         without cost tracking? Just stream tokens? Pick exactly what you need —
         no hidden coupling, no surprise state, no wasted resources.
@@ -475,7 +475,7 @@ Everything below is evidence for four things: **transparent** (nothing happens o
 
 ## How it compares
 
-Reactive Agents focuses on reliability across model tiers, evidence for every run, traces you can diagnose, and capabilities that are all opt-in. It is not a feature-count contest: streaming, tool calling and multi-agent orchestration are table stakes. For side-by-side write-ups, see [vs. LangGraph](/guides/reactive-agents-vs-langgraph/), [vs. Vercel AI SDK](/guides/reactive-agents-vs-vercel-ai-sdk/) and [vs. Mastra](/guides/reactive-agents-vs-mastra/), or the [LangChain migration guide](/guides/migrating-from-langchain/).
+Reactive Agents focuses on reliability across model tiers, evidence for every run, traces you can diagnose, and optional capabilities (memory, guardrails, cost routing, durability) that run only when you add them. It is not a feature-count contest: streaming, tool calling and multi-agent orchestration are table stakes. For side-by-side write-ups, see [vs. LangGraph](/guides/reactive-agents-vs-langgraph/), [vs. Vercel AI SDK](/guides/reactive-agents-vs-vercel-ai-sdk/) and [vs. Mastra](/guides/reactive-agents-vs-mastra/), or the [LangChain migration guide](/guides/migrating-from-langchain/).
 
   </div>
 </div>
