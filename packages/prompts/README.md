@@ -2,7 +2,7 @@
 
 > A versioned prompt template engine with built-in agent, reasoning and judge prompts for Reactive Agents.
 
-> **Stability:** unstable. Template ids and variables may change between minors; `ExperimentService` (A/B variants) may change shape.
+> **Stability:** stable (scoped). `.withPrompts()` and the template service API are stable; `ExperimentService` (A/B variants, `@unstable`) and the wording of the built-in prompts may change between minors.
 
 ## Install
 

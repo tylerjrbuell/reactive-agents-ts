@@ -15,7 +15,7 @@ Reactive Agents follows **Semantic Versioning** (`major.minor.patch`). The frame
 
 ## Stability tiers
 
-Every public surface falls into one of three tiers. The tier is recorded on this page and, per package, in the repo's `stability.json` (each package README repeats it, and a check keeps them equal). Where a single export is less settled than its package, it carries an `@unstable` JSDoc tag. Stable has no per-export tag. A "stable (scoped)" package (`llm-provider`, `reasoning`, `runtime`, `tools`) is stable only for the entry points named in the list below; the rest of that package follows the unstable list.
+Every public surface falls into one of three tiers. The tier is recorded on this page and, per package, in the repo's `stability.json` (each package README repeats it, and a check keeps them equal). Where a single export is less settled than its package, it carries an `@unstable` JSDoc tag. Stable has no per-export tag. A "stable (scoped)" package (`llm-provider`, `prompts`, `reasoning`, `runtime`, `tools`) is stable only for the entry points named in the list below; the rest of that package follows the unstable list.
 
 | Tier | Promise | Breaks allowed |
 |---|---|---|
@@ -30,6 +30,7 @@ The following surfaces are tier-1 stable: the safest to depend on. We aim to kee
 - **Entry points** — `createAgent(config)` (declarative front door) and `ReactiveAgents.create()` + the `.with*()` chain syntax. Both are the same API in two syntaxes, generated from and validated against `AgentConfigSchema` (the single source of truth); anything expressible in one is expressible in the other.
 - **Provider selection** — `.withProvider("anthropic" | "openai" | "gemini" | "groq" | "xai" | "ollama" | "litellm" | "test")`, `.withModel(model)` (string) / `.withModel({ provider, model, numCtx? })` (object), and the `LLMProvider` interface
 - **Reasoning core** — `.withReasoning()` with the documented `ReasoningOptions` shape; the canonical strategies — `reactive` (ReAct), `reflexion`, `plan-execute-reflect`, `tree-of-thought`, and `adaptive` (auto-routes among them). `direct` (single-shot) is the no-reasoning fallback. `blueprint` is also registered (aliases: `react` → `reactive`, `rewoo` → `blueprint`; full registry in [Choosing a Reasoning Strategy](/guides/choosing-strategies/)); `code-action` is experimental — see below.
+- **Prompt templates** *(scoped, `@reactive-agents/prompts`)* — `.withPrompts()` and the template service API (`PromptService`, template ids and variable interpolation). `ExperimentService` and the wording of the built-in prompts are unstable, see below.
 - **Tool surface** — `.withTools()`, `defineTool()` / `tool()`, MCP attachment via `.withMCP()`, and the `Tool` interface
 - **Typed structured output** *(new in 0.12)* — `.withOutputSchema(schema, options?)` and the result fields `result.object` / `result.objectError`; `agent.streamObject(task)` yielding `{ object: DeepPartial<T> }`. Standard Schema (Zod / Valibot / ArkType) and Effect Schema are all accepted.
 - **Harness composition** *(new in 0.12)* — `HarnessProfile.lean() | balanced() | intelligent()` applied via `.withProfile(...)`. Supersedes `.withLeanHarness()`, which remains functional.
@@ -52,6 +53,7 @@ These work, but the **shape may change** in a later minor. Pin exact versions if
 - **`KernelHooks` interface** — the inner-loop event taps (`onThought`, `onAction`, `onObservation`, etc.). The 12-phase outer hooks are stable; the inner kernel taps may consolidate.
 - **Healing pipeline stages** — `runHealingPipeline` and the 4 built-in stages are exported, but the stage list is not user-extensible yet (no builder for custom stages).
 - **Task contracts** — `.withContract(taskContract)` (required/forbidden tools, fixtures, model floor, success oracle) is wired and enforced at `build()`, but the `TaskContract` shape is still growing.
+- **Prompt experiments and built-in wording** — `ExperimentService` / `ExperimentServiceLive` (A/B prompt variants, `@unstable`) and the text of the built-in prompts in `@reactive-agents/prompts` may change between minors.
 - **Budget killswitch** — `.withBudget({ tokenLimit?, costLimit? })` enforces a cumulative ceiling in-loop; the limits shape may gain fields.
 - **Cross-run learning** — `.withLearning({ tier?, dbPath? })` and `.withSkillPersistence(enabled?)` persist experience/skills across runs; the store schema is still settling.
 - **Evidence grounding** — `.withGrounding({ mode })` (default off) and the `provenance` / `confidence` / `abstained` result fields.

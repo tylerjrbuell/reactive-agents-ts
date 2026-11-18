@@ -207,6 +207,10 @@ Blockers for the owning wardens (no edit made, `packages/**` is read-only for do
 
 Authority note: the brief listed `packages/*/README.md` as editable, but the docs-warden manifest hard-refuses edits under `packages/**`. No README edit was needed, so nothing was denied in practice.
 
+## 6d. Applied 2026-11-17, owner approval: prompts promoted to stable (scoped)
+
+`prompts` is now "stable (scoped)" in `stability.json`, `stability.md`, `features/prompts` frontmatter and `packages/prompts/README.md`. Stable: `.withPrompts()` and the template service API (`PromptService`, template ids, variable interpolation). Unstable: `ExperimentService` (A/B variants, `@unstable`) and the wording of the built-in prompts. `compose` is not promoted (needs its fifth test file first).
+
 ## 7. Not done
 
 No edits to any tier, README, JSDoc or page. No gates run beyond read-only listing (`repo find`, `repo scope`, `git log`). `bun run repo check --all` was not run and is unaffected by this single new wiki file.

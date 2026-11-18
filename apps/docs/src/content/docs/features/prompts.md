@@ -1,6 +1,6 @@
 ---
 title: Prompt Templates
-stability: unstable
+stability: stable
 description: >-
   Version-controlled prompt templates with variable interpolation and
   composition.
