@@ -54,3 +54,15 @@ When it is on, Cortex checks the server at startup, when voice is used, and ever
 2. downloads the configured speech-to-text and text-to-speech models through the server's own model API when they are missing.
 
 Settings shows **Checking**, **Starting**, **Downloading models**, **Ready** or **Failed** with the last error. After three failed attempts Cortex stops trying until you press **Retry**. If Docker is missing, not running, or refuses access, the message says so. Docker restarts the container itself after a crash or a reboot. Cortex never touches a container you named differently (for example the `speaches` one from the commands above), and refuses to manage a `cortex-speaches` container that uses another image or port. Cortex runs docker only when it listens on loopback or has an access token (`CORTEX_TOKEN`).
+
+## A second Cortex for screenshots and tests
+
+From a source checkout, run a separate Cortex next to your own so a screenshot or test run never touches the one you use:
+
+```bash
+bun run dev-stack start --port 4399 --ui-port 4398 --cwd <dir>
+bun run dev-stack status
+bun run dev-stack stop --port 4399
+```
+
+It keeps its own database under `<dir>/.cortex/` and its pid files and logs under `<dir>/.cortex-run/`, refuses a port that is busy, and `stop` ends only the processes it started. Run these from `apps/cortex`.
