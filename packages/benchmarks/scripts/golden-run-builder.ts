@@ -9,8 +9,41 @@
 import type { ReactiveAgentBuilder } from "@reactive-agents/runtime";
 
 export const GOLDEN_PROVIDER = "ollama";
-export const GOLDEN_MODEL = "gemma4:e4b";
+/** Default reproduces the 2026-11-17 capture; override with GOLDEN_MODEL=<ollama model>. */
+export const GOLDEN_MODEL = process.env.GOLDEN_MODEL ?? "gemma4:e4b";
 export const GOLDEN_TASK = `Compare the moon counts of Jupiter, Saturn, and Mars. Write a markdown report to ./report.md and the raw data as a JSON array to ./data.json.`;
+
+/** Context a lifecycle hook handler may receive. Kernel per-turn hooks carry `iteration`; engine hooks may carry `metadata.stepsCount`. */
+export type GoldenHookCtx = { iteration?: number; metadata?: { stepsCount?: number } };
+
+/** One captured hook firing. `source` says which emitter fired it; `iteration` is the kernel turn, `stepsCount` the engine's step total. */
+export type GoldenHookEntry = {
+  phase: string;
+  timing: "before" | "after";
+  t: number;
+  source: "engine" | "kernel";
+  iteration?: number;
+  stepsCount?: number;
+};
+
+/** Build a hook-log entry. Kernel hooks (think/act/observe per turn) have a numeric `iteration`; everything else is an engine hook. */
+export const toHookEntry = (
+  phase: string,
+  timing: "before" | "after",
+  t: number,
+  ctx: GoldenHookCtx | undefined,
+): GoldenHookEntry => {
+  const iteration = ctx?.iteration;
+  const stepsCount = ctx?.metadata?.stepsCount;
+  return {
+    phase,
+    timing,
+    t,
+    source: typeof iteration === "number" ? "kernel" : "engine",
+    ...(typeof iteration === "number" ? { iteration } : {}),
+    ...(typeof stepsCount === "number" ? { stepsCount } : {}),
+  };
+};
 
 /** Receipt-signing option. The private key is supplied at capture time only. */
 export interface GoldenBuildOptions {

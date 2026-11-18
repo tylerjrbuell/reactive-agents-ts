@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 import { ReactiveAgents } from "@reactive-agents/runtime";
-import { GOLDEN_MODEL, GOLDEN_PROVIDER, GOLDEN_TASK, applyGoldenBuilder, goldenBuilderLines } from "./golden-run-builder.js";
+import { GOLDEN_MODEL, GOLDEN_PROVIDER, GOLDEN_TASK, applyGoldenBuilder, goldenBuilderLines, toHookEntry, type GoldenHookCtx, type GoldenHookEntry } from "./golden-run-builder.js";
 
 const repoRoot = join(import.meta.dirname, "../../..");
 const sh = (cmd: string): string => {
@@ -38,13 +38,7 @@ const ollamaVersion = async (): Promise<string> => {
 
 const workDir = mkdtempSync(join(tmpdir(), "ra-golden-"));
 
-type HookLogEntry = {
-  phase: string;
-  timing: "before" | "after";
-  t: number;
-  iter?: number;
-};
-const hookLog: HookLogEntry[] = [];
+const hookLog: GoldenHookEntry[] = [];
 
 const PHASES = [
   "bootstrap",
@@ -76,13 +70,8 @@ async function main() {
       builder = builder.withHook({
         phase,
         timing,
-        handler: (ctx: { metadata?: { stepsCount?: number } }) => {
-          hookLog.push({
-            phase,
-            timing,
-            t: Date.now(),
-            iter: ctx?.metadata?.stepsCount,
-          });
+        handler: (ctx: GoldenHookCtx) => {
+          hookLog.push(toHookEntry(phase, timing, Date.now(), ctx));
         },
       });
     }
