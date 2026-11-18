@@ -268,3 +268,68 @@ describe("makeStatusRenderer", () => {
     }
   });
 });
+
+describe("makeStatusRenderer terminal size", () => {
+  /** A TTY mock that reports a terminal size, like a real WriteStream. */
+  function sizedStream(columns: number, rows: number) {
+    const base = makeMockStream(true);
+    return { ...base, columns, rows };
+  }
+
+  /** Drive a think phase with streamed text and a few spinner ticks. */
+  async function driveThinkPhase(out: ReturnType<typeof sizedStream>) {
+    const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
+    const renderer = makeStatusRenderer(logger, asStream(out));
+    await Effect.runPromise(renderer.start());
+    await Effect.runPromise(logger.emit({ _tag: "phase_started", phase: "think", timestamp: new Date() }));
+    for (let i = 0; i < 20; i++) renderer.pushThinkChunk("reasoning about the task at hand ");
+    await Effect.runPromise(logger.emit({ _tag: "metric", name: "tokens_used", value: 123456, unit: "tokens", timestamp: new Date() }));
+    await Effect.runPromise(logger.emit({ _tag: "metric", name: "cost_usd", value: 0.0123, unit: "usd", timestamp: new Date() }));
+    await new Promise((resolve) => setTimeout(resolve, 350)); // ~3 spinner ticks
+    await Effect.runPromise(logger.emit({ _tag: "warning", message: "careful", timestamp: new Date() }));
+    await Effect.runPromise(logger.emit({ _tag: "completion", success: true, summary: "ok", timestamp: new Date() }));
+    renderer.stop();
+  }
+
+  it("a 0x0 terminal gets plain permanent lines and no live redraws", async () => {
+    const out = sizedStream(0, 0);
+    await driveThinkPhase(out);
+
+    const all = out.raw.join("");
+    // No cursor control at all: no clear-line, no cursor-up panel redraws.
+    expect(all).not.toMatch(/\x1b\[\d*[AK]/);
+    expect(out.lines.some((l) => l.includes("careful"))).toBe(true);
+    expect(out.lines.some((l) => l.includes("Done"))).toBe(true);
+    // Bounded: only the permanent lines were written.
+    expect(out.raw.length).toBeLessThanOrEqual(3);
+    expect(all.length).toBeLessThan(500);
+  });
+
+  it("the live status line never exceeds one row of a narrow terminal", async () => {
+    const out = sizedStream(30, 24);
+    await driveThinkPhase(out);
+
+    const liveWrites = out.raw.filter((r) => r.startsWith("\r\x1b[2K") && !r.includes("\n"));
+    expect(liveWrites.length).toBeGreaterThan(0);
+    for (const w of liveWrites) {
+      const visible = w.slice("\r\x1b[2K".length).replace(/\x1b\[[0-9;]*m/g, "");
+      expect(visible.length).toBeLessThan(30);
+    }
+    // Panel rows fit too, so the fixed cursor-up count stays correct.
+    for (const w of out.raw.filter((r) => r.endsWith("\n") && r.startsWith("\r\x1b[2K  "))) {
+      const visible = w.slice("\r\x1b[2K".length, -1).replace(/\x1b\[[0-9;]*m/g, "");
+      expect(visible.length).toBeLessThanOrEqual(30);
+    }
+  });
+
+  it("an unreported size keeps the live line with the 80-column fallback", async () => {
+    const out = makeMockStream(true); // no columns/rows, as most test doubles
+    const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
+    const renderer = makeStatusRenderer(logger, asStream(out));
+    await Effect.runPromise(renderer.start());
+    await Effect.runPromise(logger.emit({ _tag: "phase_started", phase: "act", timestamp: new Date() }));
+    renderer.stop();
+
+    expect(out.raw.some((r) => r.startsWith("\r\x1b[2K") && r.includes("Acting..."))).toBe(true);
+  });
+});

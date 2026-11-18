@@ -119,11 +119,19 @@ export function makeStatusRenderer(
   eb?: EbLike | null,
   options?: StatusRendererOptions,
 ): StatusRenderer {
-  const isTTY = Boolean(out.isTTY);
+  // A TTY that REPORTS a size of 0 (0x0 ptys: CI runners, web terminals before
+  // layout, some IDE panes) cannot host a redrawn live region: every status
+  // line overflows it, so each spinner tick would wrap and scroll. Treat it as
+  // a plain stream (permanent lines only, no cursor control). An unreported
+  // size (`undefined`) keeps the live line with the 80-column fallback below.
+  const sizeUnusable = out.columns === 0 || out.rows === 0;
+  const isTTY = Boolean(out.isTTY) && !sizeUnusable;
   // Respect NO_COLOR (https://no-color.org) same as every other color-aware
   // CLI tool — plain ASCII glyphs already carry the meaning (✓/✗/⚠), color
   // is a legibility bonus, not the only signal.
-  const useColor = isTTY && !process.env.NO_COLOR;
+  const useColor = Boolean(out.isTTY) && !process.env.NO_COLOR;
+  /** Terminal width; 80 when the stream reports none (or a non-positive one). */
+  const columns = (): number => (out.columns !== undefined && out.columns > 0 ? out.columns : 80);
   const color = (code: string, text: string): string => (useColor ? `${code}${text}${ANSI.reset}` : text);
 
   const s: RendererState = {
@@ -212,17 +220,30 @@ export function makeStatusRenderer(
     }
     const base = parts.join("  ·  ");
     if (checklistSnap) {
-      const room = (out.columns ?? 80) - base.length - 5;
+      const room = columns() - base.length - 5;
       const suffix = room >= 10 ? formatChecklistSuffix(checklistSnap, room) : "";
       if (suffix) return `${base}  ·  ${suffix}`;
     }
     return base;
   }
 
+  /**
+   * Clip the live status line to one terminal row. A line that wraps leaves
+   * the cursor on its last row, so the next `\r\x1b[2K` redraw clears only
+   * that row and the rewrite wraps again: one scrolled line per spinner tick.
+   */
+  function fitStatus(line: string): string {
+    const max = columns() - 1;
+    if (line.length <= max) return line;
+    return max <= 1 ? line.slice(0, Math.max(0, max)) : `${line.slice(0, max - 1)}…`;
+  }
+
   // ─── Panel (collapsible thinking block) ──────────────────────────────────────
 
   function panelLines(): string[] {
-    const w = Math.max(20, (out.columns ?? 80) - PANEL_INDENT.length - 2);
+    // Panel rows must not wrap either: `redrawPanel` moves the cursor up by a
+    // fixed row count, which is only right when each panel line is one row.
+    const w = Math.max(1, columns() - PANEL_INDENT.length - 2);
     const all = wrapText(s.thinkText, w);
     // Show the most recent PANEL_LINES lines (tail of wrapped text)
     const visible = all.slice(Math.max(0, all.length - PANEL_LINES));
@@ -231,7 +252,7 @@ export function makeStatusRenderer(
   }
 
   function writeStatus(): void {
-    out.write(`\r\x1b[2K${statusLine()}`);
+    out.write(`\r\x1b[2K${fitStatus(statusLine())}`);
   }
 
   /**
