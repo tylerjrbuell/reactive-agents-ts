@@ -87,7 +87,7 @@ packages/reasoning/src/kernel/
     attend/       ← context-utils.ts, tool-formatting.ts
     comprehend/   ← task-intent.ts
     decide/       ← arbitrator.ts (SINGLE TERMINATION OWNER — see FIX-18; #220: shell ~850 LOC, LOC-PINNED, + 10 decide/* modules behind a RE-EXPORT SHIM — all 31 names still resolve FROM arbitrator.ts; that shim is the public surface). Also: tool-gating.ts + tool-call-refusals.ts (think-phase call gate; every refusal answered), model-exit-proposal.ts (model/oracle/final-answer exits → loop/exit-gate.ts)
-    reason/       ← think.ts ORCHESTRATOR (676 LOC post-#219; below the ledger bar — do NOT let it regrow past 1,000: the new-giant rule is the lock there). Stage modules: resolve-think-surface, dispatch-think-response (LOC-PINNED), normalize-think-response,
+    reason/       ← think.ts ORCHESTRATOR (816 LOC on 2026-11-18; below the ledger bar — do NOT let it regrow past 1,000: the new-giant rule is the lock there). Stage modules: resolve-think-surface, dispatch-think-response (LOC-PINNED), normalize-think-response,
     reflect/      ← loop-detector.ts, reactive-observer.ts, strategy-evaluator.ts
     sense/        ← step-utils.ts
     verify/       ← evidence-grounding.ts, quality-utils.ts, requirement-state.ts, verifier.ts
@@ -102,7 +102,7 @@ packages/reasoning/src/kernel/
 2. **Single termination owner**: `kernel/loop/terminate.ts` is the only helper that finalizes. `arbitrator.ts` (`kernel/capabilities/decide/arbitrator.ts`) is the only terminal-phase decider. No other file calls into termination directly. Stage 5 W4 / FIX-18.
 3. **Two records, distinct purposes**: `state.messages[]` = provider conversation; `state.steps[]` = system observations. Never confuse. Never merge.
 4. **No LLM re-verify loop** (verifier.ts:217-222): the project removed parent-side LLM verify-retry. Do not propose anything that recreates it. M3 REWORK precedent (May 12, commit `051c22be`).
-5. **Strategy switching default-on** (`runtime.ts:915`): `enableStrategySwitching !== false`. Gated off by `withLeanHarness()`.
+5. **Strategy switching is opt-in** (`packages/runtime/src/runtime.ts`): only `enableStrategySwitching === true` turns it on (made opt-in after its ablation). `withLeanHarness()` keeps it off.
 6. **Replay gates read `dist`**: `packages/reasoning` exports `dist`, so a replay-golden run (`bun run --cwd packages/benchmarks src/replay-lane-cli.ts`) after a kernel edit is only evidence once `bunx turbo run build --filter=@reactive-agents/reasoning` has run. A replay reported green on a stale build verifies nothing (Plan 9, 2026-11-04).
 7. **Red-on-cut without stash**: prove a test pins a fix by temporarily cutting the fix in the source, running the test, and restoring it. Never `git stash` (the working tree is shared with other agents).
 
