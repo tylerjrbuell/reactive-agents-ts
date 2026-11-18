@@ -113,6 +113,37 @@ describe("regressions", () => {
     for (const c of ["bun run repo test x", "ls | wc -l", "git log | head", "bun test --help | head", "bun test --version | head"])
       expect(allowed(c)).toBe(true)
   })
+  test("shell appends to repo files are denied; logs, ignored and outside paths are not", () => {
+    const ctx = { root: REPO }
+    const deny = (c: string): string | undefined => {
+      const v = classifyBash(c, rules, {}, ctx)
+      return v.decision === "deny" ? v.ruleId : undefined
+    }
+    for (const c of [
+      "cat >> packages/runtime/src/engine/execute-obs-wiring.ts <<'EOF'\nexport function f() {}\nEOF",
+      "echo x >> packages/x/src/a.ts",
+      `echo x >> ${REPO}/wiki/Hot.md`,
+      "cat x | tee -a packages/x/src/a.ts",
+      "tee -ai packages/x/src/a.ts < x",
+      "cd packages/core && echo x >> src/a.ts",
+    ])
+      expect(deny(c)).toBe("no-shell-append")
+    for (const c of [
+      "echo x >> /tmp/a.log",
+      "cmd 2>> .repo-logs/a.log",
+      `echo x >> ${REPO}/.repo-logs/a.log`,
+      "echo x >> /tmp/claude-1000/scratchpad/new.ts",
+      "echo x >> .superpowers/sdd/p/progress.md",
+      'echo x >> "$W/progress.md"',
+      "echo $((a >> 2))",
+      "tee packages/x/src/a.ts < x",
+      "cat > f.py <<'EOF'\nprint(1 >> 2)\nEOF",
+      "node -e 'let a = 1; a >>= 1'",
+      "cd /tmp/x && echo x >> a.ts",
+      "cd ~/memory; printf '%s\\n' x >> MEMORY.md",
+    ])
+      expect(deny(c)).toBeUndefined()
+  })
   test("alternative lists up to 3 paths", () => {
     expect(reasonOf("bun test a b c d | tail")).toContain("`bun run repo test a b c`")
     expect(reasonOf("bun test a b | tail")).toContain("`bun run repo test a b`")

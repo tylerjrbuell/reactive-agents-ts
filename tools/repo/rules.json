@@ -63,6 +63,41 @@
       }
     },
     {
+      "id": "no-shell-append",
+      "match": {
+        "command": "(?:(?<![\\w>])1|(?<![\\d>]))>>(?!>)\\s*(?<path>[^\\s;&|()<>`]+)|(?:^|[;&|(\\n`]|\\$\\()\\s*(?:sudo\\s+)?tee\\b(?<teeargs>[^;&|\\n)`]*)",
+        "check": "repo-append"
+      },
+      "reason": "Appending to a repo file with `>>` or `tee -a` edits it outside review. Logs, ignored paths and paths outside the repo are fine.",
+      "alternative": "use the `Edit` tool (or `Write` for a new file)",
+      "owner": "tooling-warden",
+      "reviewBy": "2027-02-17",
+      "examples": {
+        "deny": [
+          "cat >> packages/x/src/a.ts <<'EOF'\nexport const a = 1\nEOF",
+          "echo x >> packages/x/src/a.ts",
+          "echo x>>packages/x/src/a.ts",
+          "printf 'a\\n' 1>> \"wiki/Hot.md\"",
+          "cat <<'EOF' | tee -a packages/x/src/a.ts\nx\nEOF",
+          "ls && tee --append /dev/null tools/repo/rules.json < f",
+          "bun x &>> packages/x/src/a.ts"
+        ],
+        "allow": [
+          "echo x >> /tmp/a.log",
+          "cmd 2>> .repo-logs/a.log",
+          "bun run build >> .repo-logs/b.log 2>&1",
+          "cmd &>> .repo-logs/c.log",
+          "echo x >> \"$LOG\"",
+          "echo $((1 >> 2))",
+          "git commit -m \"note: echo x >> packages/a.ts\"",
+          "tee packages/x/src/a.ts <<'EOF'\nx\nEOF",
+          "echo x | tee -a /tmp/a.log",
+          "cat > notes.py <<'EOF'\nx = y >> 2\nEOF",
+          "python3 - <<'EOF'\nprint(1 >> 2)\nEOF"
+        ]
+      }
+    },
+    {
       "id": "no-shell-grep-repo",
       "match": {
         "command": "(?:(?:^|[;&(\\n`]|\\|\\||\\$\\()\\s*(?:[A-Za-z_]\\w*=\\S*\\s+)*(?:(?:sudo|time|command|nice)\\s+)*(?<cmd>u?grep|egrep|fgrep|zgrep|rg|ag)(?=\\s)|\\bfind\\b[^;&\\n]*\\|\\s*xargs\\s+(?:-\\S+\\s+)*(?<xcmd>e?grep|ugrep|rg|ag)\\b)",

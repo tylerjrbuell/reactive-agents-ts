@@ -1,8 +1,14 @@
+import { spawnSync } from "node:child_process"
+import { existsSync } from "node:fs"
+import { dirname, resolve } from "node:path"
 import { budgetProblem, namesCommand, parseMode, type RuleMode } from "./friction.ts"
 import { readManifest } from "./manifest.ts"
 
 /** Text regions a rule's `match.command` must not look inside. */
 export type NotInside = "quotes" | "quotes-opaque" | "heredoc-to-file"
+
+/** Extra code-level conditions a rule's regex match must also pass. */
+export type RuleCheck = "repo-search" | "repo-append"
 
 /** Where the repo lives, for rules that must tell repo paths from outside paths. */
 export interface HookCtx {
@@ -17,8 +23,11 @@ export interface HookRule {
    * `command` is a regex source applied to the command after `notInside` regions are stripped
    * (`quotes-opaque` keeps quoted text but makes it a single inert word, so operands survive).
    * `check: "repo-search"` additionally requires the matched grep/rg command to search repo paths.
+   * `check: "repo-append"` matches against the shell text only (quotes opaque, no heredoc bodies)
+   * and requires an append target (named group `path`, or `tee` operands in group `teeargs`) that
+   * is a repo path git does not ignore.
    */
-  match: { command: string; notInside?: readonly NotInside[]; check?: "repo-search" }
+  match: { command: string; notInside?: readonly NotInside[]; check?: RuleCheck }
   reason: string
   /** Shown after `reason`; `{name}` is replaced by the regex's named group `name` (else `<name>`). */
   alternative: string
@@ -279,8 +288,77 @@ function searchesRepo(cmd: string, rest: string, root: string): boolean {
   return positionals.length === 0 || positionals.some((op) => isRepoPath(op, root))
 }
 
+/**
+ * True when git ignores absolute path `abs`, asked from its nearest existing directory so a nested
+ * checkout (`.claude/worktrees/<x>`, ignored by the main repo) answers for its own files. No git,
+ * or any git error, means not ignored.
+ */
+function gitIgnored(abs: string, root: string): boolean {
+  let dir = dirname(abs)
+  while (dir.length > root.length && !existsSync(dir)) dir = dirname(dir)
+  const r = spawnSync("git", ["-C", dir, "check-ignore", "-q", "--", abs], { stdio: "ignore", timeout: 2000 })
+  return r.status === 0
+}
+
+/**
+ * The directory relative operands resolve against at a point in the command: the last `cd` before
+ * it (subshell scope ignored), else `root`. `undefined` when that `cd` goes somewhere unknowable
+ * (`~`, `$VAR`, `-`), so relative operands are treated as outside the repo (fail open).
+ */
+function cwdAt(before: string, root: string): string | undefined {
+  let cwd: string | undefined = root
+  for (const m of before.matchAll(/(?:^|[;&|(\n`])\s*cd(?:\s+(?<dir>[^\s;&|()`]+))?/g)) {
+    const dir = (m.groups?.dir ?? "~").replace(/["']/g, "").replace(/\u0001/g, " ")
+    cwd = /^[~$-]/.test(dir) || cwd === undefined ? undefined : resolve(cwd, dir)
+  }
+  return cwd
+}
+
+/** True when a `>>`/`tee -a` target is a repo file worth protecting: a repo path git does not ignore. */
+function protectedTarget(op: string, before: string, root: string): boolean {
+  const o = op.replace(/["']/g, "").replace(/\u0001/g, " ")
+  if (o.length === 0 || /^[~$]/.test(o)) return false
+  const cwd = o.startsWith("/") ? root : cwdAt(before, root)
+  if (cwd === undefined) return false
+  const abs = resolve(cwd, o)
+  return isRepoPath(abs, root) && !gitIgnored(abs, root)
+}
+
+/** Operands of `tee` when it appends (`-a`, `--append` or a short cluster with `a`), else none. */
+function teeAppendTargets(args: string): readonly string[] {
+  const toks = args.split(/\s+/).filter((t) => t.length > 0)
+  let append = false
+  let pastDashes = false
+  const ops: string[] = []
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i] as string
+    if (/^\d*(?:[<>]|&>)/.test(t)) {
+      if (/^\d*[<>]{1,2}$/.test(t)) i++
+      continue
+    }
+    if (pastDashes || t === "-" || !t.startsWith("-")) ops.push(t)
+    else if (t === "--") pastDashes = true
+    else if (t === "--append" || /^-[A-Za-z]*a[A-Za-z]*$/.test(t)) append = true
+  }
+  return append ? ops : []
+}
+
+/** Inside an unclosed `$((` arithmetic expansion, where `>>` is a shift, not a redirect. */
+const inArithmetic = (before: string): boolean => before.lastIndexOf("$((") > before.lastIndexOf("))")
+
 /** The first match of `rule` against an already-parsed command, or null. */
 function matchRule(rule: HookRule, p: Parsed, ctx: HookCtx): RegExpExecArray | null {
+  if (rule.match.check === "repo-append") {
+    const root = ctx.root ?? process.cwd()
+    for (const m of p.opaque.matchAll(new RegExp(rule.match.command, "g"))) {
+      const before = p.opaque.slice(0, m.index)
+      const path = m.groups?.path
+      if (path !== undefined && !inArithmetic(before) && protectedTarget(path, before, root)) return m
+      const teeArgs = m.groups?.teeargs
+      if (teeArgs !== undefined && teeAppendTargets(teeArgs).some((op) => protectedTarget(op, before, root))) return m
+    }
+    return null
+  }
   const text = target(p, rule.match.notInside ?? [])
   if (rule.match.check === undefined) return compile(rule.match.command).exec(text)
   const root = ctx.root ?? process.cwd()
@@ -354,7 +432,7 @@ export function loadRules(root: string): readonly HookRule[] {
       match: {
         command,
         notInside: notInside as NotInside[],
-        ...(m.check === "repo-search" ? { check: m.check } : {}),
+        ...(m.check === "repo-search" || m.check === "repo-append" ? { check: m.check } : {}),
       },
       reason: str(o.reason, `${id}.reason`),
       alternative: str(o.alternative, `${id}.alternative`),
