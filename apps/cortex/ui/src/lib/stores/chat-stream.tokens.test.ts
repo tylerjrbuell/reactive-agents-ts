@@ -192,6 +192,13 @@ describe("chat-stream token usage", () => {
     expect(t.liveTokens).toBeUndefined();
   });
 
+  it("the turn's steps read stepsCount, not the (smaller) kernel turn count in iterations", async () => {
+    const t = await run([
+      top({ _tag: "StreamCompleted", output: "hi", metadata: { tokensUsed: 10, cost: 0, stepsCount: 10, iterations: 4, duration: 1 } }),
+    ]);
+    expect(t.steps).toBe(10);
+  });
+
   it("no ContextPressure ever leaves context undefined", async () => {
     const t = await run([top({ _tag: "TextDelta", text: "hi" })]);
     expect(t.context).toBeUndefined();

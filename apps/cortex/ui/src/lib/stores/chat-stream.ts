@@ -497,7 +497,8 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         const usageMatchesTotal = reported !== undefined && reported.tokensTotal === tokensUsed;
         streamInputTokens = metaNumber(meta, "inputTokens") ?? (usageMatchesTotal && inputReported ? reported.tokensIn : undefined);
         streamOutputTokens = metaNumber(meta, "outputTokens") ?? (usageMatchesTotal && outputReported ? reported.tokensOut : undefined);
-        steps = metaNumber(meta, "iterations") ?? metaNumber(meta, "stepsCount") ?? 0;
+        // "Steps" is the step count; `iterations` is now the kernel turn count (a different, smaller number).
+        steps = metaNumber(meta, "stepsCount") ?? metaNumber(meta, "iterations") ?? 0;
         if (event.toolSummary && event.toolSummary.length > 0) {
           toolsUsed = event.toolSummary.map((t) => t.name);
         }
