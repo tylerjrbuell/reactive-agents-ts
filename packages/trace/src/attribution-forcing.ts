@@ -9,8 +9,9 @@
 //                               (model:ignored-guidance, model:evidence-not-gathered),
 //                               the stalled turns offered domain tools on a native-FC
 //                               request, and the harness answered with prose instead of
-//                               forcing a call: act-or-answer was off, or did not fire
-//                               on those turns. Stalls must dominate: the unforced
+//                               forcing a call: act-or-answer was ON (leverAvailable) but
+//                               did not fire on those turns. A run with the opt-in lever
+//                               off or unrecorded keeps the model label. Stalls must dominate: the unforced
 //                               no-call turns are at least half of the turns that
 //                               offered a domain tool, up to the divergence turn. Forcing that fired and still failed
 //                               (the forced reply made no call, or the forced call's
@@ -35,6 +36,20 @@ export function actOrAnswerSetting(f: Facts): boolean | "proactive" | undefined 
   if (typeof mech !== "object" || mech === null || Array.isArray(mech)) return undefined;
   const v = (mech as Readonly<Record<string, unknown>>)["actOrAnswer"];
   return typeof v === "boolean" || v === "proactive" ? v : undefined;
+}
+
+/**
+ * Whether the act-or-answer lever was on for this run, per `run-started.config`.
+ * The lever is opt-in (ledger, 2026-11-07), so a run that has it off, or whose
+ * trace does not record it, did not have forcing available: the harness cannot
+ * be blamed for not using it, and the model label stands.
+ *
+ * @param f Run facts.
+ * @returns True only when the trace records `actOrAnswer` as `true` or `"proactive"`.
+ */
+export function leverAvailable(f: Facts): boolean {
+  const setting = actOrAnswerSetting(f);
+  return setting === true || setting === "proactive";
 }
 
 /**
@@ -97,6 +112,8 @@ export function forcingUnused(modelRules: readonly Rule[]): Rule {
     const model = modelRules.map((r) => r(ctx)).find((h) => h !== undefined);
     if (model === undefined) return undefined;
     const { f, first } = ctx;
+    // An opt-in lever that was off (or unrecorded) is not the harness's miss.
+    if (!leverAvailable(f)) return undefined;
     const cutoff = first?.exchange.seq ?? Number.POSITIVE_INFINITY;
     const stalls = noCallStalls(f, cutoff);
     if (stalls.length === 0) return undefined;
@@ -111,8 +128,7 @@ export function forcingUnused(modelRules: readonly Rule[]): Rule {
     // One stray no-call turn in a run that kept calling is not what failed it.
     const offeredTurns = offeredThinkTurns(f, cutoff).length;
     if (unforced.length === 0 || unforced.length * 2 < offeredTurns) return undefined;
-    const setting = actOrAnswerSetting(f);
-    const mode = setting === undefined ? "not recorded" : String(setting);
+    const mode = String(actOrAnswerSetting(f));
     const offered = unforced[0]!.toolSchemaNames.filter((n) => !isMeta(n)).slice(0, 4).join(",");
     const evidence: CauseEvidence[] = [
       ev1(unforced[0]!, `${unforced.length} of ${offeredTurns} turn(s) that offered domain tools made no call and were not forced (actOrAnswer=${mode}); first offered ${offered}`),
@@ -124,7 +140,7 @@ export function forcingUnused(modelRules: readonly Rule[]): Rule {
       ...(model.divergence ? { divergence: model.divergence } : {}),
       ...(model.target ? { target: model.target } : {}),
       evidence,
-      needs: setting === undefined ? ["run-started.config.mechanisms.actOrAnswer (whether forcing existed for this run)"] : [],
+      needs: [],
     };
   };
 }

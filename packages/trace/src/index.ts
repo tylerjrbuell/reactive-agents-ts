@@ -38,6 +38,9 @@ export type { CauseAnalysis, CauseTally, FailureCause, CauseConfidence, CauseEvi
  * configuration or the model? See {@link attributeFailure}.
  */
 export { attributeFailure, renderAttribution, tallyAttributions } from "./attribution.js"
+/** Honest-decline check shared by attribution and the benchmark scorer (text + tool provenance). */
+export { isHonestDecline, toolProvenanceOf } from "./attribution-decline.js"
+export type { ToolProvenance } from "./attribution-decline.js"
 /** The one failure taxonomy: every attribution reason, and the owner of each failure cause. */
 export { CAUSE_ATTRIBUTION, verdictOf } from "./taxonomy.js"
 /** Which harness mechanisms acted in a run, and how that changed between two cohorts. */

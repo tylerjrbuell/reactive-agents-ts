@@ -31,11 +31,14 @@
 // rules marked [c] in attribution-refusal.ts, rules marked [n] in attribution-literal-newlines.ts.
 // Containment (attribution-containment.ts) gates the evidence rules marked [k]: a cut
 // does not count when every URL the deliverable uses was visible on its turn.
-//   model:fabrication-vetoed    the run's terminal verifier refused invented numbers or
-//                               entities (`output-not-fabricated-*`); a grader that
-//                               passed a partial check does not make that veto false
-//   harness:false-veto          grader passed but the run was marked failed; or
+//   harness:false-veto          grader passed but the run was marked failed (ground truth
+//                               first: it precedes fabrication-vetoed); or
 //                               a deliverable that names a template placeholder
+//   harness:honest-decline-mislabeled [d]  failed run, no abstention, every real tool
+//                               call failed, final text an honest decline (attribution-decline.ts)
+//   model:fabrication-vetoed    the run's terminal verifier refused invented numbers or
+//                               entities (`output-not-fabricated-*`) and no grader passed
+//                               the run
 //   harness:tool-surface        a contract-required tool was hidden from the model
 //   harness:tool-not-offered [r] the model asked for a tool its request did not offer
 //   harness:contradictory-guidance [g]  the deciding turn told the model to call a tool
@@ -125,6 +128,7 @@ import {
 } from "./attribution-rules.js";
 import { ruleContradictoryGuidance } from "./attribution-guidance.js";
 import { forcingUnused } from "./attribution-forcing.js";
+import { ruleHonestDecline } from "./attribution-decline.js";
 import { ruleContentRefused } from "./attribution-refusal.js";
 import { ruleUnrepairedContent } from "./attribution-literal-newlines.js";
 import { containment, cutCleared, containmentLine, type Containment } from "./attribution-containment.js";
@@ -681,7 +685,8 @@ const ruleCompletenessBlind: Rule = ({ f, targets, divergences }) => {
 const ruleForcingUnused: Rule = forcingUnused([ruleIgnoredGuidance, ruleEvidenceNotGathered]);
 
 const RULES: readonly Rule[] = [
-  ruleFabricationVetoed, ruleFalseVeto, ruleToolSurface, ruleToolNotOffered, ruleContradictoryGuidance, ruleSubpassAbstained,
+  // Ground truth first: a passing grader outranks the run's own verifier veto (false-veto before fabrication-vetoed).
+  ruleFalseVeto, ruleHonestDecline, ruleFabricationVetoed, ruleToolSurface, ruleToolNotOffered, ruleContradictoryGuidance, ruleSubpassAbstained,
   ruleToolCallDropped, ruleRefusalCountedAsRepeat, ruleContentRefused, ruleUnrepairedContent, ruleToolCallCorrupted, rulePlanFanoutBlob, rulePrematureStop,
   ruleCompletenessBlind, ruleOfferAcceptedAsDone, ruleEvidenceWithheld, ruleEvidenceTruncated, ruleEvidenceMissing,
   ruleMisleadingGuidance, ruleForcingUnused, ruleIgnoredGuidance, ruleEvidenceNotGathered, ruleHadEvidence, ruleRefusalCountedAsRepeatProbable,

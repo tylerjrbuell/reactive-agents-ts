@@ -37,8 +37,9 @@ export type AttributionVerdict = "harness" | "model" | "environment" | "unattrib
  * from, so the docs Reasons table (`reference/cli.md`) is pinned against it.
  */
 export const TURN_LEVEL_REASONS = [
-  "model:fabrication-vetoed",
   "harness:false-veto",
+  "harness:honest-decline-mislabeled",
+  "model:fabrication-vetoed",
   "harness:tool-surface",
   "harness:tool-not-offered",
   "harness:contradictory-guidance",

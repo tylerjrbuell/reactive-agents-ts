@@ -424,8 +424,8 @@ describe("attributeFailure — shared taxonomy", () => {
   const verdict = (checks: { name: string; passed: boolean }[]) =>
     mk({ ...at(1), kind: "verifier-verdict", action: "final-answer", terminal: true, source: "kernel", verified: false, summary: "rejected", checks });
 
-  it("model:fabrication-vetoed — the run's own fabrication check refused the model's answer, even when a partial grader passed", () => {
-    // qwen rw-6: invented before/after benchmarks with only file tools; the hidden check graded the file half only.
+  it("a grader pass outranks the run's own fabrication veto: harness:false-veto, veto in alsoMatched (2026-11-18, 3 rw-6 cells)", () => {
+    // qwen/cogito rw-6: eval-graded passed=true, yet the verifier vetoed "125ms" as fabricated. Ground truth first.
     const a = attributeFailure(trace([
       started(), contract(["file-write"], ["report.md"]),
       exchange({ iter: 0, toolCalls: [{ name: "file-write", arguments: { path: "/w/report.md", content: "x" } }] }),
@@ -434,9 +434,23 @@ describe("attributeFailure — shared taxonomy", () => {
       completed("failure", "final_answer", { success: false }),
       graded(true, [{ name: "bun hidden-check.ts", passed: true }]),
     ]));
+    expect(a.reason).toBe("harness:false-veto");
+    expect(a.verdict).toBe("harness");
+    expect(a.alsoMatched).toContain("model:fabrication-vetoed");
+  });
+
+  it("model:fabrication-vetoed — the run's own fabrication check refused the model's answer and the grader failed too", () => {
+    // qwen rw-6: invented before/after benchmarks with only file tools; the grader did not pass the run.
+    const a = attributeFailure(trace([
+      started(), contract(["file-write"], ["report.md"]),
+      exchange({ iter: 0, toolCalls: [{ name: "file-write", arguments: { path: "/w/report.md", content: "x" } }] }),
+      ...call(0, "file-write", { path: "/w/report.md", content: "x" }, true, "✓ Written"),
+      verdict([{ name: "output-not-fabricated-measurement", passed: false }]),
+      completed("failure", "final_answer", { success: false }),
+      graded(false, [{ name: "bun hidden-check.ts", passed: false }]),
+    ]));
     expect(a.reason).toBe("model:fabrication-vetoed");
     expect(a.verdict).toBe("model");
-    expect(a.alsoMatched).toContain("harness:false-veto");
   });
 
   it("a fabrication veto of harness-assembled text stays harness:false-veto", () => {

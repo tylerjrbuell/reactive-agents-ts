@@ -2,6 +2,8 @@ import { describe, it, expect } from "bun:test";
 import { attributeFailure, verdictOf } from "../src/index.js";
 import type { Trace, TraceEvent } from "../src/index.js";
 import { mk } from "./fixtures/mk-event.js";
+import { gatherFacts } from "../src/attribution-facts.js";
+import { leverAvailable } from "../src/attribution-forcing.js";
 
 // harness:forcing-unused (owner decision 2026-11-06, canonical-failure-modes
 // report "Instrument note"): a no-call stall the harness could have forced
@@ -87,9 +89,9 @@ const SECOND_TOTAL = "summary.txt holds the second total";
 const ALPHA = "total=3";
 
 /** Reads alpha, optionally stalls once, then writes summary.txt without reading beta. */
-function unreadInputRun(stall: boolean): Trace {
+function unreadInputRun(stall: boolean, aoa: Setting = true): Trace {
   return trace([
-    started(TWO_INPUTS, false), contract(["file-read", "file-write"], ["summary.txt"]),
+    started(TWO_INPUTS, aoa), contract(["file-read", "file-write"], ["summary.txt"]),
     exchange(0, { toolCalls: [{ name: "file-read", arguments: { path: "/w/alpha.txt" } }] }),
     ...call(0, "file-read", { path: "/w/alpha.txt" }, true, ALPHA),
     ...(stall ? [
@@ -108,26 +110,33 @@ describe("harness:forcing-unused", () => {
     expect(verdictOf("harness:forcing-unused")).toBe("harness");
   });
 
-  it("an off-mode no-call stall under ignored guidance is the harness's (decisive)", () => {
+  it("an off-mode no-call stall keeps the model label: the lever is opt-in and was not on (ledger 2026-11-07)", () => {
     const a = attributeFailure(ignoredGuidanceRun(false));
+    expect(a.reason).toBe("model:ignored-guidance");
+    expect(a.verdict).toBe("model");
+  });
+
+  it("a trace that does not record actOrAnswer cannot show the lever existed: the model label stands", () => {
+    const a = attributeFailure(ignoredGuidanceRun("absent"));
+    expect(a.reason).toBe("model:ignored-guidance");
+  });
+
+  it("leverAvailable reads run-started.config: only true and \"proactive\" count", () => {
+    const f = (s: Setting) => gatherFacts(ignoredGuidanceRun(s));
+    expect([false, "absent", true, "proactive"].map((s) => leverAvailable(f(s as Setting)))).toEqual([false, false, true, true]);
+  });
+
+  it("forcing on but not fired on the stall is the harness's (decisive)", () => {
+    const a = attributeFailure(ignoredGuidanceRun(true));
     expect(a.reason).toBe("harness:forcing-unused");
     expect(a.verdict).toBe("harness");
     expect(a.confidence).toBe("decisive");
     expect(a.alsoMatched).toContain("model:ignored-guidance");
-    expect(a.evidence[0]?.detail).toContain("actOrAnswer=false");
+    expect(a.evidence[0]?.detail).toContain("actOrAnswer=true");
   });
 
-  it("a trace that does not record actOrAnswer is the harness's, probable", () => {
-    const a = attributeFailure(ignoredGuidanceRun("absent"));
-    expect(a.reason).toBe("harness:forcing-unused");
-    expect(a.confidence).toBe("probable");
-    expect(a.missing.join(" ")).toContain("actOrAnswer");
-  });
-
-  it("forcing on but not fired on the stall is still the harness's", () => {
-    const a = attributeFailure(ignoredGuidanceRun(true));
-    expect(a.reason).toBe("harness:forcing-unused");
-    expect(a.confidence).toBe("decisive");
+  it("proactive mode that did not fire on the stall is the harness's too", () => {
+    expect(attributeFailure(ignoredGuidanceRun("proactive")).reason).toBe("harness:forcing-unused");
   });
 
   it("forcing fired and the forced reply made no call: the model label stands", () => {
@@ -152,11 +161,17 @@ describe("harness:forcing-unused", () => {
     expect(a.reason).toBe("model:ignored-guidance");
   });
 
-  it("an evidence-not-gathered run with an off-mode stall before the failing write is the harness's", () => {
+  it("an evidence-not-gathered run with an unforced stall (lever on) before the failing write is the harness's", () => {
     const a = attributeFailure(unreadInputRun(true));
     expect(a.reason).toBe("harness:forcing-unused");
     expect(a.alsoMatched).toContain("model:evidence-not-gathered");
     expect(a.target?.ref).toBe("summary.txt");
+  });
+
+  it("the same stalled run with the lever off keeps model:evidence-not-gathered", () => {
+    const a = attributeFailure(unreadInputRun(true, false));
+    expect(a.reason).toBe("model:evidence-not-gathered");
+    expect(a.alsoMatched).not.toContain("harness:forcing-unused");
   });
 
   it("one stray no-call turn in a run that kept calling keeps the model label (stalls not dominant)", () => {
@@ -181,7 +196,7 @@ describe("harness:forcing-unused", () => {
       systemPrompt: "s", messages: [{ role: "user", content: "do the task" }], toolSchemaNames: TOOLS,
       response: { content: "", stopReason: "max_tokens" },
     });
-    const onlyCut = attributeFailure(ignoredGuidanceRun(false, [cut(1), cut(1), cut(1)]));
+    const onlyCut = attributeFailure(ignoredGuidanceRun(true, [cut(1), cut(1), cut(1)]));
     expect(onlyCut.reason).toBe("harness:forcing-unused");
     expect(onlyCut.evidence[0]?.detail).toContain("2 of 2 turn(s)");
   });
