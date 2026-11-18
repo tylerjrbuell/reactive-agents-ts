@@ -1,97 +1,101 @@
-# Cortex
+# @reactive-agents/cortex
 
-Local desk for Reactive Agents: Bun + Elysia API, SQLite store, WebSocket ingest/live fan-out, and a SvelteKit UI: Beacon, Chat (multimodal composer, voice), Runs and run traces, Lab builder, Judgments, memory and skills, and approvals. User docs: https://docs.reactiveagents.dev/features/cortex/
+> A local web studio for Reactive Agents: watch runs live, read every reasoning step, chat with agents and build them without writing code.
 
-**Contributors & AI agents:** see **[`AGENTS.md`](./AGENTS.md)** in this folder for architecture, WS contracts, store map, pitfalls, and plan index.
+> **Stability:** experimental. The UI, the SQLite storage schema and the HTTP endpoints may change between minor releases.
 
-## Prerequisites
-
-From the **repo root**:
+## Install
 
 ```bash
-bun install
+bun add reactive-agents @reactive-agents/cortex
+# or: npm install reactive-agents @reactive-agents/cortex
 ```
 
-## Start everything (recommended for review)
+`reactive-agents` brings the `rax` CLI; `@reactive-agents/cortex` is the studio it launches.
 
-From **`apps/cortex`**:
+## Usage
+
+Start the studio:
 
 ```bash
-cd apps/cortex
-bun start
+bunx rax cortex
+# API + UI on http://127.0.0.1:4321, opens in your browser
 ```
 
-This runs:
+Then stream an agent to it from the CLI:
 
-1. **Cortex server** on [http://localhost:4321](http://localhost:4321) — REST, ingest WS, live WS.
-2. **SvelteKit dev** on [http://localhost:5173](http://localhost:5173) — Vite proxies `/api` and `/ws` to the server.
+```bash
+bunx rax run "Research the top 5 TypeScript testing frameworks" --provider anthropic --tools --cortex
+```
 
-**Open the UI at port 5173.** The server does not auto-open a browser when started via `bun start` (so your tab stays on the dev UI).
+or from your own code with `.withCortex()`:
 
-### Two terminals (optional)
+```ts
+import { ReactiveAgents } from "reactive-agents";
 
-| Terminal | Command | Role |
-|----------|---------|------|
-| 1 | `cd apps/cortex && bun run dev:server` | API + WS on `4321` |
-| 2 | `cd apps/cortex && bun run dev:ui` | UI on `5173` (proxied to `4321`) |
+const agent = await ReactiveAgents.create()
+  .withProvider("anthropic")
+  .withTools()
+  .withCortex() // streams to http://localhost:4321, or CORTEX_URL
+  .build();
 
-For a second, throwaway instance (tests, tooling) use the pid-file lifecycle instead of killing by port: `bun run dev-stack start --port 4399 --ui-port 4398 --cwd <tmp-dir>`, then `bun run dev-stack status` and `bun run dev-stack stop --port 4399`. `stop` only touches processes `start` recorded in `.cortex-run/` (override with `CORTEX_RUN_DIR`).
+await agent.run("Summarize the top AI news this week");
+```
 
-## Environment
+The connection is best-effort: if Cortex is not running, the agent still runs and logs one warning. `rax cortex --help` lists the options (`--port`, `--host`, `--no-open`).
+
+## Features
+
+- **Beacon**: a live board of running agents, with a prompt bar to start a new run.
+- **Runs and run view**: run history, the full trace, "Why it ended", and an inspector with Context (skills and recalled memories), Memory, Safety and Judgments tabs. Compare two runs.
+- **Chat**: a multimodal composer (pictures, audio, files, `@` file tags), slash commands, live approvals and questions before risky tools, and voice (dictation, read aloud, voice mode).
+- **Lab**: an agent builder with TypeScript export, saved agents, memory and skills studios, tools and prompts. Connect a saved gateway agent to Telegram, Signal or a signed webhook, and watch its channels and schedules in the Gateway tab.
+- **Settings**: provider keys (including Ollama Cloud), judgment backends, voice engines.
+
+Everything is stored in a local SQLite file (`.cortex/cortex.db` under the directory you start Cortex in), so you can reopen any run later.
+
+## API
+
+| Export or command | Use it when |
+|---|---|
+| `rax cortex` | You want the studio. Starts the API, WebSocket ingest and the built UI on one port. |
+| `startCortexServer(config?)` | You embed Cortex in your own Bun process. Takes a partial config (`port`, `hostname`, `token`, `dbPath`, `openBrowser`) and returns `{ hostname, port, stop }`. |
+| `.withCortex(url?)` | On the agent builder (`reactive-agents`): stream that agent's events to Cortex. |
+
+## Configuration
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `CORTEX_PORT` | `4321` | HTTP + WS listen port |
 | `CORTEX_HOST` | `127.0.0.1` | Interface the server binds. Loopback only by default; set `0.0.0.0` to expose Cortex to your network (this requires `CORTEX_TOKEN`; the server refuses to start without it) |
 | `CORTEX_TOKEN` | unset | Access token for `/api/*` and `/ws/*`. Not needed on loopback. Required for a non-loopback `CORTEX_HOST`. Clients send `Authorization: Bearer <token>`; in a browser open `/?token=<token>` once (sets an HttpOnly cookie); sockets also accept `?token=` |
-| `CORTEX_NO_OPEN` | unset | Set to `1` to disable opening a browser when running **`dev:server`** alone |
+| `CORTEX_NO_OPEN` | unset | Set to `1` to not open a browser on start |
+| `CORTEX_URL` | local Cortex on port `4321` | Where agents (`.withCortex()`, `rax run --cortex`) send events |
 
-SQLite path comes from `defaultCortexConfig` in `server/types.ts` (default `.cortex/cortex.db` under the current working directory — usually `apps/cortex`).
+### Security note (Lab: host shell)
 
-## Security note (Lab — host shell)
+The Lab builder can opt in to **`shell-execute`**, which runs allowlisted terminal commands on the **same machine** as the Cortex server. It is off by default; turning it on is **at your own risk**. The Tools section shows one list of allowed commands: the framework defaults as removable chips, an input to add a command, and quick-add buttons for opt-in groups with a short risk note each. The list you see is exactly what the agent may run. Use it only on trusted accounts and codebases, and read the framework docs on blocklists and Docker sandboxing for stronger isolation.
 
-The Lab builder can opt in to **`shell-execute`**, which runs allowlisted terminal commands on the **same machine** as the Cortex server. It is disabled by default; enabling it is **at your own risk**. When enabled, the Tools section shows **one list of allowed commands**: the framework defaults pre-filled as chips you can remove, an input to add a command, and quick-add buttons for opt-in groups (JavaScript, Python, Web, Archives, Environment) with a short risk note each. The list you see is exactly what the agent may run; defaults and opt-in commands come from `ShellExecuteConfig` in `@reactive-agents/tools`. Use only on trusted accounts and codebases, and read the framework docs on blocklists and Docker sandboxing for stronger isolation.
+## Documentation
 
-## Production-style UI (single port)
+- [Cortex Studio](https://docs.reactiveagents.dev/features/cortex/): tour, chat, run view, Lab, gateway and channels, approvals, voice, settings
+- [Connect your app](https://docs.reactiveagents.dev/features/cortex/connect-your-app/): `.withCortex()` and what gets streamed
+- [CLI reference](https://docs.reactiveagents.dev/reference/cli/): `rax cortex` and `rax run --cortex`
 
-Build the static UI and let Cortex serve it from `ui/build`:
+## Runtime
 
-```bash
-cd apps/cortex
-bun run build:ui
-bun run dev:server
-```
+Bun >= 1.1.0. Cortex uses `Bun.serve` and `bun:sqlite`, so it does not run on Node.js. The agents that stream to it can run on Bun or Node.js 22.5+.
 
-Then open [http://localhost:4321](http://localhost:4321). (Ensure `server/index.ts` `staticAssetsPath` points at the built UI — it does when run via the bundled entry.)
+## License
 
-## Tests
+MIT. See [LICENSE](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/LICENSE).
 
-```bash
-cd apps/cortex
-bun test
-```
+## Contributing
 
-UI component/store tests:
+From a source checkout (`bun install` at the repo root), run `bun start` in `apps/cortex`. It starts the server on `:4321` and the hot-reloading SvelteKit UI on `http://localhost:5173` (Vite proxies `/api` and `/ws`; open the UI on 5173). Separately: `bun run dev:server` and `bun run dev:ui`. For a throwaway second instance use `bun run dev-stack start --port 4399 --ui-port 4398 --cwd <tmp-dir>`, then `bun run dev-stack stop --port 4399` (it stops only the processes it started).
 
-```bash
-cd apps/cortex/ui
-bun test
-```
+Single-port, production-style: `bun run build:ui && bun run dev:server`, then open `http://localhost:4321`.
 
-## UI checks
+Checks, from `apps/cortex`: `bun test` (server), and in `ui/`: `bun test`, `bun run check`, `bun run build`.
 
-```bash
-cd apps/cortex/ui
-bun run check   # svelte-kit sync + svelte-check
-bun run build
-```
-
-## Features
-
-- **Beacon** — live board and field of running agents, with a prompt bar.
-- **Chat** — multimodal composer (pictures, audio, files, `@` file tags), slash commands such as `/mcp` and `/btw`, rich answers with deliverables, live approvals and questions (agents ask before risky tools such as writing files or running the shell by default; switch it off per agent), one command list shared by `/` and the Config button, and voice (dictation, read aloud, voice mode).
-- **Runs and run view** — run table, trace, "Why it ended", and an inspector with Context (skills and recalled memories), Memory, Safety and Judgments tabs. Compare two runs.
-- **Lab** — agent builder (with TypeScript export), saved agents, memory studio, agent skills, tools and prompts. A **Channels** builder section connects a saved Gateway process agent to Telegram, Signal or a signed webhook: credentials are saved encrypted and never shown again, a connection test checks them, and the access list is fail-closed (an empty list means nobody can message the agent; "Allow everyone" is an explicit switch). The **Gateway** tab shows each gateway agent's live channel connections, schedules (next fire and recent runs), inbound queue activity and recent messages and refusals.
-- **Settings** — provider keys (including Ollama Cloud), judgment backends, voice engines.
-
-Architecture, routes and contracts for contributors are in [`AGENTS.md`](./AGENTS.md). Earlier phase plans are archived under `wiki/Planning/Implementation-Plans/Superpowers/archive/`.
+Architecture, routes, WebSocket contracts, store map and pitfalls: [AGENTS.md](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/cortex/AGENTS.md).
