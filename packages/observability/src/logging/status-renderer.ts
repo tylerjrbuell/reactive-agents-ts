@@ -214,8 +214,9 @@ export function makeStatusRenderer(
     if (s.tokens > 0) parts.push(`${s.tokens.toLocaleString()} tok`);
     if (s.costUsd > 0) parts.push(`$${s.costUsd.toFixed(4)}`);
     if (s.entropy !== null && !s.tool) parts.push(`entropy ${s.entropy.toFixed(2)}${s.entropyTrend}`);
-    // Keyboard hint
-    if (isTTY && s.thinkText && s.phase === "think") {
+    // Keyboard hint: only when `t` is actually read (stdin may be piped while
+    // stdout is a TTY: StackBlitz, IDE panes, piped input).
+    if (isTTY && ownsKeyboard && s.thinkText && s.phase === "think") {
       parts.push(s.thinkExpanded ? "[t: collapse]" : "[t: expand]");
     }
     const base = parts.join("  ·  ");
@@ -251,6 +252,16 @@ export function makeStatusRenderer(
     return visible;
   }
 
+  /**
+   * The panel's last row: the `t` hint when the renderer owns the keyboard,
+   * blank otherwise. The row is always drawn so the panel height (and the
+   * cursor-up count in `collapsePanel`/`redrawPanel`) stays fixed even if
+   * keyboard ownership is released mid-run.
+   */
+  function panelHintRow(): string {
+    return ownsKeyboard ? `${PANEL_INDENT}\x1b[2m[t: collapse thinking]\x1b[0m` : "";
+  }
+
   function writeStatus(): void {
     out.write(`\r\x1b[2K${fitStatus(statusLine())}`);
   }
@@ -266,7 +277,7 @@ export function makeStatusRenderer(
     for (const line of panelLines()) {
       out.write(`${PANEL_INDENT}${line}\n`);
     }
-    out.write(`${PANEL_INDENT}\x1b[2m[t: collapse thinking]\x1b[0m\n`);
+    out.write(`${panelHintRow()}\n`);
     writeStatus();
     s.drawnLines = PANEL_LINES + 1;
   }
@@ -291,7 +302,7 @@ export function makeStatusRenderer(
     for (const line of panelLines()) {
       out.write(`\r\x1b[2K${PANEL_INDENT}${line}\n`);
     }
-    out.write(`\r\x1b[2K${PANEL_INDENT}\x1b[2m[t: collapse thinking]\x1b[0m\n`);
+    out.write(`\r\x1b[2K${panelHintRow()}\n`);
     writeStatus();
   }
 

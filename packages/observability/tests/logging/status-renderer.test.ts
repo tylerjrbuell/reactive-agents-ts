@@ -267,6 +267,49 @@ describe("makeStatusRenderer", () => {
       Object.defineProperty(process, "stdin", { value: original, configurable: true });
     }
   });
+
+  describe("the `t` key hint shows only when the renderer owns the keyboard", () => {
+    /** Run a think phase with streamed text and spinner ticks; return all output. */
+    async function thinkOutput(stdinIsTTY: boolean): Promise<string> {
+      const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
+      const out = makeMockStream();
+      const renderer = makeStatusRenderer(logger, asStream(out));
+      const stdin = {
+        isTTY: stdinIsTTY,
+        setRawMode: vi.fn(),
+        resume: vi.fn(),
+        pause: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
+        setEncoding: vi.fn(),
+        listenerCount: vi.fn(() => 0),
+      };
+      const original = process.stdin;
+      Object.defineProperty(process, "stdin", { value: stdin, configurable: true });
+      try {
+        await Effect.runPromise(renderer.start());
+        await Effect.runPromise(logger.emit({ _tag: "phase_started", phase: "think", timestamp: new Date() }));
+        renderer.pushThinkChunk("reasoning about the task ");
+        await new Promise((resolve) => setTimeout(resolve, 250)); // spinner ticks redraw the line
+        renderer.stop();
+      } finally {
+        Object.defineProperty(process, "stdin", { value: original, configurable: true });
+      }
+      return out.raw.join("");
+    }
+
+    it("stdout TTY, stdin piped: no hint (the key would do nothing)", async () => {
+      const all = await thinkOutput(false);
+      expect(all).toContain("reasoning about the task");
+      expect(all).not.toContain("[t:");
+    });
+
+    it("stdout and stdin both TTY: hint shown", async () => {
+      const all = await thinkOutput(true);
+      expect(all).toContain("[t: collapse]");
+      expect(all).toContain("[t: collapse thinking]");
+    });
+  });
 });
 
 describe("makeStatusRenderer terminal size", () => {
