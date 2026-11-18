@@ -2,7 +2,7 @@
 title: API Stability & Versioning
 description: >-
   SemVer commitments, stability tiers, what's stable vs experimental as of
-  v0.18, and the deprecation policy.
+  v0.19, and the deprecation policy.
 topic: releases
 related:
   - guides/whats-new
@@ -23,7 +23,7 @@ Every public surface falls into one of three tiers. The tier is recorded on this
 | **Unstable** | API may change between minor versions with a CHANGELOG note. Suitable for production if you pin exactly. | Yes, between minors, with a migration note. |
 | **Experimental** | Active R&D. May change shape between any release. Use at your own risk; expect to update code on each upgrade. | Anytime, including patch. |
 
-## What's stable as of v0.18
+## What's stable as of v0.19
 
 The following surfaces are tier-1 stable: the safest to depend on. We aim to keep them source-compatible across `0.x` minors, with a deprecation cycle where possible; any exception is listed in that release's notes.
 
@@ -41,7 +41,7 @@ The following surfaces are tier-1 stable: the safest to depend on. We aim to kee
 - **AgentResult shape** — `.run()` and `.runStream()` return values
 - **Raw provider clients** — `AnthropicProviderLive`, `OpenAIProviderLive`, `LocalProviderLive`, `GeminiProviderLive`, `GroqProviderLive`, `XAIProviderLive`, `LiteLLMProviderLive` exported as standalone Effect Layers (you can skip the harness entirely)
 
-## What's unstable as of v0.18
+## What's unstable as of v0.19
 
 These work, but the **shape may change** in a later minor. Pin exact versions if you depend on them.
 
@@ -68,7 +68,7 @@ These work, but the **shape may change** in a later minor. Pin exact versions if
 - **Durable execution** — `.withDurableRuns()`, `agent.resumeRun(runId)` and `agent.listRuns({ status? })`. Moved down from stable: the durable code kept changing through v0.17 and v0.18. The durable human-in-the-loop gates (see [Durable HITL](/guides/durable-hitl/)) are unstable too.
 - **`create-reactive-agent`** — the scaffolder. Templates and generated project shape change with each minor.
 
-## What's experimental as of v0.18
+## What's experimental as of v0.19
 
 Use at your own risk. Will change.
 
