@@ -14,6 +14,7 @@
  * Completed steps ride the restored state verbatim and the effect journal
  * serves completed tool calls, so no completed step runs again.
  */
+import { foldAdvisory, type ChecklistFact } from "@reactive-agents/core";
 import {
   appendGuidanceText,
   deserializeKernelState,
@@ -35,6 +36,28 @@ export interface RunResume {
 const CONTINUE_TEXT =
   "The run was interrupted by the user and is continuing. Pick up exactly where you left off. " +
   "Results of tool calls already made are in the conversation; do not redo them.";
+
+const MAX_LISTED_ROWS = 5;
+
+/**
+ * One guidance line naming the run's own open to-do rows, or undefined when none.
+ * The kernel's wrap-up turn is opt-in and once per run; a continued run would
+ * otherwise finish with its list untouched. Sub-agent rows are not the run's own.
+ */
+const openTodoGuidance = (state: KernelState): string | undefined => {
+  const facts: ChecklistFact[] = [];
+  for (const e of state.ledger ?? []) {
+    if (e.kind === "checklist-item" && !(e.pass ?? "").startsWith("sub-agent:")) facts.push(e);
+  }
+  const open = foldAdvisory(facts).filter((i) => i.status === "pending" || i.status === "in_progress");
+  if (open.length === 0) return undefined;
+  const listed = open.slice(0, MAX_LISTED_ROWS).map((i) => `[${i.id}] ${i.title}`);
+  if (open.length > MAX_LISTED_ROWS) listed.push(`+${open.length - MAX_LISTED_ROWS} more`);
+  return (
+    `${open.length} to-do item${open.length === 1 ? " is" : "s are"} still open: ${listed.join(", ")}. ` +
+    "Mark finished ones done, remove ones no longer needed, or finish them, then give your final answer."
+  );
+};
 
 /** True for the stops a person asked for. */
 const isUserStop = (kind: RunStopKind | undefined): boolean => kind === "user-paused" || kind === "user-stopped";
@@ -60,16 +83,18 @@ export const prepareResume = (params: {
 
   const note = params.note?.trim();
   const kind = params.stop !== undefined ? stopKindOf(params.stop) : undefined;
-  const guidance = [
-    ...(isUserStop(kind) ? [CONTINUE_TEXT] : []),
-    ...(note !== undefined && note.length > 0 ? [`The user adds: ${note}`] : []),
-  ];
   let state: KernelState;
   try {
     state = deserializeKernelState(params.stateJson);
   } catch {
     return { stateJson: params.stateJson };
   }
+  const openRows = openTodoGuidance(state);
+  const guidance = [
+    ...(isUserStop(kind) ? [CONTINUE_TEXT] : []),
+    ...(openRows !== undefined ? [openRows] : []),
+    ...(note !== undefined && note.length > 0 ? [`The user adds: ${note}`] : []),
+  ];
   const maxIterations = resumeCap(state, params.extraIterations);
   if (guidance.length === 0 && maxIterations === undefined) return { stateJson: params.stateJson };
 
