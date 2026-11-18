@@ -69,8 +69,8 @@ const rules: Rule[] = [
       // bun test command help "(5,028 tests / 556 files, ~65s)"
       {
         label: "bun test help comment",
-        pattern: /\([\d,]+\+? tests \/ [\d,]+\+? files,/,
-        replacement: `(${testsFloor(metrics.tests)} tests / ${filesFloor(metrics.testFiles)} files,`,
+        pattern: /\([\d,]+\+? tests \/ [\d,]+\+? files(?=[,)])/,
+        replacement: `(${testsFloor(metrics.tests)} tests / ${filesFloor(metrics.testFiles)} files`,
       },
       // Hero stats table "| **5,028 tests**             |"
       {
