@@ -172,3 +172,4 @@ The skill defaults to `docs/superpowers/plans/`. **OVERRIDE to `wiki/Planning/Im
 - [[Implementation-Plans/2026-11-04-runtime-wither-batch2|2026-11-04 runtime wither batch 2]] — #213, 5 of 9 withers proven
 - [[Implementation-Plans/2026-11-04-diagnose-error-tagging|2026-11-04 diagnose error tagging]] — #285, D3 tranche 2, 12 sites tagged
 - [[Implementation-Plans/2026-11-17-docs-adoption-readiness|2026-11-17 docs and adoption readiness]] — funnel fixes, unified pitch, Cortex refresh, then launch (draft)
+- [[Implementation-Plans/2026-11-18-measurement-overhaul|2026-11-18 measurement overhaul]] — truthful gate v2, sound scorers, fast tiered loop; audits 01-03 (draft)
