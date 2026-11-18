@@ -276,10 +276,14 @@ describe("long-horizon arm", () => {
     expect(cellIdOf("m", "lh-debug-green", "lh-a0", 0)).toBe("m|lh-debug-green@lh-a0|0")
     const dir = mkdtempSync(join(tmpdir(), "h3-lh-arm-"))
     try {
-      const base = { out: join(dir, "r.json"), traceRoot: join(dir, "t"), tiers: ["qwen3:4b"], k: 1, budgetSec: 0, cellTimeoutSec: 1 }
+      // lh-1 is dropped when no web-search key is in env or any .env (CI has none, a dev
+      // checkout usually does), so filter it out: the count must not depend on local keys.
+      const taskFilter = LH_TASKS.map((t) => t.id).filter((id) => id !== "lh-1")
+      const base = { out: join(dir, "r.json"), traceRoot: join(dir, "t"), tiers: ["qwen3:4b"], k: 1, budgetSec: 0, cellTimeoutSec: 1, taskFilter }
       expect((await runH3({ ...base, suite: "long-horizon", noSwitch: true })).error).toMatch(/do not apply/)
       const r = await runH3({ ...base, suite: "long-horizon" })
-      expect(r).toEqual({ ran: 0, remaining: LH_TASKS.length })
+      expect(r).toEqual({ ran: 0, remaining: taskFilter.length })
+      expect(taskFilter.length).toBe(LH_TASKS.length - 1)
       writeFileSync(base.out, JSON.stringify({ suite: "h3", version: "1", gitSha: "x", taskHashes: {}, k: 1, cells: [] }))
       expect((await runH3({ ...base, suite: "long-horizon" })).error).toMatch(/holds suite h3/)
     } finally {
