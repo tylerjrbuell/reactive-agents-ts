@@ -1,4 +1,5 @@
 import { gradedCheckHarness } from "./graded-check.js"
+import { generateRw3HiddenCheck } from "./rw3-hidden-check.js"
 import type { BenchmarkTask } from "../types.js"
 
 // ── Fixture generators ────────────────────────────────────────────────────────
@@ -605,57 +606,6 @@ check("recommendation targets restocking / inventory", () => {
   const section = idx >= 0 ? lower.slice(idx) : lower
   return /restock|re-stock|\\bstock\\b|inventory|supply|supplier|replenish|reorder|safety\\s+stock/.test(section)
 })
-
-report()
-`
-}
-
-/**
- * rw-3 hidden check — graded structural + groundedness accuracy
- * (2026-07-11 keyword→graded conversion wave).
- *
- * The employee fixture is deterministic (generateEmployeeData), so the
- * actionable finding has fixed numbers: Engineering averages ≈ $144,600 against
- * a company average ≈ $102,240 (a ≈ 41% premium) while carrying the LOWEST
- * performance (≈ 2.68 avg, every other dept ≥ 3.4). The check accepts the
- * claim grounded EITHER way (the averages or the premium percent) and never
- * pins a required phrasing — only that the report is structured, surfaces the
- * outlier, grounds it in real numbers, and lands a recommendation.
- * "Open-ended, no recipe" stays true: the prompt is unchanged.
- */
-function generateRw3HiddenCheck(): string {
-  return `// hidden-check.ts — scorer-written validation of report.md. Not agent-authored.
-${gradedCheckHarness()}
-import { readFileSync, existsSync } from "node:fs"
-import { join } from "node:path"
-
-const path = join(import.meta.dir, "report.md")
-const raw = existsSync(path) ? readFileSync(path, "utf8") : ""
-// Comma/dollar-insensitive digit matching: "$144,600" ≡ "144600".
-const norm = raw.replace(/[,_$]/g, "")
-
-check("report.md exists and is substantive", () =>
-  raw.replace(/\\s+/g, " ").length >= 300 && !/\\b(TODO|TBD|lorem ipsum|placeholder)\\b/i.test(raw))
-
-// No table is requested: a pipe table or 3+ numeric list lines both pass.
-check("presents data in a structured form", () => {
-  return raw.split("\\n").filter((l) => (l.match(/\\|/g) ?? []).length >= 2 || (/^\\s*([-*•]|\\d+[.)])\\s+/.test(l) && /\\d/.test(l))).length >= 3
-})
-
-check("surfaces Engineering as the outlier department", () => /engineering/i.test(raw))
-
-check("salary claim is grounded in the data", () => {
-  // Accept the average (≈$144.6k, band [138k, 152k]) or the premium (~35–49%).
-  const nums = [...norm.matchAll(/(?<!\\d)(\\d{5,6})(?!\\d)/g)].map((m) => Number(m[1]))
-  const engAvg = nums.some((n) => n >= 138000 && n <= 152000)
-  const premium = /\\b(3[5-9]|4[0-9])(\\.\\d+)?\\s*%/.test(norm)
-  return engAvg || premium
-})
-
-check("connects salary to the performance dimension", () =>
-  /performance/i.test(raw) && (/\\b2\\.\\d{1,2}\\b/.test(norm) || /low(est)?|below|under|weakest|poor|lag/i.test(raw)))
-
-check("gives a concrete recommendation", () => /recommend|suggest|propose|should|action/i.test(raw))
 
 report()
 `

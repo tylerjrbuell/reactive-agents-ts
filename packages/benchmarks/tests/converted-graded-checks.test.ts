@@ -239,6 +239,47 @@ Leadership should review the engineering band before the next cycle.
   it("no report → 0.0", () => {
     expect(scoreCheck("rw-3", {})).toBe(0.0);
   });
+
+  // Measurement overhaul 0.6 (audit 02 D5): groundedness must be ABOUT Engineering.
+  const FILLER = `# Report
+
+| Department | Headcount |
+|------------|-----------|
+| Engineering | 15 |
+| Sales | 15 |
+
+Engineering is the largest team by headcount. Sales matches it.
+
+`;
+  const TAIL = `
+## Recommendation
+Leadership should review the staffing mix.
+`;
+
+  it("an unrelated 40% anywhere does not ground the salary claim", () => {
+    const base = `${FILLER}Many employees joined in the last two years, and attrition is a topic.\nPerformance review scores are fine.${TAIL}`;
+    const withStray = `${FILLER}About 40% of employees joined in the last two years, and attrition is 38%.\nPerformance review scores are fine.${TAIL}`;
+    // The old regex gave the stray percent a whole point; now it earns nothing.
+    expect(scoreCheck("rw-3", { "report.md": withStray })).toBe(scoreCheck("rw-3", { "report.md": base }));
+  });
+
+  it("an unrelated salary-shaped number does not ground the claim", () => {
+    const withStray = `${FILLER}The CEO's compensation is $145,000 and the office lease is $140000 a month.${TAIL}`;
+    const withEngineering = `${FILLER}Engineering average salary is $144,600 while the company average is $102,240.${TAIL}`;
+    expect(scoreCheck("rw-3", { "report.md": withEngineering })).toBeGreaterThan(scoreCheck("rw-3", { "report.md": withStray }));
+  });
+
+  it("$144.6k and '41 percent' about Engineering count (the old regex rejected both)", () => {
+    const k = `${FILLER}Engineering salaries average $144.6k, and engineering performance is lowest at 2.7.${TAIL}`;
+    const pct = `${FILLER}Engineering is paid about 41 percent above the company average; its performance score is the lowest at 2.7.${TAIL}`;
+    expect(scoreCheck("rw-3", { "report.md": k })).toBe(1.0);
+    expect(scoreCheck("rw-3", { "report.md": pct })).toBe(1.0);
+  });
+
+  it("a bare mention of Engineering and performance with no claim does not pass the outlier and performance checks", () => {
+    const s = scoreCheck("rw-3", { "report.md": `${FILLER}Performance reviews happen yearly. The engineering team met for lunch.${TAIL}` });
+    expect(s).toBeLessThan(1);
+  });
 });
 
 // ── rw-6: inverted task — file-artifact half ─────────────────────────────────

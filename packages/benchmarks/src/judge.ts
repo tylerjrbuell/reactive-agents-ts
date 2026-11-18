@@ -4,7 +4,7 @@ import { dirname, join } from "node:path"
 import type { BenchDimensionScore, BenchmarkTask, DimensionScore, QualityDimension, RunScore, SuccessCriteria } from "./types.js"
 import { measuredRuns } from "./report-format.js"
 import type { JudgeLayerResult, JudgeRequest, JudgeResponse } from "@reactive-agents/judge-server"
-import type { EvalGradedCheck } from "@reactive-agents/trace"
+import { isHonestDecline, type EvalGradedCheck, type ToolProvenance } from "@reactive-agents/trace"
 
 // ── Deliverable collection (grading-channel fix) ─────────────────────────────
 //
@@ -123,18 +123,32 @@ function resolveJudgeUrl(opts?: JudgeRpcOptions): string {
 // ── Pure utility functions (testable without LLM) ────────────────────────────
 
 /**
- * Deterministic abstention scoring (no judge):
- *  - trap task (abstainExpected): correct iff the agent abstained.
- *  - solvable task: correct iff it produced the right answer; a premature
- *    abstain scores 0 (guard against over-abstaining).
+ * Name of the check that reports a premature abstention on a solvable task.
+ * It rides on the accuracy dimension's `checks`; the accuracy score itself is
+ * the task's own deterministic check, so abstention is read apart from accuracy.
+ */
+export const PREMATURE_ABSTENTION_CHECK = "premature abstention (reported separately; accuracy is the task's own check)"
+
+/** Tool-call outcomes of one run, as read from its trace (see `isHonestDecline`). */
+export type RunToolProvenance = ToolProvenance
+
+/** An honest decline of a run the dispatcher stopped before the harness could finalize it as an abstention. */
+const isHonestDeclineRun = (output: string, terminatedBy: string | undefined, provenance: RunToolProvenance | undefined): boolean =>
+  terminatedBy === "dispatcher-early-stop" && isHonestDecline(output, provenance)
+
+/**
+ * Deterministic abstention rail score (no judge), for trap tasks:
+ * correct iff the agent abstained (the rail) or was credited an honest decline.
+ * `answerCorrect` is ignored: a solvable task is no longer scored here (see
+ * {@link PREMATURE_ABSTENTION_CHECK}); the param stays so old callers compile.
  */
 export function scoreAbstention(i: {
   abstainExpected: boolean;
   abstained: boolean;
-  answerCorrect: boolean;
+  answerCorrect?: boolean;
 }): number {
   if (i.abstainExpected) return i.abstained ? 1 : 0;
-  return i.abstained ? 0 : i.answerCorrect ? 1 : 0;
+  return i.abstained ? 0 : i.answerCorrect === true ? 1 : 0;
 }
 
 /**
@@ -363,6 +377,8 @@ async function scoreWithJudge(
  *   When `"abstained"`, the agent earned abstention; combined with `task.abstainExpected`
  *   to route trap tasks through `scoreAbstention`. Optional for backward compatibility
  *   — omit or pass undefined for non-trap runs; scoring is unchanged.
+ * @param provenance - The run's tool-call outcomes (from the trace). Lets a trap task credit
+ *   an honest decline that ended `dispatcher-early-stop`; without it that credit is text-only.
  */
 /**
  * Score a cell that produced NO completed run (timeout or crash).
@@ -399,6 +415,7 @@ export async function scoreTask(
   _runIterations: number,
   opts?: JudgeRpcOptions,
   terminatedBy?: string,
+  provenance?: RunToolProvenance,
 ): Promise<ReadonlyArray<BenchDimensionScore>> {
   const scores: BenchDimensionScore[] = []
 
@@ -422,41 +439,26 @@ export async function scoreTask(
   )
 
   // ── Trap-task abstention routing ─────────────────────────────────────────────
-  // When the task declares abstainExpected OR the agent terminated with an
-  // earned abstention, route accuracy through scoreAbstention (deterministic,
-  // no judge). The existing deterministic answer check (successCriteria regex /
-  // expected pattern) serves as the answerCorrect signal for solvable-task guard.
-  // All non-trap, non-abstained runs fall through to the normal scoring below.
+  // Only a task that DECLARES abstainExpected is scored by the abstention rail
+  // (deterministic, no judge). Two signals, reported separately as checks:
+  //   * rail: terminatedBy === "abstained" (the harness finalized an abstention);
+  //   * text: an honest decline the harness stopped before it could finalize
+  //     (terminatedBy dispatcher-early-stop), credited by text + tool provenance.
+  // A solvable task that abstained prematurely is NOT routed here: its accuracy
+  // comes from its own check (hidden fixtures, regex, ...) and the premature
+  // abstention is appended as a separate check below, so an ablation of the
+  // abstention mechanism cannot move accuracy by construction (audit 02 D2).
   const abstained = terminatedBy === "abstained";
-  if (task.abstainExpected === true || abstained) {
-    // Compute answerCorrect using the same deterministic check the normal path
-    // would use — so the solvable-task premature-abstain guard is accurate.
-    let answerCorrect = false;
-    if (task.successCriteria?.type === "regex") {
-      answerCorrect = matchSuccessCriteria(output, task.successCriteria) === 1;
-    } else if (task.successCriteria?.type === "verifiable") {
-      const vs = await scoreVerifiable(
-        task.successCriteria.command,
-        tmpDir,
-        task.successCriteria.partialCredit,
-      );
-      answerCorrect = vs.score === 1;
-    } else if (task.expected) {
-      const patterns = task.expected.split("|");
-      answerCorrect = patterns.some((p) => {
-        try { return new RegExp(p, "i").test(output); }
-        catch { return output.toLowerCase().includes(p.toLowerCase()); }
-      });
-    }
-    const score = scoreAbstention({
-      abstainExpected: task.abstainExpected === true,
-      abstained,
-      answerCorrect,
+  if (task.abstainExpected === true) {
+    const declinedByText = !abstained && isHonestDeclineRun(output, terminatedBy, provenance);
+    const score = scoreAbstention({ abstainExpected: true, abstained: abstained || declinedByText });
+    scores.push({
+      dimension: "accuracy", score, grader: "abstention",
+      checks: [
+        { name: "abstained (abstainExpected)", passed: abstained },
+        { name: "honest decline (text + tool provenance)", passed: declinedByText },
+      ],
     });
-    const abstainCheck: EvalGradedCheck = task.abstainExpected === true
-      ? { name: "abstained (abstainExpected)", passed: abstained }
-      : { name: "no premature abstention", passed: !abstained };
-    scores.push({ dimension: "accuracy", score, grader: "abstention", checks: [abstainCheck] });
     // Skip the normal accuracy block; continue to efficiency + dimensionRubrics below.
   } else {
 
@@ -508,7 +510,16 @@ export async function scoreTask(
     })
   }
 
-  } // end else (non-trap / non-abstained accuracy block)
+  } // end else (non-trap accuracy block)
+
+  // A premature abstention on a solvable task: reported, never folded into accuracy.
+  if (abstained && task.abstainExpected !== true) {
+    const i = scores.findIndex((d) => d.dimension === "accuracy")
+    if (i >= 0) {
+      const acc = scores[i]!
+      scores[i] = { ...acc, checks: [...(acc.checks ?? []), { name: PREMATURE_ABSTENTION_CHECK, passed: false }] }
+    }
+  }
 
   // ── Efficiency — normalized token usage ─────────────────────────────────────
   if (task.primaryDimensions?.includes("efficiency")) {

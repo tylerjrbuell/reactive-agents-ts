@@ -159,7 +159,10 @@ describe("runSession wiring (no live model)", () => {
       expect(g).toHaveLength(1)
       expect(g[0]).toMatchObject({
         grader: "abstention", passed: true, score: 1, taskId: "ab-trap-4", source: "bench", suiteHash: "suite-xyz",
-        checks: [{ name: "abstained (abstainExpected)", passed: true }],
+        checks: [
+          { name: "abstained (abstainExpected)", passed: true },
+          { name: "honest decline (text + tool provenance)", passed: false },
+        ],
       })
     }), 90_000)
 })

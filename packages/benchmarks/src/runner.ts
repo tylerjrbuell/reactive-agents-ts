@@ -47,10 +47,9 @@ export { withConfigEnv, shouldUseLongHorizon, billedTokenFields, writeFixtures, 
 
 import { scoreTask, scoreErrorCell, computeReliability, judgeUnreachable, DEFAULT_JUDGE_URL } from "./judge.js"
 import { formatDiagnosisLine, runEndStatusField, trustVerdict } from "./diagnose.js"
-import { gradeThenDiagnose } from "./eval-graded.js"
-
+import type { ReportModels } from "./gate/options.js"
+import { gradeThenDiagnose, toolProvenanceFromTrace } from "./eval-graded.js"
 type ProviderName = NonNullable<RuntimeOptions["provider"]>;
-
 export interface RunnerOptions {
   /** LLM provider to use for task execution. */
   readonly provider: ProviderName;
@@ -862,7 +861,7 @@ export async function runSession(
             // by an LLM yields hallucinated evidence (2026-07-07 forensic run).
             const dimensions = result.status === "error"
               ? scoreErrorCell(task, result.error ?? "error", result.durationMs)
-              : await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations, undefined, result.terminatedBy)
+              : await scoreTask(result.output, task, tmpDir, result.tokensUsed, result.iterations, undefined, result.terminatedBy, await toolProvenanceFromTrace(session.traceDir, result.traceId))
             // Grader-in-trace: append the deterministic grade to the trace, THEN diagnose it.
             const diagnosis = await gradeThenDiagnose(session.traceDir, result.traceId, dimensions, task.id, session.suiteHash)
             // Score-aware trust verdict: combine the trace honesty label with
@@ -923,9 +922,10 @@ export async function runSession(
   const hasTrapTasks = abstentionInputs.some((r) => r.abstainExpected)
   const abstentionMetrics = hasTrapTasks ? aggregateAbstention(abstentionInputs) : undefined
 
-  const sessionReport: SessionReport = {
+  const sessionReport: SessionReport & ReportModels = {
     generatedAt: new Date().toISOString(),
     runs: [],
+    models: session.models.map((m) => ({ id: m.id, provider: m.provider })),
     sessionId: session.id,
     sessionVersion: session.version,
     gitSha,

@@ -231,7 +231,7 @@ SIZE_BASELINE=(
   "benchmarks/src/runner.ts:963"
   "core/src/services/event-bus.ts:188"
   "runtime/src/runtime.ts:1105"
-  "benchmarks/src/tasks/real-world.ts:1531"
+  "benchmarks/src/tasks/real-world.ts:1481"
   "reasoning/src/kernel/state/kernel-state.ts:1292"
   "llm-provider/src/providers/local.ts:1139"
   "runtime/src/builder/types.ts:1061"

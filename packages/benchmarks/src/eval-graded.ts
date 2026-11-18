@@ -9,7 +9,8 @@
 
 import { appendFileSync, existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import type { EvalGradedEvent, TraceEventBase } from "@reactive-agents/trace"
+import { loadTrace, toolProvenanceOf } from "@reactive-agents/trace"
+import type { EvalGradedEvent, ToolProvenance, TraceEventBase } from "@reactive-agents/trace"
 import { diagnoseRun } from "./diagnose.js"
 import type { BenchDimensionScore, RunDiagnosis } from "./types.js"
 
@@ -91,6 +92,24 @@ export function appendEvalGraded(
   } catch (e) {
     const message = typeof e === "object" && e !== null && "message" in e ? String(e.message) : String(e)
     return { appended: false, reason: message }
+  }
+}
+
+/**
+ * Tool provenance of a recorded run (which tools errored, which succeeded), read
+ * from its trace so the scorer can credit an honest decline by text + provenance.
+ * `undefined` when there is no trace or it cannot be read (scoring then falls
+ * back to the rail-only signal).
+ */
+export async function toolProvenanceFromTrace(
+  traceDir: string | undefined,
+  traceId: string | undefined,
+): Promise<ToolProvenance | undefined> {
+  if (!traceDir || !traceId) return undefined
+  try {
+    return toolProvenanceOf(await loadTrace(join(traceDir, `${traceId}.jsonl`)))
+  } catch {
+    return undefined
   }
 }
 
