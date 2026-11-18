@@ -26,16 +26,29 @@ describe("resolveMaxIterationCap — resume cap", () => {
     ).toEqual({ maxIterations: 13, clamped: false });
   });
 
-  it("resumed + plan-budget-raised config cap above the resume cap keeps the higher cap", () => {
+  // 2026-11-18 (v0.19.0 prep): the resume cap wins OUTRIGHT, also when LOWER.
+  // `resumeRun(id, { extraIterations: 1 })` on an agent with explicit
+  // `.withMaxIterations(12)` must stop at the extraIterations bound, not 12.
+  it("resumed + LOWER resume cap beats an explicit higher cap (extraIterations bounds the run)", () => {
+    expect(
+      resolveMaxIterationCap({ configCap: 12, tierHint: 4, explicit: true, resumed: true }),
+    ).toEqual({ maxIterations: 4, clamped: false });
     expect(
       resolveMaxIterationCap({ configCap: 20, tierHint: 13, explicit: true, resumed: true }),
-    ).toEqual({ maxIterations: 20, clamped: false });
+    ).toEqual({ maxIterations: 13, clamped: false });
   });
 
-  it("resumed with a lower hint falls through to the normal rules", () => {
+  it("resumed + lower resume cap beats the non-explicit config cap too, without a clamp signal", () => {
     expect(
       resolveMaxIterationCap({ configCap: 10, tierHint: 8, explicit: false, resumed: true }),
-    ).toEqual({ maxIterations: 8, clamped: true });
+    ).toEqual({ maxIterations: 8, clamped: false });
+  });
+
+  it("resumed with no resume cap falls through to the normal rules", () => {
+    expect(resolveMaxIterationCap({ configCap: 12, tierHint: undefined, explicit: true, resumed: true })).toEqual({
+      maxIterations: 12,
+      clamped: false,
+    });
   });
 
   it("non-resumed runs are unchanged", () => {
@@ -92,12 +105,15 @@ const makeLlm = async () => {
   return { state, layer };
 };
 
-const runWith = async (withResume: boolean): Promise<number> => {
+const runWith = async (
+  withResume: boolean,
+  caps: { readonly config: number; readonly resume: number; readonly spent: number } = { config: 3, resume: 13, spent: 3 },
+): Promise<number> => {
   const llm = await makeLlm();
   const logger = await Effect.runPromise(makeObservableLogger({ live: false }));
   const resumeState = transitionState(
-    initialKernelState({ maxIterations: 3, strategy: "reactive", kernelType: "react" }),
-    { iteration: 3, status: "thinking" },
+    initialKernelState({ maxIterations: caps.config, strategy: "reactive", kernelType: "react" }),
+    { iteration: caps.spent, status: "thinking" },
   );
   await Effect.runPromise(
     provideTestEnvelope(
@@ -111,10 +127,10 @@ const runWith = async (withResume: boolean): Promise<number> => {
           ...defaultReasoningConfig,
           strategies: {
             ...defaultReasoningConfig.strategies,
-            reactive: { ...defaultReasoningConfig.strategies.reactive, maxIterations: 3, maxIterationsExplicit: true },
+            reactive: { ...defaultReasoningConfig.strategies.reactive, maxIterations: caps.config, maxIterationsExplicit: true },
           },
         },
-        contextProfile: { tier: "local" as const, maxIterations: 13 },
+        contextProfile: { tier: "local" as const, maxIterations: caps.resume },
         ...(withResume ? { resumeState } : {}),
       }),
     ).pipe(Effect.provide(Layer.succeed(ObservableLogger, logger)), Effect.provide(llm.layer)),
@@ -129,5 +145,12 @@ describe("executeReactive — resumed run honors the resume cap", () => {
     // Fresh run: explicit cap 3 stops it; the resumed one has 3 -> 13 headroom.
     expect(fresh).toBeLessThanOrEqual(4);
     expect(resumed).toBeGreaterThan(fresh);
+  });
+
+  it("resumed state under a LOWER resume cap stops there, not at the explicit config cap", async () => {
+    // Explicit cap 12, resumed at iteration 2 with resume cap 3 (spent 2 + extraIterations 1).
+    const resumed = await runWith(true, { config: 12, resume: 3, spent: 2 });
+    // Pre-fix the explicit 12 won: ~10 more LLM calls. Under the resume cap: at most 1-2.
+    expect(resumed).toBeLessThanOrEqual(2);
   });
 });

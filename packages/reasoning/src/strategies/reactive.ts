@@ -172,9 +172,12 @@ const positiveOrUndefined = (n: number | undefined): number | undefined =>
  * Resolve the effective reactive iteration cap.
  *
  * Precedence (rule 0 added 2026-11-17, Cortex Continue):
- *   0. On a RESUME (`resumed: true`) a `tierHint` above the otherwise-resolved
- *      cap is the runtime's per-run resume cap and wins, even over an explicit
- *      cap (the resumed state already spent that cap). Non-resumed runs skip it.
+ *   0. On a RESUME (`resumed: true`) the `tierHint` slot carries the runtime's
+ *      per-run cap (`run-resume.ts` / `loop-stop-resume.ts`: spent iterations
+ *      plus the caller's `extraIterations`, or the run's own cap) and wins
+ *      OUTRIGHT, above or below an explicit cap. 2026-11-18: it used to win
+ *      only when higher, so an explicit 12 beat an `extraIterations: 1` bound.
+ *      Non-resumed runs skip it.
  *
  * Then (2026-10-23 explicit-cap fix, introspective harness loop —
  * wiki/Research/Harness-Reports/introspective-2026-10-24-02-*):
@@ -196,10 +199,9 @@ export function resolveMaxIterationCap(
   const configCap = positiveOrUndefined(sources.configCap);
   const tierHint = positiveOrUndefined(sources.tierHint);
 
-  // (0) Resume cap: the runtime's raised per-run cap beats any lower resolved cap.
+  // (0) Resume cap: the runtime's per-run cap wins outright, above or below.
   if (sources.resumed === true && tierHint !== undefined) {
-    const base = resolveMaxIterationCap({ ...sources, resumed: false }).maxIterations;
-    if (tierHint > base) return { maxIterations: tierHint, clamped: false };
+    return { maxIterations: tierHint, clamped: false };
   }
 
   // (1) Explicit user cap always wins — no min with the tier hint.

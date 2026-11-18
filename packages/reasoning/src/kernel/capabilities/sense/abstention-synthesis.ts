@@ -20,7 +20,7 @@
 
 import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../../types/step.js";
-import { isUserStopReason } from "../../loop/terminate-reason.js";
+import { isKillswitchGuardReason, isUserStopReason } from "../../loop/terminate-reason.js";
 
 /**
  * Terminals that are infrastructure FAULTS, not effort exhaustion. A run that
@@ -113,7 +113,9 @@ export function isGuardStopTerminal(terminatedBy: string | undefined): boolean {
   return (
     GUARD_STOP_TERMINALS.has(terminatedBy) ||
     terminatedBy.startsWith("loop_detected:") ||
-    terminatedBy.startsWith("controller_early_stop:")
+    terminatedBy.startsWith("controller_early_stop:") ||
+    // A killswitch timeout / watchdog / denial did not exhaust the budget.
+    isKillswitchGuardReason(terminatedBy)
   );
 }
 

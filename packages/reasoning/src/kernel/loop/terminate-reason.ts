@@ -150,9 +150,10 @@ export type NarrowedTerminatedBy =
  * whitelist below): a miss falls through to the pre-existing `max_iterations`
  * label (the old behaviour, an under-claim of precision), never to a new
  * mislabel. True cap/budget exits (`max_iterations`, `budget_exceeded`, the
- * killswitch templated families `budget-limit:` / `timeout-after:` /
- * `max-iterations:` / `watchdog:` / `killswitch:`), `kernel_error` and an
- * absent raw reason keep `max_iterations`.
+ * killswitch families `budget-limit:` / `max-iterations:`), the reason-less
+ * `killswitch:` sentinel, `kernel_error` and an absent raw reason keep
+ * `max_iterations`. Killswitch guard families (`isKillswitchGuardReason`:
+ * `timeout-after:` / `watchdog:` / `require-approval-for:`) are guard stops.
  */
 const GUARD_STOP_REASONS: ReadonlySet<string> = new Set<TerminateReason>([
   "loop_graceful",
@@ -173,10 +174,26 @@ const GUARD_STOP_PREFIXES: readonly string[] = ["loop_detected:", "controller_ea
 export const isTemplatedTerminateReason = (raw: string): raw is TemplatedTerminateReason =>
   GUARD_STOP_PREFIXES.some((p) => raw.startsWith(p));
 
+/**
+ * Compose killswitch reason families (`killswitchTerminatedBy`, phase-hooks.ts)
+ * that stop a run for a reason OTHER than its iteration cap or budget: a
+ * wall-clock timeout, a no-progress watchdog, a denied approval. 2026-11-18:
+ * these used to narrow to `max_iterations` (a `timeoutAfter("50ms")` stop
+ * claimed the iteration cap). `max-iterations:` and `budget-limit:` are true
+ * cap / budget exits and stay off this list; so does the reason-less
+ * `killswitch:<verb>` sentinel (unknown cause, whitelist under-claims).
+ */
+const KILLSWITCH_GUARD_PREFIXES: readonly string[] = ["timeout-after:", "watchdog:", "require-approval-for:"];
+
+/** True for a compose killswitch stop that is neither a cap nor a budget exit (list above). */
+export function isKillswitchGuardReason(raw: string | undefined): boolean {
+  return raw !== undefined && KILLSWITCH_GUARD_PREFIXES.some((p) => raw.startsWith(p));
+}
+
 /** True when a raw kernel reason names a harness guard stop (whitelist above). */
 export function isGuardStopReason(raw: string | undefined): boolean {
   if (raw === undefined) return false;
-  return GUARD_STOP_REASONS.has(raw) || isTemplatedTerminateReason(raw);
+  return GUARD_STOP_REASONS.has(raw) || isTemplatedTerminateReason(raw) || isKillswitchGuardReason(raw);
 }
 
 /**

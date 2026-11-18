@@ -11,6 +11,7 @@
 import { describe, it, expect } from "bun:test";
 import type { ReasoningStep } from "../../../../src/types/step.js";
 import {
+  buildAbstentionOutput,
   shouldSynthesizeAbstention,
   summarizeAttempts,
 } from "../../../../src/kernel/capabilities/sense/abstention-synthesis.js";
@@ -102,5 +103,30 @@ describe("summarizeAttempts: deterministic what-was-attempted summary", () => {
     expect(summarizeAttempts(steps)).toBe(
       "3 tool call(s) attempted (search, read), 3 succeeded",
     );
+  });
+});
+
+// 2026-11-18 (v0.19.0 prep): a compose killswitch timeout / watchdog / denial
+// is not budget exhaustion; the failure cause names the killswitch instead of
+// "within the available budget". Cap / budget killswitches keep that wording.
+describe("buildAbstentionOutput: killswitch stops", () => {
+  it("a timeout-after killswitch names itself, not the budget", () => {
+    const text = buildAbstentionOutput([], { terminatedBy: "timeout-after:50ms" });
+    expect(text).toContain("stopped by timeout-after:50ms");
+    expect(text).not.toContain("within the available budget");
+  });
+
+  it("watchdog and approval-denial killswitches name themselves", () => {
+    for (const reason of ["watchdog:no-progress-for:5000ms", "require-approval-for:denied:web_search"]) {
+      const text = buildAbstentionOutput([], { terminatedBy: reason });
+      expect(text).toContain(`stopped by ${reason}`);
+      expect(text).not.toContain("within the available budget");
+    }
+  });
+
+  it("max-iterations and budget-limit killswitches keep the budget wording", () => {
+    for (const reason of ["max-iterations:5", "budget-limit:tokens:1000/512"]) {
+      expect(buildAbstentionOutput([], { terminatedBy: reason })).toContain("within the available budget");
+    }
   });
 });

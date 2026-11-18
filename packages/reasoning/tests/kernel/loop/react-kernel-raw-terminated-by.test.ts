@@ -119,25 +119,25 @@ describe("deriveTerminatedBy() — rawTerminatedBy parallel open-string channel"
     }
   });
 
-  it("preserves all five killswitch reason families verbatim while narrowing to max_iterations when status != done", () => {
-    // These are the dynamic reasons documented in killswitch-reason-preserved.test.ts:
-    //   - budget-limit:tokens:N/M
-    //   - timeout-after:Wms
-    //   - max-iterations:N
-    //   - require-approval-for:denied:TOOL
-    //   - watchdog:no-progress-for:Nms
-    const reasons = [
-      "budget-limit:tokens:1000/512",
-      "timeout-after:30s",
-      "max-iterations:5",
+  it("preserves all five killswitch reason families verbatim; cap/budget ones narrow to max_iterations when status != done", () => {
+    // These are the dynamic reasons documented in killswitch-reason-preserved.test.ts.
+    // Cap / budget exits (and the reason-less sentinel) keep max_iterations:
+    const capReasons = ["budget-limit:tokens:1000/512", "max-iterations:5", "killswitch:terminate"];
+    for (const reason of capReasons) {
+      const result = deriveTerminatedBy(syntheticState({ terminatedBy: reason, status: "thinking" }));
+      expect(result.terminatedBy).toBe("max_iterations");
+      expect(result.rawTerminatedBy).toBe(reason);
+    }
+    // 2026-11-18: a timeout / watchdog / approval denial is not an iteration-cap
+    // exit (timeoutAfter("50ms") used to report max_iterations) → guard_stop.
+    const guardReasons = [
+      "timeout-after:50ms",
       "require-approval-for:denied:web_search",
       "watchdog:no-progress-for:5000ms",
     ];
-    for (const reason of reasons) {
-      const result = deriveTerminatedBy(
-        syntheticState({ terminatedBy: reason, status: "thinking" }),
-      );
-      expect(result.terminatedBy).toBe("max_iterations");
+    for (const reason of guardReasons) {
+      const result = deriveTerminatedBy(syntheticState({ terminatedBy: reason, status: "failed" }));
+      expect(result.terminatedBy).toBe("guard_stop");
       expect(result.rawTerminatedBy).toBe(reason);
     }
   });
