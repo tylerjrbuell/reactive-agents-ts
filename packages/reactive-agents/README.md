@@ -1,6 +1,8 @@
 # reactive-agents
 
-> TypeScript agents that finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from.
+**Agents you can control, audit and improve.**
+
+> An open-source TypeScript agent harness for controllable execution, end-to-end observability, and reliable runs on local models and frontier APIs.
 
 > **Stability:** stable. `ReactiveAgents.create()` and the `.with*()` chain are tier-1 stable; where a single export is less settled than its package it carries an `@unstable` JSDoc tag, and the tier itself is recorded in the stability reference.
 
@@ -10,9 +12,18 @@
 
 [Documentation](https://docs.reactiveagents.dev/) · [Discord](https://discord.gg/Mp99vQam3Q) · [GitHub](https://github.com/tylerjrbuell/reactive-agents-ts) · [Changelog](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/CHANGELOG.md)
 
-`reactive-agents` is the umbrella package: one install, one fluent builder, and the core `@reactive-agents/*` layers re-exported behind it. Built on Effect-TS with schema-validated boundaries and tagged errors. Every layer is opt-in through a `.with*()` call.
+`reactive-agents` is the umbrella package: one install, one fluent builder, and the core `@reactive-agents/*` layers re-exported behind it. Built on Effect-TS with schema-validated boundaries and tagged errors. Optional capabilities (memory, guardrails, cost routing, durability) only run when you add them with a `.with*()` call; Reactive Intelligence is on by default.
 
-**Accountable:** every run produces an evidence receipt. Receipts are unsigned by default; call `.withReceiptSigning()` or set the `RA_RECEIPT_KEY` environment variable to sign them with Ed25519.
+## What you get that other frameworks don't
+
+- **Same code, local or frontier.** Finishes the loop on a 4B Ollama model and on Claude, GPT, or Gemini; only the model line changes.
+- **A receipt for every run.** Claim-to-evidence record and verdict; sign with Ed25519 via `.withReceiptSigning()` (unsigned by default).
+- **Explain any failed run.** Every run writes a trace; `rax-diagnose cause <runId>` names why it failed. Replay re-runs from the trace with tool results held fixed.
+- **Survives a crash.** `.withDurableRuns()` checkpoints each step; a fresh process resumes (opt-in).
+- **Private and quiet by default.** No telemetry unless you opt in (`DO_NOT_TRACK` wins); quiet when piped.
+- **Cortex, a local studio.** Watch runs, inspect traces, build agents locally. No hosted dashboard.
+
+Docs: https://docs.reactiveagents.dev/
 
 ## Install
 
@@ -23,29 +34,31 @@ bun add reactive-agents
 # or: npm install reactive-agents
 ```
 
-`effect` is a dependency. If you import from `effect` in your own code, install it explicitly: `bun add effect`.
-
 ## Quick start
 
-```ts
-import { ReactiveAgents } from "reactive-agents";
+No Effect knowledge needed for the basics: `createAgent` + `await agent.run()`.
 
-const agent = await ReactiveAgents.create()
-  .withName("research-assistant")
-  .withProvider("anthropic")
-  .withModel("claude-sonnet-4-6")
-  .withReasoning()
-  .withTools({ builtins: "research" })
-  .withMemory({ tier: "standard" })
-  .withGuardrails()
-  .withCostTracking()
-  .build();
+```ts
+import { createAgent } from "reactive-agents";
+
+const agent = await createAgent({
+  name: "research-assistant",
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
+  reasoning: {},
+  tools: { builtins: "research" },
+  memory: { tier: "standard" },
+  guardrails: {},
+  costTracking: {},
+});
 
 const result = await agent.run("Summarize the latest research on retrieval-augmented generation");
 
 console.log(result.output);
 console.log(result.metadata); // { duration, cost, tokensUsed, stepsCount, strategyUsed }
 ```
+
+`effect` is a dependency. If you import from `effect` in your own code, install it explicitly: `bun add effect`.
 
 Run a local model with the same code:
 
