@@ -5,9 +5,9 @@
 // to undefined (no service, build proceeds unchanged) — never throws, never
 // blocks a build.
 import { describe, expect, it, afterEach } from "bun:test";
-import { probeAutoShadow } from "../src/judgment-autoshadow.js";
+import { autoShadowRequested, probeAutoShadow } from "../src/judgment-autoshadow.js";
 
-const ENV_KEYS = ["REACTIVE_AGENTS_NO_AUTO_SHADOW", "OLLAMA_ENDPOINT", "OLLAMA_HOST", "OLLAMA_BASE"] as const;
+const ENV_KEYS = ["REACTIVE_AGENTS_NO_AUTO_SHADOW", "REACTIVE_AGENTS_AUTO_SHADOW","OLLAMA_ENDPOINT", "OLLAMA_HOST", "OLLAMA_BASE"] as const;
 const saved: Record<string, string | undefined> = {};
 
 function setEnv(key: string, value: string | undefined) {
@@ -23,11 +23,57 @@ afterEach(() => {
   }
 });
 
-describe("7.1 auto-shadow probe", () => {
-  it("opt-out env short-circuits to undefined without probing", async () => {
+describe("7.1 auto-shadow request gate", () => {
+  it("default (never set, no env) is off", () => {
+    setEnv("REACTIVE_AGENTS_NO_AUTO_SHADOW", undefined);
+    setEnv("REACTIVE_AGENTS_AUTO_SHADOW", undefined);
+    expect(autoShadowRequested(undefined)).toBe(false);
+  });
+
+  it("builder opt-in or env opt-in turns it on", () => {
+    setEnv("REACTIVE_AGENTS_NO_AUTO_SHADOW", undefined);
+    setEnv("REACTIVE_AGENTS_AUTO_SHADOW", undefined);
+    expect(autoShadowRequested(true)).toBe(true);
+    setEnv("REACTIVE_AGENTS_AUTO_SHADOW", "1");
+    expect(autoShadowRequested(undefined)).toBe(true);
+  });
+
+  it("builder opt-out beats env opt-in; opt-out env beats everything", () => {
+    setEnv("REACTIVE_AGENTS_AUTO_SHADOW", "1");
+    expect(autoShadowRequested(false)).toBe(false);
     setEnv("REACTIVE_AGENTS_NO_AUTO_SHADOW", "1");
-    setEnv("OLLAMA_ENDPOINT", "http://localhost:11434");
-    expect(await probeAutoShadow()).toBeUndefined();
+    expect(autoShadowRequested(true)).toBe(false);
+  });
+});
+
+describe("7.1 auto-shadow probe", () => {
+  const stubTags = (names: string[]) => {
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL) =>
+      new Response(JSON.stringify({ models: names.map((name) => ({ name })) }), { status: 200 })) as typeof fetch;
+    return () => {
+      globalThis.fetch = real;
+    };
+  };
+
+  it("untagged model matches its :latest tag; absent model resolves undefined", async () => {
+    const restore = stubTags(["nimble:latest"]);
+    try {
+      expect((await probeAutoShadow({ baseUrl: "http://fake.invalid" }))?.model).toBe("nimble");
+      expect(await probeAutoShadow({ baseUrl: "http://fake.invalid", model: "clef" })).toBeUndefined();
+    } finally {
+      restore();
+    }
+  });
+
+  it("malformed /api/tags body resolves undefined", async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL) => new Response("{}", { status: 200 })) as typeof fetch;
+    try {
+      expect(await probeAutoShadow({ baseUrl: "http://fake.invalid" })).toBeUndefined();
+    } finally {
+      globalThis.fetch = real;
+    }
   });
 
   it("unreachable server resolves to undefined (never throws)", async () => {

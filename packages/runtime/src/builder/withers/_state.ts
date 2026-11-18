@@ -244,8 +244,8 @@ export interface BuilderState {
   _mcpToolkitRequests: import("@reactive-agents/tools").MCPToolkitRequest[];
   _lazyValidation: boolean;
   _enableJudgment: boolean;
-  /** `false` after `.withJudgment(false)` — skips the build-time auto-shadow probe. */
-  _autoShadow: boolean;
+  /** Auto-shadow choice: `true` from `.withJudgment({ shadow: true })`, `false` from `.withJudgment(false)`, `undefined` = never set (env decides, default off). */
+  _autoShadow: boolean | undefined;
   _judgmentOptions?: import("../types.js").JudgmentBuilderOptions;
   _judgmentShadowDbPath?: string;
   _approvalPolicy?: import("../types.js").ApprovalPolicyConfig;

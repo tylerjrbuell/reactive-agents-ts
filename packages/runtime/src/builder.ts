@@ -447,7 +447,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _enableGuardrails: boolean = false
     private _enableVerification: boolean = false
     private _enableJudgment: boolean = false // `.withJudgment()` opt-in; off by default
-    private _autoShadow: boolean = true // `.withJudgment(false)` sets false: no auto-shadow probe
+    private _autoShadow: boolean | undefined = undefined // opt-in: `.withJudgment({ shadow: true })` or REACTIVE_AGENTS_AUTO_SHADOW=1
     private _judgmentShadowDbPath?: string
     private _enableCostTracking: boolean = false
     private _enableAudit: boolean = false
@@ -1045,7 +1045,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * Delegates to `applyWithJudgment` in `builder/withers/quality-guardrails.ts` (#218 decomp) —
      * full public-contract JSDoc moved verbatim there.
      */
-    withJudgment(options?: JudgmentBuilderOptions | false): this {
+    withJudgment(options?: JudgmentBuilderOptions | import('./judgment-autoshadow.js').JudgmentShadowOptions | false): this {
         applyWithJudgment(asBuilderState(this), options)
         return this
     }

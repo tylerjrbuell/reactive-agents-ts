@@ -27,6 +27,7 @@ describe.skipIf(!live)("7.1 auto-shadow closed loop (live Ollama)", () => {
         .withProvider("ollama")
         .withModel("qwen3:4b")
         .withMaxIterations(2)
+        .withJudgment({ shadow: true })
         .build();
       const r = await agent.run("What is 2+2? Reply with ONLY the number.");
       expect(r.success).toBe(true);

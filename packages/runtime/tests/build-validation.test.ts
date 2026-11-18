@@ -80,15 +80,18 @@ describe("Build-time validation", () => {
   });
 
   test("skips API key check for ollama provider", async () => {
-    // Ollama doesn't require an API key. Build succeeds if Ollama is running,
-    // or throws a connection error if it isn't — either outcome is correct.
+    // Ollama doesn't require an API key. The endpoint is pinned to a closed
+    // port so the test never reaches a real local Ollama: the build must fail
+    // on the connection pre-flight, NOT on an API key check.
+    const savedEndpoint = process.env.OLLAMA_ENDPOINT;
+    process.env.OLLAMA_ENDPOINT = "http://127.0.0.1:1";
     try {
-      const agent = await ReactiveAgents.create().withProvider("ollama").build();
-      // Ollama is running — no API key error should have occurred
-      await agent.dispose();
-    } catch (e: any) {
-      // Ollama is not running — should be a connection error, NOT an API key error
-      expect(e.message).toMatch(/Cannot connect to Ollama|Provider connection failed/);
+      await expect(ReactiveAgents.create().withProvider("ollama").build()).rejects.toThrow(
+        /Cannot connect to Ollama|Provider connection failed/,
+      );
+    } finally {
+      if (savedEndpoint === undefined) delete process.env.OLLAMA_ENDPOINT;
+      else process.env.OLLAMA_ENDPOINT = savedEndpoint;
     }
   });
 

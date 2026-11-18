@@ -121,6 +121,7 @@ describe(".withJudgment() — Task 8 builder wiring", () => {
       .withProvider("test")
       .withTestScenario([{ text: "FINAL ANSWER: done" }])
       .withReasoning({ defaultStrategy: "reactive" })
+      .withJudgment({ shadow: true })
       .build();
     agentsToDispose.push(agent);
 

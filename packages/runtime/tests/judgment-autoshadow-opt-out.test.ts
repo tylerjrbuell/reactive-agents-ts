@@ -2,8 +2,8 @@
 //
 // `.withJudgment(false)` is the in-code off switch for the Wave 7.1
 // auto-shadow probe. Pins: opt-out never touches the network (no Ollama
-// /api/tags probe) and never wires a judgment service; default behavior is unchanged
-// (probe runs); the env var still wins.
+// /api/tags probe) and never wires a judgment service; the default never
+// probes either (opt-in since 2026-11-18); the opt-out env var wins.
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -59,10 +59,16 @@ describe("withJudgment(false) opts out of auto-shadow", () => {
     await agent.dispose();
   });
 
-  it("default (never called): probe still runs - behavior unchanged", async () => {
+  it("default (never called): no probe - auto-shadow is opt-in since 2026-11-18", async () => {
     const agent = await base().build();
     await agent.dispose();
-    expect(probed.length).toBe(1);
+    expect(probed).toEqual([]);
+  });
+
+  it("withJudgment(false) after shadow opt-in: last call wins, no probe", async () => {
+    const agent = await base().withJudgment({ shadow: true }).withJudgment(false).build();
+    await agent.dispose();
+    expect(probed).toEqual([]);
   });
 
   it("explicit withJudgment() does not probe either (unchanged)", async () => {
@@ -71,9 +77,9 @@ describe("withJudgment(false) opts out of auto-shadow", () => {
     expect(probed).toEqual([]);
   });
 
-  it("env var still wins over the default", async () => {
+  it("opt-out env var wins over the shadow opt-in", async () => {
     process.env.REACTIVE_AGENTS_NO_AUTO_SHADOW = "1";
-    const agent = await base().build();
+    const agent = await base().withJudgment({ shadow: true }).build();
     await agent.dispose();
     expect(probed).toEqual([]);
   });

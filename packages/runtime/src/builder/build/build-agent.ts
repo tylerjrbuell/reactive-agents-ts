@@ -13,7 +13,7 @@ import { Effect } from 'effect'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { wireRiHooks } from '../ri-wiring.js'
-import { probeAutoShadow } from '../../judgment-autoshadow.js'
+import { autoShadowRequested, probeAutoShadow } from '../../judgment-autoshadow.js'
 import { unwrapError } from '../../errors.js'
 import { emitBuilderNotice } from '../builder-notice.js'
 import type { ReactiveAgent } from '../../reactive-agent.js'
@@ -42,19 +42,27 @@ export const buildAgent = async <TOut>(
     deps: BuildAgentDeps<TOut>,
 ): Promise<ReactiveAgent<TOut>> => {
     const state = deps.state
-        // Wave 7.1 auto-shadow: shadow sites sample nothing without a wired
-        // JudgmentService, so a default-off world never accumulates inversion
-        // traffic. When the user did not opt into judgment AND did not opt
-        // out (`.withJudgment(false)` or REACTIVE_AGENTS_NO_AUTO_SHADOW=1), probe for a cheap LOCAL
-        // Ollama backend: shadow events fire, decisions are never consumed.
-        // Keyless-safe: unreachable server or any error = no service, build
-        // proceeds unchanged. Explicit `.withJudgment()` always wins (this
-        // branch only runs when it was never called).
-        if (!state._enableJudgment && state._autoShadow) {
-            const auto = await probeAutoShadow()
+        // Wave 7.1 auto-shadow, OPT-IN since 2026-11-18: only with
+        // `.withJudgment({ shadow: true })` or REACTIVE_AGENTS_AUTO_SHADOW=1
+        // (REACTIVE_AGENTS_NO_AUTO_SHADOW=1 and `.withJudgment(false)` win).
+        // Default builds make no Ollama call here. When asked, probe a LOCAL
+        // Ollama for the shadow model: shadow events fire, decisions are
+        // never consumed. Keyless-safe: unreachable server, model not
+        // installed, or any error = no service, build proceeds unchanged.
+        // Explicit `.withJudgment()` always wins (it sets _enableJudgment).
+        if (!state._enableJudgment && autoShadowRequested(state._autoShadow)) {
+            const auto = await probeAutoShadow({
+                model: state._judgmentOptions?.model,
+                baseUrl: state._judgmentOptions?.baseUrl,
+            })
             if (auto !== undefined) {
                 state._enableJudgment = true
-                state._judgmentOptions = { backend: auto.backend, baseUrl: auto.baseUrl }
+                state._judgmentOptions = {
+                    ...state._judgmentOptions,
+                    backend: auto.backend,
+                    baseUrl: auto.baseUrl,
+                    model: auto.model,
+                }
                 state._judgmentShadowDbPath =
                     process.env.REACTIVE_AGENTS_SHADOW_DB ??
                     join(homedir(), ".reactive-agents", "judgment-shadow.db")

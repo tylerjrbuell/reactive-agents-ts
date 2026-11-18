@@ -670,11 +670,11 @@ export type JudgmentBackendName = "jev" | "llm" | "ollama";
 export interface JudgmentBuilderOptions {
     /** TypeSafe API key. Falls back to `TYPESAFE_API_KEY` when absent. */
     readonly apiKey?: string
-    /**
-     * Backend base URL override. For `jev` this is the TypeSafe API root;
-     * for `ollama` this is the Ollama server root (e.g. `http://localhost:11434`).
-     */
+    /** Backend base URL override: TypeSafe API root for `jev`, Ollama server root (e.g. `http://localhost:11434`) for `ollama`. */
     readonly baseUrl?: string
+    /** Never set here: `{ shadow: true }` is the observation-only form, `JudgmentShadowOptions`. */
+    // `never` makes the two `.withJudgment()` forms a discriminated union, so `{ shadow: true, backend }` is a type error.
+    readonly shadow?: never
     /** Model identifier passed to the backend on each `ask()` call. */
     readonly model?: string
     /** Per-request timeout in ms. Default: 3000 (jev-backend `DEFAULT_TIMEOUT_MS`). */
