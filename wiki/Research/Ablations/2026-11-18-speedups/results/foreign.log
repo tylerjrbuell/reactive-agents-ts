@@ -1,0 +1,355 @@
+23:15:13 load=8.67 models=[] clients=1343547:rw-ks-probe2.ts 
+23:15:28 load=8.44 models=[] clients=1358252:rw-ks-probe2.ts 
+23:15:44 load=9.89 models=[] clients=
+23:15:59 load=8.50 models=[] clients=
+23:16:14 load=7.73 models=[] clients=
+23:16:29 load=6.75 models=[] clients=
+23:16:44 load=6.93 models=["gemma4:e4b"] clients=
+23:16:59 load=7.32 models=[] clients=
+23:17:14 load=7.79 models=["gemma4:e4b"] clients=
+23:17:30 load=7.95 models=[] clients=
+23:17:45 load=7.96 models=[] clients=
+23:18:00 load=7.69 models=[] clients=
+23:18:15 load=7.57 models=[] clients=
+23:18:30 load=7.00 models=["gemma4:e4b"] clients=
+23:18:45 load=5.82 models=[] clients=
+23:19:00 load=5.29 models=[] clients=
+23:19:15 load=4.63 models=[] clients=
+23:19:30 load=4.12 models=[] clients=
+23:19:45 load=3.50 models=[] clients=
+23:20:00 load=3.71 models=[] clients=
+23:20:15 load=3.93 models=[] clients=
+23:20:30 load=4.79 models=[] clients=
+23:20:46 load=4.47 models=[] clients=
+23:21:01 load=4.49 models=["nimble:latest"] clients=1546565:test 
+23:21:16 load=5.95 models=["nimble:latest"] clients=1546565:test 
+23:21:31 load=7.15 models=["nimble:latest"] clients=1546565:test 
+23:21:46 load=8.97 models=["nimble:latest"] clients=1546565:test 
+23:22:01 load=9.44 models=["nimble:latest"] clients=1546565:test 
+23:22:17 load=10.68 models=["nimble:latest"] clients=1546565:test 
+23:22:32 load=9.31 models=["nimble:latest"] clients=1546565:test 
+23:22:47 load=9.35 models=["nimble:latest"] clients=1546565:test 
+23:23:02 load=10.88 models=["nimble:latest"] clients=1546565:test 
+23:23:17 load=11.77 models=["nimble:latest"] clients=1546565:test 216922:run 
+23:23:32 load=12.29 models=["nimble:latest"] clients=1546565:test 216922:run 
+23:23:48 load=12.41 models=["nimble:latest"] clients=1546565:test 216922:run 
+23:24:03 load=11.51 models=["nimble:latest"] clients=1546565:test 1603878:test 216922:run 
+23:24:18 load=10.72 models=[] clients=216922:run 
+23:24:33 load=9.58 models=["gemma4:e4b"] clients=1616254:test 216922:run 
+23:24:49 load=9.71 models=["nimble:latest"] clients=1616254:test 216922:run 
+23:25:04 load=9.87 models=[] clients=1616254:test 216922:run 
+23:25:19 load=11.27 models=["nimble:latest"] clients=1616254:test 216922:run 
+23:25:34 load=11.13 models=["nimble:latest"] clients=1616254:test 216922:run 
+23:25:49 load=10.90 models=["nimble:latest"] clients=1616254:test 216922:run 
+23:26:05 load=10.26 models=["nimble:latest"] clients=1616254:test 216922:run 
+23:26:20 load=9.84 models=["nimble:latest"] clients=1616254:test 216922:run 
+23:26:35 load=9.01 models=["nimble:latest"] clients=1616254:test 216922:run 
+23:26:50 load=8.29 models=["nimble:latest"] clients=1616254:test 1662218:durable-effect-crash-child.ts 216922:run 
+23:27:06 load=9.07 models=["nimble:latest"] clients=1616254:test 216922:run 
+23:27:21 load=9.43 models=["nimble:latest"] clients=1616254:test 216922:run 
+23:27:36 load=9.82 models=[] clients=216922:run 
+23:27:51 load=8.71 models=["qwen3:latest"] clients=1683262:test 216922:run 
+23:28:06 load=7.45 models=[] clients=216922:run 
+23:28:22 load=6.68 models=[] clients=216922:run 
+23:28:37 load=7.17 models=[] clients=216922:run 
+23:28:52 load=8.45 models=[] clients=1708689:test 216922:run 
+23:29:07 load=9.55 models=[] clients=1708689:test 216922:run 
+23:29:22 load=9.17 models=[] clients=1708689:test 216922:run 
+23:29:38 load=8.57 models=["nimble:latest"] clients=1708689:test 216922:run 
+23:29:53 load=8.99 models=["qwen3:latest"] clients=1708689:test 216922:run 
+23:30:08 load=8.94 models=[] clients=1708689:test 216922:run 
+23:30:23 load=9.57 models=["nimble:latest"] clients=1708689:test 216922:run 
+23:30:38 load=10.39 models=["nimble:latest"] clients=1708689:test 216922:run 
+23:30:54 load=10.04 models=["nimble:latest"] clients=1708689:test 216922:run 
+1794976257 23:30:57 load=10.04 foreign=[1708689(256conn):bun_test_packages/runtime_--timeout_15000 216922(1conn):bun_run_server/index.ts ]
+23:31:09 load=9.32 models=["nimble:latest"] clients=1708689:test 216922:run 
+1794976272 23:31:12 load=9.32 foreign=[1708689(256conn):bun_test_packages/runtime_--timeout_15000 216922(1conn):bun_run_server/index.ts ]
+23:31:24 load=10.45 models=["nimble:latest"] clients=1708689:test 216922:run 
+1794976287 23:31:27 load=10.45 foreign=[1708689(223conn):bun_test_packages/runtime_--timeout_15000 216922(1conn):bun_run_server/index.ts ]
+23:31:39 load=9.78 models=["nimble:latest"] clients=1708689:test 
+1794976302 23:31:42 load=9.78 foreign=[1708689(243conn):bun_test_packages/runtime_--timeout_15000 ]
+23:31:54 load=9.88 models=["nimble:latest"] clients=1708689:test 
+1794976317 23:31:57 load=9.88 foreign=[]
+23:32:10 load=9.09 models=[] clients=
+1794976332 23:32:12 load=9.09 foreign=[]
+23:32:25 load=7.97 models=[] clients=
+1794976347 23:32:27 load=7.97 foreign=[]
+23:32:40 load=7.09 models=[] clients=
+1794976362 23:32:42 load=7.09 foreign=[]
+23:32:55 load=7.70 models=[] clients=
+1794976377 23:32:57 load=7.70 foreign=[]
+23:33:10 load=7.25 models=[] clients=
+1794976392 23:33:12 load=7.25 foreign=[]
+23:33:26 load=6.80 models=[] clients=
+1794976407 23:33:27 load=6.80 foreign=[]
+23:33:41 load=6.73 models=[] clients=
+1794976422 23:33:42 load=6.73 foreign=[]
+23:33:56 load=5.88 models=[] clients=
+1794976437 23:33:57 load=5.88 foreign=[]
+23:34:11 load=7.71 models=[] clients=
+1794976453 23:34:13 load=7.71 foreign=[]
+23:34:26 load=6.72 models=[] clients=
+1794976468 23:34:28 load=6.72 foreign=[]
+23:34:41 load=6.60 models=[] clients=
+1794976483 23:34:43 load=6.60 foreign=[]
+23:34:57 load=6.11 models=["gemma4:e4b"] clients=
+23:35:12 load=5.88 models=[] clients=
+23:35:27 load=5.22 models=[] clients=
+23:35:42 load=4.35 models=[] clients=
+23:35:57 load=4.00 models=[] clients=
+23:36:12 load=4.38 models=[] clients=
+23:36:28 load=4.79 models=[] clients=1874256:test 
+23:36:43 load=5.45 models=["nimble:latest"] clients=1874256:test 
+23:36:58 load=6.64 models=["nimble:latest"] clients=1874256:test 
+23:37:13 load=7.71 models=["nimble:latest"] clients=1874256:test 
+23:37:28 load=7.93 models=["nimble:latest"] clients=1874256:test 
+23:37:44 load=8.10 models=["nimble:latest"] clients=1874256:test 
+23:37:59 load=8.68 models=["nimble:latest"] clients=1874256:test 
+23:38:14 load=8.45 models=["nimble:latest"] clients=1874256:test 
+23:38:29 load=7.81 models=["nimble:latest"] clients=
+23:38:44 load=6.38 models=["nimble:latest"] clients=
+23:38:59 load=5.40 models=["nimble:latest"] clients=
+23:39:14 load=4.57 models=["nimble:latest"] clients=
+23:39:29 load=4.12 models=["nimble:latest"] clients=
+23:39:45 load=3.50 models=["nimble:latest"] clients=
+23:40:00 load=3.18 models=["nimble:latest"] clients=
+23:40:15 load=2.70 models=["nimble:latest"] clients=
+23:40:30 load=2.54 models=["nimble:latest"] clients=
+23:40:45 load=2.48 models=["nimble:latest"] clients=
+23:41:00 load=2.77 models=["nimble:latest"] clients=
+23:41:15 load=3.61 models=["nimble:latest"] clients=
+23:41:30 load=4.47 models=["nimble:latest"] clients=
+23:41:45 load=3.84 models=["nimble:latest"] clients=
+23:42:00 load=3.51 models=["nimble:latest"] clients=
+23:42:16 load=3.18 models=["nimble:latest"] clients=
+23:42:31 load=3.42 models=["nimble:latest"] clients=
+23:42:46 load=3.27 models=["nimble:latest"] clients=
+23:43:01 load=3.27 models=["nimble:latest"] clients=
+23:43:16 load=3.57 models=["nimble:latest"] clients=2032111:test 
+23:43:31 load=3.66 models=[] clients=2032111:test 
+23:43:46 load=3.54 models=[] clients=2032111:test 
+23:44:01 load=3.75 models=[] clients=2032111:test 
+23:44:16 load=3.36 models=[] clients=2032111:test 
+23:44:32 load=3.42 models=[] clients=
+23:44:47 load=3.18 models=[] clients=
+23:45:02 load=3.68 models=[] clients=
+23:45:17 load=3.56 models=[] clients=
+23:45:32 load=3.08 models=[] clients=
+23:45:47 load=3.14 models=[] clients=
+23:46:02 load=3.36 models=[] clients=
+23:46:17 load=5.16 models=[] clients=
+23:46:32 load=4.75 models=[] clients=
+23:46:48 load=4.37 models=[] clients=2142211:test 
+23:47:03 load=4.22 models=[] clients=2142211:test 
+23:47:18 load=3.95 models=[] clients=2142211:test 
+23:47:33 load=5.07 models=[] clients=2142211:test 
+23:47:48 load=5.19 models=[] clients=2142211:test 
+23:48:03 load=4.41 models=[] clients=
+23:48:18 load=3.51 models=[] clients=
+23:48:33 load=3.02 models=[] clients=
+23:48:49 load=3.87 models=[] clients=
+23:49:04 load=3.32 models=[] clients=
+23:49:19 load=2.88 models=[] clients=
+23:49:34 load=2.63 models=[] clients=2236526:capture-golden-run.ts 
+23:49:49 load=3.99 models=["gemma4:e4b"] clients=2236526:capture-golden-run.ts 
+23:50:04 load=5.37 models=["gemma4:e4b"] clients=
+23:50:19 load=7.16 models=["gemma4:e4b"] clients=
+23:50:35 load=8.04 models=["gemma4:e4b"] clients=
+23:50:50 load=7.40 models=["gemma4:e4b"] clients=
+23:51:05 load=7.23 models=["gemma4:e4b"] clients=
+23:51:20 load=6.36 models=["gemma4:e4b"] clients=
+23:51:35 load=6.52 models=["gemma4:e4b"] clients=
+23:51:51 load=7.47 models=["gemma4:e4b"] clients=
+23:52:06 load=7.32 models=["gemma4:e4b"] clients=
+23:52:21 load=7.56 models=["gemma4:e4b"] clients=2310812:capture-golden-run.ts 
+23:52:37 load=9.89 models=["gemma4:e4b"] clients=
+23:52:52 load=9.19 models=["gemma4:e4b"] clients=2305533:test 
+23:53:07 load=10.19 models=["gemma4:e4b"] clients=2305533:test 
+23:53:22 load=10.49 models=["gemma4:e4b"] clients=2305533:test 
+23:53:38 load=11.57 models=["gemma4:e4b"] clients=2305533:test 
+1795011597 09:19:57 load=8.87 foreign=[2555977(1conn):bun_test_packages/runtime_--timeout_15000 ]
+1795011612 09:20:12 load=8.92 foreign=[2555977(1conn):bun_test_packages/runtime_--timeout_15000 ]
+1795011627 09:20:27 load=9.37 foreign=[]
+1795011642 09:20:42 load=11.19 foreign=[]
+1795011657 09:20:57 load=10.56 foreign=[]
+1795011673 09:21:13 load=10.76 foreign=[]
+1795011688 09:21:28 load=11.74 foreign=[]
+1795011703 09:21:43 load=11.14 foreign=[]
+1795011718 09:21:58 load=10.41 foreign=[]
+1795011733 09:22:13 load=8.67 foreign=[]
+1795011748 09:22:28 load=8.40 foreign=[]
+1795011763 09:22:43 load=8.88 foreign=[]
+1795011778 09:22:58 load=9.07 foreign=[]
+1795011793 09:23:13 load=8.18 foreign=[]
+1795011808 09:23:28 load=9.32 foreign=[]
+1795011823 09:23:43 load=9.48 foreign=[]
+1795011838 09:23:58 load=9.31 foreign=[]
+1795011854 09:24:14 load=9.28 foreign=[]
+1795011869 09:24:29 load=8.18 foreign=[]
+1795011884 09:24:44 load=7.11 foreign=[]
+1795011899 09:24:59 load=8.63 foreign=[]
+1795011914 09:25:14 load=8.11 foreign=[]
+1795011929 09:25:29 load=8.27 foreign=[]
+1795011944 09:25:44 load=7.10 foreign=[]
+1795011959 09:25:59 load=6.37 foreign=[]
+1795011974 09:26:14 load=6.51 foreign=[]
+1795011989 09:26:29 load=5.74 foreign=[]
+1795012004 09:26:44 load=6.67 foreign=[]
+1795012013 09:26:53 load=5.95 clients=[] models=[gemma4:e4b]
+1795012028 09:27:08 load=6.20 clients=[] models=[gemma4:e4b]
+1795012043 09:27:23 load=5.49 clients=[] models=[]
+1795012058 09:27:38 load=5.93 clients=[] models=[]
+1795012073 09:27:53 load=5.53 clients=[] models=[gemma4:e4b]
+1795012089 09:28:09 load=4.90 clients=[] models=[gemma4:e4b]
+1795012104 09:28:24 load=4.91 clients=[] models=[]
+1795012119 09:28:39 load=4.70 clients=[] models=[]
+1795012134 09:28:54 load=5.28 clients=[] models=[gemma4:e4b]
+1795012149 09:29:09 load=5.23 clients=[] models=[]
+1795012164 09:29:24 load=5.40 clients=[] models=[]
+1795012180 09:29:40 load=6.54 clients=[] models=[]
+1795012195 09:29:55 load=6.39 clients=[] models=[gemma4:e4b]
+1795012210 09:30:10 load=6.59 clients=[] models=[gemma4:e4b]
+1795012225 09:30:25 load=5.56 clients=[] models=[]
+1795012240 09:30:40 load=6.37 clients=[] models=[gemma4:e4b]
+1795012255 09:30:55 load=5.61 clients=[] models=[gemma4:e4b]
+1795012271 09:31:11 load=4.89 clients=[] models=[]
+1795012286 09:31:26 load=4.80 clients=[] models=[]
+1795012301 09:31:41 load=5.00 clients=[] models=[gemma4:e4b]
+1795012316 09:31:56 load=6.04 clients=[] models=[]
+1795012332 09:32:12 load=8.80 clients=[] models=[gemma4:e4b]
+1795012347 09:32:27 load=8.22 clients=[] models=[gemma4:e4b]
+1795012362 09:32:42 load=7.97 clients=[] models=[]
+1795012377 09:32:57 load=7.49 clients=[] models=[gemma4:e4b]
+1795012392 09:33:12 load=7.37 clients=[] models=[gemma4:e4b]
+1795012408 09:33:28 load=6.86 clients=[] models=[]
+1795012425 09:33:45 load=6.21 clients=[] models=[gemma4:e4b]
+1795012440 09:34:00 load=5.51 clients=[] models=[]
+1795012456 09:34:16 load=5.65 clients=[] models=[]
+1795012471 09:34:31 load=6.26 clients=[] models=[]
+1795012486 09:34:46 load=5.61 clients=[] models=[gemma4:e4b]
+1795012501 09:35:01 load=5.26 clients=[] models=[]
+1795012516 09:35:16 load=5.20 clients=[] models=[]
+1795012531 09:35:31 load=5.52 clients=[] models=[gemma4:e4b]
+1795012547 09:35:47 load=6.21 clients=[] models=[]
+1795012562 09:36:02 load=5.99 clients=[] models=[gemma4:e4b]
+1795012577 09:36:17 load=5.97 clients=[] models=[gemma4:e4b]
+1795012592 09:36:32 load=5.95 clients=[] models=[gemma4:e4b]
+1795012607 09:36:47 load=5.67 clients=[] models=[gemma4:e4b]
+1795012622 09:37:02 load=5.68 clients=[] models=[gemma4:e4b]
+1795012638 09:37:18 load=7.31 clients=[] models=[gemma4:e4b]
+1795012653 09:37:33 load=7.06 clients=[] models=[gemma4:e4b]
+1795012668 09:37:48 load=7.52 clients=[] models=[]
+1795012683 09:38:03 load=6.76 clients=[] models=[gemma4:e4b]
+1795012698 09:38:18 load=6.91 clients=[] models=[]
+1795012713 09:38:33 load=6.55 clients=[] models=[]
+1795012729 09:38:49 load=6.25 clients=[] models=[gemma4:e4b]
+1795012744 09:39:04 load=6.29 clients=[] models=[]
+1795012759 09:39:19 load=5.28 clients=[] models=[]
+1795012774 09:39:34 load=4.99 clients=[] models=[]
+1795012789 09:39:49 load=4.39 clients=[] models=[]
+1795012805 09:40:05 load=5.23 clients=[] models=[]
+1795012820 09:40:20 load=4.96 clients=[] models=[]
+1795012828 09:40:28 load=4.72 clients=[] models=[gemma4:e4b]
+1795012843 09:40:43 load=5.84 clients=[] models=[gemma4:e4b]
+1795012858 09:40:58 load=6.38 clients=[] models=[gemma4:e4b]
+1795012874 09:41:14 load=7.11 clients=[] models=[gemma4:e4b]
+1795012889 09:41:29 load=6.84 clients=[] models=[]
+1795012904 09:41:44 load=5.92 clients=[] models=[]
+1795012919 09:41:59 load=5.42 clients=[] models=[gemma4:e4b]
+1795012934 09:42:14 load=5.52 clients=[] models=[]
+1795012949 09:42:29 load=7.34 clients=[] models=[]
+1795012964 09:42:44 load=7.56 clients=[] models=[gemma4:e4b]
+1795012980 09:43:00 load=7.10 clients=[] models=[]
+1795012995 09:43:15 load=6.41 clients=[] models=[gemma4:e4b]
+1795013010 09:43:30 load=7.20 clients=[] models=[gemma4:e4b]
+1795013025 09:43:45 load=8.29 clients=[] models=[]
+1795013040 09:44:00 load=7.06 clients=[] models=[]
+1795013055 09:44:15 load=6.23 clients=[] models=[gemma4:e4b]
+1795013070 09:44:30 load=5.79 clients=[] models=[]
+1795013086 09:44:46 load=6.21 clients=[] models=[]
+1795013101 09:45:01 load=7.08 clients=[] models=[]
+1795013116 09:45:16 load=6.35 clients=[] models=[gemma4:e4b]
+1795013131 09:45:31 load=5.75 clients=[] models=[gemma4:e4b]
+1795013146 09:45:46 load=5.92 clients=[] models=[]
+1795013161 09:46:01 load=5.80 clients=[] models=[gemma4:e4b]
+1795013177 09:46:17 load=6.50 clients=[] models=[gemma4:e4b]
+1795013192 09:46:32 load=5.98 clients=[] models=[gemma4:e4b]
+1795013204 09:46:44 load=5.44 clients=[] models=[gemma4:e4b]
+1795013219 09:46:59 load=5.45 clients=[] models=[cogito:14b]
+1795013234 09:47:14 load=6.70 clients=[] models=[cogito:14b]
+1795013250 09:47:30 load=8.01 clients=[] models=[cogito:14b]
+1795013265 09:47:45 load=7.43 clients=[] models=[cogito:14b]
+1795013280 09:48:00 load=7.86 clients=[] models=[cogito:14b]
+1795013295 09:48:15 load=8.61 clients=[] models=[]
+1795013310 09:48:30 load=8.98 clients=[] models=[cogito:14b]
+1795013326 09:48:46 load=9.55 clients=[] models=[cogito:14b]
+1795013341 09:49:01 load=9.18 clients=[] models=[]
+1795013356 09:49:16 load=9.10 clients=[] models=[]
+1795013371 09:49:31 load=8.51 clients=[] models=[cogito:14b]
+1795013386 09:49:46 load=8.74 clients=[] models=[cogito:14b]
+1795013401 09:50:01 load=8.73 clients=[] models=[]
+1795013417 09:50:17 load=8.06 clients=[] models=[cogito:14b]
+1795013432 09:50:32 load=8.16 clients=[] models=[]
+1795013447 09:50:47 load=7.86 clients=[] models=[]
+1795013462 09:51:02 load=7.04 clients=[] models=[cogito:14b]
+1795013478 09:51:18 load=7.17 clients=[] models=[cogito:14b]
+1795013493 09:51:33 load=7.82 clients=[] models=[]
+1795013508 09:51:48 load=7.65 clients=[] models=[]
+1795013523 09:52:03 load=8.51 clients=[] models=[cogito:14b]
+1795013538 09:52:18 load=8.75 clients=[] models=[cogito:14b]
+1795013554 09:52:34 load=8.66 clients=[] models=[cogito:14b]
+1795013569 09:52:49 load=8.79 clients=[] models=[cogito:14b]
+1795013584 09:53:04 load=9.71 clients=[] models=[cogito:14b]
+1795013599 09:53:19 load=9.33 clients=[] models=[]
+1795013614 09:53:34 load=10.41 clients=[] models=[cogito:14b]
+1795013630 09:53:50 load=9.87 clients=[] models=[cogito:14b]
+1795013639 09:53:59 load=9.72 clients=[] models=[cogito:14b]
+1795013654 09:54:14 load=8.77 clients=[] models=[cogito:14b]
+1795013669 09:54:29 load=10.41 clients=[] models=[cogito:14b]
+1795013684 09:54:44 load=10.34 clients=[] models=[cogito:14b]
+1795013700 09:55:00 load=10.58 clients=[] models=[cogito:14b]
+1795013715 09:55:15 load=10.66 clients=[] models=[cogito:14b]
+1795013730 09:55:30 load=9.66 clients=[] models=[]
+1795013745 09:55:45 load=9.73 clients=[] models=[cogito:14b]
+1795013761 09:56:01 load=9.12 clients=[] models=[cogito:14b]
+1795013776 09:56:16 load=9.01 clients=[] models=[]
+1795013791 09:56:31 load=9.28 clients=[] models=[cogito:14b]
+1795013806 09:56:46 load=8.64 clients=[] models=[cogito:14b]
+1795013821 09:57:01 load=7.69 clients=[] models=[]
+1795013837 09:57:17 load=8.08 clients=[] models=[cogito:14b]
+1795013852 09:57:32 load=8.43 clients=[] models=[cogito:14b]
+1795013867 09:57:47 load=7.79 clients=[] models=[]
+1795013882 09:58:02 load=7.18 clients=[] models=[]
+1795013897 09:58:17 load=7.16 clients=[] models=[cogito:14b]
+1795013912 09:58:33 load=7.89 clients=[] models=[cogito:14b]
+1795013928 09:58:48 load=8.79 clients=[] models=[cogito:14b]
+1795013943 09:59:03 load=9.74 clients=[] models=[cogito:14b]
+1795013958 09:59:18 load=9.57 clients=[] models=[cogito:14b]
+1795013974 09:59:34 load=9.94 clients=[] models=[cogito:14b]
+1795013989 09:59:49 load=9.87 clients=[] models=[cogito:14b]
+1795014004 10:00:04 load=9.69 clients=[] models=[cogito:14b]
+1795014019 10:00:19 load=10.01 clients=[] models=[cogito:14b]
+1795014036 10:00:36 load=9.87 clients=[] models=[cogito:14b]
+1795014051 10:00:51 load=9.57 clients=[] models=[cogito:14b]
+1795014067 10:01:07 load=9.89 clients=[] models=[cogito:14b]
+1795014082 10:01:22 load=10.26 clients=[] models=[]
+1795014097 10:01:37 load=9.74 clients=[] models=[cogito:14b]
+1795014112 10:01:52 load=9.65 clients=[] models=[cogito:14b]
+1795014127 10:02:07 load=9.74 clients=[] models=[]
+1795014142 10:02:22 load=9.09 clients=[] models=[cogito:14b]
+1795014158 10:02:38 load=8.90 clients=[] models=[cogito:14b]
+1795014173 10:02:53 load=8.77 clients=[] models=[cogito:14b]
+1795014188 10:03:08 load=8.69 clients=[] models=[cogito:14b]
+1795014203 10:03:23 load=8.37 clients=[] models=[]
+1795014219 10:03:39 load=7.83 clients=[] models=[]
+1795014234 10:03:54 load=7.45 clients=[] models=[cogito:14b]
+1795014249 10:04:09 load=7.55 clients=[] models=[cogito:14b]
+1795014264 10:04:24 load=7.39 clients=[] models=[]
+1795014279 10:04:39 load=7.69 clients=[] models=[]
+1795014294 10:04:54 load=8.95 clients=[] models=[cogito:14b]
+1795014310 10:05:10 load=8.36 clients=[] models=[cogito:14b]
+1795014325 10:05:25 load=8.37 clients=[] models=[cogito:14b]
+1795014340 10:05:40 load=8.75 clients=[] models=[cogito:14b]
+1795014355 10:05:55 load=9.15 clients=[] models=[cogito:14b]
+1795014371 10:06:11 load=8.31 clients=[] models=[cogito:14b]
+1795014386 10:06:26 load=8.20 clients=[] models=[cogito:14b]

@@ -1,0 +1,2 @@
+NO-CHANGE · harness:none 0→0 · pass 41/48 → 35/48 (-13pp, within noise) · mechanism guard:lean_final_turn:redirect fired 0/48 → 40/48; harness:none absent from the baseline cells (wrong target?)
+  activity changed: guard:lean_final_turn:redirect 0/48→40/48; signal:redirect@loop/iterate-pass.ts:710:repeated-identical-failure 3/48→6/48; guard:dispatcher_early_stop:terminate 8/48→10/48; guard:dispatcher_early_stop:block 0/48→2/48; guard:exit_gate:block 0/48→2/48; guard:exit_gate:terminate 0/48→2/48

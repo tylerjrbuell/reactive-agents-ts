@@ -1,0 +1,19 @@
+23:11:59 9.70 8.83 8.37 ollama=["nimble:latest"] foreign=pid=1262253 
+23:21:40 tier=gemma4:e4b chunk=1 load=7.40 6.98 7.80 clients=[1546565:bun_test_packages/runtime_--timeout_15000 ]
+23:28:19 gemma4:e4b chunk=1 [ab] ran=2 remaining=235 elapsed=398s
+23:28:19 tier=gemma4:e4b chunk=2 load=6.68 8.49 8.43 clients=[216922:bun_run_server/index.ts ]
+23:30:57 chunk start tier=gemma4:e4b load=10.04 9.21 8.71
+09:19:57 chunk start tier=gemma4:e4b load=8.87 5.36 2.63
+09:26:45 chunk end tier=gemma4:e4b [ab] ran=19 remaining=176 elapsed=408s
+09:26:53 precheck tier=gemma4:e4b load=5.95 7.05 4.61 foreignClients=[] foreignModels=[]
+09:33:38 chunk end tier=gemma4:e4b [ab] ran=23 remaining=90 elapsed=405s
+09:33:45 precheck tier=gemma4:e4b load=6.21 6.53 5.19 foreignClients=[] foreignModels=[]
+09:40:25 chunk end tier=gemma4:e4b [ab] ran=26 remaining=26 elapsed=399s
+09:40:28 precheck tier=gemma4:e4b load=4.72 5.80 5.36 foreignClients=[] foreignModels=[]
+09:46:39 chunk end tier=gemma4:e4b [ab] ran=22 remaining=0 elapsed=370s
+09:46:44 precheck tier=cogito:14b load=5.44 6.14 5.72 foreignClients=[] foreignModels=[]
+09:53:55 chunk end tier=cogito:14b [ab] ran=19 remaining=52 elapsed=431s
+09:53:59 precheck tier=cogito:14b load=9.72 8.43 6.96 foreignClients=[] foreignModels=[]
+10:00:33 chunk end tier=cogito:14b [ab] ran=18 remaining=17 elapsed=393s
+10:00:36 precheck tier=cogito:14b load=9.87 9.07 7.76 foreignClients=[] foreignModels=[]
+10:06:32 chunk end tier=cogito:14b [ab] ran=17 remaining=0 elapsed=355s

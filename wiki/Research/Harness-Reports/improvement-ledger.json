@@ -1215,6 +1215,32 @@
       "tokenOverheadPct": -1.9938566161170082,
       "rationale": "OPT-IN · 2 tier(s) · -8.3pp lift · -2.0% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)",
       "status": "opt-in"
+    },
+    {
+      "id": "e191dd73-5528-4c98-a377-57bddef1c8c8",
+      "createdAt": "2026-11-18T15:06:53.731Z",
+      "weakness": "independent tool calls go out one per turn (32% of H3 turns; 2026-11-18-extra-iterations)",
+      "hypothesis": "parallelToolHint (RA_PARALLEL_TOOL_HINT=1): batching sentence in the local-tier system prompt for parallel-reliable models cuts turns and billed tokens at equal pass rate",
+      "baselineVariantId": "off",
+      "candidateVariantId": "pth",
+      "decision": "opt-in",
+      "liftPp": -0.8888888888888882,
+      "tokenOverheadPct": -35.917026692849625,
+      "rationale": "OPT-IN · 2 tier(s) · -0.9pp lift · -35.9% billed tok — within the noise floor; no measurable effect (NOT evidence of equivalence)",
+      "status": "opt-in"
+    },
+    {
+      "id": "8bd13607-c0bc-400b-a75d-27f0bd2c9529",
+      "createdAt": "2026-11-18T15:06:54.239Z",
+      "weakness": "answer-only final turn costs 26% of tokens / 34% of LLM time (2026-11-18-extra-iterations)",
+      "hypothesis": "leanFinalTurn (RA_LEAN_FINAL_TURN=1): answer turn without tools/thinking once contract tool work settles cuts tokens and time at equal pass rate",
+      "baselineVariantId": "off",
+      "candidateVariantId": "lft",
+      "decision": "reject",
+      "liftPp": -10.370370370370368,
+      "tokenOverheadPct": -3.948150662164624,
+      "rationale": "REJECT · 2 tier(s) · -10.4pp lift · -3.9% billed tok — a tier significantly regresses",
+      "status": "rejected"
     }
   ]
 }
