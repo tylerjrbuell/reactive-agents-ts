@@ -1,0 +1,11 @@
+{
+  "name": "frontier",
+  "status": "uncalibrated",
+  "pStall": 0.02,
+  "pPrematureFinal": 0.02,
+  "pRepeat": 0.02,
+  "pHallucinatedTool": 0.005,
+  "pDecline": 0.01,
+  "complianceGivenGuidance": 0.9,
+  "provenance": "UNCALIBRATED illustrative prior for a frontier API model; not fitted. S5 calibration is a later spike."
+}

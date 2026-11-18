@@ -1,0 +1,11 @@
+{
+  "name": "mid-local",
+  "status": "uncalibrated",
+  "pStall": 0.07,
+  "pPrematureFinal": 0.06,
+  "pRepeat": 0.05,
+  "pHallucinatedTool": 0.03,
+  "pDecline": 0.02,
+  "complianceGivenGuidance": 0.7,
+  "provenance": "UNCALIBRATED illustrative prior for an 8B-class local model (cogito:8b tier); not fitted. S5 calibration is a later spike."
+}

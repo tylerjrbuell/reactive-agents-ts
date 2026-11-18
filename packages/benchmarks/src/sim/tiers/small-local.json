@@ -1,0 +1,11 @@
+{
+  "name": "small-local",
+  "status": "uncalibrated",
+  "pStall": 0.12,
+  "pPrematureFinal": 0.10,
+  "pRepeat": 0.08,
+  "pHallucinatedTool": 0.06,
+  "pDecline": 0.03,
+  "complianceGivenGuidance": 0.5,
+  "provenance": "UNCALIBRATED illustrative prior for a 4B-class local model; shaped by the S3/S4 census (rw-6, rw-7, h3-exact-value are the discriminative tasks) but NOT fitted. Replace via the S5 calibration spike (rax-diagnose attribute rates + receipt compliance) before any claim."
+}
