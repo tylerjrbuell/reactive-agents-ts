@@ -79,6 +79,7 @@ import { verifyDelivery } from "../capabilities/verify/delivery-authority.js";
 import { emitGuardFired } from "../utils/diagnostics.js";
 import { terminate, type TerminateOptions, type TerminateReason } from "./terminate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
+import { honestDeclineOf } from "./honest-decline-exit.js";
 import { basisOfOutstanding, classifyContractOutstanding } from "./contract-outstanding.js";
 import { unavailableRequiredTools, unavailableToolItem } from "./runner-helpers/tool-health.js";
 import {
@@ -620,6 +621,15 @@ export function emitDisposition(taskId: string, state: KernelState, record: Exit
   });
 }
 
+/** An accepted exit's terminal transition (the proposal's reason, deliverable and meta). */
+function endOnProposal(state: KernelState, p: Pick<ExitProposal, "reason" | "deliverable" | "extraMeta">): KernelState {
+  return terminate(state, {
+    reason: p.reason,
+    deliverable: p.deliverable,
+    ...(p.extraMeta ? { extraMeta: p.extraMeta } : {}),
+  });
+}
+
 /**
  * Hand a guard's exit proposal to the gate. Callers act on the decision:
  * `accept`/`handoff` → the state is terminal (break); `deny-once` / `deny` →
@@ -706,6 +716,21 @@ export function proposeExit(args: {
     const classified = classifyContractOutstanding(state, args.input, deliverableToContent(judged));
     const outstandingBasis = basisOfOutstanding(outstanding, classified, unavailableLines);
     const unmeetableOnly = unavailableLines.length > 0 && outstanding.every((item) => unavailableLines.includes(item));
+    // A guard stopping a run whose model honestly declined over an input that
+    // always errored: an abstention with the model's text, not a failure.
+    const decline = proposal.proposedBy === "model" ? undefined : honestDeclineOf(state, args.input, outstanding);
+    if (decline !== undefined) {
+      const record: ExitGateRecord = { proposedBy: proposal.proposedBy, gateDecision: "accept", reason: "honest_decline", outstanding };
+      if (proposal.guardEvent !== undefined) {
+        yield* emitGuardFired({ taskId: args.taskId, iteration: state.iteration, ...proposal.guardEvent, outcome: "terminate" });
+      }
+      yield* emitDisposition(args.taskId, state, record);
+      return disposed("accept", endOnProposal(state, {
+        reason: "abstained",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: decline.text, iteration: state.iteration }),
+        extraMeta: { ...(proposal.extraMeta ?? {}), terminalSite: "honest-decline", abstention: { reason: decline.text, missing: decline.missing } },
+      }));
+    }
     const progress = writeProgressArgs(state);
     // Only the answer is missing (no required tool, no unmet delivery
     // condition): a denial is an answer turn, and the next think call withholds tools.
@@ -785,14 +810,7 @@ export function proposeExit(args: {
     if (decision === "accept" && args.accept !== undefined) {
       return disposed(decision, yield* args.accept(state));
     }
-    if (decision === "accept") {
-      state = terminate(state, {
-        reason: proposal.reason,
-        deliverable: proposal.deliverable,
-        ...(proposal.extraMeta ? { extraMeta: proposal.extraMeta } : {}),
-      });
-      return disposed(decision, state);
-    }
+    if (decision === "accept") return disposed(decision, endOnProposal(state, proposal));
     // Handoff: the run ends unfinished. The harness never writes the answer
     // (owner decision 2026-11-10). When the MODEL wrote one, its draft ships
     // as a labelled partial: the draft plus the deterministic `Unfinished:`

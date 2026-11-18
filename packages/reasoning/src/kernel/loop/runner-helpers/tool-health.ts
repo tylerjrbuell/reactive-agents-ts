@@ -50,12 +50,12 @@ export interface BrokenTool {
   readonly routedVia?: string;
 }
 
-interface ToolOutcome {
+export interface ToolOutcome {
   readonly toolName: string;
   readonly success: boolean;
 }
 
-function executedOutcomes(steps: readonly ReasoningStep[]): readonly ToolOutcome[] {
+export function executedOutcomes(steps: readonly ReasoningStep[]): readonly ToolOutcome[] {
   const out: ToolOutcome[] = [];
   for (const step of steps) {
     if (step.type !== "observation" || step.metadata?.frameworkInstrumentation === GUARD_OBSERVATION_TAG) continue;
