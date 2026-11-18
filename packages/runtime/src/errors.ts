@@ -411,7 +411,14 @@ const KNOWN_TAGS = new Set([
  * regression ceiling that feeds off this consolidation.
  */
 function setOriginalTaggedError(err: Error, original: unknown): void {
-  (err as unknown as Record<string, unknown>)._originalTaggedError = original;
+  // Non-enumerable: Bun's uncaught-error printer renders every enumerable
+  // property, and a tagged error here printed as its own source-frame block.
+  Object.defineProperty(err, "_originalTaggedError", {
+    value: original,
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
 }
 
 /**
@@ -533,14 +540,38 @@ export function toRunBoundaryError(unwrapped: Error): Error {
   if (debug) return unwrapped;
 
   const oneLine = firstMeaningfulLine(unwrapped.message);
-  const clean = new Error(oneLine);
+  const clean = new RunBoundaryError(oneLine, unwrapped);
   // Preserve the full error for programmatic inspection, but trim its stack to
   // a single line so the runtime's internal frames don't reach the console
   // unless debugging is explicitly requested.
   unwrapped.stack = `${unwrapped.name || "Error"}: ${oneLine}`;
-  (clean as Error & { cause?: unknown }).cause = unwrapped;
   clean.stack = `${clean.name}: ${clean.message}`;
   return clean;
+}
+
+/**
+ * The error `agent.run()` rejects with by default. Named "Error" so it prints
+ * as a plain error. `cause` (the full unwrapped error) is a prototype accessor,
+ * not an own property: Bun's uncaught-error printer renders an own `cause` as
+ * a second source-frame block, and a bad API key at a top-level await printed
+ * three stacked frames that buried the one-line message.
+ */
+class RunBoundaryError extends Error {
+  readonly #full: Error;
+
+  constructor(message: string, full: Error) {
+    super(message);
+    this.#full = full;
+  }
+
+  static {
+    Object.defineProperty(RunBoundaryError.prototype, "cause", {
+      get(this: RunBoundaryError): Error {
+        return this.#full;
+      },
+      configurable: true,
+    });
+  }
 }
 
 function isFiberFailure(error: unknown): boolean {

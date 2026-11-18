@@ -535,9 +535,9 @@ export const buildSubAgentTask = (
         // the parent actually enabled observability — `parentObservabilityOptions`
         // is populated from the builder's default `_observabilityOptions` even
         // when `.withObservability()` was never called, so spreading it
-        // unconditionally would leak a stale default `verbosity: 'minimal'` into
-        // sub-agents whose parent never opted in, silently suppressing their own
-        // console output. Mirrors the guard in runtime-construction.ts.
+        // unconditionally would leak the parent's options into sub-agents whose
+        // parent never opted in (the default once carried `verbosity: 'minimal'`
+        // and silently muted them). Mirrors the guard in runtime-construction.ts.
         observabilityOptions: parentEnableObservability && parentObservabilityOptions
           ? { ...parentObservabilityOptions, logPrefix: childLogPrefix, emitConsole: false }
           : { logPrefix: childLogPrefix, emitConsole: false },

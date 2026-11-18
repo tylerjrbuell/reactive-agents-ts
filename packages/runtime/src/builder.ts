@@ -463,9 +463,9 @@ export class ReactiveAgentBuilder<TOut = unknown> {
         maxRetries?: number
     }
     private _enableObservability: boolean = false
-    private _observabilityOptions: ObservabilityOptions = {
-        verbosity: 'minimal',
-    }
+    // Verbosity stays unset until the caller sets it: unset follows stdout
+    // (TTY "normal", piped "minimal"); only an explicit "minimal" is quiet.
+    private _observabilityOptions: ObservabilityOptions = {}
     private _cortexUrl: string | null = null
     private _enablePrompts: boolean = false
     private _promptsOptions?: PromptsOptions

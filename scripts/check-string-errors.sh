@@ -62,7 +62,8 @@ SCAN_DIR="${1:-$ROOT/packages}"
 # 2026-11-12 246->238: web-search failures are typed (WebSearchProviderError /
 # WebSearchExhaustedError) instead of raw Error instances.
 # 2026-11-15 238->237: A2A discovery failures mint the tagged DiscoveryError.
-STRING_ERRORS_BASELINE=237
+# 2026-11-17 237->236: run() boundary rejects with RunBoundaryError (runtime errors.ts).
+STRING_ERRORS_BASELINE=236
 
 # Task 3 twin ledger: `instanceof Error|*Error` OCCURRENCES (one line may carry
 # two matches; 129 occurrences / 128 lines at capture). These are the rejection-

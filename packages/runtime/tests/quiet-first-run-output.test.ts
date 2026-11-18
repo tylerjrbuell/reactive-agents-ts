@@ -114,7 +114,7 @@ describe("resolveStatusMode", () => {
 describe("run on a terminal: status line honours verbosity", () => {
   // Real engine path: stdout is a TTY, no opt-out env var. The status
   // renderer clears its line with "\r\x1b[2K"; nothing else in a run writes it.
-  const statusWrites = async (verbosity: "minimal" | "normal"): Promise<number> => {
+  const statusWrites = async (verbosity: "minimal" | "normal" | "bare"): Promise<number> => {
     const savedTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
     const savedEnv = process.env["REACTIVE_AGENTS_DISABLE_STATUS_MODE"];
     delete process.env["REACTIVE_AGENTS_DISABLE_STATUS_MODE"];
@@ -126,10 +126,11 @@ describe("run on a terminal: status line honours verbosity", () => {
     }) as typeof process.stdout.write);
     const c = captureConsole();
     try {
-      const agent = await ReactiveAgents.create()
-        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
-        .withObservability({ verbosity })
-        .build();
+      const base = ReactiveAgents.create().withTestScenario([{ text: "FINAL ANSWER: ok" }]);
+      const agent = await (verbosity === "bare"
+        ? base.withObservability()
+        : base.withObservability({ verbosity })
+      ).build();
       await agent.run("say ok");
       await agent.dispose();
     } finally {
@@ -148,6 +149,43 @@ describe("run on a terminal: status line honours verbosity", () => {
   test("control: normal draws the status line", async () => {
     expect(await statusWrites("normal")).toBeGreaterThan(0);
   }, 20000);
+  // A bare .withObservability() asks to see more, so it must not read as an
+  // explicit "minimal" (the builder once defaulted its options to minimal).
+  test("bare withObservability(): draws the status line", async () => {
+    expect(await statusWrites("bare")).toBeGreaterThan(0);
+  }, 20000);
+});
+
+describe("bare withObservability() leaves verbosity unset", () => {
+  const buildInfoLines = (isTTY: boolean) =>
+    withStdoutTTY(isTTY, async () => {
+      const c = captureConsole();
+      try {
+        const agent = await ReactiveAgents.create()
+          .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+          .withObservability()
+          .build();
+        await agent.dispose();
+      } finally {
+        c.restore();
+      }
+      return c.out.filter((l) => l.includes(BUILD_INFO));
+    });
+
+  test("terminal: build-info line prints", async () => {
+    expect(await buildInfoLines(true)).toHaveLength(1);
+  });
+  test("piped: build-info line stays off", async () => {
+    expect(await buildInfoLines(false)).toHaveLength(0);
+  });
+  test("toConfig() emits no verbosity the caller never set", () => {
+    const config = ReactiveAgents.create().withObservability().toConfig();
+    expect(config.observability?.verbosity).toBeUndefined();
+  });
+  test("explicit minimal still serializes", () => {
+    const config = ReactiveAgents.create().withObservability({ verbosity: "minimal" }).toConfig();
+    expect(config.observability?.verbosity).toBe("minimal");
+  });
 });
 
 describe("builder notices print one plain ⚠ line on stderr", () => {

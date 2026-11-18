@@ -260,8 +260,8 @@ export function serializeBuilder(state: BuilderStateForSerialization): AgentConf
     config["memory"] = m;
   }
 
-  // Observability. Gate on the flag alone: the builder always holds default
-  // options (`{ verbosity: "minimal" }`) even when observability is off, and
+  // Observability. Gate on the flag alone: the builder always holds an
+  // options object (`{}` by default) even when observability is off, and
   // emitting them would make agentConfigToBuilder turn observability on.
   // Options only take effect when the flag is on (runtime-construction.ts).
   if (state._enableObservability) {
