@@ -29,10 +29,10 @@ const tasks = [
 </section>
 
 <style>
+  /* Same column as the stats panel above (.ra-panel has no max-width of its
+     own), so left and right edges line up. */
   .ra-tasks {
-    max-width: 72rem;
-    margin: 1.5rem auto;
-    padding: 0 1rem;
+    margin: 1.5rem auto 1.75rem;
   }
   .ra-tasks-h {
     margin: 0 0 0.75rem;
@@ -44,17 +44,44 @@ const tasks = [
     margin: 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-    gap: 0.5rem 0.75rem;
+    /* 10 tasks: 2 columns = 5 balanced rows, 1 column on phones. Rows share
+       one height (grid default stretch) and each tile fills its cell. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem 0.75rem;
+  }
+  @media (max-width: 640px) {
+    .ra-tasks-list {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .ra-tasks-list li {
+    position: relative;
+    margin: 0;
+    display: flex;
   }
   .ra-tasks-list a {
-    display: block;
-    height: 100%;
-    padding: 0.6rem 0.9rem;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-height: 3.5rem;
+    padding: 0.75rem 2.1rem 0.75rem 1rem;
     border: 1px solid var(--sl-color-hairline);
     border-radius: 0.5rem;
     text-decoration: none;
+    line-height: 1.35;
     color: var(--sl-color-white);
+  }
+  /* New/Updated dot (injected after the link by NewContentMarkers): pin it
+     inside the tile instead of letting it sit on the border. */
+  .ra-tasks-list :global(.ra-marker-icon) {
+    position: absolute;
+    top: 50%;
+    right: 0.9rem;
+    margin: 0;
+    transform: translateY(-50%);
+  }
+  .ra-tasks-list :global(.ra-marker-icon:hover) {
+    transform: translateY(-50%) scale(1.25);
   }
   .ra-tasks-list a:hover,
   .ra-tasks-list a:focus-visible {

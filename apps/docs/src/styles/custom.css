@@ -302,12 +302,11 @@ body {
 }
 
 .ra-panel-inner {
-    /* Translucent + frosted, not opaque — lets the fixed ambient glyph
-       (.ra-hero-glyph-bg) read through every card as the page scrolls,
-       instead of stopping dead at the hero. Blur keeps text legible over it. */
-    background: rgba(18, 19, 26, 0.82);
-    backdrop-filter: blur(22px);
-    -webkit-backdrop-filter: blur(22px);
+    /* Mostly opaque with a faint tint of the fixed ambient glyph
+       (.ra-hero-glyph-bg) showing through. No backdrop-filter: combined with
+       the rounded clip and the animated glow it painted square dark corner
+       artifacts in Chromium, and the blurred glyph lowered text contrast. */
+    background: rgba(18, 19, 26, 0.94);
     border-radius: 19px;
     padding: 2.5rem 2.8rem;
     /* Clip any flush-edge child (a table, a scroll container, an image) to
@@ -778,7 +777,32 @@ body {
 }
 
 [data-theme='light'] .ra-panel-inner {
-    background: rgba(255, 255, 255, 0.82);
+    background: rgba(255, 255, 255, 0.94);
+}
+
+/* Prose links and inline code inside panels: AA contrast in both themes
+   (dark: lavender on near-black; light: deep violet on white) and long
+   inline code wraps instead of overflowing the card. */
+.ra-section-card .ra-panel-inner :is(li, p, td) {
+    overflow-wrap: anywhere;
+}
+.ra-section-card .ra-panel-inner :is(li, p, td) a:not([class]) {
+    color: var(--sl-color-accent-high);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+.ra-section-card .ra-panel-inner :is(li, p, td) code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.ra-section-card .ra-panel-inner :is(li, p, td) a code {
+    color: inherit !important;
+}
+
+/* Floating scroll-to-top sits in the corner, not over the content column. */
+.scroll-to-top-button {
+    left: auto !important;
+    right: 1.25rem !important;
 }
 
 [data-theme='light'] .ra-stat {
@@ -944,8 +968,10 @@ body {
 
 /* ── Inline code ────────────────────────────────────────────── */
 :not(pre) > code {
-    background: rgba(139, 92, 246, 0.1) !important;
-    color: var(--sl-color-accent) !important;
+    background: rgba(139, 92, 246, 0.16) !important;
+    /* Dark theme: accent-high (#c4b5fd) is ~10:1 on the page; the base accent
+       (#7c3aed) was ~3.2:1 and failed AA for inline code everywhere. */
+    color: var(--sl-color-accent-high) !important;
     border-radius: 4px;
     padding: 0.15em 0.35em;
     font-size: 0.88em;
@@ -2419,9 +2445,6 @@ summary:hover .sl-badge.ra-rollup {
     color: var(--sl-color-text);
 }
 
-.scroll-to-top-button {
-    left: 47.5% !important;
-}
 /* ── Release indicators: stability tags + New/Updated markers ──
    (wiki/Reference/Docs-Indicators.md). `.ra-ind-marker` is everything the
    "Highlight what's new" toggle hides; `.ra-ind-stability` is never hidden. */
