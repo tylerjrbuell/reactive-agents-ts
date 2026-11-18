@@ -2,7 +2,7 @@
 
 > Prebuilt killswitches that stop or terminate a Reactive Agents run when an iteration, token, cost, time, progress or tool-approval limit is crossed.
 
-> **Stability:** unstable. Killswitch options and firing behavior are still changing (killswitch fixes landed in October 2026), so option shapes may change between `0.x` minors. See the [stability policy](https://docs.reactiveagents.dev/reference/stability/).
+> **Stability:** stable (scoped). The killswitches (`maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`), `RunHandle` and the `.compose()` callback form are stable; `.withBudget` and the `HarnessConfig` fields of `.withHarness({ ... })`, which keep growing, are unstable and may change between `0.x` minors. See the [stability policy](https://docs.reactiveagents.dev/reference/stability/).
 
 [![npm](https://img.shields.io/npm/v/@reactive-agents/compose?color=CB3837&logo=npm)](https://www.npmjs.com/package/@reactive-agents/compose)
 [![docs](https://img.shields.io/badge/docs-reactiveagents.dev-7C3AED)](https://docs.reactiveagents.dev/reference/compose-api/)

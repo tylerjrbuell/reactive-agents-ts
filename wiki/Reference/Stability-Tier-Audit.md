@@ -211,6 +211,10 @@ Authority note: the brief listed `packages/*/README.md` as editable, but the doc
 
 `prompts` is now "stable (scoped)" in `stability.json`, `stability.md`, `features/prompts` frontmatter and `packages/prompts/README.md`. Stable: `.withPrompts()` and the template service API (`PromptService`, template ids, variable interpolation). Unstable: `ExperimentService` (A/B variants, `@unstable`) and the wording of the built-in prompts. `compose` is not promoted (needs its fifth test file first).
 
+## 6e. Applied 2026-11-17, owner approval: compose promoted to stable (scoped)
+
+`compose` is now "stable (scoped)" in `stability.json`, `stability.md` and `packages/compose/README.md`. Stable: killswitches (`maxIterations`, `budgetLimit`, `timeoutAfter`, `watchdog`, `requireApprovalFor`), `RunHandle`, the `.compose()` callback form. Unstable: `.withBudget` and the growing `HarnessConfig` fields of `.withHarness({ ... })`. No docs page maps to compose, so no frontmatter change. Evidence: no breaks in window, last change 2026-10-16, 5 test files after 73f20c99a, no `@unstable` tag in `packages/compose`. Supersedes the "compose is not promoted" line in 6d.
+
 ## 7. Not done
 
 No edits to any tier, README, JSDoc or page. No gates run beyond read-only listing (`repo find`, `repo scope`, `git log`). `bun run repo check --all` was not run and is unaffected by this single new wiki file.

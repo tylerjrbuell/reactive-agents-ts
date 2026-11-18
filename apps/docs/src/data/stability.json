@@ -1,9 +1,9 @@
 {
-  "$comment": "Stability tier per public package dir. Source of truth for package READMEs (guard: scripts/check-package-readmes.ts) and mirrors src/content/docs/reference/stability.md. Edit here and in the README together; a mismatch is a finding. A scoped 'stable' (llm-provider, prompts, reasoning, runtime, tools) means the documented entry points only; see stability.md. `pagePackages` maps a docs page (path under src/content/docs, no extension) to the package whose tier it must carry; `pageTiers` pins page-level feature tiers that have no package of their own. Guard: scripts/derive-framework-facts.ts findDrift ('pages:'): every page frontmatter `stability:` must equal the mapped tier, and a page with a `stability:` must be mapped.",
+  "$comment": "Stability tier per public package dir. Source of truth for package READMEs (guard: scripts/check-package-readmes.ts) and mirrors src/content/docs/reference/stability.md. Edit here and in the README together; a mismatch is a finding. A scoped 'stable' (compose, llm-provider, prompts, reasoning, runtime, tools) means the documented entry points only; see stability.md. `pagePackages` maps a docs page (path under src/content/docs, no extension) to the package whose tier it must carry; `pageTiers` pins page-level feature tiers that have no package of their own. Guard: scripts/derive-framework-facts.ts findDrift ('pages:'): every page frontmatter `stability:` must equal the mapped tier, and a page with a `stability:` must be mapped.",
   "packages": {
     "a2a": "experimental",
     "channels": "unstable",
-    "compose": "unstable",
+    "compose": "stable",
     "core": "unstable",
     "cost": "unstable",
     "create-reactive-agent": "unstable",
