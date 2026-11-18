@@ -1,0 +1,416 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/reg-cogito",
+    "tiers": [
+      "cogito:8b"
+    ],
+    "arms": [
+      {
+        "id": "default"
+      }
+    ],
+    "k": 5,
+    "tasks": [
+      "rw-2",
+      "rw-3",
+      "rw-6",
+      "rw-7",
+      "rw-9",
+      "ab-trap-4",
+      "ab-trap-5",
+      "h3-plan-only",
+      "h3-todo-heavy",
+      "h3-required-tools",
+      "h3-continuation",
+      "h3-exact-value"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 180,
+    "env": {
+      "RA_ACT_OR_ANSWER": "0",
+      "RA_LEAN_FINAL_TURN": "0",
+      "RA_PARALLEL_TOOL_HINT": "0"
+    },
+    "allowContention": true,
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|cogito:8b|rw-2|default",
+    "0|cogito:8b|rw-3|default",
+    "0|cogito:8b|rw-6|default",
+    "0|cogito:8b|rw-7|default",
+    "0|cogito:8b|rw-9|default",
+    "0|cogito:8b|ab-trap-4|default",
+    "0|cogito:8b|ab-trap-5|default",
+    "0|cogito:8b|h3-plan-only|default",
+    "0|cogito:8b|h3-todo-heavy|default",
+    "0|cogito:8b|h3-required-tools|default",
+    "0|cogito:8b|h3-continuation|default",
+    "0|cogito:8b|h3-exact-value|default",
+    "1|cogito:8b|rw-2|default",
+    "1|cogito:8b|rw-3|default",
+    "1|cogito:8b|rw-6|default",
+    "1|cogito:8b|rw-7|default",
+    "1|cogito:8b|rw-9|default",
+    "1|cogito:8b|ab-trap-4|default",
+    "1|cogito:8b|ab-trap-5|default",
+    "1|cogito:8b|h3-plan-only|default",
+    "1|cogito:8b|h3-todo-heavy|default",
+    "1|cogito:8b|h3-required-tools|default",
+    "1|cogito:8b|h3-continuation|default",
+    "1|cogito:8b|h3-exact-value|default",
+    "2|cogito:8b|rw-2|default",
+    "2|cogito:8b|rw-3|default",
+    "2|cogito:8b|rw-6|default",
+    "2|cogito:8b|rw-7|default",
+    "2|cogito:8b|rw-9|default",
+    "2|cogito:8b|ab-trap-4|default",
+    "2|cogito:8b|ab-trap-5|default",
+    "2|cogito:8b|h3-plan-only|default",
+    "2|cogito:8b|h3-todo-heavy|default",
+    "2|cogito:8b|h3-required-tools|default",
+    "2|cogito:8b|h3-continuation|default",
+    "2|cogito:8b|h3-exact-value|default",
+    "3|cogito:8b|rw-2|default",
+    "3|cogito:8b|rw-3|default",
+    "3|cogito:8b|rw-6|default",
+    "3|cogito:8b|rw-7|default",
+    "3|cogito:8b|rw-9|default",
+    "3|cogito:8b|ab-trap-4|default",
+    "3|cogito:8b|ab-trap-5|default",
+    "3|cogito:8b|h3-plan-only|default",
+    "3|cogito:8b|h3-todo-heavy|default",
+    "3|cogito:8b|h3-required-tools|default",
+    "3|cogito:8b|h3-continuation|default",
+    "3|cogito:8b|h3-exact-value|default",
+    "4|cogito:8b|rw-2|default",
+    "4|cogito:8b|rw-3|default",
+    "4|cogito:8b|rw-6|default",
+    "4|cogito:8b|rw-7|default",
+    "4|cogito:8b|rw-9|default",
+    "4|cogito:8b|ab-trap-4|default",
+    "4|cogito:8b|ab-trap-5|default",
+    "4|cogito:8b|h3-plan-only|default",
+    "4|cogito:8b|h3-todo-heavy|default",
+    "4|cogito:8b|h3-required-tools|default",
+    "4|cogito:8b|h3-continuation|default",
+    "4|cogito:8b|h3-exact-value|default"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-18T22:00:38.815Z",
+  "updatedAt": "2026-11-18T22:17:58.189Z",
+  "units": {
+    "0|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 57
+    },
+    "0|cogito:8b|rw-3|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 18
+    },
+    "0|cogito:8b|rw-6|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 39
+    },
+    "0|cogito:8b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 36
+    },
+    "0|cogito:8b|rw-9|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 18
+    },
+    "0|cogito:8b|ab-trap-4|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 3
+    },
+    "0|cogito:8b|ab-trap-5|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 5
+    },
+    "0|cogito:8b|h3-plan-only|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "0|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "0|cogito:8b|h3-required-tools|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "0|cogito:8b|h3-continuation|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 6
+    },
+    "0|cogito:8b|h3-exact-value|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 8
+    },
+    "1|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 22
+    },
+    "1|cogito:8b|rw-3|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 18
+    },
+    "1|cogito:8b|rw-6|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 28
+    },
+    "1|cogito:8b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 49
+    },
+    "1|cogito:8b|rw-9|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 17
+    },
+    "1|cogito:8b|ab-trap-4|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 3
+    },
+    "1|cogito:8b|ab-trap-5|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 5
+    },
+    "1|cogito:8b|h3-plan-only|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    },
+    "1|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "1|cogito:8b|h3-required-tools|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 63
+    },
+    "1|cogito:8b|h3-continuation|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 6
+    },
+    "1|cogito:8b|h3-exact-value|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 7
+    },
+    "2|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "2|cogito:8b|rw-3|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 19
+    },
+    "2|cogito:8b|rw-6|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 37
+    },
+    "2|cogito:8b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 24
+    },
+    "2|cogito:8b|rw-9|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 14
+    },
+    "2|cogito:8b|ab-trap-4|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 3
+    },
+    "2|cogito:8b|ab-trap-5|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 4
+    },
+    "2|cogito:8b|h3-plan-only|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "2|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 20
+    },
+    "2|cogito:8b|h3-required-tools|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 11
+    },
+    "2|cogito:8b|h3-continuation|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 6
+    },
+    "2|cogito:8b|h3-exact-value|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 8
+    },
+    "3|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 19
+    },
+    "3|cogito:8b|rw-3|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "3|cogito:8b|rw-6|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 27
+    },
+    "3|cogito:8b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 64
+    },
+    "3|cogito:8b|rw-9|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "3|cogito:8b|ab-trap-4|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 3
+    },
+    "3|cogito:8b|ab-trap-5|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 5
+    },
+    "3|cogito:8b|h3-plan-only|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 14
+    },
+    "3|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    },
+    "3|cogito:8b|h3-required-tools|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 8
+    },
+    "3|cogito:8b|h3-continuation|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 6
+    },
+    "3|cogito:8b|h3-exact-value|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "4|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 17
+    },
+    "4|cogito:8b|rw-3|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 18
+    },
+    "4|cogito:8b|rw-6|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 40
+    },
+    "4|cogito:8b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 25
+    },
+    "4|cogito:8b|rw-9|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 17
+    },
+    "4|cogito:8b|ab-trap-4|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 3
+    },
+    "4|cogito:8b|ab-trap-5|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 4
+    },
+    "4|cogito:8b|h3-plan-only|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    },
+    "4|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    },
+    "4|cogito:8b|h3-required-tools|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "4|cogito:8b|h3-continuation|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 6
+    },
+    "4|cogito:8b|h3-exact-value|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 8
+    }
+  },
+  "current": null,
+  "chunks": 60,
+  "pauses": [],
+  "pausedSec": 0,
+  "lastError": null,
+  "driftWarnings": []
+}

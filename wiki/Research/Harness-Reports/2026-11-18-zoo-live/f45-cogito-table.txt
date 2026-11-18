@@ -1,0 +1,5 @@
+task | arm | n | solved | acc | turns | tok/run | tok/solved | causes | b(base-only) c(arm-only)
+rw-6 | off | 5 | 3/5 | 0.89 | 5.6 | 7098 | 11830 | {"success-with-warning":2,"verifier-reject":1,"never-engaged":2} | -
+rw-6 | aoa | 5 | 5/5 | 1.00 | 3.2 | 6551 | 6551 | {"success-with-warning":5} | b=0 c=2
+rw-7 | off | 5 | 0/5 | 0.27 | 10.4 | 18500 | - | {"unexplained":2,"stall-after-work":2,"wrong-answer":1} | -
+rw-7 | aoa | 5 | 0/5 | 0.40 | 8.6 | 19284 | - | {"wrong-answer":4,"stall-after-work":1} | b=0 c=0

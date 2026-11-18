@@ -1,0 +1,3 @@
+{"outDir":"/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/smoke/run","tiers":["gemma4:e4b"],"k":1,"tasks":["h3-exact-value"],"cellTimeoutSec":180,"allowContention":true,
+ "runnerCmd":["bun","run","/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"],
+ "arms":[{"id":"off","env":{"RA_LEAN_FINAL_TURN":"0"}},{"id":"lft","env":{"RA_LEAN_FINAL_TURN":"1"}}]}

@@ -1,0 +1,6 @@
+H3: results file was started at 2fe6acc12936133522e65c3093005db4d4664da1, HEAD is 0335f07c14fba8420fd67b0fb119d0d004b2023e (baseline must stay on one SHA)
+PREFLIGHT WARNING: host contention detected; continuing because --allow-contention was given. Cells below may be stalled, not failed.
+  - 1 established client connection(s) on :11434 (another Ollama client is active)
+  - host load 11.37 on 6 CPUs (1.89/CPU > 0.75)
+[h3] qwen3:4b|rw-6|4 solved=true acc=1.00 pass cause=success-with-warning it=3 11743tok 60s elapsed=62s
+[h3] ran=1 remaining=0

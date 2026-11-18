@@ -1,0 +1,5 @@
+PREFLIGHT WARNING: host contention detected; continuing because --allow-contention was given. Cells below may be stalled, not failed.
+  - 1 established client connection(s) on :11434 (another Ollama client is active)
+  - host load 4.53 on 6 CPUs (0.76/CPU > 0.75)
+[h3] gemma4:e4b|h3-exact-value|4 solved=true acc=1.00 pass cause=none it=3 2403tok 5s elapsed=9s
+[h3] ran=1 remaining=0

@@ -1,0 +1,425 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/f123-gemma",
+    "tiers": [
+      "gemma4:e4b"
+    ],
+    "arms": [
+      {
+        "id": "off"
+      },
+      {
+        "id": "aoa",
+        "env": {
+          "RA_ACT_OR_ANSWER": "1"
+        }
+      },
+      {
+        "id": "lft",
+        "env": {
+          "RA_LEAN_FINAL_TURN": "1"
+        }
+      },
+      {
+        "id": "pth",
+        "env": {
+          "RA_PARALLEL_TOOL_HINT": "1"
+        }
+      }
+    ],
+    "k": 5,
+    "tasks": [
+      "ab-trap-5",
+      "h3-exact-value",
+      "h3-todo-heavy"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 180,
+    "env": {
+      "RA_ACT_OR_ANSWER": "0",
+      "RA_LEAN_FINAL_TURN": "0",
+      "RA_PARALLEL_TOOL_HINT": "0"
+    },
+    "allowContention": true,
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|gemma4:e4b|ab-trap-5|off",
+    "0|gemma4:e4b|ab-trap-5|aoa",
+    "0|gemma4:e4b|ab-trap-5|lft",
+    "0|gemma4:e4b|ab-trap-5|pth",
+    "0|gemma4:e4b|h3-exact-value|off",
+    "0|gemma4:e4b|h3-exact-value|aoa",
+    "0|gemma4:e4b|h3-exact-value|lft",
+    "0|gemma4:e4b|h3-exact-value|pth",
+    "0|gemma4:e4b|h3-todo-heavy|off",
+    "0|gemma4:e4b|h3-todo-heavy|aoa",
+    "0|gemma4:e4b|h3-todo-heavy|lft",
+    "0|gemma4:e4b|h3-todo-heavy|pth",
+    "1|gemma4:e4b|ab-trap-5|off",
+    "1|gemma4:e4b|ab-trap-5|aoa",
+    "1|gemma4:e4b|ab-trap-5|lft",
+    "1|gemma4:e4b|ab-trap-5|pth",
+    "1|gemma4:e4b|h3-exact-value|off",
+    "1|gemma4:e4b|h3-exact-value|aoa",
+    "1|gemma4:e4b|h3-exact-value|lft",
+    "1|gemma4:e4b|h3-exact-value|pth",
+    "1|gemma4:e4b|h3-todo-heavy|off",
+    "1|gemma4:e4b|h3-todo-heavy|aoa",
+    "1|gemma4:e4b|h3-todo-heavy|lft",
+    "1|gemma4:e4b|h3-todo-heavy|pth",
+    "2|gemma4:e4b|ab-trap-5|off",
+    "2|gemma4:e4b|ab-trap-5|aoa",
+    "2|gemma4:e4b|ab-trap-5|lft",
+    "2|gemma4:e4b|ab-trap-5|pth",
+    "2|gemma4:e4b|h3-exact-value|off",
+    "2|gemma4:e4b|h3-exact-value|aoa",
+    "2|gemma4:e4b|h3-exact-value|lft",
+    "2|gemma4:e4b|h3-exact-value|pth",
+    "2|gemma4:e4b|h3-todo-heavy|off",
+    "2|gemma4:e4b|h3-todo-heavy|aoa",
+    "2|gemma4:e4b|h3-todo-heavy|lft",
+    "2|gemma4:e4b|h3-todo-heavy|pth",
+    "3|gemma4:e4b|ab-trap-5|off",
+    "3|gemma4:e4b|ab-trap-5|aoa",
+    "3|gemma4:e4b|ab-trap-5|lft",
+    "3|gemma4:e4b|ab-trap-5|pth",
+    "3|gemma4:e4b|h3-exact-value|off",
+    "3|gemma4:e4b|h3-exact-value|aoa",
+    "3|gemma4:e4b|h3-exact-value|lft",
+    "3|gemma4:e4b|h3-exact-value|pth",
+    "3|gemma4:e4b|h3-todo-heavy|off",
+    "3|gemma4:e4b|h3-todo-heavy|aoa",
+    "3|gemma4:e4b|h3-todo-heavy|lft",
+    "3|gemma4:e4b|h3-todo-heavy|pth",
+    "4|gemma4:e4b|ab-trap-5|off",
+    "4|gemma4:e4b|ab-trap-5|aoa",
+    "4|gemma4:e4b|ab-trap-5|lft",
+    "4|gemma4:e4b|ab-trap-5|pth",
+    "4|gemma4:e4b|h3-exact-value|off",
+    "4|gemma4:e4b|h3-exact-value|aoa",
+    "4|gemma4:e4b|h3-exact-value|lft",
+    "4|gemma4:e4b|h3-exact-value|pth",
+    "4|gemma4:e4b|h3-todo-heavy|off",
+    "4|gemma4:e4b|h3-todo-heavy|aoa",
+    "4|gemma4:e4b|h3-todo-heavy|lft",
+    "4|gemma4:e4b|h3-todo-heavy|pth"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-18T21:26:48.150Z",
+  "updatedAt": "2026-11-18T21:40:59.482Z",
+  "units": {
+    "0|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "0|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "0|gemma4:e4b|ab-trap-5|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "0|gemma4:e4b|ab-trap-5|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 11
+    },
+    "0|gemma4:e4b|h3-exact-value|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "0|gemma4:e4b|h3-exact-value|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "0|gemma4:e4b|h3-exact-value|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "0|gemma4:e4b|h3-exact-value|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "0|gemma4:e4b|h3-todo-heavy|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 23
+    },
+    "0|gemma4:e4b|h3-todo-heavy|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 24
+    },
+    "0|gemma4:e4b|h3-todo-heavy|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 23
+    },
+    "0|gemma4:e4b|h3-todo-heavy|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "1|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    },
+    "1|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "1|gemma4:e4b|ab-trap-5|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "1|gemma4:e4b|ab-trap-5|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "1|gemma4:e4b|h3-exact-value|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "1|gemma4:e4b|h3-exact-value|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "1|gemma4:e4b|h3-exact-value|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 8
+    },
+    "1|gemma4:e4b|h3-exact-value|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "1|gemma4:e4b|h3-todo-heavy|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 23
+    },
+    "1|gemma4:e4b|h3-todo-heavy|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 22
+    },
+    "1|gemma4:e4b|h3-todo-heavy|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 23
+    },
+    "1|gemma4:e4b|h3-todo-heavy|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "2|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 11
+    },
+    "2|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "2|gemma4:e4b|ab-trap-5|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "2|gemma4:e4b|ab-trap-5|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "2|gemma4:e4b|h3-exact-value|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "2|gemma4:e4b|h3-exact-value|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "2|gemma4:e4b|h3-exact-value|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "2|gemma4:e4b|h3-exact-value|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "2|gemma4:e4b|h3-todo-heavy|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 23
+    },
+    "2|gemma4:e4b|h3-todo-heavy|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 21
+    },
+    "2|gemma4:e4b|h3-todo-heavy|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 25
+    },
+    "2|gemma4:e4b|h3-todo-heavy|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "3|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "3|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "3|gemma4:e4b|ab-trap-5|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "3|gemma4:e4b|ab-trap-5|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 11
+    },
+    "3|gemma4:e4b|h3-exact-value|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "3|gemma4:e4b|h3-exact-value|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "3|gemma4:e4b|h3-exact-value|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 8
+    },
+    "3|gemma4:e4b|h3-exact-value|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "3|gemma4:e4b|h3-todo-heavy|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 24
+    },
+    "3|gemma4:e4b|h3-todo-heavy|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 24
+    },
+    "3|gemma4:e4b|h3-todo-heavy|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 23
+    },
+    "3|gemma4:e4b|h3-todo-heavy|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 19
+    },
+    "4|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 11
+    },
+    "4|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "4|gemma4:e4b|ab-trap-5|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    },
+    "4|gemma4:e4b|ab-trap-5|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 11
+    },
+    "4|gemma4:e4b|h3-exact-value|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "4|gemma4:e4b|h3-exact-value|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "4|gemma4:e4b|h3-exact-value|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 8
+    },
+    "4|gemma4:e4b|h3-exact-value|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    },
+    "4|gemma4:e4b|h3-todo-heavy|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 23
+    },
+    "4|gemma4:e4b|h3-todo-heavy|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 19
+    },
+    "4|gemma4:e4b|h3-todo-heavy|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 22
+    },
+    "4|gemma4:e4b|h3-todo-heavy|pth": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    }
+  },
+  "current": null,
+  "chunks": 60,
+  "pauses": [],
+  "pausedSec": 0,
+  "lastError": null,
+  "driftWarnings": []
+}

@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/smoke/run",
+    "tiers": [
+      "gemma4:e4b"
+    ],
+    "arms": [
+      {
+        "id": "off",
+        "env": {
+          "RA_LEAN_FINAL_TURN": "0"
+        }
+      },
+      {
+        "id": "lft",
+        "env": {
+          "RA_LEAN_FINAL_TURN": "1"
+        }
+      }
+    ],
+    "k": 1,
+    "tasks": [
+      "h3-exact-value"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 180,
+    "allowContention": true,
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|gemma4:e4b|h3-exact-value|off",
+    "0|gemma4:e4b|h3-exact-value|lft"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-18T21:25:11.253Z",
+  "updatedAt": "2026-11-18T21:26:10.629Z",
+  "units": {
+    "0|gemma4:e4b|h3-exact-value|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "0|gemma4:e4b|h3-exact-value|lft": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 9
+    }
+  },
+  "current": null,
+  "chunks": 2,
+  "pauses": [
+    {
+      "at": "2026-11-18T21:25:11.283Z",
+      "unit": "0|gemma4:e4b|h3-exact-value|off",
+      "findings": [
+        "1 established client connection(s) on :11434 (another Ollama client is active)"
+      ],
+      "waitSec": 30
+    },
+    {
+      "at": "2026-11-18T21:25:41.287Z",
+      "unit": "0|gemma4:e4b|h3-exact-value|off",
+      "findings": [
+        "1 established client connection(s) on :11434 (another Ollama client is active)"
+      ],
+      "waitSec": 60
+    }
+  ],
+  "pausedSec": 30,
+  "lastError": null,
+  "driftWarnings": []
+}

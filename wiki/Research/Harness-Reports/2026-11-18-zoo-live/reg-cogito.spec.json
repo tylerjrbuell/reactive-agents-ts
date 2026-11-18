@@ -1,0 +1,4 @@
+{"outDir":"/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/reg-cogito","tiers":["cogito:8b"],"k":5,"cellTimeoutSec":180,"allowContention":true,
+ "runnerCmd":["bun","run","/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"],
+ "env":{"RA_ACT_OR_ANSWER":"0","RA_LEAN_FINAL_TURN":"0","RA_PARALLEL_TOOL_HINT":"0"},
+ "arms":[{"id":"default"}]}

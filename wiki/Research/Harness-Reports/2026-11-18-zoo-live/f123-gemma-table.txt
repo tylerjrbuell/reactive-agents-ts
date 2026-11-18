@@ -1,0 +1,13 @@
+task | arm | n | solved | acc | turns | tok/run | tok/solved | causes | b(base-only) c(arm-only)
+ab-trap-5 | off | 5 | 5/5 | 1.00 | 3.4 | 2418 | 2418 | {"unexplained":3,"tool-failure":2} | -
+ab-trap-5 | aoa | 5 | 2/5 | 0.40 | 4.0 | 4519 | 11298 | {"tool-failure":5} | b=3 c=0
+ab-trap-5 | lft | 5 | 4/5 | 0.80 | 3.8 | 3412 | 4265 | {"unexplained":2,"tool-failure":3} | b=1 c=0
+ab-trap-5 | pth | 5 | 4/5 | 0.80 | 3.8 | 3010 | 3763 | {"tool-failure":4,"unexplained":1} | b=1 c=0
+h3-exact-value | off | 5 | 5/5 | 1.00 | 3.0 | 2425 | 2425 | {"none":5} | -
+h3-exact-value | aoa | 5 | 5/5 | 1.00 | 3.0 | 2389 | 2389 | {"none":5} | b=0 c=0
+h3-exact-value | lft | 5 | 1/5 | 0.20 | 2.4 | 1543 | 7715 | {"none":1,"wrong-answer":4} | b=4 c=0
+h3-exact-value | pth | 5 | 5/5 | 1.00 | 2.0 | 1950 | 1950 | {"none":5} | b=0 c=0
+h3-todo-heavy | off | 5 | 5/5 | 1.00 | 13.0 | 21362 | 21362 | {"none":5} | -
+h3-todo-heavy | aoa | 5 | 5/5 | 1.00 | 13.0 | 20642 | 20642 | {"none":4,"success-with-warning":1} | b=0 c=0
+h3-todo-heavy | lft | 5 | 4/5 | 0.93 | 13.0 | 21191 | 26489 | {"none":4,"tool-failure":1} | b=1 c=0
+h3-todo-heavy | pth | 5 | 5/5 | 1.00 | 3.0 | 6403 | 6403 | {"none":2,"success-with-warning":3} | b=0 c=0

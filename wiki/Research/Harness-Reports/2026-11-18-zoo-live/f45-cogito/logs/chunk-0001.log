@@ -1,0 +1,5 @@
+PREFLIGHT WARNING: host contention detected; continuing because --allow-contention was given. Cells below may be stalled, not failed.
+  - foreign model(s) loaded in Ollama: gemma4:e4b (contend for GPU/VRAM)
+  - 1 established client connection(s) on :11434 (another Ollama client is active)
+[h3] cogito:8b|rw-6|0 solved=true acc=1.00 pass cause=success-with-warning it=6 7674tok 38s elapsed=41s
+[h3] ran=1 remaining=0

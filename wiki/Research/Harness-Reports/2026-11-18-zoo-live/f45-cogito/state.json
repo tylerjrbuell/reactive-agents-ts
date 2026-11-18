@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/f45-cogito",
+    "tiers": [
+      "cogito:8b"
+    ],
+    "arms": [
+      {
+        "id": "off"
+      },
+      {
+        "id": "aoa",
+        "env": {
+          "RA_ACT_OR_ANSWER": "1"
+        }
+      }
+    ],
+    "k": 5,
+    "tasks": [
+      "rw-6",
+      "rw-7"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 180,
+    "env": {
+      "RA_ACT_OR_ANSWER": "0",
+      "RA_LEAN_FINAL_TURN": "0",
+      "RA_PARALLEL_TOOL_HINT": "0"
+    },
+    "allowContention": true,
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|cogito:8b|rw-6|off",
+    "0|cogito:8b|rw-6|aoa",
+    "0|cogito:8b|rw-7|off",
+    "0|cogito:8b|rw-7|aoa",
+    "1|cogito:8b|rw-6|off",
+    "1|cogito:8b|rw-6|aoa",
+    "1|cogito:8b|rw-7|off",
+    "1|cogito:8b|rw-7|aoa",
+    "2|cogito:8b|rw-6|off",
+    "2|cogito:8b|rw-6|aoa",
+    "2|cogito:8b|rw-7|off",
+    "2|cogito:8b|rw-7|aoa",
+    "3|cogito:8b|rw-6|off",
+    "3|cogito:8b|rw-6|aoa",
+    "3|cogito:8b|rw-7|off",
+    "3|cogito:8b|rw-7|aoa",
+    "4|cogito:8b|rw-6|off",
+    "4|cogito:8b|rw-6|aoa",
+    "4|cogito:8b|rw-7|off",
+    "4|cogito:8b|rw-7|aoa"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-18T21:41:06.039Z",
+  "updatedAt": "2026-11-18T21:52:59.423Z",
+  "units": {
+    "0|cogito:8b|rw-6|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 41
+    },
+    "0|cogito:8b|rw-6|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 24
+    },
+    "0|cogito:8b|rw-7|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 32
+    },
+    "0|cogito:8b|rw-7|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 20
+    },
+    "1|cogito:8b|rw-6|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 25
+    },
+    "1|cogito:8b|rw-6|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 58
+    },
+    "1|cogito:8b|rw-7|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 27
+    },
+    "1|cogito:8b|rw-7|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 30
+    },
+    "2|cogito:8b|rw-6|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 47
+    },
+    "2|cogito:8b|rw-6|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 29
+    },
+    "2|cogito:8b|rw-7|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 51
+    },
+    "2|cogito:8b|rw-7|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 36
+    },
+    "3|cogito:8b|rw-6|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 43
+    },
+    "3|cogito:8b|rw-6|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 31
+    },
+    "3|cogito:8b|rw-7|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 46
+    },
+    "3|cogito:8b|rw-7|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 46
+    },
+    "4|cogito:8b|rw-6|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 41
+    },
+    "4|cogito:8b|rw-6|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 26
+    },
+    "4|cogito:8b|rw-7|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 32
+    },
+    "4|cogito:8b|rw-7|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 28
+    }
+  },
+  "current": null,
+  "chunks": 20,
+  "pauses": [],
+  "pausedSec": 0,
+  "lastError": null,
+  "driftWarnings": []
+}
