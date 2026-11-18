@@ -36,8 +36,8 @@ function makeMockReasoning(opts: {
   tokens?: number;
   /**
    * Extra preliminary "thought" steps before the final answer. Needed for
-   * no-tool-call scenarios so `ctx.iteration` (== `stepsCount`,
-   * `reasoning-post-think.ts:214`) lands above 3 — otherwise
+   * no-tool-call scenarios so `ctx.iteration` (the run's kernel turns; this
+   * stub reports one turn per step as `kernelIterations`) lands above 3 — otherwise
    * `classifyComplexity` (`engine/util.ts`) grades the run "moderate" and
    * `memory-flush-dispatch.ts` FORKS the flush fire-and-forget, racing this
    * test's synchronous assertions. "complex" (iteration > 3) runs it
@@ -76,7 +76,7 @@ function makeMockReasoning(opts: {
         output: unknown;
         status: "completed" | "failed" | "partial";
         steps?: readonly { id: string; type: string; content: string; metadata?: Record<string, unknown> }[];
-        metadata: { cost: number; tokensUsed: number; stepsCount: number };
+        metadata: { cost: number; tokensUsed: number; stepsCount: number; kernelIterations: number };
       }>;
     }>("ReasoningService"),
     {
@@ -85,7 +85,8 @@ function makeMockReasoning(opts: {
           output: opts.content ?? "FINAL ANSWER: Task completed.",
           status: "completed" as const,
           steps,
-          metadata: { cost: 0.001, tokensUsed: (opts.tokens ?? 50) + 100, stepsCount: steps.length },
+          // One kernel turn per step: the run's iteration (engine/run-kernel-turns.ts).
+          metadata: { cost: 0.001, tokensUsed: (opts.tokens ?? 50) + 100, stepsCount: steps.length, kernelIterations: steps.length },
         }),
     },
   );

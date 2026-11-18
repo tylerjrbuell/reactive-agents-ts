@@ -34,6 +34,7 @@ import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { readPosture } from "../../../chat/todo-seed.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { absorbedLedgerMetadata } from "../../run-ledger-scope.js";
+import { addedRunKernelTurns, passKernelTurns, readRunKernelTurns } from "../../run-kernel-turns.js";
 
 /** Parameter shape accepted by ReasoningService.execute(). */
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
@@ -211,6 +212,7 @@ export const runReasoningHarnessHooks = (
               lastResponse: String(retryResult.output ?? ""),
               reasoningResult: retryResult,
               ...absorbedLedgerMetadata(ctx.metadata, retryResult, "continuation"),
+              ...addedRunKernelTurns(ctx.metadata, retryResult),
             },
           };
         } else {
@@ -219,14 +221,15 @@ export const runReasoningHarnessHooks = (
       }
     }
 
-    // withMinIterations: re-run until the required floor is reached.
-    // Loop (not a lone `if`): a single continuation only ever yields 2 total
-    // passes regardless of minIterations. Each continuation counts as one more
-    // iteration; iterationsDone strictly increases so the loop terminates, and
-    // a failed / un-normalizable continuation breaks early.
+    // withMinIterations: continue until the run has used at least N kernel
+    // turns, the same unit `metadata.iterations` reports (run-kernel-turns.ts).
+    // Until 2026-11-18 this read `ctx.iteration - 1` before anything had set
+    // it, so it was always 0 and the floor ran N continuation passes no matter
+    // how many turns the first pass used. The loop stops when a continuation
+    // fails, cannot be normalized, returns no output, or adds no turn, so the
+    // count strictly increases while it runs and the loop terminates.
     if (config.minIterations && !cacheHit && reasoningOpt._tag === "Some") {
-      let iterationsDone = ctx.iteration - 1;
-      while (iterationsDone < config.minIterations) {
+      while ((readRunKernelTurns(ctx.metadata) ?? 0) < config.minIterations) {
         // Review C1 mirror — see withCustomTermination above.
         if (isEnforcedAbstention(ctx.metadata.reasoningResult)) break;
         const continuationOutcome = yield* Effect.exit(
@@ -249,9 +252,11 @@ export const runReasoningHarnessHooks = (
             lastResponse: String(contResult.output ?? ""),
             reasoningResult: contResult,
             ...absorbedLedgerMetadata(ctx.metadata, contResult, "continuation"),
+            ...addedRunKernelTurns(ctx.metadata, contResult),
           },
         };
-        iterationsDone++;
+        // A pass that used no turn cannot make progress toward the floor.
+        if (passKernelTurns(contResult) <= 0) break;
       }
     }
 
@@ -344,6 +349,7 @@ export const runReasoningHarnessHooks = (
                     lastResponse: String(revised.output ?? ""),
                     reasoningResult: revised,
                     ...absorbedLedgerMetadata(ctx.metadata, revised, "continuation"),
+                    ...addedRunKernelTurns(ctx.metadata, revised),
                   },
                 };
               }
@@ -383,6 +389,7 @@ export const runReasoningHarnessHooks = (
               lastResponse: String(retryResult.output ?? ""),
               reasoningResult: retryResult,
               ...absorbedLedgerMetadata(ctx.metadata, retryResult, "continuation"),
+              ...addedRunKernelTurns(ctx.metadata, retryResult),
             },
           };
         } else {

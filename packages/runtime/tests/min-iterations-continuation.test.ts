@@ -37,7 +37,9 @@ describe("withMinIterations continuation", () => {
       })
       .withReasoning({ defaultStrategy: "reactive" })
       .withRequiredTools({ adaptive: false })
-      .withMinIterations(2)
+      // Floor 3 kernel turns: the first pass uses 2 (tool, answer), so one
+      // continuation runs (2026-11-18: the floor counts turns, not passes).
+      .withMinIterations(3)
       .withMaxIterations(6)
       .build();
     try {

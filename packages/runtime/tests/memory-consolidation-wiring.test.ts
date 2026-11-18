@@ -35,9 +35,9 @@ import { defaultReactiveAgentsConfig } from "../src/types.js";
 // execution path. `memory-flush.ts`'s consolidation trigger sits behind the
 // SAME "non-trivial run" gate as the semantic-extraction Lever 7 gate
 // (`classifyComplexity` — trivial iff `iteration<=1 && toolCallCount===0`,
-// where `iteration` is `ReasoningResult.metadata.stepsCount`,
-// `reasoning-post-think.ts:214`). Two tool-call action/observation step
-// pairs (4 steps) plus a final thought push `stepsCount` to 5 — comfortably
+// where `iteration` is the run's kernel turns: `ReasoningResult.metadata.kernelIterations`
+// summed per pass, engine/run-kernel-turns.ts). The stub reports 5 turns
+// (one per step: two action/observation pairs plus a final thought) — comfortably
 // non-trivial and, since `toolCallLog.length` (tracked separately, from
 // real `ToolCallCompleted` events this bare stub doesn't emit) stays 0,
 // `iteration>3` also forces the SYNCHRONOUS "complex" dispatch path
@@ -70,7 +70,7 @@ function makeMockReasoning() {
         output: unknown;
         status: "completed" | "failed" | "partial";
         steps?: readonly { id: string; type: string; content: string; metadata?: Record<string, unknown> }[];
-        metadata: { cost: number; tokensUsed: number; stepsCount: number };
+        metadata: { cost: number; tokensUsed: number; stepsCount: number; kernelIterations: number };
       }>;
     }>("ReasoningService"),
     {
@@ -79,7 +79,9 @@ function makeMockReasoning() {
           output: "FINAL ANSWER: The answer is 4.",
           status: "completed" as const,
           steps,
-          metadata: { cost: 0.001, tokensUsed: 150, stepsCount: steps.length },
+          // The run's iteration is its kernel turns (engine/run-kernel-turns.ts),
+          // no longer stepsCount: report 5 turns to keep the run "complex".
+          metadata: { cost: 0.001, tokensUsed: 150, stepsCount: steps.length, kernelIterations: steps.length },
         }),
     },
   );

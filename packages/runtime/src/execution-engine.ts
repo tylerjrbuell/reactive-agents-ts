@@ -447,11 +447,11 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                     // ReasoningService that doesn't route through the kernel
                     // (see feature-contract.test.ts "act hook fires after
                     // reasoning when tools were used", which mocks the
-                    // service and depends on exactly this). For the real
-                    // kernel, act.ts ALSO fires its own act+observe pair per
-                    // individual tool round (finer-grained, per-call). Both
-                    // are real and intentional at different granularity —
-                    // not a duplicate to remove.
+                    // service and depends on exactly this). A kernel pass
+                    // fires act+observe itself once per tool turn, so the
+                    // post-think step skips this pair when the last pass ran
+                    // a kernel (run-kernel-turns.ts passRanKernel): one
+                    // owner per run, no phantom rows (2026-11-18).
                     fireActObserveHooks: (c) =>
                       Effect.gen(function* () {
                         let cc = yield* guardedPhase(c, "act", (cx) => Effect.succeed(cx));

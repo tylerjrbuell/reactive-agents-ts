@@ -165,7 +165,10 @@ export function assembleTaskResult(
         const switches = readStrategySwitches(ctx.metadata);
         return switches.length > 0 ? ({ strategySwitches: switches } as Record<string, unknown>) : {};
       })(),
-      stepsCount: ctx.metadata.stepsCount ?? ctx.iteration,
+      // Two counts, two units: `stepsCount` is reasoning steps (thought,
+      // action, observation each count); `iterations` is the run's kernel
+      // turns (engine/run-kernel-turns.ts). Neither falls back to the other.
+      stepsCount: ctx.metadata.stepsCount ?? 0,
       iterations: ctx.iteration,
       // Forward reasoning steps so chat() can access tool results and analysis.
       // Cast needed: reasoningSteps is an internal field not in the public TaskResult type.

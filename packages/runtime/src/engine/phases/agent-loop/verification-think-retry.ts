@@ -20,6 +20,7 @@ import type { MessageContent, Task } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { absorbedLedgerMetadata } from "../../run-ledger-scope.js";
+import { addedRunKernelTurns, passKernelTurns, readRunKernelTurns } from "../../run-kernel-turns.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
 import type { ObsLike, EbLike } from "../../runtime-context.js";
 import { extractTaskText, isEnforcedAbstention, normalizeReasoningResult } from "../../util.js";
@@ -150,9 +151,11 @@ export const runVerificationThinkRetry = (
             tokensUsed:
               c.tokensUsed + (norm.metadata.tokensUsed ?? 0),
             cost: c.cost + (norm.metadata.cost ?? 0),
-            iteration: c.iteration + 1,
+            // The retry's kernel turns add to the run's (run-kernel-turns.ts).
+            iteration: (readRunKernelTurns(c.metadata) ?? c.iteration) + passKernelTurns(norm),
             metadata: {
               ...c.metadata,
+              ...addedRunKernelTurns(c.metadata, norm),
               lastResponse: retryOutput,
               isComplete: norm.status === "completed",
               reasoningResult: norm,

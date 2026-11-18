@@ -149,19 +149,7 @@
     },
     {
       "_tag": "PhaseStarted",
-      "phase": "act"
-    },
-    {
-      "_tag": "PhaseCompleted",
-      "phase": "act"
-    },
-    {
-      "_tag": "PhaseStarted",
-      "phase": "observe"
-    },
-    {
-      "_tag": "PhaseCompleted",
-      "phase": "observe"
+      "phase": "complete"
     },
     {
       "_tag": "PhaseStarted",
@@ -169,15 +157,11 @@
     },
     {
       "_tag": "PhaseCompleted",
-      "phase": "memory-flush"
-    },
-    {
-      "_tag": "PhaseStarted",
       "phase": "complete"
     },
     {
       "_tag": "PhaseCompleted",
-      "phase": "complete"
+      "phase": "memory-flush"
     },
     {
       "_tag": "TrustEvent",

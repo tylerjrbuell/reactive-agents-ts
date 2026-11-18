@@ -8,7 +8,8 @@
  *     tools internally and the inline path's logEpisode never fires)
  *   - Record experience for cross-agent learning
  *   - Fire synthetic "act" + "observe" lifecycle hooks if reasoning used tools
- *   - Update iteration count from reasoning steps
+ *     and no kernel ran the pass (a kernel fires the real ones per turn)
+ *   - Set the run's iteration count to its kernel turns (run-kernel-turns.ts)
  *   - Semantic cache store (cache the final response keyed by task text)
  *
  * Extracted from `execution-engine.ts:1170-1353` (W23 step 6a-5) to shrink
@@ -29,6 +30,7 @@ import type { ObsLike } from "../../runtime-context.js";
 import { extractTaskText } from "../../util.js";
 import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 import { isPausedResult } from "../../finalize/run-finalize.js";
+import { passKernelTurns, passRanKernel, readRunKernelTurns } from "../../run-kernel-turns.js";
 
 export interface ReasoningPostThinkDeps {
   readonly config: ReactiveAgentsConfig;
@@ -40,7 +42,8 @@ export interface ReasoningPostThinkDeps {
    * wrapper. The body of each phase passes ctx through unchanged — the goal is
    * to trigger user-supplied lifecycle hooks (e.g. .withHook({ phase: "act" }))
    * with visibility into the synthesized tool calls. Caller is responsible for
-   * routing through the lifecycle-checked guardedPhase wrapper.
+   * routing through the lifecycle-checked guardedPhase wrapper. Called only
+   * when the last pass ran no kernel (`passRanKernel` is false).
    */
   readonly fireActObserveHooks: (ctx: ExecutionContext) => Effect.Effect<ExecutionContext, never>;
 }
@@ -206,13 +209,21 @@ export const runReasoningPostThink = (
       // EventBus events. MetricsCollector auto-subscribes to these events.
       // (Previously duplicated here via obs.recordHistogram — removed to fix double counting.)
 
-      ctx = yield* fireActObserveHooks(ctx);
+      // A kernel pass already fired act + observe once per tool turn
+      // (reasoning's act capability). Firing the coarse pair again here gave
+      // every kernel run a phantom act/observe after the kernel ended
+      // (2026-11-18). Fire it only when no kernel ran the last pass: a custom
+      // or mocked ReasoningService, whose only act/observe signal this is.
+      if (!passRanKernel(ctx.metadata.reasoningResult)) {
+        ctx = yield* fireActObserveHooks(ctx);
+      }
     }
 
-    // Update iteration to reflect actual reasoning steps
+    // The run's iteration count is its kernel turns over every pass so far
+    // (run-kernel-turns.ts), not the reasoning step count.
     ctx = {
       ...ctx,
-      iteration: ctx.metadata.stepsCount ?? 1,
+      iteration: readRunKernelTurns(ctx.metadata) ?? passKernelTurns(ctx.metadata.reasoningResult),
     };
 
     // ── Semantic cache store (after successful reasoning) ──

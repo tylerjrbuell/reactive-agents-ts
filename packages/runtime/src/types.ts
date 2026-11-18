@@ -260,7 +260,7 @@ export interface ExecutionContextMetadata {
       inputTokens?: number;
       /** Completion/output tokens (optional — see inputTokens). */
       outputTokens?: number;
-      stepsCount: number;
+      stepsCount: number; /** Kernel turns of this pass; absent when no kernel ran it (engine/run-kernel-turns.ts). */ kernelIterations?: number;
       duration?: number;
       strategyFallback?: boolean;
       confidence?: number;

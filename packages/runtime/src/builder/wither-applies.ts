@@ -125,10 +125,26 @@ export const applyMemoryOptions = (
 };
 
 /**
+ * Phases the reasoning kernel fires per turn through the harness pipeline
+ * (`runPhaseHooks` in reasoning's kernel loop and act capability). Every other
+ * lifecycle phase (bootstrap, guardrail, ..., complete) is fired once per run
+ * by the engine's `guardedPhase` from the lifecycle registry.
+ *
+ * The kernel also fires `bootstrap` and `complete` for compose-API hooks
+ * (killswitches abort there). A `.withHook()` hook mirrored onto those fired
+ * twice per run, and its `complete:after` ran before the engine's
+ * `complete:before` (2026-11-18). So `.withHook()` mirrors only the phases in
+ * this set: each phase has one firing owner.
+ */
+const KERNEL_FIRED_PHASES: ReadonlySet<string> = new Set(["think", "act", "observe"]);
+
+/**
  * Apply `.withHook(hook)` registration. Pushes the hook onto the builder's
- * lifecycle list AND mirrors it as a harness phase hook for compose-side
- * observability. Returns a callback to register the harness side (caller
- * invokes via `builder.withHarness(...)` to keep the chaining contract).
+ * lifecycle list (the engine fires it). For a kernel-fired phase (think, act,
+ * observe) it also returns a harness registration, so the kernel fires the
+ * hook once per turn. For every other phase it returns a no-op registration:
+ * the engine is the only owner. The caller passes the callback to
+ * `builder.withHarness(...)` to keep the chaining contract.
  */
 export const applyHookRegistration = (
   builder: ReactiveAgentBuilder,
@@ -137,6 +153,8 @@ export const applyHookRegistration = (
   h: import("@reactive-agents/core").Harness,
 ) => void) => {
   asState(builder)._hooks.push(hook);
+
+  if (!KERNEL_FIRED_PHASES.has(hook.phase)) return () => {};
 
   // Harness registration callback — caller passes to .withHarness(...).
   if (hook.timing === "on-error") {

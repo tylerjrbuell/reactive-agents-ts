@@ -203,8 +203,10 @@ export const emitTelemetryRunReport = (
           const skillsActiveCount = activeSkills.length;
           const learnedSkillsContribution = activeSkills.some(s => s.source === "learned");
 
-          // ctx.iteration starts at 1 and increments AFTER each loop, so N real iterations = ctx.iteration - 1
-          const realIterations = ctx.iteration - 1;
+          // ctx.iteration is the run's kernel turn count (engine/run-kernel-turns.ts),
+          // set after reasoning. Before 2026-11-18 it held the reasoning step count,
+          // and this site subtracted 1 from it.
+          const realIterations = ctx.iteration;
           const taskComplexity = deriveTaskComplexity(realIterations, toolCallLog.length, strategySwitched, contextPressurePeak);
           const failurePattern = deriveFailurePattern(outcome, terminatedByRaw, errorsFromLoop, contextPressurePeak);
 

@@ -202,15 +202,18 @@ describe("runtime verifier verdict stamp", () => {
     expect(kernelIterationOf([], 7)).toBe(7);
   });
 
-  it("(b) tool run: runtime verdict iter is below the inflated engine counter and matches the kernel verdict", async () => {
+  it("(b) tool run: runtime verdict iter equals the run's kernel turns and matches the kernel verdict", async () => {
     const { evs, result } = await stalledRun();
     const verdicts = evs.filter((e) => e.kind === "verifier-verdict");
     const rt = verdicts.find((e) => e.kind === "verifier-verdict" && e.source === "runtime");
     const kernel = verdicts.find((e) => e.kind === "verifier-verdict" && e.source === undefined);
     expect(rt).toBeDefined();
-    const engineIterations = (result.metadata as { iterations?: number }).iterations ?? 0;
-    // Vacuity guard: the engine counter really is inflated on this run (9 vs 3).
-    expect(engineIterations).toBeGreaterThan(rt!.iter);
+    const engineIterations = result.metadata.iterations ?? 0;
+    // Until 2026-11-18 the engine counter held the step count (9 vs 3 here),
+    // so this guard asserted it was inflated. It now reports the kernel's
+    // turns (engine/run-kernel-turns.ts): the same number the verdict stamps
+    // on this one-pass run.
+    expect(engineIterations).toBe(rt!.iter);
     expect(kernel?.iter === undefined || rt!.iter <= kernel.iter).toBe(true);
   }, 20000);
 

@@ -53,8 +53,18 @@ export interface AgentResultMetadata {
      * that finished the run.
      */
     readonly strategySwitches?: ReadonlyArray<StrategySwitchRecord>
-    /** Number of reasoning iterations/steps taken to complete the task. */
+    /**
+     * Number of reasoning steps the run recorded. Thought, action and
+     * observation each count, so this exceeds `iterations` on tool runs.
+     */
     readonly stepsCount: number
+    /**
+     * Iterations the run used: the kernel's model turns, summed over every
+     * reasoning pass (continuations and verification retries included). A
+     * pass with no kernel (a custom ReasoningService) counts as 1. Until
+     * 2026-11-18 this field held the reasoning step count.
+     */
+    readonly iterations?: number
     /** Confidence level of the result. */
     readonly confidence?: 'high' | 'medium' | 'low'
     /**

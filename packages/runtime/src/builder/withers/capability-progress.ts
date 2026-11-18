@@ -78,10 +78,15 @@ export const applyWithHealthCheck = (state: BuilderState, ) => {
 
 
 /**
- * Require at least N iterations before the agent can declare success.
- * Blocks the fast-path and hides the final-answer tool until the minimum
- * is reached. Only iterations that include at least one tool call count.
- * @param n - Minimum number of iterations required
+ * Require the run to use at least N iterations (kernel turns, the unit
+ * `result.metadata.iterations` reports). When the first pass answers in fewer
+ * turns, the engine runs continuation passes, each shown the previous answer,
+ * until the run's turn count reaches N or a continuation fails, returns no
+ * output or adds no turn. Turns of every pass count, with or without a tool call.
+ *
+ * Changed 2026-11-18: before, the floor ran N continuation passes no matter
+ * how many turns the first pass used.
+ * @param n - Minimum number of kernel turns the run must use
  * @returns `this` for chaining
  * Composable equivalent: the `.compose(...)` minimum-iteration
  *   killswitch variant.

@@ -57,6 +57,8 @@ const MockToolServiceLayer = Layer.succeed(
 function makeMockReasoningService(opts: {
   toolsUsed?: Array<{ name: string; result: string }>;
   stepsCount?: number;
+  /** Kernel turns the mocked pass reports (absent = no kernel ran it). */
+  kernelIterations?: number;
   output?: string;
 }) {
   const toolsUsed = opts.toolsUsed ?? [];
@@ -67,7 +69,7 @@ function makeMockReasoningService(opts: {
         output: unknown;
         status: string;
         steps?: readonly { id: string; type: string; content: string; metadata?: { toolUsed?: string } }[];
-        metadata: { cost: number; tokensUsed: number; stepsCount: number };
+        metadata: { cost: number; tokensUsed: number; stepsCount: number; kernelIterations?: number };
       }>;
     }>("ReasoningService"),
     {
@@ -92,6 +94,7 @@ function makeMockReasoningService(opts: {
               cost: 0.002,
               tokensUsed: 500,
               stepsCount,
+              ...(opts.kernelIterations !== undefined ? { kernelIterations: opts.kernelIterations } : {}),
             },
           }),
         );
@@ -586,11 +589,12 @@ describe("TaskResult shape contracts", () => {
 //
 // The tests' actual intent — "the iteration count reflects the amount of
 // real multi-step work the agent did, not a hardcoded 1" — DOES have a
-// kernel-arm equivalent: `reasoning-post-think.ts` sets
-// `ctx.iteration = ctx.metadata.stepsCount` after the pass completes, so a
-// multi-tool-call run's iteration count in the `complete` hook reflects the
-// reasoning service's real step count. Redesigned below to pin that contract
-// instead of the now-impossible per-round-trip think-hook-firing one.
+// kernel-arm equivalent: `reasoning-post-think.ts` sets `ctx.iteration` to
+// the run's kernel turns (`metadata.kernelIterations`, engine/run-kernel-turns.ts)
+// after the pass completes, so a multi-tool-call run's iteration count in the
+// `complete` hook reflects the turns the reasoning pass took. Until 2026-11-18
+// it was the step count. Redesigned below to pin that contract instead of the
+// now-impossible per-round-trip think-hook-firing one.
 describe("Multi-iteration contracts (kernel arm)", () => {
   it("think hook fires exactly once per task regardless of internal tool-use rounds", async () => {
     const thinkIterations: number[] = [];
@@ -621,7 +625,7 @@ describe("Multi-iteration contracts (kernel arm)", () => {
     expect(thinkIterations[0]).toBe(1);
   });
 
-  it("final iteration count reflects the reasoning pass's real step count, not a hardcoded 1", async () => {
+  const finalIterationFor = async (kernelIterations: number | undefined): Promise<number> => {
     let finalIteration = -1;
     const { engineLayer } = makeEngine({ maxIterations: 5 });
     // toolsUsed: 2 tools → stepsCount = 2*2+1 = 5 (thought + action/observation
@@ -631,6 +635,7 @@ describe("Multi-iteration contracts (kernel arm)", () => {
         { name: "web_search", result: "result 1" },
         { name: "web_search", result: "result 2" },
       ],
+      ...(kernelIterations !== undefined ? { kernelIterations } : {}),
     });
     const testLayer = Layer.mergeAll(engineLayer, reasoningLayer, MockToolServiceLayer);
 
@@ -645,9 +650,16 @@ describe("Multi-iteration contracts (kernel arm)", () => {
         yield* engine.execute(mockTask());
       }).pipe(Effect.provide(testLayer)),
     );
+    return finalIteration;
+  };
 
-    // Gutting the stepsCount → iteration wiring (reasoning-post-think.ts)
-    // would leave this at 1 → RED.
-    expect(finalIteration).toBe(5);
+  it("final iteration count is the pass's kernel turns, not its step count or a hardcoded 1", async () => {
+    // 3 kernel turns, 5 steps. Gutting the kernelIterations → iteration wiring
+    // (reasoning-post-think.ts) gives 1; the old stepsCount wiring gives 5.
+    expect(await finalIterationFor(3)).toBe(3);
+  });
+
+  it("a pass with no kernel (custom ReasoningService) counts as one iteration, not its step count", async () => {
+    expect(await finalIterationFor(undefined)).toBe(1);
   });
 });

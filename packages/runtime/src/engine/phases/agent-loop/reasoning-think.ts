@@ -26,6 +26,7 @@ import { readPlanFindings } from "../../../chat/plan-findings.js";
 import { readEnvironmentUpdate } from "../../../chat/environment-snapshot.js";
 
 import { RUN_LEDGER_METADATA_KEY, seedRunLedger } from "../../run-ledger-scope.js";
+import { addedRunKernelTurns } from "../../run-kernel-turns.js";
 import { DebriefStoreService, PlanStoreService } from "@reactive-agents/memory";
 import { resolveSynthesisConfigForStrategy } from "../../../synthesis-resolve.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../../../types.js";
@@ -509,6 +510,8 @@ export const runReasoningThink = (
         // run-scoped home each later pass would overwrite `reasoningResult` and
         // take this ledger with it.
         [RUN_LEDGER_METADATA_KEY]: seedRunLedger(result),
+        // The run's kernel turn count starts at this pass (run-kernel-turns.ts).
+        ...addedRunKernelTurns(c.metadata, result),
       },
     };
   }));
