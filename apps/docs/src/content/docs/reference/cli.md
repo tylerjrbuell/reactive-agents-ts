@@ -90,7 +90,15 @@ Run an agent with a prompt.
 ```bash
 rax run <prompt> [--provider anthropic|openai|gemini|groq|xai|ollama|litellm|test]
           [--model <model>] [--name <name>] [--tools] [--reasoning] [--stream] [--cortex]
+          [--verbose|-v] [--quiet]
 ```
+
+| Flag | Behavior |
+| --- | --- |
+| `--tools` | Enables the built-in tools (files, web, code), equivalent to `.withTools({ builtins: true })`. |
+| `--stream` | Streams tokens to the terminal and turns off the live status line. |
+| `--quiet` | Prints only the output and turns off the live status line. |
+| `--verbose`, `-v` | Shows phase-by-phase execution details, including when output is piped (not a TTY). |
 
 **`--cortex`:** Enables `.withCortex()` on the builder so run lifecycle events are sent to a local **Cortex** companion studio (WebSocket ingest). Cortex is available as a public npm package (`@reactive-agents/cortex`). For npm-installed CLI: `bun add @reactive-agents/cortex && rax cortex`. For repo contributors: `bun cortex` (runs from source with hot reload). Set `CORTEX_URL` to the HTTP base (default `http://127.0.0.1:4321`).
 

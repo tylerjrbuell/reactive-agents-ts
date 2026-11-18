@@ -145,7 +145,7 @@ for await (const event of stream) {
 | `xai` | `XAI_API_KEY` | `grok-4` |
 | `ollama` | _(none — local)_ | `qwen3:14b` |
 
-Ollama runs locally with no API key. The scaffolded `.env.example` reflects the correct variable for the chosen provider.
+Ollama runs locally with no API key. The scaffolded `.env.example` reflects the correct variable for the chosen provider. Run `cp .env.example .env`, then replace the `your-key-here` placeholder with your key. The generated project treats an unedited placeholder as a missing key: it prints one line and exits 1.
 
 ## Non-interactive (CI)
 

@@ -39,8 +39,11 @@ npm install reactive-agents
 **Set at least one provider key** in `.env` (or skip if you're going local).
 
 ```bash
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
+touch .env
+# then add one line with your real key, for example: ANTHROPIC_API_KEY=<your key>
 # or OPENAI_API_KEY, GOOGLE_API_KEY, GROQ_API_KEY, XAI_API_KEY, LITELLM_API_KEY
+# Scaffolded with `rax init`? Run `cp .env.example .env` and replace the
+# `your-key-here` placeholder instead (an unedited placeholder counts as a missing key).
 
 # No key? Run fully local with Ollama instead:
 ollama pull qwen3:4b

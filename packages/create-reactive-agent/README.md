@@ -36,6 +36,17 @@ npm create reactive-agent my-agent -- \
   --yes
 ```
 
+### Set your API key
+
+Cloud providers need a key. Copy the generated stub, then set the real value:
+
+```bash
+cd my-agent
+cp .env.example .env   # then set the provider key (for example ANTHROPIC_API_KEY) in .env
+```
+
+The stub holds a `your-key-here` placeholder. The generated project treats that placeholder as a missing key: it prints one line and exits 1 instead of sending it to the provider. Ollama needs no key.
+
 The same scaffold from code:
 
 ```ts

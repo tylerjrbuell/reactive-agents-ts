@@ -98,15 +98,25 @@ bun add reactive-agents
 
 ## 2. Set Up Environment
 
-Set at least one provider key. Pick whichever you have access to:
+Set at least one provider key. Pick whichever you have access to.
+
+If you scaffolded with `rax init`, copy the generated template and set your key:
 
 ```bash
-# Pick at least one
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env  # Recommended for first agent
-echo 'OPENAI_API_KEY=sk-...'        >> .env
-echo 'GOOGLE_API_KEY=...'           >> .env
-echo 'GROQ_API_KEY=gsk_...'         >> .env
-echo 'XAI_API_KEY=xai-...'          >> .env
+cp .env.example .env   # then replace `your-key-here` with your real key
+```
+
+The scaffold treats the `your-key-here` placeholder as a missing key: it prints one line and exits 1 instead of sending a bad key to the provider.
+
+If you set up manually, create `.env` and put one real key in it (replace each value below before you run the line):
+
+```bash
+# Pick at least one; replace the value with your real key
+echo 'ANTHROPIC_API_KEY=<your-anthropic-key>' > .env  # Recommended for first agent
+echo 'OPENAI_API_KEY=<your-openai-key>'       >> .env
+echo 'GOOGLE_API_KEY=<your-google-key>'       >> .env
+echo 'GROQ_API_KEY=<your-groq-key>'           >> .env
+echo 'XAI_API_KEY=<your-xai-key>'             >> .env
 
 # Or run fully local — no key needed
 ollama pull qwen3:4b

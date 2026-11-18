@@ -150,7 +150,7 @@ const builder = ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withReasoning()
-  .withTools();
+  .withTools({ builtins: true });
 
 const json = agentConfigToJSON(builder.toConfig());
 const restored = await ReactiveAgents.fromJSON(json);

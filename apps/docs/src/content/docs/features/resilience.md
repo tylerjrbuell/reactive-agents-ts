@@ -81,7 +81,7 @@ Tool execution results are cached to avoid redundant calls for identical inputs 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools() // Tool result caching is built-in
+  .withTools({ builtins: true }) // Tool result caching is built-in
   .build();
 ```
 
