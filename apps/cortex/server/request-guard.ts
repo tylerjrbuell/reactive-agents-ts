@@ -1,7 +1,7 @@
 /**
  * Host / Origin allowlist for `/api/*` and `/ws/*`.
  *
- * Cortex has no authentication; its loopback bind is the only wall. A DNS-rebinding page
+ * Without `CORTEX_TOKEN` (allowed only on loopback), the loopback bind is the only wall. A DNS-rebinding page
  * defeats that wall: the browser connects to 127.0.0.1 while the page believes it is talking
  * to `evil.example`. The attack carries that name in `Host` (and `Origin`), so a request
  * whose Host is not a name this server expects, or whose Origin is a foreign site, is

@@ -1,11 +1,11 @@
 /**
  * Which network interface the Cortex server binds.
  *
- * Cortex has no authentication, and its API can list directories
- * (`/api/workspace/browse`), read skill files and start agent runs. So it binds the
- * loopback interface by default: only this computer can reach it. Exposing it to the
- * network is an explicit opt-in: `CORTEX_HOST` (env) or `hostname` in the
- * `startCortexServer` config.
+ * Cortex's API can list directories (`/api/workspace/browse`), read skill files and start
+ * agent runs, and on loopback it asks for no token. So it binds the loopback interface by
+ * default: only this computer can reach it. Exposing it to the network is an explicit
+ * opt-in: `CORTEX_HOST` (env) or `hostname` in the `startCortexServer` config, and a
+ * non-loopback bind also requires `CORTEX_TOKEN` (`bindRefusal` in `request-guard.ts`).
  */
 
 /** The default bind address: loopback only. */

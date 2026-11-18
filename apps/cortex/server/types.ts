@@ -12,8 +12,10 @@ export type AgentId = string & { readonly _brand: "AgentId" };
 export interface CortexConfig {
   readonly port: number;
   /**
-   * Interface to bind. Unset: `CORTEX_HOST`, else `127.0.0.1` (this computer only;
-   * Cortex has no authentication). Set `0.0.0.0` to expose it to the network.
+   * Interface to bind. Unset: `CORTEX_HOST`, else `127.0.0.1` (this computer only; loopback
+   * needs no token). A non-loopback hostname such as `0.0.0.0` exposes Cortex to the network
+   * and requires an access token (`token` / `CORTEX_TOKEN`): without one the server refuses
+   * to start.
    */
   readonly hostname?: string;
   /**

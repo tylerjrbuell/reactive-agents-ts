@@ -283,7 +283,7 @@ export async function startCortexServer(
     });
 
   const displayUrl = cortexListenDisplayUrl(resolvedConfig.port);
-  // Loopback unless the caller opts in (listen-host.ts): the API has no authentication.
+  // Loopback unless the caller opts in (listen-host.ts); a non-loopback bind requires CORTEX_TOKEN (bindRefusal).
   const hostname = resolveCortexHostname(config.hostname, env.raw);
 
   // Bun’s default idleTimeout (~10s) drops connections that send no response bytes yet — e.g. long MCP
