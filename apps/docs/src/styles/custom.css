@@ -1682,8 +1682,14 @@ body {
    >= 4.5:1 on the page background; the violet already comes from the
    light-theme accent. */
 :root {
-    --ra-ind-new: var(--ra-violet);
-    --ra-ind-updated: var(--ra-cyan);
+    /* Marker dots: solid light neon green = new, solid light blue = updated.
+       Light-theme variants are a step deeper plus an edge (below) so the dot
+       stays visible on a white page. These are the only literals. */
+    --ra-marker-new: #4ade80;
+    --ra-marker-updated: #7dd3fc;
+    --ra-marker-edge: 0%;
+    --ra-ind-new: var(--ra-marker-new);
+    --ra-ind-updated: var(--ra-marker-updated);
     --ra-ind-experimental: var(--ra-violet);
     --ra-ind-unstable: var(--sl-color-orange);
     --ra-ind-deprecated: var(--sl-color-red);
@@ -1691,16 +1697,17 @@ body {
     --ra-ind-glow: 0.28;
 }
 [data-theme='light'] {
-    --ra-ind-new: var(--sl-color-accent);
-    --ra-ind-updated: color-mix(in srgb, var(--ra-cyan) 62%, var(--sl-color-white));
+    --ra-marker-new: #22e26b;
+    --ra-marker-updated: #38bdf8;
+    --ra-marker-edge: 35%;
     --ra-ind-experimental: var(--sl-color-accent);
     --ra-ind-glow: 0.2;
 }
 
 /* New/Updated icons. One shape language everywhere (sidebar link, TOC link,
-   page title, inline heading, hub rows, group roll-ups): filled violet dot
-   with a soft halo = new, cyan ring = updated. Shape differs as well as hue, so
-   the two never rely on colour alone. Authored markers only
+   page title, inline heading, hub rows, group roll-ups): solid light neon
+   green dot = new, solid light blue dot = updated, each with a thin edge and
+   soft halo (no hole). Authored markers only
    (wiki/Reference/Docs-Indicators.md); the toggle hides them via the
    data-ra-whats-new attribute on html. Alt text after `/` gives the pseudo
    icon an accessible name; `title` is the tooltip. */
@@ -1740,13 +1747,19 @@ a[data-ra-new-content='new']::before,
 .ra-marker-icon[data-ra-marker='new'],
 .sl-badge.ra-rollup-new {
     background: var(--ra-ind-new);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ra-ind-new) calc(var(--ra-ind-glow) * 100%), transparent);
+    border: 0;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--ra-ind-new), var(--sl-color-white) var(--ra-marker-edge)),
+        0 0 0 3px color-mix(in srgb, var(--ra-ind-new) calc(var(--ra-ind-glow) * 100%), transparent);
 }
 a[data-ra-new-content='updated']::before,
 .ra-marker-icon[data-ra-marker='updated'],
 .sl-badge.ra-rollup-updated {
-    background: transparent;
-    border: 2px solid var(--ra-ind-updated);
+    background: var(--ra-ind-updated);
+    border: 0;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--ra-ind-updated), var(--sl-color-white) var(--ra-marker-edge)),
+        0 0 0 3px color-mix(in srgb, var(--ra-ind-updated) calc(var(--ra-ind-glow) * 100%), transparent);
 }
 a:is(:hover, :focus-visible)[data-ra-new-content]::before,
 .ra-marker-icon:hover,

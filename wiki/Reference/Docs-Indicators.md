@@ -15,7 +15,7 @@ How the docs site shows "how stable is this" and "what is new". Everything is au
 |---|---|---|---|
 | Stability tag (`stable`, `unstable`, `experimental`, `deprecated`) | page frontmatter `stability:` | text badge: page title row; sidebar when not `stable` | never |
 | New in X (filled green dot) | frontmatter `since: "0.19"` | icon: after the page title, on the sidebar link | when X leaves the window |
-| Updated in X (blue ring) | frontmatter `updated: "0.19"` | icon: same places | when X leaves the window |
+| Updated in X (blue dot) | frontmatter `updated: "0.19"` | icon: same places | when X leaves the window |
 | Section marker | `<Since version="0.19" />` in a heading (`.mdx`) | same icon inline, and on the TOC link | when X leaves the window |
 
 Rules:
@@ -61,7 +61,7 @@ Only the "Last updated" date and commit hash on the title row, from one `git log
 
 ## v2 (2026-11-17): tokens, roll-ups, TOC, derived version
 
-- **Design tokens.** `--ra-ind-new` (violet), `--ra-ind-updated` (cyan, darkened in light mode by mixing toward `--sl-color-white`), `--ra-ind-experimental`, `--ra-ind-unstable` (Starlight orange), `--ra-ind-deprecated` (Starlight red) in `custom.css`. No literal colours below the token block (a test pins it). New = filled dot with halo, Updated = ring, so shape carries the meaning as well as hue.
+- **Design tokens.** `--ra-marker-new` (light neon green) and `--ra-marker-updated` (light blue), each with a deeper light-theme value and `--ra-marker-edge` (a thin edge mixed toward `--sl-color-white`, 0% in dark) feeding `--ra-ind-new` / `--ra-ind-updated`, `--ra-ind-experimental`, `--ra-ind-unstable` (Starlight orange), `--ra-ind-deprecated` (Starlight red) in `custom.css`. No literal colours below the token block (a test pins it). New and Updated are both solid dots (no ring/hole); hue (green vs blue) and the tooltip/accessible name carry the meaning.
 - **Sidebar is compact.** Stability is a trailing glyph (flask = experimental, warning triangle = unstable, struck circle = deprecated) drawn by CSS mask from `data-ra-stability`; the tooltip and accessible name say "Experimental". The sidebar never gets a text pill: the row is a flex line, indicator slots `flex: none`, label `min-width: 0`, wraps at word boundaries. The full-text `StabilityBadge` stays on the page title only.
 - **Roll-ups.** A sidebar group shows a dot/ring when a descendant page is new/updated (its badge text, "5 new or updated in 0.19: A, B, ...", is the accessible name and tooltip). A page counts as marked when its frontmatter marker is in the window or any `<Since>` heading is.
 - **Hub rows.** Router tables, link lists and link cards decorate the primary link of each row with the same icon; the tooltip names the sections ("Updated in 0.19: Ollama Cloud, Images, Audio and Files"). Data: `#ra-marker-index` JSON from `route-middleware.ts`, applied by `NewContentMarkers.astro`.
