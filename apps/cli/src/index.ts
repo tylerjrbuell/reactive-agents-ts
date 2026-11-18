@@ -1,6 +1,6 @@
 import { psCommand } from "./commands/ps.js";
 import { attachCommand } from "./commands/attach.js";
-import { runInit } from "./commands/init.js";
+import { runInit, DEFAULT_TEMPLATE } from "./commands/init.js";
 import { runCreateAgent } from "./commands/create-agent.js";
 import { runDev } from "./commands/dev.js";
 import { runEval } from "./commands/eval.js";
@@ -18,6 +18,7 @@ import { runTrace } from "./commands/trace.js";
 import { runSkills } from "./commands/skills.js";
 import { runDiagnose } from "./commands/diagnose.js";
 import { runMcp } from "./commands/mcp.js";
+import { listTemplates } from "create-reactive-agent";
 import { printBanner, printVersion, VERSION } from "./banner.js";
 import { fail, info } from "./ui.js";
 
@@ -25,7 +26,8 @@ const HELP = `
   Usage: rax <command> [options]
 
   Commands:
-    init <name> [--template minimal|standard|full]   Scaffold a new project
+    init <name> [--template <template>]               Scaffold a new project (default template: ${DEFAULT_TEMPLATE})
+                  templates: ${listTemplates().map((t) => t.name).join(", ")}
     create agent <name> [--recipe basic|...]          Generate an agent file
     run <prompt> [--provider ...] [options]           Run an agent (see --help on usage error)
     cortex [--port <n>] [--no-open] [--help]          Cortex companion studio (requires @reactive-agents/cortex)

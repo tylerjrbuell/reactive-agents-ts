@@ -22,7 +22,8 @@ ${section("Usage")}
 ${section("Options")}
   --port <n>     API listen port (default: ${DEFAULT_PORT}, or env CORTEX_PORT)
   --host <addr>  Listen address (default 127.0.0.1, or env CORTEX_HOST).
-                 Anything else exposes Cortex, which has no auth, to the network
+                 Any other address requires CORTEX_TOKEN (Cortex refuses to start
+                 without it): Cortex can run code and read files
   --no-open      Do not open a browser on start (or set CORTEX_NO_OPEN=1)
   -h, --help     Show this help
 
@@ -33,6 +34,7 @@ ${section("Install")}
 ${section("Environment")}
   CORTEX_PORT       Server port (default ${DEFAULT_PORT})
   CORTEX_HOST       Listen address (default 127.0.0.1)
+  CORTEX_TOKEN      Access token; required when --host is not loopback
   CORTEX_NO_OPEN    Set to 1 to skip opening the browser
   CORTEX_URL        Base URL agents use to reach ingest
 `.trimEnd());
@@ -128,8 +130,8 @@ export async function runCortexCli(argv: readonly string[]): Promise<void> {
     console.error(info("Install it:"));
     console.error(info("  bun add @reactive-agents/cortex"));
     console.error();
-    console.error(info("Or run from source repo:"));
-    console.error(info("  bun cortex"));
+    console.error(info("Or, from a reactive-agents source checkout:"));
+    console.error(info("  bun run cortex"));
     process.exit(1);
   }
 

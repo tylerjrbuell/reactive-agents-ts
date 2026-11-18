@@ -16,7 +16,7 @@ import { banner, fail, info, kv, section, success } from "../ui.js";
  * same default. No compat aliases for the old `standard`/`full` names: rax
  * init is pre-1.0 and a second name-mapping surface would re-fork the truth.
  */
-const DEFAULT_TEMPLATE: TemplateName = "minimal";
+export const DEFAULT_TEMPLATE: TemplateName = "minimal";
 
 function validTemplateNames(): readonly string[] {
   return listTemplates().map((t) => t.name);

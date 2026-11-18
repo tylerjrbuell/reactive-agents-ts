@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { ReactiveAgents, ReactiveAgent } from "@reactive-agents/runtime";
 import { resolve } from "path";
+import { listTemplates } from "create-reactive-agent";
 
 const CLI_ENTRY = resolve(import.meta.dir, "../src/index.ts");
 
@@ -103,5 +104,19 @@ describe("CLI Run Command — Agent Integration", () => {
     const r = await runCli(["run"]);
     expect(r.code).not.toBe(0);
     expect(r.out + r.err).toContain("--cortex");
+  }, TEST_TIMEOUT_MS);
+
+  it("run usage points npm users to `rax cortex`, not the contributor `bun cortex`", async () => {
+    const r = await runCli(["run"]);
+    expect(r.out + r.err).toContain("rax cortex");
+    expect(r.out + r.err).not.toContain("bun cortex");
+  }, TEST_TIMEOUT_MS);
+
+  it("main help lists exactly the scaffolder's init templates", async () => {
+    const r = await runCli(["help"]);
+    expectExitZero(r);
+    const line = r.out.split("\n").find((l) => l.trim().startsWith("templates:"));
+    expect(line?.trim()).toBe(`templates: ${listTemplates().map((t) => t.name).join(", ")}`);
+    expect(r.out).not.toContain("minimal|standard|full");
   }, TEST_TIMEOUT_MS);
 });
