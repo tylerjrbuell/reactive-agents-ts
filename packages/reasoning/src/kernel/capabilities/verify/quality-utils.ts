@@ -29,6 +29,9 @@ export function isSatisfied(text: string): boolean {
 const FUTURE_ACTION_SENTENCE =
   /^(?:(?:and|so|now|next|then),?\s+)*(?:i\s+will|i['’]ll|i\s+shall|i\s+am\s+going\s+to|i['’]m\s+going\s+to|let\s+me)\s+(?:(?:now|then|next|first),?\s+)?(?:go\s+ahead\s+and\s+)?(?:re-?)?(?:process|format|update|provide|present|compile|generate|prepare|summari[sz]e|produce|organi[sz]e|put|deliver|display|show|output|give|return|finali[sz]e|complete|create|write|build|construct|assemble|analy[sz]e|calculate|compute|combine|merge|record|add|save|check|read|continue|proceed|gather|fetch|retrieve|search|run|execute)\b[^:]*$/i;
 
+/** A first-person "still need X" sentence: the model says an input is missing. */
+const UNMET_NEED_SENTENCE = /^(?:(?:and|so|but|however),?\s+)*i\s+still\s+(?:need|require|have\s+to\s+(?:read|get|fetch|check))\b/i;
+
 /**
  * A sentence asking the user's permission to go on with the task ("Would you
  * like me to proceed with fixing the bugs in the remaining modules?"). The
@@ -133,7 +136,11 @@ export function detectContinuationIntent(text: string): {
     trimmed.split(/\n/).filter((l) => /^\s*\|.+\|\s*$/.test(l)).length >= 2 ||
     trimmed.split(/\n/).filter((l) => /^\s*(?:[-*]|\d+[.)])\s+\S/.test(l)).length >= 2;
   const lastSentence = finalSentenceOf(lastLine);
-  const futureActionSentence = !deliveredStructure && FUTURE_ACTION_SENTENCE.test(lastSentence);
+  // Fifth shape (ablation 2026-11-18, gemma4:e4b on a tool-less turn): the
+  // reply reports an unmet need ("The count from a.json is 412. I still need
+  // the content of b.json."): not a delivered result.
+  const futureActionSentence =
+    !deliveredStructure && (FUTURE_ACTION_SENTENCE.test(lastSentence) || UNMET_NEED_SENTENCE.test(lastSentence));
 
   if (futureActionSentence || isIntentOnlyOutput(trimmed) || TERMINAL_INTENT.some((p) => p.test(lastLine))) {
     return {

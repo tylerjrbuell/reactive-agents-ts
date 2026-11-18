@@ -16,6 +16,9 @@
  *  - that tool work is settled ({@link toolWorkSettled}, shared with the budget
  *    answer turn): validated tool evidence, no blocking contract item, no
  *    requested action undone;
+ *  - every file the task names was touched by a tool ({@link unreadNamedInputs});
+ *    a satisfied `tool-coverage` alone is not evidence the task is answerable
+ *    (ablation 2026-11-18: one of two files read, tool-less partial reply ended the run);
  *  - no lean turn was taken since the last tool call (`leanFinalTurnAtActions`).
  *
  * Such a call ships with NO tools (the same withhold as the exit gate's answer
@@ -37,6 +40,7 @@ import type { RequirementKind } from "../../contract/run-contract.js";
 import { isPlanPosture } from "../../policy/run-posture.js";
 import { toolWorkSettled } from "../../loop/budget-answer-turn.js";
 import { guidanceForAnswerTurn } from "./answer-turn.js";
+import { deriveDeliverablePaths } from "../verify/derive-conditions.js";
 
 // Interface merging keeps kernel-state.ts (LOC-pinned) untouched.
 declare module "../../state/kernel-state.js" {
@@ -62,6 +66,28 @@ const TOOL_WORK_KINDS: ReadonlySet<RequirementKind> = new Set<RequirementKind>([
   "write-coverage",
 ]);
 
+const FILE_TOKEN = /(?:^|[\s"'`(,])((?:\.{0,2}\/)?[\w-]+(?:[/.][\w-]+)*\.[A-Za-z][A-Za-z0-9]{0,4})(?=$|[\s"'`),;:!?]|\.(?:\s|$))/g;
+
+/**
+ * Files the task names that no tool call has touched yet. A file the task asks
+ * to WRITE is a deliverable (the contract tracks it), not an input to read.
+ * Deterministic. A satisfied `tool-coverage` ("file-read ran once") does not
+ * mean every named input was read: ablation 2026-11-18 (h3-exact-value) read
+ * a.json only, went tool-less, and the partial reply ended the run.
+ */
+export function unreadNamedInputs(task: string, steps: readonly { readonly type: string; readonly content: string }[]): readonly string[] {
+  const written = new Set(deriveDeliverablePaths(task).map((p) => p.replace(/^\.\//, "")));
+  const touched = steps.filter((s) => s.type === "action" || s.type === "observation").map((s) => s.content);
+  const out = new Set<string>();
+  for (const m of task.matchAll(FILE_TOKEN)) {
+    const path = (m[1] ?? "").replace(/^\.\//, "");
+    if (path.length === 0 || written.has(path)) continue;
+    const base = path.split("/").pop() ?? path;
+    if (!touched.some((c) => c.includes(base))) out.add(path);
+  }
+  return [...out];
+}
+
 /** The deterministic facts {@link shouldTakeLeanFinalTurn} decides from. */
 export interface LeanFinalTurnFacts {
   readonly enabled: boolean;
@@ -69,6 +95,8 @@ export interface LeanFinalTurnFacts {
   readonly planPosture: boolean;
   readonly declaresToolWork: boolean;
   readonly toolWorkSettled: boolean;
+  /** Every file the task names has been read (or is a write target). */
+  readonly inputsRead: boolean;
   readonly actions: number;
   readonly takenAtActions: number | undefined;
 }
@@ -81,6 +109,7 @@ export function shouldTakeLeanFinalTurn(t: LeanFinalTurnFacts): boolean {
     !t.planPosture &&
     t.declaresToolWork &&
     t.toolWorkSettled &&
+    t.inputsRead &&
     t.takenAtActions !== t.actions
   );
 }
@@ -123,6 +152,7 @@ export function decideLeanFinalTurn(args: {
       planPosture: false,
       declaresToolWork: (state.meta.runContract?.requirements ?? []).some((r) => TOOL_WORK_KINDS.has(r.kind)),
       toolWorkSettled: toolWorkSettled(state, input) !== undefined,
+      inputsRead: unreadNamedInputs(input.task, state.steps).length === 0,
       actions,
       takenAtActions: state.meta.leanFinalTurnAtActions,
     });

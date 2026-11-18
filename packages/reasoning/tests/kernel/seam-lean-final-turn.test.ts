@@ -22,6 +22,7 @@ import {
   LEAN_FINAL_TURN_GUARD,
   LEAN_FINAL_TURN_HINT,
   shouldTakeLeanFinalTurn,
+  unreadNamedInputs,
   type LeanFinalTurnFacts,
 } from "../../src/kernel/capabilities/reason/lean-final-turn.js";
 import { resolveHarnessConfig, type HarnessConfig } from "../../src/harness-config.js";
@@ -42,6 +43,7 @@ const BASE: LeanFinalTurnFacts = {
   planPosture: false,
   declaresToolWork: true,
   toolWorkSettled: true,
+  inputsRead: true,
   actions: 1,
   takenAtActions: undefined,
 };
@@ -60,6 +62,19 @@ describe("lean final turn: when a call is lean (pure)", () => {
   it("an answer-only contract, or tool work still open: not lean", () => {
     expect(shouldTakeLeanFinalTurn({ ...BASE, declaresToolWork: false })).toBe(false);
     expect(shouldTakeLeanFinalTurn({ ...BASE, toolWorkSettled: false })).toBe(false);
+  });
+
+  it("a named input still unread: not lean", () => {
+    expect(shouldTakeLeanFinalTurn({ ...BASE, inputsRead: false })).toBe(false);
+  });
+
+  it("unreadNamedInputs: names the files no tool touched; write targets are not inputs", () => {
+    const task = "Read a.json and b.json and add the counts.";
+    const step = (type: string, content: string) => ({ type, content });
+    expect(unreadNamedInputs(task, [])).toEqual(["a.json", "b.json"]);
+    expect(unreadNamedInputs(task, [step("action", '{"path":"./a.json"}')])).toEqual(["b.json"]);
+    expect(unreadNamedInputs(task, [step("action", "a.json"), step("observation", "b.json: 3")])).toEqual([]);
+    expect(unreadNamedInputs("Write the summary to ./out.md.", [])).toEqual([]);
   });
 
   it("once per batch of tool work: not again until another tool call", () => {
@@ -113,7 +128,7 @@ const BUDGET = {
 async function run(
   harness: HarnessConfig,
   turns: readonly TestTurn[],
-  opts: { readonly requiredTools?: readonly string[] } = {},
+  opts: { readonly requiredTools?: readonly string[]; readonly task?: string } = {},
 ) {
   const model = scriptedModel(turns);
   const executed: unknown[] = [];
@@ -130,7 +145,7 @@ async function run(
         : Effect.void,
     );
     return yield* executeReactive({
-      taskDescription: TASK,
+      taskDescription: opts.task ?? TASK,
       taskType: "research",
       memoryContext: "",
       availableTools: ["gather"],
@@ -186,6 +201,45 @@ describe("end to end: the answer-only turn ships lean", () => {
     const { requests, fired } = await run({ leanFinalTurn: true }, GATHER_THEN_ANSWER, { requiredTools: [] });
     expect(requests.every((r) => (r.tools?.length ?? 0) > 0)).toBe(true);
     expect(fired).toHaveLength(0);
+  }, 20000);
+
+  const TWO_FILES = "Use the gather tool to read a.json and b.json, then add the two counts and tell me the total.";
+
+  it("on: one of two named files read: the next turn keeps its tools, the partial reply does not end the run", async () => {
+    // Exact-value shape: one call satisfies the contract's tool-coverage, b.json is unread.
+    const { requests, fired, result } = await run({ leanFinalTurn: true }, [
+      { toolCall: { id: "g1", name: "gather", args: { q: "a.json" } } },
+      { text: "The count from a.json is 412. I still need the content of b.json." },
+      { toolCall: { id: "g2", name: "gather", args: { q: "b.json" } } },
+      { text: "The total is 412 plus 7, which is 419." },
+    ], { task: TWO_FILES });
+    expect(requests[1]!.tools?.length ?? 0).toBeGreaterThan(0); // b.json unread: no lean turn
+    expect(fired).toHaveLength(0);
+    expect(requests.length).toBeGreaterThanOrEqual(3); // the partial reply did not end the run
+    expect(String(result.output ?? "")).not.toBe("The count from a.json is 412. I still need the content of b.json.");
+  }, 20000);
+
+  it("on: both named files read: the lean turn still fires (happy path)", async () => {
+    const { requests, fired, result } = await run({ leanFinalTurn: true }, [
+      { toolCall: { id: "g1", name: "gather", args: { q: "a.json" } } },
+      { toolCall: { id: "g2", name: "gather", args: { q: "b.json" } } },
+      { text: "The total is 412 plus 7, which is 419." },
+    ], { task: TWO_FILES });
+    expect(fired).toHaveLength(1);
+    expect(requests[requests.length - 1]!.tools ?? []).toHaveLength(0);
+    expect(String(result.output ?? "")).toContain("419");
+  }, 20000);
+
+  it("on: a tool-less reply that says it still needs input is not accepted as final; tools return", async () => {
+    // Inputs look read to the harness (named only in prose), so the lean turn fires; the reply reports a gap.
+    const { requests } = await run({ leanFinalTurn: true }, [
+      { toolCall: { id: "g1", name: "gather", args: { q: "sales" } } },
+      { text: "The north is up 14%. I still need the west figures." },
+      { text: ANSWER },
+    ]);
+    expect(requests.length).toBeGreaterThanOrEqual(3);
+    expect(requests[1]!.tools ?? []).toHaveLength(0);
+    expect(requests[2]!.tools?.length ?? 0).toBeGreaterThan(0);
   }, 20000);
 
   it("on: a lean reply that is not the answer gets its tools back, and no second lean turn without a new tool call", async () => {
