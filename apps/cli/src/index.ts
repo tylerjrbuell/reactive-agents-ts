@@ -1,3 +1,6 @@
+// Must stay the first import: it runs before any framework package loads
+// (Node version floor, quiet node:sqlite notice). tsup keeps it external.
+import "./node-preflight.js";
 import { psCommand } from "./commands/ps.js";
 import { attachCommand } from "./commands/attach.js";
 import { runInit, DEFAULT_TEMPLATE } from "./commands/init.js";
@@ -21,6 +24,7 @@ import { runMcp } from "./commands/mcp.js";
 import { listTemplates } from "create-reactive-agent";
 import { printBanner, printVersion, VERSION } from "./banner.js";
 import { fail, info } from "./ui.js";
+import { isEntrypoint } from "./runtime.js";
 
 const HELP = `
   Usage: rax <command> [options]
@@ -192,7 +196,8 @@ export function main(argv: string[] = process.argv.slice(2)) {
   }
 }
 
-// Run if invoked directly
-if (import.meta.main) {
+// Run if invoked directly (works on Node 22.5+, where import.meta.main is
+// absent before 24.2, and through npm's node_modules/.bin symlink).
+if (isEntrypoint(import.meta.url, import.meta.main)) {
   main();
 }

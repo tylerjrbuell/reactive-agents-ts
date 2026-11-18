@@ -1,4 +1,6 @@
 // File: apps/cli/src/commands/bench.ts
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { info } from "../ui.js";
 
 export async function runBench(argv: string[]) {
@@ -63,7 +65,9 @@ export async function runBench(argv: string[]) {
   }
 
   if (output) {
-    await Bun.write(output, JSON.stringify(report, null, 2));
+    // Bun.write created parent dirs; keep that on Node.
+    await mkdir(dirname(output), { recursive: true });
+    await writeFile(output, JSON.stringify(report, null, 2));
     console.log(info(`Report saved to ${output}`));
   }
 }

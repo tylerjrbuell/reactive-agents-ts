@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test --reporter=dots"
   },
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

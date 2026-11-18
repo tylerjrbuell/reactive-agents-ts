@@ -1,6 +1,7 @@
 // File: apps/cli/src/commands/cortex.ts
 // rax cortex — lazy-loads @reactive-agents/cortex (optional peer dep).
 import { banner, fail, info, kv, section } from "../ui.js";
+import { ensureBunRuntime } from "../runtime.js";
 
 const DEFAULT_PORT = 4321;
 
@@ -102,6 +103,10 @@ export async function runCortexCli(argv: readonly string[]): Promise<void> {
     printCortexHelp();
     return;
   }
+
+  // The Cortex server is built on Bun (Bun.serve, bun:sqlite). On Node this
+  // re-runs the command under Bun when installed, else prints one line.
+  ensureBunRuntime("cortex", "the Cortex server runs on Bun");
 
   const port =
     parsed.port ?? parseInt(process.env.CORTEX_PORT ?? String(DEFAULT_PORT), 10);

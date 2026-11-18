@@ -6,6 +6,7 @@
 // statically-imported workspace package — but benchmarks is private.
 type GateVerdict = import("@reactive-agents/benchmarks").GateVerdict;
 type LiftPolicy = import("@reactive-agents/benchmarks").LiftPolicy;
+import { readFile } from "node:fs/promises";
 import { fail, info } from "../ui.js";
 
 const GATE_USAGE =
@@ -74,7 +75,7 @@ export async function runEvalGate(args: string[]): Promise<void> {
 
   let reportText: string;
   try {
-    reportText = await Bun.file(reportPath).text();
+    reportText = await readFile(reportPath, "utf8");
   } catch {
     console.error(fail(`Cannot read report file: ${reportPath}`));
     process.exit(1);

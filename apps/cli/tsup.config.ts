@@ -1,14 +1,18 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  // node-preflight is its own file and external to index: an ESM bundle
+  // evaluates imported files in order, so it runs before runtime-shim loads.
+  entry: ["src/index.ts", "src/node-preflight.ts"],
   format: ["esm"],
-  dts: true,
+  dts: { entry: "src/index.ts" },
   clean: true,
   splitting: false,
   sourcemap: true,
-  banner: { js: "#!/usr/bin/env bun" },
+  // Node shebang: rax runs on Node.js 22.5+ and on Bun (`bun dist/index.js`).
+  banner: { js: "#!/usr/bin/env node" },
   external: [
+    "./node-preflight.js",
     "effect",
     "@reactive-agents/core",
     "@reactive-agents/runtime",

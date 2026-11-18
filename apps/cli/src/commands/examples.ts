@@ -1,4 +1,5 @@
 import { section, kv, muted, fail, info, hint } from '../ui.js'
+import { ensureBunRuntime } from '../runtime.js'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -17,16 +18,8 @@ const EXAMPLES_DIR = EXAMPLES_DIR_CANDIDATES.find((dir) => existsSync(join(dir, 
   ?? EXAMPLES_DIR_CANDIDATES[0]!
 const DEMOS_DIR = join(EXAMPLES_DIR, 'src/demos')
 
-/**
- * Resolve the JS runtime capable of running a demo .ts file.
- * Under Bun, process.execPath is the absolute bun binary (no PATH lookup).
- * Otherwise fall back to a `bun` on PATH.
- */
-function resolveDemoRuntime(): string {
-  const versions = (process as unknown as { versions?: Record<string, string> }).versions
-  if (typeof versions?.bun === 'string') return process.execPath
-  return 'bun'
-}
+/** Why `suite` and `demo` call ensureBunRuntime: they run .ts sources directly. */
+const NEEDS_BUN_REASON = 'it runs the TypeScript example sources directly'
 
 const MINDS_MODES = ['scripted', 'judgment', 'llm'] as const
 type MindsMode = (typeof MINDS_MODES)[number]
@@ -186,6 +179,7 @@ export async function runExamples(args: string[]): Promise<void> {
         console.error(info('The published CLI does not ship apps/examples. Run from a repo checkout, or: bun run apps/examples/index.ts --offline'))
         process.exit(1)
       }
+      ensureBunRuntime('examples suite', NEEDS_BUN_REASON)
       console.log(info(`Running example suite from ${EXAMPLES_DIR}`))
       console.log()
       // Import the examples module and call its runExamples function
@@ -232,6 +226,7 @@ export async function runExamples(args: string[]): Promise<void> {
         console.error(fail('--minds is only supported for the island-sim demo'))
         process.exit(1)
       }
+      ensureBunRuntime('examples demo', NEEDS_BUN_REASON)
       // An explicit --minds wins over ambient env; otherwise inherit env untouched.
       const mindsEnv: Record<string, string> = !mindsExplicit ? {} : {
         ISLAND_SIM_JUDGMENT: minds === 'judgment' ? '1' : '0',
@@ -242,10 +237,10 @@ export async function runExamples(args: string[]): Promise<void> {
       if (demo.name === 'island-sim') console.log(kv('Minds', mindsExplicit ? minds : 'scripted (default)'))
       console.log()
 
-      // Spawn via node:child_process so this works under both Bun and Node.
-      // Use the absolute bun binary when running under Bun to avoid PATH lookup
-      // failures; a missing cwd previously surfaced as `posix_spawn 'bun'` ENOENT.
-      const runtime = resolveDemoRuntime()
+      // ensureBunRuntime above guarantees we are on Bun, so process.execPath
+      // is the absolute bun binary (no PATH lookup; a missing cwd previously
+      // surfaced as `posix_spawn 'bun'` ENOENT).
+      const runtime = process.execPath
       const fullArgs = ['run', demoPath, ...demoArgs]
       const cwd = existsSync(DEMOS_DIR) ? DEMOS_DIR : process.cwd()
       return new Promise<void>((resolvePromise, reject) => {

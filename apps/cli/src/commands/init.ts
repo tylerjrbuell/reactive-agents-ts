@@ -8,6 +8,7 @@ import {
   type TemplateName,
 } from "create-reactive-agent";
 import { banner, fail, info, kv, section, success } from "../ui.js";
+import { detectPackageManager } from "../runtime.js";
 
 /**
  * The engine's non-interactive default template (mirrors
@@ -74,11 +75,8 @@ export function detectProviderFromEnv(
   return "ollama";
 }
 
-/** Infer the package manager: bun when running under Bun, else npm (matches
- * the engine CLI's defaults; rax init has no pnpm/yarn launch path). */
-export function detectPackageManager(): PackageManager {
-  return typeof Bun !== "undefined" ? "bun" : "npm";
-}
+/** Package-manager detection lives in runtime.ts (shared with `rax demo`). */
+export { detectPackageManager };
 
 export interface CreateProjectInput {
   readonly projectName: string;

@@ -18,7 +18,7 @@ bunx @reactive-agents/cli --help
 # or: npx @reactive-agents/cli --help
 ```
 
-The `rax` binary runs on Bun, so Bun must be on your `PATH` even when you install it with npm. See [Runtime](#runtime).
+`rax` runs on Node.js 22.5+ or Bun, so `npx` works without Bun installed. See [Runtime](#runtime).
 
 ## Usage
 
@@ -49,9 +49,9 @@ Every command prints its options with `--help`, for example `rax run --help`.
 | `rax create agent <name> [--recipe basic\|researcher\|coder\|orchestrator]` | Generate an agent file in your project. |
 | `rax run <prompt> [--provider <name>] [--model <id>] [--tools] [--reasoning] [--stream] [--cortex]` | Run an agent once and print the result. Providers: `anthropic` (default), `openai`, `ollama`, `gemini`, `litellm`, `groq`, `xai`, `test`. |
 | `rax playground [--provider <name>] [--stream] [--memory]` | Interactive agent REPL. Uses the `test` provider by default. |
-| `rax dev [--entry <path>] [--no-watch]` | Run your agent entrypoint in watch mode. |
+| `rax dev [--entry <path>] [--no-watch]` | Run your agent entrypoint in watch mode, with Bun when installed, else with the project's `tsx`. |
 | `rax serve [--port <n>] [--name <name>]` | Serve an agent over A2A. |
-| `rax cortex [--port <n>] [--no-open]` | Launch the Cortex studio. Needs `@reactive-agents/cortex` installed. Pair it with `rax run ... --cortex`. |
+| `rax cortex [--port <n>] [--no-open]` | Launch the Cortex studio. Needs Bun and `@reactive-agents/cortex` installed. Pair it with `rax run ... --cortex`. |
 | `rax eval run --suite <name>` | Run an evaluation suite. |
 | `rax trace inspect <path>`, `rax trace compare <a> <b>` | Read or compare JSONL trace files. |
 | `rax diagnose <sub>` | Inspect recorded runs (for example `list`, `replay`, `grep`, `diff`, `debrief`). |
@@ -68,7 +68,16 @@ Every command prints its options with `--help`, for example `rax run --help`.
 
 ## Runtime
 
-The `rax` binary needs Bun >= 1.1.0 on your `PATH` (its entry is `#!/usr/bin/env bun`). Projects it scaffolds run on Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+The `rax` binary runs on Node.js 22.5+ (its entry is `#!/usr/bin/env node`) or on Bun >= 1.1.0. Bun honors the Node shebang, so pass `--bun` to force the Bun runtime: `bunx --bun rax ...` or `bun run --bun rax ...`. On a machine with Bun but no Node, use one of these forms. Projects it scaffolds run on either; Bun is recommended.
+
+On Node, `rax init` and `rax demo` print npm commands (or the package manager that launched `rax`). A few commands need Bun itself. On Node they re-run under Bun when `bun` is on your `PATH`, and otherwise print a one-line "needs Bun" message:
+
+- `rax cortex`: the Cortex server runs on Bun.
+- `rax examples suite` and `rax examples demo`: they run the TypeScript example sources directly (repo checkout only).
+
+`rax dev` uses Bun when it is installed and otherwise runs your entry with the project's `tsx`, which the npm, pnpm and yarn scaffolds already include.
+
+Node.js 22.5 to 22.12 gate `node:sqlite` behind `--experimental-sqlite`; without it, SQLite-backed features (memory, for example) fall back to a no-op store that persists nothing. Use Node.js 22.13+ or Bun for those.
 
 ## License
 

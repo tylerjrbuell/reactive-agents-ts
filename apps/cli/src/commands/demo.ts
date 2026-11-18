@@ -12,6 +12,7 @@ import {
     metricsSummary,
 } from '../ui.js'
 import { demoResponses, DEMO_TASK } from './demo-responses.js'
+import { detectPackageManager, installCommand } from '../runtime.js'
 
 // ── Hacker News tool — self-contained, no API key required ─────────────────
 // Live demo proof: the agent fetches the current HN front page (live data,
@@ -366,7 +367,7 @@ export async function runDemo(_argv: string[]): Promise<void> {
     console.log()
     console.log(chalk.hex(VIOLET).bold('🚀 Liked what you saw?'))
     console.log()
-    console.log(kv('Install', chalk.hex(CYAN)('bun add reactive-agents')))
+    console.log(kv('Install', chalk.hex(CYAN)(installCommand(detectPackageManager(), 'reactive-agents'))))
     console.log(kv('Scaffold', chalk.hex(CYAN)('rax init my-agent')))
     console.log(kv('Docs', muted('https://docs.reactiveagents.dev/')))
     console.log(
