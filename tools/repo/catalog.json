@@ -5,7 +5,7 @@
       "id": "scripts/mem-watch.sh",
       "path": "scripts/mem-watch.sh",
       "kind": "ops",
-      "summary": "Read-only memory snapshot: MemAvailable, RAM-backed temp usage, top RSS processes, ollama ps; --watch to loop",
+      "summary": "Read-only snapshot: free RAM, tmpfs use, top RSS, ollama ps; --watch loops",
       "invoke": "bash scripts/mem-watch.sh [--watch]"
     },
     {
