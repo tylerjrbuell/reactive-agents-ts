@@ -74,18 +74,19 @@ function build(onTool: (name: string) => void) {
     .withMetaTools(false) // only our two tools, for a clean story
     .withMaxIterations(8)
     .withDurableRuns({ dir: DIR, checkpointEvery: 1 })
+    // A per-turn `think` hook sees the kernel state at the start of each turn,
+    // including the tool calls (action steps) of the turn before.
     .withHook({
-      phase: "act",
-      timing: "after",
+      phase: "think",
+      timing: "before",
       handler: (ctx) => {
-        const results = ctx.toolResults ?? [];
-        for (let i = narrated; i < results.length; i++) {
-          const e = results[i] as { toolName?: string; name?: string };
-          const n = e.toolName ?? e.name ?? "tool";
-          if (TOOL_HINTS[n]) onTool(n); // only our real tools, not the final-answer step
+        if ("metadata" in ctx) return; // engine firing, not a kernel turn
+        const calls = ctx.state.steps.filter((s) => s.type === "action");
+        for (const s of calls.slice(narrated)) {
+          const used = s.metadata?.toolUsed;
+          if (typeof used === "string" && TOOL_HINTS[used]) onTool(used); // only our real tools, not the final-answer step
         }
-        narrated = results.length;
-        return ctx;
+        narrated = calls.length;
       },
     })
     .build();

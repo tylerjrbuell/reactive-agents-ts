@@ -131,18 +131,20 @@ async function runAgent(label: string, provider: string, model: string, tint: st
       // Narrate each tool call live (via the captured realOut, so it shows in
       // the recording even though framework logs are silenced) — this is the
       // story: the agent calling tools and correlating, not just a final blob.
+      // A per-turn `think` hook sees the kernel state at the start of each
+      // turn, including the tool calls (action steps) of the turn before.
       .withHook({
-        phase: "act",
-        timing: "after",
+        phase: "think",
+        timing: "before",
         handler: (ctx) => {
-          const results = ctx.toolResults ?? [];
-          for (let i = narrated; i < results.length; i++) {
-            const e = results[i] as { toolName?: string; name?: string };
-            const n = e.toolName ?? e.name ?? "tool";
+          if ("metadata" in ctx) return; // engine firing, not a kernel turn
+          const calls = ctx.state.steps.filter((s) => s.type === "action");
+          for (const s of calls.slice(narrated)) {
+            const used = s.metadata?.toolUsed;
+            const n = typeof used === "string" ? used : "tool";
             line(`  ${c.cyan}→ ${n}${c.reset}  ${c.gray}${TOOL_HINTS[n] ?? ""}${c.reset}`);
           }
-          narrated = results.length;
-          return ctx;
+          narrated = calls.length;
         },
       })
       .build();

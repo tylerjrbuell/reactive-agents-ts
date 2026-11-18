@@ -2,7 +2,8 @@
  * Example 02: Lifecycle Hooks
  *
  * Demonstrates the ExecutionEngine's lifecycle hook system:
- * - Register before/after hooks on specific phases
+ * - Register before/after hooks on engine phases (full ExecutionContext)
+ * - Register a per-turn `think` hook that sees each kernel turn's iteration and state
  * - Observe the agent loop's internal execution flow
  * - Modify execution context via hooks
  *
@@ -15,7 +16,13 @@
 
 import { Effect } from "effect";
 import { ReactiveAgents } from "reactive-agents";
-import type { LifecycleHook, ExecutionContext } from "reactive-agents";
+import type {
+  EngineLifecycleHook,
+  EngineLifecyclePhase,
+  ExecutionContext,
+  KernelTurnLifecycleHook,
+  LifecycleHook,
+} from "reactive-agents";
 
 export interface ExampleResult {
   passed: boolean;
@@ -38,26 +45,51 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
   const phaseTimings: Array<{ phase: string; timing: string; timestamp: number }> = [];
 
-  const logPhaseHook = (
-    phase: string,
-    timing: "before" | "after",
-  ): LifecycleHook => ({
-    phase: phase as any,
+  const recordEnginePhase = (phase: string, timing: "before" | "after", ctx: ExecutionContext): void => {
+    const elapsed = Date.now() - ctx.startedAt.getTime();
+    phaseTimings.push({ phase, timing, timestamp: elapsed });
+    console.log(`  [${timing.toUpperCase().padEnd(6)}] Phase: ${phase.padEnd(16)} (${elapsed}ms)`);
+  };
+
+  // Engine phases fire once per run with the full ExecutionContext
+  // (startedAt, metadata, toolResults, ...). Returning the context passes it
+  // down the phase chain unchanged.
+  const enginePhaseHook = (phase: EngineLifecyclePhase, timing: "before" | "after"): EngineLifecycleHook => ({
+    phase,
     timing,
-    handler: (ctx: ExecutionContext) => {
-      const elapsed = Date.now() - ctx.startedAt.getTime();
-      phaseTimings.push({ phase, timing, timestamp: elapsed });
-      console.log(`  [${timing.toUpperCase().padEnd(6)}] Phase: ${phase.padEnd(16)} (${elapsed}ms)`);
+    handler: (ctx) => {
+      recordEnginePhase(phase, timing, ctx);
       return Effect.succeed(ctx);
     },
   });
 
-  // Track all major phases
-  const phases = ["bootstrap", "strategy-select", "think", "memory-flush", "complete"] as const;
-  const hooks = phases.flatMap((phase) => [
-    logPhaseHook(phase, "before"),
-    logPhaseHook(phase, "after"),
-  ]);
+  // `think`, `act` and `observe` are per-turn phases: the reasoning kernel
+  // fires them once per kernel turn with { phase, iteration, state }, and the
+  // engine may also fire them with an ExecutionContext. Narrow with
+  // `"metadata" in ctx` before reading engine-only fields.
+  const thinkHook = (timing: "before" | "after"): KernelTurnLifecycleHook => ({
+    phase: "think",
+    timing,
+    handler: (ctx) => {
+      if ("metadata" in ctx) {
+        recordEnginePhase("think", timing, ctx);
+        return;
+      }
+      // Kernel firing: report each turn once, as it starts.
+      if (timing === "before") {
+        console.log(
+          `      turn ${ctx.iteration}: ${ctx.state.steps.length} steps, ${ctx.state.tokens} tokens so far`,
+        );
+      }
+    },
+  });
+
+  const enginePhases = ["bootstrap", "strategy-select", "memory-flush", "complete"] as const;
+  const hooks: LifecycleHook[] = [
+    ...enginePhases.flatMap((phase) => [enginePhaseHook(phase, "before"), enginePhaseHook(phase, "after")]),
+    thinkHook("before"),
+    thinkHook("after"),
+  ];
 
   // ─── Build the agent with hooks ───
 
