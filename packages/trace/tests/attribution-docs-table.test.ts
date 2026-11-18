@@ -7,13 +7,13 @@ import { CAUSE_ATTRIBUTION, TURN_LEVEL_REASONS } from "../src/taxonomy.js";
 // list every turn-level attribution reason, in rule order, and nothing else; the
 // "(failure cause)" row must name every reason CAUSE_ATTRIBUTION maps to.
 
-const CLI_DOC = resolve(import.meta.dir, "../../../apps/docs/src/content/docs/reference/cli.md");
+const CLI_DOC = resolve(import.meta.dir, "../../../apps/docs/src/content/docs/reference/cli/diagnose.md");
 
 /** Rows of the table that follows "Reasons, first match wins:", as [first cell, second cell]. */
 function reasonsTable(): readonly (readonly [string, string])[] {
   const lines = readFileSync(CLI_DOC, "utf8").split("\n");
   const start = lines.findIndex((l) => l.includes("Reasons, first match wins:"));
-  if (start < 0) throw new Error("cli.md: no 'Reasons, first match wins:' table");
+  if (start < 0) throw new Error("cli/diagnose.md: no 'Reasons, first match wins:' table");
   const rows: (readonly [string, string])[] = [];
   for (const line of lines.slice(start + 1)) {
     if (line.trim() === "" && rows.length > 0) break;
@@ -36,7 +36,7 @@ const reasonsIn = (cell: string): ReadonlySet<string> => {
   return out;
 };
 
-describe("cli.md attribution Reasons table", () => {
+describe("cli/diagnose.md attribution Reasons table", () => {
   const rows = reasonsTable();
   const named = rows.flatMap(([c]) => {
     const m = /^`([^`]+)`$/.exec(c);
