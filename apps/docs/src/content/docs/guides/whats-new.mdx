@@ -68,6 +68,10 @@ Other changes you may notice with no code change:
 - **The harness no longer writes the answer for an unfinished run.** The "handoff synthesis" LLM call is removed. A run that wrote a draft ends `partial` with an `Unfinished:` list; a run that never answered ends `failed` with `Outstanding: …` on `error`.
 - **Unknown token counts are absent, not 0.** `TokenUsage.inputTokens` and `outputTokens` are optional, and a run result omits a half the provider did not report. Gemini thinking tokens now count in `outputTokens`, so Gemini thinking-model totals and cost rise to the honest figure.
 - **Anthropic `completeStructured()` enforces the schema** by forcing one tool call whose `input_schema` is your schema (calls with extended thinking keep the prompt path).
+- **Judgment auto-shadow is opt-in.** Before, any `build()` that could reach Ollama silently wired a `nimble` judge and wrote `~/.reactive-agents/judgment-shadow.db`. Opt in with `.withJudgment({ shadow: true })` or `REACTIVE_AGENTS_AUTO_SHADOW=1`. See [Judgment layer](/features/judgment-layer/).
+- **Off a terminal, warnings and errors go to stderr.** Stdout carries only the answer.
+- **`ToolBuilder` handlers that return an Effect now produce its value as the tool result.** Before, the observation was the `Effect` or `Exit` object. See [Custom tools](/guides/tools/custom-tools/).
+- **The facade exports the `ProviderName` type.**
 
 ### Upgrading from 0.18
 
@@ -77,6 +81,7 @@ Each line keeps the 0.18 behavior or adapts code to the new shape.
 - Calibration: `.withCalibration("auto", { learned: true, community: true })`.
 - Log lines off a terminal: `.withObservability({ verbosity: "normal" })`. Builder notices are on stderr now.
 - To-do wrap-up turn: `RA_TODO_WRAPUP=1`.
+- Judgment shadow (the old auto-wired `nimble` judge): `.withJudgment({ shadow: true })` or `REACTIVE_AGENTS_AUTO_SHADOW=1`.
 - Failed runs: read `result.error` and switch on `result.outcome`; handle `"abstained"` wherever you switch on a status.
 - Token counts: treat `inputTokens` and `outputTokens` as possibly `undefined`.
 - Git and GitHub writes: `.withTools({ terminal: true, builtins: ["git"] })` instead of `gh-cli` / `git-cli`.
