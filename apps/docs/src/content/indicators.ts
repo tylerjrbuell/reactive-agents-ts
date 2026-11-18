@@ -150,6 +150,18 @@ export function upcomingRelease(current: MinorVersion): MinorVersion {
   return { major: current.major, minor: current.minor + 1 };
 }
 
+/**
+ * True when the What's New page's top `## vX.Y.Z` heading may stand at the
+ * `current` release: it is the current minor (any patch), or the next minor
+ * being prepared on `dev` before its tag (VERSION is stamped at tag time).
+ * A heading behind `current`, or more than one minor ahead, is drift.
+ */
+export function isPublishableTopRelease(version: string, current: MinorVersion): boolean {
+  const v = parseMinor(version);
+  if (!v) return false;
+  return ordinal(v) === ordinal(current) || ordinal(v) === ordinal(upcomingRelease(current));
+}
+
 /** True when `version` falls inside the marker window ending at the upcoming minor. */
 export function isInWindow(version: string, current: MinorVersion, span: number = WINDOW_MINORS): boolean {
   const v = parseMinor(version);
@@ -265,6 +277,9 @@ export function releaseStructureTags(
       const rel = h.text.match(/^v(\d+\.\d+)\.\d+\b/)?.[1];
       if (/^unreleased\b/i.test(h.text)) section = { kind: "new", version: formatMinor(upcomingRelease(current)) };
       else if (rel && formatMinor(parseMinor(rel)!) === formatMinor(current)) section = { kind: "new", version: formatMinor(current) };
+      // The release being prepared (heading written before its tag) is new in that minor.
+      else if (rel && formatMinor(parseMinor(rel)!) === formatMinor(upcomingRelease(current)))
+        section = { kind: "new", version: formatMinor(upcomingRelease(current)) };
       else section = undefined;
     }
     return section;

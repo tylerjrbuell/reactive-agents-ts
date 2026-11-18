@@ -10,6 +10,7 @@ import {
   formatMinor,
   indicatorsFor,
   isInWindow,
+  isPublishableTopRelease,
   markerLabel,
   pagePathFromDocId,
   parseMinor,
@@ -179,7 +180,24 @@ describe("single release constant", () => {
     const page = readFileSync(join(import.meta.dir, "docs/guides/whats-new.mdx"), "utf8");
     const top = page.match(/^## v(\d+\.\d+\.\d+)\b/m)?.[1];
     expect(top).toBeDefined();
-    expect(formatMinor(parseMinor(top!)!)).toBe(formatMinor(CURRENT_RELEASE));
+    // The current minor, or the next one written before its tag stamps VERSION.
+    expect(isPublishableTopRelease(top!, CURRENT_RELEASE)).toBe(true);
+  });
+
+  it("top release heading: current or next minor passes; behind or two ahead fails", () => {
+    const current = at("0.18.0");
+    expect(isPublishableTopRelease("0.18.0", current)).toBe(true);
+    expect(isPublishableTopRelease("0.18.3", current)).toBe(true);
+    expect(isPublishableTopRelease("0.19.0", current)).toBe(true);
+    expect(isPublishableTopRelease("0.17.0", current)).toBe(false);
+    expect(isPublishableTopRelease("0.20.0", current)).toBe(false);
+    expect(isPublishableTopRelease("1.19.0", current)).toBe(false);
+    expect(isPublishableTopRelease("not-a-version", current)).toBe(false);
+  });
+
+  it("a top heading for the release being prepared is marked new in that minor", () => {
+    const tags = releaseStructureTags(extractHeadings(["## v0.19.0 - Next", "### A", "## v0.18.0 - Now", "### B"].join("\n")), at("0.18.0"));
+    expect(tags.map((t) => t && `${t.kind}:${t.version}`)).toEqual(["new:0.19", "new:0.19", "new:0.18", "new:0.18"]);
   });
 
   it("is derived (env > tag > VERSION), never a package manifest", () => {

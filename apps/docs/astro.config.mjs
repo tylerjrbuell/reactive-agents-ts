@@ -523,7 +523,8 @@ export default defineConfig({
                             label: "What's New",
                             collapsed: true,
                             items: [
-                                { label: 'Latest and Unreleased', link: 'guides/whats-new/' },
+                                { label: 'Latest', link: 'guides/whats-new/' },
+                                { label: 'v0.18', link: 'guides/whats-new/v0-18/' },
                                 { label: 'v0.17', link: 'guides/whats-new/v0-17/' },
                                 { label: 'v0.15 and v0.16', link: 'guides/whats-new/v0-15-to-v0-16/' },
                                 { label: 'v0.13 and v0.14', link: 'guides/whats-new/v0-13-to-v0-14/' },

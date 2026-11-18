@@ -15,13 +15,40 @@ import metrics from '../../../data/metrics.json';
 Get release highlights as an RSS feed: [`/rss.xml`](/rss.xml). Drop into NetNewsWire, Inoreader, or any feed reader.
 </Aside>
 
-A quick-scan guide to what has landed in each release. Start here when returning after time away: this page carries the unreleased changes and the current minor, and older releases are archived by minor version below. Each bullet links to the relevant documentation.
+A quick-scan guide to what has landed in each release. Start here when returning after time away: this page carries the current minor, and older releases are archived by minor version below. Each bullet links to the relevant documentation.
 
 ---
 
-## Unreleased (next minor)
+## v0.19.0 - Opt-in defaults, honest outcomes, and channel routing (November 2026)
 
-Not tagged yet. These are on `dev` and may still change before release.
+This release makes an agent quiet and private unless you ask otherwise, makes every finished run say plainly how it ended, routes messaging channels to any agent, and lets any durable run be stopped and continued. Read the defaults first: several change an existing agent with no code change.
+
+### New defaults and breaking changes
+
+<Aside type="caution" title="New default: anonymous run telemetry is opt-in">
+An agent with no telemetry setting sends no run report, creates no install id and prints no telemetry notice. Opt in with `.withReactiveIntelligence({ telemetry: true })` or `REACTIVE_AGENTS_TELEMETRY=1`. An explicit `telemetry: false` beats the env opt-in, and `DO_NOT_TRACK=1` or `REACTIVE_AGENTS_TELEMETRY=0` turn it off even over an explicit `true`. See [Telemetry](/telemetry/).
+</Aside>
+
+<Aside type="caution" title="New default: learned and community calibration are opt-in">
+With `calibration: "auto"` (the default when reasoning is on), a run uses only the calibration shipped for its model. Before, both extra tiers were on with no option set. Opt in with `.withCalibration("auto", { learned: true, community: true })`:
+
+- `learned`: once a model has 5 recorded runs on this machine, what those runs observed (parallel tool calls, tool-classifier reliability, act-or-answer forcing) overrides the shipped assumptions. This helps most for models with no shipped calibration. Runs are still recorded locally while it is off, so turning it on later uses the history you already have. Nothing is uploaded.
+- `community`: one GET request per model to the community profile endpoint, cached on disk for 24 hours. `DO_NOT_TRACK=1` blocks it.
+
+See [Model Calibration](/features/llm-providers/#model-calibration) for what a calibration changes.
+</Aside>
+
+<Aside type="caution" title="New default: quiet output when stdout is not a terminal">
+With no `verbosity` set, a terminal keeps the `"normal"` live log lines. A server, pipe, CI job or embedding app now gets only warnings and errors: no phase narration, span list or metrics dashboard. Piped runs and any `verbosity: "minimal"` run print the answer alone: the `✓ Provider: … | Model: …` line after `build()` is skipped and the live status line stays off. Builder notices (for example `withTools: unknown option …`) are one `⚠ <message>` line on stderr instead of logfmt on stdout. An explicit `verbosity` always wins, and EventBus events and traces are unchanged. See [Observability](/features/observability/).
+</Aside>
+
+<Aside type="caution" title="Breaking: a failed run's output is empty">
+The harness no longer writes text into `output`. A failed run ships `output: ""` (or the model's own last text when the kernel kept it), and the cause is on `result.error`, followed by `What was attempted: N tool call(s) attempted (…), M succeeded.` when recorded. A failed chat turn is recorded as failed, not as an answer. Every finished run now carries `result.outcome`: `"success" | "partial" | "failed" | "abstained"`. `ReasoningStatus` gains `"abstained"`. A run a person stops is an honest `partial` with the answer so far, not a success. Code that showed `output` for failed runs should show `error`. See [AgentResult](/reference/builder-api/agent-result/).
+</Aside>
+
+<Aside type="caution" title="Breaking: gh-cli, git-cli and gws-cli are removed">
+A shell scoped to named programs replaces them. `.withTools({ builtins: ["git"] })` registers a `shell-execute` that runs only `git` and `gh`, and only read-only subcommands (`status`, `log`, `diff`, `fetch`, `gh pr list`, GET `gh api`, ...). Writes such as `commit` and `push` need the full terminal, which asks for approval: `.withTools({ terminal: true, builtins: ["git"] })`. The old names `"gh-cli"` and `"git-cli"` resolve to the scoped shell with a deprecation notice. `"gws-cli"` selects no tool; allow the program on the terminal instead (`.withTools({ terminal: { additionalCommands: ["gws"] } })`). `"all"` no longer grants git or gh. The scoped shell passes git only your `user.name` and `user.email`, so credential helpers from your git config no longer apply. See [Git and GitHub CLIs](/guides/tools/built-in-tools/#git-and-github-clis).
+</Aside>
 
 <Aside type="caution" title="Breaking: channels reject unknown senders by default">
 A gateway with no `accessControl` now denies every inbound channel sender (Telegram, Signal, webhook-channel) instead of letting them drive the agent. The deny reason names the sender (`telegram:123`) and how to allow it, and the gateway logs a warning at start. Set `accessControl.allowedSenders`, or keep the old behavior with an explicit opt-in: `accessControl: { accessPolicy: "open" }`. An `accessControl` block with no `accessPolicy` still defaults to `allowlist`. See [Messaging Channels](/guides/messaging-channels/) and [Gateway](/features/gateway/).
@@ -33,6 +60,33 @@ A gateway with no `accessControl` now denies every inbound channel sender (Teleg
 `rax deploy --target cloudrun` now requires IAM authentication by default. Pass `--allow-unauthenticated` to make the service public; the agent API has no auth of its own. See [`rax deploy`](/reference/cli/#rax-deploy).
 </Aside>
 
+Other changes you may notice with no code change:
+
+- **Chat takes the tool loop when the agent has tools.** `agent.chat()` and `session.chat()` run the kernel whenever the agent has a capability tool (custom, MCP, sub-agent, terminal, opted-in built-in or documents), instead of guessing from the message wording. `.withToolIntent("message")` restores the old wording heuristic; a per-call `{ useTools }` still wins. See [Chat and sessions](/cookbook/chat-and-sessions/).
+- **Small tool sets are visible from turn 1.** When the permitted tool set has 15 or fewer tools, every tool is shown on the first turn instead of being narrowed by keyword relevance. Such agents send more schema tokens per turn; larger sets are unchanged. See [Disclosure](/guides/tools/scoping-and-policy/#disclosure-how-permitted-tools-are-shown).
+- **The to-do wrap-up turn is opt-in.** With `RA_TODO_WRAPUP=1`, if the model answers with open `todo` items, the harness holds the answer for one turn and names them. Off by default because it costs a model call that no ablation has measured. See [Tools](/guides/tools/built-in-tools/).
+- **The harness no longer writes the answer for an unfinished run.** The "handoff synthesis" LLM call is removed. A run that wrote a draft ends `partial` with an `Unfinished:` list; a run that never answered ends `failed` with `Outstanding: …` on `error`.
+- **Unknown token counts are absent, not 0.** `TokenUsage.inputTokens` and `outputTokens` are optional, and a run result omits a half the provider did not report. Gemini thinking tokens now count in `outputTokens`, so Gemini thinking-model totals and cost rise to the honest figure.
+- **Anthropic `completeStructured()` enforces the schema** by forcing one tool call whose `input_schema` is your schema (calls with extended thinking keep the prompt path).
+
+### Upgrading from 0.18
+
+Each line keeps the 0.18 behavior or adapts code to the new shape.
+
+- Telemetry: `.withReactiveIntelligence({ telemetry: true })` or `REACTIVE_AGENTS_TELEMETRY=1`.
+- Calibration: `.withCalibration("auto", { learned: true, community: true })`.
+- Log lines off a terminal: `.withObservability({ verbosity: "normal" })`. Builder notices are on stderr now.
+- To-do wrap-up turn: `RA_TODO_WRAPUP=1`.
+- Failed runs: read `result.error` and switch on `result.outcome`; handle `"abstained"` wherever you switch on a status.
+- Token counts: treat `inputTokens` and `outputTokens` as possibly `undefined`.
+- Git and GitHub writes: `.withTools({ terminal: true, builtins: ["git"] })` instead of `gh-cli` / `git-cli`.
+- Chat wording heuristic: `.withToolIntent("message")`.
+- Open channels: `accessControl: { accessPolicy: "open" }`, and prefix every sender (`signal:+1555…`, `telegram:123…`).
+- Public Cloud Run service: `rax deploy --target cloudrun --allow-unauthenticated`.
+- SDK server clients: send `Authorization: Bearer <RAX_API_KEY>`.
+- Cortex off loopback: set `CORTEX_TOKEN`.
+- OTel spans you collect yourself: read `parentSpanContext?.spanId` instead of `parentSpanId`.
+
 ### Framework
 
 - **Multimodal input.** `run()`, `runStream()` and `chat()` take `TaskInput` (a string or image, audio and file parts). Unsupported parts fail with a typed `UnsupportedModalityError`; others degrade to a visible placeholder. See [Multimodal Input](/guides/multimodal/).
@@ -43,18 +97,39 @@ A gateway with no `accessControl` now denies every inbound channel sender (Teleg
 - **`MemoryRecalled` event and `"guardrail"` abort reason.** Recalled memories are visible on the bus; a guardrail-blocked run aborts with `reason: "guardrail"`. See [Memory](/guides/memory/) and [Guardrails](/guides/guardrails/).
 - **JSON Schema `outputSchema` and structured output reports.** See [Typed Structured Output](/guides/structured-output/).
 - **Eval rubric graders.** A case can carry a judgment `rubric`; a grader that cannot decide grades `inconclusive`, never a pass. See [Eval](/features/eval/).
-- **To-do wrap-up turn (opt-in).** With `RA_TODO_WRAPUP=1`, if the model answers with open `todo` items, the harness holds the answer for one turn and names them. Off by default because it costs a model call. See [Tools](/guides/tools/).
-- **Anonymous run telemetry is now opt-in.** An agent with no telemetry setting sends nothing, creates no install id and prints no notice. Opt in with `.withReactiveIntelligence({ telemetry: true })` or `REACTIVE_AGENTS_TELEMETRY=1`; `DO_NOT_TRACK=1` always wins. See [Telemetry](/telemetry/).
-- **Learned and community calibration are opt-in.** Only the shipped per-model calibration applies by default. Opt in to learning from your own recorded runs and to the community profile fetch with `.withCalibration("auto", { learned: true, community: true })`; runs still record observations locally. `DO_NOT_TRACK=1` blocks the community request. See [Model Calibration](/features/llm-providers/#model-calibration).
-- **Runs are quiet when stdout is not a terminal.** With no `verbosity` set, a terminal keeps `"normal"`; a server, pipe, CI job or embedding app prints only warnings and errors. An explicit `verbosity` always wins, and EventBus events and traces are unchanged. See [Observability](/features/observability/).
 - **Durable run retention.** `.withDurableRuns({ retention })` bounds the run store: by default the newest 50 `completed` runs within 30 days are kept, with older checkpoints compacted. Resumable runs are never pruned. See [Durable Execution](/guides/durable-execution/#retention).
 - **Verifier advisories are labelled as advisory.** A warn-only verdict logs "Advisory check on the model's answer (answer kept)" instead of reading as a rejection.
-- **`@reactive-agents/observe` moves to OpenTelemetry 2.x** (`@opentelemetry/sdk-trace-*` `^2.6`), matching `@reactive-agents/observability`. See [OpenTelemetry Tracing](/features/observe/).
+- **`@reactive-agents/observe` moves to OpenTelemetry 2.x** (`@opentelemetry/sdk-trace-*` `^2.6`), matching `@reactive-agents/observability`. A clean install resolves one copy of each OTel package. See [OpenTelemetry Tracing](/features/observe/).
+
+### Plans, stops and resumes
+
+- **Plan then execute as a primitive.** `agent.plan(input)` returns a typed `Plan`; `agent.execute(plan)` and `agent.run(input, { plan })` run it and report each step's status on `result.plan`. Chat sessions have a `"plan"` or `"execute"` mode (`agent.session({ mode: "plan" })`). Plans export to Markdown, JSON and HTML. Plan recon (`.withHarness({ planRecon: true })`, default off) lets the plan turn call read-only tools. See [Plan then execute](/guides/plan-then-execute/).
+- **Continue any durable run.** `agent.resumeRun(runId, { note?, extraIterations? })` continues a run that a user stopped or paused, an error, a spent budget, a timeout, a loop guard or a crash ended. New `agent.pauseRun(runId)` and `agent.stopRun(runId)`. See [Durable Execution](/guides/durable-execution/#stop-pause-and-continue-any-run).
+- **`agent.stop()` takes effect within about 100 ms**, even inside a long reasoning loop or an in-flight model call.
+- **Approvals without durable runs.** `.withApprovalPolicy({ mode: "detach" })` no longer needs `.withDurableRuns()`: a gated call waits in process until `approveRun` or `denyRun`, and `runStream()` emits `ApprovalRequested` on the same stream. `request_user_input` takes several typed questions in one call. See [Durable HITL](/guides/durable-hitl/#live-approval-no-durable-store).
+- **Approval rules for shell commands.** `.withApprovalPolicy({ commands: ["git push"] })` gates by command, not only by tool. Tools can declare a deterministic `preflight`, and the gate asks it first, so a command the shell would refuse anyway is refused without an approval prompt. See [Shell command rules](/guides/durable-hitl/#shell-command-rules).
+
+### Agents, tools and providers
+
+- **`agent.memory()`** lists, searches, edits and deletes what an agent stored; semantic and procedural rows record the `taskId` and `runId` that wrote them. See [Memory](/guides/memory/).
+- **Stored skills evolve.** Used skills are promoted by confidence, regressions roll back only on evidence, and `agent.rollbackSkill(name)` and `agent.setSkillMode(name, mode)` give manual control. See [Agent Skills](/guides/agent-skills/).
+- **Config as code.** `agentConfigToSource(config)` prints the `ReactiveAgents.create()…build()` source for an `AgentConfig`, with secrets left out, and `toConfig()` now keeps thinking, skills, meta-tools, sub-agents, documents, calibration and more. See [Configuration](/reference/configuration/).
+- **Read-only tools are declared.** `defineTool({ mutatesExternalState: false })` and MCP `readOnly` mark a tool read-only; `toolEffect()` resolves `"read" | "write" | "unknown"`. Channel senders and plan recon use it. See [Custom Tools](/guides/tools/custom-tools/).
+- **Per-agent web search keys.** `.withTools({ webSearch: { apiKeys, providers } })` sets keys and provider order for one agent; explicit keys win over the environment. See [Web Search Configuration](/guides/tools/built-in-tools/#web-search-configuration).
+- **`.withProvider(p, { apiKey })` works for every provider.** Anthropic, Gemini and Ollama used to ignore it. Billing and quota failures classify as their own fatal `quota` error class, and malformed model output fails with `LLMMalformedOutputError`. See [Typed provider errors](/features/llm-providers/#typed-provider-errors).
+- **Tools absorb common call mistakes.** A lone string sent under the wrong key heals to the required parameter, a missing required parameter gets an error that names it and shows a valid call, and `shell-execute` allows `2>&1` and `/dev/null` redirects.
+
+### CLI and terminal output
+
+- **`rax run` fixes.** `--tools` enables the built-in tools again, `--verbose` shows phase lines when piped, `--quiet` prints only the answer on a terminal too, and `--stream` no longer draws the status line over streamed tokens. Scaffolded projects treat the `.env.example` placeholder as a missing key and print the "set `<KEY>`" message instead of a provider 401. See [CLI](/reference/cli/).
+- **The status line stays bounded.** A terminal that reports 0 columns or 0 rows gets plain lines only; a narrow terminal clips the status line to one row. The `[t: collapse]` hint shows only when the `t` key works.
+- **One error for a bad key.** An uncaught `run()` failure prints one error block, not three; `err.cause` keeps the detail.
 
 ### Gateway and channels
 
 - **Durable schedules, ingress server and inbound queue.** `agent.schedules()`, restart catch-up for cron, a webhook and channel ingress server, and a queue so overlapping events are not dropped. See [Gateway](/features/gateway/).
 - **Canonical `ChannelAdapter` contract** with native Signal and Telegram bot adapters. See [Messaging Channels](/guides/messaging-channels/).
+- **Channel routing.** `.withChannels({ adapters, routes, agents })` opens each channel once and routes conversations to any agent by `RouteSpec` rules, fail-closed per route. Non-owner senders get a read-only tool surface (`senderTools`, a tool list, not a prompt). Routes can acknowledge slow turns (fixed text or model-written), owners can send `/new` or `/reset`, and an opt-in SQLite inbox and outbox keep dedupe, turn caps and pending replies across a restart. See [Routes](/guides/messaging-channels/routes/) and [Reliability](/guides/messaging-channels/reliability/).
 - **GitHub webhook replay dedupe and A2A params validation.** The GitHub adapter rejects a replayed `x-github-delivery` id, and the A2A server answers malformed `message/send`, `message/stream`, `tasks/get` and `tasks/cancel` params with JSON-RPC `-32602`. See [A2A Protocol](/features/a2a-protocol/).
 - **Deploy hardening.** Validated agent names, always-on daemon settings per target, and the Cloud Run auth default above. See [`rax deploy`](/reference/cli/#rax-deploy).
 
@@ -67,7 +142,8 @@ Behavior changes first. Each one can break an existing setup. See [Security Hard
 - **File tools refuse secret paths.** `file-read`, `file-write`, `file-edit`, `list-directory` and `grep` refuse credential paths inside the file root (`.env`, `.env.*`, `.ssh`, `.cortex`, `secret.key`, `provider-keys.json`, ...), including through symlinks. Hosts opt out explicitly with `withSecretPathAccess`.
 - **Shell escapes closed.** `shell-execute` parses `sed` and `awk` programs and refuses any construct that can run commands or write files, refuses `sort --compress-program`, and path-checks option values (`sort --output=/tmp/x`). File tools resolve symlinks before confining a path, and `grep` globs can no longer leave the file root.
 - **Empty webhook secrets fail closed.** An empty or whitespace webhook or Telegram `secretToken` is treated as unset instead of accepting any signature.
-- **SSRF guard covers more address forms.** `assertPublicUrl` now applies the private, loopback and metadata rules to IPv4-mapped, IPv4-compatible, NAT64 and 6to4 IPv6 forms, and blocks `localhost.` and `*.localhost`.
+- **SSRF guard covers more address forms.** `assertPublicUrl` now applies the private, loopback and metadata rules to IPv4-mapped, IPv4-compatible, NAT64 and 6to4 IPv6 forms, and blocks `localhost.` and `*.localhost`. `http-get` and A2A agent-card discovery connect to the address they validated (`fetchPinned`), closing the DNS-rebinding gap.
+- **A2A client.** `auth: { type: "apiKey" }` sends `Authorization: Bearer <apiKey>` (the scheme the built-in server accepts), requests have a timeout and response size cap, and JSON-RPC calls no longer follow redirects.
 - **Approval rules see through wrappers.** A `"git push"` rule still matches `git -C dir push`, `env git push`, `xargs`, `timeout` and `sudo -u x`. `shell-execute` forwards `gh` and `gws` credentials only when that command is granted.
 - **Owner-only file modes.** New trace, log and exporter directories are `0700` and files `0600`. The same holds for durable-run storage (`runs.db`), memory directories, the memory SQLite file and `memory.md`, scratchpad spill files and `.cortex/`. Existing files keep their current permissions. Agent ids are contained to one path segment in the durable-runs and memory directories.
 - **Redaction covers modern key formats.** Traces, logs and OTel output redact `sk-proj-` keys, OpenRouter, fine-grained GitHub, Slack, Stripe, Groq and xAI keys, PEM private-key blocks, `Basic` credentials and `password=` / `secret=` / `token=` assignments.
@@ -81,145 +157,18 @@ Chat composer with a Config popover, `/mcp` and `/btw` commands, a Context tab (
 - **Asks before risky tools by default.** Writing files, running code and the full shell wait for your approval in chat and desk runs; gateway agents refuse them. Turn it off with **Ask before risky tools** in Lab Tools or `/approvals` in chat. The framework's own default is unchanged. See [Approvals and questions](/features/cortex/approvals-and-questions/).
 - **One command surface.** Typing `/` and the Config button open the same anchored list, with each setting beside its slash command and current value. Esc goes back one level, then closes. See [Chat and composer](/features/cortex/chat-and-composer/).
 - **One styled `Select`.** Every pick list uses it: search from nine options, grouped options, keyboard support. The Beacon settings panel closes on an outside click or Esc.
+- **Tagged files no longer flood goals:** at most 8 deliverable goals.
 - **Live goal output.** Goal segments, schedule fires and loop ticks stream into the open chat like a typed turn, and a reload reattaches. A picked file the browser can no longer read shows a "Not attached" toast. See [Goals, plans and loops](/features/cortex/goals-plans-loops/).
 - **Channels and a Gateway tab.** The Lab connects a saved Gateway process agent to Telegram, Signal or a signed webhook with encrypted write-only credentials, an access-control editor and **Test connection**, and a Gateway tab shows connection state and activity. See [Gateway and channels](/features/cortex/gateway-and-channels/).
+- **Durable runs are on by default in Cortex.** Chats, desk runs and gateway agents are built with durable runs unless you turn them off, so a Stop, a Pause or a crash leaves a run you can **Continue** without losing progress. The framework default stays off. Cortex uses the framework's retention defaults (the newest 50 completed runs within 30 days), and `REACTIVE_AGENTS_RUNS_DIR` moves the run store. See [Approvals and questions](/features/cortex/approvals-and-questions/).
+- **The channel hub survives a restart.** The durable inbox, outbox and follow-up timers live in the Cortex database, so a redelivered message does not run twice and a pending reply is sent. Gateway metrics persist too. `CORTEX_CHANNEL_INBOX=memory` restores the in-memory hub.
+- **Approvals.** A shell command the tool would refuse is refused before Cortex asks, so you are no longer asked to approve a call that cannot run. Approve and Deny answer at once and the turn keeps streaming, and long parameters have **Show full parameters** (secrets masked). Tool arguments show while a call runs.
+- **Chat file tags are pointers.** A tagged `@file` reaches the agent as its path and size (files of 2 KB or less are still inlined), and **Edit message** restores the tag chips.
+- **Beacon Field.** Repeatable drag, arrow-key moves, the Board's status filter and search, folding of sub-agents, richer nodes and a legend. The sonar rings are back on the Beacon hero.
+- **Opt-in calibration in the Builder.** **Learned calibration** and **Community calibration** switches under Reliability are off by default and write `.withCalibration("auto", { learned, community })`. The Model page shows spend and the model's calibration, marked Shipped or Learned.
+- **`dev-stack start|stop|status`.** `bun run dev-stack start --port 4399 --ui-port 4398` (in `apps/cortex`) runs a second, detached instance; `stop` ends only the processes it started. See [Local setup recipes](/features/cortex/local-setup-recipes/).
 
----
-
-## v0.18.0 - Workspaces, skills, and a single run scope (November 2026)
-
-<Aside type="note" title="Breaking changes">
-- **Strategy switching is opt-in.** It was on by default; now enable it with `.withReasoning({ enableStrategySwitching: true })`. Runs that relied on the implicit default will no longer switch strategies.
-- **`SessionOptions.persistOnEnd` is removed** (it was a documented no-op). Use `persist` and call `session.end()`.
-- **User-global skill directories are opt-in.** `~/.agents/skills` and `~/.reactive-agents/skills` load only with `.withSkills({ global: true })`. `discoverSkills` now takes `(root, paths, { global?, agentId? })`.
-- **Removed from `@reactive-agents/core` exports:** `StreamingTextCallback` and other per-run values now bound by the run scope. Strategy authors: `FinalizeExtras` is gone; the strategy terminal takes one typed input (see `runStrategy`).
-</Aside>
-
-This release makes a run's state live in one place, so workspace, skills, tool evidence, and documents follow the run instead of leaking between runs or agents. It also adds images to more providers and gives tools and sessions explicit controls.
-
-### Workspaces and per-run scope
-
-- `.withTools({ workspace: "/abs/path" })` sets an agent's working directory, and `agent.run(task, { workspace })` overrides it for one run (also `runStream()`).
-- Gateway runs (heartbeat, cron, channel events) honor the caller's file root, the same as `run()`.
-- Each built agent owns its document store: `.withDocuments()` and `agent.ingest()` documents are searched only by that agent.
-- Meta-tool stores (scratchpad, checkpoints, discovered tools) are per run, not process-wide.
-
-### Skills
-
-- `.withSkills()` no longer needs `paths`. With no arguments it discovers `<workspace>/.agents/skills`, `<workspace>/.<agentId>/skills`, and `<workspace>/.claude/skills`.
-- `activate-skill` loads a discovered skill mid-run. `{ name }` returns the body, kept through context compaction; `{ name, file }` loads a supporting file.
-
-### Tools and tool control
-
-- `.withTools({ maxCallsPerTool: { "web-search": 3 } })` caps calls per tool per run. Calls past the cap are not run. Sub-agents inherit the cap.
-- `.withTools({ riskLevels: { "file-read": "low" } })` overrides any tool's risk level, built-ins included.
-- Images returned by tools (for example MCP screenshots) reach the model as images. MCP results keep image, audio, and resource items instead of dropping them.
-- `file-write` saves a `.json` file that has unescaped quotes inside string values, instead of failing it.
-
-### Providers and requests
-
-- Images in messages now reach OpenAI, LiteLLM, Ollama, and Gemini models. Before, those providers silently dropped image blocks.
-- `CompletionRequest` takes `toolChoice: "required"` (at least one tool call) and `thinking?: boolean` to override thinking for one call. See [Providers](/features/llm-providers/#forcing-a-tool-call).
-
-### Chat and durable runs
-
-- Workspace-scoped coding agents: see the [workspace and skills cookbook](/cookbook/workspace-and-skills/).
-- `ChatEngine` is one engine behind `agent.chat()`, `agent.session()`, and the gateway. The direct path applies the persona, and history windowing is on by default. `session.runStream()` streams a conversational turn.
-- Session and gateway ids are canonical (`sess_agent_*`, `sess_session_*`, `sess_gateway_*`). Legacy gateway chat keys still read via fallback.
-- `.withDurableRuns()` records side-effecting tool results, so a crash after a tool succeeds but before the next checkpoint no longer repeats that effect silently.
-
-### Harness
-
-- `.withHarness({ actOrAnswer })` is a new opt-in switch (`true`, `"auto"`, or `"proactive"`) for act-or-answer on native function calling. Default off.
-- Plan-execute and blueprint/code-action runs are held to the files their task names, the same delivery check as the main loop.
-- When a provider reports the prompt is over the context window, the agent compacts to half the window and retries once.
-
-### Diagnostics
-
-- `rax-diagnose cause <run>` classifies a failed run's cause with a closed-union `cause` and `confidence`; `rax-diagnose attribute` shares that taxonomy and tells you whether a harness change actually ran.
-
-### Durable tool effects: what a resume does with a side effect
-
-Checkpoints alone leave a window: a tool can succeed after the last checkpoint and before the next one commits. With `.withDurableRuns()`, every tool call now writes a `run_effects` row before it runs (`executing`) and the terminal outcome after it finishes. On `resumeRun()`:
-
-- **Succeeded:** the stored result is injected. The tool does not run again.
-- **No terminal row (crashed mid-call):** the call is replayed, and the trust receipt names it `ambiguous-then-replayed`.
-
-The framework does not give tools an idempotency-key API. For external systems (payments, email, webhooks), key idempotency in the tool itself, because a crash can leave the outcome unknown. See [Durable execution](/guides/durable-execution/#tool-effects-are-recorded).
-
-### Live checklist from the run contract
-
-Every run now projects a checklist from the contract and ledger facts the terminal gate judges. Plan-execute streams each plan step as a checklist row, with no `todo` tool call. Rows can show as done from ledger evidence (`source: "inferred"` with `evidence`). The checklist is advisory: the exit gate, not the checklist, decides completion.
-
-### Web search: Keenable joins the provider chain
-
-Thanks to [@KGKallasmaa](https://github.com/KGKallasmaa), who contributed the Keenable provider (PR #289), and to the maintainers who re-landed it after a temporary revert (PR #290).
-
-- `web-search` tries providers in order: Tavily, Brave, Serper, **Keenable**, then DuckDuckGo instant answers (no key needed).
-- Set `KEENABLE_API_KEY` to enable it. Without it, Keenable is skipped and the chain behaves as before.
-- A Keenable failure (for example a 401) is recorded in the attempt log and falls through to the next provider. It does not fail the search.
-
-Setup and key names: [Tools → Web Search Configuration](/guides/tools/built-in-tools/#web-search-configuration).
-
-### Public kernel and trace APIs
-
-- `@reactive-agents/reasoning` exports `makeKernel` and the `Phase`/`Guard` types, so custom strategies can extend the composable kernel without deep imports.
-- `@reactive-agents/trace` exports `analyzeCause(trace)` and `attributeFailure(trace)`, the same classifiers `rax-diagnose` uses, for use in your own eval harness.
-- A deterministic grader's verdict is recorded as an `eval-graded` trace event, so a run that ends cleanly but gives a wrong answer is labelled as such.
-
-### Contributors
-
-Thank you to everyone who contributed to v0.18.0. External contributions in this release:
-
-- [@KGKallasmaa](https://github.com/KGKallasmaa): Keenable web-search provider (PR #289).
-
-### Also in v0.18.0
-
-**Added**
-
-- `toolContent(parts)` (from `@reactive-agents/tools`): a tool returns typed image, audio, or file parts that reach the model. See [Tools](/guides/tools/custom-tools/#tools-that-return-images-audio-or-files).
-- Typed provider errors: `LLMError`, `LLMRateLimitError` (`retryAfterMs`), `LLMContextOverflowError` (`tokenCount`, `maxTokens`, `errorClass`). See [Providers](/features/llm-providers/#typed-provider-errors).
-- `CompletionRequest.toolChoice: "required"` and per-request `thinking`. Streams emit `thinking_delta` for reasoning models. See [Providers](/features/llm-providers/#forcing-a-tool-call).
-- `completeStructured()` reports each native attempt (`StructuredAttemptReport`), and `llm-exchange` trace events show what happened inside the call.
-- Harness switch `inputCoverage` (opt-in, off by default, or `RA_INPUT_COVERAGE=1`): when a task names inputs, each one must be read before the run finishes.
-- Harness switch `actOrAnswer` (`true`, `"auto"`, or `"proactive"`) for native function calling. Default off.
-- `ContextPressure` event per model call (`tokensUsed`, `tokensAvailable`, `utilizationPct`, `level`). See [Streaming](/features/streaming/#context-pressure).
-- `result.metadata.runId`, `inputTokens`, `outputTokens`, `llmCalls`. See [Observability](/features/observability/#result-metadata-and-trace-linkage).
-- Core helpers `mediaPartLabel` and `summarizePart` give one spelling for non-text parts shown as text.
-- A `read` builtin preset (`file-read`, `list-directory`, `grep`) for read-only filesystem access: `.withTools({ builtins: "read", workspace })`.
-- `.withTools({ riskLevels })` overrides a tool's risk level by name, including built-ins. Low-risk tools are the only ones the text parser binds from prose.
-- `rax eval gate --activations <n>`, `rax cortex --host <addr>` (or `CORTEX_HOST`), and `rax serve` accepts `groq` and `xai`. See [CLI](/reference/cli/).
-- Cortex chat: `/goal`, `/plan`, `/loop`, `/schedule`, `/agent on`, approval cards and reply boxes in the thread, a context meter, and a tool disclosure picker. See [Cortex](/features/cortex/goals-plans-loops/).
-- `rax init` delegates project generation to `create-reactive-agent`. Its `with-approval-gates` template prompts through `node:readline` and denies when there is no TTY.
-
-**Changed (check these after upgrading)**
-
-- A commanded `.withModel({ temperature })` reaches the LLM request verbatim on every strategy.
-- Tool caps hold on every strategy, count once per run, and hold inside a single turn. Sub-agents inherit them.
-- Required tools are no longer capped at their required count plus two by default.
-- Debug log lines (for example "Direct strategy completed") no longer print on a default run.
-- Ollama `completeStructured()` defaults thinking off unless you set it. Ollama `stream()` honors `maxTokens` as a hard output cap for thinking models.
-- OpenAI `gpt-5*` and `o<digit>` models send `max_completion_tokens`.
-- Traces and checkpoints store media summaries, not bytes. The inline-media stub reads `[image omitted from record: ...]`.
-- `shell-execute` no longer points `HOME` and `TMPDIR` at a caller-supplied directory. `terminal.timeoutMs` above 30 seconds is honored.
-- `code-execute` refuses shell input (for example `bun test` or `ls -la`) and says so. It no longer runs it.
-- `.withTools({ disclosure: "discover" })` loads tools on demand, as documented.
-- `build()` and `buildEffect()` warn when the provider silently defaults to `"test"`.
-- `file-write` accepts a JSON value as `content`, and prose writes no longer land as literal `\n` text.
-- The `dedup` note and guard warnings no longer count as progress, and a blocked call no longer counts as "called" or "succeeded".
-
-**Fixed**
-
-- Security: a `.withAgentTool()` sub-agent now runs under the parent's approval policy, task contract, fabrication guard, and grounding. Before, it ran with none of them.
-- Sub-agents that crash add their full spend to the parent run, and their LLM calls are counted.
-- `claude-haiku-5-5` no longer fails with "temperature is deprecated for this model".
-- Stream-drop `EOF` is classified as transient and retried.
-- A run that stops after effort is honestly labelled, and a give-up statement no longer reports `success: true`.
-- A run whose required tool failed is no longer counted as done (only a successful call counts).
-- A run that writes 2 of 3 named files is refused. Template paths such as `out-N.txt` are not treated as literal deliverables.
-- Git, gh, and gws CLI tools keep partial output when they hit the 30-second timeout.
-- The exit gate's decision is final for a turn: a run it ended cannot be reopened.
-- `rax-diagnose cause` and `attribute` label aborted runs, stop-guard terminations, and `eval-graded` results more accurately.
+Restart Cortex after upgrading to pick these up.
 
 ---
 
@@ -229,6 +178,7 @@ Earlier releases are archived by minor version. Nothing was removed.
 
 | Version | Month | Headline | Notes |
 | --- | --- | --- | --- |
+| v0.18.0 | November 2026 | Workspaces, skills, and a single run scope | [v0.18 release notes](/guides/whats-new/v0-18/) |
 | v0.17.0 | October 2026 | Local judgment, safer connections, truthful runs | [v0.17 release notes](/guides/whats-new/v0-17/) |
 | v0.16.0 | September 2026 | Harness control & memory reliability | [v0.15 and v0.16 release notes](/guides/whats-new/v0-15-to-v0-16/) |
 | v0.15.0 | August 2026 | Hardening pass | [v0.15 and v0.16 release notes](/guides/whats-new/v0-15-to-v0-16/) |

@@ -315,6 +315,7 @@ Actions: `keep`, `move` (file path changes, redirect needed), `merge-into` (cont
 | `/guides/whats-new/v0-13-to-v0-14/` | new | self | Help and releases > What's New | archive: v0.14.0, v0.13.5, v0.13.0 |
 | `/guides/whats-new/v0-15-to-v0-16/` | new | self | Help and releases > What's New | archive: v0.16.0, v0.15.0 |
 | `/guides/whats-new/v0-17/` | new | self | Help and releases > What's New | archive: v0.17.0 |
+| `/guides/whats-new/v0-18/` | new | self | Help and releases > What's New | archive: v0.18.0 |
 | `/guides/whats-new/v0-5-to-v0-10/` | new | self | Help and releases > What's New | archive: v0.10.x down to v0.5.0 |
 | `/guides/your-first-agent/` | keep | self | Start here |  |
 | `/reference/builder-api/` | split (DONE 2026-11-17) | self (hub) | Reference > Builder API | hub 2.5k words: factory, generated method-to-config table, build methods, full example |
