@@ -27,7 +27,7 @@ Docs: https://docs.reactiveagents.dev/
 
 ## Install
 
-Bun >= 1.1.0 is recommended (native SQLite, subprocess and HTTP APIs). Node.js 22.5+ is supported through `@reactive-agents/runtime-shim`.
+Bun >= 1.1.0 is recommended (native SQLite, subprocess and HTTP APIs). Node.js 22.5+ is supported through `@reactive-agents/runtime-shim`. The `rax` CLI runs on Node.js 22.5+ or Bun; `rax cortex` needs Bun.
 
 ```bash
 bun add reactive-agents
@@ -158,7 +158,7 @@ Install separately when needed: [`gateway`](https://www.npmjs.com/package/@react
 
 Prefer a leaner install? Skip the umbrella: `bun add @reactive-agents/runtime @reactive-agents/llm-provider @reactive-agents/reasoning`. `ReactiveAgents.create()` is exported from `@reactive-agents/runtime`.
 
-Watch your agents run with Cortex: `bun add @reactive-agents/cortex`, then `rax cortex`.
+Watch your agents run with Cortex: `bun add @reactive-agents/cortex`, then `rax cortex` (Cortex needs Bun).
 
 ![Cortex chat in Plan mode showing an editable three-step plan with tool chips for file-read, before it is executed.](https://docs.reactiveagents.dev/screens/cortex/chat-plan-card--crop.webp)
 *Plan mode: the agent proposes a plan, one line per step with the tool it will use. Edit it, then Execute.*
@@ -184,7 +184,7 @@ Watch your agents run with Cortex: `bun add @reactive-agents/cortex`, then `rax 
 
 ## Runtime
 
-Bun >= 1.1.0 (recommended) or Node.js 22.5+.
+Bun >= 1.1.0 (recommended) or Node.js 22.5+. The `rax` CLI runs on either; `rax cortex` needs Bun.
 
 ## License
 
