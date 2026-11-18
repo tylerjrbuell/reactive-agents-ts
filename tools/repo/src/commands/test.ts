@@ -6,6 +6,7 @@ import { flagValue, rejectUnknown, splitArgs } from "../lib/args.ts"
 import { summarizeBunTest, type TestSummary } from "../lib/bun-test-summary.ts"
 import type { Io } from "../lib/output.ts"
 import { resolveRoot } from "../lib/root.ts"
+import { acquireSlot, SLOT_HELD_ENV } from "../lib/test-slots.ts"
 
 /** Failure names printed before `... N more`. */
 const FAILURE_CAP = 15
@@ -53,13 +54,14 @@ export function spawnLogged(
   cwd: string,
   logPath: string,
   maxSeconds: number = DEFAULT_MAX_SECONDS,
+  extraEnv: Readonly<Record<string, string>> = {},
 ): Promise<{ code: number; timedOut: boolean }> {
   const fd = openSync(logPath, "w")
   return new Promise((done) => {
     const child = spawn(cmd, [...args], {
       cwd,
       stdio: ["ignore", fd, fd],
-      env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
+      env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0", ...extraEnv },
     })
     let timedOut = false
     let killer: ReturnType<typeof setTimeout> | undefined
@@ -93,7 +95,8 @@ export interface TestRun {
 }
 
 /**
- * Run `bun test <paths>` once with output going straight to a log file; no printing.
+ * Run `bun test <paths>` once with output going straight to a log file. Waits for a machine-wide
+ * test slot first (see `lib/test-slots.ts`); `notify` gets the one waiting line, if any.
  * `namePattern` is passed as `-t <pattern>` (bun's test-name filter).
  */
 export async function execTests(
@@ -103,10 +106,20 @@ export async function execTests(
   logPrefix = "test",
   maxSeconds: number = DEFAULT_MAX_SECONDS,
   namePattern?: string,
+  notify: (line: string) => void = () => {},
 ): Promise<TestRun> {
+  const slot = await acquireSlot(notify)
+  let exit: number
+  let timedOut: boolean
   const log = newLogPath(root, logPrefix)
   const filter = namePattern === undefined ? [] : ["-t", namePattern]
-  const { code: exit, timedOut } = await spawnLogged("bun", ["test", ...paths, "--timeout", timeout, ...filter], root, log, maxSeconds)
+  try {
+    ;({ code: exit, timedOut } = await spawnLogged("bun", ["test", ...paths, "--timeout", timeout, ...filter], root, log, maxSeconds, {
+      [SLOT_HELD_ENV]: "1",
+    }))
+  } finally {
+    slot.release()
+  }
   const summary = summarizeBunTest(readFileSync(log, "utf8"))
   const failed = summary.fail === null || summary.fail > 0 || exit !== 0 || timedOut
   return { exit, summary, log: relative(root, log), failed, timedOut, maxSeconds, root }
@@ -140,7 +153,7 @@ export async function runScopedTests(
   maxSeconds: number = DEFAULT_MAX_SECONDS,
   namePattern?: string,
 ): Promise<number> {
-  const r = await execTests(root, paths, timeout, "test", maxSeconds, namePattern)
+  const r = await execTests(root, paths, timeout, "test", maxSeconds, namePattern, (l) => void io.out(l))
   const s = r.summary
   io.data({ pass: s.pass, fail: s.fail, skip: s.skip, failures: s.failures, details: s.details, exit: r.exit, log: r.log })
   const lines = describeRun(r)
@@ -163,6 +176,7 @@ export const testCommand: Command = {
     `--max-seconds <n>: wall-clock limit for the whole run (default ${DEFAULT_MAX_SECONDS}); give the Bash call a matching timeout`,
     "output: counts, failing names, and error/expected/received/location for the first failures; the full log path last",
     "never pipe this or `bun test`: the log file holds the full output (Read it with offset/limit)",
+    "concurrency: runs share max(2, cores/3) machine-wide slots (REPO_TEST_SLOTS overrides); extra runs print a waiting line and queue",
   ],
   async run(args, io) {
     const valueFlags = ["--timeout", "--root", "--max-seconds", "-t"]

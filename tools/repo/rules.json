@@ -63,33 +63,6 @@
       }
     },
     {
-      "id": "no-cd-prefix",
-      "mode": "warn",
-      "match": {
-        "command": "^\\s*cd\\s+(?<dir>\\S+)\\s*&&",
-        "notInside": ["quotes", "heredoc-to-file"],
-        "check": "repo-cd"
-      },
-      "reason": "A `cd <path> &&` prefix hides the working directory and breaks permission matching.",
-      "alternative": "use absolute paths, e.g. `git -C /abs/repo status`",
-      "owner": "harness-warden",
-      "reviewBy": "2027-02-03",
-      "examples": {
-        "deny": [
-          "cd packages/core && ls",
-          "cd ./tools/repo && bun test"
-        ],
-        "allow": [
-          "cd /home/u/repo",
-          "(cd /home/u/repo && git status)",
-          "git -C /home/u/repo status",
-          "cd /tmp && ls",
-          "cd /tmp/x; ls",
-          "cd packages/core"
-        ]
-      }
-    },
-    {
       "id": "no-shell-grep-repo",
       "match": {
         "command": "(?:(?:^|[;&(\\n`]|\\|\\||\\$\\()\\s*(?:[A-Za-z_]\\w*=\\S*\\s+)*(?:(?:sudo|time|command|nice)\\s+)*(?<cmd>u?grep|egrep|fgrep|zgrep|rg|ag)(?=\\s)|\\bfind\\b[^;&\\n]*\\|\\s*xargs\\s+(?:-\\S+\\s+)*(?<xcmd>e?grep|ugrep|rg|ag)\\b)",

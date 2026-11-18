@@ -73,7 +73,7 @@ export const verifyCommand: Command = {
       let code: number
       let log: string
       if (step.startsWith("bun run repo test ")) {
-        const r = await execTests(root, [dir], DEFAULT_TEST_TIMEOUT, "verify-test", maxSeconds)
+        const r = await execTests(root, [dir], DEFAULT_TEST_TIMEOUT, "verify-test", maxSeconds, undefined, (l) => void io.out(l))
         if (r.failed) return io.fail(`✗ ${step}\n${describeRun(r).join("\n")}`, `open ${r.log}`)
         io.out(`✓ ${step}`)
         continue

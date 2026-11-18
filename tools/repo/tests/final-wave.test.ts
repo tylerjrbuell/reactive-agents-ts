@@ -4,7 +4,6 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { spawnSync } from "node:child_process"
 import { main, type Streams } from "../src/cli.ts"
-import { classifyBash, loadRules } from "../src/lib/hook-rules.ts"
 import { preBash } from "../src/commands/hook.ts"
 import { describeRun, pruneRunLogs } from "../src/commands/test.ts"
 import { fillBase } from "../src/lib/friction.ts"
@@ -177,19 +176,6 @@ describe("REPO_HOOKS=off prefix", () => {
   })
 })
 
-describe("no-cd-prefix only fires on in-repo cd && forms", () => {
-  const rules = loadRules(REPO_ROOT)
-  const decide = (c: string): string => classifyBash(c, rules, {}, { root: REPO_ROOT }).decision
-  test("warns", () => {
-    expect(decide("cd packages/core && ls")).toBe("warn")
-    expect(decide(`cd ${REPO_ROOT}/tools && ls`)).toBe("warn")
-  })
-  test("allows outside-repo, bare cd, and ; forms", () => {
-    for (const c of ["cd /tmp && ls", "cd /tmp/x/y && ls", "cd /tmp; ls", "cd packages/core", "cd packages/core; ls"])
-      expect(decide(c)).toBe("allow")
-  })
-})
-
 describe("run log rotation", () => {
   test("keeps the newest N test-/verify- logs and never touches jsonl", () => {
     const d = tmp("repo-logs-")
@@ -212,7 +198,7 @@ describe("timeout output", () => {
   test("only fail, log; no counts", () => {
     const lines = describeRun({
       exit: 143,
-      summary: { pass: null, fail: null, skip: null, failures: [] },
+      summary: { pass: null, fail: null, skip: null, failures: [], details: {} },
       log: ".repo-logs/test-x.log",
       failed: true,
       timedOut: true,

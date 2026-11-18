@@ -16,10 +16,9 @@ export interface HookRule {
   /**
    * `command` is a regex source applied to the command after `notInside` regions are stripped
    * (`quotes-opaque` keeps quoted text but makes it a single inert word, so operands survive).
-   * `check: "repo-search"` additionally requires the matched grep/rg command to search repo paths;
-   * `check: "repo-cd"` requires the regex's `dir` group to be a repo path.
+   * `check: "repo-search"` additionally requires the matched grep/rg command to search repo paths.
    */
-  match: { command: string; notInside?: readonly NotInside[]; check?: "repo-search" | "repo-cd" }
+  match: { command: string; notInside?: readonly NotInside[]; check?: "repo-search" }
   reason: string
   /** Shown after `reason`; `{name}` is replaced by the regex's named group `name` (else `<name>`). */
   alternative: string
@@ -285,12 +284,6 @@ function matchRule(rule: HookRule, p: Parsed, ctx: HookCtx): RegExpExecArray | n
   const text = target(p, rule.match.notInside ?? [])
   if (rule.match.check === undefined) return compile(rule.match.command).exec(text)
   const root = ctx.root ?? process.cwd()
-  if (rule.match.check === "repo-cd") {
-    // Fires only when the named group `dir` is a repo path (relative, or absolute under the root).
-    const m = compile(rule.match.command).exec(text)
-    const dir = m?.groups?.dir
-    return m !== null && dir !== undefined && isRepoPath(dir, root) ? m : null
-  }
   for (const m of text.matchAll(new RegExp(rule.match.command, "g"))) {
     const cmd = m.groups?.cmd
     if (cmd === undefined || searchesRepo(cmd, text.slice(m.index + m[0].length), root)) return m
@@ -361,7 +354,7 @@ export function loadRules(root: string): readonly HookRule[] {
       match: {
         command,
         notInside: notInside as NotInside[],
-        ...(m.check === "repo-search" || m.check === "repo-cd" ? { check: m.check } : {}),
+        ...(m.check === "repo-search" ? { check: m.check } : {}),
       },
       reason: str(o.reason, `${id}.reason`),
       alternative: str(o.alternative, `${id}.alternative`),

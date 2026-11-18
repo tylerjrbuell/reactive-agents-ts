@@ -107,7 +107,7 @@ describe("mode: warn | deny", () => {
     expect(log(r, "denies.jsonl").map((e) => `${String(e.ruleId)}:${String(e.mode)}`)).toEqual(["no-stray-artifacts:warn", "no-docs-dir:deny"])
   })
   test("warn text omits the override / place --allow hint; placement warn ends with the CI note", () => {
-    const hook = loadRules(REPO).find((x) => x.id === "no-cd-prefix") as HookRule
+    const hook: HookRule = { ...(loadRules(REPO)[0] as HookRule), mode: "warn" }
     expect(renderRuleText(hook)).not.toContain("REPO_ALLOW")
     const p = loadPlacement(REPO).rules.find((x) => x.id === "no-stray-artifacts") as PlacementRule
     const text = renderPlacementText(p, "note.md")
@@ -122,8 +122,8 @@ describe("mode: warn | deny", () => {
     expect(placeFile("x.txt", [warnRule, denyRule])).toMatchObject({ ok: false, ruleId: "d", mode: "deny" })
     expect(placeFile("x.txt", [warnRule])).toMatchObject({ ok: false, ruleId: "w", mode: "warn" })
   })
-  test("shipped modes: no-cd-prefix is the only warn hook rule; the four broad placement rules warn", () => {
-    expect(loadRules(REPO).filter((x) => x.mode === "warn").map((x) => x.id)).toEqual(["no-cd-prefix"])
+  test("shipped modes: no hook rule warns (a warn that changes nothing is noise); the four broad placement rules warn", () => {
+    expect(loadRules(REPO).filter((x) => x.mode === "warn").map((x) => x.id)).toEqual([])
     const warn = loadPlacement(REPO).rules.filter((x) => x.mode === "warn").map((x) => x.id).sort()
     expect(warn).toEqual(["no-stray-artifacts", "root-allowlist", "scripts-only", "tests-beside-code"])
   })

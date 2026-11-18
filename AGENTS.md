@@ -19,7 +19,7 @@ Required: steps 4–5 before claiming done. Optional: 1–3 (use instead of ad-h
 1. **Subagents only for broad fan-out.** Locate with `bun run repo find` or a direct Read; never spawn one to read a known file.
 2. **Browser: text first** (`browser_snapshot`, `get_page_text`); screenshots only when asked.
 3. **Browser failures: stop at 2–3**, then report and ask. Do not retry the same navigate/click.
-4. **No `cd <abs path> && …`.** Use absolute paths; cwd resets (hook warns).
+4. **No `cd <abs path> && …`.** Use absolute paths; cwd resets.
 5. **Wiki: `bun run repo find "<q>" --wiki`** or the Canonical Wiki Index in `wiki/Development/Repo-Navigation.md`. Start with `wiki/Hot.md`. Do not browse `wiki/Home.md` or `wiki/MOCs/*` (stale).
 6. **Keep always-loaded files small.** `wiki/Hot.md` ≤500 words; `.agents/MEMORY.md` is an index; this file ≤22 KB (tested). The placement guard checks new files.
 7. **Shell `grep` can silently miss files** (ugrep `-I --ignore-files`); recursive shell grep is hook-denied. Use `bun run repo find` or `/usr/bin/grep -a`.
