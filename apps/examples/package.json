@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke": "bun run index.ts --offline",
     "smoke:strict": "bun run index.ts --offline --strict",
     "run-all": "bun run index.ts",

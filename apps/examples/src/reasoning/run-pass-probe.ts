@@ -55,7 +55,7 @@ async function runOne(strategy: Strat): Promise<ProbeRow> {
   await agent.dispose();
 
   const output = result.output ?? "";
-  const steps = result.steps ?? [];
+  const steps = result.metadata.reasoningSteps ?? [];
   return {
     strategy,
     status: result.status ?? "unknown",

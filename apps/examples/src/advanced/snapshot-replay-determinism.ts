@@ -34,6 +34,7 @@ import {
   diffTraces,
   computeArgsHash,
   buildToolTable,
+  buildLLMTable,
 } from "@reactive-agents/replay";
 import type { RecordedRun, AgentRunOutcome } from "@reactive-agents/replay";
 import type { TraceEvent } from "@reactive-agents/trace";
@@ -132,6 +133,7 @@ export async function run(_opts?: { provider?: string; model?: string }): Promis
     config: {},
     trace: { runId, events },
     toolTable: buildToolTable(events),
+    llmTable: buildLLMTable(events),
   };
 
   console.log(`Constructed RecordedRun: ${runId}`);

@@ -55,13 +55,12 @@ async function runOne(strategy: Strat): Promise<ProbeRow> {
   await agent.dispose();
 
   const output = result.output ?? "";
-  const steps = result.steps ?? [];
+  const steps = result.metadata.reasoningSteps ?? [];
 
   // Count steps that look like critique/reflection observations.
-  const critiqueSteps = steps.filter((s: any) => {
-    if (typeof s?.content !== "string") return false;
-    return /\[CRITIQUE\b|\[REFLECTION\b|\[REFLECT\b/i.test(s.content);
-  }).length;
+  const critiqueSteps = steps.filter((s) =>
+    /\[CRITIQUE\b|\[REFLECTION\b|\[REFLECT\b/i.test(s.content),
+  ).length;
 
   return {
     strategy,

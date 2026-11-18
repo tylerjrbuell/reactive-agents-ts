@@ -52,7 +52,7 @@ Updated: 2026-05-24. Smoke run: 43 examples, 6 xfail, 0 fail. (AX2 killswitch-to
 | M2 Strategy switching | ✅ | R21 | wiring path witness; `control.strategy-evaluated` tag doesn't fire under test provider — cassette gap |
 | M3 Verifier+retry | 🟡 | R23 (xfail) | failure-then-success cassette missing |
 | M4 Healing pipeline | ✅ | T8 | direct healer-API exercise; in-loop healing under reactive strategy is a cassette gap |
-| M5 Context curation | ✅ | R22 | direct curator-API exercise; in-loop budget crossing is a cassette gap |
+| M5 Context curation | 🔵 | every long run | R22 removed 2026-11-17: its curator API (`applyMessageWindowWithCompact`) was deleted 2026-07-07; compaction is internal (`compactHistoryStage`) with no public call surface |
 | M6 Skill system | ✅ | F7 | cross-session recall via shared dbPath |
 | M7 Calibration | 🟡 | R23 (xfail) | calibration sample accumulation needs cassette |
 | M8 Sub-agent delegation | ✅ | 04, 09, 10 | 04 + 09 + 10 now offline (flipped requiresKey) |

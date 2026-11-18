@@ -21,22 +21,13 @@
  * dead — tests used wrong state shapes and false-passed. Fixes landed at
  * that time; this example is the executable regression net.
  *
- * **Known propagation gap (2026-05-24 — xfail):** the kernel-side
- * killswitch.reason preservation shipped (state.meta.terminatedBy is set
- * by 4 abort sites in runner.ts + act.ts), but `react-kernel.ts:152` and
- * `reactive.ts:256` narrow `state.meta.terminatedBy` to the closed
- * TerminatedBy 5-value enum before building the reasoning result.
- * Killswitch reasons like "budget-limit:tokens:1/0" become "max_iterations"
- * or "final_answer" via the fallback branch. The dynamic reason is
- * unobservable from result.metadata.terminatedBy until the propagation
- * chain preserves raw kernel meta through to AgentCompleted.terminationReason
- * (event schema already extended for this; consumer-side TaskResult
- * needs a parallel rawTerminatedBy field). This example asserts the
- * happy path that does NOT hold today — flip from xfail to passing once
- * the chain ships.
+ * `result.terminatedBy` is the closed TerminatedBy enum, so a dynamic
+ * killswitch reason like "budget-limit:tokens:109/1" is read from
+ * `AgentCompleted.terminationReason`, which carries the raw kernel reason.
  */
 
-import { ReactiveAgents } from "reactive-agents";
+import { Schema } from "effect";
+import { ReactiveAgents, defineTool } from "reactive-agents";
 import { killswitches } from "@reactive-agents/compose";
 import {
   budgetLimit,
@@ -54,6 +45,14 @@ export interface ExampleResult {
   durationMs: number;
 }
 
+/** Harmless tool the scripted test model calls, so each run takes several turns. */
+const doStepTool = defineTool({
+  name: "do-step",
+  description: "Do one step of the task and report it.",
+  input: Schema.Struct({ n: Schema.Number }),
+  handler: async (args) => `step ${args.n} done`,
+});
+
 interface KillswitchResult {
   name: string;
   triggered: boolean;
@@ -68,17 +67,16 @@ async function runKillswitch(
   task: string = "Run the task",
 ): Promise<KillswitchResult> {
   // Scenario with tool calls forces the kernel to continue past iter 0
-  // (text-only turns terminate the LLM stream and often trigger reactive
-  // exit; tool turns mandate another iteration to process the result).
+  // (a text-only turn ends the run; a tool turn needs another iteration to
+  // process the result), so the before-think guards get to run.
   let b = ReactiveAgents.create()
     .withName(`ks-${name}`)
     .withProvider("test")
     .withReasoning()
-    .withTools({ builtins: true }) // built-ins are opt-in; the scenario calls them
-    .withMinIterations(3)
+    .withTools({ tools: [doStepTool] })
     .withTestScenario([
-      { toolCall: { name: "current_time", args: {} } },
-      { toolCall: { name: "current_time", args: {} } },
+      { toolCall: { name: "do-step", args: { n: 1 } } },
+      { toolCall: { name: "do-step", args: { n: 2 } } },
       { text: "FINAL ANSWER: done." },
     ]);
   b = configure(b);
@@ -134,16 +132,16 @@ export async function run(): Promise<ExampleResult> {
   );
 
   // 3. timeoutAfter — aborts when wall-clock exceeded
-  // Hard to assert deterministically without delayMs; use a microscopic
-  // budget and a delayed scenario.
+  // A microscopic budget and a slow tool turn: the cap is crossed before the
+  // second think.
   {
     let b = ReactiveAgents.create()
       .withName("ks-timeoutAfter")
       .withProvider("test")
       .withReasoning()
-      .withMinIterations(3)
+      .withTools({ tools: [doStepTool] })
       .withTestScenario([
-        { text: "step 1", delayMs: 50 },
+        { toolCall: { name: "do-step", args: { n: 1 } }, delayMs: 50 },
         { text: "FINAL ANSWER: done." },
       ])
       .withHarness(timeoutAfter({ wallClock: "10ms", onTrigger: "stop" }));
@@ -223,21 +221,17 @@ export async function run(): Promise<ExampleResult> {
   }
 
   // Pass criterion: (a) all 5 registry-declared killswitches were attempted
-  // (no missing surfaces), AND (b) at least one fired live with its raw
-  // dynamic reason surfacing through to AgentCompleted.terminationReason
-  // (proves the full kernel → reasoning result → engine ctx → AgentCompleted
-  // chain). Watchdog is wiring-asserted only (stall scenario hard under
-  // test provider); maxIterations / budgetLimit / requireApprovalFor are
-  // reactive-strategy-bounded by test-provider behavior (reactive exits at
-  // iter 0 on end_turn, so before-think hooks at iter >= 1 don't fire
-  // deterministically without a multi-iteration scenario). timeoutAfter
-  // is the canonical live-trigger witness (delayed timer fires regardless
-  // of iteration count).
+  // (no missing surfaces), AND (b) every killswitch except watchdog fired
+  // live with its raw dynamic reason surfacing through to
+  // AgentCompleted.terminationReason (proves the full kernel → reasoning
+  // result → engine ctx → AgentCompleted chain for each one). Watchdog is
+  // wiring-asserted only (a stall scenario is hard under the test provider).
   const allDeclaredCovered = declared.length === results.length;
   const liveTriggers = results.filter((r) => r.triggered && !r.note);
-  const anyLiveTrigger = liveTriggers.length >= 1;
+  const liveExpected = results.filter((r) => !r.note).length;
+  const allLiveTriggered = liveTriggers.length === liveExpected;
 
-  const passed = allDeclaredCovered && anyLiveTrigger;
+  const passed = allDeclaredCovered && allLiveTriggered;
   return {
     passed,
     output: passed

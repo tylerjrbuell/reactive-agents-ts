@@ -19,13 +19,13 @@
  *     iterations trips the before-think guard once state.tokens ≥ maxTokens.
  *     Termination reason surfaces as `budget-limit:tokens:<used>/<cap>`.
  *
- *   - TEST (no key): under the deterministic test provider the reactive strategy
- *     exits on `end_turn` before the next before-think guard runs, so the
- *     token/stall guards can't fire deterministically (documented in
- *     killswitch-toggle.ts). `timeoutAfter` IS the canonical live-trigger witness
- *     under the test provider (a delayed scenario turn trips the wall-clock timer
- *     regardless of iteration count). We drive it to prove the governance stack
- *     terminates a run and surfaces the killswitch reason.
+ *   - TEST (no key): the scripted model makes slow tool calls (a harmless
+ *     `do-step` tool, 50ms per turn). The test provider reports few tokens, so
+ *     `timeoutAfter` is the deterministic witness: the 10ms wall-clock cap trips
+ *     at the next before-think guard.
+ *
+ * The cost caps use `onTrigger: "terminate"`, which ends the run as failed.
+ * (`"stop"`, the default, ends it gracefully and keeps `success: true`.)
  *
  * In BOTH modes the demo asserts `success === false` and that the raw killswitch
  * reason reached `AgentCompleted.terminationReason`, then prints the measured
@@ -35,7 +35,8 @@
  *   ANTHROPIC_API_KEY=sk-ant-... bun run apps/examples/src/advanced/cost-governance.ts
  *   bun run apps/examples/src/advanced/cost-governance.ts   # test mode (no key)
  */
-import { ReactiveAgents } from "reactive-agents";
+import { Schema } from "effect";
+import { ReactiveAgents, defineTool } from "reactive-agents";
 import {
   budgetLimit,
   watchdog,
@@ -58,56 +59,58 @@ const TOKEN_BUDGET = 400;
 const NO_PROGRESS_FOR = "5m";
 const GATED_TOOLS = ["file-write"] as const;
 
+/** Harmless tool the scripted test model calls, so the run takes several turns. */
+const doStepTool = defineTool({
+  name: "do-step",
+  description: "Do one step of the task and report it.",
+  input: Schema.Struct({ n: Schema.Number }),
+  handler: async (args) => `step ${args.n} done`,
+});
+
 export async function run(opts?: { provider?: string; model?: string }): Promise<ExampleResult> {
   const start = Date.now();
   const provider = (opts?.provider ?? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "test")) as PN;
   const live = provider !== "test";
 
   // Wall-clock cap is the DETERMINISTIC witness under the test provider (tiny,
-  // trips on a delayed scenario turn). In LIVE mode we widen it so budgetLimit —
-  // the primary cost governor — wins the race and caps the run on real token spend.
+  // trips after the first slow tool turn). In LIVE mode we widen it so
+  // budgetLimit, the primary cost governor, wins the race on real token spend.
   const WALL_CLOCK = live ? "60s" : "10ms";
 
   console.log("\n=== Cost Governance — budget + watchdog + approval + timeout on ONE agent ===\n");
   console.log(`Mode: ${live ? `LIVE (${provider})` : "TEST (deterministic)"}\n`);
 
   // ─── Build ONE agent composing all four cost/governance killswitches ───
-  //
-  // In LIVE mode we lean on budgetLimit as the primary cost governor; the small
-  // token cap trips once real usage accumulates. In TEST mode budget/watchdog
-  // can't fire deterministically (reactive strategy exits before the next
-  // guard), so timeoutAfter is the deterministic witness — its wall-clock cap
-  // is tiny and a delayed scenario turn trips it.
   const mkGoverned = (name: string) => {
     let b = ReactiveAgents.create()
       .withName(name)
       .withProvider(provider)
       .withReasoning()
-      .withMinIterations(2)
       // ── Compose the cost/governance killswitches (all real, all on one agent) ──
-      .withHarness(budgetLimit({ maxTokens: TOKEN_BUDGET, onTrigger: "stop" }))
-      .withHarness(watchdog({ noProgressFor: NO_PROGRESS_FOR, onTrigger: "stop" }))
+      // "terminate" fails the run when a cap is crossed; "stop" would end it
+      // gracefully with success kept.
+      .withHarness(budgetLimit({ maxTokens: TOKEN_BUDGET, onTrigger: "terminate" }))
+      .withHarness(watchdog({ noProgressFor: NO_PROGRESS_FOR, onTrigger: "terminate" }))
       .withHarness(
         requireApprovalFor({
           tools: [...GATED_TOOLS],
           approver: () => false, // deny every gated tool call
-          onDeny: "stop",
+          onDeny: "terminate",
         }),
       )
-      .withHarness(timeoutAfter({ wallClock: WALL_CLOCK, onTrigger: "stop" }));
-    // Live runs need real tools so multi-step work accumulates tokens and trips
-    // budgetLimit. Under the test provider, tools + approval short-circuit the
-    // reactive strategy to a final answer before the timeout witness can fire,
-    // so we omit them and let timeoutAfter be the deterministic witness.
-    if (live) b = b.withTools();
+      .withHarness(timeoutAfter({ wallClock: WALL_CLOCK, onTrigger: "terminate" }));
+    // Live: real built-in tools, so multi-step work accumulates tokens and
+    // trips budgetLimit. Test: one harmless scripted tool, so the run takes
+    // several slow turns and the before-think guards get to run.
+    b = live ? b.withTools({ builtins: true }) : b.withTools({ tools: [doStepTool] });
     // Small model for live runs (cheap; cost governance is the point).
     const model = opts?.model ?? (live ? "claude-haiku-4-5" : undefined);
     if (model) b = b.withModel(model);
     if (!live) {
-      // Delayed turns so the wall-clock timeout witness trips deterministically.
+      // Slow tool turns: the 10ms wall-clock cap is crossed after the first one.
       b = b.withTestScenario([
-        { text: "Working on it… step 1", delayMs: 50 },
-        { text: "step 2", delayMs: 50 },
+        { toolCall: { name: "do-step", args: { n: 1 } }, delayMs: 50 },
+        { toolCall: { name: "do-step", args: { n: 2 } }, delayMs: 50 },
         { text: "FINAL ANSWER: done." },
       ]);
     }
@@ -122,32 +125,18 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   const agent = await mkGoverned("cost-governed");
 
   let terminationReason = "";
-  const budgetSignals: { tokensUsed: number; costUsd: number; status: string; reason?: string }[] = [];
+  const budgetSignals: { budgetType: string; limit: number; used: number }[] = [];
   const unsubCompleted = await agent.subscribe("AgentCompleted", (e) => {
     terminationReason = e.terminationReason ?? "";
   });
-  // Budget signals (if the trace surface emits them) let us print used-vs-cap.
-  let unsubBudget: (() => void) | undefined;
-  try {
-    unsubBudget = await agent.subscribe(
-      "BudgetSignalCollected" as never,
-      (e: unknown) => {
-        const ev = e as { tokensUsed?: number; costUsd?: number; status?: string; reason?: string };
-        budgetSignals.push({
-          tokensUsed: ev.tokensUsed ?? 0,
-          costUsd: ev.costUsd ?? 0,
-          status: ev.status ?? "ok",
-          reason: ev.reason,
-        });
-      },
-    );
-  } catch {
-    // Event name not exposed on this build's typed subscribe surface — fine.
-  }
+  // budgetLimit() publishes BudgetExhausted with the real figures when it fires.
+  const unsubBudget = await agent.subscribe("BudgetExhausted", (e) => {
+    budgetSignals.push({ budgetType: e.budgetType, limit: e.limit, used: e.used });
+  });
 
   const result = await agent.run(task);
   unsubCompleted();
-  unsubBudget?.();
+  unsubBudget();
   await agent.dispose();
 
   const tokens = result.metadata.tokensUsed ?? 0;
@@ -182,7 +171,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
   console.log(`  wall-clock cap:     ${WALL_CLOCK}`);
   if (budgetSignals.length > 0) {
     const last = budgetSignals[budgetSignals.length - 1];
-    console.log(`  budget signal:      status=${last.status} tokens=${last.tokensUsed}${last.reason ? ` reason=${last.reason}` : ""}`);
+    console.log(`  budget exhausted:   ${last.budgetType} used=${last.used} limit=${last.limit}`);
   }
 
   // ─── Measured governance overhead (bare vs governed, same scenario) ───

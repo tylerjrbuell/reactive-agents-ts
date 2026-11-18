@@ -1,5 +1,5 @@
-import { AgentState } from "../world/schema.js";
-import { Weather } from "../world/schema.js";
+import type { AgentState } from "../world/schema.js";
+import type { Weather } from "../world/schema.js";
 
 type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
 type MutableAgent = Mutable<AgentState> & { needs: Mutable<AgentState["needs"]> };

@@ -1,4 +1,4 @@
-import { WorldState } from "../world/schema.js";
+import type { WorldState } from "../world/schema.js";
 import { parseWorld } from "./schema.js";
 import { makeFallbackWorld } from "./fallback.js";
 import { worldFromBlueprint } from "./blueprint.js";

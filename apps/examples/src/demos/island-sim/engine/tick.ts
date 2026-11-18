@@ -1,10 +1,10 @@
-import { WorldState, AgentState } from "../world/schema.js";
-import { SimEvent } from "./events.js";
+import type { WorldState, AgentState } from "../world/schema.js";
+import type { SimEvent } from "./events.js";
 import { applyAction } from "./actions.js";
 import { decayNeeds, deathCause, needsCritical } from "./needs.js";
 import { regrowResources } from "./resources.js";
 import { perceive } from "./perceive.js";
-import { Rng, makeRng } from "./rng.js";
+import { type Rng, makeRng } from "./rng.js";
 import { advanceIslandGameplay, initializeIslandGameplay } from "./gameplay.js";
 import type { Decision } from "../decision/types.js";
 import type { Perception } from "./perceive.js";

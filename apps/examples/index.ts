@@ -370,13 +370,6 @@ const EXAMPLES: ExampleMeta[] = [
         path: './src/reasoning/21-strategy-switch-live.ts',
     },
     {
-        num: 'R22',
-        label: 'long-context-curation',
-        category: 'reasoning',
-        requiresKey: false,
-        path: './src/reasoning/22-long-context-curation.ts',
-    },
-    {
         // xfail: 4 mechanisms (M3, M7, M9 focused, M12 matrix) await
         // cassette infrastructure. @reactive-agents/replay supports
         // identity replay only today; failure-then-success / multi-run

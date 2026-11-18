@@ -119,7 +119,7 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     console.log(`Demo 2 → ${demo2Passed ? "PASS (object=undefined, objectError set)" : "FAIL"}\n`);
 
     // Bonus: show StructuredOutputError is importable and is the right class.
-    const err = new StructuredOutputError("example error");
+    const err = new StructuredOutputError({ rawText: "bad input", issues: ["example error"] });
     console.log(`StructuredOutputError instanceof check: ${err instanceof StructuredOutputError}\n`);
   } else {
     console.log("── Demo 2: degrade on parse failure (skipped in live mode — test mode only) ──\n");

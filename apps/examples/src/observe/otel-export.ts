@@ -24,11 +24,13 @@ import {
   OpenInferenceTracerLayer,
   setupOpenInferenceExporter,
 } from "reactive-agents/observe";
+// Import the span classes from sdk-trace-node (it re-exports sdk-trace-base),
+// so the processor and the provider share one copy of sdk-trace-base types.
 import {
   InMemorySpanExporter,
+  NodeTracerProvider,
   SimpleSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
-import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+} from "@opentelemetry/sdk-trace-node";
 import * as otelApi from "@opentelemetry/api";
 
 export interface ExampleResult {

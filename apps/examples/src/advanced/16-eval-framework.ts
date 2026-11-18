@@ -61,21 +61,22 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
 
     const evalCase = {
       id: "capital-france-01",
+      name: "Capital of France",
       input: "What is the capital of France?",
       expectedOutput: "Paris",
-      dimensions: ["accuracy", "relevance"],
     };
+    const dimensions = ["accuracy", "relevance"];
 
     console.log(`  Evaluating case: ${evalCase.id}`);
-    console.log(`  Dimensions: ${evalCase.dimensions.join(", ")}`);
+    console.log(`  Dimensions: ${dimensions.join(", ")}`);
 
     const result = yield* evalSvc.runCase(
       evalCase,
       "test-agent",
-      evalCase.dimensions,
+      dimensions,
       agentResult.output,
       {
-        latencyMs: agentResult.metadata.durationMs ?? 0,
+        latencyMs: agentResult.metadata.duration,
         tokensUsed: agentResult.metadata.tokensUsed,
       },
     );

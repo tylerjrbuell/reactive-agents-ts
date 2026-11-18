@@ -43,10 +43,9 @@ export interface ExampleResult {
 const REPORT_FILE = "./crypto-research-report.md";
 const COINS = ["BTC", "ETH", "SOL"];
 
-// Canned CoinGecko-shaped payload. The test provider doesn't dispatch tools
-// today, but injecting a same-named mock SHADOWS the real built-in (custom
-// tools register after built-ins → last-writer-wins) so the example stays
-// offline even if the harness ever wires test-mode tool dispatch.
+// Canned CoinGecko-shaped payload. Injecting a same-named mock SHADOWS the
+// real built-in (custom tools register after built-ins, last writer wins), so
+// the scripted `crypto-price` call in test mode stays offline.
 const MOCK_PRICES = {
   prices: [
     { symbol: "BTC", name: "Bitcoin", price: 67_000, currency: "usd" },
@@ -150,13 +149,13 @@ export async function run(opts?: {
   });
 
   if (isTest) {
-    // NOTE: under the deterministic test provider, built-in tools are NOT
-    // dispatched (neither native `toolCall` nor `ACTION:` text reaches the act
-    // phase in this harness — see tools/healing-malformed-tool-call.ts). So the
-    // test scenario returns the finished briefing directly as the FINAL ANSWER
-    // and the witness asserts on the OUTPUT. Real tool execution (CoinGecko
-    // fetch + file-write) happens in LIVE mode against a real provider.
+    // Script the same tool path a live model takes: one batched price fetch
+    // (served by the mock above), one file-write, then the answer. The task
+    // names a file to write, so the harness does not count the run as a
+    // success until `file-write` has actually run.
     b = b.withTestScenario([
+      { toolCall: { name: "crypto-price", args: { coins: COINS } } },
+      { toolCall: { name: "file-write", args: { path: REPORT_FILE, content: REPORT_MD } } },
       { text: `${REPORT_MD}\nFINAL ANSWER: wrote ${REPORT_FILE}` },
     ]);
   }
@@ -170,9 +169,8 @@ export async function run(opts?: {
   console.log(`Output: ${result.output}`);
   console.log(`Steps: ${result.metadata.stepsCount}`);
 
-  // Witness. Test mode: tools aren't dispatched, so assert the briefing came
-  // back on the OUTPUT (success + a coin name present). Live mode: the real
-  // file-write tool ran — if the report exists, verify its contents too.
+  // Witness: the run succeeded and a coin name is in the output or the
+  // report. If file-write produced a report, it must mention a coin.
   const outputMentionsCoin = /bitcoin|ethereum|solana/i.test(result.output);
   const fileWritten = existsSync(REPORT_FILE);
   let fileMentionsCoin = false;

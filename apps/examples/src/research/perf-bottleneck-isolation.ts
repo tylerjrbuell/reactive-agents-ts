@@ -10,10 +10,13 @@
  *
  * Usage: DEFAULT_MODEL=qwen3.5:latest bun run apps/examples/src/research/perf-bottleneck-isolation.ts
  */
+import { Schema } from 'effect'
 import { ReactiveAgents } from 'reactive-agents'
+import { ProviderNameSchema } from '@reactive-agents/runtime'
 import type { AgentEvent } from '@reactive-agents/core'
 
-const PROVIDER = process.env.DEFAULT_PROVIDER || 'ollama'
+const envProvider = process.env.DEFAULT_PROVIDER || 'ollama'
+const PROVIDER = Schema.is(ProviderNameSchema)(envProvider) ? envProvider : 'ollama'
 const MODEL = process.env.DEFAULT_MODEL || 'qwen3.5:latest'
 
 interface Agg { count: number; totalMs: number }

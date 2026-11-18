@@ -55,9 +55,9 @@ async function runOne(strategy: Strat): Promise<ProbeRow> {
   await agent.dispose();
 
   const output = result.output ?? "";
-  const steps = result.steps ?? [];
-  const toolCalls = steps.filter((s: any) =>
-    s.type === "action" || (typeof s.content === "string" && /crypto-price/i.test(s.content)),
+  const steps = result.metadata.reasoningSteps ?? [];
+  const toolCalls = steps.filter((s) =>
+    s.type === "action" || /crypto-price/i.test(s.content),
   ).length;
 
   return {
