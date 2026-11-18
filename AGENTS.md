@@ -155,7 +155,7 @@ bun run docs:dev              # docs site (docs:build, docs:preview)
 
 ## Team-Ownership Dev Contract (standing; ratified 2026-09-03 on continued use — the pilot's lift evaluation never ran, see [[2026-09-03-warden-pilot-ratified]])
 
-Domain-scoped edits go to their warden via `Agent` dispatch (MissionBrief in, UpwardReport out); the main thread dispatches, verifies, integrates. **Owner of a path:** `bun run repo scope <files>` (source `tools/repo/ownership.json`). Cross-cutting: `harness-warden` (probes), `ablation-warden` (default-on, new mechanisms), `release-warden`, `debrief-scribe` (AAR). **Only exception:** hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` (each warden task also logs a YAML block there).
+Domain-scoped edits go to their warden via `Agent` dispatch (MissionBrief in, UpwardReport out); the main thread dispatches, verifies, integrates. **Owner of a path:** `bun run repo scope <files>` (source `tools/repo/ownership.json`). Cross-cutting: `harness-warden` (probes), `ablation-warden` (default-on, new mechanisms), `release-warden`, `debrief-scribe` (AAR). **Only exception:** hot-fix to red CI on `main`, logged with `bypass-reason` in `wiki/Research/Pilots/2026-05-23-team-ownership-dev-contract/log.md` (no per-task YAML since 2026-11-17).
 
 Schemas (contract v2, vendored from [`wardens`](https://github.com/tylerjrbuell/wardens)): `.agents/skills/mission-brief/SKILL.md`, `.agents/skills/upward-report/SKILL.md`. Validate a report and get the next action: `bun run repo warden-report <file>`.
 
