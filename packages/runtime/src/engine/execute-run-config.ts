@@ -23,6 +23,7 @@ import {
   resolveActOrAnswer,
   resolveHarnessConfig,
   type ActOrAnswerCalibration,
+  type ResolvedHarness,
 } from "@reactive-agents/reasoning";
 import type { ReactiveAgentsConfig } from "../types.js";
 import { disclosureFloor } from "./run-envelope-config.js";
@@ -111,6 +112,42 @@ export function buildRunConfigSnapshot(args: {
   // the resolved calibration and `config.provider` (the kernel's `providerName`).
   const actOrAnswer = resolveActOrAnswer(harness.actOrAnswer, args.calibration, String(config.provider ?? ""));
   const disclosure = resolveDisclosure(config, harness, args.env ?? process.env);
+  // Resolved harness mechanisms (explicit config > env > tier default > default).
+  // `satisfies` makes a new `ResolvedHarness` key a compile error until it is
+  // recorded here; tests/run-config-harness-drift.test.ts pins the same at runtime.
+  const harnessMechanisms = {
+    lazyDisclosure: harness.lazyDisclosure,
+    toolDiscovery: harness.toolDiscovery,
+    toolIndex: harness.toolIndex,
+    toolIndexMaxEntries: harness.toolIndexMaxEntries,
+    disclosureMode: harness.disclosureMode,
+    verboseRules: harness.verboseRules,
+    recencyBudgetChars: harness.recencyBudgetChars,
+    toolResultBudgetChars: harness.toolResultBudgetChars,
+    auditRationale: harness.auditRationale,
+    treeOfThoughtExploreBudgetMs: harness.treeOfThoughtExploreBudgetMs,
+    assemblyDebug: harness.assemblyDebug,
+    // Presence only: the dump path itself stays out of the trace.
+    promptDumpPathPrefix: harness.promptDumpPathPrefix !== undefined,
+    numCtxPolicy: harness.numCtxPolicy,
+    actOrAnswer: actOrAnswer.mode,
+    actOrAnswerSource: actOrAnswer.source,
+    inputCoverage: harness.inputCoverage === true,
+    writeCoverage: harness.writeCoverage === true,
+    stableToolList: harness.stableToolList === true,
+    compactCallConstraints: harness.compactCallConstraints === true,
+    budgetAnswerTurn: harness.budgetAnswerTurn === true,
+    leanThinking: harness.leanThinking === true,
+    computeOffload: harness.computeOffload === true,
+    planToolCatalog: harness.planToolCatalog === true,
+    planBudget: harness.planBudget !== false,
+    autoTick: harness.autoTick !== false,
+    bookkeepingRefund: harness.bookkeepingRefund !== false,
+    planRecon: harness.planRecon === true,
+    wrapUpReserve: harness.wrapUpReserve === true,
+    todoWrapUp: harness.todoWrapUp === true,
+    llmRecoveryBudget: llmRecoveryBudgetOf(harness),
+  } satisfies { readonly [K in keyof ResolvedHarness]-?: unknown } & { readonly actOrAnswerSource: unknown };
   const mechanisms = defined({
     leanHarness: lean,
     longHorizon: config.horizonProfile === "long",
@@ -135,29 +172,7 @@ export function buildRunConfigSnapshot(args: {
     customVerifier: config.verifier !== undefined && !lean,
     modelRouting: config.modelRouting !== undefined,
     contract: config.taskContract !== undefined,
-    // Resolved harness mechanisms (explicit config > env > tier default > default).
-    lazyDisclosure: harness.lazyDisclosure,
-    toolDiscovery: harness.toolDiscovery,
-    toolIndex: harness.toolIndex,
-    verboseRules: harness.verboseRules,
-    auditRationale: harness.auditRationale,
-    assemblyDebug: harness.assemblyDebug,
-    numCtxPolicy: harness.numCtxPolicy,
-    actOrAnswer: actOrAnswer.mode,
-    actOrAnswerSource: actOrAnswer.source,
-    inputCoverage: harness.inputCoverage === true,
-    stableToolList: harness.stableToolList === true,
-    compactCallConstraints: harness.compactCallConstraints === true,
-    budgetAnswerTurn: harness.budgetAnswerTurn === true,
-    leanThinking: harness.leanThinking === true,
-    computeOffload: harness.computeOffload === true,
-    planToolCatalog: harness.planToolCatalog === true,
-    planBudget: harness.planBudget !== false,
-    autoTick: harness.autoTick !== false,
-    bookkeepingRefund: harness.bookkeepingRefund !== false,
-    planRecon: harness.planRecon === true,
-    wrapUpReserve: harness.wrapUpReserve === true,
-    llmRecoveryBudget: llmRecoveryBudgetOf(harness),
+    ...harnessMechanisms,
   });
   const contract = config.taskContract;
   const metaOn = config.metaTools
