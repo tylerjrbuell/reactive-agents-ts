@@ -15,6 +15,7 @@ import { homedir } from 'node:os'
 import { wireRiHooks } from '../ri-wiring.js'
 import { probeAutoShadow } from '../../judgment-autoshadow.js'
 import { unwrapError } from '../../errors.js'
+import { emitBuilderNotice } from '../builder-notice.js'
 import type { ReactiveAgent } from '../../reactive-agent.js'
 import type { MCPServerConfig } from '../../runtime.js'
 import type { BuilderState } from '../withers/_state.js'
@@ -252,9 +253,7 @@ export const buildAgent = async <TOut>(
             )
             if (riskWarning !== undefined) validation.warnings.push(riskWarning)
         }
-        for (const warning of validation.warnings) {
-            console.warn(`⚠ ${warning}`)
-        }
+        for (const warning of validation.warnings) emitBuilderNotice(warning)
         // A tools-enabled agent with zero capability tools: one notice naming
         // the fix (spec §12.8 Q1). Same channel as the withMetaTools notice.
         if (state._enableTools) {
@@ -266,7 +265,7 @@ export const buildAgent = async <TOut>(
                 hasAgentTools: state._agentTools.length > 0 || state._allowDynamicSubAgents,
                 hasDocuments: state._documents.length > 0,
             })
-            if (notice !== undefined) Effect.runSync(Effect.logWarning(notice))
+            if (notice !== undefined) emitBuilderNotice(notice)
         }
         if (validation.errors.length > 0) {
             throw new BuildValidationError(validation.errors)
@@ -278,7 +277,11 @@ export const buildAgent = async <TOut>(
             throw new Error(`Provider connection failed: ${conn.error}`)
         }
 
-        logBuildInfo(state._provider, validation.resolvedModel, state._providerConfig?.apiKey)
+        // Verbosity counts only when observability is on: the same rule the
+        // runtime applies when it builds the ObservabilityService.
+        logBuildInfo(state._provider, validation.resolvedModel, state._providerConfig?.apiKey, {
+            verbosity: state._enableObservability ? state._observabilityOptions.verbosity : undefined,
+        })
 
         const agent = await Effect.runPromise(deps.buildEffect()).catch((e) => {
             throw unwrapError(e)

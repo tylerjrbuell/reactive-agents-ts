@@ -7,26 +7,27 @@ import {
 } from "../src/builder/meta-tools-resolution";
 
 describe("withMetaTools dropped-default notice", () => {
-  // The notice goes through Effect.logWarning (framework logger path), whose
-  // default logger writes via console.log — never console.warn.
+  // The notice goes through the builder notice channel (builder-notice.ts):
+  // one `⚠ ` line on stderr (console.warn), never stdout.
   let warn: ReturnType<typeof spyOn>;
-  let consoleWarn: ReturnType<typeof spyOn>;
+  let consoleLog: ReturnType<typeof spyOn>;
   beforeEach(() => {
-    warn = spyOn(console, "log").mockImplementation(() => {});
-    consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+    warn = spyOn(console, "warn").mockImplementation(() => {});
+    consoleLog = spyOn(console, "log").mockImplementation(() => {});
   });
   afterEach(() => {
     warn.mockRestore();
-    consoleWarn.mockRestore();
+    consoleLog.mockRestore();
   });
 
   test("{ todo: true } logs exactly one notice naming recall", () => {
     ReactiveAgents.create().withMetaTools({ todo: true });
     expect(warn).toHaveBeenCalledTimes(1);
     const msg = String(warn.mock.calls[0]?.[0]);
+    expect(msg).toStartWith("⚠ ");
     expect(msg).toContain("recall");
     expect(msg).toContain("recall: true");
-    expect(consoleWarn).not.toHaveBeenCalled();
+    expect(consoleLog).not.toHaveBeenCalled();
   });
 
   test("{ todo: true, recall: true } logs nothing", () => {

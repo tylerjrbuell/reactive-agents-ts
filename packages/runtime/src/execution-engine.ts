@@ -71,7 +71,7 @@ import { mintTraceLinkage } from "./engine/finalize/trace-linkage.js";
 // ─── Execution-cluster decomposition (GH #221 W26) ───
 // Verbatim cluster extractions lifted out of this file; each module's header
 // doc names the cluster and the former line range.
-import { bindExecutionObservability, makeExecutionLogger } from "./engine/execute-obs-wiring.js";
+import { bindExecutionObservability, makeExecutionLogger, resolveStatusMode } from "./engine/execute-obs-wiring.js";
 import { registerExecutionEventCollectors } from "./engine/execute-event-collectors.js";
 import { resolveContractAndKillSwitch } from "./engine/execute-killswitch-bridge.js";
 import { makeLifecycleGuard } from "./engine/execute-lifecycle-guard.js";
@@ -748,20 +748,9 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 return result;
               });
 
-            // Initialize ObservableLogger
-            //
-            // Status-mode auto-activation uses an explicit opt-out signal so
-            // the runtime never reads NODE_ENV (HS-01, 2026-05-20 sweep).
-            // Tests/CI set `logging.disableStatusMode: true` or the
-            // `REACTIVE_AGENTS_DISABLE_STATUS_MODE=true` env var.
-            const statusModeDisabled =
-              config.logging?.disableStatusMode === true ||
-              process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE === "true";
-            const isStatusMode =
-              config.logging?.mode === "status" ||
-              (config.logging?.mode !== "stream" &&
-                Boolean(process.stdout.isTTY) &&
-                !statusModeDisabled);
+            // Initialize ObservableLogger. Status mode rule (TTY, opt-outs,
+            // "minimal" verbosity): engine/execute-obs-wiring.ts.
+            const isStatusMode = resolveStatusMode(config.logging, verbosity);
 
             const loggerConfig = {
               // In status mode the renderer owns all output; logger stays buffered

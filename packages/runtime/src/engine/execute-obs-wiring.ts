@@ -165,3 +165,41 @@ export const makeExecutionLogger = (
     }
     return logger;
   });
+
+/** Host facts {@link resolveStatusMode} reads; tests inject both. */
+export interface StatusModeEnvironment {
+  readonly stdoutIsTTY?: () => boolean;
+  /** `REACTIVE_AGENTS_DISABLE_STATUS_MODE` value. Default: read from `process.env`. */
+  readonly disableStatusModeEnv?: string;
+}
+
+/**
+ * Whether this execution hands stdout to the live status line.
+ *
+ * `logging.mode: "status"` always wins. Otherwise status mode turns on by
+ * itself only when stdout is a TTY, nothing opted out
+ * (`logging.disableStatusMode` or `REACTIVE_AGENTS_DISABLE_STATUS_MODE=true`;
+ * the runtime never reads NODE_ENV, HS-01), and verbosity is not "minimal".
+ * On a TTY "minimal" is only ever explicit, so
+ * `withObservability({ verbosity: "minimal" })` prints the answer alone.
+ *
+ * @param logging - The engine's `logging` config.
+ * @param verbosity - The execution's resolved verbosity.
+ * @param environment - Host facts; tests inject them.
+ */
+export const resolveStatusMode = (
+  logging: Pick<NonNullable<ReactiveAgentsConfig["logging"]>, "mode" | "disableStatusMode"> | undefined,
+  verbosity: ExecutionVerbosity,
+  environment: StatusModeEnvironment = {},
+): boolean => {
+  if (logging?.mode === "status") return true;
+  const disabledByEnv =
+    (environment.disableStatusModeEnv ?? process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE) === "true";
+  return (
+    logging?.mode !== "stream" &&
+    logging?.disableStatusMode !== true &&
+    !disabledByEnv &&
+    verbosity !== "minimal" &&
+    (environment.stdoutIsTTY ?? stdoutIsTTY)()
+  );
+};

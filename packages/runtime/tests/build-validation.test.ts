@@ -1,6 +1,7 @@
 import { describe, test, expect, afterEach } from "bun:test";
 import { ReactiveAgents } from "../src";
 import { validateProviderConnection, logBuildInfo } from "../src/build-validation";
+import { withStdoutTTY } from "./_helpers-tty.js";
 
 describe("Build-time validation", () => {
   const originalEnv = { ...process.env };
@@ -97,7 +98,7 @@ describe("Build-time validation", () => {
     const origLog = console.log;
     console.log = (msg: string) => lines.push(msg);
     try {
-      logBuildInfo("anthropic", "claude-sonnet-4-6");
+      logBuildInfo("anthropic", "claude-sonnet-4-6", undefined, { stdoutIsTTY: () => true });
     } finally {
       console.log = origLog;
     }
@@ -173,7 +174,7 @@ describe("Build-time validation", () => {
     expect(result.ok).toBe(true);
   });
 
-  test("logs resolved provider info on build", async () => {
+  test("logs resolved provider info on build (terminal stdout)", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-test123";
     const logs: string[] = [];
     const origLog = console.log;
@@ -181,7 +182,8 @@ describe("Build-time validation", () => {
       if (typeof msg === "string") logs.push(msg);
     };
 
-    const agent = await ReactiveAgents.create().withProvider("anthropic").build();
+    // A piped stdout stays quiet (tests/quiet-first-run-output.test.ts).
+    const agent = await withStdoutTTY(true, () => ReactiveAgents.create().withProvider("anthropic").build());
 
     console.log = origLog;
     await agent.dispose();

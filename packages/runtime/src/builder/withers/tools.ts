@@ -6,6 +6,7 @@
  * `.withDocuments()`, `.withRequiredTools()`, `.withMCP()`, `.withMetaTools()`.
  */
 import { droppedMetaToolsNotice } from "../meta-tools-resolution.js";
+import { emitBuilderNotice } from "../builder-notice.js";
 import { ToolBuilder, type RagMemoryStore, type ToolDefinition } from '@reactive-agents/tools';
 import { Effect, Either } from "effect";
 import { resolveWorkspaceDir } from "../../engine/start-run.js";
@@ -191,12 +192,10 @@ export const applyWithTools = (
   s._enableTools = true;
   if (options) {
     for (const { key, suggestion } of unknownToolsOptionKeys(options)) {
-      Effect.runSync(
-        Effect.logWarning(
-          `withTools: unknown option '${key}' ignored` +
-            (suggestion !== undefined ? ` — did you mean '${suggestion}'?` : "") +
-            ` Valid options: ${Object.keys(TOOLS_OPTION_KEYS).join(", ")}.`,
-        ),
+      emitBuilderNotice(
+        `withTools: unknown option '${key}' ignored` +
+          (suggestion !== undefined ? ` — did you mean '${suggestion}'?` : "") +
+          ` Valid options: ${Object.keys(TOOLS_OPTION_KEYS).join(", ")}.`,
       );
     }
     const { required, ...rest } = options;
@@ -311,7 +310,7 @@ export const applyWithMetaTools = (
   } else {
     if (config !== undefined) {
       const notice = droppedMetaToolsNotice(config);
-      if (notice !== undefined) Effect.runSync(Effect.logWarning(notice));
+      if (notice !== undefined) emitBuilderNotice(notice);
     }
     s._metaTools = config ?? {
       brief: true,

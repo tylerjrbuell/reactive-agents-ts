@@ -332,10 +332,10 @@ async function firstVisibleSurface(tools: ToolsOptions): Promise<readonly string
 }
 
 describe("R3: withTools({ include }) is not an option — it must not be dropped silently", () => {
-  // Effect.logWarning's default logger writes via console.log.
+  // Builder notices print one `⚠ ` line via console.warn (builder-notice.ts).
   let log: ReturnType<typeof spyOn>;
   beforeEach(() => {
-    log = spyOn(console, "log").mockImplementation(() => {});
+    log = spyOn(console, "warn").mockImplementation(() => {});
   });
   afterEach(() => {
     log.mockRestore();
@@ -357,7 +357,7 @@ describe("R3: withTools({ include }) is not an option — it must not be dropped
     expect(viaBuiltins).toContain("file-read");
     expect(viaInclude).not.toContain("file-write");
     expect(viaInclude).not.toContain("file-read");
-    log = spyOn(console, "log").mockImplementation(() => {});
+    log = spyOn(console, "warn").mockImplementation(() => {});
   }, 30000);
 
   it("the wither logs one notice naming the unknown key and the key it meant", () => {

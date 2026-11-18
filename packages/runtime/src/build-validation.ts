@@ -1,5 +1,6 @@
 import { checkOllamaConnection, resolveCanonical } from "@reactive-agents/llm-provider";
 import { capabilitySourcePreflight } from "@reactive-agents/core";
+import { resolveVerbosity, stdoutIsTTY, type VerbosityLevel } from "@reactive-agents/observability";
 import type {
   ContractCapability as Capability,
   TaskContract,
@@ -338,11 +339,35 @@ export async function validateProviderConnection(
   return { ok: true };
 }
 
+/** When {@link logBuildInfo} prints: the run's verbosity and the stdout it lands on. */
+export interface BuildInfoDisplay {
+  /** Verbosity set with `withObservability({ verbosity })`; `undefined` when none was set. */
+  readonly verbosity?: VerbosityLevel;
+  /** Host fact; tests inject it. Default: `process.stdout.isTTY`. */
+  readonly stdoutIsTTY?: () => boolean;
+}
+
+/**
+ * Print the `✓ Provider | Model | API key` line after a successful build.
+ *
+ * Narration, so it follows the same verbosity rule as phase lines
+ * (`resolveVerbosity`): it prints only when the resolved verbosity is not
+ * "minimal". Unset verbosity piped (`| cat`, CI, a server) resolves to
+ * "minimal", so stdout carries the answer alone. The key itself never prints.
+ *
+ * @param provider - Provider name.
+ * @param resolvedModel - Model the build resolved.
+ * @param providerApiKeyOverride - Key passed via `.withProvider` config.
+ * @param display - Verbosity and TTY facts; see {@link BuildInfoDisplay}.
+ */
 export function logBuildInfo(
   provider: ProviderName,
   resolvedModel: string,
   providerApiKeyOverride?: string,
+  display: BuildInfoDisplay = {},
 ): void {
+  const isTTY = (display.stdoutIsTTY ?? stdoutIsTTY)();
+  if (resolveVerbosity(display.verbosity, isTTY) === "minimal") return;
   const key = readProviderApiKey(provider) ?? providerApiKeyOverride;
   const keyDisplay =
     key
