@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Effect } from "effect";
 import { resolveOllamaEndpoint } from "@reactive-agents/llm-provider";
 import {
@@ -17,8 +17,25 @@ import {
 
 const VARS = ["OLLAMA_ENDPOINT", "OLLAMA_HOST", "OLLAMA_BASE"] as const;
 
+// Isolate from the developer/CI shell: every test starts with the Ollama
+// endpoint vars cleared; tests that exercise env handling set them explicitly.
+// The shell's original values are restored after each test.
+const saved = new Map<(typeof VARS)[number], string | undefined>();
+
+beforeEach(() => {
+  for (const v of VARS) {
+    saved.set(v, process.env[v]);
+    delete process.env[v];
+  }
+});
+
 afterEach(() => {
-  for (const v of VARS) delete process.env[v];
+  for (const v of VARS) {
+    const value = saved.get(v);
+    if (value === undefined) delete process.env[v];
+    else process.env[v] = value;
+  }
+  saved.clear();
 });
 
 const oneNoul: QuestionSpecs = { q: { type: "noul" } };
