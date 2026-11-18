@@ -69,7 +69,7 @@ No manual instrumentation is needed. `MetricsCollector` auto-subscribes to the E
 | `"verbose"` | Full dashboard | + reasoning steps + LLM call summary |
 | `"debug"` | Full dashboard | + full prompt/tool I/O (no truncation) |
 
-With no `verbosity` set and stdout not a terminal (a server, a pipe, CI, an embedding app), only warnings and errors print. Set `verbosity` explicitly to get the dashboard there. See [Observability](/features/observability/).
+With no `verbosity` set and stdout not a terminal (a server, a pipe, CI, an embedding app), only warnings and errors print, to stderr, so stdout carries only the answer. Set `verbosity` explicitly to get the dashboard there. See [Observability](/features/observability/).
 
 ## Live Phase Streaming
 

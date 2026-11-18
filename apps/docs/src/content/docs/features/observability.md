@@ -14,7 +14,7 @@ related:
 The observability layer gives you full visibility into agent behavior. Every execution phase emits spans, every LLM call records metrics, and every decision is logged with structured context.
 
 :::note[Default verbosity depends on stdout]
-Call `.withObservability({ verbosity: "normal" | "verbose" | "debug", live: true })` to turn on the metrics dashboard and live streaming. When you set no `verbosity`, the default follows where stdout goes: an interactive terminal gets `"normal"`; a non-TTY stdout (a server, a pipe, CI, or an app that embeds the library) prints warnings and errors only, with no phase narration, spans or dashboard. An explicit `verbosity` always wins, and an explicit `"minimal"` stays fully silent. EventBus events and traces are unchanged: the default only affects what is printed to stdout. The policy is exported as `resolveVerbosity(explicit, isTTY)`.
+Call `.withObservability({ verbosity: "normal" | "verbose" | "debug", live: true })` to turn on the metrics dashboard and live streaming. When you set no `verbosity`, the default follows where stdout goes: an interactive terminal gets `"normal"`; a non-TTY stdout (a server, a pipe, CI, or an app that embeds the library) prints warnings and errors only, to stderr, with no phase narration, spans or dashboard, so stdout carries only the answer. An explicit `verbosity` always wins, and an explicit `"minimal"` stays fully silent. EventBus events and traces are unchanged: the default only affects what is printed. The policy is exported as `resolveVerbosity(explicit, isTTY)`.
 :::
 
 ## Quick Start
