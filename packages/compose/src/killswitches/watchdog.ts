@@ -21,6 +21,15 @@ export function watchdog(options: WatchdogOptions): (harness: Harness) => void {
   return (harness: Harness) => {
     let lastProgress = Date.now();
 
+    // A kernel run starting is the zero point for "no progress". Without this
+    // the clock ran from harness registration (agent build) or the previous
+    // run's last turn, so a run started after an idle gap longer than the
+    // threshold was aborted on its first think turn.
+    harness.before('bootstrap', () => {
+      lastProgress = Date.now();
+      return undefined;
+    });
+
     // Progress = a tool batch executed. Tracked on after('act'), which the
     // runner actually fires (act.ts). The original observation.tool-result
     // tap was dead — that tag has no runtime emit site (v0.12 deferred

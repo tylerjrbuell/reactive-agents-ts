@@ -217,14 +217,15 @@ describe('timeoutAfter', () => {
     expect(boots2.length).toBe(1);
   });
 
-  it('cleans up timer on complete', async () => {
+  it('arms no timer, so there is nothing to clean up on complete', async () => {
+    // The clock is a start timestamp checked at before(think), not a
+    // setTimeout, so no timer outlives the run. It must NOT hook complete:
+    // complete fires at the end of every pass, and a run can have several
+    // (see killswitch-run-clock.test.ts).
     const pipeline = buildPipeline(timeoutAfter({ wallClock: '10s' }));
     const bootstrapHooks = pipeline.collectPhaseHooks('before', 'bootstrap');
     for (const h of bootstrapHooks) await h({ phase: 'bootstrap', iteration: 0, state: mockState });
-    const completeHooks = pipeline.collectPhaseHooks('after', 'complete');
-    expect(completeHooks.length).toBe(1);
-    await completeHooks[0]!({ phase: 'complete', iteration: 1, state: mockState });
-    // Should not crash or leave timer running
+    expect(pipeline.collectPhaseHooks('after', 'complete')).toHaveLength(0);
   });
 });
 
