@@ -18,7 +18,8 @@
  *    requested action undone;
  *  - every file the task names was touched by a tool ({@link unreadNamedInputs});
  *    a satisfied `tool-coverage` alone is not evidence the task is answerable
- *    (ablation 2026-11-18: one of two files read, tool-less partial reply ended the run);
+ *    (ablation 2026-11-18: one of two files read, tool-less partial reply ended the run),
+ *    and every prose-named input has a call ({@link unreadProseInputs});
  *  - no lean turn was taken since the last tool call (`leanFinalTurnAtActions`).
  *
  * Such a call ships with NO tools (the same withhold as the exit gate's answer
@@ -88,6 +89,30 @@ export function unreadNamedInputs(task: string, steps: readonly { readonly type:
   return [...out];
 }
 
+/** A read-type verb and the object phrase it governs, up to the clause end. */
+const READ_CLAUSE =
+  /\b(?:read|open|load|fetch|review|inspect|gather|retrieve|look\s+at)\s+([^.;:\n]*?)(?=,?\s+(?:and\s+then|then|after|before|so|to)\b|[.;:\n]|$)/gi;
+/** A counted object starts with a determiner or ordinal ("the first report"), so a second VERB phrase is not one. */
+const COUNTED_OBJECT = /^(?:the|a|an|my|our|each|both|this|that|first|second|third|fourth|fifth|\d+)\b/i;
+
+/**
+ * Inputs the task names in PROSE ("read the first report and the second report")
+ * that no tool call has covered yet: the coordinated objects of a read verb,
+ * minus the tool calls made so far. Filename tokens are blind to such inputs
+ * (zoo shape unread-input-prose: one read, then a tool-less partial reply ended
+ * the run), so the lean turn holds until the task's declared count of read
+ * objects has a call each. Over-counting only keeps the full turn (the safe
+ * side). Deterministic; a task with fewer than two counted objects reports 0.
+ */
+export function unreadProseInputs(task: string, steps: readonly { readonly type: string }[]): number {
+  let wanted = 0;
+  for (const m of task.matchAll(READ_CLAUSE)) {
+    const parts = (m[1] ?? "").split(/\s*(?:,|\band\b)\s*/).filter((p) => p.trim().length > 0);
+    if (parts.length >= 2 && parts.every((p) => COUNTED_OBJECT.test(p.trim()))) wanted = Math.max(wanted, parts.length);
+  }
+  return Math.max(0, wanted - steps.filter((s) => s.type === "action").length);
+}
+
 /** The deterministic facts {@link shouldTakeLeanFinalTurn} decides from. */
 export interface LeanFinalTurnFacts {
   readonly enabled: boolean;
@@ -152,7 +177,7 @@ export function decideLeanFinalTurn(args: {
       planPosture: false,
       declaresToolWork: (state.meta.runContract?.requirements ?? []).some((r) => TOOL_WORK_KINDS.has(r.kind)),
       toolWorkSettled: toolWorkSettled(state, input) !== undefined,
-      inputsRead: unreadNamedInputs(input.task, state.steps).length === 0,
+      inputsRead: unreadNamedInputs(input.task, state.steps).length === 0 && unreadProseInputs(input.task, state.steps) === 0,
       actions,
       takenAtActions: state.meta.leanFinalTurnAtActions,
     });

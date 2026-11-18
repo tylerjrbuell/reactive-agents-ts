@@ -10,13 +10,13 @@ const hint = findMechanism("parallelToolHint")!;
 const wrap = findMechanism("wrapUpReserve")!;
 
 describe("shape 4: correct derived answer vetoed as fabrication (rw-6)", () => {
-  it("the terminal fabricated-measurement veto ends the run failed with no repair turn (standing defect, kernel/verifier owner)", async () => {
+  it("a projection beyond measured timings (no comparison claim) ships with an advisory, not a terminal failure", async () => {
     const off = await runArm(fabricationVeto, armConfig());
     expect(off.toolSeq).toEqual(["code-execute"]);
-    expect(off.turns).toBe(2); // no turn left for the model to drop the figure
-    expect(off.status).toBe("failed");
-    expect(off.guardReasons.join("\n")).toContain("output-not-fabricated-measurement");
-    expect(off.meetsIdeal).toBe(false); // flips true when the veto grants a repair turn
+    expect(off.turns).toBe(2);
+    expect(off.status).toBe("completed");
+    expect(off.output).toContain("650 ms"); // kept, labelled by the verification warning
+    expect(off.meetsIdeal).toBe(true);
   }, 30000);
 
   it("no swept mechanism repairs it: wrapUpReserve is inert", async () => {

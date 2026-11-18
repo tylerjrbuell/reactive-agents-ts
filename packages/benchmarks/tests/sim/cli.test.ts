@@ -20,12 +20,14 @@ afterEach(() => {
 });
 
 describe("bench:sim CLI", () => {
-  it("exit 1 and a HURTS row when a shape is hurt (leanFinalTurn on prose-named inputs)", async () => {
+  // The exit-1-on-HURTS branch (`cells.some(hurts)`) has no registered cell to drive it since the
+  // 2026-11-18 kernel fixes cleared every deterministic HURTS; matrix.test.ts pins the verdict itself.
+  it("exit 0 with the fixed lean gate: prose- and filename-named inputs are both NEUTRAL", async () => {
     const code = await main(["--mechanism", "leanFinalTurn", "--shapes", "unread-input-prose,unread-input-filename"]);
-    expect(code).toBe(1);
+    expect(code).toBe(0);
     const text = out.join("\n");
     expect(text).toContain("deterministic");
-    expect(text).toMatch(/unread-input-prose\s+leanFinalTurn\s+HURTS/);
+    expect(text).toMatch(/unread-input-prose\s+leanFinalTurn\s+NEUTRAL/);
     expect(text).toMatch(/unread-input-filename\s+leanFinalTurn\s+NEUTRAL/);
   }, 30000);
 

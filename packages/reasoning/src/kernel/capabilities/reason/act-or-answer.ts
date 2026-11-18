@@ -85,6 +85,7 @@ import type { ReasoningStep } from "../../../types/index.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
 import type { ActOrAnswerMode, ResolvedHarness } from "../../../harness-config.js";
 import type { ContextProfile } from "../../../context/context-profile.js";
+import { declineSettlesOutstanding } from "../../loop/honest-decline-exit.js";
 import { isFailedToolObservation } from "../../utils/observation-helpers.js";
 import { resolveAssistantTurn, type AssistantTurnMeta } from "./assistant-turn.js";
 import { prepareThinkGatewayCall, type PrepareThinkGatewayCallParams } from "./prepare-think-gateway-call.js";
@@ -392,7 +393,8 @@ export function planProactiveActOrAnswer(
   // Cheap gates first: the delivery check runs only in proactive mode on native FC.
   const mode = effectiveActOrAnswerMode(surface.h);
   if (mode !== "proactive" || context.toolCallingDriver.mode !== "native-fc") return undefined;
-  const outstanding = outstandingToolWork(state, context.input);
+  const rawOutstanding = outstandingToolWork(state, context.input);
+  const outstanding = declineSettlesOutstanding(state, context.input, rawOutstanding) ? [] : rawOutstanding;
   const fire = shouldForceFirstRequest({
     mode,
     nativeFC: true,
@@ -518,7 +520,12 @@ function retryActOrAnswer(params: ActOrAnswerParams, first: ConsumedThinkStream,
     if ((!mode && !unforced) || context.toolCallingDriver.mode !== "native-fc" || (called && !unforced)) {
       return first;
     }
-    const outstanding = outstandingToolWork(state, input);
+    // An honest decline after a required tool that only ever failed is no
+    // stall: forcing another call would bury it (honest-decline-exit.ts).
+    const rawOutstanding = outstandingToolWork(state, input);
+    const outstanding = declineSettlesOutstanding(state, input, rawOutstanding, called ? undefined : first.accumulatedContent)
+      ? []
+      : rawOutstanding;
     const opportunity = unforced && !params.toolsWithheld && prepare.llmTools.length > 0 && outstanding.length > 0;
     if (called) return tallied(first, { unforcedToolWork: opportunity });
     const turn = yield* resolveAssistantTurn({

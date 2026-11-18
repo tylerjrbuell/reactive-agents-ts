@@ -10,7 +10,7 @@ import { Effect } from "effect";
 import { proposeExit, DISPATCHER_EARLY_STOP } from "../../src/kernel/loop/exit-gate.js";
 import { passthroughOutputDeliverable } from "../../src/kernel/loop/runner-helpers/deliverable.js";
 import { deriveTerminatedBy } from "../../src/kernel/loop/terminate-reason.js";
-import { honestDeclineOf } from "../../src/kernel/loop/honest-decline-exit.js";
+import { honestDeclineOf, declineSettlesOutstanding } from "../../src/kernel/loop/honest-decline-exit.js";
 import { looksLikeHonestDecline } from "../../src/kernel/capabilities/decide/abstention-detection.js";
 import { makeKernelInput, makeKernelState } from "../../src/testing/kernel-fixtures.js";
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
@@ -95,5 +95,25 @@ describe("looksLikeHonestDecline", () => {
     expect(looksLikeHonestDecline("Here is the summary of the report.")).toBe(false);
     expect(looksLikeHonestDecline("")).toBe(false);
     expect(looksLikeHonestDecline(`${DECLINE} ${"x ".repeat(400)}`)).toBe(false);
+  });
+});
+
+describe("declineSettlesOutstanding: act-or-answer must not force a read the model declined", () => {
+  const permanentlyFailed = (s: KernelState): KernelState =>
+    ({ ...s, evidence: { ...s.evidence, permanentlyFailed: new Set(["file-read"]) } }) as KernelState;
+
+  it("same conditions as the gate (even when the tool is marked permanently failed) -> settled", () => {
+    const s = permanentlyFailed(stateWith([...failedReads, makeStep("thought", DECLINE)]));
+    expect(declineSettlesOutstanding(s, INPUT, ["file-read"])).toBe(true);
+    expect(declineSettlesOutstanding(s, INPUT, ["file-read"], DECLINE)).toBe(true);
+  });
+
+  it("not settled: tool succeeded once, a single failure, a partial answer, or other outstanding work", () => {
+    const ok = stateWith([readResult(false), readResult(true), readResult(false), readResult(false), makeStep("thought", DECLINE)]);
+    expect(declineSettlesOutstanding(ok, INPUT, ["file-read"])).toBe(false);
+    expect(declineSettlesOutstanding(stateWith([readResult(false), makeStep("thought", DECLINE)]), INPUT, ["file-read"])).toBe(false);
+    const s = permanentlyFailed(stateWith(failedReads));
+    expect(declineSettlesOutstanding(s, INPUT, ["file-read"], "The total is 412.")).toBe(false);
+    expect(declineSettlesOutstanding(s, INPUT, ["file-read", "file-write"], DECLINE)).toBe(false);
   });
 });

@@ -27,6 +27,7 @@ import { deliverableTextOf } from "../capabilities/reason/assistant-turn.js";
 import { unresolvedThoughtSet } from "../capabilities/reflect/unresolved-steps.js";
 import { looksLikeHonestDecline } from "../capabilities/decide/abstention-detection.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
+import { missingRequired } from "../capabilities/verify/requirement-state.js";
 import { executedOutcomes } from "./runner-helpers/tool-health.js";
 
 /** Failed executed calls, with no success, before a required tool counts as always-erroring. */
@@ -63,15 +64,56 @@ export function honestDeclineOf(
   input: KernelInput,
   outstanding: readonly string[],
 ): HonestDecline | undefined {
-  const missing = missingRequiredToolsForInput(state, input);
-  if (missing.length === 0 || outstanding.length === 0) return undefined;
+  const missing = neverSucceededRequired(state, input);
+  if (missing === undefined || outstanding.length === 0) return undefined;
   // Everything outstanding must be one of the missing required tools.
   if (!outstanding.every((item) => missing.some((tool) => item.includes(`\`${tool}\``)))) return undefined;
+  const text = latestTextAfterEvidence(state);
+  return text !== undefined && looksLikeHonestDecline(text) ? { text, missing } : undefined;
+}
+
+/**
+ * The missing required tools when EVERY one was called at least
+ * {@link MIN_FAILED_CALLS} times and never succeeded (the input is genuinely
+ * unavailable); undefined when nothing is missing or any tool is still viable.
+ */
+function neverSucceededRequired(state: KernelState, input: KernelInput): readonly string[] | undefined {
+  return neverSucceededAmong(state, missingRequiredToolsForInput(state, input));
+}
+
+function neverSucceededAmong(state: KernelState, missing: readonly string[]): readonly string[] | undefined {
+  if (missing.length === 0) return undefined;
   const outcomes = executedOutcomes(state.steps);
   for (const tool of missing) {
     const mine = outcomes.filter((o) => o.toolName === tool);
     if (mine.length < MIN_FAILED_CALLS || mine.some((o) => o.success)) return undefined;
   }
-  const text = latestTextAfterEvidence(state);
-  return text !== undefined && looksLikeHonestDecline(text) ? { text, missing } : undefined;
+  return missing;
+}
+
+/**
+ * True when the tool work still listed as `outstanding` (raw tool names, as
+ * act-or-answer lists it) is only required tools that never succeeded AND the
+ * model has declined because of it: forcing another call of those tools would
+ * only bury the honest decline (shape zoo honest-decline: act-or-answer
+ * turned an abstention into 11 turns of re-reads). `text` is the model's
+ * reply this turn when the caller holds it; default is its latest tool-free
+ * text. Same conditions as {@link honestDeclineOf}; pure.
+ */
+export function declineSettlesOutstanding(
+  state: KernelState,
+  input: KernelInput,
+  outstanding: readonly string[],
+  text?: string,
+): boolean {
+  // Raw missing list: a tool marked permanently failed is exactly the case here
+  // (effectiveMissingRequired drops it, but its delivery condition stays listed).
+  const missing = neverSucceededAmong(
+    state,
+    missingRequired(state.evidence, input.requiredTools ?? [], input.requiredToolQuantities),
+  );
+  if (missing === undefined || outstanding.length === 0) return false;
+  if (!outstanding.every((item) => missing.includes(item))) return false;
+  const said = text?.trim() ? text : latestTextAfterEvidence(state);
+  return said !== undefined && looksLikeHonestDecline(said);
 }

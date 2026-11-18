@@ -678,12 +678,14 @@ export const defaultVerifier: Verifier = {
           name: "output-not-fabricated-measurement",
           passed: fab.ok,
           severity:
-            fab.ok ? "pass" : fab.hard && fabMode === "block" && !(corpusEmpty && !benchmarkShaped) ? "reject" : "warn",
+            fab.ok ? "pass" : fab.hard && fabMode === "block" && !(corpusEmpty && !benchmarkShaped) && !fab.projection ? "reject" : "warn",
           reason: fab.ok
             ? undefined
             : corpusEmpty && !benchmarkShaped
               ? `no tool evidence to ground against (advisory, not enforced): ${fab.violations.join("; ")}`
-              : fab.violations.join("; "),
+              : fab.projection
+                ? `projection beyond the measured values (advisory, answer kept): ${fab.violations.join("; ")}`
+                : fab.violations.join("; "),
         });
 
         // Check 4d: contradicted-test-claim guard. Same fabrication-guard

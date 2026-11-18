@@ -101,6 +101,25 @@ describe("detectFabricatedMeasurement (always-on fabrication guard)", () => {
   });
 });
 
+describe("detectFabricatedMeasurement projection (zoo fabrication-veto)", () => {
+  const evidence = "n=1000: 4.5 ms\nn=10000: 55 ms";
+  it("a bare time projection beside measured timings is flagged as a projection", () => {
+    const r = detectFabricatedMeasurement("Sorting scales as n log n, so 100000 items takes 650 ms.", evidence);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.projection).toBe(true);
+  });
+  it("an invented comparison stays a hard, non-projection violation", () => {
+    const r = detectFabricatedMeasurement("It ran in 55 ms before and now takes 30 ms, which is faster.", evidence);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.projection).toBe(false);
+  });
+  it("no timing evidence at all is not a projection", () => {
+    const r = detectFabricatedMeasurement("Sorting 100000 items takes 650 ms.", "source code only");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.projection).toBe(false);
+  });
+});
+
 describe("detectContradictedTestClaim (2026-08-15 rw-7 real-model finding)", () => {
   it("flags 'all tests passed' contradicted by a non-zero exit code in evidence", () => {
     const out = "All tests have passed successfully after fixing the bugs in each file.";

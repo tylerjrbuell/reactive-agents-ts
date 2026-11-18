@@ -278,7 +278,7 @@ export function detectFabricatedMeasurement(
   output: string,
   evidence: string,
   tolerance = 0.01,
-): { readonly ok: true } | { readonly ok: false; readonly violations: readonly string[]; readonly hard: boolean } {
+): { readonly ok: true } | { readonly ok: false; readonly violations: readonly string[]; readonly hard: boolean; readonly projection: boolean } {
   const claims = extractMeasurementClaims(output);
   if (claims.length === 0) return { ok: true };
   const corpus = extractAllNumbers(evidence);
@@ -295,6 +295,7 @@ export function detectFabricatedMeasurement(
   // the number is a literal anchor no observation holds. A bare percent is read as a
   // measurement only from a perf word in its sentence (a semantic category): it advises.
   let hard = false;
+  let onlyTimeClaims = true;
   for (const claim of claims) {
     const grounded =
       corpus.some(
@@ -303,11 +304,16 @@ export function detectFabricatedMeasurement(
     if (!grounded) {
       violations.push(`fabricated measurement "${claim.phrase}" — no tool observation produced this value`);
       if (claim.kind.tag !== "percent") hard = true;
+      if (claim.kind.tag !== "time") onlyTimeClaims = false;
     }
   }
   if (violations.length === 0) return { ok: true };
-  return { ok: false, violations, hard };
+  const projection = onlyTimeClaims && !COMPARATIVE_CLAIM.test(output) && TIMING_PATTERNS.some((p) => new RegExp(p).test(evidence));
+  return { ok: false, violations, hard, projection };
 }
+
+/** A claimed comparison (improvement, before/after): an invented one is a fabricated benchmark result. */
+const COMPARATIVE_CLAIM = /\bfaster\b|\bslower\b|speed-?up|improv|reduc|\bbetter\b|\bworse\b|\bgain|regress|\bversus\b|\bvs\.?\b|before.{0,24}after/i;
 
 /**
  * Test-suite claim contradicted by the tool evidence — e.g. the answer says

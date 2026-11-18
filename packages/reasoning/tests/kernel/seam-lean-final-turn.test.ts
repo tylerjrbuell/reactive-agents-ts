@@ -23,6 +23,7 @@ import {
   LEAN_FINAL_TURN_HINT,
   shouldTakeLeanFinalTurn,
   unreadNamedInputs,
+  unreadProseInputs,
   type LeanFinalTurnFacts,
 } from "../../src/kernel/capabilities/reason/lean-final-turn.js";
 import { resolveHarnessConfig, type HarnessConfig } from "../../src/harness-config.js";
@@ -75,6 +76,13 @@ describe("lean final turn: when a call is lean (pure)", () => {
     expect(unreadNamedInputs(task, [step("action", '{"path":"./a.json"}')])).toEqual(["b.json"]);
     expect(unreadNamedInputs(task, [step("action", "a.json"), step("observation", "b.json: 3")])).toEqual([]);
     expect(unreadNamedInputs("Write the summary to ./out.md.", [])).toEqual([]);
+    // Prose-named inputs (zoo unread-input-prose): one read call per coordinated object.
+    const act = (n: number) => Array.from({ length: n }, () => ({ type: "action" }));
+    const prose = "Use the gather tool to read the first report and the second report, then add the two counts.";
+    expect(unreadProseInputs(prose, act(0))).toBe(2);
+    expect(unreadProseInputs(prose, act(1))).toBe(1);
+    expect(unreadProseInputs(prose, act(2))).toBe(0);
+    expect(unreadProseInputs("Read the report and summarize it.", act(0))).toBe(0);
   });
 
   it("once per batch of tool work: not again until another tool call", () => {

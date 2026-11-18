@@ -10,17 +10,14 @@ const LEAN = "guard:lean_final_turn:redirect";
 const lean = findMechanism("leanFinalTurn")!;
 
 describe("shape 1: unread input, leanFinalTurn", () => {
-  it("prose-named inputs: the lean turn fires after one read and the partial reply ends the run (HURTS; known kernel defect)", async () => {
+  it("prose-named inputs: the lean turn waits until both reads are made (no longer HURTS)", async () => {
     const off = await runArm(unreadInputProse, armConfig());
     const on = await runArm(unreadInputProse, armConfig(lean));
     expect(off.meetsIdeal).toBe(true);
-    expect(off.toolSeq).toEqual(["gather", "gather"]);
-    expect(on.activityKeys).toContain(LEAN);
-    expect(on.meetsIdeal).toBe(false);
-    expect(on.toolSeq).toEqual(["gather"]); // second report never read
-    expect(on.output).toContain("I still need the second report");
-    expect(on.turns).toBeLessThan(off.turns);
-    expect(verdictOf(off, on)).toBe("hurts");
+    expect(on.meetsIdeal).toBe(true);
+    expect(on.toolSeq).toEqual(["gather", "gather"]);
+    expect(on.output).not.toContain("I still need");
+    expect(verdictOf(off, on)).not.toBe("hurts");
   }, 30000);
 
   it("filename-named inputs: the gate holds the lean turn until both are read (neutral outcome, fewer input tokens)", async () => {

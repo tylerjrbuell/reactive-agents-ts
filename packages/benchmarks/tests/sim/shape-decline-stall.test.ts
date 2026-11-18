@@ -19,13 +19,16 @@ describe("shape 2: honest decline after an always-failing required tool (ab-trap
     expect(off.meetsIdeal).toBe(true);
   }, 30000);
 
-  it("actOrAnswer drives a model that obeys the forced call into more failing reads: abstention lost (HURTS)", async () => {
+  it("actOrAnswer (both modes) does not force another read after the decline: abstention kept, no extra turns", async () => {
     const off = await runArm(honestDecline, armConfig());
-    const on = await runArm(honestDecline, armConfig(act));
-    expect(on.activityKeys).toContain("guard:act-or-answer:redirect");
-    expect(on.toolSeq.length).toBeGreaterThan(off.toolSeq.length);
-    expect(on.status).not.toBe("abstained");
-    expect(verdictOf(off, on)).toBe("hurts");
+    for (const m of [act, proactive]) {
+      const on = await runArm(honestDecline, armConfig(m));
+      // proactive still forces the early reads (nothing declined yet); none follows the decline
+      expect(on.toolSeq).toEqual(off.toolSeq);
+      expect(on.status).toBe("abstained");
+      expect(on.turns).toBeLessThanOrEqual(off.turns);
+      expect(verdictOf(off, on)).not.toBe("hurts");
+    }
   }, 30000);
 });
 

@@ -78,7 +78,14 @@ describe("matrix", () => {
 
   it("a deterministic cell carries verdict, deltas and win/loss", async () => {
     const lean = MECHANISMS.find((m) => m.name === "leanFinalTurn")!;
-    const cell = await runCell(unreadInputProse, lean, {});
+    // unreadInputProse is fixed (the lean gate counts prose-named reads); this variant
+    // phrases its inputs where the gate cannot count them, the residual hurting case.
+    const uncountable = {
+      ...unreadInputProse,
+      id: "unread-input-uncountable",
+      task: "Use the gather tool on the first report as well as the second report, then add the two counts and tell me the total.",
+    };
+    const cell = await runCell(uncountable, lean, {});
     expect(cell.verdict).toBe("hurts");
     expect(cell.losses).toBe(1);
     expect(cell.turnsDelta).toBe(-1);
