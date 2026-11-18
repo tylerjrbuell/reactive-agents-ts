@@ -46,6 +46,8 @@ const EVERY_FIELD: Required<HarnessConfig> = {
   autoTick: false,
   bookkeepingRefund: false,
   planRecon: true,
+  parallelToolHint: "always",
+  leanFinalTurn: true,
   llmRecoveryBudget: 3,
 };
 

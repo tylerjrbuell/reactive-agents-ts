@@ -1,10 +1,11 @@
 import { Effect, Context, Layer, Ref } from "effect";
 import type {
-  LifecycleHook,
   LifecyclePhase,
   HookTiming,
   ExecutionContext,
 } from "./types.js";
+import type { EngineRegisteredHook } from "./lifecycle-hook-types.js";
+import type { RawHookResult } from "./hooks-normalize.js";
 import { HookError } from "./errors.js";
 import { normalizeHookResult } from "./hooks-normalize.js";
 
@@ -15,7 +16,7 @@ export class LifecycleHookRegistry extends Context.Tag("LifecycleHookRegistry")<
   {
     /** Register a lifecycle hook. Returns unregister function. */
     readonly register: (
-      hook: LifecycleHook,
+      hook: EngineRegisteredHook,
     ) => Effect.Effect<() => void, never>;
 
     /** Run all hooks for a phase/timing. Returns updated context. */
@@ -26,7 +27,7 @@ export class LifecycleHookRegistry extends Context.Tag("LifecycleHookRegistry")<
     ) => Effect.Effect<ExecutionContext, HookError>;
 
     /** Get all registered hooks. */
-    readonly list: () => Effect.Effect<readonly LifecycleHook[], never>;
+    readonly list: () => Effect.Effect<readonly EngineRegisteredHook[], never>;
   }
 >() {}
 
@@ -35,7 +36,7 @@ export class LifecycleHookRegistry extends Context.Tag("LifecycleHookRegistry")<
 export const LifecycleHookRegistryLive = Layer.effect(
   LifecycleHookRegistry,
   Effect.gen(function* () {
-    const hooks = yield* Ref.make<LifecycleHook[]>([]);
+    const hooks = yield* Ref.make<EngineRegisteredHook[]>([]);
 
     return {
       register: (hook) =>
@@ -57,7 +58,10 @@ export const LifecycleHookRegistryLive = Layer.effect(
 
           let current = ctx;
           for (const hook of matching) {
-            current = yield* normalizeHookResult(hook.handler, current).pipe(
+            // The engine passes an ExecutionContext, and a per-turn handler
+            // hands back the context it received, so an engine firing yields one.
+            const handler = hook.handler as (c: ExecutionContext) => RawHookResult;
+            current = yield* normalizeHookResult(handler, current).pipe(
               Effect.mapError(
                 (cause) =>
                   new HookError({

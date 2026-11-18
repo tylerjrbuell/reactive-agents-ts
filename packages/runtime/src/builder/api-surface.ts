@@ -11,7 +11,12 @@
  * `new ReactiveAgentBuilder()` line's location next to the class definition.
  */
 import type { ReactiveAgentBuilder } from "../builder.js";
-import type { LifecycleHook, ExecutionContext, RawHookResult } from "../types.js";
+import type { LifecycleHook, RawHookResult } from "../types.js";
+import type {
+  KernelTurnHookContext,
+  KernelTurnErrorHookContext,
+  KernelTurnPhase,
+} from "../lifecycle-hook-types.js";
 import type { RuntimeErrors } from "../errors.js";
 import { runHookResultForSideEffect } from "../hooks-normalize.js";
 
@@ -51,7 +56,11 @@ export const reactiveAgentsFromJSON = async (
 export async function invokeUserHookSafely(
   self: ReactiveAgentBuilder,
   hook: LifecycleHook,
-  ctx: { phase: string; iteration: number },
+  ctx: {
+    phase: string;
+    iteration: number;
+    state?: Readonly<import("@reactive-agents/core").KernelStateLike>;
+  },
 ): Promise<void> {
   const surface = (err: unknown): void => {
     const handler = (
@@ -89,18 +98,22 @@ export async function invokeUserHookSafely(
       normalized,
     );
   };
-  let result: unknown;
+  // The kernel fires only think/act/observe (applyHookRegistration), so this
+  // hook's handler accepts the per-turn context. before/after carry the
+  // kernel state; on-error does not.
+  const turnCtx: KernelTurnHookContext | KernelTurnErrorHookContext =
+    ctx.state === undefined
+      ? { phase: ctx.phase as KernelTurnPhase, iteration: ctx.iteration }
+      : { phase: ctx.phase as KernelTurnPhase, iteration: ctx.iteration, state: ctx.state };
+  let result: RawHookResult<unknown>;
   try {
-    result = hook.handler({
-      phase: ctx.phase,
-      iteration: ctx.iteration,
-    } as ExecutionContext);
+    result = (hook.handler as (c: KernelTurnHookContext | KernelTurnErrorHookContext) => RawHookResult<unknown>)(turnCtx);
   } catch (err) {
     surface(err);
     return;
   }
   try {
-    await runHookResultForSideEffect(result as RawHookResult);
+    await runHookResultForSideEffect(result);
   } catch (err) {
     surface(err);
   }

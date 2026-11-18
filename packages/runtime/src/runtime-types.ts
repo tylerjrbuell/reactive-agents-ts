@@ -789,7 +789,7 @@ export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCa
     backoffMs: number;
   };
 
-  /** Minimum iterations before final-answer is permitted. */
+  /** Continue until the run reaches N kernel turns (the unit `metadata.iterations` reports). */
   minIterations?: number;
 
   /** Background data injected into reasoning memory context (not system prompt). */

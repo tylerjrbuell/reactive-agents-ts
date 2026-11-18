@@ -12,7 +12,6 @@ import {
 } from "./reasoning-options-schema.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import type { TaskComplexity } from "./telemetry-enrichment.js";
-import type { RawHookResult } from "./hooks-normalize.js";
 export type { RawHookResult } from "./hooks-normalize.js";
 
 /**
@@ -455,48 +454,17 @@ export const ToolResultSchema = Schema.Struct({
 });
 export type ToolResult = typeof ToolResultSchema.Type;
 
-/**
- * Lifecycle hook — code executed at specific phases of agent execution.
- *
- * Hooks can be registered via `.withHook()` on the builder. Multiple hooks can be registered;
- * they execute in registration order. Hooks receive the execution context and can inspect
- * or modify it. An after-hook receives the context with results from the phase.
- *
- * @example
- * ```typescript
- * // Plain function — no Effect import needed. Return nothing to observe.
- * const hook: LifecycleHook = {
- *   phase: "think",
- *   timing: "after",
- *   handler: (ctx) => {
- *     console.log(`Iteration ${ctx.iteration}: ${ctx.selectedStrategy}`);
- *   },
- * };
- * ```
- */
-export interface LifecycleHook {
-  /** Lifecycle phase to hook into */
-  readonly phase: LifecyclePhase;
-  /** When to invoke the hook relative to the phase */
-  readonly timing: HookTiming;
-  /**
-   * Handler invoked with the current execution context.
-   *
-   * Return the (possibly modified) context to pass it down the phase chain,
-   * or return nothing to observe without changing it. Plain values, Promises,
-   * and Effects are all accepted — you do NOT need to import Effect:
-   *
-   * ```ts
-   * handler: (ctx) => { console.log(ctx.iteration); }                       // observe
-   * handler: (ctx) => ({ ...ctx, metadata: { ...ctx.metadata, seen: 1 } })  // modify
-   * handler: async (ctx) => { await save(ctx); return ctx; }                // async
-   * ```
-   *
-   * A thrown error (or rejected Promise / failed Effect) propagates as a
-   * `HookError`.
-   */
-  readonly handler: (ctx: ExecutionContext) => RawHookResult;
-}
+// `.withHook()` types (phase-keyed handler contexts) live in lifecycle-hook-types.ts.
+export type {
+  LifecycleHook,
+  EngineLifecycleHook,
+  KernelTurnLifecycleHook,
+  KernelTurnErrorLifecycleHook,
+  KernelTurnHookContext,
+  KernelTurnErrorHookContext,
+  KernelTurnPhase,
+  EngineLifecyclePhase,
+} from "./lifecycle-hook-types.js";
 
 /**
  * Model parameters for the builder's `.withModel()` method.
@@ -614,7 +582,7 @@ export const ReactiveAgentsConfigSchema = Schema.Struct({
   verificationOnReject: Schema.optional(
     Schema.Literal("block", "annotate", "proceed"),
   ),
-  /** Minimum iterations with at least one tool call before final-answer is allowed. */
+  /** Continue until the run reaches N kernel turns (the unit `metadata.iterations` reports). */
   minIterations: Schema.optional(Schema.Number),
   /** Inject background data into reasoning context (separate from system prompt instructions). */
   taskContext: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })),

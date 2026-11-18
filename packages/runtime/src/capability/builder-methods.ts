@@ -101,7 +101,7 @@ export const BUILDER_METHOD_ANNOTATIONS: Readonly<Record<string, Annotation>> = 
   // ── Budget / execution ──
   withBudget: { kind: "config", configKeys: ["budget"], description: "Declarative token/cost budget caps." },
   withMaxIterations: { kind: "config", configKeys: ["execution.maxIterations"], description: "Iteration cap." },
-  withMinIterations: { kind: "config", configKeys: ["execution.minIterations"], description: "Minimum iterations before termination." },
+  withMinIterations: { kind: "config", configKeys: ["execution.minIterations"], description: "Continue until the run reaches N kernel turns (the unit metadata.iterations reports)." },
   withTimeout: { kind: "config", configKeys: ["execution.timeoutMs"], description: "Run timeout (ms)." },
   withRetryPolicy: { kind: "config", configKeys: ["execution.retryPolicy"], description: "LLM retry policy (maxRetries/backoff)." },
   withCircuitBreaker: { kind: "config", configKeys: ["circuitBreaker"], description: "Circuit-breaker thresholds (false disables)." },

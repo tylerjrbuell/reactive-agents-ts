@@ -217,6 +217,7 @@ GIANT_BAR=1000
 # 2026-11-16 plan producer substrate: plan-execute.ts 782->781 (local tool-summary mapping deleted; planner context, unrun-step redirect and result plan wired through shared policy modules).
 # 2026-11-17 durable interrupt/resume: reactive-agent.ts 1972->1901 (runDurable body moved verbatim to agent/run-durable.ts, which also carries the interrupt + live-registry wiring; pauseRun/stopRun/activeRunIds delegates added).
 # 2026-11-17 quiet first-run output: execution-engine.ts 955->944 (status-mode rule moved to engine/execute-obs-wiring.ts resolveStatusMode, which also turns it off at "minimal" verbosity).
+# 2026-11-18 phase-keyed hook types: runtime/src/types.ts 1048->1016 (LifecycleHook moved to lifecycle-hook-types.ts as a phase-discriminated union; types.ts re-exports it).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:1901"
   "runtime/src/chat/engine.ts:654"
@@ -240,7 +241,7 @@ SIZE_BASELINE=(
   "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1065"
   "tools/src/skills/shell-execution.ts:571"
-  "runtime/src/types.ts:1048"
+  "runtime/src/types.ts:1016"
   "observability/src/exporters/console-exporter.ts:1042"
   "reasoning/src/kernel/capabilities/reason/dispatch-think-response.ts:577"
 )

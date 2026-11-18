@@ -249,7 +249,7 @@ export interface BudgetLimits {
     // standalone wither (one slot, one serialization path). Absent = unchanged.
     /** Iteration cap — equivalent to `.withMaxIterations(n)`. */
     readonly maxIterations?: number
-    /** Minimum iterations before termination — equivalent to `.withMinIterations(n)`. */
+    /** Continue until the run reaches N kernel turns — equivalent to `.withMinIterations(n)`. */
     readonly minIterations?: number
     /** Whole-run timeout in ms — equivalent to `.withTimeout(ms)`. */
     readonly timeout?: number
@@ -1834,7 +1834,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     }
 
     /**
-     * Require at least N iterations before the agent can declare success.
+     * Continue the run until it reaches at least N kernel turns.
      * Delegates to `applyWithMinIterations` in `builder/withers/capability-progress.ts` (#218 decomp) —
      * full public-contract JSDoc moved verbatim there.
      */

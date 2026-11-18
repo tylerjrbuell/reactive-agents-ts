@@ -110,6 +110,13 @@ export type {
   AgentState,
   ExecutionContext,
   LifecycleHook,
+  EngineLifecycleHook,
+  KernelTurnLifecycleHook,
+  KernelTurnErrorLifecycleHook,
+  KernelTurnHookContext,
+  KernelTurnErrorHookContext,
+  KernelTurnPhase,
+  EngineLifecyclePhase,
   ReactiveAgentsConfig,
   // Streaming types
   AgentStreamEvent,

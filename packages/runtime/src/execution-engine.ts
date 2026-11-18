@@ -2,7 +2,7 @@ import { Effect, Context, Layer, Ref, Duration, Logger, FiberRef, Fiber } from "
 import type { ExecutionContext, ReactiveAgentsConfig } from "./types.js";
 import { ExecutionError, type RuntimeErrors } from "./errors.js";
 import { LifecycleHookRegistry } from "./hooks.js";
-import type { LifecycleHook } from "./types.js";
+import type { EngineRegisteredHook } from "./lifecycle-hook-types.js";
 
 import { getRunSlot, modelOverrideSlot, streamSinkSlot } from "@reactive-agents/core/internal/run-scope";
 
@@ -93,7 +93,7 @@ export class ExecutionEngine extends Context.Tag("ExecutionEngine")<
       task: Task,
     ) => Effect.Effect<TaskResult, RuntimeErrors | TaskError>;
 
-    readonly registerHook: (hook: LifecycleHook) => Effect.Effect<void, never>;
+    readonly registerHook: (hook: EngineRegisteredHook) => Effect.Effect<void, never>;
 
     readonly getContext: (
       taskId: string,

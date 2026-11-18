@@ -103,6 +103,8 @@ export const MAXIMAL_CONFIG: AgentConfig = {
       autoTick: false,
       bookkeepingRefund: false,
       planRecon: true,
+      parallelToolHint: "always",
+      leanFinalTurn: true,
       llmRecoveryBudget: 3,
     },
   },

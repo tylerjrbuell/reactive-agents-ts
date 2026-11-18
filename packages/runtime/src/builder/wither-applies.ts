@@ -172,6 +172,7 @@ export const applyHookRegistration = (
     h[kind](
       hook.phase as import("@reactive-agents/core").Phase,
       async (ctx) => {
+        // ctx carries { phase, iteration, state }; the handler gets all three.
         await invokeUserHookSafely(builder, hook, ctx);
       },
     );

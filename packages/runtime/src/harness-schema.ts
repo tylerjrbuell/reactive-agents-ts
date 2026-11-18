@@ -115,6 +115,21 @@ export const HarnessConfigSchema = Schema.Struct({
    */
   planRecon: Schema.optional(Schema.Boolean),
   /**
+   * Parallel tool hint: a short prompt line telling the model it may make
+   * independent tool calls together in one reply. `true` shows it only when
+   * the model's calibration rates parallel calls `reliable`; `"always"` shows
+   * it whatever the calibration says. Opt-in: default OFF until an ablation
+   * measures it. Env: `RA_PARALLEL_TOOL_HINT=1` or `=always`.
+   */
+  parallelToolHint: Schema.optional(Schema.Union(Schema.Boolean, Schema.Literal("always"))),
+  /**
+   * Lean final turn: once the run's declared tool work is done and only the
+   * answer is left, the next think call ships with no tools and no thinking
+   * allowance. Opt-in: default OFF until an ablation measures it. Env:
+   * `RA_LEAN_FINAL_TURN=1`.
+   */
+  leanFinalTurn: Schema.optional(Schema.Boolean),
+  /**
    * LLM recovery budget: how many recoverable provider failures on think
    * turns one run may retry instead of ending with `llm_error`. Malformed
    * model output is resampled; a request over the context window or the

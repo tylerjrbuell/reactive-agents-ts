@@ -146,6 +146,8 @@ export function buildRunConfigSnapshot(args: {
     planRecon: harness.planRecon === true,
     wrapUpReserve: harness.wrapUpReserve === true,
     todoWrapUp: harness.todoWrapUp === true,
+    parallelToolHint: harness.parallelToolHint ?? false,
+    leanFinalTurn: harness.leanFinalTurn === true,
     llmRecoveryBudget: llmRecoveryBudgetOf(harness),
   } satisfies { readonly [K in keyof ResolvedHarness]-?: unknown } & { readonly actOrAnswerSource: unknown };
   const mechanisms = defined({

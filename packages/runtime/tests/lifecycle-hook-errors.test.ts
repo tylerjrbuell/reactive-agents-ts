@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { Effect } from "effect";
 import { ReactiveAgents, ReactiveAgentBuilder } from "../src/builder.js";
-import type { LifecycleHook } from "../src/types.js";
+import type { KernelTurnLifecycleHook, LifecycleHook } from "../src/types.js";
 import { RegistrationHarness } from "@reactive-agents/core";
 
 /**
@@ -172,14 +172,14 @@ describe("lifecycle hook error routing (HS-14 / #74)", () => {
       handler: () =>
         Effect.promise(async () => {
           throw new Error("async hook rejected");
-        }) as unknown as ReturnType<LifecycleHook["handler"]>, // boundary: deliberately rejecting handler violates the Effect return type
+        }) as unknown as ReturnType<KernelTurnLifecycleHook["handler"]>, // boundary: deliberately rejecting handler violates the Effect return type
     };
     // Simpler: return a rejecting Promise directly. Type-cast since handler
     // signature says Effect but the production wrapper only awaits.
     const directHook: LifecycleHook = {
       phase: "think",
       timing: "before",
-      handler: (() => Promise.reject(new Error("async hook rejected"))) as unknown as LifecycleHook["handler"], // boundary: Promise-returning handler violates the Effect return type
+      handler: (() => Promise.reject(new Error("async hook rejected"))) as unknown as KernelTurnLifecycleHook["handler"], // boundary: Promise-returning handler violates the Effect return type
     };
     const builder = ReactiveAgents.create()
       .withName("hook-err-async")
@@ -210,7 +210,7 @@ describe("lifecycle hook error routing (HS-14 / #74)", () => {
       handler: ((_ctx: unknown) => {
         invoked += 1;
         return Effect.succeed(_ctx);
-      }) as unknown as LifecycleHook["handler"], // boundary: plain (non-Effect) handler exercises the normalizer
+      }) as unknown as KernelTurnLifecycleHook["handler"], // boundary: plain (non-Effect) handler exercises the normalizer
     };
     const builder = ReactiveAgents.create()
       .withName("hook-normal")

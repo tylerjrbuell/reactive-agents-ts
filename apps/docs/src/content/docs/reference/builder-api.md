@@ -114,7 +114,7 @@ reference](/reference/configuration/) for the declarative field list.
 | `withMemory` | `memory`, `features.memory` | config | Enable memory layers + tier/dbPath/capacity/experienceLearning/consolidation. |
 | `withMemoryConsolidation` | `memory.memoryConsolidation` | config | Background memory consolidation/decay/prune. |
 | `withMetaTools` | `metaTools` | config | Conductor's-suite meta-tools. |
-| `withMinIterations` | `execution.minIterations` | config | Minimum iterations before termination. |
+| `withMinIterations` | `execution.minIterations` | config | Continue until the run reaches N kernel turns (the unit metadata.iterations reports). |
 | `withModel` | `model`, `thinking`, `temperature`, `maxTokens`, `numCtx` | config | Model id + params (thinking/temperature/maxTokens/numCtx). |
 | `withModelPricing` | `pricingRegistry` | config | Custom model pricing registry. |
 | `withModelRouting` | `modelRouting` | config | Cost-aware model routing. |

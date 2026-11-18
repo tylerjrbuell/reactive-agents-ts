@@ -13,12 +13,16 @@ import type { ExecutionError } from "./errors.js";
  *   - return `void`/`undefined`               → observe-only, context unchanged
  *   - return a `Promise` of either            → same, async
  *   - return an `Effect`                      → same, Effect (legacy form)
+ *
+ * `C` is the context the handler may hand back. It defaults to
+ * `ExecutionContext`; per-turn hooks (think/act/observe) use their context
+ * union, so returning the `ctx` they received type-checks.
  */
-export type RawHookResult =
-  | ExecutionContext
+export type RawHookResult<C = ExecutionContext> =
+  | C
   | void
-  | Promise<ExecutionContext | void>
-  | Effect.Effect<ExecutionContext, ExecutionError>;
+  | Promise<C | void>
+  | Effect.Effect<C, ExecutionError>;
 
 /** Narrow a value to a thenable without an `any` cast. */
 function isThenable(u: unknown): u is Promise<unknown> {
@@ -97,13 +101,13 @@ export function normalizeHookResult(
  * plain value is ignored. Failures reject so the caller's error handler fires.
  */
 export async function runHookResultForSideEffect(
-  raw: RawHookResult,
+  raw: RawHookResult<unknown>,
 ): Promise<void> {
   if (raw === undefined || raw === null) return;
   if (Effect.isEffect(raw)) {
     // Same narrowing as normalizeHookResult — RawHookResult's Effect arm is
-    // Effect<ExecutionContext, ExecutionError>; assert that exact shape.
-    await Effect.runPromise(raw as Effect.Effect<ExecutionContext, ExecutionError>);
+    // Effect<C, ExecutionError>; the value is discarded, so C stays unknown.
+    await Effect.runPromise(raw as Effect.Effect<unknown, ExecutionError>);
     return;
   }
   if (isThenable(raw)) {
