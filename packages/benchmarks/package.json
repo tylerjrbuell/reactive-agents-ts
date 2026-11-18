@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test --reporter=dots",
     "bench": "bun run src/run.ts",
+    "bench:drive": "bun run src/driver/cli.ts",
     "bench:t0": "bun test tests/t0-deterministic.test.ts",
     "bench:replay": "bun run src/replay-lane-cli.ts",
     "bench:replay:record": "bun run src/replay-record.ts",

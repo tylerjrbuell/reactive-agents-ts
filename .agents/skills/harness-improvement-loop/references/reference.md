@@ -23,8 +23,25 @@ Verdict decisions (`AttributionDecision` in `src/ledger.ts`):
 | `improved` | target dropped, not to 0, nothing else rose |
 | `no-change` | target did not drop (also flags a target absent from the baseline cells) |
 
+### Unattended A/B: `bench:drive` (`packages/benchmarks/src/driver/`)
+
+Use for any multi-chunk run instead of hand-chunking. `bun run --cwd packages/benchmarks bench:drive -- <spec.json>` starts a detached supervisor (own process group, logs under `<outDir>/logs/`) and returns; it survives the shell and tool-task kills.
+
+```json
+{ "outDir": "/abs/dir", "tiers": ["qwen3:4b","cogito:8b"], "k": 5,
+  "arms": [{"id":"base"}, {"id":"treat","env":{"RA_SOMETHING":"1"}}],
+  "tasks": ["h3-todo-heavy"], "suite": "h3", "cellTimeoutSec": 180,
+  "verdict": {"before":"base","after":"treat","reason":"harness:<r>"} }
+```
+
+- `tasks` omitted = the whole suite. Each arm writes `<outDir>/<arm>.json` (run-h3 results, resumable). Optional per-arm `noSwitch` / `metaArm`, spec-wide `env`, `allowContention`.
+- Order is run-major, then tier, task, and the arms back to back per cell (paired; recorded in `state.json` `order`). One run-h3 call per (cell, arm), so each chunk stays far under 590 s.
+- Contention preflight runs before every chunk; a contended host pauses with backoff 30 s doubling to 600 s (recorded in `pauses`), gives up after 6 h paused.
+- `bench:drive status <outDir>`: cells done/total, current chunk, last error, ETA, pauses, provenance DRIFT warnings. `bench:drive stop <outDir>`: group kill; the in-flight cell re-runs on resume. Re-run the same spec command to resume (refuses a different plan in the same dir). A unit failing twice is marked failed; the run ends `completed-with-failures` and skips the verdict.
+- On completion: `summary.json` (pointers to results) and, if `verdict` is given, `verdict.txt` from `h3/verdict.ts`.
+
 Pitfalls:
-- Run cells **foreground** with `timeout 590`; background bench cells get killed. Re-invoke until `remaining=0`.
+- Hand-run cells **foreground** with `timeout 590`; background bench cells get killed. Re-invoke until `remaining=0`. (Or use `bench:drive`.)
 - Tiers must be in `STATIC_CAPABILITIES` (`packages/llm-provider/src/capability.ts`). Others resolve `source="fallback"` (2048 ctx) and every cell is INCONCLUSIVE. `qwen3:4b` and `cogito:8b` are trusted; `llama3.2:3b`, `gemma4:e4b`, `gemma4:12b` are not (2026-11-03).
 - `packages/reasoning` exports `dist`: rebuild it before a live rerun of a reasoning change. Other workspace packages run from `src` under Bun.
 - Timeouts count as unsolved measured runs (`isMeasured` in `report.ts`); they carry `no-trace` in attribution.
