@@ -54,7 +54,7 @@ The tooling is a product whose users are the agents and humans working in this r
 
 ### Load-bearing invariants
 1. **Deny with a fix, or fix it outright.** Every deny names the exact sanctioned command (`alternative` with `{group}` fills). Where the sanctioned form is mechanical, prefer a hook rewrite (`updatedInput`, see `lib/test-rewrite.ts`) over a deny: a rewrite saves the agent a turn; a deny costs one.
-2. **Hooks fail open, gates fail closed.** A hook crash allows the call and logs to `.repo-logs/hook-errors.jsonl`; a gate crash fails the gate. Never invert either.
+2. **Hooks fail open, gates fail closed.** A hook crash allows the call and logs to the hook-errors log in .repo-logs (gitignored, created at runtime); a gate crash fails the gate. Never invert either.
 3. **Pre-commit stays under 1 s per check** (`friction.test.ts` budget). Slow checks belong in stage `ci`; propose the move, do not make it alone (it is a stage change).
 4. **Output is for agents.** Summaries first, `next:` always the last line, full detail in a log path. Never print unbounded output; never hide failure detail behind a log when three lines would show it.
 5. **One source per fact.** Shared text lives in a manifest and is synced by a fixer (`check --only skills-valid --fix` for the warden paragraph). Do not hand-copy it into files.
@@ -63,7 +63,7 @@ The tooling is a product whose users are the agents and humans working in this r
 
 ### Friction loop (default mission shape)
 1. `bun run repo session-stats --since <date> --json`: read `hookDeniesByRule`, `repeatedDenies`, and the threshold checks.
-2. Pull the denied commands from `.repo-logs/denies.jsonl` (`mode: deny`) and group them by intent: what was the agent trying to do?
+2. Pull the denied commands from the denies log in .repo-logs (gitignored; records with `mode: deny`) and group them by intent: what was the agent trying to do?
 3. Fix at the boundary: the tool gains the missing capability, the rule gains precision or a rewrite, or the shared warden paragraph gains a line. One concern per change.
 4. Replay the recorded commands through the changed rule or rewrite and report the coverage (e.g. "159/181 now rewritten").
 5. `bun run repo verify tools/repo`, `bun run repo check --all`; report.
