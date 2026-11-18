@@ -34,6 +34,41 @@ process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE ??= "true";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pidAlive } from "../tools/repo/src/lib/test-slots.ts";
+import { makeTestRoot, realFs, sweep, TEST_ROOT_ENV, testTmpBase } from "../tools/repo/src/lib/tmp-janitor.ts";
+
+/**
+ * One temp root per test process (2026-11-18 OOM audit): /tmp is RAM-backed, ~33,000 leaked test dirs
+ * reached 7 GB, and `process.on("exit")` cleanup never runs when a process is SIGKILLed or OOM-killed.
+ * Point TMPDIR at `<tmp>/ra-tests-<pid>-<rand>/` so every suite's `os.tmpdir()` mkdtemp lands in one
+ * removable tree; remove it on exit, SIGINT and SIGTERM; and reap roots whose PID is dead (names only,
+ * no stat, so startup stays cheap). `repo test` creates the root itself and passes RA_TEST_TMP_ROOT.
+ */
+if (!process.env[TEST_ROOT_ENV]) {
+  try {
+    sweep(realFs, testTmpBase(), { pidAlive, now: Date.now(), legacy: false, dryRun: false });
+    const root = makeTestRoot();
+    process.env.TMPDIR = root;
+    process.env[TEST_ROOT_ENV] = root;
+    const cleanup = (): void => {
+      try {
+        rmSync(root, { recursive: true, force: true });
+      } catch {
+        // best-effort; the next run's sweep reaps it by dead PID
+      }
+    };
+    process.on("exit", cleanup);
+    for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143]] as const) {
+      process.on(sig, () => {
+        cleanup();
+        process.exit(code);
+      });
+    }
+  } catch {
+    // hooks and preloads fail open: tests still run against the plain OS temp dir
+  }
+}
+
 if (!process.env.REACTIVE_AGENTS_TRACE_DIR) {
   const traceDir = mkdtempSync(join(tmpdir(), "ra-test-traces-"));
   process.env.REACTIVE_AGENTS_TRACE_DIR = traceDir;

@@ -2,6 +2,13 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "scripts/mem-watch.sh",
+      "path": "scripts/mem-watch.sh",
+      "kind": "ops",
+      "summary": "Read-only memory snapshot: MemAvailable, RAM-backed temp usage, top RSS processes, ollama ps; --watch to loop",
+      "invoke": "bash scripts/mem-watch.sh [--watch]"
+    },
+    {
       "id": ".agents/skills/harness-improvement-loop/scripts/call-drop-audit.py",
       "path": ".agents/skills/harness-improvement-loop/scripts/call-drop-audit.py",
       "kind": "research",

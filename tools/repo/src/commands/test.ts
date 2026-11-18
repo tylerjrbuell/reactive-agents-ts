@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { closeSync, type Dirent, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { closeSync, type Dirent, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { join, relative } from "node:path"
 import type { Command } from "../cli.ts"
 import { flagValue, rejectUnknown, splitArgs } from "../lib/args.ts"
@@ -7,6 +7,8 @@ import { summarizeBunTest, type TestSummary } from "../lib/bun-test-summary.ts"
 import type { Io } from "../lib/output.ts"
 import { resolveRoot } from "../lib/root.ts"
 import { acquireSlot, SLOT_HELD_ENV, slotCount } from "../lib/test-slots.ts"
+import { makeTestRoot, TEST_ROOT_ENV } from "../lib/tmp-janitor.ts"
+import { preflightHeavy } from "./janitor.ts"
 
 /** Failure names printed before `... N more`. */
 const FAILURE_CAP = 15
@@ -84,6 +86,34 @@ export function spawnLogged(
   })
 }
 
+/** Temp roots of in-flight runs, removed on process exit (one `exit` hook for any number of chunks). */
+const liveRoots = new Set<string>()
+let exitHooked = false
+function rmTree(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true })
+  } catch {
+    // the janitor reaps it by dead PID next run
+  }
+}
+
+/**
+ * Opt-in memory cap: with `REPO_TEST_MEM_MAX=<size>` (e.g. `8G`) the test run starts in its own systemd
+ * user scope with `MemoryMax` and no swap, so a runaway test is OOM-killed inside that cgroup and not the
+ * desktop session. Verified on this machine: `systemd-run --user --scope -p MemoryMax=2G -p MemorySwapMax=0 <cmd>`.
+ * Unset = no wrapper. Without systemd-run the wrapper is skipped silently.
+ */
+export function memCapped(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  hasSystemdRun: boolean = existsSync("/usr/bin/systemd-run"),
+): [string, string[]] {
+  const [cmd = "", ...rest] = argv
+  const cap = env.REPO_TEST_MEM_MAX
+  if (cap === undefined || !/^\d+[KMGT]?$/.test(cap) || !hasSystemdRun) return [cmd, rest]
+  return ["systemd-run", ["--user", "--scope", "--quiet", "-p", `MemoryMax=${cap}`, "-p", "MemorySwapMax=0", ...argv]]
+}
+
 /** Result of one logged `bun test` run. */
 export interface TestRun {
   exit: number
@@ -116,12 +146,24 @@ export async function execTests(
   let timedOut: boolean
   const log = newLogPath(root, logPrefix)
   const filter = namePattern === undefined ? [] : ["-t", namePattern]
+  // One removable temp root per run: every suite's os.tmpdir() lands inside it (see lib/tmp-janitor.ts).
+  const tmpRoot = makeTestRoot()
+  const [cmd, cmdArgs] = memCapped(["bun", "test", ...paths, "--timeout", timeout, ...filter])
+  liveRoots.add(tmpRoot)
+  if (!exitHooked) {
+    exitHooked = true
+    process.on("exit", () => liveRoots.forEach(rmTree)) // SIGINT/SIGTERM exit through the slot's handlers
+  }
   try {
-    ;({ code: exit, timedOut } = await spawnLogged("bun", ["test", ...paths, "--timeout", timeout, ...filter], root, log, maxSeconds, {
+    ;({ code: exit, timedOut } = await spawnLogged(cmd, cmdArgs, root, log, maxSeconds, {
       [SLOT_HELD_ENV]: "1",
+      TMPDIR: tmpRoot,
+      [TEST_ROOT_ENV]: tmpRoot,
     }))
   } finally {
     slot.release()
+    rmTree(tmpRoot)
+    liveRoots.delete(tmpRoot)
   }
   const summary = summarizeBunTest(readFileSync(log, "utf8"))
   // `errors` (unhandled errors outside tests) fail a run even at `0 fail`; bun also exits 1 for them.
@@ -284,6 +326,8 @@ export const testCommand: Command = {
     const maxRaw = flagValue(args, "--max-seconds") ?? String(DEFAULT_MAX_SECONDS)
     if (!/^\d+$/.test(maxRaw) || Number(maxRaw) === 0) return io.usage(`--max-seconds must be a positive integer: ${maxRaw}`, "bun run repo test --help")
     const root = resolveRoot(flagValue(args, "--root"))
+    const refused = preflightHeavy(io, "repo test")
+    if (refused !== undefined) return refused
     if (all) return runAllTests(root, timeout, io, Number(maxRaw), flagValue(args, "-t"))
     return runScopedTests(root, paths, timeout, io, Number(maxRaw), flagValue(args, "-t"))
   },

@@ -5,6 +5,7 @@ import { flagValue, rejectUnknown, splitArgs } from "../lib/args.ts"
 import { matchesGlob } from "../lib/glob.ts"
 import { loadChecks, type CheckEntry } from "../lib/manifest.ts"
 import { resolveRoot } from "../lib/root.ts"
+import { preflightHeavy } from "./janitor.ts"
 import { DEFAULT_MAX_SECONDS, DEFAULT_TEST_TIMEOUT, describeRun, execTests, newLogPath, spawnLogged } from "./test.ts"
 
 /**
@@ -69,6 +70,8 @@ export const verifyCommand: Command = {
       return 0
     }
     if (!typecheck) io.out("skip: typecheck (no script)")
+    const refused = preflightHeavy(io, "repo verify")
+    if (refused !== undefined) return refused
     for (const step of plan) {
       let code: number
       let log: string

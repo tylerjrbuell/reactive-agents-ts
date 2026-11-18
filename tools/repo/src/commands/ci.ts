@@ -9,6 +9,7 @@ import { orderJobs, planFromWorkflow, stepKey, type CiJob, type CiPlan, type CiS
 import type { Io } from "../lib/output.ts"
 import { resolveRoot } from "../lib/root.ts"
 import { acquireSlot, pidAlive, SLOT_HELD_ENV } from "../lib/test-slots.ts"
+import { preflightHeavy } from "./janitor.ts"
 import { describeRun, spawnLogged, suiteChunks } from "./test.ts"
 
 /** Workflow the mirror reads. */
@@ -210,6 +211,9 @@ export const ciCommand: Command = {
     }
     const short = sha.slice(0, 9)
     const modeLabel = fast ? "fast (WEAKER than CI)" : runCmd !== undefined ? "run" : only !== undefined ? `job ${only}` : "full"
+
+    const refused = args.includes("--dry-run") ? undefined : preflightHeavy(io, "repo ci")
+    if (refused !== undefined) return refused
 
     const base = cloneBase(process.env)
     const prefix = basename(root)
