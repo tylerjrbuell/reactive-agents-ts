@@ -118,6 +118,8 @@ export type {
   KernelTurnPhase,
   EngineLifecyclePhase,
   ReactiveAgentsConfig,
+  /** Provider names accepted by `.withProvider()`. */
+  ProviderName,
   // Streaming types
   AgentStreamEvent,
   StreamDensity,

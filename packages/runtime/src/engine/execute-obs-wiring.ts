@@ -142,8 +142,9 @@ const isWarningOrError = (event: LogEvent): boolean =>
 
 /**
  * Build the execution's ObservableLogger. With `liveWarningsOnly` and a live
- * logger, a subscriber prints warning/error events to stdout (the logger
- * itself sits at "minimal" and prints nothing). Buffering and subscribers are
+ * logger, a subscriber prints warning/error events to stderr, so a piped
+ * stdout carries only the answer (the logger itself sits at "minimal" and
+ * prints nothing). Buffering and subscribers are
  * unchanged, so run summaries and any event consumer see every event.
  *
  * @param loggerConfig - Passed to `makeObservableLogger` unchanged.
@@ -159,7 +160,7 @@ export const makeExecutionLogger = (
       const prefix = loggerConfig.logPrefix ?? "";
       yield* logger.subscribe((event, formatted) =>
         isWarningOrError(event)
-          ? Effect.sync(() => { console.log(`${prefix}${formatted}`); })
+          ? Effect.sync(() => { console.warn(`${prefix}${formatted}`); })
           : Effect.void,
       );
     }

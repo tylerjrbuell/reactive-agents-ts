@@ -14,16 +14,22 @@ import { ReactiveAgents } from "../src/index.js";
  * A unit test of the bridge proves the bridge works. Only this proves the
  * ENGINE uses it. If anyone restores `Logger.none`, this goes red.
  */
+// Captures stdout AND stderr writes: off a TTY, live warnings print on stderr
+// (console.warn) so piped stdout carries only the answer.
 const captureConsole = () => {
   const lines: string[] = [];
-  const original = console.log;
-  console.log = (...args: unknown[]) => {
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+  const push = (...args: unknown[]) => {
     lines.push(args.map(String).join(" "));
   };
+  console.log = push;
+  console.warn = push;
   return {
     lines,
     restore: () => {
-      console.log = original;
+      console.log = originalLog;
+      console.warn = originalWarn;
     },
   };
 };

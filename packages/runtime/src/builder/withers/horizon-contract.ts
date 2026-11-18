@@ -131,8 +131,9 @@ export const applyWithUserInteraction = (state: BuilderState, options: UserInter
  * `agent.approveRun(runId)` / `agent.denyRun(runId, reason)` from ANY process,
  * which resumes the run from its checkpoint to completion.
  *
- * `mode: "detach"` requires `.withDurableRuns()` (detached pauses need a
- * durable store).
+ * Without `.withDurableRuns()`, `mode: "detach"` waits live in this process
+ * (`runStream()` emits `ApprovalRequested` and stays open until answered);
+ * durable runs add answers from another process or after a restart.
  *
  * `mode: "block"` (the default when durable runs are OFF) decides each gated
  * call IN PROCESS via the `onApprove` callback, without pausing. **Supply
@@ -154,7 +155,7 @@ export const applyWithUserInteraction = (state: BuilderState, options: UserInter
  * @param policy - Approval policy configuration
  * @param policy.tools - Tool names whose calls must be approved
  * @param policy.requireFor - Predicate: return true to require approval for this call
- * @param policy.mode - "detach" (durable pause) or "block" (in-process decision)
+ * @param policy.mode - "detach" (a person decides; live wait, or durable pause with durable runs) or "block" (in-process decision)
  * @param policy.onApprove - In-process decider for block mode: return true/{approve:true} to run, false/{approve:false} to deny
  * @returns `this` for chaining
  */

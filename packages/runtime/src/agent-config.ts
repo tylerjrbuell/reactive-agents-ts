@@ -730,7 +730,7 @@ export const DurableRunsConfigSchema = Schema.Struct({
  * in block mode refuses every gated call (deny by default).
  */
 export const ApprovalPolicyConfigSchema = Schema.Struct({
-  /** "detach" (durable pause; needs durableRuns) or "block" (decide in process). */
+  /** "detach" (a person decides; waits live, or pauses durably with durableRuns) or "block" (decide in process). */
   mode: Schema.optional(Schema.Literal("detach", "block")),
   /** Tool names whose calls need approval. */
   tools: Schema.optional(Schema.Array(Schema.String)),

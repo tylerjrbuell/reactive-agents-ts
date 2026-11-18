@@ -27,6 +27,15 @@ const captureConsoleLog = () => {
   return { lines, restore: () => { console.log = original; } };
 };
 
+const captureConsoleWarn = () => {
+  const lines: string[] = [];
+  const original = console.warn;
+  console.warn = (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+  };
+  return { lines, restore: () => { console.warn = original; } };
+};
+
 describe("bindExecutionObservability: verbosity default follows stdout", () => {
   const bind = (observabilityVerbosity: "minimal" | "normal" | undefined, isTTY: boolean) =>
     Effect.runPromise(
@@ -64,8 +73,11 @@ describe("makeExecutionLogger: warnings-only live printing", () => {
     { _tag: "error", message: "quiet-probe-error", timestamp: new Date() },
   ];
 
-  test("prints warn/error only; buffer and subscribers still get every event", async () => {
-    const cap = captureConsoleLog();
+  test("prints warn/error only, on stderr; buffer and subscribers still get every event", async () => {
+    // stderr, not stdout (dx-warden 2026-11-17): a piped run's stdout carries
+    // only the answer, so `agent | jq` style hosts never see a warning line.
+    const out = captureConsoleLog();
+    const cap = captureConsoleWarn();
     try {
       const seen = await Effect.runPromise(
         Effect.gen(function* () {
@@ -81,7 +93,9 @@ describe("makeExecutionLogger: warnings-only live printing", () => {
       expect(seen.buffered).toEqual(["phase_started", "warning", "error"]);
     } finally {
       cap.restore();
+      out.restore();
     }
+    expect(out.lines).toEqual([]);
     expect(cap.lines.length).toBe(2);
     expect(cap.lines.some((l) => l.includes("quiet-probe-warning"))).toBe(true);
     expect(cap.lines.some((l) => l.includes("quiet-probe-error"))).toBe(true);

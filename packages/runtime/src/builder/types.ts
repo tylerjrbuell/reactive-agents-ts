@@ -558,7 +558,7 @@ export interface DurableRunsOptions {
  *
  * - `tools` — tool names whose calls must be approved.
  * - `requireFor` — predicate; return true to require approval for this call.
- * - `mode` — "detach" (durable pause) or "block" (in-process).
+ * - `mode` — "detach" (a person decides: live wait, or durable pause) or "block" (in-process).
  * - `onApprove` — in-process decider for block mode: return `true` /
  *   `{ approve: true }` to run the call, `false` / `{ approve: false, reason }`
  *   to refuse. May be async; a throw or rejection denies (fail-closed). Ignored

@@ -344,7 +344,7 @@ export interface RuntimeOptions extends Pick<ToolsOptions, "riskLevels" | "maxCa
   /**
    * Opt-in durable HITL approval policy (Phase D). Resolved from
    * `.withApprovalPolicy()`: `tools` is the explicit gated-name list, `requireFor`
-   * an optional predicate, `mode` "detach" (durable pause) or "block" (in-process).
+   * an optional predicate, `mode` "detach" (live wait or durable pause) or "block" (in-process).
    * Threaded into `KernelInput.approvalPolicy` by `reasoning-think.ts`. Absent ⇒
    * no durable approval gate.
    */
