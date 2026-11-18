@@ -1,8 +1,12 @@
 # Reactive Agents — Example Suite
 
-21 runnable examples demonstrating every layer of the framework. Each example
+Runnable examples demonstrating every layer of the framework, grouped by
+category (foundations, tools, multi-agent, trust, advanced, reasoning,
+interaction, streaming, gateway, observe, research, demos). Each example
 exports a `run()` function for use with the test runner, and can also be run
-standalone with `bun run`.
+standalone with `bun run`. The registry in `index.ts` is the full list;
+`bun run smoke` prints the current pass count. Examples marked `xfail` there
+are failing-spec witnesses for documented capability gaps.
 
 ## Quick Start
 
@@ -32,7 +36,10 @@ bun run index.ts
 `.env` is gitignored. Leave every key blank to stay in TEST/offline mode.
 One-off without a file: `ANTHROPIC_API_KEY=sk-ant-... bun run index.ts`.
 
-## All Examples
+## Featured Examples
+
+A representative subset; run `bun run index.ts --offline` to list every
+registered example.
 
 | #   | File                                                                          | What It Shows                      | Key Builder Method           | Offline? |
 | --- | ----------------------------------------------------------------------------- | ---------------------------------- | ---------------------------- | -------- |
