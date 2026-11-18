@@ -1,6 +1,6 @@
 # @reactive-agents/judgment
 
-> Typed, provider-abstracted judgment for Reactive Agents: ask Noul (yes/no), Choice or Score questions and get typed answers with probabilities.
+> Typed, provider-abstracted judgment for Reactive Agents: ask Noul (TypeSafe's name for a yes/no question; the answer is a probability), Choice or Score questions and get typed answers with probabilities.
 
 > **Stability:** experimental. Shapes may change between any releases.
 
@@ -50,6 +50,8 @@ Failures are typed (`JudgmentTimeout`, `JudgmentUnauthorized`, `JudgmentUnsuppor
 | `makeJevBackend` | You use the TypeSafe Jev model (API key from config or `TYPESAFE_API_KEY`). |
 | `makeLlmBackend` | You have no judgment vendor: it emulates judgment over an `LLMService`, uncalibrated. |
 | `makeOllamaBackend` | You want a local System One backend over Ollama. |
+| `makeSystemOneHttpBackend` | You wire System One to another HTTP provider through a `SystemOneProviderDescriptor`. |
+| `passes` | You gate an answer on `minProbability` (and `minConfidence` for Choice/Score). |
 | `capabilitiesOf` | You need a backend's limits (supported kinds, images, calibration) before asking. |
 | `withEvents` | You want `judgment:*` events on the `EventBus`. |
 | `QuestionSpecs`, `JudgmentAnswers`, `JudgmentBackend` | You type questions and answers, or implement a backend. |
