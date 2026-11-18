@@ -108,7 +108,7 @@ You can also register tools **after** `build()` on the agent facade: `await agen
 
 ## ToolBuilder Fluent API
 
-The `ToolBuilder` provides a fluent API for building `ToolDefinition` schema objects without raw literals. It validates at `build()` time (a missing description throws). The execution handler — `(args: Record<string, unknown>) => Effect<...>` — is supplied when you register the tool with `.withTools({ tools })`:
+The `ToolBuilder` provides a fluent API for building `ToolDefinition` schema objects without raw literals. It validates at `build()` time (a missing description throws). Attach the execution handler with `.handler((args) => Effect...)`, then pass the result of `.build()` straight into `.withTools({ tools })`. `build()` returns `{ definition, handler }`, and the handler keeps its own type. Return an `Effect` from the handler (`Effect.succeed(...)`, `Effect.try(...)`, `Effect.tryPromise(...)`), because the runtime runs every handler as an Effect. A build with no `.handler(...)` has no `handler` and is a compile error in `.withTools()`.
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
@@ -116,15 +116,16 @@ import { ToolBuilder } from "@reactive-agents/tools";
 import { Effect } from "effect";
 
 // Basic tool
-const { definition: calculatorDef } = ToolBuilder.create("calculator")
+const calculator = ToolBuilder.create("calculator")
   .description("Perform arithmetic calculations")
   .param("expression", "string", "Math expression to evaluate", { required: true })
   .riskLevel("low")
   .timeout(5_000)
+  .handler((args) => Effect.try(() => String(args.expression)))
   .build();
 
 // Tool with multiple params and enum
-const { definition: fileOpDef } = ToolBuilder.create("file-operation")
+const fileOp = ToolBuilder.create("file-operation")
   .description("Perform a file system operation")
   .param("path", "string", "File path", { required: true })
   .param("operation", "string", "Operation to perform", { required: true, enum: ["read", "write", "delete"] })
@@ -132,27 +133,18 @@ const { definition: fileOpDef } = ToolBuilder.create("file-operation")
   .riskLevel("medium")
   .requiresApproval(true)
   .timeout(10_000)
+  .handler((args) =>
+    Effect.tryPromise(async () => {
+      // ... implementation using args.path / args.operation / args.content
+      return "done";
+    }),
+  )
   .build();
 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools({
-    tools: [
-      {
-        definition: calculatorDef,
-        handler: (args) => Effect.try(() => String(args.expression)),
-      },
-      {
-        definition: fileOpDef,
-        handler: (args) =>
-          Effect.tryPromise(async () => {
-            // ... implementation using args.path / args.operation / args.content
-            return "done";
-          }),
-      },
-    ],
-  })
+  .withTools({ tools: [calculator, fileOp] })
   .build();
 ```
 
@@ -170,8 +162,10 @@ Prefer [`defineTool`](#registering-custom-tools) when you want typed, schema-val
 | `.requiresApproval(bool)` | Sets the approval-required flag on the definition (metadata — see [Durable HITL](/guides/durable-hitl/) for enforcement) |
 | `.returnType(text)` | Human-readable return type description |
 | `.category(cat)` | `"search" \| "file" \| "code" \| "http" \| "data" \| "system" \| "custom" \| "vcs" \| "productivity"` |
-| `.handler(fn)` | Optional: attach an untyped function `(...args: unknown[]) => unknown` to carry alongside the definition for custom pipelines. The agent runtime does **not** execute this — pass an Effect handler to `.withTools({ tools })` instead |
-| `.build()` | Produce `{ definition, handler? }` — use the `definition` with `.withTools({ tools })` |
+| `.handler(fn)` | Attach the execution handler `(args: Record<string, unknown>) => Effect<...>`. Required for `.withTools()`: it runs the handler as an Effect, so return one |
+| `.build()` | Produce `{ definition, handler }` (typed `BuiltTool<H>`). With `.handler(fn)` set, `handler` is required and keeps its type, so the result goes straight into `.withTools({ tools })`. Without it, `handler` is absent and `.withTools()` rejects the entry at compile time |
+
+`BuiltTool` and `ToolBuilderHandler` are exported as types from `@reactive-agents/tools` if you need to annotate a built tool.
 
 ## Function Adapter
 

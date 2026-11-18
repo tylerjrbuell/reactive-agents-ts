@@ -58,35 +58,35 @@ const calculator: ToolDefinition = {
 
 ## Tools with Side Effects
 
-For tools that modify state, raise the `riskLevel` and return structured results so the agent can reason about success/failure. The `ToolBuilder` builds the definition and catches misconfiguration at build time (a missing description throws). The handler is supplied at registration through `.withTools({ tools })`. It receives a single `args` record and returns an `Effect`: use `Effect.succeed(...)` for pure values, `Effect.try(...)` for synchronous code that can throw and `Effect.tryPromise(...)` for async work. Errors reach the agent as observations instead of crashing the run.
+For tools that modify state, raise the `riskLevel` and return structured results so the agent can reason about success/failure. The `ToolBuilder` builds the definition and catches misconfiguration at build time (a missing description throws). Attach the handler with `.handler(...)`, then pass the built tool straight into `.withTools({ tools })`; a build with no handler is a compile error there. The handler receives a single `args` record and returns an `Effect`: use `Effect.succeed(...)` for pure values, `Effect.try(...)` for synchronous code that can throw and `Effect.tryPromise(...)` for async work. Errors reach the agent as observations instead of crashing the run.
 
 ```typescript
 import { ReactiveAgents } from "reactive-agents";
 import { ToolBuilder } from "@reactive-agents/tools";
 import { Effect } from "effect";
 
-const { definition: writeFileDef } = ToolBuilder.create("write-file")
+const writeFile = ToolBuilder.create("write-file")
   .description("Write content to a file, creating it if it doesn't exist")
   .param("path", "string", "Destination file path", { required: true })
   .param("content", "string", "Content to write", { required: true })
   .param("append", "boolean", "Append instead of overwrite", { default: false })
   .riskLevel("medium")
   .timeout(10_000)
+  .handler((args) =>
+    Effect.tryPromise(async () => {
+      const path = String(args.path);
+      const content = String(args.content);
+      const { writeFile, appendFile } = await import("fs/promises");
+      const fn = args.append ? appendFile : writeFile;
+      await fn(path, content, "utf-8");
+      return { success: true, path, bytesWritten: content.length };
+    }),
+  )
   .build();
-
-const writeFileHandler = (args: Record<string, unknown>) =>
-  Effect.tryPromise(async () => {
-    const path = String(args.path);
-    const content = String(args.content);
-    const { writeFile, appendFile } = await import("fs/promises");
-    const fn = args.append ? appendFile : writeFile;
-    await fn(path, content, "utf-8");
-    return { success: true, path, bytesWritten: content.length };
-  });
 
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
-  .withTools({ tools: [{ definition: writeFileDef, handler: writeFileHandler }] })
+  .withTools({ tools: [writeFile] })
   .build();
 ```
 
@@ -102,6 +102,7 @@ const deleteFileTool = new ToolBuilder("delete-file")
   .riskLevel("high")           // "low" | "medium" | "high" | "critical"
   .requiresApproval()          // sets definition.requiresApproval = true
   .timeout(5_000)
+  .handler((args) => Effect.succeed({ deleted: String(args.path) })) // required: build() without a handler does not compile in withTools
   .build();
 ```
 
@@ -119,6 +120,7 @@ const { definition, handler } = new ToolBuilder("delete-file")
   .param("path", "string", "File path to delete", { required: true })
   .riskLevel("high")
   .requiresApproval()
+  .handler((args) => Effect.succeed(`deleted ${String(args.path)}`))
   .build();
 
 if (definition.requiresApproval) {
