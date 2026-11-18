@@ -155,6 +155,7 @@ export type {
   // Judgment (`.withJudgment()` / `agent.judge()`)
   JudgmentBuilderOptions,
   JudgmentSites,
+  JudgmentShadowOptions,
 
   // Judgment (`agent.judge()` / `agent.judgeRank()`)
   JudgeInput,

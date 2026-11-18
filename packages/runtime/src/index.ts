@@ -34,6 +34,7 @@ export type {
   JudgeRankResult,
 } from "./judgment-rank.js";
 export { DEFAULT_JUDGE_RANK_CHUNK_CAP } from "./judgment-rank.js";
+export type { JudgmentShadowOptions } from "./judgment-autoshadow.js";
 
 // ─── Schemas ───
 export {
