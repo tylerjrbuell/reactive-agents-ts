@@ -877,17 +877,18 @@ body {
 }
 
 .sl-link-button.primary {
-    background: linear-gradient(
-        135deg,
-        var(--ra-violet) 0%,
-        var(--ra-violet-deep) 100%
-    );
+    /* White label on a deep-violet gradient: Starlight's dark-theme default
+       (near-black text) measured 3.2-4.2:1 on the old #8b5cf6 to #7c3aed
+       fill; this is 5.5:1 or better. */
+    background: linear-gradient(135deg, var(--ra-violet-deep) 0%, #6d28d9 100%);
+    color: #ffffff;
     border-color: transparent;
 }
 .sl-link-button.primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 24px rgba(139, 92, 246, 0.35);
-    background: linear-gradient(135deg, #a78bfa 0%, var(--ra-violet) 100%);
+    background: linear-gradient(135deg, var(--ra-violet-deep) 0%, #5b21b6 100%);
+    color: #ffffff;
 }
 .sl-link-button.primary:active {
     transform: translateY(0);
@@ -3125,6 +3126,22 @@ ol.ra-steps > li:last-child {
     padding-inline: 0.9rem;
     font-size: 0.86rem;
     gap: 0.3rem;
+    /* Same height for every button: the icon-less "minimal" one measured
+       48px next to 56px icon buttons. */
+    min-height: 3.5rem;
+    box-sizing: border-box;
+}
+/* Between the two-column breakpoint and wide desktop the copy column is
+   ~400px and the three buttons (428px) wrapped, stranding Star on its own
+   row. Tighten until they fit one row. */
+@media (min-width: 50rem) and (max-width: 72rem) {
+    .ra-hero-actions {
+        gap: 0.45rem;
+    }
+    .ra-hero-actions .sl-link-button {
+        padding-inline: 0.7rem;
+        font-size: 0.8rem;
+    }
 }
 @media (max-width: 50rem) {
     .ra-hero-actions {
@@ -3320,7 +3337,7 @@ ol.ra-steps > li:last-child {
     color: #86efac;
 }
 .ra-hero-code .rc {
-    color: #5b6472;
+    color: #7d8799;
     font-style: italic;
 }
 [data-theme='light'] .ra-hero-code .rk {
@@ -3333,7 +3350,22 @@ ol.ra-steps > li:last-child {
     color: #15803d;
 }
 [data-theme='light'] .ra-hero-code .rc {
-    color: #94a3b8;
+    color: #64748b;
+}
+[data-theme='light'] .ra-hero-vtag {
+    color: #0e7490;
+    border-color: rgba(14, 116, 144, 0.35);
+}
+/* The dark-theme gradient starts at #c4b5fd, about 1.9:1 on white. */
+[data-theme='light'] .ra-hero h1 {
+    background-image: linear-gradient(
+        165deg,
+        #6d28d9 0%,
+        #7c3aed 25%,
+        #0e7490 50%,
+        #7c3aed 75%,
+        #5b21b6 100%
+    );
 }
 .ra-hero-verdict {
     display: flex;
@@ -3443,6 +3475,22 @@ ol.ra-steps > li:last-child {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* Phone width truncated the receipt facts ("... 2/2 deli..."); let them wrap. */
+@media (max-width: 640px) {
+    .ra-hero-receipt-strip {
+        align-items: flex-start;
+    }
+    .ra-hero-receipt-strip span:nth-child(2) {
+        white-space: normal;
+        overflow: visible;
+    }
+    .ra-hero-receipt-dot {
+        margin-top: 0.4em;
+    }
+    .ra-hero-code {
+        font-size: 0.74rem;
+    }
+}
 .ra-hero-receipt-link {
     margin-left: auto;
     flex: 0 0 auto;
@@ -3464,7 +3512,8 @@ ol.ra-steps > li:last-child {
     -webkit-appearance: none;
     background: none;
     border: none;
-    padding: 0.3rem;
+    /* 24px minimum touch target (was 16.6px). */
+    padding: 0.55rem;
     margin: 0;
     cursor: pointer;
     display: flex;
