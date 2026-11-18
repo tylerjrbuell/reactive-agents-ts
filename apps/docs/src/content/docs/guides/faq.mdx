@@ -16,7 +16,7 @@ faq:
       Claude, GPT, and Gemini.
   - q: Is Reactive Agents production-ready?
     a: >-
-      It is in early access (v0.18.0) with 13,601 tests across 2,300+ files run on
+      It is in early access (v0.18.0) with 20,700+ tests across 2,300+ files run on
       every PR, durable crash-resume, and human-in-the-loop approvals. The core
       execution engine, providers, tools, and memory are stable. APIs can still
       change between minor versions, so pin a version for production.
@@ -62,7 +62,7 @@ Skeptical-engineer questions answered straight. If you have one that isn't here,
 
 ### Is it production-ready?
 
-The framework runs **{metrics.tests.toLocaleString()} tests across {metrics.testFiles} files** on every PR; current main has 0 failures. The same agent code runs the full loop — tool execution with healing, verification, receipts — on frontier APIs (Anthropic, OpenAI, Gemini, Groq, xAI) and on local Ollama models, and we exercise both tiers continuously during development.
+The framework runs **{metrics.tests.toLocaleString()}+ tests across {metrics.testFiles} files** on every PR; current main has 0 failures. The same agent code runs the full loop — tool execution with healing, verification, receipts — on frontier APIs (Anthropic, OpenAI, Gemini, Groq, xAI) and on local Ollama models, and we exercise both tiers continuously during development.
 
 **Honest caveats:**
 - **Bun ≥ 1.1.0 is recommended** (optimal performance — native SQLite, subprocess, HTTP). **Node.js ≥ 22.5 is supported** via `@reactive-agents/runtime-shim` (on Node, SQLite full-text search is unavailable and memory search falls back to `LIKE`). The floors are the `engines` fields in `packages/reactive-agents/package.json`.

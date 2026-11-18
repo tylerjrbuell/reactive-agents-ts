@@ -38,6 +38,9 @@ const metrics = JSON.parse(readFileSync(METRICS_FILE, "utf-8")) as {
 
 const fmt = (n: number) => n.toLocaleString();
 
+/** Test count is a rounded-down floor ("20,700+"), never an exact number. */
+const testsFloor = (n: number) => `${fmt(n)}+`;
+
 /**
  * Test-file count as a floor ("1,600+"), not an exact number: the exact count
  * changed with every new test file, so each commit that added one turned the
@@ -60,20 +63,20 @@ const rules: Rule[] = [
       // "5,028 tests across 556 files" prose
       {
         label: "tests across files prose",
-        pattern: /\*\*[\d,]+ tests\*\* across [\d,]+\+? files/,
-        replacement: `**${fmt(metrics.tests)} tests** across ${filesFloor(metrics.testFiles)} files`,
+        pattern: /\*\*[\d,]+\+? tests\*\* across [\d,]+\+? files/,
+        replacement: `**${testsFloor(metrics.tests)} tests** across ${filesFloor(metrics.testFiles)} files`,
       },
       // bun test command help "(5,028 tests / 556 files, ~65s)"
       {
         label: "bun test help comment",
-        pattern: /\([\d,]+ tests \/ [\d,]+\+? files,/,
-        replacement: `(${fmt(metrics.tests)} tests / ${filesFloor(metrics.testFiles)} files,`,
+        pattern: /\([\d,]+\+? tests \/ [\d,]+\+? files,/,
+        replacement: `(${testsFloor(metrics.tests)} tests / ${filesFloor(metrics.testFiles)} files,`,
       },
       // Hero stats table "| **5,028 tests**             |"
       {
         label: "hero stats table tests",
-        pattern: /\| \*\*[\d,]+ tests\*\*\s+\|/,
-        replacement: `| **${fmt(metrics.tests)} tests**             |`,
+        pattern: /\| \*\*[\d,]+\+? tests\*\*\s+\|/,
+        replacement: `| **${testsFloor(metrics.tests)} tests**             |`,
       },
     ],
   },
@@ -85,7 +88,7 @@ const rules: Rule[] = [
       {
         label: "faq tests across files",
         pattern: /[\d,]+\+? tests across [\d,]+\+? files/,
-        replacement: `${fmt(metrics.tests)} tests across ${filesFloor(metrics.testFiles)} files`,
+        replacement: `${testsFloor(metrics.tests)} tests across ${filesFloor(metrics.testFiles)} files`,
       },
       {
         label: "faq package counts",
@@ -100,7 +103,7 @@ const rules: Rule[] = [
       {
         label: "contributing bun test count",
         pattern: /# [\d,]+\+? tests — all must pass/,
-        replacement: `# ${fmt(metrics.tests)} tests — all must pass`,
+        replacement: `# ${testsFloor(metrics.tests)} tests — all must pass`,
       },
       {
         label: "contributing build package count",

@@ -1,5 +1,5 @@
 {
-  "tests": 13601,
-  "updated": "2026-11-07",
-  "_note": "Latest full workspace test run (local, `bun run test` via turbo, 2026-11-07): 0 fail across 13601 tests in 1653 files (runtime package: 2207 pass / 0 fail). Count is the sum of per-package 'Ran N tests' totals. NOT auto-refreshed by CI; update manually after a full run when the count moves."
+  "tests": 20700,
+  "updated": "2026-11-17",
+  "_note": "Rounded-down floor of the latest full-suite run on dev (`bun run repo test --all`, 2026-11-17: 20,757 passing). Displayed as '20,700+'. Do not use the 23,602 figure (double-counted). NOT auto-refreshed by CI; update manually after a full run when the count moves."
 }

@@ -1,9 +1,9 @@
 ---
 title: Reactive Agents
-description: Agents you can control, audit and improve. TypeScript agents that can finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from. Built on Effect-TS.
+description: Agents you can control, audit and improve. An open-source TypeScript agent harness for controllable execution, end-to-end observability, and reliable runs on local models and frontier APIs.
 template: splash
 hero:
-    tagline: 'Agents you can control, audit and improve. TypeScript agents that can finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from.'
+    tagline: 'Agents you can control, audit and improve. An open-source TypeScript agent harness for controllable execution, end-to-end observability, and reliable runs on local models and frontier APIs.'
     image:
         file: ../../assets/logo-dark.svg
     actions:
@@ -63,6 +63,21 @@ import demoGif from '../../assets/local-vs-frontier.gif'
   refreshed by CI). Never hardcode a literal here — edit the script.
 */}
 
+<div class="ra-section-card ra-panel" id="what-you-get">
+  <div class="ra-panel-inner">
+
+## What you get that other frameworks don't
+
+- **Same code, local or frontier.** The agent loop finishes the job on a 4B Ollama model and on Claude, GPT, or Gemini; only the model line changes. [See the demo](/guides/examples/#demos).
+- **A receipt for every run.** Each run returns a claim-to-evidence record with a verdict. Sign it with Ed25519 via `.withReceiptSigning()` (unsigned by default). [Builder reference](/reference/builder-api/safety-and-quality/).
+- **Explain any failed run.** Every run writes a trace by default, and `rax-diagnose cause <runId>` names why it failed. Replay re-runs a recorded run from its trace with tool results held fixed (model calls stay live unless you add a replay LLM layer). [rax-diagnose](/reference/cli/diagnose/) · [Snapshot & replay](/features/snapshot-replay/).
+- **Survives a crash.** With `.withDurableRuns()`, a run checkpoints each step and a fresh process resumes it. Durable runs are opt-in in the framework (Cortex turns them on for its own runs). [Durable execution](/guides/durable-execution/).
+- **Private and quiet by default.** No telemetry unless you opt in (`DO_NOT_TRACK` always wins), output is quiet when piped, and optional capabilities such as memory, guardrails, cost routing, and durability only run when you add them with a `.with*()` call. [Observability](/features/observability/).
+- **Cortex, a local studio.** Watch runs live, inspect traces, and build agents on your machine. No hosted dashboard. [Cortex](/features/cortex/).
+
+  </div>
+</div>
+
 <div class="ra-panel ra-stats-panel">
     <div class="ra-panel-inner ra-stats-inner">
         <div class="ra-stats">
@@ -73,7 +88,7 @@ import demoGif from '../../assets/local-vs-frontier.gif'
             </div>
             <div class="ra-stat">
                 <span class="ra-stat-icon">✅</span>
-                <span class="ra-stat-value">{metrics.tests.toLocaleString()}</span>
+                <span class="ra-stat-value">{metrics.tests.toLocaleString()}+</span>
                 <span class="ra-stat-label">Tests</span>
             </div>
             <div class="ra-stat">
@@ -147,7 +162,7 @@ Click a screenshot to enlarge it.
 
 ## Every phase, visible
 
-The engine has 12 phases. Most agent frameworks hide this entirely. Here's exactly which ones fired **for the run above**, and which stayed off because nothing in the config asked for them. Composable means opt-in, not "always-on and hidden."
+The engine has 12 phases. Here's exactly which ones fired **for the run above**, and which stayed off because nothing in the config asked for them. Composable means opt-in, not "always-on and hidden."
 
 <RunPhases />
 
@@ -161,7 +176,7 @@ The engine has 12 phases. Most agent frameworks hide this entirely. Here's exact
 
 ## Every run returns a receipt
 
-Most frameworks give you prose and ask you to trust it. Reactive Agents returns a **typed `TrustReceipt`**: an evidence trail you can inspect, gate on, and (optionally) verify by Ed25519 signature. This is the receipt from the **same run** above.
+Reactive Agents returns a **typed `TrustReceipt`**: an evidence trail you can inspect, gate on, and (optionally) verify by Ed25519 signature. This is the receipt from the **same run** above.
 
 <EvidenceReceipt />
 
@@ -389,7 +404,7 @@ Everything below is evidence for four things: **transparent** (nothing happens o
     <Card title="Type-Safe from End to End" icon="seti:typescript">
         **Strict TypeScript** throughout. Every agent, tool, memory entry, and
         LLM call is validated by Effect-TS schemas. Failures are typed tagged
-        errors, not exceptions. **{metrics.tests.toLocaleString()} tests** keep
+        errors, not exceptions. **{metrics.tests.toLocaleString()}+ tests** keep
         every service boundary honest on every PR.
     </Card>
     <Card title="Composable Layer Architecture" icon="puzzle">
@@ -458,37 +473,9 @@ Everything below is evidence for four things: **transparent** (nothing happens o
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## How It's Different
+## How it compares
 
-<CardGrid>
-    <Card title="vs. LangChain / LlamaIndex" icon="document">
-        Python-first, dynamically typed, monolithic. Reactive Agents is
-        **TypeScript-native and strictly typed**, fully modular layers, and
-        built-in observability. You see every decision — not just the final
-        output. Side-by-side migration guide included.
-    </Card>
-    <Card title="vs. Vercel AI SDK" icon="document">
-        Great for streaming and tool calling, but stops there. Reactive Agents
-        adds the **reliability harness** — tool-call healing, context curation,
-        termination oracle — plus opt-in **4-tier memory**, guardrails,
-        verification, cost routing, and a **12-phase execution engine** with
-        full observability. Same TypeScript ergonomics; the parts that break at
-        scale are handled.
-    </Card>
-    <Card title="vs. AutoGen / CrewAI" icon="document">
-        Multi-agent-first frameworks. Reactive Agents takes the
-        Cognition-aligned posture: **single-threaded writes, sub-agent
-        delegation only when it pays for itself**. Type-safe, composable, with
-        the **healing pipeline that keeps local-model tool calling viable** —
-        and A2A (JSON-RPC + SSE) ready when you actually need fan-out.
-    </Card>
-    <Card title="vs. Building From Scratch" icon="document">
-        **{metrics.grandTotal} production-ready packages, {metrics.tests.toLocaleString()} tests, {metrics.phases}-phase engine.** Memory,
-        reasoning, tools, A2A, gateway, reactive intelligence, safety, cost,
-        identity, orchestration — all composable, all opt-in. Focus on your
-        agent's logic, not infrastructure.
-    </Card>
-</CardGrid>
+Reactive Agents focuses on reliability across model tiers, evidence for every run, traces you can diagnose, and capabilities that are all opt-in. It is not a feature-count contest: streaming, tool calling and multi-agent orchestration are table stakes. For side-by-side write-ups, see [vs. LangGraph](/guides/reactive-agents-vs-langgraph/), [vs. Vercel AI SDK](/guides/reactive-agents-vs-vercel-ai-sdk/) and [vs. Mastra](/guides/reactive-agents-vs-mastra/), or the [LangChain migration guide](/guides/migrating-from-langchain/).
 
   </div>
 </div>

@@ -6,7 +6,7 @@
 
 **Agents you can control, audit and improve.**
 
-TypeScript agents that can finish the job on a 4B local model or a frontier API, with an evidence receipt for every run (Ed25519-signable) and a trace you can diagnose a failed run from.
+An open-source TypeScript agent harness for controllable execution, end-to-end observability, and reliable runs on local models and frontier APIs.
 
 [![CI](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/reactive-agents?logo=npm&label=npm&color=CB3837)](https://www.npmjs.com/package/reactive-agents)
@@ -17,18 +17,27 @@ TypeScript agents that can finish the job on a 4B local model or a frontier API,
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/tylerjrbuell/reactive-agents-ts/pulls)
 [![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in-Codespaces-black?logo=github)](https://codespaces.new/tylerjrbuell/reactive-agents-ts?quickstart=1)
 
-[Documentation](https://docs.reactiveagents.dev/) · [Discord](https://discord.gg/Mp99vQam3Q) · [Quick Start](#quick-start) · [Features](#features) · [Comparison](#comparison) · [Architecture](#architecture) · [Packages](#packages)
+[Documentation](https://docs.reactiveagents.dev/) · [Discord](https://discord.gg/Mp99vQam3Q) · [Quick Start](#quick-start) · [Features](#features) · [How it compares](#how-it-compares) · [Architecture](#architecture) · [Packages](#packages)
 
 </div>
 
 ---
 
-Most agent frameworks pick one model tier, hide the loop behind an opaque runtime, and hand back prose you have to take on faith. Reactive Agents is built around four things instead:
+## What you get that other frameworks don't
 
-- 🔍 **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay locally, with no SaaS dashboard required. *(Engine: [`packages/runtime/src/engine`](packages/runtime/src/engine); replay: [`packages/replay`](packages/replay).)*
-- 🛡️ **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the same code finish the agent loop on a local 4B Ollama model and on Claude, GPT, or Gemini, with no per-model rewrites. *(Healing: [`packages/tools/src/healing`](packages/tools/src/healing); termination owner: [`terminate.ts`](packages/reasoning/src/kernel/loop/terminate.ts); provider adapters: [`adapter.ts`](packages/llm-provider/src/adapter.ts).)*
-- 🧩 **Composable and controllable.** A typed builder of opt-in layers: start with a model, then add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for. *(Builder: [`packages/runtime/src/builder.ts`](packages/runtime/src/builder.ts).)*
-- 🧾 **Accountable.** Every run returns a `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust. Add `.withReceiptSigning()` (or set `RA_RECEIPT_KEY`) to sign it with Ed25519; unsigned by default. *(Schema: [`packages/core/src/types/receipt.ts`](packages/core/src/types/receipt.ts).)*
+- **Same code, local or frontier.** The agent loop finishes the job on a 4B Ollama model and on Claude, GPT, or Gemini; only the model line changes. [See the demo](apps/examples/src/demos/local-vs-frontier.ts).
+- **A receipt for every run.** Each run returns a claim-to-evidence record with a verdict. Sign it with Ed25519 via `.withReceiptSigning()` (unsigned by default). [Receipt schema](packages/core/src/types/receipt.ts).
+- **Explain any failed run.** Every run writes a trace by default, and `rax-diagnose cause <runId>` names why it failed. `replay` re-runs a recorded run from its trace with tool results held fixed (model calls stay live unless you add a replay LLM layer). [rax-diagnose](https://docs.reactiveagents.dev/reference/cli/diagnose/) · [Snapshot & replay](https://docs.reactiveagents.dev/features/snapshot-replay/).
+- **Survives a crash.** With `.withDurableRuns()`, a run checkpoints each step and a fresh process resumes it. Durable runs are opt-in in the framework (Cortex turns them on for its own runs). [Durable execution](https://docs.reactiveagents.dev/guides/durable-execution/) · [demo](apps/examples/src/demos/durable-resume.ts).
+- **Private and quiet by default.** No telemetry unless you opt in (`DO_NOT_TRACK` always wins), output is quiet when piped, and optional capabilities such as memory, guardrails, cost routing, and durability only run when you add them with a `.with*()` call. [Observability](https://docs.reactiveagents.dev/features/observability/).
+- **Cortex, a local studio.** Watch runs live, inspect traces, and build agents on your machine. No hosted dashboard. [Cortex docs](https://docs.reactiveagents.dev/features/cortex/).
+
+Reactive Agents is built around four things:
+
+- **Transparent harness.** A deterministic 12-phase execution engine with `before` / `after` / `on-error` hooks on every phase. Every prompt, tool call, and reasoning step is a typed event you can inspect, steer, and replay locally, with no SaaS dashboard required. *(Engine: [`packages/runtime/src/engine`](packages/runtime/src/engine); replay: [`packages/replay`](packages/replay).)*
+- **Reliable on every model tier.** Model-adaptive context profiles, tool-call healing, output verification, durable crash-resume, and a single-owner termination oracle let the same code finish the agent loop on a local 4B Ollama model and on Claude, GPT, or Gemini, with no per-model rewrites. *(Healing: [`packages/tools/src/healing`](packages/tools/src/healing); termination owner: [`terminate.ts`](packages/reasoning/src/kernel/loop/terminate.ts); provider adapters: [`adapter.ts`](packages/llm-provider/src/adapter.ts).)*
+- **Composable and controllable.** A typed builder of opt-in layers: start with a model, then add reasoning, memory, guardrails, cost routing, and durability one `.with()` call at a time. You own the loop; nothing runs that you didn't ask for. *(Builder: [`packages/runtime/src/builder.ts`](packages/runtime/src/builder.ts).)*
+- **Accountable.** Every run returns a `receipt`, a claim-to-evidence record with a verdict and confidence, not just an answer you have to trust. Add `.withReceiptSigning()` (or set `RA_RECEIPT_KEY`) to sign it with Ed25519; unsigned by default. *(Schema: [`packages/core/src/types/receipt.ts`](packages/core/src/types/receipt.ts).)*
 
 Built on Effect-TS: schema-validated boundaries and tagged errors. A ratcheted migration (`scripts/check-string-errors.sh`) is draining the remaining string-thrown errors; the count can only go down.
 
@@ -37,7 +46,7 @@ Built on Effect-TS: schema-validated boundaries and tagged errors. A ratcheted m
 | **One import to start**      | Reasoning, memory, guardrails, and cost routing are all opt-in, added one `.with()` call at a time |
 | **8 LLM providers**          | Anthropic, OpenAI, Gemini, Groq, xAI, Ollama (local), LiteLLM (40+ models), Test |
 | **8 reasoning strategies**   | ReAct, Blueprint, Reflexion, Plan-Execute, Tree-of-Thought, Adaptive, Direct, Code-Action (@experimental) |
-| **13,601 tests**             | Counted from the repo by the docs metrics script (`bun run --cwd apps/docs metrics`) |
+| **20,700+ tests**             | Rounded-down count from a full-suite run (`bun run repo test --all`) |
 | **12-phase execution**       | Deterministic lifecycle with before/after/error hooks per phase  |
 | **Cortex Studio**            | Live agent canvas, entropy charts, debrief UI, agent builder     |
 | **Effect-TS end to end**     | Compile-time type safety, schema-validated boundaries, tagged errors |
@@ -70,7 +79,7 @@ An agent is a loop: LLM, tool, observe, repeat. Hand-rolling it works for a prot
 
 That's harness engineering, and there are three honest paths: build it yourself (workable, but an ongoing maintenance cost), use a black-box harness (fast to start, hard to debug or override), or use a transparent one. Reactive Agents is the third: every phase emits typed events, prompts are readable templates rather than buried strings, and components like the healing pipeline and context curator are exported and inspectable, not hidden behind a proprietary loop.
 
-See [full documentation](https://docs.reactiveagents.dev/) for the complete case, including a side-by-side breakdown against LangChain, the Vercel AI SDK, and AutoGen/CrewAI in [Comparison](#comparison) below.
+See [full documentation](https://docs.reactiveagents.dev/) for the complete case, and [How it compares](#how-it-compares) below for our focus.
 
 ## Cortex Studio
 
@@ -171,7 +180,7 @@ Grouped by capability. Every layer is opt-in: call `.with*()` only for what you 
 - All build on `ui-core` and consume `AgentStream.toSSE()` from Next.js, SvelteKit, Nuxt, or any SSE-capable server
 
 ### ✅ Confidence
-- **13,601 tests** across 2,300+ files, counted from the repo by `bun run --cwd apps/docs metrics`
+- **20,700+ tests** across 2,300+ files, rounded down from a full-suite run (`bun run repo test --all`)
 - **Pre-1.0 versioning**: while the version is `0.x`, minor releases may include breaking changes. Each is listed per release in the [changelog](CHANGELOG.md) and [What's New](https://docs.reactiveagents.dev/guides/whats-new/) with migration notes; the [stability tiers](https://docs.reactiveagents.dev/reference/stability/) say which surfaces are safest.
 - **Strict TypeScript**: Effect-TS schemas validate every service boundary; tagged errors on the converted packages, with the remaining string throws capped by a shrink-only CI ratchet
 
@@ -189,13 +198,13 @@ bun add reactive-agents
 npm install reactive-agents
 ```
 
-> **Note:** `reactive-agents` declares `effect` as a **peer dependency** (`^3.10.0`), and so do most framework packages. A few — e.g. `@reactive-agents/core` — *additionally* declare it as a regular dependency (a dual declaration), so `effect` arrives in your install tree transitively via the framework regardless, while the peer declaration is how the packages ask your app to share one `effect` version with them. If you import from `effect` directly in your own code, declare it explicitly: `bun add effect` (or `npm install effect`).
-
 Set your provider key first (each provider's variable is listed in [Environment Variables](#environment-variables) below):
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...   # or put it in .env
 ```
+
+No Effect knowledge needed for the basics: `createAgent` + `await agent.run()`.
 
 `createAgent(config)` is the front door: one declarative config object, the shape you already know from the Vercel AI SDK and OpenAI SDK. This is the 90% case:
 
@@ -212,6 +221,8 @@ const result = await agent.run('Explain quantum entanglement')
 console.log(result.output)
 console.log(result.metadata) // { duration, cost, tokensUsed, stepsCount }
 ```
+
+> **Note:** `reactive-agents` declares `effect` as a **peer dependency** (`^3.10.0`), and so do most framework packages. A few — e.g. `@reactive-agents/core` — *additionally* declare it as a regular dependency (a dual declaration), so `effect` arrives in your install tree transitively via the framework regardless, while the peer declaration is how the packages ask your app to share one `effect` version with them. If you import from `effect` directly in your own code, declare it explicitly: `bun add effect` (or `npm install effect`).
 
 ### Add Capabilities
 
@@ -442,20 +453,9 @@ const agent = await ReactiveAgents.create()
 
 Available phases (12): `bootstrap`, `guardrail`, `cost-route`, `strategy-select`, `think`, `act`, `observe`, `verify`, `memory-flush`, `cost-track`, `audit`, `complete`. Each supports `before`, `after`, and `on-error` timing.
 
-## Comparison
+## How it compares
 
-Scoped to where Reactive Agents is structurally different, not a feature-count contest. Most of these frameworks ship token streaming, tool calling, and multi-agent orchestration too.
-
-| Capability                       | Reactive Agents         | LangChain JS | Vercel AI SDK | Mastra    |
-| --------------------------------- | :----------------------: | :----------: | :-----------: | :-------: |
-| Full type safety (Effect-TS)      |           Yes            |      No      |    Partial    |  Partial  |
-| Typed per-phase lifecycle hooks   |   12 phases, `before`/`after`/`error`   |  Callbacks   |  Middleware   |    No     |
-| Model-adaptive context by tier    |         4 tiers          |      No      |      No       |    No     |
-| Signed run receipt (claim to evidence) |           Yes           |      No      |      No       |    No     |
-| Production guardrails             |           Yes            |      No      |      No       |  Partial (processors) |
-| Durable crash-resume              |           Yes            |      No      |      No       | Partial (Temporal-backed workflows) |
-
-<sub>Reflects our understanding of each framework's first-party, shipped features as of 2026-09. "No" means we found no first-party equivalent, not that none exists; these move fast. Corrections welcome: [open a PR](https://github.com/tylerjrbuell/reactive-agents-ts/edit/main/README.md).</sub>
+Reactive Agents focuses on reliability across model tiers, evidence for every run, traces you can diagnose, and capabilities that are all opt-in. It is not a feature-count contest: token streaming, tool calling, and multi-agent orchestration are table stakes in this space. For side-by-side write-ups, see the [comparison guides](https://docs.reactiveagents.dev/guides/reactive-agents-vs-vercel-ai-sdk/) (dated, with corrections welcome).
 
 ## Use Cases
 
@@ -804,7 +804,7 @@ const maxIter = createMaxIterationsScenario() // agent + prompt that hits max it
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (13,601 tests / 2,300+ files, ~3m)
+bun test                 # Run full test suite (20,700+ tests / 2,300+ files)
 bun run build            # Build all packages (ESM + DTS via tsup)
 ```
 
