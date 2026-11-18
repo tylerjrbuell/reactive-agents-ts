@@ -7,6 +7,10 @@ function fmtPct(n: number): string {
   return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 }
 
+function fmtP(p: number): string {
+  return p < 0.001 ? "<0.001" : p.toFixed(p < 0.1 ? 4 : 3);
+}
+
 function tierRow(t: TierEvidence, policy: LiftPolicy): string {
   const verdict = t.inconclusive
     ? "INCONCLUSIVE"
@@ -33,14 +37,30 @@ function tierRow(t: TierEvidence, policy: LiftPolicy): string {
  * is built from, any tasks excluded as unpaired (never silent), and the
  * pass^8 reliability read (or its absence, called out as underpowered).
  */
-function tierDetailLines(t: TierEvidence): string[] {
+function tierDetailLines(t: TierEvidence, policy: LiftPolicy): string[] {
   const lines: string[] = [];
+  const fisher = new Map((t.exact?.perTask ?? []).map((x) => [x.taskId, x]));
   // A single-task tier's row already IS the task delta — no duplicate line.
   if (t.perTask.length > 1) {
     for (const p of t.perTask) {
       const d = `${p.dPp >= 0 ? "+" : ""}${p.dPp.toFixed(1)}pp`;
-      lines.push(`    · ${p.taskId.slice(0, 24).padEnd(24)} ${d.padStart(8)} ± ${p.sePp.toFixed(1)}pp`);
+      const x = fisher.get(p.taskId);
+      const exact = x
+        ? `  ${x.baselineSolved}/${x.baselineRuns} → ${x.candidateSolved}/${x.candidateRuns} Fisher p=${fmtP(x.fisherP)}`
+        : "";
+      lines.push(`    · ${p.taskId.slice(0, 24).padEnd(24)} ${d.padStart(8)} ± ${p.sePp.toFixed(1)}pp${exact}`);
     }
+  }
+  if (t.exact !== undefined && !t.inconclusive) {
+    const m = t.exact.mcnemar;
+    lines.push(
+      `    · exact McNemar (run-paired, nominal): +${m.b} gained / -${m.c} lost of ${m.pairs} pairs, p=${fmtP(m.p)}`,
+    );
+  }
+  if (!t.inconclusive) {
+    lines.push(
+      `    · runsNeeded: ${t.runsNeeded}/cell for 80% power at ≥${policy.minLiftPp}pp over ${t.perTask.length} task(s) (have ${t.minRunsObserved})`,
+    );
   }
   if (t.unpairedTaskIds.length > 0) {
     lines.push(
@@ -80,7 +100,7 @@ export function formatGateReceipt(
   const header = `LIFT GATE · ${verdict.candidateVariantId} vs ${verdict.baselineVariantId}`;
   const cols = `  ${"tier".padEnd(18)} ${"base".padStart(6)}  ${"cand".padStart(6)}  ${"lift".padStart(8)}  ${"tok".padStart(8)}  verdict`;
   const rows = verdict.perTier
-    .flatMap((t) => [tierRow(t, policy), ...tierDetailLines(t)])
+    .flatMap((t) => [tierRow(t, policy), ...tierDetailLines(t, policy)])
     .join("\n");
   // The aggregate headline prints the leg the verdict was SCORED on, labeled,
   // consistent with the per-tier sub-line. The other leg is one line up on

@@ -285,8 +285,31 @@ export interface TierEvidence {
   readonly minRunsObserved: number;
   /** `minRunsObserved < policy.minRuns` → this tier cannot pass OR regress. */
   readonly underpowered: boolean;
-  /** Approx runs/arm needed to resolve `policy.minLiftPp` at this spread. */
+  /**
+   * Runs PER CELL (per task, per arm) needed for 80% power to resolve
+   * `policy.minLiftPp` on the mean of this tier's T paired tasks at the
+   * observed spread. Printed on every receipt beside `minRunsObserved`.
+   */
   readonly runsNeeded: number;
+  /**
+   * Exact small-sample reads, ADDITIVE evidence only (no decision reads them,
+   * so the v1 `decision` is unchanged). Per task, a two-sided Fisher exact p on
+   * solved/measured counts; tier-wide, an exact McNemar over run-index-paired
+   * outcomes (b = candidate solved & baseline not, c = the reverse). The
+   * pairing is nominal (interleaved arms), not seed-paired. Absent when the
+   * tier has no paired task.
+   */
+  readonly exact?: {
+    readonly perTask: ReadonlyArray<{
+      readonly taskId: string;
+      readonly baselineSolved: number;
+      readonly baselineRuns: number;
+      readonly candidateSolved: number;
+      readonly candidateRuns: number;
+      readonly fisherP: number;
+    }>;
+    readonly mcnemar: { readonly pairs: number; readonly b: number; readonly c: number; readonly p: number };
+  };
   /** |liftPp| exceeds the noise floor. */
   readonly significant: boolean;
   /** A cell was preflight-violated or the metric was missing → cannot judge this tier. */

@@ -10,7 +10,7 @@ import { fail, info } from "../ui.js";
 
 const GATE_USAGE =
   "Usage: rax eval gate --report <SessionReport.json> --baseline <variantId> --candidate <variantId> " +
-  "[--metric <dimension>] [--min-lift <pp>] [--max-tok <pct>] [--min-tiers <n>] [--token-leg <raw|billed>] " +
+  "[--metric <dimension>] [--min-lift <pp>] [--max-tok <pct>] [--min-tiers <n>] [--token-leg <raw|billed>] [--token-free-tiers <id,id>] " +
   "[--ledger <path> --weakness <t> --hypothesis <t> --weakness-ref <id> --activations <n>]";
 
 /**
@@ -61,8 +61,16 @@ export async function runEvalGate(args: string[]): Promise<void> {
     );
     process.exit(1);
   }
-  const { evaluateLiftGate, formatGateReceipt, DEFAULT_LIFT_POLICY, recordGateOutcome, loadLedger, saveLedger } =
-    benchmarks;
+  const {
+    evaluateLiftGate,
+    formatGateReceipt,
+    DEFAULT_LIFT_POLICY,
+    recordGateOutcome,
+    loadLedger,
+    saveLedger,
+    gateOptionsFor,
+    modelsOfReport,
+  } = benchmarks;
 
   let reportText: string;
   try {
@@ -105,7 +113,13 @@ export async function runEvalGate(args: string[]): Promise<void> {
   };
 
   // evaluateLiftGate is pure; report shape is the SessionReport written by `rax bench --output`.
-  const verdict = evaluateLiftGate(report as Parameters<typeof evaluateLiftGate>[0], baseline, candidate, policy);
+  // Same options the in-bench `--gate` uses (long-horizon class routing +
+  // token-free local tiers), so one report gets one verdict from either entry
+  // point (audit 01 D7). Tier providers come from the report's `models`;
+  // `--token-free-tiers a,b` covers archived reports that predate that field.
+  const extraTokenFree = (get("--token-free-tiers") ?? "").split(",").filter((t) => t.length > 0);
+  const options = gateOptionsFor(modelsOfReport(report), extraTokenFree);
+  const verdict = evaluateLiftGate(report as Parameters<typeof evaluateLiftGate>[0], baseline, candidate, policy, options);
   // Pass the policy the verdict was ACTUALLY evaluated under — formatGateReceipt
   // otherwise falls back to DEFAULT_LIFT_POLICY for its display text and would
   // print "(scored: billed)" on a receipt scored under `--token-leg raw`.

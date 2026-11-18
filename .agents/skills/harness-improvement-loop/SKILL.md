@@ -75,7 +75,7 @@ Success = `FIXED` (target 0, no other `harness:*` reason rose) or `IMPROVED`. `S
 
 **(c) Full H3** only before promoting anything onto the default path: all 12 tasks, k=5, both tiers, same suite hash / arm / cell timeout as the baseline; then `rax eval gate` if it is an A/B of a mechanism (ablation-warden).
 
-**Pass-rate claims:** only when pooled 95% Wilson intervals are disjoint (`verdict.ts` prints `RESOLVABLE`). At n=5 per cell a gap under ~26pp is noise. Count drops are the signal; rates are context.
+**Pass-rate claims:** `verdict.ts` reads the gate's paired-by-task estimator per tier on graded accuracy (`h3/paired.ts`): RESOLVABLE when the 95% band on the mean lift clears (needs >= 2 tasks) or one task collapses/gains under Holm-corrected Fisher. Exact McNemar b/c is printed beside it. Count drops are the signal; rates are context. Pooled Wilson (disjoint-only) was retired 2026-11-18.
 
 ## 5. RECORD: results + ledger, every verdict
 

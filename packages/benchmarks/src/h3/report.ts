@@ -1,6 +1,7 @@
 // File: src/h3/report.ts — aggregate H3 results JSON into per-task x tier stats.
 //   bun run src/h3/report.ts <results.json>... [--md]   # summary lines (+ table with --md)
 import { readFileSync } from "node:fs"
+import { parseTrace } from "@reactive-agents/trace"
 import type { H3Cell, H3Results } from "./run-h3.js"
 import { intervalsDisjoint, passHatK, wilson } from "./stats.js"
 
@@ -43,6 +44,34 @@ export function llmCallsOf(traceFile: string | null): number | null {
   if (!traceFile) return null
   try {
     return readFileSync(traceFile, "utf8").trim().split("\n").filter((l) => l.includes('"kind":"llm-exchange"')).length
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Tokens a run consumed, summed from its trace's `llm-exchange` events: `tokens`
+ * = in + out, `billed` = (in - cache read) + out (the runner's billed definition).
+ * Recovers a timed-out cell's spend, which the run never reported. Null when the
+ * trace is absent/unreadable or carries no token counts.
+ */
+export function tracedTokensOf(traceFile: string | null): { readonly tokens: number; readonly billed: number } | null {
+  if (!traceFile) return null
+  try {
+    let tokens = 0
+    let billed = 0
+    let seen = false
+    for (const e of parseTrace(readFileSync(traceFile, "utf8")).events) {
+      if (e.kind !== "llm-exchange") continue
+      const r = e.response
+      if (r.tokensIn === undefined && r.tokensOut === undefined) continue
+      seen = true
+      const inT = r.tokensIn ?? 0
+      const out = r.tokensOut ?? 0
+      tokens += inT + out
+      billed += Math.max(0, inT - (r.cacheReadTokensIn ?? 0)) + out
+    }
+    return seen ? { tokens, billed } : null
   } catch {
     return null
   }

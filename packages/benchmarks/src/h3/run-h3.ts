@@ -29,6 +29,16 @@ import { H3_TASKS } from "./tasks.js"
 import { LH_TASKS } from "./long-horizon-tasks.js"
 import { h3Hashes, h3SuiteHash, lhHashes, lhSuiteHash } from "./freeze.js"
 import { longHorizonFactsFromTrace, type LongHorizonFacts } from "./long-horizon.js"
+import { tracedTokensOf } from "./report.js"
+import {
+  DEFAULT_CELL_TIMEOUT_SEC,
+  checkContention,
+  collectProvenance,
+  formatContention,
+  preflightEntry,
+  provenanceDrift,
+  type RunProvenance,
+} from "../preflight-provenance.js"
 
 export const H3_VERSION = "1.0.0"
 
@@ -134,6 +144,11 @@ export interface H3Results {
   readonly suite: H3Suite
   readonly version: string
   readonly gitSha: string
+  /**
+   * What produced this file (dist hash, RA_* flags, timeout, model digests, scorer
+   * version, contention checks). Absent in files recorded before 2026-11-18.
+   */
+  readonly provenance?: RunProvenance
   readonly taskHashes: Record<string, string>
   readonly k: number
   readonly cells: ReadonlyArray<H3Cell>
@@ -221,6 +236,8 @@ export interface RunH3Opts {
   readonly metaArm?: boolean
   /** Run the strategy-switching-off ablation arm instead of the default arm. */
   readonly noSwitch?: boolean
+  /** Run despite host contention (foreign Ollama model/client, high load); recorded in provenance. Default: refuse. */
+  readonly allowContention?: boolean
   /** `long-horizon` runs the Plan 9 0e suite (LH_TASKS) instead of the frozen H3 suite. */
   readonly suite?: "h3" | "long-horizon"
 }
@@ -233,7 +250,9 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
   if (longHorizon && (opts.noSwitch || opts.metaArm)) return { ran: 0, remaining: 0, error: "H3: --meta-arm / --no-switch do not apply to --suite long-horizon" }
   const suite: H3Suite = longHorizon ? "h3-lh" : "h3"
   const suiteTasks = longHorizon ? LH_TASKS : H3_TASKS
-  const results = loadResults(opts.out, opts.k, suite)
+  let results = loadResults(opts.out, opts.k, suite)
+  const startMarginSec = opts.startMarginSec ?? opts.cellTimeoutSec + 20
+  let prepared = false
   if (results.suite !== suite) return { ran: 0, remaining: 0, error: `H3: ${opts.out} holds suite ${results.suite}, not ${suite}` }
   if (results.gitSha !== gitSha()) console.warn(`H3: results file was started at ${results.gitSha}, HEAD is ${gitSha()} (baseline must stay on one SHA)`)
   const done = new Set(results.cells.map((c) => c.cellId))
@@ -265,7 +284,34 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
     const id = cellIdOf(p.tier, p.task.id, p.variant.id, p.run)
     if (done.has(id)) continue
     const elapsed = (Date.now() - started) / 1000
-    if (elapsed + (opts.startMarginSec ?? opts.cellTimeoutSec + 20) > opts.budgetSec) { remaining++; continue }
+    if (elapsed + startMarginSec > opts.budgetSec) { remaining++; continue }
+    if (!prepared) {
+      // Lazily, at the first cell that will really start: a no-op resume (nothing
+      // startable inside the budget) neither probes the host nor rewrites the file.
+      prepared = true
+      const ollamaModels = opts.tiers.map((t) => H3_TIERS[t]!).filter((m) => m.provider === "ollama").map((m) => m.model)
+      const contention = ollamaModels.length > 0 ? await checkContention(ollamaModels) : undefined
+      if (contention && !contention.ok) {
+        const text = formatContention(contention, opts.allowContention === true)
+        if (!opts.allowContention) return { ran, remaining: remaining + 1, error: text }
+        console.error(text)
+      }
+      const fresh = await collectProvenance({
+        gitSha: results.gitSha,
+        cellTimeoutSec: opts.cellTimeoutSec,
+        startMarginSec,
+        budgetSec: opts.budgetSec,
+        models: ollamaModels,
+        preflight: contention ? [preflightEntry(contention, opts.allowContention === true)] : [],
+      })
+      const prior = results.provenance
+      if (prior) {
+        for (const d of provenanceDrift(prior, fresh)) console.warn(`H3: provenance drift since this file started: ${d}`)
+        results = { ...results, provenance: { ...prior, preflight: [...prior.preflight, ...fresh.preflight] } }
+      } else {
+        results = { ...results, provenance: fresh }
+      }
+    }
     const model = H3_TIERS[p.tier]!
     const traceDir = join(opts.traceRoot, p.tier.replace(/[^\w.-]/g, "_"), p.variant.id.replace(/[^\w.-]/g, "_"), p.task.id, `run${p.run}`)
     mkdirSync(traceDir, { recursive: true })
@@ -293,11 +339,15 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
       const traceFile = run0?.traceId ? join(traceDir, `${run0.traceId}.jsonl`) : null
       const acc = run0?.dimensions.find((d) => d.dimension === "accuracy")?.score ?? null
       const facts = traceFactsOf(traceFile)
+      // A timed-out cell reports tokens=0 / billed=null (the run never returned), yet it
+      // burned tokens: recover them from its partial trace so an arm with more timeouts
+      // does not look cheaper (audit 03 D3). Only when the run itself reported nothing.
+      const traced = (run0?.tokensUsed ?? 0) === 0 && run0?.billedTokens == null ? tracedTokensOf(traceFile) : null
       cell = {
         cellId: id, taskId: p.task.id, variant: p.variant.id, tier: p.tier, run: p.run,
         accuracy: acc, solved: run0 ? isSolved(run0) : false,
         status: run0?.status ?? "no-run", inconclusive: tr?.inconclusive !== undefined,
-        tokens: run0?.tokensUsed ?? 0, billedTokens: run0?.billedTokens ?? null,
+        tokens: traced?.tokens ?? run0?.tokensUsed ?? 0, billedTokens: run0?.billedTokens ?? traced?.billed ?? null,
         durationMs: Math.round(run0?.durationMs ?? 0),
         iterations: facts.iterations, terminatedBy: facts.terminatedBy, endStatus: facts.endStatus,
         causeLabel: facts.causeLabel, causeAuthority: facts.causeAuthority, toolSurface: facts.toolSurface,
@@ -338,7 +388,7 @@ if (import.meta.main) {
   const traceRoot = arg("trace-root")
   const tier = arg("tier")
   if (!out || !traceRoot || !tier) {
-    console.error("usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec 150] [--task id,id] [--meta-arm] [--no-switch] [--suite long-horizon]")
+    console.error(`usage: --out <abs.json> --trace-root <abs dir> --tier a,b [--k 5] [--budget-sec 560] [--cell-timeout-sec ${DEFAULT_CELL_TIMEOUT_SEC}] [--start-margin-sec N] [--task id,id] [--meta-arm] [--no-switch] [--suite long-horizon] [--allow-contention]`)
     process.exit(2)
   }
   const r = await runH3({
@@ -346,7 +396,8 @@ if (import.meta.main) {
     tiers: tier.split(","),
     k: Number(arg("k", "5")),
     budgetSec: Number(arg("budget-sec", "560")),
-    cellTimeoutSec: Number(arg("cell-timeout-sec", "150")),
+    cellTimeoutSec: Number(arg("cell-timeout-sec", String(DEFAULT_CELL_TIMEOUT_SEC))),
+    allowContention: process.argv.includes("--allow-contention"),
     ...(arg("start-margin-sec") ? { startMarginSec: Number(arg("start-margin-sec")) } : {}),
     metaArm: process.argv.includes("--meta-arm"),
     noSwitch: process.argv.includes("--no-switch"),

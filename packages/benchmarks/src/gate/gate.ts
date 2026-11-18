@@ -9,6 +9,7 @@ import {
   passKEstimate,
 } from "../report-format.js";
 import type { SessionReport, TaskVariantReport } from "../types.js";
+import { fisherExactP, mcnemarOf, pairByRun, pairedLift, runsNeededFor } from "./exact.js";
 import {
   DEFAULT_LIFT_POLICY,
   DEFAULT_PROMOTION_SIGNIFICANCE_K,
@@ -186,6 +187,38 @@ function taskStatusRegressions(
   return out;
 }
 
+/** Measured runs of a cell as run-index-keyed solved flags (position when indices collide). */
+function solvedFlags(r: TaskVariantReport): { index: number; solved: boolean }[] {
+  const runs = measuredRuns(r.runs ?? []);
+  const unique = new Set(runs.map((x) => x.runIndex)).size === runs.length;
+  return runs.map((x, i) => ({ index: unique ? x.runIndex : i, solved: isSolved(x) }));
+}
+
+/** Per-task Fisher p and a tier-wide exact McNemar over the paired cells (additive evidence). */
+function exactEvidence(
+  pairs: readonly { id: string; b: TaskVariantReport; c: TaskVariantReport }[],
+): TierEvidence["exact"] {
+  if (pairs.length === 0) return undefined;
+  const rows = pairs.map(({ id, b, c }) => {
+    const bf = solvedFlags(b);
+    const cf = solvedFlags(c);
+    const baselineSolved = bf.filter((x) => x.solved).length;
+    const candidateSolved = cf.filter((x) => x.solved).length;
+    return {
+      row: {
+        taskId: id,
+        baselineSolved,
+        baselineRuns: bf.length,
+        candidateSolved,
+        candidateRuns: cf.length,
+        fisherP: fisherExactP(baselineSolved, bf.length, candidateSolved, cf.length),
+      },
+      paired: pairByRun(bf, cf),
+    };
+  });
+  return { perTask: rows.map((r) => r.row), mcnemar: mcnemarOf(rows.map((r) => r.paired)) };
+}
+
 function computeEvidence(
   model: string,
   base: readonly TaskVariantReport[],
@@ -311,20 +344,12 @@ function computeEvidence(
 
   const variance = maxOf(pairedCells.map((r) => r.variance));
 
-  // ── SE(D̄): the larger of two noise sources ────────────────────────────────
-  // Within-cell: √(Σ se_t²)/T — sampling noise inside each cell, shrinks with
-  // runs. Between-task (clustered): sd(d_t)/√T — how much the tasks DISAGREE
-  // about the effect; more runs per cell never shrinks it, only more tasks do.
-  // Taking the max means a task-heterogeneous "effect" cannot buy significance
-  // by hammering the same two tasks with more runs.
-  const within = T === 0 ? 0 : Math.sqrt(perTask.reduce((a, p) => a + (p.sePp / 100) ** 2, 0)) / T;
-  const between =
-    T >= 2
-      ? Math.sqrt(perTask.reduce((a, p) => a + (p.dPp / 100 - dBar) ** 2, 0) / (T - 1)) /
-        Math.sqrt(T)
-      : 0;
-  const stdErr = Math.max(within, between);
-  const stdErrPp = stdErr * 100;
+  // ── SE(D̄): the larger of two noise sources (see `pairedLift`) ─────────────
+  // Within-cell sampling noise shrinks with runs; the between-task clustered
+  // term never does, only more tasks do. Taking the max means a
+  // task-heterogeneous "effect" cannot buy significance by hammering the same
+  // two tasks with more runs. Shared with the H3 verdict via `exact.ts`.
+  const { stdErrPp } = pairedLift(perTask);
   const noisePp = policy.significanceK * stdErrPp;
   const promotionNoisePp = promotionK * stdErrPp;
 
@@ -334,13 +359,11 @@ function computeEvidence(
       : Math.min(...pairedCells.map((r) => measuredCountOf(r)));
   const underpowered = minRunsObserved < policy.minRuns;
 
-  // Runs/arm to resolve `minLiftPp` at the observed spread (equal-n, z=K).
-  // Uses the PROMOTION band: this number is printed as advice on underpowered
-  // receipts, and the bar the re-run must actually clear is the promotion one.
+  // Runs per cell to resolve `minLiftPp` at the observed spread, 80% power, on
+  // the mean of T tasks. Uses the PROMOTION band: the bar a re-run must clear.
   const sd = maxOf(pairedCells.map((r) => cellSpread(r, policy.metric)));
-  const delta = policy.minLiftPp / 100;
-  const runsNeeded =
-    delta > 0 ? Math.ceil((2 * promotionK ** 2 * sd ** 2) / delta ** 2) : 0;
+  const runsNeeded = runsNeededFor(sd, policy.minLiftPp, T, promotionK);
+  const exact = exactEvidence(pairs);
 
   // An underpowered tier may neither pass nor regress: we did not look hard
   // enough to say anything, and saying "no effect" would be a lie.
@@ -430,6 +453,7 @@ function computeEvidence(
     minRunsObserved,
     underpowered,
     runsNeeded,
+    ...(exact !== undefined ? { exact } : {}),
     significant,
     inconclusive,
     passes,

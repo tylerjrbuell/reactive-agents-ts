@@ -22,8 +22,12 @@
 // run count drops, and no other `harness:*` reason rises (else `shifted`: the
 // runs now fail on a different harness defect). Exit 0 only on fixed/improved
 // (and removed / baseline in their modes).
-// Pass rate is reported
-// with pooled 95% Wilson intervals and is claimable ONLY when they are disjoint.
+// The pass-rate claim is read per tier with the lift gate's own paired-by-task
+// estimator (`paired.ts`, on graded accuracy where cells carry it) plus a
+// per-task Holm-corrected Fisher exact test: a regression is RESOLVABLE when the
+// 95% band on the mean lift is cleared OR one task collapsed significantly.
+// Exact McNemar b/c (run-paired) is printed beside it. Pooled Wilson intervals
+// (disjoint-only) were the old rule and missed a -24pp gate rejection (audit 03 D1).
 // Attribution is recomputed from each cell's trace (`attributeFailure`), so a
 // fix to the attribution rules themselves re-scores old traces too.
 //
@@ -47,9 +51,10 @@ import {
   saveLedger,
   type AttributionDecision,
 } from "../ledger.js"
-import { isMeasured } from "./report.js"
+import { isMeasured, tracedTokensOf } from "./report.js"
+import { describePaired, pairedRead, taskKeyOf, type PairedRead } from "./paired.js"
 import type { H3Cell, H3Results } from "./run-h3.js"
-import { intervalsDisjoint, wilson } from "./stats.js"
+import { wilson } from "./stats.js"
 
 /** Label used for a measured cell with no trace on disk (timeout, pruned trace). */
 export const NO_TRACE = "no-trace"
@@ -60,8 +65,12 @@ export interface ArmSummary {
   readonly solved: number
   readonly rate: number
   readonly ci: { readonly lo: number; readonly hi: number }
-  /** Mean billed tokens over cells that recorded them; null when none did. */
+  /** Mean billed tokens over measured cells with a token figure, timed-out cells included (recovered from their trace); null when none has one. */
   readonly meanBilledTokens: number | null
+  /** Measured cells that ended in an execution timeout. */
+  readonly timeouts: number
+  /** Measured cells with no token figure at all (excluded from the mean, so the mean is NOT cost-complete when > 0). */
+  readonly tokenUnknown: number
   /** Attribution reason → run count (includes `not-failed` and `no-trace`). */
   readonly reasons: Readonly<Record<string, number>>
 }
@@ -77,8 +86,12 @@ export interface TargetedVerdict {
   readonly targetAfter: number
   /** Other `harness:*` reasons whose count rose, with before/after counts. */
   readonly newHarnessReasons: Readonly<Record<string, { readonly before: number; readonly after: number }>>
+  /** Pooled solved-rate delta (context only; the decision reads {@link paired}). */
   readonly passRateDeltaPp: number
+  /** The paired read resolved a regression or a gain (the gate's paired-by-task estimator + per-task Holm-Fisher). */
   readonly passRateResolvable: boolean
+  /** Per-tier paired-by-task read on graded accuracy where available (audit 03 D1). */
+  readonly paired: PairedRead
   readonly tokenDeltaPct: number | null
   /** Activity keys whose run count changed between the arms, largest change first. */
   readonly activityChanged: readonly ActivityDelta[]
@@ -104,7 +117,10 @@ export interface RemovalInput {
   readonly locDelta?: number
 }
 
-const cellKey = (c: H3Cell): string => `${c.tier}|${c.taskId}${c.variant === "ra-default" ? "" : `@${c.variant}`}`
+const cellKey = (c: H3Cell): string => `${c.tier}|${taskKeyOf(c)}`
+
+/** Billed tokens of a cell; raw tokens when billing was unreported; null when the cell has no figure (never 0). */
+const tokensOfCell = (c: H3Cell): number | null => c.billedTokens ?? (c.tokens > 0 ? c.tokens : null)
 
 function summarize(cells: readonly H3Cell[], reasonOf: (c: H3Cell) => string): ArmSummary {
   const measured = cells.filter(isMeasured)
@@ -114,13 +130,20 @@ function summarize(cells: readonly H3Cell[], reasonOf: (c: H3Cell) => string): A
     const r = reasonOf(c)
     reasons[r] = (reasons[r] ?? 0) + 1
   }
-  const billed = measured.flatMap((c) => (c.billedTokens == null ? [] : [c.billedTokens]))
+  // Timed-out cells stay in the token mean (their spend is real; dropping them made an arm
+  // with more timeouts look cheaper). Cells with no recoverable figure are counted, not zeroed.
+  const billed = measured.flatMap((c) => {
+    const t = tokensOfCell(c)
+    return t === null ? [] : [t]
+  })
   return {
     n: measured.length,
     solved,
     rate: measured.length ? solved / measured.length : 0,
     ci: wilson(solved, measured.length),
     meanBilledTokens: billed.length ? billed.reduce((a, b) => a + b, 0) / billed.length : null,
+    timeouts: measured.filter((c) => c.error === "execution-timeout").length,
+    tokenUnknown: measured.length - billed.length,
     reasons,
   }
 }
@@ -163,14 +186,18 @@ export function compareTargeted(
   }
 
   const passRateDeltaPp = (a.rate - b.rate) * 100
-  const passRateResolvable = b.n > 0 && a.n > 0 && intervalsDisjoint(a.ci, b.ci)
+  // The decision reads the gate's paired-by-task estimator (plus per-task Holm-Fisher),
+  // NOT disjoint pooled Wilson intervals, which needed ~22-25pp and called a lever the
+  // gate rejected "within noise" (audit 03 D1).
+  const paired = pairedRead(before, after)
+  const passRateResolvable = paired.resolvable
   const tokenDeltaPct =
     a.meanBilledTokens != null && b.meanBilledTokens != null && b.meanBilledTokens > 0
       ? ((a.meanBilledTokens - b.meanBilledTokens) / b.meanBilledTokens) * 100
       : null
 
   const regressedNew = Object.keys(newHarnessReasons).length > 0
-  const regressedRate = passRateResolvable && passRateDeltaPp < 0
+  const regressedRate = paired.resolvableDown
   const dropped = targetAfter < targetBefore
   const inert = removal === undefined && mechanism !== undefined && mechanism.firedAfter === 0
   // Removal: "less" is billed tokens down or fewer source lines; the removed mechanism must be gone.
@@ -196,7 +223,9 @@ export function compareTargeted(
                 ? "improved"
                 : "no-change"
 
-  const rate = `pass ${b.solved}/${b.n} → ${a.solved}/${a.n} (${passRateDeltaPp >= 0 ? "+" : ""}${passRateDeltaPp.toFixed(0)}pp, ${passRateResolvable ? "RESOLVABLE" : "within noise"})`
+  const timeoutNote = a.timeouts + b.timeouts > 0 ? `; timeouts ${b.timeouts}→${a.timeouts}` : ""
+  const unknownNote = a.tokenUnknown + b.tokenUnknown > 0 ? `; tokens unknown for ${b.tokenUnknown}+${a.tokenUnknown} cells (mean not cost-complete)` : ""
+  const rate = `pass ${b.solved}/${b.n} → ${a.solved}/${a.n} (pooled ${passRateDeltaPp >= 0 ? "+" : ""}${passRateDeltaPp.toFixed(0)}pp; ${describePaired(paired)})${timeoutNote}${unknownNote}`
   const extra = regressedNew
     ? `; new harness reasons: ${Object.entries(newHarnessReasons).map(([r, v]) => `${r} ${v.before}→${v.after}`).join(", ")}`
     : ""
@@ -231,6 +260,7 @@ export function compareTargeted(
     newHarnessReasons,
     passRateDeltaPp,
     passRateResolvable,
+    paired,
     tokenDeltaPct,
     activityChanged,
     ...(mechanism ? { mechanism } : {}),
@@ -282,11 +312,26 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined
 }
 
+/**
+ * Results recorded before 2026-11-18 carry tokens=0 / billed=null for timed-out
+ * cells (the run never returned). Fill them from the cell's partial trace so the
+ * token mean includes the spend; a cell with a figure, or no trace, is untouched.
+ */
+export function withRecoveredTokens(cells: readonly H3Cell[], traced: (file: string | null) => { tokens: number; billed: number } | null = tracedTokensOf): H3Cell[] {
+  return cells.map((c) => {
+    if (c.billedTokens != null || c.tokens > 0 || !isMeasured(c)) return c
+    const t = traced(c.traceFile)
+    return t ? { ...c, tokens: t.tokens, billedTokens: t.billed } : c
+  })
+}
+
 const cellsOf = (files: string): H3Cell[] =>
-  files
-    .split(",")
-    .filter((f) => f.length > 0)
-    .flatMap((f) => (JSON.parse(readFileSync(f, "utf8")) as H3Results).cells)
+  withRecoveredTokens(
+    files
+      .split(",")
+      .filter((f) => f.length > 0)
+      .flatMap((f) => (JSON.parse(readFileSync(f, "utf8")) as H3Results).cells),
+  )
 
 if (import.meta.main) {
   const beforeArg = arg("before")

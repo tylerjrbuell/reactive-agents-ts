@@ -7,7 +7,8 @@ import { runSession } from "./runner.js"
 import { gateReceiptFor, powerWarningFor } from "./gate/on-path.js"
 import { formatPassKSummary, statusCell } from "./report-format.js"
 import { DEFAULT_LIFT_POLICY } from "./gate/types.js"
-import { LONG_HORIZON_TASKS } from "./tasks/long-horizon.js"
+import { gateOptionsFor } from "./gate/options.js"
+import { checkContention, collectProvenance, formatContention, preflightEntry } from "./preflight-provenance.js"
 import { regressionGateSession } from "./sessions/regression-gate.js"
 import { realWorldFullSession } from "./sessions/real-world-full.js"
 import { competitorComparisonSession } from "./sessions/competitor-comparison.js"
@@ -186,6 +187,7 @@ export interface CliArgs {
   baselinePath?: string
   verbose?: boolean
   judgeUrl?: string
+  allowContention?: boolean
 }
 
 export function parseArgs(argv: string[]): CliArgs {
@@ -213,6 +215,8 @@ export function parseArgs(argv: string[]): CliArgs {
       // verdict for this session's report instead of leaving the means to be
       // eyeballed. The gate had zero production callers before 2026-07-09.
       case "--gate":         args.gate = next?.split(","); i++; break
+      // Run despite host contention (foreign Ollama model/client, high load); recorded in provenance.
+      case "--allow-contention": args.allowContention = true; break
     }
   }
   return args
@@ -285,7 +289,32 @@ async function main() {
     const outputPath = args.output ?? "apps/docs/src/data/benchmark-report.json"
     const baselinePath = args.baselinePath ?? `benchmark-baselines/${args.session}.json`
 
+    // Contention preflight (audit 03 D4): a foreign Ollama model/client or a loaded host
+    // stalls cells, and a stalled cell scores as a model failure. Refuse unless
+    // --allow-contention; either way the finding is recorded in the report's provenance.
+    const ollamaModels = session.models.filter((m) => m.provider === "ollama").map((m) => m.model)
+    const contention = ollamaModels.length > 0 ? await checkContention(ollamaModels) : undefined
+    if (contention && !contention.ok) {
+      console.error(formatContention(contention, args.allowContention === true))
+      if (!args.allowContention) process.exit(2)
+    }
+
     const report = await runSession(session, args.output ? outputPath : undefined)
+    if (args.output) {
+      // Stamp provenance into the persisted report (runSession wrote it; merge, never replace).
+      const provenance = await collectProvenance({
+        gitSha: report.gitSha,
+        cellTimeoutSec: session.timeoutMs !== undefined ? session.timeoutMs / 1000 : null,
+        startMarginSec: null,
+        budgetSec: null,
+        models: ollamaModels,
+        preflight: contention ? [preflightEntry(contention, args.allowContention === true)] : [],
+      })
+      const persisted: unknown = JSON.parse(readFileSync(outputPath, "utf8"))
+      if (typeof persisted === "object" && persisted !== null) {
+        writeFileSync(outputPath, JSON.stringify({ ...persisted, provenance }, null, 2), "utf8")
+      }
+    }
     printSessionSummary(report)
 
     // The gate is ON the session path (wiring audit 2026-07-09). The power
@@ -297,15 +326,9 @@ async function main() {
       const [baseline, candidate] = args.gate
       if (baseline && candidate) {
         console.log("")
-        // Only the long-horizon tags matter for class routing; untagged tasks
-        // are judged under the short-class (token-overhead) rule.
-        // Local (Ollama) tiers are token-free: their cost leg is reported, not
-        // binding (owner ruling 2026-11-06). Paid tiers keep the cost rule.
-        const tokenFreeTiers = new Set(session.models.filter(m => m.provider === "ollama").map(m => m.id))
-        console.log(gateReceiptFor(report, baseline, candidate, DEFAULT_LIFT_POLICY, {
-          tasks: LONG_HORIZON_TASKS.map(t => ({ id: t.id, tags: [...(t.tags ?? [])] })),
-          isTokenFreeTier: tier => tokenFreeTiers.has(tier),
-        }))
+        // One options builder shared with `rax eval gate` (long-horizon class
+        // routing + token-free local tiers; audit 01 D7).
+        console.log(gateReceiptFor(report, baseline, candidate, DEFAULT_LIFT_POLICY, gateOptionsFor(session.models)))
       }
     }
 
