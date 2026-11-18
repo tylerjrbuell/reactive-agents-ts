@@ -201,6 +201,7 @@ GIANT_BAR=1000
 # 2026-11-11 live ask-user rail: act.ts 1124->1098 (request_user_input handling moved to act/user-interaction.ts handleUserInteraction, which also answers inline via RunEnvelope.rails.askUser; the pause terminate() stays in act.ts).
 # 2026-11-17 approval preflight: act.ts 1098->1097 (detach gate find() moved to act/approval-gate.ts firstDetachGatedCall, which skips tool-preflight-refused calls).
 # 2026-11-18 before-act boundary: act.ts 1097->1066 (the per-call and post-round before-act hook fires replaced by one act/before-act-gate.ts call that runs before any call of the round; the batch path fired its hook after its tools ran).
+# 2026-11-18 round-close hooks: act.ts 1066->1025 (after-act / before-observe / after-observe fires moved to act/round-hooks.ts closeRound, which hands each hook the merged round state instead of the act-entry state).
 # 2026-11-12 channelStatus(): reactive-agent.ts 2016->2012 (+channelStatus delegate and import; gatewayStatus JSDoc condensed to one line).
 # 2026-11-12 event-bus.ts 224->188 (handler isolation moved to core/src/services/event-handler-isolation.ts). Keep '#' out of the SIZE_BASELINE array: the fixture test's patch regex stops at the first '#'.
 # 2026-11-13 benchmarks/src/runner.ts 964->963 (run end-status spread through runEndStatusField).
@@ -235,7 +236,7 @@ SIZE_BASELINE=(
   "llm-provider/src/providers/local.ts:1139"
   "runtime/src/builder/types.ts:1061"
   "llm-provider/src/types.ts:978"
-  "reasoning/src/kernel/capabilities/act/act.ts:1066"
+  "reasoning/src/kernel/capabilities/act/act.ts:1025"
   "reasoning/src/strategies/reflexion.ts:987"
   "tools/src/mcp/mcp-client.ts:1116"
   "reasoning/src/strategies/tree-of-thought.ts:904"

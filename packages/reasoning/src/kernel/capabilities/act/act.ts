@@ -56,7 +56,7 @@ import {
   type KernelMessage,
 } from "../../../kernel/state/kernel-state.js";
 import { contributeGuidance, textSignal } from "../../state/guidance-channel.js";
-import { runPhaseHooks, killswitchTerminatedBy } from "../../../kernel/loop/phase-hooks.js";
+import { closeRound } from "./round-hooks.js";
 import { emitToCompose, sentinelDeliverable } from "@reactive-agents/core";
 import { planNextMoveBatches } from "../decide/tool-gating.js";
 import { firstDetachGatedCall } from "./approval-gate.js";
@@ -967,54 +967,13 @@ export function handleActing(
         ...textSignal("gatherDedup", context.input.posture !== "plan" && dedupNudge),
       ];
 
-      // 'after act' hooks
-      {
-        const ctrl = yield* Effect.promise(() =>
-          runPhaseHooks(pipeline, 'after', 'act', state.iteration, state)
-        );
-        if (ctrl) {
-          return yield* finalizeKillswitchExit(roundSnap(), ctrl, normalizedPendingCalls);
-        }
-      }
-
-      // 'observe' hooks — the tool's observation steps are appended to
-      // `allSteps` above and the conversation context has been assembled, so
-      // this IS the observe phase the 12-phase lifecycle documents ("append
-      // tool results, curate context", a loop-body phase). The kernel never
-      // fired it: `observe` appeared exactly once per RUN, from the outer
-      // engine's synthetic end-of-run pair, so a user hook on `observe` never
-      // saw a single tool result during the loop. Fire it here, per tool
-      // round, with the same abort semantics as the surrounding phases.
-      {
-        const ctrl = yield* Effect.promise(() =>
-          runPhaseHooks(pipeline, 'before', 'observe', state.iteration, state)
-        );
-        if (ctrl) {
-          return yield* finalizeKillswitchExit(roundSnap(), ctrl, normalizedPendingCalls);
-        }
-      }
-
-      // ── Artifact truth (Wave C / C2, audit 01-F1) ────────────────────────────
-      // Emit `artifact` ledger entries for files this round produced, recognized
-      // by the tool's DECLARED `produces` field (resolveProduces) + the per-
-      // builtin path-extraction contract — not the old 4-name/15-key heuristic.
-      // Seeded via patch.ledger (the same seam the terminal-verdict/claim
-      // emitters use); the C1 chokepoint then appends this round's step-derived
-      // tool-invocation/tool-result entries on top. The chokepoint itself is
-      // untouched (C1 owns it). Only the NEW steps of this round are scanned.
-      const seededLedger = yield* deriveRoundLedger(roundSnap(), dedupSignals);
-      const ledgerWithArtifacts = seededLedger !== state.ledger ? seededLedger : undefined;
-
-      // 'after observe' hooks — closes the pair opened above, once the round's
-      // ledger/artifact curation is done and the observation is fully settled.
-      {
-        const ctrl = yield* Effect.promise(() =>
-          runPhaseHooks(pipeline, 'after', 'observe', state.iteration, state)
-        );
-        if (ctrl) {
-          return yield* finalizeKillswitchExit(roundSnap(), ctrl, normalizedPendingCalls);
-        }
-      }
+      // 'after act' → 'before observe' → round ledger (C2 artifacts) → 'after
+      // observe', each hook over the merged round state (act/round-hooks.ts).
+      const closed = yield* closeRound(pipeline, roundSnap(), {
+        messages: newConversationHistory, scratchpad: mergedScratchpad,
+      }, normalizedPendingCalls, dedupSignals);
+      if (closed._tag === "exit") return closed.state;
+      const ledgerWithArtifacts = closed.ledger !== state.ledger ? closed.ledger : undefined;
 
       // All native tool calls executed — transition back to thinking.
       // Any harness signals raised this round flow via pendingGuidance — think.ts

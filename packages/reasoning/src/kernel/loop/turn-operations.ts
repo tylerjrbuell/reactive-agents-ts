@@ -367,6 +367,11 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
         yield* emitLog({ _tag: "phase_started", phase: "think", timestamp: new Date() });
       }
 
+      // The turn's own 0-indexed number. The think step advances
+      // `state.iteration` on most exits, so 'after think' reports this value
+      // rather than the advanced counter; both hooks of a turn agree.
+      const turnIteration = t.state.iteration;
+
       // 'before think' hooks — may abort iteration. Decomposed verbatim to
       // ./iterate-before-think-seam.ts (quality program Task 9).
       const beforeThink = yield* runBeforeThinkHooks({
@@ -399,7 +404,7 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
       if (dispatchesThink) {
         const state = t.state;
         yield* Effect.promise(() =>
-          runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'think', state.iteration, state)
+          runPhaseHooks(effectiveInput.harnessPipeline, 'after', 'think', turnIteration, state)
         );
 
         yield* emitLog({
