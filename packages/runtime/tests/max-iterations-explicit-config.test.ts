@@ -112,6 +112,13 @@ describe("resolveReasoningConfig — behavioral-contract tightening (bridge inva
     expect(cfg.strategies.reactive.maxIterationsExplicit).toBe(true);
   });
 
+  it("bare .withReasoning() (no options) + withMaxIterations(5) carries the explicit cap", () => {
+    const cfg = resolveReasoningConfig(opts(true, undefined, 5));
+    expect(cfg.defaultStrategy).toBe("reactive");
+    expect(cfg.strategies.reactive.maxIterations).toBe(5);
+    expect(cfg.strategies.reactive.maxIterationsExplicit).toBe(true);
+  });
+
   it("absent/invalid contract cap does not fold", () => {
     const cfg = resolveReasoningConfig({
       ...opts(false, undefined, undefined),

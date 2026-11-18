@@ -158,7 +158,7 @@ export const resolveReasoningConfig = (options: {
           },
         },
       }
-    : defaultReasoningConfig;
+    : bareReasoningConfig(maxIterations, explicit);
 };
 
 import {
