@@ -180,6 +180,33 @@ Guard: `stability.json` now has `pagePackages` (page slug to package) and `pageT
 
 Remaining for other owners: JSDoc refresh (5.3: react/svelte/vue "zero tests", reasoning/prompts/llm-provider/testing "v0.10.x", identity `@experimental`), `packages/reactive-agents` and `packages/runtime` README wording on tags (5.2), `stability.md` heading "as of v0.18" refresh at release (M17). READMEs for a2a, compose, identity, create-reactive-agent already match `stability.json`.
 
+## 6c. Applied 2026-11-17, second pass (owner: fewer false "unstable")
+
+Re-verified against `git log` (src only, window 2026-10-18..2026-11-17 = 30 days; 60-day column from 2026-09-18), test-file counts and `@unstable` tags. Result: **zero tier changes**. No candidate meets all of (a)-(e). `stability.json`, `stability.md`, READMEs and frontmatter already agree (guards green), so nothing was edited except this section. Structural badge noise: stable pages already render subdued (`StabilityBadge.astro`); only 3 pages carry `stable`, so removing them would drop a true positive signal for no gain. Unstable pages map to unstable packages, so they keep the badge.
+
+| Package | Tier | Last src commit | 30d / 60d commits | Test files | `@unstable` in src | Failing criterion (keep tier) |
+|---|---|---|---|---|---|---|
+| verification | unstable | 2026-10-27 | 1 / 1 (internal `any` removal) | 7 | none | (e) 21 days, clock reaches 30 on 2026-11-26; page's own caveat "replaceable verifier not shipped" and "one production user" rule unverified. First to re-check after 11-26 |
+| prompts | unstable | 2026-03-22 (content); 2026-11-17 JSDoc only | 1 / 1 (docs) | 11 | `ExperimentService` | a, b, c (`.withPrompts()`), e hold. Blocked by (d) only for the A/B sub-surface and by README wording "template ids and variables may change". Borderline: could be "stable (scoped)" excluding `ExperimentService` and built-in prompt wording. Needs owner call plus README edit (`packages/prompts/README.md`, outside docs-warden authority) |
+| cost | unstable | 2026-11-15 | 1 / 5 | 11 | none | (e) changed 2 days ago (shadow judgments); routing primitives are not a builder policy (page caveat) |
+| interaction | unstable | 2026-11-15 | 1 / 4 | 10 | none | (e) changed 2 days ago (chat session mode) |
+| guardrails | unstable | 2026-11-12 | 4 / 6 | 6 | none | (e) PII detector behavior fixes 11-11/11-12 |
+| eval | unstable | 2026-11-11 | 3 / 7 | 13 | none | (e) new graders 11-11 |
+| diagnose | unstable | 2026-11-11 | 10 / 10 | 8 | none | (e) 10 commits in 30 days |
+| observability | unstable | 2026-11-17 | 11 / 11 | 33 | none | (e) 11 commits in 30 days |
+| runtime-shim | unstable | 2026-11-12 | 2 / 3 | 10 | `fetchPinned` (page lists it unstable) | (e) new surface 11-12; `@unstable` sub-surface |
+| observe | unstable | 2026-09-24 | 0 / 1 | 4 | none | (b) 4 test files, under 5 |
+| health | unstable | 2026-08-07 | 0 / 0 | 1 | none | (b) 1 test file |
+| react / svelte / vue | unstable | 2026-11-17 (JSDoc) | 2 / 2 | 11 / 9 / 4 | file header "All exports unstable. Zero in-repo consumers" | (d) tag on entry point and 0 in-repo dependents; vue also fails (b) with 4 tests. JSDoc "zero tests"/"v0.10.x" wording already removed in `0f489f3ee` |
+| compose | unstable | 2026-10-16 (32 days) | 0 / 0 | 4 (2 pkg + 2 runtime seam) | none | (b) only; (e) now holds. Re-check if 1+ more seam tests land, then promote with README edit |
+| identity | experimental | 2026-07-02 | 0 / 0 | 3 | none | dormant, no wither (unchanged, J4) |
+
+Unchanged and not candidates (churn): memory 7 commits/30d, trace 41, ui-core 37, channels 25, reactive-intelligence 16, a2a 5.
+
+Blockers for the owning wardens (no edit made, `packages/**` is read-only for docs-warden): none for correctness. To apply the two near-misses later: prompts needs `packages/prompts/README.md` Stability line plus `stability.json`, `stability.md` scoped list and page frontmatter in one pass; compose needs 1 more test file first.
+
+Authority note: the brief listed `packages/*/README.md` as editable, but the docs-warden manifest hard-refuses edits under `packages/**`. No README edit was needed, so nothing was denied in practice.
+
 ## 7. Not done
 
 No edits to any tier, README, JSDoc or page. No gates run beyond read-only listing (`repo find`, `repo scope`, `git log`). `bun run repo check --all` was not run and is unaffected by this single new wiki file.
