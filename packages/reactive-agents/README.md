@@ -91,7 +91,7 @@ for await (const event of agent.runStream("Analyze this dataset", { signal: cont
 }
 ```
 
-Hook any lifecycle phase (`before`, `after` or `on-error` on each of the 12 phases):
+Hook any lifecycle phase (`before`, `after` or `on-error` on each of the 12 phases). `think`, `act` and `observe` fire once per kernel turn and receive `{ phase, iteration, state }`; the other phases receive the `ExecutionContext`:
 
 ```ts
 import { Effect } from "effect";
@@ -105,7 +105,10 @@ const hooked = await ReactiveAgents.create()
     phase: "act",
     timing: "after",
     handler: (ctx) => {
-      console.log(`Tool results so far: ${ctx.toolResults.length}`);
+      // think/act/observe fire per kernel turn with { phase, iteration, state }
+      if (!("metadata" in ctx)) {
+        console.log(`Tools used so far: ${[...ctx.state.toolsUsed]}`);
+      }
       return Effect.succeed(ctx);
     },
   })
