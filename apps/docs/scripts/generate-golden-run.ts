@@ -32,7 +32,22 @@ const arg = (name: string): string | undefined => {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : undefined;
 };
 
-/** Newest committed golden-run-* directory by name (date-sorted, descending). */
+/** Why a capture folder cannot be used yet, or null when it is complete. A capture still in progress
+ *  (no run.json, a half-written one, or no capture block) must never break the docs build. */
+const incompleteReason = (dir: string): string | null => {
+  const runPath = join(dir, "run.json");
+  if (!existsSync(runPath)) return "no run.json";
+  try {
+    const run = JSON.parse(readFileSync(runPath, "utf-8")) as { capture?: { capturedAt?: string; frameworkVersion?: string } };
+    if (!run.capture?.capturedAt || !run.capture.frameworkVersion) return "run.json has no capture block";
+    return null;
+  } catch {
+    return "run.json is not valid JSON";
+  }
+};
+
+/** Newest complete golden-run-* directory by name (date-sorted, descending). Newer folders that are
+ *  still being captured are skipped and logged; `--dir` stays strict. */
 const findLatestDir = (): string => {
   const explicit = arg("dir");
   if (explicit) return explicit;
@@ -42,7 +57,12 @@ const findLatestDir = (): string => {
     .sort()
     .reverse();
   if (dirs.length === 0) throw new Error(`no golden-run-* dirs under ${REPORTS_ROOT}`);
-  return join(REPORTS_ROOT, dirs[0]);
+  for (const name of dirs) {
+    const reason = incompleteReason(join(REPORTS_ROOT, name));
+    if (reason === null) return join(REPORTS_ROOT, name);
+    console.warn(`[golden-run] skipping ${name}: ${reason} (capture in progress?)`);
+  }
+  throw new Error(`no complete golden-run-* dir under ${REPORTS_ROOT} (every folder skipped)`);
 };
 
 /**
