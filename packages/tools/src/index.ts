@@ -382,6 +382,7 @@ export {
 
 // ─── Builder ───
 export { ToolBuilder } from "./tool-builder.js";
+export type { BuiltTool, ToolBuilderHandler } from "./tool-builder.js";
 
 // ─── Schema-Inferred Tool Factory ───
 export { defineTool } from "./define-tool.js";

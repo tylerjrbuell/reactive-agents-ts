@@ -1,6 +1,26 @@
 import type { ToolDefinition, ToolParameter } from "./types.js";
 
-export class ToolBuilder {
+/** A function passed to {@link ToolBuilder.handler}: one args object in, any value out. */
+export type ToolBuilderHandler = (args: Record<string, unknown>) => unknown;
+
+/**
+ * What {@link ToolBuilder.build} returns. With a handler set (`H` is the
+ * handler's own type), `handler` is required and keeps that exact type, so an
+ * Effect-returning handler fits `.withTools({ tools: [...] })` with no cast.
+ * Without one, `handler` is absent, and `.withTools()` rejects the entry at
+ * compile time: it needs a handler to run the tool.
+ */
+export type BuiltTool<H extends ToolBuilderHandler | undefined> = H extends ToolBuilderHandler
+  ? { readonly definition: ToolDefinition; readonly handler: H }
+  : { readonly definition: ToolDefinition; readonly handler?: undefined };
+
+/**
+ * Fluent builder for a {@link ToolDefinition}. The type parameter tracks the
+ * handler: `ToolBuilder.create()` starts with none, and `.handler(fn)` makes
+ * the builder `ToolBuilder<typeof fn>`. A bare `ToolBuilder` annotation
+ * accepts either state.
+ */
+export class ToolBuilder<H extends ToolBuilderHandler | undefined = ToolBuilderHandler | undefined> {
   private _name: string;
   private _description?: string;
   private _parameters: ToolParameter[] = [];
@@ -9,7 +29,7 @@ export class ToolBuilder {
   private _requiresApproval = false;
   private _returnType?: string;
   private _category?: ToolDefinition["category"];
-  private _handler?: (args: Record<string, unknown>) => unknown;
+  private _handler?: ToolBuilderHandler;
 
   constructor(name: string) {
     this._name = name;
@@ -20,8 +40,8 @@ export class ToolBuilder {
    * `new ToolBuilder("name")` in a builder chain, and is the form used
    * throughout the docs. Equivalent to the constructor.
    */
-  static create(name: string): ToolBuilder {
-    return new ToolBuilder(name);
+  static create(name: string): ToolBuilder<undefined> {
+    return new ToolBuilder<undefined>(name);
   }
 
   description(desc: string): this {
@@ -78,13 +98,24 @@ export class ToolBuilder {
    * arguments — tool handlers everywhere in this codebase (`toolService`,
    * `toolBuilderToEntry`, `defineToolSimple`) are invoked with a single args
    * object.
+   *
+   * `.withTools({ tools })` runs the handler as an Effect, so return one
+   * there (`Effect.succeed(value)`, `Effect.tryPromise(...)`). A plain-value
+   * handler still builds, but `.withTools()` rejects it at compile time.
    */
-  handler(fn: (args: Record<string, unknown>) => unknown): this {
+  handler<F extends ToolBuilderHandler>(fn: F): ToolBuilder<F> {
     this._handler = fn;
-    return this;
+    // Same instance, now typed with the handler: the type parameter is phantom
+    // (it only shapes build()'s return), so no runtime state differs.
+    return this as ToolBuilder<ToolBuilderHandler | undefined> as ToolBuilder<F>;
   }
 
-  build(): { definition: ToolDefinition; handler?: (args: Record<string, unknown>) => unknown } {
+  /**
+   * Validate and produce `{ definition, handler }`. `handler` is present (and
+   * required in the type) only when `.handler(fn)` was called.
+   * @throws when no description was set.
+   */
+  build(): BuiltTool<H> {
     if (!this._description) {
       throw new Error("ToolBuilder: description is required");
     }
@@ -99,6 +130,11 @@ export class ToolBuilder {
       ...(this._returnType ? { returnType: this._returnType } : {}),
       ...(this._category ? { category: this._category } : {}),
     };
-    return { definition, ...(this._handler ? { handler: this._handler } : {}) };
+    const built: BuiltTool<ToolBuilderHandler | undefined> = this._handler
+      ? { definition, handler: this._handler }
+      : { definition };
+    // `_handler` is set exactly when H is a handler type (only handler() moves
+    // H off undefined), so the runtime shape matches BuiltTool<H>.
+    return built as BuiltTool<H>;
   }
 }
