@@ -68,20 +68,22 @@
       "id": "apps/cortex/scripts/dev-stack-cli.ts",
       "path": "apps/cortex/scripts/dev-stack-cli.ts",
       "kind": "ops",
-      "summary": "dev-stack start/stop/status subcommands (pid-file lifecycle for a separate Cortex instance)",
+      "summary": "Cortex dev-stack start/stop/status with pid files (separate instance)",
       "invoke": "bun run --cwd apps/cortex dev-stack start|stop|status"
     },
     {
       "id": "apps/cortex/scripts/dev-stack-lifecycle.ts",
       "path": "apps/cortex/scripts/dev-stack-lifecycle.ts",
       "kind": "ops",
-      "summary": "Pid-file lifecycle helpers: spawn, classify and stop only our own dev-stack children"
+      "summary": "Pid-file helpers: spawn, classify, stop only our own dev-stack children",
+      "invoke": "bun run --cwd apps/cortex dev-stack status"
     },
     {
       "id": "apps/cortex/scripts/tests/dev-stack-lifecycle.test.ts",
       "path": "apps/cortex/scripts/tests/dev-stack-lifecycle.test.ts",
-      "kind": "test",
-      "summary": "Lifecycle tests: reused pid never killed, foreign process untouched, refuses double start"
+      "kind": "test-support",
+      "summary": "Reused pid never killed, foreign process untouched, double start refused",
+      "invoke": "bun run repo test apps/cortex/scripts/tests/dev-stack-lifecycle.test.ts"
     },
     {
       "id": "apps/docs/scripts/README.md",
