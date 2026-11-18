@@ -46,7 +46,7 @@ You also own the framework's UI layer: `packages/ui-core` (framework-agnostic vi
 - `bun run --cwd apps/cortex/ui test`, `bun run --cwd apps/cortex/ui check` (svelte-check), `bun run --cwd apps/cortex/ui build`
 - `bun test packages/ui-core`, `bun test packages/react`, `bun test packages/svelte`, `bun test packages/vue`, and `bunx turbo run typecheck --filter=<ui package>`
 - `bun run build:packages` (Cortex runs framework `dist/`, see invariant 1)
-- `bun run --cwd apps/cortex start` for live UI checks; stop it before returning
+- `bun run --cwd apps/cortex dev-stack start|status|stop --port 4399 ...` for live UI checks on a separate instance (ports 4399/4398, scratch cwd); `stop --port 4399` before returning. Never kill by port or name
 - `bash scripts/check-*.sh` (RUN only, never edit), `git diff`, `git status`, `find`
 
 **Hard refuse:** edits under `packages/**` other than the four UI-layer packages; edits to `apps/cortex/ui/build/**` or `dist/**` (generated); commits, pushes, tags, releases; deleting untracked files you did not create (runs started from Cortex can write agent output into the tree, e.g. a stray `crypto_market_report.md`; report it, never remove it).
@@ -96,7 +96,7 @@ The Lab builder panel (`AgentConfigPanel.svelte`, `AdvancedFrameworkConfig.svelt
 1. **PLACEMENT.** Giants stay frozen: `AgentConfigPanel.svelte` (~2.2k LOC), `routes/lab/+page.svelte`, `ToolWorkshop.svelte`, `chat-session-service.ts`, `ChatPanel.svelte`. New behavior lands in a new module or component (one concern each; e.g. `ListField.svelte` for list/record fields, a `lib/*.ts` pure helper with its test) and the giant only wires it. If an honest change must grow a giant by more than wiring, STOP and escalate.
 2. **PURE HELPERS GET TESTS.** Logic in `ui/src/lib/*.ts` has a sibling `*.test.ts`; server services have `server/tests/*` cells. Behavior changes land with a pin that fails before and passes after (prove with a reverted mutation).
 3. **EXACT BASELINES.** Record pristine counts (server suite, UI `src/lib` suite) before editing; return at baseline + your new tests, 0 fail. Run `bun run --cwd apps/cortex typecheck`, UI `check` and UI `build` before returning `completed`.
-4. **LIVE CHECK FOR UI.** UI changes are verified in the running app (`bun run --cwd apps/cortex start`, UI on :5173) with `browser_snapshot` text, not screenshots; confirm the value reaches the built agent config (server log or run config snapshot). Stop at 2-3 browser failures and report.
+4. **LIVE CHECK FOR UI.** UI changes are verified in a SEPARATE instance you start and stop yourself: `bun run --cwd apps/cortex dev-stack start --port 4399 --ui-port 4398 --cwd <scratch-dir>` (UI on :4398, own db under `<scratch-dir>/.cortex/`), then `bun run --cwd apps/cortex dev-stack stop --port 4399`. Stop kills only the pid-file children. Never `pkill`, `kill` or `fuser -k` by port or name, and never start, stop or probe the owner's stack on :4321/:5173. Verify with `browser_snapshot` text, not screenshots; confirm the value reaches the built agent config (server log or run config snapshot). Stop at 2-3 browser failures and report.
 5. **DOCS + CHANGESET.** User-visible Cortex behavior: update `apps/cortex/AGENTS.md` / `README.md` per its "When You Change Cortex" table, the matching `features/cortex/*.mdx` page when user-facing, and write `.changeset/<slug>.md` (`"@reactive-agents/cortex": patch|minor`).
 
 ## Workflow per spawn

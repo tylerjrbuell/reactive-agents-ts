@@ -39,6 +39,8 @@
     "dist",
     "ui/build",
     "scripts/dev-stack.ts",
+    "scripts/dev-stack-cli.ts",
+    "scripts/dev-stack-lifecycle.ts",
     "README.md",
     "LICENSE"
   ],
@@ -50,6 +52,7 @@
     "dev:server": "bun run server/index.ts",
     "dev:ui": "cd ui && bun run dev",
     "start": "bun run scripts/dev-stack.ts",
+    "dev-stack": "bun run scripts/dev-stack.ts",
     "build": "tsup",
     "build:ui": "cd ui && bun run build",
     "screenshots:docs": "bun run scripts/docs-screenshots/run.ts",

@@ -35,6 +35,8 @@ This runs:
 | 1 | `cd apps/cortex && bun run dev:server` | API + WS on `4321` |
 | 2 | `cd apps/cortex && bun run dev:ui` | UI on `5173` (proxied to `4321`) |
 
+For a second, throwaway instance (tests, tooling) use the pid-file lifecycle instead of killing by port: `bun run dev-stack start --port 4399 --ui-port 4398 --cwd <tmp-dir>`, then `bun run dev-stack status` and `bun run dev-stack stop --port 4399`. `stop` only touches processes `start` recorded in `.cortex-run/` (override with `CORTEX_RUN_DIR`).
+
 ## Environment
 
 | Variable | Default | Purpose |

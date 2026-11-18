@@ -31,6 +31,7 @@ bun start
 | Script | Purpose |
 |--------|---------|
 | `bun start` | `scripts/dev-stack.ts` — server + UI together; sets `CORTEX_NO_OPEN=1` on the server child. |
+| `bun run dev-stack start \| stop \| status` | Detached stack tracked by pid files (`scripts/dev-stack-cli.ts`, rules `dev-stack-lifecycle.ts`, pin `scripts/tests/dev-stack-lifecycle.test.ts`). `start --port 4399 --ui-port 4398 --cwd <dir>` runs a SEPARATE instance (server cwd decides the db: `<dir>/.cortex/cortex.db`; env `CORTEX_PORT`, `CORTEX_UI_PORT`, `CORTEX_RUN_DIR`; pid files + logs in `<cwd>/.cortex-run/`, gitignored), refuses a busy port or a live pid file, waits until both answer. `stop --port 4399` kills only the pid-file children (process group, SIGTERM then SIGKILL after 5 s; a pid whose command line no longer matches is never signalled). Never `pkill`/kill by port. `status` lists pid, alive, port, listening. Plain `bun start` is unchanged. |
 | `bun run dev` / `dev:server` | Elysia + SQLite + routes + WS only. |
 | `bun run dev:ui` | SvelteKit dev only (expects server on 4321). |
 | `bun run build:ui` | Production UI build → `ui/build`. |

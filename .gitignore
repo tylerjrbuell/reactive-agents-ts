@@ -110,3 +110,6 @@ note.md
 
 # Raw ablation traces stay local (multi-MB); receipts and scripts are committed.
 wiki/Research/Ablations/**/traces-*/
+
+# Cortex dev-stack pid files and logs (apps/cortex/scripts/dev-stack.ts start)
+.cortex-run/

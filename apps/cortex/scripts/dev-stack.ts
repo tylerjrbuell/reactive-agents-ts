@@ -6,7 +6,17 @@
  * Open the **Vite** URL in the browser, not the API port alone.
  *
  * Used by `apps/cortex` `bun start` and root `bun cortex`.
+ *
+ * Subcommands `start | stop | status` run a DETACHED stack tracked by pid files instead
+ * (`dev-stack-cli.ts`); `stop` kills only pids it recorded. With no subcommand this file behaves
+ * exactly as above.
  */
+const subcommand = process.argv[2];
+if (subcommand === "start" || subcommand === "stop" || subcommand === "status") {
+  const { runLifecycle } = await import("./dev-stack-cli.js");
+  process.exit(await runLifecycle(subcommand, process.argv.slice(3)));
+}
+
 const cortexRoot = new URL("..", import.meta.url).pathname;
 
 function spawnCortex(
