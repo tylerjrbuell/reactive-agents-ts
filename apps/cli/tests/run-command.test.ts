@@ -4,6 +4,44 @@ import { resolve } from "path";
 
 const CLI_ENTRY = resolve(import.meta.dir, "../src/index.ts");
 
+// Each subprocess cold-starts `bun src/index.ts` (whole workspace from src), which
+// takes seconds under full-suite load. The child gets a generous kill timeout and
+// the test timeout sits above it, so a slow child finishes (or fails with a clear
+// timeout) instead of being killed mid-run by the test runner (`exit code null`).
+const CHILD_TIMEOUT_MS = 60_000;
+const TEST_TIMEOUT_MS = CHILD_TIMEOUT_MS + 30_000;
+
+interface CliResult {
+  readonly code: number | null;
+  readonly signal: number | string | null;
+  readonly out: string;
+  readonly err: string;
+}
+
+/** Spawns the CLI asynchronously and waits for both pipes and the exit code. */
+const runCli = async (args: readonly string[]): Promise<CliResult> => {
+  const proc = Bun.spawn(["bun", CLI_ENTRY, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: CHILD_TIMEOUT_MS,
+  });
+  const [out, err, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  return { code, signal: proc.signalCode, out, err };
+};
+
+/** Asserts a clean exit, printing the signal and stderr when it was not. */
+const expectExitZero = (r: CliResult): void => {
+  expect({ code: r.code, signal: r.signal, err: r.code === 0 ? "" : r.err }).toEqual({
+    code: 0,
+    signal: null,
+    err: "",
+  });
+};
+
 describe("CLI Run Command — Agent Integration", () => {
   it("should build and run an agent via test provider", async () => {
     const agent = await ReactiveAgents.create()
@@ -18,66 +56,52 @@ describe("CLI Run Command — Agent Integration", () => {
     expect(result.success).toBe(true);
     expect(result.agentId).toContain("cli-test-agent");
     expect(typeof result.metadata.duration).toBe("number");
-  });
+  }, TEST_TIMEOUT_MS);
 
-  it("should parse CLI help without errors", () => {
-    const proc = Bun.spawnSync(["bun", CLI_ENTRY, "help"], {
-      stderr: "pipe",
-    });
-    expect(proc.exitCode).toBe(0);
-  });
+  it("should parse CLI help without errors", async () => {
+    expectExitZero(await runCli(["help"]));
+  }, TEST_TIMEOUT_MS);
 
-  it("should show run command in help text", () => {
-    const proc = Bun.spawnSync(["bun", CLI_ENTRY, "help"], {
-      stderr: "pipe",
-    });
-    const helpText = proc.stdout.toString() + proc.stderr.toString();
+  it("should show run command in help text", async () => {
+    const r = await runCli(["help"]);
+    const helpText = r.out + r.err;
     expect(helpText).toContain("run");
     expect(helpText).toContain("rax"); // CLI brand name
-  });
+  }, TEST_TIMEOUT_MS);
 
   // Piped runs (stdout is not a TTY), as in CI or `rax run ... | tee`.
-  const runPiped = (...flags: string[]) => {
-    const proc = Bun.spawnSync(["bun", CLI_ENTRY, "run", "What is 2+2?", "--provider", "test", ...flags], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    return { code: proc.exitCode, out: proc.stdout.toString(), err: proc.stderr.toString() };
-  };
+  const runPiped = (...flags: string[]) => runCli(["run", "What is 2+2?", "--provider", "test", ...flags]);
 
-  it("--tools enables the built-in tools (no 'no capability tools' warning)", () => {
-    const r = runPiped("--tools");
-    expect(r.code).toBe(0);
+  it("--tools enables the built-in tools (no 'no capability tools' warning)", async () => {
+    const r = await runPiped("--tools");
+    expectExitZero(r);
     expect(r.out + r.err).not.toContain("no capability tools");
-  }, 30_000);
+  }, TEST_TIMEOUT_MS);
 
-  it("--quiet prints the answer with no CLI chrome", () => {
-    const r = runPiped("--quiet");
-    expect(r.code).toBe(0);
+  it("--quiet prints the answer with no CLI chrome", async () => {
+    const r = await runPiped("--quiet");
+    expectExitZero(r);
     expect(r.out.trim().split("\n").at(-1)).toBe("Test response.");
     expect(r.out + r.err).not.toContain("Executing");
     expect(r.out).not.toContain("Metrics");
-  }, 30_000);
+  }, TEST_TIMEOUT_MS);
 
-  it("--verbose shows phase lines even off a TTY", () => {
-    const r = runPiped("--verbose");
-    expect(r.code).toBe(0);
+  it("--verbose shows phase lines even off a TTY", async () => {
+    const r = await runPiped("--verbose");
+    expectExitZero(r);
     expect(r.out).toContain("[phase:");
-  }, 30_000);
+  }, TEST_TIMEOUT_MS);
 
-  it("default piped run prints no phase lines", () => {
-    const r = runPiped();
-    expect(r.code).toBe(0);
+  it("default piped run prints no phase lines", async () => {
+    const r = await runPiped();
+    expectExitZero(r);
     expect(r.out).not.toContain("[phase:");
     expect(r.out).toContain("Test response.");
-  }, 30_000);
+  }, TEST_TIMEOUT_MS);
 
-  it("run usage lists --cortex", () => {
-    const proc = Bun.spawnSync(["bun", CLI_ENTRY, "run"], {
-      stderr: "pipe",
-    });
-    expect(proc.exitCode).not.toBe(0);
-    const text = proc.stdout.toString() + proc.stderr.toString();
-    expect(text).toContain("--cortex");
-  });
+  it("run usage lists --cortex", async () => {
+    const r = await runCli(["run"]);
+    expect(r.code).not.toBe(0);
+    expect(r.out + r.err).toContain("--cortex");
+  }, TEST_TIMEOUT_MS);
 });
