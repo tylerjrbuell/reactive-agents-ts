@@ -34,7 +34,7 @@ interface AgentResult {
         stepsCount: number // Number of reasoning steps / iterations
         confidence?: 'high' | 'medium' | 'low' // From final-answer tool
         // Honest-partial markers (present when the harness authored the shipped output)
-        harnessAuthoredOutput?: boolean // true when output was produced by the harness, not the model (assembled deliverable or exhausted-run abstention)
+        harnessAuthoredOutput?: boolean // true only when a non-empty output was assembled by the harness, not written by the model (for example a budget-stopped plan joining its completed steps). Absent on failed and abstained runs: their output is ""
         verificationWarning?: string    // the result-boundary verifier's note, when it flagged something
         verificationNote?: string       // withVerification({ onReject: "annotate" }): why the answer still failed verification; `output` is shipped unchanged
     }
@@ -160,8 +160,9 @@ source it was verified against (`packages/runtime/src/reactive-agent.ts`,
    the run's evidence trail, **not** the factual correctness of `output` — not
    a truth certificate (`builder/types.ts`).
 7. **`result.metadata.harnessAuthoredOutput` / `result.metadata.verificationWarning`**
-   — honest-partial markers, on `metadata` (not top level): `true` when the
-   shipped output was authored by the harness rather than the model, plus the
+   — honest-partial markers, on `metadata` (not top level): `true` only when a
+   non-empty shipped output was assembled by the harness rather than written
+   by the model (never on a failed run's empty output), plus the
    result-boundary verifier's note when it flagged unmet requirements
    (`builder/types.ts` — `AgentResultMetadata`).
 
@@ -180,7 +181,7 @@ try {
         console.log(result.output)
         console.log(result.goalAchieved)               // true / false / null
         console.log(result.receipt?.verdict)           // evidence grade
-        console.log(result.metadata.harnessAuthoredOutput) // honest-partial marker
+        console.log(result.metadata.harnessAuthoredOutput) // honest-partial marker (usually absent)
     }
 } catch {
     // Only: terminate()/kill-switch interruption, or a BARE builder (no
@@ -212,29 +213,30 @@ if (result.terminatedBy === 'abstained') {
 run-level surface is distinct from the per-field structured-output `abstained`
 map (`.withOutputSchema({ abstainBelow })`) — the two are unrelated and may coexist.
 
-### Exhausted runs ship an abstention, never silence
+### Failed runs ship an empty `output` and the cause on `error`
 
 A run that stops after effort (the iteration or tool budget is exhausted, or its
-terminal answer is rejected) without producing a verified answer does not return
-empty output. The harness synthesizes a deterministic, harness-authored
-abstention that names what was attempted. `success` is `false` (this is not a
-success claim), and `metadata.harnessAuthoredOutput` is `true`:
+terminal answer is rejected) without producing a verified answer ships
+`output: ""`. The harness never writes an answer for a failed run. `success` is
+`false`, and the cause is on `result.error`, followed by a deterministic
+`What was attempted: ...` line when the kernel recorded it (no extra LLM call):
 
 ```typescript
 const result = await agent.run('Fetch the live ZZZ-token price and summarize it')
 if (!result.success) {
-    console.log(result.output)
-    // "Could not complete the task within the available budget.
-    //  What was attempted: 3 tool call(s) attempted (web-search), 0 succeeded."
-    console.log(result.metadata.harnessAuthoredOutput) // true
+    console.log(result.output) // ""
+    console.log(result.error)
+    // "<cause> What was attempted: 3 tool call(s) attempted (web-search), 0 succeeded."
 }
 ```
 
-This is deterministic (no extra LLM call) and distinct from the forced
-`abstained` terminal above: an exhausted run reports `terminatedBy` as its real
-reason (`max_iterations`, `end_turn`, …) and status `failed`, not `abstained`.
-Infrastructure faults (`terminatedBy: "llm_error"`) are excluded, so their real
-cause is kept on `result.error` rather than masked by an abstention.
+Show `result.error`, not `result.output`, for a failed run. The exceptions keep
+the model's own text: a partial run returns the model's draft as `output` with
+the outstanding items on `error`, and a model's own give-up text still ships as
+`output`. An exhausted run reports `terminatedBy` as its real reason
+(`max_iterations`, `end_turn`, …) and `outcome: "failed"`, not `"abstained"`.
+`error` is the real cause for provider faults too (`terminatedBy: "llm_error"`),
+never the model's last sentence.
 
 ### Give-up answers become abstentions, not success
 

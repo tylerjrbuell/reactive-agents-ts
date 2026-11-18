@@ -8,7 +8,8 @@
  */
 
 import rss from "@astrojs/rss";
-import { getCollection, getEntry, render } from "astro:content";
+import { getEntry } from "astro:content";
+import { releaseItemLink } from "../rss-anchor";
 
 export const GET = async (context: { site?: URL }) => {
   const site = context.site?.toString() ?? "https://docs.reactiveagents.dev";
@@ -45,7 +46,7 @@ export const GET = async (context: { site?: URL }) => {
       title: titleLine,
       pubDate: new Date(), // best we can do without per-section dates
       description: body,
-      link: `/guides/whats-new/#${slugify(titleLine)}`,
+      link: releaseItemLink(site, titleLine),
       categories: [version],
     };
   });
@@ -59,9 +60,3 @@ export const GET = async (context: { site?: URL }) => {
     customData: `<language>en-us</language><docs>https://docs.reactiveagents.dev/guides/whats-new/</docs>`,
   });
 };
-
-const slugify = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
