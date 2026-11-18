@@ -60,10 +60,26 @@ describe("scopeFiles", () => {
     expect(r.unowned).toEqual([])
     expect(r.owners).toEqual([])
   })
+  test("directory target unions every row under it (split-ownership dir)", () => {
+    const split: OwnershipEntry[] = [
+      { glob: "packages/p/README.md", owner: "docs-warden", checks: [], docs: [] },
+      { glob: "packages/p/**", owner: null, reason: "split", checks: [], docs: [] },
+      { glob: "packages/p/src/**", owner: "dx-warden", checks: [], docs: [] },
+    ]
+    for (const t of ["packages/p", "packages/p/"]) {
+      const r = scopeFiles([t], split)
+      expect(r.owners).toEqual(["docs-warden", "dx-warden"])
+      expect(r.unowned).toEqual([])
+    }
+    expect(scopeFiles(["packages/q"], split).unowned).toEqual(["packages/q"])
+  })
 })
 
 describe("real ownership.json", () => {
   const entries = loadOwnership(REPO)
+  test("create-reactive-agent dir scope names dx-warden and docs-warden", () => {
+    expect(scopeFiles(["packages/create-reactive-agent"], entries).owners).toEqual(["docs-warden", "dx-warden"])
+  })
   test("every owner has .claude/agents/<owner>.md", () => {
     for (const e of entries)
       if (e.owner !== null) expect(existsSync(join(REPO, ".claude", "agents", `${e.owner}.md`))).toBe(true)

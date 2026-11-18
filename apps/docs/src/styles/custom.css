@@ -1718,8 +1718,8 @@ mobile-starlight-toc a[data-ra-new-content]::before,
 .sl-badge.ra-rollup {
     display: inline-block;
     box-sizing: border-box;
-    width: 0.5rem;
-    height: 0.5rem;
+    width: 0.375rem;
+    height: 0.375rem;
     border-radius: 50%;
     flex: none;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -1735,7 +1735,7 @@ mobile-starlight-toc a[data-ra-new-content]::before {
    first text line (line-height 1.4). */
 .sidebar-pane a[data-ra-new-content]::before {
     margin-inline-end: 0;
-    margin-top: calc((1.4em - 0.5rem) / 2);
+    margin-top: calc((1.4em - 0.375rem) / 2);
     vertical-align: baseline;
 }
 .ra-marker-icon {
@@ -1750,7 +1750,7 @@ a[data-ra-new-content='new']::before,
     border: 0;
     box-shadow:
         0 0 0 1px color-mix(in srgb, var(--ra-ind-new), var(--sl-color-white) var(--ra-marker-edge)),
-        0 0 0 3px color-mix(in srgb, var(--ra-ind-new) calc(var(--ra-ind-glow) * 100%), transparent);
+        0 0 0 2px color-mix(in srgb, var(--ra-ind-new) calc(var(--ra-ind-glow) * 100%), transparent);
 }
 a[data-ra-new-content='updated']::before,
 .ra-marker-icon[data-ra-marker='updated'],
@@ -1759,7 +1759,7 @@ a[data-ra-new-content='updated']::before,
     border: 0;
     box-shadow:
         0 0 0 1px color-mix(in srgb, var(--ra-ind-updated), var(--sl-color-white) var(--ra-marker-edge)),
-        0 0 0 3px color-mix(in srgb, var(--ra-ind-updated) calc(var(--ra-ind-glow) * 100%), transparent);
+        0 0 0 2px color-mix(in srgb, var(--ra-ind-updated) calc(var(--ra-ind-glow) * 100%), transparent);
 }
 a:is(:hover, :focus-visible)[data-ra-new-content]::before,
 .ra-marker-icon:hover,
@@ -1792,10 +1792,10 @@ summary:hover .sl-badge.ra-rollup {
     content: '' / attr(data-ra-stability-label);
     display: inline-block;
     flex: none;
-    width: 0.95rem;
-    height: 0.95rem;
+    width: 0.7rem;
+    height: 0.7rem;
     margin-inline-start: auto;
-    margin-top: calc((1.4em - 0.95rem) / 2);
+    margin-top: calc((1.4em - 0.7rem) / 2);
     background-color: var(--ra-ind-stability-color, var(--ra-ind-stable));
     -webkit-mask: var(--ra-ind-glyph) center / contain no-repeat;
     mask: var(--ra-ind-glyph) center / contain no-repeat;

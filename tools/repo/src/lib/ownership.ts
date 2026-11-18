@@ -66,7 +66,13 @@ export function scopeFiles(files: readonly string[], entries: readonly Ownership
   const unowned: string[] = []
   const noOwner: { file: string; reason: string }[] = []
   for (const f of files) {
-    const hits = entries.filter((e) => matchesGlob(f, e.glob))
+    let hits = entries.filter((e) => matchesGlob(f, e.glob))
+    if (hits.every((h) => h.owner === null)) {
+      // A directory target (`packages/x`, `packages/x/`) hits no row or only a null-owner
+      // catch-all; add every row under it so split-ownership dirs report all their owners.
+      const dir = `${f.replace(/\/+$/, "")}/`
+      hits = [...new Set([...hits, ...entries.filter((e) => e.glob.startsWith(dir))])]
+    }
     if (hits.length === 0) unowned.push(f)
     if (hits.length > 0 && hits.every((h) => h.owner === null))
       noOwner.push({ file: f, reason: hits.map((h) => h.reason ?? "").find((x) => x.length > 0) ?? "" })
