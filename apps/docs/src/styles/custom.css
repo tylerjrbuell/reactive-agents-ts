@@ -954,6 +954,28 @@ body {
     background: rgba(109, 40, 217, 0.07) !important;
     color: #5b21b6 !important;
 }
+/* Inline code inside asides (note, tip, caution, danger; both themes): the
+   violet-on-violet chip drops below WCAG AA on the tinted aside backgrounds.
+   Inherit the aside's own text colour (already AA against its background) and
+   use a neutral chip derived from that colour, so every variant and theme
+   keeps the same contrast as the body text. */
+.starlight-aside :not(pre) > code,
+[data-theme='light'] .starlight-aside :not(pre) > code {
+    color: inherit !important;
+    background: color-mix(in srgb, currentColor 8%, transparent) !important;
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+}
+/* Links inside asides: the violet accent is below AA on the tinted
+   backgrounds, so links take the aside text colour and keep an underline. */
+.sl-markdown-content .starlight-aside a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+.sl-markdown-content .starlight-aside a:hover {
+    color: inherit;
+    text-decoration-color: currentColor;
+}
 
 /* ── Tables — readable columns ─────────────────────────────────
    Starlight wraps tables in a scrolling container; we tune column
