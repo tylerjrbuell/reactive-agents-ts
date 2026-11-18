@@ -14,14 +14,14 @@
 
 `reactive-agents` is the umbrella package: one install, one fluent builder, and the core `@reactive-agents/*` layers re-exported behind it. Built on Effect-TS with schema-validated boundaries and tagged errors. Optional capabilities (memory, guardrails, cost routing, durability) only run when you add them with a `.with*()` call; Reactive Intelligence is on by default.
 
-## What you get that other frameworks don't
+## What's different about Reactive Agents
 
-- **Same code, local or frontier.** Finishes the loop on a 4B Ollama model and on Claude, GPT, or Gemini; only the model line changes.
-- **A receipt for every run.** Claim-to-evidence record and verdict; sign with Ed25519 via `.withReceiptSigning()` (unsigned by default).
-- **Explain any failed run.** Every run writes a trace; `rax-diagnose cause <runId>` names why it failed. Replay re-runs from the trace with tool results held fixed.
-- **Survives a crash.** `.withDurableRuns()` checkpoints each step; a fresh process resumes (opt-in).
-- **Private and quiet by default.** No telemetry unless you opt in (`DO_NOT_TRACK` wins); quiet when piped.
-- **Cortex, a local studio.** Watch runs, inspect traces, build agents locally. No hosted dashboard.
+- **The same code runs on a local or a hosted model.** A 4B Ollama model or Claude, GPT or Gemini: only the model line changes. Per-model context profiles, tool-call healing ([`packages/tools/src/healing`](https://github.com/tylerjrbuell/reactive-agents-ts/tree/main/packages/tools/src/healing)), output verification and a single termination check ([`terminate.ts`](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/packages/reasoning/src/kernel/loop/terminate.ts)) do the adapting. [See the demo](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/local-vs-frontier.ts).
+- **A receipt for every run.** Each run returns a claim-to-evidence record with a verdict. Ed25519 signing is off by default: add `.withReceiptSigning()` or set `RA_RECEIPT_KEY`. [Receipt schema](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/packages/core/src/types/receipt.ts).
+- **Failed runs explain themselves.** Every run writes a trace, and `rax-diagnose cause <runId>` names why it failed. Each of the 12 execution phases ([`packages/runtime/src/engine`](https://github.com/tylerjrbuell/reactive-agents-ts/tree/main/packages/runtime/src/engine)) has `before`, `after` and `on-error` hooks, and replay re-runs a trace with tool results held fixed (model calls stay live). [rax-diagnose](https://docs.reactiveagents.dev/reference/cli/diagnose/) · [Snapshot & replay](https://docs.reactiveagents.dev/features/snapshot-replay/).
+- **Runs can survive a crash.** Opt in with `.withDurableRuns()`: the run checkpoints each step and a fresh process resumes it. [Durable execution](https://docs.reactiveagents.dev/guides/durable-execution/) · [demo](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/apps/examples/src/demos/durable-resume.ts).
+- **Quiet and private by default.** No telemetry unless you opt in (`DO_NOT_TRACK` always wins), and output is quiet when piped. Memory, guardrails, cost routing and durability run only when you add them with a `.with*()` call ([builder](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/packages/runtime/src/builder.ts)). The entropy sensor (Reactive Intelligence) is on by default and sends no data anywhere. [Observability](https://docs.reactiveagents.dev/features/observability/).
+- **A local studio, no hosted dashboard.** Cortex shows runs live, lets you inspect traces and build agents, all on your machine. [Cortex docs](https://docs.reactiveagents.dev/features/cortex/).
 
 Docs: https://docs.reactiveagents.dev/
 
