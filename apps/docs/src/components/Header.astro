@@ -40,10 +40,7 @@ const PLAYGROUND_URL = '/playground/'
 		{shouldRenderSearch && <Search />}
 	</div>
 	<div class="sl-flex print:hidden right-group">
-		{/* Visible at every width: primary CTA + live star count. */}
-		<a class="ra-header-cta" href="/guides/quickstart/" data-ra-placement="header">
-			Get started
-		</a>
+		{/* Visible at every width: live star count. */}
 		<a
 			class="ra-star-cta ra-header-star"
 			href="https://github.com/tylerjrbuell/reactive-agents-ts"
@@ -153,22 +150,6 @@ const PLAYGROUND_URL = '/playground/'
 		}
 	}
 
-	.ra-header-cta {
-		display: inline-flex;
-		align-items: center;
-		flex-shrink: 0;
-		padding: 0.4rem 0.8rem;
-		border-radius: 999px;
-		background: var(--sl-color-accent);
-		color: var(--sl-color-black);
-		font-size: 0.8rem;
-		font-weight: 600;
-		white-space: nowrap;
-		text-decoration: none;
-	}
-	.ra-header-cta:hover {
-		filter: brightness(1.1);
-	}
 	.right-group :global(.ra-header-star) {
 		margin-bottom: 0;
 		padding: 0.35rem 0.6rem;
@@ -181,9 +162,6 @@ const PLAYGROUND_URL = '/playground/'
 		}
 		.right-group :global(.ra-header-star .ra-star-label) {
 			display: none;
-		}
-		.ra-header-cta {
-			padding: 0.35rem 0.65rem;
 		}
 	}
 

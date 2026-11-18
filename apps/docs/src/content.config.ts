@@ -44,6 +44,8 @@ export const collections = {
         since: versionString,
         updated: versionString,
         stability: z.enum(STABILITY_TIERS).optional(),
+        // Per-page override for the first-screen Try it block (src/content/try-it.ts).
+        tryIt: z.boolean().optional(),
         // Computed at build time by docs-loader-with-meta.ts (last-commit.ts),
         // display only ("Last updated"). Never authored.
         lastCommit: z.object({ hash: z.string(), date: z.string() }).optional(),

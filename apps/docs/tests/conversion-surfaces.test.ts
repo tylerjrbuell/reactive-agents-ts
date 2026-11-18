@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { TRY_IT_PAGES, shouldShowTryIt } from "../src/content/try-it";
 
 const DOCS = resolve(import.meta.dir, "..");
 const REPO = resolve(DOCS, "../..");
@@ -39,11 +40,37 @@ describe("conversion surfaces", () => {
     for (const c of calls) expect(c).not.toMatch(/email/i);
   });
 
+  it("Try it placement rule: allowlist shows, reference/release pages never do", () => {
+    for (const id of ["guides/local-models", "guides/reasoning", "cookbook/local-agent-ollama"]) {
+      expect(shouldShowTryIt(id)).toBe(true);
+    }
+    for (const id of [
+      "guides/whats-new",
+      "guides/whats-new/v0-18",
+      "reference/cli",
+      "reference/stability",
+      "reference/builder-api/core-and-model",
+      "guides/troubleshooting",
+      "concepts/architecture",
+    ]) {
+      expect(shouldShowTryIt(id)).toBe(false);
+      // the denylist wins even over a frontmatter force-show
+      expect(shouldShowTryIt(id, true)).toBe(false);
+    }
+    expect(shouldShowTryIt("guides/local-models", false)).toBe(false);
+    expect(shouldShowTryIt("guides/memory", true)).toBe(true);
+    expect(shouldShowTryIt("guides/memory")).toBe(false);
+  });
+
+  it("PageTitle uses the shared rule, not a local list", () => {
+    const p = read("src/components/PageTitle.astro");
+    expect(p).toContain("shouldShowTryIt");
+    expect(p).not.toContain("TRY_IT_PAGES");
+  });
+
   it("every Try-it page id resolves to a content file", () => {
-    const m = read("src/components/PageTitle.astro").match(/TRY_IT_PAGES = new Set\(\[([\s\S]*?)\]\)/);
-    expect(m).not.toBeNull();
-    const ids = [...(m?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((x) => x[1]);
-    expect(ids.length).toBeGreaterThanOrEqual(10);
+    const ids = [...TRY_IT_PAGES];
+    expect(ids.length).toBeGreaterThanOrEqual(5);
     for (const id of ids) {
       const found = [".md", ".mdx"].some((ext) => existsSync(resolve(DOCS, "src/content/docs", id + ext)));
       expect(found).toBe(true);
@@ -65,12 +92,11 @@ describe("narrow-width header and overflow guards (Starlight 0.43)", () => {
   const header = read("src/components/Header.astro");
   const css = read("src/styles/custom.css");
 
-  it("keeps the Get started and Star CTAs unconditionally visible", () => {
-    expect(header).toMatch(/class="ra-header-cta"/);
+  it("keeps the Star CTA unconditionally visible; the header has no Get started button", () => {
     expect(header).toMatch(/ra-star-cta ra-header-star/);
-    // No rule may hide either CTA at any width.
-    expect(header).not.toMatch(/\.ra-header-cta\s*\{[^}]*display:\s*none/);
     expect(header).not.toMatch(/\.ra-header-star\s*\{[^}]*display:\s*none/);
+    expect(header).not.toContain("ra-header-cta");
+    expect(header).not.toContain("Get started");
   });
 
   it("hides the Playground button below 64rem so it never sits under the menu button", () => {

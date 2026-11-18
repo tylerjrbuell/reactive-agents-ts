@@ -1,5 +1,6 @@
 ---
 import TryIt from "./TryIt.astro";
+import { shouldShowTryIt } from "../content/try-it";
 import MarkerIcon from "./MarkerIcon.astro";
 import StabilityBadge from "./StabilityBadge.astro";
 import WhatsNewToggle from "./WhatsNewToggle.astro";
@@ -33,23 +34,10 @@ const commitUrl = lastCommit
 
 const id = route?.entry?.id ?? "";
 
-// Entry pages that get the first-screen "Try it" block (TryIt.astro). One
-// list here instead of per-page markup. quickstart already opens with an
-// install walkthrough, so it is not listed.
-const TRY_IT_PAGES = new Set([
-  "guides/reasoning",
-  "guides/local-models",
-  "reference/cli",
-  "guides/choosing-strategies",
-  "guides/cost-optimization",
-  "guides/whats-new",
-  "guides/tools",
-  "guides/troubleshooting",
-  "cookbook/agent-tool-calling-mcp",
-  "cookbook/local-agent-ollama",
-]);
+// Try it placement rule lives in src/content/try-it.ts (allowlist, denylist,
+// frontmatter `tryIt` override).
 const pageId = id.replace(/\.(mdx?|md)$/, "").replace(/\/index$/, "");
-const showTryIt = TRY_IT_PAGES.has(pageId);
+const showTryIt = shouldShowTryIt(pageId, (data as { tryIt?: boolean }).tryIt);
 const { sections: changed } = tocMarks(
   (route?.toc?.items ?? []) as TocNode[],
   extractHeadings((route?.entry as { body?: string } | undefined)?.body ?? ""),

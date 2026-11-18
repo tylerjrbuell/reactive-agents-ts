@@ -149,7 +149,7 @@ Fires when a user clicks 👍 Yes or 👎 No on the auto-injected "Was this page
 
 ## Conversion CTA events (added 2026-11-17)
 
-Baseline and rationale: [[2026-11-17-docs-conversion-baseline]]. CTA surfaces (all widths): header "Get started" + star, the first-screen "Try it" block on entry pages (`TryIt.astro`), the end-of-page block on every page (`EndOfPage.astro`), the right sidebar on wide screens, and a floating Feedback tab. `placement` values: `header`, `hero`, `tryit`, `endcap`, `sidebar`, `nav`, `content`, plus `panel` and `floating`/`button`/`downvote` where noted. The email address is never sent in any event.
+Baseline and rationale: [[2026-11-17-docs-conversion-baseline]]. CTA surfaces (all widths): header star (the header "Get started" button was removed 2026-11-17), the first-screen "Try it" block on getting-started and core guide pages only (`TryIt.astro`, rule in `src/content/try-it.ts`; never on reference, What's New or other release pages), the end-of-page block on every page (`EndOfPage.astro`), the right sidebar on wide screens, and a floating Feedback tab. `placement` values: `header`, `hero`, `tryit`, `endcap`, `sidebar`, `nav`, `content`, plus `panel` and `floating`/`button`/`downvote` where noted. The email address is never sent in any event.
 
 ### `star_cta_click`
 
