@@ -492,13 +492,16 @@ export function finalizeStrategyResult(
     // Owner decision 2026-11-10: the harness never writes the answer. The
     // enforced run's output is EMPTY; the abstention text is its cause on
     // `error`, followed by the failed checks.
+    // The arms' metadata, carried through every later re-mint (coverage,
+    // delegation) so a cap never reverts the enforced terminal.
+    const armExtraMetadata = enforced ? enforcedTerminalMetadata(params.extraMetadata) : params.extraMetadata;
     const finalBase = enforced
       ? buildStrategyResult({
           ...params,
           output: "",
           status: "failed",
           error: `${ENFORCED_ABSTENTION_OUTPUT} Failed checks: ${failed.join(", ")}.`,
-          extraMetadata: enforcedTerminalMetadata(params.extraMetadata),
+          extraMetadata: armExtraMetadata,
         })
       : base;
 
@@ -669,7 +672,10 @@ export function finalizeStrategyResult(
             ...params,
             output: gated.output,
             status: cappedStatus,
-            extraMetadata: { ...params.extraMetadata, ...honestEnvelopeMetadata(coverage) },
+            // Keep the earlier arms' cause (GH #206 / fabrication guard): a
+            // user stop must not fall back to the generic sentence.
+            error: gated.error ?? params.error,
+            extraMetadata: { ...armExtraMetadata, ...honestEnvelopeMetadata(coverage) },
           });
 
     // ── 5.3 delegation-laundering arm (worst-of join over child envelopes) ──
@@ -706,6 +712,7 @@ export function finalizeStrategyResult(
             ...params,
             output: finalResult.output,
             status: delegationCappedStatus,
+            error: finalResult.error ?? params.error,
             // Recompute the envelope metadata from BOTH arms: extraMetadata
             // carries only strategy-declared fields, so the coverage arm's
             // fields (already merged into finalResult.metadata) are re-derived
@@ -714,7 +721,7 @@ export function finalizeStrategyResult(
             // CONCATENATE (review fix): two arms firing must not drop each
             // other's reason — the receipt names every unmet requirement.
             extraMetadata: {
-              ...params.extraMetadata,
+              ...armExtraMetadata,
               ...honestEnvelopeMetadata(coverage),
               ...honestEnvelopeMetadata(delegation),
               ...(coverage.verificationWarning !== undefined &&

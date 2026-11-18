@@ -347,13 +347,28 @@ export function runTerminalVerifierGate(args: {
         // debugging detail isn't lost, just no longer the first thing a user
         // sees on a TTY status line. A warn verdict reads "advisory", never
         // "rejected" (see `terminalVerdictLogMessage`).
+        // An advisory (warn) verdict KEEPS the answer, so it logs at debug: it
+        // is still recorded for subscribers and the trace (verifyAndEmit
+        // already emitted the verdict event), but a correct kept answer no
+        // longer prints a warning line at normal verbosity.
         const verdictLog = terminalVerdictLogMessage(verdict);
-        yield* emitLog({
-          _tag: "warning",
-          message: verdictLog.message,
-          context: verdictLog.context,
-          timestamp: new Date(),
-        });
+        yield* emitLog(
+          verdictSeverity === "warn"
+            ? {
+                _tag: "log",
+                level: "debug",
+                source: "framework",
+                message: verdictLog.message,
+                ...(verdictLog.context !== undefined ? { fields: { context: verdictLog.context } } : {}),
+                timestamp: new Date(),
+              }
+            : {
+                _tag: "warning",
+                message: verdictLog.message,
+                context: verdictLog.context,
+                timestamp: new Date(),
+              },
+        );
         //   - escalate : structural failure (harness fallback, shallow give-up).
         //                Suppress by FAILING the run — the `failed` status +
         //                error IS the escalation signal, and it crosses the

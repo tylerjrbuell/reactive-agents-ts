@@ -30,7 +30,7 @@ import { resolveCompletionStatus } from "../../../src/kernel/state/completion-st
 import { deserializeKernelState, serializeKernelState } from "../../../src/kernel/state/kernel-codec.js";
 import { recordChecklistItems } from "../../../src/kernel/ledger/emit.js";
 import { finalizeStrategyResult } from "../../../src/kernel/capabilities/sense/finalize-result.js";
-import { provideTestEnvelope } from "../../../src/kernel/envelope/run-envelope.js";
+import { buildRunEnvelope, provideTestEnvelope } from "../../../src/kernel/envelope/run-envelope.js";
 import { toolCalled } from "../../../src/kernel/capabilities/verify/post-conditions.js";
 import { initialKernelState, transitionState, type KernelRunOptions, type KernelState, type ThoughtKernel } from "../../../src/kernel/state/kernel-state.js";
 import { makeStep } from "../../../src/kernel/capabilities/sense/step-utils.js";
@@ -198,6 +198,51 @@ describe("the mint reports a stop as partial, not success", () => {
     );
     expect(r.status).toBe("partial");
     expect((r.metadata as { outstandingCriteria?: readonly string[] }).outstandingCriteria).toEqual(["stopped_by_request"]);
+  });
+
+  // Audit 2026-11-18 polish 2: the user-stop coverage re-mint rebuilt from
+  // `params` and dropped the earlier arms' cause. CUT: re-mint with
+  // `...params` alone (no arm error / metadata) turns these red.
+  const readStep = () => [
+    makeStep("action", JSON.stringify({ tool: "read-file", input: '{"path":"a"}' }), {
+      toolCall: { id: "s1", name: "read-file", arguments: { path: "a" } },
+    }),
+  ];
+
+  it("empty-output stop keeps the GH #206 cause (what was attempted) on error", async () => {
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          ...params,
+          steps: readStep(),
+          output: "",
+          status: "failed",
+          kernelMeta: { terminatedBy: "stop_requested" },
+        }),
+      ),
+    );
+    expect(r.status).toBe("failed");
+    expect(r.error).toBeDefined();
+    expect(r.error).toContain("stopped on request (stop_requested)");
+    expect(r.error).not.toContain("within the available budget");
+    const outcome = (r.metadata as { extensions?: Record<string, unknown> }).extensions?.["terminalOutcome"] as { authority: string };
+    expect(outcome.authority).toBe("user-stop");
+  });
+
+  it("a stop on a fabrication-guard enforced run keeps the guard cause and the abstained terminal", async () => {
+    const r = await Effect.runPromise(
+      provideTestEnvelope(
+        finalizeStrategyResult({
+          ...params,
+          requiredTools: ["web-search"],
+          extraMetadata: { terminatedBy: "final_answer", rawTerminatedBy: "stop_requested" },
+        }),
+        buildRunEnvelope({ fabricationGuard: "block" }),
+      ),
+    );
+    expect(r.status).toBe("failed");
+    expect(r.error).toContain("grounding-on-required");
+    expect((r.metadata as Record<string, unknown>)["terminatedBy"]).toBe("abstained");
   });
 
   it("control: an ordinary end_turn stays completed with nothing outstanding", async () => {

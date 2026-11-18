@@ -84,6 +84,21 @@ export function offersDomainTool(
   return (schemas ?? []).some((s) => s.scope !== "harness" && !META_TOOLS.has(s.name));
 }
 
+/**
+ * True when a pass could reach a domain tool: one is offered, or relevance
+ * pruning hid them all but `discover-tools` is offered and the full catalog
+ * (`allToolSchemas`) holds one. A pruned-but-discoverable run had something
+ * to ground on, so it is not the no-tools case.
+ */
+export function reachesDomainTool(input: {
+  readonly availableToolSchemas?: readonly { readonly name: string; readonly scope?: "domain" | "harness" }[];
+  readonly allToolSchemas?: readonly { readonly name: string; readonly scope?: "domain" | "harness" }[];
+}): boolean {
+  if (offersDomainTool(input.availableToolSchemas)) return true;
+  const discoverable = (input.availableToolSchemas ?? []).some((s) => s.name === "discover-tools");
+  return discoverable && offersDomainTool(input.allToolSchemas);
+}
+
 /** True when the raw kernel terminal names a HARNESS-forced end. */
 export function isHarnessForcedTerminal(rawTerminatedBy: string | undefined): boolean {
   if (rawTerminatedBy === undefined) return false;

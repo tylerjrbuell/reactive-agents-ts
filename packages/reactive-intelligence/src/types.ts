@@ -384,12 +384,14 @@ export const defaultReactiveIntelligenceConfig: ReactiveIntelligenceConfig = {
     //   1. LLMService is not provided into the EntropySensorService layer
     //      (sibling, not dep, under runtime.ts `Layer.mergeAll`) → `llm` is
     //      None → the embed never fires.
-    //   2. `priorThought` is never populated on the score path → the
-    //      `llm && priorThought` gate fails even when llm IS wired.
-    //   3. The sensor hardcodes `taskEmbedding: null` and surfaces only
-    //      `taskAlignment` (always 0 when taskEmbedding is null), discarding
-    //      the meaningful `noveltyScore`/`adjacentRepetition` signals.
-    // Re-enabling requires fixing all three + a cross-tier ablation proving
+    //   2. FIXED: `priorThought` is now passed on the score path (the
+    //      kernel's reactive-observer and the runtime event collector), and
+    //      the sensor embeds only the new thought once the prior's embedding
+    //      is cached (audit 2026-11-18).
+    //   3. PARTLY FIXED: the sensor still passes `taskEmbedding: null`
+    //      (taskAlignment is always 0), but it now feeds `noveltyScore` into
+    //      the composite; `adjacentRepetition` is still unused.
+    // Re-enabling requires fixing what remains + a cross-tier ablation proving
     // it improves early-stop/convergence (prior early-stop levers falsified).
     // Until then the config tells the truth: this sensor source is OFF.
     semanticEntropy: false,

@@ -48,7 +48,8 @@ import type { ContextProfile } from "../../../context/context-profile.js";
 import { transitionState, asKernelStateLike } from "../../../kernel/state/kernel-state.js";
 import { sanitizeToolName } from "../attend/context-utils.js";
 import { shouldInjectDriverInstructions } from "../decide/tool-gating.js";
-import { emitToolSurfaceResolved, emitProjectionRendered, emitCuratorDecision, emitSignalRendered, emitSignalEffect } from "../../utils/diagnostics.js";
+import { emitToolSurfaceResolved, emitProjectionRendered, emitSignalRendered, emitSignalEffect } from "../../utils/diagnostics.js";
+import { emitCuratorDecisions } from "./curator-decisions.js";
 import { degradedParts, toLLMMessages } from "../../../assembly/to-llm-messages.js";
 import { emitContentPartsDegraded } from "../../utils/content-part-degraded.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
@@ -372,38 +373,14 @@ export function handleThinking(
       // 838935cb) now reaches the debrief. Emit each COMPRESSED result (the
       // budget-relevant evidence); when a render compressed nothing, emit one
       // "kept" for the last projected result so a clean tool-using run still
-      // clears the blindspot instead of tripping a false positive.
-      const toolResults = trace.messages.filter(
-        (m): m is typeof m & { ref: string } => m.role === "tool_result" && typeof m.ref === "string",
-      );
-      const compressedRefs = new Set<string>();
-      for (const m of toolResults) {
-        if (m.projection !== "preview+ref") continue;
-        compressedRefs.add(m.ref);
-        yield* emitCuratorDecision({
-          taskId: state.taskId,
-          iteration: state.iteration,
-          action: "compressed",
-          targetRef: m.ref,
-          rationale: {
-            why: `overflow: ${m.rawChars ?? m.chars} chars > budget ${m.budget ?? 0} (window ${trace.capability.window}, ${trace.capability.tier}) — projected as preview+ref`,
-            refs: [m.ref],
-          },
-        });
-      }
-      const lastKept = [...toolResults].reverse().find((m) => !compressedRefs.has(m.ref));
-      if (compressedRefs.size === 0 && lastKept) {
-        yield* emitCuratorDecision({
-          taskId: state.taskId,
-          iteration: state.iteration,
-          action: "kept",
-          targetRef: lastKept.ref,
-          rationale: {
-            why: `fit: ${lastKept.chars} chars <= budget ${lastKept.budget ?? trace.capability.window} — kept full`,
-            refs: [lastKept.ref],
-          },
-        });
-      }
+      // clears the blindspot instead of tripping a false positive. Each ref's
+      // `compressed` decision is emitted once per run (curator-decisions.ts).
+      yield* emitCuratorDecisions({
+        taskId: state.taskId,
+        iteration: state.iteration,
+        messages: trace.messages,
+        capability: trace.capability,
+      });
     }
 
     if (h.assemblyDebug) {

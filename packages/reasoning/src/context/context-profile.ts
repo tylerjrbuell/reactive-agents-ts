@@ -44,6 +44,10 @@ export const ContextProfileSchema = Schema.Struct({
   /** Maximum context window tokens for this tier. Used by pressure gates and message compaction. */
   maxTokens: Schema.optional(Schema.Number),
   /**
+   * NO EFFECT (accepted for compatibility, slated for deprecation): nothing
+   * reads this field today (debt D-2026-10-13-W2F-1), so setting it changes
+   * no prompt. The text below describes the original Slice C design.
+   *
    * S2.5 Slice C — opt-in production wiring for the curator's trust-aware
    * "Recent tool observations:" section. When > 0, the kernel asks
    * defaultContextCurator to append the last N observation steps (untrusted

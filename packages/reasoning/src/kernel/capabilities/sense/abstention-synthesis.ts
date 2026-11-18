@@ -20,6 +20,7 @@
 
 import { deliverableToContent, sentinelDeliverable } from "@reactive-agents/core";
 import type { ReasoningStep } from "../../../types/step.js";
+import { isUserStopReason } from "../../loop/terminate-reason.js";
 
 /**
  * Terminals that are infrastructure FAULTS, not effort exhaustion. A run that
@@ -163,6 +164,11 @@ export function buildAbstentionOutput(
   stop?: AbstentionStop,
 ): string {
   const attempts = summarizeAttempts(steps);
+  // A person's stop is the cause, never budget exhaustion.
+  if (isUserStopReason(stop?.terminatedBy)) {
+    const cause = `the run was stopped on request (${stop?.terminatedBy}) before an answer was produced; ${attempts}`;
+    return deliverableToContent(sentinelDeliverable("no_substantive_output", cause));
+  }
   if (isGuardStopTerminal(stop?.terminatedBy)) {
     const why = (stop?.error ?? "").split("\n")[0]?.trim() ?? "";
     const cause = `the run was stopped by ${stop?.terminatedBy}${why.length > 0 ? ` (${why.replace(/\.$/, "")})` : ""}; ${attempts}`;

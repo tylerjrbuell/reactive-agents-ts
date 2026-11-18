@@ -660,7 +660,12 @@ export function proposeExit(args: {
         meta: { ...state.meta, terminatedBy: undefined },
       }));
     }
-    if (proposal.kind === "soft" && proposal.proposedBy !== "model" && todoWrapUpAwaitingReply(state.steps)) {
+    if (
+      proposal.kind === "soft" &&
+      proposal.proposedBy !== "model" &&
+      args.input.harness?.todoWrapUp === true &&
+      todoWrapUpAwaitingReply(state.steps)
+    ) {
       // The todo wrap-up turn (todo-wrap-up.ts) is owed its reply: a guard firing
       // now would hand off the answer the model already wrote. Defer one pass.
       yield* emitGuardFired({

@@ -22,6 +22,7 @@ import { resolveCompletionStatus } from "../state/completion-status.js";
 import { deriveTerminalOutcome } from "../state/terminal-outcome.js";
 import { entriesOfKind } from "../ledger/run-ledger.js";
 import type { Verifier, VerificationResult } from "../capabilities/verify/verifier.js";
+import type { LogEvent } from "@reactive-agents/observability";
 
 const ok: Verifier = {
   verify: (c) => ({ verified: true, checks: [], summary: `${c.action}: all checks passed`, action: c.action, softFail: false }),
@@ -163,6 +164,52 @@ describe("terminal boundary — verdict consumed, answer written (every terminat
       expect(answerStatuses(refused)).toEqual(["declared"]);
       expect(resolveCompletionStatus(refused)).toBe("partial");
     }
+  });
+
+  it("advisory (warn) verdict logs at debug, never as a warning; a hard reject still warns", async () => {
+    const advisory: Verifier = {
+      verify: (c) => ({
+        verified: false,
+        checks: [{ name: "evidence-grounded", passed: false, reason: "figure not in observations", severity: "warn" }],
+        summary: "final-answer: advisory at evidence-grounded",
+        action: c.action,
+        softFail: true,
+        severity: "warn",
+      }),
+    };
+    const runWith = async (verifier: Verifier) => {
+      const logs: LogEvent[] = [];
+      const done = terminate(declaredState(), {
+        reason: "harness_synthesis",
+        deliverable: modelSynthesisDeliverable({ type: "thought", content: "The answer is 42.", iteration: 1 }),
+      });
+      const out = await Effect.runPromise(
+        runTerminalVerifierGate({
+          state: done,
+          verifier,
+          effectiveInput: { task: "t" },
+          taskIntent: { format: undefined } as never,
+          currentOptions: { taskId: "tdb" } as never,
+          emitLog: (e) => Effect.sync(() => { logs.push(e); }),
+          isAwaitingApproval: false,
+          isAwaitingInteraction: false,
+          isAbstained: false,
+          isBudgetTerminal: false,
+          isUserStop: false,
+        }).pipe(Effect.provide(TestLLMServiceLayer([]))),
+      );
+      return { out, logs };
+    };
+
+    const soft = await runWith(advisory);
+    expect(soft.out.status).toBe("done");
+    expect(soft.out.meta.verificationWarning).toBe("final-answer: advisory at evidence-grounded");
+    expect(soft.logs.some((e) => e._tag === "warning")).toBe(false);
+    const line = soft.logs.find((e) => e._tag === "log");
+    expect(line).toMatchObject({ _tag: "log", level: "debug" });
+
+    const hard = await runWith(reject);
+    expect(hard.logs.some((e) => e._tag === "warning")).toBe(true);
   });
 
   it("provenance vocabulary: sentinel deliverable stamps `sentinel`", () => {

@@ -7,7 +7,6 @@ import {
   type ModelCalibrationLike,
   type ContextSectionLike,
   type ContextPressureLike,
-  type KernelStateLike,
 } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type {
@@ -37,9 +36,6 @@ import { CalibrationStore } from "../calibration/calibration-store.js";
  * integrity, density, diversity, lack of hedging, and JSON validity), while
  * composite entropy uses the opposite convention: higher means more disorder.
  */
-/** `KernelStateLike["meta"]` with `readonly` stripped — the sensor mutates the live meta bag (kernel-runner pattern). */
-type MutableMeta = { -readonly [K in keyof KernelStateLike["meta"]]: KernelStateLike["meta"][K] }
-
 export function meanStructural(s: StructuralEntropy): number {
   const quality = (
     s.formatCompliance +
@@ -113,6 +109,13 @@ export const EntropySensorServiceLive = (
       // thought back-to-back. Keep the second observation out of the shared
       // trajectory while still returning its fresh score to the caller.
       const lastThoughtByTask = new Map<string, string>();
+      // Per-task semantic-entropy cache: every thought embedded so far and
+      // their centroid. Held here (like `trajectories`) so the sensor never
+      // writes into the caller's kernel state.
+      const thoughtEmbeddingsByTask = new Map<
+        string,
+        { readonly embeddings: readonly (readonly number[])[]; readonly centroid: readonly number[] | null }
+      >();
 
       // Calibration store — use external if provided, else in-memory
       const calStore = externalCalStore ?? new CalibrationStore();
@@ -139,21 +142,22 @@ export const EntropySensorServiceLive = (
             // 3. Semantic entropy (requires embed + prior thought)
             let noveltyScore: number | null = null;
             if (config.entropy.semanticEntropy !== false && llm && priorThought) {
-              const embeddings = yield* llm.embed([thought, priorThought]).pipe(
+              // The prior thought was embedded on the previous call (it is the
+              // last cached embedding), so only the new thought is embedded
+              // then. The first call embeds both and uses the prior's
+              // embedding as the novelty reference.
+              const cached = thoughtEmbeddingsByTask.get(kernelState.taskId);
+              const toEmbed = cached !== undefined ? [thought] : [thought, priorThought];
+              const embeddings = yield* llm.embed(toEmbed).pipe(
                 Effect.catchAll(() => Effect.succeed([] as readonly (readonly number[])[])),
               );
-              if (embeddings.length >= 2) {
-                const entropyMeta = (kernelState.meta.entropy ?? {}) as {
-                  readonly thoughtEmbeddings?: {
-                    readonly embeddings?: readonly (readonly number[])[];
-                    readonly centroid?: readonly number[] | null;
-                  };
-                };
-                const priorEmbeddings = entropyMeta.thoughtEmbeddings?.embeddings ?? [];
-                const centroid = entropyMeta.thoughtEmbeddings?.centroid ?? null;
+              if (embeddings.length === toEmbed.length) {
+                const current = embeddings[0] as readonly number[];
+                const priorEmbeddings = cached?.embeddings ?? embeddings.slice(1);
+                const centroid = cached?.centroid ?? priorEmbeddings[0] ?? null;
 
                 const semResult = computeSemanticEntropy({
-                  currentEmbedding: embeddings[0] as number[],
+                  currentEmbedding: current,
                   taskEmbedding: null,
                   priorEmbeddings,
                   centroid,
@@ -163,15 +167,11 @@ export const EntropySensorServiceLive = (
                 // thoughts is the meaningful disorder signal here.
                 noveltyScore = semResult.noveltyScore;
 
-                // Update centroid in meta (mutable — matches kernel runner pattern)
-                const newCentroid = updateCentroid(centroid, embeddings[0] as number[], priorEmbeddings.length);
-                (kernelState.meta as MutableMeta).entropy = {
-                  ...entropyMeta,
-                  thoughtEmbeddings: {
-                    embeddings: [...priorEmbeddings, embeddings[0]],
-                    centroid: newCentroid,
-                  },
-                };
+                // Cache in the service (per task), never in the caller's meta.
+                thoughtEmbeddingsByTask.set(kernelState.taskId, {
+                  embeddings: [...priorEmbeddings, current],
+                  centroid: updateCentroid(centroid, current, priorEmbeddings.length),
+                });
               }
             }
 

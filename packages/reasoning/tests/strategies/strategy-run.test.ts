@@ -165,6 +165,34 @@ describe("runStrategy — one trajectory per run", () => {
       expect((result.metadata as { terminatedBy?: string }).terminatedBy).toBe("abstained");
     });
 
+    // Audit 2026-11-18 polish 4: relevance pruning hid every domain tool, but
+    // discover-tools could still surface one from allToolSchemas. The run had
+    // something to ground on, so the same ungrounded answer is abstained.
+    const runPruned = (available: readonly { name: string; description: string; parameters: readonly never[] }[]) =>
+      Effect.runPromise(provideTestEnvelope(
+        runStrategy({ strategy: "reflexion", logSite: "test" }, (run) =>
+          Effect.gen(function* () {
+            yield* run.pass(reactKernel, {
+              task: "Sum 2 and 3",
+              availableToolSchemas: available,
+              allToolSchemas: [{ name: "add", description: "Add two numbers", parameters: [] }],
+            }, passOptions);
+            return { _tag: "Result" as const, output: PLAIN, status: "partial" as const, kernelMeta: { terminatedBy: "max_iterations" } };
+          }),
+        ).pipe(Effect.provide(TestLLMServiceLayer([{ match: "Sum", text: "FINAL ANSWER: 5" }]))),
+        buildRunEnvelope({}),
+      ));
+
+    it("pruned to zero domain tools but discoverable via allToolSchemas: abstained", async () => {
+      const result = await runPruned([{ name: "discover-tools", description: "find tools", parameters: [] }]);
+      expect((result.metadata as { terminatedBy?: string }).terminatedBy).toBe("abstained");
+    });
+
+    it("control: pruned to zero with discovery off is still the no-tools case", async () => {
+      const result = await runPruned([]);
+      expect((result.metadata as { terminatedBy?: string }).terminatedBy).not.toBe("abstained");
+    });
+
     it("meta tools alone do not count as visible tools", async () => {
       const result = await runWith([{ name: "todo", description: "checklist", parameters: [] }]);
       expect((result.metadata as { terminatedBy?: string }).terminatedBy).not.toBe("abstained");

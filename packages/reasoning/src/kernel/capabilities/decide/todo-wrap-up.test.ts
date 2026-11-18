@@ -22,6 +22,9 @@ import { makeStep } from "../sense/step-utils.js";
 import { stepTodoWrapUp, todoWrapUpAwaitingReply, todoWrapUpIssued, todoWrapUpText } from "./todo-wrap-up.js";
 import { ownItems } from "../reflect/checklist-reminder.js";
 import { resolveHarnessConfig } from "../../../harness-config.js";
+import { harnessSynthesisDeliverable } from "@reactive-agents/core";
+import { DISPATCHER_EARLY_STOP, proposeExit } from "../../loop/exit-gate.js";
+import { makeKernelInput } from "../../../testing/kernel-fixtures.js";
 
 const SCHEMAS = [
   { name: "gather1", description: "gather", parameters: [{ name: "q", type: "string", required: true }] },
@@ -180,5 +183,32 @@ describe("stepTodoWrapUp (seam pin)", () => {
   it("no room (iteration or call budget spent) -> no nudge", () => {
     expect(stepTodoWrapUp(withOpenRow(9), 10)).toBeUndefined();
     expect(stepTodoWrapUp(withOpenRow(2, 10), 10)).toBeUndefined();
+  });
+
+  // Audit 2026-11-18: the exit gate's wrap-up deferral is gated on the flag.
+  // RED-ON-CUT: drop `input.harness?.todoWrapUp === true` from the deferral in
+  // exit-gate.ts `proposeExit` and the flag-off soft exit is deferred too.
+  it("exit gate defers a soft guard to the wrap-up reply only when the flag is on", async () => {
+    const awaiting = stepTodoWrapUp(withOpenRow(2), 10) as KernelState;
+    expect(todoWrapUpAwaitingReply(awaiting.steps)).toBe(true);
+    const propose = (todoWrapUp: boolean) =>
+      Effect.runPromise(
+        proposeExit({
+          state: awaiting,
+          proposal: { ...DISPATCHER_EARLY_STOP, deliverable: harnessSynthesisDeliverable([], undefined, "") },
+          input: makeKernelInput({
+            task: "t",
+            harness: todoWrapUp ? { ...resolveHarnessConfig(), todoWrapUp: true as const } : resolveHarnessConfig(),
+          }),
+          maxIterations: 10,
+          taskId: "t",
+        }).pipe(Effect.provide(EventBusLive)),
+      );
+    const deferredToWrapUp = (d: { state: KernelState }) => d.state.steps.length === awaiting.steps.length;
+    const on = await propose(true);
+    expect(on.decision).toBe("deny");
+    expect(deferredToWrapUp(on)).toBe(true);
+    const off = await propose(false);
+    expect(deferredToWrapUp(off)).toBe(false);
   });
 });
