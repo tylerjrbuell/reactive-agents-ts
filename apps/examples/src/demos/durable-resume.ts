@@ -72,7 +72,6 @@ function build(onTool: (name: string) => void) {
     .withReasoning()
     .withTools({ tools: [health, deploys] })
     .withMetaTools(false) // only our two tools, for a clean story
-    .withReactiveIntelligence({ telemetry: false })
     .withMaxIterations(8)
     .withDurableRuns({ dir: DIR, checkpointEvery: 1 })
     .withHook({

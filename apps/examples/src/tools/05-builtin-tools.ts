@@ -46,14 +46,15 @@ export async function run(opts?: { provider?: string; model?: string }): Promise
     .withProvider(provider);
   if (opts?.model) b = b.withModel(opts.model);
   b = b
-    .withTools()
+    .withTools({ builtins: ["file-write"] }) // built-ins are opt-in
     .withReasoning({ defaultStrategy: "reactive" })
     .withMaxIterations(6);
   if (provider === "test") {
+    // A native tool call, then the answer. (Text like "ACTION: file-write {...}"
+    // is not a tool call: the kernel only executes structured calls.)
     b = b.withTestScenario([
-      { match: "write", text: `ACTION: file-write\n{"path":"${DEMO_FILE}","content":"${DEMO_CONTENT}"}\nFINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
-      { match: "file", text: `ACTION: file-write\n{"path":"${DEMO_FILE}","content":"${DEMO_CONTENT}"}\nFINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
-      { text: `FINAL ANSWER: I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
+      { toolCall: { name: "file-write", args: { path: DEMO_FILE, content: DEMO_CONTENT } } },
+      { text: `I wrote "${DEMO_CONTENT}" to ${DEMO_FILE} successfully.` },
     ]);
   }
   const agent = await b.build();

@@ -74,7 +74,7 @@ async function runKillswitch(
     .withName(`ks-${name}`)
     .withProvider("test")
     .withReasoning()
-    .withTools()
+    .withTools({ builtins: true }) // built-ins are opt-in; the scenario calls them
     .withMinIterations(3)
     .withTestScenario([
       { toolCall: { name: "current_time", args: {} } },
@@ -166,7 +166,7 @@ export async function run(): Promise<ExampleResult> {
       .withName("ks-requireApprovalFor")
       .withProvider("test")
       .withReasoning()
-      .withTools()
+      .withTools({ builtins: ["file-write"] })
       .withTestScenario([
         { toolCall: { name: "file-write", args: { path: "/tmp/x", content: "y" } } },
         { text: "FINAL ANSWER: done." },

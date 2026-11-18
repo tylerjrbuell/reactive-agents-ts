@@ -127,7 +127,6 @@ async function runAgent(label: string, provider: string, model: string, tint: st
       .withModel(model)
       .withReasoning()
       .withTools({ tools: [healthTool, deploysTool] })
-      .withReactiveIntelligence({ telemetry: false }) // no telemetry notice in the recording
       .withMaxIterations(8)
       // Narrate each tool call live (via the captured realOut, so it shows in
       // the recording even though framework logs are silenced) — this is the
