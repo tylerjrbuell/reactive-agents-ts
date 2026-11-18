@@ -38,7 +38,7 @@ Methods that bound a run and its cost: iteration, timeout and retry limits, cost
 | `maxIterations`           | `number` (optional)                           | Max kernel iterations before failing                                            |
 | `temperature`             | `number` (optional)                           | LLM sampling temperature                                                        |
 | `maxTokens`               | `number` (optional)                           | Context-window token cap used by pressure gates and message compaction          |
-| `recentObservationsLimit` | `number` (optional)                           | When > 0, append the last N tool observations to the system prompt (default: 0) |
+| `recentObservationsLimit` | `number` (optional)                           | Accepted but currently has no effect: nothing reads it, so setting it changes nothing. It is slated for deprecation. |
 
 <!-- docs-skip-typecheck -->
 ```typescript
