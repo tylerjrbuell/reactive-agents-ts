@@ -1792,10 +1792,10 @@ summary:hover .sl-badge.ra-rollup {
     content: '' / attr(data-ra-stability-label);
     display: inline-block;
     flex: none;
-    width: 0.6rem;
-    height: 0.6rem;
+    width: 0.95rem;
+    height: 0.95rem;
     margin-inline-start: auto;
-    margin-top: calc((1.4em - 0.6rem) / 2);
+    margin-top: calc((1.4em - 0.95rem) / 2);
     background-color: var(--ra-ind-stability-color, var(--ra-ind-stable));
     -webkit-mask: var(--ra-ind-glyph) center / contain no-repeat;
     mask: var(--ra-ind-glyph) center / contain no-repeat;
