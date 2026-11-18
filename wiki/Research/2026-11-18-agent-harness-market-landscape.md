@@ -237,6 +237,53 @@ benchmark, and covers all three white-space claims through its subline. #2 hits 
 bundled failing-trace sample before launch. #3 is the strongest hook on HN *after* the benchmark lands; until
 then it invites the Forge "overinflating" reply with nothing to answer it.
 
+## 6b. Exhaustive framing sweep (owner request, 2026-11-18)
+
+The owner asked to exhaust other framings before adopting #1. Each angle below is a distinct *reason to care*,
+not a rewording. Scored 1-5 on: **True** (holds today without caveats), **Own** (no competitor page uses it,
+section 4), **Pain** (maps to a section 3 complaint), **Stick** (short, concrete, repeatable), **HN** (low risk of
+the section 3 punishments). Total /25.
+
+| # | Angle | Headline | True | Own | Pain | Stick | HN | Total | Note |
+|---|---|---|---|---|---|---|---|---|---|
+| A1 | Evidence | Agents that show their work. | 5 | 5 | 3 | 4 | 5 | **22** | Section 6 #1. Soft on pain; subline carries it |
+| A2 | Evidence | Agents with receipts. | 5 | 5 | 3 | 5 | 4 | **22** | "Receipts" = proof (idiom) and names the real artifact (`TrustReceipt`). Risk: reads as payments for a second |
+| A3 | Evidence | Every answer comes with its evidence. | 4 | 4 | 3 | 2 | 4 | 17 | Receipt grades the trail, not truth; "every" invites nitpicks |
+| B1 | Failure | Know why your agent failed. | 4 | 5 | 5 | 4 | 4 | **22** | `cause` can say undetermined; needs bundled sample trace |
+| B2 | Failure | When your agent fails, it tells you why. | 3 | 5 | 5 | 3 | 3 | 19 | Implies always; overclaim risk |
+| B3 | Failure | Agent failures, explained. | 4 | 4 | 5 | 4 | 4 | 21 | Clean; slightly passive |
+| C1 | Debuggability | Debug agents like you debug code. | 5 | 3 | 5 | 5 | 4 | **22** | Covers trace + replay (tool results fixed) + `rax-diagnose` + deterministic `@reactive-agents/testing` scenarios. "Debug" overlaps LangSmith's verb, but not as a dev-mental-model promise |
+| C2 | Debuggability | Agents you can step through. | 3 | 5 | 4 | 4 | 3 | 19 | Implies a step debugger; replay is close but not interactive |
+| D1 | Attribution | Was it the model, or the harness? | 5 | 5 | 4 | 4 | 4 | 22 | Question hooks the live HN debate (icyfox "frameworks are just harnesses"). Better as a post title / Reddit hook than a permanent hero |
+| D2 | Attribution | Harness or model? Your trace knows. | 4 | 5 | 4 | 3 | 4 | 20 | Section 6 #4 |
+| E1 | Small model | Make a 4B model finish the job. | 2 | 4 | 5 | 5 | 2 | 18 | Strongest hook, unbacked until the benchmark (Forge "overinflating") |
+| E2 | Small model | Same agent code, 4B model or frontier. | 4 | 4 | 4 | 3 | 3 | 18 | Section 6 #3; one demo, not a pass rate |
+| E3 | Small model | Built for the model on your laptop. | 4 | 4 | 4 | 4 | 3 | 19 | Implies frontier is second-class; it is not |
+| F1 | No black box | The agent loop, out in the open. | 5 | 4 | 3 | 3 | 4 | 19 | True (12 hookable phases, every step an event) but abstract |
+| F2 | No black box | No magic. Every step is yours. | 4 | 3 | 3 | 4 | 3 | 17 | "No magic" is a common dev-tool claim |
+| G1 | Honesty | Agents that say "I don't know." | 3 | 5 | 4 | 5 | 2 | 19 | `abstained` verdict + honest-decline path exist, but a single counterexample in the thread sinks it |
+| H1 | Local/private | Your models, your machine, your traces. | 5 | 3 | 3 | 4 | 4 | 19 | True; "local-first" is contested ground |
+| I1 | Composite | Small models. Real work. Full receipts. | 3 | 5 | 4 | 4 | 3 | 19 | "Real work" needs the benchmark to defend |
+| J1 | Typed | Type-safe agents, end to end. | 4 | 1 | 2 | 3 | 4 | 14 | Pydantic owns "Typed end to end"; Effect is a filter |
+
+**Shortlist (22/25):** A1 "Agents that show their work.", A2 "Agents with receipts.", B1 "Know why your agent
+failed.", C1 "Debug agents like you debug code.", and D1 "Was it the model, or the harness?" (as a post hook).
+
+**What separates them.** A1/A2 sell a *property* (transparency) and are safest. B1/C1 sell a *job the reader
+already has* (debugging a bad run), which section 3 shows is the sharpest unmet pain and is where no competitor
+leads; they convert better if the proof is one keyless command. D1 is the best *conversation starter* and belongs
+in the Show HN first comment or Reddit title, not the hero.
+
+**Pairing that uses more than one angle:** headline C1 or B1, subline carrying A1 and the small-model hook, e.g.
+"Debug agents like you debug code." / "An open-source TypeScript agent harness: every run leaves a local trace and a
+receipt that ties claims to evidence, `rax-diagnose` names why a failed run failed, and the same code runs on a 4B
+Ollama model or a frontier API."
+
+**How to pick without guessing.** Real traffic is too low for an A/B on the site (about 400-700 humans a month).
+Cheaper signals, in order: (1) ask 5-10 target developers (Discord, peers) "what does this do and would you try it?"
+after 5 seconds on each shortlisted hero, and count correct paraphrases; (2) post the D1 question as a
+discussion (not a launch) and see which phrasing commenters repeat back; (3) the day the benchmark lands, re-score E1.
+
 ## 7. Show HN title (<=80 chars)
 
 Recommended (79 chars):
