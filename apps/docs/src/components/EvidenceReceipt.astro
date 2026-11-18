@@ -51,7 +51,7 @@ const rawJson = JSON.stringify(
                 <div><span class="rm-k">tool calls failed</span><span class="rm-v rm-good">{receipt.toolCallStats.failed}</span></div>
                 <div><span class="rm-k">tokens</span><span class="rm-v">{run.tokensUsed.toLocaleString()}</span></div>
                 <div><span class="rm-k">duration</span><span class="rm-v">{(run.wallMs / 1000).toFixed(1)}s</span></div>
-                <div><span class="rm-k">iterations</span><span class="rm-v">{run.iterations}</span></div>
+                <div><span class="rm-k">reasoning steps</span><span class="rm-v">{run.reasoningSteps}</span></div>
                 <div><span class="rm-k">terminated by</span><span class="rm-v">{receipt.terminatedBy}</span></div>
                 <div><span class="rm-k">verifier</span><span class="rm-v rm-good">{receipt.verifierVerdict ?? 'n/a'}</span></div>
                 <div><span class="rm-k">signature</span><span class="rm-v">{signature ? signature.alg : 'unsigned'}</span></div>

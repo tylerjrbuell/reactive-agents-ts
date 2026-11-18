@@ -128,6 +128,13 @@
       "invoke": "bun apps/docs/scripts/generate-golden-run.ts"
     },
     {
+      "id": "apps/docs/scripts/golden-run-timeline.ts",
+      "path": "apps/docs/scripts/golden-run-timeline.ts",
+      "kind": "docs",
+      "summary": "Pair golden-run tool rows to trace events by tool name and time",
+      "invoke": "bun apps/docs/scripts/generate-golden-run.ts"
+    },
+    {
       "id": "apps/docs/scripts/golden-run-freshness.ts",
       "path": "apps/docs/scripts/golden-run-freshness.ts",
       "kind": "check",

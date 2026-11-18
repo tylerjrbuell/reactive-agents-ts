@@ -15,7 +15,7 @@ const DESCRIPTIONS: Record<string, string> = {
     guardrail: 'Block injection, PII, toxicity pre-LLM',
     'cost-route': 'Pick cheapest capable model tier',
     'strategy-select': 'ReAct · Reflexion · Plan-Execute · ToT',
-    think: 'LLM reasoning step (one of N iterations)',
+    think: 'LLM reasoning pass (one per model turn in the loop)',
     act: 'Tool execution + healing pipeline',
     observe: 'Append tool results, curate context',
     verify: 'Entropy, fact decomposition, NLI check',

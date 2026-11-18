@@ -20,6 +20,7 @@
  */
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { buildTimelineSkeleton, toolStartsFromTrace, type HookEntry, type ToolStart } from "./golden-run-timeline";
 
 const DOCS_DIR = resolve(import.meta.dirname, "..");
 const REPO_ROOT = resolve(DOCS_DIR, "../..");
@@ -89,11 +90,11 @@ const canonicalPhases = (): string[] => {
 // inside the loop" legend already on the Architecture-at-a-Glance section).
 const LOOP_PHASES = new Set(["think", "act", "observe"]);
 
-interface HookEntry {
-  readonly phase: string;
-  readonly timing: "before" | "after";
-  readonly t: number;
-}
+/** Real tool-call start times from the capture's trace file, when present. */
+const traceStarts = (dir: string, file: string): ToolStart[] | undefined => {
+  const p = join(dir, file);
+  return existsSync(p) ? toolStartsFromTrace(readFileSync(p, "utf-8")) : undefined;
+};
 interface ReasoningStep {
   readonly type: "thought" | "action" | "observation";
   readonly content?: string;
@@ -124,6 +125,7 @@ interface RunJson {
     readonly metadata: {
       readonly strategyUsed?: string;
       readonly iterations?: number;
+      readonly stepsCount?: number;
       readonly tokensUsed?: number;
       readonly cost?: number;
       readonly reasoningSteps?: readonly ReasoningStep[];
@@ -153,23 +155,11 @@ const argsPreview = (name: string, args: Record<string, unknown> | undefined): s
 };
 
 /** Phases, tool calls, playback timeline and debrief derived from one captured run. */
-const transform = (run: RunJson) => {
+const transform = (run: RunJson, toolStarts?: readonly ToolStart[]) => {
 
-  // Aggregate the real hook log into per-phase fire counts, in canonical
-  // 12-phase order. A phase absent from the log genuinely did not run for
-  // this config — shown as "opt-in, not configured" rather than hidden, since
-  // that's itself evidence of the composable "nothing runs uninvited" claim.
-  const counts = new Map<string, number>();
-  for (const e of run.hookLog) {
-    if (e.timing !== "before") continue;
-    counts.set(e.phase, (counts.get(e.phase) ?? 0) + 1);
-  }
-  const phases = canonicalPhases().map((name) => ({
-    name,
-    fired: counts.has(name),
-    count: counts.get(name) ?? 0,
-    loop: LOOP_PHASES.has(name),
-  }));
+  // Phases are counted below from the displayed rows, in canonical 12-phase order. A phase absent
+  // from the log genuinely did not run for this config: shown as "opt-in, not configured" rather
+  // than hidden, since that's itself evidence of the composable "nothing runs uninvited" claim.
 
   // Real per-call detail for the expandable trace rows: the thought that
   // preceded this action, and the observation/result it produced. For a
@@ -210,37 +200,46 @@ const transform = (run: RunJson) => {
   // no matching real tool call — when the act-hook count outruns the real
   // toolCalls array, that's it: fall through to a plain phase tick rather
   // than render an empty tool row.
-  const beforeEvents = run.hookLog.filter((e) => e.timing === "before");
-  const t0 = beforeEvents[0]?.t ?? 0;
-  let actCursor = 0;
-  const timeline = beforeEvents.map((e) => {
-    const atMs = e.t - t0;
-    if (e.phase === "act" && actCursor < toolCalls.length) {
-      const tc = toolCalls[actCursor];
-      actCursor += 1;
+  // Tool rows are paired to hooks by tool name + time (see golden-run-timeline.ts); the runtime fires
+  // several `act before` hooks per call, so zipping the N-th hook to the N-th call is wrong. Hooks that
+  // match no call (per-turn duplicates, the engine's post-kernel bookkeeping block) are dropped.
+  const skeleton = buildTimelineSkeleton(run.hookLog, toolCalls.map((t) => t.name), toolStarts);
+  const timeline = skeleton.map((r) => {
+    if (r.toolIndex !== null) {
+      const tc = toolCalls[r.toolIndex]!;
       return {
-        atMs,
+        atMs: r.atMs,
         kind: "tool" as const,
-        phase: e.phase,
+        phase: r.phase,
         tool: tc.name,
         argsPreview: tc.argsPreview,
         detail: tc.detail,
       };
     }
     return {
-      atMs,
+      atMs: r.atMs,
       kind: "phase" as const,
-      phase: e.phase,
+      phase: r.phase,
       tool: null,
       argsPreview: null,
       detail: null as
         | { thought: string | null; leadsToTool: string | null }
         | { observations: { tool: string; argsPreview: string; result: string | null }[] }
         | { engineWrapper: true }
-        | { outerBatch: true }
         | null,
     };
   });
+
+  // Fire counts follow the rows shown, not raw hook fires: a phase's count must not exceed what the
+  // replay displays (the raw log fires act/observe 2-3x per call).
+  const counts = new Map<string, number>();
+  for (const r of timeline) counts.set(r.phase, (counts.get(r.phase) ?? 0) + 1);
+  const phases = canonicalPhases().map((name) => ({
+    name,
+    fired: counts.has(name),
+    count: counts.get(name) ?? 0,
+    loop: LOOP_PHASES.has(name),
+  }));
 
   // Zip the kernel's `think` ticks to the run's real thought steps in order.
   // Since the duplicate-think fix (iterate-pass.ts now fires `think` hooks
@@ -274,27 +273,11 @@ const transform = (run: RunJson) => {
       const toolsBefore = timeline.slice(0, i).filter((t) => t.kind === "tool").length;
       const seen = toolCalls.slice(toolsConsumedByObserve, toolsBefore);
       toolsConsumedByObserve = toolsBefore;
-      if (seen.length > 0) {
-        // The real observation content per tool result curated into context
-        // by this tick — not a summary label, the actual text.
-        entry.detail = {
-          observations: seen.map((t) => ({ tool: t.name, argsPreview: t.argsPreview, result: t.detail.result })),
-        };
-      } else {
-        // No new tool since the last observe tick: this is the outer
-        // engine's batched pair firing after everything is already
-        // consumed by the kernel's per-round observes (see the `act` case
-        // below for the paired explanation).
-        entry.detail = { outerBatch: true };
-      }
-    }
-    if (entry.phase === "act" && !entry.detail) {
-      // A plain (non-`tool`-kind) `act` phase tick is the outer engine's
-      // batched act+observe pair — see execution-engine.ts's
-      // fireActObserveHooks — genuinely fired once per reasoning() call,
-      // covering every tool that call used, separate from the kernel's own
-      // per-round act+observe pairs above. Not a leftover, not a duplicate.
-      entry.detail = { outerBatch: true };
+      // Observe rows only survive after a tool row, so `seen` is never empty. The real observation
+      // content per tool result curated into context by this tick: the actual text, not a label.
+      entry.detail = {
+        observations: seen.map((t) => ({ tool: t.name, argsPreview: t.argsPreview, result: t.detail.result })),
+      };
     }
   }
 
@@ -328,7 +311,7 @@ const main = (): void => {
     throw new Error(`${runPath} has no capture block (capturedAt/frameworkVersion); recapture with capture-golden-run.ts`);
   }
   const { capture } = run;
-  const { phases, timeline, toolCalls, debrief } = transform(run);
+  const { phases, timeline, toolCalls, debrief } = transform(run, traceStarts(dir, "success-trace.jsonl"));
 
   const out = {
     _source: `Real, unedited live run captured from wiki/Research/Harness-Reports/golden-run-${dirDate}/run.json. GENERATED by apps/docs/scripts/generate-golden-run.ts. Do not hand-edit; regenerate via packages/benchmarks/scripts/capture-golden-run.ts.`,
@@ -339,7 +322,9 @@ const main = (): void => {
     run: {
       wallMs: run.wallMs,
       strategy: run.result.metadata.strategyUsed ?? "reactive",
-      iterations: run.result.metadata.iterations ?? 0,
+      // `metadata.iterations` is the reasoning-step count (stepsCount: thought + action + observation
+      // per tool turn), not kernel turns; exported under its honest name.
+      reasoningSteps: run.result.metadata.stepsCount ?? run.result.metadata.iterations ?? 0,
       tokensUsed: run.result.metadata.tokensUsed ?? 0,
       cost: run.result.metadata.cost ?? 0,
     },
@@ -359,7 +344,7 @@ const main = (): void => {
   if (existsSync(failedPath)) {
     const f = JSON.parse(readFileSync(failedPath, "utf-8")) as RunJson;
     if (f.capture?.maxIterations == null) throw new Error(`${failedPath}: capture.maxIterations missing`);
-    const ft = transform(f);
+    const ft = transform(f, traceStarts(dir, "failed-trace.jsonl"));
     // The failed run's metadata.iterations is deliberately NOT exported: it counts
     // something other than the cap (see the capture README), so the page shows the cap.
     const failedOut = {
