@@ -80,6 +80,32 @@ agent.withHarness({
 | `actOrAnswer` | `boolean \| "proactive" \| "auto"` | `false` | `RA_ACT_OR_ANSWER` (`=1`, `=proactive` or `=auto`) |
 | `inputCoverage` | `boolean` | `false` | `RA_INPUT_COVERAGE` (`=1`) |
 | `parallelToolHint` | `boolean \| "always"` | `true` (calibration-gated) | `RA_PARALLEL_TOOL_HINT` (`=0` to disable, `=always` to force) |
+| `budgetAnswerTurn` | `boolean` | `true` | `RA_BUDGET_ANSWER_TURN` (`=0` to disable) |
+| `leanFinalTurn` | `boolean` | `false` | `RA_LEAN_FINAL_TURN` (`=1`) |
+| `planBudget` | `boolean` | `false` | `RA_PLAN_BUDGET` (`=1`); see [Plan then execute](/guides/plan-then-execute/) |
+| `autoTick` | `boolean` | `true` | `RA_AUTO_TICK` (`=0` to disable) |
+| `bookkeepingRefund` | `boolean` | `true` | `RA_BOOKKEEPING_REFUND` (`=0` to disable) |
+| `repetitionBackstop` | `{ maxCalls?, iterationFraction? }` | `{ iterationFraction: 0.75 }` | none — config-only |
+
+`budgetAnswerTurn` is on by default since v0.19.0. When a run holds tool
+evidence and only the answer is missing, the last think call its iteration
+budget allows ships with no tools, so the model writes its answer instead of a
+tool call nobody would answer. The harness never writes the answer, and a run
+with no evidence still fails. A guard stop (such as the dispatcher early-stop)
+that would end such a run without an answer also gets this one turn.
+
+`leanFinalTurn` (opt-in): once the run's declared tool work is done and only
+the answer is left, the next call ships with no tools and thinking off.
+
+`autoTick` closes the model's open to-do rows that a successful tool call
+evidences (by the row's tool hint), and `bookkeepingRefund` stops a round that
+only updated the to-do list, or whose calls were all refused as duplicates,
+from spending an iteration (bounded). Rows with no evidence stay open and are
+listed as `unresolved` on `result.metadata.extensions.checklist`.
+
+`repetitionBackstop` caps how many times one tool may run with new arguments
+while its results still add information: `ceil(maxIterations * iterationFraction)`
+iterations' worth of calls, or a plain `maxCalls` count, which wins.
 
 `actOrAnswer: true` handles a turn where the model replies without calling a
 tool while tool work is still outstanding (a required tool not yet called, a

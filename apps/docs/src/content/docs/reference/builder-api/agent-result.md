@@ -123,6 +123,11 @@ source it was verified against (`packages/runtime/src/reactive-agent.ts`,
    - **Any other engine rejection** is unwrapped, fed to `.withErrorHandler()`
      if registered, and re-thrown as a run-boundary error
      (`reactive-agent.ts` — the tail of the `execute().catch`).
+   - **The rejection type** is `AgentRunError` (exported from
+     `reactive-agents`), a one-line message such as a provider 401. Left
+     uncaught it prints as that one line; the full error, with its remediation
+     hint, is on `err.cause`. `RA_DEBUG_ERRORS=1` rejects with the full error
+     and stack instead.
 
    Unifying the bare-builder throw contract with the result-returning contract
    is **deferred to a future breaking release**. Until then this asymmetry is

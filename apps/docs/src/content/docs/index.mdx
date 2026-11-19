@@ -269,29 +269,29 @@ No API key? Use `provider: 'ollama'` with a pulled model (`ollama pull qwen3:4b`
 <div class="ra-section-card ra-panel">
   <div class="ra-panel-inner">
 
-## New in v0.18.0
+## New in v0.19.0
 
-v0.18.0 makes a run's workspace, skills, and tool evidence belong to that run, so agents stop leaking state between runs and sub-agents. It also gives tools and chat explicit controls and lets images reach every major provider.
+v0.19.0 makes an agent quiet and private unless you ask otherwise, makes every finished run say plainly how it ended and what it cost, and lets any durable run be stopped and continued. Several defaults changed: read the upgrade notes first.
 
 <div class="ra-release-cards">
 <CardGrid>
-    <Card title="Workspaces that follow the run" icon="setting">
-        Set a working directory with `.withTools({ workspace })`, override it per run with `agent.run(task, { workspace })`, and keep each agent's documents in its own store.
+    <Card title="Honest outcomes" icon="approve-check">
+        Every run carries `result.outcome` (`success`, `partial`, `failed` or `abstained`). A failed run ships an empty `output` and the cause on `result.error`.
 
-        [Build a workspace-scoped coding agent](/cookbook/workspace-and-skills/)
+        [Read AgentResult](/reference/builder-api/agent-result/)
     </Card>
-    <Card title="Skills loaded on demand" icon="approve-check">
-        `.withSkills()` discovers `.agents/skills` in the run's workspace with no arguments. `activate-skill` loads a skill mid-run and keeps it through context compaction.
+    <Card title="Costs that match the bill" icon="setting">
+        Calls are priced per model from a bundled price list, an unknown price is reported as unknown, and `await result.totalCost?.()` gives the billed total.
 
-        [Read the Tools guide](/guides/tools/)
+        [Read Cost Tracking](/features/cost-tracking/)
     </Card>
-    <Card title="Tool limits and images" icon="approve-check">
-        Cap calls per tool with `.withTools({ maxCallsPerTool })`, override risk levels, and send tool-returned and message images to OpenAI, LiteLLM, Ollama, and Gemini models.
+    <Card title="Stop, pause and continue" icon="setting">
+        `agent.resumeRun(runId)` continues a durable run that a stop, pause, budget, timeout or crash ended, and `agent.plan()` returns a typed plan to execute.
 
-        [Read the Tools guide](/guides/tools/)
+        [Read Durable Execution](/guides/durable-execution/)
     </Card>
-    <Card title="Deploy and observe" icon="setting">
-        Scaffold a Cloudflare Worker agent and export OpenInference traces to Langfuse with one preset.
+    <Card title="Channels to any agent" icon="approve-check">
+        `.withChannels()` routes Telegram, Signal and webhook conversations to any agent, and unknown senders are rejected by default.
 
         [See the release highlights](/guides/whats-new/)
     </Card>

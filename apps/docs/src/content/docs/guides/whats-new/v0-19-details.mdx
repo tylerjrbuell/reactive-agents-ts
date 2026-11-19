@@ -1,7 +1,7 @@
 ---
-title: v0.19 security hardening and Cortex
+title: v0.19 release details
 description: >-
-  Detail for v0.19.0: every security hardening change and the Cortex changes (November 2026).
+  Detail for v0.19.0: harness and strategy fixes, CLI, gateway and channels, every security hardening change, and the Cortex changes (November 2026).
 sidebar:
   order: 0
 topic: releases
@@ -11,7 +11,70 @@ related:
   - features/cortex
 ---
 
-The headline, new defaults, breaking changes and the upgrade checklist for v0.19.0 are on [What's New](/guides/whats-new/). This page carries the security hardening and Cortex detail for the same release.
+The headline, new defaults, breaking changes and the upgrade checklist for v0.19.0 are on [What's New](/guides/whats-new/). This page carries the harness, CLI, gateway, security hardening and Cortex detail for the same release.
+
+## Harness and strategies
+
+These change how a run ends or what the model sees, with no code change. Every switch named here is a `.withHarness()` key; see [Harness Control](/features/harness-control/).
+
+**Honest endings**
+
+- **An honest decline is an abstention.** When a required tool failed on every call (permanent errors such as ENOENT or 404 settle after one) and the model says it cannot answer for lack of input, the run ends `abstained` with the model's own words, including when the decline came in the same turn as a call a guard dropped. Before, it ended `failed` with "stopped before the model wrote a final answer". `actOrAnswer` no longer forces another call of a tool the model has declined over.
+- **A strategy body that fails ends like any other run.** A failed direct model call, an unparseable plan or a refused configuration ends `failed` with `Strategy execution failed (<strategy>): <message>` on `error`, keeping the run's steps and spend. `rax-diagnose` names it `strategy-error`.
+- **A run stopped before any answer** says it was stopped on request instead of "no grounded answer".
+- **Fabrication checks.** A bare time projection from printed timings ("100000 items takes 650 ms") ships with an advisory warning instead of failing; invented before/after or percent benchmark figures fail.
+- **Advisory verifier verdicts log at debug level**, labelled "Advisory check on the model's answer (answer kept)", so a kept answer prints no warning line.
+
+**Multi-pass strategies keep their work**
+
+- **Every pass runs on the run's model settings.** Reflexion passes, tree-of-thought branches and plan-execute steps ran as provider `unknown` on the mid profile (a 32,768-token window and a smaller think budget). They now get the run's provider, context profile, calibration mode and iteration budget.
+- **The last tool batch runs.** A pass that stops on its own iteration cap runs the calls its last think proposed while the run still has budget, instead of dropping them. When those results arrive after the draft was written, one bounded synthesis call writes the answer from them (recorded as `metadata.unreadResultsSynthesis`).
+- **Stored results survive passes.** A pass seeded with an earlier pass's thread resolves its stored tool results, so a large result is not reduced to a preview.
+- **Reflexion.** The final pass decides the status, so an earlier capped pass no longer vetoes a verified answer. The generate pass gets half the run's iteration budget. A failed final model call no longer ships a draft the critique rejected. The "already completed" list pairs each call with its own result and marks refused calls as not run.
+- **code-action.** A program that returns only an `{ error }` object, or whose every tool call failed, is a failed check, not a success. MCP results arrive decoded from JSON, a repair prompt shows each result's shape, an object result is written up in the form the task asked for, and a repeated sandbox error stops the run early. The approval-policy refusal applies only when a gated tool is callable; `codeActionApprovalConflict` (exported from `reactive-agents`) answers the same question before a run.
+
+**Tool-call guards**
+
+- **The repetition guard watches information, not counts.** Read-only queries with new arguments keep running while their results change; the guard steps in after 2 empty, failed or repeated results, with a backstop of 0.75 of `maxIterations` (iterations' worth of calls). Tune it with `repetitionBackstop: { maxCalls?, iterationFraction? }`.
+- **Duplicate calls.** A refusal names the first listed input not yet read, or the paired output owed. A round whose calls were all refused as duplicates spends no iteration (at most 3 in a row). A write paired with a read in the same round waits for the read.
+- **Hooks.** `before act` hooks fire once per tool call before any call of the turn runs, on every path; `after act` and `observe` hooks see the round's results.
+- **The between-turn environment notice** is shown at most once per run, not once per pass.
+- **Synthesis keeps your format.** It names an output format only when the task does. Every act-phase guard refusal emits a `GuardFiredEmitted` event with `outcome: "block"`.
+
+**Opt-in switches and traces**
+
+- **`leanFinalTurn`** (off): once declared tool work is done, the answer call ships with no tools and thinking off. Its ablation was a reject.
+- **`planBudget`** (off): a plan-seeded run's iteration bound grows to fit the plan, in two stages, the second only after progress. Its ablation measured +15 to 36% tokens with no accuracy lift. Cortex's **Plan budget** switch now shows off too.
+- **Traces name what ran.** `run-started.config` records every resolved harness key and the calibration a run resolved, field by field with its source. `.withCalibration("skip")` now reaches every pass of every strategy, and each run records one `capability-resolved` event naming where its model's limits came from.
+- **Structured strategy steps.** `ReasoningStepCompleted` carries an optional `structured` payload per strategy (tree-of-thought nodes and path, code-action code and result, reflexion critiques, adaptive's choice, plan steps), so a UI can draw a strategy without parsing text.
+- **`@reactive-agents/observe` moves to OpenTelemetry 2.x** (`@opentelemetry/sdk-trace-*` `^2.6`), matching `@reactive-agents/observability`, so a clean install resolves one copy of each OTel package. Unpriced calls omit `llm.estimated_cost_usd` and spans carry `llm.price_source`. See [OpenTelemetry Tracing](/features/observe/).
+
+## Costs and models
+
+The headline cost and model changes are on [What's New](/guides/whats-new/). Also in this release:
+
+- **Pricing fixes.** A failing `withDynamicPricing` fetch no longer fails `build()` (unless `withStrictValidation()`); it falls back to your `withModelPricing` rows and the bundled snapshot, and your rows now win over remote rows. `.withCostTracking()` records the real input and output token split. Cost routing reads the PriceBook (its own price table is gone), and its Gemini light tier is `gemini-2.5-flash`. See [Cost Tracking](/features/cost-tracking/).
+- **Gemini fixes.** Gemma models on the Gemini provider work again (the thinking field is sent only to models that support thinking), Gemini 3 tool replays keep their `thought_signature`, and a stray leading `thought` line no longer prefixes answers.
+- **MCP output schemas reach the model.** A tool with an `outputSchema` gets a compact `returnType`, which code-action shows as `Returns: <type>`.
+- **`code-execute` retry guidance.** A call whose code never ran (unsupported language, shell input, syntax error) says how to retry, with a runnable example.
+
+## CLI and terminal output
+
+- **`rax` runs on Node 22.5+ without Bun.** The binary's shebang is `node`, so `npx @reactive-agents/cli demo` works on a Node-only machine; `init`, `run`, `playground` and `demo` run on Node, and Node's SQLite notice no longer prints on every command. `rax cortex` and `rax examples suite|demo` still need Bun: they re-run under Bun when it is on `PATH`, otherwise print one "needs Bun" line. Bun stays recommended.
+- **`rax run` fixes.** `--tools` enables the built-in tools again, `--verbose` shows phase lines when piped, `--quiet` prints only the answer on a terminal too, and `--stream` no longer draws the status line over streamed tokens. Scaffolded projects treat the `.env.example` placeholder as a missing key and print the "set `<KEY>`" message instead of a provider 401. See [CLI](/reference/cli/).
+- **Scaffolds are ready for coding agents.** Every new project has an `AGENTS.md` pointing at the current docs and skills. Templates print a failed `build()` or `run()` as one `Error:` line and exit 1, the default Ollama model is `qwen3:4b`, `--provider=xai` writes `grok-4.7`, and an unknown `--template`, `--provider` or `--pm` exits 1 with the valid values.
+- **Help text tells the truth.** `rax help` lists the real `rax init` templates and every `rax diagnose` subcommand, `rax cortex --help` says a non-loopback `--host` needs `CORTEX_TOKEN`, and `NO_COLOR` turns off all `rax` color.
+- **The status line stays bounded.** A terminal that reports 0 columns or 0 rows gets plain lines only; a narrow terminal clips the status line to one row. The `[t: collapse]` hint shows only when the `t` key works.
+- **One error for a bad key.** An uncaught `run()` failure prints one line (`AgentRunError`), not three stacked frames; `err.cause` keeps the detail, and `RA_DEBUG_ERRORS=1` shows the full stack.
+- **`rax-diagnose` without a run of your own.** `@reactive-agents/diagnose` ships `examples/failed-run.jsonl`. `cause` and `attribute` now name strategy errors (`strategy-error`), split trace files holding several runs (`--segment=<n|all>`), and read a status override on a verified answer as a mislabel, not a budget cap. `rax-diagnose replay` shows the run cost. See [`rax-diagnose`](/reference/cli/diagnose/).
+
+## Gateway and channels
+
+- **Durable schedules, ingress server and inbound queue.** `agent.schedules()`, restart catch-up for cron, a webhook and channel ingress server, and a queue so overlapping events are not dropped. See [Gateway](/features/gateway/).
+- **Canonical `ChannelAdapter` contract** with native Signal and Telegram bot adapters. See [Messaging Channels](/guides/messaging-channels/).
+- **Channel routing.** `.withChannels({ adapters, routes, agents })` opens each channel once and routes conversations to any agent by `RouteSpec` rules, fail-closed per route. Non-owner senders get a read-only tool surface (`senderTools`, a tool list, not a prompt). Routes can acknowledge slow turns (fixed text or model-written), owners can send `/new` or `/reset`, and an opt-in SQLite inbox and outbox keep dedupe, turn caps and pending replies across a restart. See [Routes](/guides/messaging-channels/routes/) and [Reliability](/guides/messaging-channels/reliability/).
+- **GitHub webhook replay dedupe and A2A params validation.** The GitHub adapter rejects a replayed `x-github-delivery` id, and the A2A server answers malformed `message/send`, `message/stream`, `tasks/get` and `tasks/cancel` params with JSON-RPC `-32602`. See [A2A Protocol](/features/a2a-protocol/).
+- **Deploy hardening.** Validated agent names, always-on daemon settings per target, and Cloud Run IAM authentication by default (see the breaking changes on [What's New](/guides/whats-new/)). See [`rax deploy`](/reference/cli/#rax-deploy).
 
 ## Security hardening
 
@@ -28,12 +91,19 @@ Behavior changes first. Each one can break an existing setup. See [Security Hard
 - **Owner-only file modes.** New trace, log and exporter directories are `0700` and files `0600`. The same holds for durable-run storage (`runs.db`), memory directories, the memory SQLite file and `memory.md`, scratchpad spill files and `.cortex/`. Existing files keep their current permissions. Agent ids are contained to one path segment in the durable-runs and memory directories.
 - **Redaction covers modern key formats.** Traces, logs and OTel output redact `sk-proj-` keys, OpenRouter, fine-grained GitHub, Slack, Stripe, Groq and xAI keys, PEM private-key blocks, `Basic` credentials and `password=` / `secret=` / `token=` assignments.
 - **Dependencies.** `effect` is pinned to 3.22.4 workspace-wide (AsyncLocalStorage advisory) and `@modelcontextprotocol/sdk` is `^1.32.2`. `client_credentials` and `private_key_jwt` MCP auth accept an optional `expectedIssuer`.
+- **Approval gates cover late tools.** `.withApprovalPolicy()` now gates MCP tools the server marks as writing (`destructiveHint: true` or `readOnlyHint: false`), `.withAgentTool()` sub-agents and `agent.registerTool()` tools with `requiresApproval: true`. Unannotated MCP tools stay ungated unless named in `tools` (`"server/tool"`) or matched by `requireFor`. A server's write hint beats an operator `readOnly` listing.
+- **`before act` hooks can stop a parallel batch.** With parallel batching on, the hooks used to fire after the batch's tools had run, so a killswitch such as `requireApprovalFor` could not block them. They now fire once per call, with the healed tool name, before any call of the turn runs, and an abort stops the whole turn.
 - **Smaller fixes.** A2A and channels bound request bytes and task and session stores; `rax deploy` scaffolds write a `.dockerignore` for `.git` and `.env*`; MCP docker HTTP mode binds `127.0.0.1`; `http-get` drops credential headers on cross-origin redirects.
 
 ## Cortex
 
 Chat composer with a Config popover, `/mcp` and `/btw` commands, a Context tab (active skills and recalled memories), judgments, rich answers, `@` file tags, attachments, and voice (dictation, read aloud, voice mode). See [Cortex](/features/cortex/).
 
+- **A card for every reasoning strategy.** Chat shows a live card for the running strategy: the ReAct loop per iteration, tree of thought as a tree with pruned and selected nodes, reflexion rounds with critique verdicts, code action with code, output and verification, adaptive's choice and why, and plan strategies with per-step retries, patches and failures. The card stays on the turn, collapsed to one line, after it ends and after a reload, including turns resumed by an approval or Continue.
+- **A Thinking pill.** Reasoning leads each turn as a collapsible pill that streams live, and reasoning a model prints into its visible reply moves to the pill instead of reading as the answer.
+- **Model prices and honest run costs.** Model pickers show `$in / $out per 1M`, `free (local)` or `price unknown`, the model page has a **Price** section, and a provider's list sorts by price. Run costs add only priced calls; a partial total reads as a lower bound (`≥ $0.012`). When a live model list fails, pickers show every known model with the reason, PriceBook-only ids under "Known models (not confirmed live)".
+- **Continue starts a linked run.** Chat Continue, the Runs page "Can continue" strip and Resume of a crashed run start a new run marked "continued from" its parent, each with its own trace. Stop and Pause show at once, and editing right after a Stop no longer fails as busy.
+- **How a run ended.** The to-do outcome reads "To-do 3/5" with each harness-closed row's evidence and an "Unresolved" list, an answer written from unread tool results says so, and a run the strategy accepted after a capped pass reads as completed.
 - **Asks before risky tools by default.** Writing files, running code and the full shell wait for your approval in chat and desk runs; gateway agents refuse them. Turn it off with **Ask before risky tools** in Lab Tools or `/approvals` in chat. The framework's own default is unchanged. See [Approvals and questions](/features/cortex/approvals-and-questions/).
 - **One command surface.** Typing `/` and the Config button open the same anchored list, with each setting beside its slash command and current value. Esc goes back one level, then closes. See [Chat and composer](/features/cortex/chat-and-composer/).
 - **One styled `Select`.** Every pick list uses it: search from nine options, grouped options, keyboard support. The Beacon settings panel closes on an outside click or Esc.

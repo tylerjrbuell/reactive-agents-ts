@@ -19,9 +19,9 @@ A quick-scan guide to what has landed in each release. Start here when returning
 
 ---
 
-## v0.19.0 - Opt-in defaults, honest outcomes, and channel routing (November 2026)
+## v0.19.0 - Opt-in defaults, honest outcomes, and billed costs (November 2026)
 
-This release makes an agent quiet and private unless you ask otherwise, makes every finished run say plainly how it ended, routes messaging channels to any agent, and lets any durable run be stopped and continued. Read the defaults first: several change an existing agent with no code change.
+This release makes an agent quiet and private unless you ask otherwise, makes every finished run say plainly how it ended and what it cost, adapts to models it has never seen, routes messaging channels to any agent, and lets any durable run be stopped and continued. Read the defaults first: several change an existing agent with no code change.
 
 ### New defaults and breaking changes
 
@@ -46,6 +46,22 @@ With no `verbosity` set, a terminal keeps the `"normal"` live log lines. A serve
 The harness no longer writes text into `output`. A failed run ships `output: ""` (or the model's own last text when the kernel kept it), and the cause is on `result.error`, followed by `What was attempted: N tool call(s) attempted (…), M succeeded.` when recorded. A failed chat turn is recorded as failed, not as an answer. Every finished run now carries `result.outcome`: `"success" | "partial" | "failed" | "abstained"`. `ReasoningStatus` gains `"abstained"`. A run a person stops is an honest `partial` with the answer so far, not a success. Code that showed `output` for failed runs should show `error`. See [AgentResult](/reference/builder-api/agent-result/).
 </Aside>
 
+<Aside type="caution" title="Breaking (types): an unknown price is absent, not 0">
+Every LLM call is now priced from a bundled price list (the PriceBook), so most runs report a different, correct cost: Gemini runs rise, most cached OpenAI and Anthropic runs fall. A model with no known price is no longer guessed: its cost fields are absent and a total that includes it is a lower bound. Four packages change type:
+
+- **core and llm-provider.** `LLMRequestCompleted.estimatedCost` and `TokenUsage.estimatedCost` are optional. Replace `total += e.estimatedCost` with `addCost(total, e.estimatedCost)` or `sumCosts(costs)` from `@reactive-agents/core`; both return `{ usd, complete }`. `calculateCost` is deprecated, drops its pricing argument and returns `number | undefined`: use `priceFor(provider, model)` with `priceUsage(...)`, or set your rates with `withModelPricing`.
+- **runtime and cost.** The stream's `TokenUsage.costUsd` is optional, and so are `costPer1MInput`, `costPer1MOutput` and `ComplexityAnalysis.estimatedCost` in `@reactive-agents/cost`. Handle `undefined`; for a run's billed total use `await result.totalCost?.()`.
+- **ui-core.** `TokenUsage.costUsd` is optional. Sum with `addCallCost` or `foldRunCost` and show a partial total with `formatCostTotal`.
+
+When `result.metadata.costComplete` is `false`, `cost` is a lower bound. See [Cost Tracking](/features/cost-tracking/#how-calls-are-priced).
+</Aside>
+
+<Aside type="caution" title="Changed: iterations count model turns, hooks fire once per phase">
+`result.metadata.iterations` now counts the kernel's model turns across every reasoning pass: a run with 2 tool turns and an answer reports 3, not about 7. `stepsCount` still counts steps. `.withMinIterations(n)` counts turns too: continuation passes run only until the run reaches `n` turns, so a first pass that already used `n` turns runs none.
+
+A `.withHook()` hook fires once per phase occurrence (`bootstrap` used to fire twice). `LifecycleHook` is now a union keyed by `phase`: `think`, `act` and `observe` handlers receive `KernelTurnHookContext | ExecutionContext`, so code that read `ctx.metadata` or other engine fields there without narrowing no longer compiles. Narrow with `"metadata" in ctx`. `interface X extends LifecycleHook` becomes an intersection type. See [Lifecycle Hooks](/guides/hooks/).
+</Aside>
+
 <Aside type="caution" title="Breaking: gh-cli, git-cli and gws-cli are removed">
 A shell scoped to named programs replaces them. `.withTools({ builtins: ["git"] })` registers a `shell-execute` that runs only `git` and `gh`, and only read-only subcommands (`status`, `log`, `diff`, `fetch`, `gh pr list`, GET `gh api`, ...). Writes such as `commit` and `push` need the full terminal, which asks for approval: `.withTools({ terminal: true, builtins: ["git"] })`. The old names `"gh-cli"` and `"git-cli"` resolve to the scoped shell with a deprecation notice. `"gws-cli"` selects no tool; allow the program on the terminal instead (`.withTools({ terminal: { additionalCommands: ["gws"] } })`). `"all"` no longer grants git or gh. The scoped shell passes git only your `user.name` and `user.email`, so credential helpers from your git config no longer apply. See [Git and GitHub CLIs](/guides/tools/built-in-tools/#git-and-github-clis).
 </Aside>
@@ -62,6 +78,14 @@ A gateway with no `accessControl` now denies every inbound channel sender (Teleg
 
 Other changes you may notice with no code change:
 
+- **The last turn a budget allows is an answer turn.** When a run holds tool evidence and only the answer is missing, its last model call ships with no tools, so the model writes the answer instead of a tool call nobody answers. Such runs now end `completed` with `terminatedBy: "final_answer"` instead of `max_iterations`. The harness never writes the answer. Off: `.withHarness({ budgetAnswerTurn: false })` or `RA_BUDGET_ANSWER_TURN=0`. See [Harness Control](/features/harness-control/).
+- **The parallel tool hint is on.** For models whose calibration rates parallel calls `reliable`, the system prompt asks for independent tool calls in one reply (the default mid, large and frontier prompts already said so). Off: `.withHarness({ parallelToolHint: false })`.
+- **Approval policies gate tools added after `build()`.** Under `.withApprovalPolicy()`, MCP tools the server marks as writing, `.withAgentTool()` sub-agents and `agent.registerTool()` tools with `requiresApproval: true` now wait for approval. Before, they ran unasked. See [Durable HITL](/guides/durable-hitl/).
+- **xAI's default model is `grok-4.7`.** `grok-4` left xAI's price list; it still works but its cost is unknown.
+- **`.withModel("id", { numCtx })` applies its settings.** The second argument used to be dropped silently. A setting `.withModel()` cannot apply (`num_ctx`, `provider`, a non-object) now throws `ModelOptionError`, and a declared `numCtx` applies only to that agent, not every agent on the same model id.
+- **A failed `run()` rejects with `AgentRunError`.** Uncaught, it prints one line; the full error is on `err.cause`.
+- **Strategies honor the configured cap.** Tree-of-thought uses your `maxIterations` (it stopped at a tier cap of 6 to 12), and `direct` with tools defaults to 3 iterations, so a tool-calling first turn no longer fails at 1.
+- **`timeoutAfter()` and `watchdog()` clocks are per run.** A timeout covers the whole run, continuation passes included, and no longer fires on the next run once spent.
 - **Chat takes the tool loop when the agent has tools.** `agent.chat()` and `session.chat()` run the kernel whenever the agent has a capability tool (custom, MCP, sub-agent, terminal, opted-in built-in or documents), instead of guessing from the message wording. `.withToolIntent("message")` restores the old wording heuristic; a per-call `{ useTools }` still wins. See [Chat and sessions](/cookbook/chat-and-sessions/).
 - **Small tool sets are visible from turn 1.** When the permitted tool set has 15 or fewer tools, every tool is shown on the first turn instead of being narrowed by keyword relevance. Such agents send more schema tokens per turn; larger sets are unchanged. See [Disclosure](/guides/tools/scoping-and-policy/#disclosure-how-permitted-tools-are-shown).
 - **The to-do wrap-up turn is opt-in.** With `RA_TODO_WRAPUP=1`, if the model answers with open `todo` items, the harness holds the answer for one turn and names them. Off by default because it costs a model call that no ablation has measured. See [Tools](/guides/tools/built-in-tools/).
@@ -84,6 +108,12 @@ Each line keeps the 0.18 behavior or adapts code to the new shape.
 - Judgment shadow (the old auto-wired `nimble` judge): `.withJudgment({ shadow: true })` or `REACTIVE_AGENTS_AUTO_SHADOW=1`.
 - Failed runs: read `result.error` and switch on `result.outcome`; handle `"abstained"` wherever you switch on a status.
 - Token counts: treat `inputTokens` and `outputTokens` as possibly `undefined`.
+- Costs: treat `estimatedCost` and `costUsd` as possibly `undefined`, sum with `addCost` / `sumCosts`, read the billed total from `await result.totalCost?.()`, and replace `calculateCost` with `priceFor` plus `priceUsage`.
+- Hooks: narrow `think` / `act` / `observe` handlers with `"metadata" in ctx`.
+- `withMinIterations(n)`: to keep the old number of continuation passes, add the turns your first pass usually takes to `n`.
+- Budget answer turn: `.withHarness({ budgetAnswerTurn: false })`. Parallel tool hint: `.withHarness({ parallelToolHint: false })`.
+- xAI's old default: `.withModel("grok-4")` (unpriced).
+- `.withModel()` errors: move `provider` to `.withProvider()` and spell the window `numCtx`.
 - Git and GitHub writes: `.withTools({ terminal: true, builtins: ["git"] })` instead of `gh-cli` / `git-cli`.
 - Chat wording heuristic: `.withToolIntent("message")`.
 - Open channels: `accessControl: { accessPolicy: "open" }`, and prefix every sender (`signal:+1555…`, `telegram:123…`).
@@ -103,13 +133,19 @@ Each line keeps the 0.18 behavior or adapts code to the new shape.
 - **JSON Schema `outputSchema` and structured output reports.** See [Typed Structured Output](/guides/structured-output/).
 - **Eval rubric graders.** A case can carry a judgment `rubric`; a grader that cannot decide grades `inconclusive`, never a pass. See [Eval](/features/eval/).
 - **Durable run retention.** `.withDurableRuns({ retention })` bounds the run store: by default the newest 50 `completed` runs within 30 days are kept, with older checkpoints compacted. Resumable runs are never pruned. See [Durable Execution](/guides/durable-execution/#retention).
-- **Verifier advisories are labelled as advisory.** A warn-only verdict logs "Advisory check on the model's answer (answer kept)" instead of reading as a rejection.
-- **`@reactive-agents/observe` moves to OpenTelemetry 2.x** (`@opentelemetry/sdk-trace-*` `^2.6`), matching `@reactive-agents/observability`. A clean install resolves one copy of each OTel package. See [OpenTelemetry Tracing](/features/observe/).
+
+### Costs and models
+
+- **Costs match the bill.** Calls are priced from a committed snapshot of LiteLLM's price list (2026-11-19, cross-checked against the providers' price pages) for Anthropic, OpenAI, Gemini, Groq, xAI and Mistral: per-model input, output, cache read and write, long-context tiers and web search. The old keyword guesses are gone. `withModelPricing` rows always win and accept `cacheRead`, `cacheWrite5m` and `cacheWrite1h`. LiteLLM uses the proxy's reported cost. See [How calls are priced](/features/cost-tracking/#how-calls-are-priced).
+- **One billed total per run.** `await result.totalCost?.()` resolves to `{ usd, complete }`, including the background debrief and any structured-output extraction call; `metadata.cost` stays the spend up to the result. The same value is on the new `RunCostFinalized` event, published once per run. A call cut in flight marks the total incomplete. `chat()` replies carry `costComplete`, traces record `run-cost-finalized`, and `rax run` and scaffolded projects print a partial total as `>= $x (some prices unknown)`. See [Token tracking](/features/cost-tracking/#token-tracking).
+- **Unknown models adapt.** A hosted model the framework does not list runs on a provisional 128,000-token window with native tool calling, not a 2,048-token window without tools. Gemini, Anthropic, LiteLLM and Ollama limits are discovered at build, and a context-limit error that states the real limit is remembered. See [Models the framework does not list](/features/llm-providers/#models-the-framework-does-not-list).
+- **Model lists fall back to known models.** When a live model list fails, `resolveProviderModels` returns the presets plus every model the PriceBook prices for that provider, each with `listedBy`; an exhausted balance reads as reason `"quota"`. See [Live Model Discovery](/features/llm-providers/#live-model-discovery).
+- More pricing, Gemini and model fixes are on [v0.19 release details](/guides/whats-new/v0-19-details/#costs-and-models).
 
 ### Plans, stops and resumes
 
 - **Plan then execute as a primitive.** `agent.plan(input)` returns a typed `Plan`; `agent.execute(plan)` and `agent.run(input, { plan })` run it and report each step's status on `result.plan`. Chat sessions have a `"plan"` or `"execute"` mode (`agent.session({ mode: "plan" })`). Plans export to Markdown, JSON and HTML. Plan recon (`.withHarness({ planRecon: true })`, default off) lets the plan turn call read-only tools. See [Plan then execute](/guides/plan-then-execute/).
-- **Continue any durable run.** `agent.resumeRun(runId, { note?, extraIterations? })` continues a run that a user stopped or paused, an error, a spent budget, a timeout, a loop guard or a crash ended. New `agent.pauseRun(runId)` and `agent.stopRun(runId)`. See [Durable Execution](/guides/durable-execution/#stop-pause-and-continue-any-run).
+- **Continue any durable run.** `agent.resumeRun(runId, { note?, extraIterations? })` continues a run that a user stopped or paused, an error, a spent budget, a timeout, a loop guard or a crash ended. New `agent.pauseRun(runId)` and `agent.stopRun(runId)`. With `{ newRun: true }` the continuation is a new run with its own id and trace file, linked by `result.continuedFrom`. A resume names the run's still-open to-do rows. See [Durable Execution](/guides/durable-execution/#stop-pause-and-continue-any-run).
 - **`agent.stop()` takes effect within about 100 ms**, even inside a long reasoning loop or an in-flight model call.
 - **Approvals without durable runs.** `.withApprovalPolicy({ mode: "detach" })` no longer needs `.withDurableRuns()`: a gated call waits in process until `approveRun` or `denyRun`, and `runStream()` emits `ApprovalRequested` on the same stream. `request_user_input` takes several typed questions in one call. See [Durable HITL](/guides/durable-hitl/#live-approval-no-durable-store).
 - **Approval rules for shell commands.** `.withApprovalPolicy({ commands: ["git push"] })` gates by command, not only by tool. Tools can declare a deterministic `preflight`, and the gate asks it first, so a command the shell would refuse anyway is refused without an approval prompt. See [Shell command rules](/guides/durable-hitl/#shell-command-rules).
@@ -122,25 +158,14 @@ Each line keeps the 0.18 behavior or adapts code to the new shape.
 - **Read-only tools are declared.** `defineTool({ mutatesExternalState: false })` and MCP `readOnly` mark a tool read-only; `toolEffect()` resolves `"read" | "write" | "unknown"`. Channel senders and plan recon use it. See [Custom Tools](/guides/tools/custom-tools/).
 - **Per-agent web search keys.** `.withTools({ webSearch: { apiKeys, providers } })` sets keys and provider order for one agent; explicit keys win over the environment. See [Web Search Configuration](/guides/tools/built-in-tools/#web-search-configuration).
 - **`.withProvider(p, { apiKey })` works for every provider.** Anthropic, Gemini and Ollama used to ignore it. Billing and quota failures classify as their own fatal `quota` error class, and malformed model output fails with `LLMMalformedOutputError`. See [Typed provider errors](/features/llm-providers/#typed-provider-errors).
-- **Tools absorb common call mistakes.** A lone string sent under the wrong key heals to the required parameter, a missing required parameter gets an error that names it and shows a valid call, and `shell-execute` allows `2>&1` and `/dev/null` redirects.
+- **Tools absorb common call mistakes.** A lone string sent under the wrong key heals to the required parameter, a missing required parameter gets an error that names it and shows a valid call, a zero-argument call reaches the tool as `{}`, and `shell-execute` allows `2>&1` and `/dev/null` redirects.
+- **`recall(key, full: true)` returns the stored result.** It used to come back compressed again. Content too large for the window comes in sections (`recall(key, full: true, start: N)`), and the segmented-read parameters work again. An exact repeat of a call that already succeeded replays its result instead of being refused.
+- **`code-execute` runs Python 3** with `language: "python"` (host `python3`, not isolated, like the JavaScript path). See [code-execute](/guides/tools/built-in-tools/#code-execute).
+- **To-do lists follow the evidence.** A successful tool call ticks the open row that names it, and rows still open at the end are listed as `unresolved` on `metadata.extensions.checklist`. Off: `.withHarness({ autoTick: false })`.
 
-### CLI and terminal output
+### CLI, channels, harness, security and Cortex
 
-- **`rax run` fixes.** `--tools` enables the built-in tools again, `--verbose` shows phase lines when piped, `--quiet` prints only the answer on a terminal too, and `--stream` no longer draws the status line over streamed tokens. Scaffolded projects treat the `.env.example` placeholder as a missing key and print the "set `<KEY>`" message instead of a provider 401. See [CLI](/reference/cli/).
-- **The status line stays bounded.** A terminal that reports 0 columns or 0 rows gets plain lines only; a narrow terminal clips the status line to one row. The `[t: collapse]` hint shows only when the `t` key works.
-- **One error for a bad key.** An uncaught `run()` failure prints one error block, not three; `err.cause` keeps the detail.
-
-### Gateway and channels
-
-- **Durable schedules, ingress server and inbound queue.** `agent.schedules()`, restart catch-up for cron, a webhook and channel ingress server, and a queue so overlapping events are not dropped. See [Gateway](/features/gateway/).
-- **Canonical `ChannelAdapter` contract** with native Signal and Telegram bot adapters. See [Messaging Channels](/guides/messaging-channels/).
-- **Channel routing.** `.withChannels({ adapters, routes, agents })` opens each channel once and routes conversations to any agent by `RouteSpec` rules, fail-closed per route. Non-owner senders get a read-only tool surface (`senderTools`, a tool list, not a prompt). Routes can acknowledge slow turns (fixed text or model-written), owners can send `/new` or `/reset`, and an opt-in SQLite inbox and outbox keep dedupe, turn caps and pending replies across a restart. See [Routes](/guides/messaging-channels/routes/) and [Reliability](/guides/messaging-channels/reliability/).
-- **GitHub webhook replay dedupe and A2A params validation.** The GitHub adapter rejects a replayed `x-github-delivery` id, and the A2A server answers malformed `message/send`, `message/stream`, `tasks/get` and `tasks/cancel` params with JSON-RPC `-32602`. See [A2A Protocol](/features/a2a-protocol/).
-- **Deploy hardening.** Validated agent names, always-on daemon settings per target, and the Cloud Run auth default above. See [`rax deploy`](/reference/cli/#rax-deploy).
-
-### Security hardening and Cortex
-
-The full lists moved to [v0.19 security hardening and Cortex](/guides/whats-new/v0-19-details/). Security: the SDK server now needs a bearer key (`RAX_API_KEY`), Cortex off loopback needs `CORTEX_TOKEN`, file tools refuse secret paths, shell escapes and SSRF forms are closed, and new files are owner-only. Cortex: risky tools ask for approval by default, durable runs are on by default, and calibration switches are in the Builder. See [Security Hardening](/guides/security-hardening/) and [Cortex](/features/cortex/).
+The full lists are on [v0.19 release details](/guides/whats-new/v0-19-details/). CLI: `rax` runs on Node 22.5+ without Bun (Bun stays recommended), scaffolds ship an `AGENTS.md`, a failed `run()` prints one line, and `rax-diagnose` ships a sample failed run. Channels: `.withChannels({ adapters, routes, agents })` routes each conversation to any agent, with native Signal and Telegram adapters and durable schedules. Harness: honest declines end `abstained`, multi-pass strategies (reflexion, plan-execute, code-action) keep their evidence and their last tool batch, and code-action no longer reports an error object as success. Security: the SDK server now needs a bearer key (`RAX_API_KEY`), Cortex off loopback needs `CORTEX_TOKEN`, file tools refuse secret paths, shell escapes and SSRF forms are closed, `before act` hooks can stop a parallel batch, and new files are owner-only. Cortex: a live card for every reasoning strategy, model prices in every picker, Continue starts a linked run, risky tools ask for approval by default and durable runs are on by default. See [Security Hardening](/guides/security-hardening/) and [Cortex](/features/cortex/).
 
 ---
 

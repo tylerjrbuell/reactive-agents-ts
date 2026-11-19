@@ -150,7 +150,7 @@ const agent = await ReactiveAgents.create()
 | `.withCortex(url?)` | optional URL | Cortex desk server integration |
 | `.withHealthCheck()` | — | Self-monitoring health endpoint |
 | `.withErrorHandler(fn)` | `(err, ctx) => void` | Custom error handling callback |
-| `.withHook(hook)` | `LifecycleHook` | Lifecycle callbacks (beforeRun, afterStep, etc.) |
+| `.withHook(hook)` | `LifecycleHook` (`{ phase, timing, handler }`) | Lifecycle callbacks, once per phase occurrence. Engine phases (`bootstrap` … `complete`) get `ExecutionContext`; `think` / `act` / `observe` get `KernelTurnHookContext \| ExecutionContext`: narrow with `"metadata" in ctx` before reading engine fields |
 | `.withSelfImprovement()` | — | Meta-learning from past runs |
 | `.withExperienceLearning()` | — | Injects prior-run experience tips into context |
 

@@ -206,9 +206,20 @@ const agent = await ReactiveAgents.create()
 
 ## Live Model Discovery
 
-`listProviderModels` asks a provider which models it serves right now, and `resolveProviderModels` does the same but falls back to the built-in preset list when discovery fails or no key is set, so UIs need no code change per model release. Anthropic, OpenAI, Gemini, Groq, xAI, LiteLLM and Ollama are supported. Listings are cached for 10 minutes per provider, endpoint and hashed credential; failures are never cached. A key is sent only to its own provider's host, and redirects are not followed. Inactive Groq models are skipped. For free-text model ids the fallback never blocks you from typing one.
+`listProviderModels` asks a provider which models it serves right now, and `resolveProviderModels` does the same but falls back to every model the framework knows when discovery fails or no key is set: the presets first, then each chat model the bundled price list prices for that provider. Each row says where it came from (`listedBy: "live" | "static" | "price-book"`), and an out-of-credits or spending-limit refusal fails with `ModelDiscoveryError` reason `"quota"`. UIs need no code change per model release. Anthropic, OpenAI, Gemini, Groq, xAI, LiteLLM and Ollama are supported. Listings are cached for 10 minutes per provider, endpoint and hashed credential; failures are never cached. A key is sent only to its own provider's host, and redirects are not followed. Inactive Groq models are skipped. For free-text model ids the fallback never blocks you from typing one.
 
 OpenAI `gpt-5*` and o-series ids send `max_completion_tokens` and omit `temperature`, which those models reject.
+
+### Models the framework does not list
+
+A model id with no row in the built-in capability table still gets usable limits:
+
+- **Discovery.** At build, Ollama (`/api/show`), Gemini (`models.get`), Anthropic (`GET /v1/models/{id}`) and LiteLLM (`/model/info`) are asked once per model and process for the input limit, output limit and thinking or vision support. OpenAI states no limits, so it relies on the next rule.
+- **Provisional window.** An unknown model on a hosted provider (Anthropic, OpenAI, Gemini, Groq, xAI) runs on a 128,000-token window with native tool calling (Groq and xAI 131,072), marked `provisional: true` in the `capability-resolved` trace event. An unknown LiteLLM model keeps the conservative 2,048-token fallback, because a proxy often fronts a local model that truncates silently.
+- **Learned limits.** When a provider rejects a request with an error that states the real limit ("maximum context length is 64000 tokens"), that limit is recorded for the model, so the next resolve uses it. The request is not retried. `learnedCapabilityLimitFor(provider, model)` lists what was learned.
+- **Gemini variants.** Ids such as `gemini-flash-latest` or a dated `-preview` take the limits of the nearest listed model of the same variant (pro, flash or flash-lite).
+
+Static table rows always win over discovered and learned values. To set a window yourself, `.withModel({ model, numCtx })`; it applies only to that agent.
 
 ## Model Presets
 
