@@ -46,8 +46,15 @@ const toolDef = (name: string) => ({
 interface Counts { read: number; write: number }
 interface Hooks { readonly onRead?: () => void; readonly onWrite?: () => void }
 
-const agentOf = (dir: string, counts: Counts, script: readonly unknown[], hooks: Hooks = {}, maxIterations = 12) =>
-  ReactiveAgents.create()
+const agentOf = (
+  dir: string,
+  counts: Counts,
+  script: readonly unknown[],
+  hooks: Hooks = {},
+  maxIterations = 12,
+  harness?: { budgetAnswerTurn?: boolean },
+) => {
+  const b = ReactiveAgents.create()
     .withName("interrupt-subject")
     .withSystemPrompt("You research then write.")
     .withTestScenario(script as never)
@@ -59,8 +66,9 @@ const agentOf = (dir: string, counts: Counts, script: readonly unknown[], hooks:
     })
     .withReasoning()
     .withMaxIterations(maxIterations)
-    .withDurableRuns({ dir, checkpointEvery: 1 })
-    .build();
+    .withDurableRuns({ dir, checkpointEvery: 1 });
+  return (harness ? b.withHarness(harness) : b).build();
+};
 
 const FIRST_RUN = [
   { toolCall: { name: "read-tool", args: { q: "a" } } },
@@ -202,17 +210,18 @@ describe("a user stop or pause leaves the run continuable", () => {
 });
 
 describe("a run that ended failed is resumable", () => {
-  it("a spent budget: status failed, kind budget, resumable; extraIterations continues it without repeating completed tools", async () => {
+  const SPENT_BUDGET_SCRIPT = [
+    { toolCall: { name: "read-tool", args: { q: "a" } } },
+    { toolCall: { name: "write-tool", args: { q: "one" } } },
+    { toolCall: { name: "write-tool", args: { q: "two" } } },
+    { toolCall: { name: "write-tool", args: { q: "three" } } },
+    { text: "FINAL ANSWER: done." },
+  ];
+
+  it("a spent budget (answer turn off): status failed, kind budget, resumable; extraIterations continues it without repeating completed tools", async () => {
     await withTempDir(async (dir) => {
       const counts: Counts = { read: 0, write: 0 };
-      const script = [
-        { toolCall: { name: "read-tool", args: { q: "a" } } },
-        { toolCall: { name: "write-tool", args: { q: "one" } } },
-        { toolCall: { name: "write-tool", args: { q: "two" } } },
-        { toolCall: { name: "write-tool", args: { q: "three" } } },
-        { text: "FINAL ANSWER: done." },
-      ];
-      const agent = await agentOf(dir, counts, script, {}, 2);
+      const agent = await agentOf(dir, counts, SPENT_BUDGET_SCRIPT, {}, 2, { budgetAnswerTurn: false });
       const first = await agent.run(TASK);
       expect(first.success).toBe(false);
       const row = await rowOf(agent, first.runId!);
@@ -223,11 +232,33 @@ describe("a run that ended failed is resumable", () => {
       expect(counts).toEqual({ read: 1, write: 0 });
       await agent.dispose();
 
-      const second = await agentOf(dir, counts, [{ text: "FINAL ANSWER: done." }]);
+      const second = await agentOf(dir, counts, [{ text: "FINAL ANSWER: done." }], {}, 12, { budgetAnswerTurn: false });
       const result = await second.resumeRun(first.runId!, { extraIterations: 6 });
       expect(result.success).toBe(true);
       // The pending call runs once on resume; the completed read never repeats.
       expect(counts).toEqual({ read: 1, write: 1 });
+      await second.dispose();
+    });
+  });
+
+  it("a spent budget (answer turn on, the default): status failed, kind budget, resumable; extraIterations finishes it with nothing pending", async () => {
+    await withTempDir(async (dir) => {
+      const counts: Counts = { read: 0, write: 0 };
+      const agent = await agentOf(dir, counts, SPENT_BUDGET_SCRIPT, {}, 2);
+      const first = await agent.run(TASK);
+      expect(first.success).toBe(false);
+      const row = await rowOf(agent, first.runId!);
+      expect(row?.status).toBe("failed");
+      expect(row?.stop?.kind).toBe("budget");
+      expect(row?.resumable).toBe(true);
+      expect(counts).toEqual({ read: 1, write: 0 });
+      await agent.dispose();
+
+      const second = await agentOf(dir, counts, [{ text: "FINAL ANSWER: done." }]);
+      const result = await second.resumeRun(first.runId!, { extraIterations: 6 });
+      expect(result.success).toBe(true);
+      // The write was asked for on the tools-withheld answer turn and refused; nothing is pending.
+      expect(counts).toEqual({ read: 1, write: 0 });
       await second.dispose();
     });
   });
