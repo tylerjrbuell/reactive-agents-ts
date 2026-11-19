@@ -58,6 +58,13 @@
       "invoke": "bun --env-file=.env .agents/skills/harness-improvement-loop/scripts/probe-qa-strategy-matrix.ts --out <results.json> --trace-root <dir> --model <model> --provider <provider>"
     },
     {
+      "id": ".agents/skills/harness-improvement-loop/scripts/probe-gemini-thought-signature.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/probe-gemini-thought-signature.ts",
+      "kind": "research",
+      "summary": "Live check that the Gemini provider replays thoughtSignature on tool-call history (expects 200, not 400)",
+      "invoke": "bun --env-file=.env .agents/skills/harness-improvement-loop/scripts/probe-gemini-thought-signature.ts"
+    },
+    {
       "id": ".agents/skills/harness-improvement-loop/scripts/validate-entropy.ts",
       "path": ".agents/skills/harness-improvement-loop/scripts/validate-entropy.ts",
       "kind": "research",
