@@ -2255,3 +2255,14 @@ bypass-reason: "original edits made on main thread without routing; this entry c
   spend-usd: 0
   files: [wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/RESULTS-OFFLOAD.md, wiki/Research/Harness-Reports/2026-11-13-local-model-campaign/manifest-offload.jsonl]
 ```
+
+```yaml
+- date: 2026-11-19
+  warden: main-thread (bypass)
+  task: pin-bun-types-dist-tag
+  state: completed
+  bypass-reason: "hot-fix to red CI on main: nightly Eval Suite failed `bun install --frozen-lockfile` ('lockfile had changes, but lockfile is frozen') on unchanged 557671384 after bun-types 1.4.5 was published 2026-11-19T08:56Z. 33 workspace package.json files declared \"bun-types\": \"latest\"; a dist tag re-resolves on every install. dev's lockfile had 1.4.4 too, so the v0.19.0 push and publish.yml would have failed the same way. One mechanical edit across 33 owners' manifests; no source change."
+  change: "8269d15e6: \"bun-types\": \"latest\" -> \"^1.3.13\" (root package.json's range) in 33 package.json files; bun.lock refreshed (resolves 1.4.5)."
+  verification: "bun install --frozen-lockfile clean; bun run typecheck 72/72 (0 cached)"
+  follow-up: "tooling-warden: gate forbidding dist-tag specifiers in workspace manifests; repo ci reused the host bun cache, so its frozen install missed the drift"
+```
