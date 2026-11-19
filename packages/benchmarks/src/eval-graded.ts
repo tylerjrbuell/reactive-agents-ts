@@ -12,6 +12,7 @@ import { join } from "node:path"
 import { loadTrace, toolProvenanceOf } from "@reactive-agents/trace"
 import type { EvalGradedEvent, ToolProvenance, TraceEventBase } from "@reactive-agents/trace"
 import { diagnoseRun } from "./diagnose.js"
+import { runEvidenceOf, type RunEvidence } from "./fabrication-count.js"
 import type { BenchDimensionScore, RunDiagnosis } from "./types.js"
 
 /** An `eval-graded` event before the trace base fields (runId/seq/iter/timestamp) are stamped. */
@@ -108,6 +109,22 @@ export async function toolProvenanceFromTrace(
   if (!traceDir || !traceId) return undefined
   try {
     return toolProvenanceOf(await loadTrace(join(traceDir, `${traceId}.jsonl`)))
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * What a recorded run's real tools printed (scorer v3 fabrication count).
+ * `undefined` when there is no trace or it cannot be read.
+ */
+export async function runEvidenceFromTrace(
+  traceDir: string | undefined,
+  traceId: string | undefined,
+): Promise<RunEvidence | undefined> {
+  if (!traceDir || !traceId) return undefined
+  try {
+    return runEvidenceOf(await loadTrace(join(traceDir, `${traceId}.jsonl`)))
   } catch {
     return undefined
   }

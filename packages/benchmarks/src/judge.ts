@@ -5,6 +5,7 @@ import type { BenchDimensionScore, BenchmarkTask, DimensionScore, QualityDimensi
 import { measuredRuns } from "./report-format.js"
 import type { JudgeLayerResult, JudgeRequest, JudgeResponse } from "@reactive-agents/judge-server"
 import { isHonestDecline, type EvalGradedCheck, type ToolProvenance } from "@reactive-agents/trace"
+import { FABRICATION_CHECK, FABRICATION_CHECKED_TASKS, fabricatedFigures, type RunEvidence } from "./fabrication-count.js"
 
 // ── Deliverable collection (grading-channel fix) ─────────────────────────────
 //
@@ -416,6 +417,7 @@ export async function scoreTask(
   opts?: JudgeRpcOptions,
   terminatedBy?: string,
   provenance?: RunToolProvenance,
+  evidence?: RunEvidence,
 ): Promise<ReadonlyArray<BenchDimensionScore>> {
   const scores: BenchDimensionScore[] = []
 
@@ -511,6 +513,23 @@ export async function scoreTask(
   }
 
   } // end else (non-trap accuracy block)
+
+  // Scorer v3: figures the final answer states that no tool printed and the task did not give.
+  // Counted as one more check in the partial-credit ratio, so a fabricating run never reads solved.
+  // Needs the run's trace evidence; without it (no trace) the cell is graded on its artifacts only.
+  if (evidence !== undefined && FABRICATION_CHECKED_TASKS.has(task.id)) {
+    const i = scores.findIndex((d) => d.dimension === "accuracy")
+    if (i >= 0) {
+      const acc = scores[i]!
+      const invented = fabricatedFigures(output, task.prompt, evidence)
+      const checks = [...(acc.checks ?? []), {
+        name: FABRICATION_CHECK, passed: invented.length === 0,
+        ...(invented.length > 0 ? { detail: `invented: ${invented.map((n) => `${n}%`).join(", ")}` } : {}),
+      }]
+      const passed = checks.filter((c) => c.passed).length
+      scores[i] = { ...acc, checks, ...(invented.length > 0 ? { score: Math.min(acc.score, passed / checks.length) } : {}) }
+    }
+  }
 
   // A premature abstention on a solvable task: reported, never folded into accuracy.
   if (abstained && task.abstainExpected !== true) {

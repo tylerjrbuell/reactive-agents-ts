@@ -87,7 +87,8 @@ describe("premature abstention on a solvable task", () => {
 
 describe("SCORER_VERSION", () => {
   it("is the new version and results files without it read as legacy", () => {
-    expect(SCORER_VERSION).toBe(2);
+    expect(SCORER_VERSION).toBe(3);
+    expect(scorerVersionOf({ scorerVersion: 2 })).toBe(2);
     expect(scorerVersionOf({})).toBe(LEGACY_SCORER_VERSION);
     expect(scorerVersionOf({ scorerVersion: SCORER_VERSION })).toBe(SCORER_VERSION);
     expect(scorerVersionOf({ scorerVersion: 7 })).toBe(LEGACY_SCORER_VERSION);

@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os"
 import { dirname, join, resolve, sep } from "node:path"
 import { loadTrace, type TraceEvent } from "@reactive-agents/trace"
+import { runEvidenceOf } from "../fabrication-count.js"
 import { scoreTask } from "../judge.js"
 import { writeFixtures } from "../runner.js"
 import type { BenchmarkTask } from "../types.js"
@@ -115,7 +116,7 @@ export async function regradeCell(input: RegradeCellInput): Promise<RegradeOutco
   let grade: EvalGradedPayload | undefined
   try {
     rebuildWorkspace(task, trace.events, dir)
-    const dims = await scoreTask(output, task, dir, 0, 0, NO_JUDGE, terminatedBy)
+    const dims = await scoreTask(output, task, dir, 0, 0, NO_JUDGE, terminatedBy, undefined, runEvidenceOf(trace))
     grade = buildEvalGraded(dims, {
       taskId: task.id, source: "trace-regrade",
       ...(input.suiteHash !== undefined ? { suiteHash: input.suiteHash } : {}),
