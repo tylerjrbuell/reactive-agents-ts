@@ -214,3 +214,55 @@ Selection caveat still applies: refusals occur in already-looping runs. 3 of 10 
 3. Instrument note (no edit made): the scanner infers "followed the hint" from the first `Already done` text in `llm-exchange`; a trace event carrying the refusal hint would make this exact. Candidate for kernel-warden when touching `guard.ts`.
 
 No `packages/**` file changed in this mission, so `repo verify packages/benchmarks` was not re-run. Ledger: two entries appended to `improvement-ledger.json`.
+
+## Addendum 5 (2026-11-18): decline over a dead tool (`d15d076d0`) and range-expanded refusal (`66531b642`)
+
+Pre-registration: [PREDICTIONS-5.md](PREDICTIONS-5.md), written before the first cell. Build: HEAD `66531b6427ec`, tree clean; reasoning dist sha256 `44afda35…` (contains `no-missing-required` x1, `expandNumberedRange` x2); bench resolves reasoning from `src`. `ollama ps` clean before the first drive; one supervisor at a time; 180 s cells. Specs `a5-A/B/B2.spec.json`, results `a5-A/`, `a5-B/`, `a5-B2/`; scanner `a4-trace-scan.ts` plus two scratch readers (write contents, read/write order). 40 cells, 0 failed units.
+
+### Family A: ab-trap-5, gemma4:e4b, k=10 per arm
+
+| Metric | Predicted | Observed |
+| --- | --- | --- |
+| off solved | 9-10/10 | 10/10 |
+| aoa solved | 9-10/10 | 10/10 |
+| decline-scored-0 across both arms | <= 1 of 20 | 0 of 20 |
+| any lost decline with `rejectedBy: tool-viable` | none | none (no losses) |
+| tokens/run off vs aoa | n/a | 3075 vs 2718 (-12%) |
+
+Verdict: CONFIRMED (rule: <= 1 of 20 losses, each arm >= 8/10). Was 1 of 10 at k=5, 2 of 10 before that. One model, one task: not a KEEP.
+
+### Family B: cogito:8b, default arm
+
+| Cell | Baseline | Predicted | Observed |
+| --- | --- | --- | --- |
+| h3-todo-heavy k=10 solved | 0/10 | 1-3/10 | 0/10 (acc per run 0.17 0 0.17 0 0.17 0.83 0.5 0.67 0.17 0.17) |
+| refusal fired | 7/10 | 4-7 | 7/10 |
+| refusal names the first unread input | 6/7 named, wrong (notes-6) | >= 80% | 7/7 correct (notes-3 x6, notes-4 x1; checked against the reads before the refusal) |
+| model read the named input after | 3/6 | >= 4 | 6/7 |
+| solved among refusal runs | 0/7 | >= 1 | 0/7 |
+| tokens/run | 14155 | n/a | 15858, 0 solved |
+| h3-exact-value k=5 | 5/5 | >= 4/5 | 5/5, 2766 tok/run |
+| h3-required-tools k=5 | none | >= 4/5 | 0/5 (3682 tok/run) |
+
+Verdict todo-heavy: REFUTED per rule (refusal fired >= 3, correct input named, overall 0/10). The range fix works as designed and the model follows it (6 of 7), yet nothing solves. Verdict exact-value: no regression. Verdict required-tools: flagged by the rule (<= 3/5) but NOT a regression: the same task scored 0/5 on cogito in `reg-cogito` at `0335f07c`, before these fixes. Failure is a wrong mean (score 0.667, 20-row arithmetic), `model:had-evidence-wrong-output`.
+
+### Why todo-heavy still fails (10 runs, from `file-read`/`file-write` order and write contents)
+
+| Cause | Runs | Shape |
+| --- | --- | --- |
+| A. Refusal hint steers to the next READ while the pending step is a WRITE; off-by-one lag | 0, 2, 8, 9 (0.17); 5, 7 recover partly (0.83, 0.67) | model reads notes-2 (42), does NOT write out-2, re-reads notes-2; the duplicate read is refused with "Read notes-3 first"; model reads notes-3 and writes out-2=16 (notes-3's double); every later out-N is the next file's value; out-6 unwritten at the 14-iteration cap |
+| B. Placeholder content | 1, 3 | read/write in perfect order but every `file-write` content is the literal string `doubled_value`; run3 loops the whole cycle 3 times |
+| C. Write-before-read | 4 | one read (notes-1), then six writes all `34` |
+| D. Arithmetic on derived output | 6 | out-4/5/6 = 56/112/224 (doubling the previous output) after the refusal |
+
+Cause A is the one the pre-registered change touches and it is the largest (6 of 10). The hint text (`Already done - do NOT repeat. Still outstanding: write the file ./out-2.txt; ...  Do the next item now. Read <notes-3> first: it is a listed input you have not read yet.`) lists writes as outstanding but the explicit imperative is the read. Trace evidence (run0 seq 116): the tool result of the refused re-read carries the hint; the model's very next call is `file-read notes-3`. The model's real stall happened one step earlier (it read notes-2 and did not write out-2), which the hint does not address: the missing step there is "write out-2 from the value already read". Instrument faults seen on the way: `rax-diagnose cause` labels runs 0 and 9 `wrong-tool-arg` because the dedup-refused read (`tool-call-end ok:false`, seq 105) counts as a tool failure; runs 5 and 7 are `terminal-mislabel` (`terminal_decision.status=failed`, `run-completed.status=success`) at the iteration cap. Neither changes the grade.
+
+### Ranked hypotheses for the next cycle (one fix, kernel-warden; ablation-gated)
+
+1. Refusal names the pending WRITE first: when a listed input is already read and its output (`out-N`, outstanding artifact whose source is read-but-unwritten) is not, the hint should say "Write ./out-2.txt now from the value you read" instead of "Read notes-3 first". Zoo shape (zero-token): trace steps read notes-1, write out-1, read notes-2, read notes-2 (refused); assert the hint's first imperative is write out-2, not read notes-3. Predicted effect: removes cause A (6 of 10); solved 2-4/10 expected, since causes B-D remain (4 runs).
+2. Write-before-read gate (ablation-gated): refuse `file-write` of an output whose source input is unread, or whose content equals a value not derived from a read of that source. Shape: one read then six writes (run4) and run0-style lag (out-2=16 after notes-3). Predicted effect: catches C and part of A; also needs a content-vs-evidence check for lag, so it overlaps hypothesis 1. Do 1 first; add 2 only if solved <= 2/10.
+3. Literal placeholder detection (cause B, 2 of 10): reject write content matching a value that appears in no prior tool result and is not computable from one (`doubled_value`) when the prompt asked for digits only. Predicted effect: 0-2 runs. Lowest priority: closer to a model-capability issue and not a general failure class on its own.
+
+Not examined: cause D (run6) beyond the write contents. Power: k=10, one tier; nothing here is a KEEP.
+
+No `packages/**` file changed in this mission, so `repo verify packages/benchmarks` was not re-run. Ledger: two entries appended to `wiki/Research/Harness-Reports/improvement-ledger.json`.

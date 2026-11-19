@@ -1,0 +1,398 @@
+{
+  "suite": "h3",
+  "version": "1.0.0",
+  "gitSha": "66531b6427ec4665cd1f27551ea039b86bb55b51",
+  "taskHashes": {
+    "rw-2": "5d94d45278b16588fcf1860e54281a69361119c16c38344892cde81585c9c2ae",
+    "rw-3": "36bde558d98d0858b9911cc807f067b83d8e5ebca08b8bd3929943d769004a6d",
+    "rw-6": "a99d8cc845d63e96b045ff56d2d93bbe82883ede6bc2d5e46005e3b56b12abc4",
+    "rw-7": "39383c1c5ec566603768746c8c5d65b03ca1eec5991bb09cf358d8af3a3ca9bc",
+    "rw-9": "c77adb4a7e43bcd2ffa1c710be182ab8bfe4dde7d26753ac611c7c59ea62b650",
+    "ab-trap-4": "0924b8efd729c9949f191ca30be5a55640c69daf538c28d1eed58713ca2e6e59",
+    "ab-trap-5": "2bbcf19349d355b1542da9f5218c83fb57147ab4e9479d576615bb423df72a4a",
+    "h3-plan-only": "5cdbda49f6b2c478e03bd9cfd42e458aaf5de893c983290c467ed4bf0ee25164",
+    "h3-todo-heavy": "bd2c400369421b983040128665b0856022b4a232bdeb192da51d90848760482f",
+    "h3-required-tools": "d3424e1c2a04e4ac427bd79d75963e1157fc73416f2de1b4984208f487b27832",
+    "h3-continuation": "7d135799445ca2bc2a57b7f1e004c88a688e107d5fba2dc180b9b9e0900eb0e1",
+    "h3-exact-value": "20dc59f9fa4e6326cb0f1661040466802471bab82aac86ce5e801fd186f098d7"
+  },
+  "k": 1,
+  "cells": [
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|0",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 0,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 2106,
+      "billedTokens": 2106,
+      "durationMs": 6806,
+      "iterations": 3,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "unexplained",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run0/01M7RQ6RAYFMJWWAT6GKR34RQS.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run0",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|1",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 1,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 2928,
+      "billedTokens": 2928,
+      "durationMs": 7404,
+      "iterations": 4,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "tool-failure",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run1/01M7RQ7E5Y2AF6K5WCMH1RHM5G.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run1",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|2",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 2,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 2968,
+      "billedTokens": 2968,
+      "durationMs": 7565,
+      "iterations": 4,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "tool-failure",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run2/01M7RQ855EYVNMA67P09BBZ5JD.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run2",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|3",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 3,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 4030,
+      "billedTokens": 4030,
+      "durationMs": 8297,
+      "iterations": 4,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "tool-failure",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run3/01M7RQ8VWGYTM61P81N9NSG43G.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run3",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|4",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 4,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 2038,
+      "billedTokens": 2038,
+      "durationMs": 6536,
+      "iterations": 3,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "unexplained",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run4/01M7RQ9M8BY0FETXBHXK1RYJKN.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run4",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|5",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 5,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 2268,
+      "billedTokens": 2268,
+      "durationMs": 7052,
+      "iterations": 3,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "unexplained",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run5/01M7RQA99CTZQD4GTE8783227Y.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run5",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|6",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 6,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 3959,
+      "billedTokens": 3959,
+      "durationMs": 8542,
+      "iterations": 4,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "tool-failure",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run6/01M7RQAZJ7WS52RJ92ZCMTT49P.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run6",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|7",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 7,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 4397,
+      "billedTokens": 4397,
+      "durationMs": 9336,
+      "iterations": 4,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "tool-failure",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run7/01M7RQBQSY4ZJTF47VXJ3HV53R.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run7",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|8",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 8,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 2077,
+      "billedTokens": 2077,
+      "durationMs": 6888,
+      "iterations": 3,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "unexplained",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run8/01M7RQCFCBF58Y5FAAVP615DC4.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run8",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "gemma4:e4b|ab-trap-5|9",
+      "taskId": "ab-trap-5",
+      "variant": "ra-default",
+      "tier": "gemma4:e4b",
+      "run": 9,
+      "accuracy": 1,
+      "solved": true,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 3974,
+      "billedTokens": 3974,
+      "durationMs": 8235,
+      "iterations": 4,
+      "terminatedBy": "abstained",
+      "endStatus": "failure",
+      "causeLabel": "tool-failure",
+      "causeAuthority": "abstention",
+      "toolSurface": [
+        "file-read"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run9/01M7RQD4MZDW0QZ8RX8TYWZ7GK.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-A/traces/off/gemma4_e4b/ra-default/ab-trap-5/run9",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    }
+  ],
+  "provenance": {
+    "gitSha": "66531b6427ec4665cd1f27551ea039b86bb55b51",
+    "scorerVersion": 3,
+    "reasoningDistHash": "cea2b253214c7f0ad3789ff6aba81d051c25db9a7ce7fcbe272ad40b0c1458dc",
+    "raEnv": {
+      "RA_ACT_OR_ANSWER": "0"
+    },
+    "cellTimeoutSec": 180,
+    "startMarginSec": 200,
+    "budgetSec": 210,
+    "modelDigests": {
+      "gemma4:e4b": "dc35e8d9c6061baa6f0fa870975ab6932e2542b579b13ea0f199fa4bb7300c9c"
+    },
+    "preflight": [
+      {
+        "at": "2026-11-19T01:37:09.044Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 1.06,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:37:31.578Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 1.41,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:37:55.295Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 1.37,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:38:18.859Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 1.24,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:38:43.503Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 1.91,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:39:04.848Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 1.82,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:39:28.156Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 2,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:39:52.442Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 2.74,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:40:16.793Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 3.05,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:40:38.381Z",
+        "ok": true,
+        "allowed": false,
+        "findings": [],
+        "loadAvg1": 2.88,
+        "ollamaClients": 0
+      }
+    ]
+  }
+}

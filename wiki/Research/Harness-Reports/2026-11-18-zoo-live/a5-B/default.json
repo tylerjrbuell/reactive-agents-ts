@@ -1,0 +1,407 @@
+{
+  "suite": "h3",
+  "version": "1.0.0",
+  "gitSha": "66531b6427ec4665cd1f27551ea039b86bb55b51",
+  "taskHashes": {
+    "rw-2": "5d94d45278b16588fcf1860e54281a69361119c16c38344892cde81585c9c2ae",
+    "rw-3": "36bde558d98d0858b9911cc807f067b83d8e5ebca08b8bd3929943d769004a6d",
+    "rw-6": "a99d8cc845d63e96b045ff56d2d93bbe82883ede6bc2d5e46005e3b56b12abc4",
+    "rw-7": "39383c1c5ec566603768746c8c5d65b03ca1eec5991bb09cf358d8af3a3ca9bc",
+    "rw-9": "c77adb4a7e43bcd2ffa1c710be182ab8bfe4dde7d26753ac611c7c59ea62b650",
+    "ab-trap-4": "0924b8efd729c9949f191ca30be5a55640c69daf538c28d1eed58713ca2e6e59",
+    "ab-trap-5": "2bbcf19349d355b1542da9f5218c83fb57147ab4e9479d576615bb423df72a4a",
+    "h3-plan-only": "5cdbda49f6b2c478e03bd9cfd42e458aaf5de893c983290c467ed4bf0ee25164",
+    "h3-todo-heavy": "bd2c400369421b983040128665b0856022b4a232bdeb192da51d90848760482f",
+    "h3-required-tools": "d3424e1c2a04e4ac427bd79d75963e1157fc73416f2de1b4984208f487b27832",
+    "h3-continuation": "7d135799445ca2bc2a57b7f1e004c88a688e107d5fba2dc180b9b9e0900eb0e1",
+    "h3-exact-value": "20dc59f9fa4e6326cb0f1661040466802471bab82aac86ce5e801fd186f098d7"
+  },
+  "k": 1,
+  "cells": [
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|0",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 0,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 19600,
+      "billedTokens": 19600,
+      "durationMs": 17700,
+      "iterations": 14,
+      "terminatedBy": "max_iterations",
+      "endStatus": "failure",
+      "causeLabel": "wrong-tool-arg",
+      "causeAuthority": "strategy-exhausted",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run0/01M7RQDZE8TYKBNH8PAT9TNMF8.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run0",
+      "failureModes": [
+        "overlap-storm",
+        "max-iter-no-progress"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|1",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 1,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 10540,
+      "billedTokens": 10540,
+      "durationMs": 14103,
+      "iterations": 8,
+      "terminatedBy": "end_turn",
+      "endStatus": "success",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run1/01M7RQEKAQCAHGE07JPD3YKV36.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run1",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|2",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 2,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 19786,
+      "billedTokens": 19786,
+      "durationMs": 11823,
+      "iterations": 14,
+      "terminatedBy": "max_iterations",
+      "endStatus": "failure",
+      "causeLabel": "wrong-tool-arg",
+      "causeAuthority": "strategy-exhausted",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run2/01M7RQF3M2EAH73WAX5S641S1R.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run2",
+      "failureModes": [
+        "overlap-storm",
+        "max-iter-no-progress"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|3",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 3,
+      "accuracy": 0,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 9532,
+      "billedTokens": 9532,
+      "durationMs": 24682,
+      "iterations": 5,
+      "terminatedBy": "harness_synthesis",
+      "endStatus": "success",
+      "causeLabel": "stall-after-work",
+      "causeAuthority": "stall-deliverable",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run3/01M7RQFHP3KMMD6D8K7YRJEGT9.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run3",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "claimed-success (unverified)"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|4",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 4,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 4922,
+      "billedTokens": 4922,
+      "durationMs": 12966,
+      "iterations": 4,
+      "terminatedBy": "end_turn",
+      "endStatus": "success",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "model-final",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run4/01M7RQGCABQK8CEAPJ84HDXM3E.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run4",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|5",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 5,
+      "accuracy": 0.8333333333333334,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 20201,
+      "billedTokens": 20201,
+      "durationMs": 11716,
+      "iterations": 14,
+      "terminatedBy": "max_iterations",
+      "endStatus": "success",
+      "causeLabel": "terminal-mislabel",
+      "causeAuthority": "none-recorded",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run5/01M7RQGVG34SXWZ8C0Z011S38Y.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run5",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|6",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 6,
+      "accuracy": 0.5,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 17198,
+      "billedTokens": 17198,
+      "durationMs": 14058,
+      "iterations": 13,
+      "terminatedBy": "controller_early_stop:dispatcher_early_stop",
+      "endStatus": "success",
+      "causeLabel": "wrong-answer",
+      "causeAuthority": "guard:dispatcher_early_stop",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run6/01M7RQH9FW0TW6GT6J962N12NW.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run6",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "claimed-success (unverified)"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|7",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 7,
+      "accuracy": 0.6666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 18647,
+      "billedTokens": 18647,
+      "durationMs": 13299,
+      "iterations": 14,
+      "terminatedBy": "max_iterations",
+      "endStatus": "success",
+      "causeLabel": "terminal-mislabel",
+      "causeAuthority": "none-recorded",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run7/01M7RQHSR31R3CZQVW3T2AW1S9.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run7",
+      "failureModes": [],
+      "honestyLabel": "claimed-success (unverified)"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|8",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 8,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 20041,
+      "billedTokens": 20041,
+      "durationMs": 12203,
+      "iterations": 14,
+      "terminatedBy": "max_iterations",
+      "endStatus": "failure",
+      "causeLabel": "wrong-tool-arg",
+      "causeAuthority": "strategy-exhausted",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run8/01M7RQJ98NZR3ZRGCW3ZB1SAVD.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run8",
+      "failureModes": [
+        "overlap-storm",
+        "max-iter-no-progress"
+      ],
+      "honestyLabel": "honest-failure"
+    },
+    {
+      "cellId": "cogito:8b|h3-todo-heavy|9",
+      "taskId": "h3-todo-heavy",
+      "variant": "ra-default",
+      "tier": "cogito:8b",
+      "run": 9,
+      "accuracy": 0.16666666666666666,
+      "solved": false,
+      "status": "pass",
+      "inconclusive": false,
+      "tokens": 18114,
+      "billedTokens": 18114,
+      "durationMs": 11327,
+      "iterations": 13,
+      "terminatedBy": "dispatcher-early-stop",
+      "endStatus": "failure",
+      "causeLabel": "wrong-tool-arg",
+      "causeAuthority": "guard:dispatcher_early_stop",
+      "toolSurface": [
+        "file-read",
+        "file-write"
+      ],
+      "traceFile": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run9/01M7RQJQQ58J6B7HM3J1DEGSZR.jsonl",
+      "traceDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a5-B/traces/default/cogito_8b/ra-default/h3-todo-heavy/run9",
+      "failureModes": [
+        "overlap-storm"
+      ],
+      "honestyLabel": "honest-failure"
+    }
+  ],
+  "provenance": {
+    "gitSha": "66531b6427ec4665cd1f27551ea039b86bb55b51",
+    "scorerVersion": 3,
+    "reasoningDistHash": "cea2b253214c7f0ad3789ff6aba81d051c25db9a7ce7fcbe272ad40b0c1458dc",
+    "raEnv": {
+      "RA_ACT_OR_ANSWER": "0",
+      "RA_LEAN_FINAL_TURN": "0",
+      "RA_PARALLEL_TOOL_HINT": "0"
+    },
+    "cellTimeoutSec": 180,
+    "startMarginSec": 200,
+    "budgetSec": 210,
+    "modelDigests": {
+      "cogito:8b": "75b508ddece134205c621b91237310024ca983027fb7f724c2032d106419bd1b"
+    },
+    "preflight": [
+      {
+        "at": "2026-11-19T01:41:07.451Z",
+        "ok": false,
+        "allowed": true,
+        "findings": [
+          "foreign model(s) loaded in Ollama: gemma4:e4b (contend for GPU/VRAM)"
+        ],
+        "loadAvg1": 2.31,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:41:27.885Z",
+        "ok": true,
+        "allowed": true,
+        "findings": [],
+        "loadAvg1": 2.17,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:41:44.602Z",
+        "ok": true,
+        "allowed": true,
+        "findings": [],
+        "loadAvg1": 2.06,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:41:59.005Z",
+        "ok": true,
+        "allowed": true,
+        "findings": [],
+        "loadAvg1": 2.2,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:42:26.267Z",
+        "ok": true,
+        "allowed": true,
+        "findings": [],
+        "loadAvg1": 2.33,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:42:41.815Z",
+        "ok": true,
+        "allowed": true,
+        "findings": [],
+        "loadAvg1": 2.41,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:42:56.115Z",
+        "ok": true,
+        "allowed": true,
+        "findings": [],
+        "loadAvg1": 2.53,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:43:12.785Z",
+        "ok": true,
+        "allowed": true,
+        "findings": [],
+        "loadAvg1": 2.35,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:43:28.674Z",
+        "ok": true,
+        "allowed": true,
+        "findings": [],
+        "loadAvg1": 2.13,
+        "ollamaClients": 0
+      },
+      {
+        "at": "2026-11-19T01:43:43.470Z",
+        "ok": true,
+        "allowed": true,
+        "findings": [],
+        "loadAvg1": 2.5,
+        "ollamaClients": 0
+      }
+    ]
+  }
+}

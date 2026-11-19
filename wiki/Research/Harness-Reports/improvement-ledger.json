@@ -1451,6 +1451,32 @@
       "tokenOverheadPct": 23,
       "rationale": "REFUTED per PREDICTIONS-4: refusal fired 7/10, named an input 6/7 (always notes-6), 0/7 solved; model read the named file after refusal in 3/6 and still wrote wrong values. exact-value 5/5 no regression. One tier, k=10. Next: range expansion in deriveListedInputs (kernel-warden).",
       "status": "rejected"
+    },
+    {
+      "createdAt": "2026-11-19T01:45:50.045Z",
+      "baselineVariantId": "prior-HEAD",
+      "candidateVariantId": "66531b642",
+      "decision": "inconclusive",
+      "status": "inconclusive",
+      "id": "49f47727-9286-4e34-8e93-888f697950fc",
+      "weakness": "ab-trap-5 honest decline lost when the required tool is permanently failed (declineCheck.rejectedBy tool-viable)",
+      "hypothesis": "d15d076d0: decline judged on unfiltered missing-required. gemma4:e4b, actOrAnswer off/on, k=10 per arm, HEAD 66531b642",
+      "liftPp": 0,
+      "tokenOverheadPct": null,
+      "rationale": "CONFIRMED on pre-registered rule: 20/20 solved (off 10/10, aoa 10/10), 0 decline losses (was 1/10 at k=5). One model, one task: not a KEEP. Evidence: 2026-11-18-zoo-live/README.md addendum 5, a5-A/"
+    },
+    {
+      "createdAt": "2026-11-19T01:45:50.045Z",
+      "baselineVariantId": "prior-HEAD",
+      "candidateVariantId": "66531b642",
+      "decision": "inconclusive",
+      "status": "inconclusive",
+      "id": "333e01d3-9c5d-4ea5-9842-eb20f63bfa33",
+      "weakness": "h3-todo-heavy 0/10 on cogito:8b; refusal named notes-6 not the first unread input",
+      "hypothesis": "66531b642: deriveListedInputs expands numbered ranges. cogito:8b default arm k=10, HEAD 66531b642",
+      "liftPp": 0,
+      "tokenOverheadPct": null,
+      "rationale": "REFUTED on pre-registered rule: refusal fired 7/10, named the correct first-unread input 7/7, solved 0/10. Hint steers to the NEXT read while the pending step is write(out-N) for an input already read; model writes the next value into out-N (off-by-one lag). Next candidate: hint names the pending write first. Evidence: README addendum 5, a5-B/"
     }
   ]
 }
