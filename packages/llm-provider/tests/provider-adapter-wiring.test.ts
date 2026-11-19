@@ -587,7 +587,8 @@ describe("gemini — M12 Hook 1/7 (parseToolCalls) wiring", () => {
     );
 
     expect(result.toolCalls).toHaveLength(1);
-    expect(result.toolCalls?.[0].id).toBe("call_0");
+    // Ids are unique per call (thought signatures are keyed by them), ending in the call index.
+    expect(result.toolCalls?.[0].id).toMatch(/^gemini-tc-[a-z0-9]+-[a-z0-9]+-0$/);
     expect(result.toolCalls?.[0].name).toBe("web_search");
     expect(result.toolCalls?.[0].input).toEqual({ query: "default-parser-path" });
   });
@@ -618,7 +619,7 @@ describe("gemini — M12 Hook 1/7 (parseToolCalls) wiring", () => {
     expect(result.toolCalls).toHaveLength(1);
     expect(result.toolCalls?.[0].name).toBe("normalized");
     expect(result.toolCalls?.[0].input).toEqual({ from: "adapter" });
-    expect(result.toolCalls?.[0].id).toBe("call_0");
+    expect(result.toolCalls?.[0].id).toMatch(/^gemini-tc-[a-z0-9]+-[a-z0-9]+-0$/);
   });
 
   it("adapter returns undefined → falls through to default extraction", async () => {

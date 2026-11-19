@@ -12,6 +12,7 @@ import {
   type ImageWireRules,
 } from "../content-parts.js";
 import { relocateToolImages } from "../tool-result-images.js";
+import { ensureFunctionCallSignature } from "./gemini-thought-signatures.js";
 
 // Gemini message conversion (moved out of gemini.ts, Plan 9 Phase 4 stage C).
 
@@ -59,7 +60,7 @@ export const geminiContentPolicy = (model: string): ContentPolicy =>
 export type GeminiPart =
   | { text: string }
   | { inlineData: { mimeType: string; data: string } }
-  | { functionCall: { name: string; args: unknown } }
+  | { functionCall: { name: string; args: unknown }; thoughtSignature?: string }
   | { functionResponse: { name: string; response: unknown } };
 
 export type GeminiContent = {
@@ -73,13 +74,21 @@ export type GeminiContent = {
  * degradation stub in place. A tool-result image moves to a follow-up user
  * content (see `relocateToolImages`).
  *
+ * A `tool_use` block becomes a `functionCall` part carrying the thought
+ * signature Gemini returned for that call id (`signatureFor`). A model content
+ * whose calls have no known signature gets the documented placeholder on its
+ * first call, so Gemini 3 models never reject the history with a 400 (see
+ * gemini-thought-signatures.ts).
+ *
  * @param input — provider-neutral messages
  * @param policy — the per-request content policy
+ * @param signatureFor — remembered thought signature for a tool-call id
  * @returns contents plus the degradations to emit
  */
 export const toGeminiContents = (
   input: readonly LLMMessage[],
   policy: ContentPolicy,
+  signatureFor: (toolCallId: string) => string | undefined = () => undefined,
 ): { readonly contents: GeminiContent[]; readonly degraded: readonly DegradedPart[] } => {
   const result: GeminiContent[] = [];
   const relocated = relocateToolImages(input, policy, GEMINI_IMAGE_RULES);
@@ -120,8 +129,10 @@ export const toGeminiContents = (
         if (block.type === "text") {
           parts.push({ text: block.text });
         } else if (block.type === "tool_use") {
+          const signature = signatureFor(block.id);
           parts.push({
             functionCall: { name: block.name, args: block.input },
+            ...(signature !== undefined ? { thoughtSignature: signature } : {}),
           });
         } else if (block.type === "tool_result") {
           parts.push({
@@ -142,6 +153,7 @@ export const toGeminiContents = (
         }
       }
       if (parts.length > 0) {
+        if (role === "model") ensureFunctionCallSignature(parts);
         result.push({ role, parts });
       }
     }

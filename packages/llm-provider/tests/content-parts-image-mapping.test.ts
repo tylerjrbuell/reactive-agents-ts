@@ -312,7 +312,15 @@ describe("seam: Gemini image mapping", () => {
     expect(contents).toEqual([
       { role: "user", parts: [{ text: "hello" }] },
       { role: "user", parts: [{ text: "a" }, { text: "b" }] },
-      { role: "model", parts: [{ text: "calling" }, { functionCall: { name: "file-read", args: { path: "x" } } }] },
+      // No remembered thought signature: the call gets Google's documented
+      // placeholder (gemini-thought-signatures.ts).
+      {
+        role: "model",
+        parts: [
+          { text: "calling" },
+          { functionCall: { name: "file-read", args: { path: "x" } }, thoughtSignature: "skip_thought_signature_validator" },
+        ],
+      },
       { role: "user", parts: [{ functionResponse: { name: "file-read", response: { content: "result" } } }] },
       { role: "model", parts: [{ text: "done" }] },
     ]);

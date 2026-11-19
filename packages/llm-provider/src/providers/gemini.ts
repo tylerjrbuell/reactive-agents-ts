@@ -31,6 +31,11 @@ import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
 import { emitContentDegradations } from "../content-parts.js";
 import { GEMINI_INPUT_MODALITIES, geminiContentPolicy, toGeminiContents } from "./gemini-messages.js";
+import {
+  makeThoughtSignatureStore,
+  newGeminiToolCallId,
+  rememberFunctionCallSignatures,
+} from "./gemini-thought-signatures.js";
 import { geminiToolConfigField } from "./tool-choice.js";
 import type { ToolChoice } from "../tool-protocol.js";
 
@@ -73,13 +78,21 @@ type GeminiUsage = {
 
 type GeminiFunctionCall = { name: string; args: unknown };
 
+/** Response part fields read here; `thoughtSignature` rides function-call parts (Gemini 3). */
+type GeminiResponsePart = {
+  text?: string;
+  thought?: boolean;
+  functionCall?: GeminiFunctionCall;
+  thoughtSignature?: string;
+};
+
 type GeminiRawResponse = {
   text: string;
   functionCalls?: GeminiFunctionCall[];
   usageMetadata?: GeminiUsage;
   candidates?: Array<{
     finishReason?: string;
-    content?: { parts?: Array<{ text?: string; thought?: boolean; functionCall?: GeminiFunctionCall }> };
+    content?: { parts?: GeminiResponsePart[] };
   }>;
 };
 
@@ -137,13 +150,14 @@ const mapGeminiResponse = (
   const adapterParsed = providerAdapter.parseToolCalls?.(response, model);
   const toolCalls = adapterParsed
     ? adapterParsed.map((tc, i) => ({
-        // Gemini synthesizes ids (`call_${i}`) — no original id to preserve.
-        id: `call_${i}`,
+        // Gemini returns no call ids. Synthesized ids are unique per call:
+        // thought signatures are keyed by them (gemini-thought-signatures.ts).
+        id: newGeminiToolCallId(i),
         name: tc.name,
         input: tc.arguments,
       }))
     : response.functionCalls?.map((fc, i) => ({
-        id: `call_${i}`,
+        id: newGeminiToolCallId(i),
         name: fc.name,
         input: fc.args,
       }));
@@ -283,6 +297,9 @@ export const GeminiProviderLive = Layer.effect(
     const key = resolveProviderApiKey(config.providerConfig, config.googleApiKey);
     const toEffectError = (error: unknown, model?: string): LLMErrors =>
       mapProviderError(error, "gemini", model, key.source);
+    // Thought signatures Gemini returned, keyed by the tool-call ids this
+    // instance generated; replayed on later requests (gemini-thought-signatures.ts).
+    const signatures = makeThoughtSignatureStore();
 
     // ─── Lazy-load the SDK via dynamic import (interceptable by mock.module) ───
 
@@ -291,7 +308,7 @@ export const GeminiProviderLive = Layer.effect(
       usageMetadata?: GeminiUsage;
       candidates?: Array<{
         finishReason?: string;
-        content?: { parts?: Array<{ text?: string; thought?: boolean; functionCall?: GeminiFunctionCall }> };
+        content?: { parts?: GeminiResponsePart[] };
       }>;
       functionCalls?: GeminiFunctionCall[];
     };
@@ -347,7 +364,11 @@ export const GeminiProviderLive = Layer.effect(
           if (!model || model.startsWith("claude") || model.startsWith("gpt-")) {
             model = GEMINI_DEFAULT_MODEL;
           }
-          const { contents, degraded } = toGeminiContents(request.messages, geminiContentPolicy(model));
+          const { contents, degraded } = toGeminiContents(
+            request.messages,
+            geminiContentPolicy(model),
+            signatures.lookup,
+          );
           yield* emitContentDegradations("gemini", model, degraded);
           const systemPrompt =
             extractSystemPrompt(request.messages) ?? request.systemPrompt;
@@ -386,7 +407,13 @@ export const GeminiProviderLive = Layer.effect(
             );
           }
 
-          return mapGeminiResponse(response, model, config.pricingRegistry);
+          const mapped = mapGeminiResponse(response, model, config.pricingRegistry);
+          rememberFunctionCallSignatures(
+            signatures,
+            response.candidates?.[0]?.content?.parts,
+            (mapped.toolCalls ?? []).map((tc) => tc.id),
+          );
+          return mapped;
         }).pipe((effect) =>
           // G2 default is 120s: 30s was too tight for thinking-mode models —
           // a single reasoning-heavy complete() (e.g. tree-of-thought
@@ -413,7 +440,11 @@ export const GeminiProviderLive = Layer.effect(
           if (!model || model.startsWith("claude") || model.startsWith("gpt-")) {
             model = GEMINI_DEFAULT_MODEL;
           }
-          const { contents, degraded } = toGeminiContents(request.messages, geminiContentPolicy(model));
+          const { contents, degraded } = toGeminiContents(
+            request.messages,
+            geminiContentPolicy(model),
+            signatures.lookup,
+          );
           yield* emitContentDegradations("gemini", model, degraded);
           const systemPrompt =
             extractSystemPrompt(request.messages) ?? request.systemPrompt;
@@ -474,6 +505,9 @@ export const GeminiProviderLive = Layer.effect(
                 // Raw functionCalls captured for adapter normalization at
                 // end-of-stream. Populated only when useAdapterNormalization.
                 const rawFunctionCalls: GeminiFunctionCall[] = [];
+                // Thought signature of each raw call (same index), re-keyed to
+                // the normalized ids below.
+                const rawSignatures: (string | undefined)[] = [];
                 // gemini-2.5-flash sometimes leads visible text with a bare
                 // "thought" line (model text, not a thought part) — see
                 // gemini-thought-marker.ts. Single visible-text sink.
@@ -530,12 +564,14 @@ export const GeminiProviderLive = Layer.effect(
                         emitVisible(part.text);
                       }
                       // Tool call
-                      const fc = (part as { functionCall?: GeminiFunctionCall }).functionCall;
+                      const fc = part.functionCall;
                       if (fc && typeof fc.name === "string") {
-                        const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
+                        const tcId = newGeminiToolCallId(accumulatedToolCalls.length);
                         accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
+                        if (part.thoughtSignature !== undefined) signatures.remember(tcId, part.thoughtSignature);
                         if (useAdapterNormalization) {
                           rawFunctionCalls.push(fc);
+                          rawSignatures.push(part.thoughtSignature);
                         } else {
                           emitToolCallComplete(emit, tcId, fc.name, fc.args);
                         }
@@ -549,10 +585,11 @@ export const GeminiProviderLive = Layer.effect(
                     const fcs = chunk.functionCalls;
                     if (fcs && fcs.length > 0) {
                       for (const fc of fcs) {
-                        const tcId = `gemini-tc-${Date.now()}-${accumulatedToolCalls.length}`;
+                        const tcId = newGeminiToolCallId(accumulatedToolCalls.length);
                         accumulatedToolCalls.push({ id: tcId, name: fc.name, input: fc.args });
                         if (useAdapterNormalization) {
                           rawFunctionCalls.push(fc);
+                          rawSignatures.push(undefined);
                         } else {
                           emitToolCallComplete(emit, tcId, fc.name, fc.args);
                         }
@@ -606,7 +643,9 @@ export const GeminiProviderLive = Layer.effect(
                     accumulatedToolCalls.length = 0;
                     for (let i = 0; i < normalized.length; i++) {
                       const tc = normalized[i]!;
-                      const tcId = `gemini-tc-${Date.now()}-${i}`;
+                      const tcId = newGeminiToolCallId(i);
+                      const signature = rawSignatures[i];
+                      if (signature !== undefined) signatures.remember(tcId, signature);
                       accumulatedToolCalls.push({
                         id: tcId,
                         name: tc.name,
@@ -733,7 +772,7 @@ export const GeminiProviderLive = Layer.effect(
                         },
                       ];
 
-                const wire = toGeminiContents(msgs, geminiContentPolicy(model));
+                const wire = toGeminiContents(msgs, geminiContentPolicy(model), signatures.lookup);
                 yield* emitContentDegradations("gemini", model, wire.degraded);
                 const response = yield* Effect.tryPromise({
                   try: () =>
