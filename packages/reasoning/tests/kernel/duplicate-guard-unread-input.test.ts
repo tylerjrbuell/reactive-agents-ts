@@ -6,6 +6,7 @@
 import { describe, expect, it } from "bun:test";
 import type { ToolCallSpec } from "@reactive-agents/tools";
 import { duplicateGuard } from "../../src/kernel/capabilities/act/guard.js";
+import { deriveListedInputs } from "../../src/kernel/capabilities/verify/derive-inputs.js";
 import { makeKernelInput, makeKernelState } from "../../src/testing/kernel-fixtures.js";
 import { withEvidence } from "./tool-evidence-fixture.js";
 import type { ReasoningStep } from "../../src/types/index.js";
@@ -39,6 +40,30 @@ function refusal(paths: readonly string[]): string {
   expect(outcome.pass).toBe(false);
   return outcome.pass ? "" : outcome.observation;
 }
+
+describe("a written range expands to every member (cogito h3-todo-heavy, zoo-live addendum 4)", () => {
+  const RANGE_TASK =
+    "Six files in your working directory, notes-1.txt through notes-6.txt, each contain one integer. Track the work as a todo list with one item per file. For each notes-N.txt, write out-N.txt containing exactly double that integer (digits only). Finish all six.";
+
+  it("deriveListedInputs yields notes-1..notes-6 in order", () => {
+    expect(deriveListedInputs(RANGE_TASK).map((i) => i.entity)).toEqual([1, 2, 3, 4, 5, 6].map((n) => `notes-${n}.txt`));
+  });
+
+  it("'to' ranges expand and a lone pair or reversed range does not", () => {
+    expect(deriveListedInputs("Read a-1.md to a-3.md.").map((i) => i.entity)).toEqual(["a-1.md", "a-2.md", "a-3.md"]);
+    expect(deriveListedInputs("Read a-1.md and a-3.md.").map((i) => i.entity)).toEqual(["a-1.md", "a-3.md"]);
+    expect(deriveListedInputs("Read a-3.md through a-1.md.").map((i) => i.entity)).toEqual(["a-3.md", "a-1.md"]);
+  });
+
+  it("the duplicate refusal names notes-2.txt after notes-1.txt, not notes-6.txt", () => {
+    const state = withEvidence(makeKernelState({ status: "acting", steps: ranRead("notes-1.txt") }));
+    const outcome = duplicateGuard(repeat, state, makeKernelInput({ task: RANGE_TASK }));
+    expect(outcome.pass).toBe(false);
+    const text = outcome.pass ? "" : outcome.observation;
+    expect(text).toContain("Read notes-2.txt first");
+    expect(text).not.toContain("notes-6.txt");
+  });
+});
 
 describe("duplicateGuard names the first unread listed input", () => {
   it("names notes-2.txt when only notes-1.txt was read", () => {

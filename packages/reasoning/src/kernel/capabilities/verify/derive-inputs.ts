@@ -58,6 +58,29 @@ function isJsonValue(task: string, start: number): boolean {
 }
 
 /**
+ * The members between a range's two written ends: "notes-1.txt through
+ * notes-6.txt" names notes-2..5 too. `first` is the candidate just matched,
+ * `rest` the task text after it. Same prefix and extension on both ends, a
+ * forward range of at most {@link MAX_BOUND_FAMILY} members; otherwise none.
+ * Returns the interior members (the second end is matched as its own token).
+ */
+function expandNumberedRange(first: string, rest: string): string[] {
+  const head = /^(.*?)(\d+)(\.[A-Za-z0-9]{1,5})$/.exec(first);
+  if (head === null) return [];
+  const [, prefix = "", lo = "", ext = ""] = head;
+  const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tail = new RegExp(`^\\s*(?:through|thru|to|-|\\u2013|\\u2014)\\s+${escape(prefix)}(\\d+)${escape(ext)}(?![\\w])`, "i").exec(rest);
+  if (tail === null) return [];
+  const from = Number(lo);
+  const to = Number(tail[1]);
+  if (!(to > from + 1) || to - from + 1 > MAX_BOUND_FAMILY) return [];
+  const pad = lo.length > 1 && lo.startsWith("0") ? lo.length : 0;
+  const members: string[] = [];
+  for (let n = from + 1; n < to; n++) members.push(`${prefix}${String(n).padStart(pad, "0")}${ext}`);
+  return members;
+}
+
+/**
  * Derive the inputs a task explicitly lists, in first-appearance order,
  * de-duplicated (`./a.ts` and `a.ts` are one input). Empty when the task lists
  * none, and when it lists more than {@link MAX_BOUND_FAMILY} (no longer a
@@ -94,6 +117,9 @@ export function deriveListedInputs(task: string): ListedInput[] {
     if (isPlaceholderPath(candidate, task, start)) continue;
     if (deliverables.has(anchorDeliverablePath(candidate))) continue;
     add(candidate, start);
+    for (const member of expandNumberedRange(candidate, task.slice(start + candidate.length))) {
+      if (!deliverables.has(anchorDeliverablePath(member))) add(member, start);
+    }
   }
 
   return out.length > MAX_BOUND_FAMILY ? [] : out.sort((a, b) => a.start - b.start);
