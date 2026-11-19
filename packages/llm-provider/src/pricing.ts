@@ -1,12 +1,14 @@
 import { Effect } from "effect";
+import type { ModelPricing } from "./price-book/schema.js";
 
-/**
- * Token costs per 1 million tokens in USD.
- */
-export interface ModelPricing {
-  readonly input: number;
-  readonly output: number;
-}
+export type { ModelPricing } from "./price-book/schema.js";
+
+/** Per-token decimal string -> $/1M tokens, or undefined when absent/invalid. */
+const perMillion = (perToken: string | undefined): number | undefined => {
+  if (perToken === undefined) return undefined;
+  const n = parseFloat(perToken);
+  return Number.isFinite(n) && n >= 0 ? Number((n * 1_000_000).toPrecision(12)) : undefined;
+};
 
 /**
  * Normalized interface for dynamic LLM pricing providers.
@@ -43,22 +45,42 @@ export const openRouterPricingProvider: PricingProvider = {
       })) as {
         data: Array<{
           id: string;
-          pricing: { prompt: string; completion: string };
+          pricing: {
+            prompt: string;
+            completion: string;
+            input_cache_read?: string;
+            input_cache_write?: string;
+            input_cache_write_1h?: string;
+          };
         }>;
       };
 
       const registry: Record<string, ModelPricing> = {};
       for (const model of json.data) {
-        // OpenRouter pricing is per-1-token. Multiply by 1M to get per-1M cost.
-        // Some free models list "0", which is handled fine by parseFloat.
-        registry[model.id] = {
-          input: parseFloat(model.pricing.prompt) * 1_000_000,
-          output: parseFloat(model.pricing.completion) * 1_000_000,
+        // OpenRouter pricing is per token; the registry is $/1M tokens.
+        const input = perMillion(model.pricing.prompt);
+        const output = perMillion(model.pricing.completion);
+        if (input === undefined || output === undefined) continue;
+        const cacheRead = perMillion(model.pricing.input_cache_read);
+        const cacheWrite5m = perMillion(model.pricing.input_cache_write);
+        const cacheWrite1h = perMillion(model.pricing.input_cache_write_1h);
+        const row: ModelPricing = {
+          input,
+          output,
+          ...(cacheRead !== undefined ? { cacheRead } : {}),
+          ...(cacheWrite5m !== undefined ? { cacheWrite5m } : {}),
+          ...(cacheWrite1h !== undefined ? { cacheWrite1h } : {}),
         };
-        // Also add the shortest name since users might just say "gpt-4o"
+        registry[model.id] = row;
+        // Short and native aliases: "gpt-4o" for "openai/gpt-4o"; Anthropic API
+        // ids dash the version OpenRouter dots ("claude-sonnet-4.6" -> "-4-6").
         const shortName = model.id.split("/").pop();
-        if (shortName && !registry[shortName]) {
-          registry[shortName] = registry[model.id];
+        const aliases = [shortName];
+        if (model.id.startsWith("anthropic/") && shortName) {
+          aliases.push(shortName.replace(/(\d)\.(\d)/g, "$1-$2"));
+        }
+        for (const alias of aliases) {
+          if (alias && !registry[alias]) registry[alias] = row;
         }
       }
 
@@ -93,13 +115,19 @@ export const urlPricingProvider = (url: string): PricingProvider => ({
       const json = (yield* Effect.tryPromise({
         try: () => res.json(),
         catch: (e) => new Error(`JSON parse failed: ${e}`),
-      })) as Record<string, { input: number; output: number }>;
+      })) as Record<string, ModelPricing>;
 
       const registry: Record<string, ModelPricing> = {};
       for (const [key, value] of Object.entries(json)) {
+        // Optional cache rates ($/1M) pass through when numeric.
+        const extra: Record<string, number> = {};
+        for (const field of ["cacheRead", "cacheWrite5m", "cacheWrite1h"] as const) {
+          if (typeof value[field] === "number") extra[field] = value[field];
+        }
         registry[key] = {
           input: Number(value.input),
           output: Number(value.output),
+          ...extra,
         };
       }
 

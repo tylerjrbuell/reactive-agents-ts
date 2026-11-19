@@ -20,8 +20,9 @@ import type {
   TokenLogprob,
   LLMProvider,
 } from "../types.js";
-import { calculateCost, estimateTokenCount } from "../token-counter.js";
-import type { CacheUsage } from "../token-counter.js";
+import { estimateTokenCount } from "../token-counter.js";
+import { costFields, openAICompatBillableUsage } from "../price-book/price-usage.js";
+import type { PricingRegistry } from "../price-book/schema.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { createStreamToolCallAccumulator } from "../stream-tool-call-accumulator.js";
 import { selectAdapter } from "../adapter.js";
@@ -381,6 +382,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
             response as OpenAIRawResponse,
             model,
             config.pricingRegistry,
+            providerName,
           );
           // Cluster B parity (mirrors gemini.ts): surface a non-OK finish with
           // empty content as an error rather than a silent empty-success the
@@ -583,24 +585,16 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                   // is priced on the reported halves only.
                   const inputTokens = finalUsage.prompt_tokens;
                   const outputTokens = finalUsage.completion_tokens;
-                  const cacheUsage: CacheUsage = {
-                    cached_tokens: finalUsage.prompt_tokens_details?.cached_tokens,
-                  };
+                  const cachedTokens = finalUsage.prompt_tokens_details?.cached_tokens;
                   emit.single({
                     type: "usage",
                     usage: {
                       inputTokens,
                       outputTokens,
                       totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
-                      estimatedCost: calculateCost(
-                        inputTokens ?? 0,
-                        outputTokens ?? 0,
-                        model,
-                        cacheUsage,
-                        config.pricingRegistry,
-                      ),
-                      ...(typeof cacheUsage.cached_tokens === "number"
-                        ? { cacheReadInputTokens: cacheUsage.cached_tokens }
+                      ...costFields(providerName, model, openAICompatBillableUsage(finalUsage), config.pricingRegistry),
+                      ...(typeof cachedTokens === "number"
+                        ? { cacheReadInputTokens: cachedTokens }
                         : {}),
                       ...(typeof finalUsage.completion_tokens_details?.reasoning_tokens === "number"
                         ? { reasoningTokens: finalUsage.completion_tokens_details.reasoning_tokens }
@@ -699,7 +693,7 @@ export const makeOpenAICompatProvider = (opts: OpenAICompatOptions) =>
                 });
 
                 const raw = completeResult as OpenAIRawResponse;
-                const mapped = mapOpenAIResponse(raw, model, config.pricingRegistry);
+                const mapped = mapOpenAIResponse(raw, model, config.pricingRegistry, providerName);
                 const stopReason = reportedStopReason(raw.choices[0]?.finish_reason, "openai");
                 // No thinkingChars: Chat Completions returns no reasoning text
                 // (only a reasoning token count in usage details).
@@ -855,7 +849,9 @@ type OpenAIRawResponse = {
 const mapOpenAIResponse = (
   response: OpenAIRawResponse,
   model: string,
-  registry?: Record<string, { readonly input: number; readonly output: number }>,
+  registry: PricingRegistry | undefined,
+  /** Price-book provider: openai, groq or xai (they share this mapper). */
+  provider: string,
 ): CompletionResponse => {
   const message = response.choices[0]?.message;
   const content = message?.content ?? "";
@@ -948,15 +944,10 @@ const mapOpenAIResponse = (
         response.usage.total_tokens > 0
           ? response.usage.total_tokens
           : (response.usage?.prompt_tokens ?? 0) + (response.usage?.completion_tokens ?? 0),
-      estimatedCost: calculateCost(
-        response.usage?.prompt_tokens ?? 0,
-        response.usage?.completion_tokens ?? 0,
-        model,
-        {
-          cached_tokens: response.usage?.prompt_tokens_details?.cached_tokens,
-        },
-        registry,
-      ),
+      // Unreported usage = unknown cost, never a measured $0.
+      ...(response.usage
+        ? costFields(provider, model, openAICompatBillableUsage(response.usage), registry)
+        : { priceSource: "unknown" as const }),
       ...(typeof response.usage?.prompt_tokens_details?.cached_tokens === "number"
         ? { cacheReadInputTokens: response.usage.prompt_tokens_details.cached_tokens }
         : {}),

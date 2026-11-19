@@ -14,7 +14,9 @@ import type {
   StreamEvent,
   LLMMessage,
 } from "../types.js";
-import { calculateCost, estimateTokenCount } from "../token-counter.js";
+import { estimateTokenCount } from "../token-counter.js";
+import { costFields, geminiBillableUsage } from "../price-book/price-usage.js";
+import type { PricingRegistry } from "../price-book/schema.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { emitToolCallComplete } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
@@ -75,6 +77,9 @@ type GeminiUsage = {
   thoughtsTokenCount?: number;
   totalTokenCount?: number;
   cachedContentTokenCount?: number;
+  /** Built-in tool prompt tokens; billed as input, outside promptTokenCount. */
+  toolUsePromptTokenCount?: number;
+  promptTokensDetails?: ReadonlyArray<{ modality?: string; tokenCount?: number }>;
 };
 
 type GeminiFunctionCall = { name: string; args: unknown };
@@ -136,7 +141,7 @@ const explainGeminiFinishReason = (reason: string): string => {
 const mapGeminiResponse = (
   response: GeminiRawResponse,
   model: string,
-  registry?: Record<string, { readonly input: number; readonly output: number }>,
+  registry?: PricingRegistry,
 ): CompletionResponse => {
   // M12 Hook 1/7 — give the calibrated/tier ProviderAdapter first crack at
   // normalizing tool calls (e.g., Gemini args-as-string variants). When the
@@ -186,15 +191,10 @@ const mapGeminiResponse = (
       outputTokens,
       totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
       // Cost is priced on the reported halves only.
-      estimatedCost: calculateCost(
-        inputTokens ?? 0,
-        outputTokens ?? 0,
-        model,
-        {
-          cached_content_token_count: response.usageMetadata?.cachedContentTokenCount,
-        },
-        registry,
-      ),
+      // Unreported usage = unknown cost, never a measured $0.
+      ...(response.usageMetadata
+        ? costFields("gemini", model, geminiBillableUsage(response.usageMetadata), registry)
+        : { priceSource: "unknown" as const }),
       ...(typeof response.usageMetadata?.cachedContentTokenCount === "number"
         ? { cacheReadInputTokens: response.usageMetadata.cachedContentTokenCount }
         : {}),
@@ -500,6 +500,7 @@ export const GeminiProviderLive = Layer.effect(
                 let outputTokens: number | undefined;
                 let usageReported = false;
                 let cachedContentTokens: number | undefined;
+                let lastUsage: GeminiUsage | undefined;
                 let reasoningTokens: number | undefined;
                 let lastFinishReason: string | undefined;
                 const accumulatedToolCalls: { id: string; name: string; input: unknown }[] = [];
@@ -600,6 +601,7 @@ export const GeminiProviderLive = Layer.effect(
 
                   if (chunk.usageMetadata) {
                     usageReported = true;
+                    lastUsage = chunk.usageMetadata as GeminiUsage;
                     inputTokens = chunk.usageMetadata.promptTokenCount;
                     // Thoughts sit OUTSIDE candidatesTokenCount (SDK totalTokenCount
                     // = prompt + candidates + toolUse + thoughts): output = sum.
@@ -705,13 +707,11 @@ export const GeminiProviderLive = Layer.effect(
                       outputTokens,
                       totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
                       // Cost is priced on the reported halves only.
-                      estimatedCost: calculateCost(
-                        inputTokens ?? 0,
-                        outputTokens ?? 0,
+                      // Last reported metadata; cached count carried from any chunk.
+                      ...costFields(
+                        "gemini",
                         model,
-                        {
-                          cached_content_token_count: cachedContentTokens,
-                        },
+                        geminiBillableUsage({ ...lastUsage, cachedContentTokenCount: cachedContentTokens }),
                         config.pricingRegistry,
                       ),
                       ...(typeof cachedContentTokens === "number"

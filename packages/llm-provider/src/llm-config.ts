@@ -1,6 +1,7 @@
 import { Context, Layer } from "effect";
 import type { LLMProvider, EmbeddingConfig, ObservabilityVerbosity } from "./types.js";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
+import type { PricingRegistry } from "./price-book/schema.js";
 
 /**
  * LLM service configuration.
@@ -340,18 +341,17 @@ export class LLMConfig extends Context.Tag("LLMConfig")<
     readonly observabilityVerbosity: ObservabilityVerbosity;
 
     /**
-     * Custom pricing registry for calculating token costs.
-     * Maps model identifiers to input/output token costs per 1 million tokens.
-     * Overrides built-in framework pricing if an exact match is found.
+     * User pricing, $/1M tokens, keyed by model id. Wins over the built-in
+     * PriceBook for that model. Omitted cache rates bill cached tokens at `input`.
      *
      * @example
      * ```typescript
      * pricingRegistry: {
-     *   "my-fine-tuned-model": { input: 0.5, output: 1.5 }
+     *   "my-fine-tuned-model": { input: 0.5, output: 1.5, cacheRead: 0.05 }
      * }
      * ```
      */
-    readonly pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>;
+    readonly pricingRegistry?: PricingRegistry;
   }
 >() {}
 

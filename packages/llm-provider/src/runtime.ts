@@ -12,6 +12,7 @@ import type { TestTurn } from "./testing.js";
 import { makeEmbeddingCache } from "./embedding-cache.js";
 import { makeCircuitBreaker } from "./circuit-breaker.js";
 import type { CircuitBreakerConfig } from "./retry.js";
+import type { PricingRegistry } from "./price-book/schema.js";
 
 /**
  * Layer that wraps the underlying LLMService.embed() with a content-hash
@@ -66,7 +67,7 @@ export const createLLMProviderLayer = (
   model?: string,
   modelParams?: { thinking?: boolean; thinkingOptions?: import("./thinking/index.js").ThinkingOptions; temperature?: number; maxTokens?: number; numCtx?: number; ollamaTimeoutMs?: number; baseUrl?: string; apiKey?: string; headers?: Record<string, string> },
   circuitBreaker?: Partial<CircuitBreakerConfig> | false,
-  pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>,
+  pricingRegistry?: PricingRegistry,
 ) => {
   if (provider === "test") {
     return Layer.mergeAll(

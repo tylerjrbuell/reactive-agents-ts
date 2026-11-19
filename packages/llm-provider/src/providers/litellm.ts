@@ -27,7 +27,9 @@ import {
   mapOpenAIMessages,
   type OpenAIMessage,
 } from "./openai-messages.js";
-import { calculateCost, estimateTokenCount } from "../token-counter.js";
+import { estimateTokenCount } from "../token-counter.js";
+import { costFields, openAICompatBillableUsage, type OpenAICompatWireUsage } from "../price-book/price-usage.js";
+import type { PricingRegistry } from "../price-book/schema.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { selectAdapter } from "../adapter.js";
 import { normalizeToolSchemaFor } from "../schema-utils.js";
@@ -125,13 +127,10 @@ type LiteLLMRawResponse = {
     };
     finish_reason: string;
   }>;
-  usage: {
+  usage: OpenAICompatWireUsage & {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
-    // Some LiteLLM proxies include cost directly
-    input_cost?: number;
-    output_cost?: number;
     // LiteLLM normalizes prompt-caching token counts to this OpenAI-shaped
     // field for providers that support it (LiteLLM docs).
     prompt_tokens_details?: { cached_tokens?: number };
@@ -141,10 +140,24 @@ type LiteLLMRawResponse = {
   model: string;
 };
 
+/**
+ * The proxy's own cost for a call from the `x-litellm-response-cost` response
+ * header (LiteLLM docs; not verified against a live proxy, 2026-11-19).
+ *
+ * @returns USD, or undefined when the header is absent or not a finite number >= 0
+ */
+export const parseLiteLLMResponseCost = (header: string | null | undefined): number | undefined => {
+  if (header === null || header === undefined || header.trim() === "") return undefined;
+  const usd = Number(header);
+  return Number.isFinite(usd) && usd >= 0 ? usd : undefined;
+};
+
 const mapLiteLLMResponse = (
   response: LiteLLMRawResponse,
   model: string,
-  registry?: Record<string, { readonly input: number; readonly output: number }>,
+  registry?: PricingRegistry,
+  /** Proxy-billed USD (`x-litellm-response-cost`), when the proxy sent it. */
+  responseCost?: number,
 ): CompletionResponse => {
   const message = response.choices[0]?.message;
   const content = message?.content ?? "";
@@ -205,20 +218,12 @@ const mapLiteLLMResponse = (
         response.usage.total_tokens > 0
           ? response.usage.total_tokens
           : (response.usage?.prompt_tokens ?? 0) + (response.usage?.completion_tokens ?? 0),
-      estimatedCost: calculateCost(
-        response.usage?.prompt_tokens ?? 0,
-        response.usage?.completion_tokens ?? 0,
-        model,
-        undefined,
-        registry,
-        // Prioritize costs returned directly from the proxy if available
-        response.usage?.input_cost !== undefined && response.usage?.output_cost !== undefined
-          ? {
-              input: (response.usage.input_cost / (response.usage.prompt_tokens || 1)) * 1_000_000,
-              output: (response.usage.output_cost / (response.usage.completion_tokens || 1)) * 1_000_000,
-            }
-          : undefined,
-      ),
+      // User pricing > proxy bill (header) > proxy /model/info rates > snapshot
+      // (alias-aware: "openai/gpt-4o" prices as openai gpt-4o). Cached tokens
+      // bill at the model's cache rate. No usage and no bill = unknown.
+      ...(response.usage || responseCost !== undefined
+        ? costFields("litellm", model, openAICompatBillableUsage(response.usage ?? {}), registry, responseCost)
+        : { priceSource: "unknown" as const }),
       ...(typeof response.usage?.prompt_tokens_details?.cached_tokens === "number"
         ? { cacheReadInputTokens: response.usage.prompt_tokens_details.cached_tokens }
         : {}),
@@ -233,13 +238,14 @@ const mapLiteLLMResponse = (
 
 // ─── Fetch helper ───
 
-const liteLLMFetch = async (
+/** POST to the proxy; returns the JSON body and the proxy-billed cost header. */
+const liteLLMPost = async (
   baseURL: string,
   path: string,
   body: unknown,
   apiKey?: string,
   extraHeaders?: Record<string, string>,
-): Promise<unknown> => {
+): Promise<{ readonly body: unknown; readonly responseCost: number | undefined }> => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...extraHeaders,
@@ -260,8 +266,15 @@ const liteLLMFetch = async (
     );
   }
 
-  return res.json();
+  // `headers?.` tolerates minimal fetch doubles that omit headers.
+  const responseCost = parseLiteLLMResponseCost(res.headers?.get?.("x-litellm-response-cost"));
+  return { body: await res.json(), responseCost };
 };
+
+/** POST to the proxy; returns the JSON body only. */
+const liteLLMFetch = async (
+  ...args: Parameters<typeof liteLLMPost>
+): Promise<unknown> => (await liteLLMPost(...args)).body;
 
 // ─── LiteLLM Provider Layer ───
 
@@ -349,14 +362,15 @@ export const LiteLLMProviderLive = Layer.effect(
 
           const response = yield* Effect.tryPromise({
             try: () =>
-              liteLLMFetch(baseURL, "/chat/completions", requestBody, apiKey, extraHeaders),
+              liteLLMPost(baseURL, "/chat/completions", requestBody, apiKey, extraHeaders),
             catch: (error) => toEffectError(error),
           });
 
           return mapLiteLLMResponse(
-            response as LiteLLMRawResponse,
+            response.body as LiteLLMRawResponse,
             model,
             config.pricingRegistry,
+            response.responseCost,
           );
         }).pipe((effect) =>
           // G2 default is 120s (thinking/reasoning models exceed 30s); F4
@@ -519,13 +533,9 @@ export const LiteLLMProviderLive = Layer.effect(
                             inputTokens,
                             outputTokens,
                             totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
-                            estimatedCost: calculateCost(
-                              inputTokens ?? 0,
-                              outputTokens ?? 0,
-                              model,
-                              undefined,
-                              config.pricingRegistry,
-                            ),
+                            // No x-litellm-response-cost here: a stream's
+                            // headers precede generation, so priced from usage.
+                            ...costFields("litellm", model, openAICompatBillableUsage(finalUsage), config.pricingRegistry),
                             ...(typeof finalUsage.prompt_tokens_details?.cached_tokens === "number"
                               ? { cacheReadInputTokens: finalUsage.prompt_tokens_details.cached_tokens }
                               : {}),
@@ -655,7 +665,7 @@ export const LiteLLMProviderLive = Layer.effect(
                 yield* emitContentDegradations("litellm", model, wire.degraded);
                 const completeResult = yield* Effect.tryPromise({
                   try: () =>
-                    liteLLMFetch(
+                    liteLLMPost(
                       baseURL,
                       "/chat/completions",
                       {
@@ -671,8 +681,8 @@ export const LiteLLMProviderLive = Layer.effect(
                   catch: (error) => toEffectError(error),
                 });
 
-                const raw = completeResult as LiteLLMRawResponse;
-                const mapped = mapLiteLLMResponse(raw, model, config.pricingRegistry);
+                const raw = completeResult.body as LiteLLMRawResponse;
+                const mapped = mapLiteLLMResponse(raw, model, config.pricingRegistry, completeResult.responseCost);
                 // Thinking size from `reasoning_content` when the proxied model returns it.
                 const reasoning = raw.choices[0]?.message?.reasoning_content;
                 const stopReason = reportedStopReason(raw.choices[0]?.finish_reason, "litellm");

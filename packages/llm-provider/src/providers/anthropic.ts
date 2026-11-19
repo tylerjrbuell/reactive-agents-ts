@@ -15,7 +15,9 @@ import type {
   StreamEvent,
   LLMMessage,
 } from "../types.js";
-import { calculateCost, estimateTokenCount } from "../token-counter.js";
+import { estimateTokenCount } from "../token-counter.js";
+import { anthropicBillableUsage, costFields, type AnthropicWireUsage } from "../price-book/price-usage.js";
+import type { PricingRegistry } from "../price-book/schema.js";
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from "../retry.js";
 import { emitToolUseDelta, emitToolUseStart } from "../streaming-helpers.js";
 import { selectAdapter } from "../adapter.js";
@@ -469,18 +471,8 @@ export const AnthropicProviderLive = Layer.effect(
                   inputTokens: totalInputTokens(msg.usage),
                   outputTokens: msg.usage.output_tokens,
                   totalTokens: totalInputTokens(msg.usage) + msg.usage.output_tokens,
-                  estimatedCost: calculateCost(
-                    // Same total; calculateCost subtracts the cache pools back
-                    // out to price base / read / creation at their own rates.
-                    totalInputTokens(msg.usage),
-                    msg.usage.output_tokens,
-                    model,
-                    {
-                      cache_creation_input_tokens: msg.usage.cache_creation_input_tokens,
-                      cache_read_input_tokens: msg.usage.cache_read_input_tokens,
-                    },
-                    config.pricingRegistry,
-                  ),
+                  // Every billable pool at the model's own rate (PriceBook).
+                  ...costFields("anthropic", model, anthropicBillableUsage(msg.usage), config.pricingRegistry),
                   // Lever 1 prompt-caching observability — mirrors complete() path.
                   ...(typeof msg.usage.cache_creation_input_tokens === "number"
                     ? { cacheCreationInputTokens: msg.usage.cache_creation_input_tokens }
@@ -611,7 +603,8 @@ export const AnthropicProviderLive = Layer.effect(
             });
 
             const raw = completeResult as AnthropicRawResponse;
-            const response = mapAnthropicResponse(raw, structuredModel);
+            // F8: same pricing as complete()/stream() (user registry + PriceBook).
+            const response = mapAnthropicResponse(raw, structuredModel, config.pricingRegistry);
             const stopReason = reportedStopReason(raw.stop_reason, "anthropic");
             const thinkingChars = anthropicThinkingChars(completeResult);
 
@@ -733,12 +726,7 @@ type AnthropicRawResponse = {
     | { type: "tool_use"; id: string; name: string; input: unknown }
   >;
   stop_reason: string;
-  usage: {
-    input_tokens: number;
-    output_tokens: number;
-    cache_creation_input_tokens?: number;
-    cache_read_input_tokens?: number;
-  };
+  usage: AnthropicWireUsage;
   model: string;
 };
 
@@ -767,7 +755,7 @@ const anthropicThinkingChars = (raw: unknown): number | undefined => {
 const mapAnthropicResponse = (
   response: AnthropicRawResponse,
   model: string,
-  registry?: Record<string, { readonly input: number; readonly output: number }>,
+  registry?: PricingRegistry,
 ): CompletionResponse => {
   const textContent = response.content
     .filter(
@@ -825,18 +813,8 @@ const mapAnthropicResponse = (
       inputTokens: totalInputTokens(response.usage),
       outputTokens: response.usage.output_tokens,
       totalTokens: totalInputTokens(response.usage) + response.usage.output_tokens,
-      estimatedCost: calculateCost(
-        // Same total; calculateCost subtracts the cache pools back out to price
-        // base / read / creation at their own rates.
-        totalInputTokens(response.usage),
-        response.usage.output_tokens,
-        model,
-        {
-          cache_creation_input_tokens: response.usage.cache_creation_input_tokens,
-          cache_read_input_tokens: response.usage.cache_read_input_tokens,
-        },
-        registry,
-      ),
+      // Every billable pool at the model's own rate (PriceBook).
+      ...costFields("anthropic", model, anthropicBillableUsage(response.usage), registry),
       // Lever 1 prompt-caching observability — surface cache hit/creation
       // counts up the stack so bench reports and runtime metrics can show
       // "X input tok (Y cached)" instead of just total input.

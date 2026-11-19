@@ -231,6 +231,41 @@ export { retryPolicy, isRetryableLLMError } from "./retry.js";
 export type { PricingProvider, ModelPricing } from "./pricing.js";
 export { openRouterPricingProvider, urlPricingProvider } from "./pricing.js";
 
+// ─── PriceBook (model prices + exact per-call cost) ───
+export {
+  priceFor,
+  priceSnapshotInfo,
+  modelIdCandidates,
+  registerReportedPrice,
+  PriceBook,
+  PriceBookLive,
+} from "./price-book/price-book.js";
+export {
+  priceUsage,
+  costFields,
+  anthropicBillableUsage,
+  openAICompatBillableUsage,
+  geminiBillableUsage,
+  BillableUsageSchema,
+  type BillableUsage,
+  type PricedUsage,
+  type CostFields,
+} from "./price-book/price-usage.js";
+export {
+  PriceEntrySchema,
+  PriceRatesSchema,
+  PriceTierSchema,
+  PriceSourceSchema,
+  ModelPricingSchema,
+  type PriceEntry,
+  type PriceRates,
+  type PriceTier,
+  type PriceSource,
+  type PriceEntrySource,
+  type PricingRegistry,
+} from "./price-book/schema.js";
+export { buildPriceSnapshot, renderPriceSnapshotModule, LITELLM_PRICES_URL } from "./price-book/snapshot-generator.js";
+
 // ─── Cost Instrumentation ───
 export { billedInputTokens, type BilledTokens, type UsageLike } from "./billed-tokens.js";
 

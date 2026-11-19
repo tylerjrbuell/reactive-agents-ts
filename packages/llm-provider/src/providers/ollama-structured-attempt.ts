@@ -9,6 +9,7 @@
  */
 import { reportedStopReason } from '../params/stop-reason.js'
 import type { StructuredAttemptResult } from '../structured-parse-retry.js'
+import { LOCAL_COST_FIELDS } from '../price-book/price-usage.js'
 
 /** The fields of an Ollama chat response a structured attempt reads. */
 export type OllamaStructuredResponse = {
@@ -38,7 +39,7 @@ export function ollamaStructuredAttempt(
             inputTokens,
             outputTokens,
             totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
-            estimatedCost: 0, // Local models are free
+            ...LOCAL_COST_FIELDS, // Local models are free ($0, price-book)
         },
         ...(stopReason !== undefined ? { stopReason } : {}),
         ...(typeof thinking === 'string' && thinking.length > 0

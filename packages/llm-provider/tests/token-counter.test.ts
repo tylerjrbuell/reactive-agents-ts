@@ -41,7 +41,7 @@ describe("Token Counter", () => {
   });
 
   it("should calculate cost for known models", () => {
-    const cost = calculateCost(1_000_000, 500_000, "claude-sonnet-4-20250514");
+    const cost = calculateCost(1_000_000, 500_000, "claude-sonnet-4-6");
     // 1M input * $3/1M + 500K output * $15/1M = $3 + $7.5 = $10.5
     expect(cost).toBeCloseTo(10.5, 1);
   });
@@ -52,10 +52,8 @@ describe("Token Counter", () => {
     expect(cost).toBeCloseTo(0.75, 2);
   });
 
-  it("should use default cost for unknown models", () => {
-    const cost = calculateCost(1_000, 1_000, "unknown-model");
-    // Uses default: $3/1M input + $15/1M output
-    expect(cost).toBeGreaterThan(0);
+  it("returns no cost for unknown models (no default price is invented)", () => {
+    expect(calculateCost(1_000, 1_000, "unknown-model")).toBeUndefined();
   });
 
   it("estimates fewer tokens for natural language than code", async () => {

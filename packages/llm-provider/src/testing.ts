@@ -79,7 +79,9 @@ function fakeUsage(inputLen: number, outputLen: number) {
     inputTokens: Math.ceil(inputLen / 4),
     outputTokens: Math.ceil(outputLen / 4),
     totalTokens: Math.ceil(inputLen / 4) + Math.ceil(outputLen / 4),
+    // The double bills nothing: a known $0, like local inference.
     estimatedCost: 0,
+    priceSource: "price-book" as const,
   };
 }
 
@@ -434,6 +436,7 @@ export const TestLLMService = (
             outputTokens,
             totalTokens: inputTokens + outputTokens,
             estimatedCost: 0,
+            priceSource: "price-book" as const,
           },
         },
       ];

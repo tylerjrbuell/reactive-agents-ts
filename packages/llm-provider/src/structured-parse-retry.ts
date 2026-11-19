@@ -58,6 +58,16 @@ const addCount = (a: number | undefined, b: number | undefined): number | undefi
   a === undefined || b === undefined ? undefined : a + b;
 
 /**
+ * Provenance of a summed cost: either side "unknown" -> "unknown"; otherwise
+ * the latest attempt's source (the identity element carries none).
+ */
+const mergePriceSource = (
+  a: TokenUsage["priceSource"],
+  b: TokenUsage["priceSource"],
+): TokenUsage["priceSource"] =>
+  a === "unknown" || b === "unknown" ? "unknown" : (b ?? a);
+
+/**
  * Sum two {@link TokenUsage} records. Optional cache fields are only emitted
  * when at least one side carries them, so a provider without prompt caching
  * does not acquire spurious zero-valued cache fields.
@@ -66,7 +76,13 @@ const addUsage = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
   inputTokens: addCount(a.inputTokens, b.inputTokens),
   outputTokens: addCount(a.outputTokens, b.outputTokens),
   totalTokens: a.totalTokens + b.totalTokens,
-  estimatedCost: a.estimatedCost + b.estimatedCost,
+  // An unpriced attempt makes the total unknown (absent), never a partial sum.
+  ...(a.estimatedCost !== undefined && b.estimatedCost !== undefined
+    ? { estimatedCost: a.estimatedCost + b.estimatedCost }
+    : {}),
+  ...(mergePriceSource(a.priceSource, b.priceSource) !== undefined
+    ? { priceSource: mergePriceSource(a.priceSource, b.priceSource) }
+    : {}),
   ...(a.cacheCreationInputTokens !== undefined ||
   b.cacheCreationInputTokens !== undefined
     ? {

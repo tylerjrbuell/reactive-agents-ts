@@ -21,6 +21,8 @@ import { Effect, Option } from "effect";
 import type { ReportedModelMetadata } from "../capability-reported.js";
 import type { CapabilityDiscoverer } from "../capability-discovery.js";
 import { discoverReported, getJson, positiveInt, type DiscoveryFetch } from "./discovery-common.js";
+import { registerReportedPrice } from "../price-book/price-book.js";
+import type { PriceRates } from "../price-book/schema.js";
 
 type Rec = Readonly<Record<string, unknown>>;
 const isRec = (v: unknown): v is Rec => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -64,8 +66,45 @@ export function parseLiteLLMModelInfo(body: unknown, model: string): Option.Opti
   });
 }
 
+/** $/token -> $/1M tokens, or undefined unless a finite number >= 0. */
+const perMillion = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 ? Number((v * 1_000_000).toPrecision(12)) : undefined;
+
 /**
- * Build the LiteLLM discoverer.
+ * The per-token rates a /model/info body states for the deployments named
+ * `model` (the operator's prices, LiteLLM docs; unverified against a live
+ * proxy). Reported only when every deployment states the same input and output
+ * rate, since the proxy may route a request to any of them.
+ *
+ * @returns $/1M-token rates, or `Option.none()` when absent or ambiguous
+ */
+export function parseLiteLLMModelInfoPrice(body: unknown, model: string): Option.Option<PriceRates> {
+  if (!isRec(body) || !Array.isArray(body.data)) return Option.none();
+  const rates = body.data
+    .filter((d): d is Rec => isRec(d) && d.model_name === model)
+    .map((d): PriceRates | undefined => {
+      const info = isRec(d.model_info) ? d.model_info : {};
+      const input = perMillion(info.input_cost_per_token);
+      const output = perMillion(info.output_cost_per_token);
+      if (input === undefined || output === undefined) return undefined;
+      const cacheRead = perMillion(info.cache_read_input_token_cost);
+      const cacheWrite5m = perMillion(info.cache_creation_input_token_cost);
+      return {
+        input,
+        output,
+        ...(cacheRead !== undefined ? { cacheRead } : {}),
+        ...(cacheWrite5m !== undefined ? { cacheWrite5m } : {}),
+      };
+    });
+  const first = rates[0];
+  if (first === undefined) return Option.none();
+  const same = rates.every((r) => r !== undefined && JSON.stringify(r) === JSON.stringify(first));
+  return same ? Option.some(first) : Option.none();
+}
+
+/**
+ * Build the LiteLLM discoverer. Also records the proxy's stated rates for
+ * `model` in the PriceBook (`registerReportedPrice`) when /model/info has them.
  *
  * Skips the request for a static row or already-reported metadata.
  *
@@ -80,6 +119,12 @@ export const makeLiteLLMCapabilityDiscoverer =
       const headers: Record<string, string> =
         apiKey !== undefined && apiKey.length > 0 ? { authorization: `Bearer ${apiKey}` } : {};
       return getJson(fetchImpl, `${base}/model/info`, headers).pipe(
+        Effect.tap((body) =>
+          Effect.sync(() => {
+            const price = parseLiteLLMModelInfoPrice(body, model);
+            if (Option.isSome(price)) registerReportedPrice("litellm", model, price.value);
+          }),
+        ),
         Effect.map((body) => parseLiteLLMModelInfo(body, model)),
       );
     });

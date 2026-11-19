@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import type { ContentBlock, ToolMessageBlock } from "./content-blocks.js";
+import { PriceSourceSchema } from "./price-book/schema.js";
 
 // ─── LLM Provider Type ───
 
@@ -388,20 +389,19 @@ export const TokenUsageSchema = Schema.Struct({
   outputTokens: Schema.optional(Schema.Number),
   /** Sum of input and output tokens */
   totalTokens: Schema.Number,
-  /** Estimated cost in USD based on provider pricing */
-  estimatedCost: Schema.Number,
+  /** Cost in USD (PriceBook, user pricing or provider bill). ABSENT = price unknown, not free. */
+  estimatedCost: Schema.optional(Schema.Number),
+  /** Where `estimatedCost` came from (core `PriceSource`); "unknown" when it is absent. */
+  priceSource: Schema.optional(PriceSourceSchema),
   /**
-   * Tokens that wrote NEW entries to the provider's prompt cache on this turn.
-   * Charged at a premium (e.g. Anthropic: 1.25x base input). Subsequent calls
-   * within the cache TTL window read these for the discounted cache_read price.
-   * Optional — providers without prompt caching omit this field.
+   * Tokens that wrote NEW entries to the provider's prompt cache on this turn,
+   * billed at the model's cache-write rate. Optional: absent without caching.
    */
   cacheCreationInputTokens: Schema.optional(Schema.Number),
   /**
-   * Tokens served from the provider's prompt cache (cache hit). Charged at a
-   * deep discount (e.g. Anthropic: 0.1x base input — 90% off). Indicates the
-   * caching infrastructure (Lever 1, GH #143-followup) is firing on multi-turn
-   * conversations. Optional — providers without prompt caching omit this field.
+   * Tokens served from the provider's prompt cache (cache hit), billed at the
+   * model's cache-read rate. Indicates the caching infrastructure (Lever 1,
+   * GH #143-followup) is firing. Optional: absent without prompt caching.
    */
   cacheReadInputTokens: Schema.optional(Schema.Number),
   /**
@@ -929,7 +929,7 @@ export type LLMRequestEvent = {
       readonly inputTokens: number;
       readonly outputTokens: number;
       readonly totalTokens: number;
-      readonly estimatedCost: number;
+      readonly estimatedCost?: number;
     };
   };
   /** Complete request payload (only if LLMConfig.observabilityVerbosity = "full") */

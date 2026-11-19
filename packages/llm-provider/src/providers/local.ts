@@ -14,7 +14,7 @@ import type {
     ToolCall,
     TokenLogprob,
 } from '../types.js'
-import { estimateTokenCount } from '../token-counter.js'
+import { estimateTokenCount, LOCAL_COST_FIELDS } from '../token-counter.js'
 import { retryStreamBeforeFirstEmission, withRetryAndTimeout } from '../retry.js'
 import { getProviderDefaultModel } from '../provider-defaults.js'
 import { resolveCapability, registerProbedCapability } from '../capability-resolver.js'
@@ -529,7 +529,7 @@ export const LocalProviderLive = Layer.effect(
                             inputTokens,
                             outputTokens,
                             totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
-                            estimatedCost: 0, // Local models are free
+                            ...LOCAL_COST_FIELDS, // Local models are free ($0, price-book)
                         },
                         model: response.model ?? model,
                         toolCalls,
@@ -894,7 +894,7 @@ export const LocalProviderLive = Layer.effect(
                                                     (chunk.prompt_eval_count ??
                                                         0) +
                                                     (chunk.eval_count ?? 0),
-                                                estimatedCost: 0,
+                                                ...LOCAL_COST_FIELDS,
                                             },
                                             // Provider transparency: exact context window used this call.
                                             // F7: reuses the single numCtx binding from stream setup.
