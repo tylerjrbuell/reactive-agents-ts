@@ -34,6 +34,7 @@ process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE ??= "true";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { testHomeEnv } from "../tools/repo/src/lib/test-home.ts";
 import { pidAlive } from "../tools/repo/src/lib/test-slots.ts";
 import { makeTestRoot, realFs, sweep, TEST_ROOT_ENV, testTmpBase } from "../tools/repo/src/lib/tmp-janitor.ts";
 
@@ -50,6 +51,11 @@ if (!process.env[TEST_ROOT_ENV]) {
     const root = makeTestRoot();
     process.env.TMPDIR = root;
     process.env[TEST_ROOT_ENV] = root;
+    // HOME isolation (2026-11-19): suites leaked ~9,000 agent memory dirs into the real
+    // ~/.reactive-agents/memory. Point HOME at a mirror of the real home without ~/.reactive-agents.
+    // Bun caches os.homedir() at startup, so this covers process.env.HOME readers (the memory db
+    // resolver) and child processes; `repo test` sets HOME at spawn and covers os.homedir() too.
+    Object.assign(process.env, testHomeEnv(root));
     const cleanup = (): void => {
       try {
         rmSync(root, { recursive: true, force: true });

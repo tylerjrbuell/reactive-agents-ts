@@ -44,6 +44,20 @@
       "invoke": "bun .agents/skills/harness-improvement-loop/scripts/ollama-native-fc-gate.ts"
     },
     {
+      "id": ".agents/skills/harness-improvement-loop/scripts/probe-dispose-exit.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/probe-dispose-exit.ts",
+      "kind": "research",
+      "summary": "Live probe: does the process exit on its own after agent.dispose()",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/probe-dispose-exit.ts <provider> <model> [web] [strategy]"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/probe-qa-strategy-matrix.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/probe-qa-strategy-matrix.ts",
+      "kind": "research",
+      "summary": "Live QA strategy x model x task matrix with mechanically checked cells",
+      "invoke": "bun --env-file=.env .agents/skills/harness-improvement-loop/scripts/probe-qa-strategy-matrix.ts --out <results.json> --trace-root <dir> --model <model> --provider <provider>"
+    },
+    {
       "id": ".agents/skills/harness-improvement-loop/scripts/validate-entropy.ts",
       "path": ".agents/skills/harness-improvement-loop/scripts/validate-entropy.ts",
       "kind": "research",

@@ -203,9 +203,13 @@ export function reapCompileCache(fs: JanitorFs, dir: string, opts: { now: number
 export interface Hog {
   path: string
   bytes: number
-  kind: "stale-worktree" | "big-tmp"
+  kind: "stale-worktree" | "big-tmp" | "test-leftovers" | "cache"
   /** Hours since last activity (worktrees only). */
   idleHours?: number
+  /** Entries in the group (test leftovers only). */
+  count?: number
+  /** Short label: the fixture prefix or the cache name. */
+  label?: string
   fix: string
 }
 
@@ -214,25 +218,40 @@ export const WORKTREE_STALE_MS = 24 * 60 * 60 * 1000
 /** Top-level temp entries the janitor does not own are reported above this size. */
 export const BIG_TMP_BYTES = 500 * 1024 ** 2
 
-/** One agent worktree reading: path, last activity (newest of HEAD commit and index mtime) and size. */
+/** One worktree reading: path, last activity (newest of HEAD commit and index mtime) and size. */
 export interface WorktreeReading {
   path: string
   lastActiveMs: number
   /** Size; only needed for stale worktrees, so a reader may size lazily. */
   bytes: () => number
+  /** `git worktree list` marks it prunable: its directory is gone. */
+  prunable?: boolean
+  /** `git worktree lock` was set on it. */
+  locked?: boolean
 }
 
-/** Worktrees idle past `WORKTREE_STALE_MS`, with the exact remove command. Report only. */
+/** The command that frees a stale worktree. `git worktree remove` refuses a dirty tree, which is the point. */
+function worktreeFix(w: WorktreeReading): string {
+  if (w.prunable === true) return "git worktree prune   # directory already gone; drops the stale record"
+  if (w.locked === true) return `git worktree unlock ${w.path} && git worktree remove ${w.path}   # locked: check why first`
+  return `git worktree remove ${w.path}`
+}
+
+/** Worktrees idle past `WORKTREE_STALE_MS` (or prunable), with the exact remove command. Report only. */
 export function staleWorktrees(worktrees: readonly WorktreeReading[], now: number): Hog[] {
   return worktrees
-    .filter((w) => now - w.lastActiveMs >= WORKTREE_STALE_MS)
-    .map((w) => ({
-      path: w.path,
-      bytes: w.bytes(),
-      kind: "stale-worktree" as const,
-      idleHours: Math.floor((now - w.lastActiveMs) / 3_600_000),
-      fix: `git worktree remove ${w.path}`,
-    }))
+    .filter((w) => w.prunable === true || now - w.lastActiveMs >= WORKTREE_STALE_MS)
+    .map((w) =>
+      w.prunable === true
+        ? { path: w.path, bytes: 0, kind: "stale-worktree" as const, label: "directory gone", fix: worktreeFix(w) }
+        : {
+            path: w.path,
+            bytes: w.bytes(),
+            kind: "stale-worktree" as const,
+            idleHours: Math.floor((now - w.lastActiveMs) / 3_600_000),
+            fix: worktreeFix(w),
+          },
+    )
 }
 
 /**

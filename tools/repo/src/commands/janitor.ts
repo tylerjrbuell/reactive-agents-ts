@@ -1,9 +1,11 @@
 import { execFileSync, spawnSync } from "node:child_process"
-import { readdirSync, statSync } from "node:fs"
+import { existsSync, readdirSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { isAbsolute, join, sep } from "node:path"
+import { isAbsolute, join } from "node:path"
 import type { Command } from "../cli.ts"
 import { rejectUnknown } from "../lib/args.ts"
+import { type CacheReading, cacheHogs, TEST_MEMORY_PREFIXES, testMemoryLeftovers } from "../lib/dev-hogs.ts"
+import { realHome } from "../lib/test-home.ts"
 import { assessPressure, readPressure, type Pressure, type Verdict } from "../lib/mem-guard.ts"
 import type { Io } from "../lib/output.ts"
 import { resolveRoot } from "../lib/root.ts"
@@ -82,22 +84,49 @@ export function preflightHeavy(io: Io, cmd: string): number | undefined {
   return undefined
 }
 
+/** Paths per `du` call: keeps argv far below ARG_MAX when sizing thousands of memory dirs. */
+const DU_BATCH = 1000
+
 /** Recursive size in bytes via `du -sk` (POSIX; far faster than a JS walk on 250k-file worktrees). */
 function duBytes(paths: readonly string[]): Map<string, number> {
   const out = new Map<string, number>()
-  if (paths.length === 0) return out
-  // du exits 1 on unreadable subdirs but still prints totals: read stdout regardless.
-  const r = spawnSync("du", ["-sk", "--", ...paths], { encoding: "utf8", timeout: 60_000, maxBuffer: 16 * 1024 ** 2 })
-  for (const line of (r.stdout ?? "").split("\n")) {
-    const m = /^(\d+)\s+(.+)$/.exec(line)
-    if (m !== null && m[2] !== undefined) out.set(m[2], Number(m[1]) * 1024)
+  for (let i = 0; i < paths.length; i += DU_BATCH) {
+    // du exits 1 on unreadable subdirs but still prints totals: read stdout regardless.
+    const r = spawnSync("du", ["-sk", "--", ...paths.slice(i, i + DU_BATCH)], { encoding: "utf8", timeout: 60_000, maxBuffer: 16 * 1024 ** 2 })
+    for (const line of (r.stdout ?? "").split("\n")) {
+      const m = /^(\d+)\s+(.+)$/.exec(line)
+      if (m !== null && m[2] !== undefined) out.set(m[2], Number(m[1]) * 1024)
+    }
   }
   return out
 }
 
-/** Agent worktrees under `<root>/.claude/worktrees/` with their last activity. Never throws. */
-function readAgentWorktrees(root: string): WorktreeReading[] {
-  const prefix = join(root, ".claude", "worktrees") + sep
+/** One `git worktree list --porcelain` record. */
+export interface WorktreeRecord {
+  path: string
+  prunable: boolean
+  locked: boolean
+}
+
+/**
+ * Worktree records from `git worktree list --porcelain`, minus the main worktree (always first) and
+ * `self` (the checkout the janitor runs in). Covers worktrees anywhere on disk, not only `.claude/worktrees`.
+ */
+export function parseWorktreeList(porcelain: string, self: string): WorktreeRecord[] {
+  const out: WorktreeRecord[] = []
+  for (const block of porcelain.split(/\n\s*\n/).slice(1)) {
+    const lines = block.split("\n")
+    const head = lines.find((l) => l.startsWith("worktree "))
+    if (head === undefined) continue
+    const path = head.slice("worktree ".length)
+    if (path === self) continue
+    out.push({ path, prunable: lines.some((l) => l.startsWith("prunable")), locked: lines.some((l) => l.startsWith("locked")) })
+  }
+  return out
+}
+
+/** Every linked worktree of this repo with its last activity. Never throws. */
+function readWorktrees(root: string): WorktreeReading[] {
   let list = ""
   try {
     list = execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
@@ -105,10 +134,11 @@ function readAgentWorktrees(root: string): WorktreeReading[] {
     return []
   }
   const out: WorktreeReading[] = []
-  for (const line of list.split("\n")) {
-    if (!line.startsWith("worktree ")) continue
-    const path = line.slice("worktree ".length)
-    if (!path.startsWith(prefix)) continue
+  for (const { path, prunable, locked } of parseWorktreeList(list, root)) {
+    if (prunable) {
+      out.push({ path, lastActiveMs: 0, bytes: () => 0, prunable, locked })
+      continue
+    }
     let last = 0
     try {
       last = Number(execFileSync("git", ["log", "-1", "--format=%ct"], { cwd: path, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()) * 1000
@@ -117,9 +147,37 @@ function readAgentWorktrees(root: string): WorktreeReading[] {
     } catch {
       // Missing or broken worktree: keep `last` as read; a prunable one shows as stale.
     }
-    out.push({ path, lastActiveMs: last, bytes: () => duBytes([path]).get(path) ?? 0 })
+    out.push({ path, lastActiveMs: last, bytes: () => duBytes([path]).get(path) ?? 0, locked })
   }
   return out
+}
+
+/** Sizes of test-fixture entries in the real `~/.reactive-agents/memory` (others are never walked). */
+function readTestMemorySizes(memDir: string): Map<string, number> {
+  let names: string[] = []
+  try {
+    names = readdirSync(memDir).filter((n) => TEST_MEMORY_PREFIXES.some((p) => n.startsWith(p)))
+  } catch {
+    return new Map()
+  }
+  const sizes = new Map<string, number>()
+  for (const [p, b] of duBytes(names.map((n) => join(memDir, n)))) sizes.set(p.slice(memDir.length + 1), b)
+  return sizes
+}
+
+/** Turbo and bun install cache sizes (absent caches are left out). */
+function readCaches(root: string, home: string): CacheReading {
+  const turbo = join(root, ".turbo")
+  const bunInstall = process.env.BUN_INSTALL
+  const bun =
+    process.env.BUN_INSTALL_CACHE_DIR ?? join(bunInstall !== undefined && bunInstall.length > 0 ? bunInstall : join(home, ".bun"), "install", "cache")
+  const sizes = duBytes([turbo, bun].filter((p) => existsSync(p)))
+  const r: CacheReading = {}
+  const t = sizes.get(turbo)
+  const b = sizes.get(bun)
+  if (t !== undefined) r.turbo = { path: turbo, bytes: t }
+  if (b !== undefined) r.bun = { path: bun, bytes: b }
+  return r
 }
 
 /** Sizes of top-level temp entries the janitor does not own (owned and `claude-*` entries are never walked). */
@@ -142,14 +200,24 @@ function readTmpSizes(dir: string): Map<string, number> {
 /** Hogs listed per kind before `... N more`. */
 const HOG_CAP = 10
 
+function hogWhat(h: Hog): string {
+  switch (h.kind) {
+    case "stale-worktree":
+      return `stale worktree, ${h.label ?? `idle ${h.idleHours ?? "?"} h`}`
+    case "big-tmp":
+      return "large temp entry, not janitor-owned"
+    case "test-leftovers":
+      return `${h.count ?? "?"} test-fixture memory dirs ${h.label ?? ""}* in the real home`
+    case "cache":
+      return h.label ?? "cache"
+  }
+}
+
 function hogLines(hogs: readonly Hog[]): string[] {
   const lines: string[] = []
-  for (const kind of ["stale-worktree", "big-tmp"] as const) {
+  for (const kind of ["stale-worktree", "test-leftovers", "cache", "big-tmp"] as const) {
     const of = hogs.filter((h) => h.kind === kind)
-    for (const h of of.slice(0, HOG_CAP)) {
-      const what = kind === "stale-worktree" ? `stale worktree, idle ${h.idleHours ?? "?"} h` : "large temp entry, not janitor-owned"
-      lines.push(`  ${fmtBytes(h.bytes)}  ${what}: ${h.fix}`)
-    }
+    for (const h of of.slice(0, HOG_CAP)) lines.push(`  ${fmtBytes(h.bytes)}  ${hogWhat(h)}: ${h.fix}`)
     if (of.length > HOG_CAP) lines.push(`  ... ${of.length - HOG_CAP} more ${kind}`)
   }
   return lines
@@ -163,7 +231,7 @@ export const janitorCommand: Command = {
   detail: [
     "--dry-run: report what would be removed, remove nothing",
     "reaps: <tmp>/ra-tests-<pid>-* whose PID is dead (any age); legacy ra-*, corrective-guard*, w3b-triad*, rax-clean-install-test* and similar older than 60 min; <tmp>/node-compile-cache older than 24 h or over 512 MB (node regenerates it)",
-    "reports only (never deletes): git worktrees under .claude/worktrees idle > 24 h, with size and the `git worktree remove <path>` command; top-level temp entries > 500 MB it does not own",
+    "reports only (never deletes), each with its cleanup command: every linked git worktree (anywhere on disk) idle > 24 h or prunable; test-fixture agent memory dirs (guardrail-test-*, sub-grand-*, ...) in the real ~/.reactive-agents/memory; .turbo > 2 GB; the bun install cache > 5 GB; top-level temp entries > 500 MB it does not own",
     "never touches a root whose PID is alive, repo-test-slots-*, or <tmp>/claude-* (other live sessions); also scans REPO_TEST_TMPDIR when set",
     "the reaping (not the report) runs automatically at the start of `repo test`, `repo verify`, `repo ci` and `repo guard`",
   ],
@@ -175,7 +243,15 @@ export const janitorCommand: Command = {
     const now = Date.now()
     let hogs: Hog[] = []
     try {
-      hogs = [...staleWorktrees(readAgentWorktrees(resolveRoot(undefined)), now), ...bigTmpEntries(tmpdir(), readTmpSizes(tmpdir()))]
+      const root = resolveRoot(undefined)
+      const home = realHome()
+      const memDir = join(home, ".reactive-agents", "memory")
+      hogs = [
+        ...staleWorktrees(readWorktrees(root), now),
+        ...testMemoryLeftovers(memDir, readTestMemorySizes(memDir)),
+        ...cacheHogs(readCaches(root, home)),
+        ...bigTmpEntries(tmpdir(), readTmpSizes(tmpdir())),
+      ]
     } catch {
       // The report is advisory: never fail the janitor over it.
     }

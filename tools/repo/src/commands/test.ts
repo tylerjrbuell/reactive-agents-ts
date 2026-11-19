@@ -7,6 +7,7 @@ import { summarizeBunTest, type TestSummary } from "../lib/bun-test-summary.ts"
 import type { Io } from "../lib/output.ts"
 import { resolveRoot } from "../lib/root.ts"
 import { acquireSlot, SLOT_HELD_ENV, slotCount } from "../lib/test-slots.ts"
+import { testHomeEnv } from "../lib/test-home.ts"
 import { makeTestRoot, TEST_ROOT_ENV } from "../lib/tmp-janitor.ts"
 import { preflightHeavy, PRESSURE_HINT, pressureStop } from "./janitor.ts"
 
@@ -130,6 +131,14 @@ export interface TestRun {
 }
 
 /**
+ * Env that confines a test process to `root`: TMPDIR (every `os.tmpdir()` mkdtemp) and HOME (a mirror
+ * of the real home without `~/.reactive-agents`, see `lib/test-home.ts`). Removing `root` removes both.
+ */
+export function testRootEnv(root: string): Record<string, string> {
+  return { TMPDIR: root, [TEST_ROOT_ENV]: root, ...testHomeEnv(root) }
+}
+
+/**
  * Run `bun test <paths>` once with output going straight to a log file. Waits for a machine-wide
  * test slot first (see `lib/test-slots.ts`); `notify` gets the one waiting line, if any.
  * `namePattern` is passed as `-t <pattern>` (bun's test-name filter). `beforeStart` runs once the slot
@@ -167,8 +176,7 @@ export async function execTests(
   try {
     ;({ code: exit, timedOut } = await spawnLogged(cmd, cmdArgs, root, log, maxSeconds, {
       [SLOT_HELD_ENV]: "1",
-      TMPDIR: tmpRoot,
-      [TEST_ROOT_ENV]: tmpRoot,
+      ...testRootEnv(tmpRoot),
     }))
   } finally {
     slot.release()
