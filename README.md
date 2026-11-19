@@ -137,7 +137,7 @@ Everything else lives on the [documentation site](https://docs.reactiveagents.de
 
 ```bash
 bun install              # Install dependencies
-bun test                 # Run full test suite (20,700+ tests / 2,300+ files)
+bun test                 # Run full test suite (20,700+ tests / 2,400+ files)
 bun run build            # Build all packages
 ```
 
