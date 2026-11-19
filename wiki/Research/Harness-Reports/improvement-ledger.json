@@ -1423,6 +1423,34 @@
       "tokenOverheadPct": -9,
       "rationale": "k=5 per arm gemma4:e4b one tier: off 4/5, on 4/5 (b=1,c=1); non-inferior under the pre-registered rule; on-arm early-stop 3/5 > 1/5 (proximal moved) but the same failure appears 1/5 in the OFF arm, so it is not flag-caused. Not a KEEP (single tier, noise-level). Working tree had uncommitted guard.ts duplicateGuard hint change (kernel-warden). Residual owner: kernel-warden.",
       "status": "baseline"
+    },
+    {
+      "id": "e5b2c9d3-6f48-4a01-b7d2-3c0f8a4e9f52",
+      "createdAt": "2026-11-19T03:30:00.000Z",
+      "weaknessRef": "wiki/Research/Harness-Reports/2026-11-18-zoo-live/README.md",
+      "weakness": "ab-trap-5 gemma4:e4b: 1/10 runs (aoa arm) still end dispatcher-early-stop failure with an honest decline; exit_gate.declineCheck says rejectedBy=tool-viable with missingTools=[] at both gates.",
+      "hypothesis": "inspectDecline derives missing tools via effectiveMissingRequired, which drops tools in evidence.permanentlyFailed (attempted, 0 successes); a required tool that failed ENOENT is therefore treated as 'nothing missing' and the decline is rejected. Not reproduced zero-token; anchor honest-decline-exit.ts neverSucceededRequired + requirement-state.ts effectiveMissingRequired.",
+      "baselineVariantId": "ab-trap-5-aoa-off-373a12a70",
+      "candidateVariantId": "ab-trap-5-dd307bab7",
+      "decision": "baseline",
+      "liftPp": 0,
+      "tokenOverheadPct": -9,
+      "rationale": "k=5 per arm: off 5/5, on 4/5; decline-scored-0 1/10 (was 2/10): between rules, underpowered. Non-inferior. Owner: kernel-warden.",
+      "status": "baseline"
+    },
+    {
+      "id": "f6c3d0e4-7a59-4b12-c8e3-4d1a9b5f0a63",
+      "createdAt": "2026-11-19T03:35:00.000Z",
+      "weaknessRef": "wiki/Research/Harness-Reports/2026-11-18-zoo-live/README.md",
+      "weakness": "cogito:8b h3-todo-heavy 0/10 solved at dd307bab7 (baseline 1/10 rescored, 3/15 pooled); duplicate refusal fired 7/10.",
+      "hypothesis": "f08652b1a refusal names 'first unread listed input' but deriveListedInputs reads the prompt 'notes-1.txt through notes-6.txt' as two inputs (notes-1, notes-6), so the named input is always notes-6 while notes-2..5 stay unread; refusal text cannot steer a range-enumerated task.",
+      "baselineVariantId": "h3-todo-heavy-cogito-pre-f08652b1a",
+      "candidateVariantId": "h3-todo-heavy-cogito-dd307bab7",
+      "decision": "reject",
+      "liftPp": -10,
+      "tokenOverheadPct": 23,
+      "rationale": "REFUTED per PREDICTIONS-4: refusal fired 7/10, named an input 6/7 (always notes-6), 0/7 solved; model read the named file after refusal in 3/6 and still wrote wrong values. exact-value 5/5 no regression. One tier, k=10. Next: range expansion in deriveListedInputs (kernel-warden).",
+      "status": "rejected"
     }
   ]
 }

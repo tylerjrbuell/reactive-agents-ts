@@ -1,0 +1,3 @@
+H3: results file was started at dd307bab7aa1ee007c785f9bcd0e9ac20fed733d, HEAD is 2269b920ccf57f851642171045f0e1bf624167ba (baseline must stay on one SHA)
+[h3] cogito:8b|h3-exact-value|3 solved=true acc=1.00 pass cause=none it=3 2099tok 5s elapsed=7s
+[h3] ran=1 remaining=0

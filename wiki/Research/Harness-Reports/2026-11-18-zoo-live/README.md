@@ -171,3 +171,46 @@ Then re-run F1b (10 cells, about 2 minutes). Ledger entry appended.
 ### runner.ts shrink (same mission)
 
 `runner.ts` 974 > 963 LOC (ceiling): per-task sandbox (temp dir, fixtures, `withFileRoot`, grading, cleanup) moved into `packages/benchmarks/src/quick-grade.ts` as `openQuickSandbox(task)`. Behavior unchanged; quick-grade tests 4/4, `repo verify packages/benchmarks` green, `check-file-size` green.
+
+## Addendum 4 (2026-11-19): live gate fix (`dd307bab7`) and refusal fix (`f08652b1a`)
+
+Pre-registration: [PREDICTIONS-4.md](PREDICTIONS-4.md), written before the first cell. Build: HEAD `dd307bab7`, clean `packages/reasoning`; dist sha256 `e574369b…` contains `blocking-outstanding` and `listed input you have not read yet`; bench resolves reasoning from `src`. `ollama ps` clean before each drive; one supervisor at a time; 180 s cells. Specs `a4-A/B/B2.spec.json`, results `a4-A/`, `a4-B/`, `a4-B2/`, scanner `a4-trace-scan.ts` (refusal and named input read from `llm-exchange` message text, not labels). 25 cells, 0 failed units.
+
+### Family A: ab-trap-5, gemma4:e4b, k=5 per arm
+
+| Metric | Predicted | Observed |
+| --- | --- | --- |
+| off solved | 5/5 (4/5 ok) | 5/5 |
+| on (actOrAnswer) solved | 5/5 (4/5 ok) | 4/5 |
+| decline-scored-0 across both arms | <= 1 of 10 | 1 of 10 (aoa run4; was 2 of 10) |
+| tokens/run off > on | n/a | 3165 > 2865 |
+
+Verdict: underpowered, weakly confirmed. Both arms meet the >= 4/5 bar and the loss count met the "confirmed" threshold (<= 1 of 10), but 1 vs 2 of 10 is inside noise and the failure still occurs. Not a KEEP (one tier).
+
+The remaining loss (aoa run4, `rax-diagnose cause`: `tool-failure/repeated-identical-call`, `harness:honest-decline-mislabeled`, status failure, the model's output is the true decline) is explained by the new `exit_gate.declineCheck`. Both gates record `missingTools: []` and `rejectedBy: "tool-viable"`: gate 1 (iter 3, deny-once, outstanding `call the file-read tool` [declared] + `write the final answer ...` [heuristic]) and gate 2 (iter 4, handoff, outstanding `call the file-read tool` [declared], text = "I cannot determine the total because the file `./ledger.json` could not be found or read."). The heuristic item (`dd307bab7`) is no longer what blocks it; the first clause, `missing === undefined`, rejects, and it also holds when the missing list is EMPTY. The text is a valid decline and file-read failed twice with ENOENT.
+
+Hypothesis (code-read, NOT reproduced zero-token): `inspectDecline` calls `neverSucceededRequired` -> `missingRequiredToolsForInput` -> `effectiveMissingRequired` (`requirement-state.ts:141`), which filters out tools in `evidence.permanentlyFailed` (attempted, 0 successes; `requirement-state.ts:94`). A failed required tool is thus dropped from `missing`, `neverSucceededAmong` returns undefined on `missing.length === 0`, and the decline is rejected as "tool-viable" precisely when the tool is dead. The outstanding list (from `outstandingItems`, unfiltered) still says "call the file-read tool". Anchors: `packages/reasoning/src/kernel/loop/honest-decline-exit.ts` (`inspectDecline`, `neverSucceededAmong`), `packages/reasoning/src/kernel/capabilities/verify/requirement-state.ts:141`. Next fix (kernel-warden): compute the decline's `missing` from unfiltered `missingRequired` over `input.requiredTools`, keep the "every call failed" test on outcomes; pin with a zero-token test whose evidence has `permanentlyFailed: ["file-read"]`. Also give the empty case its own `rejectedBy` value; `tool-viable` is misleading there.
+
+### Family B: cogito:8b, default arm
+
+| Cell | Baseline | Predicted | Observed |
+| --- | --- | --- | --- |
+| h3-todo-heavy k=10 solved | 1/10 rescored, 3/15 pooled, 0/8 refusal runs | 3-5/10 | 0/10 (acc mean 0.35 vs 0.38) |
+| refusal fired | 8 of 15 pooled | 4-7 of 10 | 7 of 10 |
+| refusal names an unread input | n/a | >= 80% of fired | 6 of 7 (85%); always `notes-6.txt` |
+| solved among refusal runs | 0/8 | >= 1 | 0/7 |
+| model read the named input after the refusal | n/a | n/a | 3 of 6 |
+| tokens/run, tokens/solved | 11492 | n/a | 14155, undefined (0 solved) |
+| h3-exact-value k=5 solved | 9/10 (5/5 reg) | >= 4/5 | 5/5, 2195 tok/run, refusal fired 1 (no hint), solved |
+
+Verdict todo-heavy: REFUTED per the pre-registered rule (refusal fired >= 3, named an input, 0 solved; overall <= 1/10). The mechanism misfires on this task: the prompt says "notes-1.txt through notes-6.txt", so `deriveListedInputs` yields two entities (notes-1, notes-6). After notes-1 is read the hint always says "Read notes-6.txt first" while notes-2..5 are the ones skipped. Run0: model read notes-6, wrote out-3..6 all as `108` (54 x 2) from one read. Run4: read notes-6, wrote out-3/out-4 as 126 (notes-4's value) and out-5 as 84 (notes-2's). Where the model followed the hint outputs were still wrong (3 of 6 followed), so a correct range expansion may not suffice. Verdict exact-value: no regression (non-inferior; k=5, one tier).
+
+Selection caveat still applies: refusals occur in already-looping runs. 3 of 10 runs had no refusal (run1, run7: 2-3 iterations then wrong answer; run9: stall-after-work), so the cell fails from several independent causes and the refusal text touches one.
+
+### Next-fix hypotheses (kernel-warden; one fix per cycle)
+
+1. Decline gate: stop dropping permanently-failed required tools from the `missing` set `inspectDecline` judges (above). Zero-token pin first, then ab-trap-5 k=5 per arm; proximal metric = `declineCheck.rejectedBy` becomes `none`, loss count 0 of 10.
+2. todo-heavy: (a) expand "X-1 through X-N" ranges in `deriveListedInputs` (`verify/derive-inputs.ts:66`) so the named input is a truly unread one; (b) since following the hint still gave wrong values in 3 of 6 runs, the stronger candidate is a gate refusing `file-write` of `out-N` while its source is unread (the inputCoverage/writeCoverage family, ablation-gated). Measure (a) at k=10 first; if solved stays <= 2/10 go to (b) as an ablation.
+3. Instrument note (no edit made): the scanner infers "followed the hint" from the first `Already done` text in `llm-exchange`; a trace event carrying the refusal hint would make this exact. Candidate for kernel-warden when touching `guard.ts`.
+
+No `packages/**` file changed in this mission, so `repo verify packages/benchmarks` was not re-run. Ledger: two entries appended to `improvement-ledger.json`.
