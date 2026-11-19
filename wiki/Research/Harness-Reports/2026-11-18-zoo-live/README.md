@@ -139,3 +139,35 @@ F2 5/5 vs 5/5 means "not catastrophically worse than off" (the pre-fix failure w
 
 1. `honest-decline-exit.ts` `latestTextAfterEvidence`: read the decline text of a turn whose call batch was dropped when the run ends by a guard (H-A3). Zero-token proof first: replay the three traces `recheck-f1/traces/aoa/gemma4_e4b/ra-default/ab-trap-5/run{1,2,4}` to check `honestDeclineOf` returns undefined for them, then add a zoo shape `decline-after-ignored-nudge` (decline plus call in one turn after a redirect nudge).
 2. Then re-run F1 (10 cells, about 2 minutes) before reading any actOrAnswer verdict again.
+
+## Addendum 3 (2026-11-19): ab-trap-5 actOrAnswer re-run after the dropped-call decline fix
+
+Pre-registration: [PREDICTIONS-3.md](PREDICTIONS-3.md) (written before the first cell). Build: HEAD `373a12a70` (contains `76957e01e`), reasoning dist sha256 `6a344635…` (20:11:05, contains `callsDropped`); bench resolves reasoning from `src`. Confound: uncommitted kernel-warden diff in `packages/reasoning/src/kernel/capabilities/act/guard.ts` (`duplicateGuard` hint text; `git diff packages/reasoning` hash `0b2afcc80eab`); it never touches the exit gate. gemma4:e4b, k=5 per arm, 180 s cell timeout, 10 cells, 0 failed units; `ollama ps` empty before. Table: [recheck-f1b-table.txt](recheck-f1b-table.txt); results `recheck-f1b/`.
+
+| Cell | Predicted off / on | Observed off / on | tok/run off > on | b,c | Proximal (early-stop on-arm) | Agree |
+| --- | --- | --- | --- | --- | --- | --- |
+| F1b | 5/5 / 4-5/5 | 4/5 / 4/5 | 2951 > 2681 (-9%) | 1,1 | 1/5 (was 3/5); also 1/5 in the OFF arm | outcome yes (on non-inferior), off predicted 5/5 missed by one |
+
+Decision rule: on 4 >= off 4 - 1, non-inferior; not hurt. The earlier "on = 2/5" is not reproduced (2/5 > 4/5, same on-arm 3/5 > 1/5 early-stops). Verdict: the dropped-call fix is directionally confirmed on the on-arm, but the failure it targeted is NOT gone: it occurs once per arm, including with the flag OFF (off run1), so it is a gate defect independent of actOrAnswer, and the earlier "flag raises the rate" lead is withdrawn (n too small either way). One model, one task, k=5: not a KEEP.
+
+### What the 2 remaining failures are (off run1, aoa run0; `rax-diagnose cause`: `tool-failure/repeated-identical-call`, `harness:honest-decline-mislabeled`, output = the true decline, scored 0)
+
+The shape differs from addendum 2's "decline + call in one turn". Both runs: iter 1 tool-free decline; iter 2 and iter 3 pure `file-read` calls with empty content (after the redirect nudge); then:
+- Gate 1 (iter 3, `dispatcher_early_stop`): `deny-once`, outstanding `["call the file-read tool", "write the final answer (the last text was narration around a tool call, not an answer)"]` (`exit-gate.ts:250` `CALL_NARRATION`).
+- The model then writes a tool-free decline ("I cannot determine the total because ..."), 0 calls.
+- Gate 2 (iter 4, `dispatcher_early_stop`): `handoff`, outstanding `["call the file-read tool"]`, run `failure`; `pending_batch` drops the stale iter-3 call.
+
+Zero-token repro (probe test built from the trace shape, since deleted; steps: call/action/failed-read/decline/call/action/failed-read/pure call; `honestDeclineOf` called directly):
+- Gate 1 outstanding (2 items): returns `undefined`. With only the tool item: returns the decline. So `honestDeclineOf` (`honest-decline-exit.ts:78`, `outstanding.every(...)`) rejects because of the heuristic `CALL_NARRATION` item, even though a valid tool-free decline exists from iter 1. This is a confirmed defect at gate level, but it only causes one deny-once (the model may recover next turn).
+- Gate 2 shape (plus a final tool-free decline, stale pending batch): returns the decline, yet the real run did NOT abstain. NOT explained: the real state at gate 2 differs from my reconstruction in a way I cannot see from the trace (the trace has no step-level `assistantTurn` and the exit_gate event does not record what `honestDeclineOf` saw).
+
+### For kernel-warden (minimal next fix, hypothesis only)
+
+1. Make the exit gate record the inputs of the decline check in the `exit_gate` guard event when proposal is a guard and a required tool never succeeded: `missing`, the `latestTextAfterEvidence` text (or `none`), and which clause rejected. One traced run then shows why gate 2 handed off. This is the instrument the question needs.
+2. Treat `CALL_NARRATION` (and other heuristic-basis items, `outstandingBasis: "heuristic"`) as non-blocking in `honestDeclineOf`'s `every` check; zero-token pin: gate 1 shape above must abstain.
+3. Candidate for gate 2 to check first: whether the dispatcher early-stop is evaluated against `state.steps` that already include the final decline thought (observer at iter 4 ran 3 ms after the stream returned), and whether the stale iter-3 `pendingNativeToolCalls` (still listed by `pending_batch dropped`) changes `callsDropped`/`latestTextAfterEvidence` for the earlier call thought.
+Then re-run F1b (10 cells, about 2 minutes). Ledger entry appended.
+
+### runner.ts shrink (same mission)
+
+`runner.ts` 974 > 963 LOC (ceiling): per-task sandbox (temp dir, fixtures, `withFileRoot`, grading, cleanup) moved into `packages/benchmarks/src/quick-grade.ts` as `openQuickSandbox(task)`. Behavior unchanged; quick-grade tests 4/4, `repo verify packages/benchmarks` green, `check-file-size` green.
