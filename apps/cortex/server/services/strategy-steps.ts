@@ -12,7 +12,16 @@
  * event and are simply absent until the framework reports them.
  */
 import type { AgentEvent } from "@reactive-agents/core";
-import { totNodeOfThought, totNodeOfWire, type StepEvent, type TotNode } from "@reactive-agents/ui-core";
+import {
+  planStepPayloadOf,
+  strategyChoicePayloadOf,
+  totNodeOfThought,
+  totNodeOfWire,
+  type PlanStepPayload,
+  type StepEvent,
+  type StrategyChoicePayload,
+  type TotNode,
+} from "@reactive-agents/ui-core";
 import type { SubscribableAgent } from "./chat-ingest.js";
 
 /** Steps kept when nobody drains (a run with no consumer); older ones are dropped first. */
@@ -31,7 +40,13 @@ export interface StepDetail {
   readonly verify?: { readonly verdict: string; readonly summary: string };
   readonly critique?: string;
   readonly accepted?: boolean;
+  readonly note?: string;
+  readonly choice?: StrategyChoicePayload;
+  readonly planStep?: PlanStepPayload;
 }
+
+/** Plan-style passes whose narration explains a retry, a patch or a failure (`plan-execute:step-2:failed`, `blueprint:step-1:retry-1`). */
+const PLAN_REASON_PASS = /^(?:plan-execute|blueprint|rewoo):step-\d+:(?:failed|patch|retry(?:-\d+)?)$/;
 
 /**
  * Detail from a step's `structured` payload, read defensively (a `kind` this code does not know, or no
@@ -55,6 +70,14 @@ export function stepDetailOf(structured: unknown, exploreThought: string | undef
         ...(str(r.stderr) !== undefined ? { stderr: str(r.stderr)! } : {}),
         ...(str(v.verdict) !== undefined ? { verify: { verdict: str(v.verdict)!, summary: typeof v.summary === "string" ? v.summary : "" } } : {}),
       };
+    }
+    case "strategy-choice": {
+      const choice = strategyChoicePayloadOf(r);
+      return choice ? { choice } : {};
+    }
+    case "plan-step": {
+      const planStep = planStepPayloadOf(r);
+      return planStep ? { planStep } : {};
     }
     case "reflexion":
       return { ...(str(r.critique) !== undefined ? { critique: str(r.critique)! } : {}), ...(typeof r.accepted === "boolean" ? { accepted: r.accepted } : {}) };
@@ -87,7 +110,11 @@ export async function recordStrategySteps(
     if (!pass) return;
     followed ??= event.taskId;
     if (event.taskId !== followed) return;
-    const detail = stepDetailOf(asRecord(event).structured, pass.endsWith(":explore") ? event.thought : undefined, tot);
+    // Adaptive reports its choice (strategy picked, cost downgrade, fallback) only as the step's narration.
+    const note = pass.startsWith("adaptive:") ? str(event.thought)?.slice(0, 300) : undefined;
+    // A failed, retried or patched plan step explains itself in its narration (thought) or observation.
+    const reason = PLAN_REASON_PASS.test(pass) ? str(event.thought ?? asRecord(event).observation)?.slice(0, 300) : undefined;
+    const detail: StepDetail = { ...stepDetailOf(asRecord(event).structured, pass.endsWith(":explore") ? event.thought : undefined, tot), ...((note ?? reason) !== undefined ? { note: (note ?? reason)! } : {}) };
     if (detail.node?.id.startsWith("thought-")) tot += 1;
     if (pass === lastPass && Object.keys(detail).length === 0) return;
     lastPass = pass;

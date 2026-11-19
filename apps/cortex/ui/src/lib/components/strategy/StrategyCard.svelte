@@ -11,6 +11,7 @@
   import { strategyCardModel } from "../../strategy-visuals/registry.js";
   import Icon from "../kit/Icon.svelte";
   import PhaseRows from "./PhaseRows.svelte";
+  import PlanRows from "./PlanRows.svelte";
   import TotLevels from "./TotLevels.svelte";
   import AttemptGroups from "./AttemptGroups.svelte";
 
@@ -48,6 +49,8 @@
           <AttemptGroups {run} noun={model.noun} />
         {:else if model.kind === "loop" && loop}
           <ReactLoopRows {loop} />
+        {:else if model.kind === "plan"}
+          <PlanRows {run} historyOnly={model.historyOnly} />
         {:else}
           <PhaseRows rows={run.rows} />
         {/if}

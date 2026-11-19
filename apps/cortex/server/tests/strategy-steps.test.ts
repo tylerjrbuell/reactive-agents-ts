@@ -87,4 +87,26 @@ describe("recordStrategySteps", () => {
     expect(withCode!.step).toMatchObject({ code: "return 1", stdout: "1" });
     expect(plain!.step).not.toHaveProperty("code");
   });
+
+  it("carries structured strategy-choice and plan-step payloads, and ignores malformed ones", async () => {
+    const h = await harness();
+    h.emit(step("t1", "adaptive:select", { structured: { kind: "strategy-choice", selected: "reflexion", reason: "classifier" } }));
+    h.emit(step("t1", "plan-execute:step-1:retry-1", { structured: { kind: "plan-step", stepIndex: 0, status: "retry", attempt: 1 } }));
+    h.emit(step("t1", "plan-execute:step-2:done", { structured: { kind: "plan-step", stepIndex: 1, status: "exploded" } }));
+    const [choice, retry, bad] = h.log.drain();
+    expect(choice!.step).toMatchObject({ choice: { selected: "reflexion", reason: "classifier" } });
+    expect(retry!.step).toMatchObject({ planStep: { stepIndex: 0, status: "retry", attempt: 1 } });
+    expect(bad!.step).not.toHaveProperty("planStep");
+  });
+
+  it("attaches the failure, retry or patch narration to a plan step as its note", async () => {
+    const h = await harness();
+    h.emit(step("t1", "plan-execute:step-1:start"));
+    h.emit(step("t1", "plan-execute:step-1:failed", { observation: "[FAILED s1] tool timed out" }));
+    h.emit(step("t1", "blueprint:step-2:retry-1", { thought: "[RETRY s2 attempt 2/3] Previous error: bad args" }));
+    const [start, failed, retry] = h.log.drain();
+    expect(start!.step).not.toHaveProperty("note");
+    expect(failed!.step).toMatchObject({ note: "[FAILED s1] tool timed out" });
+    expect(retry!.step).toMatchObject({ note: expect.stringContaining("Previous error: bad args") });
+  });
 });

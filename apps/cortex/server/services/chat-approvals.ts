@@ -27,6 +27,8 @@ import type { AgentResult, ReactiveAgent } from "@reactive-agents/runtime";
 import type { InteractionQuestion } from "@reactive-agents/core";
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
 import { runEventStream } from "./chat-resume-stream.js";
+import type { ChatStreamEvent } from "./chat-detached-turn.js";
+import type { StrategyStepLog } from "./strategy-steps.js";
 import { TurnTraceRecorder, turnOutcomeOf, withTurnOutcome, type StoredTurnTrace } from "./chat-turn-trace.js";
 import { durableApprovals, type ApprovalDecision, type PendingGate } from "./durable-approvals.js";
 import { checkInteractionAnswer, questionsOfPending } from "./interaction-answers.js";
@@ -86,6 +88,8 @@ export interface ChatApprovalHost {
   persistExchange(sessionId: string, userMessage: string, reply: string, result: AgentResult | undefined, toolsUsed: readonly string[], trace?: StoredTurnTrace): void;
   /** Drop the cached agent so the next turn rebuilds history from the DB. */
   evict(sessionId: string): Promise<void>;
+  /** The session's strategy-step log (its cached agent's), so a decided run's strategy card is streamed and stored like a normal turn's. */
+  strategyStepsOf?(sessionId: string): StrategyStepLog | undefined;
 }
 
 /** Outcome of {@link ChatApprovals.resolve}. */
@@ -97,7 +101,7 @@ export type ChatApprovalOutcome =
 
 /** A decision started as a live turn: its stream events, ready for a detached turn. */
 export type ChatApprovalStart =
-  | { readonly ok: true; readonly message: string; readonly events: AsyncGenerator<AgentStreamEvent> }
+  | { readonly ok: true; readonly message: string; readonly events: AsyncGenerator<ChatStreamEvent> }
   | { readonly ok: false; readonly code: "not-found" | "busy" | "failed"; readonly message: string };
 
 /** Denial reason sent to the run when the user gives none. */
@@ -409,7 +413,7 @@ export class ChatApprovals {
       decision === "approved"
         ? agent.approveRun(runId, reason ? { reason } : undefined)
         : agent.denyRun(runId, reason?.trim() ? reason : DEFAULT_DENY_REASON);
-    return { ok: true, message: pending.userMessage, events: this.followDecision(agent, start, pending, decision, release) };
+    return { ok: true, message: pending.userMessage, events: this.followDecision(agent, start, pending, decision, release, this.host.strategyStepsOf?.(sessionId)) };
   }
 
   /** The events of a decided run, landing its result before the terminal event reaches any client. */
@@ -419,7 +423,8 @@ export class ChatApprovals {
     pending: ChatPendingApproval,
     decision: ApprovalDecision,
     release: () => void,
-  ): AsyncGenerator<AgentStreamEvent> {
+    steps?: StrategyStepLog,
+  ): AsyncGenerator<ChatStreamEvent> {
     const recorder = new TurnTraceRecorder();
     let landed = false;
     try {
@@ -431,8 +436,8 @@ export class ChatApprovals {
         landed = true;
         // Landed (reply stored, or held on the next gate): a re-pause shows as paused from here.
         this.resolving.delete(pending.runId);
-      })) {
-        recorder.record(event);
+      }, steps)) {
+        recorder.record(event); // StepEvents too: the stored card is what the stream showed
         yield event;
       }
     } finally {

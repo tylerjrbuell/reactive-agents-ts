@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { Elysia } from "elysia";
-import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import type { ChatStreamEvent } from "../services/chat-detached-turn.js";
 import { applySchema } from "../db/schema.js";
 import { chatApprovalStartRoute } from "../api/chat-approval-start-route.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
@@ -55,8 +55,8 @@ async function pause(id: string): Promise<string> {
   return runId!;
 }
 
-const drain = async (events: AsyncIterable<AgentStreamEvent>): Promise<AgentStreamEvent[]> => {
-  const out: AgentStreamEvent[] = [];
+const drain = async (events: AsyncIterable<ChatStreamEvent>): Promise<ChatStreamEvent[]> => {
+  const out: ChatStreamEvent[] = [];
   for await (const e of events) out.push(e);
   return out;
 };

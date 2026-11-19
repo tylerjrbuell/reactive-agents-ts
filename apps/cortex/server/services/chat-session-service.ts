@@ -282,7 +282,7 @@ export class ChatSessionService {
       this.persistTurn(id, userMessage, reply, result?.metadata.tokensUsed ?? 0, toolsUsed, trace, by, result ? turnCostOf(result.metadata.cost, undefined) : undefined, result?.taskId, undefined, split);
     };
     // What every durable rail takes the same way: the turn guard, the session's agent, the exchange writer, eviction.
-    const rail = { acquireTurn: (id: string) => this.acquireTurn(id), agentFor: (id: string) => this.approvableAgentFor(id), persistExchange, evict: (id: string) => this.evictSession(id) };
+    const rail = { acquireTurn: (id: string) => this.acquireTurn(id), agentFor: (id: string) => this.approvableAgentFor(id), persistExchange, evict: (id: string) => this.evictSession(id), strategyStepsOf: (id: string) => this.sessions.get(id)?.strategySteps };
     this.approvals = new ChatApprovals(db, { ...rail, agentIdFor: (id) => getChatSession(this.db, id)?.stableAgentId });
     // Continue lists loop-stopped runs from the durable store (the builder's Durable runs setting).
     this.resume = new ChatResume({ ...rail, durableSourceOf: (id) => chatDurableSource(getChatSession(this.db, id)), liveAgentOf: (id) => this.sessions.get(id)?.approvable });

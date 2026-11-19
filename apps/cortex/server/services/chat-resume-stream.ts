@@ -13,6 +13,8 @@
 import type { AgentEvent } from "@reactive-agents/core";
 import type { AgentResult, AgentStreamEvent, ResumeRunOptions } from "@reactive-agents/runtime";
 import { isUserStopResult, userInterruptOf } from "@reactive-agents/ui-core";
+import type { ChatStreamEvent } from "./chat-detached-turn.js";
+import type { StrategyStepLog } from "./strategy-steps.js";
 import { cancelReasonOf } from "./chat-turn-stop.js";
 import { errorText } from "./loop-stop-resume.js";
 
@@ -98,8 +100,9 @@ export async function* resumeEventStream(
   runId: string,
   options: ResumeRunOptions | undefined,
   onSettled: (outcome: { readonly result: AgentResult } | { readonly error: unknown }) => void,
-): AsyncGenerator<AgentStreamEvent> {
-  yield* runEventStream(agent, () => agent.resumeRun(runId, options), onSettled);
+  steps?: StrategyStepLog,
+): AsyncGenerator<ChatStreamEvent> {
+  yield* runEventStream(agent, () => agent.resumeRun(runId, options), onSettled, steps);
 }
 
 /** What a followed run ended with: its result, or the failure that stopped it. */
@@ -109,16 +112,23 @@ export type RunSettled = { readonly result: AgentResult } | { readonly error: un
  * Follow any durable run the framework drives without a stream (`resumeRun`, `approveRun`,
  * `denyRun`): start it with `start`, yield its bus progress, then its terminal event.
  * `onSettled` may be async; it is awaited before the terminal event is yielded.
+ * `steps` is the session's strategy-step log (`strategy-steps.ts`, subscribed to the same bus): the
+ * turn starts it, and its steps are yielded as `StepEvent`s ahead of each progress event and before
+ * the terminal one, exactly as `chatStream` does, so the host's trace recorder folds them into the
+ * stored strategy card.
  */
 export async function* runEventStream(
   agent: Pick<ResumeStreamAgent, "subscribe">,
   start: () => Promise<AgentResult>,
   onSettled: (outcome: RunSettled) => void | Promise<void>,
-): AsyncGenerator<AgentStreamEvent> {
+  steps?: StrategyStepLog,
+): AsyncGenerator<ChatStreamEvent> {
   const queue: AgentStreamEvent[] = [];
   let wake: (() => void) | undefined;
   let iterations = 0;
+  steps?.beginTurn();
   const onEvent = (event: AgentEvent): void => {
+    if (event._tag === "ReasoningStepCompleted") wake?.();
     const projected = resumeProgressEvent(event);
     if (projected === undefined) return;
     if (projected._tag === "IterationProgress") iterations = Math.max(iterations, projected.iteration);
@@ -140,6 +150,7 @@ export async function* runEventStream(
   );
   try {
     for (;;) {
+      yield* steps?.drain() ?? [];
       while (queue.length > 0) yield queue.shift()!;
       if (end.value !== undefined) break;
       await new Promise<void>((resolve) => {
@@ -152,6 +163,7 @@ export async function* runEventStream(
   } finally {
     detach?.();
   }
+  yield* steps?.drain() ?? [];
   while (queue.length > 0) yield queue.shift()!;
   const settled = end.value;
   await onSettled(settled);

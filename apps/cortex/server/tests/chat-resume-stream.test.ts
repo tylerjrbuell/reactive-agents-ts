@@ -4,7 +4,8 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { join } from "node:path";
 import { Effect } from "effect";
 import type { AgentEvent } from "@reactive-agents/core";
-import { RunStoreLive, RunStoreService, type AgentResult, type AgentStreamEvent } from "@reactive-agents/runtime";
+import { RunStoreLive, RunStoreService, type AgentResult } from "@reactive-agents/runtime";
+import type { ChatStreamEvent } from "./../services/chat-detached-turn.js";
 import { ChatResume, type ChatResumeHost, type ResumableAgent } from "../services/chat-resume.js";
 import { resumeEventStream, resumeProgressEvent, resumeTerminalEvent, type ResumeStreamAgent } from "../services/chat-resume-stream.js";
 import { ResumeGuard } from "../services/loop-stop-resume.js";
@@ -44,8 +45,8 @@ function steppedAgent(steps: readonly AgentEvent[], end: () => Promise<AgentResu
   return agent;
 }
 
-const drain = async (gen: AsyncGenerator<AgentStreamEvent>): Promise<AgentStreamEvent[]> => {
-  const out: AgentStreamEvent[] = [];
+const drain = async (gen: AsyncGenerator<ChatStreamEvent>): Promise<ChatStreamEvent[]> => {
+  const out: ChatStreamEvent[] = [];
   for await (const e of gen) out.push(e);
   return out;
 };
@@ -83,7 +84,7 @@ describe("resumeEventStream", () => {
   it("yields progress while the run works, then the terminal event, after the result was handed over", async () => {
     const settled: string[] = [];
     const agent = steppedAgent([bus.iteration(1), bus.started("c1"), bus.completed("c1")], async () => result({}));
-    const events: AgentStreamEvent[] = [];
+    const events: ChatStreamEvent[] = [];
     for await (const e of resumeEventStream(agent, "run-1", undefined, () => settled.push("settled"))) {
       // The exchange is handed over before the end reaches the client.
       if (e._tag === "StreamCompleted") expect(settled).toEqual(["settled"]);

@@ -26,7 +26,9 @@ import { durableRunsDbPath } from "./crashed-runs.js";
 import { ChatRunControl } from "./chat-run-control.js";
 import type { InterruptableAgent } from "./run-interrupt.js";
 import { replyOf } from "./chat-approvals.js";
-import { turnOutcomeOf, withContinuedFrom, withTurnOutcome, type StoredTurnTrace } from "./chat-turn-trace.js";
+import { TurnTraceRecorder, turnOutcomeOf, withContinuedFrom, withTurnOutcome, type StoredTurnTrace } from "./chat-turn-trace.js";
+import type { ChatStreamEvent } from "./chat-detached-turn.js";
+import type { StrategyStepLog } from "./strategy-steps.js";
 import {
   continueMessage,
   errorText,
@@ -84,6 +86,8 @@ export interface ChatResumeHost {
   ): void;
   /** Drop the cached agent so the next turn rebuilds history from the DB. */
   evict(sessionId: string): Promise<void>;
+  /** The session's strategy-step log (its cached agent's), so a continued run's strategy card is streamed and stored like a normal turn's. */
+  strategyStepsOf?(sessionId: string): StrategyStepLog | undefined;
 }
 
 /**
@@ -165,22 +169,28 @@ export class ChatResume {
     sessionId: string,
     runId: string,
     input: Extract<ParsedResumeInput, { ok: true }>,
-  ): Promise<{ readonly ok: true; readonly message: string; readonly events: AsyncGenerator<AgentStreamEvent> } | ({ readonly ok: false } & ResumeFailure)> {
+  ): Promise<{ readonly ok: true; readonly message: string; readonly events: AsyncGenerator<ChatStreamEvent> } | ({ readonly ok: false } & ResumeFailure)> {
     const admitted = await this.admit(sessionId, runId);
     if (!admitted.ok) return admitted;
     const { agent, leave } = admitted;
     const host = this.host;
-    const store = (result: AgentResult): void => this.store(sessionId, result, input);
-    async function* events(): AsyncGenerator<AgentStreamEvent> {
+    const store = (result: AgentResult, recorded: StoredTurnTrace | undefined): void => this.store(sessionId, result, input, recorded);
+    const steps = host.strategyStepsOf?.(sessionId);
+    async function* events(): AsyncGenerator<ChatStreamEvent> {
       let stored = false;
+      // The strategy steps the continued run reports fold into the stored card, as on a normal turn.
+      const recorder = new TurnTraceRecorder();
       try {
         // The exchange is stored before the terminal event reaches any client.
-        yield* resumeEventStream(agent, runId, continueOptions(input.options), (end) => {
+        for await (const event of resumeEventStream(agent, runId, continueOptions(input.options), (end) => {
           if ("result" in end) {
-            store(end.result);
+            store(end.result, recorder.finish());
             stored = true;
           }
-        });
+        }, steps)) {
+          if (event._tag === "StepEvent") recorder.record(event);
+          yield event;
+        }
       } finally {
         if (stored) await host.evict(sessionId).catch(() => undefined);
         leave();
@@ -239,10 +249,10 @@ export class ChatResume {
   }
 
   /** Store the continued run's result as the session's next exchange ("Continue" and the reply). */
-  private store(sessionId: string, result: AgentResult, input: Extract<ParsedResumeInput, { ok: true }>): void {
+  private store(sessionId: string, result: AgentResult, input: Extract<ParsedResumeInput, { ok: true }>, recorded?: StoredTurnTrace): void {
     const outcome = result.success ? undefined : turnOutcomeOf(result);
     // The continuation is its own run: the turn is stamped with its parent so the thread, the Runs list and the trace drawer link them.
-    const trace = withContinuedFrom(withTurnOutcome(undefined, outcome), result.continuedFrom);
+    const trace = withContinuedFrom(withTurnOutcome(recorded, outcome), result.continuedFrom);
     // The turn stores the run's id (`taskId`); a continuation's durable `runId` is the new run's own id, so it wins.
     const stored = result.continuedFrom !== undefined && result.runId !== undefined ? { ...result, taskId: result.runId } : result;
     this.host.persistExchange(sessionId, continueMessage(input.options.note), replyOf(result), stored, [], trace);
