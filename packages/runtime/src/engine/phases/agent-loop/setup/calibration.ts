@@ -23,19 +23,36 @@
  */
 import { Effect } from "effect";
 import {
-  resolveModelCalibration,
-  resolveModelCalibrationAsync,
+  resolveModelCalibrationWithProvenance,
+  resolveModelCalibrationWithProvenanceAsync,
   type CalibrationTierFlags,
 } from "../../../../calibration-resolver.js";
+import { describeCalibration, type CalibrationResolution } from "../../../execute-calibration-record.js";
 import type { ReactiveAgentsConfig } from "../../../../types.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { telemetryOptedOut } from "@reactive-agents/reactive-intelligence";
+type CalibrationConfig = Pick<ReactiveAgentsConfig, "calibration" | "provider" | "defaultModel" | "reactiveIntelligenceOptions">;
+
+/** The resolved calibration plus its trace record (per-field sources). */
+export interface ResolvedCalibrationWithRecord {
+  readonly calibration: ModelCalibration | undefined;
+  readonly resolution: CalibrationResolution;
+}
+
 export const resolveCalibration = (
-  config: Pick<ReactiveAgentsConfig, "calibration" | "provider" | "defaultModel" | "reactiveIntelligenceOptions">,
+  config: CalibrationConfig,
 ): Effect.Effect<ModelCalibration | undefined, never> =>
+  Effect.map(resolveCalibrationWithRecord(config), (r) => r.calibration);
+
+/** {@link resolveCalibration} that also returns the per-field provenance record. */
+export const resolveCalibrationWithRecord = (
+  config: CalibrationConfig,
+): Effect.Effect<ResolvedCalibrationWithRecord, never> =>
   Effect.gen(function* () {
     const cal = config.calibration;
-    if (!cal || cal === "skip") return undefined;
+    if (!cal || cal === "skip") {
+      return { calibration: undefined, resolution: describeCalibration("skip", undefined, undefined, "shipped") };
+    }
 
     if (cal === "auto") {
       // Both extra tiers are opt-in (`.withCalibration("auto", { learned, community })`,
@@ -52,25 +69,24 @@ export const resolveCalibration = (
       const localObservations =
         tiers?.learnedCalibration === true && (config.provider !== "test" || observationsBaseDir !== undefined);
 
-      if (fetchCommunity) {
-        return yield* Effect.tryPromise(() =>
-          resolveModelCalibrationAsync(modelId, {
-            observationsBaseDir,
-            localObservations,
-            fetchCommunity: true,
-          }),
-        ).pipe(
-          Effect.catchAll(() =>
-            Effect.succeed(
-              resolveModelCalibration(modelId, { observationsBaseDir, localObservations }),
-            ),
-          ),
-        );
-      }
-
-      return resolveModelCalibration(modelId, { observationsBaseDir, localObservations });
+      const opts = { observationsBaseDir, localObservations };
+      const resolved = fetchCommunity
+        ? yield* Effect.tryPromise(() =>
+            resolveModelCalibrationWithProvenanceAsync(modelId, { ...opts, fetchCommunity: true }),
+          ).pipe(Effect.catchAll(() => Effect.succeed(resolveModelCalibrationWithProvenance(modelId, opts))))
+        : resolveModelCalibrationWithProvenance(modelId, opts);
+      return {
+        calibration: resolved?.calibration,
+        resolution: describeCalibration(
+          resolved === undefined ? "unresolved" : "auto",
+          resolved?.calibration,
+          resolved?.provenance,
+          "shipped",
+        ),
+      };
     }
 
     // Caller provided a fully-specified ModelCalibration object
-    return cal as ModelCalibration;
+    const custom = cal as ModelCalibration;
+    return { calibration: custom, resolution: describeCalibration("custom", custom, undefined, "custom") };
   });

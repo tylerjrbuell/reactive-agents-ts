@@ -18,6 +18,7 @@
  *    `truncated: true`).
  */
 import { isRunOrigin, type RunOrigin, type Task } from "@reactive-agents/core";
+import type { CalibrationResolution } from "./execute-calibration-record.js";
 import {
   llmRecoveryBudgetOf,
   resolveActOrAnswer,
@@ -52,6 +53,12 @@ export type RunConfigSnapshot = {
    * `catalog` is capped at 50 entries; `catalogTotal` is set when capped.
    */
   readonly skills?: RunSkillsRecord & { readonly catalogTotal?: number };
+  /**
+   * The calibration the run resolved: per-field value and source, probe version
+   * and tiers (`execute-calibration-record.ts`). `builder.calibration` stays the
+   * requested mode string.
+   */
+  readonly calibration?: CalibrationResolution;
   readonly truncated?: true;
 };
 
@@ -105,6 +112,8 @@ export function buildRunConfigSnapshot(args: {
    * kernel receives, so `actOrAnswer: "auto"` records the mode the run uses.
    */
   readonly calibration?: { readonly actOrAnswer?: ActOrAnswerCalibration };
+  /** Per-field record of the resolved calibration (value + source), stamped as `config.calibration`. */
+  readonly calibrationResolution?: CalibrationResolution;
 }): RunConfigSnapshot {
   const { config, provider, model, lean } = args;
   const harness = resolveHarnessConfig(disclosureHarness(config), disclosureFloor(config));
@@ -238,10 +247,11 @@ export function buildRunConfigSnapshot(args: {
   });
   const env = readRaEnv(args.env);
   const skills = args.skills === undefined ? {} : { skills: capSkills(args.skills) };
-  const snap: RunConfigSnapshot = { mechanisms, disclosure, builder, env, ...skills };
+  const resolvedCalibration = args.calibrationResolution === undefined ? {} : { calibration: args.calibrationResolution };
+  const snap: RunConfigSnapshot = { mechanisms, disclosure, builder, env, ...skills, ...resolvedCalibration };
   if (JSON.stringify(snap).length <= RUN_CONFIG_MAX_CHARS) return snap;
   const { tools: _tools, harness: _harness, ...slim } = builder;
-  return { mechanisms, disclosure, builder: slim, env, ...skills, truncated: true };
+  return { mechanisms, disclosure, builder: slim, env, ...skills, ...resolvedCalibration, truncated: true };
 }
 
 /**

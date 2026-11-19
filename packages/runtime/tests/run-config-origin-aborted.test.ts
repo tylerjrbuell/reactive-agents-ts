@@ -58,7 +58,7 @@ describe("run-started config + origin", () => {
       builder: Record<string, unknown>;
       env: Record<string, string>;
     };
-    expect(Object.keys(cfg)).toEqual(["mechanisms", "disclosure", "builder", "env"]);
+    expect(Object.keys(cfg)).toEqual(["mechanisms", "disclosure", "builder", "env", "calibration"]);
     expect(cfg.builder.maxIterations).toBe(3);
     expect(cfg.builder.strategy).toBe("reactive");
     expect(cfg.mechanisms.leanHarness).toBe(false);

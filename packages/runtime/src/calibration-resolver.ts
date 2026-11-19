@@ -161,6 +161,18 @@ export async function resolveModelCalibrationAsync(
   modelId: string,
   opts: ResolveModelCalibrationAsyncOptions = {},
 ): Promise<ModelCalibration | undefined> {
+  return (await resolveModelCalibrationWithProvenanceAsync(modelId, opts))?.calibration;
+}
+
+/**
+ * Async variant of {@link resolveModelCalibrationWithProvenance}: fetches the
+ * community profile when asked (failure is non-fatal) and reports where each
+ * resolved field came from.
+ */
+export async function resolveModelCalibrationWithProvenanceAsync(
+  modelId: string,
+  opts: ResolveModelCalibrationAsyncOptions = {},
+): Promise<ResolvedModelCalibration | undefined> {
   let community = opts.communityProfile;
   if (!community && opts.fetchCommunity) {
     try {
@@ -173,5 +185,5 @@ export async function resolveModelCalibrationAsync(
       // Community fetch failure is non-fatal — fall through to sync path
     }
   }
-  return resolveModelCalibration(modelId, { ...opts, communityProfile: community });
+  return resolveModelCalibrationWithProvenance(modelId, { ...opts, communityProfile: community });
 }

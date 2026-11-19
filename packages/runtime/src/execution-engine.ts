@@ -47,7 +47,7 @@ import { strategySelect } from "./engine/phases/strategy-select.js";
 import { verify } from "./engine/phases/verify.js";
 import { logVerifySummary } from "./engine/phases/verify-summary-log.js";
 import { dispatchMemoryFlush } from "./engine/phases/memory-flush-dispatch.js";
-import { resolveCalibration } from "./engine/phases/agent-loop/setup/calibration.js";
+import { resolveCalibrationWithRecord } from "./engine/phases/agent-loop/setup/calibration.js";
 import { prepareReasoningToolSchemas, toKernelToolSchema } from "./engine/phases/agent-loop/setup/tool-schemas.js";
 import { checkSemanticCache } from "./engine/phases/agent-loop/cache-check.js";
 import { runVerificationThinkRetry } from "./engine/phases/agent-loop/verification-think-retry.js";
@@ -274,13 +274,13 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                 // Phase 2–4 dispatchers (classifierReliability); the same value is threaded
                 // into all three execute() call sites below.
                 // Extracted to engine/phases/agent-loop/setup/calibration.ts (W23 step 4).
-                const resolvedCalibration: ModelCalibration | undefined = yield* resolveCalibration(config);
+                const { calibration: resolvedCalibration, resolution: calibrationResolution } = yield* resolveCalibrationWithRecord(config);
 
                 // Skills resolve per run BEFORE AgentStarted so run-started.config records them.
                 const runSkills = yield* resolveRunSkills({ task, config, modelId: String(ctx.selectedModel ?? config.defaultModel ?? "unknown") });
                 if (eb) {
                   // AgentStarted emission: engine/execute-agent-started.ts (GH #221 W26, GH #236).
-                  yield* publishAgentStarted({ eb, ctx, task, config, executionStartMs, skills: runSkills?.record, calibration: resolvedCalibration });
+                  yield* publishAgentStarted({ eb, ctx, task, config, executionStartMs, skills: runSkills?.record, calibration: resolvedCalibration, calibrationResolution });
                 }
 
                 // ── Phase 1: BOOTSTRAP ── (engine/phases/bootstrap.ts, W23); post-bootstrap
@@ -700,7 +700,7 @@ export const ExecutionEngineLive = (config: ReactiveAgentsConfig) =>
                   config,
                   result,
                   executionSucceeded,
-                  resolvedCalibration,
+                  resolvedCalibration, calibrationResolution,
                 });
 
                 // ── Record entropy metrics for dashboard + Telemetry RunReport ──

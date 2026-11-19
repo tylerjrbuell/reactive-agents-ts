@@ -19,8 +19,25 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { renderCalibrationProvenance } from "@reactive-agents/observability";
 import { loadObservations } from "@reactive-agents/reactive-intelligence";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
+import type { CalibrationResolution } from "./execute-calibration-record.js";
 import type { ExecutionContext, ReactiveAgentsConfig } from "../types.js";
 import type { ObsLike } from "./runtime-context.js";
+
+/**
+ * Map the resolver's field sources to the renderer's tier names. `shipped` and
+ * `default` (framework defaults) are the prior; `custom` (caller-supplied
+ * object) is reported as the prior too. Without a record, fall back to prior.
+ */
+export const provenanceSourcesOf = (
+  resolution: CalibrationResolution | undefined,
+): ("prior" | "community" | "local")[] => {
+  const out = new Set<"prior" | "community" | "local">();
+  for (const tier of resolution?.tiers ?? []) {
+    out.add(tier === "community" ? "community" : tier === "learned" ? "local" : "prior");
+  }
+  if (out.size === 0) out.add("prior");
+  return (["prior", "community", "local"] as const).filter((t) => out.has(t));
+};
 
 export interface CompletionObsDeps {
   readonly obs: ObsLike | null;
@@ -31,6 +48,8 @@ export interface CompletionObsDeps {
   readonly result: TaskResult;
   readonly executionSucceeded: boolean;
   readonly resolvedCalibration: ModelCalibration | undefined;
+  /** Per-field provenance of `resolvedCalibration`; absent falls back to prior-only. */
+  readonly calibrationResolution?: CalibrationResolution;
 }
 
 export const emitCompletionObservability = (
@@ -45,6 +64,7 @@ export const emitCompletionObservability = (
     result,
     executionSucceeded,
     resolvedCalibration,
+    calibrationResolution,
   } = deps;
 
   return Effect.gen(function* () {
@@ -74,18 +94,20 @@ export const emitCompletionObservability = (
     if (obs && resolvedCalibration) {
       try {
         const modelId = String(ctx.selectedModel ?? config.defaultModel ?? "unknown");
-        const localObs = loadObservations(modelId, {
-          baseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"],
-        });
-        const sources: ("prior" | "community" | "local")[] = ["prior"];
-        if (localObs.sampleCount > 0) sources.push("local");
+        // True sources from the resolver's per-field provenance (not a guess
+        // from the presence of local observations).
+        const sources = provenanceSourcesOf(calibrationResolution);
+        const localSamples = sources.includes("local")
+          ? loadObservations(modelId, { baseDir: process.env["REACTIVE_AGENTS_OBSERVATIONS_DIR"] }).sampleCount
+          : 0;
         const provenance = renderCalibrationProvenance({
           modelId,
           sources,
-          localSamples: localObs.sampleCount,
+          localSamples,
           summary: {
             parallelCallCapability: resolvedCalibration.parallelCallCapability,
             classifierReliability: resolvedCalibration.classifierReliability,
+            toolCallDialect: resolvedCalibration.toolCallDialect,
           },
         });
         yield* obs.info(`◉ [calibration] ${provenance}`).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-completion-obs.ts:88", tag: errorTag(err) })));
