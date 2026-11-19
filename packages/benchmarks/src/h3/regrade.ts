@@ -27,7 +27,7 @@ import { scoreTask } from "../judge.js"
 import { writeFixtures } from "../runner.js"
 import type { BenchmarkTask } from "../types.js"
 import { appendEvalGraded, buildEvalGraded, type EvalGradedPayload } from "../eval-graded.js"
-import { H3_TASKS } from "./tasks.js"
+import { H3_SELECTABLE_TASKS } from "./tasks-v2.js"
 import { h3SuiteHash } from "./freeze.js"
 
 /** H3 tasks carry no judge dimension; an unreachable URL guarantees no judge call is ever attempted. */
@@ -157,7 +157,7 @@ export async function regradeResults(
   for (const file of resultsFiles) {
     const res = JSON.parse(readFileSync(file, "utf8")) as { readonly cells: readonly ResultsCell[] }
     for (const c of res.cells) {
-      const task = H3_TASKS.find((t) => t.id === c.taskId)
+      const task = H3_SELECTABLE_TASKS.find((t) => t.id === c.taskId)
       if (!task) {
         out.push({ traceFile: c.traceFile, taskId: c.taskId, status: "no-grade", recorded: c.accuracy, reason: "task not in H3_TASKS" })
         continue

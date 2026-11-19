@@ -26,6 +26,7 @@ import { applySearchKeysFromEnvFiles, searchBackendConfigured } from "../search-
 import { isSolved } from "../report-format.js"
 import type { BenchmarkTask, HarnessVariant, ModelVariant } from "../types.js"
 import { H3_TASKS } from "./tasks.js"
+import { H3_SELECTABLE_TASKS } from "./tasks-v2.js"
 import { LH_TASKS } from "./long-horizon-tasks.js"
 import { h3Hashes, h3SuiteHash, lhHashes, lhSuiteHash } from "./freeze.js"
 import { longHorizonFactsFromTrace, type LongHorizonFacts } from "./long-horizon.js"
@@ -249,7 +250,8 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
   const longHorizon = opts.suite === "long-horizon"
   if (longHorizon && (opts.noSwitch || opts.metaArm)) return { ran: 0, remaining: 0, error: "H3: --meta-arm / --no-switch do not apply to --suite long-horizon" }
   const suite: H3Suite = longHorizon ? "h3-lh" : "h3"
-  const suiteTasks = longHorizon ? LH_TASKS : H3_TASKS
+  // v2 additive tasks (rw-2-calc, ...) are selectable by `--task` only; the default run set stays the frozen 12.
+  const suiteTasks = longHorizon ? LH_TASKS : opts.taskFilter?.length ? H3_SELECTABLE_TASKS : H3_TASKS
   let results = loadResults(opts.out, opts.k, suite)
   const startMarginSec = opts.startMarginSec ?? opts.cellTimeoutSec + 20
   let prepared = false

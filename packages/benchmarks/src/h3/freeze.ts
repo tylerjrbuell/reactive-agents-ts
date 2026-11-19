@@ -6,6 +6,7 @@ import { dirname, join } from "node:path"
 import type { BenchmarkTask } from "../types.js"
 import { H3_TASKS } from "./tasks.js"
 import { LH_TASKS } from "./long-horizon-tasks.js"
+import { H3_V2_TASKS } from "./tasks-v2.js"
 
 /** Stable (key-sorted) JSON so the hash does not depend on property order. */
 function canonical(v: unknown): string {
@@ -36,12 +37,20 @@ export const lhHashes = (): Record<string, string> => taskHashes(LH_TASKS)
 /** Fingerprint of the frozen long-horizon suite (Plan 9 0e). */
 export const lhSuiteHash = (): string => suiteHashOf(LH_TASKS)
 
+/** Per-task hashes of the additive v2 tasks (`tasks-v2.ts`). */
+export const h3V2Hashes = (): Record<string, string> => taskHashes(H3_V2_TASKS)
+/** Fingerprint of the additive v2 task set. */
+export const h3V2SuiteHash = (): string => suiteHashOf(H3_V2_TASKS)
+
+export const V2_MANIFEST_PATH = join(dirname(new URL(import.meta.url).pathname), "h3v2-manifest.json")
 export const MANIFEST_PATH = join(dirname(new URL(import.meta.url).pathname), "h3-manifest.json")
 export const LH_MANIFEST_PATH = join(dirname(new URL(import.meta.url).pathname), "lh-manifest.json")
 
 if (import.meta.main) {
   writeFileSync(MANIFEST_PATH, JSON.stringify({ suiteHash: h3SuiteHash(), tasks: h3Hashes() }, null, 2) + "\n", "utf8")
   writeFileSync(LH_MANIFEST_PATH, JSON.stringify({ suiteHash: lhSuiteHash(), tasks: lhHashes() }, null, 2) + "\n", "utf8")
+  writeFileSync(V2_MANIFEST_PATH, JSON.stringify({ suiteHash: h3V2SuiteHash(), tasks: h3V2Hashes() }, null, 2) + "\n", "utf8")
+  console.log(`froze ${H3_V2_TASKS.length} v2 tasks -> ${V2_MANIFEST_PATH}`)
   console.log(`froze ${H3_TASKS.length} tasks -> ${MANIFEST_PATH}`)
   console.log(`froze ${LH_TASKS.length} tasks -> ${LH_MANIFEST_PATH}`)
 }
