@@ -224,6 +224,12 @@ export function validateBuild(
    * incorrectly for a fully-configured OpenAI-compatible endpoint.
    */
   providerApiKeyOverride?: string,
+  /**
+   * The agent's declared window (`.withModel({ numCtx })`). Lifts a fallback
+   * capability to `source: "user"` for THIS agent's PreFlight only (never a
+   * process-wide registry row), so a declared window satisfies the gate.
+   */
+  userNumCtx?: number,
 ): BuildValidationResult {
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -284,7 +290,7 @@ export function validateBuild(
   // strictValidation — rather than running silently degraded (anti-mission #4).
   // `provider: "test"`/"custom" are exempt (no real capability to resolve).
   if (model && provider !== "test" && provider !== "custom") {
-    const cap = resolveCanonical(provider, model);
+    const cap = resolveCanonical(provider, model, { userNumCtx });
     resolvedCapability = cap;
     const violation = capabilitySourcePreflight({
       provider,

@@ -461,7 +461,7 @@ export const createRuntime = (options: RuntimeOptions) => {
   // with logModelIO, trace layer, diagnose CLI) can see direct LLM calls
   // outside the kernel main loop (plan-execute analysis, reflexion, ToT
   // BFS, etc.). Always wrap — events are silent unless someone subscribes.
-  const observableLlmLayer: Layer.Layer<LLMService> = makeObservableLLM().pipe(
+  const observableLlmLayer: Layer.Layer<LLMService> = makeObservableLLM({ userNumCtx: options.numCtx }).pipe(
     Layer.provide(rateLimitedLlmLayer as Layer.Layer<LLMService, never, never>),
   ) as Layer.Layer<LLMService>;
 
@@ -936,7 +936,7 @@ export const createLightRuntime = (options: LightRuntimeOptions) => {
       apiKey: options.providerConfig?.apiKey,
       headers: options.providerConfig?.headers,
     }, // observable-wrapped like the root: the child's run meter and LLM events see every call
-  ).pipe((p) => makeObservableLLM().pipe(Layer.provide(p as Layer.Layer<LLMService, never, never>))) as Layer.Layer<LLMService>;
+  ).pipe((p) => makeObservableLLM({ userNumCtx: options.numCtx }).pipe(Layer.provide(p as Layer.Layer<LLMService, never, never>))) as Layer.Layer<LLMService>;
 
   // Lightweight memory — working memory only, no SQLite, no embeddings
   const memoryLayer = options.enableMemory

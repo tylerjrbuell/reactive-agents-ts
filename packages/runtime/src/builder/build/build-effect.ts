@@ -356,6 +356,9 @@ export const runBuilderBuildEffect = <TOut>(
                 thinkingOptions: state._thinkingOptions,
                 provider: state._provider,
                 model: state._model,
+                // Per-agent declared window: read by run-task's capability
+                // lookups (never written to the process-wide registry).
+                numCtx: state._numCtx,
                 // Arc 1 Task 9: threaded through so buildRunTaskEffect can
                 // resolve it via resolveReceiptSigningKey (config wins over
                 // RA_RECEIPT_KEY env var).

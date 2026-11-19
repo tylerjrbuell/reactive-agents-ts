@@ -150,27 +150,22 @@ export const buildAgent = async <TOut>(
         // starved every tool-result compression budget (live-confirmed 2026-07-30:
         // a 25-KB result from the since-removed gh-cli tool crushed to ~1.2 KB → model fabricated the tail).
         // Best-effort: never throws, no-op for providers without a probe.
-        const { primeCapability, registerUserSuppliedCapability } = await import(
-            '@reactive-agents/llm-provider'
-        )
+        const { primeCapability } = await import('@reactive-agents/llm-provider')
         await primeCapability(state._provider, state._model, {
             endpoint: state._providerConfig?.baseUrl,
             apiKey: state._providerConfig?.apiKey,
         })
-        // Developer-declared window via `.withModel({ numCtx })` wins over the
-        // probe/table AND must reach the profile too — so it has to register
-        // BEFORE the profile resolve below (one knob moves both budget + wire).
-        // Also the escape hatch when the probe is unavailable (air-gapped,
-        // proxied gateway): otherwise validateBuild fails on a `source:
-        // "fallback"` capability and tells the user to patch STATIC_CAPABILITIES
-        // for a fact they just supplied. No-op when the probe or table won.
-        if (state._numCtx !== undefined && state._model !== undefined) {
-            registerUserSuppliedCapability(state._provider, state._model, state._numCtx)
-        }
+        // Developer-declared window via `.withModel({ numCtx })` fills the hole
+        // a failed probe leaves (air-gapped, proxied gateway) and must reach the
+        // profile AND validateBuild below (one knob moves both budget + wire).
+        // It is passed per call as `userNumCtx`, never written to the
+        // process-wide registry: a registry row would leak this agent's window
+        // to every other agent on the same model id (2026-11-19).
+        const userNumCtx = state._numCtx
 
         // Auto-resolve context profile from model name if not explicitly set.
         // resolveProfileWithWindow binds maxTokens to the MODEL's real window
-        // (recommendedNumCtx — now probe/numCtx-aware thanks to the prime above)
+        // (recommendedNumCtx — probe-aware thanks to the prime above, numCtx-aware via userNumCtx)
         // instead of the tier placeholder — otherwise the placeholder (e.g.
         // mid=32768) masqueraded as a caller-set cap and the runner's
         // applyCapabilityMaxTokens skipped resolution, so builder agents ran at
@@ -182,7 +177,8 @@ export const buildAgent = async <TOut>(
             )
             state._contextProfile = resolveProfileWithWindow(
                 state._model,
-                state._provider
+                state._provider,
+                { userNumCtx }
             )
         }
 
@@ -238,7 +234,8 @@ export const buildAgent = async <TOut>(
             state._strictValidation,
             state._lazyValidation,
             taskContractInput,
-            state._providerConfig?.apiKey
+            state._providerConfig?.apiKey,
+            userNumCtx
         )
         // Each requested removed CLI name is a build warning, never an error.
         validation.warnings.push(...builtinDeprecationWarnings(toolSelection))

@@ -530,7 +530,7 @@ export const buildRunTaskEffect = (
                         // Known model = a shipped capability entry (static table / probe /
                         // user override). An unknown model resolves to the conservative
                         // fallback and routes to the grounded repair path.
-                        calibrated: isKnownModel(deps.config.provider, deps.config.model),
+                        calibrated: isKnownModel(deps.config.provider, deps.config.model, deps.config['numCtx']),
                     })
                     if (engine === 'grounded') {
                         // ── Task 2.5: grounded engine path ───────────────────────────────
@@ -636,8 +636,12 @@ export const buildRunTaskEffect = (
     ) as Effect.Effect<AgentResult, Error>
 }
 
-/** True when (provider, model) resolves to a real capability entry rather than the conservative fallback. */
-function isKnownModel(provider: unknown, model: unknown): boolean {
+/**
+ * True when (provider, model) resolves to a real capability entry rather than the conservative fallback.
+ * `numCtx` is this agent's declared window (`.withModel({ numCtx })`), applied per call, never global.
+ */
+function isKnownModel(provider: unknown, model: unknown, numCtx: unknown): boolean {
   if (typeof provider !== "string" || typeof model !== "string" || !provider || !model) return false
-  return resolveCapability(provider, model).source !== 'fallback'
+  const userNumCtx = typeof numCtx === "number" ? numCtx : undefined
+  return resolveCapability(provider, model, { userNumCtx }).source !== 'fallback'
 }

@@ -16,6 +16,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { _resetProbedRegistryForTesting } from "@reactive-agents/llm-provider";
 import { loadTrace } from "@reactive-agents/trace";
 import { ReactiveAgentBuilder, ReactiveAgents } from "../src/builder.js";
 import { applyWithModel } from "../src/builder/withers/model-budget.js";
@@ -29,6 +30,9 @@ process.env.REACTIVE_AGENTS_TRACE_DIR = TRACE_DIR;
 delete process.env.REACTIVE_AGENTS_TRACE;
 
 afterAll(() => {
+  // A test-unique model id plus this reset keep any capability row out of
+  // later files in the same `bun test` process (default model "test-model").
+  _resetProbedRegistryForTesting();
   if (PRIOR_DIR === undefined) delete process.env.REACTIVE_AGENTS_TRACE_DIR;
   else process.env.REACTIVE_AGENTS_TRACE_DIR = PRIOR_DIR;
   if (PRIOR_FLAG !== undefined) process.env.REACTIVE_AGENTS_TRACE = PRIOR_FLAG;
@@ -112,7 +116,7 @@ describe("withModel(modelId, params) — one code path with the object form", ()
   it("run-started.config.builder records numCtx 8000", async () => {
     const agent = await ReactiveAgents.create()
       .withTestScenario([{ text: "FINAL ANSWER: ok" }])
-      .withModel("test-model", { numCtx: 8000 })
+      .withModel("seam-numctx-model", { numCtx: 8000 })
       .withReasoning({ defaultStrategy: "reactive" })
       .withMaxIterations(2)
       .build();
@@ -124,7 +128,7 @@ describe("withModel(modelId, params) — one code path with the object form", ()
     if (started?.kind !== "run-started") return;
     const cfg = started.config as { builder: Record<string, unknown> };
     expect(cfg.builder.numCtx).toBe(8000);
-    expect(cfg.builder.model).toBe("test-model");
+    expect(cfg.builder.model).toBe("seam-numctx-model");
   });
 });
 
