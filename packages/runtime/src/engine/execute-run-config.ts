@@ -20,6 +20,7 @@
 import { isRunOrigin, type RunOrigin, type Task } from "@reactive-agents/core";
 import type { CalibrationResolution } from "./execute-calibration-record.js";
 import {
+  actOrAnswerIsDefault,
   llmRecoveryBudgetOf,
   resolveActOrAnswer,
   resolveHarnessConfig,
@@ -119,7 +120,13 @@ export function buildRunConfigSnapshot(args: {
   const harness = resolveHarnessConfig(disclosureHarness(config), disclosureFloor(config));
   // Same inputs as the kernel's run-start resolve (reasoning `resolveRunStartHarness`):
   // the resolved calibration and `config.provider` (the kernel's `providerName`).
-  const actOrAnswer = resolveActOrAnswer(harness.actOrAnswer, args.calibration, String(config.provider ?? ""));
+  // The 4th arg marks a never-configured OFF as "default-off" (vs "explicit").
+  const actOrAnswer = resolveActOrAnswer(
+    harness.actOrAnswer,
+    args.calibration,
+    String(config.provider ?? ""),
+    actOrAnswerIsDefault(disclosureHarness(config)),
+  );
   const disclosure = resolveDisclosure(config, harness, args.env ?? process.env);
   // Resolved harness mechanisms (explicit config > env > tier default > default).
   // `satisfies` makes a new `ResolvedHarness` key a compile error until it is

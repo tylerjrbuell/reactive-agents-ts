@@ -137,7 +137,8 @@ describe("run-started config + origin", () => {
     await off.dispose();
     if (prior !== undefined) process.env.RA_ACT_OR_ANSWER = prior;
     expect(offMech?.actOrAnswer).toBe(false);
-    expect(offMech?.actOrAnswerSource).toBe("explicit");
+    // Never configured: the trace says so ("default-off"), not "explicit".
+    expect(offMech?.actOrAnswerSource).toBe("default-off");
   });
 
   test('actOrAnswer "auto" records the mode the resolved calibration picks, with its source', async () => {

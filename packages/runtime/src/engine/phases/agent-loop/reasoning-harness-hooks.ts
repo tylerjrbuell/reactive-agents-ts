@@ -30,6 +30,7 @@ import {
   normalizeReasoningResult,
 } from "../../util.js";
 import { asExecutionContextEffect } from "./as-execution-context-effect.js";
+import { calibrationRequestFields } from "./setup/calibration.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { readPosture } from "../../../chat/todo-seed.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
@@ -175,7 +176,7 @@ export const runReasoningHarnessHooks = (
       ),
       observationSummary: config.reasoningOptions?.observationSummary,
       auditRationale: config.reasoningOptions?.auditRationale,
-      calibration: resolvedCalibration,
+      ...calibrationRequestFields(config, resolvedCalibration),
       harnessPipeline: config.harnessPipeline,
       envelope: continuationEnvelope,
       };

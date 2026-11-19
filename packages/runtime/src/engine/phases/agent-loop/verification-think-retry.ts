@@ -28,6 +28,7 @@ import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { readPosture } from "../../../chat/todo-seed.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
 import { asExecutionContextEffect } from "./as-execution-context-effect.js";
+import { calibrationRequestFields } from "./setup/calibration.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 
@@ -116,7 +117,7 @@ export const runVerificationThinkRetry = (
           config.contextProfile?.temperature) as number | undefined,
         environmentContext: config.environmentContext as Record<string, string> | undefined,
         initialMessages: c.messages as readonly { readonly role: "user" | "assistant"; readonly content: MessageContent }[],
-        calibration: resolvedCalibration,
+        ...calibrationRequestFields(config, resolvedCalibration),
         // Cross-cutting cascade (2026-07-22) — this retry re-runs the REAL task
         // (`taskDescription` is the task, the verifier feedback rides
         // `initialMessages`) and its output becomes the user-visible answer, so

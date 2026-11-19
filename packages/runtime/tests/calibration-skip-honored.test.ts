@@ -14,11 +14,13 @@ import type { CalibrationMode } from "../src/types";
 describe("resolveCalibrationSetting — P0-9 skip opt-out", () => {
   test('explicit "skip" is honored even when reasoning is ON', () => {
     // This is the exact case the bug ignored: reasoning on + user opted out.
-    expect(resolveCalibrationSetting("skip", true)).toBeUndefined();
+    // Stays "skip" (not collapsed to undefined) so the engine can forward
+    // calibrationMode "skip" to the kernel.
+    expect(resolveCalibrationSetting("skip", true)).toBe("skip");
   });
 
   test('explicit "skip" is honored when reasoning is OFF', () => {
-    expect(resolveCalibrationSetting("skip", false)).toBeUndefined();
+    expect(resolveCalibrationSetting("skip", false)).toBe("skip");
   });
 
   test('unset + reasoning ON auto-enables calibration', () => {

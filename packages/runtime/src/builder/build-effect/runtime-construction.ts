@@ -60,21 +60,20 @@ import type {
  * silently rewritten to `"auto"`. `undefined` means "unset" (user never called
  * the wither), which is distinct from an explicit `"skip"`.
  *
- * Downstream (`engine/phases/agent-loop/setup/calibration.ts`) treats both
- * `undefined` and `"skip"` as "no calibration adapter", so we collapse an
- * explicit skip to `undefined` here.
+ * An explicit skip stays `"skip"` (not collapsed to `undefined`): the engine
+ * forwards it as `calibrationMode: "skip"` so the kernel also skips its own
+ * adapter lookup. Unset-with-reasoning-off stays `undefined`.
  *
  * @param explicit - The value passed to `.withCalibration()`, or `undefined` if never called.
  * @param enableReasoning - Whether the reasoning kernel is active.
- * @returns The calibration mode to forward to the runtime, or `undefined` to skip.
+ * @returns The calibration mode to forward to the runtime, or `undefined` when unset and reasoning is off.
  */
 export function resolveCalibrationSetting(
   explicit: CalibrationMode | undefined,
   enableReasoning: boolean,
 ): CalibrationMode | undefined {
-  // Explicit opt-out — honor it even when reasoning is on.
-  if (explicit === "skip") return undefined;
-  // Any other explicit choice ("auto" or a ModelCalibration object) wins.
+  // Any explicit choice ("skip", "auto" or a ModelCalibration object) wins,
+  // so an opt-out holds even when reasoning is on.
   if (explicit !== undefined) return explicit;
   // Unset: auto-enable calibration when reasoning is active, otherwise none.
   return enableReasoning ? "auto" : undefined;

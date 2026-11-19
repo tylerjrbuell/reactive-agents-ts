@@ -50,6 +50,7 @@ import {
   STRATEGY_SWITCHES_KEY,
 } from "./strategy-switch-capture.js";
 import { skillsContextFromMetadata } from "../../bootstrap/skill-activatable.js";
+import { calibrationRequestFields } from "./setup/calibration.js";
 
 type ReasoningExecuteRequest = Parameters<ReasoningServiceLike["execute"]>[0];
 type ToolSchemaShape =NonNullable<ReasoningExecuteRequest["availableToolSchemas"]>[number];
@@ -391,7 +392,7 @@ export const runReasoningThink = (
       ),
       observationSummary: config.reasoningOptions?.observationSummary,
       auditRationale: config.reasoningOptions?.auditRationale,
-      calibration: resolvedCalibration,
+      ...calibrationRequestFields(config, resolvedCalibration),
       verifier: config.verifier,
       harnessPipeline: config.harnessPipeline,
       // Issue #128 / North Star v5.0 Pillar 6 — declarative budget caps for

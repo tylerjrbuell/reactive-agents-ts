@@ -90,3 +90,18 @@ export const resolveCalibrationWithRecord = (
     const custom = cal as ModelCalibration;
     return { calibration: custom, resolution: describeCalibration("custom", custom, undefined, "custom") };
   });
+
+/**
+ * The calibration fields every `ReasoningService.execute` request carries.
+ * `calibrationMode` is `"skip"` only for an explicit `.withCalibration("skip")`,
+ * and then no resolved object travels either, so a consumer reading
+ * `calibration` sees none and the kernel's adapter selection skips its own
+ * file lookup. Any other setting is `"auto"` with the run's resolved value.
+ */
+export const calibrationRequestFields = (
+  config: Pick<ReactiveAgentsConfig, "calibration">,
+  resolved: ModelCalibration | undefined,
+): { readonly calibrationMode: "auto" | "skip"; readonly calibration: ModelCalibration | undefined } =>
+  config.calibration === "skip"
+    ? { calibrationMode: "skip", calibration: undefined }
+    : { calibrationMode: "auto", calibration: resolved };
