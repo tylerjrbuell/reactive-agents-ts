@@ -16,6 +16,9 @@
 // goes red (the resumed tool call never runs). Pass `state.steps` instead of
 // `gateHistory(...)` in exit-gate.ts `proposeExit`: the end-to-end case goes
 // red (the guard hands off; the last call still carried tools, no answer turn).
+// Read `state.steps` instead of `gateHistory(...)` in exit-gate.ts
+// `budgetAnswerTurnTaken`: the budgetAnswerTurnTaken case goes red (the spent
+// cap's reservation reads as this budget's answer turn under the raised cap).
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { EventBusLive } from "@reactive-agents/core";
@@ -26,7 +29,7 @@ import { gateHistory, isSpentCapReservation } from "../../src/kernel/state/resum
 import { resetResumedStreaks } from "../../src/kernel/assessment/guard-adapters.js";
 import { deserializeKernelState, serializeKernelState } from "../../src/kernel/state/kernel-codec.js";
 import { transitionState, type KernelInput } from "../../src/kernel/state/kernel-state.js";
-import { gateStep } from "../../src/kernel/loop/exit-gate.js";
+import { budgetAnswerTurnTaken, gateStep } from "../../src/kernel/loop/exit-gate.js";
 import { makeKernelInput, makeKernelRunOptions, makeKernelState } from "../../src/testing/kernel-fixtures.js";
 import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { resolveHarnessConfig } from "../../src/harness-config.js";
@@ -70,6 +73,14 @@ describe("resume-epoch helpers", () => {
     const steps = [reservation(2, 2)];
     expect(gateHistory(steps, 3)).toBe(steps);
     expect(gateHistory(steps, 9)).toEqual([]);
+  });
+
+  it("budgetAnswerTurnTaken reads through gateHistory: a spent cap's reservation is not this budget's answer turn", () => {
+    const steps = [reservation(2, 2)];
+    // Under the cap that reserved it (3), the turn was made and the cap is reached.
+    expect(budgetAnswerTurnTaken(makeKernelState({ steps, llmCalls: 3, iteration: 3 } as never), 3)).toBe(true);
+    // Resumed under a raised cap (9) and run to it: the old reservation does not count.
+    expect(budgetAnswerTurnTaken(makeKernelState({ steps, llmCalls: 9, iteration: 9 } as never), 9)).toBe(false);
   });
 });
 

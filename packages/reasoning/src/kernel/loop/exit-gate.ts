@@ -376,7 +376,7 @@ export function lastExitGateRecord(steps: readonly ReasoningStep[]): ExitGateRec
  * allows no further think call: only the iteration cap may end the run now.
  */
 export function budgetAnswerTurnTaken(state: KernelState, maxIterations: number): boolean {
-  const record = lastExitGateRecord(state.steps);
+  const record = lastExitGateRecord(gateHistory(state.steps, maxIterations)); // a spent cap's reservation is not this budget's (resume)
   const llmCalls = state.llmCalls ?? 0;
   return (
     record?.proposedBy === "max_iterations" &&
