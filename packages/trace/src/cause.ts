@@ -54,6 +54,7 @@ import type { Trace } from "./replay.js";
 import { lastRunSegment } from "./segments.js";
 import { runEndingGuardEvents } from "./guard-run-end.js";
 import { uncalledClaimedTools } from "./tool-claim.js";
+import { UNRESOLVED_TOOL_CALL_GUARD, acceptedAfterFailedPass } from "./terminal-predicates.js";
 import type {
   TraceEvent,
   GuardFiredEvent,
@@ -510,7 +511,8 @@ const ruleMislabel: Rule = (f) => {
       ev.push(ev1(f.completed, `run-completed.status=${f.status} vs run-completed.outcome.status=completed`));
     }
   }
-  if (f.isSuccess && tdStatus === "failed") {
+  // A capped pass's failed terminal the strategy answered past is explained (terminal-predicates.ts).
+  if (f.isSuccess && tdStatus === "failed" && !acceptedAfterFailedPass(f.terminalDecision, f.completed, f.ev)) {
     ev.push(ev1(f.terminalDecision!, `terminal_decision.status=failed but run-completed.status=success`));
   }
   const lastKernelVerdict = f.terminalVerdicts.at(-1);
@@ -605,8 +607,10 @@ const ruleToolProtocol: Rule = (f) => {
   const sw = f.ev.find(
     (e): e is StrategySwitchedEvent => e.kind === "strategy-switched" && /consecutive-thoughts/.test(e.reason),
   );
-  const unresolved = f.guards.find((g) => /unresolved/.test(g.guard)) ??
-    (f.terminatedBy !== undefined && /tool_call_unresolved/.test(f.terminatedBy) ? f.guards.at(-1) : undefined);
+  const unresolved = f.guards.find((g) => UNRESOLVED_TOOL_CALL_GUARD.test(g.guard)) ??
+    // The terminal that named it, not the last guard: advisory records (e.g.
+    // checklist-unresolved) are emitted after the terminal decision.
+    (f.terminatedBy !== undefined && /tool_call_unresolved/.test(f.terminatedBy) ? (f.terminalDecision ?? f.guards.at(-1)) : undefined);
   if (!sw && !unresolved) return undefined;
   const evidence = [
     ...(sw ? [ev1(sw, `strategy-switched: ${sw.reason.slice(0, 100)}`)] : []),
