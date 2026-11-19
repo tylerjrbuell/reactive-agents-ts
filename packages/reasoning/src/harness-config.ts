@@ -167,10 +167,14 @@ export interface HarnessConfig {
    * Budget answer turn. When the run holds validated tool evidence, no tool
    * work is outstanding and only the answer is missing, the last think call
    * the iteration budget allows ships with no tools, so the model writes the
-   * answer instead of making a tool call nobody answers. A verified reply ends
-   * the run as the model's own final answer. The harness never writes it.
-   * Default OFF: ablation 2026-11-10 measured +1.9pp over 3 tiers (within
-   * noise). (`RA_BUDGET_ANSWER_TURN=1`)
+   * answer instead of making a tool call nobody answers. A guard stop (the
+   * dispatcher early-stop, a no-progress stop) that would otherwise end such
+   * a run answerless gets the same one answer turn. A verified reply ends the
+   * run as the model's own final answer. The harness never writes it.
+   * Default ON: owner decision 2026-11-19 (Cortex trace
+   * 01M7TERZAVP2RS489WEBJ3HY7H ended answerless with the evidence gathered),
+   * measured afterwards; the 2026-11-10 ablation measured +1.9pp over 3 tiers
+   * (within noise). `false` (or `RA_BUDGET_ANSWER_TURN=0`) turns it off.
    */
   readonly budgetAnswerTurn?: boolean;
   /**
@@ -467,7 +471,7 @@ export interface ResolvedHarness {
   readonly stableToolList?: true;
   /** Compact call constraints (see `HarnessConfig.compactCallConstraints`). Present only when on. */
   readonly compactCallConstraints?: true;
-  /** Budget answer turn (see `HarnessConfig.budgetAnswerTurn`). Present only when on. */
+  /** Budget answer turn (see `HarnessConfig.budgetAnswerTurn`). Present only when on (the default). */
   readonly budgetAnswerTurn?: true;
   /** Wrap-up reserve (see `HarnessConfig.wrapUpReserve`). Present only when on. */
   readonly wrapUpReserve?: true;

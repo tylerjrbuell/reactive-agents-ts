@@ -61,6 +61,7 @@ import type {
   ToolServiceInstance,
 } from "../../state/kernel-state.js";
 import type { ToolSchema } from "../attend/tool-formatting.js";
+import { conversationChars } from "../attend/recall-read.js";
 
 export interface ToolObserveContext {
   readonly iteration: number;
@@ -707,6 +708,8 @@ export function executeToolAndObserve(
         ...(config.scratchpad ? { scratchpad: config.scratchpad } : {}),
         ...(config.profile ? { profile: config.profile } : {}),
         ...(config.preprocess ? { preprocess: config.preprocess } : {}),
+        // The kernel's state carries its conversation; a synthetic view has none (0 used).
+        contextUsedChars: conversationChars("messages" in ctx.state ? ctx.state.messages : undefined),
         // The model's ACTUAL toolbox this turn. A recovery hint may name a tool
         // only if it is here — the registry lists built-ins the schema withheld.
         // Absent schemas ⇒ empty set ⇒ hints name no tool, which is the safe

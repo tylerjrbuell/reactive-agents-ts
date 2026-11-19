@@ -21,9 +21,16 @@
  * (`requestedActionTools`), or nothing outstanding: no reservation, the run
  * ends as before.
  *
- * OPT-IN (`harness.budgetAnswerTurn`, `RA_BUDGET_ANSWER_TURN=1`): ablation
+ * A guard stop before the last call (dispatcher early-stop, no-progress) on
+ * such a run gets the same answer turn once, even after an earlier denial
+ * (`disposeExit`'s `answerTurnGiven`).
+ *
+ * DEFAULT ON (`harness.budgetAnswerTurn`; `false` or `RA_BUDGET_ANSWER_TURN=0`
+ * turns it off): owner decision 2026-11-19 after Cortex trace
+ * 01M7TERZAVP2RS489WEBJ3HY7H ended answerless at the cap with the evidence
+ * gathered; measured afterwards. Ablation
  * wiki/Research/Ablations/2026-11-10-budget-answer-turn-ablation.md measured
- * +1.9pp over 3 tiers, within noise.
+ * +1.9pp over 3 tiers, within noise (M5b, 2026-11-16: not exercised).
  *
  * Recorded like every gate decision: a `deny-once` exit-gate record (with
  * `answerTurnAt`) on the step record, an `exit_gate` guard-fired event, and a
@@ -67,10 +74,16 @@ export function budgetAnswerTurnRecord(
   input: KernelInput,
   maxIterations: number,
 ): ExitGateRecord | undefined {
-  if (input.harness?.budgetAnswerTurn !== true) return undefined; // opt-in (ablation 2026-11-10)
+  if (input.harness?.budgetAnswerTurn !== true) return undefined; // off by config / env (default on)
   if (state.status !== "thinking" || !isLastThinkCall(state, maxIterations)) return undefined;
   const llmCalls = state.llmCalls ?? 0;
   if (lastExitGateRecord(state.steps)?.answerTurnAt === llmCalls) return undefined; // already reserved
+  // A pass of a multi-pass run (`withRunBudget`): only the RUN's last call is
+  // reserved. With run calls left after this one, the pending batch runs
+  // (pending-batch.ts) and a later pass answers; a call past the run budget
+  // (a pass floor) belongs to the strategy's own wrap-up (reflexion synthesis).
+  const runLeft = state.meta.runIterationsLeft;
+  if (runLeft !== undefined && runLeft - Math.max(state.iteration, llmCalls) !== 1) return undefined;
   const judged = toolWorkSettled(state, input);
   if (judged === undefined) return undefined;
   const outstanding = outstandingItems(state, input, judged);
@@ -110,11 +123,12 @@ export function reserveBudgetAnswerTurn(args: {
 }): Effect.Effect<KernelState, never, never> {
   return Effect.gen(function* () {
     const { state, maxIterations, taskId } = args;
-    // A seeded plan run's wrap-up reserve (wrap-up-reserve.ts) takes the call the
-    // budget answer turn leaves; both are the same tools-withheld answer turn.
-    const budgeted = budgetAnswerTurnRecord(state, args.input, maxIterations);
-    const wrapUp = budgeted === undefined ? wrapUpReserve(state, args.input, isLastThinkCall(state, maxIterations)) : undefined;
-    const record = budgeted ?? wrapUp?.record;
+    // A seeded plan run's wrap-up reserve (wrap-up-reserve.ts, opt-in) takes the
+    // call first when it applies; otherwise the budget answer turn (default on)
+    // may. Both are the same tools-withheld answer turn.
+    const wrapUp = wrapUpReserve(state, args.input, isLastThinkCall(state, maxIterations));
+    const budgeted = wrapUp === undefined ? budgetAnswerTurnRecord(state, args.input, maxIterations) : undefined;
+    const record = wrapUp?.record ?? budgeted;
     if (record === undefined) return state;
     yield* emitGuardFired({
       taskId,

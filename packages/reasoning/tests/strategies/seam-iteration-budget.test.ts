@@ -114,8 +114,8 @@ const configWith = (maxIterations: number, kernelMaxIterations?: number): Reason
   },
 });
 
-// The budget answer turn (opt-in, `harness.budgetAnswerTurn`) marks where a
-// pass's share ends: its last call ships no tools. Both cases run with it on.
+// Both cases run with the budget answer turn on (default since 2026-11-19). It
+// reserves only the run's last call, so a pass's share ends with its tools on.
 const runReflexion = (config: ReasoningConfig, opts: { readonly silentAnswerTurn?: boolean } = {}) => {
   const model = reflexionModel(opts);
   return Effect.runPromise(
@@ -136,8 +136,11 @@ const runReflexion = (config: ReasoningConfig, opts: { readonly silentAnswerTurn
 describe("reflexion draws on the run's iteration budget", () => {
   it("(a) maxIterations 12: the generate pass is not capped at 3 (it leads: its share is 6)", async () => {
     const { result, offered } = await runReflexion(configWith(12));
-    const toolCallsBeforeAnswer = offered.findIndex((n) => n === 0);
-    expect(toolCallsBeforeAnswer).toBe(5); // 6 iterations: 5 tool calls, then the answer turn
+    // 6 iterations: six tool-offered calls. The pass cap is not the run's, so
+    // its last call keeps its tools (since 2026-11-19 the budget answer turn
+    // reserves only the RUN's last call) and a later pass answers.
+    expect(offered.length).toBe(6);
+    expect(offered.every((n) => n > 0)).toBe(true);
     expect(String(result.output ?? "")).toContain(ANSWER);
   }, 20000);
 

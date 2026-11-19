@@ -8,7 +8,8 @@
 // exit gate's answer turn (no tools). The model writes the answer; the harness
 // never does.
 //
-// OPT-IN (`harness.budgetAnswerTurn` / `RA_BUDGET_ANSWER_TURN=1`): ablation
+// DEFAULT ON since 2026-11-19 (owner decision; `harness.budgetAnswerTurn:
+// false` / `RA_BUDGET_ANSWER_TURN=0` turn it off). Before that it was opt-in: ablation
 // wiki/Research/Ablations/2026-11-10-budget-answer-turn-ablation.md measured
 // +1.9pp over 3 tiers, within noise. Its three defects are pinned here:
 //   1. a verified answer-turn reply ended `partial` / `max_iterations` (the cap
@@ -76,24 +77,25 @@ const stateAt = (iteration: number, steps = gathered): KernelState => {
   return makeKernelState({ status: "thinking", iteration, llmCalls: iteration, toolsUsed: toolsUsed.size > 0 ? toolsUsed : new Set(["gather"]), steps } as never);
 };
 
-describe("the budget answer turn is opt-in", () => {
+describe("the budget answer turn's switch (default on since 2026-11-19; see seam-answer-turn-default.test.ts)", () => {
   const saved = process.env.RA_BUDGET_ANSWER_TURN;
   afterEach(() => {
     if (saved === undefined) delete process.env.RA_BUDGET_ANSWER_TURN;
     else process.env.RA_BUDGET_ANSWER_TURN = saved;
   });
 
-  it("resolves off by default, on from config or RA_BUDGET_ANSWER_TURN=1, and config beats env", () => {
+  it("resolves on by default, off from config false or RA_BUDGET_ANSWER_TURN=0, and config beats env", () => {
     delete process.env.RA_BUDGET_ANSWER_TURN;
+    expect(resolveHarnessConfig().budgetAnswerTurn).toBe(true);
+    expect(resolveHarnessConfig({ budgetAnswerTurn: true }).budgetAnswerTurn).toBe(true);
+    process.env.RA_BUDGET_ANSWER_TURN = "0";
     expect("budgetAnswerTurn" in resolveHarnessConfig()).toBe(false);
     expect(resolveHarnessConfig({ budgetAnswerTurn: true }).budgetAnswerTurn).toBe(true);
-    process.env.RA_BUDGET_ANSWER_TURN = "1";
-    expect(resolveHarnessConfig().budgetAnswerTurn).toBe(true);
     expect("budgetAnswerTurn" in resolveHarnessConfig({ budgetAnswerTurn: false })).toBe(false);
   });
 
-  it("flag unset: no reservation, the state is unchanged, and budgetAnswerTurnTaken stays false", async () => {
-    const input = makeKernelInput({ task: TASK, harness: resolveHarnessConfig({}) });
+  it("flag off: no reservation, the state is unchanged, and budgetAnswerTurnTaken stays false", async () => {
+    const input = makeKernelInput({ task: TASK, harness: resolveHarnessConfig({ budgetAnswerTurn: false }) });
     expect(budgetAnswerTurnRecord(stateAt(9), input, 10)).toBeUndefined();
     const state = stateAt(9);
     const after = await Effect.runPromise(
@@ -130,7 +132,7 @@ describe("the budget answer turn is opt-in", () => {
           taskId: "t",
         }).pipe(Effect.provide(EventBusLive)),
       );
-    const off = await propose(makeKernelInput({ task: TASK, harness: resolveHarnessConfig({}) }));
+    const off = await propose(makeKernelInput({ task: TASK, harness: resolveHarnessConfig({ budgetAnswerTurn: false }) }));
     expect(off.decision).not.toBe("deny-once");
     expect(off.state.steps.some((s) => s.metadata?.exitGate?.answerTurnAt !== undefined)).toBe(false);
     const on = await propose(inputOn());

@@ -23,7 +23,8 @@ import type { LogEvent } from "@reactive-agents/observability";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ObservationResult } from "../../../types/observation.js";
 import { makeObservationResult } from "../../utils/observation-helpers.js";
-import type { ContextProfile } from "../../../context/context-profile.js";
+import { resolveEffectiveNumCtx, type ContextProfile } from "../../../context/context-profile.js";
+import { shapeRecallRead } from "../attend/recall-read.js";
 import {
   ToolNotFoundError,
   subAgentResultForDisplay,
@@ -682,6 +683,8 @@ export function executeNativeToolCall(
      * Kernel callers omit it (normalizeObservation already covers their needs).
      */
     preprocess?: (raw: string) => string;
+    /** Characters the conversation already holds; bounds a full recall read (attend/recall-read.ts). */
+    contextUsedChars?: number;
   },
 ): Effect.Effect<{ content: string; parts?: readonly ContentPart[]; success: boolean; storedKey?: string; delegatedToolsUsed?: readonly string[]; subAgentLedger?: RunLedger; childEnvelopes?: readonly SubAgentChildEnvelope[]; extractedFact?: string; fullContent?: string }, never> {
   return toolService
@@ -731,9 +734,21 @@ export function executeNativeToolCall(
         // synthesis step needs the complete data, not the compressed preview.
         const fullContent = content;
 
+        // A full recall read returns the stored content up to the remaining
+        // context, or names the size and the next section: never a compressed,
+        // re-stored preview (trace 01M7TERZAVP2RS489WEBJ3HY7H).
+        const recallRead = toolCall.name === "recall" && success
+          ? shapeRecallRead({
+              toolArgs: toolCall.arguments, toolResult: content, scratchpad: config?.scratchpad,
+              windowTokens: config?.profile ? resolveEffectiveNumCtx(config.profile) : undefined,
+              usedChars: config?.contextUsedChars,
+            })
+          : undefined;
+        if (recallRead !== undefined) content = recallRead;
+
         // Apply result compression for large outputs
         let storedKey: string | undefined;
-        if (config?.compression) {
+        if (config?.compression && recallRead === undefined) {
           // A recall read gets a window-bounded budget, not the per-result one (R1).
           const budget = toolResultBudget(toolCall.name, config.compression.budget ?? config.profile?.toolResultMaxChars ?? 800, config.profile?.maxTokens);
           const previewItems = config.compression.previewItems ?? config.profile?.toolResultPreviewItems ?? 5;

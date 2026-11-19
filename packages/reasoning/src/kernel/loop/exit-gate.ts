@@ -524,11 +524,14 @@ export function disposeExit(args: {
    */
   readonly unmeetableOnly?: boolean;
   /**
-   * `harness.budgetAnswerTurn` (opt-in, ablation 2026-11-10). Only when true
+   * `harness.budgetAnswerTurn` (default on, owner 2026-11-19). Only when true
    * may an answer-only denial take the run's last think call at iteration
-   * `maxIterations - 1`; absent, a soft guard there gets no extra turn.
+   * `maxIterations - 1`, or follow an earlier denial (once per run, see
+   * `answerTurnGiven`); absent, a soft guard there gets no extra turn.
    */
   readonly budgetAnswerTurn?: boolean;
+  /** An answer turn (a record with `answerTurnAt`) was already granted this run. */
+  readonly answerTurnGiven?: boolean;
 }): ExitGateDecision {
   if (args.outstanding.length === 0) return "accept";
   if (args.unmeetableOnly === true) return args.hasMaterial ? "handoff" : "accept";
@@ -545,6 +548,9 @@ export function disposeExit(args: {
   const roomForOneMore =
     args.iteration < args.maxIterations - (answerTurnFits ? 0 : 1) && args.llmCalls < args.maxIterations;
   if (args.kind === "soft" && !args.deniedBefore && roomForOneMore) return "deny-once";
+  // A guard stop after an earlier denial still gets one answer turn when only
+  // the answer is missing (trace 01M7TERZAVP2RS489WEBJ3HY7H ended answerless).
+  if (args.kind === "soft" && answerTurnFits && args.answerTurnGiven !== true && roomForOneMore) return "deny-once";
   if (
     args.kind === "soft" && args.deniedBefore && roomForOneMore && args.writeProgress === true &&
     args.maxDenials !== undefined && (args.denialsSoFar ?? 0) < args.maxDenials
@@ -753,8 +759,9 @@ export function proposeExit(args: {
       answerOnly,
       unmeetableOnly,
       budgetAnswerTurn: args.input.harness?.budgetAnswerTurn === true,
+      answerTurnGiven: state.steps.some((s) => s.metadata?.exitGate?.answerTurnAt !== undefined),
     });
-    const progressDenial = decision === "deny-once" && exitDeniedBefore(state.steps);
+    const progressDenial = decision === "deny-once" && exitDeniedBefore(state.steps) && progress?.writeProgress === true;
     const answerTurn = decision === "deny-once" && answerOnly;
     const record: ExitGateRecord = {
       proposedBy: proposal.proposedBy,

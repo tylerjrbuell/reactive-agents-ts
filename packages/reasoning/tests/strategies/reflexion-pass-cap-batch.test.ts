@@ -102,7 +102,7 @@ async function runReflexion(run: number) {
   const result = await Effect.runPromise(
     program.pipe(Effect.provide(Layer.provideMerge(ReasoningServiceLive(configFor(run)), base))),
   );
-  return { result, queries, pendingGuards: guards.filter((g) => g.guard === "pending_batch") };
+  return { result, queries, guards, pendingGuards: guards.filter((g) => g.guard === "pending_batch") };
 }
 
 const TREND_QUERIES = [
@@ -132,11 +132,25 @@ describe("reflexion: the batch of a pass's last think runs while the run has bud
     expect((result.metadata as { unreadResultsSynthesis?: { outcome?: string } }).unreadResultsSynthesis?.outcome).toBeDefined();
   }, 20000);
 
-  it("at the RUN cap the batch is still dropped, and the record names run-budget-exhausted", async () => {
+  it("at the RUN cap (budget answer turn off) the batch is still dropped, and the record names run-budget-exhausted", async () => {
     // Run budget 4 = generate 2 + improve 2: nothing is left when the improve pass caps.
-    const { queries, pendingGuards } = await runReflexion(4);
+    const saved = process.env.RA_BUDGET_ANSWER_TURN;
+    process.env.RA_BUDGET_ANSWER_TURN = "0";
+    try {
+      const { queries, pendingGuards } = await runReflexion(4);
+      expect(queries).toEqual(["EV market size 2026", "EV market overview"]);
+      expect(pendingGuards.map((g) => [g.outcome, g.reason])).toEqual([["warn", "dropped"]]);
+      expect(pendingGuards[0]?.metadata).toEqual(expect.objectContaining({ cause: "run-budget-exhausted" }));
+    } finally {
+      if (saved === undefined) delete process.env.RA_BUDGET_ANSWER_TURN;
+      else process.env.RA_BUDGET_ANSWER_TURN = saved;
+    }
+  }, 20000);
+
+  it("at the RUN cap (default since 2026-11-19): the run's last call is the answer turn, so no batch is left to drop", async () => {
+    const { queries, guards, pendingGuards } = await runReflexion(4);
     expect(queries).toEqual(["EV market size 2026", "EV market overview"]);
-    expect(pendingGuards.map((g) => [g.outcome, g.reason])).toEqual([["warn", "dropped"]]);
-    expect(pendingGuards[0]?.metadata).toEqual(expect.objectContaining({ cause: "run-budget-exhausted" }));
+    expect(guards.some((g) => g.guard === "budget_answer_turn")).toBe(true);
+    expect(pendingGuards.filter((g) => g.reason === "dropped")).toEqual([]);
   }, 20000);
 });

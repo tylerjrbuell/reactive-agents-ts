@@ -246,12 +246,12 @@ export function stableToolListEnabled(): boolean {
 /**
  * Budget answer turn: when the run holds validated tool evidence and only the
  * answer is outstanding, the last think call the iteration budget allows ships
- * with no tools (`kernel/loop/budget-answer-turn.ts`). Default OFF: ablation
- * 2026-11-10 measured +1.9pp over 3 tiers (within noise).
- * `RA_BUDGET_ANSWER_TURN=1` enables it.
+ * with no tools (`kernel/loop/budget-answer-turn.ts`). Default ON (owner
+ * decision 2026-11-19, ablation pending; the 2026-11-10 ablation measured
+ * +1.9pp over 3 tiers, within noise). `RA_BUDGET_ANSWER_TURN=0` disables it.
  */
 export function budgetAnswerTurnEnabled(): boolean {
-  return readFlag("RA_BUDGET_ANSWER_TURN") === "1";
+  return readFlag("RA_BUDGET_ANSWER_TURN") !== "0";
 }
 
 /**
