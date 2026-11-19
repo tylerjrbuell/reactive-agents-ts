@@ -36,7 +36,7 @@ const title = route?.entry?.data?.title ?? "";
 
   <div class="ra-endcap-col">
     <p class="ra-endcap-h">Follow along</p>
-    <a href={GITHUB_URL} target="_blank" rel="noopener" class="ra-star-cta ra-endcap-star" data-ra-placement="endcap">
+    <a href={GITHUB_URL} target="_blank" rel="noopener" class="ra-star-cta ra-endcap-star" data-ra-placement="endcap" data-ra-self-tracked>
       <span class="ra-star-icon">⭐</span>
       <span class="ra-star-label">Star on GitHub</span>
       {githubStats.stars > 0 && <span class="ra-star-count">{githubStats.stars}</span>}

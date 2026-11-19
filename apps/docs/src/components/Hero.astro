@@ -207,7 +207,7 @@ const maxLines = Math.max(...snippetsData.map((s) => s.lines.length))
                 {actions.length > 0 && (
                     <div class="ra-hero-actions">
                         {actions.map((a) => (
-                            <LinkButton href={a.link} variant={a.variant} icon={a.icon?.name}>
+                            <LinkButton href={a.link} variant={a.variant} icon={a.icon?.name} {...a.attrs}>
                                 {a.text}
                             </LinkButton>
                         ))}

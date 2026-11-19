@@ -11,7 +11,7 @@ related:
   - features/eval
 ---
 
-import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 The `@reactive-agents/benchmarks` package is an **internal evaluation harness**: a fixed set of tasks spanning 5 complexity tiers (trivial, simple, moderate, complex, expert) that you run against a real LLM to measure pass rate, latency, token usage, and cost for *your* provider and model choices.
 
@@ -35,11 +35,7 @@ SQL injection fix expected: "parameteriz|prepared|placeholder|\$1|\?|injection|s
 
 This is a coarse smoke check. A loosely related answer can match one alternative, so treat a pass as "on topic", not "correct".
 
-Five code tasks are instead graded by a hidden check that imports and runs the agent's code. That grading runs only in session mode (`--session`).
-
-<Aside type="caution" title="Quick mode does not grade the code tasks">
-In quick mode (`--provider` without `--session`), the five hidden-check tasks currently report pass without being checked. Treat quick-mode pass rates as a smoke test, not a measurement.
-</Aside>
+Five code tasks are instead graded by a hidden check that imports and runs the agent's code. Quick mode (`--provider` without `--session`) and session mode grade every task through the same scorer: each quick-mode task runs in its own sandbox directory, hidden checks run against the files the agent wrote there, and a task with no grader cannot pass.
 
 ## Running Benchmarks
 

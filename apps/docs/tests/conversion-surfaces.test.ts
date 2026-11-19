@@ -45,6 +45,20 @@ describe("conversion surfaces", () => {
     expect(outbound).toContain('a.closest("[data-ra-self-tracked]")) return;');
   });
 
+  it("Star CTAs count once: every star_cta_click surface opts out of outbound_click", () => {
+    for (const f of ["src/components/Header.astro", "src/components/PageSidebar.astro", "src/components/EndOfPage.astro"]) {
+      const src = read(f);
+      const tags = src.match(/<a\b[^>]*class="ra-star-cta[^"]*"[^>]*>/g) ?? [];
+      expect(tags.length).toBeGreaterThanOrEqual(1);
+      for (const t of tags) expect(t).toContain("data-ra-self-tracked");
+    }
+    const hero = read("src/content/docs/index.mdx");
+    const star = hero.slice(hero.indexOf('text: "⭐ Star on GitHub"'), hero.indexOf("topic:"));
+    expect(star).toMatch(/attrs:\s*\n\s*data-ra-self-tracked: true/);
+    // the custom Hero override must forward frontmatter attrs, or the opt-out never renders
+    expect(read("src/components/Hero.astro")).toContain("{...a.attrs}");
+  });
+
   it("never sends the email address to analytics", () => {
     const sub = read("src/components/EmailSubscribe.astro");
     const calls = sub.match(/track\("subscribe_[a-z]+",[^)]*\)/g) ?? [];
