@@ -3,7 +3,7 @@ import { Effect, type Layer } from "effect";
 import type { DeskRunDb } from "../services/crashed-runs.js";
 import { CortexRunnerService } from "../services/runner-service.js";
 import type { ChatSessionService } from "../services/chat-session-service.js";
-import { interruptChatTurn } from "../services/chat-run-control.js";
+import { interruptChatTurnSettled } from "../services/chat-run-control.js";
 import { DetachedTurns } from "../services/chat-detached-turn.js";
 import { findLoopStoppedRuns, loopStoppedSummaryOf, reopenRunRow, restoreRunRow } from "../services/loop-stopped-runs.js";
 import { errorText, parseResumeInput, ResumeGuard, resumeStatusOf } from "../services/loop-stop-resume.js";
@@ -32,8 +32,8 @@ const ContinueBody = t.Optional(t.Object({ note: t.Optional(t.Unknown()), extraI
  */
 export const chatResumeRoute = (svc: ChatSessionService, detachedTurns: DetachedTurns = new DetachedTurns()) =>
   new Elysia({ prefix: "/api/chat" })
-    .post("/sessions/:sessionId/chat/stop", ({ params }) => interruptChatTurn(svc, params.sessionId, "stop"))
-    .post("/sessions/:sessionId/chat/pause", ({ params }) => interruptChatTurn(svc, params.sessionId, "pause"))
+    .post("/sessions/:sessionId/chat/stop", ({ params }) => interruptChatTurnSettled(svc, params.sessionId, "stop"))
+    .post("/sessions/:sessionId/chat/pause", ({ params }) => interruptChatTurnSettled(svc, params.sessionId, "pause"))
     .get("/sessions/:sessionId/resumable", async ({ params, set }) => {
       if (!svc.getSession(params.sessionId)) {
         set.status = 404;

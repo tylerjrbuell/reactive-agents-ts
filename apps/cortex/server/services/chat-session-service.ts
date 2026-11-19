@@ -244,8 +244,8 @@ export class ChatSessionService {
   private readonly inFlight = new Set<string>();
   /** Sessions whose config changed mid-turn: evict the cached agent when the turn ends. */
   private readonly evictAfterTurn = new Set<string>();
-  /** In-flight streamed turns, so a Stop and a client disconnect are told apart (`chat-turn-stop.ts`). */
-  private readonly turnStops = new ChatTurnStops();
+  /** In-flight streamed turns: Stop vs disconnect, and `settleIfStopping` for the stop route (`chat-turn-stop.ts`). */
+  readonly turnStops = new ChatTurnStops();
   /** Per-session `/docs` URL cache + ingest-failure record (D-2026-10-28-DOC-FETCH). */
   private readonly documents: SessionDocumentCache;
 
@@ -338,9 +338,7 @@ export class ChatSessionService {
   }
 
   /** True while a turn is in flight for the session. */
-  isBusy(sessionId: string): boolean {
-    return this.inFlight.has(sessionId);
-  }
+  isBusy(sessionId: string): boolean { return this.inFlight.has(sessionId); }
 
   /** Start collecting the cached agent's root-run assessments for one turn (no-op before the agent is built). */
   beginTurnAssessments(sessionId: string): void {
@@ -363,9 +361,7 @@ export class ChatSessionService {
     return () => {
       this.inFlight.delete(sessionId);
       // A config PATCH during the turn deferred its eviction (updateSessionConfig): rebuild now.
-      if (this.evictAfterTurn.delete(sessionId)) {
-        void this.evictSession(sessionId).catch((e: unknown) => cortexLog("warn", "chat", "deferred session eviction failed", { sessionId, error: String(e) }));
-      }
+      if (this.evictAfterTurn.delete(sessionId)) void this.evictSession(sessionId).catch((e: unknown) => cortexLog("warn", "chat", "deferred session eviction failed", { sessionId, error: String(e) }));
     };
   }
 
@@ -489,6 +485,7 @@ export class ChatSessionService {
 
   private async mutateHistory<T>(sessionId: string, fn: () => T): Promise<T> {
     if (!getChatSession(this.db, sessionId)) throw new Error(`Chat session ${sessionId} not found`);
+    await this.turnStops.settleIfStopping(sessionId); // an edit right after Stop waits for the aborted turn to release
     const release = this.acquireTurn(sessionId);
     try {
       const out = fn();
@@ -734,7 +731,7 @@ export class ChatSessionService {
     const enableTools = resolveEnableTools(cfg);
     const streamReasoningSteps = cfg.streamReasoningSteps === true;
     if (this.approvals.hasPending(sessionId)) throw new ChatApprovalPendingError(sessionId);
-
+    await this.turnStops.settleIfStopping(sessionId); // a send right after Stop waits for the aborted turn to release
     const release = this.acquireTurn(sessionId);
     if (opts.attachments && opts.attachments.length > 0) this.turnAttachments.set(sessionId, opts.attachments);
     // What the run receives: the message plus any attachments (a plain string when there are none).

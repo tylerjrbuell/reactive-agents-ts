@@ -24,7 +24,13 @@ interface ActiveTurn {
   readonly controller: AbortController;
   byUser: boolean;
   paused: boolean;
+  /** Resolves when the turn's handle ends (the turn released the session's in-flight guard right after). */
+  readonly settled: Promise<void>;
+  readonly settle: () => void;
 }
+
+/** Longest a Stop, or a history change / new send right after one, waits for the aborted turn to wind down. */
+export const STOP_SETTLE_MS = 8_000;
 
 /** The `StreamCancelled.reason` of a stopped turn: who stopped it, `user-paused` for a Pause. */
 export const cancelReasonOf = (by: InterruptedBy, how: UserInterrupt | undefined): string =>
@@ -36,7 +42,11 @@ export class ChatTurnStops {
 
   /** Register the session's turn; `clientSignal` (the request's) aborts it as a disconnect. */
   begin(sessionId: string, clientSignal?: AbortSignal): TurnStopHandle {
-    const turn: ActiveTurn = { controller: new AbortController(), byUser: false, paused: false };
+    let settle: () => void = () => {};
+    const settled = new Promise<void>((r) => {
+      settle = r;
+    });
+    const turn: ActiveTurn = { controller: new AbortController(), byUser: false, paused: false, settled, settle };
     const onClientAbort = (): void => turn.controller.abort();
     if (clientSignal?.aborted) turn.controller.abort();
     else clientSignal?.addEventListener("abort", onClientAbort, { once: true });
@@ -49,8 +59,28 @@ export class ChatTurnStops {
       end: () => {
         clientSignal?.removeEventListener("abort", onClientAbort);
         if (this.active.get(sessionId) === turn) this.active.delete(sessionId);
+        turn.settle();
       },
     };
+  }
+
+  /**
+   * Wait (bounded) for the session's aborted turn to finish winding down. Resolves `true` at once
+   * when no turn is stopping (nothing to wait for: a turn that is still running is genuinely busy),
+   * `true` when the stopping turn released in time, `false` on timeout.
+   */
+  async settleIfStopping(sessionId: string, timeoutMs: number = STOP_SETTLE_MS): Promise<boolean> {
+    const turn = this.active.get(sessionId);
+    if (turn === undefined || !turn.controller.signal.aborted) return true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<false>((r) => {
+      timer = setTimeout(() => r(false), timeoutMs);
+    });
+    try {
+      return await Promise.race([turn.settled.then(() => true as const), timedOut]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   /** Stop the session's in-flight turn as the user (`how` = Pause or Stop, default Stop). `false` when no turn is running. */

@@ -68,7 +68,7 @@ describe("chat Stop and Pause routes", () => {
     for (const action of ["stop", "pause"]) {
       const res = await send("POST", `/api/chat/sessions/${id}/chat/${action}`);
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ stopped: false, persisted: false, outcome: "not-live" });
+      expect(await res.json()).toEqual({ stopped: false, persisted: false, outcome: "not-live", settled: true });
     }
   });
 });

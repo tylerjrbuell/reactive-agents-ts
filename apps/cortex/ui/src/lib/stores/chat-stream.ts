@@ -113,28 +113,42 @@ export function failTurn(turns: ChatTurn[], id: number, cause: unknown): ChatTur
   }));
 }
 
-/** How long a Stop waits for the server before the client drops the stream anyway. */
-const STOP_TIMEOUT_MS = 2_000;
+/**
+ * How long a Stop / Pause waits for the server. The server answers once the aborted turn has
+ * released the session, bounded at 8s (`STOP_SETTLE_MS`); this stays just above it.
+ */
+const STOP_TIMEOUT_MS = 10_000;
+
+/** What the server answers to a chat Stop: `settled` = the turn released the session (an edit is accepted now). */
+export type StopAnswer = { readonly ok: true; readonly stopped: boolean; readonly settled: boolean } | { readonly ok: false };
+
+/** Ask the server to stop the session's streamed turn; never throws (`{ ok: false }` when it did not answer in time). */
+export async function requestTurnStopAnswer(sessionId: string): Promise<StopAnswer> {
+  try {
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/chat/stop`, {
+      method: "POST",
+      signal: AbortSignal.timeout(STOP_TIMEOUT_MS),
+    });
+    if (!res.ok) return { ok: false };
+    const body = (await res.json()) as { stopped?: boolean; settled?: boolean };
+    // A body without `settled` (an older server) counts as settled; only an explicit `false` is "still winding down".
+    return { ok: true, stopped: body.stopped === true, settled: body.settled !== false };
+  } catch {
+    return { ok: false };
+  }
+}
 
 /**
  * Ask the server to stop the session's streamed turn, so it is stored as stopped
  * by the user. Never throws; `false` when the server had no turn or did not answer.
  */
 export async function requestTurnStop(sessionId: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/chat/stop`, {
-      method: "POST",
-      signal: AbortSignal.timeout(STOP_TIMEOUT_MS),
-    });
-    const body = (await res.json()) as { stopped?: boolean };
-    return res.ok && body.stopped === true;
-  } catch {
-    return false;
-  }
+  const answer = await requestTurnStopAnswer(sessionId);
+  return answer.ok && answer.stopped;
 }
 
-/** What the server answers to a chat Pause: whether a turn ended and whether the run was saved so it can continue. */
-export type PauseAnswer = { readonly ok: true; readonly stopped: boolean; readonly persisted: boolean } | { readonly ok: false };
+/** What the server answers to a chat Pause: whether a turn ended and whether the run was saved so it can continue (`settled`: the turn released the session). */
+export type PauseAnswer = { readonly ok: true; readonly stopped: boolean; readonly persisted: boolean; readonly settled: boolean } | { readonly ok: false };
 
 /**
  * Pause the session's running turn: the framework ends the durable run at its next step
@@ -144,10 +158,13 @@ export type PauseAnswer = { readonly ok: true; readonly stopped: boolean; readon
  */
 export async function requestTurnPause(sessionId: string): Promise<PauseAnswer> {
   try {
-    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/chat/pause`, { method: "POST" });
+    const res = await fetch(`${CORTEX_SERVER_URL}/api/chat/sessions/${encodeURIComponent(sessionId)}/chat/pause`, {
+      method: "POST",
+      signal: AbortSignal.timeout(STOP_TIMEOUT_MS),
+    });
     if (!res.ok) return { ok: false };
-    const body = (await res.json()) as { stopped?: boolean; persisted?: boolean };
-    return { ok: true, stopped: body.stopped === true, persisted: body.persisted === true };
+    const body = (await res.json()) as { stopped?: boolean; persisted?: boolean; settled?: boolean };
+    return { ok: true, stopped: body.stopped === true, persisted: body.persisted === true, settled: body.settled !== false };
   } catch {
     return { ok: false };
   }

@@ -12,14 +12,15 @@
   import { toast } from "$lib/stores/toast-store.js";
   import { pauseToast } from "$lib/run-controls.js";
 
-  let busy = $state(false);
+  import { interruptPhase, interruptTurn } from "$lib/stores/chat-interrupt.js";
+
+  const pending = $derived($interruptPhase !== "idle");
 
   async function pause(): Promise<void> {
     const sid = $chatStore.activeSessionId;
-    if (busy || !sid) return;
-    busy = true;
-    const answer = await requestTurnPause(sid);
-    busy = false;
+    if (pending || !sid) return;
+    const answer = await interruptTurn("pausing", () => requestTurnPause(sid));
+    if (!answer) return;
     const t = pauseToast(answer);
     if (t.tone === "success") toast.success(t.title, t.detail);
     else toast.warning(t.title, t.detail);
@@ -29,12 +30,14 @@
 <button
   type="button"
   class="pause"
-  aria-label="Pause reply"
-  disabled={busy}
+  class:pending
+  aria-label={$interruptPhase === "pausing" ? "Pausing reply" : "Pause reply"}
+  aria-busy={$interruptPhase === "pausing"}
+  disabled={pending}
   use:tooltip={"Pause: stop here and continue later (needs Durable runs)"}
   onclick={() => void pause()}
 >
-  <Icon name="pause" />
+  {#if $interruptPhase === "pausing"}<Icon name="clock" size="sm" /><span>Pausing…</span>{:else}<Icon name="pause" />{/if}
 </button>
 
 <style>
@@ -42,8 +45,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
+    gap: 6px;
+    min-width: 32px;
     height: 32px;
+    padding: 0 8px;
+    font-size: var(--cortex-fs-sm, 12px);
     border: 1px solid var(--cortex-line);
     border-radius: var(--cortex-r-ctl);
     background: var(--cortex-surface-2);

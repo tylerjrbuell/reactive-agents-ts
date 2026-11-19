@@ -2,7 +2,8 @@ import { get, writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
 import { carryContext } from "../chat-context.js";
-import { failTurn, requestTurnStop, streamAssistantTurn } from "./chat-stream.js";
+import { failTurn, requestTurnStopAnswer, streamAssistantTurn } from "./chat-stream.js";
+import { friendlyChatError, interruptTurn, whenInterruptIdle } from "./chat-interrupt.js";
 import { ATTACH_ACTIVE_TURN, chatStreamEndpoint, fetchActiveTurn, resumedTurns, shouldResume } from "./chat-resume.js";
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
@@ -479,7 +480,7 @@ function createChatStore() {
       body: JSON.stringify(body),
     });
     const payload = (await res.json().catch(() => ({}))) as T & { error?: string };
-    if (!res.ok) throw new Error(payload.error ?? `${action} failed`);
+    if (!res.ok) throw new Error(friendlyChatError(payload.error ?? `${action} failed`));
     return payload;
   }
 
@@ -498,6 +499,7 @@ function createChatStore() {
   async function rewind(turnId: number): Promise<string> {
     const sid = activeId();
     if (!sid) return "";
+    await whenInterruptIdle(); // an edit right after Stop waits for the stop to settle
     const { userMessage } = await utility<{ userMessage: string }>(sid, "rewind", { turnId });
     historyChanged(sid);
     await refreshTurns(sid);
@@ -769,17 +771,13 @@ function createChatStore() {
 
   let activeController: AbortController | null = null;
 
-  /**
-   * Stop the running turn. The server is asked first, so it stops the run itself
-   * and stores the turn as stopped by the user (a dropped stream alone reads as a
-   * disconnect); the stream is then dropped whatever the answer.
-   */
+  /** Stop the running turn: the server first (stored as stopped by the user, not a disconnect; "Stopping…" shows until it let go), then drop the stream. */
   async function stop(): Promise<void> {
     const controller = activeController;
     if (!controller) return;
     activeController = null;
     const sid = activeId();
-    if (sid) await requestTurnStop(sid);
+    if (sid) await interruptTurn("stopping", () => requestTurnStopAnswer(sid));
     controller.abort();
   }
 

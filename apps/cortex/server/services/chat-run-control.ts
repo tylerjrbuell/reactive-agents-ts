@@ -63,3 +63,32 @@ export async function interruptChatTurn(
   const aborted = svc.stopTurn(sessionId, kind === "pause" && outcome === "not-live" ? "stop" : kind);
   return { stopped: aborted || outcome !== "not-live", persisted: outcome === "persisted", outcome };
 }
+
+/** What the HTTP Stop / Pause answers: the interrupt plus whether the turn had fully let go of the session. */
+export interface ChatInterruptSettledAnswer extends ChatInterruptAnswer {
+  /**
+   * The aborted turn released the session (an edit or send is accepted now). `false` when it was
+   * still winding down after the bounded wait: the client keeps its "Stopping" state and retries.
+   */
+  readonly settled: boolean;
+}
+
+/** What {@link interruptChatTurnSettled} needs on top of {@link ChatTurnInterruptPorts}. */
+export interface ChatTurnSettlePorts extends ChatTurnInterruptPorts {
+  readonly turnStops: { settleIfStopping(sessionId: string, timeoutMs?: number): Promise<boolean> };
+}
+
+/**
+ * The Stop / Pause the HTTP routes answer: {@link interruptChatTurn}, then a bounded wait for the
+ * aborted turn to release the session, so the response means "the session accepts edits again".
+ * Kept apart from `interruptChatTurn` because an in-stream caller must not wait on the stream it is draining.
+ */
+export async function interruptChatTurnSettled(
+  svc: ChatTurnSettlePorts,
+  sessionId: string,
+  kind: InterruptKind,
+  timeoutMs?: number,
+): Promise<ChatInterruptSettledAnswer> {
+  const answer = await interruptChatTurn(svc, sessionId, kind);
+  return { ...answer, settled: await svc.turnStops.settleIfStopping(sessionId, timeoutMs) };
+}

@@ -68,11 +68,11 @@ BUN_SQLITE_BASELINE=49
 # (new giants are forbidden at birth). Keep NO '#' characters inside the array literal: the
 # self-test patches this block by regex.
 SIZE_LEDGER=(
-  "server/services/chat-session-service.ts:1453"
+  "server/services/chat-session-service.ts:1450"
   "server/services/runner-service.ts:844"
   "server/api/chat.ts:834"
   "ui/src/lib/components/ChatPanel.svelte:899"
-  "ui/src/lib/stores/chat-store.ts:826"
+  "ui/src/lib/stores/chat-store.ts:824"
 )
 
 FAIL=0

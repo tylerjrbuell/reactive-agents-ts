@@ -63,6 +63,17 @@ describe("strategy steps on the chat stream", () => {
     expect(final.strategyRun?.nodes).toHaveLength(1);
   });
 
+  it("a failed completion (a strategy refusal: success false + error) settles the phases and shows the reason", async () => {
+    const cause = "Strategy execution failed (code-action): code-action cannot honor .withApprovalPolicy";
+    const { final } = await run([
+      stepEv("reflexion:generate"),
+      sse({ _tag: "StreamCompleted", output: "", metadata: {}, success: false, terminatedBy: "llm_error", error: cause }),
+    ]);
+    expect(final.strategyRun?.ended).toBe(true);
+    expect(final.streaming).toBeFalsy();
+    expect(final.runFailed?.error).toContain("code-action cannot honor .withApprovalPolicy");
+  });
+
   it("a turn with no steps leaves strategyRun absent, and a malformed step is ignored", async () => {
     const { final } = await run([sse({ _tag: "StepEvent", step: { nonsense: true } }), sse({ _tag: "StreamCompleted", output: "x", metadata: {} })]);
     expect(final.strategyRun).toBeUndefined();

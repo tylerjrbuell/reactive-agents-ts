@@ -15,6 +15,7 @@
   import { tick } from "svelte";
   import ChatModeToggle from "$lib/components/chat/ChatModeToggle.svelte";
   import ChatPauseButton from "$lib/components/chat/ChatPauseButton.svelte";
+  import { interruptPhase } from "$lib/stores/chat-interrupt.js";
   import { isModeShortcut, modeHint, nextMode, type ChatMode } from "$lib/chat-mode.js";
 
   interface Props {
@@ -83,7 +84,9 @@
     void onFiles(files);
   }
 
-  const sendLabel = $derived(sendAction === "stop" ? "Stop reply" : sendAction === "queue" ? "Queue message" : "Send message");
+  /** A Stop / Pause the server has not confirmed yet: the send button reads "Stopping…" and is inert. */
+  const interrupting = $derived(sendAction === "stop" && $interruptPhase !== "idle");
+  const sendLabel = $derived(interrupting ? ($interruptPhase === "pausing" ? "Pausing reply" : "Stopping reply") : sendAction === "stop" ? "Stop reply" :sendAction === "queue" ? "Queue message" : "Send message");
 
   // Highlight layer: a mirror of the text behind the transparent textarea, same box and
   // wrapping, where recognized command tokens get a tinted background. The textarea
@@ -172,12 +175,15 @@
         class="send"
         class:stop={sendAction === "stop"}
         class:queue={sendAction === "queue"}
-        disabled={sendAction === "send" && !hasText}
+        disabled={interrupting || (sendAction === "send" && !hasText)}
+        aria-busy={interrupting}
         aria-label={sendLabel}
         use:tooltip={sendAction === "queue" ? "Queue: sent when this reply finishes" : sendLabel}
         onclick={onSendButton}
       >
-        {#if sendAction === "stop"}
+        {#if interrupting && $interruptPhase === "stopping"}
+          <Icon name="clock" size="sm" /><span>Stopping…</span>
+        {:else if sendAction === "stop"}
           <Icon name="stop" />
         {:else if sendAction === "queue"}
           <Icon name="clock" size="sm" /><span>Queue</span>
