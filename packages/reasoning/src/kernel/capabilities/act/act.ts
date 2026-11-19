@@ -66,7 +66,7 @@ import { effectiveMissingRequired } from "../verify/requirement-state.js";
 import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { assembleConversation } from "./conversation-assembly.js";
 import { syncRoundScratchpad } from "./scratchpad-sync.js";
-import { checkToolCall, defaultGuards } from "./guard.js";
+import { checkToolCall, defaultGuards } from "./guard.js"; import { withRoundReadFirst } from "./batch-read-first.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, type KernelMessageLike } from "@reactive-agents/core";
 
@@ -531,7 +531,7 @@ export function handleActing(
 
         const plannedBatch = batchLeaderToCalls.get(tc.id);
         if (plannedBatch && plannedBatch.length > 1) {
-          const guardCheck = checkToolCall(defaultGuards);
+          const guardCheck = withRoundReadFirst(checkToolCall(defaultGuards), normalizedPendingCalls, state);
           const executableCalls: ToolCallSpec[] = [];
           const healedByCallId = new Map<string, boolean>();
 
@@ -758,7 +758,7 @@ export function handleActing(
         }
 
         // ── Guard pipeline (blocked / duplicate / side-effect / repetition / meta-dedup) ──
-        const guardCheck = checkToolCall(defaultGuards);
+        const guardCheck = withRoundReadFirst(checkToolCall(defaultGuards), normalizedPendingCalls, state);
         const guardOutcome = guardCheck(tc, transitionState(state, {
           steps: allSteps,
           toolsUsed: newToolsUsed,
