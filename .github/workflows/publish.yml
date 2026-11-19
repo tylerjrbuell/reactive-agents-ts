@@ -156,7 +156,8 @@ jobs:
       # Sync the release artifacts back to main: VERSION (so `cat VERSION` ==
       # npm @latest), the CHANGELOG.md section release.ts just aggregated,
       # the deletion of the changesets it consumed, and the 34 stamped
-      # packages/*/package.json files release.ts wrote in this tag workspace.
+      # packages/*/package.json files release.ts wrote in this tag workspace,
+      # plus the two public apps (apps/cli, apps/cortex).
       # Without the changeset deletion, consumed changesets linger on main
       # and re-aggregate into the NEXT release's notes (bit v0.11.2: seven
       # v0.11.0-era notes had to be purged by hand). Without the package.json
@@ -176,7 +177,13 @@ jobs:
           # branch switch discards them.
           cp CHANGELOG.md "$RUNNER_TEMP/CHANGELOG.release.md"
           ls .changeset/ > "$RUNNER_TEMP/changesets-remaining.txt"
-          tar -cf "$RUNNER_TEMP/package-jsons.tar" packages/*/package.json
+          # The two public apps (@reactive-agents/cli, @reactive-agents/cortex)
+          # are stamped by release.ts too; leaving them out let the facade's
+          # cli pin move to the release while apps/cli stayed behind, so bun
+          # installed a stale npm cli under the facade. Explicit paths: the
+          # other apps/* are private and keep their own versions.
+          tar -cf "$RUNNER_TEMP/package-jsons.tar" packages/*/package.json \
+            apps/cli/package.json apps/cortex/package.json
           git fetch origin main
           git checkout -f -B main origin/main
           echo "${{ steps.ver.outputs.version }}" > VERSION
@@ -190,7 +197,8 @@ jobs:
               git rm -q "$f"
             fi
           done
-          git add VERSION CHANGELOG.md .changeset/ packages/*/package.json
+          git add VERSION CHANGELOG.md .changeset/ packages/*/package.json \
+            apps/cli/package.json apps/cortex/package.json
           if git diff --cached --quiet; then
             echo "release artifacts already synced — nothing to commit"
             exit 0
