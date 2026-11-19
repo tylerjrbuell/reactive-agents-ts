@@ -11,7 +11,7 @@ import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { proposeExit, DISPATCHER_EARLY_STOP } from "../../src/kernel/loop/exit-gate.js";
 import { passthroughOutputDeliverable } from "../../src/kernel/loop/runner-helpers/deliverable.js";
 import { deriveTerminatedBy } from "../../src/kernel/loop/terminate-reason.js";
-import { honestDeclineOf, declineSettlesOutstanding } from "../../src/kernel/loop/honest-decline-exit.js";
+import { honestDeclineOf, inspectDecline, declineSettlesOutstanding } from "../../src/kernel/loop/honest-decline-exit.js";
 import { looksLikeHonestDecline } from "../../src/kernel/capabilities/decide/abstention-detection.js";
 import { makeKernelInput, makeKernelState } from "../../src/testing/kernel-fixtures.js";
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
@@ -245,5 +245,29 @@ describe("declineSettlesOutstanding: act-or-answer must not force a read the mod
     const s = permanentlyFailed(stateWith(failedReads));
     expect(declineSettlesOutstanding(s, INPUT, ["file-read"], "The total is 412.")).toBe(false);
     expect(declineSettlesOutstanding(s, INPUT, ["file-read", "file-write"], DECLINE)).toBe(false);
+  });
+});
+
+describe("a permanently failed required tool is not tool-viable (ab-trap-5 aoa run4, zoo-live addendum 4)", () => {
+  const OUTSTANDING = ["call the `file-read` tool"];
+  const permanent = (steps: ReasoningStep[]): KernelState => {
+    const s = stateWith(steps);
+    return { ...s, evidence: { ...s.evidence, permanentlyFailed: new Set(["file-read"]) } } as KernelState;
+  };
+
+  it("decline settles though evidence.permanentlyFailed drops the tool from the effective missing list", () => {
+    const steps = [...failedReads, makeStep("thought", DECLINE)];
+    expect(honestDeclineOf(permanent(steps), INPUT, OUTSTANDING)).toEqual({ text: DECLINE, missing: ["file-read"] });
+  });
+
+  it("a required tool that never ran still reads as tool-viable", () => {
+    const check = inspectDecline(permanent([makeStep("thought", DECLINE)]), INPUT, OUTSTANDING).check;
+    expect(check.rejectedBy).toBe("tool-viable");
+  });
+
+  it("nothing required missing is its own rejection, not tool-viable", () => {
+    const state = stateWith([readResult(true), makeStep("thought", DECLINE)]);
+    const done = { ...state, evidence: { ...state.evidence, successfulCounts: { "file-read": 1 } } } as KernelState;
+    expect(inspectDecline(done, INPUT, OUTSTANDING).check.rejectedBy).toBe("no-missing-required");
   });
 });

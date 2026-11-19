@@ -27,7 +27,6 @@ import { deliverableTextOf } from "../capabilities/reason/assistant-turn.js";
 import { unresolvedThoughtSet } from "../capabilities/reflect/unresolved-steps.js";
 import { looksLikeHonestDecline } from "../capabilities/decide/abstention-detection.js";
 import type { RequirementBasis } from "../contract/requirement-basis.js";
-import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import { missingRequired } from "../capabilities/verify/requirement-state.js";
 import { executedOutcomes } from "./runner-helpers/tool-health.js";
 
@@ -92,7 +91,7 @@ export interface DeclineCheck {
   /** The model's latest text after the last successful result, or null. */
   readonly textAfterEvidence: string | null;
   /** First clause that rejected the decline; "none" when it settled. */
-  readonly rejectedBy: "none" | "no-outstanding" | "tool-viable" | "blocking-outstanding" | "no-text" | "not-a-decline";
+  readonly rejectedBy: "none" | "no-outstanding" | "no-missing-required" | "tool-viable" | "blocking-outstanding" | "no-text" | "not-a-decline";
 }
 
 /**
@@ -106,10 +105,14 @@ export function inspectDecline(
   outstanding: readonly string[],
   basis?: readonly RequirementBasis[],
 ): { readonly decline: HonestDecline | undefined; readonly check: DeclineCheck } {
-  const missing = neverSucceededRequired(state, input);
+  // Raw missing list: a permanently failed tool is exactly the decline case
+  // (effectiveMissingRequired drops it, which read as "tool-viable": ab-trap-5 aoa run4).
+  const rawMissing = missingRequired(state.evidence, input.requiredTools ?? [], input.requiredToolQuantities);
+  const missing = neverSucceededAmong(state, rawMissing);
   const text = latestTextAfterEvidence(state);
   const seen = { missingTools: missing ?? [], textAfterEvidence: text ?? null };
   const reject = (rejectedBy: DeclineCheck["rejectedBy"]) => ({ decline: undefined, check: { ...seen, rejectedBy } });
+  if (rawMissing.length === 0) return reject("no-missing-required");
   if (missing === undefined) return reject("tool-viable");
   if (outstanding.length === 0) return reject("no-outstanding");
   if (text === undefined) return reject("no-text");
@@ -125,10 +128,6 @@ export function inspectDecline(
  * {@link MIN_FAILED_CALLS} times and never succeeded (the input is genuinely
  * unavailable); undefined when nothing is missing or any tool is still viable.
  */
-function neverSucceededRequired(state: KernelState, input: KernelInput): readonly string[] | undefined {
-  return neverSucceededAmong(state, missingRequiredToolsForInput(state, input));
-}
-
 function neverSucceededAmong(state: KernelState, missing: readonly string[]): readonly string[] | undefined {
   if (missing.length === 0) return undefined;
   const outcomes = executedOutcomes(state.steps);
