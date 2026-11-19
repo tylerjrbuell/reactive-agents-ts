@@ -60,7 +60,11 @@ const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly to
   // failed with the same sandbox error; a repeated identical failure now stops
   // the run after plan + one repair (code-action-reflect.ts isRepeatedSandboxFailure).
   // The tokens also carry the new zero-argument line in the code-action prompt.
-  "code-action": { llmCalls: 2, tokensUsed: 606 },
+  // 2026-11-19 RAISED tokens 606 -> 624 (owner-approved 2026-11-19): the prompt's
+  // "Results are parsed (no JSON.parse)." clause, folded into the function-call
+  // paragraph (9 tokens x 2 calls; the standalone-line wording cost 654).
+  // Since 8698acebb JSON tool results reach the code decoded, so JSON.parse on one throws.
+  "code-action": { llmCalls: 2, tokensUsed: 624 },
   // 2026-11-05 S4b 4/1601 -> 2/1260: reflect skipped when every step completed
   // and the deterministic delivery judgment verified the contract (the
   // scripted reflect said UNSATISFIED, so the old run also paid an augment).

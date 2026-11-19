@@ -15,6 +15,8 @@
 //     (retried while iterations remain), `failed` with the error named at the cap;
 //   - a tool output with `success: false` throws into the code, never resolves quietly;
 //   - every tool call failing is not an answer either;
+//   - the plan prompt says tool results arrive parsed (no JSON.parse), and code
+//     that JSON.parses one anyway fails once and is fixed by the repair turn;
 //   - negative controls: plain-text results stay strings, a normal object
 //     answer completes.
 //
@@ -28,6 +30,7 @@ import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { executeCodeAction } from "../../src/strategies/code-action.js";
 import { decodeSandboxToolResult, errorShapedResult } from "../../src/strategies/code-action/sandbox-tool-result.js";
+import { buildPlanPrompt } from "../../src/strategies/code-action/code-action-plan.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import { provideTestEnvelope, buildRunEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
@@ -109,6 +112,14 @@ describe("sandbox tool results — pure", () => {
   });
 });
 
+describe("code-action prompt — tool results arrive parsed", () => {
+  it("the system prompt tells the model results are parsed and must not be JSON.parse'd", () => {
+    const { system } = buildPlanPrompt("task", "declare async function t(): Promise<unknown>;");
+    expect(system).toContain("parsed");
+    expect(system).toContain("JSON.parse");
+  });
+});
+
 describe("code-action — trace 01M7T338WQJ4TV6Z6M6T3SNHHP", () => {
   it("a JSON-text MCP result reaches the code decoded: the website is found and the run completes", async () => {
     const result = await run([TRACE_CODE], { success: true, result: WEBSITES_TEXT });
@@ -136,6 +147,15 @@ describe("code-action — trace 01M7T338WQJ4TV6Z6M6T3SNHHP", () => {
     expect(result.status).toBe("failed");
     expect(String(result.error)).toContain("401 unauthorized");
     expect(result.output ?? "").not.toBe("undefined");
+  }, 20000);
+
+  it("code that JSON.parses an already-decoded result fails once, then the repair turn's code completes", async () => {
+    const parseCode = fence(`(async () => { const r = JSON.parse(await umami_list_websites()); return { names: r.websites.map((w) => w.name) }; })()`);
+    const result = await run([parseCode, TRACE_CODE], { success: true, result: WEBSITES_TEXT }, 3);
+    expect(result.status).toBe("completed");
+    expect(result.output).toContain("Reactive Agents Documentation");
+    // The first code threw on JSON.parse of an object: a sandbox failure the repair turn fixed.
+    expect(result.steps.some((s) => s.content.startsWith("[CODE-ACTION] Sandbox execution failed:"))).toBe(true);
   }, 20000);
 
   it("negative control: a plain-text tool result stays a string and completes", async () => {
