@@ -8,7 +8,7 @@
   import { goto } from "$app/navigation";
   import { tooltip } from "$lib/actions/tooltip.js";
   import { page } from "$app/state";
-  import { formatModelPrice, formatRelativeTime, formatTokens, statusOfRun } from "@reactive-agents/ui-core";
+  import { formatModelPrice, formatRelativeTime, modelPriceDetail, formatTokens, statusOfRun } from "@reactive-agents/ui-core";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import PageHeader from "$lib/components/kit/PageHeader.svelte";
   import Button from "$lib/components/kit/Button.svelte";
@@ -242,7 +242,7 @@
             {#each sortedModels as m (m.value)}
               <a class="mp-run mp-model" href={modelHref(provider, m.value)}>
                 <span class="mp-run-name mp-data">{m.label || m.value}</span>
-                <span class="mp-data mp-run-meta">{formatModelPrice(m.price)}</span>
+                <span class="mp-data mp-run-meta" use:tooltip={modelPriceDetail(m.price)}>{formatModelPrice(m.price)}</span>
               </a>
             {/each}
           {/if}

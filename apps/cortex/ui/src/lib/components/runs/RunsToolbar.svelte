@@ -5,6 +5,7 @@
    */
   import Icon from "$lib/components/kit/Icon.svelte";
   import Select from "$lib/components/kit/Select.svelte";
+  import { tooltip } from "$lib/actions/tooltip.js";
   import { formatCostTotal, formatTokens, partialCostNote } from "@reactive-agents/ui-core";
   import { RUN_SORTS, RUN_STATUS_FILTERS, type RunSort, type RunStatusFilter } from "$lib/runs-table.js";
 
@@ -34,7 +35,7 @@
   <Select id="runs-sort" bind:value={sort} options={RUN_SORTS} aria-label="Sort runs" class="sort" />
   <div class="totals">
     <span>tokens <b>{formatTokens(totals.tokens)}</b></span>
-    <span title={partialCostNote(totals.costComplete) || undefined}>cost <b>{formatCostTotal(totals.cost, totals.costComplete)}</b></span>
+    <span use:tooltip={partialCostNote(totals.costComplete)}>cost <b>{formatCostTotal(totals.cost, totals.costComplete)}</b></span>
   </div>
 </div>
 

@@ -63,8 +63,10 @@ export {
 } from "./state/cost-total.js";
 export {
   isLocalPrice,
+  isFreePrice,
   formatPerMillion,
   formatModelPrice,
+  modelPriceDetail,
   priceSourceLabel,
   compareByPrice,
   type ModelPrice,

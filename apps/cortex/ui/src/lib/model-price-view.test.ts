@@ -13,6 +13,8 @@ const sonnet: ModelPrice = {
 };
 const mini: ModelPrice = { input: 0.15, output: 0.6, source: "official", asOf: "2026-11-01" };
 const local: ModelPrice = { input: 0, output: 0, source: "local" };
+/** Gemma 4 on Gemini: Google's page lists it free of charge (free tier), with no paid price. */
+const gemma: ModelPrice = { input: 0, output: 0, source: "official", asOf: "2026-11-19" };
 
 describe("model page price card", () => {
   test("input, output, cache read and the long-context tier in $/1M with the source", () => {
@@ -43,5 +45,20 @@ describe("chat model rows", () => {
     expect(modelRowDetail({ value: "claude-x", label: "Claude X", price: sonnet })).toBe("claude-x · $3 / $15 per 1M");
     expect(modelRowDetail({ value: "qwen3:4b", label: "qwen3:4b", price: local })).toBe("free (local)");
     expect(modelRowDetail({ value: "mystery", label: "mystery" })).toBe("price unknown");
+  });
+
+  test("a hosted $0 / $0 model (Gemma 4 on Gemini) reads free, not $0 / $0", () => {
+    expect(modelRowDetail({ value: "gemma-4-31b-it", label: "gemma-4-31b-it", price: gemma })).toBe("free");
+  });
+});
+
+describe("model page free price", () => {
+  test("a free hosted price has no $0 stats (the card says free in words)", () => {
+    expect(priceStats(gemma)).toEqual([]);
+  });
+
+  test("sort by price puts free hosted with local first, unknown last", () => {
+    const rows = [{ value: "u" }, { value: "m", price: mini }, { value: "g", price: gemma }, { value: "l", price: local }];
+    expect(sortModelList(rows, "price").map((r) => r.value)).toEqual(["l", "g", "m", "u"]);
   });
 });

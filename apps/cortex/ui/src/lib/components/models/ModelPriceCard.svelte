@@ -5,7 +5,7 @@
    * the Spend section. Local models read "free", unpriced ones "price unknown".
    * Rules: `priceStats` in `lib/model-page.ts`.
    */
-  import { isLocalPrice, priceSourceLabel, type ModelPrice } from "@reactive-agents/ui-core";
+  import { isFreePrice, isLocalPrice, priceSourceLabel, type ModelPrice } from "@reactive-agents/ui-core";
   import SettingsGroup from "$lib/components/settings/SettingsGroup.svelte";
   import StatGrid from "$lib/components/settings/StatGrid.svelte";
   import { priceStats } from "$lib/model-page.js";
@@ -27,6 +27,9 @@
     <p class="pc-empty">Price unknown. The framework has no rate for this model, so its calls carry no cost and run totals that include them are marked partial.</p>
   {:else if isLocalPrice(price)}
     <p class="pc-empty">Free (local). Local inference has no per-token bill.</p>
+  {:else if isFreePrice(price)}
+    <p class="pc-empty">Free. Calls are billed $0 per million input and output tokens (free tier; no paid tier price).</p>
+    <p class="pc-source">Source: {priceSourceLabel(price)}</p>
   {:else}
     <div class="pc-grid"><StatGrid {items} /></div>
     <p class="pc-source">Source: {priceSourceLabel(price)}</p>

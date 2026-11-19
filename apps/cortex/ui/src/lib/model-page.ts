@@ -9,6 +9,7 @@ import {
   formatPerMillion,
   formatTokens,
   formatTokensPerSecond,
+  isFreePrice,
   isLocalPrice,
   priceSourceLabel,
   type ModelPrice,
@@ -42,11 +43,11 @@ export interface PriceItem {
 
 /**
  * The price card's stats: input, output, cache read and long-context tiers in
- * $/1M. Empty when the price is unknown or the model is local (the card says
- * so in words instead).
+ * $/1M. Empty when the price is unknown, the model is local, or a hosted model
+ * is free (`isFreePrice`); the card says so in words instead of `$0` stats.
  */
 export function priceStats(price: ModelPrice | undefined): PriceItem[] {
-  if (price === undefined || isLocalPrice(price)) return [];
+  if (price === undefined || isLocalPrice(price) || isFreePrice(price)) return [];
   const source = priceSourceLabel(price);
   const items: PriceItem[] = [
     { label: "Input", value: `${formatPerMillion(price.input)} / 1M`, title: `Uncached input tokens. Source: ${source}.` },

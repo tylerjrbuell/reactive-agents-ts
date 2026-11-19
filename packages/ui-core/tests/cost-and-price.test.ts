@@ -8,7 +8,9 @@ import {
   formatCostTotal,
   formatModelPrice,
   formatPerMillion,
+  isFreePrice,
   llmCallCostOf,
+  modelPriceDetail,
   partialCostNote,
   priceSourceLabel,
   type ModelPrice,
@@ -97,5 +99,33 @@ describe("model price display", () => {
   test("sort by cost: cheapest first, unknown last", () => {
     const rows: (ModelPrice | undefined)[] = [undefined, sonnet, mini, local];
     expect([...rows].sort(compareByPrice)).toEqual([local, mini, sonnet, undefined]);
+  });
+
+  // Gemma 4 on Gemini: Google lists it "Free of charge" (free tier) with no paid price, so the
+  // PriceBook carries $0 / $0. "$0 / $0 per 1M" read like missing data; it is a real price.
+  const gemma: ModelPrice = { input: 0, output: 0, source: "official", asOf: "2026-11-19" };
+
+  test("a hosted model priced $0 in and $0 out reads free, distinct from local and unknown", () => {
+    expect(isFreePrice(gemma)).toBe(true);
+    expect(formatModelPrice(gemma)).toBe("free");
+    expect(isFreePrice(local)).toBe(false);
+    expect(isFreePrice(undefined)).toBe(false);
+    expect(isFreePrice(mini)).toBe(false);
+    expect(isFreePrice({ input: 0, output: 0.4, source: "official" })).toBe(false);
+    expect(isFreePrice({ input: 0, output: 0, source: "official", tiers: [{ minPromptTokens: 128_001, input: 1 }] })).toBe(false);
+  });
+
+  test("price detail explains free, local and unknown prices", () => {
+    expect(modelPriceDetail(gemma)).toBe(
+      "Free: billed $0 per 1M input and output tokens (free tier; no paid tier price). Source: provider price page, as of 2026-11-19",
+    );
+    expect(modelPriceDetail(local)).toBe("Free (local): local inference has no per-token bill.");
+    expect(modelPriceDetail(undefined)).toBe("Price unknown: the framework has no rate for this model.");
+    expect(modelPriceDetail(sonnet)).toBe("$3 / $15 per 1M. Source: LiteLLM price list, as of 2026-11-19");
+  });
+
+  test("sort by cost: local and free hosted first, unknown last", () => {
+    const rows: (ModelPrice | undefined)[] = [undefined, mini, gemma, local];
+    expect([...rows].sort(compareByPrice)).toEqual([local, gemma, mini, undefined]);
   });
 });
