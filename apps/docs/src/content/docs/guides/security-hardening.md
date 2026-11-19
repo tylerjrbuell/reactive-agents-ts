@@ -56,7 +56,7 @@ Transports, auth and Docker options are documented in [MCP Support](/guides/tool
 
 ## Tool Risk Reduction
 
-- Disable `code-execute` unless strictly required.
+- Disable `code-execute` unless strictly required. By default it runs model-written JavaScript/TypeScript (Bun) or Python 3 (host `python3`) as a subprocess on the host. **It is not isolated:** the code runs as your OS user, can read host files by absolute path and has the host's network access. Only `PATH` and `HOME` are passed in its environment, so your API keys are not. Set `RA_SANDBOX=docker` to run it in a throwaway container instead (no host fallback; the Python path through Docker is untested). See [code-execute](/guides/tools/built-in-tools/#code-execute).
 - **`shell-execute` (host terminal)** — runs allowlisted CLI commands on the machine hosting the agent. Treat it as high privilege: only enable when you understand the default allowlist/blocklist, and prefer Docker-isolated or custom-hardened registration for anything user-facing. In **Cortex**, host shell is off by default and must be explicitly enabled in the Lab builder; the UI surfaces this as an at-your-own-risk choice.
 - Require approval for state-changing tools where possible — gate them with `.withApprovalPolicy({ tools: [...], mode: "detach" })` so the run waits for a human; add `.withDurableRuns()` when the pause must survive process death. See [Human-in-the-Loop Approval](/guides/durable-hitl/).
 - Isolate file-write scope to approved directories.

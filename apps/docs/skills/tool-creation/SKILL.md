@@ -101,6 +101,8 @@ Enable selectively with `allowedTools`:
 **Standard tools** (visible to the model with `.withTools({ builtins: true })`, or `builtins: [...]` for a subset; a bare `.withTools()` registers them but hides them):
 `web-search`, `http-get`, `file-read`, `file-write`, `code-execute`
 
+`code-execute` runs JavaScript/TypeScript under Bun (default; end with `return <value>`) or Python 3 under the host `python3` (`language: "python"`, also `python3`/`py`; `print()` the answer, stdout becomes `result`). Other languages and shell commands are refused. By default it is a host subprocess in `/tmp` with only `PATH` and `HOME` set: **not isolated** (same OS user, can read host files, host network). `RA_SANDBOX=docker` runs it in a container with no host fallback; the Python-in-Docker path is untested. Without `python3` on `PATH`, Python calls fail with "not found, nothing executed".
+
 **Meta-tools** (registered by kernel, available in `.withTools()`):
 `checkpoint`, `recall`, `find`, `brief`, `pulse`, `context-status`, `final-answer`
 

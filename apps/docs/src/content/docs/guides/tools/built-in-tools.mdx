@@ -23,7 +23,7 @@ These tools are registered internally as soon as you call `.withTools()`, but ea
 | `file-read` | file | Read file contents (path-traversal protected) | — |
 | `file-write` | file | Write file contents (requires approval) | — |
 | `file-edit` | file | Replace text in existing files (use instead of `file-write` for edits; requires approval) | — |
-| `code-execute` | code | Execute JavaScript/TypeScript only (no shell, no Python) in a subprocess (`Bun.spawn`, `cwd: "/tmp"`, minimal env); data is inline or read by absolute path | — |
+| `code-execute` | code | Execute JavaScript/TypeScript (Bun, the default) or Python 3 (`language: "python"`) in a host subprocess (`cwd: "/tmp"`, minimal env). Not isolated; no shell commands. See [code-execute](#code-execute) | Python needs `python3` on the host `PATH` |
 | `crypto-price` | data | Get current prices for 30+ cryptocurrencies via CoinGecko's free public API | — |
 
 `http-get` only fetches public addresses. It resolves the host once, checks every answer, and connects to that checked address (and re-checks each redirect hop), so a hostname that later resolves to a private or metadata address (DNS rebinding) is never reached. Credentials you pass in `headers` are dropped when a redirect leaves the original origin. Set `RA_HTTP_ALLOW_PRIVATE=1` to allow trusted local targets. A 4xx or 5xx response, or a 200 whose body is a short (under 2 KB) "not found" page, is returned as a tool failure that names the status and URL, not as a success.
@@ -56,6 +56,16 @@ const writer = await ReactiveAgents.create()
 // Runtime ingestion by either agent is visible to both on their next run.
 await writer.ingest("Style guide: short sentences.", { source: "style.md" });
 ```
+
+### code-execute
+
+`code-execute` runs a snippet in a fresh subprocess and returns its result. Each call starts clean: no variables or files carry over, so the data must be inlined in the code or read by absolute path.
+
+- **Languages.** `language` is optional. `javascript` (the default) and `typescript` (also `js`, `ts`) run under Bun. `python` (also `python3`, `py`) runs under the host's `python3`. Any other language is refused and nothing runs. Shell commands (`ls -la`, `python3 script.py`) are refused too: pass the source code itself.
+- **Results.** In JavaScript/TypeScript, `return` the answer. Python has no `return`: `print()` the answer and its stdout arrives in `result` (and `output`). A Python failure keeps the last 20 traceback lines.
+- **No `python3`.** If the host has no `python3` on `PATH`, the call returns a "not found, nothing executed" error and suggests JavaScript instead.
+- **Environment.** By default the code runs on the host in `/tmp` with only `PATH` and `HOME` set, so API keys in your environment are not passed to it. The subprocess is killed at the timeout (30 s by default). **It is not isolated:** it runs as your OS user, can read host files by absolute path and has the host's network access. Treat it as code execution on your machine.
+- **Docker mode.** With `RA_SANDBOX=docker` set, `code-execute` runs both languages in a throwaway Docker container instead and never falls back to the host. The Python path through Docker is untested.
 
 ### crypto-price
 

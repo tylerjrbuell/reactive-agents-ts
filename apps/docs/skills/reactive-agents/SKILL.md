@@ -110,7 +110,7 @@ builder.buildEffect()                        // returns Effect<ReactiveAgent> fo
 
 - `.build()` is async — always `await` it; forgetting causes silent "agent is undefined" errors
 - `.withProvider()` is required — there is no default provider
-- `.withTools()` with no args registers the built-ins but hides them from the model (and logs a "no capability tools" warning if nothing else is configured). Opt in with `.withTools({ builtins: true })` for the 5 standard tools (`web-search`, `http-get`, `file-read`, `file-write`, `code-execute`) or `builtins: [...]` for a subset. Shell execution is **opt-in only** via `.withTools({ terminal: true })`; use `allowedTools` to restrict standard tools
+- `.withTools()` with no args registers the built-ins but hides them from the model (and logs a "no capability tools" warning if nothing else is configured). Opt in with `.withTools({ builtins: true })` for the 5 standard tools (`web-search`, `http-get`, `file-read`, `file-write`, `code-execute`) or `builtins: [...]` for a subset. `code-execute` runs JavaScript/TypeScript (Bun) or Python 3 (`language: "python"`, host `python3`; `print()` the answer) as a host subprocess in `/tmp` with a minimal env; it is not isolated unless `RA_SANDBOX=docker`. Shell execution is **opt-in only** via `.withTools({ terminal: true })`; use `allowedTools` to restrict standard tools
 - Strategy name is `"plan-execute-reflect"` — **not** `"plan-execute"` (throws `StrategyNotFoundError`)
 - Memory tiers are `"standard"` and `"enhanced"` — **not** `"1"` and `"2"` (those are deprecated)
 - `"groq"` and `"openrouter"` are not valid provider names — use `"litellm"` for proxy/router providers

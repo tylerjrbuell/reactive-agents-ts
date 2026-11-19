@@ -41,7 +41,7 @@ All tool execution runs in a sandbox with:
 - **Error containment** — Tool failures don't crash the agent; errors are reported as observation text
 - **Result wrapping** — All outputs are wrapped in `ToolExecutionResult` with success/failure status
 
-The `code-execute` tool uses subprocess isolation via `Bun.spawn()` with `cwd: "/tmp"` and a minimal environment (`PATH` only). This prevents spawned code from reading environment variables (API keys, secrets) or accessing files outside `/tmp`.
+The `code-execute` tool runs JavaScript/TypeScript under Bun, or Python 3 under the host's `python3` when the call sets `language: "python"`. Both run as a subprocess with `cwd: "/tmp"` and a minimal environment (`PATH` and `HOME` only), so the code cannot read your environment variables (API keys, secrets). This is not isolation: the subprocess runs as your OS user, can read host files by absolute path and has the host's network access. For container isolation set `RA_SANDBOX=docker` (the Python path through Docker is untested). See [code-execute](/guides/tools/built-in-tools/#code-execute).
 
 ## Input Validation
 

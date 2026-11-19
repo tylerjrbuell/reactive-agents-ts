@@ -95,13 +95,14 @@ When the same tool is called with the same arguments, the cached result is retur
 
 ## Docker Sandbox
 
-For code execution tools, the Docker sandbox provides container-level isolation:
+For code execution tools, the Docker sandbox provides container-level isolation. It is off by default: set `RA_SANDBOX=docker` in the environment to turn it on.
 
 ```typescript
+// RA_SANDBOX=docker in the environment
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withTools({ builtins: ["code-execute"] }) // Code execution uses Docker sandbox when available
+  .withTools({ builtins: ["code-execute"] }) // code-execute runs in a Docker container
   .build();
 ```
 
@@ -120,7 +121,9 @@ The Docker sandbox prevents:
 - Resource exhaustion (CPU/memory caps)
 - Network access to internal services
 
-When Docker is not available, code execution falls back to `Bun.spawn()` subprocess isolation with a minimal environment (`PATH` only).
+In Docker mode there is no host fallback: if Docker is not installed or not running, `code-execute` returns an error and runs nothing. Python code (`language: "python"`) also routes to the container; that path is untested.
+
+Without `RA_SANDBOX=docker`, `code-execute` runs JavaScript/TypeScript under Bun or Python 3 under the host `python3` as a subprocess in `/tmp` with only `PATH` and `HOME` set. That subprocess is **not isolated**: it runs as your OS user, can read host files and has the host's network access. See [code-execute](/guides/tools/built-in-tools/#code-execute).
 
 ## Required Tools Guard
 
