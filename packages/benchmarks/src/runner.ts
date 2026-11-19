@@ -6,7 +6,8 @@
  * measuring real-world latency, token usage, cost, and correctness.
  */
 import type { BenchmarkTask, TaskResult, OverheadMeasurement, BenchmarkReport, Tier } from "./types.js";
-import { toolsToExpose } from "@reactive-agents/core";
+import { toolsToExpose, addCost, EMPTY_COST_SUM } from "@reactive-agents/core";
+import type { CostSum } from "@reactive-agents/core";
 import { BENCHMARK_TASKS } from "./task-registry.js";
 import { ReactiveAgents } from "@reactive-agents/runtime";
 import { createRuntime } from "@reactive-agents/runtime";
@@ -38,12 +39,14 @@ import {
   withConfigEnv, matchesExpected, shouldUseLongHorizon, billedTokenFields,
   writeFixtures, computeGroundingSet, dispatch,
 } from "./run-internal.js"
+import { buildSummary } from "./summary.js"
 
 // GH #268: moved verbatim to sibling modules; re-exported so importers of
 // "./runner.js" keep working.
 export { ALL_TASKS }
 export { aggregateAbstention, aggregateRuns, aggregatePassKByVariant, computeAllAblation, summarizeDimensions }
 export { withConfigEnv, shouldUseLongHorizon, billedTokenFields, writeFixtures, computeGroundingSet }
+export { buildSummary }
 
 import { openQuickSandbox } from "./quick-grade.js"
 import { scoreTask, scoreErrorCell, computeReliability, judgeUnreachable, DEFAULT_JUDGE_URL } from "./judge.js"
@@ -135,7 +138,9 @@ const runTask = async (
 
     let agentResult: Awaited<ReturnType<typeof agent.run>>;
     let cumulativeTokens = 0;
-    let cumulativeCost = 0;
+    // Absent estimatedCost = price unknown, not free: the tally stays a
+    // partial sum and says so (complete=false) instead of reading as exact.
+    let costTally: CostSum = EMPTY_COST_SUM;
     let cumulativeBilledTokens = 0;
     let cumulativeCacheReadTokens = 0;
     // Set true the first time LLMRequestCompleted actually fires. A subscribe
@@ -152,7 +157,7 @@ const runTask = async (
     const unsub = await agent.subscribe((event) => {
       if (event._tag === "LLMRequestCompleted") {
         cumulativeTokens += event.tokensUsed;
-        cumulativeCost += event.estimatedCost;
+        costTally = addCost(costTally, event.estimatedCost);
         // Before the F-1 fix nothing published this event, so these
         // accumulators sat at 0 and the bench silently fell through to
         // agentResult.metadata.tokensUsed. They are live now.
@@ -213,7 +218,9 @@ const runTask = async (
         durationMs,
         tokensUsed: cumulativeTokens,
         ...billedTokenFields(sawLLMRequestCompleted, cumulativeBilledTokens, cumulativeCacheReadTokens),
-        estimatedCost: cumulativeCost,
+        estimatedCost: costTally.usd,
+        // No LLMRequestCompleted seen = no per-call evidence: never claim exact.
+        costComplete: sawLLMRequestCompleted && costTally.complete,
         iterations,
         output: error instanceof Error ? `Error: ${error.message}` : String(error),
       } satisfies TaskResult;
@@ -236,7 +243,10 @@ const runTask = async (
       // ORing against a nonexistent metadata field. Omit entirely (not 0) when
       // the subscriber never fired, so aggregateRuns falls back to raw tokensUsed.
       ...billedTokenFields(sawLLMRequestCompleted, cumulativeBilledTokens, cumulativeCacheReadTokens),
-      estimatedCost: agentResult.metadata.cost || cumulativeCost,
+      estimatedCost: agentResult.metadata.cost || costTally.usd,
+      // Completeness comes from the per-call events either way: metadata.cost
+      // sums the same calls, so an unknown-price call leaves it partial too.
+      costComplete: sawLLMRequestCompleted && costTally.complete,
       iterations: agentResult.metadata.stepsCount || iterations,
       output: agentResult.output.slice(0, 1000),
     } satisfies TaskResult;
@@ -253,6 +263,8 @@ const runTask = async (
       durationMs: performance.now() - start,
       tokensUsed: 0,
       estimatedCost: 0,
+      // The tally is out of scope here; calls may have run before the throw.
+      costComplete: false,
       iterations: 0,
       output: isExpectedError ? errorMessage : "",
       error: isExpectedError ? undefined : errorMessage,
@@ -330,45 +342,6 @@ const measureOverhead = (): OverheadMeasurement[] => {
   }
 
   return measurements;
-};
-
-/**
- * Build summary statistics from task results.
- */
-const buildSummary = (tasks: TaskResult[]): BenchmarkReport["summary"] => {
-  const passed = tasks.filter((t) => t.status === "pass").length;
-  const failed = tasks.filter((t) => t.status === "fail").length;
-  const errors = tasks.filter((t) => t.status === "error").length;
-  const totalMs = tasks.reduce((a, t) => a + t.durationMs, 0);
-
-  const tiers: Tier[] = ["trivial", "simple", "moderate", "complex", "expert"];
-  const byTier = Object.fromEntries(
-    tiers.map((tier) => {
-      const tierTasks = tasks.filter((t) => t.tier === tier);
-      return [
-        tier,
-        {
-          passed: tierTasks.filter((t) => t.status === "pass").length,
-          total: tierTasks.length,
-          avgMs: tierTasks.length > 0
-            ? tierTasks.reduce((a, t) => a + t.durationMs, 0) / tierTasks.length
-            : 0,
-        },
-      ];
-    }),
-  ) as Record<Tier, { passed: number; total: number; avgMs: number }>;
-
-  return {
-    totalTasks: tasks.length,
-    passed,
-    failed,
-    errors,
-    totalDurationMs: totalMs,
-    totalTokens: tasks.reduce((a, t) => a + t.tokensUsed, 0),
-    totalCost: tasks.reduce((a, t) => a + t.estimatedCost, 0),
-    avgLatencyMs: tasks.length > 0 ? totalMs / tasks.length : 0,
-    byTier,
-  };
 };
 
 /**
@@ -557,7 +530,8 @@ export const runBenchmarks = async (
     : `${summary.totalDurationMs.toFixed(0)}ms total`;
   log(`  ${V}│${X}  ${D}Duration${X}  ${C}${durationStr.padEnd(40)}${X} ${V}│${X}`);
   log(`  ${V}│${X}  ${D}Tokens${X}    ${C}${String(summary.totalTokens.toLocaleString()).padEnd(40)}${X} ${V}│${X}`);
-  log(`  ${V}│${X}  ${D}Cost${X}      ${C}${"$" + summary.totalCost.toFixed(4)}${X}${" ".repeat(Math.max(0, 39 - ("$" + summary.totalCost.toFixed(4)).length))} ${V}│${X}`);
+  const costStr = "$" + summary.totalCost.toFixed(4) + (summary.costComplete ? "" : " (partial: price unknown)");
+  log(`  ${V}│${X}  ${D}Cost${X}      ${C}${costStr}${X}${" ".repeat(Math.max(0, 39 - costStr.length))} ${V}│${X}`);
   log(`  ${V}└─────────────────────────────────────────────────────┘${X}\n`);
 
   // ── Per-tier breakdown ──

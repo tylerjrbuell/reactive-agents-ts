@@ -207,6 +207,7 @@ GIANT_BAR=1000
 # 2026-11-12 channelStatus(): reactive-agent.ts 2016->2012 (+channelStatus delegate and import; gatewayStatus JSDoc condensed to one line).
 # 2026-11-12 event-bus.ts 224->188 (handler isolation moved to core/src/services/event-handler-isolation.ts). Keep '#' out of the SIZE_BASELINE array: the fixture test's patch regex stops at the first '#'.
 # 2026-11-13 benchmarks/src/runner.ts 964->963 (run end-status spread through runEndStatusField).
+# 2026-11-19 benchmarks/src/runner.ts 963->937 (buildSummary moved to benchmarks/src/summary.ts with the costComplete cost-completeness rollup)
 # 2026-11-12 structured questions: reactive-agent.ts 2012->2002 (listPendingInteractions inline row type replaced by the shared PendingInteraction from agent/durable-facade.ts).
 # 2026-11-13 loop guidance: kernel-state.ts 1299->1292 (LoopDetectionConfig moved verbatim to kernel/state/loop-detection-config.ts, +guidanceCycles field there).
 # 2026-11-12 chat routes by capability: reactive-agent.ts 2002->1987 (three pre-resolved useTools sites + _resolveUseTools replaced by one toolIntent capability per ChatEngine, makeChatToolIntent in agent/chat-capabilities.ts), chat/engine.ts 670->669 (routing JSDoc condensed, toolIntent port added).
@@ -233,7 +234,7 @@ SIZE_BASELINE=(
   "reasoning/src/kernel/loop/runner.ts:839"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
   "reasoning/src/strategies/plan-execute.ts:735"
-  "benchmarks/src/runner.ts:963"
+  "benchmarks/src/runner.ts:937"
   "core/src/services/event-bus.ts:188"
   "runtime/src/runtime.ts:1105"
   "benchmarks/src/tasks/real-world.ts:1481"

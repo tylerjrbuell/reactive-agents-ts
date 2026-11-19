@@ -161,7 +161,14 @@ export interface TaskResult {
   readonly billedTokens?: number;
   /** Cache-read input tokens, mirroring {@link RunScore.cacheReadTokens}. */
   readonly cacheReadTokens?: number;
+  /** USD cost; a partial sum when `costComplete` is false. */
   readonly estimatedCost: number;
+  /**
+   * True only when every LLM call carried a known price. False when any call
+   * had an unknown price (absent `estimatedCost`) or no per-call cost events
+   * were seen, so `estimatedCost` is a lower bound, not an exact total.
+   */
+  readonly costComplete: boolean;
   readonly iterations: number;
   readonly output: string;
   readonly error?: string;
@@ -188,7 +195,10 @@ export interface BenchmarkReport {
     readonly errors: number;
     readonly totalDurationMs: number;
     readonly totalTokens: number;
+    /** USD; a lower bound when `costComplete` is false. */
     readonly totalCost: number;
+    /** True only when every task's cost was complete (see `TaskResult.costComplete`). */
+    readonly costComplete: boolean;
     readonly avgLatencyMs: number;
     readonly byTier: Record<Tier, { passed: number; total: number; avgMs: number }>;
   };
