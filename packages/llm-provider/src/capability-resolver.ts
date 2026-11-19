@@ -21,6 +21,10 @@
 //      discovery (see capability-reported.ts). `source: "inferred"`. Only fires
 //      when a context window was reported; no id-regex guessing.
 //
+//   2.75 Gemini family rule - an unlisted Gemini text-model id borrows the
+//      nearest static row of its variant (capability-gemini-family.ts).
+//      `source: "inferred"`.
+//
 //   3. Fallback — `fallbackCapability(provider, model)`. Conservative
 //      values that won't crash any modern provider. Emits the optional
 //      `onProbeFailed` callback so callers can surface a
@@ -39,6 +43,7 @@ import {
 } from "./capability.js";
 import { chatToolsRequireNoReasoning, chatToolsRequireResponses } from "./capability-chat-tools.js";
 import { capabilityFromReported, reportedModelMetadataFor } from "./capability-reported.js";
+import { geminiFamilyCapability } from "./capability-gemini-family.js";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
 /**
@@ -223,6 +228,14 @@ function resolveCapabilityTiers(
   if (reported !== undefined) {
     const fromReported = capabilityFromReported(provider, model, reported);
     if (fromReported !== null) return fromReported;
+  }
+
+  // Tier 2.75 - Gemini family rule: an unlisted Gemini text-model id
+  // (`gemini-flash-latest`, `-preview`, new versions) borrows the nearest
+  // static row of its variant. `source: "inferred"`.
+  if (provider === "gemini") {
+    const fromFamily = geminiFamilyCapability(model);
+    if (fromFamily !== undefined) return fromFamily;
   }
 
   // Tier 3 — conservative fallback. Fires the user-supplied onProbeFailed
