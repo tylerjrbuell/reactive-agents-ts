@@ -19,6 +19,7 @@ export const CAUSE_DESCRIPTIONS: Readonly<Record<FailureCause, string>> = {
   aborted: "The run was aborted",
   "incomplete-trace": "The trace ends without the run finishing (process killed or crashed)",
   "provider-error": "The model provider returned an error",
+  "strategy-error": "The reasoning strategy failed with an error before it reached a final answer",
   "satisfiability-abstain": "The agent declined up front: the task could not be done with what it had",
   "terminal-mislabel": "The final status contradicts how the run actually ended",
   "plan-posture-veto": "The plan posture limited the tools, and the result did not cover the task",
@@ -54,6 +55,9 @@ const SUBCAUSE_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
   ["aborted/guardrail-block", "A guardrail blocked the run"],
   ["aborted/contract-violation", "A behavioral contract check stopped the run"],
   ["aborted/kill-switch", "A kill switch stopped the run"],
+  ["strategy-error/config-refused", "The reasoning strategy refused the run's configuration before calling the model"],
+  ["strategy-error/synthesis-failed", "The reasoning strategy produced no answer and its synthesis fallback failed"],
+  ["terminal-mislabel/status-override", "A status override failed an answer the run had verified and accepted"],
 ]);
 
 /**
@@ -118,7 +122,14 @@ const CAUSE_ACTIONS: Readonly<Record<FailureCause, ActionRule>> = {
     sub === "utility-misroute"
       ? ["A utility call ran as an agent task: check why it was routed through an agent run."]
       : ["Give the agent the tools or inputs the task needs (the evidence names what the preflight found missing)."],
-  "terminal-mislabel": () => ["This is a harness defect: the final status contradicts the run's own signals. Report it with this trace."],
+  "strategy-error": (sub) =>
+    sub === "config-refused"
+      ? ["The strategy refused this configuration (the reason is in the evidence): change the strategy or the conflicting option."]
+      : ["Read the strategy error in the evidence; if it names no configuration problem, report it with this trace."],
+  "terminal-mislabel": (sub) =>
+    sub === "status-override"
+      ? ["This is a harness defect: a status override (named in the evidence) failed an answer the terminal gate verified and accepted. Report it with this trace."]
+      : ["This is a harness defect: the final status contradicts the run's own signals. Report it with this trace."],
   "plan-posture-veto": () => ["Check the plan posture's tool surface against the tools the task needs."],
   "never-engaged": () => [
     "Check that the tool the task needs was visible to the model and described clearly.",

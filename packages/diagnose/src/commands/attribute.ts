@@ -17,11 +17,14 @@ import {
   loadTrace,
   classifyProvenance,
   mechanismActivity,
+  runSegmentNote,
   type Attribution,
   type AttributionTally,
   type MechanismActivity,
+  type RunSegmentRef,
 } from "@reactive-agents/trace";
 import { candidateTraceDirs, resolveTracePath } from "../lib/resolve.js";
+import { pickRuns, type SegmentSelector } from "../lib/segments.js";
 import { listTraceFilesRecursive } from "./cause.js";
 
 /** Options for {@link attributeCommand}. */
@@ -31,11 +34,15 @@ export interface AttributeOpts {
   readonly all?: boolean;
   /** Cohort mode only: exclude synthetic (`test` provider/model) traces. */
   readonly real?: boolean;
+  /** Single mode: which run of a file that holds several (default the last; `all` reports each). */
+  readonly segment?: SegmentSelector;
 }
 
-/** One attributed file in a cohort. */
+/** One attributed run in a cohort. */
 export interface CohortAttribution {
   readonly path: string;
+  /** The run's position when its file holds several runs under one runId. */
+  readonly runSegment?: RunSegmentRef;
   readonly attribution: Attribution;
   readonly activity: MechanismActivity;
 }
@@ -65,7 +72,15 @@ export async function attributeDirectories(
       const trace = await loadTrace(path);
       const hasRun = trace.events.some((e) => e.kind === "run-started" || e.kind === "run-completed" || e.kind === "run-aborted");
       if (!hasRun) continue;
-      out.push({ path, attribution: attributeFailure(trace), activity: mechanismActivity(trace) });
+      // One entry per run: a file whose runId was reused holds several.
+      for (const run of pickRuns(trace, "all")) {
+        out.push({
+          path,
+          ...(run.ref !== undefined ? { runSegment: run.ref } : {}),
+          attribution: attributeFailure(run.trace),
+          activity: mechanismActivity(run.trace),
+        });
+      }
     }
   }
   return out;
@@ -105,6 +120,7 @@ export async function attributeCommand(target: string | undefined, opts: Attribu
             activity: Object.fromEntries(activity),
             runs: cohort.map((c) => ({
               path: c.path,
+              ...(c.runSegment ? { runSegment: c.runSegment } : {}),
               verdict: c.attribution.verdict,
               reason: c.attribution.reason,
               confidence: c.attribution.confidence,
@@ -125,11 +141,20 @@ export async function attributeCommand(target: string | undefined, opts: Attribu
     process.exit(2);
   }
   const trace = await loadTrace(await resolveTracePath(target));
-  const attribution = attributeFailure(trace);
-  const activity = [...mechanismActivity(trace)].sort();
+  const reports = pickRuns(trace, opts.segment).map((run) => ({
+    run,
+    attribution: attributeFailure(run.trace),
+    activity: [...mechanismActivity(run.trace)].sort(),
+  }));
+  const json = reports.map(({ run, attribution, activity }) => ({ ...attribution, ...(run.ref ? { runSegment: run.ref } : {}), activity }));
   console.log(
     opts.json
-      ? JSON.stringify({ ...attribution, activity }, null, 2)
-      : `${renderAttribution(attribution)}\n  activity  ${activity.length > 0 ? activity.join(", ") : "none"}`,
+      ? JSON.stringify(opts.segment === "all" ? json : json[0], null, 2)
+      : reports
+          .map(({ run, attribution, activity }) => {
+            const [head, ...rest] = renderAttribution(attribution).split("\n");
+            return [head, ...(run.ref ? [`  note      ${runSegmentNote(run.ref)}`] : []), ...rest, `  activity  ${activity.length > 0 ? activity.join(", ") : "none"}`].join("\n");
+          })
+          .join("\n\n"),
   );
 }

@@ -18,11 +18,13 @@ import {
   tallyCauses,
   loadTrace,
   classifyProvenance,
+  withRunSegment,
   type Attribution,
   type CauseAnalysis,
   type CauseTally,
 } from "@reactive-agents/trace";
 import { candidateTraceDirs, resolveTracePath } from "../lib/resolve.js";
+import { pickRuns, type SegmentSelector } from "../lib/segments.js";
 
 /** Options for {@link causeCommand}. */
 export interface CauseOpts {
@@ -31,6 +33,8 @@ export interface CauseOpts {
   readonly all?: boolean;
   /** Cohort mode only: exclude synthetic (`test` provider/model) traces. */
   readonly real?: boolean;
+  /** Single mode: which run of a file that holds several (default the last; `all` reports each). */
+  readonly segment?: SegmentSelector;
 }
 
 /** Recursively list `.jsonl` trace files under `dir`, skipping the shared `llm-direct.jsonl` sink. */
@@ -43,14 +47,16 @@ export async function listTraceFilesRecursive(dir: string): Promise<string[]> {
     .sort();
 }
 
-/** One classified file in a cohort. */
+/** One classified run in a cohort. */
 export interface CohortCause {
   readonly path: string;
   readonly analysis: CauseAnalysis;
 }
 
 /**
- * Classify every trace under `dirs`. Files with no events, or with neither a
+ * Classify every trace under `dirs`, one entry per run: a file whose runId was
+ * reused holds several runs, and each is classified on its own (its position
+ * is `analysis.runSegment`). Files with no events, or with neither a
  * `run-started` nor a terminal event (stray sinks), are skipped.
  */
 export async function classifyDirectories(
@@ -67,7 +73,9 @@ export async function classifyDirectories(
       const trace = await loadTrace(path);
       const hasRun = trace.events.some((e) => e.kind === "run-started" || e.kind === "run-completed" || e.kind === "run-aborted");
       if (!hasRun) continue;
-      out.push({ path, analysis: analyzeCause(trace) });
+      for (const run of pickRuns(trace, "all")) {
+        out.push({ path, analysis: run.ref !== undefined ? withRunSegment(run.trace, run.ref) : analyzeCause(run.trace) });
+      }
     }
   }
   return out;
@@ -112,7 +120,7 @@ export async function causeCommand(target: string | undefined, opts: CauseOpts =
     const tally = tallyCauses(cohort.map((c) => c.analysis));
     console.log(
       opts.json
-        ? JSON.stringify({ dirs, tally, runs: cohort.map((c) => ({ path: c.path, cause: c.analysis.cause, subCause: c.analysis.subCause, confidence: c.analysis.confidence, outcomeStatus: c.analysis.outcomeStatus })) }, null, 2)
+        ? JSON.stringify({ dirs, tally, runs: cohort.map((c) => ({ path: c.path, ...(c.analysis.runSegment ? { runSegment: c.analysis.runSegment } : {}), cause: c.analysis.cause, subCause: c.analysis.subCause, confidence: c.analysis.confidence, outcomeStatus: c.analysis.outcomeStatus })) }, null, 2)
         : renderCauseTally(tally, `Causes across ${dirs.join(", ")}${opts.real ? " (real traces only)" : ""}`),
     );
     return;
@@ -122,16 +130,17 @@ export async function causeCommand(target: string | undefined, opts: CauseOpts =
     process.exit(2);
   }
   const trace = await loadTrace(await resolveTracePath(target));
-  const analysis = analyzeCause(trace);
-  // Harness-vs-model attribution rides along (see `rax-diagnose attribute` for the full report).
-  const attribution = attributeFailure(trace);
+  const reports = pickRuns(trace, opts.segment).map((run) => {
+    const analysis = run.ref !== undefined ? withRunSegment(run.trace, run.ref) : analyzeCause(run.trace);
+    // Harness-vs-model attribution rides along (see `rax-diagnose attribute` for the full report).
+    return { analysis, attribution: attributeFailure(run.trace) };
+  });
+  const json = reports.map(({ analysis, attribution }) => ({
+    ...analysis, description: causeDescription(analysis.cause, analysis.subCause), nextActions: causeNextActions(analysis), attribution,
+  }));
   console.log(
     opts.json
-      ? JSON.stringify(
-          { ...analysis, description: causeDescription(analysis.cause, analysis.subCause), nextActions: causeNextActions(analysis), attribution },
-          null,
-          2,
-        )
-      : renderCauseReport(analysis, attribution),
+      ? JSON.stringify(opts.segment === "all" ? json : json[0], null, 2)
+      : reports.map(({ analysis, attribution }) => renderCauseReport(analysis, attribution)).join("\n\n"),
   );
 }

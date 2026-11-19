@@ -20,7 +20,7 @@ import type { FailureCause } from "../src/index.js";
 // Every cause, as a typed Record: a new FailureCause is a type error here until listed.
 const ALL: Readonly<Record<FailureCause, true>> = {
   "direct-chat": true, timeout: true, "user-stop": true, aborted: true, "incomplete-trace": true,
-  "provider-error": true, "satisfiability-abstain": true, "terminal-mislabel": true,
+  "provider-error": true, "strategy-error": true, "satisfiability-abstain": true, "terminal-mislabel": true,
   "plan-posture-veto": true, "never-engaged": true, "tool-protocol": true, "tool-failure": true,
   "wrong-tool-arg": true, "stall-after-work": true, "stall-no-progress": true, "loop-after-work": true,
   "bookkeeping-loop": true, "verifier-reject": true, "budget-cap": true, unexplained: true,

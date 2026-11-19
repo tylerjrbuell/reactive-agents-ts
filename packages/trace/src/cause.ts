@@ -27,8 +27,11 @@
 //   0 direct-chat (not a run)
 //   1 timeout / user-stop / aborted (run-aborted.reason, else its error tag or
 //     causeClass) | incomplete-trace (neither run-completed nor run-aborted)
-//   2 provider-error     3 satisfiability-abstain
-//   4 terminal-mislabel (incl. run-completed.status vs outcome contradiction)
+//   2 provider-error     2b strategy-error (the strategy body failed; checked
+//     before provider-error, which keeps runs a provider error ended)
+//   3 satisfiability-abstain
+//   4 terminal-mislabel (incl. run-completed.status vs outcome contradiction,
+//     and a status override that failed a verified, accepted answer)
 //   5 plan-posture-veto  6 never-engaged
 //   7 tool-protocol      8 tool-failure       8b wrong-tool-arg
 //   9 stall-after-work / loop-after-work / stall-no-progress
@@ -42,8 +45,13 @@
 //       named tool that never ran is `success-with-warning/tool-claim-without-call`.
 // Not implemented (needs a signal the trace does not carry yet): audit rule 5
 // `contract-pollution` (needs requirement provenance, audit rank 8).
+//
+// One file, several runs: a trace whose runId was reused (Cortex "Continue")
+// holds one segment per `run-started`. `analyzeCause` classifies the LAST
+// segment only and reports its position in `runSegment` (segments.ts).
 
 import type { Trace } from "./replay.js";
+import { lastRunSegment } from "./segments.js";
 import { runEndingGuardEvents } from "./guard-run-end.js";
 import { uncalledClaimedTools } from "./tool-claim.js";
 import type {
@@ -72,6 +80,7 @@ export type FailureCause =
   | "aborted"
   | "incomplete-trace"
   | "provider-error"
+  | "strategy-error"
   | "satisfiability-abstain"
   | "terminal-mislabel"
   | "plan-posture-veto"
@@ -101,6 +110,14 @@ export interface CauseEvidence {
   readonly detail: string;
 }
 
+/** Position of one run among the runs that share a runId in one trace file. */
+export interface RunSegmentRef {
+  /** 1-based position in recorded order. */
+  readonly index: number;
+  /** Runs in the file. */
+  readonly count: number;
+}
+
 /** Output of {@link analyzeCause}. */
 export interface CauseAnalysis {
   readonly runId: string;
@@ -117,6 +134,13 @@ export interface CauseAnalysis {
   readonly kernelAuthority?: string;
   /** `run-completed.status`, or `aborted` / `unknown` when no run-completed exists. */
   readonly outcomeStatus: string;
+  /**
+   * Which run this is when several share the runId in one trace file (a
+   * reused runId, e.g. Cortex "Continue"); absent when the file holds one run.
+   * `analyzeCause` covers the last run (`index === count`, 1-based); classify
+   * another with `runSegments` (segments.ts) and {@link withRunSegment}.
+   */
+  readonly runSegment?: RunSegmentRef;
 }
 
 /** Tools that are harness bookkeeping, not work on the task. */
@@ -400,6 +424,55 @@ const ruleProvider: Rule = (f) => {
   };
 };
 
+/** The runtime's text for a failed strategy (`runtime/src/engine/strategy-failure.ts:describeStrategyFailure`). */
+const STRATEGY_FAILURE = /^Strategy execution failed \(([^)]*)\)(?::\s*([\s\S]*))?$/;
+/** Terminal authority a strategy-body failure records once the shared terminal mints it (conformance audit G2). */
+const STRATEGY_ERROR_AUTHORITY = "strategy-error";
+
+/**
+ * The strategy body failed (it threw instead of reaching the terminal). Read
+ * from `run-completed.error` (`Strategy execution failed (<strategy>): …`), or
+ * from a `strategy-error` authority on the outcome or `terminal_decision`.
+ * Runs a provider error ended (`terminatedBy=llm_error` or a recorded
+ * `errorClass`) are left to `provider-error`; a body that failed on a model
+ * call (`LLM call failed` in the message) is `provider-error`, probable. Sub-causes: `config-refused`
+ * (no model call and no tokens: the strategy refused before any work),
+ * `synthesis-failed` (the strategy's synthesis fallback failed), else `body-error`.
+ */
+const ruleStrategyError: Rule = (f) => {
+  const c = f.completed;
+  if (c === undefined || f.isSuccess) return undefined;
+  if (f.terminatedBy === "llm_error") return undefined;
+  const td = metaOf(f.terminalDecision);
+  if (c.outcome?.errorClass !== undefined || str(td, "errorClass") !== undefined) return undefined;
+  const m = STRATEGY_FAILURE.exec(c.error ?? "");
+  const byAuthority = c.outcome?.authority === STRATEGY_ERROR_AUTHORITY || str(td, "authority") === STRATEGY_ERROR_AUTHORITY;
+  if (m === null && !byAuthority) return undefined;
+  const strategy = m?.[1];
+  const message = m?.[2] ?? c.error ?? "";
+  // The body failed on a model call (`Plan generation failed: LLM call failed: 429 ...`):
+  // the provider error is the cause. Probable: no llm_error terminal recorded it.
+  if (/\bLLM call failed\b/i.test(message)) {
+    const sub = UNTAGGED_CLASS_SHAPES.find(([re]) => re.test(message))?.[1] ?? PROVIDER_SUBCLASSES.find(([re]) => re.test(message))?.[1];
+    return {
+      cause: "provider-error",
+      ...(sub !== undefined ? { subCause: sub } : {}),
+      evidence: [ev1(c, `strategy${strategy !== undefined ? ` ${strategy}` : ""} failed on a model call: ${message.slice(0, 160)}${sub !== undefined ? "; subCause from error text" : ""}`)],
+      needs: ["terminal_decision.authority (llm_error)"],
+    };
+  }
+  const modelCalls = f.ev.filter((e) => e.kind === "llm-exchange").length;
+  const subCause =
+    modelCalls === 0 && c.totalTokens === 0 ? "config-refused"
+    : /synthesis/i.test(message) ? "synthesis-failed"
+    : "body-error";
+  const evidence: CauseEvidence[] = [
+    ev1(c, `strategy${strategy !== undefined ? ` ${strategy}` : ""} failed: ${message.slice(0, 160)}${subCause === "config-refused" ? "; 0 llm-exchange, 0 tokens" : ""}`),
+  ];
+  if (byAuthority && f.terminalDecision !== undefined) evidence.push(ev1(f.terminalDecision, `terminal_decision authority=${str(td, "authority") ?? "?"}`));
+  return { cause: "strategy-error", subCause, evidence, needs: [] };
+};
+
 const ruleSatisfiability: Rule = (f) => {
   const g = f.guards.find((x) => x.guard === "satisfiability-preflight");
   if (!g) return undefined;
@@ -448,9 +521,50 @@ const ruleMislabel: Rule = (f) => {
   ) {
     ev.push(ev1(lastKernelVerdict, `kernel verdict verified=true and terminal_decision=done, but run-completed.status=failure with no terminal_status_override`));
   }
+  const veto = statusOverrideVeto(f);
+  if (veto !== undefined) ev.push(...veto.evidence);
   if (ev.length === 0) return undefined;
-  return { cause: "terminal-mislabel", evidence: ev, needs: [] };
+  return {
+    cause: "terminal-mislabel",
+    ...(veto !== undefined ? { subCause: "status-override" } : {}),
+    evidence: ev,
+    needs: veto?.needs ?? [],
+  };
 };
+
+/**
+ * A `terminal_status_override` that failed an answer the terminal had verified
+ * and accepted (conformance audit 2026-11-18, I3): the last `terminal_decision`
+ * meant to deliver, the `deliverable_decision` for that terminal passed, and the
+ * override, recorded after both with `labelsDisagree: true`, turned the run into
+ * a failure. The iteration cap may have been reached on the way, but it did not
+ * decide the status. A `contract-coverage` override is left to plan-posture-veto.
+ */
+function statusOverrideVeto(f: Facts): { evidence: CauseEvidence[]; needs: string[] } | undefined {
+  const o = f.override, td = f.terminalDecision, d = f.deliverable;
+  if (f.status !== "failure" || o === undefined || td === undefined || d === undefined) return undefined;
+  if (o.reason === "contract-coverage") return undefined;
+  const om = metaOf(o), tm = metaOf(td);
+  if (om["labelsDisagree"] !== true || o.seq < td.seq || d.seq > td.seq) return undefined;
+  // The deliverable decision must belong to the last terminal, not an earlier pass.
+  if (f.guards.some((g) => g.guard === "terminal_decision" && g.seq > d.seq && g.seq < td.seq)) return undefined;
+  const overrideDeliverable = rec(om, "deliverable");
+  const accepted = d.outcome === "pass" && overrideDeliverable?.["outcome"] !== "block" && overrideDeliverable?.["accepted"] !== false;
+  if (!accepted) return undefined;
+  const intent = str(tm, "intent");
+  const delivering = intent !== undefined ? intent === "deliver" : str(tm, "status") === "done";
+  if (!delivering) return undefined;
+  const outstanding = om["outstanding"];
+  const outstandingText = Array.isArray(outstanding) && outstanding.length > 0 ? `; outstanding=${outstanding.slice(0, 3).map(String).join(",")}` : "";
+  return {
+    evidence: [
+      ev1(d, `deliverable_decision=pass (${d.reason.slice(0, 40)})`),
+      ev1(td, `terminal_decision ${intent !== undefined ? `intent=${intent}` : `status=${str(tm, "status") ?? "?"}`} finalStatus=${str(tm, "finalStatus") ?? "?"}`),
+      ev1(o, `terminal_status_override reason=${o.reason} labelsDisagree=true: ${str(om, "terminalDecisionFinalStatus") ?? "?"} -> ${str(om, "finalStatus") ?? "?"}${outstandingText}`),
+    ],
+    needs: intent === undefined ? ["terminal_decision.intent"] : [],
+  };
+}
 
 const rulePlanPosture: Rule = (f) => {
   if (f.isSuccess) return undefined;
@@ -641,7 +755,7 @@ const ruleBudgetCap: Rule = (f) => {
 };
 
 const RULES: readonly Rule[] = [
-  ruleDirectChat, ruleIncomplete, ruleProvider, ruleSatisfiability, ruleMislabel, rulePlanPosture, ruleNeverEngaged,
+  ruleDirectChat, ruleIncomplete, ruleStrategyError, ruleProvider, ruleSatisfiability, ruleMislabel, rulePlanPosture, ruleNeverEngaged,
   ruleToolProtocol, ruleHarnessFallbackAfterWork, ruleToolFailure, ruleWrongToolArg,
   ruleBookkeeping, ruleVerifierReject, ruleBudgetCap,
 ];
@@ -712,17 +826,20 @@ function wrongAnswer(f: Facts, warnEvidence: readonly CauseEvidence[]): { subCau
  * guessing when a trace lacks the terminal signals. Reads model text only for
  * the warning-level tool-claim check (see the honesty rules above).
  *
- * @param trace A loaded trace (one run).
+ * @param trace A loaded trace. When several runs share its runId, the last
+ *   run is classified (see {@link CauseAnalysis.runSegment}).
  * @returns The cause, confidence, supporting evidence and the signals whose
  *   absence kept the verdict from being decisive.
  */
 export function analyzeCause(trace: Trace): CauseAnalysis {
-  const f = gatherFacts(trace);
+  const seg = lastRunSegment(trace);
+  const f = gatherFacts(seg.trace);
   const authority = f.completed?.outcome?.authority ?? str(metaOf(f.terminalDecision), "authority");
   const kernelAuthority = f.completed?.outcome?.kernelAuthority;
   const outcomeStatus = f.status ?? (f.aborted ? "aborted" : ruleDirectChat(f) ? "direct-chat" : "unknown");
   const common = {
     runId: trace.runId,
+    ...(seg.count > 1 ? { runSegment: { index: seg.count, count: seg.count } } : {}),
     ...(authority !== undefined ? { authority } : {}),
     ...(kernelAuthority !== undefined ? { kernelAuthority } : {}),
     outcomeStatus,
@@ -804,9 +921,30 @@ export function analyzeCause(trace: Trace): CauseAnalysis {
 export function renderCause(c: CauseAnalysis): string {
   const L: string[] = [];
   L.push(`${c.runId}: cause=${c.cause}${c.subCause ? `/${c.subCause}` : ""} confidence=${c.confidence} status=${c.outcomeStatus}${c.authority ? ` authority=${c.authority}` : ""}`);
+  if (c.runSegment !== undefined) L.push(`  note      ${runSegmentNote(c.runSegment)}`);
   for (const e of c.evidence) L.push(`  evidence  ${e.eventKind}#${e.seq}  ${e.detail}`);
   if (c.missing.length > 0) L.push(`  missing   ${c.missing.join("; ")}`);
   return L.join("\n");
+}
+
+/**
+ * One line naming which of the runs that share a runId a report covers.
+ *
+ * @param s The run's position (`CauseAnalysis.runSegment`).
+ */
+export function runSegmentNote(s: RunSegmentRef): string {
+  return `${s.count} runs share this runId; this is run ${s.index} of ${s.count}${s.index === s.count ? " (the last)" : ""}`;
+}
+
+/**
+ * Classify one run of a multi-run trace file and record its position.
+ *
+ * @param segment One element of `runSegments(trace)`.
+ * @param ref Its 1-based position and the file's run count.
+ */
+export function withRunSegment(segment: Trace, ref: RunSegmentRef): CauseAnalysis {
+  const a = analyzeCause(segment);
+  return ref.count > 1 ? { ...a, runSegment: ref } : a;
 }
 
 /** Cohort tally of causes across many runs (audit rule 13 cohort mode). */

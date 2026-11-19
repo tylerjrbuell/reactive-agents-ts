@@ -102,6 +102,10 @@ export const CAUSE_ATTRIBUTION: Readonly<Record<FailureCause, AttributionReason>
   // No run-completed and no run-aborted: a killed process and a harness crash look the same.
   "incomplete-trace": "unattributed",
   "provider-error": "environment:provider-error",
+  // A strategy body error is a refused configuration or a harness fault, and the
+  // trace cannot always tell which; no owner until a harness reason is ratified
+  // with its docs row (conformance audit 2026-11-18, I1).
+  "strategy-error": "unattributed",
   "satisfiability-abstain": "unattributed",
   "terminal-mislabel": "harness:terminal-mislabel",
   "plan-posture-veto": "harness:plan-posture-veto",

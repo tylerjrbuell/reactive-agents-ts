@@ -27,12 +27,14 @@ export type {
   InterventionPressure,
   CoverageReport,
 } from "./analyze.js"
-export { analyzeCause, renderCause, tallyCauses } from "./cause.js"
+export { analyzeCause, renderCause, tallyCauses, runSegmentNote, withRunSegment } from "./cause.js"
+/** Split a trace file that holds several runs under one runId (a reused runId, e.g. Cortex "Continue"). */
+export { runSegments, lastRunSegment } from "./segments.js"
 /** Plain words and justified next steps for each failure cause (one vocabulary for every reader). */
 export { CAUSE_DESCRIPTIONS, causeDescription, causeNextActions } from "./cause-description.js"
 export { gateDecisionFor, guardEndedRun, runEndingGuardEvents } from "./guard-run-end.js"
 export type { GuardEventLike } from "./guard-run-end.js"
-export type { CauseAnalysis, CauseTally, FailureCause, CauseConfidence, CauseEvidence } from "./cause.js"
+export type { CauseAnalysis, CauseTally, FailureCause, CauseConfidence, CauseEvidence, RunSegmentRef } from "./cause.js"
 /**
  * Zero-token harness-vs-model attribution of a failed run: is it the harness
  * configuration or the model? See {@link attributeFailure}.

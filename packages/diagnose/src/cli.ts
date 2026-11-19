@@ -22,6 +22,7 @@ import { debriefCommand } from "./commands/debrief.js";
 import { signalsCommand } from "./commands/signals.js";
 import { causeCommand } from "./commands/cause.js";
 import { attributeCommand } from "./commands/attribute.js";
+import { parseSegmentFlag } from "./lib/segments.js";
 import { DiagnoseUsageError } from "./errors.js";
 
 interface ParsedArgs {
@@ -65,6 +66,9 @@ Commands:
   cause --all [dir] [--real]      Tally causes across a directory of traces (cohort mode)
   attribute <runId|path> [--json] Is it the harness or the model? (verdict, reason, divergence turn, evidence)
   attribute --all [dir] [--real]  Tally attributions across a directory of traces (counts by verdict/reason)
+  cause|attribute ... --segment=<n|all>
+                                  A file holding several runs under one runId (e.g. Cortex Continue):
+                                  report run n (1-based) or each run; default the last
 
 Run IDs:
   - bare ULID resolves under ~/.reactive-agents/traces/ or <cwd>/.reactive-agents/traces/
@@ -147,13 +151,13 @@ async function main(): Promise<void> {
       case "cause": {
         const all = Boolean(args.flags.get("all"));
         const target = args.positional[0];
-        await causeCommand(target, { json: Boolean(args.flags.get("json")), all, real: Boolean(args.flags.get("real")) });
+        await causeCommand(target, { json: Boolean(args.flags.get("json")), all, real: Boolean(args.flags.get("real")), segment: parseSegmentFlag(args.flags.get("segment")) });
         return;
       }
       case "attribute": {
         const all = Boolean(args.flags.get("all"));
         const target = args.positional[0];
-        await attributeCommand(target, { json: Boolean(args.flags.get("json")), all, real: Boolean(args.flags.get("real")) });
+        await attributeCommand(target, { json: Boolean(args.flags.get("json")), all, real: Boolean(args.flags.get("real")), segment: parseSegmentFlag(args.flags.get("segment")) });
         return;
       }
       case "help":

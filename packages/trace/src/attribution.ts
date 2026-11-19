@@ -102,6 +102,7 @@
 import type { Trace } from "./replay.js";
 import { analyzeCause, type CauseConfidence, type CauseEvidence } from "./cause.js";
 import { guardEndedRun } from "./guard-run-end.js";
+import { lastRunSegment } from "./segments.js";
 import { CAUSE_ATTRIBUTION, verdictOf, type AttributionReason, type AttributionVerdict } from "./taxonomy.js";
 import type {
   LLMExchangeEvent,
@@ -726,11 +727,14 @@ function causeFallback(trace: Trace): { readonly reason: AttributionReason; read
  * not need to know the answer was wrong can fire; the rest report
  * `unattributed` and name `eval-graded` in `missing`.
  *
- * @param trace A loaded trace (one run), e.g. from {@link loadTrace}.
+ * @param full A loaded trace, e.g. from {@link loadTrace}. When several runs
+ *   share its runId, the last run is attributed (segments.ts `runSegments`).
  * @returns The verdict, the reason, the divergence turn, supporting evidence,
  *   the signals whose absence limited the verdict, and other matching reasons.
  */
-export function attributeFailure(trace: Trace): Attribution {
+export function attributeFailure(full: Trace): Attribution {
+  // Several runs under one runId (a reused runId): attribute the last one, as `analyzeCause` does.
+  const trace = lastRunSegment(full).trace;
   const f = gatherFacts(trace);
   const base = { runId: trace.runId, failureSignals: f.failureSignals };
   const failed = f.failureSignals.length > 0 || (f.grade !== undefined && !f.grade.passed);
