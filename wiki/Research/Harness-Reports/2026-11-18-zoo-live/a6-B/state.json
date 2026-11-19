@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a6-B",
+    "tiers": [
+      "cogito:8b"
+    ],
+    "arms": [
+      {
+        "id": "default"
+      }
+    ],
+    "k": 10,
+    "tasks": [
+      "h3-todo-heavy"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 180,
+    "env": {
+      "RA_ACT_OR_ANSWER": "0",
+      "RA_LEAN_FINAL_TURN": "0",
+      "RA_PARALLEL_TOOL_HINT": "0"
+    },
+    "allowContention": true,
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|cogito:8b|h3-todo-heavy|default",
+    "1|cogito:8b|h3-todo-heavy|default",
+    "2|cogito:8b|h3-todo-heavy|default",
+    "3|cogito:8b|h3-todo-heavy|default",
+    "4|cogito:8b|h3-todo-heavy|default",
+    "5|cogito:8b|h3-todo-heavy|default",
+    "6|cogito:8b|h3-todo-heavy|default",
+    "7|cogito:8b|h3-todo-heavy|default",
+    "8|cogito:8b|h3-todo-heavy|default",
+    "9|cogito:8b|h3-todo-heavy|default"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-19T01:51:32.516Z",
+  "updatedAt": "2026-11-19T01:54:06.136Z",
+  "units": {
+    "0|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 14
+    },
+    "1|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "2|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    },
+    "3|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "4|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    },
+    "5|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "6|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 17
+    },
+    "7|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "8|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 17
+    },
+    "9|cogito:8b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    }
+  },
+  "current": null,
+  "chunks": 10,
+  "pauses": [],
+  "pausedSec": 0,
+  "lastError": null,
+  "driftWarnings": []
+}

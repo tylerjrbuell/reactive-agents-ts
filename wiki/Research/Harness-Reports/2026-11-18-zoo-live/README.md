@@ -266,3 +266,45 @@ Cause A is the one the pre-registered change touches and it is the largest (6 of
 Not examined: cause D (run6) beyond the write contents. Power: k=10, one tier; nothing here is a KEEP.
 
 No `packages/**` file changed in this mission, so `repo verify packages/benchmarks` was not re-run. Ledger: two entries appended to `wiki/Research/Harness-Reports/improvement-ledger.json`.
+
+## Addendum 6 (2026-11-18): duplicate refusal leads with the pending write (`132ae5515`)
+
+Pre-registration: [PREDICTIONS-6.md](PREDICTIONS-6.md), mtime 20:51:22, before the first result file (a6-B/default.json 20:54:06). Build: HEAD `132ae5515d85`, tree clean apart from the new sim shape; reasoning dist sha256 `31327ebf…` contains `do not re-read it` (x1); bench and sim resolve reasoning from `src` (sim header: "kernel source: packages/reasoning/src last changed at 132ae5515 (HEAD 132ae5515), clean"). `ollama ps` empty before the first drive; one supervisor at a time; 180 s cells. Specs `a6-B/B2/C.spec.json`, results `a6-B/`, `a6-B2/`, `a6-C/`. 20 cells, 0 failed units.
+
+### Zero-token shape (run first)
+
+`packages/benchmarks/src/sim/shapes/pending-write.ts` (registered in `SHAPES`), test `packages/benchmarks/tests/sim/shape-pending-write.test.ts`. Sequence: read notes-1, write out-1, read notes-2, re-read notes-2 (refused). Asserts: the refusal reads "Write .../out-2.txt now from the value you just read in .../notes-2.txt: do not re-read it. Then read notes-3" (Write precedes Read), and a scripted policy that writes next completes all six pairs with exact values. Reverting `132ae5515` would fail it (the policy then takes the lag path); I did not re-run it on the old commit. Two more shapes, `pending-write-stubborn-cap14` and `-cap16`, model a stubborn re-reader against the live 14-iteration cap (cause E below).
+
+### Prediction vs observation (cogito:8b, default arm)
+
+| Cell | Baseline | Predicted | Observed |
+| --- | --- | --- | --- |
+| h3-todo-heavy k=10 solved | 0/10 | 2-4/10 | 1/10 (acc per run 0 0.17 1.0 0.17 0.83 0 0.83 0.67 0.67 0.50); 16803 tok/run |
+| cause A runs | 6/10 | <= 2 | 2 (runs 1, 3) |
+| refusal fired | 7/10 | 4-7 | 8/10; all 8 lead with Write (text checked) |
+| h3-exact-value k=5 | 5/5 | >= 4/5 | 5/5, 2189 tok/run |
+| h3-todo-heavy gemma4:e4b k=5 | 5/5 | >= 4/5 | 5/5, 21488 tok/run, 0 refusals |
+
+Verdict todo-heavy: REFUTED on the pre-registered rule (solved 1 < 2). The rule's third case applies: cause A dropped 6 to 2, so the change is mechanically confirmed and not sufficient. Of 8 refusal runs, 6 then wrote the correct out-2 (84); 2 followed the trailing "Then read notes-3" and re-created the lag. No regression on exact-value or gemma todo-heavy. k=10, one model for the target: no KEEP claim.
+
+### Causes now (10 runs, from `file-read`/`file-write` order, write contents, calls per iteration)
+
+| Cause | Runs | Evidence |
+| --- | --- | --- |
+| solved | 2 (14 iterations, barely) | all six correct |
+| A. lag (read notes-3, then write out-2) | 1, 3 | first refusal leads with Write; next calls `R:notes-3, W:out-2=16` |
+| E. iteration budget | 4, 6, 8 | every written value correct (0.83, 0.83, 0.67). 5 of 8 refusal runs re-read notes-2 a second time before writing (two refused re-reads, three iterations on one item). Run4: iteration 13 extracted a call, `ri-early-stop` blocked, `pending_batch ... dropped`, `exit_gate terminate max_iterations` at iter 13 of 14: out-6 never written |
+| B. dependent calls in one parallel batch | 0, 5 | 12 calls in 2-3 iterations (run0 `{0:2, 1:10}`, run5 `{0:2,1:2,2:8}`): writes issued in the same batch as the reads they need, so content is `double_value` / `2 * integer_fr...` |
+| C/D. write without reading; doubling the previous output | 7, 9 | one call per iteration; out-4=16 (notes-3's double, notes-4 unread); run9 out-5=32, out-6=64 |
+
+Addendum 5 filed B as "placeholder content" and a model-capability issue. The trace says it is a batching defect: a dependent call cannot see the result of a sibling in its batch. That is a general failure class, not a model quirk.
+
+### Ranked next fixes (one per cycle, kernel-warden; ablation-gated)
+
+1. E, iteration budget wasted on refused re-reads (3 of 10). Candidates: (a) a refused duplicate does not consume an iteration; (b) the refusal drops "Then read X" when a pending write exists (also targets A: runs 1, 3 followed it). Zero-token shapes: `pending-write-stubborn-cap14` pins the lost last pair, `pending-write` pins the hint. The sim does not reproduce the live waste exactly (there one of two repeated re-reads executes; live both were refused), so the stubborn shape uses 3 re-reads to match the live cost: a cost model, not a replay. Predicted: (a) runs 4, 6 solve, run 8 maybe, +2-3/10 (solved 3-4/10); (b) alone +0-2.
+2. B, dependent write batched with its read (2 of 10; both end in 3-4 iterations with placeholder output). Candidate: run a write after the read of its paired input when both are in one batch (substrate; applies to any read-then-write plan). Predicted +0-2. No zero-token shape yet (needs a batch-capable policy).
+3. C/D (2 of 10). Write-before-read gate: not warranted now. It would reuse `pairedOutputForInput`/`isInputRead`, but every gate refusal burns an iteration in a budget-bound task (cause E), so it can lose runs it saves. Predicted gain <= 1/10. Hand to ablation-warden only if, after E is fixed, solved is still <= 3/10 with C/D runs present.
+
+Instrument notes: `rax-diagnose cause` labels the refused re-reads `wrong-tool-arg`/`tool-failure` (runs 1, 3, 4, 6, 8) and run 2 `terminal-mislabel`; no grade changed. Per-iteration call counts came from `tool-call-start` `iter` (scratch readers, not committed).
+
+`bun run repo verify packages/benchmarks`: green (tests, typecheck, check-cross-cutting). Ledger: one entry appended to `improvement-ledger.json`. Power: k=10 SE ~13-15pp; nothing here is a KEEP.

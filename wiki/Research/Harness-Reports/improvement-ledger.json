@@ -1477,6 +1477,19 @@
       "liftPp": 0,
       "tokenOverheadPct": null,
       "rationale": "REFUTED on pre-registered rule: refusal fired 7/10, named the correct first-unread input 7/7, solved 0/10. Hint steers to the NEXT read while the pending step is write(out-N) for an input already read; model writes the next value into out-N (off-by-one lag). Next candidate: hint names the pending write first. Evidence: README addendum 5, a5-B/"
+    },
+    {
+      "createdAt": "2026-11-19T02:05:00.000Z",
+      "baselineVariantId": "66531b642",
+      "candidateVariantId": "132ae5515",
+      "decision": "inconclusive",
+      "status": "inconclusive",
+      "id": "6d1f5c0e-3a7b-4e52-9c18-a6b0d2e47f31",
+      "weakness": "h3-todo-heavy 0/10 on cogito:8b; cause A (read N, skip write out-N, refusal says read N+1, outputs shift by one) in 6 of 10",
+      "hypothesis": "132ae5515: duplicate refusal leads with the pending write. cogito:8b default arm k=10, HEAD 132ae5515; gemma4:e4b todo-heavy k=5 and cogito exact-value k=5 as no-regression",
+      "liftPp": 10,
+      "tokenOverheadPct": null,
+      "rationale": "REFUTED on pre-registered rule (solved 1/10 < 2) but MECHANICALLY CONFIRMED: cause A 6 -> 2 of 10, all 8 refusals lead with Write, 6 of 8 then wrote the correct out-2. Remaining loss: iteration budget (3 runs correct but out of the 14-iteration cap after 1-2 extra refused re-reads), placeholder content x2, write-before-read x2. No regression: exact-value 5/5, gemma todo-heavy 5/5. k=10, one model. Evidence: README addendum 6, a6-B/B2/C"
     }
   ]
 }

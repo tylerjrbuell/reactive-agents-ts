@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a6-C",
+    "tiers": [
+      "gemma4:e4b"
+    ],
+    "arms": [
+      {
+        "id": "default"
+      }
+    ],
+    "k": 5,
+    "tasks": [
+      "h3-todo-heavy"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 180,
+    "env": {
+      "RA_ACT_OR_ANSWER": "0",
+      "RA_LEAN_FINAL_TURN": "0",
+      "RA_PARALLEL_TOOL_HINT": "0"
+    },
+    "allowContention": true,
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|gemma4:e4b|h3-todo-heavy|default",
+    "1|gemma4:e4b|h3-todo-heavy|default",
+    "2|gemma4:e4b|h3-todo-heavy|default",
+    "3|gemma4:e4b|h3-todo-heavy|default",
+    "4|gemma4:e4b|h3-todo-heavy|default"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-19T01:54:59.448Z",
+  "updatedAt": "2026-11-19T01:57:04.830Z",
+  "units": {
+    "0|gemma4:e4b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 27
+    },
+    "1|gemma4:e4b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 25
+    },
+    "2|gemma4:e4b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 23
+    },
+    "3|gemma4:e4b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 24
+    },
+    "4|gemma4:e4b|h3-todo-heavy|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 26
+    }
+  },
+  "current": null,
+  "chunks": 5,
+  "pauses": [],
+  "pausedSec": 0,
+  "lastError": null,
+  "driftWarnings": []
+}
