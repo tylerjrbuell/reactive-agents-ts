@@ -59,13 +59,14 @@ export const HarnessConfigSchema = Schema.Struct({
    */
   compactCallConstraints: Schema.optional(Schema.Boolean),
   /**
-   * Budget answer turn. Opt-in: when the run holds validated tool evidence, no
-   * tool work is outstanding and only the answer is missing, the last think
-   * call the iteration budget allows ships with no tools, so the model writes
-   * the answer instead of a tool call nobody answers. A verified reply ends
-   * the run as the model's own final answer; the harness never writes it. Off
-   * by default: the ablation verdict was OPT-IN (+1.9pp over 3 tiers, within
-   * noise). (`RA_BUDGET_ANSWER_TURN=1`)
+   * Budget answer turn. Default on: when the run holds validated tool
+   * evidence, no tool work is outstanding and only the answer is missing, the
+   * last think call the iteration budget allows ships with no tools, so the
+   * model writes the answer instead of a tool call nobody answers. A verified
+   * reply ends the run as the model's own final answer; the harness never
+   * writes it. Default on since 2026-11-19 (owner decision; the ablation
+   * measured +1.9pp over 3 tiers, within noise). Set `false` (or
+   * `RA_BUDGET_ANSWER_TURN=0`) to turn it off.
    */
   budgetAnswerTurn: Schema.optional(Schema.Boolean),
   wrapUpReserve: Schema.optional(Schema.Boolean),

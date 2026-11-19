@@ -290,7 +290,7 @@ describe("run-started config + origin", () => {
     }
   });
 
-  test(".withHarness({ budgetAnswerTurn: true }) is recorded as a mechanism (default off)", async () => {
+  test("budgetAnswerTurn is recorded as a mechanism (default on; .withHarness({ budgetAnswerTurn: false }) turns it off)", async () => {
     const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
       const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
       return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
@@ -302,17 +302,17 @@ describe("run-started config + origin", () => {
       const on = await ReactiveAgents.create()
         .withTestScenario([{ text: "FINAL ANSWER: ok" }])
         .withReasoning({ defaultStrategy: "reactive" })
-        .withHarness({ budgetAnswerTurn: true })
         .build();
-      const onMech = await mechanismsOf(on.run("budget-answer-turn pin"));
+      const onMech = await mechanismsOf(on.run("budget-answer-turn default pin"));
       await on.dispose();
       expect(onMech?.budgetAnswerTurn).toBe(true);
 
       const off = await ReactiveAgents.create()
         .withTestScenario([{ text: "FINAL ANSWER: ok" }])
         .withReasoning({ defaultStrategy: "reactive" })
+        .withHarness({ budgetAnswerTurn: false })
         .build();
-      const offMech = await mechanismsOf(off.run("budget-answer-turn default pin"));
+      const offMech = await mechanismsOf(off.run("budget-answer-turn opt-out pin"));
       await off.dispose();
       expect(offMech?.budgetAnswerTurn).toBe(false);
     } finally {
