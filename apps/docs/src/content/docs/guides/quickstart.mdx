@@ -12,10 +12,15 @@ related:
 ---
 
 import { FileTree, Aside, Badge, CardGrid, LinkCard, Tabs, TabItem } from '@astrojs/starlight/components';
+import AgentPrompt from '../../../components/AgentPrompt.astro';
+
+<AgentPrompt />
+
+Working with a coding agent? See [Quickstart for agents](#quickstart-for-agents) for the exact commands and the outdated APIs agents tend to invent.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) ≥1.1.0 (`curl -fsSL https://bun.sh/install | bash`)
+- [Bun](https://bun.sh) ≥1.1.0, recommended (`curl -fsSL https://bun.sh/install | bash`), or Node.js 22.5+
 - An API key from [Anthropic](https://console.anthropic.com), [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com), [Groq](https://console.groq.com), [xAI](https://console.x.ai), or [LiteLLM](https://www.litellm.ai) — *or* run a local model with [Ollama](https://ollama.com) (no key needed)
 - TypeScript 5.5+ with `"moduleResolution": "bundler"` (`rax init` scaffolds this for you) — see [Installation](../installation/#typescript-configuration) for the full `tsconfig.json`
 
@@ -317,6 +322,61 @@ Individual `.withX()` methods are fully supported and compose cleanly
 with presets. Reach for a `HarnessProfile` preset when you want the
 whole default-on capability set in one line, or `.compose(...)` for a
 precise chokepoint.
+
+## Quickstart for agents
+
+This section is for coding agents (Claude Code, Cursor, Codex and similar) setting up Reactive Agents for a user. Follow it exactly; do not substitute APIs from memory.
+
+**Before writing code**
+
+- Read [`/llms.txt`](https://docs.reactiveagents.dev/llms.txt). It indexes every page as markdown: add `.md` to any page path, for example `https://docs.reactiveagents.dev/reference/builder-api.md`.
+- Install the agent skills: `npx skills add https://docs.reactiveagents.dev`
+- Runtime: Bun 1.1+ (recommended) or Node.js 22.5+.
+
+**Scaffold a project** (non-interactive; `--provider` is one of `anthropic`, `openai`, `google`, `groq`, `xai`, `ollama`):
+
+```bash
+npm create reactive-agent my-agent -- --template=minimal --provider=anthropic --yes
+cd my-agent
+npm install
+cp .env.example .env   # then set ANTHROPIC_API_KEY in .env (skip for ollama)
+npm run start
+```
+
+Other templates: `with-tools`, `streaming`, `with-structured-output`, `with-approval-gates`, `with-memory`, `cloudflare-worker`. To add the framework to an existing project instead: `npm install reactive-agents` (or `bun add reactive-agents`).
+
+**Minimal correct agent**
+
+```typescript title="src/index.ts"
+import { ReactiveAgents } from "reactive-agents";
+
+const agent = await ReactiveAgents.create()
+  .withName("assistant")
+  .withProvider("anthropic")        // or "openai", "gemini", "groq", "xai", "ollama", "litellm"
+  .withModel("claude-sonnet-4-6")
+  .withTools({ builtins: true })    // optional: built-in tools (web search, http, files, code)
+  .build();
+
+const result = await agent.run("What is the capital of France?");
+console.log(result.output);         // the answer
+console.log(result.success);        // did the run complete
+```
+
+**Common wrong patterns** (removed, renamed or no-op APIs that agents reproduce from older training data):
+
+| Do not write | Write instead |
+| --- | --- |
+| `.withProvider("google")` | `.withProvider("gemini")` (the scaffolder's `--provider=google` flag maps to it) |
+| `.withTerminalTools()` | `.withTools({ terminal: true })` |
+| `.withTelemetry()` | `.withObservability({ telemetry: true })` |
+| `.withoutTracing()` | `.withObservability({ tracing: false })` |
+| `.withProgressCheckpoint()` | `.withDurableRuns()` for crash-resume |
+| `.withIdentity()`, `.withInteraction()`, `.withOrchestration()`, `.withCacheTimeout()` | Removed in v0.14 with no builder replacement; for multi-agent use `.withAgentTool()` |
+| `.withFallbacks({ models, errorThreshold })` | `.withFallbacks({ providers: [...] })` (the only option) |
+| `.withReactiveIntelligence({ autonomy, constraints })` | Removed; the remaining controller options are in the [builder reference](/reference/builder-api/) |
+| `controller: { contextCompression: true }` | Deprecated with no effect; leave it out |
+
+If a method is not in the [builder API reference](/reference/builder-api/), it does not exist.
 
 ## What's Next?
 

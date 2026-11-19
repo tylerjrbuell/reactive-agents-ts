@@ -5,6 +5,25 @@ import starlightLinksValidator from 'starlight-links-validator'
 import starlightLlmsTxt from 'starlight-llms-txt'
 import starlightImageZoom from 'starlight-image-zoom'
 import starlightScrollToTop from 'starlight-scroll-to-top'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import {
+    listDocsPages,
+    llmsDescription,
+    llmsDetails,
+} from './src/agent-docs/llms-entry.ts'
+import { CURRENT_VERSION } from './src/content/indicators.ts'
+
+// llms.txt is the agent entry point: description, agent guidance and a page
+// index of markdown twins (src/agent-docs/llms-entry.ts). Counts come from
+// metrics.json, never typed by hand.
+const docsMetrics = JSON.parse(
+    readFileSync(new URL('./src/data/metrics.json', import.meta.url), 'utf8'),
+)
+const docsPages = listDocsPages(
+    fileURLToPath(new URL('./src/content/docs', import.meta.url)),
+)
+
 export default defineConfig({
     // Docs now deploy to a custom domain at the root path.
     site: 'https://docs.reactiveagents.dev',
@@ -72,10 +91,14 @@ export default defineConfig({
                 // Generates /llms.txt + /llms-full.txt — a flat plain-text view of
                 // the entire docs site, optimized for LLM ingestion. On-brand for an
                 // AI agent framework: the docs are themselves consumable by agents.
+                // Per-page markdown twins (<page>.md) come from src/pages/[...slug].md.ts.
                 starlightLlmsTxt({
                     projectName: 'Reactive Agents',
-                    description:
-                        'TypeScript AI agent framework — Effect-TS type-safe, 12-phase observable execution engine, 33 published packages, runs on local Ollama through frontier APIs.',
+                    description: llmsDescription(docsMetrics.providers),
+                    details: llmsDetails({
+                        pages: docsPages,
+                        version: CURRENT_VERSION,
+                    }),
                     optionalLinks: [
                         {
                             label: 'GitHub repo',

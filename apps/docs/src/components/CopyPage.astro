@@ -1,0 +1,244 @@
+---
+// "Copy page" control in the page title row: copy this page's markdown twin
+// (<page>.md, src/pages/[...slug].md.ts) to the clipboard, view it, or open it
+// in Claude or ChatGPT. One split button; the menu is keyboard operable
+// (Enter/Space/ArrowDown open, arrows move, Escape closes). Every action fires
+// the Umami `copy_page` event with an `action` property.
+import { DOCS_ORIGIN, markdownPathForSlug, slugForId } from "../agent-docs/page-markdown";
+
+interface Props {
+  /** Docs collection id of the current page. */
+  id: string;
+}
+
+const mdPath = markdownPathForSlug(slugForId(Astro.props.id));
+const mdUrl = `${DOCS_ORIGIN}${mdPath}`;
+const ask = encodeURIComponent(`Read ${mdUrl} and help me with Reactive Agents.`);
+const claudeUrl = `https://claude.ai/new?q=${ask}`;
+const chatgptUrl = `https://chatgpt.com/?q=${ask}`;
+const menuId = "ra-copy-page-menu";
+---
+
+<div class="ra-copy-page" data-ra-copy-page data-md={mdPath}>
+  <button type="button" class="ra-copy-page-main" data-ra-action="copy">
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+    <span data-ra-copy-label aria-live="polite">Copy page</span>
+  </button>
+  <button
+    type="button"
+    class="ra-copy-page-toggle"
+    aria-label="More page actions"
+    aria-haspopup="menu"
+    aria-expanded="false"
+    aria-controls={menuId}
+  >
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+  </button>
+  <div class="ra-copy-page-menu" id={menuId} role="menu" aria-label="Page actions" hidden>
+    <button type="button" role="menuitem" tabindex="-1" data-ra-action="copy">
+      <span class="ra-copy-page-item-title">Copy page</span>
+      <span class="ra-copy-page-item-hint">Markdown for LLMs and agents</span>
+    </button>
+    <a role="menuitem" tabindex="-1" href={mdPath} target="_blank" data-ra-action="view">
+      <span class="ra-copy-page-item-title">View as Markdown</span>
+      <span class="ra-copy-page-item-hint">This page as plain text</span>
+    </a>
+    <a role="menuitem" tabindex="-1" href={claudeUrl} target="_blank" rel="noopener noreferrer" data-ra-action="claude">
+      <span class="ra-copy-page-item-title">Open in Claude</span>
+      <span class="ra-copy-page-item-hint">Ask about this page</span>
+    </a>
+    <a role="menuitem" tabindex="-1" href={chatgptUrl} target="_blank" rel="noopener noreferrer" data-ra-action="chatgpt">
+      <span class="ra-copy-page-item-title">Open in ChatGPT</span>
+      <span class="ra-copy-page-item-hint">Ask about this page</span>
+    </a>
+  </div>
+</div>
+
+<script>
+  type Track = (name: string, data?: Record<string, unknown>) => void;
+
+  function track(action: string): void {
+    const fn = (window as { __raTrack?: Track }).__raTrack;
+    fn?.("copy_page", { action, path: location.pathname });
+  }
+
+  /** Copy the twin. ClipboardItem with a promise keeps Safari's user-gesture window. */
+  async function copyMarkdown(mdPath: string): Promise<void> {
+    const load = () =>
+      fetch(mdPath).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      });
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      const blob = load().then((text) => new Blob([text], { type: "text/plain" }));
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": blob })]);
+      return;
+    }
+    await navigator.clipboard.writeText(await load());
+  }
+
+  function init(root: HTMLElement): void {
+    if (root.dataset.raBound) return;
+    root.dataset.raBound = "1";
+    const mdPath = root.dataset.md ?? "";
+    const toggle = root.querySelector<HTMLButtonElement>(".ra-copy-page-toggle")!;
+    const menu = root.querySelector<HTMLElement>(".ra-copy-page-menu")!;
+    const label = root.querySelector<HTMLElement>("[data-ra-copy-label]")!;
+    const items = () => [...menu.querySelectorAll<HTMLElement>("[role='menuitem']")];
+    let resetTimer: number | undefined;
+
+    const setOpen = (open: boolean, focus: "first" | "last" | "toggle" | "none" = "none") => {
+      menu.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+      if (open && focus === "first") items()[0]?.focus();
+      if (open && focus === "last") items().at(-1)?.focus();
+      if (!open && focus === "toggle") toggle.focus();
+    };
+
+    const flash = (text: string) => {
+      label.textContent = text;
+      window.clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(() => (label.textContent = "Copy page"), 2000);
+    };
+
+    root.addEventListener("click", (ev) => {
+      const target = (ev.target as Element).closest<HTMLElement>("[data-ra-action]");
+      if (!target) return;
+      const action = target.dataset.raAction ?? "";
+      track(action);
+      if (action === "copy") {
+        copyMarkdown(mdPath).then(
+          () => flash("Copied"),
+          () => flash("Copy failed"),
+        );
+      }
+      if (!menu.hidden) setOpen(false, action === "copy" ? "toggle" : "none");
+    });
+
+    toggle.addEventListener("click", () => setOpen(menu.hidden, menu.hidden ? "first" : "none"));
+    toggle.addEventListener("keydown", (ev) => {
+      if (ev.key === "ArrowDown") { ev.preventDefault(); setOpen(true, "first"); }
+      if (ev.key === "ArrowUp") { ev.preventDefault(); setOpen(true, "last"); }
+    });
+
+    menu.addEventListener("keydown", (ev) => {
+      const list = items();
+      const i = list.indexOf(document.activeElement as HTMLElement);
+      const move = (to: number) => { ev.preventDefault(); list[(to + list.length) % list.length]?.focus(); };
+      if (ev.key === "ArrowDown") move(i + 1);
+      else if (ev.key === "ArrowUp") move(i - 1);
+      else if (ev.key === "Home") move(0);
+      else if (ev.key === "End") move(list.length - 1);
+      else if (ev.key === "Escape") { ev.preventDefault(); setOpen(false, "toggle"); }
+      else if (ev.key === "Tab") setOpen(false);
+      else if (ev.key === " " && (document.activeElement as HTMLElement)?.tagName === "A") {
+        ev.preventDefault();
+        (document.activeElement as HTMLElement).click();
+      }
+    });
+
+    document.addEventListener("click", (ev) => {
+      if (!menu.hidden && !root.contains(ev.target as Node)) setOpen(false);
+    });
+  }
+
+  function initAll(): void {
+    for (const root of document.querySelectorAll<HTMLElement>("[data-ra-copy-page]")) init(root);
+  }
+
+  document.addEventListener("astro:page-load", initAll);
+  initAll();
+</script>
+
+<style>
+  .ra-copy-page {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: stretch;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    font-size: var(--sl-text-xs);
+    line-height: 1;
+  }
+  .ra-copy-page > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2rem;
+    padding: 0 0.6rem;
+    border: 0;
+    background: none;
+    color: var(--sl-color-gray-2);
+    font: inherit;
+    cursor: pointer;
+  }
+  .ra-copy-page > button:hover {
+    color: var(--sl-color-white);
+    background: var(--sl-color-gray-6);
+  }
+  .ra-copy-page-main {
+    border-radius: 0.5rem 0 0 0.5rem;
+    white-space: nowrap;
+  }
+  .ra-copy-page .ra-copy-page-toggle {
+    padding: 0 0.45rem;
+    border-left: 1px solid var(--sl-color-gray-5);
+    border-radius: 0 0.5rem 0.5rem 0;
+  }
+  .ra-copy-page button:focus-visible,
+  .ra-copy-page-menu [role="menuitem"]:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: -2px;
+  }
+  .ra-copy-page-menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 15rem;
+    padding: 0.3rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.6rem;
+    background: var(--sl-color-bg-nav, var(--sl-color-black));
+    box-shadow: var(--sl-shadow-md);
+  }
+  .ra-copy-page-menu[hidden] {
+    display: none;
+  }
+  /* Under the title on narrow screens (custom.css .ra-title-row), so open rightward. */
+  @media (max-width: 50rem) {
+    .ra-copy-page-menu {
+      right: auto;
+      left: 0;
+    }
+  }
+  .ra-copy-page-menu [role="menuitem"] {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.5rem 0.6rem;
+    border: 0;
+    border-radius: 0.4rem;
+    background: none;
+    color: var(--sl-color-white);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .ra-copy-page-menu [role="menuitem"]:hover,
+  .ra-copy-page-menu [role="menuitem"]:focus {
+    background: var(--sl-color-gray-6);
+  }
+  .ra-copy-page-item-title {
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+  }
+  .ra-copy-page-item-hint {
+    color: var(--sl-color-gray-3);
+  }
+</style>

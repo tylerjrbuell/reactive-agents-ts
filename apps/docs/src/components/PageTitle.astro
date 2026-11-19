@@ -1,5 +1,6 @@
 ---
 import TryIt from "./TryIt.astro";
+import CopyPage from "./CopyPage.astro";
 import { shouldShowTryIt } from "../content/try-it";
 import MarkerIcon from "./MarkerIcon.astro";
 import StabilityBadge from "./StabilityBadge.astro";
@@ -46,9 +47,12 @@ const { sections: changed } = tocMarks(
 );
 ---
 
-<h1 id="_top" class="ra-page-title" data-page-id={id}>
-  {data.title}{pageMark && <MarkerIcon marker={{ kind: pageMark.kind, version: pageMark.version }} label={pageMark.label} />}
-</h1>
+<div class="ra-title-row">
+  <h1 id="_top" class="ra-page-title" data-page-id={id}>
+    {data.title}{pageMark && <MarkerIcon marker={{ kind: pageMark.kind, version: pageMark.version }} label={pageMark.label} />}
+  </h1>
+  {id && pageId !== "404" && <CopyPage id={id} />}
+</div>
 
 <div class="ra-title-meta">
   {indicators.stability && <StabilityBadge tier={indicators.stability} />}

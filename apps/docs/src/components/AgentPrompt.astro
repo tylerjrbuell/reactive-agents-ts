@@ -1,0 +1,113 @@
+---
+// Collapsible "Use this prompt with your coding agent" box for the quickstart.
+// The text lives in src/agent-docs/agent-prompt.ts (the markdown twin inlines
+// the same constant). Copy fires the Umami `agent_prompt_copy` event.
+import { AGENT_PROMPT } from "../agent-docs/agent-prompt";
+---
+
+<details class="ra-agent-prompt" data-ra-agent-prompt>
+  <summary>Use this prompt with your coding agent</summary>
+  <p class="ra-agent-prompt-intro">
+    Paste it into Claude Code, Cursor, Codex or any coding agent. It points the agent at these docs and the
+    current API so it does not code from stale training data.
+  </p>
+  <pre class="ra-agent-prompt-text" tabindex="0"><code>{AGENT_PROMPT}</code></pre>
+  <button type="button" class="ra-agent-prompt-copy" data-ra-agent-prompt-copy>
+    <span data-ra-agent-prompt-label aria-live="polite">Copy prompt</span>
+  </button>
+</details>
+
+<script>
+  type Track = (name: string, data?: Record<string, unknown>) => void;
+
+  function init(): void {
+    for (const box of document.querySelectorAll<HTMLElement>("[data-ra-agent-prompt]")) {
+      if (box.dataset.raBound) continue;
+      box.dataset.raBound = "1";
+      const button = box.querySelector<HTMLButtonElement>("[data-ra-agent-prompt-copy]")!;
+      const label = box.querySelector<HTMLElement>("[data-ra-agent-prompt-label]")!;
+      const text = box.querySelector<HTMLElement>(".ra-agent-prompt-text")?.textContent ?? "";
+      let timer: number | undefined;
+      const flash = (msg: string) => {
+        label.textContent = msg;
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => (label.textContent = "Copy prompt"), 2000);
+      };
+      button.addEventListener("click", () => {
+        (window as { __raTrack?: Track }).__raTrack?.("agent_prompt_copy", { path: location.pathname });
+        navigator.clipboard.writeText(text).then(
+          () => flash("Copied"),
+          () => flash("Copy failed"),
+        );
+      });
+      box.addEventListener("toggle", () => {
+        if ((box as HTMLDetailsElement).open) {
+          (window as { __raTrack?: Track }).__raTrack?.("agent_prompt_open", { path: location.pathname });
+        }
+      });
+    }
+  }
+
+  document.addEventListener("astro:page-load", init);
+  init();
+</script>
+
+<style>
+  .ra-agent-prompt {
+    margin-top: 1.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.6rem;
+    background: var(--sl-color-gray-7, var(--sl-color-gray-6));
+  }
+  .ra-agent-prompt > summary {
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    color: var(--sl-color-white);
+    cursor: pointer;
+  }
+  .ra-agent-prompt > summary:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: -2px;
+    border-radius: 0.6rem;
+  }
+  .ra-agent-prompt[open] > summary {
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+  .ra-agent-prompt-intro {
+    margin: 0.75rem 1rem 0;
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-2);
+  }
+  .ra-agent-prompt-text {
+    margin: 0.75rem 1rem 0;
+    padding: 0.75rem;
+    max-height: 22rem;
+    overflow: auto;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.4rem;
+    background: var(--sl-color-bg);
+    font-size: var(--sl-text-xs);
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .ra-agent-prompt-copy {
+    margin: 0.75rem 1rem 1rem;
+    padding: 0.45rem 0.85rem;
+    border: 1px solid var(--sl-color-text-accent);
+    border-radius: 0.5rem;
+    background: var(--sl-color-text-accent);
+    color: var(--sl-color-black);
+    font: inherit;
+    font-size: var(--sl-text-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .ra-agent-prompt-copy:hover {
+    opacity: 0.88;
+  }
+  .ra-agent-prompt-copy:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+</style>
