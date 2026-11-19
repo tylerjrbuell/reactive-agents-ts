@@ -61,6 +61,7 @@ export {
   DurableConfigMismatchError,
   RunNotResumableError,
   ToolsOptionError,
+  ModelOptionError,
   UnsupportedModalityError,
   unwrapError,
   unwrapErrorWithSuggestion,

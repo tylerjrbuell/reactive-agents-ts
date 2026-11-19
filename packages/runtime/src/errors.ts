@@ -222,6 +222,20 @@ export class ToolsOptionError extends Data.TaggedError("ToolsOptionError")<{
   readonly message: string;
 }> {}
 
+/**
+ * Thrown by `.withModel()` when an argument has the wrong shape: a first
+ * argument that is neither a model id string nor a params object, a `params`
+ * argument that is not an object (or follows the object form), or a key that
+ * is not a `ModelParams` field (e.g. `num_ctx` for `numCtx`). Fails at the
+ * call so a setting is never silently dropped.
+ */
+export class ModelOptionError extends Data.TaggedError("ModelOptionError")<{
+  /** The `.withModel()` argument that holds the invalid value. */
+  readonly argument: "modelOrParams" | "params";
+  /** Human-readable reason, naming the bad value or keys. */
+  readonly message: string;
+}> {}
+
 /** `agent.schedules()` was used on an agent built without `.withGateway()`. */
 export class ScheduleUnavailableError extends Data.TaggedError("ScheduleUnavailableError")<{
   readonly message: string;
@@ -364,6 +378,12 @@ export function errorContext(error: unknown): ErrorContext {
           details: { option: e.option },
         };
       }
+      case "ModelOptionError": {
+        return {
+          suggestion: `Fix the .withModel() "${e.argument}" argument: pass a model id, a ModelParams object, or (modelId, { numCtx, temperature, maxTokens, thinking }).`,
+          details: { argument: e.argument },
+        };
+      }
       case "UnsupportedModalityError": {
         return {
           suggestion: `Use a model that accepts ${e.partType} input, or remove the ${e.partType} part (see modelInputCapabilities(provider, model)).`,
@@ -398,6 +418,7 @@ const KNOWN_TAGS = new Set([
   "BudgetExceededError",
   "ToolDefinitionError",
   "ToolsOptionError",
+  "ModelOptionError",
   "UnsupportedModalityError",
   "StructuredOutputError",
 ]);

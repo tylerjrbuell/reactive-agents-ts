@@ -847,23 +847,23 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     // ─── Model & Provider ───
 
     /**
-     * Set the LLM model to use for this agent.
+     * Set the LLM model to use for this agent, optionally with its params. All three spellings
+     * share one code path (`applyWithModel` in `builder/withers/model-budget.ts`).
      *
-     * Examples: `"claude-opus-4-20250514"`, `"gpt-4-turbo"`, `"mistral-large"`, `"gemini-2.0-flash"`
-     *
-     * @param model - Model identifier string
-     * @param params - ModelParams object with model + thinking/temperature/maxTokens/numCtx
-     * @param params.model - Model identifier (provider-specific). Examples: `"claude-opus-4-20250514"`, `"gpt-4-turbo"`, `"gemini-2.0-flash"`
-     * @param params.thinking - Enable/disable thinking mode (auto-detect if omitted). Default: undefined
-     * @param params.temperature - Sampling temperature 0.0-1.0. Default: undefined (provider default)
-     * @param params.maxTokens - Maximum output tokens. Default: undefined (provider default)
-     * @param params.numCtx - Context window size for local providers (Ollama `options.num_ctx`); ignored by hosted providers. Default: undefined
+     * @example `.withModel("claude-sonnet-4-6")` — model id only.
+     * @example `.withModel("gemma4:e4b", { numCtx: 8000 })` — same as `.withModel({ model: "gemma4:e4b", numCtx: 8000 })`.
+     * @example `.withModel({ temperature: 0.2 })` — params without pinning a model (provider default).
+     * @param model - Model identifier (provider-specific), e.g. `"gpt-4-turbo"`, `"gemini-2.0-flash"`
+     * @param params - Overrides for that model: `thinking` (auto-detect if omitted), `temperature`,
+     *   `maxTokens`, `numCtx` (Ollama `options.num_ctx`; ignored by hosted providers). Absent = provider default.
+     * @throws ModelOptionError when an argument has the wrong shape or a key is not a `ModelParams`
+     *   field (e.g. `num_ctx`), so a setting is never silently dropped.
      * @returns `this` for chaining
      */
-    withModel(model: string): this
+    withModel(model: string, params?: Omit<ModelParamsInput, 'model'>): this
     withModel(params: ModelParamsInput): this
-    withModel(modelOrParams: string | ModelParamsInput): this {
-        applyWithModel(this, modelOrParams)
+    withModel(modelOrParams: string | ModelParamsInput, params?: Omit<ModelParamsInput, 'model'>): this {
+        applyWithModel(this, modelOrParams, params)
         return this
     }
 

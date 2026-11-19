@@ -82,6 +82,9 @@ export {
   taskInputText,
   taskInputParts,
 
+  // `.withModel()` rejects a wrong-shaped argument or unknown params key
+  ModelOptionError,
+
   // Failed-run rejection class (supports identity checks in user code)
   AgentRunError,
 
