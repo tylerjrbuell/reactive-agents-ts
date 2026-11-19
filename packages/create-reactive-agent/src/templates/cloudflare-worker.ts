@@ -58,7 +58,9 @@ export default {
         question,
         output: result.output,
         steps: result.metadata.stepsCount,
+        // A lower bound when costComplete is false (a model had no known price).
         cost: result.metadata.cost,
+        costComplete: result.metadata.costComplete !== false,
       });
     } catch (err) {
       // A bad key or a provider outage: answer with the one-line cause.

@@ -1,10 +1,20 @@
 import { ReactiveAgents, type ReactiveAgent } from "@reactive-agents/runtime";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
-import { createSpinner, kv, muted, fail, section, info, hint } from "../ui.js";
+import { createSpinner, kv, muted, fail, section, info, hint, formatCost } from "../ui.js";
 import { VALID_PROVIDERS, isValidProvider, providerList, type Provider } from "../providers.js";
 
 const DEFAULT_CORTEX_URL = "http://127.0.0.1:4321";
+
+/** The `StreamCompleted` metadata fields `rax run --stream` prints. */
+interface StreamRunMetadata {
+  readonly duration: number;
+  readonly stepsCount: number;
+  readonly cost: number;
+  /** `false` when a call had no known price (`cost` is a lower bound). */
+  readonly costComplete?: boolean;
+  readonly strategyUsed?: string;
+}
 
 interface MCPConfigFile {
   servers: Array<{
@@ -251,21 +261,19 @@ export async function runAgent(args: string[]): Promise<void> {
     // spinner on the same terminal interleaves with it.
     const execSpin = quiet || stream || frameworkStatusLine ? null : createSpinner("Executing...");
     const result = stream
-      ? await (async () => {
+      ? await (async (): Promise<{
+          success: boolean;
+          output: string;
+          metadata: StreamRunMetadata;
+          error?: string;
+        }> => {
           if (!quiet) {
             console.log(section("Streaming Output"));
           }
 
           let output = "";
           let streamError: string | null = null;
-          let finalMetadata:
-            | {
-                duration: number;
-                stepsCount: number;
-                cost: number;
-                strategyUsed?: string;
-              }
-            | undefined;
+          let finalMetadata: StreamRunMetadata | undefined;
 
           for await (const event of agent.runStream(prompt)) {
             switch (event._tag) {
@@ -322,7 +330,14 @@ export async function runAgent(args: string[]): Promise<void> {
         console.log(section("Metrics"));
         console.log(kv("Duration", `${result.metadata.duration}ms`));
         console.log(kv("Steps", String(result.metadata.stepsCount)));
-        console.log(kv("Cost", `$${result.metadata.cost.toFixed(6)}`));
+        // run() results resolve the billed total (background debrief
+        // included); a stream reports the pre-debrief spend. Either is a lower
+        // bound when a model had no known price.
+        const cost =
+          "totalCost" in result && result.totalCost
+            ? await result.totalCost()
+            : { usd: result.metadata.cost, complete: result.metadata.costComplete !== false };
+        console.log(kv("Cost", formatCost(cost)));
         if (verbose && (result.metadata as { strategyUsed?: string }).strategyUsed) {
           console.log(kv("Strategy", (result.metadata as { strategyUsed?: string }).strategyUsed!));
         }

@@ -14,7 +14,7 @@ import {
   OpenAIProviderLive,
   LLMService,
 } from "@reactive-agents/llm-provider";
-import { section, info, success, fail, kv, spinner, muted } from "../ui.js";
+import { section, info, success, fail, kv, spinner, muted, formatCost } from "../ui.js";
 import { runEvalGate } from "./eval-gate.js";
 import { runEvalLedger } from "./eval-ledger.js";
 
@@ -69,6 +69,7 @@ export async function runEval(args: string[]): Promise<void> {
     const ds = yield* DatasetService;
     const evalService = yield* EvalService;
     const sutLLM = yield* LLMService;
+    let unpricedCalls = 0;
 
     // SuiteAgentRunner — runs the SUT for each case via LLMService.
     // Stays in the SUT code path; never touches JudgeLLMService.
@@ -89,6 +90,9 @@ export async function runEval(args: string[]): Promise<void> {
                 }),
             ),
           );
+        // Absent estimatedCost = the model has no known price: count it so
+        // the summary shows the total as a lower bound, not as exact.
+        if (response.usage.estimatedCost === undefined) unpricedCalls += 1;
         return {
           actualOutput: response.content,
           metrics: {
@@ -118,7 +122,7 @@ export async function runEval(args: string[]): Promise<void> {
     console.log(section("Summary"));
     console.log(kv("Pass", `${s.passed}/${s.totalCases}`));
     console.log(kv("Avg Score", `${(s.avgScore * 100).toFixed(1)}%`));
-    console.log(kv("Cost", `$${s.totalCostUsd.toFixed(5)}`));
+    console.log(kv("Cost", formatCost({ usd: s.totalCostUsd, complete: unpricedCalls === 0 }, 5)));
 
     console.log(section("Dimension Scores"));
     for (const [dim, avg] of Object.entries(s.dimensionAverages)) {

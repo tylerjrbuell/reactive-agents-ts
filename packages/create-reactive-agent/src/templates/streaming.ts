@@ -1,6 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
-import { renderEnvGuard, renderFailHelper } from "./shared.js";
+import { renderCostHelper, renderEnvGuard, renderFailHelper } from "./shared.js";
 
 export const streamingTemplate: Template = {
   name: "streaming",
@@ -49,7 +49,8 @@ for await (const event of agent.runStream(task)) {
         console.error(\`\\n[error] \${event.error}\`);
         process.exitCode = 1;
       } else {
-        console.log(\`\\n\\n[done] steps=\${event.metadata.stepsCount} cost=$\${event.metadata.cost.toFixed(6)}\`);
+        const cost = { usd: event.metadata.cost, complete: event.metadata.costComplete !== false };
+        console.log(\`\\n\\n[done] steps=\${event.metadata.stepsCount} cost=\${formatCost(cost)}\`);
       }
       break;
     case "StreamError":
@@ -58,6 +59,8 @@ for await (const event of agent.runStream(task)) {
       break;
   }
 }
+
+${renderCostHelper()}
 
 ${renderFailHelper()}
 `;

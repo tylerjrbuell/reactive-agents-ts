@@ -1,6 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
-import { renderEnvGuard, renderFailHelper } from "./shared.js";
+import { renderCostHelper, renderEnvGuard, renderFailHelper } from "./shared.js";
 
 export const withToolsTemplate: Template = {
   name: "with-tools",
@@ -39,7 +39,12 @@ console.log(\`> \${task}\\n\`);
 const result = await agent.run(task).catch(fail);
 
 console.log(result.output);
-console.log(\`\\nSteps: \${result.metadata.stepsCount} | Strategy: \${result.metadata.strategyUsed ?? "default"} | Cost: $\${result.metadata.cost.toFixed(6)}\`);
+
+// The billed total for the run (every LLM call, any background debrief included).
+const cost = (await result.totalCost?.()) ?? { usd: result.metadata.cost, complete: result.metadata.costComplete !== false };
+console.log(\`\\nSteps: \${result.metadata.stepsCount} | Strategy: \${result.metadata.strategyUsed ?? "default"} | Cost: \${formatCost(cost)}\`);
+
+${renderCostHelper()}
 
 ${renderFailHelper()}
 `;

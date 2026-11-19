@@ -49,6 +49,10 @@ describe("provider-config", () => {
     }
   });
 
+  test("xai default is grok-4.7 (grok-4 is off xAI's price list: every run would report cost unknown)", () => {
+    expect(providerDefaultModel("xai")).toBe("grok-4.7");
+  });
+
   test("provider import name is identity", () => {
     for (const p of ["anthropic", "openai", "google", "ollama"] as const) {
       expect(providerImport(p)).toBe(p);
@@ -211,6 +215,22 @@ describe("template-specific output", () => {
     expect(idx.content).toContain("GOOGLE_API_KEY");
     const env = files.find((f) => f.path === ".env.example")!;
     expect(env.content).toContain("GOOGLE_API_KEY");
+  });
+
+  test("cost prints never show a partial total as exact", () => {
+    for (const t of ["minimal", "with-tools", "streaming"] as const) {
+      const idx = renderTemplate(baseOpts({ template: t })).find((f) => f.path === "src/index.ts")!;
+      expect(idx.content).not.toContain("metadata.cost.toFixed");
+      expect(idx.content).toContain("costComplete !== false");
+      expect(idx.content).toContain("function formatCost(");
+      expect(idx.content).toContain("(some prices unknown)");
+    }
+    for (const t of ["minimal", "with-tools"] as const) {
+      const idx = renderTemplate(baseOpts({ template: t })).find((f) => f.path === "src/index.ts")!;
+      expect(idx.content).toContain("await result.totalCost?.()");
+    }
+    const worker = renderTemplate(baseOpts({ template: "cloudflare-worker" })).find((f) => f.path === "src/index.ts")!;
+    expect(worker.content).toContain("costComplete: result.metadata.costComplete !== false");
   });
 
   test("minimal template does NOT call withTools or runStream", () => {

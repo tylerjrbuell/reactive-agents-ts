@@ -206,6 +206,16 @@ export function metricsSummary(opts: {
   );
 }
 
+/**
+ * Format a run's USD cost for display. `complete: false` means some LLM call
+ * had no known price and added nothing, so `usd` is a lower bound: it prints
+ * as `>= $x (some prices unknown)`, never as an exact total.
+ */
+export function formatCost(cost: { readonly usd: number; readonly complete: boolean }, digits = 6): string {
+  const usd = `$${cost.usd.toFixed(digits)}`;
+  return cost.complete ? usd : `>= ${usd} (some prices unknown)`;
+}
+
 /** Legacy compat — deprecated in favor of spinner(). */
 export function createSpinner(message: string) {
   const s = spinner(message);

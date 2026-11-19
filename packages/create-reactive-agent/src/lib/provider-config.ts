@@ -24,6 +24,16 @@ export function providerEnvVar(p: Provider): string | null {
   }
 }
 
+/**
+ * The model a scaffolded project pins in `.withModel(...)`.
+ *
+ * This package has no runtime dependencies (it must install fast via
+ * `npm create`), so it cannot import `PROVIDER_DEFAULT_MODELS` from
+ * `@reactive-agents/llm-provider`. Some picks differ from that table on
+ * purpose (a cheaper OpenAI model, the Ollama model the quickstart pulls).
+ * Every cloud pick must be on the provider's price list (the PriceBook):
+ * an unpriced model makes every scaffolded run report its cost as unknown.
+ */
 export function providerDefaultModel(p: Provider): string {
   switch (p) {
     case "anthropic":
@@ -35,7 +45,7 @@ export function providerDefaultModel(p: Provider): string {
     case "groq":
       return "openai/gpt-oss-120b";
     case "xai":
-      return "grok-4";
+      return "grok-4.7";
     case "ollama":
       // Same model the docs quickstart pulls (`ollama pull qwen3:4b`): a
       // ~2.5 GB first download, and the README / next steps name it.

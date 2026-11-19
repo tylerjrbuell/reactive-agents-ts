@@ -155,6 +155,23 @@ function fail(err: unknown): never {
 }`;
 }
 
+/**
+ * The cost-print seam emitted by templates that show a run's cost. A model
+ * with no known price adds nothing to the total rather than a guess, so the
+ * figure is then a lower bound (`complete: false`) and must not print as an
+ * exact total. Pair it with `await result.totalCost?.()` (the billed total)
+ * on `run()` results, or `metadata.cost` + `metadata.costComplete` on a
+ * `StreamCompleted` event.
+ */
+export function renderCostHelper(): string {
+  return `// Print a run's cost. \`complete\` is false when a model had no known price:
+// the total then leaves those calls out, so it is a lower bound.
+function formatCost(cost: { usd: number; complete: boolean }): string {
+  const usd = \`$\${cost.usd.toFixed(6)}\`;
+  return cost.complete ? usd : \`>= \${usd} (some prices unknown)\`;
+}`;
+}
+
 function renderReadme(opts: ScaffoldOptions): string {
   const envVar = providerEnvVar(opts.provider);
   const envBlock = envVar

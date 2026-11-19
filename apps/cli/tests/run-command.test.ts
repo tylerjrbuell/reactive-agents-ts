@@ -2,6 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { ReactiveAgents, ReactiveAgent } from "@reactive-agents/runtime";
 import { resolve } from "path";
 import { listTemplates } from "create-reactive-agent";
+import { formatCost } from "../src/ui.js";
 
 const CLI_ENTRY = resolve(import.meta.dir, "../src/index.ts");
 
@@ -99,6 +100,20 @@ describe("CLI Run Command — Agent Integration", () => {
     expect(r.out).not.toContain("[phase:");
     expect(r.out).toContain("Test response.");
   }, TEST_TIMEOUT_MS);
+
+  it("prints the run's cost as an exact total when every call was priced", async () => {
+    const r = await runPiped();
+    expectExitZero(r);
+    const line = r.out.split("\n").find((l) => l.includes("Cost"));
+    expect(line).toContain("$0.000000");
+    expect(line).not.toContain("some prices unknown");
+  }, TEST_TIMEOUT_MS);
+
+  it("formatCost marks a partial total as a lower bound, never as exact", () => {
+    expect(formatCost({ usd: 0.0123, complete: true })).toBe("$0.012300");
+    expect(formatCost({ usd: 0.0123, complete: false })).toBe(">= $0.012300 (some prices unknown)");
+    expect(formatCost({ usd: 1, complete: true }, 5)).toBe("$1.00000");
+  });
 
   it("run usage lists --cortex", async () => {
     const r = await runCli(["run"]);
