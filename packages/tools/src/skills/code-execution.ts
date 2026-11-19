@@ -57,6 +57,27 @@ const ENOENT_HINT =
   " Hint: the working directory is /tmp, not the workspace, so relative paths do not resolve. " +
   "Use the absolute path from the task (host sandbox only), or inline the data in the code.";
 
+/** Bun parse failures (`error: Expected ";" but found ":"`) and thrown SyntaxError text. */
+const SYNTAX_ERROR_RE =
+  /SyntaxError|^\s*error: (?:Expected|Unexpected|Unterminated|Invalid|Missing|Unclosed)\b/m;
+
+/**
+ * Appended to failures where the code never ran (wrong language, shell input,
+ * syntax error). The tool contract must be recoverable from its own error:
+ * accepted language, one runnable example, and where data has to come from.
+ */
+export const CODE_RETRY_GUIDE =
+  " Retry with JavaScript/TypeScript only, for example: " +
+  "`const xs = [3, 5, 9]; return xs.reduce((a, b) => a + b, 0) / xs.length;`. " +
+  "Data must be inlined in the code: each call starts clean in /tmp and keeps no variables. " +
+  "To use a file's data, read it with the file-read tool first, then paste the numbers into the code.";
+
+/** Add the retry guide when the failure is a never-executed syntax error. */
+const withSyntaxGuide = (message: string): string =>
+  SYNTAX_ERROR_RE.test(message)
+    ? `${message}\nThe code is not valid JavaScript/TypeScript (Python syntax, pasted data or stray text cause this).${CODE_RETRY_GUIDE}`
+    : message;
+
 /**
  * Make a failure message non-empty and model-actionable: strip the temp-file
  * path and Bun banner, name the cause when the text is empty, and explain the
@@ -65,7 +86,7 @@ const ENOENT_HINT =
 export function explainCodeError(raw: string, fallback: string): string {
   const cleaned = raw.replace(/\S*code-exec-[^\s]*/g, "<code>").replace(BUN_BANNER_RE, "").trim();
   const message = cleaned.length > 0 ? cleaned : fallback;
-  return /ENOENT|no such file or directory/i.test(message) ? message + ENOENT_HINT : message;
+  return withSyntaxGuide(/ENOENT|no such file or directory/i.test(message) ? message + ENOENT_HINT : message);
 }
 
 /** Parse the wrapper's stdout sentinel into the code-execute result shape. */
@@ -204,7 +225,7 @@ const shellInputRefusal = (code: string): string => {
   const shown = first.length > 80 ? `${first.slice(0, 80)}…` : first;
   return (
     `${JSON.stringify(shown)} is a shell command, not JavaScript/TypeScript. ` +
-    `code-execute runs JavaScript/TypeScript code with Bun; it does not run shell commands. Nothing was executed.`
+    `code-execute runs JavaScript/TypeScript code with Bun; it does not run shell commands. Nothing was executed.${CODE_RETRY_GUIDE}`
   );
 };
 
@@ -250,8 +271,9 @@ export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition =
   name: "code-execute",
   description:
     "Execute JavaScript/TypeScript only (Bun). No shell commands, no Python: other languages fail. " +
+    "STATELESS: each call is a fresh process in /tmp; no variables or files carry over, so inline all data in the code " +
+    "(or read a file by absolute path on the host sandbox; otherwise read it with the file tools first, then paste the values). " +
     "Best for: math, aggregation, string transforms, JSON parsing, sorting, regex extraction. " +
-    "Data must be inline in the code or read from a file by absolute path. " +
     "Example: const rows = [3, 5, 9]; return rows.reduce((a, b) => a + b, 0) / rows.length; " +
     "IMPORTANT: The code runs in a separate process with NO access to stored results, tool outputs, " +
     "or agent state — variables like _tool_result_N do NOT exist in the code environment. " +
@@ -348,7 +370,7 @@ export const codeExecuteHandler = (
           executed: false,
           error:
             `language "${String(args.language)}" is not supported: code-execute runs JavaScript/TypeScript only ` +
-            `(no shell, no Python). Rewrite the logic in JavaScript/TypeScript. Nothing was executed.`,
+            `(no shell, no Python). Nothing was executed.${CODE_RETRY_GUIDE}`,
         };
       }
 

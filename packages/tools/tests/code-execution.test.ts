@@ -164,3 +164,55 @@ describe("code-execute shell input", () => {
     expect(isShellInput("")).toBe(false);
   });
 });
+
+// Arithmetic-lever census 2026-11-19: 73% of failed code-execute calls never
+// ran (wrong language/shell/syntax). The error must carry the retry contract.
+// RED-ON-CUT: drop CODE_RETRY_GUIDE from any never-executed branch and the
+// matching case below loses the example/data hint.
+describe("code-execute retry guidance (never-executed failures)", () => {
+  const guide = (error: string | undefined): void => {
+    expect(error).toContain("JavaScript/TypeScript only");
+    expect(error).toContain("return xs.reduce((a, b) => a + b, 0) / xs.length;");
+    expect(error).toContain("inlined in the code");
+    expect(error).toContain("file-read tool");
+  };
+
+  it("wrong language carries the guide", async () => {
+    const r = (await Effect.runPromise(
+      codeExecuteHandler()({ code: "print(1)", language: "python" }) as Effect.Effect<CodeExecResult, never, never>,
+    )) as { executed: boolean; error?: string };
+    expect(r.executed).toBe(false);
+    guide(r.error);
+  });
+
+  it("shell input carries the guide", async () => {
+    const r = (await run("bun test")) as { executed: boolean; error?: string };
+    guide(r.error);
+  });
+
+  it.each(["const xs = [1,2 3]; return xs", "def f(x):\n  return x"])("syntax error %p carries the guide", async (code) => {
+    const r = (await run(code)) as { executed: boolean; error?: string };
+    expect(r.executed).toBe(false);
+    guide(r.error);
+  });
+
+  it("CONTROL: code that ran and threw is unchanged (no guide)", async () => {
+    const r = (await run("throw new Error('boom')")) as { executed: boolean; error?: string };
+    expect(r.executed).toBe(false);
+    expect(r.error).toBe("Error: boom");
+  });
+
+  it("CONTROL: runtime ReferenceError is unchanged (no guide)", async () => {
+    const r = (await run("return undefinedThing + 1")) as { executed: boolean; error?: string };
+    expect(r.executed).toBe(false);
+    expect(r.error).toContain("ReferenceError");
+    expect(r.error).not.toContain("inlined in the code");
+  });
+
+  it("description states JS/TS-only, stateless and cwd up front", () => {
+    const d = codeExecuteToolFor().description;
+    expect(d.indexOf("STATELESS")).toBeLessThan(d.indexOf("Best for"));
+    expect(d.slice(0, 400)).toContain("/tmp");
+    expect(d.slice(0, 120)).toContain("JavaScript/TypeScript only");
+  });
+});
