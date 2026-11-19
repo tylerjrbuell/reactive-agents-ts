@@ -25,6 +25,7 @@ import { ToolResultCache } from "./caching/tool-result-cache.js";
 import { ToolApprovalGate, definitionRequiresApproval } from "./governance/tool-approval-gate.js";
 import { annotateToolNameCorrection } from "./registry/resolve-tool-name.js";
 import { classifyMCPToolMutation } from "./mcp/read-only-classification.js";
+import { jsonSchemaToTypeString } from "./mcp/output-schema-type.js";
 
 /**
  * Maps an MCP tool's raw JSON Schema `type` string onto `ToolParameter`'s
@@ -583,6 +584,7 @@ export const ToolServiceLive = Layer.effect(
           }
 
           const mutates = classifyMCPToolMutation(config, toolName, schema?.annotations);
+          const returnType = jsonSchemaToTypeString(schema?.outputSchema);
           yield* registry.register(
             {
               name: `${server.name}/${toolName}`,
@@ -597,6 +599,8 @@ export const ToolServiceLive = Layer.effect(
               produces: "data",
               // Operator-declared only; undefined = unclassified (not read-only).
               ...(mutates === undefined ? {} : { mutatesExternalState: mutates }),
+              // Server-declared outputSchema as a compact type (code-action `Returns:`).
+              ...(returnType === undefined ? {} : { returnType }),
             },
             (args) =>
               mcpClient.callTool(server.name, toolName, args).pipe(

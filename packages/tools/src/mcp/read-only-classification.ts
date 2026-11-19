@@ -70,13 +70,17 @@ export const toMCPToolSchemaEntry = (t: {
   readonly name: string;
   readonly description?: string;
   readonly inputSchema?: unknown;
+  readonly outputSchema?: unknown;
   readonly annotations?: unknown;
 }): MCPToolSchema => {
   const annotations = pickMCPToolAnnotations(t.annotations);
+  const { outputSchema } = t;
+  const hasOutputSchema = typeof outputSchema === "object" && outputSchema !== null && !Array.isArray(outputSchema);
   return {
     name: t.name,
     description: t.description,
     inputSchema: t.inputSchema as Record<string, unknown> | undefined,
+    ...(hasOutputSchema ? { outputSchema: outputSchema as Record<string, unknown> } : {}),
     ...(annotations ? { annotations } : {}),
   };
 };

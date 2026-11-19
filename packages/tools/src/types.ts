@@ -572,6 +572,16 @@ export const MCPToolSchemaEntry = Schema.Struct({
     Schema.Record({ key: Schema.String, value: Schema.Unknown }),
   ),
   /**
+   * JSON Schema the server declares for the tool's structured result.
+   *
+   * Rendered as a compact type string into the registered tool's `returnType`.
+   *
+   * @default undefined
+   */
+  outputSchema: Schema.optional(
+    Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+  ),
+  /**
    * MCP tool annotation hints as reported by the server. SERVER-SUPPLIED AND
    * UNTRUSTED: used for read-only classification only when the operator sets
    * `trustAnnotations` on the server config.
