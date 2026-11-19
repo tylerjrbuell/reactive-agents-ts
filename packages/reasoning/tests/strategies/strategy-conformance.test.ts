@@ -677,6 +677,8 @@ describe("reflexion multi-pass trajectory (audit G3, G4)", () => {
     let n = 0;
     // generate and improve-1 spend their share on tool calls and end at the cap
     // (critiques UNSATISFIED); improve-2 answers and is never critiqued.
+    // maxIterations 6: the generate pass leads with 3 (half the run), so it caps
+    // before a tool-less turn lets it answer (at 9 it drew 5 and answered).
     const r = await runReflexionCell((req, critiques) => {
       if (req.text.includes(CRITIQUE_MARK)) return { text: UNSATISFIED_CRITIQUES[critiques] ?? "UNSATISFIED: more." };
       if ((req.tools?.length ?? 0) > 0 && critiques < 2) {
@@ -684,7 +686,7 @@ describe("reflexion multi-pass trajectory (audit G3, G4)", () => {
         return { toolCall: { name: "add", args: { a: 2 + n, b: 3 + n } } };
       }
       return { text: "FINAL ANSWER: The sum of 2 and 3 is 5." };
-    }, { config: reflexionConfig(9, 2) });
+    }, { config: reflexionConfig(6, 2) });
     const vetoes = r.overrides.filter((o) => o["authority"] === "envelope-outstanding");
     const m = r.result?.metadata ?? {};
     expect(

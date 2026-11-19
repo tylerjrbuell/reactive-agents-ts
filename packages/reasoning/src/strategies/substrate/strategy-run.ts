@@ -66,13 +66,14 @@ import type { LedgerEntry, RunLedger } from "../../kernel/ledger/run-ledger.js";
 import type { RunContract } from "../../kernel/contract/run-contract.js";
 import "../../kernel/state/pass-seed.js";
 import { makeStrategyEmitLog, resolveStrategyServices } from "../../kernel/utils/service-utils.js";
-import { growRunLedger, ledgerSinkTarget } from "../../kernel/ledger/ledger-sink.js";
+import { appendAnnounced, growRunLedger, ledgerSinkTarget } from "../../kernel/ledger/ledger-sink.js";
 import { resolveRunSpend } from "../budget/run-budget-spend.js";
 import type { BudgetSpend } from "../budget/remaining-budget.js";
 import { addKnown, contributedHalf } from "../../kernel/utils/known-count.js";
 import { usageSpend } from "../../kernel/run-budget.js";
-import { passIterationShare, passIterationsUsed, type IterationBudget } from "../budget/iteration-budget.js";
+import { passIterationShare, passIterationsUsed, type IterationBudget, type PassShareOptions } from "../budget/iteration-budget.js";
 import { defaultReasoningConfig } from "../../types/config.js";
+import { envelopeWithAcceptedAnswer, ledgerWithAcceptedAnswer } from "./answer-acceptance.js";
 import { PLAN_INCOMPLETE_GUARD, planIncompleteReason, settlePlan, type PlanStepLike } from "../../kernel/policy/plan-completion.js";
 import { emitGuardFired } from "../../kernel/utils/diagnostics.js";
 
@@ -223,9 +224,11 @@ export interface StrategyRun {
    * The iterations the next kernel pass may use: its share of the run's
    * iteration budget still left (`passIterationShare` over
    * `StrategyRunSpec.iterationBudget`). `passesLeft` counts this pass and every
-   * pass that may follow it. Without a spec budget, the default run budget.
+   * pass that may follow it. A `lead` pass (the one doing the run's tool work)
+   * draws half of what is left when that beats the even share. Without a spec
+   * budget, the default run budget.
    */
-  readonly iterationShare: (passesLeft: number) => number;
+  readonly iterationShare: (passesLeft: number, options?: PassShareOptions) => number;
 }
 
 /** Metadata keys the substrate derives; strategy extras may not set them. */
@@ -322,6 +325,12 @@ export type StrategyEnd =
       readonly error?: string | null;
       readonly basedOn?: PassResult;
       readonly verdict?: StrategyDeliveryVerdict;
+      /**
+       * The strategy's own check accepted `output` as the answer (reflexion's
+       * SATISFIED critique). The `answer` floor is then met even if a pass
+       * left it outstanding (`answer-acceptance.ts`); nothing else is waived.
+       */
+      readonly answerAccepted?: boolean;
       readonly outcome?: StrategyOutcome;
       readonly kernelMeta?: KernelState["meta"];
       readonly extraMetadata?: StrategyExtras;
@@ -727,11 +736,12 @@ export function runStrategy<E, R>(
         steps.push(...more);
         recordedEvidence.push(...more.filter(isToolEvidence));
       },
-      iterationShare: (passesLeft) =>
+      iterationShare: (passesLeft, shareOptions) =>
         passIterationShare(
           spec.iterationBudget ?? { run: defaultReasoningConfig.strategies.reactive.maxIterations },
           iterationsSpent,
           passesLeft,
+          shareOptions,
         ),
     };
 
@@ -805,8 +815,10 @@ export function runStrategy<E, R>(
           },
         });
       }
-      // Passes the answering pass superseded no longer cap (`standingEnvelopes`).
-      const envelope = joined(end.basedOn);
+      // Passes the answering pass superseded no longer cap (`standingEnvelopes`);
+      // an answer the strategy accepted meets the `answer` floor.
+      const standing = joined(end.basedOn);
+      const envelope = end.answerAccepted === true ? envelopeWithAcceptedAnswer(standing) : standing;
       // 1. Status. A strategy-decided outcome is an honest non-success, judged
       //    at `partial` without the cap machinery (nothing to waive); otherwise
       //    the strategy's verdict (or the plain worst-of envelope) caps it.
@@ -907,8 +919,20 @@ export function runStrategy<E, R>(
       return yield* growRunLedger(ledger, fresh, 0, ledgerSinkTarget(eventBus, taskId, spec.agentId, `${spec.logSite}:announce-ledger`));
     });
 
+    // The terminal's ledger: the strategy's accepted answer (`answerAccepted`),
+    // announced like every other growth, then the settled ledger.
+    const terminalLedger = (end: StrategyEnd) =>
+      Effect.gen(function* () {
+        if (end._tag === "Result" && end.answerAccepted === true) {
+          const { eventBus } = yield* resolveStrategyServices;
+          yield* appendAnnounced(ledgerRef, (l) => ledgerWithAcceptedAnswer(l, spec.strategy, kernelIterations ?? 0),
+            ledgerSinkTarget(eventBus, taskId, spec.agentId, `${spec.logSite}:announce-ledger`));
+        }
+        return yield* settledLedger;
+      });
+
     return yield* body(run).pipe(
-      Effect.flatMap((end) => settledLedger.pipe(Effect.flatMap((ledger) => terminal(end, ledger)))),
+      Effect.flatMap((end) => terminalLedger(end).pipe(Effect.flatMap((ledger) => terminal(end, ledger)))),
       Effect.catchIf(isPaused, (p) => paused(p.pause)),
       Effect.catchIf(isBodyError, bodyFailed),
       Effect.map((result) => withKernelIterations(result, kernelIterations)),

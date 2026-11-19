@@ -247,7 +247,7 @@ export const executeReflexion = (
       }),
       ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
     }, {
-      maxIterations: run.iterationShare(maxRetries + 1), // generate + up to maxRetries improve passes
+      maxIterations: run.iterationShare(maxRetries + 1, { lead: true }), // generate leads (tool work); up to maxRetries improve passes follow
       strategy: "reflexion",
       kernelType: "react",
       taskId: input.taskId,
@@ -632,7 +632,7 @@ export const executeReflexion = (
     // caps the status under the envelopes still standing (a continuing pass
     // supersedes the passes before it), relays the answering pass's raw
     // terminatedBy and abstention, ties `final_answer` to a completed status,
-    // and forwards the one run ledger.
+    // and forwards the one run ledger. SATISFIED meets the `answer` floor.
     const uncritiqued = reason.kind === "max-iters" && final.response !== final.critiqued;
     const satisfied = reason.kind === "satisfied" || (uncritiqued && passDelivered(final.lastPass));
     return {
@@ -640,8 +640,8 @@ export const executeReflexion = (
       output: gated.output,
       status: satisfied ? ("completed" as const) : ("partial" as const),
       basedOn: final.lastPass,
-      // The answering sub-kernel's meta carries the durable rails and the
-      // kernel verdict the mint reads.
+      answerAccepted: reason.kind === "satisfied",
+      // The answering sub-kernel's meta carries the durable rails and kernel verdict.
       kernelMeta: final.lastPass.state.meta,
       extraMetadata: {
         confidence: satisfied ? Math.max(0.6, 1 - (iters / 3) * 0.3) : 0.4,

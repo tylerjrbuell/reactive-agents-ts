@@ -32,17 +32,38 @@ export interface IterationBudget {
  */
 export const MIN_PASS_ITERATIONS = 2;
 
+/** How a pass's share is weighed against the passes that may follow it. */
+export interface PassShareOptions {
+  /**
+   * The pass does the run's tool work and later passes only refine its answer
+   * (reflexion's generate pass before its improve passes). A lead pass draws
+   * half of what is left, `ceil(remaining / 2)`, when that beats the even share.
+   */
+  readonly lead?: boolean;
+}
+
 /**
  * The iterations the next kernel pass may use: `perPass` when set, else an
  * even share of the run budget still left, `ceil(remaining / passesLeft)`,
  * never below `floor`. `passesLeft` counts this pass and every pass that may
- * follow it. Recomputed before each pass, the shares add up to the run budget
- * unless the floor lifts a share (a budget smaller than passes x floor).
+ * follow it. A `lead` pass draws `ceil(remaining / 2)` instead when larger
+ * (trace 01M7T3GGGZTYN79G1T0JSW4G5V: an even quarter of 16 left reflexion's
+ * generate pass 4 iterations, spent on bookkeeping and two tool calls before
+ * any answer). The passes after it split what it left evenly. Recomputed
+ * before each pass, the shares add up to the run budget unless the floor
+ * lifts a share (a budget smaller than passes x floor).
  */
-export function passIterationShare(budget: IterationBudget, spent: number, passesLeft: number): number {
+export function passIterationShare(
+  budget: IterationBudget,
+  spent: number,
+  passesLeft: number,
+  options: PassShareOptions = {},
+): number {
   if (budget.perPass !== undefined) return budget.perPass;
   const remaining = Math.max(0, budget.run - spent);
-  return Math.max(budget.floor ?? MIN_PASS_ITERATIONS, Math.ceil(remaining / Math.max(1, passesLeft)));
+  const even = Math.ceil(remaining / Math.max(1, passesLeft));
+  const share = options.lead === true ? Math.max(even, Math.ceil(remaining / 2)) : even;
+  return Math.max(budget.floor ?? MIN_PASS_ITERATIONS, share);
 }
 
 /** The iterations one finished kernel pass used: its loop counter or its LLM calls, whichever is higher. */

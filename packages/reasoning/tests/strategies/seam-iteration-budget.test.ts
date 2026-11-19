@@ -46,6 +46,14 @@ describe("passIterationShare: a pass's share of the run's iteration budget", () 
     expect(passIterationShare({ run: 2 }, 2, 2)).toBe(2);
   });
 
+  it("a lead pass draws half of what is left when that beats the even share; later passes split the rest", () => {
+    expect(passIterationShare({ run: 16 }, 0, 4, { lead: true })).toBe(8); // trace 01M7T3GGGZTYN79G1T0JSW4G5V got 4
+    expect(passIterationShare({ run: 16 }, 8, 3)).toBe(3);
+    expect(passIterationShare({ run: 10 }, 0, 2, { lead: true })).toBe(5); // two passes: same as even
+    expect(passIterationShare({ run: 20, perPass: 3 }, 0, 4, { lead: true })).toBe(3); // explicit per-pass cap still wins
+    expect(passIterationShare({ run: 3 }, 0, 4, { lead: true })).toBe(2); // floor still holds
+  });
+
   it("a pass used its loop counter or its LLM calls, whichever is higher", () => {
     expect(passIterationsUsed({ iteration: 2, llmCalls: 3 })).toBe(3);
   });
@@ -124,10 +132,10 @@ const runReflexion = (config: ReasoningConfig, opts: { readonly silentAnswerTurn
 };
 
 describe("reflexion draws on the run's iteration budget", () => {
-  it("(a) maxIterations 20: the generate pass is not capped at 3 (its share is 5)", async () => {
-    const { result, offered } = await runReflexion(configWith(20));
+  it("(a) maxIterations 12: the generate pass is not capped at 3 (it leads: its share is 6)", async () => {
+    const { result, offered } = await runReflexion(configWith(12));
     const toolCallsBeforeAnswer = offered.findIndex((n) => n === 0);
-    expect(toolCallsBeforeAnswer).toBe(4); // 5 iterations: 4 tool calls, then the answer turn
+    expect(toolCallsBeforeAnswer).toBe(5); // 6 iterations: 5 tool calls, then the answer turn
     expect(String(result.output ?? "")).toContain(ANSWER);
   }, 20000);
 
@@ -139,5 +147,88 @@ describe("reflexion draws on the run's iteration budget", () => {
     const { result } = await runReflexion(configWith(20, 2), { silentAnswerTurn: true });
     expect(result.status).toBe("partial");
     expect(String(result.output ?? "")).toContain(ANSWER);
+  }, 20000);
+});
+
+// Cortex trace 01M7T3GGGZTYN79G1T0JSW4G5V (reflexion, gemini-flash-latest,
+// maxIterations 16, maxRetries 3): the generate pass got an even quarter of the
+// run (4 iterations), spent them on todo bookkeeping and two tool calls, and
+// hit its cap mid-tool-work with no draft. Reflexion synthesized a full report
+// from its evidence and the critique said SATISFIED, but the generate pass's
+// unmet `answer` floor still stood (as `outstandingCriteria` and as a declared,
+// never-satisfied ledger requirement), so the runtime vetoed the run to
+// failure ("unmet requirements: answer"). Now:
+//   (c) the generate pass leads: it draws half the run budget (8 of 16);
+//   (d) the critique's acceptance is the `answer` floor's self-critique verdict,
+//       so a pass that hit its own cap no longer leaves `answer` outstanding.
+//
+// RED-ON-CUT (verified 2026-11-19): drop `{ lead: true }` at reflexion.ts's
+// generate pass: (a) and (c) go red. Drop `answerAccepted` from reflexion's
+// Result, or skip `ledgerWithAcceptedAnswer` in the substrate: (d) goes red.
+describe("reflexion: a generate pass capped mid-tool-work hands off, it does not fail the run", () => {
+  const MANY = Array.from({ length: 14 }, (_, i) => `gather_${i}`);
+  const MANY_SCHEMAS = MANY.map((name) => ({ name, description: `gather ${name} data`, parameters: PARAMS }));
+
+  /** Calls a distinct tool on every tool-offered think call (never answers in the pass); synthesis answers; critique SATISFIED. */
+  function neverAnsweringModel() {
+    const tools = TestLLMService(MANY.map((name, i) => ({ toolCall: { id: `m-${i}`, name, args: { q: `q${i}` } } })));
+    const answer = TestLLMService([{ text: ANSWER }]);
+    const critique = TestLLMService([{ text: "SATISFIED: the response fully addresses the task." }]);
+    const offered: number[] = [];
+    const layer = Layer.succeed(
+      LLMService,
+      LLMService.of({
+        ...tools,
+        complete: (req) => ((req.systemPrompt ?? "").includes("critical evaluator") ? critique : answer).complete(req),
+        stream: (req) => {
+          const n = req.tools?.length ?? 0;
+          offered.push(n);
+          return (n === 0 ? answer.stream(req) : tools.stream(req)).pipe(
+            Effect.map((s) =>
+              Stream.map(s, (ev): StreamEvent =>
+                ev.type === "usage"
+                  ? { type: "usage", usage: { inputTokens: 1000 * offered.length, outputTokens: 50, totalTokens: 1000 * offered.length + 50, estimatedCost: 0 } }
+                  : ev,
+              ),
+            ),
+          );
+        },
+      }),
+    );
+    return { offered, layer };
+  }
+
+  const run = () => {
+    const model = neverAnsweringModel();
+    return Effect.runPromise(
+      provideTestEnvelope(
+        executeReflexion({
+          taskDescription: TASK,
+          taskType: "research",
+          memoryContext: "",
+          availableTools: MANY,
+          availableToolSchemas: MANY_SCHEMAS,
+          config: configWith(16),
+        } as never).pipe(Effect.provide(Layer.merge(model.layer, succeedingToolLayer({ finding: EVIDENCE }, PARAMS)))),
+        buildRunEnvelope({}),
+      ),
+    ).then((result) => ({ result, offered: model.offered }));
+  };
+
+  it("(c) maxIterations 16, maxRetries 3: the generate pass draws half the run (8 think calls), not a quarter (4)", async () => {
+    const { offered } = await run();
+    // Every generate-pass think call offered tools and called one; the critique was satisfied, so no improve pass ran.
+    expect(offered.length).toBe(8);
+  }, 20000);
+
+  it("(d) the critique-accepted answer clears the `answer` floor: no outstanding answer, ledger answer satisfied, not failed", async () => {
+    const { result } = await run();
+    expect(result.status).toBe("partial"); // the generate pass was budget-capped: honest partial, never failed
+    expect(String(result.output ?? "")).toContain(ANSWER);
+    const meta = result.metadata as Record<string, unknown> & { readonly extensions?: { readonly terminalOutcome?: { readonly answerSatisfied?: boolean | null; readonly outstanding?: readonly string[] } } };
+    expect((meta.outstandingCriteria as readonly string[] | undefined) ?? []).not.toContain("answer");
+    expect(meta.extensions?.terminalOutcome?.answerSatisfied).toBe(true);
+    expect(meta.extensions?.terminalOutcome?.outstanding).toBeDefined();
+    expect(meta.extensions?.terminalOutcome?.outstanding).not.toContain("answer");
   }, 20000);
 });
