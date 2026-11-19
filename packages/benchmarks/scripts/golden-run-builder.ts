@@ -11,6 +11,8 @@ import type { ReactiveAgentBuilder } from "@reactive-agents/runtime";
 export const GOLDEN_PROVIDER = "ollama";
 /** Default reproduces the 2026-11-17 capture; override with GOLDEN_MODEL=<ollama model>. */
 export const GOLDEN_MODEL = process.env.GOLDEN_MODEL ?? "gemma4:e4b";
+/** Ollama context window for the capture (the value scratch.ts asks for). */
+export const GOLDEN_NUM_CTX = 8000;
 export const GOLDEN_TASK = `Compare the moon counts of Jupiter, Saturn, and Mars. Write a markdown report to ./report.md and the raw data as a JSON array to ./data.json.`;
 
 /** Context a lifecycle hook handler may receive. Kernel per-turn hooks carry `iteration`; engine hooks may carry `metadata.stepsCount`. */
@@ -60,7 +62,12 @@ interface BuilderStep {
 
 const STEPS: readonly BuilderStep[] = [
   { line: `.withProvider("${GOLDEN_PROVIDER}")`, apply: (b) => b.withProvider(GOLDEN_PROVIDER) },
-  { line: `.withModel("${GOLDEN_MODEL}")`, apply: (b) => b.withModel(GOLDEN_MODEL) },
+  // Object form: `.withModel("id", { numCtx })` is not an overload, so a second
+  // argument would be dropped at runtime. Pins Ollama `num_ctx` to 8,000.
+  {
+    line: `.withModel({ model: "${GOLDEN_MODEL}", numCtx: ${GOLDEN_NUM_CTX} })`,
+    apply: (b) => b.withModel({ model: GOLDEN_MODEL, numCtx: GOLDEN_NUM_CTX }),
+  },
   { line: `.withReasoning()`, apply: (b) => b.withReasoning() },
   // Only the tools the task needs. `builtins: true` attaches every capability
   // tool's schema to every turn; the lean set is what scratch.ts uses.
@@ -69,11 +76,14 @@ const STEPS: readonly BuilderStep[] = [
     apply: (b) => b.withTools({ builtins: ["file-write", "web-search"] }),
   },
   { line: `.withObservability()`, apply: (b) => b.withObservability() },
-  // gemma4:e4b advertises a `thinking` capability; without this every captured
-  // thought step has empty content.
-  { line: `.withThinking(true)`, apply: (b) => b.withThinking(true) },
-  // Debrief synthesis is memory-gated.
-  { line: `.withMemory()`, apply: (b) => b.withMemory() },
+  // Native thinking off, as in scratch.ts: about 2-3 s and 500-1,600 output
+  // tokens faster. Thought steps carry only the model's visible text, so turns
+  // that go straight to a tool call (always turn 0 here) have none.
+  { line: `.withThinking(false)`, apply: (b) => b.withThinking(false) },
+  // Debrief without the memory stack. `.withMemory()` gave the same debrief on
+  // this local-tier run but added a ~0.9 s memory-extraction call on the
+  // critical path (golden-run-2026-11-19b README).
+  { line: `.withDebrief()`, apply: (b) => b.withDebrief() },
   {
     line: `.withReceiptSigning({ privateKeyJwk })`,
     apply: (b, o) => b.withReceiptSigning({ privateKeyJwk: o.privateKeyJwk }),
