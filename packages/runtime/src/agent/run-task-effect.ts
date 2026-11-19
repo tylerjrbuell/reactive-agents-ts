@@ -78,6 +78,7 @@ import {
 } from '@reactive-agents/reasoning'
 import { deriveTaskOutcome, deriveMetadataToolCalls, terminalOutcomeFields } from '../engine/finalize/derive-outcome.js'
 import { isPausedResult } from '../engine/finalize/run-finalize.js'
+import { readRunCost, resultCost, withPostRunCost } from '../engine/finalize/run-cost.js'
 import { deriveReceiptModelId } from '../builder/helpers.js'
 import { appendTaskText, preflightTaskInput, taskInputText, toTaskInputPayload, type TaskInput } from './task-input.js'
 import { resolveReceiptSigningKey, signReceipt } from '../receipt-signing.js'
@@ -416,6 +417,12 @@ export const buildRunTaskEffect = (
                                   .catch(() => r.debrief),
                       }
                     : {}),
+                // The run's final cost: the value finalize attached (the same
+                // one RunCostFinalized carries). A lost debrief join resolves
+                // to the answer's spend flagged incomplete, never a rejection.
+                totalCost: () =>
+                    runFacadeEffect(deps.runtime, readRunCost(r) ?? Effect.succeed(resultCost(r.metadata)))
+                        .catch(() => ({ usd: resultCost(r.metadata).usd, complete: false })),
                 ...(r.error !== undefined ? { error: r.error } : {}),
             }
             // Capture debrief for use as context in subsequent chat() calls.
@@ -586,6 +593,10 @@ export const buildRunTaskEffect = (
                 }),
             )
         }),
+        // The extraction above runs after the engine's meter settled: meter it
+        // into the run's final cost (RunCostFinalized + totalCost(), which wait
+        // for it). metadata.cost stays the engine's settled spend.
+        withPostRunCost(String(taskId), deps.outputSchemaConfig !== undefined),
         // Trust receipt signing (Arc 1 Task 9) — optional, additive. Signs
         // the ALREADY-COMPUTED receipt (attached above, whichever branch
         // produced this result) with the configured Ed25519 key, if any.

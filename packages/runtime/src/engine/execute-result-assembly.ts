@@ -157,6 +157,10 @@ export function assembleTaskResult(
       // Optional — absent when neither source reports a split.
       ...(typeof inputTokens === "number" ? { inputTokens } : {}),
       ...(typeof outputTokens === "number" ? { outputTokens } : {}),
+      // Cost completeness from the same settled meter as `cost`: `false`
+      // when some call had no known price (`cost` is then a lower bound).
+      // Absent = complete. Rides untyped: core ResultMetadata has no field.
+      ...(settledSplit?.costComplete === false ? ({ costComplete: false } as Record<string, unknown>) : {}),
       // A mid-run kernel switch is invisible on ctx.selectedStrategy (the
       // strategy result names the entry strategy); report the switch target.
       strategyUsed: readStrategySwitchedTo(ctx.metadata) ?? ctx.selectedStrategy,
@@ -313,6 +317,7 @@ export function assembleTaskResult(
             runBudgetSpend: {
               tokens: ambientRunMeter.tokens,
               cost: ambientRunMeter.cost,
+              ...(ambientRunMeter.costComplete === false ? { costComplete: false } : {}),
               ...(typeof ambientRunMeter.inputTokens === "number" ? { inputTokens: ambientRunMeter.inputTokens } : {}),
               ...(typeof ambientRunMeter.outputTokens === "number" ? { outputTokens: ambientRunMeter.outputTokens } : {}),
               ...(typeof ambientRunMeter.llmCalls === "number" ? { llmCalls: ambientRunMeter.llmCalls } : {}),

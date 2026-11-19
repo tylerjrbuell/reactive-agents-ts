@@ -4,7 +4,8 @@
  * Owns: (1) the structured `error` log line for a failed run (moved verbatim
  * from execution-engine.ts, former `Effect.tapError` block) and (2) the
  * `AgentAborted` sentinel published when the run's effect ends in failure,
- * defect or interrupt, so a trace never silently lacks a terminal event.
+ * defect or interrupt, so a trace never silently lacks a terminal event,
+ * followed by the run's one `RunCostFinalized` (live run-meter total).
  *
  * Measurement only: the exit is observed and re-propagated unchanged (same
  * success value, same cause). Publishing swallows its own failures.
@@ -14,6 +15,8 @@ import type { RunAbortCause, RunAbortReason, Task } from "@reactive-agents/core"
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { ObservableLoggerService } from "@reactive-agents/observability";
 import type { EbLike } from "./runtime-context.js";
+import { publishAbortedRunCost } from "./finalize/run-cost.js";
+import { withInFlightLlmTracking } from "./llm-in-flight.js";
 
 const ERROR_CAP = 200;
 
@@ -71,10 +74,17 @@ export interface RunExitDeps {
  * Pipeable wrapper for the root run effect: logs a typed failure and, on any
  * non-success exit, publishes `AgentAborted`. The wrapped effect's success and
  * failure channels are unchanged.
+ *
+ * Also tracks the run's LLM calls cut in flight (`llm-in-flight.ts`) for the
+ * whole run, so the settled spend and the aborted-run cost can say when a
+ * started call never reported its usage.
  */
 export const observeRunExit =
   (deps: RunExitDeps) =>
   <A, E, R>(self: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+    withInFlightLlmTracking(deps.eb, String(deps.task.id), observeExit(deps, self));
+
+const observeExit = <A, E, R>(deps: RunExitDeps, self: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     self.pipe(
       Effect.tapError((err) => {
         // All RuntimeErrors extend Data.TaggedError which extends Error
@@ -91,7 +101,7 @@ export const observeRunExit =
       Effect.onExit((exit) => {
         if (Exit.isSuccess(exit) || deps.eb === null) return Effect.void;
         const rc = deps.task.metadata?.context?.["runContext"] as
-          | { rootRunId?: string; parentRunId?: string; depth?: number }
+          | { runId?: string; rootRunId?: string; parentRunId?: string; depth?: number }
           | undefined;
         const error = describeAbort(exit.cause);
         const durationMs = Date.now() - deps.executionStartMs;
@@ -108,6 +118,16 @@ export const observeRunExit =
           ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
           ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),
           ...(typeof rc?.depth === "number" ? { depth: rc.depth } : {}),
-        }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-run-exit.ts:aborted", tag: errorTag(err) })));
+        }).pipe(
+          Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/execute-run-exit.ts:aborted", tag: errorTag(err) })),
+          // The run's one RunCostFinalized: an aborted run never reaches finalize.
+          Effect.zipRight(
+            publishAbortedRunCost(deps.eb, {
+              taskId: String(deps.task.id),
+              agentId: deps.agentId,
+              ...(rc?.runId ? { runId: rc.runId } : {}),
+            }),
+          ),
+        );
       }),
     );

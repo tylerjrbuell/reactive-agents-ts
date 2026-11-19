@@ -1,5 +1,6 @@
 import { describe, test, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
+import { priceFor } from "@reactive-agents/llm-provider";
 import {
   heuristicClassify,
   analyzeComplexity,
@@ -57,8 +58,8 @@ describe("Complexity Router", () => {
     const sonnet = getModelCostConfig("sonnet");
     const opus = getModelCostConfig("opus");
 
-    expect(haiku.costPer1MInput).toBeLessThan(sonnet.costPer1MInput);
-    expect(sonnet.costPer1MInput).toBeLessThan(opus.costPer1MInput);
+    expect(haiku.costPer1MInput!).toBeLessThan(sonnet.costPer1MInput!);
+    expect(sonnet.costPer1MInput!).toBeLessThan(opus.costPer1MInput!);
     expect(opus.quality).toBe(1.0);
   });
 
@@ -112,7 +113,7 @@ describe("Complexity Router", () => {
   test("routes to Gemini models when provider is gemini", async () => {
     const config = await Effect.runPromise(routeToModel("What is 2+2?", undefined, "gemini"));
     expect(config.provider).toBe("gemini");
-    expect(config.model).toBe("gemini-2.0-flash");
+    expect(config.model).toBe("gemini-2.5-flash");
   });
 
   test("getModelCostConfig returns provider-specific config", () => {
@@ -294,7 +295,34 @@ describe("Complexity Router", () => {
     const sonnetCost = estimateCost(text, sonnet);
     const opusCost = estimateCost(text, opus);
 
-    expect(haikuCost).toBeLessThan(sonnetCost);
-    expect(sonnetCost).toBeLessThan(opusCost);
+    expect(haikuCost!).toBeLessThan(sonnetCost!);
+    expect(sonnetCost!).toBeLessThan(opusCost!);
+  });
+
+  // ─── Audit 2026-11-19 F3: router prices come from the PriceBook ───
+
+  test("every routed tier model is priced, at the PriceBook's rates", () => {
+    for (const provider of ["anthropic", "openai", "gemini", "ollama", "litellm"] as const) {
+      for (const tier of ["haiku", "sonnet", "opus"] as const) {
+        const config = getModelCostConfig(tier, provider);
+        const price = priceFor(provider, config.model);
+        expect(Option.isSome(price)).toBe(true);
+        if (Option.isNone(price)) continue;
+        expect(config.costPer1MInput).toBe(price.value.input);
+        expect(config.costPer1MOutput).toBe(price.value.output);
+      }
+    }
+  });
+
+  test("claude-opus-4-7 routes at its billed $5/$25, not the old $15/$75 table row", () => {
+    const opus = getModelCostConfig("opus", "anthropic");
+    expect(opus.model).toBe("claude-opus-4-7");
+    expect(opus.costPer1MInput).toBe(5);
+    expect(opus.costPer1MOutput).toBe(25);
+  });
+
+  test("an unpriced model has an unknown estimate, never $0", () => {
+    const unpriced = { ...getModelCostConfig("haiku"), model: "no-such-model", costPer1MInput: undefined };
+    expect(estimateCost("hello world", unpriced)).toBeUndefined();
   });
 });

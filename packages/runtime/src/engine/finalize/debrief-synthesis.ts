@@ -41,6 +41,7 @@ import type { ToolCallEntry } from "../execute-event-collectors.js";
 import { applyVerificationOutcome } from "./verification-outcome.js";
 import { deriveFailureCause } from "./failure-cause.js";
 import { isPausedResult } from "./run-finalize.js";
+import { NO_SYNTHESIS_COST, synthesisCostOf, type DebriefFiberValue } from "./run-cost.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -288,35 +289,42 @@ export const prepareDebrief = (
 export const finalizeDebriefBackground = (
   deps: DebriefSynthesisDeps,
   prepared: PreparedDebrief,
-): Effect.Effect<{ debrief: AgentDebrief | undefined; tokensUsed: number }, never> => {
+): Effect.Effect<DebriefFiberValue, never> => {
   const { ctx, task, eb, terminatedByRaw, sanitizedOutput } = deps;
   const { debriefInput, fallbackDebrief, shouldFinalize, shouldSynthesizeLLM } = prepared;
+  // No debrief LLM call: nothing to add to the run's cost.
+  const noCall: DebriefFiberValue = { debrief: fallbackDebrief, tokensUsed: 0, synthesisCost: NO_SYNTHESIS_COST };
 
   return Effect.gen(function* () {
     if (!shouldFinalize) {
-      return { debrief: undefined as AgentDebrief | undefined, tokensUsed: 0 };
+      return { debrief: undefined, tokensUsed: 0, synthesisCost: NO_SYNTHESIS_COST } satisfies DebriefFiberValue;
     }
 
     // Resolve the final debrief: rich LLM synthesis when non-trivial + LLM
-    // available, else the deterministic fallback (always available).
-    const debriefAndTokens: { debrief: AgentDebrief | undefined; tokensUsed: number } =
+    // available, else the deterministic fallback (always available). A call
+    // that was made but reported no usage (failed, or no usage) has an
+    // unknown cost (`synthesisCostOf`), never $0.
+    const debriefAndTokens: DebriefFiberValue =
       yield* (shouldSynthesizeLLM
         ? Effect.serviceOption(LLMService).pipe(
             Effect.flatMap((llmOpt) => {
               if (llmOpt._tag !== "Some") {
-                return Effect.succeed({ debrief: fallbackDebrief, tokensUsed: 0 });
+                return Effect.succeed(noCall);
               }
               return synthesizeDebrief(debriefInput).pipe(
                 Effect.provideService(LLMService, llmOpt.value),
-                Effect.map((result) => ({ debrief: (result.debrief as AgentDebrief | undefined) ?? fallbackDebrief, tokensUsed: result.tokensUsed })),
+                Effect.map((result): DebriefFiberValue => {
+                  const synthesized = result.debrief as AgentDebrief | undefined;
+                  return { debrief: synthesized ?? fallbackDebrief, tokensUsed: result.tokensUsed, synthesisCost: synthesisCostOf(synthesized) };
+                }),
                 // On LLM failure fall back to the deterministic debrief so the
                 // store + event always see a record (was `undefined` pre-split).
-                Effect.catchAll(() => Effect.succeed({ debrief: fallbackDebrief, tokensUsed: 0 })),
+                Effect.catchAll(() => Effect.succeed({ ...noCall, synthesisCost: synthesisCostOf(undefined) })),
               );
             }),
-            Effect.catchAll(() => Effect.succeed({ debrief: fallbackDebrief, tokensUsed: 0 })),
+            Effect.catchAll(() => Effect.succeed(noCall)),
           )
-        : Effect.succeed({ debrief: fallbackDebrief, tokensUsed: 0 }));
+        : Effect.succeed(noCall));
 
     const { debrief, tokensUsed } = debriefAndTokens;
 
@@ -374,8 +382,9 @@ export const finalizeDebriefBackground = (
     // it (`settleRunSpend` → `settleRunMeter`) before forking this, so its LLM
     // call is ignored by the meter. Its spend is reported instead on
     // `debrief.metrics.synthesisTokens` (debriefRich() + DebriefCompleted),
-    // its LLM call keyed to the run's taskId.
-    return { debrief, tokensUsed };
+    // its LLM call keyed to the run's taskId. `synthesisCost` feeds the run's
+    // final total (`RunCostFinalized`, `totalCost()`; see run-cost.ts).
+    return debriefAndTokens;
   });
 };
 

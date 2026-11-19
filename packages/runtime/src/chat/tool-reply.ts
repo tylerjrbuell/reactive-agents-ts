@@ -42,6 +42,8 @@ export function assembleToolReply(
     ...(result.metadata.outputTokens !== undefined ? { outputTokens: result.metadata.outputTokens } : {}),
     steps: result.metadata.stepsCount,
     cost: result.metadata.cost,
+    // Partially priced run: `cost` is a lower bound (absent = complete).
+    ...(result.metadata.costComplete === false ? { costComplete: false } : {}),
     reasoningSteps: result.metadata.reasoningSteps,
     scratchpad,
     ...(citationCheck ? { citationCheck } : {}),

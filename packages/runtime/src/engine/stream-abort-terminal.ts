@@ -8,7 +8,9 @@
  * run as live forever. {@link watchRunTerminal} gives the abort path one
  * `ExecutionCancelled` for the run, published only while the run is still
  * open: a run that already published a terminal, or whose producer finished
- * on its own (completed, failed, paused), gets none.
+ * on its own (completed, failed, paused), gets none. When the run has no
+ * `RunCostFinalized` yet (cut before the engine started), one follows with
+ * an unknown cost.
  *
  * Consumers that close aborted runs themselves (Cortex's `closeOpenRuns`)
  * stay correct: they drop a run once they see its terminal event.
@@ -16,6 +18,7 @@
 import { Effect } from "effect";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { EbLike } from "./runtime-context.js";
+import { publishRunCostFinalized } from "./finalize/run-cost.js";
 
 /** Bus events that end a run. */
 const TERMINAL_TAGS = ["AgentCompleted", "TaskFailed", "ExecutionCancelled"] as const;
@@ -35,9 +38,13 @@ export interface RunTerminalWatch {
  * `AgentCompleted`, `TaskFailed` and `ExecutionCancelled` for this taskId
  * only (sub-agent runs on the same bus are ignored).
  */
-export const watchRunTerminal = (eb: EbLike, taskId: string): Effect.Effect<RunTerminalWatch> =>
+export const watchRunTerminal = (eb: EbLike, taskId: string, agentId: string): Effect.Effect<RunTerminalWatch> =>
   Effect.gen(function* () {
     let settled = false;
+    // The interrupted engine publishes the run's RunCostFinalized itself
+    // (execute-run-exit.ts); only a run cut before the engine wrapped it is
+    // left without one, and gets it here.
+    let costFinalized = false;
     const unsubscribes: Array<() => void> = [];
     for (const tag of TERMINAL_TAGS) {
       const unsubscribe = yield* eb.on(tag, (event) =>
@@ -47,13 +54,20 @@ export const watchRunTerminal = (eb: EbLike, taskId: string): Effect.Effect<RunT
       );
       unsubscribes.push(unsubscribe);
     }
+    unsubscribes.push(
+      yield* eb.on("RunCostFinalized", (event) =>
+        Effect.sync(() => {
+          if (event.taskId === taskId) costFinalized = true;
+        }),
+      ),
+    );
     const release = Effect.sync(() => {
       for (const unsubscribe of unsubscribes.splice(0)) unsubscribe();
     });
     const publishIfOpen = Effect.suspend(() => {
       if (settled) return Effect.void;
       settled = true;
-      return eb.publish({ _tag: "ExecutionCancelled", taskId }).pipe(
+      const cancelled = eb.publish({ _tag: "ExecutionCancelled", taskId }).pipe(
         Effect.catchAll((err) =>
           emitErrorSwallowed({
             site: "runtime/src/engine/stream-abort-terminal.ts:ExecutionCancelled",
@@ -61,6 +75,19 @@ export const watchRunTerminal = (eb: EbLike, taskId: string): Effect.Effect<RunT
           }),
         ),
       );
+      // No run meter is readable here: the cost is unknown, not $0.
+      return costFinalized
+        ? cancelled
+        : cancelled.pipe(
+            Effect.zipRight(
+              publishRunCostFinalized(
+                eb,
+                { taskId, agentId },
+                { usd: 0, complete: false },
+                "runtime/src/engine/stream-abort-terminal.ts:RunCostFinalized",
+              ),
+            ),
+          );
     });
     return {
       settle: Effect.sync(() => {

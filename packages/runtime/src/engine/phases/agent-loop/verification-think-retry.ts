@@ -15,7 +15,7 @@
  * test files.
  */
 import { Effect } from "effect";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { addCost, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { MessageContent, Task } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
@@ -246,7 +246,11 @@ export const runVerificationThinkRetry = (
       ],
       tokensUsed:
         c.tokensUsed + (response.usage?.totalTokens ?? 0),
-      cost: c.cost + (response.usage?.estimatedCost ?? 0),
+      // Known cost only: an unpriced call adds nothing here. Completeness is
+      // the run meter's (this call fed it through the observable wrapper);
+      // settleRunSpend replaces ctx.cost with the meter total before any
+      // reader sees it.
+      cost: addCost({ usd: c.cost, complete: true }, response.usage?.estimatedCost).usd,
       iteration: c.iteration + 1,
       metadata: {
         ...c.metadata,

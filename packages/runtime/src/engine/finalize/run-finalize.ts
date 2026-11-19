@@ -1,7 +1,8 @@
 /**
  * Run Finalization block.
  *
- * Owns: AgentCompleted/TaskCompleted event emission, entropy trace attach,
+ * Owns: AgentCompleted/TaskCompleted event emission, the run's final cost
+ * (RunCostFinalized + totalCost(), via run-cost.ts), entropy trace attach,
  * token/cost metrics emission, completion event emission, non-live mode
  * console summary.
  *
@@ -21,6 +22,7 @@ import type { EbLike } from "../runtime-context.js";
 import { readTerminalOutcome } from "./terminal-outcome-read.js";
 import { foldRuntimeAuthority } from "./status-authority.js";
 import { kernelIterationArg } from "./result-verification.js";
+import { finalizeRunCost, resultCost } from "./run-cost.js";
 
 // ─── Deps interface ───────────────────────────────────────────────────────────
 
@@ -192,7 +194,12 @@ export const finalizeRun = (
         durationMs: Date.now() - executionStartMs,
         ...(!executionSucceeded && result.error ? { error: result.error } : {}),
         ...(terminationReason ? { terminationReason } : {}),
-        ...(typeof result.metadata?.cost === "number" ? { totalCostUsd: result.metadata.cost } : {}),
+        // Answer spend from the settled run meter, with its completeness
+        // (`false` = some call had no known price; the debrief call is on
+        // the run's RunCostFinalized, not here).
+        ...(typeof result.metadata?.cost === "number"
+          ? { totalCostUsd: result.metadata.cost, costComplete: resultCost(result.metadata).complete }
+          : {}),
         ...(rc?.runId ? { runId: rc.runId } : {}),
         ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
         ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),
@@ -214,6 +221,16 @@ export const finalizeRun = (
         ...(config.defaultModel ? { modelId: String(config.defaultModel) } : {}),
       }).pipe(Effect.catchAll((err) => emitErrorSwallowed({ site: "runtime/src/engine/finalize/run-finalize.ts:task-completed-event", tag: errorTag(err) })));
     }
+
+    // The run's final billed cost: RunCostFinalized (once, after the debrief
+    // call settles when one runs) + the value result.totalCost() resolves to.
+    // A paused run has not ended: the value is attached, nothing published.
+    const costRc = task.metadata?.context?.["runContext"] as { runId?: string } | undefined;
+    yield* finalizeRunCost({
+      result,
+      eb: isPausedResult(result) ? null : eb,
+      ids: { taskId: ctx.taskId, agentId: config.agentId, ...(costRc?.runId ? { runId: costRc.runId } : {}) },
+    });
 
     // Attach entropy trace to result metadata for dashboard consumption
     if (entropyLog.length > 0) {

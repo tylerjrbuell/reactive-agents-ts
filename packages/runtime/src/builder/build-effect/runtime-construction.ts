@@ -236,7 +236,7 @@ export interface BuilderRuntimeStateView {
   };
   readonly _pricingRegistry: Record<
     string,
-    { readonly input: number; readonly output: number }
+    import("@reactive-agents/llm-provider").PricingRow
   >;
   readonly _calibration?: CalibrationMode;
   readonly _calibrationOptions?: CalibrationOptions;

@@ -53,10 +53,18 @@ export const makeChildSpendProbe = (): ChildSpendProbe => {
   return { hooks: [hook], read: () => (childMeter === null ? { tokens: 0, cost: 0 } : { ...childMeter }) };
 };
 
-/** A successful child's spend, from the run meter its result reports. */
-export const spendOfChildResult = (md: Partial<ResultMetadata> | undefined): RunBudgetSpend => ({
+/**
+ * A successful child's spend, from the run meter its result reports. The
+ * child's `costComplete: false` (some child call had no known price) carries
+ * into the parent's meter, so an unpriced child makes the parent's cost
+ * incomplete too.
+ */
+export const spendOfChildResult = (
+  md: (Partial<ResultMetadata> & { readonly costComplete?: boolean }) | undefined,
+): RunBudgetSpend => ({
   tokens: md?.tokensUsed ?? 0,
   cost: md?.cost ?? 0,
+  ...(md?.costComplete === false ? { costComplete: false } : {}),
   inputTokens: md?.inputTokens,
   outputTokens: md?.outputTokens,
   llmCalls: md?.llmCalls,

@@ -33,8 +33,31 @@ export interface StrategySwitchRecord {
 export interface AgentResultMetadata {
     /** Total wall-clock duration in milliseconds. */
     readonly duration: number
-    /** Estimated cost in USD (calculated from token count). */
+    /**
+     * Run cost in USD from the run meter: every LLM call up to the result,
+     * priced per call from the full provider usage (cache, reasoning, tiers)
+     * through the PriceBook, plus delegated children's spend.
+     *
+     * A lower bound when {@link costComplete} is `false` (some model had no
+     * known price; its calls add nothing rather than a guess).
+     *
+     * Scope: the meter settles when the result is assembled. The background
+     * debrief synthesis (present when `debriefRich` is set) runs after and is
+     * NOT included; its cost is `AgentDebrief.metrics.synthesisTokens.cost`.
+     * Neither is the structured-output extraction call `.withOutputSchema()`
+     * makes when the answer is not already schema-shaped JSON.
+     * Per-call `LLMRequestCompleted` events do include those calls, so a sum
+     * of the run's events can exceed `cost`. For the billed total, debrief
+     * and extraction included, await `result.totalCost()` or read the run's
+     * `RunCostFinalized` event.
+     */
     readonly cost: number
+    /**
+     * `false` when at least one LLM call in the run (children included) had
+     * no known price, so {@link cost} understates the spend. Absent means
+     * every call was priced. Read it before showing `cost` as a total.
+     */
+    readonly costComplete?: boolean
     /** Tokens the run spent up to its result; excludes background debrief synthesis (see `AgentDebrief.metrics.synthesisTokens`). */
     readonly tokensUsed: number
     /** Prompt/input tokens (optional — provider may not split; see core ResultMetadataSchema). */
@@ -181,7 +204,7 @@ export interface AgentResultMetadata {
      * absent on un-budgeted runs. `tokensUsed` above counts THIS agent's own
      * calls; this field is the true run spend the budget gates on.
      */
-    readonly runBudgetSpend?: { readonly tokens: number; readonly cost: number }
+    readonly runBudgetSpend?: { readonly tokens: number; readonly cost: number; readonly costComplete?: boolean }
     /**
      * W0.5 result→trace linkage. The run's ULID id, equal to the engine
      * `taskId`, the `runId` stamped on every trace event, and the base name
@@ -331,6 +354,28 @@ export interface AgentResult {
      * Present only when a debrief was produced (reasoning path + `.withMemory()`).
      * The debrief call's own spend (outside `metadata.tokensUsed`) is `metrics.synthesisTokens`. */
     readonly debriefRich?: () => Promise<AgentDebrief | undefined>
+    /**
+     * The run's final billed cost: {@link AgentResultMetadata.cost} plus the
+     * background debrief LLM call when one ran, plus the `.withOutputSchema()`
+     * extraction call when one ran. The same value as the run's
+     * `RunCostFinalized` event.
+     *
+     * Resolves as soon as the debrief call settles, at once when no debrief
+     * runs. Never rejects: if the debrief fiber is lost (e.g. `dispose()`
+     * interrupted it) it resolves to `cost` with `complete: false`.
+     * `complete` is `false` when any call (debrief included) had no known
+     * price, or when a call was started but cut before it reported usage
+     * (the provider may still bill it); `usd` is then a lower bound.
+     *
+     * Present on `run()` results. `metadata.cost` stays the pre-debrief spend.
+     * On a run paused for approval or interaction it resolves to the spend so
+     * far; the resumed run reports its own total.
+     *
+     * @example
+     * const result = await agent.run("Summarize the report")
+     * const { usd, complete } = await result.totalCost!()
+     */
+    readonly totalCost?: () => Promise<{ readonly usd: number; readonly complete: boolean }>
     /** Error message when `success` is false. */
     readonly error?: string
     /** Typed structured output when `.withOutputSchema()` was set; undefined on parse-fail (lenient). */

@@ -9,7 +9,7 @@
 import { Effect, Option, type ManagedRuntime } from 'effect'
 import { ToolService } from '@reactive-agents/tools'
 import type { EnvironmentSnapshotInput } from '../chat/environment-snapshot.js'
-import { EventBus, emitErrorSwallowed, errorTag, generateTaskId, type RunOrigin, type RunPosture } from '@reactive-agents/core'
+import { EMPTY_COST_SUM, EventBus, addCost, emitErrorSwallowed, errorTag, generateTaskId, type RunOrigin, type RunPosture } from '@reactive-agents/core'
 import { originCarry, planPosture, seedCarry, snapshotToTodoSeed, type TodoSeedOption } from '../chat/todo-seed.js'
 import { watchChecklist, type PlanRuntime } from './plan-watch.js'
 import { workspaceCarry, type WorkspaceOption } from '../engine/start-run.js'
@@ -72,6 +72,8 @@ export const makeChatComplete =
                 ? { outputTokens: response.usage.outputTokens }
                 : {}),
             cost: response.usage?.estimatedCost,
+            // An unpriced call (or no usage) is unknown, not free (core addCost rule).
+            ...(addCost(EMPTY_COST_SUM, response.usage?.estimatedCost).complete ? {} : { costComplete: false }),
         }
     }
 

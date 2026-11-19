@@ -1,4 +1,8 @@
+import type { PriceSource } from "@reactive-agents/core";
 import type { AgentStreamEvent } from "../stream-types.js";
+
+const PRICE_SOURCES: readonly PriceSource[] = ["provider-reported", "price-book", "user", "unknown"];
+const isPriceSource = (v: unknown): v is PriceSource => PRICE_SOURCES.some((s) => s === v);
 
 /**
  * Project a core-bus `LLMRequestCompleted` event onto the public stream's
@@ -28,6 +32,7 @@ export function toTokenUsageStreamEvent(
     durationMs?: unknown;
     firstTokenMs?: unknown;
     estimatedCost?: unknown;
+    priceSource?: unknown;
     iteration?: unknown;
   };
   if (String(e.taskId ?? "") !== taskId) return undefined;
@@ -60,7 +65,11 @@ export function toTokenUsageStreamEvent(
     ...(typeof e.firstTokenMs === "number" && Number.isFinite(e.firstTokenMs)
       ? { firstTokenMs: e.firstTokenMs }
       : {}),
-    costUsd: typeof e.estimatedCost === "number" ? e.estimatedCost : 0,
+    // Unknown price stays absent, never $0 (consumers sum with core addCost).
+    ...(typeof e.estimatedCost === "number" && Number.isFinite(e.estimatedCost)
+      ? { costUsd: e.estimatedCost }
+      : {}),
+    ...(isPriceSource(e.priceSource) ? { priceSource: e.priceSource } : {}),
     ...(typeof e.iteration === "number" ? { iteration: e.iteration } : {}),
   };
 }

@@ -103,7 +103,7 @@ export interface ChatEngineCapabilities {
      * role `budgetTokens: 1024` played inside `direct path` before the fold.
      */
     budgetTokens?: number;
-  }) => Promise<{ message: string; tokens?: number; inputTokens?: number; outputTokens?: number; cost?: number }>;
+  }) => Promise<{ message: string; tokens?: number; inputTokens?: number; outputTokens?: number; cost?: number; costComplete?: boolean }>;
   /**
    * ChatTurn event publication port. Backed by EventBus. Optional — hosts without an
    * observable surface omit it and the engine skips emission (publish is a

@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { gatewayComplete } from "@reactive-agents/reasoning";
 import type { FinalAnswerCapture } from "@reactive-agents/tools";
-import type { TerminatedBy } from "@reactive-agents/core";
+import { EMPTY_COST_SUM, addCost, type TerminatedBy } from "@reactive-agents/core";
 import { deriveRunOutcome, foldRuntimeVeto } from "./engine/util.js";
 
 /**
@@ -156,7 +156,10 @@ export interface AgentDebrief {
       /** Completion tokens; absent when the provider reported a total only. */
       readonly output?: number;
       readonly total: number;
+      /** Known USD; 0 with `costComplete: false` when the model's price is unknown. */
       readonly cost: number;
+      /** `false` when the debrief model's price is unknown (`cost` is then not its spend). Absent = priced. */
+      readonly costComplete?: boolean;
       /** LLM calls the debrief made (1 when this field is present). */
       readonly calls: number;
     };
@@ -458,7 +461,11 @@ export function synthesizeDebrief(
                 ...(llmResponse.usage.inputTokens !== undefined ? { input: llmResponse.usage.inputTokens } : {}),
                 ...(llmResponse.usage.outputTokens !== undefined ? { output: llmResponse.usage.outputTokens } : {}),
                 total: llmResponse.usage.totalTokens,
-                cost: llmResponse.usage.estimatedCost ?? 0,
+                // Known USD; an unknown price is flagged, never a silent $0
+                // (same shape as the run meter: cost + costComplete).
+                ...((sum) => (sum.complete ? { cost: sum.usd } : { cost: sum.usd, costComplete: false }))(
+                  addCost(EMPTY_COST_SUM, llmResponse.usage.estimatedCost),
+                ),
                 calls: 1,
               },
             }

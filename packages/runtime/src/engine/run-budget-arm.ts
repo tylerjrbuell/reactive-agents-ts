@@ -34,12 +34,18 @@
 import { Effect, FiberRef } from "effect";
 import {
   CurrentRunBudget,
+  addRunSpend,
+  costSumOf,
   makeRunBudgetMeter,
   settleRunMeter,
   withRunBudgetMeter,
   type RunBudgetMeter,
 } from "@reactive-agents/reasoning";
 import type { ExecutionContext } from "../types.js";
+import { hasInFlightLlmCall } from "./llm-in-flight.js";
+
+/** Spend of a call whose usage never arrived: nothing counted, cost unknown. */
+export const UNKNOWN_SPEND = { tokens: 0, cost: 0, costComplete: false, llmCalls: 0 } as const;
 import { rootContext } from "@reactive-agents/core";
 import { ensureRunScope } from "@reactive-agents/core/internal/run-scope";
 
@@ -88,12 +94,19 @@ export const armRunBudget = <T extends { readonly id: unknown; readonly agentId?
  * meter owns the "no spend after settle" rule; callers need no detach.
  *
  * A half the meter does not know (some call reported a total only) is
- * recorded absent, never as 0.
+ * recorded absent, never as 0. Cost completeness rides the split: when some
+ * call had no known price, `ctx.cost` is a lower bound and the split records
+ * `costComplete: false` (read through reasoning's `costSumOf`).
  */
 export const settleRunSpend = <C extends Pick<ExecutionContext, "tokensUsed" | "cost" | "metadata">>(
   ctx: C,
 ): Effect.Effect<C> =>
-  Effect.map(FiberRef.get(CurrentRunBudget), (meter) => {
+  Effect.gen(function* () {
+    // A call started but never reported (interrupted in flight, e.g. raced by
+    // a timeout) may be billed with no usage the meter could add: the run's
+    // cost is a lower bound (llm-in-flight.ts).
+    if (yield* hasInFlightLlmCall) yield* addRunSpend(UNKNOWN_SPEND);
+    const meter = yield* FiberRef.get(CurrentRunBudget);
     if (meter === null) return ctx;
     settleRunMeter(meter);
     return {
@@ -116,6 +129,11 @@ export interface SettledRunSplit {
   readonly inputTokens?: number;
   readonly outputTokens?: number;
   readonly llmCalls: number;
+  /**
+   * `false` when at least one metered call had no known price, so the run's
+   * `cost` understates its spend. Absent = complete (only `false` is written).
+   */
+  readonly costComplete?: false;
 }
 
 /** ctx.metadata key `settleRunSpend` writes and {@link readSettledRunSplit} reads. */
@@ -125,6 +143,7 @@ const splitOf = (meter: RunBudgetMeter): SettledRunSplit => ({
   ...(meter.inputTokens !== undefined ? { inputTokens: meter.inputTokens } : {}),
   ...(meter.outputTokens !== undefined ? { outputTokens: meter.outputTokens } : {}),
   llmCalls: meter.llmCalls ?? 0,
+  ...(costSumOf(meter).complete ? {} : { costComplete: false as const }),
 });
 
 const isOptionalNumber = (v: unknown): boolean => v === undefined || typeof v === "number";
@@ -134,6 +153,8 @@ const isSettledRunSplit = (v: unknown): v is SettledRunSplit =>
   v !== null &&
   isOptionalNumber((v as Record<string, unknown>)["inputTokens"]) &&
   isOptionalNumber((v as Record<string, unknown>)["outputTokens"]) &&
+  ((v as Record<string, unknown>)["costComplete"] === undefined ||
+    (v as Record<string, unknown>)["costComplete"] === false) &&
   typeof (v as Record<string, unknown>)["llmCalls"] === "number";
 
 /** The split `settleRunSpend` recorded; `undefined` when no meter was settled. */

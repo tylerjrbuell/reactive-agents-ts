@@ -194,7 +194,7 @@ export const makeExecuteStream =
       );
       const eb: EbLike | null = ebOpt._tag === "Some" ? (ebOpt.value as EbLike) : null;
       // An aborted stream's terminal bus event (stream-abort-terminal.ts).
-      const runTerminal = eb ? yield* watchRunTerminal(eb, String(task.id)) : undefined;
+      const runTerminal = eb ? yield* watchRunTerminal(eb, String(task.id), config.agentId): undefined;
 
       if (eb) {
         yield* eb

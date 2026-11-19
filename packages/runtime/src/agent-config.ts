@@ -9,7 +9,7 @@ import { Schema } from "effect";
 import { DurableRetentionSchema } from "./services/run-store-retention.js";
 import type { WebSearchConfig } from "@reactive-agents/tools";
 import { ReasoningStrategy } from "@reactive-agents/core";
-import { LLMProviderType } from "@reactive-agents/llm-provider";
+import { LLMProviderType, ModelPricingSchema } from "@reactive-agents/llm-provider";
 import { RouteSpec } from "@reactive-agents/channels";
 import type { ReactiveAgentBuilder } from "./builder.js";
 import type { AuthoredApprovalPolicy } from "@reactive-agents/reasoning";
@@ -900,11 +900,11 @@ export const AgentConfigSchema = Schema.Struct({
       streaming: Schema.optional(Schema.Boolean),
     }),
   ),
-  /** Custom pricing registry. */
+  /** Custom pricing registry, $/1M tokens (cache rates optional; user pricing wins). */
   pricingRegistry: Schema.optional(
     Schema.Record({
       key: Schema.String,
-      value: Schema.Struct({ input: Schema.Number, output: Schema.Number }),
+      value: ModelPricingSchema,
     }),
   ),
   /** Background data injected into reasoning memory context. */

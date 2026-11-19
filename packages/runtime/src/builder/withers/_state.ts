@@ -226,7 +226,7 @@ export interface BuilderState {
   // pricing
   _pricingRegistry: Record<
     string,
-    { readonly input: number; readonly output: number }
+    import("@reactive-agents/llm-provider").PricingRow
   >;
   _pricingProvider?: import("@reactive-agents/llm-provider").PricingProvider;
 

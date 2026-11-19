@@ -589,7 +589,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     private _documentStore?: WithDocumentsOptions['store']
     private _pricingRegistry: Record<
         string,
-        { readonly input: number; readonly output: number }
+        import('@reactive-agents/llm-provider').PricingRow
     > = {}
     private _pricingProvider?: import('@reactive-agents/llm-provider').PricingProvider
     private _skillsConfig?: SkillsOptions
@@ -1180,7 +1180,7 @@ export class ReactiveAgentBuilder<TOut = unknown> {
     withModelPricing(
         registry: Record<
             string,
-            { readonly input: number; readonly output: number }
+            import('@reactive-agents/llm-provider').ModelPricing
         >
     ): this {
         applyWithModelPricing(asBuilderState(this), registry)

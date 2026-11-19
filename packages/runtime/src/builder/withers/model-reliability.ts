@@ -15,15 +15,18 @@ import type { BuilderState } from './_state.js'
  * Sets programmatic pricing for specific models.
  * Useful for explicitly overriding costs for known or custom models.
  *
- * @param registry - Record mapping model IDs to input/output token cost per 1 million tokens
+ * @param registry - Record mapping model IDs to $/1M-token rates: `input` and
+ *   `output` required; `cacheRead`, `cacheWrite5m`, `cacheWrite1h` optional
+ *   (an omitted cache rate bills those tokens at `input`)
  * @returns `this` for chaining
- * The `CapabilityRegistry` also resolves model pricing automatically
- * from the provider's published rates; use this explicit override for
- * custom / proxied models whose pricing the registry can't infer.
+ * Models without a user price are priced from the bundled PriceBook snapshot
+ * (`priceFor` in `@reactive-agents/llm-provider`); a model in neither has an
+ * UNKNOWN price (cost absent, never $0). User pricing always wins, including
+ * over rows fetched by `withDynamicPricing`.
  */
 export const applyWithModelPricing = (state: BuilderState,     registry: Record<
         string,
-        { readonly input: number; readonly output: number }
+        import('@reactive-agents/llm-provider').ModelPricing
     >) => {
     state._pricingRegistry = { ...state._pricingRegistry, ...registry }
 }
@@ -33,8 +36,12 @@ export const applyWithModelPricing = (state: BuilderState,     registry: Record<
  * Register a remote/dynamic pricing provider.
  * Fetches latest pricing data during `.buildEffect()` or `.build()`.
  *
- * @param provider - PricingProvider implementation (e.g., `openRouterPricingProvider`)
+ * @param provider - PricingProvider implementation (e.g., `openRouterPricingProvider`);
+ *   its rows may carry the optional cache rates of `ModelPricing`
  * @returns `this` for chaining
+ * Remote rows never override `withModelPricing`. Without `withStrictValidation`,
+ * a failed fetch never fails the build: it warns (`LoadBearingFailure:dynamic-pricing`)
+ * and prices from user pricing plus the bundled PriceBook snapshot.
  * Dynamic pricing providers can also register with the
  * `CapabilityRegistry` directly; this explicit builder wiring is handy
  * for ad-hoc overrides scoped to a single agent.

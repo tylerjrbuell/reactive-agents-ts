@@ -79,8 +79,18 @@ export interface ChatReply {
   outputTokens?: number;
   /** Reasoning steps taken (tool-capable path only) */
   steps?: number;
-  /** Estimated cost in USD (when available) */
+  /**
+   * Cost in USD. Direct path: absent when the model's price is unknown (not
+   * free) or no usage was reported. Tool path: the run meter's total, a lower
+   * bound when {@link costComplete} is `false`.
+   */
   cost?: number;
+  /**
+   * `false` when at least one LLM call in this reply had no known price, so
+   * `cost` (when present) understates the spend. Absent means every call was
+   * priced. Same source as `AgentResultMetadata.costComplete`.
+   */
+  costComplete?: boolean;
   /**
    * Full reasoning-step evidence (tool-capable path only). Structurally
    * typed to mirror `@reactive-agents/reasoning`'s `ReasoningStep` without a

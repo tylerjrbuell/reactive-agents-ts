@@ -2,20 +2,24 @@ import { Effect, Option, Either } from "effect";
 import type { ModelTier, ModelCostConfig, ComplexityAnalysis, Provider } from "../types.js";
 import { RoutingError } from "../errors.js";
 import { EventBus } from "@reactive-agents/core";
+import { priceFor } from "@reactive-agents/llm-provider";
 import { JudgmentService } from "@reactive-agents/judgment";
 import { buildComplexityJudgmentQuestions, buildComplexityJudgmentState, answerToTier } from "./judgment-complexity-questions.js";
 
-// ─── Model cost configurations per provider ───
-// Each provider maps haiku/sonnet/opus to its light/mid/heavy model.
+// ─── Model tiers per provider ───
+// Each provider maps haiku/sonnet/opus to its light/mid/heavy model. No prices
+// here: getModelCostConfig reads them from the PriceBook, so routing estimates
+// and billing use the same rates (audit 2026-11-19 F3: this table once priced
+// claude-opus-4-7 at $15/$75 while it bills $5/$25).
 
-const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
+type TierModel = Omit<ModelCostConfig, "costPer1MInput" | "costPer1MOutput">;
+
+const PROVIDER_TIERS: Record<Provider, Record<ModelTier, TierModel>> = {
   anthropic: {
     haiku: {
       tier: "haiku",
       provider: "anthropic",
       model: "claude-haiku-4-5-20251001",
-      costPer1MInput: 1.0,
-      costPer1MOutput: 5.0,
       maxContext: 200_000,
       quality: 0.6,
       speedTokensPerSec: 150,
@@ -24,8 +28,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "sonnet",
       provider: "anthropic",
       model: "claude-sonnet-4-6",
-      costPer1MInput: 3.0,
-      costPer1MOutput: 15.0,
       maxContext: 1_000_000,
       quality: 0.88,
       speedTokensPerSec: 80,
@@ -34,8 +36,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "opus",
       provider: "anthropic",
       model: "claude-opus-4-7",
-      costPer1MInput: 15.0,
-      costPer1MOutput: 75.0,
       maxContext: 1_000_000,
       quality: 1.0,
       speedTokensPerSec: 40,
@@ -46,8 +46,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "haiku",
       provider: "openai",
       model: "gpt-4o-mini",
-      costPer1MInput: 0.15,
-      costPer1MOutput: 0.6,
       maxContext: 128_000,
       quality: 0.5,
       speedTokensPerSec: 200,
@@ -56,8 +54,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "sonnet",
       provider: "openai",
       model: "gpt-4o",
-      costPer1MInput: 2.5,
-      costPer1MOutput: 10.0,
       maxContext: 128_000,
       quality: 0.85,
       speedTokensPerSec: 80,
@@ -66,8 +62,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "opus",
       provider: "openai",
       model: "o3",
-      costPer1MInput: 10.0,
-      costPer1MOutput: 40.0,
       maxContext: 200_000,
       quality: 1.0,
       speedTokensPerSec: 30,
@@ -77,9 +71,8 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
     haiku: {
       tier: "haiku",
       provider: "gemini",
-      model: "gemini-2.0-flash",
-      costPer1MInput: 0.1,
-      costPer1MOutput: 0.4,
+      // gemini-2.0-flash had no PriceBook price (retired); 2.5-flash is priced.
+      model: "gemini-2.5-flash",
       maxContext: 1_000_000,
       quality: 0.5,
       speedTokensPerSec: 200,
@@ -88,8 +81,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "sonnet",
       provider: "gemini",
       model: "gemini-2.5-pro",
-      costPer1MInput: 1.25,
-      costPer1MOutput: 10.0,
       maxContext: 1_000_000,
       quality: 0.85,
       speedTokensPerSec: 60,
@@ -98,8 +89,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "opus",
       provider: "gemini",
       model: "gemini-2.5-pro",
-      costPer1MInput: 1.25,
-      costPer1MOutput: 10.0,
       maxContext: 1_000_000,
       quality: 0.9,
       speedTokensPerSec: 60,
@@ -110,8 +99,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "haiku",
       provider: "ollama",
       model: "llama3.2:3b",
-      costPer1MInput: 0,
-      costPer1MOutput: 0,
       maxContext: 128_000,
       quality: 0.4,
       speedTokensPerSec: 100,
@@ -120,8 +107,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "sonnet",
       provider: "ollama",
       model: "llama3.1:8b",
-      costPer1MInput: 0,
-      costPer1MOutput: 0,
       maxContext: 128_000,
       quality: 0.6,
       speedTokensPerSec: 60,
@@ -130,8 +115,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "opus",
       provider: "ollama",
       model: "llama3.1:70b",
-      costPer1MInput: 0,
-      costPer1MOutput: 0,
       maxContext: 128_000,
       quality: 0.8,
       speedTokensPerSec: 20,
@@ -142,8 +125,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "haiku",
       provider: "litellm",
       model: "gpt-4o-mini",
-      costPer1MInput: 0.15,
-      costPer1MOutput: 0.6,
       maxContext: 128_000,
       quality: 0.5,
       speedTokensPerSec: 200,
@@ -152,8 +133,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "sonnet",
       provider: "litellm",
       model: "gpt-4o",
-      costPer1MInput: 2.5,
-      costPer1MOutput: 10.0,
       maxContext: 128_000,
       quality: 0.85,
       speedTokensPerSec: 80,
@@ -162,8 +141,6 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
       tier: "opus",
       provider: "litellm",
       model: "claude-opus-4-7",
-      costPer1MInput: 15.0,
-      costPer1MOutput: 75.0,
       maxContext: 1_000_000,
       quality: 1.0,
       speedTokensPerSec: 40,
@@ -171,20 +148,36 @@ const PROVIDER_CONFIGS: Record<Provider, Record<ModelTier, ModelCostConfig>> = {
   },
 };
 
-// Backward-compatible default: Anthropic
-const MODEL_CONFIGS = PROVIDER_CONFIGS.anthropic;
-
+/**
+ * A tier's model with its prices read from the PriceBook (`priceFor` in
+ * `@reactive-agents/llm-provider`), the one price source the adapters bill
+ * with. An unpriced model gets no price fields (unknown, not $0).
+ *
+ * @param tier - haiku / sonnet / opus
+ * @param provider - provider whose tier table to use; default Anthropic
+ */
 export const getModelCostConfig = (
   tier: ModelTier,
   provider?: Provider,
-): ModelCostConfig =>
-  (provider ? PROVIDER_CONFIGS[provider] : MODEL_CONFIGS)[tier];
+): ModelCostConfig => {
+  const row = PROVIDER_TIERS[provider ?? "anthropic"][tier];
+  return Option.match(priceFor(row.provider, row.model), {
+    onNone: () => row,
+    onSome: (price) => ({ ...row, costPer1MInput: price.input, costPer1MOutput: price.output }),
+  });
+};
 
 export const estimateTokens = (text: string): number =>
   Math.ceil(text.length / 4);
 
-export const estimateCost = (text: string, config: ModelCostConfig): number =>
-  (estimateTokens(text) / 1_000_000) * config.costPer1MInput;
+/**
+ * Input-cost estimate in USD for `text` on `config`'s model; `undefined` when
+ * the model's price is unknown.
+ */
+export const estimateCost = (text: string, config: ModelCostConfig): number | undefined =>
+  config.costPer1MInput === undefined
+    ? undefined
+    : (estimateTokens(text) / 1_000_000) * config.costPer1MInput;
 
 // ─── Heuristic Classifier ───
 
@@ -247,11 +240,11 @@ export const TIER_ORDER: readonly ModelTier[] = ["haiku", "sonnet", "opus"];
 
 /**
  * Returns true iff the given string is a provider that has a tier table in
- * PROVIDER_CONFIGS. Stays in sync with PROVIDER_CONFIGS automatically — no
+ * PROVIDER_TIERS. Stays in sync with PROVIDER_TIERS automatically — no
  * separate hardcoded set to drift.
  */
 export const isRoutableProvider = (p: string | undefined): p is Provider =>
-  p !== undefined && Object.hasOwn(PROVIDER_CONFIGS, p);
+  p !== undefined && Object.hasOwn(PROVIDER_TIERS, p);
 
 /**
  * Walk the tier ladder from `start` upward, returning the first tier whose
@@ -316,7 +309,6 @@ export const analyzeComplexity = (
         }
 
         const config = getModelCostConfig(tier, provider);
-
         const score =
           tier === "haiku" ? 0.2 :
           tier === "sonnet" ? 0.5 : 0.9;
@@ -325,12 +317,13 @@ export const analyzeComplexity = (
         if (/\b(step|then|next|finally)\b/i.test(task)) factors.push("multi-step");
         if (/\b(analyze|compare|evaluate)\b/i.test(task)) factors.push("analysis-required");
 
+        const estimatedCost = estimateCost(task, config);
         return {
           score,
           factors,
           recommendedTier: tier,
           estimatedTokens: estimateTokens(task),
-          estimatedCost: estimateCost(task, config),
+          ...(estimatedCost !== undefined ? { estimatedCost } : {}),
         };
       },
       catch: (e) => new RoutingError({ message: "Complexity analysis failed", taskComplexity: undefined }),

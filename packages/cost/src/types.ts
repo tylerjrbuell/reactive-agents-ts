@@ -17,8 +17,13 @@ export const ModelCostConfigSchema = Schema.Struct({
   tier: ModelTier,
   provider: Provider,
   model: Schema.String,
-  costPer1MInput: Schema.Number,
-  costPer1MOutput: Schema.Number,
+  /**
+   * Uncached input $/1M tokens, read from the PriceBook (`priceFor` in
+   * `@reactive-agents/llm-provider`). Absent when the model's price is unknown.
+   */
+  costPer1MInput: Schema.optional(Schema.Number),
+  /** Output $/1M tokens from the PriceBook. Absent when the price is unknown. */
+  costPer1MOutput: Schema.optional(Schema.Number),
   maxContext: Schema.Number,
   quality: Schema.Number,
   speedTokensPerSec: Schema.Number,
@@ -87,7 +92,8 @@ export const ComplexityAnalysisSchema = Schema.Struct({
   factors: Schema.Array(Schema.String),
   recommendedTier: ModelTier,
   estimatedTokens: Schema.Number,
-  estimatedCost: Schema.Number,
+  /** Input-cost estimate in USD; absent when the routed model's price is unknown. */
+  estimatedCost: Schema.optional(Schema.Number),
 });
 export type ComplexityAnalysis = typeof ComplexityAnalysisSchema.Type;
 

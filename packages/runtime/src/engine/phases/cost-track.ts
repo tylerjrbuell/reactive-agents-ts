@@ -12,6 +12,7 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { CostService, type ModelTier } from "@reactive-agents/cost";
 import type { Phase } from "../phase.js";
 import { resolveModelName } from "../util.js";
+import { readSettledRunSplit, type SettledRunSplit } from "../run-budget-arm.js";
 
 // Coarse haiku/sonnet/opus classification for cost tracking's `tier` field.
 // `ModelTier` is Anthropic-shaped (haiku/sonnet/opus) but applied across every
@@ -29,6 +30,22 @@ export function classifyTier(model: string): ModelTier {
   return "sonnet";
 }
 
+/**
+ * The input/output split to record, from the run meter's settled split (the
+ * same source as `ctx.tokensUsed` / `ctx.cost`, written by `settleRunSpend`).
+ *
+ * Recorded only when the meter knows both halves. Otherwise (some call
+ * reported a total only) both are 0: `CostEntry` has no "unknown" shape, and
+ * guessing a split would be worse. The run total is never recorded as output
+ * (audit 2026-11-19 F11). `cost` is unaffected: it is the settled meter cost.
+ */
+export const recordedSplit = (
+  split: SettledRunSplit | undefined,
+): { readonly inputTokens: number; readonly outputTokens: number } =>
+  split?.inputTokens !== undefined && split.outputTokens !== undefined
+    ? { inputTokens: split.inputTokens, outputTokens: split.outputTokens }
+    : { inputTokens: 0, outputTokens: 0 };
+
 export const costTrack: Phase = {
   name: "cost-track",
 
@@ -43,8 +60,7 @@ export const costTrack: Phase = {
 
       const cacheHit = Boolean(ctx.metadata?.["cacheHit"]);
       const model = resolveModelName(ctx, deps.config);
-      const inputTokens =
-        typeof ctx.metadata?.["inputTokens"] === "number" ? ctx.metadata["inputTokens"] : 0;
+      const { inputTokens, outputTokens } = recordedSplit(readSettledRunSplit(ctx.metadata ?? {}));
 
       yield* costOpt.value
         .recordCost({
@@ -53,7 +69,7 @@ export const costTrack: Phase = {
           model,
           tier: classifyTier(model),
           inputTokens,
-          outputTokens: ctx.tokensUsed,
+          outputTokens,
           cost: ctx.cost,
           cachedHit: cacheHit,
           taskType: deps.task.type,

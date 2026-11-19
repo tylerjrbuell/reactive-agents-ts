@@ -239,7 +239,14 @@ export type AgentStreamEvent =
        * `tokensOut / durationMs` is only a lower bound.
        */
       readonly firstTokenMs?: number;
-      readonly costUsd: number;
+      /**
+       * Cost of this call in USD (`LLMRequestCompleted.estimatedCost`).
+       * Absent means the model's price is unknown, NOT free: sum with core
+       * `addCost` / `sumCosts`, which mark the total incomplete.
+       */
+      readonly costUsd?: number;
+      /** Where `costUsd` came from; `"unknown"` when no price is known. Absent on older publishers. */
+      readonly priceSource?: import("@reactive-agents/core").PriceSource;
       readonly iteration?: number;
     }
   | {

@@ -175,8 +175,8 @@ describe("Cost Calculations", () => {
 
     const inputTokens = 1000;
     const outputTokens = 500;
-    const expectedInputCost = (inputTokens / 1_000_000) * haiku.costPer1MInput;
-    const expectedOutputCost = (outputTokens / 1_000_000) * haiku.costPer1MOutput;
+    const expectedInputCost = (inputTokens / 1_000_000) * haiku.costPer1MInput!;
+    const expectedOutputCost = (outputTokens / 1_000_000) * haiku.costPer1MOutput!;
     const totalCost = expectedInputCost + expectedOutputCost;
 
     expect(totalCost).toBeGreaterThan(0);
@@ -200,7 +200,7 @@ describe("Cost Calculations", () => {
       }),
     );
 
-    expect(sonnet.costPer1MInput).toBeGreaterThan(haiku.costPer1MInput);
+    expect(sonnet.costPer1MInput!).toBeGreaterThan(haiku.costPer1MInput!);
   });
 });
 

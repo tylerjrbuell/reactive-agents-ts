@@ -79,7 +79,7 @@ export interface BuilderStateForSerialization {
   _enableSelfImprovement: boolean;
   _enableHealthCheck: boolean;
   _streamDensity?: string;
-  _pricingRegistry?: Record<string, { readonly input: number; readonly output: number }>;
+  _pricingRegistry?: Record<string, import("@reactive-agents/llm-provider").ModelPricing>;
   _groundingConfig?: { mode: "block" | "warn"; tolerance?: number; maxRetries?: number };
   _fabricationGuard?: "off" | "warn" | "block";
   _stallPolicy?: { ignoredNudgeTolerance?: number; escalateNudgeContent?: boolean };
