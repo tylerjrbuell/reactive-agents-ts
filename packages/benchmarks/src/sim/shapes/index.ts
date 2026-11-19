@@ -5,6 +5,7 @@ import { honestDecline } from "./honest-decline.js";
 import { honestDeclineAfterOne } from "./honest-decline-after-1.js";
 import { iterationCap } from "./iteration-cap.js";
 import { noCallStall } from "./no-call-stall.js";
+import { pendingWrite, pendingWriteStubbornCap14, pendingWriteStubbornCap16 } from "./pending-write.js";
 import { unreadInputAbspath, unreadInputFilename, unreadInputProse } from "./unread-input.js";
 
 export const SHAPES: readonly Shape[] = [
@@ -16,6 +17,9 @@ export const SHAPES: readonly Shape[] = [
   noCallStall,
   fabricationVeto,
   iterationCap,
+  pendingWrite,
+  pendingWriteStubbornCap14,
+  pendingWriteStubbornCap16,
 ];
 
 /** Look a shape up by id; `undefined` when unknown. */
@@ -29,6 +33,9 @@ export {
   honestDeclineAfterOne,
   iterationCap,
   noCallStall,
+  pendingWrite,
+  pendingWriteStubbornCap14,
+  pendingWriteStubbornCap16,
   unreadInputAbspath,
   unreadInputFilename,
   unreadInputProse,
