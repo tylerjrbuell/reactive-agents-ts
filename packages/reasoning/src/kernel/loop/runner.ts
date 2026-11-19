@@ -21,7 +21,7 @@ import { applyCalibrationProfileOverrides } from "./runner-profile-overrides.js"
 import { sentinelDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
 import { migrateLegacyTodo } from "../state/checklist-migrate.js";
-import { seedPassState } from "../state/pass-seed.js";
+import { seedCarriedScratchpad, seedPassState } from "../state/pass-seed.js";
 import { applyPlanBudgetAtStart } from "./plan-budget.js";
 import { CONTEXT_PROFILES, applyCapabilityMaxTokens } from "../../context/context-profile.js";
 import type { ContextProfile } from "../../context/context-profile.js";
@@ -298,7 +298,7 @@ export function runKernel(
       : effectiveInput.initialMessages?.length
         ? transitionState(baseState, { messages: effectiveInput.initialMessages })
         : baseState;
-    state = seedPassState(state, effectiveInput); // pass ledger seed (state/pass-seed.ts), then advisory todo seed
+    state = yield* seedCarriedScratchpad(seedPassState(state, effectiveInput), effectiveInput); // pass-seed.ts: ledger, todo, carried refs
     // Wave C.1 slice 3 — live ledger tap watermark. Captured HERE, immediately
     // after the resume/fresh decision and BEFORE any of the pre-loop seeding
     // blocks below grow the ledger (e.g. `recordRequirementsDeclared` at the

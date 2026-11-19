@@ -55,7 +55,7 @@ declare module "./kernel-state.js" {
  * Authority label. Open string by design (new guards add `guard:<name>`), with
  * the documented vocabulary: `model-final | gate-verdict | abstention |
  * stall-deliverable | loop-resolution | harness-deliverable | budget |
- * strategy-exhausted | pause | user-stop | error | strategy-error | give-up-gate |
+ * strategy-exhausted | strategy-accepted | pause | user-stop | error | strategy-error | give-up-gate |
  * contract-coverage | delegation-cap | guard:<name> | none-recorded |
  * unclassified:<terminatedBy>`.
  */
@@ -67,6 +67,19 @@ export type TerminalAuthority = string;
  * `result.error` (prefixed `Strategy execution failed (<strategy>): `).
  */
 export const STRATEGY_ERROR_TERMINATOR = "strategy_error";
+
+/**
+ * Authority of a run whose strategy's own check accepted the answer after a
+ * pass ended without one (reflexion's SATISFIED critique past a capped pass,
+ * `answer-acceptance.ts`). The pass's terminator (e.g. `max_iterations`) did
+ * not decide the run; the acceptance did. A later finalization arm that caps
+ * the status (contract coverage, outstanding criteria, a gate refusal) still
+ * owns the label.
+ */
+export const STRATEGY_ACCEPTED_AUTHORITY = "strategy-accepted";
+
+/** Result `extraMetadata` key the strategy substrate sets when the strategy accepted its answer. */
+export const ANSWER_ACCEPTED_MARKER = "answerAcceptedBy";
 
 const MODEL_FINAL: ReadonlySet<string> = new Set([
   "final_answer_tool", "final_answer", "final_answer_regex", "end_turn", "llm_end_turn",

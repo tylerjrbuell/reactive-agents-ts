@@ -25,7 +25,7 @@ import { Data, Effect, Ref } from "effect";
 import type { CompletionResponse } from "@reactive-agents/llm-provider";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ExecutionError } from "../../errors/errors.js";
-import { STRATEGY_ERROR_TERMINATOR } from "../../kernel/state/terminal-authority.js";
+import { ANSWER_ACCEPTED_MARKER, STRATEGY_ERROR_TERMINATOR } from "../../kernel/state/terminal-authority.js";
 import type { ReasoningMetadata, ReasoningStatus, ReasoningStep } from "../../types/index.js";
 import { gatewayComplete, type GatewayRequest, type LlmCallIntent } from "../../kernel/llm-gateway.js";
 import { runPass, type PassResult } from "../../kernel/loop/run-pass.js";
@@ -890,6 +890,7 @@ export function runStrategy<E, R>(
           // still relays the run's act-or-answer sum when any pass ran.
           ...relay,
           ...claim,
+          ...(end.answerAccepted === true ? { [ANSWER_ACCEPTED_MARKER]: spec.strategy } : {}), // finalize: authority + terminal_decision
           ...envelopeMeta,
           ...own?.markers,
           // The relay's `extensions` replaced the strategy's own above: join them, plus the final plan.

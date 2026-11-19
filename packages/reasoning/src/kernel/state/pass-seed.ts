@@ -14,6 +14,8 @@
  * (`appendEntry` assigns `seq = length`), so `assess()` sees the whole run.
  * Both fields absent => today's behavior, byte-for-byte.
  */
+import { Effect, Ref } from "effect";
+import { currentScratchpadStore } from "@reactive-agents/tools";
 import type { RunContract } from "../contract/run-contract.js";
 import type { RunLedger } from "../ledger/run-ledger.js";
 import { toolEvidence } from "../capabilities/verify/requirement-state.js";
@@ -78,6 +80,42 @@ export function adoptPassLedger(
 function normalizeSeededThread(state: KernelState): KernelState {
   if (state.messages.every((m) => typeof m.content === "string")) return state;
   return transitionState(state, { messages: normalizeKernelMessages(state.messages) });
+}
+
+/**
+ * Resolve the carried thread's stored tool-result refs on a fresh pass.
+ *
+ * A multi-pass strategy hands a later pass the earlier thread
+ * (`initialMessages`), whose `tool_result` messages may point at a stored
+ * result (`storedKey`, e.g. `_tool_result_1`). A fresh pass starts with an
+ * empty `state.scratchpad`, so projection could not resolve those refs: it
+ * fell back to the message's cut preview and fired `tool-result-pairing`
+ * (harness report 2026-11-19, Cortex reflexion trace 01M7T8XTQEARASBWPNVYEEZJZ0).
+ * Keys are minted run-wide (act/tool-execution.ts), so the run's scratchpad
+ * store holds them; this copies exactly the carried refs into the pass state.
+ *
+ * Returns `state` by identity on a resumed run (its scratchpad is restored),
+ * when no carried message has a ref, or when every ref is already present or
+ * absent from the store.
+ */
+export function seedCarriedScratchpad(
+  state: KernelState,
+  input: Pick<KernelInput, "resumeState">,
+): Effect.Effect<KernelState> {
+  if (input.resumeState !== undefined) return Effect.succeed(state);
+  const refs = state.messages.flatMap((m) =>
+    m.role === "tool_result" && m.storedKey !== undefined && !state.scratchpad.has(m.storedKey) ? [m.storedKey] : [],
+  );
+  if (refs.length === 0) return Effect.succeed(state);
+  return Effect.gen(function* () {
+    const store = yield* Ref.get(yield* currentScratchpadStore);
+    const found = refs.flatMap((k) => {
+      const v = store.get(k);
+      return v === undefined ? [] : [[k, v] as const];
+    });
+    if (found.length === 0) return state;
+    return transitionState(state, { scratchpad: new Map([...state.scratchpad, ...found]) });
+  });
 }
 
 /**

@@ -58,7 +58,12 @@ import {
 } from "../../state/completion-envelope.js";
 import { deliverableDecisionEnvelope, deriveTerminalOutcome, userStopEnvelope, type TerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
-import { deriveTerminalAuthority, STRATEGY_ERROR_TERMINATOR } from "../../state/terminal-authority.js";
+import {
+  ANSWER_ACCEPTED_MARKER,
+  deriveTerminalAuthority,
+  STRATEGY_ACCEPTED_AUTHORITY,
+  STRATEGY_ERROR_TERMINATOR,
+} from "../../state/terminal-authority.js";
 import { isUserStopReason } from "../../loop/terminate-reason.js";
 import { emitStrategyTerminalDecision } from "./strategy-terminal-decision.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
@@ -790,12 +795,18 @@ export function finalizeStrategyResult(
       ...(typeof rawFromExtra === "string" ? { terminatedBy: rawFromExtra } : {}),
       ...(strategyDecision !== undefined ? { deliverableDecision: strategyDecision } : {}),
     };
+    // The strategy's own acceptance of its answer (answer-acceptance.ts) decided
+    // the run, not the answering pass's terminator: it names the authority when
+    // no finalization arm moved the status, and the strategy records the run's
+    // terminal decision (the pass's own record was for the pass).
+    const strategyAccepted = !abstained && typeof params.extraMetadata?.[ANSWER_ACCEPTED_MARKER] === "string";
+    const outcomeArm = authorityArm ?? (strategyAccepted ? STRATEGY_ACCEPTED_AUTHORITY : undefined);
     const terminalOutcome: TerminalOutcome = deriveTerminalOutcome({
       status: abstained ? "abstained" : delegationResult.status,
       meta: outcomeMeta,
       ledger: params.kernelMeta === undefined ? undefined : params.runLedger,
       outstanding,
-      ...(authorityArm !== undefined ? { arm: authorityArm } : {}),
+      ...(outcomeArm !== undefined ? { arm: outcomeArm } : {}),
     });
     // Diagnostic (no behavior): `terminal_decision` (runner, pre-finalization)
     // and this final status come from one record; when a finalization arm moved
@@ -832,8 +843,9 @@ export function finalizeStrategyResult(
         });
       }
     }
-    // Strategy-owned terminal (no kernel pass recorded one): record it here.
-    if (td === undefined && params.pause === undefined) {
+    // Strategy-owned terminal (no kernel pass recorded one, or the strategy's
+    // acceptance answered past the pass that did): record it here.
+    if ((td === undefined || strategyAccepted) && params.pause === undefined) {
       // The strategy's status-cap record (capStatusUnderVerdict) says WHY its
       // claim was or was not capped; absent => the record is unchanged.
       const statusCap = readStatusCap(params.extraMetadata?.["statusCap"]);

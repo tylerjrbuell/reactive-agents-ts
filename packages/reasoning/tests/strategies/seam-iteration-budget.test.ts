@@ -14,7 +14,9 @@
 // RED-ON-CUT: restore `kernelMaxIterations ?? 3` at reflexion.ts's generate
 // pass: (a) goes red.
 import { describe, expect, it } from "bun:test";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Ref, Stream } from "effect";
+import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
+import { STRATEGY_ACCEPTED_AUTHORITY } from "../../src/kernel/state/terminal-authority.js";
 import { LLMService, TestLLMService, type LLMErrors, type StreamEvent, type TestTurn } from "@reactive-agents/llm-provider";
 import { passIterationShare, passIterationsUsed } from "../../src/strategies/budget/iteration-budget.js";
 import { executeReflexion } from "../../src/strategies/reflexion.js";
@@ -230,5 +232,44 @@ describe("reflexion: a generate pass capped mid-tool-work hands off, it does not
     expect(meta.extensions?.terminalOutcome?.answerSatisfied).toBe(true);
     expect(meta.extensions?.terminalOutcome?.outstanding).toBeDefined();
     expect(meta.extensions?.terminalOutcome?.outstanding).not.toContain("answer");
+  }, 20000);
+
+  // (e) harness report 2026-11-19 (trace 01M7T8TY…): the acceptance decided the
+  // run, yet the outcome said `strategy-exhausted` (the capped pass's terminator)
+  // and the last `terminal_decision` on the trace was that pass's. The outcome
+  // names the acceptance, and the strategy records its own terminal decision.
+  // RED-ON-CUT: drop the `answerAccepted` marker in strategy-run.ts's mint, or the
+  // `strategy-accepted` arm in finalize-result.ts: (e) goes red.
+  it("(e) the acceptance owns the outcome authority and records one strategy-level terminal_decision", async () => {
+    const model = neverAnsweringModel();
+    const { result, decisions } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const seen = yield* Ref.make<AgentEvent[]>([]);
+        const bus = yield* EventBus;
+        yield* bus.subscribe((ev) => Ref.update(seen, (xs) => [...xs, ev]));
+        const result = yield* provideTestEnvelope(
+          executeReflexion({
+            taskDescription: TASK,
+            taskType: "research",
+            memoryContext: "",
+            availableTools: MANY,
+            availableToolSchemas: MANY_SCHEMAS,
+            config: configWith(16),
+          } as never),
+          buildRunEnvelope({}),
+        );
+        const decisions = (yield* Ref.get(seen)).flatMap((e) =>
+          e._tag === "GuardFiredEmitted" && e.guard === "terminal_decision" ? [e] : [],
+        );
+        return { result, decisions };
+      }).pipe(Effect.provide(Layer.mergeAll(model.layer, succeedingToolLayer({ finding: EVIDENCE }, PARAMS), EventBusLive))),
+    );
+    const outcome = (result.metadata as { readonly extensions?: { readonly terminalOutcome?: { readonly authority?: string } } })
+      .extensions?.terminalOutcome;
+    expect(outcome?.authority).toBe(STRATEGY_ACCEPTED_AUTHORITY);
+    const last = decisions.at(-1);
+    expect(last?.metadata?.["authority"]).toBe(STRATEGY_ACCEPTED_AUTHORITY);
+    expect(last?.metadata?.["finalStatus"]).toBe(result.status);
+    expect(last?.metadata?.["status"]).toBe("done");
   }, 20000);
 });
