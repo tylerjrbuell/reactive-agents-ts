@@ -45,6 +45,7 @@ export { ALL_TASKS }
 export { aggregateAbstention, aggregateRuns, aggregatePassKByVariant, computeAllAblation, summarizeDimensions }
 export { withConfigEnv, shouldUseLongHorizon, billedTokenFields, writeFixtures, computeGroundingSet }
 
+import { openQuickSandbox } from "./quick-grade.js"
 import { scoreTask, scoreErrorCell, computeReliability, judgeUnreachable, DEFAULT_JUDGE_URL } from "./judge.js"
 import { formatDiagnosisLine, runEndStatusField, trustVerdict } from "./diagnose.js"
 import type { ReportModels } from "./gate/options.js"
@@ -89,7 +90,7 @@ const runTask = async (
   logLevel: "silent" | "progress" | "verbose",
 ): Promise<TaskResult> => {
   const start = performance.now();
-
+  const sandbox = openQuickSandbox(task);
   try {
     const maxIter = task.maxIterations ?? (task.strategy ? 15 : 5);
     const builder = ReactiveAgents.create()
@@ -186,7 +187,7 @@ const runTask = async (
         process.stdout.write = (() => true) as any;
 
         try {
-          agentResult2 = await Promise.race([agent.run(task.prompt), timeoutPromise]);
+          agentResult2 = await sandbox.run(() => Promise.race([agent.run(task.prompt), timeoutPromise]));
         } finally {
           console.log = consoleLog;
           console.error = consoleError;
@@ -197,7 +198,7 @@ const runTask = async (
         }
       } else {
         // In verbose mode, allow agent to run with full output
-        agentResult2 = await Promise.race([agent.run(task.prompt), timeoutPromise]);
+        agentResult2 = await sandbox.run(() => Promise.race([agent.run(task.prompt), timeoutPromise]));
       }
       agentResult = agentResult2;
     } catch (error) {
@@ -222,8 +223,7 @@ const runTask = async (
     }
 
     const durationMs = performance.now() - start;
-    const passed = matchesExpected(agentResult.output, task.expected);
-
+    const passed = await sandbox.grade(agentResult.output, agentResult.metadata.tokensUsed || cumulativeTokens, agentResult.metadata.stepsCount || iterations);
     return {
       taskId: task.id,
       tier: task.tier,
@@ -257,7 +257,7 @@ const runTask = async (
       output: isExpectedError ? errorMessage : "",
       error: isExpectedError ? undefined : errorMessage,
     } satisfies TaskResult;
-  }
+  } finally { sandbox.dispose(); }
 };
 
 /**
@@ -522,7 +522,7 @@ export const runBenchmarks = async (
       if (result.status === "error") {
         log(`    ${R}↳${X} ${D}${result.error?.slice(0, 100)}${X}`);
       } else if (result.status === "fail") {
-        log(`    ${Y}↳${X} ${D}Expected pattern not found in output${X}`);
+        log(`    ${Y}↳${X} ${D}Graded check failed (expected pattern or hidden check)${X}`);
       }
     }
   }
