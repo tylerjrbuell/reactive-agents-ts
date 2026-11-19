@@ -43,7 +43,7 @@ afterAll(() => {
  * scripted reply is not code, so its run is plan + repairs to the iteration cap.
  */
 const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly tokensUsed: number }>> = {
-  // 2026-11-18 RAISED 1/278 -> 2/597 (needs owner ratification): with tools registered Direct's
+  // 2026-11-18 RAISED 1/278 -> 2/597 (owner ratified 2026-11-18): with tools registered Direct's
   // default budget is now 3 via the shared resolver. At 1 the tool turn hit the cap and the
   // run ended as failed max_iterations with the batch unexecuted; now it calls, observes, answers.
   direct: { llmCalls: 2, tokensUsed: 597 },
