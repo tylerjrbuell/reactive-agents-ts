@@ -1,5 +1,6 @@
 /**
- * Think phase — parallel tool hint (harness switch `parallelToolHint`, default OFF).
+ * Think phase — parallel tool hint (harness switch `parallelToolHint`, default ON
+ * and calibration-gated since 2026-11-19, owner decision on efficiency evidence).
  *
  * Golden-run diagnosis 2026-11-18 (wiki/Research/Harness-Reports/2026-11-18-extra-iterations):
  * independent tool calls went out one per turn (32% of H3 turns), although the

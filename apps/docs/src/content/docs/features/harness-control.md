@@ -12,7 +12,7 @@ related:
   - reference/compose-api
 ---
 
-`.withHarness({...})` is the typed control surface for the 14 harness
+`.withHarness({...})` is the typed control surface for the harness
 mechanisms — tool disclosure, discovery, the tool index, verbose rules, stable
 tool surface, context budgets, thought continuity, observe symmetry, rationale
 audit, and the Tree-of-Thought explore budget. Before this surface existed,
@@ -49,9 +49,8 @@ existing `parentReasoningOptions` passthrough, no separate mechanism needed.
 2. **Environment variable** — the matching `RA_*` variable (see
    `harness-flags.ts`). Process-global, used only where the config layer
    didn't decide.
-3. **Built-in default** — what the framework does with nothing set. Every
-   default resolves to today's behavior; this page introduces no default
-   changes.
+3. **Built-in default** — what the framework does with nothing set (the
+   Default column below).
 
 ```ts
 // Small-model profile: show everything, no discovery round trips:
@@ -62,7 +61,7 @@ agent.withHarness({
 })
 ```
 
-## The 14 fields
+## Fields
 
 | Field | Type | Default | Env fallback |
 | --- | --- | --- | --- |
@@ -80,6 +79,7 @@ agent.withHarness({
 | `numCtxPolicy` | `"fixed" \| "demand"` | `"fixed"` | none — config-only, no `RA_*` flag |
 | `actOrAnswer` | `boolean \| "proactive" \| "auto"` | `false` | `RA_ACT_OR_ANSWER` (`=1`, `=proactive` or `=auto`) |
 | `inputCoverage` | `boolean` | `false` | `RA_INPUT_COVERAGE` (`=1`) |
+| `parallelToolHint` | `boolean \| "always"` | `true` (calibration-gated) | `RA_PARALLEL_TOOL_HINT` (`=0` to disable, `=always` to force) |
 
 `actOrAnswer: true` handles a turn where the model replies without calling a
 tool while tool work is still outstanding (a required tool not yet called, a
@@ -112,6 +112,24 @@ finish until each listed input has been read, so reading one listed file no
 longer counts as reading them all. `run-started.config` records it as
 `mechanisms.inputCoverage`. Opt-in and off by default pending an ablation
 measurement.
+
+`parallelToolHint` is on by default. It adds one sentence to the system
+prompt asking the model to make independent tool calls together in one reply;
+the kernel already runs every call of a reply before the next turn. By
+default (`true`) the sentence is added only for models whose calibration rates
+parallel tool calls `reliable`. `"always"` adds it for any model.
+`.withHarness({ parallelToolHint: false })` or `RA_PARALLEL_TOOL_HINT=0` turns
+it off. The default mid, large and frontier system prompts already end with
+this sentence, so in practice it changes the local tier and custom system
+prompts; it is never added twice. It is not added with text-parse tool
+calling, on a turn without tools, under plan posture, or when parallel tool
+calls are turned off. Each turn it renders records a `harness-signal-injected`
+event with origin `parallel-tool-hint`. Measured effect (2026-11-18 ablation,
+two local Ollama models, gemma4:e4b and cogito:14b): the same pass rate, 37%
+fewer turns and 33% to 39% fewer billed tokens, almost all of it on one
+multi-tool task. Wall time barely moves on Ollama, which generates batched
+calls one after another, so the saving is mostly prompt re-reads, not decode
+time. Not yet measured on hosted providers.
 
 `numCtxPolicy: "demand"` opts a run in to sizing Ollama's `num_ctx` to the
 assembled prompt each turn instead of a fixed per-model value (D-2026-07-30-I).
@@ -213,9 +231,10 @@ const agent = ReactiveAgents.create()
 
 ## What this does not do
 
-- **No default changes.** With no `.withHarness()` call and no `RA_*`
-  variables set, every mechanism resolves exactly as it did before this
-  surface existed.
+- **Adding the surface changed no defaults.** With no `.withHarness()` call
+  and no `RA_*` variables set, every mechanism resolves to its built-in
+  default. A later default change (such as `parallelToolHint`, on since
+  v0.19.0) is decided on measurement and listed in the release notes.
 - **`packages/tools/src/flags.ts` and `packages/a2a/src/flags.ts` are
   untouched.** They gate deployment/sandbox concerns in packages that cannot
   import `harness-flags.ts` without a dependency cycle — a different problem

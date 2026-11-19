@@ -93,4 +93,32 @@ describe("run-started.config harness drift", () => {
     expect(off.mechanisms.todoWrapUp).toBe(false);
     expect(off.mechanisms.writeCoverage).toBe(false);
   });
+
+  // parallelToolHint is default ON (calibration-gated) since v0.19.0; the
+  // record must name the resolved state, not the raw config field.
+  test("parallelToolHint records its resolved state (default on)", () => {
+    prior.RA_PARALLEL_TOOL_HINT = process.env.RA_PARALLEL_TOOL_HINT;
+    delete process.env.RA_PARALLEL_TOOL_HINT;
+    const snap = (harness?: HarnessConfig) =>
+      buildRunConfigSnapshot({
+        config: makeRuntimeConfig(
+          (harness ? { reasoningOptions: { harness } } : {}) as Partial<ReactiveAgentsConfig>,
+        ),
+        provider: "test",
+        model: "m",
+        lean: false,
+        env: {},
+      }).mechanisms.parallelToolHint;
+    expect(snap()).toBe(true);
+    expect(snap({ parallelToolHint: false })).toBe(false);
+    expect(snap({ parallelToolHint: "always" })).toBe("always");
+    process.env.RA_PARALLEL_TOOL_HINT = "off";
+    expect(snap()).toBe(false);
+    process.env.RA_PARALLEL_TOOL_HINT = "0";
+    expect(snap()).toBe(false);
+    process.env.RA_PARALLEL_TOOL_HINT = "always";
+    expect(snap()).toBe("always");
+    // Explicit config beats the env.
+    expect(snap({ parallelToolHint: false })).toBe(false);
+  });
 });

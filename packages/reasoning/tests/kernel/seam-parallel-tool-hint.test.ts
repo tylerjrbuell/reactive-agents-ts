@@ -1,7 +1,7 @@
 // Run: bun test packages/reasoning/tests/kernel/seam-parallel-tool-hint.test.ts --timeout 20000
 //
 // Seam pin for kernel/capabilities/reason/parallel-tool-hint.ts (harness switch
-// `parallelToolHint`, default OFF). Golden-run diagnosis 2026-11-18: independent
+// `parallelToolHint`, default ON and calibration-gated since 2026-11-19). Golden-run diagnosis 2026-11-18: independent
 // tool calls went out one per turn although calibration rates the model
 // parallel-`reliable` and the kernel already runs every call of a reply before
 // the next think. With the switch on, the system prompt invites batching; a
@@ -80,16 +80,32 @@ describe("parallel tool hint: when the line shows (pure)", () => {
   });
 });
 
-describe("parallel tool hint: resolution (opt-in)", () => {
+describe("parallel tool hint: resolution (default ON, calibration-gated)", () => {
   const saved = process.env.RA_PARALLEL_TOOL_HINT;
   afterEach(() => {
     if (saved === undefined) delete process.env.RA_PARALLEL_TOOL_HINT;
     else process.env.RA_PARALLEL_TOOL_HINT = saved;
   });
 
-  it("off by default; true / always from config or env; config false beats env", () => {
+  it("on (calibration-gated) by default: no config, no env resolves to true", () => {
     delete process.env.RA_PARALLEL_TOOL_HINT;
+    expect(resolveHarnessConfig().parallelToolHint).toBe(true);
+    expect(resolveHarnessConfig({}).parallelToolHint).toBe(true);
+  });
+
+  it("opt-out: config false, or RA_PARALLEL_TOOL_HINT=0 / off, resolves to no hint", () => {
+    delete process.env.RA_PARALLEL_TOOL_HINT;
+    expect("parallelToolHint" in resolveHarnessConfig({ parallelToolHint: false })).toBe(false);
+    process.env.RA_PARALLEL_TOOL_HINT = "0";
     expect("parallelToolHint" in resolveHarnessConfig()).toBe(false);
+    process.env.RA_PARALLEL_TOOL_HINT = "off";
+    expect("parallelToolHint" in resolveHarnessConfig()).toBe(false);
+    // An explicit config wins over the env kill switch.
+    expect(resolveHarnessConfig({ parallelToolHint: true }).parallelToolHint).toBe(true);
+  });
+
+  it("true / always from config or env; config false beats env", () => {
+    delete process.env.RA_PARALLEL_TOOL_HINT;
     expect(resolveHarnessConfig({ parallelToolHint: true }).parallelToolHint).toBe(true);
     expect(resolveHarnessConfig({ parallelToolHint: "always" }).parallelToolHint).toBe("always");
     process.env.RA_PARALLEL_TOOL_HINT = "1";
@@ -97,8 +113,9 @@ describe("parallel tool hint: resolution (opt-in)", () => {
     process.env.RA_PARALLEL_TOOL_HINT = "always";
     expect(resolveHarnessConfig().parallelToolHint).toBe("always");
     expect("parallelToolHint" in resolveHarnessConfig({ parallelToolHint: false })).toBe(false);
+    // Any other value keeps the default (on, calibration-gated).
     process.env.RA_PARALLEL_TOOL_HINT = "yes";
-    expect("parallelToolHint" in resolveHarnessConfig()).toBe(false);
+    expect(resolveHarnessConfig().parallelToolHint).toBe(true);
   });
 });
 
@@ -196,8 +213,25 @@ describe("end to end: two independent calls in one turn when hinted", () => {
     expect(signals.filter((o) => o === PARALLEL_TOOL_HINT_ORIGIN).length).toBeGreaterThanOrEqual(1);
   }, 20000);
 
-  it("off (default): no hint, the same model makes one call per turn (unchanged)", async () => {
+  it("default (no config): a reliable model gets the hint and batches in ONE tool turn", async () => {
     const { requests, executed, signals } = await run({}, "reliable");
+    expect(String(requests[0]!.systemPrompt)).toContain(PARALLEL_TOOL_HINT);
+    expect(executed).toEqual([{ city: "Paris" }, { city: "Tokyo" }]);
+    expect(requests.length).toBe(2); // one tool turn + the answer
+    expect(signals).toContain(PARALLEL_TOOL_HINT_ORIGIN);
+  }, 20000);
+
+  it("default (no config): an unreliable-calibration model gets no hint line (calibration gate)", async () => {
+    for (const cap of ["partial", "sequential-only"]) {
+      const { requests, signals } = await run({}, cap);
+      expect(requests.every((r) => !String(r.systemPrompt ?? "").includes(PARALLEL_TOOL_HINT))).toBe(true);
+      expect(requests.length).toBe(3);
+      expect(signals).not.toContain(PARALLEL_TOOL_HINT_ORIGIN);
+    }
+  }, 20000);
+
+  it("off (config false): no hint, the same model makes one call per turn", async () => {
+    const { requests, executed, signals } = await run({ parallelToolHint: false }, "reliable");
     expect(requests.every((r) => !String(r.systemPrompt ?? "").includes(PARALLEL_TOOL_HINT))).toBe(true);
     expect(executed).toEqual([{ city: "Paris" }, { city: "Tokyo" }]);
     expect(requests.length).toBe(3); // two tool turns + the answer
@@ -217,7 +251,7 @@ describe("end to end: two independent calls in one turn when hinted", () => {
   }, 20000);
 
   it("mid tier: the default prompt already carries the sentence; on adds no second copy and no signal", async () => {
-    const off = await run({}, "reliable", "mid");
+    const off = await run({ parallelToolHint: false }, "reliable", "mid");
     const on = await run({ parallelToolHint: true }, "reliable", "mid");
     expect(hintCount(off.requests[0]!)).toBe(1);
     expect(hintCount(on.requests[0]!)).toBe(1);

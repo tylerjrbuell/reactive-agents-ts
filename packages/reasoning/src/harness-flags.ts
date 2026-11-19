@@ -319,13 +319,18 @@ export function leanThinkingEnabled(): boolean {
 /**
  * Parallel tool hint: the system prompt invites batching independent tool calls
  * in one reply (`kernel/capabilities/reason/parallel-tool-hint.ts`). Default
- * OFF pending an ablation. `RA_PARALLEL_TOOL_HINT=1` enables it for models
- * whose calibration rates parallel calls `reliable`; `RA_PARALLEL_TOOL_HINT=always`
- * enables it regardless of calibration. Any other value: off.
+ * ON, calibration-gated: the line shows only for models whose calibration rates
+ * parallel calls `reliable`. Owner decision 2026-11-19 (v0.19.0) on efficiency
+ * evidence, not the lift gate (which has no non-inferior-plus-savings path):
+ * wiki/Research/Ablations/2026-11-18-speedups/README.md measured equal pass on
+ * gemma4:e4b and cogito:14b with turns -37% and billed tokens -33..-39%.
+ * `RA_PARALLEL_TOOL_HINT=0` (or `off`) disables it; `=always` enables it
+ * regardless of calibration; `=1` or any other value keeps the default.
  */
 export function parallelToolHintMode(): true | "always" | undefined {
   const raw = readFlag("RA_PARALLEL_TOOL_HINT");
-  return raw === "1" ? true : raw === "always" ? "always" : undefined;
+  if (raw === "0" || raw === "off") return undefined;
+  return raw === "always" ? "always" : true;
 }
 
 /**

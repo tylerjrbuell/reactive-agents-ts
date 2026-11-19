@@ -199,7 +199,10 @@ export interface HarnessConfig {
    * whatever the calibration says. Native function calling only; never on a
    * tools-withheld turn, under plan posture, or when parallel tool calls are
    * turned off (`nextMovesPlanning.enabled: false`).
-   * Default OFF pending an ablation. (`RA_PARALLEL_TOOL_HINT=1` / `=always`)
+   * Default ON (calibration-gated, as `true`): owner decision 2026-11-19 on
+   * efficiency evidence (wiki/Research/Ablations/2026-11-18-speedups/README.md:
+   * equal pass, turns -37%, billed tokens -33..-39%). `false` turns it off.
+   * (`RA_PARALLEL_TOOL_HINT=0` / `=off` off, `=always` forced)
    */
   readonly parallelToolHint?: boolean | "always";
   /**

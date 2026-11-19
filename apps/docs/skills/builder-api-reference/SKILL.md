@@ -97,6 +97,7 @@ const agent = await ReactiveAgents.create()
 | `.withReasoning(opts?)` | `{ defaultStrategy?, maxIterations?, enableStrategySwitching?, maxStrategySwitches?, fallbackStrategy? }` | Strategies: `"reactive"`, `"plan-execute-reflect"`, `"tree-of-thought"`, `"reflexion"`, `"adaptive"` |
 | `.withMaxIterations(n)` | `number` | Hard cap; overrides `.withReasoning` value |
 | `.withRequiredTools(cfg)` | `{ tools?, adaptive?, maxRetries? }` | Forces tool calls before completion |
+| `.withHarness(config)` | `HarnessConfig` (plain object; the callback overload is `.compose()`) | Per-agent harness mechanism switches. `parallelToolHint` is on by default: the system prompt asks the model to batch independent tool calls in one reply, only for models whose calibration rates parallel calls `reliable`; `"always"` forces it for any model; `{ parallelToolHint: false }` or `RA_PARALLEL_TOOL_HINT=0` turns it off. Fields and defaults: docs `features/harness-control` |
 
 ### Tools
 
