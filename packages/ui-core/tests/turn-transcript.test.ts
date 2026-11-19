@@ -73,12 +73,12 @@ describe("turnTranscriptOf", () => {
     expect(t[4]).toMatchObject({ kind: "answer", final: true });
   });
 
-  test("provider thinking never becomes prose", () => {
+  test("provider thinking never becomes prose: it leads as its own thinking segment", () => {
     const t = turnTranscriptOf(
       run([progress(1), thinking(1, "The user wants traffic. I should list sites."), ...call("c1", "list_websites", true), progress(2), say(ANSWER), done(ANSWER)]),
     );
-    expect(shape(t)).toEqual(["tools:Ran 1 tool", `answer:${ANSWER}`]);
-    const group = t[0]!;
+    expect(shape(t)).toEqual(["thinking:The user wants traffic. I should list sites.", "tools:Ran 1 tool", `answer:${ANSWER}`]);
+    const group = t[1]!;
     if (group.kind !== "tools") throw new Error("expected tools");
     expect(group.steps[0]!.thinking).toContain("list sites");
   });

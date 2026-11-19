@@ -74,6 +74,7 @@ export {
   type TranscriptTools,
   type TranscriptAnswer,
   type TranscriptEnding,
+  type TranscriptThinking,
 } from "./state/turn-transcript.js";
 export {
   foldStructured,
@@ -143,6 +144,47 @@ export {
   type RunStrategyState,
   type RunStrategy,
 } from "./state/run-strategy.js";
+export { splitReasoning, type ReasoningSplit } from "./state/reasoning-split.js";
+export {
+  STRATEGY_PHASES,
+  strategySpecOf,
+  strategyPhasesOf,
+  strategyStepOf,
+  strategyStepFromWire,
+  phaseIdOf,
+  totNodeOfWire,
+  totNodeOfThought,
+  initialStrategyRun,
+  foldStrategyRun,
+  endStrategyRun,
+  strategyStatusOf,
+  totTreeOf,
+  totForestOf,
+  totHasEdges,
+  attemptsOf,
+  type TotTreeNode,
+  type CodeVerify,
+  type StrategyPhaseDef,
+  type StrategySpec,
+  type StrategyStep,
+  type StrategyStepDetail,
+  type StrategyRow,
+  type StrategyRowStatus,
+  type StrategyRunState,
+  type StrategyRunHolder,
+  type StrategyAttempt,
+  type TotNode,
+  type TotLevel,
+} from "./state/strategy-phases.js";
+export {
+  approvalGateOf,
+  strategyApprovalConflictOf,
+  strategyConflictLineOf,
+  type ApprovalGate,
+  type ConflictResolution,
+  type StrategyApprovalConflict,
+  type StrategyApprovalInput,
+} from "./state/strategy-conflict.js";
 export {
   SAFETY_EVENT_TAGS,
   safetyBodyOf,

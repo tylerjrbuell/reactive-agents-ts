@@ -1,4 +1,5 @@
 import type { TurnOutcome } from "./turn-outcome.js";
+import { splitReasoning } from "./reasoning-split.js";
 import { buildTurnSteps, persistedTurnStepsOf, type StepCall, type TurnStep } from "./turn-steps.js";
 import { visibleIterations, type TraceToolCall, type TurnTrace, type TurnTraceState } from "./turn-trace.js";
 
@@ -6,8 +7,8 @@ import { visibleIterations, type TraceToolCall, type TurnTrace, type TurnTraceSt
  * Chat-transcript view of one agent turn: the turn read as the agent talking.
  * The model's prose between iterations is message text, the tool work between
  * two pieces of prose collapses into one group ("Ran 4 tools · 1 failed"), and
- * the final answer closes the turn. Provider thinking never enters the reading
- * path; it stays on the steps a tool group carries, for drill-down.
+ * the final answer closes the turn. Provider thinking leads as a collapsible
+ * segment, never as message text, and stays on the steps a tool group carries.
  *
  * Built on {@link buildTurnSteps}: a tool group holds the action-first steps it
  * covers, so a UI expands a group into the same step rows it shows elsewhere.
@@ -73,8 +74,22 @@ export interface TranscriptEnding {
   readonly outcome: TurnOutcome;
 }
 
+/**
+ * The turn's reasoning, to be drawn as a collapsible "Thinking" pill: the provider's thinking
+ * (`ThinkingEmitted`) plus any reasoning a model printed into its visible text
+ * ({@link splitReasoning}). Always the first segment. `live` while the turn still streams, so a
+ * view can show the text growing (muted) and collapse it when the turn ends.
+ */
+export interface TranscriptThinking {
+  readonly kind: "thinking";
+  readonly key: "thinking";
+  readonly text: string;
+  readonly live: boolean;
+}
+
 /** One segment of a turn transcript, in reading order. */
 export type TranscriptSegment<C extends StepCall = StepCall> =
+  | TranscriptThinking
   | TranscriptProse
   | TranscriptTools<C>
   | TranscriptAnswer
@@ -121,7 +136,8 @@ const toolsSegment = <C extends StepCall>(steps: readonly TurnStep<C>[]): Transc
  * prose), then its tool calls; consecutive tool work with no prose between
  * merges into one group; the answer closes the transcript.
  *
- * - Thinking is excluded (it stays on the group's steps).
+ * - Thinking leads the transcript as one `thinking` segment (a collapsible pill); it also stays on
+ *   the group's steps for drill-down.
  * - Prose equal to the answer, contained in a long answer, or repeating
  *   earlier prose is dropped, so the answer never renders twice.
  * - `answer` (final) wins over `pending` (the live preview, `final: false`).
@@ -135,17 +151,28 @@ export function buildTurnTranscript<C extends StepCall>(
     readonly answer?: string | undefined;
     readonly pending?: string | undefined;
     readonly outcome?: TurnOutcome | undefined;
+    /** The turn still streams: its thinking segment is `live`. */
+    readonly live?: boolean | undefined;
   } = {},
 ): TranscriptSegment<C>[] {
   const outcome = opts.outcome;
   const finalText = outcome?.ending === "partial" && outcome.draft !== undefined ? outcome.draft : opts.answer;
-  const answerText = finalText?.trim() ? finalText : undefined;
-  const pendingText = answerText === undefined && opts.pending?.trim() ? opts.pending : undefined;
+  // Reasoning a model printed into its visible text moves to the thinking segment (one rule: splitReasoning),
+  // confirmed against what the run reported on its own channels.
+  const channels = steps.flatMap((s) => [s.thinking, s.narration]);
+  const finalSplit = finalText?.trim() ? splitReasoning(finalText, channels) : undefined;
+  const answerText = finalSplit?.answer.trim() ? finalSplit.answer : undefined;
+  const pendingSplit = answerText === undefined && !finalSplit && opts.pending?.trim() ? splitReasoning(opts.pending, channels, { live: true }) : undefined;
+  const pendingText = pendingSplit?.answer.trim() ? pendingSplit.answer : undefined;
+  const thinkingText = [...steps.map((s) => s.thinking), finalSplit?.reasoning, pendingSplit?.reasoning]
+    .filter((t): t is string => !!t && t.trim().length > 0)
+    .join("\n\n");
   const closing = norm(answerText ?? pendingText);
   const restatesAnswer = (n: string): boolean =>
     closing.length > 0 && (n === closing || (n.length > 40 && closing.includes(n)));
 
   const out: TranscriptSegment<C>[] = [];
+  if (thinkingText.length > 0) out.push({ kind: "thinking", key: "thinking", text: thinkingText, live: opts.live === true });
   const seen = new Set<string>();
   let run: TurnStep<C>[] = [];
   const flush = (): void => {
@@ -178,7 +205,7 @@ const endingShown = (o: TurnOutcome, hasAnswer: boolean): boolean =>
  */
 export function turnTranscriptOf(s: TurnTraceState): TranscriptSegment<TraceToolCall>[] {
   const steps = buildTurnSteps({ iterations: visibleIterations(s), calls: s.calls, ...(s.answer ? { answer: s.answer } : {}) });
-  return buildTurnTranscript(steps, { answer: s.answer, pending: s.pending, outcome: s.outcome });
+  return buildTurnTranscript(steps, { answer: s.answer, pending: s.pending, outcome: s.outcome, live: s.ended === undefined });
 }
 
 /**
