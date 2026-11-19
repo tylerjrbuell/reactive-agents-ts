@@ -82,6 +82,9 @@ export {
   taskInputText,
   taskInputParts,
 
+  // Failed-run rejection class (supports identity checks in user code)
+  AgentRunError,
+
   // Structured output
   StructuredOutputError,
   OutputSchemaError,

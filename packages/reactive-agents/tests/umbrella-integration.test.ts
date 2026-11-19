@@ -74,6 +74,15 @@ describe("Umbrella re-exports", () => {
     }
   });
 
+  test("AgentRunError (run rejection class) is the runtime's class", async () => {
+    const mod = await import("../src/index.js");
+    const runtime = await import("@reactive-agents/runtime");
+    expect(mod.AgentRunError).toBe(runtime.AgentRunError);
+    const err = new mod.AgentRunError("run failed", new TypeError("inner"));
+    expect(err.name).toBe("AgentRunError");
+    expect(err.cause?.message).toBe("inner");
+  });
+
   test("core service exports are accessible", async () => {
     const mod = await import("../src/index.js");
 
