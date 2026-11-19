@@ -12,6 +12,7 @@ import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
 import { ReactiveAgentBuilder } from "../src/builder";
 import { cascadeWithTransitions } from "../src/llm-fallback-cascade";
+import { peekRecords } from "./_peek";
 
 type Resp = { content: string };
 const ok = (content: string): Effect.Effect<Resp, string> => Effect.succeed({ content });
@@ -37,8 +38,8 @@ describe("cascadeWithTransitions — real provider cascade", () => {
     expect(res.content).toBe("fallback");
     // Red-on-cut: if the cascade loop is removed, the primary error propagates
     // and this Promise rejects instead of yielding "fallback".
-    // boundary: fallbackTransitions is a runtime-only key not declared on the response type
-    const transitions = (res as unknown as { fallbackTransitions: Array<Record<string, unknown>> }).fallbackTransitions;
+    // fallbackTransitions is a runtime-only key not declared on the response type
+    const transitions = peekRecords(res, "fallbackTransitions");
     expect(transitions).toHaveLength(1);
     expect(transitions[0]).toEqual({
       fromProvider: "anthropic",
@@ -59,8 +60,7 @@ describe("cascadeWithTransitions — real provider cascade", () => {
     );
     const res = await Effect.runPromise(eff);
     expect(res.content).toBe("gemini-result");
-    // boundary: fallbackTransitions is a runtime-only key not declared on the response type
-    const transitions = (res as unknown as { fallbackTransitions: Array<Record<string, unknown>> }).fallbackTransitions;
+    const transitions = peekRecords(res, "fallbackTransitions");
     expect(transitions.map((t) => `${t.fromProvider}->${t.toProvider}`)).toEqual([
       "anthropic->openai",
       "openai->gemini",

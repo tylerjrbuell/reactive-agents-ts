@@ -318,7 +318,7 @@ function countAsUnknownAs(file: string): Hit[] {
 //   ceiling doc sanctions, none in production code. Counted, not hidden.
 // - 2026-11-03: 251 → 91, and the src ceiling 79 → 74. Ratcheted down by the
 //   fixture-builder cleanup (typed kernel/runtime builders and test doubles).
-const TESTS_CEILING = 91;
+const TESTS_CEILING = 82;
 
 function walkAsUnknownAsIn(root: string): Hit[] {
   const hits: Hit[] = [];

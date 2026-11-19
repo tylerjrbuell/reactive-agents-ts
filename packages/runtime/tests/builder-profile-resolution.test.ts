@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { ReactiveAgents, ReactiveAgent } from "../src/index.js";
 import { resolveProfile } from "@reactive-agents/reasoning";
+import { peekRecord } from "./_peek";
 
 describe("Builder auto-resolves context profile from model name", () => {
   it("auto-resolves mid profile for capable local model", async () => {
@@ -54,11 +55,8 @@ describe("Builder auto-resolves context profile from model name", () => {
       .withModel({ model: uniqueModel, numCtx: declaredNumCtx });
     await builder.build();
 
-    // boundary: reads the builder's private _contextProfile
-    const resolvedProfile = (
-      builder as unknown as { _contextProfile?: { maxTokens?: number } }
-    )._contextProfile;
-    expect(resolvedProfile?.maxTokens).toBe(declaredNumCtx);
+    const resolvedProfile = peekRecord(builder, "_contextProfile");
+    expect(resolvedProfile.maxTokens).toBe(declaredNumCtx);
   });
 
   it("explicit withContextProfile overrides auto-resolution", async () => {

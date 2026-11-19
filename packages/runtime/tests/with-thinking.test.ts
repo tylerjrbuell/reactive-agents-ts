@@ -1,11 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { ReactiveAgents } from "reactive-agents";
+import { peekRecord } from "./_peek";
 
 describe(".withThinking() writes config.thinkingOptions + config.thinking", () => {
   it("bare call enables thinking", async () => {
     const agent = await ReactiveAgents.create().withProvider("anthropic").withThinking().build();
-    // boundary: peeks the agent's private config field
-    const cfg = (agent as unknown as { config: Record<string, unknown> }).config;
+    const cfg = peekRecord(agent, "config");
     expect(cfg.thinking).toBe(true);
     expect(cfg.thinkingOptions).toMatchObject({ enabled: true });
   }, 15000);
@@ -15,15 +15,13 @@ describe(".withThinking() writes config.thinkingOptions + config.thinking", () =
       .withProvider("openai")
       .withThinking({ effort: "high", budgetTokens: 8000 })
       .build();
-    // boundary: peeks the agent's private config field
-    const cfg = (agent as unknown as { config: Record<string, unknown> }).config;
+    const cfg = peekRecord(agent, "config");
     expect(cfg.thinkingOptions).toMatchObject({ enabled: true, effort: "high", budgetTokens: 8000 });
   }, 15000);
 
   it("withThinking(false) disables", async () => {
     const agent = await ReactiveAgents.create().withProvider("gemini").withThinking(false).build();
-    // boundary: peeks the agent's private config field
-    const cfg = (agent as unknown as { config: Record<string, unknown> }).config;
+    const cfg = peekRecord(agent, "config");
     expect(cfg.thinking).toBe(false);
     expect(cfg.thinkingOptions).toMatchObject({ enabled: false });
   }, 15000);
@@ -33,8 +31,7 @@ describe(".withThinking() writes config.thinkingOptions + config.thinking", () =
       .withProvider("anthropic")
       .withModel({ thinking: true })
       .build();
-    // boundary: peeks the agent's private config field
-    const cfg = (agent as unknown as { config: Record<string, unknown> }).config;
+    const cfg = peekRecord(agent, "config");
     expect(cfg.thinking).toBe(true);
   }, 15000);
 });

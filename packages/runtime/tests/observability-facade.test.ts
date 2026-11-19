@@ -7,6 +7,7 @@
 // The dedicated methods remain (additive). Precedence: last call wins.
 import { describe, expect, it } from "bun:test";
 import { ReactiveAgents } from "../src";
+import { snapshot } from "./_peek";
 
 // White-box view of the observability-related builder state the unified facade
 // must populate identically to the dedicated methods.
@@ -18,11 +19,12 @@ type ObsState = {
   _enableHealthCheck: boolean;
   _enableAudit: boolean;
   _enableCostTracking: boolean;
+  _observabilityOptions?: { verbosity?: string };
 };
 
 describe("withObservability unified facade (DX wave, v0.12)", () => {
   it("fans out sub-options to the same state as the dedicated methods", () => {
-    const unified = ReactiveAgents.create().withObservability({
+    const unified = snapshot<ObsState>(ReactiveAgents.create().withObservability({
       cortex: { url: "http://localhost:9999" },
       telemetry: { mode: "isolated" },
       logging: { level: "debug" },
@@ -30,9 +32,9 @@ describe("withObservability unified facade (DX wave, v0.12)", () => {
       health: true,
       audit: true,
       costs: true,
-    }) as unknown as ObsState; // boundary: reads private builder state (ObsState view)
+    }));
 
-    const chained = ReactiveAgents.create()
+    const chained = snapshot<ObsState>(ReactiveAgents.create()
       .withCortex("http://localhost:9999")
       // telemetry has no dedicated wither (removed v0.14 — folded into
       // withObservability); the facade is now its only entry point.
@@ -41,7 +43,7 @@ describe("withObservability unified facade (DX wave, v0.12)", () => {
       .withTracing({ dir: "/tmp/facade-traces" })
       .withHealthCheck()
       .withAudit()
-      .withCostTracking() as unknown as ObsState; // boundary: reads private builder state
+      .withCostTracking());
 
     expect(unified._cortexUrl).toBe(chained._cortexUrl);
     expect(unified._telemetryConfig).toEqual(chained._telemetryConfig);
@@ -53,19 +55,19 @@ describe("withObservability unified facade (DX wave, v0.12)", () => {
   }, 15000);
 
   it("verbosity/live still work alongside the new sub-options", () => {
-    const b = ReactiveAgents.create().withObservability({
+    const b = snapshot<ObsState>(ReactiveAgents.create().withObservability({
       verbosity: "verbose",
       cortex: true,
-    }) as unknown as ObsState & { _observabilityOptions?: { verbosity?: string } }; // boundary: reads private builder state
+    }));
     expect(b._observabilityOptions?.verbosity).toBe("verbose");
     // cortex:true resolves the URL via CORTEX_URL env / default.
     expect(typeof b._cortexUrl).toBe("string");
   }, 15000);
 
   it("tracing:false disables tracing (parity with withoutTracing)", () => {
-    const b = ReactiveAgents.create()
+    const b = snapshot<ObsState>(ReactiveAgents.create()
       .withTracing({ dir: "/tmp/x" })
-      .withObservability({ tracing: false }) as unknown as ObsState; // boundary: reads private builder state
+      .withObservability({ tracing: false }));
     expect(b._tracingConfig).toBeNull();
   }, 15000);
 });
