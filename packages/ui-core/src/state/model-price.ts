@@ -85,7 +85,7 @@ export function modelPriceDetail(price: ModelPrice | undefined): string {
   if (isLocalPrice(price)) return "Free (local): local inference has no per-token bill.";
   const source = priceSourceLabel(price);
   if (isFreePrice(price)) {
-    return `Free: billed $0 per 1M input and output tokens (free tier; no paid tier price). Source: ${source}`;
+    return `Free: billed $0 per 1M input and output tokens. Source: ${source}`;
   }
   return `${formatModelPrice(price)}. Source: ${source}`;
 }

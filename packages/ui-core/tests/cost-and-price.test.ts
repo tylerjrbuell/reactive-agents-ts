@@ -117,7 +117,7 @@ describe("model price display", () => {
 
   test("price detail explains free, local and unknown prices", () => {
     expect(modelPriceDetail(gemma)).toBe(
-      "Free: billed $0 per 1M input and output tokens (free tier; no paid tier price). Source: provider price page, as of 2026-11-19",
+      "Free: billed $0 per 1M input and output tokens. Source: provider price page, as of 2026-11-19",
     );
     expect(modelPriceDetail(local)).toBe("Free (local): local inference has no per-token bill.");
     expect(modelPriceDetail(undefined)).toBe("Price unknown: the framework has no rate for this model.");
