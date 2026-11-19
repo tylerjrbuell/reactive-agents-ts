@@ -8,13 +8,29 @@
 // inside the container every one of those hit nothing, the capability fell back
 // to the conservative 2048/none entry, and `.withStrictValidation()` failed the
 // build with a message about the MODEL rather than the endpoint).
-import { describe, it, expect, afterEach } from "bun:test";
+import { describe, it, expect, afterEach, beforeEach } from "bun:test";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
 const VARS = ["OLLAMA_ENDPOINT", "OLLAMA_HOST", "OLLAMA_BASE"] as const;
 
+// Save and clear BEFORE each case: the ambient environment (e.g. `bun run repo ci`
+// sets OLLAMA_HOST=http://127.0.0.1:9) must not leak into the first case, and the
+// caller's values are restored afterwards so later test files see them unchanged.
+const saved: Partial<Record<(typeof VARS)[number], string>> = {};
+
+beforeEach(() => {
+  for (const v of VARS) {
+    saved[v] = process.env[v];
+    delete process.env[v];
+  }
+});
+
 afterEach(() => {
-  for (const v of VARS) delete process.env[v];
+  for (const v of VARS) {
+    const value = saved[v];
+    if (value === undefined) delete process.env[v];
+    else process.env[v] = value;
+  }
 });
 
 describe("resolveOllamaEndpoint", () => {
