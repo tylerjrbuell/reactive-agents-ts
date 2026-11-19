@@ -31,6 +31,13 @@ describe("approvalConflictOfConfig (the framework's codeActionApprovalConflict, 
     expect(c?.resolutions.map((r) => r.id)).toEqual(["switch-strategy", "turn-off-approvals"]);
   });
 
+  it("a sub-agent tool is gated under the default policy, so a callable one blocks and is named", () => {
+    const c = approvalConflictOfConfig({ ...ca, agentTools: [{ toolName: "ask-researcher", agentName: "researcher" }] });
+    expect(c?.gatedTools).toEqual(["ask-researcher"]);
+    expect(c?.message).toContain("ask-researcher");
+    expect(approvalConflictOfConfig({ ...ca, askBeforeRiskyTools: false, agentTools: [{ toolName: "ask-researcher" }] })).toBeUndefined();
+  });
+
   it("an explicit policy naming a callable tool blocks with its name and offers only a strategy switch", () => {
     const c = approvalConflictOfConfig({ ...ca, askBeforeRiskyTools: false, tools: ["web-search"], approvalPolicy: { mode: "detach", tools: ["web-search"] } });
     expect(c?.gatedTools).toEqual(["web-search"]);

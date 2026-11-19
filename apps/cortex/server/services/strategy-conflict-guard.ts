@@ -3,7 +3,7 @@
  *
  * Code Action runs tools inside a sandbox, past the approval gate, so the framework refuses to start
  * it when the approval policy gates a tool the sandbox can call (`codeActionApprovalConflict` in
- * `@reactive-agents/reasoning`, the one home of that rule). This module does not re-derive the rule:
+ * `@reactive-agents/runtime`, the one home of that rule). This module does not re-derive the rule:
  * it builds the predicate's two inputs the way the agent is BUILT and calls it.
  *
  *  - Policy: `effectiveApprovalPolicy` (an explicit policy, else the rule-less default unless
@@ -19,7 +19,7 @@
  * 409 and the note never disagree with the framework. The policy is never dropped silently: each
  * resolution is a choice the person makes.
  */
-import { codeActionApprovalConflict } from "@reactive-agents/reasoning";
+import { codeActionApprovalConflict } from "@reactive-agents/runtime";
 import { approvalGateOf, strategyApprovalConflictOf, type StrategyApprovalConflict } from "@reactive-agents/ui-core";
 import { approvalPolicyOf, effectiveApprovalPolicy } from "./approval-policy.js";
 import { mergeCortexAllowedTools, mergeCortexUiToolNames, type CortexMetaToolsConfig } from "./cortex-agent-config.js";
@@ -40,6 +40,14 @@ const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is
 const record = (v: unknown): Record<string, unknown> | undefined =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 const nonEmpty = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
+
+/** Names of the sub-agent tools (`.withAgentTool`) a config attaches. The framework gates these under any approval policy. */
+function agentToolNamesOf(raw: Readonly<Record<string, unknown>>): string[] {
+  return (Array.isArray(raw.agentTools) ? raw.agentTools : []).flatMap((t) => {
+    const name = record(t)?.toolName;
+    return typeof name === "string" ? [name] : [];
+  });
+}
 
 /**
  * The tool names the built agent's sandbox could call: the allow-list `toolsDraft` builds
@@ -62,10 +70,7 @@ export function callableToolNamesOf(raw: Readonly<Record<string, unknown>>): str
     ? { enabled: mt.enabled === true, brief: mt.brief === true, find: mt.find === true, pulse: mt.pulse === true, recall: mt.recall === true, todo: mt.todo === true }
     : undefined;
   const dsa = record(raw.dynamicSubAgents);
-  const agentToolNames = (Array.isArray(raw.agentTools) ? raw.agentTools : []).flatMap((t) => {
-    const name = record(t)?.toolName;
-    return typeof name === "string" ? [name] : [];
-  });
+  const agentToolNames = agentToolNamesOf(raw);
   const toolLayer = nonEmpty(raw.mcpServerIds) || nonEmpty(raw.mcpConfigs) || agentToolNames.length > 0 || dsa?.enabled === true || userTools.length > 0 || meta?.enabled === true;
   if (!toolLayer) return [];
   return mergeCortexAllowedTools(userTools, meta, { spawnAgent: dsa?.enabled === true, agentToolNames });
@@ -82,7 +87,7 @@ export function approvalConflictOfConfig(
   const verdict = codeActionApprovalConflict({
     callableTools: callableToolNamesOf(raw),
     policy: effective
-      ? { tools: new Set([...(effective.tools ?? []), ...approvalRequiredToolNames()]), ...(effective.commands ? { commands: effective.commands } : {}) }
+      ? { tools: new Set([...(effective.tools ?? []), ...approvalRequiredToolNames(), ...agentToolNamesOf(raw)]), ...(effective.commands ? { commands: effective.commands } : {}) }
       : undefined,
   });
   return strategyApprovalConflictOf({
