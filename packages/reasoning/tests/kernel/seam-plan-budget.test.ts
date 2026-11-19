@@ -8,16 +8,18 @@
 //                             only UNCHECKED steps count, the signal step;
 //   refund interplay        — the refund cap stays on the ORIGINAL budget and
 //                             raise + refunds never pass the hard cap;
-//   resolver                — default on (absent), `planBudget:false` / RA_PLAN_BUDGET=0 off;
+//   resolver                — default OFF (absent), `planBudget:true` / RA_PLAN_BUDGET=1 on
+//                             (opt-in since 2026-11-19: +15-36% tokens, no lift);
 //   Umami-shaped scripted run — 18 unchecked steps vs maxIterations 10 finish
 //                             inside the raised bound with the signal recorded;
-//                             opted out, the same script does not.
+//                             not opted in (the default), the same script does not.
+// The pins below opt in through `ON` unless they test the default.
 //
 // RED-ON-CUT: return undefined from proposePlanBudget (scripted run + raise pins
 // fail), drop the `planBudgetHardCap` check in proposeBookkeepingRefund (the
 // hard-cap pin fails), drop `options.configuredMaxIterations` from the refund
-// cap (the original-budget pin fails), drop the `harness.planBudget === false`
-// gate (the opt-out pins fail).
+// cap (the original-budget pin fails), drop the `harness.planBudget !== true`
+// gate (the default-off pins fail).
 import { afterEach, describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
@@ -40,6 +42,8 @@ import { resolveHarnessConfig } from "../../src/harness-config.js";
 import { makeKernelInput, makeKernelRunOptions, makeKernelState } from "../../src/testing/kernel-fixtures.js";
 import { transitionState, type KernelInput, type KernelRunOptions, type KernelState, type ThoughtKernel } from "../../src/kernel/state/kernel-state.js";
 
+/** The mechanism opted in (it is default OFF). */
+const ON = resolveHarnessConfig({ planBudget: true });
 const seedOf = (n: number, done = 0): AdvisorySeedItem[] =>
   Array.from({ length: n }, (_, i) => ({
     id: String(i + 1),
@@ -49,7 +53,7 @@ const seedOf = (n: number, done = 0): AdvisorySeedItem[] =>
 const stateOf = (seed: readonly AdvisorySeedItem[], over: Partial<KernelState> = {}): KernelState =>
   seedInitialAdvisory(makeKernelState({ status: "thinking", ...over } as never), { initialAdvisory: seed });
 const inputOf = (seed: readonly AdvisorySeedItem[], over: Partial<KernelInput> = {}): KernelInput =>
-  makeKernelInput({ task: "Execute the plan.", initialAdvisory: seed, ...over });
+  makeKernelInput({ task: "Execute the plan.", initialAdvisory: seed, harness: ON, ...over });
 const optionsOf = (max = 10): KernelRunOptions => makeKernelRunOptions({ maxIterations: max });
 
 describe("planBudget (arithmetic)", () => {
@@ -109,7 +113,9 @@ describe("proposePlanBudget", () => {
     expect(proposePlanBudget(args({ seed: seedOf(18, 6) }))?.budget.steps).toBe(12);
   });
 
-  it("nothing changes: unseeded, plan posture, finished run, already raised, opted out", () => {
+  it("nothing changes: unseeded, plan posture, finished run, already raised, opted out, not opted in (the default)", () => {
+    expect(proposePlanBudget(args({ input: { harness: resolveHarnessConfig() } }))).toBeUndefined();
+    expect(proposePlanBudget(args({ input: { harness: undefined } }))).toBeUndefined();
     expect(proposePlanBudget({ state: makeKernelState({ status: "thinking" } as never), input: makeKernelInput({ task: "t" }), options: optionsOf() })).toBeUndefined();
     expect(proposePlanBudget(args({ input: { posture: "plan" } }))).toBeUndefined();
     expect(proposePlanBudget({ ...args(), state: stateOf(seed, { status: "done" }) })).toBeUndefined();
@@ -147,7 +153,7 @@ describe("ReasoningIterationProgress reports the effective bound", () => {
       );
     };
     await Effect.runPromise(
-      runKernel(kernel, { task: "Execute the plan.", initialAdvisory: seed }, { maxIterations: 10, strategy: "reactive", kernelType: "react" }).pipe(
+      runKernel(kernel, { task: "Execute the plan.", initialAdvisory: seed, harness: ON }, { maxIterations: 10, strategy: "reactive", kernelType: "react" }).pipe(
         Effect.provide(Layer.merge(TestLLMServiceLayer(), Layer.succeed(EventBus, bus))),
       ),
     );
@@ -241,13 +247,16 @@ describe("planBudget resolver", () => {
     if (saved === undefined) delete process.env.RA_PLAN_BUDGET;
     else process.env.RA_PLAN_BUDGET = saved;
   });
-  it("default ON (field absent, resolved harness unchanged); config false or RA_PLAN_BUDGET=0 turns it off; config beats env", () => {
+  it("default OFF (field absent, resolved harness unchanged); config true or RA_PLAN_BUDGET=1 turns it on; config beats env", () => {
     delete process.env.RA_PLAN_BUDGET;
     expect("planBudget" in resolveHarnessConfig()).toBe(false);
-    expect(resolveHarnessConfig({ planBudget: false }).planBudget).toBe(false);
+    expect("planBudget" in resolveHarnessConfig({ planBudget: false })).toBe(false);
+    expect(resolveHarnessConfig({ planBudget: true }).planBudget).toBe(true);
     process.env.RA_PLAN_BUDGET = "0";
-    expect(resolveHarnessConfig().planBudget).toBe(false);
-    expect("planBudget" in resolveHarnessConfig({ planBudget: true })).toBe(false);
+    expect("planBudget" in resolveHarnessConfig()).toBe(false);
+    process.env.RA_PLAN_BUDGET = "1";
+    expect(resolveHarnessConfig().planBudget).toBe(true);
+    expect("planBudget" in resolveHarnessConfig({ planBudget: false })).toBe(false);
   });
 });
 
@@ -271,7 +280,7 @@ describe("umami-shaped run: 18 unchecked seeded steps, maxIterations 10", () => 
     Effect.runPromise(
       runPass(
         reactKernel,
-        { task: "Execute the plan.", availableToolSchemas: SCHEMAS, contextProfile: { tier: "local" }, initialAdvisory: seedOf(18), ...over } as KernelInput,
+        { task: "Execute the plan.", availableToolSchemas: SCHEMAS, contextProfile: { tier: "local" }, initialAdvisory: seedOf(18), harness: ON, ...over } as KernelInput,
         opts,
       ).pipe(Effect.provide(Layer.mergeAll(TestLLMServiceLayer(script()), toolLayer, EventBusLive))),
     );
@@ -289,7 +298,7 @@ describe("umami-shaped run: 18 unchecked seeded steps, maxIterations 10", () => 
     const pass = await Effect.runPromise(
       runPass(
         reactKernel,
-        { task: "Execute the plan.", availableToolSchemas: SCHEMAS, contextProfile: { tier: "local" }, initialAdvisory: seedOf(18) } as KernelInput,
+        { task: "Execute the plan.", availableToolSchemas: SCHEMAS, contextProfile: { tier: "local" }, initialAdvisory: seedOf(18), harness: ON } as KernelInput,
         opts,
       ).pipe(Effect.provide(Layer.mergeAll(TestLLMServiceLayer(script(19)), toolLayer, EventBusLive))),
     );
@@ -306,7 +315,7 @@ describe("umami-shaped run: 18 unchecked seeded steps, maxIterations 10", () => 
     const pass = await Effect.runPromise(
       runPass(
         reactKernel,
-        { task: "Execute the plan.", availableToolSchemas: SCHEMAS, contextProfile: { tier: "local" }, initialAdvisory: seedOf(18) } as KernelInput,
+        { task: "Execute the plan.", availableToolSchemas: SCHEMAS, contextProfile: { tier: "local" }, initialAdvisory: seedOf(18), harness: ON } as KernelInput,
         opts,
       ).pipe(Effect.provide(Layer.mergeAll(TestLLMServiceLayer(script()), failing, EventBusLive))),
     );
@@ -316,6 +325,12 @@ describe("umami-shaped run: 18 unchecked seeded steps, maxIterations 10", () => 
 
   it("opted out (planBudget false): today's bound, no signal, no answer inside 10", async () => {
     const pass = await run({ harness: resolveHarnessConfig({ planBudget: false }) });
+    expect(raiseSteps(pass.state)).toHaveLength(0);
+    expect(pass.state.output ?? "").not.toContain("The spike came from site-a on Tuesday.");
+  });
+
+  it("not opted in (the default harness): today's bound, no signal, no answer inside 10", async () => {
+    const pass = await run({ harness: resolveHarnessConfig() });
     expect(raiseSteps(pass.state)).toHaveLength(0);
     expect(pass.state.output ?? "").not.toContain("The spike came from site-a on Tuesday.");
   });

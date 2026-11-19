@@ -21,8 +21,9 @@
 //   hardCap   = max(configured, min(60, configured * 3))
 //
 // Only UNCHECKED seeded steps count (a resumed plan's done steps do not). A plan
-// that fits, an unseeded run, plan posture, or `planBudget: false` /
-// `RA_PLAN_BUDGET=0`: undefined, nothing changes (byte-identical). The raise is
+// that fits, an unseeded run, plan posture, or the mechanism not opted in
+// (`planBudget: true` / `RA_PLAN_BUDGET=1`; default OFF since 2026-11-19):
+// undefined, nothing changes (byte-identical). The raise is
 // ONE bound: it lifts the iteration and LLM-call bounds the loop reads live from
 // the carrier's options (the bound the refund also bumps), and nothing else.
 // Cost, token, and time limits and kill switches are untouched and still end
@@ -115,7 +116,7 @@ export function proposePlanBudget(args: {
   readonly options: KernelRunOptions;
 }): { readonly state: KernelState; readonly options: KernelRunOptions; readonly budget: PlanBudget } | undefined {
   const { state, input, options } = args;
-  if (input.harness?.planBudget === false) return undefined;
+  if (input.harness?.planBudget !== true) return undefined;
   if (isPlanPosture(input) || (input.initialAdvisory?.length ?? 0) === 0) return undefined;
   if (state.status === "done" || state.status === "failed") return undefined;
   if (options.configuredMaxIterations !== undefined) return undefined; // already raised

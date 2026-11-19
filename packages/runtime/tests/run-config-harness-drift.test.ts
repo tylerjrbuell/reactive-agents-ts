@@ -42,7 +42,7 @@ const EVERY_FIELD: Required<HarnessConfig> = {
   leanThinking: true,
   computeOffload: true,
   planToolCatalog: true,
-  planBudget: false,
+  planBudget: true,
   autoTick: false,
   bookkeepingRefund: false,
   planRecon: true,

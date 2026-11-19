@@ -157,7 +157,7 @@ export function buildRunConfigSnapshot(args: {
     leanThinking: harness.leanThinking === true,
     computeOffload: harness.computeOffload === true,
     planToolCatalog: harness.planToolCatalog === true,
-    planBudget: harness.planBudget !== false,
+    planBudget: harness.planBudget === true,
     autoTick: harness.autoTick !== false,
     bookkeepingRefund: harness.bookkeepingRefund !== false,
     planRecon: harness.planRecon === true,

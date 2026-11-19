@@ -237,7 +237,8 @@ export interface HarnessConfig {
    * bound raised once at run start, to at most min(60, 3x configured); recorded
    * as a `plan-budget` harness signal and a `plan_budget_raised` event. Unseeded
    * runs and plans that fit are unchanged. Cost, token and time limits are
-   * untouched. Default ON; `false` or `RA_PLAN_BUDGET=0` turns it off.
+   * untouched. Default OFF (opt-in: its ablation measured more tokens with no
+   * success lift); `true` or `RA_PLAN_BUDGET=1` turns it on.
    */
   readonly planBudget?: boolean;
   /**
@@ -483,8 +484,8 @@ export interface ResolvedHarness {
   readonly computeOffload?: true;
   /** Plan tool catalog (see `HarnessConfig.planToolCatalog`). Present when on (the default). */
   readonly planToolCatalog?: true;
-  /** Plan budget (see `HarnessConfig.planBudget`). Present only when OFF (`false`); absent = on (the default). */
-  readonly planBudget?: false;
+  /** Plan budget (see `HarnessConfig.planBudget`). Present only when on; absent = off (the default). */
+  readonly planBudget?: true;
   /** Auto-tick (see `HarnessConfig.autoTick`). Present only when OFF (`false`); absent = on (the default). */
   readonly autoTick?: false;
   /** Bookkeeping refund (see `HarnessConfig.bookkeepingRefund`). Present only when OFF (`false`); absent = on (the default). */
@@ -612,7 +613,7 @@ export function resolveHarnessConfig(
     ...(pick(config.leanFinalTurn, leanFinalTurnEnabled()) ? { leanFinalTurn: true as const } : {}),
     ...(pick(config.computeOffload, computeOffloadEnabled()) ? { computeOffload: true as const } : {}),
     ...(pick(config.planToolCatalog, planToolCatalogEnabled()) ? { planToolCatalog: true as const } : {}),
-    ...(pick(config.planBudget, planBudgetEnabled()) ? {} : { planBudget: false as const }),
+    ...(pick(config.planBudget, planBudgetEnabled()) ? { planBudget: true as const } : {}),
     ...(pick(config.autoTick, autoTickEnabled()) ? {} : { autoTick: false as const }),
     ...(pick(config.bookkeepingRefund, bookkeepingRefundEnabled()) ? {} : { bookkeepingRefund: false as const }),
     ...(pick(config.planRecon, planReconEnabled()) ? { planRecon: true as const } : {}),

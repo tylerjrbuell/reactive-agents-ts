@@ -280,11 +280,12 @@ export function todoWrapUpEnabled(): boolean {
 /**
  * Plan budget: a run seeded with a plan checklist gets its iteration bound
  * raised at run start to fit the unchecked steps plus a reserve, capped
- * (`kernel/loop/plan-budget.ts`). Default ON (seeded runs only);
- * `RA_PLAN_BUDGET=0` disables it.
+ * (`kernel/loop/plan-budget.ts`). Default OFF (opt-in since 2026-11-19: its
+ * 2026-11-16 ablation cost +15-36% tokens with no success lift);
+ * `RA_PLAN_BUDGET=1` enables it (seeded runs only).
  */
 export function planBudgetEnabled(): boolean {
-  return readFlag("RA_PLAN_BUDGET") !== "0";
+  return readFlag("RA_PLAN_BUDGET") === "1";
 }
 
 /**

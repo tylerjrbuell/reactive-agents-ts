@@ -88,8 +88,9 @@ export const HarnessConfigSchema = Schema.Struct({
   /**
    * Plan budget: a run seeded with a plan checklist gets its iteration bound
    * raised once at run start to fit the unchecked steps plus a reserve, capped
-   * at min(60, 3x configured). Default ON; `false` or `RA_PLAN_BUDGET=0` turns
-   * it off.
+   * at min(60, 3x configured). Default OFF (opt-in): the 2026-11-16 plan-posture
+   * ablation measured +15-36% tokens with no accuracy lift. `true` or
+   * `RA_PLAN_BUDGET=1` turns it on; explicit config beats the env.
    */
   planBudget: Schema.optional(Schema.Boolean),
   /**

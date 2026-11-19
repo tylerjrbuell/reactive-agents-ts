@@ -420,7 +420,7 @@ describe("run-started config + origin", () => {
     }
   });
 
-  test("planBudget and wrapUpReserve are recorded as mechanisms: planBudget default ON, wrapUpReserve default OFF; explicit config and env flip them", async () => {
+  test("planBudget and wrapUpReserve are recorded as mechanisms: both default OFF; explicit config and env flip them", async () => {
     const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
       const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
       return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
@@ -440,27 +440,28 @@ describe("run-started config + origin", () => {
       const dflt = await build();
       const dfltMech = await mechanismsOf(dflt.run("plan-budget default pin"));
       await dflt.dispose();
-      expect(dfltMech?.planBudget).toBe(true);
+      // Opt-in (2026-11-16 plan-posture ablation: +15-36% tokens, no lift).
+      expect(dfltMech?.planBudget).toBe(false);
       expect(dfltMech?.wrapUpReserve).toBe(false);
 
-      const off = await build({ planBudget: false });
-      const offMech = await mechanismsOf(off.run("plan-budget explicit-off pin"));
-      await off.dispose();
-      expect(offMech?.planBudget).toBe(false);
+      const on = await build({ planBudget: true });
+      const onMech = await mechanismsOf(on.run("plan-budget explicit-on pin"));
+      await on.dispose();
+      expect(onMech?.planBudget).toBe(true);
 
-      process.env.RA_PLAN_BUDGET = "0";
+      process.env.RA_PLAN_BUDGET = "1";
       process.env.RA_WRAPUP_RESERVE = "1";
       const env = await build();
       const envMech = await mechanismsOf(env.run("plan-budget env pin"));
       await env.dispose();
-      expect(envMech?.planBudget).toBe(false);
+      expect(envMech?.planBudget).toBe(true);
       expect(envMech?.wrapUpReserve).toBe(true);
 
       // explicit config beats env
-      const explicitOn = await build({ planBudget: true });
-      const onMech = await mechanismsOf(explicitOn.run("plan-budget explicit-on pin"));
-      await explicitOn.dispose();
-      expect(onMech?.planBudget).toBe(true);
+      const explicitOff = await build({ planBudget: false });
+      const offMech = await mechanismsOf(explicitOff.run("plan-budget explicit-off pin"));
+      await explicitOff.dispose();
+      expect(offMech?.planBudget).toBe(false);
     } finally {
       delete process.env.RA_PLAN_BUDGET;
       delete process.env.RA_WRAPUP_RESERVE;
