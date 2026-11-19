@@ -670,7 +670,8 @@ export const defaultVerifier: Verifier = {
           /\bfaster\b|\bslower\b|speed-?up|\bimprove|\breduc|\boptimiz|\bversus\b|\bvs\.?\b|benchmark|before.{0,24}after/i.test(
             ctx.content,
           );
-        const fab = detectFabricatedMeasurement(ctx.content, corpus);
+        // A figure the task itself states ("aim for a 20% reduction") is not invented.
+        const fab = detectFabricatedMeasurement(ctx.content, `${corpus}\n${ctx.task}`);
         // Rejects only on a `hard` violation: a unit-bearing number that no
         // observation holds (a literal anchor). A percent read from a perf word
         // in its sentence is a semantic guess and warns (evidence-grounding.ts).

@@ -20,8 +20,8 @@ import type { ReasoningStep } from "../../src/types/index.js";
 const DECLINE = "I cannot determine the total because ./ledger.json could not be found.";
 const INPUT = makeKernelInput({ task: "Sum the amounts in ./ledger.json", requiredTools: ["file-read"] });
 
-const readResult = (success: boolean): ReasoningStep =>
-  makeStep("observation", success ? "amount=1" : "ENOENT: no such file", {
+const readResult = (success: boolean, error = "ENOENT: no such file"): ReasoningStep =>
+  makeStep("observation", success ? "amount=1" : error, {
     observationResult: { success, toolName: "file-read" },
   } as never);
 
@@ -59,9 +59,20 @@ describe("seam-honest-decline-exit: a guard's stop over an always-failing requir
     expect(state.status).not.toBe("done");
   });
 
-  it("a single failure is not 'always errored' -> unchanged", async () => {
-    const { state } = await stop(stateWith([readResult(false), makeStep("thought", DECLINE)]));
+  it("a single TRANSIENT failure is not 'always errored' -> unchanged", async () => {
+    const { state } = await stop(stateWith([readResult(false, "Error: request timed out"), makeStep("thought", DECLINE)]));
     expect(state.meta.terminatedBy).not.toBe("abstained");
+  });
+
+  it("a single PERMANENT failure (ENOENT) + decline -> abstained (gemma ab-trap-5 shape)", async () => {
+    const { state } = await stop(stateWith([readResult(false), makeStep("thought", DECLINE)]));
+    expect(state.meta.terminatedBy).toBe("abstained");
+    expect(state.output).toBe(DECLINE);
+  });
+
+  it("a permanent failure mixed with a transient one needs two calls", () => {
+    const steps = [readResult(false, "Error: connection reset"), makeStep("thought", DECLINE)];
+    expect(honestDeclineOf(stateWith(steps), INPUT, ["call the `file-read` tool"])).toBeUndefined();
   });
 
   it("the tool succeeded once this run -> unchanged", async () => {
@@ -108,10 +119,15 @@ describe("declineSettlesOutstanding: act-or-answer must not force a read the mod
     expect(declineSettlesOutstanding(s, INPUT, ["file-read"], DECLINE)).toBe(true);
   });
 
+  it("one ENOENT then a decline settles (no forced second read)", () => {
+    const s = permanentlyFailed(stateWith([readResult(false), makeStep("thought", DECLINE)]));
+    expect(declineSettlesOutstanding(s, INPUT, ["file-read"])).toBe(true);
+  });
+
   it("not settled: tool succeeded once, a single failure, a partial answer, or other outstanding work", () => {
     const ok = stateWith([readResult(false), readResult(true), readResult(false), readResult(false), makeStep("thought", DECLINE)]);
     expect(declineSettlesOutstanding(ok, INPUT, ["file-read"])).toBe(false);
-    expect(declineSettlesOutstanding(stateWith([readResult(false), makeStep("thought", DECLINE)]), INPUT, ["file-read"])).toBe(false);
+    expect(declineSettlesOutstanding(stateWith([readResult(false, "Error: timed out"), makeStep("thought", DECLINE)]), INPUT, ["file-read"])).toBe(false);
     const s = permanentlyFailed(stateWith(failedReads));
     expect(declineSettlesOutstanding(s, INPUT, ["file-read"], "The total is 412.")).toBe(false);
     expect(declineSettlesOutstanding(s, INPUT, ["file-read", "file-write"], DECLINE)).toBe(false);

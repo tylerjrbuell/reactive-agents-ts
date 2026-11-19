@@ -22,6 +22,7 @@ import {
   LEAN_FINAL_TURN_GUARD,
   LEAN_FINAL_TURN_HINT,
   shouldTakeLeanFinalTurn,
+  namedInputsExtractable,
   unreadNamedInputs,
   unreadProseInputs,
   type LeanFinalTurnFacts,
@@ -83,6 +84,22 @@ describe("lean final turn: when a call is lean (pure)", () => {
     expect(unreadProseInputs(prose, act(1))).toBe(1);
     expect(unreadProseInputs(prose, act(2))).toBe(0);
     expect(unreadProseInputs("Read the report and summarize it.", act(0))).toBe(0);
+  });
+
+  it("unreadNamedInputs: absolute paths through dot-directories are extracted (zoo-live 2026-11-18)", () => {
+    const dir = "/home/u/proj/.bench-run-123-abc";
+    const task = `Read ${dir}/a.json and ${dir}/b.json and add the counts.`;
+    expect(unreadNamedInputs(task, [])).toEqual([`${dir}/a.json`, `${dir}/b.json`]);
+    expect(unreadNamedInputs(task, [{ type: "action", content: `{"path":"${dir}/a.json"}` }])).toEqual([`${dir}/b.json`]);
+    expect(unreadNamedInputs("Read ~/.cfg/a.json and ./.env.local now.", [])).toEqual(["~/.cfg/a.json", ".env.local"]);
+  });
+
+  it("namedInputsExtractable: fails closed when a named file cannot be extracted", () => {
+    expect(namedInputsExtractable("Read /home/u/.bench-run-1-ab/a.json and add it.")).toBe(true);
+    expect(namedInputsExtractable("Summarize the report and tell me which region grew fastest.")).toBe(true);
+    expect(namedInputsExtractable("Read /tmp/dir with spaces/x.json")).toBe(true);
+    // A token the strict extractor cannot parse (non-word chars in a segment) must not read as "nothing unread".
+    expect(namedInputsExtractable("Read /home/u/run@1/a.json and add it.")).toBe(false);
   });
 
   it("once per batch of tool work: not again until another tool call", () => {
@@ -222,6 +239,19 @@ describe("end to end: the answer-only turn ships lean", () => {
       { text: "The total is 412 plus 7, which is 419." },
     ], { task: TWO_FILES });
     expect(requests[1]!.tools?.length ?? 0).toBeGreaterThan(0); // b.json unread: no lean turn
+    expect(fired).toHaveLength(0);
+  }, 20000);
+
+  it("on: dot-directory absolute paths, one of two read: the next turn keeps its tools (live shape)", async () => {
+    const dir = "/home/u/proj/.bench-run-123-abc";
+    const task = `Use the gather tool to read ${dir}/a.json and ${dir}/b.json, then add the two counts.`;
+    const { requests, fired } = await run({ leanFinalTurn: true }, [
+      { toolCall: { id: "g1", name: "gather", args: { q: `${dir}/a.json` } } },
+      { text: "The count from a.json is 412. I still need to read b.json." },
+      { toolCall: { id: "g2", name: "gather", args: { q: `${dir}/b.json` } } },
+      { text: "The total is 419." },
+    ], { task });
+    expect(requests[1]!.tools?.length ?? 0).toBeGreaterThan(0);
     expect(fired).toHaveLength(0);
   }, 20000);
 

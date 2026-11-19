@@ -291,9 +291,10 @@ export function detectFabricatedMeasurement(
     c.kind.tag === "time" && corpusSet.has(c.value) ? [{ value: c.value, seconds: c.kind.seconds }] : [],
   );
   const violations: string[] = [];
-  // `hard`: a violating claim carries its own unit (ms, ops/s, MB/s, Nx faster), so
-  // the number is a literal anchor no observation holds. A bare percent is read as a
-  // measurement only from a perf word in its sentence (a semantic category): it advises.
+  // `hard`: a violating claim is a number no observation holds. A percent counts only
+  // with a perf word in its sentence AND an unsupported magnitude, so a figure present
+  // in tool results or the task text stays allowed (grounded below); an invented one
+  // is hard (zoo-live 2026-11-18: 7 of 15 rw-6 runs ended success on invented percents).
   let hard = false;
   let onlyTimeClaims = true;
   for (const claim of claims) {
@@ -303,7 +304,7 @@ export function detectFabricatedMeasurement(
       ) || isDerivedMeasurement(claim, corpusSet, cited, timeOperands);
     if (!grounded) {
       violations.push(`fabricated measurement "${claim.phrase}" — no tool observation produced this value`);
-      if (claim.kind.tag !== "percent") hard = true;
+      hard = true;
       if (claim.kind.tag !== "time") onlyTimeClaims = false;
     }
   }

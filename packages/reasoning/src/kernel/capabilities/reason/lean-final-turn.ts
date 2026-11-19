@@ -67,7 +67,30 @@ const TOOL_WORK_KINDS: ReadonlySet<RequirementKind> = new Set<RequirementKind>([
   "write-coverage",
 ]);
 
-const FILE_TOKEN = /(?:^|[\s"'`(,])((?:\.{0,2}\/)?[\w-]+(?:[/.][\w-]+)*\.[A-Za-z][A-Za-z0-9]{0,4})(?=$|[\s"'`),;:!?]|\.(?:\s|$))/g;
+// Path segments may lead with a dot (`.bench-run-1-ab/`, `~/.config/`, `./.env.local`): zoo-live 2026-11-18.
+const FILE_TOKEN = /(?:^|[\s"'`(,])((?:(?:~|\.{0,2})\/)?\.?[\w-]+(?:[/.]\.?[\w-]+)*\.[A-Za-z][A-Za-z0-9]{0,4})(?=$|[\s"'`),;:!?]|\.(?:\s|$))/g;
+
+/** Any whitespace-delimited token that looks like a file: a path with an extension, or a common data/code extension. */
+const LOOSE_FILE_TOKEN =
+  /(?:^|[\s"'`(,])([^\s"'`(),;]*\/[^\s"'`(),;]*\.[A-Za-z][A-Za-z0-9]{0,4}|[^\s"'`(),;/]+\.(?:json|jsonl|csv|tsv|txt|md|ts|tsx|js|py|ya?ml|toml|log|html|xml|pdf|sql|env))(?=$|[\s"'`),;:!?]|\.(?:\s|$))/gi;
+
+/**
+ * Fail-closed check: true when every file-looking token the task names (and
+ * does not write) is also matched by {@link unreadNamedInputs}' extractor. A
+ * task that names files the extractor cannot read must not be taken as "all
+ * inputs read" (zoo-live 2026-11-18: zero tokens extracted read as nothing unread).
+ */
+export function namedInputsExtractable(task: string): boolean {
+  const written = new Set(deriveDeliverablePaths(task).map((p) => p.replace(/^\.\//, "")));
+  const strict = new Set<string>();
+  for (const m of task.matchAll(FILE_TOKEN)) strict.add((m[1] ?? "").replace(/^\.\//, ""));
+  for (const m of task.matchAll(LOOSE_FILE_TOKEN)) {
+    const token = (m[1] ?? "").replace(/^\.\//, "");
+    if (token.length === 0 || written.has(token) || strict.has(token)) continue;
+    return false;
+  }
+  return true;
+}
 
 /**
  * Files the task names that no tool call has touched yet. A file the task asks
@@ -177,7 +200,7 @@ export function decideLeanFinalTurn(args: {
       planPosture: false,
       declaresToolWork: (state.meta.runContract?.requirements ?? []).some((r) => TOOL_WORK_KINDS.has(r.kind)),
       toolWorkSettled: toolWorkSettled(state, input) !== undefined,
-      inputsRead: unreadNamedInputs(input.task, state.steps).length === 0 && unreadProseInputs(input.task, state.steps) === 0,
+      inputsRead: namedInputsExtractable(input.task) && unreadNamedInputs(input.task, state.steps).length === 0 && unreadProseInputs(input.task, state.steps) === 0,
       actions,
       takenAtActions: state.meta.leanFinalTurnAtActions,
     });

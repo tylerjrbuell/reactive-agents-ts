@@ -30,7 +30,11 @@ import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js"
 import { missingRequired } from "../capabilities/verify/requirement-state.js";
 import { executedOutcomes } from "./runner-helpers/tool-health.js";
 
-/** Failed executed calls, with no success, before a required tool counts as always-erroring. */
+/**
+ * Failed executed calls, with no success, before a required tool counts as
+ * always-erroring. A permanent error class (ENOENT, 404, not found) needs one
+ * (zoo-live 2026-11-18: gemma declines after a single ENOENT).
+ */
 export const MIN_FAILED_CALLS = 2;
 
 /** The decline the gate resolves to an abstention. */
@@ -86,9 +90,28 @@ function neverSucceededAmong(state: KernelState, missing: readonly string[]): re
   const outcomes = executedOutcomes(state.steps);
   for (const tool of missing) {
     const mine = outcomes.filter((o) => o.toolName === tool);
-    if (mine.length < MIN_FAILED_CALLS || mine.some((o) => o.success)) return undefined;
+    if (mine.some((o) => o.success)) return undefined;
+    // A permanent error class (ENOENT, 404, not found) is final after one call.
+    const needed = mine.length >= 1 && failedWithPermanentError(state, tool) ? 1 : MIN_FAILED_CALLS;
+    if (mine.length < needed) return undefined;
   }
   return missing;
+}
+
+/** Error text that no retry can change: the input is not there. */
+const PERMANENT_ERROR = /\bENOENT\b|no such file|not found|does not exist|\b404\b/i;
+
+/** True when EVERY failed executed result of `tool` carries a permanent error. */
+function failedWithPermanentError(state: KernelState, tool: string): boolean {
+  let seen = false;
+  for (const step of state.steps) {
+    if (step.type !== "observation") continue;
+    const result = step.metadata?.observationResult;
+    if (result?.toolName !== tool || result.success !== false) continue;
+    if (!PERMANENT_ERROR.test(step.content)) return false;
+    seen = true;
+  }
+  return seen;
 }
 
 /**

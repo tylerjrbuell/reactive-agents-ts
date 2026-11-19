@@ -85,6 +85,14 @@ describe("detectFabricatedMeasurement (always-on fabrication guard)", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("an invented percent benchmark is a HARD violation; a grounded one stays ok (zoo-live rw-6)", () => {
+    const bad = detectFabricatedMeasurement("The rewrite gave a 22% reduction in execution time.", "fixture rows only");
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.hard).toBe(true);
+    expect(detectFabricatedMeasurement("Execution time fell, a 22% reduction.", "bench: before 100 after 78 (22% faster)").ok).toBe(true);
+    expect(detectFabricatedMeasurement("A 20% reduction, as the task asked.", "rows\nAim for a 20% reduction.").ok).toBe(true);
+  });
+
   it("does NOT fire on percentages WITHOUT a perf keyword nearby (28% of users, 20% market share)", () => {
     const out = "About 28% of users prefer dark mode and 20% of the market uses it.";
     expect(detectFabricatedMeasurement(out, "").ok).toBe(true);
