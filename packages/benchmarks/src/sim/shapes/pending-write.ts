@@ -105,12 +105,16 @@ const base = (id: string, rereads: number, maxIterations: number): Shape => ({
 
 /**
  * Live cap (h3-todo-heavy `maxIterations: 14`) with a model that burns three turns on the stall (the sim lets
- * one of the repeated re-reads execute, so 3 here costs about what the live 2 refused re-reads did):
- * the last pair never lands. Known open (cause E). Cap name = the live cap; the wide arm below uses 18.
+ * one of the repeated re-reads execute, so 3 here costs about what the live 2 refused re-reads did).
+ * Since 57d8f073b an all-refused duplicate round is refunded (bounded to 3 in a row), so it now completes at 14
+ * (cause E fixed). Cap name = the live cap; the wide arm below uses 18.
  */
 export const pendingWriteStubbornCap14: Shape = base("pending-write-stubborn-cap14", 3, 14);
 /** The same stubborn model with a budget of 18 that fits (id keeps "cap16" for history): it completes, so the loss is the budget, not the hint. */
 export const pendingWriteStubbornCap16: Shape = base("pending-write-stubborn-cap16", 3, 18);
+
+/** A model that never takes the refusal: re-reads notes-2 30 times at the live cap. The refund bound (3 in a row) must still end it. */
+export const pendingWriteEndless: Shape = base("pending-write-endless-reread", 30, 14);
 
 export const pendingWrite: Shape = {
   id: "pending-write",

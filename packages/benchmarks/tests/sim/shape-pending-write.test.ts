@@ -3,7 +3,7 @@
 import { describe, expect, it } from "bun:test";
 import { armConfig } from "../../src/sim/mechanisms.js";
 import { kernelProvenance, formatKernelProvenance } from "./provenance.js";
-import { NOTES, pendingWrite, pendingWriteStubbornCap14, pendingWriteStubbornCap16 } from "../../src/sim/shapes/pending-write.js";
+import { NOTES, pendingWrite, pendingWriteStubbornCap14, pendingWriteStubbornCap16, pendingWriteEndless } from "../../src/sim/shapes/pending-write.js";
 import type { Shape } from "../../src/sim/shape.js";
 import { runArm } from "./run-shape.js";
 
@@ -50,13 +50,21 @@ describe("shape 9: pending write after a refused re-read", () => {
   }, 30000);
 
   // Live addendum 6: 5 of 8 refusal runs re-read twice before writing; 3 hit the 14-iteration cap with correct values.
-  it("stubborn model (two refused re-reads): completes at cap 16, loses the last pair at the live cap 14 (cause E, known open)", async () => {
+  it("stubborn model (refused re-reads): completes at cap 18 AND at the live cap 14 (cause E fixed by the bounded refund, 57d8f073b)", async () => {
     const wide = instrumented(pendingWriteStubbornCap16);
     await runArm(wide.shape, armConfig());
     for (let i = 0; i < NOTES.length; i++) expect(wide.writes.get(`out-${i + 1}.txt`)).toBe(String(NOTES[i]! * 2));
     const live = instrumented(pendingWriteStubbornCap14);
-    await runArm(live.shape, armConfig());
-    expect(live.writes.get("out-2.txt")).toBe(String(NOTES[1]! * 2)); // the hint worked: out-2 is right
-    expect(live.writes.has("out-6.txt")).toBe(false); // the budget did not
+    const r = await runArm(live.shape, armConfig());
+    for (let i = 0; i < NOTES.length; i++) expect(live.writes.get(`out-${i + 1}.txt`)).toBe(String(NOTES[i]! * 2));
+    expect(r.turns).toBeGreaterThan(14); // more think turns than the cap: only the refund buys them
+  }, 30000);
+
+  it("endless re-read loop: the 3-refund bound still ends it at the live cap (no hang, last pair lost)", async () => {
+    const endless = instrumented(pendingWriteEndless);
+    const r = await runArm(endless.shape, armConfig());
+    expect(r.turns).toBeLessThanOrEqual(14 + 3 + 1); // cap + at most 3 refunds (+ final answer turn)
+    expect(endless.writes.has("out-6.txt")).toBe(false);
+    expect(r.meetsIdeal).toBe(false);
   }, 30000);
 });
