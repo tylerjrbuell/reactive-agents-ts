@@ -100,6 +100,21 @@ export { resolveCanonical, warnCapabilityFallback } from "./canonical-resolver.j
 // pulled model resolves at its real window/dialect instead of the 2048 fallback.
 export { primeCapability } from "./capability-prime.js";
 
+// Per-provider capability discovery hook: how an unknown model id gets its real
+// limits from the provider (Ollama /api/show, Gemini models.get). Register a
+// discoverer to cover another provider; static rows still override it.
+export {
+  discoverCapability,
+  registerCapabilityDiscoverer,
+  capabilityDiscovererFor,
+} from "./capability-discovery.js";
+export type {
+  CapabilityDiscoverer,
+  CapabilityDiscoveryContext,
+  DiscoverCapabilityOptions,
+  DiscoveredCapability,
+} from "./capability-discovery.js";
+
 // Caller-declared capability — `.withModel({ numCtx })` fills the hole a failed
 // probe leaves, instead of the build dying on a `source: "fallback"` window the
 // user had already told us. Scoped form: `resolveCapability(p, m, { userNumCtx })`

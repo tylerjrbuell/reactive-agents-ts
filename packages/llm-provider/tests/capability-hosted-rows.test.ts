@@ -13,6 +13,9 @@ const ROWS: ReadonlyArray<readonly [string, string, number, number]> = [
   ["openai", "o4-mini", 200_000, 100_000],
   ["anthropic", "claude-opus-4-1", 200_000, 32_000],
   ["gemini", "gemini-2.0-flash", 1_048_576, 8_192],
+  // models.get report, 2026-11-19.
+  ["gemini", "gemini-4-carbon", 1_048_576, 32_768],
+  ["gemini", "gemini-4-argon", 1_048_576, 32_768],
 ];
 
 describe("hosted-model capability rows", () => {

@@ -55,7 +55,7 @@ describe("Gemini family capability rule", () => {
   });
 
   it("non-text and variant-less ids stay on the fallback", () => {
-    for (const id of ["gemini-embedding-001", "gemini-2.5-flash-preview-tts", "gemini-2.5-flash-image-preview", "gemini-exp-1206", "gemini-4-argon"]) {
+    for (const id of ["gemini-embedding-001", "gemini-2.5-flash-preview-tts", "gemini-2.5-flash-image-preview", "gemini-exp-1206", "gemini-9-boron"]) {
       expect(geminiFamilyCapability(id)).toBeUndefined();
       expect(resolveCapability("gemini", id).source).toBe("fallback");
     }

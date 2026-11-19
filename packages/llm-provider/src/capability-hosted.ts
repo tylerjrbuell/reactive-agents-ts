@@ -1,7 +1,7 @@
 // packages/llm-provider/src/capability-hosted.ts
 //
 // Older-but-still-selectable hosted models (OpenAI 4.1 family + o4-mini,
-// Gemini 2.0 Flash). Kept out of capability.ts (near the 1,000-LOC bar);
+// Gemini 2.0 Flash), plus the Gemini 4 ids (rows below, API-reported limits). Kept out of capability.ts (near the 1,000-LOC bar);
 // spread back into STATIC_CAPABILITIES. Without a row `resolveCapability`
 // falls back to a made-up 4096 window, which UIs (Cortex context meter)
 // rightly refuse to display.
@@ -90,6 +90,42 @@ export const HOSTED_STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = 
     supportsPromptCaching: true,
     supportsVision: true,
     supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  // Gemini 4 ids carry no pro/flash variant, so the family rule cannot place
+  // them. Window, output limit and thinking are the Gemini API's own models.get
+  // report (inputTokenLimit 1048576, outputTokenLimit 32768, thinking true;
+  // fetched 2026-11-19). Not reported, so kept conservative: vision and prompt
+  // caching off. Tier is not reported either: "frontier" is the owner's
+  // classification of these models (2026-11-19).
+  "gemini/gemini-4-carbon": {
+    provider: "gemini",
+    model: "gemini-4-carbon",
+    tier: "frontier",
+    maxContextTokens: 1_048_576,
+    recommendedNumCtx: 1_048_576,
+    maxOutputTokens: 32_768,
+    tokenizerFamily: "gemini",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: true,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "static-table",
+  },
+  "gemini/gemini-4-argon": {
+    provider: "gemini",
+    model: "gemini-4-argon",
+    tier: "frontier",
+    maxContextTokens: 1_048_576,
+    recommendedNumCtx: 1_048_576,
+    maxOutputTokens: 32_768,
+    tokenizerFamily: "gemini",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: true,
     supportsStreamingToolCalls: true,
     toolCallDialect: "native-fc",
     source: "static-table",
