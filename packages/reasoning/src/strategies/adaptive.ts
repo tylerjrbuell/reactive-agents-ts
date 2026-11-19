@@ -30,6 +30,7 @@ import { emitCalibrationEffect } from "../kernel/utils/calibration-trace.js";
 import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { runStrategy } from "./substrate/strategy-run.js";
+import { strategyChoiceData } from "./structured-steps.js";
 import { extractThinkingSafeContent } from "../kernel/utils/stream-parser.js";
 import { shouldSkipClassifierEvaluation } from "../kernel/capabilities/reflect/strategy-evaluator.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
@@ -189,6 +190,7 @@ export const executeAdaptive = (
         totalSteps: 1,
         thought: `[ADAPTIVE] Heuristic: ${selectedStrategy}`,
         kernelPass: "adaptive:heuristic",
+        structured: strategyChoiceData(selectedStrategy, "heuristic", localTierDefault ? "local-tier default" : undefined),
       });
     } else if (shouldSkipClassifierEvaluation(input.calibration?.classifierReliability)) {
       // W2d 2.6 — classifier-skip: reliability "low"/"skip" means skip the LLM
@@ -214,6 +216,7 @@ export const executeAdaptive = (
         totalSteps: 1,
         thought: `[ADAPTIVE] Classifier skipped; defaulting to reactive`,
         kernelPass: "adaptive:classifier-skip",
+        structured: strategyChoiceData("reactive", "classifier-skip", `classifierReliability=${input.calibration?.classifierReliability}`),
       });
     } else {
     // ── Analyze task to select strategy ──
@@ -268,6 +271,7 @@ export const executeAdaptive = (
       totalSteps: 1,
       thought: `[ADAPTIVE] Selected strategy: ${selectedStrategy}`,
       kernelPass: "adaptive:select",
+      structured: strategyChoiceData(selectedStrategy, "classifier"),
     });
     } // end else (LLM classification path)
 
@@ -310,6 +314,7 @@ export const executeAdaptive = (
           totalSteps: run.steps().length,
           thought: `[ADAPTIVE] cost-downgrade ${selectedStrategy}→${adjustment.strategy}`,
           kernelPass: "adaptive:cost-downgrade",
+          structured: strategyChoiceData(adjustment.strategy, "cost-downgrade", `from ${selectedStrategy}: ${adjustment.reason}`),
         });
         selectedStrategy = adjustment.strategy;
         costAwareDowngradeReason = adjustment.reason;
@@ -354,6 +359,7 @@ export const executeAdaptive = (
         totalSteps: 2,
         thought: `[ADAPTIVE] Falling back to reactive strategy`,
         kernelPass: "adaptive:fallback",
+        structured: strategyChoiceData("reactive", "fallback", `${selectedStrategy} returned ${subResult.status}`),
       });
 
       finalSubResult = yield* executeReactive({ ...input, taskClassification }).pipe(

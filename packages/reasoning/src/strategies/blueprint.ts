@@ -79,6 +79,7 @@ import { makePlanChecklist } from "./planning/plan-checklist.js";
 import { budgetStopReason, isBudgetExhausted } from "./budget/remaining-budget.js";
 import { runStrategy, type StrategyEnd, type StrategyPaused, type StrategyRun } from "./substrate/strategy-run.js";
 import type { StrategyServices } from "../kernel/utils/service-utils.js";
+import { planStepData } from "./structured-steps.js";
 
 const STRATEGY = "blueprint" as const;
 
@@ -389,6 +390,7 @@ const blueprintBody = (
         totalSteps: plan.steps.length,
         thought: `[DEGRADE] Plan invalid (${verification.reasons.join("; ")}) — falling back to reactive`,
         kernelPass: "blueprint:degrade",
+        structured: planStepData(0, "failed", { note: `plan invalid: ${verification.reasons.join("; ")}` }),
       });
       return yield* Effect.fail(new DegradeToReactive());
     }
@@ -532,6 +534,7 @@ const blueprintBody = (
             totalSteps: retryPlan.steps.length,
             thought: `[PATCH] Retrying ${patch.steps.length} step(s) after execution error`,
             kernelPass: "blueprint:patch",
+            structured: planStepData(preservedCompleted.length, "patched", { note: `${patch.steps.length} step(s) replanned after execution error` }),
           });
           workerResult = yield* executeBlueprintWorker(
             retryPlan,
@@ -634,6 +637,7 @@ const blueprintBody = (
         totalSteps: workerResult.steps.length,
         thought: `[DEGRADE] Execution produced no usable results after patch retry — falling back to reactive`,
         kernelPass: "blueprint:degrade",
+        structured: planStepData(0, "failed", { note: "no usable results after patch retry" }),
       });
       return yield* Effect.fail(new DegradeToReactive());
     }

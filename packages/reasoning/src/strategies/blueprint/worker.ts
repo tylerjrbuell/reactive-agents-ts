@@ -44,6 +44,7 @@ import { gatewayComplete } from "../../kernel/llm-gateway.js";
 import { isParallelBatchSafeTool } from "../../kernel/capabilities/decide/tool-gating.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
+import { planStepData } from "../structured-steps.js";
 import { formatStepAttempt } from "./progress-format.js";
 import type { ToolSchema } from "../../kernel/capabilities/attend/tool-formatting.js";
 import { buildStepExecutionPrompt } from "../planning/plan-prompts.js";
@@ -216,6 +217,7 @@ function executeBlueprintStep(
       totalSteps,
       thought: formatStepAttempt(step, totalSteps),
       kernelPass: `blueprint:step-${stepIndex + 1}:start`,
+      structured: planStepData(stepIndex, "started"),
     });
 
     const rawArgs = step.toolArgs ?? {};
@@ -367,6 +369,7 @@ function executeAnalysisStep(
       totalSteps,
       thought: formatStepAttempt(step, totalSteps),
       kernelPass: `blueprint:step-${stepIndex + 1}:start`,
+      structured: planStepData(stepIndex, "started"),
     });
 
     // Full prior data within the recency budget, previews beyond it.

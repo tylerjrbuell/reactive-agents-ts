@@ -20,6 +20,7 @@ import type { PlanStoreService } from "@reactive-agents/memory";
 import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
+import { planStepData } from "../structured-steps.js";
 import { makeStep, type KernelPause } from "../../kernel/capabilities/sense/step-utils.js";
 import type { ReasoningStep } from "../../types/index.js";
 import { extractDependencies, type Plan, type PlanStep } from "../../types/plan.js";
@@ -144,6 +145,7 @@ export const applyWaveResults = (
           totalSteps: plan.steps.length,
           observation: `[FAILED ${step.id}] ${result.error}`,
           kernelPass: `plan-execute:step-${stepIndex + 1}:failed`,
+          structured: planStepData(stepIndex, "failed", { note: String(result.error) }),
         });
 
         if (Option.isSome(planStoreOpt)) {
@@ -186,6 +188,7 @@ export const applyWaveResults = (
             totalSteps: plan.steps.length,
             thought: `[PATCH] Replaced remaining steps: ${patchDetail}`,
             kernelPass: `plan-execute:step-${stepIndex + 1}:patch`,
+            structured: planStepData(stepIndex, "patched", { note: patchDetail }),
           });
           acc.waveFailed = true; // Re-compute waves after patch
         }
@@ -230,6 +233,8 @@ export const applyWaveResults = (
         totalSteps: plan.steps.length,
         observation: `[EXEC ${step.id}] ${result.success ? "✓" : "✗"} ${result.output}`,
         kernelPass: `plan-execute:step-${stepIndex + 1}:done`,
+        // A failed step already published its `failed` payload above.
+        ...(result.success ? { structured: planStepData(stepIndex, "done") } : {}),
       });
 
       // Emit an iteration-progress boundary so the Cortex replay scrubber has

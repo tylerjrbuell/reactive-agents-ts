@@ -169,7 +169,11 @@ export const StrategyRegistryLive = Layer.effect(
         ["code-action", asStrategyFn(executeCodeAction)],
         /** ReWOO-style plan→verify→execute(0-LLM,parallel)→solve — cheap, decomposable/tool-heavy domain. */
         ["blueprint", executeBlueprint],
-        /** Literature alias for blueprint (Reasoning WithOut Observation). */
+        /**
+         * Literature alias for blueprint (Reasoning WithOut Observation). Same
+         * function: its events carry `strategy: "blueprint"` and `blueprint:*`
+         * kernelPass labels, so UIs render a rewoo run as Blueprint (plan-style).
+         */
         ["rewoo", executeBlueprint],
       ]),
     );

@@ -14,6 +14,7 @@ import type { LLMService } from "@reactive-agents/llm-provider";
 import type { RunEnvelope } from "../../kernel/envelope/run-envelope.js";
 import { publishReasoningStep } from "../../kernel/utils/service-utils.js";
 import type { StrategyServices } from "../../kernel/utils/service-utils.js";
+import { planStepData } from "../structured-steps.js";
 import type { KernelPause } from "../../kernel/capabilities/sense/step-utils.js";
 import type { ReasoningStep } from "../../types/index.js";
 import type { Plan, PlanStep } from "../../types/plan.js";
@@ -79,6 +80,7 @@ export const runStepWithRetries = (
       totalSteps: plan.steps.length,
       action: `[STEP ${stepIndex + 1}/${plan.steps.length}] ${stepLabel}`,
       kernelPass: `plan-execute:step-${stepIndex + 1}:start`,
+      structured: planStepData(stepIndex, "started"),
     });
 
     let lastError: string | undefined;
@@ -110,6 +112,7 @@ export const runStepWithRetries = (
           totalSteps: plan.steps.length,
           thought: `[RETRY ${step.id} attempt ${attempt + 1}/${deps.stepRetries + 1}] Previous error: ${lastError}`,
           kernelPass: `plan-execute:step-${stepIndex + 1}:retry-${attempt}`,
+          structured: planStepData(stepIndex, "retry", { attempt: attempt + 1, ...(lastError !== undefined ? { note: lastError } : {}) }),
         });
       }
 

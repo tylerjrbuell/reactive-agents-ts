@@ -93,6 +93,37 @@ export const reflexionData = (critique: string, accepted: boolean): ReasoningSte
 });
 
 /**
+ * `strategy-choice` payload for one adaptive decision point. `reason` is an open
+ * string; adaptive emits `heuristic | classifier | classifier-skip | cost-downgrade | fallback`.
+ */
+export const strategyChoiceData = (selected: string, reason: string, note?: string): ReasoningStepData => ({
+  kind: "strategy-choice",
+  selected,
+  reason,
+  ...(note !== undefined ? { note } : {}),
+});
+
+/** Lifecycle transition of a plan step (mirrors `PlanStepLifecycleSchema`). */
+export type PlanStepStatus = "started" | "done" | "failed" | "retry" | "patched" | "reflected";
+
+/**
+ * `plan-step` payload for one plan-execute / blueprint step transition.
+ * `stepIndex` is zero-based and stable across retries; `attempt` (1-based) is
+ * set on `retry` only. Absent fields are omitted.
+ */
+export const planStepData = (
+  stepIndex: number,
+  status: PlanStepStatus,
+  extra?: { readonly attempt?: number; readonly note?: string },
+): ReasoningStepData => ({
+  kind: "plan-step",
+  stepIndex,
+  status,
+  ...(extra?.attempt !== undefined ? { attempt: extra.attempt } : {}),
+  ...(extra?.note !== undefined ? { note: extra.note } : {}),
+});
+
+/**
  * `code-action` payload for one iteration. `stdout` is the observation text the
  * verifier and model see (tool calls + final result; the Worker sandbox has no
  * separate stdout stream), `stderr` the sandbox failure message. Absent fields
