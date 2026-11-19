@@ -125,6 +125,26 @@ export function deriveListedInputs(task: string): ListedInput[] {
   return out.length > MAX_BOUND_FAMILY ? [] : out.sort((a, b) => a.start - b.start);
 }
 
+const TRAILING_INDEX = /(\d+)\.[A-Za-z0-9]{1,5}$/;
+
+/**
+ * The deliverable a listed input feeds, paired by the numbered family index
+ * ("notes-2.txt" -> "out-2.txt" when the task lists a numbered input family and
+ * a numbered deliverable family). Undefined unless exactly one listed input and
+ * exactly one deliverable carry that index: an ambiguous shape pairs nothing.
+ */
+export function pairedOutputForInput(task: string, entity: string): string | undefined {
+  const indexOf = (p: string): string | undefined => {
+    const m = TRAILING_INDEX.exec(p);
+    return m === null ? undefined : String(Number(m[1]));
+  };
+  const idx = indexOf(entity);
+  if (idx === undefined) return undefined;
+  if (deriveListedInputs(task).filter((i) => indexOf(i.entity) === idx).length !== 1) return undefined;
+  const outs = deriveDeliverablePaths(task).filter((p) => indexOf(p) === idx);
+  return outs.length === 1 ? outs[0] : undefined;
+}
+
 // ─── Write targets (DEBT #39, write side; harness switch `writeCoverage`) ─────
 
 /**

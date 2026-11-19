@@ -17,8 +17,8 @@ import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTo
 import { observationForAction } from "../sense/step-utils.js";
 import { notRunCallIds } from "../../utils/observation-helpers.js";
 import { contractOutstanding } from "../../loop/exit-gate.js";
-import { deriveListedInputs } from "../verify/derive-inputs.js";
-import { isInputRead } from "../verify/post-conditions.js";
+import { deriveListedInputs, pairedOutputForInput } from "../verify/derive-inputs.js";
+import { isInputRead, isTargetWritten } from "../verify/post-conditions.js";
 import type { ReasoningStep } from "../../../types/index.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -409,10 +409,22 @@ export const duplicateGuard: Guard = (tc, state, input) => {
   const outstanding = missingReq.length > 0 ? [] : contractOutstanding(state, input, state.output ?? "");
   // A listed input never read is the next item: writing an output before its
   // source was read produced wrong values (cogito h3-todo-heavy, 2026-11-19).
-  const unreadInput = missingReq.length > 0
-    ? undefined
-    : deriveListedInputs(input.task).find(({ entity }) => !isInputRead(entity, state.steps, state.ledger));
-  const unreadNote = unreadInput === undefined ? "" : ` Read ${unreadInput.entity} first: it is a listed input you have not read yet.`;
+  const listedInputs = missingReq.length > 0 ? [] : deriveListedInputs(input.task);
+  const unreadInput = listedInputs.find(({ entity }) => !isInputRead(entity, state.steps, state.ledger));
+  // A read input whose paired output is unwritten leads: write it now from the
+  // value just read, not another read (cogito h3-todo-heavy: out-N shifted by one).
+  let pendingWrite: { readonly input: string; readonly output: string } | undefined;
+  for (const { entity } of listedInputs) {
+    if (!isInputRead(entity, state.steps, state.ledger)) continue;
+    const output = pairedOutputForInput(input.task, entity);
+    if (output !== undefined && !isTargetWritten(output, state.steps, state.ledger)) {
+      pendingWrite = { input: entity, output };
+      break;
+    }
+  }
+  const unreadNote = pendingWrite !== undefined
+    ? ` Write ${pendingWrite.output} now from the value you just read in ${pendingWrite.input}: do not re-read it.${unreadInput === undefined ? "" : ` Then read ${unreadInput.entity}.`}`
+    : unreadInput === undefined ? "" : ` Read ${unreadInput.entity} first: it is a listed input you have not read yet.`;
   const nextHint = missingReq.length > 0
     ? `You still need to call: ${missingReq.join(", ")}. Do that now.`
     : outstanding.length > 0

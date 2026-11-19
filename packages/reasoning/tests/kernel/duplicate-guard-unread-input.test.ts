@@ -60,7 +60,9 @@ describe("a written range expands to every member (cogito h3-todo-heavy, zoo-liv
     const outcome = duplicateGuard(repeat, state, makeKernelInput({ task: RANGE_TASK }));
     expect(outcome.pass).toBe(false);
     const text = outcome.pass ? "" : outcome.observation;
-    expect(text).toContain("Read notes-2.txt first");
+    // out-1 is owed first (pending-write-first); the next unread input follows it.
+    expect(text).toContain("Write ./out-1.txt now");
+    expect(text).toContain("Then read notes-2.txt.");
     expect(text).not.toContain("notes-6.txt");
   });
 });
@@ -69,12 +71,12 @@ describe("duplicateGuard names the first unread listed input", () => {
   it("names notes-2.txt when only notes-1.txt was read", () => {
     const text = refusal(["notes-1.txt"]);
     expect(text).toContain("Already done");
-    expect(text).toContain("Read notes-2.txt first");
+    expect(text).toContain("Then read notes-2.txt.");
     expect(text).not.toContain("Give FINAL ANSWER");
   });
 
   it("names the next unread input after two reads", () => {
-    expect(refusal(["notes-1.txt", "notes-2.txt"])).toContain("Read notes-3.txt first");
+    expect(refusal(["notes-1.txt", "notes-2.txt"])).toContain("Then read notes-3.txt.");
   });
 
   it("keeps the current text when every listed input was read", () => {
