@@ -55,6 +55,43 @@ export const ReflexionStepDataSchema = Schema.Struct({
   accepted: Schema.Boolean,
 });
 
+/** Adaptive strategy's choice of sub-strategy. */
+export const StrategyChoiceStepDataSchema = Schema.Struct({
+  kind: Schema.Literal("strategy-choice"),
+  /** Name of the strategy adaptive selected (e.g. "reactive", "plan-execute"). */
+  selected: Schema.String,
+  /**
+   * Why it was selected. Known values: `heuristic`, `classifier`, `classifier-skip`,
+   * `cost-downgrade`, `fallback`, `explicit`. Open string: consumers must tolerate new values.
+   */
+  reason: Schema.String,
+  /** Free-form human-readable detail; absent when there is none. */
+  note: Schema.optional(Schema.String),
+});
+
+/** Lifecycle states of one plan step. */
+export const PlanStepLifecycleSchema = Schema.Literal(
+  "started",
+  "done",
+  "failed",
+  "retry",
+  "patched",
+  "reflected",
+);
+
+/** One lifecycle transition of a plan-execute / blueprint step. */
+export const PlanStepEventDataSchema =Schema.Struct({
+  kind: Schema.Literal("plan-step"),
+  /** Zero-based or strategy-defined index of the step within the plan; stable across retries. */
+  stepIndex: Schema.Number,
+  /** Lifecycle transition this event records. */
+  status: PlanStepLifecycleSchema,
+  /** Attempt number (1-based) for `retry` transitions; absent otherwise. */
+  attempt: Schema.optional(Schema.Number),
+  /** Free-form human-readable detail (error, patch summary, reflection); absent when none. */
+  note: Schema.optional(Schema.String),
+});
+
 /**
  * Strategy-specific structured payload carried by `ReasoningStepCompleted.structured`.
  * Discriminated on `kind`. Consumers must ignore unknown kinds (the union may widen).
@@ -64,6 +101,8 @@ export const ReasoningStepDataSchema = Schema.Union(
   TotPathStepDataSchema,
   CodeActionStepDataSchema,
   ReflexionStepDataSchema,
+  StrategyChoiceStepDataSchema,
+  PlanStepEventDataSchema,
 );
 
 /** Structured payload for a reasoning step; see {@link ReasoningStepDataSchema}. */

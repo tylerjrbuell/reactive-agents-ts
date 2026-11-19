@@ -12,6 +12,10 @@ const variants: ReadonlyArray<ReasoningStepData> = [
   { kind: "code-action", code: "print(1)", stdout: "1", stderr: "", verify: { verdict: "pass", summary: "ok" } },
   { kind: "code-action", code: "x" },
   { kind: "reflexion", critique: "missed edge case", accepted: false },
+  { kind: "strategy-choice", selected: "plan-execute", reason: "heuristic" },
+  { kind: "strategy-choice", selected: "reactive", reason: "future-reason", note: "why" },
+  { kind: "plan-step", stepIndex: 2, status: "started" },
+  { kind: "plan-step", stepIndex: 2, status: "retry", attempt: 2, note: "tool failed" },
 ];
 
 describe("ReasoningStepData", () => {
@@ -40,12 +44,20 @@ describe("ReasoningStepData", () => {
         case "tot-path": return "path";
         case "code-action": return "code";
         case "reflexion": return "reflect";
+        case "strategy-choice": return "choice";
+        case "plan-step": return "plan";
         default: {
           const _never: never = d;
           return _never;
         }
       }
     };
-    expect(variants.map(label)).toEqual(["node", "node", "path", "code", "code", "reflect"]);
+    expect(variants.map(label)).toEqual(["node", "node", "path", "code", "code", "reflect", "choice", "choice", "plan", "plan"]);
+  });
+
+  test("plan-step rejects an unknown status", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(ReasoningStepDataSchema)({ kind: "plan-step", stepIndex: 0, status: "bogus" }),
+    ).toThrow();
   });
 });

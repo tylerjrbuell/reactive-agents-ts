@@ -463,6 +463,9 @@ export {
   TotPathStepDataSchema,
   CodeActionStepDataSchema,
   ReflexionStepDataSchema,
+  StrategyChoiceStepDataSchema,
+  PlanStepLifecycleSchema,
+  PlanStepEventDataSchema,
   ReasoningStepDataSchema,
 } from "./types/reasoning-step-data.js";
 export type { ReasoningStepData } from "./types/reasoning-step-data.js";
