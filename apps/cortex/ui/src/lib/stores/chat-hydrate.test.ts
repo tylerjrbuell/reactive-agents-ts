@@ -1,7 +1,7 @@
 // A reloaded turn keeps its strategy card: the stored run rides the trace, hydrates onto the turn, and
 // the card model shows it collapsed to its summary. A row without it (older turns) renders nothing, as before.
 import { describe, expect, it } from "bun:test";
-import { foldStrategyRun, initialStrategyRun, strategyRunForStorage, strategyStatusOf, strategyStepOf } from "@reactive-agents/ui-core";
+import { foldStrategyRun, initialStrategyRun, strategyRunForStorage, strategyStatusOf, strategyStepOf, type StrategyStepDetail } from "@reactive-agents/ui-core";
 import { strategyCardModel } from "../strategy-visuals/registry.js";
 import { hydrateTurn } from "./chat-hydrate.js";
 import type { ChatTurn } from "./chat-store.js";
@@ -33,5 +33,23 @@ describe("hydrateTurn strategy run", () => {
     const turn = hydrateTurn(row({ trace: { reasoningSteps: [], toolCalls: [] } }));
     expect(turn.strategyRun).toBeUndefined();
     expect(strategyCardModel(turn.strategyRun, { hasPlan: false }).show).toBe(false);
+  });
+});
+
+describe("hydrateTurn code-action run (the framework's real label sequence)", () => {
+  const passes = ["code-action:plan", "code-action:execute:1", "code-action:plan:2", "code-action:execute:2", "code-action:verify:2"];
+  const detail: Record<number, StrategyStepDetail> = {
+    1: { code: "throw new Error('boom')", stderr: "boom" },
+    4: { code: "'ok'", stdout: "ok", verify: { verdict: "PASS", summary: "verified" } },
+  };
+  const storedCode = strategyRunForStorage(passes.reduce((s, p, i) => foldStrategyRun(s, strategyStepOf(p, detail[i])!), initialStrategyRun))!;
+
+  it("keeps attempts, code, stderr and the verify result, and draws a collapsed card after reload", () => {
+    const run = hydrateTurn(row({ trace: { reasoningSteps: [], toolCalls: [], strategyRun: storedCode } })).strategyRun!;
+    expect(run.rows.find((r) => r.key === "execute-1")?.stderr).toBe("boom");
+    expect(run.rows.find((r) => r.key === "verify-2")?.verify?.verdict).toBe("PASS");
+    const card = strategyCardModel(run, { statusLine: strategyStatusOf(run), hasPlan: false });
+    expect(card).toMatchObject({ show: true, kind: "attempts", title: "Code action", openByDefault: false });
+    expect(card.chip).toBe("2 attempts, verified");
   });
 });

@@ -866,7 +866,7 @@ let tokensUsed = 0;
             // never the answer, so it is not stored as one.
             if (out.length > 0 || outcome !== undefined || producedFiles) replyText = out;
           }
-          yield* entry.strategySteps?.drain() ?? []; // phases reported so far go out before the event (and the terminal one)
+          yield* recorder.recordSteps(entry.strategySteps?.drain() ?? []); // phases so far go out (and into the stored card) before the event, the terminal one included
           yield withRunError(event, outcome);
         }
       } catch (e) {

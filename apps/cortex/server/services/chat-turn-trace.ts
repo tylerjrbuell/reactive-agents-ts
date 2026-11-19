@@ -16,6 +16,7 @@ import {
   type RunCompletionLike,
   type RecalledMemoryView,
   type RunSkillsView,
+  type StepEvent,
   type TurnDeliverable,
   type TurnTrace,
   type UiStreamEvent,
@@ -252,7 +253,7 @@ export class TurnTraceRecorder {
   private state = initialTurnTrace();
   private strategy = initialStrategyRun;
 
-  record(event: AgentStreamEvent): void {
+  record(event: AgentStreamEvent | StepEvent): void {
     // The runtime's AgentStreamEvent is the producer of the wire union ui-core consumes.
     const ui = event as UiStreamEvent;
     this.state = foldTurnTrace(this.state, ui);
@@ -261,6 +262,16 @@ export class TurnTraceRecorder {
       const step = strategyStepFromWire(ui.step);
       if (step) this.strategy = foldStrategyRun(this.strategy, step);
     }
+  }
+
+  /**
+   * Record the strategy `StepEvent`s a chat turn drained from its `StrategyStepLog` and hand them back
+   * to be streamed. These never pass through the runtime's stream (they come from the agent's bus), so
+   * the stream loop's `record` cannot see them: this is the one place they reach the stored card.
+   */
+  recordSteps(steps: readonly StepEvent[]): readonly StepEvent[] {
+    for (const step of steps) this.record(step);
+    return steps;
   }
 
   /**
