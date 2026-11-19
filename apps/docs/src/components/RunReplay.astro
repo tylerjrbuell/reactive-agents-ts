@@ -63,6 +63,11 @@ const PHASE_LABEL: Record<string, string> = {
                 Receipt signing is opt-in; it is enabled in this capture only, with a throwaway key made for the recording.
                 Without <code>.withReceiptSigning()</code> receipts are unsigned.
             </p>
+            <p class="ra-hero-vcap">
+                The capture had a web-search API key set (Tavily, Brave, Serper or Keenable).
+                Without one, <code>web-search</code> falls back to DuckDuckGo's keyless Instant Answer API, which returns far fewer results, so your run may search
+                more or answer from less. <a href="/guides/tools/built-in-tools/#web-search-configuration">Search providers →</a>
+            </p>
         </div>
 
         <div class="ra-replay-grid" data-replay-panel="trace">
@@ -86,6 +91,20 @@ const PHASE_LABEL: Record<string, string> = {
 {e.detail.result ?? '(no result captured)'}</pre>
                                 )}
                             </div>
+                        ) : e.detail && 'thought' in e.detail && !e.detail.thought ? (
+                            // A reasoning pass with no thought text (thinking off: the model went straight
+                            // to a tool call). Plain tick naming the call, no empty expander.
+                            <div class="ra-replay-tick ra-replay-tick--stack" data-line={i}>
+                                <p class="ra-replay-tick-line">
+                                    <span class="ra-replay-tick-dot" /> {PHASE_LABEL[e.phase ?? ''] ?? e.phase}
+                                    {e.detail.leadsToTool && <span class="ra-replay-tick-to">→ {e.detail.leadsToTool}</span>}
+                                </p>
+                                {'exitDenied' in e.detail && e.detail.exitDenied && (
+                                    <p class="ra-replay-gate">
+                                        <span class="ra-replay-gate-k">exit gate</span> refused the final answer · still outstanding: {e.detail.exitDenied.outstanding.join('; ')}
+                                    </p>
+                                )}
+                            </div>
                         ) : e.detail ? (
                             <div class="ra-replay-tick ra-replay-has-detail" data-line={i}>
                                 <button type="button" class="ra-replay-toggle" data-replay-toggle aria-expanded="false">
@@ -104,11 +123,12 @@ const PHASE_LABEL: Record<string, string> = {
                                 ) : 'engineWrapper' in e.detail ? (
                                     <pre class="ra-replay-detail" data-replay-detail hidden>outer engine wrapper: the execution engine brackets the whole kernel loop in one coarse think phase, so this tick opens before the kernel bootstraps and closes after it completes. Every reasoning pass below runs inside it.</pre>
                                 ) : (
-                                    <pre class="ra-replay-detail" data-replay-detail hidden>{
-                                        e.detail.thought
-                                            ? e.detail.thought
-                                            : `the model emitted no thought text on this pass; it went straight to a ${e.detail.leadsToTool} call`
-                                    }</pre>
+                                    <pre class="ra-replay-detail" data-replay-detail hidden>{e.detail.thought}</pre>
+                                )}
+                                {'exitDenied' in e.detail && e.detail.exitDenied && (
+                                    <p class="ra-replay-gate">
+                                        <span class="ra-replay-gate-k">exit gate</span> refused this final answer · still outstanding: {e.detail.exitDenied.outstanding.join('; ')}
+                                    </p>
                                 )}
                             </div>
                         ) : (

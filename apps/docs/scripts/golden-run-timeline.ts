@@ -48,6 +48,46 @@ export const toolStartsFromTrace = (jsonl: string): ToolStart[] => {
   return out;
 };
 
+/** An exit-gate denial: the model proposed a final answer and the harness refused it. */
+export interface ExitDenial {
+  readonly t: number;
+  readonly outstanding: readonly string[];
+}
+
+/**
+ * Exit-gate denials from a trace's JSONL text, in order: `guard-fired` events for `exit_gate` whose
+ * gate decision was `deny`. A cap-forced `handoff` (the failed run) is not a denial. Unparseable
+ * lines are skipped.
+ */
+export const exitDenialsFromTrace = (jsonl: string): ExitDenial[] => {
+  const out: ExitDenial[] = [];
+  for (const line of jsonl.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const e = JSON.parse(line) as {
+        kind?: string;
+        guard?: string;
+        timestamp?: number;
+        metadata?: { gateDecision?: string; outstanding?: unknown };
+      };
+      if (
+        e.kind === "guard-fired" &&
+        e.guard === "exit_gate" &&
+        e.metadata?.gateDecision === "deny" &&
+        typeof e.timestamp === "number"
+      ) {
+        const outstanding = Array.isArray(e.metadata.outstanding)
+          ? e.metadata.outstanding.filter((x): x is string => typeof x === "string")
+          : [];
+        out.push({ t: e.timestamp, outstanding });
+      }
+    } catch {
+      // not a JSON line; ignore
+    }
+  }
+  return out;
+};
+
 /**
  * Replay rows (one per `before` hook worth showing, plus tool rows) with act/observe phantoms removed.
  *

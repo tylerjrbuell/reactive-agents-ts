@@ -3896,6 +3896,37 @@ ol.ra-steps > li:last-child {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
+.ra-replay-tick.ra-replay-tick--stack {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+.ra-replay-tick-line {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.ra-replay-tick-to {
+    color: var(--sl-color-gray-3);
+}
+/* The exit gate refusing a premature final answer: a harness decision, shown inline. */
+.ra-replay-gate {
+    margin: 0.3rem 0 0.15rem 0.85rem;
+    padding: 0.35rem 0.6rem;
+    border-left: 2px solid #f59e0b;
+    background: rgba(245, 158, 11, 0.07);
+    border-radius: 0 6px 6px 0;
+    font-size: 0.66rem;
+    line-height: 1.5;
+    color: var(--sl-color-gray-2);
+    letter-spacing: 0.02em;
+}
+.ra-replay-gate-k {
+    color: #f59e0b;
+    font-weight: 600;
+    margin-right: 0.3rem;
+}
 .ra-replay-tick-dot {
     width: 4px;
     height: 4px;

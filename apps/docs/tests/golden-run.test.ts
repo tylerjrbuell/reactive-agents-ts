@@ -2,7 +2,12 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { goldenRunProblems, MAX_MINORS_BEHIND } from "../scripts/golden-run-freshness";
-import { buildTimelineSkeleton, toolStartsFromTrace, type HookEntry } from "../scripts/golden-run-timeline";
+import {
+  buildTimelineSkeleton,
+  exitDenialsFromTrace,
+  toolStartsFromTrace,
+  type HookEntry,
+} from "../scripts/golden-run-timeline";
 import { builderSnippet, highlightLine } from "../src/components/highlight-builder";
 
 const cap = (frameworkVersion: string, capturedAt = "2026-11-17") => ({ capture: { frameworkVersion, capturedAt } });
@@ -128,7 +133,41 @@ describe("golden-run timeline pairing (tool name + time, not hook index)", () =>
     const d = JSON.parse(readFileSync(resolve(import.meta.dir, "../src/data/golden-run.json"), "utf-8"));
     expect(d.timeline.filter((e: { kind: string }) => e.kind === "tool")).toHaveLength(d.toolCalls.length);
     expect(d.timeline.filter((e: { phase: string; kind: string }) => e.phase === "act" && e.kind !== "tool")).toEqual([]);
-    expect(d.run.reasoningSteps).toBe(run.result.metadata.stepsCount);
+    // Compare against the capture the committed data was generated from (named in `_source`).
+    const srcDir = /wiki\/Research\/Harness-Reports\/(golden-run-[^/]+)\//.exec(d._source)?.[1];
+    expect(srcDir).toBeDefined();
+    const srcRun = JSON.parse(
+      readFileSync(resolve(import.meta.dir, `../../../wiki/Research/Harness-Reports/${srcDir}/run.json`), "utf-8"),
+    );
+    expect(d.run.reasoningSteps).toBe(srcRun.result.metadata.stepsCount);
     expect(d.run.iterations).toBeUndefined();
+  });
+});
+
+describe("golden-run exit-gate denials", () => {
+  const line = (o: object): string => JSON.stringify(o);
+
+  it("reads only exit_gate deny decisions, not a cap-forced handoff or other guards", () => {
+    const jsonl = [
+      line({ kind: "guard-fired", guard: "exit_gate", timestamp: 10, metadata: { gateDecision: "deny", outstanding: ["write the file ./report.md"] } }),
+      line({ kind: "guard-fired", guard: "exit_gate", timestamp: 20, metadata: { gateDecision: "accept", outstanding: [] } }),
+      line({ kind: "guard-fired", guard: "exit_gate", timestamp: 30, metadata: { gateDecision: "handoff", outstanding: ["x"] } }),
+      line({ kind: "guard-fired", guard: "loop_detector", timestamp: 40, metadata: { gateDecision: "deny" } }),
+      "not json",
+    ].join("\n");
+    expect(exitDenialsFromTrace(jsonl)).toEqual([{ t: 10, outstanding: ["write the file ./report.md"] }]);
+  });
+
+  it("committed data: a think row with no thought renders as a plain tick, and a denial sits on a no-tool pass", () => {
+    const d = JSON.parse(readFileSync(resolve(import.meta.dir, "../src/data/golden-run.json"), "utf-8"));
+    type Row = { phase: string; detail: { thought?: string | null; leadsToTool?: string | null; exitDenied?: { outstanding: string[] } } | null };
+    const thinks = (d.timeline as Row[]).filter((e) => e.phase === "think" && e.detail && "thought" in e.detail);
+    for (const t of thinks.filter((t) => t.detail!.exitDenied)) {
+      expect(t.detail!.leadsToTool).toBeNull();
+      expect(t.detail!.exitDenied!.outstanding.length).toBeGreaterThan(0);
+    }
+    const src = readFileSync(resolve(import.meta.dir, "../src/components/RunReplay.astro"), "utf-8");
+    expect(src).not.toContain("the model emitted no thought text");
+    expect(src).toContain("ra-replay-gate");
   });
 });

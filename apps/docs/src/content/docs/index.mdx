@@ -123,6 +123,8 @@ import demoGif from '../../assets/local-vs-frontier.gif'
 
 No script, no actor. This plays back one real live run on `gemma4:e4b`, a ~4B-class local model with no API key, paced from its actual timing: the task it got, every phase and tool call it made in order, and what it produced. Everything below this point (phases fired, the trust receipt, the debrief) is synthesized from this exact same run.
 
+Watch the third reasoning pass: after writing `data.json`, the model put the report in its reply instead of writing `./report.md` and tried to finish. The exit gate refused the answer because the file was still outstanding, and the model wrote it on the next pass. That is the harness catching a premature answer; this run was picked as the median of three by wall time, not for that moment.
+
 <RunReplay />
 
 ### And when it fails
