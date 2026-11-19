@@ -9,6 +9,8 @@
   import Select from "$lib/components/kit/Select.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
   import HarnessPlanToggles from "../HarnessPlanToggles.svelte";
+  import StrategyConflictNote from "$lib/components/strategy/StrategyConflictNote.svelte";
+  import { strategyConflictOfConfig } from "$lib/strategy-visuals/conflict.js";
   import AdvancedFrameworkConfig from "$lib/components/AdvancedFrameworkConfig.svelte";
   import type { AgentConfig } from "$lib/types/agent-config.js";
   import type { CapabilityManifest } from "$lib/capabilities.js";
@@ -47,6 +49,10 @@
             </label>
           {/each}
         </div>
+        <StrategyConflictNote
+          conflict={strategyConflictOfConfig({ ...config })}
+          onResolve={(r) => (config = { ...config, ...r.patch })}
+        />
         <div class="grid grid-cols-2 gap-4">
           <div class="acp-field">
             <label for="max-iterations" class="config-label">Max iterations</label>

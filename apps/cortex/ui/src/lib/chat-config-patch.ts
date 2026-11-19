@@ -42,7 +42,14 @@ export function toggleSkillPatch(cfg: Record<string, unknown>, skill: Pick<Disco
   };
 }
 
-export const documentsOf = (cfg: Record<string, unknown>): readonly DocumentConfig[] =>
+/** Pin several skills at once: `toggleSkillPatch` folded over `names`, so each name is toggled once in order. */
+export function pinSkillsPatch(cfg: Record<string, unknown>, names: readonly string[]): { skills: SkillsConfig } {
+  let next: Record<string, unknown> = cfg;
+  for (const name of names) next = { ...next, ...toggleSkillPatch(next, { name }) };
+  return { skills: next.skills as SkillsConfig };
+}
+
+export const documentsOf =(cfg: Record<string, unknown>): readonly DocumentConfig[] =>
   Array.isArray(cfg.documents) ? (cfg.documents as DocumentConfig[]) : [];
 
 /** Add a document source (path or URL) once; the agent re-ingests it on the next turn. */

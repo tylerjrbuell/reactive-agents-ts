@@ -82,7 +82,20 @@ export function turnTranscript(
     answer: turn.content,
     pending: turn.streaming === true ? turn.liveText : undefined,
     outcome,
+    live: turn.streaming === true,
   });
+}
+
+/**
+ * The turn's answer text alone, for copy and read-aloud: reasoning a model printed into its text
+ * lives in the Thinking pill and is never copied or spoken. Falls back to the raw content when the
+ * transcript shows no answer segment (so a copy never comes back empty for a turn with text).
+ */
+export function turnAnswerText(
+  turn: StepTurn & Pick<ChatTurn, "liveText" | "runFailed" | "deliverables">,
+): string {
+  const answer = turnTranscript(turn).find((s) => s.kind === "answer");
+  return answer && "text" in answer ? answer.text : (turn.content ?? "");
 }
 
 /** How a finished turn ended, for the summary line; `undefined` while it streams. */

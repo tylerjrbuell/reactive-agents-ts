@@ -12,7 +12,7 @@ import { applySchema } from "../db/schema.js";
 import { ChatSessionBusyError, ChatSessionService } from "../services/chat-session-service.js";
 import { durableApprovals } from "../services/durable-approvals.js";
 import { normalizeCortexAgentConfig } from "../services/cortex-agent-config.js";
-import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import type { ChatStreamEvent as AgentStreamEvent } from "../services/chat-detached-turn.js";
 
 let root: string;
 let db: Database;

@@ -9,7 +9,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
-import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import type { ChatStreamEvent as AgentStreamEvent } from "../services/chat-detached-turn.js";
 import { Effect, Layer } from "effect";
 import { CortexStoreServiceLive } from "../services/store-service.js";
 import { CortexIngestService } from "../services/ingest-service.js";

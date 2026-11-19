@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { join } from "node:path";
 import { getCapabilityManifest } from "@reactive-agents/runtime";
-import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import type { ChatStreamEvent as AgentStreamEvent } from "../services/chat-detached-turn.js";
 import { openDatabase } from "../db/schema.js";
 import { getChatTurns } from "../db/chat-queries.js";
 import { insertMcpServer } from "../db/mcp-queries.js";

@@ -2,7 +2,7 @@
  * Text and turn rules voice features share: the transcript as one reading, and how a
  * chat turn finishing, failing or waiting maps to a voice-mode event. Pure.
  */
-import type { VoiceModeEvent, VoiceWaitingOn } from "@reactive-agents/ui-core";
+import { splitReasoning, type VoiceModeEvent, type VoiceWaitingOn } from "@reactive-agents/ui-core";
 import { voiceQuestionSpec } from "./voice-answer.js";
 import type { VoiceQuestion } from "./voice-question.js";
 import { questionsOf, type StructuredAnswerValue } from "../structured-questions.js";
@@ -23,6 +23,12 @@ export interface VoiceTurnLike {
   readonly liveInteraction?: unknown;
 }
 
+/** A turn's text to speak: an assistant's reasoning (printed into its text) is never read aloud. */
+const spokenText = (t: VoiceTurnLike): string => {
+  const text = t.content.trim();
+  return t.role === "assistant" ? splitReasoning(text).answer.trim() || text : text;
+};
+
 /**
  * The whole conversation as one text to read aloud: "You said" / "Agent replied"
  * before each turn so a listener can tell who is speaking. Empty turns are skipped.
@@ -30,7 +36,7 @@ export interface VoiceTurnLike {
 export function transcriptMarkdown(turns: readonly VoiceTurnLike[]): string {
   return turns
     .filter((t) => t.content.trim() !== "" && t.streaming !== true)
-    .map((t) => `${t.role === "user" ? "You said." : "The agent replied."}\n\n${t.content.trim()}`)
+    .map((t) => `${t.role === "user" ? "You said." : "The agent replied."}\n\n${spokenText(t)}`)
     .join("\n\n");
 }
 
@@ -91,6 +97,6 @@ export function replyEventOf(prev: ChatSnapshot, next: ChatSnapshot): VoiceModeE
   if (last.cancelled === true) return null;
   if (next.error) return { type: "reply-failed", message: next.error };
   if (last.runFailed !== undefined && last.runFailed !== null) return { type: "reply-failed", message: "The agent could not finish that request." };
-  const text = last.content.trim();
+  const text = spokenText(last);
   return { type: "reply", text: text !== "" ? text : "The agent finished." };
 }

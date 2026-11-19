@@ -9,6 +9,9 @@
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import ChatSubAgentCards from "$lib/components/ChatSubAgentCards.svelte";
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
+  import StrategyCard from "$lib/components/strategy/StrategyCard.svelte";
+  import { strategyStatusOf } from "@reactive-agents/ui-core";
+  import { planCardModel } from "$lib/checklist-view.js";
   import ChatRunEndingNote from "$lib/components/ChatRunEndingNote.svelte";
   import ChatRunFailedNote from "$lib/components/ChatRunFailedNote.svelte";
   import { abstentionInAnswer, bareEnding } from "$lib/turn-ending.js";
@@ -41,6 +44,11 @@
   const segments = $derived(turnTranscript(turn, steps));
   const body = $derived(segments.filter((s) => s.kind === "prose" || s.kind === "tools"));
   const answer = $derived(segments.find((s) => s.kind === "answer"));
+  // The turn's reasoning as one collapsible pill (same chip and chevron as a tool run): open and growing
+  // while the turn streams, collapsed once it ends, a click pins the viewer's choice.
+  const thinking = $derived(segments.find((s) => s.kind === "thinking"));
+  let thinkPinned = $state<boolean | null>(null);
+  const thinkOpen = $derived(thinkPinned ?? thinking?.live ?? false);
   // How the run ended when it did not simply answer (failed, partial, abstained, files only).
   const ending = $derived(segments.find((s) => s.kind === "ending"));
   const summary = $derived(turnSummary(turn, steps));
@@ -60,6 +68,11 @@
       ? `step ${turn.streamProgress.iteration} of ${turn.streamProgress.maxIterations}`
       : undefined,
   );
+  // The strategy's current phase ("Critiquing 1", "Exploring options, level 2") names what the idle
+  // line is doing; a strategy with no phase to name keeps "Thinking".
+  const phaseLine = $derived(turn.strategyRun ? strategyStatusOf(turn.strategyRun) : undefined);
+  // The goal-checks card already draws a plan strategy's plan: the strategy card adds nothing then.
+  const hasPlan = $derived(turn.checklist !== undefined && planCardModel(turn.checklist, { ended: !turn.streaming }).plan.length > 0);
   // A run waiting on the user's approval is not thinking: the approval card says what it waits for.
   const waitingOnYou = $derived(turn.streaming === true && (turn.liveApproval !== undefined || turn.liveInteraction !== undefined));
   const showIdle = $derived(turn.streaming === true && answer === undefined && !lastIsRunningGroup && !waitingOnYou);
@@ -108,6 +121,18 @@
 {/snippet}
 
 <div class="transcript" data-testid="chat-transcript">
+  {#if thinking}
+    <div class="tool-group" data-testid="thinking-group">
+      <button type="button" class="toolrow" onclick={() => (thinkPinned = !thinkOpen)} aria-expanded={thinkOpen} aria-label="Thinking. {thinkOpen ? 'Hide' : 'Show'} it">
+        {#if thinking.live}<Status tone="running" label="Thinking" dotOnly />{:else}<Icon name="think" size="sm" />{/if}
+        <span class="lead">Thinking</span>
+        <span class="chev" class:open={thinkOpen}><Icon name="chevron" size="sm" /></span>
+      </button>
+      {#if thinkOpen}
+        <div class="tool-steps"><p class="think-text" data-testid="thinking-text">{thinking.text}</p></div>
+      {/if}
+    </div>
+  {/if}
   {#each body as seg (seg.key)}
     {#if seg.kind === "prose"}
       <div class="prose" data-testid="transcript-prose"><GuardedMarkdown markdown={seg.text} showCopy={false} /></div>
@@ -136,11 +161,13 @@
     <ChatLiveInteraction question={turn.liveInteraction} />
   {/if}
 
+  {#if turn.strategyRun}<StrategyCard run={turn.strategyRun} {hasPlan} />{/if}
+
   {#if showIdle && turn.awaitingModelSince !== undefined}
     <ChatModelWait since={turn.awaitingModelSince} provider={turn.provider} {stepLine} />
   {:else if showIdle}
     <p class="thinking" data-testid="turn-thinking">
-      <Icon name="think" size="sm" />Thinking{#if stepLine}<span class="wait">{stepLine}</span>{/if}<span class="chat-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <Icon name="think" size="sm" />{phaseLine ?? "Thinking"}{#if stepLine}<span class="wait">{stepLine}</span>{/if}<span class="chat-dots" aria-hidden="true"><i></i><i></i><i></i></span>
     </p>
   {/if}
 
@@ -263,6 +290,8 @@
   .chev { display: inline-flex; color: var(--cortex-text-3); transition: transform var(--cortex-d-fast); }
   .chev.open { transform: rotate(90deg); }
   .tool-steps { padding-left: 12px; border-left: 1px solid var(--cortex-line); }
+  /* Reasoning streams in muted colour, never in the answer's. */
+  .think-text { margin: 4px 0; font-size: var(--cortex-t-sm); line-height: var(--cortex-lh-read); color: var(--cortex-text-3); white-space: pre-wrap; overflow-wrap: anywhere; max-width: var(--cortex-prose-measure); }
   .names { display: flex; flex-wrap: wrap; gap: 4px; }
 
   .thinking { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--cortex-t-sm); color: var(--cortex-text-2); }

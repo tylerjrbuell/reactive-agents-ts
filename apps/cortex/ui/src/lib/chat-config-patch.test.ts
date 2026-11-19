@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { addDocumentPatch, pinnedSkills, removeDocumentPatch, toggleSkillPatch } from "./chat-config-patch.js";
+import { addDocumentPatch, pinnedSkills, pinSkillsPatch, removeDocumentPatch, toggleSkillPatch } from "./chat-config-patch.js";
 
 const skill = { name: "tdd", description: "", source: "workspace" as const, root: "/ws/.agents/skills" };
 
@@ -12,6 +12,11 @@ describe("chat config patches", () => {
     const unpinned = toggleSkillPatch({ skills: pinned }, skill).skills;
     expect(unpinned).toEqual({ paths: [] });
     expect(pinnedSkills({ skills: unpinned })).toEqual([]);
+  });
+
+  test("pinSkillsPatch pins every name and keeps other skills settings", () => {
+    const patch = pinSkillsPatch({ skills: { paths: ["/extra"], activate: ["a"], global: true } }, ["b", "c"]);
+    expect(patch.skills).toEqual({ paths: ["/extra"], activate: ["a", "b", "c"], global: true });
   });
 
   test("documents dedupe by source and remove by source", () => {

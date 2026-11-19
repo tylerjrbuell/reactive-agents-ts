@@ -18,6 +18,7 @@ import { makeRunCauseReader, type RunCauseReader } from "../services/run-cause.j
 import { checkWorkspaceDir } from "../services/workspace-dir.js";
 import { checkInteractionAnswer, questionsOfPending } from "../services/interaction-answers.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
+import { strategyConflictBodyOf } from "../services/strategy-conflict-guard.js";
 import { effectiveApprovalPolicy } from "../services/approval-policy.js";
 import { effectiveDurableRuns } from "../services/durable-default.js";
 
@@ -159,6 +160,12 @@ export const runsRouter = (
         if (ws && !ws.ok) {
           set.status = 400;
           return { error: ws.error };
+        }
+        // Code Action cannot run behind the approval gate Cortex builds by default: say so now, not mid-run.
+        const conflict = strategyConflictBodyOf(b);
+        if (conflict) {
+          set.status = 409;
+          return conflict;
         }
         const launch = runBodyToLaunchParams(b, ws?.ok ? ws.path : undefined);
         const program = Effect.gen(function* () {

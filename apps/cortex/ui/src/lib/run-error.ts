@@ -1,3 +1,5 @@
+import { strategyConflictLineOf } from "@reactive-agents/ui-core";
+
 /** The plain line for a run the Ollama server refused for its credential. */
 export const OLLAMA_AUTH_LINE = "Ollama Cloud key missing or invalid. Add or replace it in Settings · Providers.";
 
@@ -46,6 +48,9 @@ export function runErrorLine(raw: unknown): string | undefined {
   const first = raw.split("\n").find((l) => l.trim() !== "")?.trim();
   if (!first) return undefined;
   if (isOllamaAuthError(first)) return OLLAMA_AUTH_LINE;
+  // The framework's refusal of code-action behind an approval gate reads like the up-front note does.
+  const conflictLine = strategyConflictLineOf(first);
+  if (conflictLine) return conflictLine;
   const line = redactSecrets(first);
   return line.length > MAX_CHARS ? `${line.slice(0, MAX_CHARS - 1)}…` : line;
 }

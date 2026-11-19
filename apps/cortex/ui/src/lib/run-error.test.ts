@@ -1,6 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { isOllamaAuthError, OLLAMA_AUTH_LINE, runErrorLine } from "./run-error.js";
 
+describe("code-action refused behind an approval gate", () => {
+  it("the framework's mid-run refusal reads as the same plain line the up-front note uses", () => {
+    const framework = 'code-action cannot honor .withApprovalPolicy({ mode: "detach" }): its tool calls run inside the sandbox worker, past the approval gate.';
+    const line = runErrorLine(framework);
+    expect(line).toContain("Code Action cannot run with an approval gate");
+    expect(line).not.toContain("withApprovalPolicy");
+  });
+});
+
 describe("Ollama authentication failures", () => {
   const cloud401 = "LLM stream failed at iteration 0: ollama call failed (ollama:gpt-oss:120b): ollama request failed: 401 unauthorized";
   it("reads 'Ollama Cloud key missing or invalid' and points at Settings", () => {

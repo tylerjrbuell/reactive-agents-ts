@@ -12,6 +12,7 @@ import { runTotalsByAgent, shownRunTotals, type AgentRunTotals } from "../db/age
 import type { GatewayProcessManager } from "../services/gateway-process-manager.js";
 import { migrateLegacyCliToolsInConfig } from "../services/legacy-cli-tools.js";
 import { parseCortexChannels } from "../services/channel-config.js";
+import { strategyConflictBodyOf } from "../services/strategy-conflict-guard.js";
 import { installedChannelCredentials } from "../services/channel-credentials.js";
 
 /** The `PATCH /:agentId` body: every field optional, an absent key leaves the stored value alone. */
@@ -82,6 +83,12 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
       const type = (b.type === "ad-hoc" ? "ad-hoc" : "gateway") as "gateway" | "ad-hoc";
       const agentIdPrefix = type === "gateway" ? "gateway" : "agent";
       const agentId = `${agentIdPrefix}-${crypto.randomUUID().slice(0, 8)}`;
+      // Code Action cannot run behind an approval gate (the gateway always builds one): refuse before saving.
+      const conflict = strategyConflictBodyOf(b.config ?? {});
+      if (conflict) {
+        set.status = 409;
+        return conflict;
+      }
       try {
         const config = b.config ?? {};
         const name = b.name ?? "Unnamed Agent";
@@ -120,6 +127,11 @@ export const agentsRouter = (db: Database, gateway: GatewayProcessManager) =>
     // ── Update ─────────────────────────────────────────────────────────────
     .patch("/:agentId", ({ params, body, set }) => {
       const b = (body ?? {}) as AgentPatchBody;
+      const conflict = b.config !== undefined ? strategyConflictBodyOf(b.config) : undefined;
+      if (conflict) {
+        set.status = 409;
+        return conflict;
+      }
       const patch: Parameters<typeof updateGatewayAgent>[2] = {};
       if (b.name !== undefined)     patch.name     = b.name;
       if (b.config !== undefined)   patch.config   = JSON.stringify(b.config);

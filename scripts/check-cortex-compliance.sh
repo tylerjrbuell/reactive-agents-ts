@@ -70,7 +70,7 @@ BUN_SQLITE_BASELINE=49
 SIZE_LEDGER=(
   "server/services/chat-session-service.ts:1453"
   "server/services/runner-service.ts:844"
-  "server/api/chat.ts:839"
+  "server/api/chat.ts:834"
   "ui/src/lib/components/ChatPanel.svelte:899"
   "ui/src/lib/stores/chat-store.ts:826"
 )

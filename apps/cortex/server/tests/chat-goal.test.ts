@@ -374,6 +374,7 @@ describe("chat goals", () => {
   describe("routes", () => {
     let chatCalls: number;
     const stubSvc = {
+      sessionConfig: () => null,
       chat: async () => {
         chatCalls += 1;
         return { reply: "hi", tokensUsed: 1 };

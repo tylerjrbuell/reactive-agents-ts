@@ -16,20 +16,23 @@
  * resumes from it.
  */
 import type { AgentStreamEvent } from "@reactive-agents/runtime";
-import { causeLineOf } from "@reactive-agents/ui-core";
+import { causeLineOf, type StepEvent } from "@reactive-agents/ui-core";
+
+/** What a chat turn's SSE carries: the runtime's stream events plus Cortex's live strategy `StepEvent`s (strategy-steps.ts). */
+export type ChatStreamEvent = AgentStreamEvent | StepEvent;
 
 /** Most events kept for replay per turn; older ones are dropped first. */
 export const MAX_BUFFERED_EVENTS = 20_000;
 /** How long a finished turn stays attachable (a client that reconnects just after the end still gets its last events). */
 export const FINISHED_TURN_RETENTION_MS = 60_000;
 
-const isTerminal = (e: AgentStreamEvent): boolean =>
+const isTerminal = (e: ChatStreamEvent): boolean =>
   e._tag === "StreamCompleted" || e._tag === "StreamError" || e._tag === "StreamCancelled";
 
 /** One buffered event with its absolute position. */
 export interface NumberedEvent {
   readonly id: number;
-  readonly event: AgentStreamEvent;
+  readonly event: ChatStreamEvent;
 }
 
 /** What a reconnecting client needs to draw the turn before its events arrive. */
@@ -45,7 +48,7 @@ export interface DetachedTurnInfo {
 /** One running (or just finished) turn with its replay buffer. */
 export class DetachedTurn {
   readonly startedAt = Date.now();
-  private events: AgentStreamEvent[] = [];
+  private events: ChatStreamEvent[] = [];
   /** Absolute id of `events[0]` (events dropped from the front advance it). */
   private base = 0;
   private done = false;
@@ -78,7 +81,7 @@ export class DetachedTurn {
   }
 
   /** Append an event and wake the readers. */
-  push(event: AgentStreamEvent): void {
+  push(event: ChatStreamEvent): void {
     this.events.push(event);
     if (this.events.length > MAX_BUFFERED_EVENTS) {
       const drop = this.events.length - MAX_BUFFERED_EVENTS;
@@ -154,7 +157,7 @@ export class DetachedTurns {
   start(
     sessionId: string,
     message: string,
-    source: AsyncIterable<AgentStreamEvent>,
+    source: AsyncIterable<ChatStreamEvent>,
     retentionMs = FINISHED_TURN_RETENTION_MS,
   ): DetachedTurn {
     const turn = new DetachedTurn(sessionId, message);

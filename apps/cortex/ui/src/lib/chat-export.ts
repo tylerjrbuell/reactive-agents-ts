@@ -5,6 +5,7 @@
  * export URLs/filenames the drawer and `/export` use.
  */
 import type { TraceEvent } from "@reactive-agents/trace";
+import { splitReasoning } from "@reactive-agents/ui-core";
 import type { CortexTraceFrame } from "./stores/trace-store.js";
 import { categoryOf, type TimelineRow } from "./stores/timeline-filter.js";
 import { traceTitle, type TimelineGroup } from "./stores/timeline-store.js";
@@ -192,7 +193,9 @@ export function exportUrl(base: string, sessionId: string, format: ExportFormat)
 
 /** The conversation as `**You**: …` / `**Assistant**: …` paragraphs (the "copy all" text). */
 export function transcriptText(turns: readonly { readonly role: string; readonly content: string }[]): string {
-  return turns.map((t) => `**${t.role === "user" ? "You" : "Assistant"}**: ${t.content}`).join("\n\n");
+  return turns
+    .map((t) => `**${t.role === "user" ? "You" : "Assistant"}**: ${t.role === "user" ? t.content : splitReasoning(t.content).answer || t.content}`)
+    .join("\n\n");
 }
 
 /** A fetched export, ready to save; `ok: false` when the request failed. */

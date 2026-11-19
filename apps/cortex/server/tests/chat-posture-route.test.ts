@@ -9,6 +9,7 @@ describe("chat route posture pass-through", () => {
   const seen: { chat: Posture[]; stream: Posture[] } = { chat: [], stream: [] };
   let paused = false;
   const stub = {
+    sessionConfig: () => null,
     approvals: { hasPending: () => paused },
     chat: async (_id: string, _m: string, opts?: { posture?: "execute" | "plan" }) => {
       seen.chat.push(opts?.posture);

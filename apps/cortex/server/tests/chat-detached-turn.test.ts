@@ -141,6 +141,7 @@ describe("chat stream route: the turn outlives the connection", () => {
     const src = gatedSource();
     let signalSeen: AbortSignal | undefined = undefined;
     const svc = {
+      sessionConfig: () => null,
       approvals: { hasPending: () => false },
       chatStream: (_id: string, _m: string, signal?: AbortSignal) => {
         signalSeen = signal;
@@ -188,7 +189,7 @@ describe("chat stream route: the turn outlives the connection", () => {
   });
 
   it("there is nothing to attach to for a session that never streamed", async () => {
-    const svc = { approvals: { hasPending: () => false } } as unknown as ChatSessionService;
+    const svc = { sessionConfig: () => null, approvals: { hasPending: () => false } } as unknown as ChatSessionService;
     const app = new Elysia().use(chatRouter(svc));
     expect((await app.handle(new Request("http://localhost/api/chat/sessions/none/chat/stream/active"))).status).toBe(404);
     expect(await (await app.handle(new Request("http://localhost/api/chat/sessions/none/chat/active"))).json()).toEqual({ active: false });

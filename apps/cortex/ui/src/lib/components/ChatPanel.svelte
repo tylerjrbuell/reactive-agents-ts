@@ -33,7 +33,7 @@
   import { fetchExport, transcriptText, type ExportFormat } from "$lib/chat-export.js";
   import { saveTextFile } from "$lib/chat-download.js";
   import { CORTEX_SERVER_URL } from "$lib/constants.js";
-  import { documentsOf, pinnedSkills, toggleSkillPatch, type DiscoveredSkill } from "$lib/chat-config-patch.js";
+  import { documentsOf, pinnedSkills, pinSkillsPatch, type DiscoveredSkill } from "$lib/chat-config-patch.js";
   import { fetchSessionSkills } from "$lib/chat-skills.js";
   import { inlineActivations, inlineTrigger, parseInlineCommands, promptWithoutCommands, removeSkillTokens, triggerIsComplete } from "$lib/chat-inline-commands.js";
   import { pickSkill, routeComposerInput } from "$lib/chat-composer-input.js";
@@ -220,9 +220,7 @@
   async function pinSessionSkills(names: readonly string[]) {
     const add = names.filter((n) => !pinned.includes(n));
     if (add.length === 0) return;
-    let next: Record<string, unknown> = cfg;
-    for (const name of add) next = { ...next, ...toggleSkillPatch(next, { name }) };
-    await patchConfig(`Pinned ${add.join(", ")} for every turn`, { skills: next.skills });
+    await patchConfig(`Pinned ${add.join(", ")} for every turn`, pinSkillsPatch(cfg, add));
   }
 
   function sendQueuedNow() {
@@ -869,6 +867,8 @@
           open={menuOpen}
           onRemoveSkill={removeDraftSkill}
           onPick={pickChip}
+          {cfg}
+          onPatch={patchConfig}
         />
       {/if}
     {/snippet}

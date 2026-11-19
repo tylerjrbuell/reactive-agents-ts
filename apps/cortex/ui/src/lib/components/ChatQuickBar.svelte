@@ -10,6 +10,9 @@
   import { tooltip } from "$lib/actions/tooltip.js";
   import Icon from "$lib/components/kit/Icon.svelte";
   import type { QuickBarChip } from "$lib/chat-quickbar-chips.js";
+  import { toolsOn } from "$lib/chat-quickbar.js";
+  import { strategyConflictOfConfig } from "$lib/strategy-visuals/conflict.js";
+  import StrategyConflictNote from "$lib/components/strategy/StrategyConflictNote.svelte";
 
   interface Props {
     queuedSkills: string[];
@@ -22,12 +25,20 @@
     open?: boolean;
     onRemoveSkill: (name: string) => void;
     onPick: (cmd: string) => void;
+    /** The session's config: a strategy that cannot run behind its approval gate is flagged before a send is refused. */
+    cfg?: Record<string, unknown>;
+    /** Apply a one-click resolution of that conflict (a config patch, named for the toast). */
+    onPatch?: (what: string, patch: Record<string, unknown>) => void;
   }
-  let { queuedSkills, chips, hidden = 0, config = false, open = false, onRemoveSkill, onPick }: Props = $props();
+  let { queuedSkills, chips, hidden = 0, config = false, open = false, onRemoveSkill, onPick, cfg = {}, onPatch }: Props = $props();
+  const conflict = $derived(strategyConflictOfConfig(cfg, { toolsEnabled: toolsOn(cfg) }));
 </script>
 
 <!-- data-slash-menu-keep: a chip click switches pickers itself, so the slash menu's click-outside ignores the bar. -->
 <div data-slash-menu-keep class="quick" role="toolbar" aria-label="Chat settings">
+  {#if conflict}
+    <div class="conflict"><StrategyConflictNote {conflict} onResolve={(r) => onPatch?.(r.label, { ...r.patch })} /></div>
+  {/if}
   {#each queuedSkills as name (name)}
     <button type="button" class="skill" use:tooltip={"Active for your next message only. Click to remove."} aria-label="Remove {name} from the next message" onclick={() => onRemoveSkill(name)}>
       <Icon name="bolt" size="sm" />{name}<Icon name="x" size="sm" />
@@ -55,6 +66,7 @@
 
 <style>
   .quick { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 8px 8px 0; min-width: 0; }
+  .conflict { flex: 1 0 100%; }
   .quick :global(.quick-chip) { max-width: 100%; min-width: 0; }
   /* provider · model: one chip, two buttons; the model part gives way first (ellipsis). */
   .combo { display: inline-flex; align-items: center; gap: 2px; height: 24px; padding: 0 4px 0 8px; min-width: 0; max-width: 100%; border-radius: var(--cortex-r-chip); background: var(--cortex-surface-2); color: var(--cortex-text-2); font-size: var(--cortex-t-xs); }

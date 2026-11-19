@@ -13,6 +13,11 @@ import {
   foldModelWait,
   initialModelWait,
   liveTokensPerSecond,
+  foldStrategyRun,
+  endStrategyRun,
+  initialStrategyRun,
+  strategyStepFromWire,
+  type StrategyRunState,
   type ChecklistSnapshotWire,
   type ModelWaitState,
   type RunState,
@@ -193,6 +198,8 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
   let liveApproval: LiveApproval | undefined;
   // A live question (`request_user_input`, no durable runs): the turn shows its reply controls.
   let liveInteraction: LiveInteraction | undefined;
+  // The strategy's live phases (reflexion rounds, ToT levels, plan steps ...), drawn by `StrategyCard`.
+  let strategyRun: StrategyRunState = initialStrategyRun;
 
   for await (const event of connectRunStream({
     endpoint: opts.endpoint,
@@ -204,6 +211,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
     trackModelWait(event);
     trackLiveApproval(event);
     trackLiveInteraction(event);
+    trackStrategy(event);
     reduceEvent(event);
   }
   // Flush any coalesced text deltas before persistence / return.
@@ -251,6 +259,26 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
     flushPending();
     const since = next.waiting ? next.since : undefined;
     apply((turns) => patchTurn(turns, id, (t) => ({ ...t, awaitingModelSince: since })));
+  }
+
+  /**
+   * Fold the strategy's live phases (`StepEvent`, ui-core strategy-phases.ts) into the turn's
+   * `strategyRun`; the turn ending settles every phase.
+   */
+  function trackStrategy(event: UiStreamEvent): void {
+    if (event._tag === "StepEvent") {
+      const step = strategyStepFromWire(event.step);
+      if (!step) return;
+      strategyRun = foldStrategyRun(strategyRun, step);
+    } else if (event._tag === "StreamCompleted" || event._tag === "StreamError" || event._tag === "StreamCancelled") {
+      if (strategyRun.current === undefined) return;
+      strategyRun = endStrategyRun(strategyRun);
+    } else {
+      return;
+    }
+    const next = strategyRun;
+    flushPending();
+    apply((turns) => patchTurn(turns, id, (t) => ({ ...t, strategyRun: next })));
   }
 
   /** Set or clear the turn's live approval wait (chat-live-approval.ts). */

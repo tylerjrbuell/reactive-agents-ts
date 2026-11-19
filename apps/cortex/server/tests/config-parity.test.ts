@@ -236,7 +236,8 @@ describe("AgentConfig → LaunchParams — full strategy set", () => {
         new Request("http://localhost/api/runs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...FULL_CONFIG_BODY, strategy }),
+          // Code Action cannot run behind an approval gate (strategy-conflict-guard.ts): it needs approvals off.
+          body: JSON.stringify({ ...FULL_CONFIG_BODY, strategy, ...(strategy === "code-action" ? { askBeforeRiskyTools: false, approvalPolicy: undefined, durableRuns: undefined } : {}) }),
         }),
       );
       expect(res.status, `strategy ${strategy} rejected`).toBe(200);

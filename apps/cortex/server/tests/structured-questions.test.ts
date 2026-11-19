@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { Database } from "bun:sqlite";
 import { Elysia } from "elysia";
 import { Effect, Layer } from "effect";
-import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import type { ChatStreamEvent as AgentStreamEvent } from "../services/chat-detached-turn.js";
 import type { InteractionQuestion } from "@reactive-agents/core";
 import { applySchema } from "../db/schema.js";
 import { CortexStoreServiceLive } from "../services/store-service.js";

@@ -6,7 +6,7 @@
 // answer. A desk run is listed and answered through the runner. No durable store anywhere.
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { Database } from "bun:sqlite";
-import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import type { ChatStreamEvent as AgentStreamEvent } from "../services/chat-detached-turn.js";
 import { Effect, Layer } from "effect";
 import { CortexStoreServiceLive } from "../services/store-service.js";
 import { CortexIngestService } from "../services/ingest-service.js";

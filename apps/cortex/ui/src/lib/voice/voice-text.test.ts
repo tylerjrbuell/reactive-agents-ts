@@ -9,6 +9,10 @@ describe("transcriptMarkdown", () => {
     const t = transcriptMarkdown([user("Hi"), agent("Hello **there**"), agent("", {}), agent("partial", { streaming: true })]);
     expect(t).toBe("You said.\n\nHi\n\nThe agent replied.\n\nHello **there**");
   });
+  test("never reads a leaked reasoning preface aloud", () => {
+    const leak = agent("thought The user wants a plan. I will list steps.\nHere's the plan:\n1. One");
+    expect(transcriptMarkdown([leak])).toBe("The agent replied.\n\nHere's the plan:\n1. One");
+  });
   test("an empty conversation reads nothing", () => {
     expect(transcriptMarkdown([])).toBe("");
   });

@@ -11,7 +11,7 @@
   import Badge from "$lib/components/kit/Badge.svelte";
   import Status from "$lib/components/kit/Status.svelte";
   import { bareEnding, endingBadge } from "$lib/turn-ending.js";
-  import { turnEnding } from "$lib/stores/chat-timeline.js";
+  import { turnAnswerText, turnEnding } from "$lib/stores/chat-timeline.js";
   import { railClassOf, strategyChip } from "$lib/chat-turn-meta.js";
   import { statusOfTurn } from "@reactive-agents/ui-core";
   import { fade } from "svelte/transition";
@@ -47,6 +47,8 @@
   const { turn, index: i, entering, idle, provider, model, planHidden, isLast, onCopy, strategyLabel, onRerun, onTrace, onFork, planCard = false, onExecutePlan, pastPlanCard = false }: Props = $props();
 
   const TONE = { error: "bad", warn: "warn", quiet: "neutral" } as const;
+  // Copy and read-aloud take the answer only: reasoning lives in the Thinking pill.
+  const answerText = $derived(turnAnswerText(turn));
   const status = $derived(statusOfTurn(turnEnding(turn), { streaming: turn.streaming === true }));
   const rail = $derived(railClassOf(status.tone));
   const shownProvider = $derived(turn.provider ?? (turn.streaming ? provider : ""));
@@ -112,13 +114,13 @@
     showActions={!turn.streaming && idle}
     pinned={isLast}
     showStrategy={false}
-    copyText={turn.content.trim() !== "" ? turn.content : undefined}
+    copyText={answerText.trim() !== "" ? answerText : undefined}
     {onCopy}
     {strategyLabel}
     actions={[
       // A turn that did not finish offers Retry in its ending note; the row keeps Rerun for the rest.
       ...(isLast && !turn.runFailed && !bareEnding(turn) ? [{ label: turn.incomplete ? "Retry" : "Rerun", icon: "retry" as const, run: () => onRerun() }] : []),
-      ...(turn.content.trim() !== "" ? [{ label: readingThis ? "Stop reading" : "Read aloud", icon: "speaker" as const, run: () => v.toggleRead(readId, turn.content) }] : []),
+      ...(answerText.trim() !== "" ? [{ label: readingThis ? "Stop reading" : "Read aloud", icon: "speaker" as const, run: () => v.toggleRead(readId, answerText) }] : []),
       { label: "Open trace", icon: "trace", run: () => onTrace(turn.id) },
       { label: "Fork from here", icon: "fork", run: () => onFork(turn.id) },
     ]}

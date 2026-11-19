@@ -10,7 +10,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { join } from "node:path";
-import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import type { ChatStreamEvent as AgentStreamEvent } from "../services/chat-detached-turn.js";
 import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { insertMcpServer } from "../db/mcp-queries.js";

@@ -13,6 +13,7 @@ import { attachmentsSchema } from "./chat-attachments-schema.js";
 import { readWorkspaceText, searchWorkspaceFiles } from "../services/workspace-files.js";
 import { AgentConfigBodyFields } from "./agent-config-body.js";
 import { parseCortexSkillsConfig } from "../services/cortex-agent-config.js";
+import { turnBlockOf } from "../services/chat-turn-block.js";
 
 /**
  * Body schema for chat session create / PATCH config: the chat-session switches plus
@@ -58,12 +59,6 @@ export function parsePosture(raw: string | undefined): "execute" | "plan" | unde
 }
 
 const goalFailureStatus = (f: GoalFailure): 400 | 404 | 409 => (f.code === "invalid" ? 400 : f.code === "not-found" ? 404 : 409);
-
-/** 409 body naming the goal that owns the session, or null when user turns are allowed. */
-function goalTurnBlock(goals: ChatGoalService | undefined, sessionId: string): { error: string } | null {
-  const g = goals?.activeGoal(sessionId);
-  return g ? { error: `Session is pursuing a goal: "${g.objective}". Pause or cancel the goal to chat.` } : null;
-}
 
 /** Proposal result -> HTTP: 404 unknown, 409 not `proposed`, 422 apply failed (proposal stays `proposed` with `error`). */
 function proposalResponse(r: ProposalResult, set: { status?: number | string }): { proposal?: unknown; error?: string } {
@@ -667,7 +662,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
     .post(
       "/sessions/:sessionId/chat",
       async ({ params, body, set }) => {
-        const blocked = goalTurnBlock(goals, params.sessionId);
+        const blocked = turnBlockOf(goals, svc, params.sessionId);
         if (blocked) {
           set.status = 409;
           return blocked;
@@ -716,7 +711,7 @@ export const chatRouter = (svc: ChatSessionService, schedules?: ChatScheduleServ
     .post(
       "/sessions/:sessionId/chat/stream",
       async ({ params, body, set }) => {
-        const blocked = goalTurnBlock(goals, params.sessionId);
+        const blocked = turnBlockOf(goals, svc, params.sessionId);
         if (blocked) {
           set.status = 409;
           return blocked;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildTimeline, previewArgs, turnEnding, turnSteps, turnSummary, turnTranscript } from "./chat-timeline.js";
+import { buildTimeline, previewArgs, turnAnswerText, turnEnding, turnSteps, turnSummary, turnTranscript } from "./chat-timeline.js";
 
 describe("turnSteps (ui-core step view over a chat turn)", () => {
   test("titles steps by action, never by thought; legacy thought-only steps read as narration", () => {
@@ -119,6 +119,40 @@ describe("hydrateTurn", () => {
   });
 });
 
+describe("turnTranscript thinking pill", () => {
+  const reasoningSteps = [{ iteration: 1, maxIterations: 5, thought: "", thinking: "The user wants a report." }];
+
+  test("a streaming turn's reasoning leads as a live thinking segment", () => {
+    const t = turnTranscript({ reasoningSteps, toolCalls: [], content: "", streaming: true });
+    expect(t[0]).toMatchObject({ kind: "thinking", text: "The user wants a report.", live: true });
+  });
+
+  test("a finished turn's thinking is not live, and a leaked 'thought' preface never opens the answer", () => {
+    const t = turnTranscript({ reasoningSteps, toolCalls: [], content: "thought The user wants a report.\n\n# Report", streaming: false });
+    expect(t[0]).toMatchObject({ kind: "thinking", live: false });
+    expect(t.find((s) => s.kind === "answer")).toMatchObject({ text: "# Report" });
+  });
+});
+
+describe("leaked reasoning with no reported channel (gemini 'thought ...' preface)", () => {
+  const raw = "thought The user wants a markdown report. I will outline it.\nHere's the plan:\n1. Overview\n2. Risks";
+
+  test("a reloaded stored row (content only, no trace) shows answer-only plus a pill; copy takes the answer", async () => {
+    const { hydrateTurn } = await import("./chat-store.js");
+    const turn = hydrateTurn({ id: "a1", role: "assistant", content: raw, ts: 5 } as never);
+    const t = turnTranscript(turn);
+    expect(t[0]).toMatchObject({ kind: "thinking", live: false, text: "The user wants a markdown report. I will outline it." });
+    expect(t.find((s) => s.kind === "answer")).toMatchObject({ text: "Here's the plan:\n1. Overview\n2. Risks" });
+    expect(turnAnswerText(turn)).toBe("Here's the plan:\n1. Overview\n2. Risks");
+  });
+
+  test("an answer starting with 'thought' is left whole", () => {
+    const content = "thought leadership is a niche.";
+    expect(turnAnswerText({ content, toolCalls: [], streaming: false })).toBe(content);
+    expect(turnTranscript({ content, toolCalls: [], streaming: false }).some((s) => s.kind === "thinking")).toBe(false);
+  });
+});
+
 describe("turnTranscript (the assistant turn as the agent talking)", () => {
   const shape = (segments: ReturnType<typeof turnTranscript>): string[] =>
     segments.map((s) =>
@@ -150,14 +184,15 @@ describe("turnTranscript (the assistant turn as the agent talking)", () => {
     });
     const t = turnTranscript(turn);
     expect(shape(t)).toEqual([
+      "thinking:Users want traffic.",
       "prose:Let me find the site.",
       "tools:Ran 1 tool",
       "prose:Found it; pulling stats.",
       "tools:Ran 3 tools · 1 failed, 1 fixed",
       `answer:${answer}`,
     ]);
-    // Thinking is kept for drill-down on the group's steps, never as prose.
-    const group = t[3]!;
+    // Thinking leads as its pill and is kept for drill-down on the group's steps, never as prose.
+    const group = t[4]!;
     if (group.kind !== "tools") throw new Error("expected a tool group");
     expect(group.steps[0]!.thinking).toBe("Users want traffic.");
   });

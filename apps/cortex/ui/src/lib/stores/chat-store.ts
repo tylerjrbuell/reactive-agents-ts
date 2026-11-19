@@ -7,7 +7,7 @@ import { ATTACH_ACTIVE_TURN, chatStreamEndpoint, fetchActiveTurn, resumedTurns, 
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import { turnModelOf } from "../chat-live-config.js";
-import type { ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent } from "@reactive-agents/ui-core";
+import type { ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent, StrategyRunHolder } from "@reactive-agents/ui-core";
 import type { AttachmentMeta, RecalledMemoryView, RunSkillsView, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
 import { metaOf, requestOf, taggedDraftsOf, type DraftAttachment } from "../composer-attachments.js";
 import { keepThumbs } from "./composer-attachments.js";
@@ -75,7 +75,7 @@ export interface LiveTokenSplit {
   readonly estimatedOut: boolean;
 }
 
-export type ChatTurn = {
+export type ChatTurn = StrategyRunHolder & {
   id: number;
   role: "user" | "assistant";
   content: string;

@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { Database } from "bun:sqlite";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AgentStreamEvent } from "@reactive-agents/runtime";
+import type { ChatStreamEvent as AgentStreamEvent } from "../services/chat-detached-turn.js";
 import { applySchema } from "../db/schema.js";
 import { getChatTurns } from "../db/chat-queries.js";
 import { ChatSessionService } from "../services/chat-session-service.js";

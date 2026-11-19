@@ -47,8 +47,11 @@ import {
 } from "./cortex-agent-config.js";
 import { parseCortexJudgmentConfig } from "./cortex-judgment.js";
 import { migrateChatSkillsConfig, skillRootOf } from "./workspace-skills.js";
-import { recordRecallActivity, withTurnRecall, type RecallActivityLog } from "./chat-turn-recall.js";
-import { recordSkillActivity,turnSkillPinsOf, turnSkillsOption, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
+import { withTurnRecall, type RecallActivityLog } from "./chat-turn-recall.js";
+import { attachTurnRecorders } from "./chat-turn-recorders.js";
+import type { StrategyStepLog } from "./strategy-steps.js";
+import type { ChatStreamEvent } from "./chat-detached-turn.js";
+import { turnSkillPinsOf, turnSkillsOption, withTurnSkills, type SkillActivityLog } from "./chat-turn-skills.js";
 import { detectToolCallShape } from "@reactive-agents/tools";
 import type { AttachmentMeta } from "@reactive-agents/ui-core";
 import { withTurnAttachments } from "./chat-turn-trace.js";
@@ -61,7 +64,7 @@ import { waitsLive, durableApprovals } from "./durable-approvals.js";
 import { UTILITY_AGENT_PARAMS, utilityOutput, utilityPrompt } from "./utility-agent.js";
 import { compactionContextEstimate, compactionPrompt, structureCompactionSummary } from "./compaction-summary.js";
 import { attachChatIngest, withStartedArgs, type ChatIngestHandle, type ChatIngestSink } from "./chat-ingest.js";
-import { recordTurnAssessments, type TurnAssessmentRecorder } from "./turn-assessments.js";
+import type { TurnAssessmentRecorder } from "./turn-assessments.js";
 import { CortexIngestService } from "./ingest-service.js";
 import { buildRunTaskContext } from "./chat-run-context.js";
 import { withDerivedContext } from "./chat-context-fallback.js";
@@ -83,7 +86,7 @@ import {
   type StoredTurnTrace,
 } from "./chat-turn-trace.js";
 import { ChatTurnStops, cancelReasonOf } from "./chat-turn-stop.js";
-import { recordRunErrors, type RunErrorLog } from "./chat-run-errors.js";
+import type { RunErrorLog } from "./chat-run-errors.js";
 import { makeSessionControlTool, SESSION_CONTROL_SYSTEM_LINE } from "./session-control-tool.js";
 import type { SessionControlPort } from "./chat-proposal-service.js";
 import { ChatApprovals, type ApprovableAgent, type ChatPendingApproval, type ChatPendingInteraction } from "./chat-approvals.js";
@@ -179,6 +182,7 @@ export interface CachedChatSession {
   readonly skillActivity?: SkillActivityLog;
   /** Memories each run recalled (see `chat-turn-recall.ts`). */
   readonly recallActivity?: RecallActivityLog;
+  readonly strategySteps?: StrategyStepLog; // the turn's live phases, streamed as `StepEvent`s (`strategy-steps.ts`)
   /** The same agent's durable approve/deny surface (see `chat-approvals.ts`). */
   readonly approvable?: ApprovableAgent & PlanRunnableAgent & ResumableAgent;
 }
@@ -720,7 +724,7 @@ export class ChatSessionService {
     signal?: AbortSignal,
     posture?: RunPosture,
     opts: { readonly skills?: readonly string[]; readonly input?: TaskInput; readonly attachments?: readonly AttachmentMeta[] } = {},
-  ): AsyncGenerator<AgentStreamEvent> {
+  ): AsyncGenerator<ChatStreamEvent> {
     const row = getChatSession(this.db, sessionId);
     if (!row) throw new Error(`Chat session ${sessionId} not found`);
 
@@ -755,6 +759,7 @@ export class ChatSessionService {
         return;
       }
       entry.ingest?.beginTurn();
+      entry.strategySteps?.beginTurn();
 
       // Direct conversational path: full session history + run grounding even when tools are off,
       // wrapped in the SSE event shape so Run Chat and the main Chat panel behave consistently.
@@ -868,6 +873,7 @@ let tokensUsed = 0;
             // never the answer, so it is not stored as one.
             if (out.length > 0 || outcome !== undefined || producedFiles) replyText = out;
           }
+          yield* entry.strategySteps?.drain() ?? []; // phases reported so far go out before the event (and the terminal one)
           yield withRunError(event, outcome);
         }
       } catch (e) {
@@ -1068,10 +1074,7 @@ let tokensUsed = 0;
     const ingest = sink
       ? await attachChatIngest(agent, sink, { sessionId, ...(stableAgentId ? { stableAgentId } : {}) })
       : undefined;
-    const { recorder: assessments, unsubscribe: unAssess } = await recordTurnAssessments(agent);
-    const { log: runErrors, unsubscribe: unErrors } = await recordRunErrors(agent);
-    const { log: skillActivity, unsubscribe: unSkills } = await recordSkillActivity(agent);
-    const { log: recallActivity, unsubscribe: unRecall } = await recordRecallActivity(agent);
+    const { logs, unsubscribe: unRecorders } = await attachTurnRecorders(agent);
     // A `detach` gate or a `request_user_input` question without durable runs waits live
     // mid-turn: list and answer it (durable-approvals.ts).
     const unLive = waitsLive(params)
@@ -1080,12 +1083,9 @@ let tokensUsed = 0;
     const unsubscribe = () => {
       unLive?.();
       ingest?.detach();
-      unAssess();
-      unErrors();
-      unSkills();
-      unRecall();
+      unRecorders();
     };
-    return { session, agent, unsubscribe, ...(ingest ? { ingest } : {}), assessments, runErrors, skillActivity, recallActivity, approvable: agent };
+    return { session, agent, unsubscribe, ...(ingest ? { ingest } : {}), ...logs, approvable: agent };
   }
 
   private resolveIngestSink(): Promise<ChatIngestSink | undefined> {
