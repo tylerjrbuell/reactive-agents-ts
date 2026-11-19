@@ -1,0 +1,12 @@
+{
+  "outDir": "/home/tylerbuell/h3-traces-adaptive-lift",
+  "tiers": ["cogito:8b", "qwen3:4b"],
+  "arms": [
+    { "id": "off", "env": { "RA_BENCH_CALIBRATION": "skip", "RA_ACT_OR_ANSWER": "0" } },
+    { "id": "on", "env": { "RA_BENCH_CALIBRATION": "auto", "RA_ACT_OR_ANSWER": "auto" } },
+    { "id": "swap", "env": { "RA_BENCH_CALIBRATION": "swap", "RA_ACT_OR_ANSWER": "auto" } }
+  ],
+  "k": 5,
+  "suite": "h3",
+  "cellTimeoutSec": 180
+}
