@@ -32,6 +32,7 @@ import {
   firstConvergenceIteration,
   peakContextPressure,
   deriveTaskComplexity,
+  deriveStrategySwitched,
   deriveFailurePattern,
   deriveThoughtToActionRatio,
   entropyVariance,
@@ -188,7 +189,7 @@ export const emitTelemetryRunReport = (
 
           const modelEntry = lookupModelFn(modelId, undefined, String(config.provider ?? ""));
           const taskText = extractTaskText(task.input);
-          const strategySwitched = !!rr?.metadata?.strategyFallback;
+          const strategySwitched = deriveStrategySwitched(ctx.metadata);
 
           const outcome = runOutcome;
 

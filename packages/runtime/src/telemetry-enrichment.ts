@@ -2,6 +2,7 @@
  * Pure helper functions that compute RunReport enrichment fields from raw execution data.
  * Extracted from execution-engine.ts so they can be unit-tested independently.
  */
+import { readStrategySwitches } from "./engine/phases/agent-loop/strategy-switch-capture.js";
 
 export type EntropyEntry = {
   readonly iteration: number;
@@ -75,11 +76,21 @@ export function peakContextPressure(entropyLog: readonly EntropyEntry[]): number
 }
 
 /**
+ * Whether the run made a real mid-run strategy switch. Reads the run's
+ * `StrategySwitched` history (`strategySwitches` on the execution metadata,
+ * recorded from the kernel's EventBus events), NOT `strategyFallback`: a
+ * strategy that errors or returns an invalid shape is a failure, not a switch.
+ */
+export function deriveStrategySwitched(metadata: Readonly<Record<string, unknown>>): boolean {
+  return readStrategySwitches(metadata).length > 0;
+}
+
+/**
  * Classify task complexity from execution signals.
  *
  * @param realIterations - actual loop iterations completed (ctx.iteration - 1, since ctx starts at 1)
  * @param totalToolCalls - total tool calls made (not unique)
- * @param strategySwitched - whether strategy fallback occurred
+ * @param strategySwitched - whether a real mid-run strategy switch occurred
  * @param ctxPressurePeak - peak context pressure (0–1), if available
  */
 export function deriveTaskComplexity(
