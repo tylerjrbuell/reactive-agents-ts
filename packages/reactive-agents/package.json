@@ -70,7 +70,7 @@
     "@reactive-agents/prompts": "0.18.0",
     "@reactive-agents/eval": "0.18.0",
     "@reactive-agents/a2a": "0.18.0",
-    "@reactive-agents/cli": "0.18.0"
+    "@reactive-agents/cli": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
