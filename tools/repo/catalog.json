@@ -61,7 +61,7 @@
       "id": ".agents/skills/harness-improvement-loop/scripts/probe-gemini-thought-signature.ts",
       "path": ".agents/skills/harness-improvement-loop/scripts/probe-gemini-thought-signature.ts",
       "kind": "research",
-      "summary": "Live check that the Gemini provider replays thoughtSignature on tool-call history (expects 200, not 400)",
+      "summary": "Live check: Gemini replays thoughtSignature on tool-call history (200, not 400)",
       "invoke": "bun --env-file=.env .agents/skills/harness-improvement-loop/scripts/probe-gemini-thought-signature.ts"
     },
     {
