@@ -5,7 +5,7 @@ import { CortexRunnerService } from "../services/runner-service.js";
 import type { ChatSessionService } from "../services/chat-session-service.js";
 import { interruptChatTurnSettled } from "../services/chat-run-control.js";
 import { DetachedTurns } from "../services/chat-detached-turn.js";
-import { findLoopStoppedRuns, loopStoppedSummaryOf, reopenRunRow, restoreRunRow } from "../services/loop-stopped-runs.js";
+import { findLoopStoppedRuns, loopStoppedSummaryOf } from "../services/loop-stopped-runs.js";
 import { errorText, parseResumeInput, ResumeGuard, resumeStatusOf } from "../services/loop-stop-resume.js";
 
 /** Body of a Continue request: an optional note and an optional iteration grant. */
@@ -98,8 +98,8 @@ export const chatResumeRoute = (svc: ChatSessionService, detachedTurns: Detached
  * - `GET /api/loop-stopped-runs`: durable desk runs that ended without completing
  *   (`{ runs: LoopStoppedRunSummary[] }`: `kind`, `status`, `stop`; no launch config).
  * - `POST /api/loop-stopped-runs/:runId/resume` `{ note?, extraIterations? }`:
- *   rebuild the run's agent and call the framework's `resumeRun`; `{ agentId,
- *   runId }` (the same Cortex run). 404 when the run is not a resumable
+ *   rebuild the run's agent and call the framework's `resumeRun` with `newRun`; `{ agentId,
+ *   runId }` (the NEW linked run's id, `continuedFrom` = this run). 404 when the run is not a resumable
  *   loop-stopped run, 409 while a Continue of it is already running.
  */
 export const loopStoppedRunsRouter = (
@@ -145,10 +145,8 @@ export const loopStoppedRunsRouter = (
               ...(home ? { home } : {}),
             });
             if (!stopped) return null;
-            const before = reopenRunRow(db, params.runId);
-            return yield* runner.resumeCrashed(stopped, input.options).pipe(
-              Effect.onError(() => Effect.sync(() => (before ? restoreRunRow(db, params.runId, before) : undefined))),
-            );
+            // A new linked run: the parent's row stays as it was.
+            return yield* runner.resumeCrashed(stopped, input.options);
           });
           const out = await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));
           if (out === "running") {

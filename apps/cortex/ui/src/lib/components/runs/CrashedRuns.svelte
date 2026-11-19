@@ -2,7 +2,7 @@
   /**
    * "Stopped mid-run" strip on Runs (roadmap C13): durable desk runs a crash
    * left unfinished, each with **Resume** (the framework's `resumeRun` from the
-   * last checkpoint, on the same run) and Open run. Renders nothing when there
+   * last checkpoint, as a new linked run that opens on success) and Open run. Renders nothing when there
    * are none. Loaded once on mount and after each resume. Rules and client:
    * `lib/crashed-runs.ts`.
    */
@@ -10,6 +10,8 @@
   import Button from "$lib/components/kit/Button.svelte";
   import Status from "$lib/components/kit/Status.svelte";
   import { toast } from "$lib/stores/toast-store.js";
+  import { goto } from "$app/navigation";
+  import { continuedRunPath } from "$lib/loop-stop-resume.js";
   import {
     crashedRunDetail,
     crashedRunLabel,
@@ -30,8 +32,10 @@
     const out = await resumeCrashedRun(r.runId);
     busy = null;
     if (out.ok) {
-      toast.success("Resuming run", crashedRunLabel(r));
+      toast.success("Resuming as a new run", crashedRunLabel(r));
       runs = runs.filter((x) => x.runId !== r.runId);
+      const path = continuedRunPath(out.runId);
+      if (path) void goto(path);
     } else {
       toast.error("Couldn't resume the run", out.error);
     }

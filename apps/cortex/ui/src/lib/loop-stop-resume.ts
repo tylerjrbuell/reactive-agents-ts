@@ -187,10 +187,17 @@ export function endingSupersededByContinue(outcome: EndingStop, offered: RunStop
   return same.test(outcome.terminatedBy ?? outcome.error ?? "");
 }
 
-/** Server answer to a Continue: the run finished (maybe stopped again), or the server's reason. */
+/**
+ * Server answer to a Continue: the run finished (maybe stopped again), or the server's reason.
+ * A desk Continue starts a NEW linked run and answers with its id (`runId`); chat answers carry none.
+ */
 export type ContinueResult =
-  | { readonly ok: true; readonly success: boolean; readonly resumable: boolean }
+  | { readonly ok: true; readonly success: boolean; readonly resumable: boolean; readonly runId?: string }
   | { readonly ok: false; readonly status: number; readonly error: string };
+
+/** Where a desk Continue's new run is watched (`/run/<id>`), or `undefined` when the server named none. */
+export const continuedRunPath = (runId: string | undefined): string | undefined =>
+  runId !== undefined && runId !== "" ? `/run/${encodeURIComponent(runId)}` : undefined;
 
 type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 const realFetch: Fetch = (url, init) => fetch(url, init);
@@ -198,9 +205,9 @@ const realFetch: Fetch = (url, init) => fetch(url, init);
 async function postContinue(url: string, body: ContinueBody, fetchFn: Fetch): Promise<ContinueResult> {
   try {
     const res = await fetchFn(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const json = (await res.json().catch(() => ({}))) as { error?: string; success?: boolean; resumable?: boolean };
+    const json = (await res.json().catch(() => ({}))) as { error?: string; success?: boolean; resumable?: boolean; runId?: unknown };
     if (!res.ok) return { ok: false, status: res.status, error: json.error ?? `Server returned ${res.status}` };
-    return { ok: true, success: json.success !== false, resumable: json.resumable === true };
+    return { ok: true, success: json.success !== false, resumable: json.resumable === true, ...(typeof json.runId === "string" ? { runId: json.runId } : {}) };
   } catch (e) {
     return { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) };
   }

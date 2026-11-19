@@ -4,10 +4,11 @@
  * left resumable in the durable store (`RunRecord.resumable`, `stop`). The file
  * keeps its name from when only loop stops were listed; it lists every kind now.
  * The Runs list offers Continue on them; Continue calls the framework's
- * `agent.resumeRun(durableRunId, { note?, extraIterations? })` on an agent
+ * `agent.resumeRun(durableRunId, { note?, extraIterations?, newRun: true })` on an agent
  * rebuilt from the run's stored launch config under the same agent id (runner
- * `resumeCrashed`, shared with crash resume), so the store, the config hash and
- * the task id all match the original.
+ * `resumeCrashed`, shared with crash resume), so the store and the config hash
+ * match the original. The continuation is a new Cortex run linked by
+ * `continuedFrom` (`desk-continue.ts`); the parent's row is left as it was.
  *
  * Sibling of `crashed-runs.ts` (runs a crash left `live`): same readers
  * (`listDurableRuns`), same rule that a missing store file is skipped without
@@ -100,25 +101,21 @@ export const findLoopStoppedRuns = (
     return out;
   });
 
-/** The run row's status and ending, so a failed Continue can put them back. */
-export interface RunRowState {
-  readonly status: string;
-  readonly ending: string | null;
-}
-
 /**
- * Mark a finished run `live` again for its continued run: the resumed run's events
- * land on the same Cortex run id, and the row must read as running while it goes.
- * Returns what it was, or `undefined` when there is no such row.
+ * Close a crashed run's row once its Continue started as a new run (`desk-continue.ts`).
+ * A crash leaves the row `live` with nothing running it; the continuation is its own
+ * run now, so the parent reads `stopped` (ended where it last reported) and is no
+ * longer offered as crashed. A row already finished is left alone (a loop-stopped
+ * parent keeps its status). Returns whether a row changed.
  */
-export function reopenRunRow(db: DeskRunDb, runId: string): RunRowState | undefined {
-  const row = db.prepare("SELECT status, ending FROM cortex_runs WHERE run_id = ?").get(runId) as RunRowState | null;
-  if (!row) return undefined;
-  db.prepare("UPDATE cortex_runs SET status = 'live', ending = NULL WHERE run_id = ?").run(runId);
-  return row;
-}
-
-/** Put a run row back as {@link reopenRunRow} found it (the Continue did not start). */
-export function restoreRunRow(db: DeskRunDb, runId: string, state: RunRowState): void {
-  db.prepare("UPDATE cortex_runs SET status = ?, ending = ? WHERE run_id = ?").run(state.status, state.ending, runId);
+export function closeContinuedRunRow(db: DeskRunDb, runId: string): boolean {
+  const result = db
+    .prepare(
+      `UPDATE cortex_runs
+       SET status = 'stopped',
+           completed_at = COALESCE(completed_at, (SELECT MAX(ts) FROM cortex_events WHERE cortex_events.run_id = cortex_runs.run_id), ?)
+       WHERE run_id = ? AND status = 'live'`,
+    )
+    .run(Date.now(), runId);
+  return (result.changes as number) > 0;
 }

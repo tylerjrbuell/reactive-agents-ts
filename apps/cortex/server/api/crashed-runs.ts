@@ -3,6 +3,7 @@ import type { Database } from "bun:sqlite";
 import { Effect, type Layer } from "effect";
 import { CortexRunnerService } from "../services/runner-service.js";
 import { crashedRunSummaryOf, findCrashedRuns } from "../services/crashed-runs.js";
+import { closeContinuedRunRow } from "../services/loop-stopped-runs.js";
 
 /**
  * Crashed durable desk runs (roadmap C13, `services/crashed-runs.ts`).
@@ -10,7 +11,7 @@ import { crashedRunSummaryOf, findCrashedRuns } from "../services/crashed-runs.j
  * - `GET /api/crashed-runs`: desk runs left `live` by a crash whose durable
  *   store holds a checkpoint (`{ runs: CrashedRunSummary[] }`).
  * - `POST /api/crashed-runs/:runId/resume`: rebuild the run's agent and call
- *   the framework's `resumeRun`; `{ agentId, runId }` (the same Cortex run).
+ *   the framework's `resumeRun` as a new linked run; `{ agentId, runId }` (the NEW run's id).
  *   404 when the run is not a resumable crashed run (finished, running, not
  *   durable, or no checkpoint).
  */
@@ -42,7 +43,10 @@ export const crashedRunsRouter = (
           ...(home ? { home } : {}),
         });
         if (!crashed) return null;
-        return yield* runner.resumeCrashed(crashed);
+        const started = yield* runner.resumeCrashed(crashed);
+        // The continuation is its own run now: the crashed parent's `live` row is closed.
+        closeContinuedRunRow(db, params.runId);
+        return started;
       });
       try {
         const out = await Effect.runPromise(program.pipe(Effect.provide(runnerLayer)));

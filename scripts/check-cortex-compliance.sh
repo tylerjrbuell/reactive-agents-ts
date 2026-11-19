@@ -69,7 +69,7 @@ BUN_SQLITE_BASELINE=49
 # self-test patches this block by regex.
 SIZE_LEDGER=(
   "server/services/chat-session-service.ts:1450"
-  "server/services/runner-service.ts:844"
+  "server/services/runner-service.ts:801"
   "server/api/chat.ts:834"
   "ui/src/lib/components/ChatPanel.svelte:899"
   "ui/src/lib/stores/chat-store.ts:824"

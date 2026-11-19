@@ -29,6 +29,7 @@ import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
 import type { CrashedRun } from "./crashed-runs.js";
 import { decideApproval, interruptLiveRun, settledWithin, type InterruptOutcome } from "./run-interrupt.js";
 import { structuredOutputExtractedEvent } from "./structured-output-event.js";
+import { ingestRunFailure, makeDeskContinue, STOP_EVENT_TAGS, type StopControl } from "./desk-continue.js";
 
 export interface LaunchParams {
   readonly prompt: string;
@@ -210,7 +211,7 @@ export function launchParamsToBuildParams(
 }
 
 /** Active desk run: keyed by framework task id (`runId`), same id passed to `agent.run(..., { taskId })`. */
-type ActiveEntry = {
+export type ActiveEntry = {
   readonly agentId: string;
   readonly runId: string;
   readonly agent: ReactiveAgent;
@@ -225,15 +226,6 @@ type ActiveEntry = {
   /** Ingest the user's stop as the run's terminal event, unless the run already published one. */
   readonly endAsStopped?: () => Effect.Effect<void>;
 };
-
-/** A desk run's stop request: set by stop()/terminate(), read when the run settles. */
-type StopControl = {
-  requested?: "stop" | "terminate";
-  /** The run published AgentStopped / AgentTerminated / ExecutionCancelled itself. */
-  sawStopEvent: boolean;
-};
-
-const STOP_EVENT_TAGS: ReadonlySet<string> = new Set(["AgentStopped", "AgentTerminated", "ExecutionCancelled"]);
 
 /** Timing knobs for the desk Stop / Terminate paths (tests shorten them). */
 export interface CortexRunnerOptions {
@@ -259,7 +251,8 @@ export class CortexRunnerService extends Context.Tag("CortexRunnerService")<
     /**
      * Resume a desk run a crash left mid-run (`findCrashedRuns`): rebuild its agent
      * from the stored launch config under the same agent id and call the
-     * framework's `agent.resumeRun(durableRunId, opts)` (`opts`: loop-stop `{ note?, extraIterations? }`). Events land on the same Cortex run.
+     * framework's `agent.resumeRun(durableRunId, { ...opts, newRun: true })` (`opts`: loop-stop `{ note?, extraIterations? }`).
+     * The continuation is a NEW linked Cortex run (`desk-continue.ts`): resolves to its id once it has started; the parent row is untouched.
      */
     readonly resumeCrashed: (crashed: CrashedRun, opts?: ResumeRunOptions) => Effect.Effect<{ agentId: string; runId: string }, CortexError>;
     /** Pause a run: a durable run ends at its next step with a saved place to continue from (`persisted`); other runs pause in process (`not-live`). */
@@ -419,68 +412,32 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
 
     // A run that rejected: ingest a failed AgentCompleted so the UI leaves "loading".
     const ingestFailure = (agentId: string, runId: string, startedAt: number, err: unknown) =>
-      ingest
-        .handleEvent(agentId, runId, {
-          v: 1,
-          agentId,
-          runId,
-          event: {
-            _tag: "AgentCompleted" as const,
-            taskId: runId,
-            agentId,
-            success: false,
-            totalIterations: 0,
-            totalTokens: 0,
-            durationMs: Date.now() - startedAt,
-            error: err instanceof Error ? err.message : String(err),
-          },
-        })
-        .pipe(Effect.catchAll((e) => emitErrorSwallowed({ site: "cortex/server/services/runner-service.ts:277", tag: errorTag(e) })));
+      ingestRunFailure(ingest, agentId, runId, startedAt, err);
 
-    return {
-      resumeCrashed: (crashed, resumeOpts) =>
+    // Continue of an interrupted desk run (loop stop, user stop, crash): a new linked run, `desk-continue.ts`.
+    const resumeCrashed = makeDeskContinue({
+      store,
+      ingest,
+      activeRef,
+      finalizeRun,
+      // Same launch config and the same agent id: the framework then opens the
+      // same durable store and the config hash matches the checkpoint's.
+      buildAgent: ({ agentId, launch }) =>
         Effect.gen(function* () {
-          const { runId, agentId, durableRunId, launch } = crashed;
-          if ((yield* Ref.get(activeRef)).has(runId)) {
-            return yield* Effect.fail(new CortexError({ message: `Run ${runId} is already running` }));
-          }
           const providerRaw = launch.provider ?? process.env.CORTEX_RUNNER_PROVIDER ?? "test";
           const mcpConfigs =
             launch.mcpServerIds && launch.mcpServerIds.length > 0
               ? yield* store.getMcpServerConfigsByIds(launch.mcpServerIds)
               : [];
-          // Same launch config and the same agent id: the framework then opens the
-          // same durable store and the config hash matches the checkpoint's.
-          const agent = yield* Effect.tryPromise({
+          return yield* Effect.tryPromise({
             try: () => buildCortexAgent({ ...launchParamsToBuildParams(launch, providerRaw, mcpConfigs), agentId }),
             catch: (e) => new CortexError({ message: `Failed to build agent: ${String(e)}`, cause: e }),
           });
-          const startedAt = Date.now();
-          const control: StopControl = { sawStopEvent: false };
-          const unsubscribe = yield* forwardToIngest(agent, agentId, runId, control).pipe(
-            Effect.tapError(() => Effect.promise(() => agent.dispose()).pipe(Effect.ignore)),
-          );
-          let markSettled: () => void = () => {};
-          const settled = new Promise<void>((resolve) => {
-            markSettled = resolve;
-          });
-          yield* Ref.update(activeRef, (m) =>
-            new Map(m).set(runId, { agentId, runId, agent, startedAt, unsubscribe, settled, control }),
-          );
-          cortexLog("info", "runner", "resuming crashed durable run", { agentId, runId, durableRunId });
-          // The framework continues under the checkpoint's task id (= this Cortex run id).
-          void agent
-            .resumeRun(durableRunId, resumeOpts)
-            .catch((err) => {
-              cortexLogRunnerExecution("agent.resumeRun rejected", { agentId, runId, durableRunId, ...formatErrorDetails(err) });
-              Effect.runFork(ingestFailure(agentId, runId, startedAt, err));
-            })
-            .finally(() => {
-              markSettled();
-              void Effect.runPromise(finalizeRun(runId, unsubscribe, agent));
-            });
-          return { agentId, runId };
         }),
+    });
+
+    return {
+      resumeCrashed,
 
       start: (rawParams) =>
         Effect.gen(function* () {

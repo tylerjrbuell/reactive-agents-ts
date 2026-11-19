@@ -30,7 +30,7 @@ export class CortexStoreService extends Context.Tag("CortexStoreService")<
     readonly ensureRunRow: (
       agentId: string,
       runId: string,
-      opts?: { displayName?: string; launchParamsJson?: string },
+      opts?: { displayName?: string; launchParamsJson?: string; continuedFrom?: string },
     ) => Effect.Effect<void, CortexError>;
     /** Parsed per-run launch snapshot (from `launch_params_json`); null if absent. Used by rerun. */
     readonly getLaunchParams: (
@@ -82,7 +82,7 @@ export const CortexStoreServiceLive = (db: Database) =>
 
     ensureRunRow: (agentId, runId, opts) =>
       Effect.sync(() => {
-        upsertRun(db, agentId, runId, opts?.displayName, opts?.launchParamsJson);
+        upsertRun(db, agentId, runId, opts?.displayName, opts?.launchParamsJson, opts?.continuedFrom);
       }).pipe(
         Effect.catchAll((e) => Effect.fail(new CortexError({ message: String(e), cause: e }))),
       ),

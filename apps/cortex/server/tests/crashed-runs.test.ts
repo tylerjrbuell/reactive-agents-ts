@@ -124,14 +124,22 @@ describe("resume a crashed durable desk run (framework resumeRun)", () => {
     expect(listed.runs[0]).toMatchObject({ runId, agentId, durableRunId: record!.runId });
     expect(listed.runs[0]!.launch).toBeUndefined();
 
-    // 3. Resume: same Cortex run, the framework finishes it.
+    // 3. Resume: a NEW run linked to the crashed one (desk-continue.ts); the framework finishes it
+    // and the crashed parent's live row is closed (the journal recovery is the framework's, carried to the new id).
     const res = await app.handle(new Request(`http://localhost/api/crashed-runs/${runId}/resume`, { method: "POST" }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ agentId, runId });
-    await settle(runId);
-    expect(statusOf(runId)).toBe("completed");
+    const resumed = (await res.json()) as { agentId: string; runId: string };
+    expect(resumed.agentId).toBe(agentId);
+    expect(resumed.runId).not.toBe(runId);
+    expect(resumed.runId).toMatch(new RegExp(`^${record!.runId}-cont-[0-9a-f]{8}$`));
+    await settle(resumed.runId);
+    expect(statusOf(resumed.runId)).toBe("completed");
+    expect(statusOf(runId)).toBe("stopped");
+    expect(
+      (runtime.rawDb.prepare("SELECT continued_from FROM cortex_runs WHERE run_id = ?").get(resumed.runId) as { continued_from: string }).continued_from,
+    ).toBe(runId);
     const after = await Effect.runPromise(listDurableRuns({ dbPath }));
-    expect(after.find((r) => r.runId === record!.runId)?.status).toBe("completed");
+    expect(after.find((r) => r.runId === resumed.runId)?.status).toBe("completed");
 
     // A resumed (finished) run is no longer offered, and resuming it again is 404.
     const again = await app.handle(new Request(`http://localhost/api/crashed-runs/${runId}/resume`, { method: "POST" }));

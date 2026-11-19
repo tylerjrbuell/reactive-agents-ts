@@ -89,7 +89,7 @@ describe("loop-stopped desk runs", () => {
     expect(bad.status).toBe(400);
     expect(resumeCalls).toEqual([]);
 
-    // 4. Continue passes the note and iterations to the runner untouched and re-opens the row.
+    // 4. Continue passes the note and iterations to the runner untouched and leaves the parent row alone.
     const ok = await app.handle(
       new Request(`http://localhost/api/loop-stopped-runs/${runId}/resume`, {
         method: "POST",
@@ -100,7 +100,8 @@ describe("loop-stopped desk runs", () => {
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual({ agentId, runId });
     expect(resumeCalls).toEqual([{ runId: record!.runId, options: { note: "use the cached file", extraIterations: 20 } }]);
-    expect(statusOf(runId)).toBe("live");
+    // The Continue is a new linked run (desk-continue.ts): the parent's row is left as it was.
+    expect(statusOf(runId)).toBe("completed");
 
     // 5. An unknown run is a 404.
     const missing = await app.handle(new Request("http://localhost/api/loop-stopped-runs/nope/resume", { method: "POST" }));
@@ -108,7 +109,7 @@ describe("loop-stopped desk runs", () => {
     runtime.rawDb.close();
   }, 30_000);
 
-  it("puts the run row back when the runner cannot start the Continue", async () => {
+  it("leaves the run row alone when the runner cannot start the Continue", async () => {
     const durableDir = tmpDir("loop-stopped-fail");
     const runtime = createCortexRuntime({ ...defaultCortexConfig, dbPath: tmpDbPath("loop-stopped-fail") });
     const realRunner = await Effect.runPromise(CortexRunnerService.pipe(Effect.provide(runtime.runnerLayer)));

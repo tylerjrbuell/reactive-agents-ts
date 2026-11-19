@@ -31,13 +31,16 @@ export function upsertRun(
   runId: string,
   displayName?: string | null,
   launchParamsJson?: string | null,
+  /** The Cortex run this one continues (a desk Continue's new run); first-seen wins. */
+  continuedFrom?: string | null,
 ): void {
   const dn = typeof displayName === "string" && displayName.trim() ? displayName.trim() : null;
   const lp = typeof launchParamsJson === "string" && launchParamsJson.trim() ? launchParamsJson : null;
+  const cf = typeof continuedFrom === "string" && continuedFrom !== "" ? continuedFrom : null;
   db.prepare(
     `
-    INSERT INTO cortex_runs (run_id, agent_id, started_at, display_name, launch_params_json)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO cortex_runs (run_id, agent_id, started_at, display_name, launch_params_json, continued_from)
+    VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(run_id) DO UPDATE SET
       agent_id = CASE
         WHEN cortex_runs.agent_id = cortex_runs.run_id OR cortex_runs.agent_id = 'unknown'
@@ -46,9 +49,10 @@ export function upsertRun(
       END,
       display_name = COALESCE(cortex_runs.display_name, excluded.display_name),
       -- Snapshot is written once at launch; a later re-ingest must not clobber it.
-      launch_params_json = COALESCE(cortex_runs.launch_params_json, excluded.launch_params_json)
+      launch_params_json = COALESCE(cortex_runs.launch_params_json, excluded.launch_params_json),
+      continued_from = COALESCE(cortex_runs.continued_from, excluded.continued_from)
   `,
-  ).run(runId, agentId, Date.now(), dn, lp);
+  ).run(runId, agentId, Date.now(), dn, lp, cf);
 }
 
 /** Raw stored launch snapshot for a run (used by rerun). null if absent/malformed. */

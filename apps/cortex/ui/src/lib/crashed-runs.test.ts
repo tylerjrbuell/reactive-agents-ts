@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { crashedRunDetail, crashedRunLabel, type CrashedRunWire } from "./crashed-runs.js";
+import { crashedRunDetail, crashedRunLabel, resumeCrashedRun, type CrashedRunWire } from "./crashed-runs.js";
 
 const run = (over: Partial<CrashedRunWire> = {}): CrashedRunWire => ({
   runId: "01RUN",
@@ -10,6 +10,20 @@ const run = (over: Partial<CrashedRunWire> = {}): CrashedRunWire => ({
   checkpointIteration: 2,
   updatedAt: Date.parse("2026-11-11T11:00:00Z"),
   ...over,
+});
+
+describe("resumeCrashedRun", () => {
+  it("hands back the NEW run's id (a Resume is a new linked run) and the refusal text", async () => {
+    const real = globalThis.fetch;
+    try {
+      globalThis.fetch = (async () => new Response(JSON.stringify({ agentId: "a", runId: "d-1-cont-0a1b2c3d" }), { status: 200 })) as unknown as typeof fetch;
+      expect(await resumeCrashedRun("01RUN")).toEqual({ ok: true, runId: "d-1-cont-0a1b2c3d" });
+      globalThis.fetch = (async () => new Response(JSON.stringify({ error: "nope" }), { status: 404 })) as unknown as typeof fetch;
+      expect(await resumeCrashedRun("01RUN")).toEqual({ ok: false, error: "nope" });
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
 });
 
 describe("crashed runs", () => {

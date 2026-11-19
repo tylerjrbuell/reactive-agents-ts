@@ -4,6 +4,7 @@ import {
   continueChatRun,
   startChatContinue,
   continueDeskRun,
+  continuedRunPath,
   continueTarget,
   DEFAULT_EXTRA_ITERATIONS,
   endingSupersededByContinue,
@@ -184,6 +185,16 @@ describe("clients", () => {
   it("returns the server's plain reason for a refusal and the failure text for a network error", async () => {
     expect(await continueChatRun("s", "r", {}, reply(409, { error: "Send a new message instead." }))).toEqual({ ok: false, status: 409, error: "Send a new message instead." });
     expect(await continueDeskRun("r", {}, async () => { throw new Error("offline"); })).toEqual({ ok: false, status: 0, error: "offline" });
-    expect(await continueDeskRun("r1", {}, reply(200, { agentId: "a", runId: "r1" }))).toEqual({ ok: true, success: true, resumable: false });
+    expect(await continueDeskRun("r1", {}, reply(200, { agentId: "a", runId: "r1" }))).toEqual({ ok: true, success: true, resumable: false, runId: "r1" });
+  });
+
+  it("a desk Continue hands back the NEW run's id and its page; a chat answer has none", async () => {
+    const out = await continueDeskRun("parent", {}, reply(200, { agentId: "a", runId: "parent-cont-0a1b2c3d" }));
+    expect(out.ok && out.runId).toBe("parent-cont-0a1b2c3d");
+    expect(continuedRunPath(out.ok ? out.runId : undefined)).toBe("/run/parent-cont-0a1b2c3d");
+    expect(continuedRunPath(undefined)).toBeUndefined();
+    expect(continuedRunPath("")).toBeUndefined();
+    const chat = await continueChatRun("s", "r", {}, reply(200, { reply: "ok", success: true, resumable: false }));
+    expect(chat).toEqual({ ok: true, success: true, resumable: false });
   });
 });

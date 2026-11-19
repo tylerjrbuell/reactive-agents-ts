@@ -2,7 +2,7 @@
  * Crashed durable desk runs on Runs (roadmap C13): runs a crash left mid-run
  * whose durable checkpoint the framework can resume (`GET /api/crashed-runs`,
  * server `services/crashed-runs.ts`). Resume calls the framework's `resumeRun`
- * on the same Cortex run. Rendering: `components/runs/CrashedRuns.svelte`.
+ * as a new linked Cortex run (server `services/desk-continue.ts`). Rendering: `components/runs/CrashedRuns.svelte`.
  */
 import { formatRelativeTime } from "@reactive-agents/ui-core";
 import { CORTEX_SERVER_URL } from "./constants.js";
@@ -38,11 +38,14 @@ export async function fetchCrashedRuns(): Promise<CrashedRunWire[]> {
   }
 }
 
-/** Resume one crashed run; the error text when the server refused. */
-export async function resumeCrashedRun(runId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+/** Resume one crashed run as a new linked run (`runId` = the new run); the error text when the server refused. */
+export async function resumeCrashedRun(runId: string): Promise<{ ok: true; runId?: string } | { ok: false; error: string }> {
   try {
     const r = await fetch(`${CORTEX_SERVER_URL}/api/crashed-runs/${encodeURIComponent(runId)}/resume`, { method: "POST" });
-    if (r.ok) return { ok: true };
+    if (r.ok) {
+      const body = (await r.json().catch(() => ({}))) as { runId?: unknown };
+      return { ok: true, ...(typeof body.runId === "string" ? { runId: body.runId } : {}) };
+    }
     const body = (await r.json().catch(() => ({}))) as { error?: string };
     return { ok: false, error: body.error ?? `Server returned ${r.status}` };
   } catch (e) {

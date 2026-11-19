@@ -3,7 +3,7 @@
    * "Can continue" strip on Runs: durable desk runs that ended without completing (paused or
    * stopped by you, a loop guard, budget, timeout, error) that the framework left resumable,
    * each with a chip from the stop's kind, what was done and left, a note field, a step grant
-   * and **Continue** (the framework's `resumeRun` on the same run) plus Open run. Renders
+   * and **Continue** (the framework's `resumeRun` as a new linked run, opened on success) plus Open run. Renders
    * nothing when there are none. Loaded once on mount and after each Continue. Rules and
    * client: `lib/loop-stop-resume.ts`; wording: `lib/run-stop.ts`.
    */
@@ -14,7 +14,8 @@
   import { runStatusChip } from "$lib/run-stop.js";
   import { toast } from "$lib/stores/toast-store.js";
   import { crashedRunLabel } from "$lib/crashed-runs.js";
-  import { continueDeskRun, fetchLoopStoppedRuns, type ContinueBody, type LoopStoppedRunWire } from "$lib/loop-stop-resume.js";
+  import { goto } from "$app/navigation";
+  import { continueDeskRun, continuedRunPath, fetchLoopStoppedRuns, type ContinueBody, type LoopStoppedRunWire } from "$lib/loop-stop-resume.js";
 
   interface Props {
     /** Told the Cortex run ids that can continue after every load (the Runs "Can continue" segment filters by them). */
@@ -38,8 +39,11 @@
     const out = await continueDeskRun(r.runId, body);
     busy = null;
     if (out.ok) {
-      toast.success("Continuing run", crashedRunLabel(r));
+      toast.success("Continuing as a new run", crashedRunLabel(r));
       runs = runs.filter((x) => x.runId !== r.runId);
+      // The Continue is a new linked run: open it (the parent keeps its own page, linked "continued as").
+      const path = continuedRunPath(out.runId);
+      if (path) void goto(path);
     } else {
       errors = { ...errors, [r.runId]: out.error };
     }
