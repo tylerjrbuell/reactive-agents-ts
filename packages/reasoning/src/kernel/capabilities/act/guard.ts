@@ -21,6 +21,7 @@ import { deriveListedInputs, pairedOutputForInput } from "../verify/derive-input
 import { isInputRead, isTargetWritten } from "../verify/post-conditions.js";
 import type { ReasoningStep } from "../../../types/index.js";
 import { repetitionBackstopCalls } from "../../../harness-config.js";
+import { toolResultBudget } from "../attend/tool-formatting.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,12 @@ export type GuardOutcome =
       readonly observation: string;
       /** The `guard-fired` name of the refusing guard (e.g. `repetition_guard`); act emits one event per refusal. */
       readonly guard?: string;
+      /**
+       * The observation replays an earlier successful result of the same call
+       * (`duplicateGuard`): the call is answered, not failed, so act records it
+       * as a success and the guard event as a `redirect`, not a `block`.
+       */
+      readonly replay?: true;
     };
 
 export type Guard = (
@@ -434,7 +441,10 @@ function mutatedSince(state: KernelState, afterIdx: number): boolean {
 /** Opens the note a duplicate refusal appends; the refusal-refund seam reads it back. */
 export const DUPLICATE_REFUSAL_TAG = "Already done — do NOT repeat.";
 
-/** Blocks the exact same tool+arguments pair if it already succeeded. */
+/**
+ * Answers an exact repeat of a tool+arguments pair that already succeeded with
+ * that earlier result (a cached replay, marked `replay`), instead of running it.
+ */
 export const duplicateGuard: Guard = (tc, state, input) => {
   // Canonical args (sorted keys, collapsed whitespace): gemini re-sent a call
   // with its keys in another order and it missed this guard, so the repetition
@@ -517,18 +527,27 @@ export const duplicateGuard: Guard = (tc, state, input) => {
       : unreadInput !== undefined
         ? `Not done yet.${unreadNote}`
         : "Give FINAL ANSWER if all steps are complete.";
-  // A compacted prior result shows only a preview here: point at its stored
-  // copy so the model reads the data back instead of re-fetching it.
+  // A cached replay, not a refusal (owner traces 01M7SZPWPNY8, 01M7T08Q64H1:
+  // exact re-fetches read as "unique calls denied"). A compacted prior result
+  // showed only a preview: replay its full stored copy, bounded by the window
+  // like a recall read; past that bound, point at the stored key instead.
   const storedKey = priorObs.metadata?.storedKey;
-  const storedNote = typeof storedKey === "string"
-    ? ` Already fetched: the full result is stored, read it with recall("${storedKey}", full: true).`
-    : "";
-  const dupContent = `${priorObsContent} [${DUPLICATE_REFUSAL_TAG}${storedNote} ${nextHint}]`;
+  const stored = typeof storedKey === "string" ? state.scratchpad?.get(storedKey) : undefined;
+  let replayed = priorObsContent;
+  let storedNote = "";
+  if (typeof stored === "string" && stored.length > 0) {
+    const full = resolveScratchpadValue(stored);
+    if (full.length <= toolResultBudget("recall", 0, input.contextProfile?.maxTokens)) replayed = full;
+    else storedNote = ` The full result is stored: read it with recall("${storedKey}", full: true).`;
+  }
+  const replayNote = ` Already fetched at step ${priorIdx + 1}; this is that result.`;
+  const dupContent = `${replayed} [${DUPLICATE_REFUSAL_TAG}${replayNote}${storedNote} ${nextHint}]`;
 
   return {
     pass: false,
     guard: "duplicate_guard",
     observation: dupContent,
+    replay: true,
   };
 };
 

@@ -24,6 +24,8 @@ export const UNNAMED_GUARD = "tool_guard";
 export interface GuardRefusal {
   readonly observation: string;
   readonly guard?: string;
+  /** A cached replay of an earlier successful result (`duplicateGuard`), not a denial. */
+  readonly replay?: true;
 }
 
 /** A missing tool is a hard failure; every other refusal answers the call successfully. */
@@ -48,16 +50,20 @@ export function refuseGuardedCall(
   return Effect.gen(function* () {
     const pair = blockedCallSteps(call, refusal.observation, !isGuardHardFailure(refusal.observation), { guard: true, toolUsed: true });
     yield* hooks.onAction(state, call.name, JSON.stringify(call.arguments), { callId: call.id, rationale: call.rationale });
+    // A harness reply to a call that never ran is not an ok:true receipt,
+    // except a cached replay: it returns the earlier successful result, and a
+    // failed receipt showed exact re-fetches as denied calls (owner trace 01M7T08Q64H1).
+    const replay = refusal.replay === true;
     yield* hooks.onObservation(
       transitionState(state, { steps: [...steps, pair[0]] }),
       refusal.observation,
-      false, // harness reply, the call never ran: not an ok:true receipt
+      replay,
     );
     yield* emitGuardFired({
       taskId: state.taskId,
       iteration: state.iteration,
       guard: refusal.guard ?? UNNAMED_GUARD,
-      outcome: "block",
+      outcome: replay ? "redirect" : "block",
       reason: refusal.observation,
       metadata: { toolName: call.name, toolCallId: call.id },
     });
