@@ -1,0 +1,5 @@
+---
+"@reactive-agents/llm-provider": minor
+---
+
+`resolveProviderModels` now degrades to every model RA knows when a provider's live model list fails (no key, out of credits, network, bad shape): the framework presets first, then each chat model id the bundled PriceBook prices for that provider (general ids before dated/beta/preview/latest variants; no ids invented, no aliases collapsed). Previously only the presets were listed, so xAI with an exhausted balance showed a single model. Each `DiscoveredModel` carries a new `listedBy: "live" | "static" | "price-book"` origin; `source` is unchanged (`"preset"` for every non-live row). `ModelDiscoveryError.reason` gains `"quota"`: HTTP 402, or a 403/429 whose body speaks of credits, spending limits, billing or quota (the body is matched, never echoed); other non-2xx stay `"http"`. New `pricedModelIds(provider)` lists the PriceBook's ids for a provider. The live success path is unchanged.

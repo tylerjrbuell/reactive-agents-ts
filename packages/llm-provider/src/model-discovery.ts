@@ -33,6 +33,7 @@ import { resolveCapability } from "./capability-resolver.js";
 import { registerReportedModelMetadata, type ReportedModelMetadata } from "./capability-reported.js";
 import type { CapabilitySource } from "./capability.js";
 import { listFrameworkModelsForProvider } from "./model-catalog.js";
+import { priceBookFallbackIds } from "./model-known-list.js";
 import { resolveOllamaEndpoint, resolveOllamaTarget } from "./ollama-endpoint.js";
 
 export { ModelDiscoveryError };
@@ -42,8 +43,15 @@ export interface DiscoveredModel {
   /** API model id, as passed to `withModel`. */
   readonly id: string;
   readonly label: string;
-  /** `live` = returned by the provider just now; `preset` = framework catalog. */
+  /** `live` = returned by the provider just now; `preset` = not live (framework catalog or PriceBook). */
   readonly source: "live" | "preset";
+  /**
+   * Exact origin of the row: `live` = the provider's list just now; `static` =
+   * framework presets; `price-book` = a model id the bundled PriceBook prices
+   * (listed only when the live list failed). Always set by this module; optional
+   * so rows built elsewhere stay valid.
+   */
+  readonly listedBy?: "live" | "static" | "price-book";
   readonly contextWindow?: number;
   /** From the capability resolver; `null` when the model is unknown to it. */
   readonly supportsThinking: boolean | null;
@@ -70,9 +78,12 @@ export interface ListProviderModelsOptions {
 /** Result of {@link resolveProviderModels}; never a failure. */
 export interface ResolvedProviderModels {
   readonly models: readonly DiscoveredModel[];
-  /** True when the provider answered; false when only presets are shown. */
+  /**
+   * True when the provider answered; false when only known models are shown
+   * (framework presets, then PriceBook ids; see each row's `listedBy`).
+   */
   readonly live: boolean;
-  /** Why discovery failed, when `live` is false and a fetch was needed. */
+  /** Why discovery failed (typed `reason`, e.g. `quota`), when `live` is false. */
   readonly error?: ModelDiscoveryError;
 }
 
@@ -80,6 +91,8 @@ const DEFAULT_TIMEOUT_MS = 5_000;
 const CACHE_TTL_MS = 10 * 60_000;
 const MAX_PAGES = 20;
 const ANTHROPIC_VERSION = "2023-06-01";
+/** Cap on reading a refusal body to classify it; a slow body falls back to `http`. */
+const REFUSAL_BODY_TIMEOUT_MS = 2_000;
 
 const KEY_ENV: Readonly<Record<string, string>> = {
   anthropic: "ANTHROPIC_API_KEY",
@@ -359,6 +372,34 @@ export function clearModelDiscoveryCache(): void {
 
 // ─── Fetching ───
 
+/** Body wording providers use for an exhausted balance or spending/quota cap. */
+const QUOTA_BODY = /credit|spending limit|billing|insufficient[_ ]quota|quota exceeded|exceeded your (current )?quota|payment required/i;
+
+/**
+ * Typed error for a non-2xx listing. HTTP 402, or 403/429 whose body speaks of
+ * credits, spending limits, billing or quota, is `quota`; anything else is
+ * `http`. The body is only matched, never echoed (it can carry account ids).
+ */
+function refusalOf(provider: string, response: Response): Effect.Effect<ModelDiscoveryError> {
+  const status = response.status;
+  const httpErr = fail(provider, "http", `${provider} model list returned HTTP ${status}`, status);
+  const quotaErr = fail(
+    provider,
+    "quota",
+    `${provider} refused the model list: account out of credits or past its spending limit (HTTP ${status})`,
+    status,
+  );
+  if (status === 402) return Effect.succeed(quotaErr);
+  if (status !== 403 && status !== 429) return Effect.succeed(httpErr);
+  return Effect.promise(() => response.text().catch(() => "")).pipe(
+    Effect.timeoutTo({
+      duration: REFUSAL_BODY_TIMEOUT_MS,
+      onSuccess: (body) => (QUOTA_BODY.test(body.slice(0, 4096)) ? quotaErr : httpErr),
+      onTimeout: () => httpErr,
+    }),
+  );
+}
+
 function fetchPage(
   provider: string,
   url: string,
@@ -380,9 +421,7 @@ function fetchPage(
     }),
     Effect.flatMap((res) => {
       const response = res as Response;
-      if (!response.ok) {
-        return Effect.fail(fail(provider, "http", `${provider} model list returned HTTP ${response.status}`, response.status));
-      }
+      if (!response.ok) return Effect.flatMap(refusalOf(provider, response), Effect.fail);
       return Effect.tryPromise({
         try: () => response.json() as Promise<unknown>,
         catch: () => parseErr(provider),
@@ -403,6 +442,7 @@ const toModel = (provider: string, raw: RawModel): DiscoveredModel => {
     id: raw.id,
     label: raw.label ?? raw.id,
     source: "live",
+    listedBy: "live",
     ...(ctx !== undefined ? { contextWindow: ctx } : {}),
     supportsThinking: known ? cap.supportsThinkingMode : null,
     capabilitySource: cap.source,
@@ -475,26 +515,42 @@ export function listProviderModels(
   });
 }
 
+/** A non-live row with capability info from the resolver. */
+const knownModel = (provider: string, id: string, label: string, listedBy: "static" | "price-book"): DiscoveredModel => {
+  const cap = resolveCapability(provider, id);
+  const known = cap.source !== "fallback";
+  return {
+    id,
+    label,
+    source: "preset",
+    listedBy,
+    ...(known ? { contextWindow: cap.maxContextTokens } : {}),
+    supportsThinking: known ? cap.supportsThinkingMode : null,
+    capabilitySource: cap.source,
+  };
+};
+
 function presetModels(provider: string): readonly DiscoveredModel[] {
-  return listFrameworkModelsForProvider(provider).map((p) => {
-    const cap = resolveCapability(provider, p.name);
-    const known = cap.source !== "fallback";
-    return {
-      id: p.name,
-      label: p.label,
-      source: "preset" as const,
-      ...(known ? { contextWindow: cap.maxContextTokens } : {}),
-      supportsThinking: known ? cap.supportsThinkingMode : null,
-      capabilitySource: cap.source,
-    };
-  });
+  return listFrameworkModelsForProvider(provider).map((p) => knownModel(provider, p.name, p.label, "static"));
+}
+
+/**
+ * Every model RA knows for `provider` without asking it: framework presets,
+ * then the PriceBook's chat model ids not already listed (see model-known-list.ts).
+ */
+function knownModels(provider: string): readonly DiscoveredModel[] {
+  const presets = presetModels(provider);
+  const listed = new Set(presets.map((m) => m.id));
+  const priced = priceBookFallbackIds(provider, listed, (id) => isChatModel(provider, id));
+  return [...presets, ...priced.map((id) => knownModel(provider, id, id, "price-book"))];
 }
 
 /**
  * The call apps should use. Merges live results with the framework presets
  * (live first, presets not already listed after, deduplicated by id). When
- * discovery fails it returns presets only with `live: false` and the reason.
- * Never fails.
+ * discovery fails (no key, out of credits, network, bad shape) it returns the
+ * known models (presets, then PriceBook ids, each with `listedBy`) with
+ * `live: false` and the typed reason. Never fails.
  */
 export function resolveProviderModels(
   provider: string,
@@ -506,6 +562,6 @@ export function resolveProviderModels(
       const extra = presetModels(provider).filter((m) => !seen.has(m.id));
       return { models: [...live, ...extra], live: provider !== "test" };
     }),
-    Effect.catchAll((error) => Effect.succeed<ResolvedProviderModels>({ models: presetModels(provider), live: false, error })),
+    Effect.catchAll((error) => Effect.succeed<ResolvedProviderModels>({ models: knownModels(provider), live: false, error })),
   );
 }

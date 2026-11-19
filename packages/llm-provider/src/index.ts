@@ -235,6 +235,7 @@ export { openRouterPricingProvider, urlPricingProvider } from "./pricing.js";
 export {
   priceFor,
   priceSnapshotInfo,
+  pricedModelIds,
   modelIdCandidates,
   registerReportedPrice,
   PriceBook,

@@ -150,6 +150,23 @@ export const priceFor = (
   return provider === "litellm" ? liteLLMLookup(model) : bookLookup(provider, model);
 };
 
+/**
+ * Every model id the bundled PriceBook (snapshot + official overrides) prices
+ * for `provider`, sorted, deduplicated. Ids are returned exactly as keyed: no
+ * alias folding (the book has no alias table, so none is invented here).
+ * Used by model discovery as the "known models" fallback when a live list fails.
+ *
+ * @param provider - price-book provider id (`xai`, `anthropic`, ...)
+ */
+export const pricedModelIds = (provider: string): readonly string[] => {
+  const prefix = `${provider}:`;
+  const ids = new Set<string>();
+  for (const key of [...Object.keys(PRICE_SNAPSHOT.rows), ...Object.keys(PRICE_OVERRIDES)]) {
+    if (key.startsWith(prefix) && key.length > prefix.length) ids.add(key.slice(prefix.length));
+  }
+  return [...ids].sort();
+};
+
 /** Date and URL of the bundled price snapshot. */
 export const priceSnapshotInfo = (): { readonly asOf: string; readonly sourceUrl: string } => ({
   asOf: PRICE_SNAPSHOT.asOf,

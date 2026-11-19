@@ -138,8 +138,13 @@ export class LLMMalformedOutputError extends Data.TaggedError("LLMMalformedOutpu
  */
 export class ModelDiscoveryError extends Data.TaggedError("ModelDiscoveryError")<{
   readonly provider: string;
-  /** no-credentials: key missing, nothing sent. unreachable: network/timeout. http: non-2xx. parse: unexpected body. */
-  readonly reason: "no-credentials" | "unreachable" | "http" | "parse";
+  /**
+   * no-credentials: key missing, nothing sent. unreachable: network/timeout.
+   * quota: the provider refused because the account is out of credits or past
+   * its spending/quota limit (HTTP 402, or 403/429 whose body says so).
+   * http: any other non-2xx. parse: unexpected body.
+   */
+  readonly reason: "no-credentials" | "unreachable" | "quota" | "http" | "parse";
   readonly status?: number;
   readonly message: string;
 }> {}
