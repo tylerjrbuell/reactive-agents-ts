@@ -221,6 +221,7 @@ GIANT_BAR=1000
 # 2026-11-17 durable interrupt/resume: reactive-agent.ts 1972->1901 (runDurable body moved verbatim to agent/run-durable.ts, which also carries the interrupt + live-registry wiring; pauseRun/stopRun/activeRunIds delegates added).
 # 2026-11-17 quiet first-run output: execution-engine.ts 955->944 (status-mode rule moved to engine/execute-obs-wiring.ts resolveStatusMode, which also turns it off at "minimal" verbosity).
 # 2026-11-18 phase-keyed hook types: runtime/src/types.ts 1048->1016 (LifecycleHook moved to lifecycle-hook-types.ts as a phase-discriminated union; types.ts re-exports it).
+# 2026-11-18 audit G3/G4: reflexion.ts 987->975 (bespoke empty-generate synthesis replaced by finalize.ts enforceQualityGate force; superseded-pass cap moved to substrate standingEnvelopes).
 SIZE_BASELINE=(
   "runtime/src/reactive-agent.ts:1901"
   "runtime/src/chat/engine.ts:654"
@@ -239,7 +240,7 @@ SIZE_BASELINE=(
   "runtime/src/builder/types.ts:1061"
   "llm-provider/src/types.ts:978"
   "reasoning/src/kernel/capabilities/act/act.ts:1025"
-  "reasoning/src/strategies/reflexion.ts:987"
+  "reasoning/src/strategies/reflexion.ts:975"
   "tools/src/mcp/mcp-client.ts:1116"
   "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1065"

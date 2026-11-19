@@ -22,7 +22,8 @@ import {
   type CrossCuttingInput,
 } from "../kernel/state/build-kernel-input.js";
 import type { PassResult } from "../kernel/loop/run-pass.js";
-import { runStrategy, type StrategyPaused } from "./substrate/strategy-run.js";
+import { passDelivered, runStrategy, type StrategyPaused } from "./substrate/strategy-run.js";
+import { META_TOOLS } from "../kernel/state/kernel-constants.js";
 import {
   iterateUntil,
   continueWith,
@@ -56,7 +57,6 @@ import {
   collectToolData,
 } from "../kernel/loop/finalize.js";
 import { runCritiquePass } from "../kernel/capabilities/verify/critique.js";
-import { extractDeliverableContent } from "../kernel/utils/stream-parser.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
@@ -269,35 +269,17 @@ export const executeReflexion = (
     // an empty/sentinel deliverable. An empty initialResponse then poisons the
     // entire reflect→improve loop (critique critiques nothing, improve has no base)
     // and ships a 0-char final result — the cell fails despite a capable model.
-    // Force one direct synthesis from the accumulated generate context so the loop
-    // is always seeded with a real answer. If synthesis also yields nothing, the
-    // M7 empty-output→failed invariant still holds downstream (no false success).
+    // Seed the loop through the kernel's shared terminal synthesis (finalize.ts):
+    // one tool-less call over the generate pass's tool results, meta-tool
+    // results excluded (a `todo` result carries call instructions, and Gemini
+    // answers a tool-less call that shows them with UNEXPECTED_TOOL_CALL: audit
+    // G4). It never fails; if it yields nothing, the M7 empty-output→failed
+    // invariant still holds downstream (no false success).
     if (initialResponse.trim() === "") {
-      // Build a CLEAN single-turn synthesis prompt. Do NOT reuse genPass.messages:
-      // the empty generate is typically caused by meta-tool (brief/find) churn, and
-      // that raw provider thread (assistant tool_calls + tool results) is exactly
-      // what trips native-FC providers like OpenAI into rejecting a fresh completion
-      // (the original improve-phase llm_error came from the same malformed thread).
-      // Instead, digest any gathered observation text so tool-grounded tasks keep
-      // their evidence, then ask for the final answer in one self-contained turn.
-      const observationDigest = genPass.steps
-        .filter((st) => st.type === "observation" && st.content.trim().length > 0)
-        .map((st) => st.content)
-        .join("\n")
-        .slice(0, 4000);
-      const synthPrompt = observationDigest
-        ? `Task: ${input.taskDescription}\n\nInformation gathered so far:\n${observationDigest}\n\nUsing the information above, write your complete, final answer to the task now. Output only the answer.`
-        : `Task: ${input.taskDescription}\n\nWrite your complete, final answer to the task now. Output only the answer.`;
-      const synthResponse = yield* run.call({ purpose: "synthesize", budgetClass: "provider-default" }, {
-          messages: [{ role: "user", content: synthPrompt }],
-          systemPrompt:
-            input.systemPrompt ??
-            "You are completing a task. Produce the complete, final answer directly — no preamble, no offers.",
-          // GH #246: commanded temperature wins; unset keeps the 0.7 default.
-          temperature: input.temperature ?? 0.7,
-        }, { message: "Generate produced empty output and the synthesis fallback failed", step: 0 });
-      const synthText = extractDeliverableContent(synthResponse);
-      initialResponse = synthText;
+      const synth = yield* enforceQualityGate({ llm, taskDescription: input.taskDescription, output: "", force: true,
+        toolData: collectToolData(genPass.messages, META_TOOLS), ...(input.taskId ? { traceContext: { taskId: input.taskId } } : {}) });
+      run.account({ ...synth, llmCalls: 1 });
+      initialResponse = synth.output;
       yield* emitLog({
         _tag: "warning",
         message: "Generate pass produced empty output — used synthesis fallback to seed the reflect loop",
@@ -339,6 +321,8 @@ export const executeReflexion = (
        * budget-terminal partial.
        */
       readonly lastPass: PassResult;
+      /** The response the last critique judged (an improve pass may re-ship it unchanged). */
+      readonly critiqued?: string;
     }
 
     const loopResult = yield* iterateUntil<ReflexionIterState, ExecutionError | StrategyPaused, LLMService>({
@@ -594,6 +578,7 @@ export const executeReflexion = (
             // The improve pass is the newest answering pass (the substrate
             // already joined its envelope into the run's worst-of cap).
             lastPass: improvePass,
+            critiqued: s.response,
           });
         }),
     });
@@ -641,12 +626,15 @@ export const executeReflexion = (
     // stagnant path already emitted its own warning inside the step body.
 
     // The critique's SATISFIED verdict is reflexion's own authority: it may
-    // downgrade (max-iters / stagnant -> partial). The substrate caps it under
-    // the worst-of envelope of every pass, relays the answering pass's raw
+    // downgrade (stagnant, or a critiqued answer at max-iters -> partial). An
+    // answer the loop never critiqued (the last improve pass's new answer)
+    // is judged by its pass's shared verify gate instead (audit G3). The substrate
+    // caps the status under the envelopes still standing (a continuing pass
+    // supersedes the passes before it), relays the answering pass's raw
     // terminatedBy and abstention, ties `final_answer` to a completed status,
-    // and forwards the one run ledger (every pass's tool evidence included:
-    // passes record evidence steps as they run).
-    const satisfied = reason.kind === "satisfied";
+    // and forwards the one run ledger.
+    const uncritiqued = reason.kind === "max-iters" && final.response !== final.critiqued;
+    const satisfied = reason.kind === "satisfied" || (uncritiqued && passDelivered(final.lastPass));
     return {
       _tag: "Result" as const,
       output: gated.output,

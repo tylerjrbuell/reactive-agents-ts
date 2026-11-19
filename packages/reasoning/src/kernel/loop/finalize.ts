@@ -90,12 +90,15 @@ export function decideSynthesisInput(
  * Reads from `KernelMessage[]` (not `ReasoningStep[]`) because the kernel
  * conversation thread is the canonical source of truth for tool execution
  * results. Errors are filtered out so synthesis never sees failure noise.
+ * `exclude` drops results of the named tools (e.g. `META_TOOLS`: a `todo`
+ * result carries call instructions like `todo({action:"done"})`, which a
+ * tool-less synthesis call must never see; audit G4, 2026-11-18).
  */
-export function collectToolData(messages: readonly KernelMessage[]): string {
+export function collectToolData(messages: readonly KernelMessage[], exclude?: ReadonlySet<string>): string {
   const parts: string[] = [];
   for (const m of messages) {
     // contentText: a parts result must never stringify to "[object Object]".
-    const text = m.role === "tool_result" && !m.isError ? contentText(m.content) : "";
+    const text = m.role === "tool_result" && !m.isError && exclude?.has(m.toolName) !== true ? contentText(m.content) : "";
     if (m.role === "tool_result" && text) {
       parts.push(`[${m.toolName}] ${text}`);
     }
@@ -124,16 +127,19 @@ export function enforceQualityGate(input: {
   /** P2 (2026-07-07): correlates this synthesis exchange to its run in traces
    * — without it the call files under the `llm-direct` placeholder. */
   traceContext?: { taskId?: string; iteration?: number };
+  /**
+   * Synthesize even when the draft passes the checks: the draft is not an
+   * answer (reflexion's empty generate pass). Material: `toolData`, else the draft.
+   */
+  force?: boolean;
 }): Effect.Effect<
   { output: string } & TokenSpend,
   never,
   never
 > {
-  const decision = decideSynthesisInput(
-    input.output,
-    input.taskDescription,
-    input.toolData,
-  );
+  const decision = input.force === true
+    ? { needsSynthesis: true, rawForSynthesis: input.toolData && input.toolData.length > 0 ? input.toolData : input.output }
+    : decideSynthesisInput(input.output, input.taskDescription, input.toolData);
   if (!decision.needsSynthesis) {
     return Effect.succeed({ output: input.output, ...NO_TOKEN_SPEND });
   }

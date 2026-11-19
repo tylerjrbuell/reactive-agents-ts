@@ -12,7 +12,8 @@
  *
  * These behaviors are the ONLY behavior, never per-strategy options:
  *   - every kernel pass's ledger facts accumulate into one run ledger;
- *   - every contributing pass's completion envelope caps the claimed status;
+ *   - every contributing pass's completion envelope caps the claimed status,
+ *     until a continuing pass that answers supersedes it (`standingEnvelopes`);
  *   - a paused pass ends the run with the paused result (a deferred pause, for
  *     concurrent passes, ends it at the next checkpoint or at the terminal);
  *   - relay keys (terminatedBy, runLedger, abstention, honesty markers) are
@@ -124,7 +125,9 @@ export interface PassOptions {
    * not a sub-goal. It adopts the run contract an earlier pass compiled and
    * starts from the run ledger so far (`KernelInput.seedRunContract` /
    * `seedRunLedger`), so its requirements and assessment cover the whole run
-   * instead of its own prompt. Default false: a pass compiles its own contract.
+   * instead of its own prompt. Its envelope then judges the whole run, so when
+   * it is the answering pass the passes before it stop capping the status
+   * (`standingEnvelopes`). Default false: a pass compiles its own contract.
    */
   readonly continues?: boolean;
 }
@@ -571,6 +574,37 @@ export function withKernelIterations<R extends { readonly metadata: ReasoningMet
 interface PassEnvelope {
   readonly pass: PassResult;
   readonly envelope: CompletionEnvelope;
+  /** The pass ran with `continues` (it judged the run contract over the run ledger so far). */
+  readonly continues: boolean;
+}
+
+/**
+ * The envelopes that still cap a run answered by `answering` (audit G3,
+ * 2026-11-18). A continuing pass adopted the run contract and started from the
+ * run ledger so far, so its own envelope judges the whole run: when it is the
+ * answering pass, every pass before it is superseded (its answer was replaced)
+ * and stops capping. Passes after it still cap. Otherwise: every envelope.
+ */
+export function standingEnvelopes<E extends { readonly pass: unknown; readonly continues: boolean }>(
+  envelopes: readonly E[],
+  answering: E["pass"] | undefined,
+): readonly E[] {
+  const at = answering === undefined ? -1 : envelopes.findIndex((e) => e.pass === answering);
+  return at > 0 && envelopes[at]?.continues === true ? envelopes.slice(at) : envelopes;
+}
+
+/**
+ * The pass passed the shared verify / exit gate: its terminal gate accepted
+ * the deliverable, the verifier did not refuse it, and its own envelope is
+ * clean (`completed`, nothing outstanding). A strategy whose own check never
+ * judged the final answer (reflexion's last improve pass, never critiqued)
+ * defers to this verdict instead of claiming less.
+ */
+export function passDelivered(pass: PassResult): boolean {
+  const decision = pass.state.meta.deliverableDecision;
+  const envelope = envelopeFromKernelState(pass.state);
+  return decision?.accepted === true && decision.verifier?.verified !== false &&
+    envelope.completionStatus === "completed" && envelope.outstandingCriteria === undefined;
 }
 
 /** A body failure other than a pause. */
@@ -659,7 +693,7 @@ export function runStrategy<E, R>(
           iterationsSpent += passIterationsUsed(result.state);
           kernelIterations = (kernelIterations ?? 0) + result.state.iteration;
           if (passOptions?.contributes !== false) {
-            envelopes.push({ pass: result, envelope: envelopeFromKernelState(result.state) });
+            envelopes.push({ pass: result, envelope: envelopeFromKernelState(result.state), continues: passOptions?.continues === true });
           }
           const pause = kernelPause(result.state);
           if (pause !== undefined) {
@@ -717,9 +751,9 @@ export function runStrategy<E, R>(
       totalOutputTokens: spend.outputTokens,
       totalCost: spend.cost,
     });
-    /** Worst-of envelope over contributing passes, optionally excluding the answering pass. */
-    const joined = (exclude?: PassResult): CompletionEnvelope =>
-      joinEnvelopes(envelopes.filter((e) => e.pass !== exclude).map((e) => e.envelope));
+    /** Worst-of envelope over the passes still standing under `answering`, optionally without `answering` itself. */
+    const joined = (answering?: PassResult, excludeAnswering = false): CompletionEnvelope =>
+      joinEnvelopes(standingEnvelopes(envelopes, answering).filter((e) => !excludeAnswering || e.pass !== answering).map((e) => e.envelope));
 
     const paused = (pause: KernelPause) =>
       Ref.get(ledgerRef).pipe(Effect.flatMap((ledger) => finalizePausedStrategyResult({
@@ -753,8 +787,8 @@ export function runStrategy<E, R>(
       if (end._tag === "Delegated") return Effect.succeed(relayDelegated(spec.strategy, start, steps, spend, end));
       if (end._tag === "KernelTerminal") {
         // The answering pass's own status law, capped by every OTHER
-        // contributing pass (single-pass strategies: unchanged).
-        const status = capStatusToEnvelope(resolveCompletionStatus(end.pass.state), joined(end.pass));
+        // standing pass (single-pass strategies: unchanged).
+        const status = capStatusToEnvelope(resolveCompletionStatus(end.pass.state), joined(end.pass, true));
         return finalizeStrategyResult({
           strategy: spec.strategy,
           steps,
@@ -771,7 +805,8 @@ export function runStrategy<E, R>(
           },
         });
       }
-      const envelope = joined();
+      // Passes the answering pass superseded no longer cap (`standingEnvelopes`).
+      const envelope = joined(end.basedOn);
       // 1. Status. A strategy-decided outcome is an honest non-success, judged
       //    at `partial` without the cap machinery (nothing to waive); otherwise
       //    the strategy's verdict (or the plain worst-of envelope) caps it.

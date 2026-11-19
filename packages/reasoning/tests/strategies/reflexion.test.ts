@@ -295,9 +295,10 @@ describe("ReflexionStrategy", () => {
     const layer = TestLLMServiceLayer([
       // Generate sub-pass: model emits no answer text → genPass.output empty.
       { match: "offside rule", text: "" },
-      // Forced synthesis fallback (NEW behavior): produces the real answer.
-      // Matches the distinctive synthesis-prompt phrase the fix introduces.
-      { match: "complete, final answer", text: "A player is in an offside position if nearer to the opponents' goal line than both the ball and the second-last defender." },
+      // Forced synthesis fallback: produces the real answer. Since audit G4
+      // (2026-11-18) it is the kernel's shared terminal synthesis
+      // (finalize.ts enforceQualityGate, buildSynthesisPrompt), not a bespoke prompt.
+      { match: "raw data gathered by tools", text: "A player is in an offside position if nearer to the opponents' goal line than both the ball and the second-last defender." },
       // Critique: satisfied so the loop stops after one pass.
       { match: "Evaluate whether", text: "SATISFIED: complete and accurate." },
     ]);

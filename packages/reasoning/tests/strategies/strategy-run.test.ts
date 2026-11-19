@@ -12,7 +12,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
-import { runStrategy } from "../../src/strategies/substrate/strategy-run.js";
+import { runStrategy, standingEnvelopes } from "../../src/strategies/substrate/strategy-run.js";
 import { reactKernel } from "../../src/kernel/loop/react-kernel.js";
 import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
 import { provideTestEnvelope, buildRunEnvelope } from "../../src/kernel/envelope/run-envelope.js";
@@ -418,6 +418,19 @@ describe("runStrategy — one ledger, one status cap, pause-safe concurrency", (
     expect(capped.status).toBe("partial");
     expect((capped.metadata as Record<string, unknown>).terminatedBy).toBe("end_turn");
     expect(free.status).toBe("completed");
+  });
+
+  it("G3: a continuing answering pass supersedes the passes before it; a non-continuing one, or a later pass, does not", () => {
+    const [gen, imp1, imp2] = [{ id: "gen" }, { id: "imp1" }, { id: "imp2" }];
+    const env = (p: { readonly id: string }, continues: boolean) => ({ pass: p, continues });
+    const all = [env(gen, false), env(imp1, true), env(imp2, true)];
+    expect(standingEnvelopes(all, imp2).map((e) => e.pass)).toEqual([imp2]);
+    // An earlier answering pass: the passes after it still cap.
+    expect(standingEnvelopes(all, imp1).map((e) => e.pass)).toEqual([imp1, imp2]);
+    // The first pass, a non-continuing answering pass, or no answering pass: every envelope stands.
+    expect(standingEnvelopes(all, gen)).toEqual(all);
+    expect(standingEnvelopes([env(gen, false), env(imp1, false)], imp1).length).toBe(2);
+    expect(standingEnvelopes(all, undefined)).toEqual(all);
   });
 
   it("N5: under the strategy's own delivery verdict, a step pass's outstanding criteria are not forwarded to the run", async () => {

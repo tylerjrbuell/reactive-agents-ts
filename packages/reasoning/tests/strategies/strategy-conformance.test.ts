@@ -503,8 +503,12 @@ const reference = (): Promise<FacetRun> => (reactiveReference ??= runFacet("reac
 // authority is recorded, and the cause on `error`. Before 2026-11-18 an
 // ExecutionError escaped `runStrategy` with none of them (audit G2).
 
-/** Strategies whose body has no failure of its own: a provider failure is a kernel `llm_error` terminal, or the run delegates. */
-const NO_BODY_ERROR: ReadonlySet<string> = new Set(["reactive", "direct", "adaptive"]);
+/**
+ * Strategies whose body has no failure of its own: a provider failure is a kernel `llm_error` terminal, or the run delegates.
+ * reflexion: since audit G4 (2026-11-18) its empty-generate seed is the shared terminal synthesis, which never fails
+ * (its critique degrades to a no-op), so no direct call of its own can end the body.
+ */
+const NO_BODY_ERROR: ReadonlySet<string> = new Set(["reactive", "direct", "adaptive", "reflexion"]);
 
 interface BodyErrorScenario {
   readonly turns: TestTurn[];
@@ -522,12 +526,6 @@ const BODY_ERROR: Readonly<Record<string, BodyErrorScenario>> = {
     turns: [{ text: CODE_RESPONSE }],
     envelope: { approvalPolicy: { mode: "detach", tools: new Set(["add"]) } },
     errorContains: "code-action cannot honor .withApprovalPolicy",
-  },
-  // The generate pass spends its share on tool calls; the tool-less synthesis fallback fails (E4).
-  reflexion: {
-    turns: [{ toolCall: { name: "add", args: { a: 2, b: 3 } } }],
-    failOn: "final answer to the task now",
-    errorContains: "synthesis fallback failed",
   },
   // The BFS explore's first expansion call fails at the provider.
   "tree-of-thought": {
@@ -589,6 +587,167 @@ const runBodyError = (strategy: ReasoningStrategy, sc: BodyErrorScenario): Promi
   const base = Layer.mergeAll(llm, createToolsLayer(), StrategyRegistryLive, EventBusLive);
   return Effect.runPromise(program.pipe(Effect.provide(Layer.provideMerge(ReasoningServiceLive(config), base))));
 };
+
+// ── R1 / R2: reflexion's multi-pass trajectory (audit G3, G4, 2026-11-18).
+// A programmable model: each request is answered by a one-turn TestLLMService
+// chosen from what the request is (critique, tool-bearing think call, or a
+// tool-less call), so the cell controls which pass answers.
+
+interface ReflexionCallRecord {
+  readonly toolCount: number;
+  readonly purpose: unknown;
+  readonly text: string;
+}
+
+interface ReflexionCellRun {
+  readonly result?: { readonly status: string; readonly output?: unknown; readonly steps?: readonly { readonly content: string }[]; readonly metadata: Record<string, unknown> };
+  readonly calls: readonly ReflexionCallRecord[];
+  readonly overrides: readonly Record<string, unknown>[];
+  readonly escaped?: string;
+}
+
+const CRITIQUE_MARK = "COMPLETED based on the execution evidence";
+const UNSATISFIED_CRITIQUES = [
+  "UNSATISFIED: the sum was never reported.\n- The answer must state the sum of 2 and 3.",
+  "UNSATISFIED: the second attempt still repeated tool calls without writing any reply.\n- Stop calling tools and write the final reply.",
+  "UNSATISFIED: a third distinct complaint about formatting of the final number.\n- Use digits.",
+];
+
+const runReflexionCell = (
+  decide: (req: { readonly tools?: readonly unknown[]; readonly text: string }, critiques: number) => TestTurn,
+  input: Record<string, unknown>,
+): Promise<ReflexionCellRun> => {
+  const calls: ReflexionCallRecord[] = [];
+  let critiques = 0;
+  const pick = (req: { readonly messages: readonly unknown[]; readonly systemPrompt?: unknown; readonly tools?: readonly unknown[]; readonly purpose?: unknown }) => {
+    const text = `${JSON.stringify(req.messages)} ${typeof req.systemPrompt === "string" ? req.systemPrompt : ""}`;
+    calls.push({ toolCount: req.tools?.length ?? 0, purpose: req.purpose, text });
+    const isCritique = text.includes(CRITIQUE_MARK);
+    const turn = decide({ ...(req.tools !== undefined ? { tools: req.tools } : {}), text }, critiques);
+    if (isCritique) critiques += 1;
+    return TestLLMService([turn]);
+  };
+  const base = TestLLMService([{ text: "" }]);
+  const llm = Layer.succeed(LLMService, LLMService.of({
+    ...base,
+    complete: (req) => pick(req).complete(req),
+    stream: (req) => pick(req).stream(req),
+  }));
+  const program = Effect.gen(function* () {
+    const overrides = yield* Ref.make<readonly Record<string, unknown>[]>([]);
+    const bus = yield* EventBus;
+    yield* bus.subscribe((ev) =>
+      ev._tag === "GuardFiredEmitted" && ev.guard === "terminal_status_override"
+        ? Ref.update(overrides, (xs) => [...xs, ev.metadata ?? {}])
+        : Effect.void,
+    );
+    const tools = yield* ToolService;
+    yield* tools.register(addTool, (args) => Effect.sync(() => (args.a as number) + (args.b as number)));
+    const fn = yield* (yield* StrategyRegistry).get("reflexion");
+    const outcome = yield* fn({
+      taskDescription: "Use the add tool to add 2 and 3, then report the sum.",
+      taskType: "computation",
+      memoryContext: "",
+      availableTools: ["add"],
+      availableToolSchemas: [addSchema],
+      taskId: "reflexion-cell",
+      ...input,
+    } as never).pipe(
+      Effect.map((result): Pick<ReflexionCellRun, "result" | "escaped"> => ({ result })),
+      Effect.catchAll((e) => Effect.succeed<Pick<ReflexionCellRun, "result" | "escaped">>({ escaped: `${e._tag}: ${String((e as { message?: unknown }).message)}` })),
+    );
+    return { ...outcome, overrides: yield* Ref.get(overrides) };
+  });
+  return Effect.runPromise(
+    provideTestEnvelope(program.pipe(Effect.provide(Layer.mergeAll(llm, createToolsLayer(), StrategyRegistryLive, EventBusLive)))),
+  ).then((r) => ({ ...r, calls }));
+};
+
+const reflexionConfig = (maxIterations: number, maxRetries: number) => ({
+  ...defaultReasoningConfig,
+  strategies: {
+    ...defaultReasoningConfig.strategies,
+    reactive: { ...defaultReasoningConfig.strategies.reactive, maxIterations },
+    reflexion: { ...defaultReasoningConfig.strategies.reflexion, maxRetries },
+  },
+});
+
+describe("reflexion multi-pass trajectory (audit G3, G4)", () => {
+  it("R1 (G3): a verified final pass decides the run; superseded capped passes do not veto it", async () => {
+    let n = 0;
+    // generate and improve-1 spend their share on tool calls and end at the cap
+    // (critiques UNSATISFIED); improve-2 answers and is never critiqued.
+    const r = await runReflexionCell((req, critiques) => {
+      if (req.text.includes(CRITIQUE_MARK)) return { text: UNSATISFIED_CRITIQUES[critiques] ?? "UNSATISFIED: more." };
+      if ((req.tools?.length ?? 0) > 0 && critiques < 2) {
+        n += 1;
+        return { toolCall: { name: "add", args: { a: 2 + n, b: 3 + n } } };
+      }
+      return { text: "FINAL ANSWER: The sum of 2 and 3 is 5." };
+    }, { config: reflexionConfig(9, 2) });
+    const vetoes = r.overrides.filter((o) => o["authority"] === "envelope-outstanding");
+    const m = r.result?.metadata ?? {};
+    expect(
+      r.escaped === undefined &&
+        r.result?.status === "completed" &&
+        String(r.result.output).includes("5") &&
+        vetoes.length === 0 &&
+        m["outstandingCriteria"] === undefined
+        ? "ok"
+        : `status=${r.result?.status} escaped=${r.escaped ?? "-"} output=${String(r.result?.output).slice(0, 80)} vetoes=${JSON.stringify(vetoes)} outstanding=${JSON.stringify(m["outstandingCriteria"])} critiques=${r.calls.filter((c) => c.text.includes(CRITIQUE_MARK)).length}`,
+    ).toBe("ok");
+  }, 30_000);
+
+  it("R1c (G3 control): a final answer the critique judged UNSATISFIED stays partial", async () => {
+    // generate answers; every critique is UNSATISFIED and the loop ends at the
+    // cap on improve passes that answered nothing new. End-to-end control (the
+    // standing envelope alone also holds it partial here). The rule that a
+    // re-shipped critiqued answer stays partial is pinned by adaptive.test.ts
+    // "falls back to reactive when selected sub-strategy returns partial status".
+    const r = await runReflexionCell((req, critiques) => {
+      if (req.text.includes(CRITIQUE_MARK)) return { text: UNSATISFIED_CRITIQUES[critiques] ?? "UNSATISFIED: more." };
+      if ((req.tools?.length ?? 0) > 0 && critiques === 0) return { text: "FINAL ANSWER: The sum of 2 and 3 is 5." };
+      return { text: "" };
+    }, { config: reflexionConfig(9, 2) });
+    expect(r.escaped === undefined && r.result?.status === "partial" ? "ok" : `status=${r.result?.status} escaped=${r.escaped ?? "-"}`).toBe("ok");
+  }, 30_000);
+
+  it("R2 (G4): an empty generate is answered by the shared terminal synthesis; no tool-less call carries tool instructions", async () => {
+    // The generate pass spends its one-iteration share on `todo` and `add`
+    // and ends with no answer (01M7RWEF21SK14JBECYD7DRMFF).
+    let thinks = 0;
+    const r = await runReflexionCell((req) => {
+      if (req.text.includes(CRITIQUE_MARK)) return { text: "SATISFIED: the sum 5 was reported." };
+      if ((req.tools?.length ?? 0) > 0) {
+        thinks += 1;
+        return thinks === 1
+          ? { toolCalls: [{ name: "todo", args: { action: "add", items: ["Add 2 and 3", "Report the sum"] } }, { name: "add", args: { a: 2, b: 3 } }] }
+          : { toolCall: { name: "todo", args: { action: "start", id: thinks } } };
+      }
+      return { text: "The sum of 2 and 3 is 5." };
+    }, {
+      config: reflexionConfig(3, 2),
+      metaTools: { todo: true },
+      systemPrompt: "You are an agent. Call tools immediately.",
+    });
+    // The critique is reflexion's own tool-less judgment call (its evidence
+    // block and the caller's system prompt are a separate, non-fatal surface:
+    // a failed critique degrades to a no-op). This cell pins the fallback.
+    const toolLess = r.calls.filter((c) => c.toolCount === 0 && !c.text.includes(CRITIQUE_MARK));
+    const leaking = toolLess.filter((c) => c.text.includes("todo(") || c.text.includes("Call tools immediately"));
+    const synth = toolLess.filter((c) => c.purpose === "synthesize" && c.text.includes("raw data gathered by tools") && c.text.includes("[add] 5"));
+    const attempt1 = (r.result?.steps ?? []).find((s) => s.content.startsWith("[ATTEMPT 1]"))?.content ?? "";
+    expect(
+      r.escaped === undefined &&
+        r.result?.status !== "failed" &&
+        leaking.length === 0 &&
+        synth.length === 1 &&
+        attempt1.includes("The sum of 2 and 3 is 5.")
+        ? "ok"
+        : `status=${r.result?.status} escaped=${r.escaped ?? "-"} toolLess=${JSON.stringify(toolLess.map((c) => c.purpose))} leaking=${leaking.length} (todo=${leaking.some((c) => c.text.includes("todo("))}, systemPrompt=${leaking.some((c) => c.text.includes("Call tools immediately"))}) synth=${synth.length} attempt1=${attempt1.slice(0, 80)}`,
+    ).toBe("ok");
+  }, 30_000);
+});
 
 /** Assert a cell, honoring the shrink-only KNOWN_GAPS list. */
 const cell = (strategy: string, check: string, ok: boolean, detail: string): void => {

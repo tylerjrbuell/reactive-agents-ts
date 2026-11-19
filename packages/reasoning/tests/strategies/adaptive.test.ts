@@ -1,9 +1,9 @@
 // File: tests/strategies/adaptive.test.ts
 import { describe, it, expect } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { executeAdaptive } from "../../src/strategies/adaptive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
-import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
+import { LLMService, TestLLMService, TestLLMServiceLayer, type TestTurn } from "@reactive-agents/llm-provider";
 import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 describe("AdaptiveStrategy", () => {
@@ -263,17 +263,31 @@ describe("AdaptiveStrategy", () => {
   it("falls back to reactive when selected sub-strategy returns partial status", async () => {
     // reflexion with maxRetries=1 returns partial (loop runs once, no SATISFIED)
     // reactive fallback returns completed (FINAL ANSWER)
-    const layer = TestLLMServiceLayer([
+    // Routed per request (a scripted cursor cannot tell reflexion's improve
+    // pass from the reactive fallback: both are kernel think calls).
+    const route = (text: string): TestTurn => {
       // Adaptive analysis -> select REFLEXION
-      { match: "Classify the task", text: "REFLEXION" },
+      if (text.includes("Classify the task")) return { text: "REFLEXION" };
+      // Reflexion critique: no SATISFIED: prefix -> not satisfied; maxRetries=1 so the loop exits.
+      if (text.includes("Evaluate whether")) return { text: "This response lacks detail and accuracy." };
+      // The improve pass (its thread carries the first attempt) writes nothing.
+      // Since audit G3 (2026-11-18) a final improve pass that answers and passes
+      // its verify gate makes reflexion `completed`; an empty one keeps it
+      // partial, so adaptive falls back.
+      if (text.includes("Initial attempt at an answer.")) return { text: "" };
       // Reflexion initial generation (systemPrompt contains "task execution agent")
-      { match: "task execution agent", text: "Initial attempt at an answer." },
-      // Reflexion critique (content contains "Evaluate whether")
-      // No SATISFIED: prefix -> not satisfied; maxRetries=1 so loop exits -> partial
-      { match: "Evaluate whether", text: "This response lacks detail and accuracy." },
-      // Reactive fallback (content contains "Think step-by-step")
-      { match: "Think step-by-step", text: "FINAL ANSWER: Recovered with reactive fallback." },
-    ]);
+      if (text.includes("task execution agent")) return { text: "Initial attempt at an answer." };
+      // Reactive fallback
+      return { text: "FINAL ANSWER: Recovered with reactive fallback." };
+    };
+    const pick = (req: { readonly messages: readonly unknown[]; readonly systemPrompt?: unknown }) =>
+      TestLLMService([route(`${JSON.stringify(req.messages)} ${typeof req.systemPrompt === "string" ? req.systemPrompt : ""}`)]);
+    const base = TestLLMService([{ text: "" }]);
+    const layer = Layer.succeed(LLMService, LLMService.of({
+      ...base,
+      complete: (req) => pick(req).complete(req),
+      stream: (req) => pick(req).stream(req),
+    }));
 
     // Task must be >15 words with no tools to bypass heuristic pre-classifier
     // and reach the LLM classification path that returns REFLEXION
