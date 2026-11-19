@@ -13,18 +13,11 @@ import {
   formatStatus, makeStore, newState, parseSpec, planUnits, readState, runDriver, writeState,
   type DriveSpec, type DriverDeps,
 } from "./driver.js"
+import { acquireLock, liveLockOwner, pidAlive, releaseLock } from "./lock.js"
 
 const SELF = fileURLToPath(import.meta.url)
 
-export const pidAlive = (pid: number | null): boolean => {
-  if (pid === null) return false
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (e) {
-    return typeof e === "object" && e !== null && "code" in e && e.code === "EPERM"
-  }
-}
+export { pidAlive }
 
 /** Real chunk runner: child in the supervisor's own process group, output appended to the log. */
 export const realDeps = (): DriverDeps => ({
@@ -53,6 +46,10 @@ export const realDeps = (): DriverDeps => ({
 export function startDrive(spec: DriveSpec): { readonly message: string; readonly error?: true } {
   const prior = readState(spec.outDir)
   if (prior && pidAlive(prior.pid)) return { message: `already running (supervisor pid ${prior.pid}); use status/stop`, error: true }
+  const other = liveLockOwner(prior?.pid ?? null)
+  if (other) {
+    return { message: `refused: another bench:drive supervisor is live (pid ${other.pid}, outDir ${other.outDir}, since ${other.startedAt}). Run \`bench:drive stop ${other.outDir}\` first.`, error: true }
+  }
   const planned = planUnits(spec).map((u) => u.id)
   if (prior && JSON.stringify(prior.order) !== JSON.stringify(planned)) {
     return { message: `${spec.outDir} holds a different plan (task/tier/arm/k set differs); use a fresh outDir`, error: true }
@@ -73,6 +70,7 @@ export async function stopDrive(outDir: string, graceMs = 8000): Promise<string>
   if (!state) return `no state file in ${outDir}`
   const pid = state.pid
   if (pid === null || !pidAlive(pid)) {
+    releaseLock(pid)
     if (state.status === "running" || state.status === "paused" || state.status === "starting") writeState({ ...state, status: "stopped", pid: null, current: null })
     return "not running"
   }
@@ -81,6 +79,7 @@ export async function stopDrive(outDir: string, graceMs = 8000): Promise<string>
   while (pidAlive(pid) && Date.now() < until) await new Promise((r) => setTimeout(r, 100))
   const killed = pidAlive(pid)
   if (killed) try { process.kill(-pid, "SIGKILL") } catch { /* gone */ }
+  releaseLock(pid)
   const after = readState(outDir)
   if (after && (after.status === "running" || after.status === "paused" || after.status === "starting")) writeState({ ...after, status: "stopped", pid: null, current: null })
   return `stopped supervisor group ${pid}${killed ? " (SIGKILL after grace)" : ""}; in-flight cell is re-run on resume`
@@ -90,14 +89,22 @@ async function supervise(outDir: string): Promise<number> {
   const state = readState(outDir)
   if (!state) return 2
   const store = makeStore({ ...state, pid: process.pid })
+  const lock = acquireLock(process.pid, outDir)
+  if (!lock.ok) {
+    store.commit({ status: "failed", pid: null, current: null, lastError: `refused: ${lock.message}` })
+    console.error(`[drive] refused: ${lock.message}`)
+    return 2
+  }
   store.commit({ status: "running" })
   const onStop = (): never => {
     store.commit({ status: "stopped", pid: null, current: null })
+    releaseLock(process.pid)
     process.exit(143)
   }
   process.on("SIGTERM", onStop)
   process.on("SIGINT", onStop)
   const status = await runDriver(store, realDeps())
+  releaseLock(process.pid)
   store.commit({ pid: null })
   console.error(`[drive] ${status}`)
   return 0

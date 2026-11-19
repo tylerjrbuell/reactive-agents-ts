@@ -69,10 +69,11 @@ beforeEach(() => {
   fake = join(dir, "fake.js")
   log = join(dir, "calls.log")
   writeFileSync(fake, FAKE)
+  process.env.RA_BENCH_DRIVE_LOCK = join(dir, "bench-drive.lock") // never touch a real host lock
   envFor("ok")
 })
 afterEach(() => {
-  for (const k of ["FAKE_LOG", "FAKE_MODE", "FAKE_PID", "FAKE_REFUSE"]) delete process.env[k]
+  for (const k of ["FAKE_LOG", "FAKE_MODE", "FAKE_PID", "FAKE_REFUSE", "RA_BENCH_DRIVE_LOCK"]) delete process.env[k]
   rmSync(dir, { recursive: true, force: true })
 })
 
