@@ -63,7 +63,7 @@ import { type StepExecutorInput } from "./plan-execute/step-executor.js";
 import { applyWaveResults, MAX_INLINE_PATCHES, runnableSteps } from "./plan-execute/apply-wave.js";
 import { synthesizePlanAnswer } from "./plan-execute/synthesize.js";
 import { refinePlan } from "./plan-execute/refine-plan.js";
-import { runStepWithRetries } from "./plan-execute/step-run.js";
+import { planRunIterationCap, runStepWithRetries } from "./plan-execute/step-run.js";
 import { runSingleAnalysisShortCircuit } from "./plan-execute/single-analysis.js";
 import { scoreReflectionAndDispatch, type PEREntropyEntry } from "./plan-execute/reflection-entropy.js";
 import { reflectOnPlan } from "./plan-execute/reflect.js";
@@ -195,9 +195,8 @@ export const executePlanExecute = (
     const stepRetries = planConfig.stepRetries ?? 1;
     // W5.5 strategy-tier honesty: the per-step sub-kernel budget derives from
     // the run's own iteration budget spread over the plan (floor 5), computed
-    // at the use site once `plan` exists (plan-execute/step-run.ts). An
-    // explicit `stepKernelMaxIterations` still wins (deliberate tuning beats
-    // derivation).
+    // at the use site once `plan` exists (plan-execute/step-run.ts). An explicit
+    // `stepKernelMaxIterations` still wins (deliberate tuning beats derivation).
     const stepKernelMaxIterations = planConfig.stepKernelMaxIterations;
     const planMode = planConfig.planMode ?? "linear";
     const taskId = input.taskId ?? "plan-execute";
@@ -214,6 +213,7 @@ export const executePlanExecute = (
         requiredTools: input.requiredTools ?? [],
         repairCapabilities: { perIteration: false },
         logSite: "reasoning/src/strategies/plan-execute.ts:emitLog",
+        iterationBudget: { run: planRunIterationCap(input.config) }, // step passes carry it (step-run.ts)
       },
       (run) => Effect.gen(function* () {
     const emitLog = run.emitLog;

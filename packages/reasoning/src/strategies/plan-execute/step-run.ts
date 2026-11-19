@@ -24,6 +24,18 @@ import { StrategyPaused, type StrategyRun } from "../substrate/strategy-run.js";
 import { executeStep, type StepExecutorInput } from "./step-executor.js";
 import { passIterationShare } from "../budget/iteration-budget.js";
 import { resolveStrategyIterationCap } from "../budget/iteration-cap.js";
+import type { ReasoningConfig } from "../../types/config.js";
+
+/**
+ * The run's iteration budget a plan's steps draw on. One derivation for both
+ * uses: each step's share (below) and the run spec's `iterationBudget.run`
+ * (plan-execute, blueprint), which every step pass carries as
+ * `meta.runMaxIterations` / `runIterationsLeft` (`withRunBudget`). So a step's
+ * small cap neither sizes the repetition backstop nor drops the tool batch of
+ * its last turn while the run has budget left.
+ */
+export const planRunIterationCap = (config: ReasoningConfig): number =>
+  resolveStrategyIterationCap(config, { strategyDefault: config.strategies.reactive.maxIterations });
 
 /** What one wave step needs from the orchestrator's scope. */
 export interface StepRunDeps {
@@ -93,9 +105,7 @@ export const runStepWithRetries = (
     // still wins over it).
     // The step floor (5) never lifts a step above the run cap: a user cap of 3
     // gives every step at most 3.
-    const runCap = resolveStrategyIterationCap(input.config, {
-      strategyDefault: input.config.strategies.reactive.maxIterations,
-    });
+    const runCap = planRunIterationCap(input.config);
     const derivedStepBudget = passIterationShare(
       { run: runCap, perPass: deps.stepKernelMaxIterations, floor: Math.min(5, runCap) },
       0,

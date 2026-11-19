@@ -68,6 +68,7 @@ import { executeReactive } from "./reactive.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { patchPlan } from "./planning/plan-mutation.js";
 import { finishOpenSteps } from "./blueprint/finish-open.js";
+import { planRunIterationCap } from "./plan-execute/step-run.js";
 import { planOnlyEnd } from "./planning/plan-only.js";
 import { emitSolveEvidence, selectSolveEvidence } from "./planning/solve-evidence.js";
 import { priorResultsBudgetChars } from "./planning/prior-results.js";
@@ -227,6 +228,8 @@ export const executeBlueprint = (
         requiredTools: input.requiredTools ?? [],
         repairCapabilities: { perIteration: false },
         logSite: "reasoning/src/strategies/blueprint.ts:emitLog",
+        // The remainder's step passes (blueprint/finish-open.ts) carry the run budget.
+        iterationBudget: { run: planRunIterationCap(input.config) },
       },
       (run) => blueprintBody(input, services, run),
     ).pipe(Effect.catchTag("DegradeToReactive", () => executeReactive(input)));
