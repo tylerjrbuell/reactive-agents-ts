@@ -57,7 +57,7 @@
   "devDependencies": {
     "@reactive-agents/benchmarks": "workspace:*",
     "typescript": "^6.0.3",
-    "bun-types": "latest"
+    "bun-types": "^1.3.13"
   },
   "description": "rax — the Reactive Agents CLI for scaffolding, running, and inspecting AI agents",
   "keywords": [
