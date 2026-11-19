@@ -128,13 +128,13 @@ const agent = await ReactiveAgents.create()
 
 ## Plan-sized iteration budget
 
-A run seeded from a plan gets enough iterations to finish it. The configured `maxIterations` is the floor. When the unchecked steps plus a reserve of max(2, 25%) need more, the plan-sized target is steps + reserve, at most min(60, 3x the configured value). The raise is staged: the run starts with half of the way to the target (for 18 open steps and `maxIterations` 10: 17, target 23). Near that bound the rest is granted only if the run made progress since the raise (a checklist row completed or a tool step succeeded). A run that stalls ends at the first stage instead of spending the whole budget. Bookkeeping refunds are counted on top, and the total never passes the hard cap. Unseeded runs, and plans that already fit, are unchanged. Cost, token and time limits are not touched. The raise is recorded as a `plan-budget` signal (and a `plan_budget_raised` guard event with `stage` 1 or 2) and the `planBudget` mechanism appears in the run-started config. It is on by default. Turn it off with the harness config or the environment:
+A run seeded from a plan gets enough iterations to finish it. The configured `maxIterations` is the floor. When the unchecked steps plus a reserve of max(2, 25%) need more, the plan-sized target is steps + reserve, at most min(60, 3x the configured value). The raise is staged: the run starts with half of the way to the target (for 18 open steps and `maxIterations` 10: 17, target 23). Near that bound the rest is granted only if the run made progress since the raise (a checklist row completed or a tool step succeeded). A run that stalls ends at the first stage instead of spending the whole budget. Bookkeeping refunds are counted on top, and the total never passes the hard cap. Unseeded runs, and plans that already fit, are unchanged. Cost, token and time limits are not touched. The raise is recorded as a `plan-budget` signal (and a `plan_budget_raised` guard event with `stage` 1 or 2) and the `planBudget` mechanism appears in the run-started config. It is opt-in (off by default) because it raises token use without a measured gain in task success. Turn it on with the harness config or the environment:
 
 ```ts
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withReasoning()
-  .withHarness({ planBudget: false }) // or RA_PLAN_BUDGET=0
+  .withHarness({ planBudget: true }) // or RA_PLAN_BUDGET=1
   .build()
 ```
 
