@@ -75,6 +75,10 @@ export function checklistView(s: ChecklistSnapshotWire): ChecklistView {
 /** Quiet annotation for one advisory row; `undefined` means render the row as before. */
 export type RowNote =
   | { readonly kind: "inferred"; readonly tooltip: string }
+  /** Done, closed by the harness from recorded evidence (the run's reconciliation); `label` says where done-ness came from. */
+  | { readonly kind: "harness"; readonly label: string; readonly tooltip: string }
+  /** Still open at the end of the run with nothing recording its completion; `reason` is in words. */
+  | { readonly kind: "unresolved"; readonly reason: string }
   | { readonly kind: "unmarked" };
 
 /** Tooltip text for an inferred row: where the done-ness came from. */

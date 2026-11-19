@@ -5,6 +5,7 @@ import { toTraceEvent } from "@reactive-agents/trace/normalize"; // browser-safe
 import type { RunState } from "./run-store.js";
 import type { ConvMessage } from "./trace-store.js";
 import { planBudgetTitle } from "../plan-budget.js";
+import { checklistGuardTitle } from "../run-notes-view.js";
 import { categoryOf, type TimelineRow } from "./timeline-filter.js";
 
 export interface TimelineGroup {
@@ -74,7 +75,7 @@ export function traceTitle(trace: NonNullable<TimelineRow["trace"]>): string {
     case "tool-call-end": { const t = trace as { toolName: string; ok?: boolean; durationMs?: number }; return `✓ tool ${t.toolName} ${t.ok === false ? "FAILED" : ""} ${t.durationMs ?? 0}ms`; }
     case "strategy-switched": { const t = trace as { from: string; to: string; reason: string }; return `strategy ${t.from} → ${t.to}: ${t.reason}`; }
     case "verifier-verdict": { const t = trace as { verified: boolean; summary: string }; return `verifier ${t.verified ? "✓" : "✗"} ${t.summary}`; }
-    case "guard-fired": { const t = trace as { guard?: string; outcome?: string; reason?: string }; const budget = planBudgetTitle(t); if (budget) return budget; return `guard ${t.guard ?? ""} ${t.outcome ?? ""}: ${t.reason ?? ""}`; }
+    case "guard-fired": { const t = trace as { guard?: string; outcome?: string; reason?: string; metadata?: unknown }; const budget = planBudgetTitle(t); if (budget) return budget; const todo = checklistGuardTitle(t); if (todo) return todo; return `guard ${t.guard ?? ""} ${t.outcome ?? ""}: ${t.reason ?? ""}`; }
     default: return trace.kind;
   }
 }

@@ -9,6 +9,7 @@
  * Pure and dependency-free: works on a `StreamCompleted` event, an `AgentResult`,
  * or an `AgentCompleted` bus payload.
  */
+import { terminalAuthorityOf } from "./run-notes.js";
 
 /**
  * How a turn ended.
@@ -58,6 +59,12 @@ export interface TurnOutcome {
   readonly error?: string;
   /** How the loop ended (`terminatedBy`), when reported. */
   readonly terminatedBy?: string;
+  /**
+   * The authority that decided the run, when reported (`outcome.authority`, else the kernel's
+   * `metadata.extensions.terminalOutcome.authority`). Open string: `strategy-accepted` marks a
+   * finish the strategy's own check accepted after a capped pass; read it with `terminalAuthorityView`.
+   */
+  readonly authority?: string;
   /** Abstained runs: why the agent declined, and what it was missing. */
   readonly abstention?: { readonly reason: string; readonly missing?: readonly string[] };
   /** Partial runs: the model's draft, without the `Unfinished:` list. */
@@ -246,9 +253,11 @@ export function turnOutcomeOf(c: RunCompletionLike): TurnOutcome {
   const terminatedBy = str(c.terminatedBy);
   const deliverables = deliverablesOf(c.receipt);
   const outcome = record(c.outcome);
+  const authority = terminalAuthorityOf(c);
   const base = {
     ...(error !== undefined ? { error } : {}),
     ...(terminatedBy !== undefined ? { terminatedBy } : {}),
+    ...(authority !== undefined ? { authority } : {}),
     ...(deliverables.length > 0 ? { deliverables } : {}),
   };
 

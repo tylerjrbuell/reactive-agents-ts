@@ -1,6 +1,6 @@
 <script lang="ts">
   import { addTodo, clearCompleted, todoDockMode, todoDockView, todoRowNote, toggleTodo, type TodoItem } from "$lib/todo-dock.js";
-  import type { ChecklistEvidenceWire } from "@reactive-agents/ui-core";
+  import type { ChecklistEvidenceWire, ChecklistReconciliationView } from "@reactive-agents/ui-core";
   import Tooltip from "$lib/components/Tooltip.svelte";
   import Icon from "$lib/components/kit/Icon.svelte";
 
@@ -15,10 +15,12 @@
     inferred?: Readonly<Record<string, ChecklistEvidenceWire>>;
     /** The latest turn finished: pending rows then read "not marked done". */
     turnComplete?: boolean;
+    /** The latest run's to-do outcome: rows the harness closed from evidence, and rows that ended with none. */
+    reconciliation?: ChecklistReconciliationView;
     /** Persist an edited list (replaces the whole list). */
     onChange: (items: TodoItem[]) => void;
   }
-  const { items, busy = false, enabled = false, inferred = {}, turnComplete = false, onChange }: Props = $props();
+  const { items, busy = false, enabled = false, inferred = {}, turnComplete = false, reconciliation, onChange }: Props = $props();
 
   const KEY = "cortex.chat.todoOpen";
   const read = (): boolean => {
@@ -88,7 +90,7 @@
       <div id="todo-dock-body" class="panel">
         <ul class="rows">
           {#each items as it (it.id)}
-            {@const note = todoRowNote(it, inferred, turnComplete)}
+            {@const note = todoRowNote(it, inferred, turnComplete, reconciliation)}
             <li class="row" class:current={view.current?.id === it.id} data-status={it.status}>
               <button
                 type="button"
@@ -98,7 +100,7 @@
                 aria-label={it.status === "completed" ? `Mark "${it.title}" not done` : `Mark "${it.title}" done`}
                 onclick={() => onChange(toggleTodo(items, it.id))}
               >
-                {#if note?.kind === "inferred"}
+                {#if note?.kind === "inferred" || note?.kind === "harness"}
                   <Tooltip text={note.tooltip} class="ico-wrap">
                     <span class="ico-inferred" data-testid="inferred-ico"><Icon name="check" size="sm" /></span>
                   </Tooltip>
@@ -108,7 +110,7 @@
                   <span class="ico"><Icon name={ICON[it.status]} size="sm" /></span>
                 {/if}
               </button>
-              <span class="title">{it.title}{#if note?.kind === "unmarked"}<span class="unmarked" data-testid="unmarked-note"> · not marked done</span>{/if}</span>
+              <span class="title">{it.title}{#if note?.kind === "unmarked"}<span class="unmarked" data-testid="unmarked-note"> · not marked done</span>{:else if note?.kind === "harness"}<span class="unmarked" data-testid="harness-note"> · {note.label}</span>{:else if note?.kind === "unresolved"}<span class="unmarked" data-testid="unresolved-note"> · not done: {note.reason}</span>{/if}</span>
             </li>
           {/each}
         </ul>

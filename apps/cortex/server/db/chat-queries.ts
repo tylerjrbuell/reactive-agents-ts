@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { generateTaskId } from "@reactive-agents/core";
-import { strategyRunFromStorage } from "@reactive-agents/ui-core";
+import { runNotesFromStorage, strategyRunFromStorage } from "@reactive-agents/ui-core";
 import { readStoredAttachments, readStoredDeliverables, readStoredOutcome, type StoredTurnTrace } from "../services/chat-turn-trace.js";
 import { migrateLegacyCliToolsInConfig } from "../services/legacy-cli-tools.js";
 
@@ -280,6 +280,7 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
           const deliverables = readStoredDeliverables(parsed.deliverables);
           const attachments = readStoredAttachments(parsed.attachments);
           const strategyRun = strategyRunFromStorage(parsed.strategyRun);
+          const runNotes = runNotesFromStorage(parsed.runNotes);
           trace = {
             reasoningSteps: parsed.reasoningSteps,
             toolCalls: parsed.toolCalls,
@@ -304,6 +305,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
             ...(typeof parsed.continuedFrom === "string" && parsed.continuedFrom !== "" ? { continuedFrom: parsed.continuedFrom } : {}),
             // The strategy card's folded phases (chat-turn-trace.ts); absent on older rows.
             ...(strategyRun ? { strategyRun } : {}),
+            // How the run ended beyond success or failure: to-do outcome, unread-results note, authority (ui-core run-notes).
+            ...(runNotes ? { runNotes } : {}),
           };
         }
       } catch {

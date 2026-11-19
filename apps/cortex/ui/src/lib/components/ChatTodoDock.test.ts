@@ -1,6 +1,7 @@
 /** Server-render of the to-do dock: in-progress rows reuse the header's spinner ring, not a rotated icon. */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
+import { checklistReconciliationOf } from "@reactive-agents/ui-core";
 import { renderComponent } from "./kit/test-render.js";
 
 const file = join(import.meta.dir, "ChatTodoDock.svelte");
@@ -43,5 +44,37 @@ describe("ChatTodoDock spinner", () => {
       }),
     );
     expect(html).not.toContain("todo-row-spin");
+  });
+});
+
+describe("ChatTodoDock run reconciliation", () => {
+  test("shows where harness-closed rows came from and why unresolved rows stayed open", async () => {
+    const reconciliation = checklistReconciliationOf({
+      total: 3,
+      done: 2,
+      closedByHarness: [
+        { id: "1", title: "Search", provenance: "harness:evidence" },
+        { id: "2", title: "Write", provenance: "harness:answer" },
+      ],
+      unresolved: [{ id: "3", title: "Email", status: "pending", reason: "no evidence" }],
+    });
+    const html = markup(
+      await renderComponent(file, {
+        items: [
+          { id: "1", title: "Search", status: "completed" },
+          { id: "2", title: "Write", status: "completed" },
+          { id: "3", title: "Email", status: "pending" },
+        ],
+        enabled: true,
+        turnComplete: true,
+        reconciliation,
+        onChange: () => undefined,
+      }),
+    );
+    expect(html).toContain("closed by the harness from a tool result");
+    expect(html).toContain("closed by the harness: the answer delivered it");
+    expect(html).toContain('data-testid="unresolved-note"');
+    expect(html).toContain("not done: no evidence recorded");
+    expect(html).not.toContain("not marked done");
   });
 });

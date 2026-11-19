@@ -49,6 +49,25 @@ describe("run ending", () => {
     expect(summary(db, "r-ok")).toMatchObject({ status: "completed", ending: "succeeded" });
   });
 
+  // A run the strategy accepted after a capped pass (authority `strategy-accepted`) finished: the pass's
+  // terminator (`max_iterations`) must not make the Runs table read it as stopped or failed.
+  it("a strategy-accepted finish after a capped pass is completed/succeeded; an unknown authority changes nothing", async () => {
+    const accepted = { ...succeeded, terminatedBy: "max_iterations", outcome: { status: "completed", terminatedBy: "max_iterations", authority: "strategy-accepted" } };
+    const unknown = { ...succeeded, outcome: { status: "completed", authority: "an-authority-from-the-future" } };
+    const db = new Database(":memory:");
+    applySchema(db);
+    const layer = CortexIngestServiceLive(db).pipe(Layer.provide(CortexEventBridgeLive));
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* CortexIngestService;
+        yield* svc.handleEvent("a", "r-acc", msg("r-acc", accepted));
+        yield* svc.handleEvent("a", "r-unk", msg("r-unk", unknown));
+      }).pipe(Effect.provide(layer)),
+    );
+    expect(summary(db, "r-acc")).toMatchObject({ status: "completed", ending: "succeeded" });
+    expect(summary(db, "r-unk")).toMatchObject({ status: "completed", ending: "succeeded" });
+  });
+
   it("backfills runs stored before the column from their last AgentCompleted; recompute keeps it", () => {
     const db = new Database(":memory:");
     applySchema(db);

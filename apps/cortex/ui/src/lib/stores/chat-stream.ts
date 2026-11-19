@@ -14,6 +14,7 @@ import {
   initialModelWait,
   liveTokensPerSecond,
   foldStrategyRun,
+  runNotesOf,
   endStrategyRun,
   initialStrategyRun,
   strategyStepFromWire,
@@ -555,6 +556,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
         // Failed / partial / abstained runs and file-only answers: `output` is the whole
         // answer (often ""), the live text was narration (turn-ending.ts).
         const ended = completionEnding(event);
+        const runNotes = runNotesOf(event);
         const outputIsFinal = ended.runFailed !== undefined || (ended.deliverables?.some((d) => d.produced) ?? false);
         apply((turns) =>
           patchTurn(turns, id, (t) => ({
@@ -570,6 +572,7 @@ export async function streamAssistantTurn(opts: StreamTurnOptions): Promise<Stre
             ...(trace.structured !== undefined ? { structured: trace.structured } : {}),
             ...(ended.runFailed ? { runFailed: ended.runFailed } : {}),
             ...(ended.deliverables ? { deliverables: ended.deliverables } : {}),
+            ...(runNotes ? { runNotes } : {}),
           })),
         );
         return;

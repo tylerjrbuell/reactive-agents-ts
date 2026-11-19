@@ -1,4 +1,4 @@
-import type { AttachmentMeta, ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent, RecalledMemoryView, RunSkillsView, StrategyRunState, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
+import type { AttachmentMeta, ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent, RecalledMemoryView, RunNotes, RunSkillsView, StrategyRunState, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
 import { restoreSubAgents } from "../sub-agent-view.js";
 import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
 import type { ChatToolCall, ChatTurn } from "./chat-store.js";
@@ -29,6 +29,8 @@ type PersistedTrace = {
   attachments?: readonly AttachmentMeta[];
   /** The strategy's settled phases, so its card outlives the turn and a reload (absent on older rows). */
   strategyRun?: StrategyRunState;
+  /** How the run ended beyond success or failure: to-do outcome, unread-results note, authority (absent on older rows). */
+  runNotes?: RunNotes;
 };
 
 /** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
@@ -66,5 +68,6 @@ export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTur
     ...(trace.structured ? { structured: trace.structured } : {}),
     ...(trace.attachments && trace.attachments.length > 0 ? { attachments: trace.attachments } : {}),
     ...(trace.strategyRun ? { strategyRun: trace.strategyRun } : {}),
+    ...(trace.runNotes ? { runNotes: trace.runNotes } : {}),
   };
 }

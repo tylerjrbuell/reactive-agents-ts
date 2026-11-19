@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import type { ChecklistSnapshotWire } from "@reactive-agents/ui-core";
+import { checklistReconciliationOf, type ChecklistSnapshotWire } from "@reactive-agents/ui-core";
 import { inferredFromChecklist, todoRowNote, addTodo, clearCompleted, removeTodo, todoDockMode, todoToolEnabled, todoDockView, todoFromChecklist, toggleTodo, type TodoItem } from "./todo-dock.js";
 
 const L: TodoItem[] = [
@@ -121,5 +121,47 @@ describe("inferred overlay", () => {
   it("a user un-tick (pending) drops the inferred note", () => {
     const items = toggleTodo(todoFromChecklist(snap), "1");
     expect(todoRowNote(items[0]!, inferredFromChecklist(snap), false)).toBeUndefined();
+  });
+});
+
+describe("todoRowNote with the run's reconciliation (harness closures and unresolved rows)", () => {
+  const rec = checklistReconciliationOf({
+    total: 3,
+    done: 2,
+    closedByHarness: [
+      { id: "1", title: "one", provenance: "harness:evidence", toolCallId: "call-7" },
+      { id: "2", title: "two", provenance: "harness:answer" },
+    ],
+    unresolved: [{ id: "3", title: "three", status: "pending", reason: "no evidence" }],
+  });
+  const rows: TodoItem[] = [
+    { id: "1", title: "one", status: "completed" },
+    { id: "2", title: "two", status: "completed" },
+    { id: "3", title: "three", status: "pending" },
+  ];
+
+  it("a row the harness closed says where its done-ness came from, with the evidence call", () => {
+    expect(todoRowNote(rows[0]!, {}, true, rec)).toEqual({
+      kind: "harness",
+      label: "closed by the harness from a tool result",
+      tooltip: "closed by the harness from a tool result (call call-7)",
+    });
+    expect(todoRowNote(rows[1]!, {}, true, rec)).toMatchObject({ kind: "harness", label: "closed by the harness: the answer delivered it" });
+  });
+
+  it("a row that ended with no evidence reads unresolved once the turn finished, not before", () => {
+    expect(todoRowNote(rows[2]!, {}, true, rec)).toEqual({ kind: "unresolved", reason: "no evidence recorded" });
+    expect(todoRowNote(rows[2]!, {}, false, rec)).toBeUndefined();
+  });
+
+  it("a user edit that un-ticks a harness-closed row, or no reconciliation, falls back to the old notes", () => {
+    expect(todoRowNote({ id: "1", title: "one", status: "pending" }, {}, true, rec)).toEqual({ kind: "unmarked" });
+    expect(todoRowNote(rows[2]!, {}, true, undefined)).toEqual({ kind: "unmarked" });
+    expect(todoRowNote(rows[0]!, {}, true, undefined)).toBeUndefined();
+  });
+
+  it("an unknown provenance still reads as closed by the harness", () => {
+    const odd = checklistReconciliationOf({ total: 1, done: 1, closedByHarness: [{ id: "1", title: "one", provenance: "harness:new-kind" }], unresolved: [] });
+    expect(todoRowNote(rows[0]!, {}, true, odd)).toMatchObject({ kind: "harness", label: "closed by the harness" });
   });
 });

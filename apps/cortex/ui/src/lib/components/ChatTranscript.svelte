@@ -13,6 +13,7 @@
   import { reactLoopOf, strategyStatusOf } from "@reactive-agents/ui-core";
   import { planCardModel } from "$lib/checklist-view.js";
   import ChatRunEndingNote from "$lib/components/ChatRunEndingNote.svelte";
+  import RunNotes from "$lib/components/run/RunNotes.svelte";
   import ChatRunFailedNote from "$lib/components/ChatRunFailedNote.svelte";
   import { abstentionInAnswer, bareEnding } from "$lib/turn-ending.js";
   import type { RunStopKind } from "$lib/run-stop.js";
@@ -196,6 +197,7 @@
     <!-- Ended with no recorded outcome (older rows): still a cause line and Retry, never a bare tick. -->
     <ChatRunFailedNote error={undefined} {onRetry} />
   {/if}
+  {#if !turn.streaming}<RunNotes notes={turn.runNotes} />{/if}
   {#if turn.structured && !turn.streaming}
     <StructuredResult object={turn.structured.object} error={turn.structured.error} report={turn.structured.report} />
   {:else}

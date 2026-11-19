@@ -6,6 +6,7 @@ import {
   foldTurnTrace,
   initialStrategyRun,
   initialTurnTrace,
+  runNotesOf,
   strategyRunForStorage,
   strategyStepFromWire,
   type StrategyRunState,
@@ -15,6 +16,7 @@ import {
   type InterruptedBy,
   type RunCompletionLike,
   type RecalledMemoryView,
+  type RunNotes,
   type RunSkillsView,
   type StepEvent,
   type TurnDeliverable,
@@ -113,6 +115,12 @@ export type StoredTurnTrace = Omit<TurnTrace, "outcome"> & {
    * so the strategy card survives the turn ending and a reload. Absent on older rows and for a strategy that reported none.
    */
   readonly strategyRun?: StrategyRunState;
+  /**
+   * What the run reported about how it ended, beyond success or failure (ui-core `runNotesOf`): the to-do
+   * outcome with its harness closures and unresolved rows, an answer written from unread tool results,
+   * and the terminal authority. Absent on older rows and for a run that reported none.
+   */
+  readonly runNotes?: RunNotes;
 };
 
 /**
@@ -252,11 +260,13 @@ export function withContinuedFrom(trace: StoredTurnTrace | undefined, parentRunI
 export class TurnTraceRecorder {
   private state = initialTurnTrace();
   private strategy = initialStrategyRun;
+  private notes: RunNotes | undefined;
 
   record(event: AgentStreamEvent | StepEvent): void {
     // The runtime's AgentStreamEvent is the producer of the wire union ui-core consumes.
     const ui = event as UiStreamEvent;
     this.state = foldTurnTrace(this.state, ui);
+    if (event._tag === "StreamCompleted") this.notes = runNotesOf(event);
     // StepEvent is in the ui-core wire union; the runtime's own event type does not list it.
     if (ui._tag === "StepEvent") {
       const step = strategyStepFromWire(ui.step);
@@ -282,10 +292,13 @@ export class TurnTraceRecorder {
   finish(): StoredTurnTrace | undefined {
     const trace = finishTurnTrace(this.state, { resultCap: STORED_RESULT_CAP });
     const strategyRun = strategyRunForStorage(this.strategy);
-    // A strategy card is worth keeping even for a turn with no thinking or tool calls.
-    if (trace === undefined) return strategyRun ? { reasoningSteps: [], toolCalls: [], strategyRun } : undefined;
+    const runNotes = this.notes !== undefined ? { runNotes: this.notes } : {};
+    // A strategy card or the run's notes are worth keeping even for a turn with no thinking or tool calls.
+    if (trace === undefined) {
+      return strategyRun || this.notes ? { reasoningSteps: [], toolCalls: [], ...(strategyRun ? { strategyRun } : {}), ...runNotes } : undefined;
+    }
     const { outcome, ...rest } = trace;
-    return { ...rest, ...(outcome?.deliverables ? { deliverables: outcome.deliverables } : {}), ...(strategyRun ? { strategyRun } : {}) };
+    return { ...rest, ...(outcome?.deliverables ? { deliverables: outcome.deliverables } : {}), ...(strategyRun ? { strategyRun } : {}), ...runNotes };
   }
 }
 

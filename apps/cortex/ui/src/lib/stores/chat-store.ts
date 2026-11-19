@@ -9,7 +9,7 @@ import { ATTACH_ACTIVE_TURN, chatStreamEndpoint, fetchActiveTurn, resumedTurns, 
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import { turnModelOf } from "../chat-live-config.js";
-import type { AttachmentMeta, ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent, RecalledMemoryView, RunSkillsView, StrategyRunHolder, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
+import type { AttachmentMeta, ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent, RecalledMemoryView, RunNotes, RunSkillsView, StrategyRunHolder, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
 import { metaOf, requestOf, taggedDraftsOf, type DraftAttachment } from "../composer-attachments.js";
 import { keepThumbs } from "./composer-attachments.js";
 import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
@@ -92,6 +92,8 @@ export type ChatTurn = StrategyRunHolder & {
   subAgents?: ChatSubAgent[];
   /** Latest live checklist (goal checks + agent to-do) for this turn. Absent when none. */
   checklist?: ChecklistSnapshotWire;
+  /** What the run reported about how it ended: to-do outcome, an answer from unread results, the terminal authority (ui-core `RunNotes`). Absent when none. */
+  runNotes?: RunNotes;
   /** Latest non-accept decision of the shared exit gate this turn (same for every strategy). Absent when none. */
   exitGate?: { decision: "repair" | "handoff" | "accept-unfinished"; outstanding: readonly string[]; iteration: number };
   cancelled?: boolean;

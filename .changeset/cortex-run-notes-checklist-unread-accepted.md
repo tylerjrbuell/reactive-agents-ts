@@ -1,0 +1,6 @@
+---
+"@reactive-agents/cortex": patch
+"@reactive-agents/ui-core": patch
+---
+
+Cortex shows how a run ended beyond success or failure, from the framework's own run metadata. The to-do outcome (`extensions.checklist`) reads as "To-do 3/5" with each row the harness closed marked by where its done-ness came from (a tool result, or the accepted answer) and an "Unresolved" list with each row's reason, in the to-do dock, under the answer, and in the Run view; the `checklist-unresolved` guard event reads as one quiet line in the trace feed, not an error. A turn whose answer was written from tool results the model had not read says so in a small note. A run the strategy accepted after a capped pass (authority `strategy-accepted`) reads as an accepted finish: completed in the Runs table, never failed. Notes are stored with the turn, so a reload shows them; unknown provenance, reason or authority values degrade to a neutral label. ui-core adds `runNotesOf`, `runNotesFromStorage`, `runNotesWorthShowing`, `checklistReconciliationOf`, `checklistFromCompletion`, `checklistUnresolvedOfGuard`, `terminalAuthorityView`, `terminalAuthorityOf`, `unreadResultsNoteOf` and an optional `authority` on `TurnOutcome`.

@@ -827,7 +827,7 @@
   <div class="mx-auto w-full max-w-[var(--cortex-chat-col)]">
     <ChatDocumentFailures failures={documentFailures} />
     <ChatGoalBar {sessionId} turnCount={turns.length} />
-    {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} inferred={dockInferred} turnComplete={dockTurnComplete} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
+    {#if !$planHidden}<ChatTodoDock items={todo} busy={sending} inferred={dockInferred} turnComplete={dockTurnComplete} reconciliation={lastChecklistTurn?.runNotes?.checklist} enabled={todoToolEnabled(cfg)} onChange={(next) => void chatStore.setTodo(next)} />{/if}
   </div>
   <ChatVoiceBar />
   <ChatComposer

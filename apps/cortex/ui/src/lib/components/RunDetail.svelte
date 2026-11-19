@@ -26,6 +26,8 @@
   import RunFinalDeliverable from "$lib/components/RunFinalDeliverable.svelte";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import { runEnding } from "$lib/turn-ending.js";
+  import RunNotes from "$lib/components/run/RunNotes.svelte";
+  import { runNotesFromRunEvents } from "$lib/run-notes-view.js";
   import { confirmAction } from "$lib/stores/confirm-store.js";
   import { createRunStore, isRunSettled, type CortexLiveMsg, type RunState } from "$lib/stores/run-store.js";
   import { createSignalStore } from "$lib/stores/signal-store.js";
@@ -128,6 +130,8 @@
   });
   /** How the run ended when it did not succeed (failed, partial, abstained), from `AgentCompleted`. */
   const ending = $derived(runEnding($runStore.events));
+  /** Notes about how the run ended that are not a failure: the to-do outcome, an accepted finish (`run-notes-view.ts`). */
+  const runNotes = $derived(runNotesFromRunEvents($runStore.events));
   const failureMessage = $derived.by(() => {
     if ($runStore.status !== "failed") return "";
     const ev = $runStore.events.find((e) => e.type === "TaskFailed" || (e.type === "AgentCompleted" && e.payload.success === false));
@@ -486,6 +490,8 @@
       {#if $runStore.status === "failed"}
         <RunEndingBanner {ending} cause={failureMessage} />
       {/if}
+      <!-- Quiet, informational: a finish the strategy accepted, the to-do outcome, an answer from unread results. -->
+      <RunNotes notes={runNotes} />
       <RunFinalDeliverable
         status={$runStore.status}
         deliverableText={finalDeliverableText}

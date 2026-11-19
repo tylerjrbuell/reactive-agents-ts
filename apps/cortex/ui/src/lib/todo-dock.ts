@@ -1,4 +1,4 @@
-import type { ChecklistEvidenceWire, ChecklistSnapshotWire } from "@reactive-agents/ui-core";
+import { closuresById, unresolvedById, type ChecklistEvidenceWire, type ChecklistReconciliationView, type ChecklistSnapshotWire } from "@reactive-agents/ui-core";
 import { inferredTooltip, type RowNote } from "./checklist-view.js";
 
 /** Status of one conversation to-do row (the persisted shape; `done` in the live checklist is `completed` here). */
@@ -38,12 +38,22 @@ export function inferredFromChecklist(snapshot: ChecklistSnapshotWire | undefine
   return out;
 }
 
-/** Per-row note for the dock: inferred (done by evidence) or unmarked (pending after the turn completed). */
+/**
+ * Per-row note for the dock: harness-closed (done from recorded evidence, with provenance), inferred
+ * (done by ledger evidence), unresolved (open with no evidence at the end of the run) or unmarked
+ * (pending after the turn completed). `reconciliation` is the latest run's to-do outcome (ui-core
+ * `ChecklistReconciliationView`); its rows match by id and only while the run's list is still the dock's.
+ */
 export function todoRowNote(
   item: TodoItem,
   inferred: Readonly<Record<string, ChecklistEvidenceWire>>,
   turnComplete: boolean,
+  reconciliation?: ChecklistReconciliationView,
 ): RowNote | undefined {
+  const closure = item.status === "completed" ? closuresById(reconciliation)[item.id] : undefined;
+  if (closure !== undefined) return { kind: "harness", label: closure.label, tooltip: `${closure.label}${closure.toolCallId !== undefined ? ` (call ${closure.toolCallId})` : ""}` };
+  const open = item.status !== "completed" ? unresolvedById(reconciliation)[item.id] : undefined;
+  if (open !== undefined && turnComplete) return { kind: "unresolved", reason: open.reasonLabel };
   const ev = inferred[item.id];
   if (item.status === "completed" && ev !== undefined) return { kind: "inferred", tooltip: inferredTooltip(ev) };
   if (turnComplete && item.status === "pending") return { kind: "unmarked" };
