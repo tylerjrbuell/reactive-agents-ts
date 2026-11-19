@@ -41,7 +41,7 @@
   let draft = $state("");
   const view = $derived(todoDockView(items));
   const mode = $derived(todoDockMode(items, enabled));
-  const ICON = { pending: "circle", in_progress: "retry", completed: "check-circle" } as const;
+  const ICON = { pending: "circle", completed: "check-circle" } as const;
 
   function add() {
     if (busy || draft.trim().length === 0) return;
@@ -102,6 +102,8 @@
                   <Tooltip text={note.tooltip} class="ico-wrap">
                     <span class="ico-inferred" data-testid="inferred-ico"><Icon name="check" size="sm" /></span>
                   </Tooltip>
+                {:else if it.status === "in_progress"}
+                  <span class="ico ico-run"><span class="spin" data-testid="todo-row-spin" aria-hidden="true"></span></span>
                 {:else}
                   <span class="ico"><Icon name={ICON[it.status]} size="sm" /></span>
                 {/if}
@@ -180,7 +182,9 @@
   .tick { flex: none; display: inline-flex; padding: 0; background: none; border: 0; cursor: pointer; color: var(--cortex-text-2); }
   .tick:disabled { cursor: default; opacity: 0.6; }
   .ico { display: inline-flex; padding-top: 2px; }
-  .row[data-status="completed"] .ico, .row[data-status="in_progress"] .ico { color: var(--cortex-ok); }
+  .row[data-status="completed"] .ico { color: var(--cortex-ok); }
+  /* In-progress row marker = the header's .spin ring, centered in the same 14px slot the icons use. */
+  .ico-run { width: 14px; height: 14px; align-items: center; justify-content: center; box-sizing: content-box; padding-top: 2px; }
 
   .unmarked { color: var(--cortex-text-2); font-style: italic; opacity: 0.8; }
   /* Inferred = done by deterministic evidence, not marked: dashed ring instead of the solid check. */
@@ -212,7 +216,6 @@
   }
   @media (prefers-reduced-motion: no-preference) {
     .spin { animation: dock-spin 0.9s linear infinite; }
-    .row[data-status="in_progress"] .ico { animation: dock-spin 2s linear infinite; }
   }
   @keyframes dock-spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) {
