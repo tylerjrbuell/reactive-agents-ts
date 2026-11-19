@@ -70,6 +70,8 @@ export type { ReportedModelMetadata } from "./capability-reported.js";
  */
 export {
   resolveCapability,
+  describeCapabilityResolution,
+  type CapabilityResolution,
   // Public because the eager probe cannot cover every deployment: an air-gapped
   // host, a proxied gateway that doesn't expose /api/show, or a model the app
   // already knows the window for. Registering a capability once at startup is

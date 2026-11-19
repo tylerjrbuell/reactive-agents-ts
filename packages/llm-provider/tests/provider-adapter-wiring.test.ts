@@ -49,9 +49,10 @@ mock.module("../src/adapter.js", () => ({
     caps: { supportsToolCalling: boolean },
     tier?: string,
     modelId?: string,
+    calibration?: Parameters<typeof selectAdapter>[3],
   ) => {
     if (overrideAdapter) return { adapter: overrideAdapter };
-    return passthroughSelectAdapter(caps, tier, modelId);
+    return passthroughSelectAdapter(caps, tier, modelId, calibration);
   },
 }));
 

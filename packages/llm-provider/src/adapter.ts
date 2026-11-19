@@ -284,6 +284,7 @@ import {
   loadCalibration,
   buildCalibratedAdapter,
   type ProfileOverrides,
+  type ModelCalibration,
 } from "./calibration.js";
 
 /**
@@ -339,19 +340,24 @@ export function composeAdapters(
  * @param _capabilities - provider capabilities (reserved for future use)
  * @param tier - model tier ("local" | "mid" | "large" | "frontier")
  * @param modelId - specific model identifier for calibration lookup
+ * @param calibration - resolved calibration input. `"auto"` (default) loads the
+ *   shipped/cached calibration for `modelId`; `"skip"` applies none (pure tier
+ *   adapter); a ModelCalibration object is used directly instead of any file.
  */
 export function selectAdapter(
   _capabilities: { supportsToolCalling: boolean },
   tier?: string,
   modelId?: string,
+  calibration: "auto" | "skip" | ModelCalibration = "auto",
 ): AdapterSelection {
   const tierAdapter =
     tier === "local" ? localModelAdapter
     : tier === "mid" ? midModelAdapter
     : defaultAdapter;
 
-  if (modelId) {
-    const cal = loadCalibration(modelId);
+  if (calibration === "skip") return { adapter: tierAdapter };
+  if (calibration !== "auto" || modelId) {
+    const cal = calibration !== "auto" ? calibration : loadCalibration(modelId as string);
     if (cal) {
       const { adapter: calibrated, profileOverrides } = buildCalibratedAdapter(cal);
       return { adapter: composeAdapters(tierAdapter, calibrated), profileOverrides };

@@ -245,3 +245,34 @@ function resolveCapabilityTiers(
 export function warnCapabilityFallback(provider: string, model: string): void {
   warnFallbackOnce(provider, model);
 }
+
+/**
+ * Trace-ready summary of how a Capability was resolved. Additive: a consumer
+ * (runtime/reasoning) can emit it as a `capability-resolved` event so a run
+ * records which tier supplied the numbers it ran with.
+ */
+export interface CapabilityResolution {
+  readonly provider: string;
+  readonly model: string;
+  /** Resolution tier: probe | static-table | inferred | user | fallback. */
+  readonly source: Capability["source"];
+  readonly tier: Capability["tier"];
+  readonly recommendedNumCtx: number;
+  readonly supportsThinkingMode: boolean;
+}
+
+/**
+ * Project a resolved {@link Capability} onto its trace-relevant fields.
+ *
+ * @param cap - the result of {@link resolveCapability}
+ */
+export function describeCapabilityResolution(cap: Capability): CapabilityResolution {
+  return {
+    provider: cap.provider,
+    model: cap.model,
+    source: cap.source,
+    tier: cap.tier,
+    recommendedNumCtx: cap.recommendedNumCtx,
+    supportsThinkingMode: cap.supportsThinkingMode,
+  };
+}
