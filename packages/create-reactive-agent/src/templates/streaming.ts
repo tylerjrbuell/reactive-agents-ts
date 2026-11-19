@@ -1,6 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
-import { renderEnvGuard } from "./shared.js";
+import { renderEnvGuard, renderFailHelper } from "./shared.js";
 
 export const streamingTemplate: Template = {
   name: "streaming",
@@ -22,7 +22,8 @@ const agent = await ReactiveAgents.create()
   .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
   .withMaxIterations(3)
-  .build();
+  .build()
+  .catch(fail);
 
 const task = process.argv.slice(2).join(" ") || "Write a haiku about token streaming.";
 
@@ -42,12 +43,22 @@ for await (const event of agent.runStream(task)) {
       // one reasoning iteration finished (event.iteration / event.maxIterations)
       break;
     case "StreamCompleted":
-      console.log(\`\\n\\n[done] steps=\${event.metadata.stepsCount} cost=$\${event.metadata.cost.toFixed(6)}\`);
+      // A failed run (e.g. a rejected API key) still completes the stream:
+      // \`event.error\` carries the cause.
+      if (event.error) {
+        console.error(\`\\n[error] \${event.error}\`);
+        process.exitCode = 1;
+      } else {
+        console.log(\`\\n\\n[done] steps=\${event.metadata.stepsCount} cost=$\${event.metadata.cost.toFixed(6)}\`);
+      }
       break;
     case "StreamError":
       console.error(\`\\n[error] \${event.cause}\`);
+      process.exitCode = 1;
       break;
   }
 }
+
+${renderFailHelper()}
 `;
 }

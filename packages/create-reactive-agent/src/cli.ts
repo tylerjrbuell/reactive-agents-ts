@@ -119,6 +119,29 @@ function isValidPM(s: string): s is PackageManager {
   return s === "bun" || s === "npm" || s === "pnpm" || s === "yarn";
 }
 
+const PROVIDERS: readonly Provider[] = ["anthropic", "openai", "google", "groq", "xai", "ollama"];
+const PACKAGE_MANAGERS: readonly PackageManager[] = ["bun", "npm", "pnpm", "yarn"];
+
+/**
+ * An explicit but unknown --template / --provider / --pm is a typo, not a
+ * request for the default: scaffolding "minimal" for `--template=nope` and
+ * exiting 0 hides the mistake. Same message shape as `rax init`.
+ */
+function invalidFlagError(flags: ReadonlyMap<string, string | boolean>): string | undefined {
+  const checks: ReadonlyArray<readonly [string, (s: string) => boolean, readonly string[]]> = [
+    ["template", isValidTemplate, listTemplates().map((t) => t.name)],
+    ["provider", isValidProvider, PROVIDERS],
+    ["pm", isValidPM, PACKAGE_MANAGERS],
+  ];
+  for (const [key, isValid, valid] of checks) {
+    const value = getStr(flags, key);
+    if (value !== undefined && !isValid(value)) {
+      return `Invalid ${key}: ${value}. Valid options: ${valid.join(", ")}`;
+    }
+  }
+  return undefined;
+}
+
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const { positional, flags } = parseArgs(argv);
@@ -130,6 +153,12 @@ async function main(): Promise<void> {
   if (flags.has("version") || flags.has("v")) {
     console.log(VERSION);
     return;
+  }
+
+  const flagError = invalidFlagError(flags);
+  if (flagError) {
+    console.error(`Error: ${flagError}`);
+    process.exit(1);
   }
 
   const skipPrompts = flags.has("yes") || flags.has("y") || !process.stdin.isTTY;

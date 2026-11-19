@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import * as path from "node:path";
 import type { ScaffoldOptions, ScaffoldResult } from "../types.js";
 import { renderTemplate } from "../templates/index.js";
-import { providerEnvVar } from "./provider-config.js";
+import { providerDefaultModel, providerEnvVar } from "./provider-config.js";
 
 export async function scaffold(opts: ScaffoldOptions): Promise<ScaffoldResult> {
   const targetDir = path.resolve(opts.dir);
@@ -53,7 +53,8 @@ function buildNextSteps(opts: ScaffoldOptions): readonly string[] {
     // placeholder as the key. Copy the stub, then set the real value.
     steps.push(`cp .env.example .env   # then set ${envVar} in .env`);
   } else if (opts.provider === "ollama") {
-    steps.push("# Ensure Ollama is running: https://ollama.com");
+    // Without the pull the first run fails with "model not found".
+    steps.push(`ollama pull ${providerDefaultModel("ollama")}   # Ollama must be running: https://ollama.com`);
   }
 
   const runCmd = opts.packageManager === "npm" ? "npm run start" : `${opts.packageManager} start`;

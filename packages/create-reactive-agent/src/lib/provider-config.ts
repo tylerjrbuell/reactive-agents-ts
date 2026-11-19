@@ -37,7 +37,9 @@ export function providerDefaultModel(p: Provider): string {
     case "xai":
       return "grok-4";
     case "ollama":
-      return "qwen3:14b";
+      // Same model the docs quickstart pulls (`ollama pull qwen3:4b`): a
+      // ~2.5 GB first download, and the README / next steps name it.
+      return "qwen3:4b";
   }
 }
 

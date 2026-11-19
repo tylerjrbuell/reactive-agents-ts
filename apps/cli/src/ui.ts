@@ -10,6 +10,18 @@ const GREEN = "#22c55e";
 const RED = "#ef4444";
 const DIM_COLOR = "#6b7280";
 
+// chalk 5 turns color off for a non-TTY stdout but ignores NO_COLOR
+// (https://no-color.org). Honor it once here, on the shared chalk instance,
+// so every chalk call in the CLI follows it. FORCE_COLOR still wins.
+if (process.env.NO_COLOR && !("FORCE_COLOR" in process.env)) {
+  chalk.level = 0;
+}
+
+/** True when the CLI may emit ANSI color: a TTY stdout (or FORCE_COLOR) and no NO_COLOR. */
+export function colorEnabled(): boolean {
+  return chalk.level > 0;
+}
+
 // ── Preserved API (internals upgraded) ────────────────────
 
 export function color(text: string, _ansi: string): string {

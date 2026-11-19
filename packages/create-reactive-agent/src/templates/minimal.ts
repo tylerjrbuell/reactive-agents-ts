@@ -1,6 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
-import { renderEnvGuard } from "./shared.js";
+import { renderEnvGuard, renderFailHelper } from "./shared.js";
 
 export const minimalTemplate: Template = {
   name: "minimal",
@@ -22,15 +22,18 @@ const agent = await ReactiveAgents.create()
   .withProvider("${providerRuntimeName(opts.provider)}")
   .withModel("${model}")
   .withMaxIterations(3)
-  .build();
+  .build()
+  .catch(fail);
 
 const question = process.argv.slice(2).join(" ") || "What is the capital of France?";
 
 console.log(\`> \${question}\\n\`);
 
-const result = await agent.run(question);
+const result = await agent.run(question).catch(fail);
 
 console.log(result.output);
 console.log(\`\\nSteps: \${result.metadata.stepsCount} | Cost: $\${result.metadata.cost.toFixed(6)}\`);
+
+${renderFailHelper()}
 `;
 }

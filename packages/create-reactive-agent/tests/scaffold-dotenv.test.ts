@@ -91,7 +91,9 @@ describe("generated entry .env loading (W0.2)", () => {
   test("ollama entry needs neither loader nor guard", () => {
     const entry = entryContent(baseOpts({ provider: "ollama" }));
     expect(entry).not.toContain("process.loadEnvFile");
-    expect(entry).not.toContain("process.exit(1)");
+    // process.exit(1) alone is not the guard: the fail() helper uses it too.
+    expect(entry).not.toContain("Missing ");
+    expect(entry).not.toContain("process.env.");
   });
 });
 

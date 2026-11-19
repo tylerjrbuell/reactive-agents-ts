@@ -19,7 +19,7 @@ import { runDiscover } from "./commands/discover.js";
 import { runDeploy } from "./commands/deploy/index.js";
 import { runTrace } from "./commands/trace.js";
 import { runSkills } from "./commands/skills.js";
-import { runDiagnose } from "./commands/diagnose.js";
+import { runDiagnose, DIAGNOSE_SUBCOMMANDS } from "./commands/diagnose.js";
 import { runMcp } from "./commands/mcp.js";
 import { listTemplates } from "create-reactive-agent";
 import { printBanner, printVersion, VERSION } from "./banner.js";
@@ -55,7 +55,7 @@ const HELP = `
     trace inspect <path>                              Parse and display a JSONL trace file
     trace compare <a> <b>                             Compare two trace files side-by-side
     diagnose <sub> [...]                              Forensic CLI for recorded traces
-                                                        list | replay | replay-run | grep | diff | debrief
+                                                        ${DIAGNOSE_SUBCOMMANDS.join(" | ")}
                                                         (run \`rax diagnose --help\` for details)
     skills export --agent <id> [--name <s>] [--out <file|dir>]   Export skills as SKILL.md
     skills import <file> --agent <id> [--rebind <id>] [--regenerate-id]   Import from SKILL.md

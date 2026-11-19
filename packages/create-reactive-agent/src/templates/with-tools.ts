@@ -1,6 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
-import { renderEnvGuard } from "./shared.js";
+import { renderEnvGuard, renderFailHelper } from "./shared.js";
 
 export const withToolsTemplate: Template = {
   name: "with-tools",
@@ -28,16 +28,19 @@ const agent = await ReactiveAgents.create()
   .withTools({ builtins: true })
   .withReasoning({ defaultStrategy: "reactive" })
   .withMaxIterations(6)
-  .build();
+  .build()
+  .catch(fail);
 
 const task = process.argv.slice(2).join(" ") ||
   "Compute (123 * 456) + (789 / 3) and explain the result.";
 
 console.log(\`> \${task}\\n\`);
 
-const result = await agent.run(task);
+const result = await agent.run(task).catch(fail);
 
 console.log(result.output);
 console.log(\`\\nSteps: \${result.metadata.stepsCount} | Strategy: \${result.metadata.strategyUsed ?? "default"} | Cost: $\${result.metadata.cost.toFixed(6)}\`);
+
+${renderFailHelper()}
 `;
 }

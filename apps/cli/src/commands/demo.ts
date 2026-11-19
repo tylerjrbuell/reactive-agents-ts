@@ -3,6 +3,8 @@ import chalk from 'chalk'
 import { Effect, Schema } from 'effect'
 import { ReactiveAgents, type ProviderName } from '@reactive-agents/runtime'
 import { defineTool } from '@reactive-agents/tools'
+import { resolveOllamaEndpoint } from '@reactive-agents/llm-provider'
+import { providerDefaultModel } from 'create-reactive-agent'
 import {
     banner,
     kv,
@@ -164,8 +166,12 @@ async function pickOllamaModel(models: string[]): Promise<string | null> {
     })
 }
 
-async function detectOllama(): Promise<ProviderInfo | null> {
-    const endpoint = process.env.OLLAMA_ENDPOINT ?? 'http://localhost:11434'
+/** Find a reachable Ollama with at least one pulled model (exported for tests). */
+export async function detectOllama(): Promise<ProviderInfo | null> {
+    // Same resolution the provider uses (OLLAMA_ENDPOINT, then Ollama's own
+    // OLLAMA_HOST, then OLLAMA_BASE, then localhost): detecting on a different
+    // host than the run talks to would pick a model that is not there.
+    const endpoint = resolveOllamaEndpoint()
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 2000)
     try {
@@ -217,8 +223,9 @@ async function detectProvider(): Promise<ProviderInfo | null> {
     if (process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY) {
         return {
             provider: 'gemini',
-            model: 'gemini-2.0-flash',
-            label: 'Google · gemini-2.0-flash',
+            // Same default the scaffolder writes (create-reactive-agent).
+            model: providerDefaultModel('google'),
+            label: `Google · ${providerDefaultModel('google')}`,
         }
     }
     return null
@@ -250,10 +257,9 @@ async function runLiveDemo(detected: ProviderInfo): Promise<void> {
 
     // Count distinct tools the agent invoked. The canonical source is
     // `metadata.toolCalls` (one entry per action step, derived from
-    // reasoningSteps by the execution engine). Fall back to debrief/legacy
-    // shapes if a build doesn't surface it.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const meta = (result.metadata ?? {}) as any
+    // reasoningSteps by the execution engine). Fall back to the debrief's
+    // per-tool tally when a build doesn't surface it.
+    const meta = result.metadata
     // Terminal/orchestration plumbing — not "real work" tools. Mirrors
     // META_TOOL_NAMES in sub-agent-executor.ts so the count reflects the
     // tools the agent actually used (e.g. get-hn-posts), not final-answer.
@@ -266,38 +272,25 @@ async function runLiveDemo(detected: ProviderInfo): Promise<void> {
         'recall',
         'checkpoint',
     ])
-    // Accepts string[] (names) or {name}[] (toolCalls / history entries).
-    const namesFrom = (arr: unknown): string[] =>
-        Array.isArray(arr)
-            ? Array.from(
-                  new Set(
-                      arr
-                          .map((t: unknown) =>
-                              typeof t === 'string'
-                                  ? t
-                                  : (t as { name?: string })?.name ?? ''
-                          )
-                          .filter(
-                              (n: string) =>
-                                  n.length > 0 && !META_TOOL_NAMES.has(n)
-                          )
-                  )
-              )
-            : []
-    const toolsUsedArr: string[] =
-        namesFrom(meta.toolCalls).length > 0
-            ? namesFrom(meta.toolCalls)
-            : namesFrom(
-                  meta.toolsUsed ??
-                      meta.debrief?.toolsUsed ??
-                      meta.toolCallHistory
-              )
-    const toolsCount = toolsUsedArr.length
+    const namesFrom = (
+        entries: ReadonlyArray<{ readonly name: string }> | undefined
+    ): string[] =>
+        Array.from(
+            new Set(
+                (entries ?? [])
+                    .map((t) => t.name)
+                    .filter((n) => n.length > 0 && !META_TOOL_NAMES.has(n))
+            )
+        )
+    const fromCalls = namesFrom(meta.toolCalls)
+    const toolsCount = (
+        fromCalls.length > 0 ? fromCalls : namesFrom(result.debrief?.toolsUsed)
+    ).length
 
     metricsSummary({
         duration: meta.duration ?? duration,
         steps: meta.stepsCount ?? 1,
-        tokens: meta.tokensUsed ?? 0,
+        tokens: meta.tokensUsed,
         tools: toolsCount,
         success: result.success,
     })

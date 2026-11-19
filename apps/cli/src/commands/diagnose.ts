@@ -17,6 +17,19 @@ import {
 } from "@reactive-agents/diagnose";
 import { fail, info } from "../ui.js";
 
+/** Every `rax diagnose` subcommand, in help order. `rax --help` lists these. */
+export const DIAGNOSE_SUBCOMMANDS = [
+  "list",
+  "replay",
+  "replay-run",
+  "grep",
+  "diff",
+  "debrief",
+  "signals",
+  "cause",
+  "attribute",
+] as const;
+
 const HELP = `
   Usage: rax diagnose <subcommand> [options]
 

@@ -1,6 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
-import { renderEnvGuard } from "./shared.js";
+import { renderEnvGuard, renderFailHelper } from "./shared.js";
 
 export const withMemoryTemplate: Template = {
   name: "with-memory",
@@ -27,19 +27,22 @@ const agent = await ReactiveAgents.create()
   .withModel("${model}")
   .withMemory()
   .withMaxIterations(4)
-  .build();
+  .build()
+  .catch(fail);
 
 const message = process.argv.slice(2).join(" ") ||
   "My favorite color is teal. Remember it.";
 
 console.log(\`> \${message}\\n\`);
 
-const result = await agent.run(message);
+const result = await agent.run(message).catch(fail);
 
 console.log(result.output);
 console.log(
   "\\nTip: run again with a follow-up like " +
     '"What is my favorite color?" — the agent recalls it from memory.',
 );
+
+${renderFailHelper()}
 `;
 }

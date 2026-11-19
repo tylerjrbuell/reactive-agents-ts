@@ -44,21 +44,27 @@ export default {
 
     // Pinned to OpenAI: its adapter is fetch-based and runs on workerd. The key
     // is injected from the Worker binding above.
-    const agent = await ReactiveAgents.create()
-      .withName("edge-assistant")
-      .withProvider("openai", { apiKey: env.OPENAI_API_KEY })
-      .withModel("gpt-4o-mini")
-      .withMaxIterations(3)
-      .build();
+    try {
+      const agent = await ReactiveAgents.create()
+        .withName("edge-assistant")
+        .withProvider("openai", { apiKey: env.OPENAI_API_KEY })
+        .withModel("gpt-4o-mini")
+        .withMaxIterations(3)
+        .build();
 
-    const result = await agent.run(question);
+      const result = await agent.run(question);
 
-    return Response.json({
-      question,
-      output: result.output,
-      steps: result.metadata.stepsCount,
-      cost: result.metadata.cost,
-    });
+      return Response.json({
+        question,
+        output: result.output,
+        steps: result.metadata.stepsCount,
+        cost: result.metadata.cost,
+      });
+    } catch (err) {
+      // A bad key or a provider outage: answer with the one-line cause.
+      const error = typeof err === "object" && err !== null && "message" in err ? String(err.message) : String(err);
+      return Response.json({ question, error }, { status: 502 });
+    }
   },
 };
 `;

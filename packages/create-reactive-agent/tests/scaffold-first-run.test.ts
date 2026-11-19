@@ -123,6 +123,78 @@ describe.skipIf(!READY)("first run, keyless, every template", () => {
         expect(run.stderr).toContain(`Missing ${KEY_VAR}`);
         expect(run.stderr).not.toMatch(/\n\s+at /);
       }, 45_000);
+
+      // A provider failure (bad key, Ollama down) must surface as one line and
+      // exit 1. Before the template's `.catch(fail)`, the rejected top-level
+      // await printed the framework source frame + `triggerUncaughtException`.
+      // Ollama on a closed port fails offline and needs no key.
+      test(`${name}: provider failure prints one line, not a stack trace`, async () => {
+        const dir = path.join(root, `${name}-down`);
+        await scaffold({
+          dir,
+          projectName: name,
+          template: name,
+          provider: "ollama",
+          packageManager: "bun",
+        });
+        symlinkSync(WORKSPACE_MODULES, path.join(dir, "node_modules"), "dir");
+
+        const run = spawnSync(BUN, ["run", "src/index.ts"], {
+          encoding: "utf8",
+          cwd: dir,
+          env: cleanEnv(root, { OLLAMA_HOST: "http://127.0.0.1:9" }),
+          timeout: 30_000,
+        });
+        expect(run.status).toBe(1);
+        expect(run.stderr).toContain("Error: Provider connection failed");
+        expect(run.stderr).not.toMatch(/\n\s+at /);
+        expect(run.stderr).not.toContain("triggerUncaughtException");
+        expect(run.stderr).not.toMatch(/\^\n/);
+      }, 45_000);
     }
   }
+});
+
+describe.skipIf(!READY)("with-approval-gates off a TTY", () => {
+  // A model that retries the gated call after every denial used to loop
+  // deny -> resume -> pause for minutes off a TTY and then print
+  // `Status: undefined`. The template now passes no onApproval without a TTY,
+  // so the run stops at the first gated call, the tool never runs, and the
+  // printed outcome is real.
+  test("stops at the first gated call, writes nothing, prints the paused status", async () => {
+    const dir = path.join(root, "approval-no-tty");
+    await scaffold({
+      dir,
+      projectName: "approval-no-tty",
+      template: "with-approval-gates",
+      provider: "anthropic",
+      packageManager: "bun",
+    });
+    symlinkSync(WORKSPACE_MODULES, path.join(dir, "node_modules"), "dir");
+
+    const entry = path.join(dir, "src/index.ts");
+    const source = readFileSync(entry, "utf8");
+    const call = `{ toolCall: { name: "file-write", args: { path: "poem.txt", content: "haiku" } } }`;
+    const patched = source.replace(
+      /\.withProvider\("[^"]+"\)/,
+      `.withProvider("test").withTestScenario([${Array(8).fill(call).join(", ")}, { text: "done" }])`,
+    );
+    expect(patched).not.toBe(source);
+    writeFileSync(entry, patched);
+
+    const run = spawnSync(BUN, ["run", "src/index.ts"], {
+      encoding: "utf8",
+      cwd: dir,
+      // stdin "ignore" is not a TTY: the CI / pipe case.
+      stdio: ["ignore", "pipe", "pipe"],
+      env: cleanEnv(dir, { [KEY_VAR]: "not-a-real-key" }),
+      timeout: 45_000,
+    });
+    expect(run.stderr).not.toMatch(/\n\s+at /);
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('[paused] "file-write" needs approval');
+    expect(run.stdout).toContain("Outcome: awaiting-approval");
+    expect(run.stdout).not.toContain("undefined");
+    expect(existsSync(path.join(dir, "poem.txt"))).toBe(false);
+  }, 60_000);
 });

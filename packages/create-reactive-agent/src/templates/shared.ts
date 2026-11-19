@@ -1,5 +1,5 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
-import { KEY_PLACEHOLDER, providerEnvVar, providerDisplayName } from "../lib/provider-config.js";
+import { KEY_PLACEHOLDER, providerDefaultModel, providerEnvVar, providerDisplayName } from "../lib/provider-config.js";
 import { ownPackageVersionRange } from "../lib/own-version.js";
 import { renderAgentsMd } from "./agents-md.js";
 
@@ -137,6 +137,24 @@ export function renderEnvGuard(opts: ScaffoldOptions): string {
 }`;
 }
 
+/**
+ * The provider-error seam emitted at the bottom of every Node-runnable
+ * template's src/index.ts. Templates attach it as `.catch(fail)` to `build()`
+ * and `run()` (a rejected top-level await otherwise prints the framework
+ * source frame plus a `triggerUncaughtException` stack on a bad key or an
+ * unreachable Ollama). `never` keeps `const result = await x.catch(fail)`
+ * typed as the resolved value. A function declaration, so it hoists: the
+ * example reads top to bottom with the helper out of the way at the end.
+ */
+export function renderFailHelper(): string {
+  return `// Print a failed build or run as one line (no stack trace) and exit 1.
+function fail(err: unknown): never {
+  const message = typeof err === "object" && err !== null && "message" in err ? err.message : err;
+  console.error(\`Error: \${message}\`);
+  process.exit(1);
+}`;
+}
+
 function renderReadme(opts: ScaffoldOptions): string {
   const envVar = providerEnvVar(opts.provider);
   const envBlock = envVar
@@ -151,7 +169,11 @@ ${
         ? "bun loads `.env` automatically at startup - no flag or export needed."
         : "The start script loads `.env` automatically (the generated entry reads it via `process.loadEnvFile` on Node >= 22.5). Exporting the variable in your shell also works."
     }`
-    : `Ollama runs locally. Install and start it from <https://ollama.com>.`;
+    : `Ollama runs locally. Install and start it from <https://ollama.com>, then pull the model this project uses:
+
+\`\`\`bash
+ollama pull ${providerDefaultModel(opts.provider)}
+\`\`\``;
 
   return `# ${opts.projectName}
 

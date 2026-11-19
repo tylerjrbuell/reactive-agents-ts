@@ -1,6 +1,6 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { providerDefaultModel, providerRuntimeName } from "../lib/provider-config.js";
-import { renderEnvGuard } from "./shared.js";
+import { renderEnvGuard, renderFailHelper } from "./shared.js";
 
 export const withStructuredOutputTemplate: Template = {
   name: "with-structured-output",
@@ -35,13 +35,14 @@ const agent = await ReactiveAgents.create()
   .withModel("${model}")
   .withOutputSchema(CityFact)
   .withMaxIterations(3)
-  .build();
+  .build()
+  .catch(fail);
 
 const question = process.argv.slice(2).join(" ") || "Tell me about Paris, France.";
 
 console.log(\`> \${question}\\n\`);
 
-const result = await agent.run(question);
+const result = await agent.run(question).catch(fail);
 
 if (result.object) {
   // result.object is fully typed as { city, country, population, funFact }.
@@ -52,5 +53,7 @@ if (result.object) {
   console.error("Schema parse failed:", result.objectError);
   console.log("Raw output:\\n" + result.output);
 }
+
+${renderFailHelper()}
 `;
 }

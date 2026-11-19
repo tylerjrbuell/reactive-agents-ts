@@ -246,6 +246,8 @@ describe("template-specific output", () => {
     expect(idx.content).toContain('from "node:readline/promises"');
     expect(idx.content).toContain("process.stdin.isTTY");
     expect(idx.content).not.toMatch(/const approve = true/);
+    // AgentResult.status is absent on a finished run: print outcome first.
+    expect(idx.content).toContain("result.outcome ?? result.status");
     // The generated file must be syntactically valid TypeScript.
     expect(() => new Bun.Transpiler({ loader: "ts" }).transformSync(idx.content)).not.toThrow();
   });
@@ -341,7 +343,9 @@ describe("template-specific output", () => {
   test("ollama template skips env-var check", () => {
     const files = renderTemplate(baseOpts({ provider: "ollama" }));
     const idx = files.find((f) => f.path === "src/index.ts")!;
-    expect(idx.content).not.toContain("process.exit(1)");
+    // process.exit(1) alone is not the guard: the fail() helper uses it too.
+    expect(idx.content).not.toContain("Missing ");
+    expect(idx.content).not.toContain("_API_KEY");
   });
 });
 
@@ -375,6 +379,14 @@ describe("scaffold (filesystem)", () => {
     const result = await scaffold(baseOpts({ provider: "ollama" }));
     const joined = result.nextSteps.join(" ");
     expect(joined).not.toContain("API_KEY");
+  });
+
+  test("ollama nextSteps and README name the model to pull (same as the docs quickstart)", async () => {
+    expect(providerDefaultModel("ollama")).toBe("qwen3:4b");
+    const result = await scaffold(baseOpts({ provider: "ollama" }));
+    expect(result.nextSteps.join("\n")).toContain("ollama pull qwen3:4b");
+    const readme = renderTemplate(baseOpts({ provider: "ollama" })).find((f) => f.path === "README.md")!;
+    expect(readme.content).toContain("ollama pull qwen3:4b");
   });
 
   test("cloudflare-worker nextSteps use .dev.vars + dev, not .env/start", async () => {
