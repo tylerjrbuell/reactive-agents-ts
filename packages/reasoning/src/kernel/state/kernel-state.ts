@@ -73,6 +73,7 @@ export interface KernelMeta {
 
   // ── Iteration control ──
   readonly maxIterations?: number;
+  readonly runMaxIterations?: number; // the RUN's budget over every pass (strategy-run.ts); sizes the repetition backstop. Absent: maxIterations
   readonly requiredTools?: readonly string[];
   /**
    * Opt-in "long horizon" guard profile (A2). Mirrored from
@@ -86,9 +87,8 @@ export interface KernelMeta {
   /**
    * D-2026-07-30-I: run-scoped high-water mark for demand-driven Ollama
    * `num_ctx` (opt-in via HarnessConfig.numCtxPolicy = "demand"). Ollama
-   * reloads the model whenever `num_ctx` changes between requests, so
-   * `nextNumCtx` (assembly/capability.ts) only ever grows this value within a
-   * run — never present/read when the policy is unset ("fixed", the default).
+   * reloads the model whenever `num_ctx` changes, so `nextNumCtx` (assembly/capability.ts) only
+   * grows this value within a run — never present/read when the policy is unset ("fixed", the default).
    */
   readonly numCtxHighWater?: number;
 

@@ -14,6 +14,7 @@
  *
  * Pure functions, no services.
  */
+import type { KernelRunOptions } from "../../kernel/state/kernel-state.js";
 
 /** A strategy's iteration budget: the run's, plus an optional explicit per-pass cap. */
 export interface IterationBudget {
@@ -64,6 +65,19 @@ export function passIterationShare(
   const even = Math.ceil(remaining / Math.max(1, passesLeft));
   const share = options.lead === true ? Math.max(even, Math.ceil(remaining / 2)) : even;
   return Math.max(budget.floor ?? MIN_PASS_ITERATIONS, share);
+}
+
+/**
+ * A pass's run options carrying the run's iteration budget as
+ * `meta.runMaxIterations`, never below the pass's own cap. Run-sized guards
+ * (the repetition backstop) read it, so a small pass share (direct's 3, a
+ * reflexion pass's 4) does not cap distinct, informative calls of one tool at
+ * 3 (QA N1, 2026-11-19). Without a budget the options pass through unchanged:
+ * a single-pass run's own cap is its budget.
+ */
+export function withRunBudget(options: KernelRunOptions, budget: IterationBudget | undefined): KernelRunOptions {
+  if (budget === undefined) return options;
+  return { ...options, meta: { ...options.meta, runMaxIterations: Math.max(budget.run, options.maxIterations) } };
 }
 
 /** The iterations one finished kernel pass used: its loop counter or its LLM calls, whichever is higher. */

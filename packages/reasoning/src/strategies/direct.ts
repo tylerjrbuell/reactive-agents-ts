@@ -198,7 +198,14 @@ export const executeDirect = (
     // gate is a multi-iteration concern, see the KernelInput comment above),
     // so the grounding verdict has nothing to judge here.
     return yield* runStrategy(
-      { strategy: "direct", taskId: input.taskId ?? "direct", logSite: "reasoning/src/strategies/direct.ts:emitLog" },
+      {
+        strategy: "direct",
+        taskId: input.taskId ?? "direct",
+        logSite: "reasoning/src/strategies/direct.ts:emitLog",
+        // The run's configured budget, not Direct's 1..3 pass cap: run-sized
+        // guards (the repetition backstop) read it (QA N1, 2026-11-19).
+        iterationBudget: { run: resolveStrategyIterationCap(input.config) },
+      },
       (run) =>
         Effect.gen(function* () {
           const pass = yield* run.pass(reactKernel, kernelInput, {

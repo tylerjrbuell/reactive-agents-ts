@@ -584,7 +584,8 @@ export const sideEffectGuard: Guard = (tc, state, _input) => {
  *  call passes. Past it a call passes on a new target, or on distinct arguments
  *  while the tool's last 2 results were not all empty / failed / repeats (up to
  *  a backstop of max(review point, ceil(maxIterations * 0.75) iterations' worth
- *  of calls: maxBatchSize per iteration for parallel-safe tools), set by
+ *  of calls: maxBatchSize per iteration for parallel-safe tools; maxIterations
+ *  is the run's budget, `meta.runMaxIterations` when a strategy set it), set by
  *  `HarnessConfig.repetitionBackstop`), or as a
  *  correction of a failed or superseded call. */
 export const repetitionGuard: Guard = (tc, state, input) => {
@@ -641,8 +642,11 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   // the stall suffix below.
   const history = resultHistory(state, tc.name);
   const noNewInformation = stoppedYielding(history);
-  // The run's own budget (initialKernelState mirrors KernelRunOptions.maxIterations) wins.
-  const maxIterations = state.meta?.maxIterations ?? input.maxIterations ?? DEFAULT_MAX_ITERATIONS;
+  // The RUN's budget sizes the backstop, not one pass's share: direct's 3
+  // iterations or a reflexion pass's 4 capped a non-parallel-safe tool at 3
+  // distinct calls (QA N1, 2026-11-19). A strategy pass carries the run budget
+  // (`runMaxIterations`); a single-pass run's own cap is its budget.
+  const maxIterations = state.meta?.runMaxIterations ?? state.meta?.maxIterations ?? input.maxIterations ?? DEFAULT_MAX_ITERATIONS;
   // The fraction counts iterations: a parallel-safe tool may batch maxBatchSize calls in each.
   const callsPerIteration = isParallelBatchSafeTool(tc.name) ? maxBatchSize : 1;
   const backstop = Math.max(threshold, repetitionBackstopCalls(input.harness, maxIterations, callsPerIteration));

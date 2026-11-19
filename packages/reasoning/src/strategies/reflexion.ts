@@ -65,6 +65,7 @@ import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { withEnvContext } from "../context/context-engine.js";
 import { resolveStrategyIterationCap } from "./budget/iteration-cap.js";
 import { reflexionData } from "./structured-steps.js";
+import { buildCompletedActionsContext, buildExecutionEvidence, extractSuccessfulSideEffectTools } from "./reflexion/completed-actions.js";
 
 interface ReflexionInput {
   readonly taskDescription: string;
@@ -511,7 +512,7 @@ export const executeReflexion = (
             improveDefaultFallback,
           );
 
-          const completedActions = buildCompletedActionsContext(s.lastKernelSteps);
+          const completedActions = buildCompletedActionsContext(s.allSideEffectSteps); // every pass so far (N4)
           const improvementTask = buildImprovementTask(input, updatedCritiques, completedActions);
           const improvePriorContext = paramHints
             ? `⚠️ CRITICAL — use these EXACT values (do NOT substitute or guess):\n${paramHints}`
@@ -786,72 +787,6 @@ function buildImprovementTask(
   return parts.join("\n\n");
 }
 
-/**
- * Build a summary of what was already accomplished from kernel steps.
- * Identifies side-effect tools (send/create/write) that should NOT be re-called.
- */
-function buildCompletedActionsContext(steps?: readonly ReasoningStep[]): string {
-  if (!steps || steps.length === 0) return "";
-
-  const actions = steps.filter((s) => s.type === "action");
-  const observations = steps.filter((s) => s.type === "observation");
-
-  if (actions.length === 0) return "";
-
-  const lines: string[] = ["ALREADY COMPLETED ACTIONS (do NOT repeat successful ones):"];
-
-  for (let i = 0; i < actions.length; i++) {
-    const action = actions[i];
-    // Check if the corresponding observation indicates success or error
-    const obs = observations[i];
-    const isError = obs && /\[Tool error/i.test(obs.content);
-    const icon = isError ? "❌" : "✅";
-    const content = action.content.length > 200
-      ? action.content.slice(0, 200) + "..."
-      : action.content;
-    lines.push(`  ${icon} ${content}`);
-  }
-
-  // Identify side-effect tools that must NOT be called again
-  const extractToolName = (step: ReasoningStep): string | undefined =>
-    (step.metadata?.toolUsed as string | undefined)
-    ?? step.content.match(/"tool"\s*:\s*"([^"]+)"/)?.[1]
-    ?? step.content.match(/^(\S+)\(/)?.[1];
-
-  const sideEffectActions = actions.filter((a) => {
-    const toolName = extractToolName(a);
-    return toolName != null && isSideEffectTool(toolName);
-  });
-  const successfulSideEffects = sideEffectActions.filter((a) => {
-    const obs = observations[actions.indexOf(a)];
-    return !obs || !/\[Tool error/i.test(obs.content);
-  });
-
-  if (successfulSideEffects.length > 0) {
-    lines.push("\n⚠️ DO NOT call these tools again (they have side effects and already executed):");
-    for (const t of successfulSideEffects) {
-      const name = extractToolName(t);
-      if (name) lines.push(`  - ${name}`);
-    }
-  }
-
-  return lines.join("\n");
-}
-
-/**
- * Side-effect detection via word splitting (not regex \b which treats _ as word char).
- * Splits tool names on / _ - separators, then checks for side-effect verbs.
- */
-const SIDE_EFFECT_WORDS = new Set([
-  "send", "write", "create", "delete", "post", "push",
-  "publish", "notify", "deploy", "upload", "remove", "update",
-]);
-
-function isSideEffectTool(toolName: string): boolean {
-  const words = toolName.toLowerCase().split(/[/_\-]/);
-  return words.some((w) => SIDE_EFFECT_WORDS.has(w));
-}
-
 function buildCritiquePrompt(
   taskDescription: string,
   response: string,
@@ -901,67 +836,6 @@ SATISFIED: <what was accomplished>
 UNSATISFIED: <what specific required action was not completed>
 
 If UNSATISFIED, list ONLY the specific fixes needed (one per line). Be actionable and concise.`;
-}
-
-/**
- * Build a structured execution evidence summary from kernel steps.
- * Pairs each tool call with its result so the critique can see what happened.
- */
-function buildExecutionEvidence(steps?: readonly ReasoningStep[]): string {
-  if (!steps || steps.length === 0) return "No execution steps recorded.";
-
-  const actions = steps.filter((s) => s.type === "action");
-  const observations = steps.filter((s) => s.type === "observation");
-
-  if (actions.length === 0) return "No tool calls were made.";
-
-  const evidence: string[] = [];
-
-  for (let i = 0; i < actions.length; i++) {
-    const action = actions[i].content;
-    const obs = observations[i]?.content ?? "no result recorded";
-    const isError = /\[Tool error/i.test(obs);
-    const icon = isError ? "❌" : "✅";
-    const actionStr = action.length > 200 ? action.slice(0, 200) + "..." : action;
-    const obsStr = obs.length > 150 ? obs.slice(0, 150) + "..." : obs;
-    evidence.push(`${icon} ${actionStr}\n   → ${obsStr}`);
-  }
-
-  return evidence.join("\n");
-}
-
-/**
- * Extract tool names that have side effects AND succeeded in a prior kernel pass.
- * These tools are blocked from re-execution in improvement passes to prevent
- * duplicate sends, writes, creates, etc.
- */
-function extractSuccessfulSideEffectTools(
-  steps?: readonly ReasoningStep[],
-): readonly string[] {
-  if (!steps || steps.length === 0) return [];
-
-  const actions = steps.filter((s) => s.type === "action");
-  const observations = steps.filter((s) => s.type === "observation");
-  const blocked = new Set<string>();
-
-  for (let i = 0; i < actions.length; i++) {
-    const action = actions[i];
-    const obs = observations[i];
-    const isError = obs && /\[Tool error/i.test(obs.content);
-    if (isError) continue; // Only block tools that succeeded
-
-    // Extract tool name from action content (JSON: {"tool":"name",...})
-    const toolName = action.metadata?.toolUsed as string | undefined
-      ?? action.content.match(/"tool"\s*:\s*"([^"]+)"/)?.[1];
-    if (!toolName) continue;
-
-    // Check if this tool has side effects
-    if (isSideEffectTool(toolName)) {
-      blocked.add(toolName);
-    }
-  }
-
-  return [...blocked];
 }
 
 function buildCompactedCritiqueHistory(critiques: readonly string[]): string {

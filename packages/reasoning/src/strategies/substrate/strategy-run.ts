@@ -71,9 +71,10 @@ import { resolveRunSpend } from "../budget/run-budget-spend.js";
 import type { BudgetSpend } from "../budget/remaining-budget.js";
 import { addKnown, contributedHalf } from "../../kernel/utils/known-count.js";
 import { usageSpend } from "../../kernel/run-budget.js";
-import { passIterationShare, passIterationsUsed, type IterationBudget, type PassShareOptions } from "../budget/iteration-budget.js";
+import { passIterationShare, passIterationsUsed, withRunBudget, type IterationBudget, type PassShareOptions } from "../budget/iteration-budget.js";
 import { defaultReasoningConfig } from "../../types/config.js";
 import { envelopeWithAcceptedAnswer, ledgerWithAcceptedAnswer } from "./answer-acceptance.js";
+import { answerPassErrorClaim, applyAnswerPassError } from "./answer-pass-error.js";
 import { PLAN_INCOMPLETE_GUARD, planIncompleteReason, settlePlan, type PlanStepLike } from "../../kernel/policy/plan-completion.js";
 import { emitGuardFired } from "../../kernel/utils/diagnostics.js";
 
@@ -398,6 +399,8 @@ export interface StrategyRunSpec {
    * share returns its draft and evidence to the strategy; its envelope caps the
    * run at `partial` at worst (`capStatusToEnvelope` never fails a run from a
    * sub-pass envelope), so only the strategy's own verdict can fail it.
+   * Every pass also carries `run` as `meta.runMaxIterations` (`withRunBudget`),
+   * so run-sized guards (the repetition backstop) never shrink to a pass's share.
    */
   readonly iterationBudget?: IterationBudget;
 }
@@ -687,7 +690,7 @@ export function runStrategy<E, R>(
             ...(seed !== undefined && input.seedRunLedger === undefined ? { seedRunLedger: seed } : {}),
           };
           toolsVisible = toolsVisible === true || reachesDomainTool(seeded);
-          const result = yield* runPass(kernel, seeded, options);
+          const result = yield* runPass(kernel, seeded, withRunBudget(options, spec.iterationBudget));
           runContract = runContract ?? result.state.meta.runContract;
           actOrAnswerTallies.push(actOrAnswerTally(result.state));
           steps.push(...(passOptions?.record === "evidence" ? result.steps.filter(isToolEvidence) : result.steps));
@@ -776,7 +779,9 @@ export function runStrategy<E, R>(
       })));
 
     /** The plan completion invariant (`applyPlanInvariant`), then the mint; open steps raise `plan-incomplete`. */
-    const terminal = (end: StrategyEnd, ledger: RunLedger): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> => {
+    const terminal = (raw: StrategyEnd, ledger: RunLedger): Effect.Effect<JudgedReasoningResult, never, RunEnvelope> => {
+      // An unaccepted answer held through a failed answering pass fails (QA N3).
+      const end = raw._tag === "Result" ? applyAnswerPassError(raw) : raw;
       if (end._tag !== "Result" || end.plan === undefined || pendingPause !== undefined) return mint(end, ledger);
       const planned = applyPlanInvariant(end);
       const minted = mint(planned.end, ledger);
@@ -848,11 +853,11 @@ export function runStrategy<E, R>(
       const abstention = own?.abstention ?? (passAbstained ? end.basedOn?.state.meta.abstention : undefined);
       // 5. The claim: an honest abstention wins; otherwise `final_answer` iff
       //    the capped status is `completed`, so goalAchieved and success never
-      //    contradict.
+      //    contradict; an answering pass's provider error is named (`llm_error`).
       const claim = {
         terminatedBy: own?.abstention !== undefined || passAbstained
           ? "abstained"
-          : capped.status === "completed" ? "final_answer" : "end_turn",
+          : answerPassErrorClaim(capped.status, end.basedOn),
         ...(rawTerminatedBy !== undefined ? { rawTerminatedBy } : {}),
         ...(abstention !== undefined ? { abstention } : {}),
       };
