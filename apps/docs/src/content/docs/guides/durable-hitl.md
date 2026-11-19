@@ -148,7 +148,7 @@ const agent = await ReactiveAgents.create()
   .withTools({ tools: [/* ... */] })
   .withDurableRuns()
   .withApprovalPolicy({
-    tools: ["shell-execution", "file-write"], // names that must pause
+    tools: ["shell-execute", "file-write"], // names that must pause
     mode: "detach",                           // durable pause (default with durable runs)
   })
   .build();
@@ -297,7 +297,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withApprovalPolicy({
-    tools: ["shell-execution", "file-write"],
+    tools: ["shell-execute", "file-write"],
     mode: "block",
     onApprove: async ({ toolName, args, iteration }) => {
       // Your approval UI/logic here, e.g. a Slack prompt, a CLI confirm, a policy check.

@@ -81,7 +81,7 @@ const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withModel("claude-sonnet-4-6")
   .withDurableRuns()
-  .withApprovalPolicy({ tools: ["shell-execution", "file-write"], mode: "detach" })
+  .withApprovalPolicy({ tools: ["shell-execute", "file-write"], mode: "detach" })
   .build();
 
 // 1. A gated call pauses and returns status: "awaiting-approval".
@@ -102,7 +102,7 @@ whole pause → decide → resume loop:
 
 ```ts
 const result = await agent.run("clean up the temp files", {
-  onApproval: ({ toolName, args }) => toolName !== "shell-execution",
+  onApproval: ({ toolName, args }) => toolName !== "shell-execute",
 });
 ```
 
