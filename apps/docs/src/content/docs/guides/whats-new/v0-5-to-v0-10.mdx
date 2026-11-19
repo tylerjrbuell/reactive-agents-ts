@@ -39,7 +39,7 @@ The biggest release since v0.9 — `0.10.0` through `0.10.6`, shipped over four 
 
 #### Better runtime + tooling
 
-- **`@reactive-agents/cortex`** — Cortex Studio is now installable from npm: `bunx @reactive-agents/cortex` or `rax cortex` launches the live agent canvas, debrief UI, and visual builder. See [Cortex](/features/cortex/).
+- **`@reactive-agents/cortex`** — Cortex Studio is now installable from npm: install it with `bun add @reactive-agents/cortex`, then `rax cortex` (the server runs on Bun) launches the live agent canvas, debrief UI, and visual builder. See [Cortex](/features/cortex/).
 - **Gateway chat mode** — Per-sender SQLite session history, episodic context injection, daily compaction. Set `channels.mode: 'chat'` for conversational webhooks; keep `'task'` for one-shot triggers. See [Gateway](/features/gateway/) and [Messaging Channels](/guides/messaging-channels/).
 - **Composable kernel architecture** — Internal `kernel/` reorganized by capability (`act/` · `attend/` · `comprehend/` · `decide/` · `reason/` · `reflect/` · `sense/` · `verify/` + `loop/` + `state/`). Doesn't change the public API; makes contributing to the framework easier. See [Composable Kernel](/concepts/composable-kernel/).
 - **{metrics.tests.toLocaleString()}+ tests** across {metrics.testFiles} files — verified by `bun test` on every PR.

@@ -25,6 +25,29 @@ rax diagnose attribute <runId|path> [--json]  # is it the harness or the model? 
 rax diagnose attribute --all [dir] [--real]   # tally attributions across a directory of traces
 ```
 
+## Try it without a key
+
+From the next release (0.19.0), `@reactive-agents/diagnose` ships one real recorded failed run (qwen2.5-coder:14b via Ollama, an experimental opt-in configuration). You need no API key, no model and no run of your own:
+
+```bash
+npm install @reactive-agents/diagnose
+npx rax-diagnose cause node_modules/@reactive-agents/diagnose/examples/failed-run.jsonl
+npx rax-diagnose attribute node_modules/@reactive-agents/diagnose/examples/failed-run.jsonl
+```
+
+Expected output (key lines; evidence lines omitted):
+
+```text
+01M4ZTZAAEMD217GE6Z8SM2A4W: cause=never-engaged confidence=decisive status=failure
+  ...
+  attribution harness (harness:contradictory-guidance) confidence=decisive
+01M4ZTZAAEMD217GE6Z8SM2A4W: harness (harness:contradictory-guidance) confidence=decisive target=sales-q1.txt
+```
+
+The model never called the tool it needed. The request told it to call `file-write` but offered no tool schemas, so the harness, not the model, is at fault.
+
+## Subcommands
+
 **`cause`** classifies a finished run from trace events only (never model text) with ordered, first-match-wins rules. It prints the cause, a confidence, the supporting events (`eventKind#seq`) and `missing`: the trace signals whose absence kept the verdict from being decisive. Confidence is `decisive` (read from authoritative signals), `probable` (fallback fields or heuristics; `missing` says what would upgrade it) or `insufficient-trace` (cause `undetermined`; the trace is too thin and the classifier does not guess). Causes: `direct-chat` (a trace holding only `llm-exchange` events, the direct chat path: not a run, skipped by the cohort tally), `timeout` / `user-stop` / `aborted` (from `run-aborted.reason`; an abort with no reason is classified from its error tag as `aborted/guardrail-block`, `aborted/contract-violation`, `aborted/kill-switch` or `aborted/<causeClass>`; `incomplete-trace` means only a trace with neither `run-completed` nor `run-aborted`), `provider-error` (sub-class from `outcome.errorClass`, text regex as legacy fallback), `satisfiability-abstain`, `terminal-mislabel` (includes `run-completed.status` contradicting `outcome.success`/`outcome.status`), `plan-posture-veto`, `never-engaged`, `tool-protocol`, `tool-failure`, `wrong-tool-arg`, `stall-after-work`, `stall-no-progress`, `loop-after-work`, `bookkeeping-loop`, `verifier-reject`, `budget-cap` (sub-causes `token-budget`, `cost-budget`, `token-and-cost-budget`, `spend-budget` for spend limits; iteration caps keep their own), `unexplained` (a residual, never a finding), `success-with-warning` (a success whose verifier check failed or whose deliverable was accepted via `advisory-softfail`; states the fact, does not claim the answer is wrong), and `none` (healthy run). `--all` recurses a directory (default: the trace directories above), skips `llm-direct.jsonl`, and tallies cause by outcome status; `--real` drops synthetic (`test` provider) traces. The same result is on `RunAnalysis.cause` from `@reactive-agents/trace` (`analyzeCause(trace)`). `cause --json` also carries an `attribution` field (see `attribute` below).
 
 **`attribute`** answers the next question about a failed run: is it your harness configuration or the model? It reads the recorded trace only (zero tokens) and works on any trace written by the trace recorder (`.withTracing()` or `.withObservability({ tracing: { dir } })`), with or without a grader verdict. A run counts as failed when `run-completed.status` is not `success`, `outcome.success` is false, or an `eval-graded` event failed; an abstention the grader accepts is `not-failed`. It finds the **divergence turn** (the `llm-exchange` whose output produced the failing file or final answer: from grader check names, else the contract or `outcome.outstanding` deliverables, else the run's writes), checks whether each tool result the run had obtained was in that turn's projected request, and checks what the harness did around it. Output: `verdict` (`harness` / `model` / `environment` / `unattributed` / `not-failed`), `reason`, `confidence` (`decisive` / `probable` / `insufficient-trace`), `divergenceTurn {iter, seq}`, `evidence` (`eventKind#seq` + detail), `missing` (the signals that would make it decisive) and `alsoMatched` (other reasons that also fired). Reasons, first match wins:

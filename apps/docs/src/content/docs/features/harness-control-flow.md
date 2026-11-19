@@ -118,12 +118,13 @@ The termination oracle checks for `early-stop` decisions and signals the kernel 
   },
   controller: {
     earlyStop: true,          // Stop when entropy converges
-    contextCompression: true, // Compact context under pressure
     strategySwitch: true,     // Switch strategy on flat entropy
   },
   calibrationDbPath: "./data/calibration.sqlite",
 })
 ```
+
+`controller.contextCompression` is deprecated and has no effect of its own: the evaluator behind it was removed. Context pressure is handled by auto-checkpointing (see [Local Model Performance](/features/local-model-performance/)).
 
 ## Related
 

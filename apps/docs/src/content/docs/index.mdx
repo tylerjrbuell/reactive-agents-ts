@@ -141,7 +141,7 @@ Runs fail too. Here is the same agent with its iteration budget cut to force a f
 
 ## Cortex: watch your agents run
 
-Cortex is the local studio that ships with the framework. Chat in Plan mode, stop and continue a durable run, test MCP tools, and read why a run ended. Screenshots are generated from a seeded demo, not mocked up. `bunx @reactive-agents/cortex`, then [take the tour](/features/cortex/tour/).
+Cortex is the local studio that ships with the framework. Chat in Plan mode, stop and continue a durable run, test MCP tools, and read why a run ended. Screenshots are generated from a seeded demo, not mocked up. Run `rax cortex` (the Cortex server runs on Bun), then [take the tour](/features/cortex/tour/).
 
 <CortexGallery
   variant="crop"
@@ -460,7 +460,7 @@ Everything below backs the six points above: the same code on any model tier, a 
         and inspects.
     </Card>
     <Card title="Cortex Local Studio" icon="laptop">
-        **`bunx @reactive-agents/cortex`** for a full local studio: chat with a
+        **`rax cortex`** (runs on Bun) for a full local studio: chat with a
         multimodal composer and voice, run traces, the Lab builder, judgments,
         memory and skills, and approvals. One flag away from any agent:
         `.withCortex()`. See [Cortex](/features/cortex/).

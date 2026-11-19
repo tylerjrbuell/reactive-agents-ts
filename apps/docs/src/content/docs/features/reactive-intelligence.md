@@ -40,7 +40,6 @@ With controller features enabled:
 .withReactiveIntelligence({
   controller: {
     earlyStop: true,           // Stop when entropy converges
-    contextCompression: true,  // Compact context under pressure
     strategySwitch: true,      // Switch strategy on flat entropy
   },
   telemetry: true,             // Opt in to anonymous usage data (default in config is off)
@@ -273,7 +272,7 @@ interface ReactiveIntelligenceConfig {
   controller: {
     earlyStop?: boolean;           // default: true
     branching?: boolean;           // default: false
-    contextCompression?: boolean;  // default: true
+    contextCompression?: boolean;  // deprecated: no effect (evaluator removed)
     strategySwitch?: boolean;      // default: true
     causalAttribution?: boolean;   // default: false
   };

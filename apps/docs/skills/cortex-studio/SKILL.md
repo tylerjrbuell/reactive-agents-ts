@@ -60,7 +60,7 @@ The connection is best-effort: if Cortex is down, the agent runs normally and lo
 
 ## Environment variables
 
-`CORTEX_PORT` (4321), `CORTEX_HOST` (127.0.0.1), `CORTEX_URL`, `CORTEX_ALLOWED_HOSTS`, `CORTEX_NO_OPEN`, `CORTEX_LOG`, `CORTEX_SKILL_SCAN_ROOT`, `CORTEX_CHAT_MAX_SESSIONS` (8), `CORTEX_VOICE_STT_API_KEY`, `CORTEX_VOICE_TTS_API_KEY`.
+`CORTEX_PORT` (4321), `CORTEX_HOST` (127.0.0.1), `CORTEX_TOKEN` (access token; required when `CORTEX_HOST` is not loopback, otherwise Cortex refuses to start), `CORTEX_URL`, `CORTEX_ALLOWED_HOSTS`, `CORTEX_NO_OPEN`, `CORTEX_LOG`, `CORTEX_SKILL_SCAN_ROOT`, `CORTEX_CHAT_MAX_SESSIONS` (8), `CORTEX_VOICE_STT_API_KEY`, `CORTEX_VOICE_TTS_API_KEY`.
 
 ## Voice with a local server
 
