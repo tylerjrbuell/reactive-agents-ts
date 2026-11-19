@@ -45,14 +45,26 @@ export interface HonestDecline {
   readonly missing: readonly string[];
 }
 
-/** The model's latest tool-free text with no successful tool result after it. */
+/**
+ * True when thought `at` made calls that no act phase ran: its batch is still
+ * pending and no action step follows it. A guard ending the run drops such a
+ * batch (`pending_batch` "dropped"), so the turn's prose is the model's last
+ * word, not narration of results to come (ab-trap-5 gemma4: decline + a third
+ * file-read in one turn, 3 of 5 runs).
+ */
+function callsDropped(state: KernelState, at: number): boolean {
+  if ((state.meta.pendingNativeToolCalls?.length ?? 0) === 0) return false;
+  return !state.steps.slice(at + 1).some((s) => s.type === "action");
+}
+
+/** The model's latest tool-free text (or a turn whose calls were dropped) with no successful tool result after it. */
 function latestTextAfterEvidence(state: KernelState): string | undefined {
   const shaped = unresolvedThoughtSet(state.steps);
   for (let i = state.steps.length - 1; i >= 0; i--) {
     const step: ReasoningStep = state.steps[i]!;
     if (step.type === "observation" && step.metadata?.observationResult?.success === true) return undefined;
     if (step.type !== "thought" || shaped.has(step)) continue;
-    if ((step.metadata?.assistantTurn?.callIds.length ?? 0) > 0) continue;
+    if ((step.metadata?.assistantTurn?.callIds.length ?? 0) > 0 && !callsDropped(state, i)) continue;
     const text = deliverableTextOf(step).trim();
     if (text.length > 0) return text;
   }

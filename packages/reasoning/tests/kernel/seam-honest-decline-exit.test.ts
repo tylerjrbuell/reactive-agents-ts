@@ -97,6 +97,43 @@ describe("seam-honest-decline-exit: a guard's stop over an always-failing requir
   });
 });
 
+describe("decline written in the same turn as a dropped call (ab-trap-5 gemma4:e4b, runs 1/2/4)", () => {
+  const PENDING = [{ id: "c3", name: "file-read", arguments: { path: "./ledger.json" } }];
+  const callTurn = (): ReasoningStep =>
+    makeStep("thought", DECLINE, {
+      assistantTurn: { disposition: "mixed", consumedSpans: [], callIds: ["c3"], deliverableText: DECLINE, source: "native", dialect: "native-fc" },
+    } as never);
+  // The real trace: the early-stop fired with no committed output (state.output "").
+  const withPending = (steps: ReasoningStep[], pending = true): KernelState => ({
+    ...stateWith(steps),
+    output: "",
+    meta: { ...stateWith(steps).meta, ...(pending ? { pendingNativeToolCalls: PENDING } : {}) },
+  });
+  const action = makeStep("action", "file-read");
+
+  // `outstanding` is what the real traces' exit_gate event carried at the handoff.
+  const REAL_OUTSTANDING = ["call the `file-read` tool"];
+
+  it("decline + dropped pending call after failed reads -> honest decline with the model's text", () => {
+    const steps = [readResult(false), action, readResult(false), action, callTurn()];
+    expect(honestDeclineOf(withPending(steps), INPUT, REAL_OUTSTANDING)).toEqual({ text: DECLINE, missing: ["file-read"] });
+  });
+
+  it("the same turn with executed calls (no pending batch) does not settle", () => {
+    const steps = [readResult(false), action, readResult(false), action, callTurn()];
+    expect(honestDeclineOf(withPending(steps, false), INPUT, REAL_OUTSTANDING)).toBeUndefined();
+  });
+
+  it("a call turn whose calls executed (action follows, nothing pending) still defers to its results", () => {
+    const steps = [readResult(false), callTurn(), action, readResult(false)];
+    expect(honestDeclineOf(withPending(steps, false), INPUT, ["call the `file-read` tool"])).toBeUndefined();
+  });
+
+  it("a call turn with no pending batch is not treated as dropped", () => {
+    expect(honestDeclineOf(withPending([...failedReads, callTurn()], false), INPUT, ["call the `file-read` tool"])).toBeUndefined();
+  });
+});
+
 describe("looksLikeHonestDecline", () => {
   it("accepts a missing-input decline; rejects figures, answers and long text", () => {
     expect(looksLikeHonestDecline(DECLINE)).toBe(true);
