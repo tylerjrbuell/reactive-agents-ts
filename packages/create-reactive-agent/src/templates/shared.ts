@@ -1,6 +1,7 @@
 import type { ScaffoldOptions, Template, TemplateFile } from "../types.js";
 import { KEY_PLACEHOLDER, providerEnvVar, providerDisplayName } from "../lib/provider-config.js";
 import { ownPackageVersionRange } from "../lib/own-version.js";
+import { renderAgentsMd } from "./agents-md.js";
 
 export function renderSharedFiles(
   opts: ScaffoldOptions,
@@ -15,6 +16,18 @@ export function renderSharedFiles(
   // no lying literal (drift is a release error - see scripts/release.ts).
   const raVersion = opts.version ?? ownPackageVersionRange();
 
+  const scripts: Readonly<Record<string, string>> = {
+    // Bun auto-loads .env at startup, so the bun arm needs no flag. The
+    // tsx arm deliberately does NOT use `tsx --env-file=.env`: a missing
+    // .env makes Node exit 9 ("node: .env: not found" - measured), and
+    // `--env-file-if-exists` requires Node >= 22.9, above the declared
+    // engines floor. The generated entry loads .env itself instead; keep
+    // this asymmetry in sync with renderEnvGuard below.
+    start: opts.packageManager === "bun" ? "bun run src/index.ts" : "tsx src/index.ts",
+    typecheck: "tsc --noEmit",
+    ...(tpl.extraScripts ?? {}),
+  };
+
   const packageJson = JSON.stringify(
     {
       name: opts.projectName,
@@ -23,17 +36,7 @@ export function renderSharedFiles(
       type: "module",
       // Minimum Node version stated in the framework README.
       engines: { node: ">=22.5" },
-      scripts: {
-        // Bun auto-loads .env at startup, so the bun arm needs no flag. The
-        // tsx arm deliberately does NOT use `tsx --env-file=.env`: a missing
-        // .env makes Node exit 9 ("node: .env: not found" - measured), and
-        // `--env-file-if-exists` requires Node >= 22.9, above the declared
-        // engines floor. The generated entry loads .env itself instead; keep
-        // this asymmetry in sync with renderEnvGuard below.
-        start: opts.packageManager === "bun" ? "bun run src/index.ts" : "tsx src/index.ts",
-        typecheck: "tsc --noEmit",
-        ...(tpl.extraScripts ?? {}),
-      },
+      scripts,
       dependencies: {
         "reactive-agents": raVersion,
         ...(tpl.extraDependencies ?? {}),
@@ -91,6 +94,7 @@ export function renderSharedFiles(
     { path: ".env.example", content: envContent },
     { path: ".gitignore", content: gitignore },
     { path: "README.md", content: renderReadme(opts) },
+    { path: "AGENTS.md", content: renderAgentsMd(opts, scripts) },
   ];
 }
 

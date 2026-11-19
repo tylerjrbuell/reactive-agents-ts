@@ -8,7 +8,7 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { listTemplates } from "create-reactive-agent";
+import { AGENTS_MD_HINT, LLMS_TXT_URL, listTemplates } from "create-reactive-agent";
 import {
   createProject,
   detectPackageManager,
@@ -128,6 +128,20 @@ describe("rax init delegates scaffolding to create-reactive-agent", () => {
     const entry = readFileSync(join(result.dir, "src", "index.ts"), "utf-8");
     // RED against the old generator, which emitted no guard marker.
     expect(entry).toContain("Missing ANTHROPIC_API_KEY");
+  });
+
+  it("inherits the engine's AGENTS.md (docs entry for coding agents)", async () => {
+    const result = await createProject({
+      projectName: "agents-md-proj",
+      template: "minimal",
+      provider: "anthropic",
+      packageManager: "bun",
+      cwd: TEST_DIR,
+    });
+    expect(result.files).toContain("AGENTS.md");
+    const agentsMd = readFileSync(join(result.dir, "AGENTS.md"), "utf-8");
+    expect(agentsMd).toContain(LLMS_TXT_URL);
+    expect(AGENTS_MD_HINT).toContain("AGENTS.md");
   });
 
   it("pins cloudflare-worker to OpenAI (mirrors the engine CLI rule)", async () => {

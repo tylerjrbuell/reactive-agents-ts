@@ -17,6 +17,7 @@ import * as path from "node:path";
 import { scaffold } from "./lib/scaffold.js";
 import { ownPackageVersion } from "./lib/own-version.js";
 import { listTemplates } from "./templates/index.js";
+import { AGENTS_MD_HINT, DOCS_URL } from "./templates/agents-md.js";
 import {
   promptSelect,
   promptText,
@@ -214,7 +215,8 @@ async function main(): Promise<void> {
       console.log(`  ${step}`);
     }
     console.log();
-    logInfo("Docs: https://docs.reactiveagents.dev");
+    logInfo(`Docs: ${DOCS_URL}`);
+    logInfo(AGENTS_MD_HINT);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`\nError: ${msg}`);

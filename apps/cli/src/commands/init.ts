@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import {
+  AGENTS_MD_HINT,
   scaffold,
   listTemplates,
   type PackageManager,
@@ -177,6 +178,7 @@ export function runInit(args: string[]): void {
       result.nextSteps.forEach((step, i) => {
         console.log(kv(String(i + 1), step));
       });
+      console.log(info(AGENTS_MD_HINT));
     })
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
