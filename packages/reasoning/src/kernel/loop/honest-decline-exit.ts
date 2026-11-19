@@ -26,6 +26,7 @@ import type { KernelInput, KernelState } from "../state/kernel-state.js";
 import { deliverableTextOf } from "../capabilities/reason/assistant-turn.js";
 import { unresolvedThoughtSet } from "../capabilities/reflect/unresolved-steps.js";
 import { looksLikeHonestDecline } from "../capabilities/decide/abstention-detection.js";
+import type { RequirementBasis } from "../contract/requirement-basis.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
 import { missingRequired } from "../capabilities/verify/requirement-state.js";
 import { executedOutcomes } from "./runner-helpers/tool-health.js";
@@ -79,13 +80,44 @@ export function honestDeclineOf(
   state: KernelState,
   input: KernelInput,
   outstanding: readonly string[],
+  basis?: readonly RequirementBasis[],
 ): HonestDecline | undefined {
+  return inspectDecline(state, input, outstanding, basis).decline;
+}
+
+/** What the decline check saw, recorded on the `exit_gate` event so one traced run explains a handoff. */
+export interface DeclineCheck {
+  /** Required tools the run never got a result from (undefined-> none missing / still viable). */
+  readonly missingTools: readonly string[];
+  /** The model's latest text after the last successful result, or null. */
+  readonly textAfterEvidence: string | null;
+  /** First clause that rejected the decline; "none" when it settled. */
+  readonly rejectedBy: "none" | "no-outstanding" | "tool-viable" | "blocking-outstanding" | "no-text" | "not-a-decline";
+}
+
+/**
+ * {@link honestDeclineOf} plus the inputs it judged. A heuristic-basis item
+ * (answer-shape narration, an inferred action) never blocks when the model's own
+ * decline text exists after the evidence; declared and evidence items still do.
+ */
+export function inspectDecline(
+  state: KernelState,
+  input: KernelInput,
+  outstanding: readonly string[],
+  basis?: readonly RequirementBasis[],
+): { readonly decline: HonestDecline | undefined; readonly check: DeclineCheck } {
   const missing = neverSucceededRequired(state, input);
-  if (missing === undefined || outstanding.length === 0) return undefined;
-  // Everything outstanding must be one of the missing required tools.
-  if (!outstanding.every((item) => missing.some((tool) => item.includes(`\`${tool}\``)))) return undefined;
   const text = latestTextAfterEvidence(state);
-  return text !== undefined && looksLikeHonestDecline(text) ? { text, missing } : undefined;
+  const seen = { missingTools: missing ?? [], textAfterEvidence: text ?? null };
+  const reject = (rejectedBy: DeclineCheck["rejectedBy"]) => ({ decline: undefined, check: { ...seen, rejectedBy } });
+  if (missing === undefined) return reject("tool-viable");
+  if (outstanding.length === 0) return reject("no-outstanding");
+  if (text === undefined) return reject("no-text");
+  const blocks = (item: string, i: number): boolean =>
+    !missing.some((tool) => item.includes(`\`${tool}\``)) && basis?.[i] !== "heuristic";
+  if (outstanding.some(blocks)) return reject("blocking-outstanding");
+  if (!looksLikeHonestDecline(text)) return reject("not-a-decline");
+  return { decline: { text, missing }, check: { ...seen, rejectedBy: "none" } };
 }
 
 /**

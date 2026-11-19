@@ -79,7 +79,7 @@ import { verifyDelivery } from "../capabilities/verify/delivery-authority.js";
 import { emitGuardFired } from "../utils/diagnostics.js";
 import { terminate, type TerminateOptions, type TerminateReason } from "./terminate.js";
 import { missingRequiredToolsForInput } from "./runner-helpers/state-queries.js";
-import { honestDeclineOf } from "./honest-decline-exit.js";
+import { inspectDecline, type DeclineCheck } from "./honest-decline-exit.js";
 import { basisOfOutstanding, classifyContractOutstanding } from "./contract-outstanding.js";
 import { unavailableRequiredTools, unavailableToolItem } from "./runner-helpers/tool-health.js";
 import {
@@ -601,7 +601,7 @@ const OUTCOME: Record<ExitGateDecision, "pass" | "block" | "terminate"> = {
 };
 
 /** The `exit_gate` guard-fired event for one gate record. */
-export function emitDisposition(taskId: string, state: KernelState, record: ExitGateRecord) {
+export function emitDisposition(taskId: string, state: KernelState, record: ExitGateRecord, declineCheck?: DeclineCheck) {
   return emitGuardFired({
     taskId,
     iteration: state.iteration,
@@ -616,6 +616,8 @@ export function emitDisposition(taskId: string, state: KernelState, record: Exit
       // heuristic items that only advised: a zero-token audit query.
       outstandingBasis: record.outstandingBasis ?? [],
       advisory: record.advisory ?? [],
+      // What the honest-decline check saw (guard proposals only): explains a handoff.
+      ...(declineCheck === undefined ? {} : { declineCheck }),
       handoffSynthesis: false,
     },
   });
@@ -718,13 +720,14 @@ export function proposeExit(args: {
     const unmeetableOnly = unavailableLines.length > 0 && outstanding.every((item) => unavailableLines.includes(item));
     // A guard stopping a run whose model honestly declined over an input that
     // always errored: an abstention with the model's text, not a failure.
-    const decline = proposal.proposedBy === "model" ? undefined : honestDeclineOf(state, args.input, outstanding);
+    const inspected = proposal.proposedBy === "model" ? undefined : inspectDecline(state, args.input, outstanding, outstandingBasis);
+    const decline = inspected?.decline;
     if (decline !== undefined) {
       const record: ExitGateRecord = { proposedBy: proposal.proposedBy, gateDecision: "accept", reason: "honest_decline", outstanding };
       if (proposal.guardEvent !== undefined) {
         yield* emitGuardFired({ taskId: args.taskId, iteration: state.iteration, ...proposal.guardEvent, outcome: "terminate" });
       }
-      yield* emitDisposition(args.taskId, state, record);
+      yield* emitDisposition(args.taskId, state, record, inspected?.check);
       return disposed("accept", endOnProposal(state, {
         reason: "abstained",
         deliverable: modelSynthesisDeliverable({ type: "thought", content: decline.text, iteration: state.iteration }),
@@ -771,7 +774,7 @@ export function proposeExit(args: {
         outcome: proposerOutcome(decision),
       });
     }
-    yield* emitDisposition(args.taskId, state, record);
+    yield* emitDisposition(args.taskId, state, record, inspected?.check);
     // Denials / handoff are interventions and land on the step record; an
     // accept changes nothing about the run, so it is recorded on the event only.
     if (decision !== "accept") {

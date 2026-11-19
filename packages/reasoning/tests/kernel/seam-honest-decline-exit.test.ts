@@ -6,7 +6,8 @@
 // rule lives in the shared exit gate (kernel/loop/exit-gate.ts), so every guard
 // proposal (here the dispatcher early-stop) gets it.
 import { describe, expect, it } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Ref } from "effect";
+import { EventBus, EventBusLive, type AgentEvent } from "@reactive-agents/core";
 import { proposeExit, DISPATCHER_EARLY_STOP } from "../../src/kernel/loop/exit-gate.js";
 import { passthroughOutputDeliverable } from "../../src/kernel/loop/runner-helpers/deliverable.js";
 import { deriveTerminatedBy } from "../../src/kernel/loop/terminate-reason.js";
@@ -131,6 +132,82 @@ describe("decline written in the same turn as a dropped call (ab-trap-5 gemma4:e
 
   it("a call turn with no pending batch is not treated as dropped", () => {
     expect(honestDeclineOf(withPending([...failedReads, callTurn()], false), INPUT, ["call the `file-read` tool"])).toBeUndefined();
+  });
+});
+
+describe("heuristic-basis outstanding never blocks a decline (ab-trap-5 gemma4:e4b, real trace shape)", () => {
+  const callTurn = (id: string, text: string): ReasoningStep =>
+    makeStep("thought", text, {
+      assistantTurn: { disposition: text ? "mixed" : "calls-only", consumedSpans: [], callIds: [id], deliverableText: text, source: "native", dialect: "native-fc" },
+    } as never);
+  const action = makeStep("action", "file-read");
+  // iter1 tool-free decline; iters 2-3 pure file-read calls with empty content; iter 3's batch is pending.
+  const trace = (): KernelState => {
+    const steps = [
+      makeStep("thought", DECLINE),
+      callTurn("c2", ""), action, readResult(false),
+      callTurn("c3", DECLINE),
+    ];
+    return {
+      ...stateWith(steps),
+      output: "",
+      meta: { ...stateWith(steps).meta, pendingNativeToolCalls: [{ id: "c3", name: "file-read", arguments: { path: "./ledger.json" } }] },
+    };
+  };
+
+  const stopCapturing = (state: KernelState) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const log = yield* Ref.make<AgentEvent[]>([]);
+        const bus = yield* EventBus;
+        yield* bus.subscribe((ev) => Ref.update(log, (xs) => [...xs, ev]));
+        const disposed = yield* proposeExit({
+          state,
+          proposal: { ...DISPATCHER_EARLY_STOP, deliverable: passthroughOutputDeliverable(state.output) },
+          input: INPUT,
+          maxIterations: 10,
+          taskId: "t",
+        });
+        const gate = (yield* Ref.get(log)).filter(
+          (e): e is Extract<AgentEvent, { _tag: "GuardFiredEmitted" }> => e._tag === "GuardFiredEmitted" && e.guard === "exit_gate",
+        );
+        return { disposed, gate };
+      }).pipe(Effect.provide(EventBusLive)),
+    );
+
+  it("gate 1: CALL_NARRATION + the file-read item -> abstained, event records the decline check", async () => {
+    const { disposed, gate } = await stopCapturing(trace());
+    expect(disposed.decision).toBe("accept");
+    expect(disposed.state.meta.terminatedBy).toBe("abstained");
+    expect(disposed.state.output).toBe(DECLINE);
+    expect(gate.at(-1)?.metadata?.declineCheck).toEqual({ missingTools: ["file-read"], textAfterEvidence: DECLINE, rejectedBy: "none" });
+  });
+
+  it("gate 2 (after a deny-once, stale pending batch, tool-free decline) -> abstained", async () => {
+    const base = trace();
+    const denied = makeStep("harness_signal", "gate", {
+      exitGate: { proposedBy: "dispatcher-early-stop", gateDecision: "deny-once", reason: "r", outstanding: ["call the `file-read` tool"] },
+    } as never);
+    const steps = [...base.steps, denied, makeStep("thought", DECLINE)];
+    const state: KernelState = { ...base, steps, iteration: 4, llmCalls: 4, output: DECLINE };
+    const { disposed, gate } = await stopCapturing(state);
+    expect(disposed.state.meta.terminatedBy).toBe("abstained");
+    expect(gate.at(-1)?.metadata?.declineCheck).toMatchObject({ rejectedBy: "none" });
+  });
+
+  it("the declared file-read item still blocks when the tool is viable; the event names the clause", async () => {
+    const steps = [makeStep("thought", DECLINE)];
+    const { disposed, gate } = await stopCapturing(stateWith(steps));
+    expect(disposed.state.meta.terminatedBy).not.toBe("abstained");
+    expect(gate.at(-1)?.metadata?.declineCheck).toEqual({ missingTools: [], textAfterEvidence: DECLINE, rejectedBy: "tool-viable" });
+  });
+
+  it("declared/evidence-basis items stay blocking; heuristic-basis ones do not", () => {
+    const state = trace();
+    const out = ["call the `file-read` tool", "write the final answer (shape)"];
+    expect(honestDeclineOf(state, INPUT, out)).toBeUndefined();
+    expect(honestDeclineOf(state, INPUT, out, ["declared", "heuristic"])?.text).toBe(DECLINE);
+    expect(honestDeclineOf(state, INPUT, out, ["declared", "evidence"])).toBeUndefined();
   });
 });
 
