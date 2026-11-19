@@ -458,6 +458,15 @@ export type {
 
 export type { JudgmentEvaluated, JudgmentFailed, JudgmentShadow } from "./types/judgment-events.js";
 
+export {
+  TotNodeStepDataSchema,
+  TotPathStepDataSchema,
+  CodeActionStepDataSchema,
+  ReflexionStepDataSchema,
+  ReasoningStepDataSchema,
+} from "./types/reasoning-step-data.js";
+export type { ReasoningStepData } from "./types/reasoning-step-data.js";
+
 export type {
   GoalCriterionCheck,
   GoalCriterion,

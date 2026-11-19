@@ -1,6 +1,7 @@
 
 import type { RunOrigin, RunAbortCause, RunAbortReason } from "../origin.js";
 import type { DeliverableReceipt } from "../receipt.js";
+import type { ReasoningStepData } from "../reasoning-step-data.js";
 
 /** Task/agent lifecycle, execution, memory, LLM, tool, reasoning, guardrail and safety events. */
 export type CoreAgentEvent =
@@ -336,6 +337,12 @@ export type CoreAgentEvent =
       readonly messages?: readonly { readonly role: string; readonly content: string }[];
       /** Raw LLM response content before any parsing — logged when logModelIO is enabled */
       readonly rawResponse?: string;
+      /**
+       * Strategy-specific structured payload (ToT node/path, code-action code and
+       * result, reflexion critique) for live visuals. Absent for steps that carry
+       * only text and for older emitters; consumers must tolerate unknown `kind`s.
+       */
+      readonly structured?: ReasoningStepData;
     }
   // ─── Iteration progress (from @reactive-agents/reasoning) ───
   | {
