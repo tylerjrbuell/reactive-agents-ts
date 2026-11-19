@@ -7,7 +7,7 @@
   import PromptPickerButton from "$lib/components/PromptPickerButton.svelte";
   import { formatTaskContextLines, parseTaskContextLines } from "$lib/task-context-lines.js";
   import type { ProviderOption } from "$lib/providers.js";
-  import { modelOptionLabel, type UiModelOption } from "$lib/framework-models.js";
+  import { modelSelectOption, type UiModelOption } from "$lib/framework-models.js";
   import type { PanelAgentConfig } from "../types.js";
 
   interface Props {
@@ -106,7 +106,7 @@
               <div class="config-input acp-muted" role="status">Loading models…</div>
             {:else if modelOptionsForSelect.length > 0}
               <Select id="model-select" class="config-input" bind:value={config.model}
-                options={modelOptionsForSelect.map((m) => ({ value: m.value, label: modelOptionLabel(m) }))} />
+                options={modelOptionsForSelect.map(modelSelectOption)} />
               {#if modelsNote}<p class="acp-hint">{modelsNote}</p>{/if}
             {:else}
               <input id="model-select" bind:value={config.model} placeholder="Model name" class="config-input acp-mono" />

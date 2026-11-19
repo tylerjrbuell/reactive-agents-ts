@@ -41,7 +41,7 @@ import { skillDetail } from "./chat-skills.js";
 import { parseMcpQuickAdd } from "./mcp-quick-add.js";
 import { shellOffDetail, shellOffLabel } from "./shell-from-picks.js";
 import { workspaceLabel, workspaceSourceLabel, workspaceSuggestions } from "./workspace-api.js";
-import type { UiModelOption } from "./framework-models.js";
+import { UNCONFIRMED_MODELS_GROUP, type UiModelOption } from "./framework-models.js";
 import { formatModelPrice } from "@reactive-agents/ui-core";
 
 /** A model row's detail: its id (when the label differs) and its $/1M price, `price unknown` when there is none. */
@@ -134,7 +134,7 @@ export function pickerItems(ctx: PickerContext): MenuItem[] {
       });
       const group = `Models for ${provider}`;
       const rows = models.filter((m) => has(m.value, m.label)).map((m) =>
-        configRow(m.value, "model", m.label || m.value, () => ctx.apply(`Model ${m.value}`, { model: m.value }), { group, active: m.value === model, ...(m.thinking ? { badge: "think", hint: "thinking model" } : {}), detail: modelRowDetail(m) }),
+        configRow(m.value, "model", m.label || m.value, () => ctx.apply(`Model ${m.value}`, { model: m.value }), { group: m.listedBy === "price-book" ? UNCONFIRMED_MODELS_GROUP : group, active: m.value === model, ...(m.thinking ? { badge: "think", hint: "thinking model" } : {}), detail: modelRowDetail(m) }),
       );
       const typed = slash.arg.trim();
       if (typed && !models.some((m) => m.value === typed)) {

@@ -12,15 +12,37 @@ import {
 import { settings } from "$lib/stores/settings.js";
 import { formatModelPrice, type ModelPrice } from "@reactive-agents/ui-core";
 
+/** Where a model row came from (framework `DiscoveredModel.listedBy`). */
+export type ModelListedBy = "live" | "static" | "price-book";
+
 /**
  * `thinking`: true = the model has a thinking mode, false = it does not, null/absent = not known.
  * `price`: $/1M rates from the framework PriceBook (server `GET /api/models/:provider`); absent = price unknown.
+ * `listedBy`: `price-book` rows are known ids the provider did not confirm (listed only when its live list failed).
  */
-export type UiModelOption = { value: string; label: string; thinking?: boolean | null; price?: ModelPrice };
+export type UiModelOption = {
+  value: string;
+  label: string;
+  thinking?: boolean | null;
+  price?: ModelPrice;
+  listedBy?: ModelListedBy;
+};
+
+/** Picker section for model rows the provider did not confirm (PriceBook ids shown when its live list failed). */
+export const UNCONFIRMED_MODELS_GROUP = "Known models (not confirmed live)";
 
 /** Dropdown text for a model: its label, a thinking note, and its $/1M price (ui-core `formatModelPrice`). */
 export function modelOptionLabel(m: UiModelOption): string {
   return `${m.label}${m.thinking ? " (thinking)" : ""} · ${formatModelPrice(m.price)}`;
+}
+
+/** A model as a kit `Select` option: PriceBook-only rows go under {@link UNCONFIRMED_MODELS_GROUP}. */
+export function modelSelectOption(m: UiModelOption): { value: string; label: string; group?: string } {
+  return {
+    value: m.value,
+    label: modelOptionLabel(m),
+    ...(m.listedBy === "price-book" ? { group: UNCONFIRMED_MODELS_GROUP } : {}),
+  };
 }
 
 /** `default` is the framework's current provider-default model id (when known). */
@@ -28,11 +50,17 @@ export type FetchModelsResult = {
   options: UiModelOption[];
   default?: string;
   error?: string;
-  /** Non-fatal hint, e.g. "Showing built-in list (…)" when live discovery failed. */
+  /** Non-fatal hint, e.g. "Live list unavailable (…); showing known models." when live discovery failed. */
   note?: string;
 };
 
-type ModelRow = { name: string; label: string; supportsThinking?: boolean | null; price?: ModelPrice };
+type ModelRow = {
+  name: string;
+  label: string;
+  supportsThinking?: boolean | null;
+  price?: ModelPrice;
+  listedBy?: ModelListedBy;
+};
 
 type ModelsBody = {
   models?: ModelRow[];
@@ -48,13 +76,14 @@ export function mapFrameworkBody(data: { models?: ModelRow[] }): UiModelOption[]
     label: m.label,
     ...(m.supportsThinking !== undefined ? { thinking: m.supportsThinking } : {}),
     ...(m.price ? { price: m.price } : {}),
+    ...(m.listedBy ? { listedBy: m.listedBy } : {}),
   }));
 }
 
 /**
  * One loader for every provider: `GET /api/models/:provider` (Ollama and LiteLLM
  * take the user's endpoint). Server falls back to presets itself; `live:false`
- * becomes a "showing built-in list" note, never an error.
+ * becomes a "showing known models" note, never an error.
  */
 export async function fetchModelsForProvider(
   provider: string,
@@ -80,7 +109,7 @@ export async function fetchModelsForProvider(
     const data = (await res.json()) as ModelsBody;
     const options = mapFrameworkBody(data);
     const live = data.live ?? true;
-    const note = modelsFallbackNote(live, data.error, options.length);
+    const note = modelsFallbackNote(live, data.error, options.length, p);
     return {
       options,
       default: data.default ?? localDef,

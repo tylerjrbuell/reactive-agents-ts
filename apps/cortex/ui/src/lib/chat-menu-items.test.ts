@@ -180,6 +180,18 @@ describe("pickerItems", () => {
     expect(all[0]).toMatchObject({ active: true, badge: "think", hint: "thinking model" });
   });
 
+  test("PriceBook-only model rows sit in their own not-confirmed section", () => {
+    const models = [
+      { value: "grok-4", label: "Grok 4", listedBy: "static" as const },
+      { value: "grok-3-mini", label: "grok-3-mini", listedBy: "price-book" as const },
+    ];
+    const rows = pickerItems(picker("/model ", { provider: "xai", model: "grok-4", models }).ctx);
+    expect(rows.filter((r) => r.key === "grok-4" || r.key === "grok-3-mini").map((r) => [r.key, r.group])).toEqual([
+      ["grok-4", "Models for xai"],
+      ["grok-3-mini", "Known models (not confirmed live)"],
+    ]);
+  });
+
   test("/provider and /model open one list with both sections; the typed command leads", () => {
     const a = pickerItems(picker("/provider ").ctx);
     const b = pickerItems(picker("/model ").ctx);

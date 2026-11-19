@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { Option } from "effect";
-import { priceFor } from "@reactive-agents/llm-provider";
+import { ModelDiscoveryError, priceFor } from "@reactive-agents/llm-provider";
 import { buildCapabilityResponse, createModelsRouter, modelPriceOf, type ModelsDeps } from "../api/models.js";
 
 const noFetch: typeof fetch = Object.assign(
@@ -33,6 +33,32 @@ describe("model prices on /api/models", () => {
     expect(priced?.price?.output).toBe(book.output);
     expect(priced?.price?.source).toBe(book.source);
     expect(body.models.find((m) => m.name === "no-such-model-xyz")?.price).toBeUndefined();
+  });
+
+  it("passes each row's listedBy and the quota reason through when the live list failed", async () => {
+    const app = appWith(async () => ({
+      models: [
+        { ...live("grok-4"), source: "preset" as const, listedBy: "static" as const },
+        { ...live("grok-3-mini"), source: "preset" as const, listedBy: "price-book" as const },
+        live("no-origin-row"),
+      ],
+      live: false,
+      error: new ModelDiscoveryError({ provider: "xai", reason: "quota", message: "xai 403: out of credits", status: 403 }),
+    }));
+    const res = await app.handle(new Request("http://localhost/api/models/xai"));
+    const body = (await res.json()) as {
+      live: boolean;
+      error?: { reason: string; message: string };
+      models: { name: string; listedBy?: string }[];
+    };
+    expect(body.live).toBe(false);
+    expect(body.error).toEqual({ reason: "quota", message: "xai 403: out of credits" });
+    expect(body.models.map((m) => [m.name, m.listedBy])).toEqual([
+      ["grok-4", "static"],
+      ["grok-3-mini", "price-book"],
+      ["no-origin-row", undefined],
+    ]);
+    expect("listedBy" in (body.models[2] ?? {})).toBe(false);
   });
 
   it("Ollama models are local and free", async () => {

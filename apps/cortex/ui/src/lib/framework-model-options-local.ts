@@ -99,21 +99,27 @@ export function localFrameworkModelOptions(provider: string): LocalModelOption[]
 
 /**
  * UI note for a model list that is not live. `undefined` when live. Pure so the
- * wording is pinned by a test. `count` = number of built-in models available.
+ * wording is pinned by a test. `count` = number of known models listed instead
+ * (framework presets, then PriceBook ids). `provider` names the account in the
+ * quota wording.
  */
 export function modelsFallbackNote(
   live: boolean,
   error: { reason: string; message: string } | undefined,
   count: number,
+  provider?: string,
 ): string | undefined {
   if (live) return undefined;
+  const tail = count > 0 ? "showing known models." : "no known models. Type a model id.";
+  if (error?.reason === "quota") {
+    const who = provider ? `${provider} account` : "provider account";
+    return `Live list unavailable: ${who} out of credits or spending limit reached; ${tail}`;
+  }
   const keyVar = error?.reason === "no-credentials" ? /\b[A-Z][A-Z0-9_]*_API_KEY\b/.exec(error.message)?.[0] : undefined;
   const why = keyVar
     ? ` (save a key in Settings · Providers, or set ${keyVar} in the server's environment and restart Cortex)`
     : error
       ? ` (${error.message})`
       : "";
-  return count > 0
-    ? `Showing built-in list${why}.`
-    : `No built-in models${why}. Type a model id.`;
+  return `Live list unavailable${why}; ${tail}`;
 }

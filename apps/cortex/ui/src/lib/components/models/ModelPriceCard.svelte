@@ -28,7 +28,7 @@
   {:else if isLocalPrice(price)}
     <p class="pc-empty">Free (local). Local inference has no per-token bill.</p>
   {:else if isFreePrice(price)}
-    <p class="pc-empty">Free. Calls are billed $0 per million input and output tokens (free tier; no paid tier price).</p>
+    <p class="pc-empty">Free. Calls are billed $0 per 1M input and output tokens.</p>
     <p class="pc-source">Source: {priceSourceLabel(price)}</p>
   {:else}
     <div class="pc-grid"><StatGrid {items} /></div>

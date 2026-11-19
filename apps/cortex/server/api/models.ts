@@ -36,6 +36,13 @@ export interface ModelEntry {
   readonly name: string;
   readonly label: string;
   readonly source: "live" | "preset";
+  /**
+   * Exact origin of the row (framework `DiscoveredModel.listedBy`): `live` = the
+   * provider's list just now; `static` = framework presets; `price-book` = a model
+   * id the bundled PriceBook prices, listed only when the live list failed (not
+   * confirmed available). Absent when the framework did not set it.
+   */
+  readonly listedBy?: "live" | "static" | "price-book";
   /** true/false from the framework (or Ollama api/show); null = unknown. */
   readonly supportsThinking: boolean | null;
   /** $/1M token rates from the framework PriceBook; absent = price unknown. Ollama is `source: "local"`, $0. */
@@ -75,7 +82,7 @@ export function modelPriceOf(provider: string, model: string): ModelPrice | unde
 /** Response of `GET /api/models/:provider`. */
 export interface ModelsResponse {
   readonly models: readonly ModelEntry[];
-  /** False when the provider could not be asked and only built-in presets are listed. */
+  /** False when the provider could not be asked; `models` is then the known list (presets, then PriceBook ids). */
   readonly live: boolean;
   /** Why discovery failed (present when `live` is false and a fetch was needed). */
   readonly error?: { readonly reason: string; readonly message: string };
@@ -277,6 +284,7 @@ export async function buildModelsResponse(
     name: m.id,
     label: m.label,
     source: m.source,
+    ...(m.listedBy !== undefined ? { listedBy: m.listedBy } : {}),
     supportsThinking:
       provider === "ollama" && m.source === "live" && baseUrl
         ? await ollamaSupportsThinking(listFetch, baseUrl, m.id)
