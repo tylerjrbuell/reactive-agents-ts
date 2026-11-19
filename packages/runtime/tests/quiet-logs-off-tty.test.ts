@@ -27,13 +27,14 @@ const captureConsoleLog = () => {
   return { lines, restore: () => { console.log = original; } };
 };
 
-const captureConsoleWarn = () => {
+const captureStderr = () => {
   const lines: string[] = [];
-  const original = console.warn;
-  console.warn = (...args: unknown[]) => {
-    lines.push(args.map(String).join(" "));
-  };
-  return { lines, restore: () => { console.warn = original; } };
+  const original = process.stderr.write;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    lines.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  return { lines, restore: () => { process.stderr.write = original; } };
 };
 
 describe("bindExecutionObservability: verbosity default follows stdout", () => {
@@ -77,7 +78,7 @@ describe("makeExecutionLogger: warnings-only live printing", () => {
     // stderr, not stdout (dx-warden 2026-11-17): a piped run's stdout carries
     // only the answer, so `agent | jq` style hosts never see a warning line.
     const out = captureConsoleLog();
-    const cap = captureConsoleWarn();
+    const cap = captureStderr();
     try {
       const seen = await Effect.runPromise(
         Effect.gen(function* () {

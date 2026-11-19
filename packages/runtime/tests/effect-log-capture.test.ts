@@ -15,21 +15,23 @@ import { ReactiveAgents } from "../src/index.js";
  * ENGINE uses it. If anyone restores `Logger.none`, this goes red.
  */
 // Captures stdout AND stderr writes: off a TTY, live warnings print on stderr
-// (console.warn) so piped stdout carries only the answer.
+// (process.stderr.write) so piped stdout carries only the answer.
 const captureConsole = () => {
   const lines: string[] = [];
   const originalLog = console.log;
-  const originalWarn = console.warn;
-  const push = (...args: unknown[]) => {
+  const originalStderrWrite = process.stderr.write;
+  console.log = (...args: unknown[]) => {
     lines.push(args.map(String).join(" "));
   };
-  console.log = push;
-  console.warn = push;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    lines.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
   return {
     lines,
     restore: () => {
       console.log = originalLog;
-      console.warn = originalWarn;
+      process.stderr.write = originalStderrWrite;
     },
   };
 };

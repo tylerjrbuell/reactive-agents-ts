@@ -160,7 +160,9 @@ export const makeExecutionLogger = (
       const prefix = loggerConfig.logPrefix ?? "";
       yield* logger.subscribe((event, formatted) =>
         isWarningOrError(event)
-          ? Effect.sync(() => { console.warn(`${prefix}${formatted}`); })
+          // Deliberate stderr output channel (the warnings-only sink), not
+          // ad-hoc logging: the event already went through the logger/EventBus.
+          ? Effect.sync(() => { process.stderr.write(`${prefix}${formatted}\n`); })
           : Effect.void,
       );
     }
