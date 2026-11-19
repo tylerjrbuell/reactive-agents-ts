@@ -208,6 +208,11 @@ export function actOrAnswerMode(): boolean | "proactive" | "auto" {
   return v === "proactive" || v === "auto" ? v : v === "1";
 }
 
+/** `true` when `RA_ACT_OR_ANSWER` is unset or blank (the OFF-by-default state). */
+export function actOrAnswerFlagUnset(): boolean {
+  return readFlag("RA_ACT_OR_ANSWER") === undefined;
+}
+
 /**
  * Input coverage: compile one requirement per input the task lists, so one read
  * does not satisfy every listed input (`kernel/capabilities/verify/derive-inputs.ts`).

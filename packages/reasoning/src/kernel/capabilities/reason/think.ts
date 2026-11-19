@@ -51,6 +51,7 @@ import { shouldInjectDriverInstructions } from "../decide/tool-gating.js";
 import { emitToolSurfaceResolved, emitProjectionRendered, emitSignalRendered, emitSignalEffect } from "../../utils/diagnostics.js";
 import { emitCuratorDecisions } from "./curator-decisions.js";
 import { degradedParts, toLLMMessages } from "../../../assembly/to-llm-messages.js";
+import { emitCalibrationEffect } from "../../utils/calibration-trace.js";
 import { emitContentPartsDegraded } from "../../utils/content-part-degraded.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
@@ -428,6 +429,14 @@ export function handleThinking(
     // Stable tool list: recall stays listed; a call with nothing to read is
     // refused at call time (tool-surface.ts readiness table) instead.
     const recallForceOn = input.calibration?.observationHandling === "uses-recall" || h.stableToolList === true;
+    if (input.calibration?.observationHandling === "uses-recall" && state.iteration === 0) {
+      yield* emitCalibrationEffect(state.taskId, state.iteration, {
+        field: "observationHandling",
+        value: "uses-recall",
+        consumer: "recall-overflow-gate",
+        effect: "recall kept on the tool surface (force-on)",
+      });
+    }
     const gatedToolSchemas = recallGateEnabled()
       ? filterRecallByOverflow(filteredToolSchemas, conversationMessages, recallForceOn)
       : filteredToolSchemas;

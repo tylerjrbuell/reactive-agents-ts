@@ -26,6 +26,7 @@ import { executeTreeOfThought } from "./tree-of-thought.js";
 import { executeBlueprint } from "./blueprint.js";
 import { resolveStrategyServices, compilePromptOrFallback, publishReasoningStep } from "../kernel/utils/service-utils.js";
 import { makeStep } from "../kernel/capabilities/sense/step-utils.js";
+import { emitCalibrationEffect } from "../kernel/utils/calibration-trace.js";
 import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { runStrategy } from "./substrate/strategy-run.js";
@@ -193,6 +194,12 @@ export const executeAdaptive = (
       // W2d 2.6 — classifier-skip: reliability "low"/"skip" means skip the LLM
       // classify round-trip entirely and default to the honest reactive strategy.
       selectedStrategy = "reactive";
+      yield* emitCalibrationEffect(input.taskId ?? "adaptive", 0, {
+        field: "classifierReliability",
+        value: input.calibration?.classifierReliability,
+        consumer: "adaptive-classifier",
+        effect: "classify call skipped; strategy=reactive",
+      });
       run.record(
         makeStep(
           "thought",

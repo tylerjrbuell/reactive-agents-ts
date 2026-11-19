@@ -8,6 +8,8 @@ import type { ToolCallSpec } from "@reactive-agents/tools";
 import { duplicateGuard } from "../../src/kernel/capabilities/act/guard.js";
 import { deriveListedInputs } from "../../src/kernel/capabilities/verify/derive-inputs.js";
 import { makeKernelInput, makeKernelState } from "../../src/testing/kernel-fixtures.js";
+import { makeStep } from "../../src/kernel/capabilities/sense/step-utils.js";
+import { makeObservationResult } from "../../src/kernel/utils/observation-helpers.js";
 import { withEvidence } from "./tool-evidence-fixture.js";
 import type { ReasoningStep } from "../../src/types/index.js";
 
@@ -18,18 +20,12 @@ let seq = 0;
 function ranRead(path: string): ReasoningStep[] {
   const id = `c${++seq}`;
   return [
-    { id: `a${seq}`, type: "action", content: "", timestamp: new Date(), metadata: { toolCall: { id, name: "file-read", arguments: { path } } } },
-    {
-      id: `o${seq}`,
-      type: "observation",
-      content: "12 lines",
-      timestamp: new Date(),
-      metadata: {
-        toolCallId: id,
-        observationResult: { success: true, toolName: "file-read", displayText: "12 lines", category: "file-read", resultKind: "data", preserveOnCompaction: true, trustLevel: "untrusted" },
-      },
-    },
-  ] as unknown as ReasoningStep[];
+    makeStep("action", "", { toolCall: { id, name: "file-read", arguments: { path } } }),
+    makeStep("observation", "12 lines", {
+      toolCallId: id,
+      observationResult: makeObservationResult("file-read", true, "12 lines"),
+    }),
+  ];
 }
 
 const repeat: ToolCallSpec = { id: "dup", name: "file-read", arguments: { path: "notes-1.txt" } };

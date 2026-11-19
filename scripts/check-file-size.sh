@@ -170,6 +170,7 @@ GIANT_BAR=1000
 # 2026-11-06 RI controller census cleanup: runner.ts 859->848 (profileMaxTokens seed deleted with the write-only verbosity detector), kernel-state.ts 1445->1378 (dead dispatchedTemperature / pendingCompressionRecommendation / profileMaxTokens / lastIterationTokens fields), tree-of-thought.ts 906->904 (dead contextPressure / currentTemperature controller inputs).
 # 2026-11-06 unavailable-tool hint (surface-hiding fix A): dispatch-think-response.ts 649->577 (standard thinking handler moved verbatim to reason/continue-thinking.ts).
 # 2026-11-06 discover-tools task appendix: reflexion.ts 988->987 (task threaded to the capability resolver; seedCritiques ternary fits one line).
+# 2026-11-19 runner.ts 848->839: calibration profile-override merge moved to kernel/loop/runner-profile-overrides.ts (now traced as profile-overrides-applied).
 # 2026-11-06 toolChoice "required": llm-provider types.ts 1035->987 (ToolDefinition/ToolCall moved verbatim to tool-protocol.ts with the new ToolChoice), local.ts 1182->1150 (Ollama tool wire moved verbatim to providers/ollama-tools.ts, forced-call mapping added there).
 # 2026-11-06 one parameter projection: act.ts 1134->1127 (heal map passes tool schemas whole; the hand-written parameter field picks are gone).
 # 2026-11-06 act-or-answer auto: kernel-state.ts 1378->1355 (KernelEntropyMeta / ControllerDecisionLike moved verbatim to kernel/state/kernel-entropy-meta.ts; +1 actOrAnswerTally meta field).
@@ -225,7 +226,7 @@ SIZE_BASELINE=(
   "runtime/src/builder.ts:2194"
   "runtime/src/execution-engine.ts:944"
   "reasoning/src/kernel/capabilities/decide/arbitrator.ts:796"
-  "reasoning/src/kernel/loop/runner.ts:848"
+  "reasoning/src/kernel/loop/runner.ts:839"
   "reasoning/src/kernel/loop/iterate-pass.ts:263"
   "reasoning/src/strategies/plan-execute.ts:735"
   "benchmarks/src/runner.ts:963"

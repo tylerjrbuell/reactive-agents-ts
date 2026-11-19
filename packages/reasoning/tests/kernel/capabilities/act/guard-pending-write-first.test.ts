@@ -15,6 +15,7 @@ import { makeStep } from "../../../../src/kernel/capabilities/sense/step-utils.j
 import { makeObservationResult } from "../../../../src/kernel/utils/observation-helpers.js";
 import { initialKernelState, type KernelState, type KernelInput } from "../../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
+import { makeKernelInput } from "../../../../src/testing/kernel-fixtures.js";
 import { withEvidence } from "../../tool-evidence-fixture.js";
 
 const TASK = `Six files in your working directory, notes-1.txt through notes-6.txt, each contain one integer. Track the work as a todo list with one item per file. For each notes-N.txt, write out-N.txt containing exactly double that integer (digits only). Finish all six.`;
@@ -38,7 +39,7 @@ const stateOf = (steps: ReasoningStep[]): KernelState =>
     steps,
   });
 
-const input = { task: TASK, requiredTools: [], requiredToolQuantities: {} } as unknown as KernelInput;
+const input: KernelInput = makeKernelInput({ task: TASK, requiredTools: [], requiredToolQuantities: {} });
 
 function refusal(steps: ReasoningStep[]): string {
   const out = duplicateGuard(read("dup", "notes-2.txt"), stateOf(steps), input);

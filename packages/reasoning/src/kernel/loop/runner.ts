@@ -16,7 +16,8 @@ import { resolveAvailableWritingTools } from "../contract/strategy-contract.js";
 import { Effect, FiberRef, Option } from "effect";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
-import { LLMService, DEFAULT_CAPABILITIES, selectAdapter, loadDialectPriorClaim } from "@reactive-agents/llm-provider";
+import { LLMService, DEFAULT_CAPABILITIES, loadDialectPriorClaim } from "@reactive-agents/llm-provider";
+import { applyCalibrationProfileOverrides } from "./runner-profile-overrides.js";
 import { sentinelDeliverable } from "@reactive-agents/core";
 import { createToolCallResolver, selectToolCallingDriver } from "@reactive-agents/tools";
 import { migrateLegacyTodo } from "../state/checklist-migrate.js";
@@ -198,18 +199,8 @@ export function runKernel(
       ? ({ ...CONTEXT_PROFILES[defaultTier], ...effectiveInput.contextProfile } as ContextProfile)
       : CONTEXT_PROFILES[defaultTier];
 
-    // ── Calibration-aware profile overrides ──────────────────────────────────
-    // selectAdapter may return profileOverrides sourced from a ModelCalibration
-    // (e.g., optimalToolResultChars). Apply these once up-front so every phase
-    // sees calibrated values via KernelContext.profile.
-    const { profileOverrides } = selectAdapter(
-      { supportsToolCalling: true },
-      baseProfile.tier,
-      effectiveInput.modelId,
-    );
-    const mergedProfile: ContextProfile = profileOverrides
-      ? ({ ...baseProfile, ...profileOverrides } as ContextProfile)
-      : baseProfile;
+    // Calibration-aware profile overrides, applied once (and traced) so every phase sees them.
+    const mergedProfile: ContextProfile = yield* applyCalibrationProfileOverrides(baseProfile, effectiveInput.modelId, options.taskId ?? "default");
     // S1.4 — derive the effective context window from the model Capability
     // unless the caller explicitly set contextProfile.maxTokens (their value
     // wins). Without this, local tier stays at the 32K placeholder while

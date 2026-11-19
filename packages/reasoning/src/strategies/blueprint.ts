@@ -57,6 +57,7 @@ import { forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-obse
 import type { JudgedReasoningResult } from "../kernel/capabilities/sense/finalize-result.js";
 import { resolveProfile } from "../context/profile-resolver.js";
 import { extractDeliverableContent } from "../kernel/utils/stream-parser.js";
+import { emitCalibrationEffect, type CalibrationEffect } from "../kernel/utils/calibration-trace.js";
 import { extractGoalText, joinedStepResults } from "./planning/plan-text.js";
 import type { ToolSchema } from "../kernel/capabilities/attend/tool-formatting.js";
 import type { ResultCompressionConfig } from "@reactive-agents/tools";
@@ -135,10 +136,19 @@ interface BlueprintInput {
 // weaker tool-callers are capped or linearized so a parallel batch of tool
 // calls a model can't reliably emit/track never executes concurrently.
 
-function resolveWorkerConcurrency(input: BlueprintInput): number {
+/** The worker concurrency and, when a calibration field set it, that field's effect. */
+export interface WorkerConcurrency {
+  readonly value: number;
+  readonly cause?: CalibrationEffect;
+}
+
+export function resolveWorkerConcurrency(input: BlueprintInput): WorkerConcurrency {
   const tier = resolveProfile(input.modelId ?? "mid").tier;
   const cal = input.calibration;
-
+  const byCal = (field: string, v: unknown, value: number): WorkerConcurrency => ({
+    value,
+    cause: { field, value: v, consumer: "blueprint-worker-concurrency", effect: `concurrency=${value}` },
+  });
   // Hard cap to 1 when the model cannot reliably batch/parse tool calls:
   //  - parallelCallCapability "sequential-only"
   //  - toolCallDialect not native function-calling (text-parsed)
@@ -146,9 +156,9 @@ function resolveWorkerConcurrency(input: BlueprintInput): number {
   //  carries no source field — toolCallDialect/parallelCallCapability are the
   //  available signals; dialect "none" is treated as non-native → 1.)
   if (cal) {
-    if (cal.parallelCallCapability === "sequential-only") return 1;
-    if (cal.toolCallDialect && cal.toolCallDialect !== "native-fc") return 1;
-    if (cal.parallelCallCapability === "partial") return 2;
+    if (cal.parallelCallCapability === "sequential-only") return byCal("parallelCallCapability", cal.parallelCallCapability, 1);
+    if (cal.toolCallDialect && cal.toolCallDialect !== "native-fc") return byCal("toolCallDialect", cal.toolCallDialect, 1);
+    if (cal.parallelCallCapability === "partial") return byCal("parallelCallCapability", cal.parallelCallCapability, 2);
   }
 
   // No calibration → fall back to the tier heuristic.
@@ -156,12 +166,12 @@ function resolveWorkerConcurrency(input: BlueprintInput): number {
     case "frontier":
     case "large":
     case "mid":
-      return 4;
+      return { value: 4 };
     case "local":
       // Local without calibration is the risky one-shot-planner case — cap to 2.
-      return 2;
+      return { value: 2 };
     default:
-      return 1;
+      return { value: 1 };
   }
 }
 
@@ -410,7 +420,8 @@ const blueprintBody = (
     // ── EXECUTE (parallel DAG worker — tool_calls 0-LLM, analysis/composite via shared executor) ──
     yield* emitLog({ _tag: "phase_started", phase: "blueprint:execute", timestamp: new Date() });
 
-    const concurrency = resolveWorkerConcurrency(input);
+    const { value: concurrency, cause: concurrencyCause } = resolveWorkerConcurrency(input);
+    if (concurrencyCause) yield* emitCalibrationEffect(taskId, 0, concurrencyCause);
     const planChecklist = yield* makePlanChecklist({ ledger: run.ledgerSink, eventBus, taskId,
       ...(input.agentId ? { agentId: input.agentId } : {}), site: "reasoning/src/strategies/blueprint.ts:plan-checklist" });
 

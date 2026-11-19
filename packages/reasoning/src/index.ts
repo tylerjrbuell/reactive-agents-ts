@@ -394,7 +394,7 @@ export {
   scoresEntropyInline,
 } from "./kernel/state/kernel-constants.js";
 // ─── HarnessConfig — the typed per-agent harness control surface (W3) ───
-export { resolveHarnessConfig, defaultResolvedHarness, fromDisclosureMode, resolveActOrAnswer, resolveRunStartHarness, llmRecoveryBudgetOf, DEFAULT_LLM_RECOVERY_BUDGET } from "./harness-config.js";
+export { resolveHarnessConfig, defaultResolvedHarness, fromDisclosureMode, resolveActOrAnswer, actOrAnswerIsDefault, resolveRunStartHarness, llmRecoveryBudgetOf, DEFAULT_LLM_RECOVERY_BUDGET } from "./harness-config.js";
 export type {
   HarnessConfig,
   ResolvedHarness,

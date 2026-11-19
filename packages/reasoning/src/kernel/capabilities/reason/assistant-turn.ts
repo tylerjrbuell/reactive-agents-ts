@@ -162,16 +162,29 @@ const proseMeta = (thought: string, dialect: string): AssistantTurnMeta => ({
   dialect,
 });
 
+/**
+ * The dialect a turn really used. A resolver that reports `"none"` for a turn
+ * that carried provider-native calls (and resolved or abstained on them) did
+ * not observe "no dialect": the calls were native function calling.
+ */
+export function dialectOfTurn(resolution: AssistantTurnResolution, nativeCallCount: number): string {
+  const { result, dialect } = resolution;
+  return dialect === "none" && nativeCallCount > 0 && (result._tag === "tool_calls" || result._tag === "abstained")
+    ? "native-fc"
+    : dialect;
+}
+
 /** Classify the resolver verdict into the step annotation (pure). */
 export function describeResolution(
   resolution: AssistantTurnResolution,
   params: Pick<ResolveAssistantTurnParams, "nativeCalls" | "thought">,
 ): AssistantTurnMeta {
-  const { result, dialect } = resolution;
+  const { result } = resolution;
   const { thought, nativeCalls } = params;
+  const dialect = dialectOfTurn(resolution, nativeCalls.length);
   if (result._tag === "tool_calls") {
     const ids = result.calls.map((c) => c.id);
-    return dialect === "native-fc" || (dialect === "none" && nativeCalls.length > 0)
+    return dialect === "native-fc"
       ? callsMeta(thought, "native", dialect, ids, [])
       : callsMeta(thought, "text", dialect, ids, consumedSpansOf(thought, result.calls));
   }
@@ -221,7 +234,7 @@ export function resolveAssistantTurn(params: ResolveAssistantTurnParams): Effect
     if (resolver === undefined) {
       return {
         meta: nativeCalls.length > 0
-          ? callsMeta(thought, "native", "none", nativeCalls.map((c) => c.id), [])
+          ? callsMeta(thought, "native", "native-fc", nativeCalls.map((c) => c.id), [])
           : proseMeta(thought, "none"),
       };
     }
@@ -236,7 +249,8 @@ export function resolveAssistantTurn(params: ResolveAssistantTurnParams): Effect
     const resolution: AssistantTurnResolution = resolver.resolveWithDialect
       ? yield* resolver.resolveWithDialect(resolverInput, hints)
       : { result: yield* resolver.resolve(resolverInput, hints), dialect: "none" };
-    return { meta: describeResolution(resolution, params), resolution };
+    // The recorded dialect (dispatch writes `state.meta.lastDialectObserved` from it) is the normalized one.
+    return { meta: describeResolution(resolution, params), resolution: { ...resolution, dialect: dialectOfTurn(resolution, nativeCalls.length) } };
   });
 }
 

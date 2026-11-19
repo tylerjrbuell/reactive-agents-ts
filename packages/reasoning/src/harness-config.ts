@@ -34,6 +34,7 @@ import {
   assemblyDebugEnabled,
   promptDumpPathPrefix,
   actOrAnswerMode,
+  actOrAnswerFlagUnset,
   inputCoverageEnabled,
   writeCoverageEnabled,
   stableToolListEnabled,
@@ -294,8 +295,20 @@ export type ActOrAnswerSetting = ActOrAnswerMode | "auto";
 /** The learned per-model choice (`ModelCalibration.actOrAnswer` in llm-provider). */
 export type ActOrAnswerCalibration = "proactive" | "retry" | "off";
 
-/** Where a resolved act-or-answer mode came from. */
-export type ActOrAnswerSource = "explicit" | "calibration" | "default";
+/**
+ * Where a resolved act-or-answer mode came from. `"default-off"` is the
+ * never-configured OFF state (no config value, no `RA_ACT_OR_ANSWER`), distinct
+ * from an `"explicit"` setting of `false`.
+ */
+export type ActOrAnswerSource = "explicit" | "calibration" | "default" | "default-off";
+
+/**
+ * `true` when nothing set act-or-answer: no `HarnessConfig.actOrAnswer` and no
+ * `RA_ACT_OR_ANSWER`. Callers pass it as `resolveActOrAnswer`'s `unconfigured`.
+ */
+export function actOrAnswerIsDefault(config: { readonly actOrAnswer?: ActOrAnswerSetting } | undefined): boolean {
+  return config?.actOrAnswer === undefined && actOrAnswerFlagUnset();
+}
 
 /** A resolved act-or-answer mode and where it came from. */
 export interface ResolvedActOrAnswer {
@@ -321,8 +334,9 @@ export function resolveActOrAnswer(
   configured: ActOrAnswerSetting,
   calibration?: { readonly actOrAnswer?: ActOrAnswerCalibration },
   provider?: string,
+  unconfigured?: boolean,
 ): ResolvedActOrAnswer {
-  if (configured !== "auto") return { mode: configured, source: "explicit" };
+  if (configured !== "auto") return { mode: configured, source: configured === false && unconfigured === true ? "default-off" : "explicit" };
   const learned = calibration?.actOrAnswer;
   if (learned !== undefined) return { mode: FROM_CALIBRATION[learned], source: "calibration" };
   return { mode: provider === "ollama", source: "default" };

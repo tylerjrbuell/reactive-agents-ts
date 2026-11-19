@@ -14,6 +14,7 @@ import { TextParseDriver, type ToolCallSpec } from "@reactive-agents/tools";
 import { handleActing } from "../../../src/kernel/capabilities/act/act.js";
 import { writeBeforeReadRefusal } from "../../../src/kernel/capabilities/act/batch-read-first.js";
 import { initialKernelState, noopHooks, type KernelContext, type KernelInput, type KernelState, type ToolServiceInstance } from "../../../src/kernel/state/kernel-state.js";
+import { makeKernelInput } from "../../../src/testing/kernel-fixtures.js";
 import { CONTEXT_PROFILES } from "../../../src/context/context-profile.js";
 import type { StepId } from "../../../src/types/step.js";
 
@@ -21,7 +22,7 @@ const TASK = `Six files in your working directory, notes-1.txt through notes-6.t
 
 const read = (id: string, path: string): ToolCallSpec => ({ id, name: "file-read", arguments: { path } });
 const write = (id: string, path: string, content = "?"): ToolCallSpec => ({ id, name: "file-write", arguments: { path, content } });
-const inputOf = { task: TASK, requiredTools: [], requiredToolQuantities: {} } as unknown as KernelInput;
+const inputOf: KernelInput = makeKernelInput({ task: TASK, requiredTools: [], requiredToolQuantities: {} });
 const emptyState = (): KernelState =>
   initialKernelState({ maxIterations: 14, strategy: "react-kernel", kernelType: "react", taskId: "batch-read-first" });
 
