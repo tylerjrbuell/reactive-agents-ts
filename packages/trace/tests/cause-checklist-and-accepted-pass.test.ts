@@ -66,3 +66,33 @@ describe("a strategy-accepted answer after a capped pass is not a terminal misla
     expect(analyzeCause(untolerated).cause).toBe("terminal-mislabel");
   });
 });
+
+// Since 8c0d95e6d the strategy records its own terminal_decision (status done,
+// authority strategy-accepted) after the capped pass's failed one, and the
+// outcome names that authority. Synthetic: only the terminal records, no ledger
+// acceptance and no tolerance stamp, so the older exemption cannot carry it.
+describe("a strategy-accepted terminal_decision (8c0d95e6d+) is consistent on its own", () => {
+  const acceptedRun = (finalStatus: string, outcomeStatus: "completed" | "partial"): Trace => {
+    let seq = 0;
+    const at = (iter: number) => ({ runId: "r2", iter, seq: seq++, timestamp: 1000 + seq });
+    const events: TraceEvent[] = [
+      mk({ ...at(-1), kind: "run-started", task: "t", model: "m", provider: "gemini", config: {} }),
+      mk({ ...at(10), kind: "guard-fired", guard: "terminal_decision", outcome: "terminate", reason: "max_iterations", metadata: { terminatedBy: "max_iterations", status: "failed", finalStatus: "failed", authority: "strategy-exhausted", iterationCap: { counter: "iteration", observed: 10, threshold: 10, capped: true } } }),
+      mk({ ...at(0), kind: "guard-fired", guard: "terminal_decision", outcome: "terminate", reason: "max_iterations", metadata: { terminatedBy: "max_iterations", status: "done", finalStatus, authority: "strategy-accepted" } }),
+      mk({ ...at(-1), kind: "run-completed", status: "success", output: "report", terminatedBy: "max_iterations", outcome: { authority: "strategy-accepted", status: outcomeStatus, success: outcomeStatus === "completed", tolerated: false }, totalTokens: 1, totalCostUsd: 0, durationMs: 1 }),
+    ];
+    return { runId: "r2", events };
+  };
+
+  it("last terminal_decision strategy-accepted, done, finalStatus = outcome.status: not a mislabel", () => {
+    const c = analyzeCause(acceptedRun("completed", "completed"));
+    expect(c.cause).not.toBe("terminal-mislabel");
+    expect(c).toMatchObject({ outcomeStatus: "success", authority: "strategy-accepted" });
+  });
+
+  it("the same terminal whose finalStatus disagrees with the outcome is a mislabel", () => {
+    const c = analyzeCause(acceptedRun("partial", "completed"));
+    expect(c.cause).toBe("terminal-mislabel");
+    expect(c.evidence.map((e) => e.detail).join("\n")).toContain("authority=strategy-accepted finalStatus=partial vs run-completed.outcome.status=completed");
+  });
+});

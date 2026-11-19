@@ -54,7 +54,7 @@ import type { Trace } from "./replay.js";
 import { lastRunSegment } from "./segments.js";
 import { runEndingGuardEvents } from "./guard-run-end.js";
 import { uncalledClaimedTools } from "./tool-claim.js";
-import { UNRESOLVED_TOOL_CALL_GUARD, acceptedAfterFailedPass } from "./terminal-predicates.js";
+import { UNRESOLVED_TOOL_CALL_GUARD, acceptedAfterFailedPass, strategyAcceptedStatusConflict } from "./terminal-predicates.js";
 import type {
   TraceEvent,
   GuardFiredEvent,
@@ -514,6 +514,11 @@ const ruleMislabel: Rule = (f) => {
   // A capped pass's failed terminal the strategy answered past is explained (terminal-predicates.ts).
   if (f.isSuccess && tdStatus === "failed" && !acceptedAfterFailedPass(f.terminalDecision, f.completed, f.ev)) {
     ev.push(ev1(f.terminalDecision!, `terminal_decision.status=failed but run-completed.status=success`));
+  }
+  // A strategy-accepted terminal is consistent only when its finalStatus is the outcome's.
+  const accepted = strategyAcceptedStatusConflict(f.terminalDecision, f.completed);
+  if (accepted !== undefined) {
+    ev.push(ev1(f.terminalDecision!, `terminal_decision authority=strategy-accepted finalStatus=${accepted.finalStatus} vs run-completed.outcome.status=${accepted.outcomeStatus}`));
   }
   const lastKernelVerdict = f.terminalVerdicts.at(-1);
   const abstained = f.terminatedBy === "abstained" || f.completed.outcome?.status === "abstained";
