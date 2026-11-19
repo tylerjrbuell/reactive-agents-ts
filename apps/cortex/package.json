@@ -64,7 +64,6 @@
     "effect": "^3.10.0",
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/memory": "workspace:*",
-    "@reactive-agents/reasoning": "workspace:*",
     "@reactive-agents/runtime": "workspace:*",
     "@reactive-agents/ui-core": "workspace:*",
     "@reactive-agents/observability": "workspace:*",
@@ -77,6 +76,7 @@
     "@reactive-agents/reactive-intelligence": "workspace:*"
   },
   "devDependencies": {
+    "@reactive-agents/reasoning": "workspace:*",
     "playwright-core": "1.61.1",
     "typescript": "^6.0.3",
     "tsup": "^8.5.1",

@@ -76,7 +76,6 @@
         "@reactive-agents/memory": "workspace:*",
         "@reactive-agents/observability": "workspace:*",
         "@reactive-agents/reactive-intelligence": "workspace:*",
-        "@reactive-agents/reasoning": "workspace:*",
         "@reactive-agents/replay": "workspace:*",
         "@reactive-agents/runtime": "workspace:*",
         "@reactive-agents/tools": "workspace:*",
@@ -86,6 +85,7 @@
         "elysia": "^1.1.0",
       },
       "devDependencies": {
+        "@reactive-agents/reasoning": "workspace:*",
         "@types/bun": "1.4.4",
         "playwright-core": "1.61.1",
         "tsup": "^8.5.1",
