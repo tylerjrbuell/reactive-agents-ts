@@ -10,7 +10,7 @@
   import ChatSubAgentCards from "$lib/components/ChatSubAgentCards.svelte";
   import ChatPlanCard from "$lib/components/ChatPlanCard.svelte";
   import StrategyCard from "$lib/components/strategy/StrategyCard.svelte";
-  import { strategyStatusOf } from "@reactive-agents/ui-core";
+  import { reactLoopOf, strategyStatusOf } from "@reactive-agents/ui-core";
   import { planCardModel } from "$lib/checklist-view.js";
   import ChatRunEndingNote from "$lib/components/ChatRunEndingNote.svelte";
   import ChatRunFailedNote from "$lib/components/ChatRunFailedNote.svelte";
@@ -73,6 +73,8 @@
   const phaseLine = $derived(turn.strategyRun ? strategyStatusOf(turn.strategyRun) : undefined);
   // The goal-checks card already draws a plan strategy's plan: the strategy card adds nothing then.
   const hasPlan = $derived(turn.checklist !== undefined && planCardModel(turn.checklist, { ended: !turn.streaming }).plan.length > 0);
+  // The ReAct loop the reactive card draws: thought, action, observation per iteration (args redacted by previewArgs).
+  const reactLoop = $derived(reactLoopOf({ steps: turn.reasoningSteps ?? [], calls: turn.toolCalls ?? [], ended: !turn.streaming, describeArgs: previewArgs }));
   // A run waiting on the user's approval is not thinking: the approval card says what it waits for.
   const waitingOnYou = $derived(turn.streaming === true && (turn.liveApproval !== undefined || turn.liveInteraction !== undefined));
   const showIdle = $derived(turn.streaming === true && answer === undefined && !lastIsRunningGroup && !waitingOnYou);
@@ -161,7 +163,7 @@
     <ChatLiveInteraction question={turn.liveInteraction} />
   {/if}
 
-  {#if turn.strategyRun}<StrategyCard run={turn.strategyRun} {hasPlan} />{/if}
+  {#if turn.strategyRun}<StrategyCard run={turn.strategyRun} {hasPlan} loop={reactLoop} />{/if}
 
   {#if showIdle && turn.awaitingModelSince !== undefined}
     <ChatModelWait since={turn.awaitingModelSince} provider={turn.provider} {stepLine} />

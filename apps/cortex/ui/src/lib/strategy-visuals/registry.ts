@@ -6,7 +6,7 @@
  *
  * The phases themselves (the label grammar and the fold) live in ui-core `strategy-phases.ts`.
  */
-import { attemptsOf, strategySpecOf, totTreeOf, type StrategyRunState } from "@reactive-agents/ui-core";
+import { attemptsOf, reactLoopChip, strategySpecOf, totTreeOf, type ReactLoop, type StrategyRunState } from "@reactive-agents/ui-core";
 
 /** The view a strategy gets. */
 export type StrategyVisualKind =
@@ -17,7 +17,9 @@ export type StrategyVisualKind =
   /** Rounds of draft / critique / improve, or code attempts. */
   | "attempts"
   /** A strategy whose plan the goal-checks card already draws: no card of its own while a plan is shown. */
-  | "plan";
+  | "plan"
+  /** The ReAct loop: per iteration the thought, the tool action and its observation (reactive, react). */
+  | "loop";
 
 /** One strategy's view and the words it uses. */
 export interface StrategyVisual {
@@ -33,6 +35,9 @@ export const STRATEGY_VISUALS: Readonly<Record<string, StrategyVisual>> = {
   "code-action": { kind: "attempts", noun: "Attempt" },
   "plan-execute": { kind: "plan" },
   blueprint: { kind: "plan" },
+  // `react` resolves here through its label prefix. `direct` and `adaptive` keep the generic stepper:
+  // direct has no loop, and adaptive hands over to the strategy it picked (whose own view then applies).
+  reactive: { kind: "loop" },
 };
 
 const GENERIC: StrategyVisual = { kind: "stepper" };
@@ -78,11 +83,20 @@ function summaryOf(run: StrategyRunState, visual: StrategyVisual): string {
  * The card for a run. `statusLine` is the live phase text (ui-core `strategyStatusOf`); `hasPlan` is true
  * when the goal-checks card already draws the strategy's plan, so a `plan` view adds nothing.
  */
-export function strategyCardModel(run: StrategyRunState | undefined, opts: { readonly statusLine?: string | undefined; readonly hasPlan: boolean }): StrategyCardModel {
+export function strategyCardModel(
+  run: StrategyRunState | undefined,
+  opts: { readonly statusLine?: string | undefined; readonly hasPlan: boolean; readonly loop?: ReactLoop | undefined },
+): StrategyCardModel {
   const visual = strategyVisualOf(run?.strategy);
   const empty: StrategyCardModel = { show: false, kind: visual.kind, noun: visual.noun ?? "Round", title: "", chip: "", openByDefault: false };
   if (!run || run.current === undefined || run.rows.length === 0) return empty;
   if (visual.kind === "plan" && opts.hasPlan) return empty;
+  if (visual.kind === "loop") {
+    // A loop with nothing in it yet (or a run that never thought or acted) has nothing to draw.
+    const chip = opts.loop ? reactLoopChip(opts.loop, run.ended) : undefined;
+    if (chip === undefined) return empty;
+    return { show: true, kind: "loop", noun: "Iteration", title: run.label ?? "Reactive", chip, openByDefault: !run.ended };
+  }
   const failed = run.rows.some((r) => r.status === "failed");
   return {
     show: true,

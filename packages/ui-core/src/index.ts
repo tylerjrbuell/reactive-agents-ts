@@ -66,6 +66,17 @@ export {
   type TurnSummary,
 } from "./state/turn-steps.js";
 export {
+  reactLoopOf,
+  reactLoopChip,
+  compactArgs,
+  type ReactLoop,
+  type ReactLoopInput,
+  type LoopRow,
+  type LoopAction,
+  type LoopStepInput,
+  type LoopCallInput,
+} from "./state/react-loop.js";
+export {
   buildTurnTranscript,
   turnTranscriptOf,
   persistedTurnTranscriptOf,

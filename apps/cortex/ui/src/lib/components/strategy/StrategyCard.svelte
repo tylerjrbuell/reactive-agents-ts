@@ -5,8 +5,9 @@
    * goal-checks card's, so the two read as one family: open while the strategy runs or a phase
    * failed, collapsed to a one-line summary once it ended, and a click pins the viewer's choice.
    */
-  import type { StrategyRunState } from "@reactive-agents/ui-core";
+  import type { ReactLoop, StrategyRunState } from "@reactive-agents/ui-core";
   import { strategyStatusOf } from "@reactive-agents/ui-core";
+  import ReactLoopRows from "./ReactLoopRows.svelte";
   import { strategyCardModel } from "../../strategy-visuals/registry.js";
   import Icon from "../kit/Icon.svelte";
   import PhaseRows from "./PhaseRows.svelte";
@@ -17,10 +18,12 @@
     run: StrategyRunState | undefined;
     /** True when the goal-checks card already draws the strategy's plan. */
     hasPlan?: boolean;
+    /** The turn's ReAct loop (ui-core `reactLoopOf`); the `loop` view draws it, other views ignore it. */
+    loop?: ReactLoop;
   }
-  const { run, hasPlan = false }: Props = $props();
+  const { run, hasPlan = false, loop }: Props = $props();
 
-  const model = $derived(strategyCardModel(run, { statusLine: run ? strategyStatusOf(run) : undefined, hasPlan }));
+  const model = $derived(strategyCardModel(run, { statusLine: run ? strategyStatusOf(run) : undefined, hasPlan, loop }));
 
   // null = follow the default; a click pins the viewer's choice.
   let pinned = $state<boolean | null>(null);
@@ -43,6 +46,8 @@
           <TotLevels {run} />
         {:else if model.kind === "attempts"}
           <AttemptGroups {run} noun={model.noun} />
+        {:else if model.kind === "loop" && loop}
+          <ReactLoopRows {loop} />
         {:else}
           <PhaseRows rows={run.rows} />
         {/if}
