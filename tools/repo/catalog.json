@@ -359,6 +359,20 @@
       "invoke": "bun run postinstall"
     },
     {
+      "id": "npm:prices:check",
+      "script": "prices:check",
+      "kind": "check",
+      "summary": "Price snapshot drift vs live LiteLLM and age; report-only, always exit 0",
+      "invoke": "bun run prices:check"
+    },
+    {
+      "id": "npm:prices:update",
+      "script": "prices:update",
+      "kind": "build",
+      "summary": "Download LiteLLM prices and regenerate the bundled snapshot",
+      "invoke": "bun run prices:update"
+    },
+    {
       "id": "npm:probe:ollama-fc",
       "script": "probe:ollama-fc",
       "kind": "research",
@@ -854,6 +868,13 @@
       "kind": "test-support",
       "summary": "preloaded by bunfig.toml; not run directly",
       "invoke": "bun test"
+    },
+    {
+      "id": "scripts/update-prices.ts",
+      "path": "scripts/update-prices.ts",
+      "kind": "build",
+      "summary": "Regenerate or drift-check llm-provider's LiteLLM price snapshot",
+      "invoke": "bun run prices:update | bun run prices:check"
     },
     {
       "id": "scripts/validate-cli-externals.ts",

@@ -377,6 +377,21 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "check-prices",
+      "script": "scripts/check-prices.sh",
+      "scope": [
+        "packages/llm-provider/src/price-book/**",
+        "scripts/update-prices.ts",
+        "scripts/check-prices.sh",
+        "tools/repo/checks.json"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "provider-warden",
+      "reviewBy": "2027-02-19"
+    },
+    {
       "id": "check-capabilities",
       "script": "scripts/check-capabilities.sh",
       "scope": [

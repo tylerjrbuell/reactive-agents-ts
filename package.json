@@ -48,6 +48,8 @@
     "docs:dev": "cd apps/docs && bun x astro dev",
     "docs:build": "bun run --cwd apps/docs build",
     "docs:preview": "cd apps/docs && bun x astro preview",
+    "prices:update": "bun scripts/update-prices.ts",
+    "prices:check": "bun scripts/update-prices.ts --check",
     "changeset": "changeset",
     "release": "bun scripts/release.ts",
     "release:dry": "bun scripts/release.ts --dry-run",
