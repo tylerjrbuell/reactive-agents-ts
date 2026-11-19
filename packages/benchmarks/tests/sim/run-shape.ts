@@ -137,7 +137,11 @@ export async function runArm(shape: Shape, harness: HarnessConfig, opts: ArmOpti
         Effect.provide(Layer.mergeAll(policy.layer, tools, EventBusLive)),
         Effect.provide(Logger.minimumLogLevel(LogLevel.None)),
       ),
-      buildRunEnvelope({ harness }),
+      // 2026-11-18 (747b05e5f): the kernel reads the model facet (contextProfile) off the
+      // run envelope, not the strategy input. Without it the shape's tier is ignored and
+      // every run lands on the mid profile, whose base prompt already carries the batching
+      // sentence, so parallelToolHint went inert on iteration-cap-sequential.
+      buildRunEnvelope({ harness, contextProfile: input.contextProfile }),
     ),
   );
 
