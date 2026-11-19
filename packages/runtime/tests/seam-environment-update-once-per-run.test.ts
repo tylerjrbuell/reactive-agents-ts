@@ -41,13 +41,10 @@ describe("G10: environment notice once per run", () => {
     expect(await injections("reactive", NOTICE)).toBe(1);
   }, 30_000);
 
-  // KNOWN DEFECT, owned by kernel-warden (packages/reasoning): the "once" guard
-  // in kernel/capabilities/reflect/environment-update.ts reads the per-pass
-  // kernel signal ledger, which every reflexion pass starts empty, so each
-  // pass re-injects the notice (measured: 2 injections). `it.failing` passes
-  // while the defect stands and turns RED once the guard is run-scoped:
-  // switch it to `it` then.
-  it.failing("reflexion (multi-pass): exactly one injection, not one per pass", async () => {
+  // Formerly a known defect (2 injections: the "once" guard read the per-pass
+  // signal ledger). Fixed by the run-scoped latch `reasoning.environmentUpdateShown`
+  // in kernel/capabilities/reflect/environment-update.ts.
+  it("reflexion (multi-pass): exactly one injection, not one per pass", async () => {
     expect(await injections("reflexion", NOTICE)).toBe(1);
   }, 30_000);
 
