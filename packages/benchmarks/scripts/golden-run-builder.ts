@@ -62,7 +62,12 @@ const STEPS: readonly BuilderStep[] = [
   { line: `.withProvider("${GOLDEN_PROVIDER}")`, apply: (b) => b.withProvider(GOLDEN_PROVIDER) },
   { line: `.withModel("${GOLDEN_MODEL}")`, apply: (b) => b.withModel(GOLDEN_MODEL) },
   { line: `.withReasoning()`, apply: (b) => b.withReasoning() },
-  { line: `.withTools({ builtins: true })`, apply: (b) => b.withTools({ builtins: true }) },
+  // Only the tools the task needs. `builtins: true` attaches every capability
+  // tool's schema to every turn; the lean set is what scratch.ts uses.
+  {
+    line: `.withTools({ builtins: ["file-write", "web-search"] })`,
+    apply: (b) => b.withTools({ builtins: ["file-write", "web-search"] }),
+  },
   { line: `.withObservability()`, apply: (b) => b.withObservability() },
   // gemma4:e4b advertises a `thinking` capability; without this every captured
   // thought step has empty content.

@@ -1,0 +1,6 @@
+01M7T6506ZZY6SVMR826JPDZZ7: harness (harness:premature-stop) confidence=probable target=data.json
+  failed    run-completed.status=failure; run-completed.outcome.success=false
+  evidence  guard-fired#67  harness stop terminatedBy=max_iterations at iteration 2/2; data.json never written
+  evidence  assessment#64  evidence still growing at the stop: last-2 evidenceDelta=1,1, no repeated calls
+  missing   whether the unwritten deliverables fit in the iterations the stop saved
+  activity  guard:exit_gate:terminate, guard:terminal_decision:terminate, requirement:artifact-produced@task-text, requirement:question-answered@floor, requirement:tool-coverage@floor

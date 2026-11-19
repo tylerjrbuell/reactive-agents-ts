@@ -1,0 +1,4 @@
+01M7T6207HZS3HFRQTSB41G4B7: cause=none confidence=decisive status=success authority=model-final
+  evidence  run-completed#133  status=success terminatedBy=end_turn; deliverable_decision=pass (verified)
+  meaning   Finished normally
+  attribution not-failed (not-failed) confidence=decisive — run `rax-diagnose attribute` for evidence

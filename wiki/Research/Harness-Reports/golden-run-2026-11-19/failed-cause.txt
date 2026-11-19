@@ -1,0 +1,5 @@
+01M7T6506ZZY6SVMR826JPDZZ7: cause=budget-cap/cap-cutoff confidence=decisive status=failure authority=strategy-exhausted
+  evidence  guard-fired#67  terminatedBy=max_iterations; iteration 2/2 capped=true; last-2 evidenceDelta>0=true
+  meaning   The run used up its iteration budget
+  next      The run was still making progress at the cap: raise the iteration budget.
+  attribution harness (harness:premature-stop) confidence=probable — run `rax-diagnose attribute` for evidence
