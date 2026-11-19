@@ -78,7 +78,7 @@ export interface JanitorFs {
 /** One reaped (or would-be reaped) entry. */
 export interface Reaped {
   name: string
-  reason: "dead-pid" | "legacy-old"
+  reason: "dead-pid" | "legacy-old" | "compile-cache"
   bytes: number
 }
 
@@ -176,6 +176,88 @@ export function sweepAll(
     out.liveRoots += r.liveRoots
   }
   return out
+}
+
+/** Node's on-disk compile cache in the temp dir (`module.enableCompileCache()`); it regenerates on demand. */
+export const COMPILE_CACHE = "node-compile-cache"
+/** The compile cache is reaped when older than this (mtime)... */
+export const COMPILE_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000
+/** ...or larger than this. Seen at 826 MB on RAM-backed /tmp (2026-11-19). */
+export const COMPILE_CACHE_MAX_BYTES = 512 * 1024 ** 2
+
+/**
+ * Reap `<dir>/node-compile-cache` when stale or oversized. Returns the reaped entry, or undefined when
+ * it is absent, young and small. `dryRun` reports without removing.
+ */
+export function reapCompileCache(fs: JanitorFs, dir: string, opts: { now: number; dryRun: boolean }): Reaped | undefined {
+  const path = join(dir, COMPILE_CACHE)
+  const m = fs.mtimeMs(path)
+  if (m === undefined) return undefined
+  const bytes = fs.bytes(path)
+  if (opts.now - m < COMPILE_CACHE_MAX_AGE_MS && bytes <= COMPILE_CACHE_MAX_BYTES) return undefined
+  if (!opts.dryRun) fs.remove(path)
+  return { name: COMPILE_CACHE, reason: "compile-cache", bytes }
+}
+
+/** A space hog the janitor reports and never deletes, with the command that frees it. */
+export interface Hog {
+  path: string
+  bytes: number
+  kind: "stale-worktree" | "big-tmp"
+  /** Hours since last activity (worktrees only). */
+  idleHours?: number
+  fix: string
+}
+
+/** Worktrees idle longer than this are reported. */
+export const WORKTREE_STALE_MS = 24 * 60 * 60 * 1000
+/** Top-level temp entries the janitor does not own are reported above this size. */
+export const BIG_TMP_BYTES = 500 * 1024 ** 2
+
+/** One agent worktree reading: path, last activity (newest of HEAD commit and index mtime) and size. */
+export interface WorktreeReading {
+  path: string
+  lastActiveMs: number
+  /** Size; only needed for stale worktrees, so a reader may size lazily. */
+  bytes: () => number
+}
+
+/** Worktrees idle past `WORKTREE_STALE_MS`, with the exact remove command. Report only. */
+export function staleWorktrees(worktrees: readonly WorktreeReading[], now: number): Hog[] {
+  return worktrees
+    .filter((w) => now - w.lastActiveMs >= WORKTREE_STALE_MS)
+    .map((w) => ({
+      path: w.path,
+      bytes: w.bytes(),
+      kind: "stale-worktree" as const,
+      idleHours: Math.floor((now - w.lastActiveMs) / 3_600_000),
+      fix: `git worktree remove ${w.path}`,
+    }))
+}
+
+/**
+ * True for temp entries the janitor owns or must never touch: test roots, legacy test dirs, the
+ * compile cache, live slot locks, and `claude-*` (other live agent sessions' scratch).
+ */
+export function janitorOwnsOrSkips(name: string): boolean {
+  return (
+    rootPid(name) !== undefined ||
+    PROTECTED.test(name) ||
+    name === COMPILE_CACHE ||
+    name.startsWith("claude-") ||
+    LEGACY_PREFIXES.some((p) => name.startsWith(p))
+  )
+}
+
+/** Top-level temp entries over `BIG_TMP_BYTES` that the janitor does not own, largest first. Report only. */
+export function bigTmpEntries(dir: string, sizes: ReadonlyMap<string, number>): Hog[] {
+  const out: Hog[] = []
+  for (const [name, bytes] of sizes) {
+    if (bytes <= BIG_TMP_BYTES || janitorOwnsOrSkips(name)) continue
+    const path = join(dir, name)
+    out.push({ path, bytes, kind: "big-tmp", fix: `ls -ld ${path}   # check owner and age before removing it` })
+  }
+  return out.sort((a, b) => b.bytes - a.bytes)
 }
 
 /** Human size: `1.2 GB`, `340 MB`, `12 KB`. */

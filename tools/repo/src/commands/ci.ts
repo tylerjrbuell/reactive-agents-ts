@@ -9,7 +9,7 @@ import { orderJobs, planFromWorkflow, stepKey, type CiJob, type CiPlan, type CiS
 import type { Io } from "../lib/output.ts"
 import { resolveRoot } from "../lib/root.ts"
 import { acquireSlot, pidAlive, SLOT_HELD_ENV } from "../lib/test-slots.ts"
-import { preflightHeavy } from "./janitor.ts"
+import { preflightHeavy, PRESSURE_HINT, pressureStop } from "./janitor.ts"
 import { describeRun, spawnLogged, suiteChunks } from "./test.ts"
 
 /** Workflow the mirror reads. */
@@ -179,6 +179,7 @@ export const ciCommand: Command = {
     "--run <cmd>: install, then only <cmd> in the CI-like clone (reproduce one failure: --run 'bun test path/x.test.ts')",
     "--rev <rev>: commit to mirror (default HEAD); --max-seconds <n>: per-step limit (default 1800); --dry-run: print the plan",
     `A full passing run records the commit in ${VERIFIED_LOG}; the pre-push hook skips commits already recorded.`,
+    "Memory is re-checked before each step: when the guard refuses, no further step starts and the run fails (not recorded as verified).",
     "Logs: .repo-logs/ci-<time>/ (one per step). Takes a machine-wide test slot. Run it in a terminal or a background task: a full run exceeds 10 min.",
   ],
   async run(args, io) {
@@ -278,6 +279,9 @@ export const ciCommand: Command = {
       const rows: { job: string; name: string; status: "pass" | "fail" | "not-run" | "skip" | "shared"; seconds?: number; log?: string; reason?: string }[] = []
       let firstFailLog: string | undefined
       let n = 0
+      // Re-checked before each step: a long run that grows into memory pressure stops scheduling steps.
+      let stopReason: string | undefined
+      let stopPrinted = false
       for (const it of items) {
         if ("skip" in it) {
           rows.push({ job: it.skip.job, name: it.skip.name, status: "skip", reason: it.skip.reason })
@@ -294,6 +298,13 @@ export const ciCommand: Command = {
         if (prior !== undefined) {
           rows.push({ job: s.job, name: s.name, status: "shared", log: prior.log })
           if (!prior.ok) failedJobs.add(s.job)
+          continue
+        }
+        stopReason ??= pressureStop()
+        if (stopReason !== undefined) {
+          if (!stopPrinted) io.result(`memory guard: ${stopReason}; starting no more steps`)
+          stopPrinted = true
+          rows.push({ job: s.job, name: s.name, status: "not-run", reason: "memory guard" })
           continue
         }
         n += 1
@@ -327,6 +338,7 @@ export const ciCommand: Command = {
       const line = `ci ${modeLabel} ${short}: ${count("pass")} passed, ${count("fail")} failed, ${count("not-run")} not run, ${count("skip")} skipped in ${elapsed} (logs: ${relative(root, logDir)})`
       io.data({ sha, mode: modeLabel, steps: rows, elapsed, logDir: relative(root, logDir) })
       if (failedJobs.size > 0) return io.fail(line, `open ${firstFailLog ?? relative(root, logDir)}`)
+      if (stopReason !== undefined) return io.fail(`${line}; stopped by the memory guard (${stopReason})`, PRESSURE_HINT)
       if (mode.kind === "full" && mode.only === undefined) {
         appendFileSync(join(root, VERIFIED_LOG), `${JSON.stringify({ sha, ts: new Date().toISOString(), seconds: Math.round((Date.now() - started) / 1000) })}\n`)
       }

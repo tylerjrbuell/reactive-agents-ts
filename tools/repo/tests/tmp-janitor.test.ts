@@ -2,9 +2,21 @@ import { afterAll, describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { memCapped } from "../src/commands/test.ts"
-import { assessPressure, parseMemAvailable } from "../src/lib/mem-guard.ts"
-import { type JanitorFs, makeTestRoot, realFs, rootPid, sweep } from "../src/lib/tmp-janitor.ts"
+import { pressureStop } from "../src/commands/janitor.ts"
+import { memCapped, runAllTests } from "../src/commands/test.ts"
+import { assessPressure, parseMemAvailable, parseMeminfo } from "../src/lib/mem-guard.ts"
+import { makeIo } from "../src/lib/output.ts"
+import {
+  bigTmpEntries,
+  COMPILE_CACHE,
+  type JanitorFs,
+  makeTestRoot,
+  realFs,
+  reapCompileCache,
+  rootPid,
+  staleWorktrees,
+  sweep,
+} from "../src/lib/tmp-janitor.ts"
 
 const HOUR = 3600_000
 const NOW = 1_000_000 * HOUR
@@ -107,6 +119,120 @@ describe("mem-guard", () => {
     expect(assessPressure({ memAvailableBytes: 8 * GB, tmpfsUsedFrac: 0.6 }).level).toBe("warn")
     expect(assessPressure({ memAvailableBytes: 8 * GB, tmpfsUsedFrac: 0.9 }).level).toBe("refuse")
     expect(assessPressure({}).level).toBe("ok")
+  })
+  const meminfo = (availKb: number, swapTotalKb: number, swapFreeKb: number): string =>
+    `MemTotal:       31926948 kB\nMemAvailable:   ${availKb} kB\nSwapTotal:       ${swapTotalKb} kB\nSwapFree:        ${swapFreeKb} kB\n`
+  const KB_GB = 1024 * 1024
+  test("parses swap used; no swap leaves it unset", () => {
+    const p = parseMeminfo(meminfo(17 * KB_GB, 8 * KB_GB, 2 * KB_GB))
+    expect(p.memAvailableBytes).toBe(17 * 1024 ** 3)
+    expect(p.swapUsedFrac).toBeCloseTo(0.75)
+    expect(parseMeminfo(meminfo(17 * KB_GB, 0, 0)).swapUsedFrac).toBeUndefined()
+  })
+  test("2026-11-19 OOM reading (17 GB available, 8 GB swap exhausted) is not ok", () => {
+    const v = assessPressure(parseMeminfo(meminfo(17 * KB_GB, 8 * KB_GB, 0)))
+    expect(v.level).not.toBe("ok")
+    expect(v.lines.join(" ")).toContain("swap 100% full")
+  })
+  test("swap levels", () => {
+    const GB = 1024 ** 3
+    // 90% swap with plenty of RAM: today's steady state on zram, no noise
+    expect(assessPressure({ memAvailableBytes: 19 * GB, swapUsedFrac: 0.9 }).level).toBe("ok")
+    expect(assessPressure({ memAvailableBytes: 5 * GB, swapUsedFrac: 0.95 }).level).toBe("warn")
+    expect(assessPressure({ memAvailableBytes: 7 * GB, swapUsedFrac: 0.95 }).level).toBe("ok")
+    expect(assessPressure({ memAvailableBytes: 2.5 * GB, swapUsedFrac: 0.98 }).level).toBe("refuse")
+    expect(assessPressure({ memAvailableBytes: 2.5 * GB, swapUsedFrac: 0.95 }).level).toBe("warn")
+    expect(assessPressure({ swapUsedFrac: 0.99 }).level).toBe("warn")
+  })
+  test("pressureStop: a reason only on refuse; a throwing reader never stops a run", () => {
+    expect(pressureStop(() => ({ level: "refuse", lines: ["a", "b"] }))).toBe("a; b")
+    expect(pressureStop(() => ({ level: "warn", lines: ["a"] }))).toBeUndefined()
+    expect(
+      pressureStop(() => {
+        throw new Error("no /proc")
+      }),
+    ).toBeUndefined()
+  })
+})
+
+describe("compile cache", () => {
+  const MB = 1024 ** 2
+  test("reaped when older than 24 h or larger than 512 MB; kept otherwise", () => {
+    for (const [e, reaped] of [
+      [{ age: 25 * HOUR, bytes: 10 * MB }, true],
+      [{ age: 1 * HOUR, bytes: 826 * MB }, true],
+      [{ age: 1 * HOUR, bytes: 100 * MB }, false],
+    ] as const) {
+      const { fs, removed } = fakeFs({ [COMPILE_CACHE]: e })
+      const r = reapCompileCache(fs, "/tmp", { now: NOW, dryRun: false })
+      expect(r !== undefined).toBe(reaped)
+      expect(removed).toEqual(reaped ? [COMPILE_CACHE] : [])
+    }
+  })
+  test("dry run removes nothing; absent cache is a no-op", () => {
+    const { fs, removed } = fakeFs({ [COMPILE_CACHE]: { age: 30 * HOUR, bytes: 5 } })
+    expect(reapCompileCache(fs, "/tmp", { now: NOW, dryRun: true })?.reason).toBe("compile-cache")
+    expect(removed).toEqual([])
+    expect(reapCompileCache(fakeFs({}).fs, "/tmp", { now: NOW, dryRun: false })).toBeUndefined()
+  })
+  test("sweep never treats the compile cache as a legacy test dir", () => {
+    const { fs, removed } = fakeFs({ [COMPILE_CACHE]: { age: 99 * HOUR, bytes: 1 } })
+    sweep(fs, "/tmp", { pidAlive: alive(), now: NOW, legacy: true, dryRun: false })
+    expect(removed).toEqual([])
+  })
+})
+
+describe("hog report", () => {
+  test("stale worktrees get size and the exact remove command; fresh ones are not sized", () => {
+    let sized = 0
+    const hogs = staleWorktrees(
+      [
+        { path: "/r/.claude/worktrees/agent-old", lastActiveMs: NOW - 30 * HOUR, bytes: () => ++sized * 1000 },
+        { path: "/r/.claude/worktrees/agent-new", lastActiveMs: NOW - 2 * HOUR, bytes: () => ++sized * 1000 },
+      ],
+      NOW,
+    )
+    expect(hogs).toEqual([{ path: "/r/.claude/worktrees/agent-old", bytes: 1000, kind: "stale-worktree", idleHours: 30, fix: "git worktree remove /r/.claude/worktrees/agent-old" }])
+    expect(sized).toBe(1)
+  })
+  test("big temp entries: only > 500 MB, never janitor-owned or claude-*", () => {
+    const MB = 1024 ** 2
+    const hogs = bigTmpEntries(
+      "/tmp",
+      new Map([
+        ["huge-thing", 2000 * MB],
+        ["mid-thing", 600 * MB],
+        ["small", 10 * MB],
+        ["claude-1000", 9000 * MB],
+        [COMPILE_CACHE, 900 * MB],
+        ["ra-tests-1-abcdef", 900 * MB],
+        ["repo-test-slots-x", 900 * MB],
+      ]),
+    )
+    expect(hogs.map((h) => h.path)).toEqual(["/tmp/huge-thing", "/tmp/mid-thing"])
+    expect(hogs[0]?.fix).toContain("ls -ld /tmp/huge-thing")
+  })
+})
+
+describe("runAllTests memory stop", () => {
+  test("a refusing guard starts no chunk and names the chunks not run", async () => {
+    const root = mkdtempSync(join(tmpdir(), "ra-allstop-"))
+    try {
+      for (const k of ["a", "b"]) {
+        mkdirSync(join(root, "packages", k), { recursive: true })
+        writeFileSync(join(root, "packages", k, "x.test.ts"), "")
+      }
+      const out: string[] = []
+      const io = makeIo(false, { stdout: (s) => void out.push(s), stderr: (s) => void out.push(s) })
+      const code = await runAllTests(root, "1000", io, 60, undefined, () => "swap 100% full")
+      io.flush()
+      const text = out.join("\n")
+      expect(code).toBe(1)
+      expect(text).toContain("not run (memory guard: swap 100% full): packages/a packages/b")
+      expect(text).toContain("across 0 chunks, 2 not run")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 

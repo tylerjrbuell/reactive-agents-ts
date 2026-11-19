@@ -8,7 +8,7 @@ import type { Io } from "../lib/output.ts"
 import { resolveRoot } from "../lib/root.ts"
 import { acquireSlot, SLOT_HELD_ENV, slotCount } from "../lib/test-slots.ts"
 import { makeTestRoot, TEST_ROOT_ENV } from "../lib/tmp-janitor.ts"
-import { preflightHeavy } from "./janitor.ts"
+import { preflightHeavy, PRESSURE_HINT, pressureStop } from "./janitor.ts"
 
 /** Failure names printed before `... N more`. */
 const FAILURE_CAP = 15
@@ -125,12 +125,15 @@ export interface TestRun {
   maxSeconds: number
   /** Absolute repo root, used to print stack locations repo-relative. */
   root?: string
+  /** Set when the run never started because the memory guard refused mid-suite; the reason. */
+  stopped?: string
 }
 
 /**
  * Run `bun test <paths>` once with output going straight to a log file. Waits for a machine-wide
  * test slot first (see `lib/test-slots.ts`); `notify` gets the one waiting line, if any.
- * `namePattern` is passed as `-t <pattern>` (bun's test-name filter).
+ * `namePattern` is passed as `-t <pattern>` (bun's test-name filter). `beforeStart` runs once the slot
+ * is held; a returned reason releases the slot and returns a `stopped` run without spawning anything.
  */
 export async function execTests(
   root: string,
@@ -140,8 +143,15 @@ export async function execTests(
   maxSeconds: number = DEFAULT_MAX_SECONDS,
   namePattern?: string,
   notify: (line: string) => void = () => {},
+  beforeStart: () => string | undefined = () => undefined,
 ): Promise<TestRun> {
   const slot = await acquireSlot(notify)
+  const stopped = beforeStart()
+  if (stopped !== undefined) {
+    slot.release()
+    const summary: TestSummary = { pass: 0, fail: 0, skip: 0, errors: 0, failures: [], details: {} }
+    return { exit: 0, summary, log: "", failed: true, timedOut: false, maxSeconds, root, stopped }
+  }
   let exit: number
   let timedOut: boolean
   const log = newLogPath(root, logPrefix)
@@ -174,6 +184,7 @@ export async function execTests(
 /** Summary lines for a test run (counts, failure names capped with error excerpts for the first few, log path). */
 export function describeRun(r: TestRun): string[] {
   const s = r.summary
+  if (r.stopped !== undefined) return [`not run: memory guard (${r.stopped})`]
   // A timeout has no meaningful counts: say only that, plus the log.
   if (r.timedOut) return [`fail: timeout after ${r.maxSeconds}s`, `log: ${r.log}`]
   const errors = s.errors !== null && s.errors > 0 ? `, ${s.errors} error` : ""
@@ -266,35 +277,59 @@ export function sumRuns(runs: readonly TestRun[]): { pass: number | null; fail: 
  * `repo test --all`: the whole suite as one `bun test` run per chunk (see `suiteChunks`). Chunks queue on
  * the machine-wide test slots, so at most `slotCount()` run at once. Prints totals, then each failed
  * chunk with its own summary and log; an index log lists every chunk's counts and log.
+ * Before each chunk starts, `stopCheck` re-reads memory pressure; once it refuses, no further chunk
+ * starts (running ones finish) and the run fails naming the chunks not run.
  */
-export async function runAllTests(root: string, timeout: string, io: Io, maxSeconds: number = DEFAULT_MAX_SECONDS, namePattern?: string): Promise<number> {
+export async function runAllTests(
+  root: string,
+  timeout: string,
+  io: Io,
+  maxSeconds: number = DEFAULT_MAX_SECONDS,
+  namePattern?: string,
+  stopCheck: () => string | undefined = pressureStop,
+): Promise<number> {
   const chunks = suiteChunks(root)
   if (chunks.length === 0) return io.fail("no test files found under packages/, apps/, tools/ or scripts/", "bun run repo test <paths…>")
   io.out(`running ${chunks.length} chunks, ${slotCount()} at a time (REPO_TEST_SLOTS overrides)`)
-  const runs = await Promise.all(chunks.map((c) => execTests(root, [`./${c}`], timeout, "test-all", maxSeconds, namePattern)))
+  let stopReason: string | undefined
+  const gate = (): string | undefined => {
+    if (stopReason !== undefined) return stopReason
+    stopReason = stopCheck()
+    if (stopReason !== undefined) io.out(`memory guard: ${stopReason}; starting no more chunks (running ones finish)`)
+    return stopReason
+  }
+  const runs = await Promise.all(chunks.map((c) => execTests(root, [`./${c}`], timeout, "test-all", maxSeconds, namePattern, undefined, gate)))
   const t = sumRuns(runs)
-  const failed = runs.flatMap((r, i) => (r.failed ? [{ chunk: chunks[i] ?? "?", r }] : []))
+  const failed = runs.flatMap((r, i) => (r.failed && r.stopped === undefined ? [{ chunk: chunks[i] ?? "?", r }] : []))
+  const notRun = chunks.filter((_, i) => runs[i]?.stopped !== undefined)
   const index = newLogPath(root, "test-all-index")
   writeFileSync(
     index,
-    runs.map((r, i) => `${chunks[i]}\t${r.failed ? "FAIL" : "ok"}\t${describeRun(r)[0] ?? ""}\t${r.log}`).join("\n") + "\n",
+    runs.map((r, i) => `${chunks[i]}\t${r.stopped !== undefined ? "NOT-RUN" : r.failed ? "FAIL" : "ok"}\t${describeRun(r)[0] ?? ""}\t${r.log}`).join("\n") + "\n",
   )
   const indexRel = relative(root, index)
   const errors = t.errors !== null && t.errors > 0 ? `, ${t.errors} error` : ""
-  const head = `${t.pass ?? "?"} pass, ${t.fail ?? "?"} fail, ${t.skip ?? "?"} skip${errors} across ${chunks.length} chunks`
-  io.data({ ...t, chunks: runs.map((r, i) => ({ chunk: chunks[i], failed: r.failed, exit: r.exit, log: r.log, failures: r.summary.failures })), log: indexRel })
-  if (failed.length === 0) {
+  const ran = chunks.length - notRun.length
+  const head = `${t.pass ?? "?"} pass, ${t.fail ?? "?"} fail, ${t.skip ?? "?"} skip${errors} across ${ran} chunks${notRun.length > 0 ? `, ${notRun.length} not run` : ""}`
+  io.data({
+    ...t,
+    chunks: runs.map((r, i) => ({ chunk: chunks[i], failed: r.failed, exit: r.exit, log: r.log, failures: r.summary.failures, ...(r.stopped !== undefined ? { stopped: r.stopped } : {}) })),
+    log: indexRel,
+  })
+  if (failed.length === 0 && notRun.length === 0) {
     io.result(head)
     io.result(`log: ${indexRel}`)
     return 0
   }
-  const lines = [head, `${failed.length} chunk(s) failed:`]
+  const lines = [head]
+  if (notRun.length > 0) lines.push(`not run (memory guard: ${stopReason ?? "refused"}): ${notRun.join(" ")}`)
+  if (failed.length > 0) lines.push(`${failed.length} chunk(s) failed:`)
   for (const { chunk, r } of failed) {
     lines.push(`✗ ${chunk}`)
     for (const l of describeRun(r)) lines.push(`  ${l}`)
   }
   lines.push(`index: ${indexRel}`)
-  return io.fail(lines.join("\n"), `bun run repo test ./${failed[0]?.chunk ?? "<chunk>"}`)
+  return io.fail(lines.join("\n"), failed.length > 0 ? `bun run repo test ./${failed[0]?.chunk ?? "<chunk>"}` : PRESSURE_HINT)
 }
 
 /** `repo test`: scoped bun test with a log file and a summary-only output. */
@@ -304,7 +339,7 @@ export const testCommand: Command = {
   example: "bun run repo test tools/repo/tests",
   detail: [
     "<paths…>: test files or dirs, as for `bun test` (required unless --all)",
-    "--all: full suite, one run per packages/<x>, apps/<x>, tools/<x> and scripts chunk, queued on the test slots; prints totals (pass/fail/skip/error) and each failed chunk. --max-seconds applies per chunk; give the Bash call timeout 600000",
+    "--all: full suite, one run per packages/<x>, apps/<x>, tools/<x> and scripts chunk, queued on the test slots; prints totals (pass/fail/skip/error) and each failed chunk. --max-seconds applies per chunk; give the Bash call timeout 600000. Memory is re-checked before each chunk: when the guard refuses, no new chunk starts and the run fails listing the chunks not run",
     "-t <pattern>: only tests whose name matches (bun's test-name filter)",
     `--timeout <ms>: per-test timeout (default ${DEFAULT_TEST_TIMEOUT})`,
     `--max-seconds <n>: wall-clock limit for the whole run (default ${DEFAULT_MAX_SECONDS}); give the Bash call a matching timeout`,

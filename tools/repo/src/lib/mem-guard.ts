@@ -1,8 +1,9 @@
 import { readFileSync, statfsSync } from "node:fs"
 
 /**
- * Memory pressure guard for heavy commands (`repo test`, `repo verify`, `repo ci`). Refuses to start
- * when the machine is already near an OOM kill; warns before that. Thresholds are fixed constants: a
+ * Memory pressure guard for heavy commands (`repo test`, `repo verify`, `repo ci`, `repo guard` before
+ * builds, probes and benches). Refuses to start when the machine is already near an OOM kill (low
+ * MemAvailable, exhausted swap, full RAM-backed temp); warns before that. Thresholds are fixed constants: a
  * knob that lowers them would be a bypass. Linux only (`/proc/meminfo`); elsewhere the guard is silent.
  */
 
@@ -17,24 +18,56 @@ export const TMP_WARN_FRAC = 0.5
 export const TMP_REFUSE_FRAC = 0.8
 const TMPFS_MAGIC = 0x01021994
 
+/**
+ * Swap rules. MemAvailable alone missed the 2026-11-19 OOM kill: it read ~17 GB while swap (zram, so
+ * itself RAM) was 8.0/8.0 GB full, and the next spike went straight to the OOM killer. Swap this full
+ * means nothing is left to absorb a spike, whatever MemAvailable says.
+ */
+/** Warn above this fraction of swap in use when MemAvailable is below `SWAP_WARN_MEM_BYTES`. */
+export const SWAP_WARN_FRAC = 0.9
+/** MemAvailable below which a mostly-full swap warns. */
+export const SWAP_WARN_MEM_BYTES = 6 * GB
+/** Above this fraction swap counts as exhausted: warn at any MemAvailable. */
+export const SWAP_FULL_FRAC = 0.97
+/** Refuse when swap is exhausted and MemAvailable is below this. */
+export const SWAP_REFUSE_MEM_BYTES = 3 * GB
+
+/** A `/proc/meminfo` field in bytes, or undefined. */
+function meminfoField(meminfo: string, field: string): number | undefined {
+  const m = new RegExp(`^${field}:\\s+(\\d+)\\s+kB`, "m").exec(meminfo)
+  return m === null ? undefined : Number(m[1]) * 1024
+}
+
 /** MemAvailable in bytes from `/proc/meminfo` text, or undefined. */
 export function parseMemAvailable(meminfo: string): number | undefined {
-  const m = /^MemAvailable:\s+(\d+)\s+kB/m.exec(meminfo)
-  return m === null ? undefined : Number(m[1]) * 1024
+  return meminfoField(meminfo, "MemAvailable")
+}
+
+/** The memory readings `/proc/meminfo` text gives: MemAvailable and, when swap exists, swap used. */
+export function parseMeminfo(meminfo: string): Pick<Pressure, "memAvailableBytes" | "swapUsedFrac"> {
+  const p: Pick<Pressure, "memAvailableBytes" | "swapUsedFrac"> = {}
+  const avail = parseMemAvailable(meminfo)
+  if (avail !== undefined) p.memAvailableBytes = avail
+  const total = meminfoField(meminfo, "SwapTotal")
+  const free = meminfoField(meminfo, "SwapFree")
+  if (total !== undefined && free !== undefined && total > 0) p.swapUsedFrac = 1 - free / total
+  return p
 }
 
 /** Machine readings. `undefined` = not measurable here. */
 export interface Pressure {
   memAvailableBytes?: number
+  /** Fraction of swap in use; unset when there is no swap. */
+  swapUsedFrac?: number
   /** Fraction used of the temp dir's filesystem; set only when it is tmpfs (RAM-backed). */
   tmpfsUsedFrac?: number
 }
 
 /** Read live pressure for the filesystem holding `tmpDir`. Never throws. */
 export function readPressure(tmpDir: string): Pressure {
-  const p: Pressure = {}
+  let p: Pressure = {}
   try {
-    p.memAvailableBytes = parseMemAvailable(readFileSync("/proc/meminfo", "utf8"))
+    p = parseMeminfo(readFileSync("/proc/meminfo", "utf8"))
   } catch {
     // not Linux
   }
@@ -68,6 +101,20 @@ export function assessPressure(p: Pressure): Verdict {
     } else if (p.memAvailableBytes < MEM_WARN_BYTES) {
       raise("warn")
       lines.push(`MemAvailable ${gb(p.memAvailableBytes)} GB < ${gb(MEM_WARN_BYTES)} GB`)
+    }
+  }
+  if (p.swapUsedFrac !== undefined) {
+    const swap = `swap ${Math.round(p.swapUsedFrac * 100)}% full`
+    const avail = p.memAvailableBytes
+    if (p.swapUsedFrac > SWAP_FULL_FRAC && avail !== undefined && avail < SWAP_REFUSE_MEM_BYTES) {
+      raise("refuse")
+      lines.push(`${swap} and MemAvailable ${gb(avail)} GB < ${gb(SWAP_REFUSE_MEM_BYTES)} GB`)
+    } else if (p.swapUsedFrac > SWAP_FULL_FRAC) {
+      raise("warn")
+      lines.push(`${swap} (exhausted: the next spike goes to the OOM killer)`)
+    } else if (p.swapUsedFrac > SWAP_WARN_FRAC && avail !== undefined && avail < SWAP_WARN_MEM_BYTES) {
+      raise("warn")
+      lines.push(`${swap} and MemAvailable ${gb(avail)} GB < ${gb(SWAP_WARN_MEM_BYTES)} GB`)
     }
   }
   if (p.tmpfsUsedFrac !== undefined) {
