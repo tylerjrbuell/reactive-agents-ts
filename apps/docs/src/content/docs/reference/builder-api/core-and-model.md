@@ -27,8 +27,8 @@ Methods that decide who the agent is and which model runs it: identity and promp
 
 | Method         | Signature                                                                                    | Description                                                                |
 | -------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `withModel`    | `(model: string) => this`                                                                    | Set the LLM model by name (e.g., `"claude-sonnet-4-6"`)             |
-| `withModel`    | `(params: ModelParams) => this`                                                              | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens`, `numCtx` |
+| `withModel`    | `(model: string, params?: Omit<ModelParams, "model">) => this`                               | Set the LLM model by name (e.g., `"claude-sonnet-4-6"`), optionally with `thinking`, `temperature`, `maxTokens`, `numCtx` |
+| `withModel`    | `(params: ModelParams) => this`                                                              | Set model with advanced parameters: `thinking`, `temperature`, `maxTokens`, `numCtx`. `model` may be omitted to keep the provider default |
 | `withThinking` | `(options?: boolean \| ThinkingOptions) => this`                                             | Enable native thinking / reasoning mode with optional effort + budget. The rich-config home for thinking; `.withModel({ thinking })` remains the quick boolean. `true` / absent enables, `false` disables, or pass `{ effort, budgetTokens }`. Off unless enabled. |
 | `withProvider` | `(provider: "anthropic" \| "openai" \| "ollama" \| "gemini" \| "groq" \| "xai" \| "litellm" \| "test") => this` | Set the LLM provider                                                       |
 
@@ -57,7 +57,16 @@ interface ModelParams {
 
 // ModelParams form — pin the exact context window sent to the provider
 .withModel({ model: "qwen3:14b", numCtx: 32768 })
+
+// (model, params) form — same as the line above
+.withModel("qwen3:14b", { numCtx: 32768 })
 ```
+
+Both forms accept only the `ModelParams` keys listed above. A key outside that
+list (for example `provider`, which belongs in `.withProvider()`), a
+wrongly-shaped argument, or a second argument after a params object throws
+`ModelOptionError` (exported from `reactive-agents`) when the builder method is
+called, so a typo fails at the call site instead of being silently dropped.
 
 `numCtx` overrides the assumed/maximum context length with the exact window the
 provider receives. Honored by providers that expose a context-window knob

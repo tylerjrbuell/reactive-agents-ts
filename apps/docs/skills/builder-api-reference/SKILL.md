@@ -84,7 +84,7 @@ const agent = await ReactiveAgents.create()
 | Method | Params | Notes |
 |--------|--------|-------|
 | `.withProvider(p)` | `"anthropic"\|"openai"\|"gemini"\|"ollama"\|"litellm"\|"test"` | Required |
-| `.withModel(m)` | `string \| { model, thinking?, temperature? }` | Uses provider default if omitted |
+| `.withModel(m, params?)` | `string \| { model, thinking?, temperature?, maxTokens?, numCtx? }`; or `(string, { thinking?, temperature?, maxTokens?, numCtx? })` | Uses provider default if omitted. Unknown keys (e.g. `provider`) throw `ModelOptionError` |
 | `.withRateLimiting(cfg)` | `{ requestsPerMinute?, tokensPerMinute?, maxConcurrent? }` | Provider-level rate limits |
 | `.withCircuitBreaker(cfg?)` | `{ failureThreshold?, cooldownMs?, halfOpenRequests? }` | Retries with backoff on errors |
 | `.withDynamicPricing(provider)` | `PricingProvider` | Fetches live pricing during build |

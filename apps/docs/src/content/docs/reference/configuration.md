@@ -332,7 +332,7 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 |--------|---------|-------------|
 | `.withName(name)` | `"agent"` | Agent identifier used in logs and metrics |
 | `.withProvider(provider)` | `"test"` | LLM provider: `"anthropic"` \| `"openai"` \| `"gemini"` \| `"groq"` \| `"xai"` \| `"ollama"` \| `"litellm"` \| `"test"` |
-| `.withModel(model)` | Provider default | Model string or `ModelParams` (`model`, `thinking?`, `temperature?`, `maxTokens?`, `numCtx?`). `numCtx` pins the exact provider context window (Ollama `num_ctx`); also a top-level `AgentConfig` field |
+| `.withModel(model)` / `.withModel(model, params)` | Provider default | Model string, `ModelParams` (`model`, `thinking?`, `temperature?`, `maxTokens?`, `numCtx?`), or a model string plus the other params, e.g. `.withModel("qwen3:14b", { numCtx: 32768 })`. Unknown keys throw `ModelOptionError`. `numCtx` pins the exact provider context window (Ollama `num_ctx`); also a top-level `AgentConfig` field |
 | `.withSystemPrompt(prompt)` | none | Custom system prompt prepended to all LLM calls |
 | `.withPersona(persona)` | none | Structured persona: `{ name?, role?, background?, instructions?, tone? }` |
 | `.withEnvironment(context)` | none | Extra `Record<string, string>` merged into system prompt (beyond built-in date/tz/platform) |

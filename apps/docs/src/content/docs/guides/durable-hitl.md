@@ -143,7 +143,8 @@ code; a stored block-mode policy with no `onApprove` refuses every gated call.
 import { ReactiveAgents } from "reactive-agents";
 
 const agent = await ReactiveAgents.create()
-  .withModel({ provider: "anthropic", model: "claude-sonnet-4-6" })
+  .withProvider("anthropic")
+  .withModel("claude-sonnet-4-6")
   .withTools({ tools: [/* ... */] })
   .withDurableRuns()
   .withApprovalPolicy({
