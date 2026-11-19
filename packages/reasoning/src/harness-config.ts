@@ -287,8 +287,10 @@ export interface HarnessConfig {
    *
    * - `maxCalls`: the cap as a call count. A whole number >= 0 (fractions are
    *   floored, negatives become 0). When set, it replaces `iterationFraction`.
-   * - `iterationFraction`: the cap as `ceil(maxIterations * fraction)`. Clamped
-   *   to 0..1. Default {@link DEFAULT_REPETITION_BACKSTOP_FRACTION} (0.75).
+   * - `iterationFraction`: the cap as `ceil(maxIterations * fraction)`
+   *   iterations' worth of calls (`maxBatchSize` calls per iteration for a
+   *   parallel-safe tool, 1 otherwise). Clamped to 0..1. Default
+   *   {@link DEFAULT_REPETITION_BACKSTOP_FRACTION} (0.75).
    *
    * The guard's review point (2 calls, or `maxBatchSize` for parallel-safe
    * tools, or the tool's required quantity) is always the floor: a lower cap
@@ -313,15 +315,22 @@ export const DEFAULT_REPETITION_BACKSTOP_FRACTION = 0.75;
 /**
  * The repetition backstop as a call count for a run of `maxIterations`:
  * `maxCalls` when configured, else `ceil(maxIterations * iterationFraction)`
- * (default fraction 0.75). The caller applies the review-point floor.
+ * iterations (default fraction 0.75) times `callsPerIteration`, the calls one
+ * iteration may batch for the tool (`maxBatchSize` for a parallel-safe tool, 1
+ * otherwise). The fraction counts iterations: a model batching 3-4 distinct
+ * calls per turn tripped a call-count cap after 2-3 turns (owner trace
+ * 01M7SZPWPNY8, gemini-flash, maxIterations 16). The caller applies the
+ * review-point floor.
  */
 export function repetitionBackstopCalls(
   h: Pick<ResolvedHarness, "repetitionBackstop"> | undefined,
   maxIterations: number,
+  callsPerIteration = 1,
 ): number {
   const configured = h?.repetitionBackstop;
   if (configured?.maxCalls !== undefined) return configured.maxCalls;
-  return Math.ceil(maxIterations * (configured?.iterationFraction ?? DEFAULT_REPETITION_BACKSTOP_FRACTION));
+  const iterations = Math.ceil(maxIterations * (configured?.iterationFraction ?? DEFAULT_REPETITION_BACKSTOP_FRACTION));
+  return iterations * Math.max(1, Math.floor(callsPerIteration));
 }
 
 /** Clamp a configured backstop: fraction to 0..1, maxCalls to a whole number >= 0; non-finite = unset. */

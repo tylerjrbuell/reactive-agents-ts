@@ -262,8 +262,9 @@ function distinctArgumentsEligible(tc: ToolCallSpec): boolean {
 const NO_YIELD_STREAK = 2;
 /**
  * Hard backstop on the distinct-arguments pass: once a tool has run
- * `max(threshold, repetitionBackstopCalls(harness, maxIterations))` times
- * (default `ceil(maxIterations * 0.75)`), distinct arguments no longer exempt
+ * `max(threshold, repetitionBackstopCalls(harness, maxIterations, callsPerIteration))`
+ * times (default `ceil(maxIterations * 0.75)` iterations of `maxBatchSize` calls
+ * for a parallel-safe tool, of 1 call otherwise), distinct arguments no longer exempt
  * it, however much it still yields. Configured by `HarnessConfig.repetitionBackstop`.
  */
 const DEFAULT_MAX_ITERATIONS = 10;
@@ -435,7 +436,12 @@ export const DUPLICATE_REFUSAL_TAG = "Already done — do NOT repeat.";
 
 /** Blocks the exact same tool+arguments pair if it already succeeded. */
 export const duplicateGuard: Guard = (tc, state, input) => {
-  const currentActionJson = JSON.stringify({ tool: tc.name, args: tc.arguments });
+  // Canonical args (sorted keys, collapsed whitespace): gemini re-sent a call
+  // with its keys in another order and it missed this guard, so the repetition
+  // guard refused it with no data (owner trace 01M7SZPWPNY8, seq 1356 = 1267).
+  const callSig = (name: string, args: unknown): string =>
+    JSON.stringify({ tool: name, args: canonicalizeArgs(args ?? {}) });
+  const currentActionJson = callSig(tc.name, tc.arguments);
 
   // Single pass over state.steps: find the first prior action matching this
   // exact tool+args call that was followed by a successful observation.
@@ -456,7 +462,7 @@ export const duplicateGuard: Guard = (tc, state, input) => {
   for (const { step, index: idx } of ranActions(state.steps)) {
     const stepTc = step.metadata?.toolCall as { name: string; arguments: unknown } | undefined;
     if (!stepTc) continue;
-    if (JSON.stringify({ tool: stepTc.name, args: stepTc.arguments }) !== currentActionJson) continue;
+    if (callSig(stepTc.name, stepTc.arguments) !== currentActionJson) continue;
     const next = observationForAction(state.steps, idx);
     if (next?.metadata?.observationResult?.success === true) {
       // Latest match wins: its epoch is the one a mutation can have ended.
@@ -511,7 +517,13 @@ export const duplicateGuard: Guard = (tc, state, input) => {
       : unreadInput !== undefined
         ? `Not done yet.${unreadNote}`
         : "Give FINAL ANSWER if all steps are complete.";
-  const dupContent = `${priorObsContent} [${DUPLICATE_REFUSAL_TAG} ${nextHint}]`;
+  // A compacted prior result shows only a preview here: point at its stored
+  // copy so the model reads the data back instead of re-fetching it.
+  const storedKey = priorObs.metadata?.storedKey;
+  const storedNote = typeof storedKey === "string"
+    ? ` Already fetched: the full result is stored, read it with recall("${storedKey}", full: true).`
+    : "";
+  const dupContent = `${priorObsContent} [${DUPLICATE_REFUSAL_TAG}${storedNote} ${nextHint}]`;
 
   return {
     pass: false,
@@ -552,7 +564,8 @@ export const sideEffectGuard: Guard = (tc, state, _input) => {
  *  tools, 2 for sequential-only ones, raised to requiredToolQuantities) every
  *  call passes. Past it a call passes on a new target, or on distinct arguments
  *  while the tool's last 2 results were not all empty / failed / repeats (up to
- *  a backstop of max(review point, ceil(maxIterations * 0.75)) calls, set by
+ *  a backstop of max(review point, ceil(maxIterations * 0.75) iterations' worth
+ *  of calls: maxBatchSize per iteration for parallel-safe tools), set by
  *  `HarnessConfig.repetitionBackstop`), or as a
  *  correction of a failed or superseded call. */
 export const repetitionGuard: Guard = (tc, state, input) => {
@@ -611,7 +624,9 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   const noNewInformation = stoppedYielding(history);
   // The run's own budget (initialKernelState mirrors KernelRunOptions.maxIterations) wins.
   const maxIterations = state.meta?.maxIterations ?? input.maxIterations ?? DEFAULT_MAX_ITERATIONS;
-  const backstop = Math.max(threshold, repetitionBackstopCalls(input.harness, maxIterations));
+  // The fraction counts iterations: a parallel-safe tool may batch maxBatchSize calls in each.
+  const callsPerIteration = isParallelBatchSafeTool(tc.name) ? maxBatchSize : 1;
+  const backstop = Math.max(threshold, repetitionBackstopCalls(input.harness, maxIterations, callsPerIteration));
   if (
     priorCallsOfSameTool < backstop &&
     !noNewInformation &&

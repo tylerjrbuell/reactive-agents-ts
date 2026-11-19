@@ -394,6 +394,27 @@ export function nextToolResultKey(scratchpad?: ReadonlyMap<string, string>): str
   return `_tool_result_${max + 1}`;
 }
 
+/** Rough chars-per-token ratio used to turn a token window into a char budget. */
+const CHARS_PER_TOKEN = 4;
+/** Share of the context window one `recall` read may fill. */
+const RECALL_WINDOW_SHARE = 0.25;
+/** Window assumed when the profile carries none (matches the tier profiles' 32K floor). */
+const DEFAULT_WINDOW_TOKENS = 32_768;
+
+/**
+ * The compression budget for one tool result. A `recall` read is the model
+ * asking for stored evidence back: compressing it with the ordinary per-result
+ * budget re-stored it as a new `_tool_result_N` preview, so compacted data never
+ * returned (owner trace 01M7SZPWPNY8: `recall(_tool_result_1, full: true)` came
+ * back as "[recall result — compressed preview]"). It gets a budget bounded by
+ * the context window instead (a quarter of it); every other tool keeps `budget`.
+ */
+export function toolResultBudget(toolName: string, budget: number, windowTokens?: number): number {
+  if (toolName !== "recall") return budget;
+  const window = windowTokens !== undefined && windowTokens > 0 ? windowTokens : DEFAULT_WINDOW_TOKENS;
+  return Math.max(budget, Math.floor(window * CHARS_PER_TOKEN * RECALL_WINDOW_SHARE));
+}
+
 /** Replace blind truncation with structured preview + optional scratchpad storage.
  *
  * Wave 6.2 decision (recorded, not deferred): NO per-call content scan rides

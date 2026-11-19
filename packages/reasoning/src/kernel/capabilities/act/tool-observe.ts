@@ -778,7 +778,8 @@ export function executeToolAndObserve(
     // listing where exact names matter for subsequent tool-calling must
     // never go through an LLM summarization pass — there is nothing to
     // "extract," every line is already the payload.
-    if (exec.success && config.extractFactsLLM && toolName !== "discover-tools") {
+    // `recall` too: it returns stored evidence the model asked for in full.
+    if (exec.success && config.extractFactsLLM && toolName !== "discover-tools" && toolName !== "recall") {
       const extracted = yield* extractObservationFacts(
         toolName,
         exec.content,

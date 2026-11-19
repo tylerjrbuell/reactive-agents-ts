@@ -50,6 +50,8 @@ function stateOf(steps: ReasoningStep[], meta: Record<string, unknown> = {}): Ke
 }
 
 const input = { requiredToolQuantities: {}, nextMovesPlanning: { maxBatchSize: 4 } } as KernelInput;
+/** One call per iteration: the backstop's iteration fraction is then a call count (review point 1). */
+const oneCallInput = { requiredToolQuantities: {}, nextMovesPlanning: { maxBatchSize: 1 } } as KernelInput;
 
 const metricTypes = ["url", "referrer", "country", "browser", "os", "device", "event", "language"];
 
@@ -127,13 +129,44 @@ describe("repetitionGuard — information yield (c): research runaway", () => {
   });
 
   it("blocks distinct, yielding calls at the hard backstop max(threshold, ceil(maxIterations * 0.75))", () => {
-    const small = { maxIterations: 8 }; // the run's budget (state.meta) → backstop = max(4, 6) = 6
+    // One call per iteration → backstop = max(1, ceil(8 * 0.75) * 1) = 6.
+    const small = { maxIterations: 8 }; // the run's budget (state.meta)
     const steps: ReasoningStep[] = metricTypes.slice(0, 6)
       .flatMap((type) => ran(call(METRICS, { type }), `rows for ${type}`));
-    const outcome = repetitionGuard(call(METRICS, { type: "language" }), stateOf(steps, small), input);
+    const outcome = repetitionGuard(call(METRICS, { type: "language" }), stateOf(steps, small), oneCallInput);
     expect(outcome.pass).toBe(false);
     const underBackstop = steps.slice(0, 10); // 5 prior calls
-    expect(repetitionGuard(call(METRICS, { type: "language" }), stateOf(underBackstop, small), input)).toEqual({ pass: true });
+    expect(repetitionGuard(call(METRICS, { type: "language" }), stateOf(underBackstop, small), oneCallInput)).toEqual({ pass: true });
+  });
+});
+
+describe("repetitionGuard — R3: the backstop counts iterations, so batched calls are not starved", () => {
+  // Owner trace 01M7SZPWPNY8 (gemini-flash, maxIterations 16): 3-4 distinct
+  // get_website_metrics calls per iteration; the 14th distinct query (13 prior
+  // calls, iteration 13 of 16) was refused at a call-count backstop of 12.
+  const run16 = { maxIterations: 16 };
+  const distinctCalls = (n: number): ReasoningStep[] =>
+    Array.from({ length: n }, (_, i) => ran(call(METRICS, { type: "path", window: `w${i}` }), `rows for window ${i}`)).flat();
+  const next = () => call(METRICS, { type: "path", window: "new" });
+
+  it("a parallel-safe tool gets ceil(16 * 0.75) = 12 iterations of maxBatchSize 4 = 48 calls", () => {
+    expect(repetitionGuard(next(), stateOf(distinctCalls(13), run16), input)).toEqual({ pass: true });
+    expect(repetitionGuard(next(), stateOf(distinctCalls(47), run16), input)).toEqual({ pass: true });
+    expect(repetitionGuard(next(), stateOf(distinctCalls(48), run16), input).pass).toBe(false);
+  });
+
+  it("a sequential-only tool keeps one call per iteration (12)", () => {
+    const seqCalls = (n: number): ReasoningStep[] =>
+      Array.from({ length: n }, (_, i) => ran(call("compute", { expr: `${i} * 2` }), `= ${i * 2}`)).flat();
+    const q = () => call("compute", { expr: "99 * 2" });
+    expect(repetitionGuard(q(), stateOf(seqCalls(11), run16), input)).toEqual({ pass: true });
+    expect(repetitionGuard(q(), stateOf(seqCalls(12), run16), input).pass).toBe(false);
+  });
+
+  it("repetitionBackstopCalls scales only the fraction by callsPerIteration; maxCalls stays a call count", () => {
+    expect(repetitionBackstopCalls(undefined, 16, 4)).toBe(48);
+    expect(repetitionBackstopCalls(undefined, 16)).toBe(12);
+    expect(repetitionBackstopCalls(resolveHarnessConfig({ repetitionBackstop: { maxCalls: 10 } }), 16, 4)).toBe(10);
   });
 });
 
@@ -147,7 +180,8 @@ describe("repetitionGuard — configurable backstop (HarnessConfig.repetitionBac
   const next = () => call(METRICS, { type: "region" });
 
   it("a resolved harness with no repetitionBackstop keeps the default (6 prior calls block, 5 pass)", () => {
-    const h = { ...input, harness: resolveHarnessConfig() } as KernelInput;
+    // One call per iteration, so the default ceil(8 * 0.75) = 6 iterations is 6 calls.
+    const h = { ...oneCallInput, harness: resolveHarnessConfig() } as KernelInput;
     expect(repetitionGuard(next(), stateOf(priorCalls(6), small), h).pass).toBe(false);
     expect(repetitionGuard(next(), stateOf(priorCalls(5), small), h)).toEqual({ pass: true });
   });
@@ -162,9 +196,11 @@ describe("repetitionGuard — configurable backstop (HarnessConfig.repetitionBac
     expect(repetitionGuard(next(), stateOf(priorCalls(8), small), withBackstop({ maxCalls: 8 })).pass).toBe(false);
   });
 
-  it("a higher iterationFraction allows more (1.0 of 8 iterations = 8 calls)", () => {
-    expect(repetitionGuard(next(), stateOf(priorCalls(7), small), withBackstop({ iterationFraction: 1 }))).toEqual({ pass: true });
-    expect(repetitionGuard(next(), stateOf(priorCalls(8), small), withBackstop({ iterationFraction: 1 })).pass).toBe(false);
+  it("a higher iterationFraction allows more (1.0 of 8 iterations = 8 calls at one call per iteration)", () => {
+    const oneCall = (repetitionBackstop: HarnessConfig["repetitionBackstop"]): KernelInput =>
+      ({ ...oneCallInput, harness: resolveHarnessConfig({ repetitionBackstop }) }) as KernelInput;
+    expect(repetitionGuard(next(), stateOf(priorCalls(7), small), oneCall({ iterationFraction: 1 }))).toEqual({ pass: true });
+    expect(repetitionGuard(next(), stateOf(priorCalls(8), small), oneCall({ iterationFraction: 1 })).pass).toBe(false);
   });
 
   it("the review point stays the floor: maxCalls below it still lets calls under the threshold pass", () => {

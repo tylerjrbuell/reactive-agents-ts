@@ -34,7 +34,7 @@ import {
 import type { ResultCompressionConfig, SubAgentChildEnvelope } from "@reactive-agents/tools";
 import { evaluateTransform } from "../../utils/tool-parsing.js";
 import type { RunLedger } from "../../ledger/run-ledger.js";
-import { compressToolResult, nextToolResultKey } from "../attend/tool-formatting.js";
+import { compressToolResult, nextToolResultKey, toolResultBudget } from "../attend/tool-formatting.js";
 import { gatewayComplete } from "../../llm-gateway.js";
 import { extractThinkingSafeContent } from "../../utils/stream-parser.js";
 import type { ToolServiceInstance } from "../../../kernel/state/kernel-state.js";
@@ -572,7 +572,7 @@ export function executeToolCall(
           }
 
           // Structured compression / auto-preview (tier-adaptive)
-          const budget = compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800;
+          const budget = toolResultBudget(toolRequest.tool, compressionConfig?.budget ?? profile?.toolResultMaxChars ?? 800, profile?.maxTokens);
           const previewItems = compressionConfig?.previewItems ?? profile?.toolResultPreviewItems ?? 3;
           const autoStore = compressionConfig?.autoStore ?? true;
           const compressed = compressToolResult(normalized, toolRequest.tool, budget, previewItems, scratchpadStore);
@@ -734,7 +734,8 @@ export function executeNativeToolCall(
         // Apply result compression for large outputs
         let storedKey: string | undefined;
         if (config?.compression) {
-          const budget = config.compression.budget ?? config.profile?.toolResultMaxChars ?? 800;
+          // A recall read gets a window-bounded budget, not the per-result one (R1).
+          const budget = toolResultBudget(toolCall.name, config.compression.budget ?? config.profile?.toolResultMaxChars ?? 800, config.profile?.maxTokens);
           const previewItems = config.compression.previewItems ?? config.profile?.toolResultPreviewItems ?? 5;
           const compressed = compressToolResult(content, toolCall.name, budget, previewItems, config.scratchpad);
           content = compressed.content;
