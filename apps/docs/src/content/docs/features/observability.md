@@ -400,7 +400,7 @@ yield* obs.flush();
 Every `agent.run()` result carries the run's accounting, from one spend meter:
 
 - `metadata.runId` — the trace run id. It matches the trace file and the `run-started` event, so you can go from a result to its trace.
-- `metadata.tokensUsed` and `metadata.cost` — count every LLM call the run made, including structured calls and sub-agents' spend folded into the parent.
+- `metadata.tokensUsed` and `metadata.cost` — count every LLM call up to the result, with sub-agents' spend folded into the parent. They exclude the background debrief call and the `.withOutputSchema()` extraction call, and `cost` is a lower bound when `metadata.costComplete === false`. For the billed total, await `result.totalCost()` (see [Cost Tracking](/features/cost-tracking/#token-tracking)).
 - `metadata.inputTokens`, `metadata.outputTokens`, `metadata.llmCalls` — the same split, from the same meter.
 
 `run-started` records the task text (`AgentStarted.task`), and `run-started.config` records the resolved harness configuration.

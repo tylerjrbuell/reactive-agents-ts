@@ -66,7 +66,7 @@ const agent = await ReactiveAgents.create()
 // xAI — Grok models, OpenAI-compatible
 const agent = await ReactiveAgents.create()
   .withProvider("xai")
-  .withModel("grok-4")
+  .withModel("grok-4.7")                 // the xAI default
   .build();
 
 // Ollama (local) — Healing Pipeline repairs malformed tool calls from small models
@@ -212,18 +212,24 @@ OpenAI `gpt-5*` and o-series ids send `max_completion_tokens` and omit `temperat
 
 ## Model Presets
 
-| Preset              | Provider  | Cost/1M Input | Context Window | Quality |
-| ------------------- | --------- | ------------- | -------------- | ------- |
-| `claude-haiku`      | Anthropic | $1.00         | 200K           | 0.60    |
-| `claude-sonnet`     | Anthropic | $3.00         | 200K           | 0.85    |
-| `claude-opus`       | Anthropic | $15.00        | 1M             | 1.00    |
-| `gpt-4o-mini`       | OpenAI    | $0.15         | 128K           | 0.55    |
-| `gpt-4o`            | OpenAI    | $2.50         | 128K           | 0.80    |
-| `gemini-2.0-flash`  | Gemini    | $0.10         | 1M             | 0.75    |
-| `gemini-2.5-flash`  | Gemini    | $0.15         | 1M             | 0.80    |
-| `gemini-2.5-pro`    | Gemini    | $1.25         | 1M             | 0.95    |
-| `openai/gpt-oss-120b` | Groq | $0.15      | 131K           | 0.80    |
-| `grok-4`            | xAI       | $3.00         | 256K           | 0.90    |
+`ModelPresets` (exported from `@reactive-agents/llm-provider`) lists pre-configured models with a context window and a quality tier:
+
+| Preset                  | Provider  | Model                        | Context Window | Quality |
+| ----------------------- | --------- | ---------------------------- | -------------- | ------- |
+| `claude-haiku`          | Anthropic | `claude-haiku-4-5`           | 200K           | 0.60    |
+| `claude-sonnet`         | Anthropic | `claude-sonnet-4-6`          | 1M             | 0.85    |
+| `claude-sonnet-4-5`     | Anthropic | `claude-sonnet-4-5-20250929` | 200K           | 0.90    |
+| `claude-opus`           | Anthropic | `claude-opus-4-8`            | 1M             | 1.00    |
+| `gpt-4o-mini`           | OpenAI    | `gpt-4o-mini`                | 128K           | 0.55    |
+| `gpt-4o`                | OpenAI    | `gpt-4o`                     | 128K           | 0.80    |
+| `gpt-5.4`               | OpenAI    | `gpt-5.4`                    | 1M             | 0.90    |
+| `gpt-5.5`               | OpenAI    | `gpt-5.5`                    | 1M             | 1.00    |
+| `gemini-2.5-flash-lite` | Gemini    | `gemini-2.5-flash-lite`      | 1M             | 0.70    |
+| `gemini-2.5-pro`        | Gemini    | `gemini-2.5-pro`             | 1M             | 0.95    |
+
+Calls are billed from the PriceBook, not from a preset: per-model rates for input, output, cache and long-context tiers, from a bundled price snapshot or your own pricing. A model with no known price reports its cost as unknown. Use `priceFor(provider, model)` to read a model's current rates. See [How calls are priced](/features/cost-tracking/#how-calls-are-priced).
+
+Each provider's default model (used when you omit `.withModel()`): `anthropic` `claude-sonnet-4-6`, `openai` `gpt-4o`, `gemini` `gemini-2.5-flash`, `groq` `openai/gpt-oss-120b`, `xai` `grok-4.7`, `litellm` `gpt-4o`, `ollama` `llama3.2`.
 
 ## Tool Calling
 
@@ -255,20 +261,20 @@ If a model cannot take an image, the image is replaced by a text note such as `[
 
 ## Prompt Caching
 
-Each provider implements caching differently. The framework handles cost discounting automatically when the provider reports cached token usage.
+Each provider implements caching differently. When the provider reports cached tokens, the framework bills them at that model's own cache-read and cache-write rates from the PriceBook. Cache rates differ per model, not per provider (for example, Anthropic cache reads are 0.1x input on Sonnet 4.6 and 0.05x on Opus 5.5). See [How calls are priced](/features/cost-tracking/#how-calls-are-priced).
 
 ### Anthropic — Explicit `cache_control`
 
 Anthropic uses **manual cache hints** via `cache_control: { type: "ephemeral" }` blocks. The framework automatically applies these to system prompts ≥ 1,024 tokens and to the full tool schema block on every request:
 
-- **System prompt**: Cached when `>= ~4,096 chars` — 90% discount on cache hits, 25% surcharge on writes
+- **System prompt**: Cached when `>= ~4,096 chars`; cache reads and writes bill at the model's cache rates
 - **Tool schemas**: Last tool in the array is marked, caching the full schema block
 
 Cache TTL is 5 minutes. The framework handles this transparently — no configuration required.
 
 ### Gemini — Automatic Implicit Caching
 
-Gemini 2.0 Flash and 2.5 models support **automatic context caching** — Google's servers cache repeated prefixes server-side with no client code required. When a cache hit occurs, `cachedContentTokenCount` is returned in the usage metadata and the framework applies a **75% cost discount** automatically.
+Gemini 2.0 Flash and 2.5 models support **automatic context caching** — Google's servers cache repeated prefixes server-side with no client code required. When a cache hit occurs, `cachedContentTokenCount` is returned in the usage metadata and the framework bills those tokens at the model's cache-read rate.
 
 There is no minimum token requirement for implicit caching — Google manages it transparently for eligible models.
 
@@ -284,7 +290,7 @@ const agent = await ReactiveAgents.create()
 
 ### OpenAI — Automatic Caching
 
-OpenAI applies automatic prompt caching server-side for inputs longer than 1,024 tokens. Cached tokens are returned as `cached_tokens` in the usage object and the framework applies a **50% cost discount** automatically.
+OpenAI applies automatic prompt caching server-side for inputs longer than 1,024 tokens. Cached tokens are returned as `cached_tokens` in the usage object and the framework bills them at the model's cache-read rate (for example 0.1x input on `gpt-5.4`, 0.5x on `gpt-4o`).
 
 ## Provider Adapters
 

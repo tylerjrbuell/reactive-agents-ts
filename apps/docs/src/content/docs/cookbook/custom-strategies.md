@@ -47,6 +47,7 @@ A strategy that generates a response, extracts claims, verifies each one, and re
 <!-- docs-skip-typecheck -->
 ```typescript
 import { Effect } from "effect";
+import { sumCosts } from "@reactive-agents/core";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { StrategyRegistry } from "@reactive-agents/reasoning";
 
@@ -121,8 +122,9 @@ const executeChainOfVerification = (input) =>
       output: revised.content,
       metadata: {
         duration: Date.now() - startTime,
-        cost: initial.usage.estimatedCost + claims.usage.estimatedCost +
-              verification.usage.estimatedCost + revised.usage.estimatedCost,
+        // estimatedCost is absent when a model's price is unknown; sumCosts
+        // (from @reactive-agents/core) adds the known ones and flags the rest.
+        cost: sumCosts([initial, claims, verification, revised].map((r) => r.usage.estimatedCost)).usd,
         tokensUsed: totalTokens,
         stepsCount: steps.length,
         confidence: 0.9,
@@ -193,7 +195,7 @@ When the agent is built with `.withTools()`, ToolService is automatically provid
 
 ## Strategy Best Practices
 
-1. **Track all costs** — Accumulate `usage.estimatedCost` and `usage.totalTokens` from every LLM call
+1. **Track all costs** — Accumulate `usage.estimatedCost` and `usage.totalTokens` from every LLM call. `estimatedCost` is absent when the model's price is unknown, so sum it with `sumCosts` / `addCost` from `@reactive-agents/core` rather than `+`
 2. **Use `steps` array** — Record each reasoning step with thought, action, and observation for debugging
 3. **Set confidence** — Estimate confidence (0-1) in the `metadata` — this feeds into interaction mode decisions
 4. **Handle errors** — Wrap tool calls and LLM calls in error handling to prevent strategy crashes

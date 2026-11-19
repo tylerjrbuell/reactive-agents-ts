@@ -281,10 +281,11 @@ yield * eventBus.on('ReasoningStepCompleted', onStepComplete)
 | `StrategySwitched`           | `taskId`, `fromStrategy`, `toStrategy`, `switchNumber`, `stepsCarriedOver`         |
 | `ProviderFallbackActivated`  | `taskId`, `fromProvider`, `toProvider`, `reason`, `attemptNumber`                  |
 | `DebriefCompleted`           | `taskId`, `agentId`, `debrief`                                                     |
+| `RunCostFinalized`           | `taskId`, `agentId`, `runId?`, `totalCostUsd`, `costComplete` — the run's billed total, debrief included; published once per run (see [Cost Tracking](/features/cost-tracking/#token-tracking)) |
 | `ChatTurn`                   | `taskId`, `sessionId`, `role`, `content`, `routedVia`, `tokensUsed?`               |
 | `MemorySnapshot`             | `taskId`, `iteration`, `working`, `episodicCount`, `semanticCount`, `skillsActive` |
 | `ContextPressure`            | `taskId`, `utilizationPct`, `tokensUsed`, `tokensAvailable`, `level`               |
-| `TokenUsage`                 | `callId`, `tokensTotal`, `tokensIn?`, `tokensOut?`, `estimated`, `cacheReadTokensIn?`, `cacheCreationTokensIn?`, `model`, `provider`, `durationMs`, `costUsd`, `iteration?` |
+| `TokenUsage`                 | `callId`, `tokensTotal`, `tokensIn?`, `tokensOut?`, `estimated`, `cacheReadTokensIn?`, `cacheCreationTokensIn?`, `model`, `provider`, `durationMs`, `costUsd?` (absent = price unknown, not free), `priceSource?`, `iteration?` |
 | `AgentHealthReport`          | `agentId`, `status`, `checks[]`, `uptimeMs`                                        |
 | `AgentConnected`             | `agentId`, `runId`, `cortexUrl`                                                    |
 | `AgentDisconnected`          | `agentId`, `runId`, `reason`                                                       |

@@ -112,15 +112,30 @@ const result = await agent.run(task, {
 });
 ```
 
-### Dynamic pricing (LiteLLM / custom providers)
+### How calls are priced
+
+Every call is priced from the PriceBook: your `withModelPricing` rows first (they always win), then `withDynamicPricing` rows, Ollama at $0, a LiteLLM proxy's stated rates, then a bundled LiteLLM price snapshot (per-model input, output, cache read, cache write 5m/1h, long-context tiers, web search). There is no keyword guess and no fixed cache discount. A model in none of these has an **unknown** price: its calls carry no `estimatedCost` and `priceSource: "unknown"`, and the run reports `result.metadata.costComplete === false` with `cost` as a lower bound.
 
 ```ts
-import { createLiteLLMPricingProvider } from "@reactive-agents/llm-provider";
+import { openRouterPricingProvider, urlPricingProvider } from "@reactive-agents/llm-provider";
 
-.withDynamicPricing(createLiteLLMPricingProvider())
-// Fetches live model prices from LiteLLM pricing API
-// Required when using models whose costs are not in the built-in price table
+// Your own rates ($/1M). Cache rates optional; omitted ones bill at `input`.
+.withModelPricing({ "my-fine-tuned-model": { input: 0.5, output: 1.5, cacheRead: 0.05 } })
+
+// Live rows fetched at build (never override withModelPricing)
+.withDynamicPricing(openRouterPricingProvider)
+// or: .withDynamicPricing(urlPricingProvider("https://internal.corp/pricing.json"))
 ```
+
+### Reading the cost of a run
+
+```ts
+const result = await agent.run(task);
+const { cost, costComplete } = result.metadata; // pre-debrief spend; lower bound when costComplete === false
+const total = await result.totalCost?.();       // { usd, complete }: billed total incl. the background debrief call
+```
+
+The same total is on the `RunCostFinalized` event (`totalCostUsd`, `costComplete`), published once per run. Sum per-call costs (`LLMRequestCompleted.estimatedCost`, stream `TokenUsage.costUsd`, both optional) with `sumCosts` / `addCost` from `@reactive-agents/core`, never with `+`.
 
 ## CostTrackingOptions reference
 
@@ -145,5 +160,7 @@ import { createLiteLLMPricingProvider } from "@reactive-agents/llm-provider";
 - `withCostTracking()` with no args is still useful — it enables cost telemetry without enforcing limits (all defaults are generous)
 - `withCircuitBreaker()` opens on LLM provider errors, not on budget exceeded errors — they are independent systems
 - Rate limiting queues requests rather than dropping them — set `maxConcurrent` based on your provider's actual concurrency limits to avoid provider-side 429s
-- `withDynamicPricing()` makes an external HTTP call during build — ensure network access and handle build failures
+- `withDynamicPricing()` makes an external HTTP call during build. A failed fetch does not fail `build()`: it logs `LoadBearingFailure:dynamic-pricing` and falls back to your `withModelPricing` rows plus the bundled snapshot. With `withStrictValidation()` the build fails instead
+- `result.metadata.cost` excludes the background debrief call (with `.withMemory()` / `.withDebrief()`); use `await result.totalCost()` for the billed total
+- An unpriced model is not free: check `costComplete` before showing `cost` as a total, or set its rates with `withModelPricing`
 - Daily budget resets at midnight UTC by default — to use a different timezone, configure it via `.withGateway({ timezone: "America/New_York" })`

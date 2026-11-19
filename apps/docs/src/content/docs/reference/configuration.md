@@ -364,8 +364,8 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 |--------|---------|-------------|
 | `.withCircuitBreaker(config?)` | off until set | Provider circuit breaker (`failureThreshold`, `cooldownMs`, …) |
 | `.withRateLimiting(config?)` | off until set | RPM / TPM / concurrency limits |
-| `.withModelPricing(registry)` | none | Static $/1M token overrides |
-| `.withDynamicPricing(provider)` | none | Fetch pricing at build |
+| `.withModelPricing(registry)` | none (bundled PriceBook snapshot) | Your $/1M rates per model: `{ input, output, cacheRead?, cacheWrite5m?, cacheWrite1h? }`; always wins. Declarative key `pricingRegistry` |
+| `.withDynamicPricing(provider)` | none | Fetch price rows at build; never overrides `withModelPricing`; a failed fetch warns and falls back to the bundled snapshot unless `withStrictValidation()` |
 | `.withFallbacks(config)` | none | Ordered provider cascade — `{ providers }`; falls back to the next provider on any error |
 
 ### Memory

@@ -310,7 +310,10 @@ await using agent = await ReactiveAgents.create()
 // Run a task
 const result = await agent.run("Research the latest advances in CRISPR gene editing");
 console.log(result.output);
-console.log(`Cost: $${result.metadata.cost.toFixed(4)}`);
+// Billed total, incl. the background debrief and structured-output extraction calls.
+// `complete` is false when a model had no known price; `usd` is then a lower bound.
+const total = await result.totalCost?.();
+if (total) console.log(`Cost: $${total.usd.toFixed(4)}${total.complete ? "" : " (lower bound)"}`);
 console.log(`Tokens: ${result.metadata.tokensUsed}`);
 console.log(`Strategy: ${result.metadata.strategyUsed}`);
 // agent.dispose() is called automatically here

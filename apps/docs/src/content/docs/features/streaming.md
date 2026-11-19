@@ -58,7 +58,7 @@ type AgentStreamEvent =
   | { _tag: "ToolCallStarted"; toolName: string; callId: string; args?: unknown }
   | { _tag: "ToolCallCompleted"; toolName: string; callId: string; durationMs: number; success: boolean }
   | { _tag: "StructuredOutputReported"; taskId: string; strategy?: string; report: StructuredOutputReport }
-  | { _tag: "TokenUsage"; callId: string; tokensTotal: number; tokensIn?: number; tokensOut?: number; estimated: boolean; cacheReadTokensIn?: number; cacheCreationTokensIn?: number; model: string; provider: string; durationMs: number; firstTokenMs?: number; costUsd: number; iteration?: number };
+  | { _tag: "TokenUsage"; callId: string; tokensTotal: number; tokensIn?: number; tokensOut?: number; estimated: boolean; cacheReadTokensIn?: number; cacheCreationTokensIn?: number; model: string; provider: string; durationMs: number; firstTokenMs?: number; costUsd?: number; priceSource?: PriceSource; iteration?: number };
 
 interface ToolSummaryEntry {
   toolName: string;
@@ -359,7 +359,9 @@ A `TokenUsage` event is emitted at the completion of each LLM call (full density
 - `tokensIn` / `tokensOut` — provider-reported halves; absent when the provider did not split, never fabricated
 - `estimated` — `true` when at least one half was derived rather than reported
 - `cacheReadTokensIn` / `cacheCreationTokensIn` — provider-reported cache figures, absent when not reported
-- `model`, `provider`, `durationMs`, `costUsd`, `iteration`
+- `model`, `provider`, `durationMs`, `iteration`
+- `costUsd` — the call's cost in USD; absent when the model's price is unknown (not free). Sum per-call costs with `sumCosts` / `addCost` from `@reactive-agents/core`, which mark the total incomplete instead of counting an unknown price as $0
+- `priceSource` — where `costUsd` came from: `"provider-reported"`, `"price-book"`, `"user"` or `"unknown"`
 - `firstTokenMs` — milliseconds to the first streamed output token; absent for non-streamed calls. Output rate is `tokensOut / ((durationMs - firstTokenMs) / 1000)`; without it, `tokensOut / durationMs` is only a lower bound
 
 Cortex folds these into the per-turn strip and the Inspector's Context tab. Estimates are always marked with `~` and corrected as soon as a provider number arrives; the measured context ring still comes from `ContextPressure`.

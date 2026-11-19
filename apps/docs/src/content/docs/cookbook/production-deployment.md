@@ -84,10 +84,9 @@ Set spending limits to prevent runaway costs:
 // Budget enforcement happens automatically when .withCostTracking() is enabled
 // Configure limits through the CostService layer if needed
 
-// The complexity router automatically selects cheaper models for simple tasks:
-// Simple questions → Haiku ($1/M tokens)
-// Medium tasks → Sonnet ($3/M tokens)
-// Complex tasks → Opus ($15/M tokens)
+// Opt in with .withModelRouting() and the complexity router picks a cheaper
+// tier for simple tasks (Anthropic: haiku → sonnet → opus tier models).
+// Tier prices come from the PriceBook; see /features/cost-tracking/.
 ```
 
 ### Monitor Spending

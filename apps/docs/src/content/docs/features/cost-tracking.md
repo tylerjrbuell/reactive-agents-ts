@@ -22,7 +22,7 @@ import { openRouterPricingProvider } from "@reactive-agents/llm-provider";
 const agent = await ReactiveAgents.create()
   .withProvider("anthropic")
   .withCostTracking()   // Enable cost controls
-  .withDynamicPricing(openRouterPricingProvider) // Automatically fetch latest model prices
+  .withDynamicPricing(openRouterPricingProvider) // Optional: fetch live prices at build (bundled prices apply without it)
   .build();
 ```
 
@@ -71,7 +71,7 @@ Applies on **both** the inline and reasoning (`.withReasoning()`) paths — the 
 
 `.withModelRouting()` has no declarative `AgentConfig` key; it is builder-only. Use it for mixed workloads where most requests are simple (Q&A, classification, summarization) and a few need frontier reasoning.
 
-To choose the model before you build the agent, `@reactive-agents/cost` exposes the routing primitives: `analyzeComplexity(task)` scores a task and `routeToModel(task)` returns a `ModelCostConfig` for the recommended tier. Both are Effect-based and also surface on `CostService.routeToModel(task, context)`. Pass the result to `.withModel(...)`. For an ordered provider cascade on errors (no budget logic), use [`.withFallbacks({ providers })`](/reference/builder-api/).
+To choose the model before you build the agent, `@reactive-agents/cost` exposes the routing primitives: `analyzeComplexity(task)` scores a task and `routeToModel(task)` returns a `ModelCostConfig` for the recommended tier. Its `costPer1MInput` / `costPer1MOutput` come from the PriceBook (below) and are absent when the tier model has no known price. Both are Effect-based and also surface on `CostService.routeToModel(task, context)`. Pass the result to `.withModel(...)`. For an ordered provider cascade on errors (no budget logic), use [`.withFallbacks({ providers })`](/reference/builder-api/).
 
 ## Budget Enforcement
 
@@ -106,7 +106,7 @@ const agent = await ReactiveAgents.create()
 
 try {
   const result = await agent.run("Complex task");
-  console.log(result.metadata.cost); // Estimated USD cost
+  console.log(result.metadata.cost); // USD, a lower bound when result.metadata.costComplete === false
 } catch (e) {
   if (e instanceof BudgetExceededError) {
     console.error("Budget exceeded:", e.message); // escalate, alert, or degrade gracefully
@@ -120,26 +120,80 @@ try {
 
 Budget state is persisted to SQLite via `BudgetDB`, so cost tracking survives agent restarts. When an agent starts, the budget enforcer loads the most recent spend from the database and continues from where it left off — daily and monthly budgets are enforced across restarts without resetting.
 
-## Dynamic Pricing
+## How Calls Are Priced
 
-By default, the framework maintains an internal static map of provider token costs. To ensure absolute accuracy when using platforms with hundreds of models (like OpenRouter or LiteLLM) or when pricing changes, you can configure the agent to dynamically fetch pricing during initialization:
+Every LLM call is priced from the **PriceBook** in `@reactive-agents/llm-provider`. A model's price is resolved in this order:
+
+1. **Your pricing.** Rows from `.withModelPricing()` always win. Rows fetched by `.withDynamicPricing()` come next; they never override yours.
+2. **Local models.** Ollama calls cost $0.
+3. **A LiteLLM proxy's own rates**, when the proxy states them in `/model/info`.
+4. **The bundled price snapshot**: a copy of LiteLLM's `model_prices_and_context_window.json`, filtered to Anthropic, OpenAI, Gemini, Groq, xAI and Mistral and cross-checked against the providers' price pages, with a few corrections from those pages. `priceSnapshotInfo()` returns its date (`asOf`) and source URL. The snapshot is refreshed in the repository and ships with each release.
+
+Rates are dollars per 1M tokens and are set **per model**: input, output, cache read, cache write (5-minute and 1-hour), audio, long-context tiers (a higher rate above a prompt size, for example Gemini 2.5 Pro above 200k prompt tokens) and per-request web search. Each provider adapter reports the full usage of a call (cache reads and writes, Gemini thinking and tool-use prompt tokens, audio tokens, Anthropic web searches), and one function, `priceUsage`, applies the model's rates. There is no fixed per-provider cache discount: the cache rate is whatever that model bills.
+
+Model ids are matched exactly after stripping a provider prefix (`openai/gpt-4o` prices as `gpt-4o`). A dated id can have its own price, so date suffixes are not stripped.
+
+To look up a price yourself (for a model picker, say):
+
+```typescript
+import { Option } from "effect";
+import { priceFor } from "@reactive-agents/llm-provider";
+
+const price = priceFor("anthropic", "claude-sonnet-4-6");
+if (Option.isSome(price)) {
+  console.log(price.value.input, price.value.output, price.value.source); // $/1M and where it came from
+} else {
+  console.log("price unknown");
+}
+```
+
+### Unknown prices are reported as unknown
+
+A model that is in none of the sources above has **no price**. The framework does not guess one. Its calls carry no `usage.estimatedCost` and `usage.priceSource: "unknown"`, and the `LLMRequestCompleted` event omits `estimatedCost`. Each call says where its cost came from in `priceSource`: `"provider-reported"`, `"price-book"`, `"user"` or `"unknown"`.
+
+When any call in a run (delegated sub-agents included) had an unknown price, `result.metadata.costComplete` is `false` and `result.metadata.cost` is a **lower bound**: the sum of the calls that were priced. A fully priced run has no `costComplete` field. Check it before you show `cost` as a total:
+
+```typescript
+const result = await agent.run("Summarize the report");
+const { cost, costComplete } = result.metadata;
+console.log(costComplete === false ? `at least $${cost} (some calls unpriced)` : `$${cost}`);
+```
+
+The same flag appears on `runBudgetSpend`, on `chat()` replies (`ChatReply.costComplete`) and on `AgentCompleted`. On the stream, `TokenUsage.costUsd` is absent for an unpriced call. To add up per-call costs yourself, use `sumCosts` / `addCost` from `@reactive-agents/core`: they return `{ usd, complete }` and never count an unknown price as $0.
+
+### Your own prices
+
+`.withModelPricing()` sets $/1M rates for any model. `input` and `output` are required; `cacheRead`, `cacheWrite5m` and `cacheWrite1h` are optional, and an omitted cache rate bills those tokens at your `input` rate.
+
+```typescript
+builder.withModelPricing({
+  "my-fine-tuned-model": { input: 0.5, output: 1.5, cacheRead: 0.05 },
+});
+```
+
+Calls priced this way report `priceSource: "user"`.
+
+### Dynamic pricing
+
+`.withDynamicPricing(provider)` fetches price rows when the agent is built:
 
 ```typescript
 import { openRouterPricingProvider, urlPricingProvider } from "@reactive-agents/llm-provider";
 
-// 1. Fetch live prices from OpenRouter's API
-builder.withDynamicPricing(openRouterPricingProvider)
+// Live prices from OpenRouter's model list (keeps OpenRouter's cache rates)
+builder.withDynamicPricing(openRouterPricingProvider);
 
-// 2. Fetch prices from an internal JSON file hosted anywhere
-builder.withDynamicPricing(urlPricingProvider("https://internal.corp/pricing.json"))
-
-// 3. Override specific model costs manually
-builder.withModelPricing({
-  "my-fine-tuned-model": { input: 0.5, output: 1.5 }
-})
+// Or a JSON price list you host
+builder.withDynamicPricing(urlPricingProvider("https://internal.corp/pricing.json"));
 ```
 
-If the dynamic fetch fails, the builder warns but gracefully falls back to the static map. When cost calculations run (e.g. for `metadata.cost`), the framework automatically correctly calculates cached-token discounts applied by OpenAI (50%), Anthropic, and Gemini (25%).
+- Fetched rows are labelled `source: "remote"` by `priceFor`, with `origin` naming the price list; calls priced from them report `priceSource: "price-book"`. A custom `PricingProvider` should set `origin` on its rows, or pass them through `markRemotePricing(rows, origin)`.
+- Your `.withModelPricing()` rows win over fetched rows.
+- **A failed fetch does not fail `build()`.** The build continues with your `.withModelPricing()` rows plus the bundled snapshot and logs a warning (`LoadBearingFailure:dynamic-pricing`). With `.withStrictValidation()`, the fetch failure fails the build instead.
+
+### LiteLLM proxy
+
+With the `litellm` provider, the cost the proxy reports in its `x-litellm-response-cost` header is used as the call's cost (`priceSource: "provider-reported"`). Otherwise the call is priced from the proxy's `/model/info` rates or the snapshot, with cached tokens billed at the cache rate.
 
 ## Semantic Caching
 
@@ -264,18 +318,32 @@ The execution engine accumulates token usage across every LLM call the run makes
 const result = await agent.run("Complex multi-step task");
 console.log(`Tokens used: ${result.metadata.tokensUsed}`);
 console.log(`LLM calls: ${result.metadata.llmCalls}`);
-console.log(`Cost: $${result.metadata.cost}`);
+console.log(`Cost up to the result: $${result.metadata.cost}`);
 ```
 
-**Debrief synthesis is reported separately.** With memory enabled, a non-trivial run forks one more LLM call after the answer to write its rich [debrief](/features/debrief-chat/). That call runs after the result is built, so it is not in `tokensUsed` or `llmCalls`. Its spend is on the rich debrief, and its `LLMRequestCompleted` event carries the run's `taskId`:
+**Debrief synthesis runs after the result.** With `.withMemory()` or `.withDebrief()`, a non-trivial run forks one more LLM call after the answer to write its rich [debrief](/features/debrief-chat/). That call runs after the result is built, so it is not in `cost`, `tokensUsed` or `llmCalls`. Neither is the extraction call `.withOutputSchema()` makes when the answer is not already schema-shaped JSON. `result.metadata.cost` is the spend up to the result.
+
+For the **billed total of the run**, debrief and extraction included, await `result.totalCost()`. It resolves to `{ usd, complete }`: at once when no debrief runs, otherwise when the debrief call settles. It never rejects. `complete` is `false` when any call, the debrief included, had no known price or the debrief call failed; `usd` is then a lower bound.
+
+```typescript
+const result = await agent.run("Complex multi-step task");
+console.log(`Cost up to the answer: $${result.metadata.cost}`);
+
+const total = await result.totalCost?.();
+if (total) console.log(`Billed total: $${total.usd}${total.complete ? "" : " (lower bound)"}`);
+```
+
+The same value is on the `RunCostFinalized` event (`taskId`, `agentId`, optional `runId`, `totalCostUsd`, `costComplete`), published exactly once per run: after the debrief call on debrief runs, right after `AgentCompleted` otherwise, and after `AgentAborted` when a run fails or is aborted. Read a run's total from this event, not from `AgentCompleted.totalCostUsd`, which is the pre-debrief spend.
+
+The debrief's own spend is on the rich debrief (`metrics.synthesisTokens`: `{ input, output, total, cost, calls }`, plus `costComplete: false` when the debrief model is unpriced) and on the `DebriefCompleted` event:
 
 ```typescript
 const rich = await result.debriefRich?.();
-const debriefSpend = rich?.metrics.synthesisTokens; // { input, output, total, cost, calls } | undefined
+const debriefSpend = rich?.metrics.synthesisTokens;
 const billedTokens = result.metadata.tokensUsed + (debriefSpend?.total ?? 0);
 ```
 
-The same figures ride on the run's `DebriefCompleted` event (`event.debrief.metrics.synthesisTokens`).
+`.withCostTracking()` budget entries record the run meter's input/output token split (0/0 when the provider reported only totals).
 
 ## What's Next
 

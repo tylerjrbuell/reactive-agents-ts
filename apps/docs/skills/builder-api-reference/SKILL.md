@@ -87,8 +87,8 @@ const agent = await ReactiveAgents.create()
 | `.withModel(m, params?)` | `string \| { model, thinking?, temperature?, maxTokens?, numCtx? }`; or `(string, { thinking?, temperature?, maxTokens?, numCtx? })` | Uses provider default if omitted. Unknown keys (e.g. `provider`) throw `ModelOptionError` |
 | `.withRateLimiting(cfg)` | `{ requestsPerMinute?, tokensPerMinute?, maxConcurrent? }` | Provider-level rate limits |
 | `.withCircuitBreaker(cfg?)` | `{ failureThreshold?, cooldownMs?, halfOpenRequests? }` | Retries with backoff on errors |
-| `.withDynamicPricing(provider)` | `PricingProvider` | Fetches live pricing during build |
-| `.withModelPricing(registry)` | `Record<string, { input, output }>` | Custom per-model USD pricing |
+| `.withDynamicPricing(provider)` | `PricingProvider` (`openRouterPricingProvider`, `urlPricingProvider(url)`) | Fetches price rows during build; never overrides `withModelPricing`; a failed fetch warns and falls back to the bundled price snapshot (fails the build only under `withStrictValidation()`) |
+| `.withModelPricing(registry)` | `Record<string, { input, output, cacheRead?, cacheWrite5m?, cacheWrite1h? }>` | Your $/1M rates; always win. Unlisted models use the bundled PriceBook snapshot or report price unknown (`metadata.costComplete: false`) |
 
 ### Reasoning & iteration
 

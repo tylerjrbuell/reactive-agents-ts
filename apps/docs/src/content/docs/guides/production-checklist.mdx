@@ -261,20 +261,21 @@ The dashboard is driven entirely by the EventBus. No manual instrumentation is r
 
 ### Exporting Metrics
 
-Call `agent.exportMetrics()` to retrieve metrics programmatically for forwarding to an external monitoring system (Prometheus, Datadog, etc.).
+Each run's figures are on `result.metadata`; forward them to an external monitoring system (Prometheus, Datadog, etc.). `cost` is the spend up to the answer; `await result.totalCost()` adds the background debrief call. Both flag a partial total when a model had no known price (see [Cost Tracking](/features/cost-tracking/#unknown-prices-are-reported-as-unknown)).
 
 {/* docs-skip-typecheck */}
 ```typescript
 const result = await agent.run("Process batch job");
-const metrics = await agent.exportMetrics();
+const total = await result.totalCost?.();
 
 // Forward to your monitoring pipeline
 await metricsClient.record({
   agentId: "prod-agent",
-  duration: metrics.totalDurationMs,
-  tokens: metrics.totalTokens,
-  cost: metrics.estimatedCostUsd,
-  steps: metrics.stepCount,
+  duration: result.metadata.duration,
+  tokens: result.metadata.tokensUsed,
+  cost: total?.usd ?? result.metadata.cost,
+  costComplete: total?.complete ?? result.metadata.costComplete !== false,
+  steps: result.metadata.stepsCount,
 });
 ```
 
