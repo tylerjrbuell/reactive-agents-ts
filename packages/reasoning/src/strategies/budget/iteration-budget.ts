@@ -74,10 +74,26 @@ export function passIterationShare(
  * reflexion pass's 4) does not cap distinct, informative calls of one tool at
  * 3 (QA N1, 2026-11-19). Without a budget the options pass through unchanged:
  * a single-pass run's own cap is its budget.
+ *
+ * `spent` is what earlier passes of the run used; the pass carries what is
+ * left as `meta.runIterationsLeft`. A pass that stops on its own cap with run
+ * budget still left runs the tool batch of its last think instead of dropping
+ * it (`kernel/loop/pending-batch.ts`; trace 01M7T84BKRW64TD0HQA6E8GHSP).
  */
-export function withRunBudget(options: KernelRunOptions, budget: IterationBudget | undefined): KernelRunOptions {
+export function withRunBudget(
+  options: KernelRunOptions,
+  budget: IterationBudget | undefined,
+  spent = 0,
+): KernelRunOptions {
   if (budget === undefined) return options;
-  return { ...options, meta: { ...options.meta, runMaxIterations: Math.max(budget.run, options.maxIterations) } };
+  return {
+    ...options,
+    meta: {
+      ...options.meta,
+      runMaxIterations: Math.max(budget.run, options.maxIterations),
+      runIterationsLeft: Math.max(0, budget.run - spent),
+    },
+  };
 }
 
 /** The iterations one finished kernel pass used: its loop counter or its LLM calls, whichever is higher. */

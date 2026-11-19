@@ -19,10 +19,16 @@
  *     deliverable that is still outstanding. The kernel runs ONE act on the
  *     batch (no think, no LLM call), then the cap proposal judges the run
  *     with the write in evidence.
+ *   - **drain (pass cap)** — the loop stopped on a PASS cap of a multi-pass
+ *     strategy while the run still has iterations (`meta.runIterationsLeft`).
+ *     The cap counts think calls, so a capped pass could never run its last
+ *     think's batch (trace 01M7T84BKRW64TD0HQA6E8GHSP: a reflexion improve
+ *     pass dropped 4 searches with 3 run iterations left). Same single act.
  *   - **dropped** — any other ending with a batch still pending. Nothing runs:
- *     the exit already finalized, or the batch writes nothing the contract
- *     still needs. The run records a `pending-batch` intervention step (it
- *     reaches the receipt) and a `pending_batch` guard event naming the calls.
+ *     the exit already finalized, or the run's iteration budget is spent
+ *     (recorded `cause: run-budget-exhausted`). The run records a
+ *     `pending-batch` intervention step (it reaches the receipt) and a
+ *     `pending_batch` guard event naming the calls.
  *   - durable pauses (`awaiting-approval` / `awaiting-interaction`) keep the
  *     batch on purpose for the resume; the rule leaves them alone.
  */
@@ -71,12 +77,33 @@ export function outstandingDeliverableWrites(state: KernelState): readonly strin
   return paths;
 }
 
+/**
+ * The run's iterations left after this pass, when a multi-pass strategy set the
+ * run budget (`meta.runIterationsLeft`, `withRunBudget`); `undefined` for a
+ * single-pass run, whose own cap is the run's. A pass counts what it used as
+ * its loop counter or its LLM calls, whichever is higher (`passIterationsUsed`).
+ */
+export function runIterationsLeftAfterPass(state: KernelState): number | undefined {
+  const left = state.meta.runIterationsLeft;
+  if (left === undefined) return undefined;
+  return left - Math.max(state.iteration, state.llmCalls ?? 0);
+}
+
+/**
+ * The loop stopped on a PASS cap while the run still has iterations: the
+ * pass's last think proposed calls the run can afford to execute.
+ */
+export function passCapWithRunBudget(state: KernelState): boolean {
+  return state.status === "acting" && (runIterationsLeftAfterPass(state) ?? 0) > 0;
+}
+
 /** The rule's decision for a finished loop (pure; {@link settlePendingBatch} applies it). */
 export function pendingBatchSettlement(state: KernelState): PendingBatchSettlement {
   if (pendingBatch(state).length === 0) return "none";
   const by = state.meta.terminatedBy;
   if (by === "awaiting-approval" || by === "awaiting-interaction") return "paused";
   if (state.status === "acting" && outstandingDeliverableWrites(state).length > 0) return "drained";
+  if (passCapWithRunBudget(state)) return "drained";
   return "dropped";
 }
 
@@ -116,23 +143,33 @@ export function settlePendingBatch(
         guard: "pending_batch",
         outcome: "pass",
         reason: "drained",
-        metadata: { calls, deliverables },
+        metadata: deliverables.length > 0
+          ? { calls, deliverables }
+          : { calls, cause: "pass-cap", runIterationsLeft: runIterationsLeftAfterPass(state) ?? null },
       });
       const acted = yield* ctx.kernel(state, ctx.context);
       return yield* assessAfterAct({ state: acted, currentOptions: ctx.currentOptions });
     }
     const terminatedBy = state.meta.terminatedBy ?? null;
+    // On the iteration cap (nothing finalized yet) the run's budget is spent:
+    // a pass cap with budget left drained above.
+    const runBudgetExhausted = state.status === "acting" && terminatedBy === null;
     yield* emitGuardFired({
       taskId,
       iteration: state.iteration,
       guard: "pending_batch",
       outcome: "warn",
       reason: "dropped",
-      metadata: { calls, terminatedBy, status: state.status },
+      metadata: {
+        calls,
+        terminatedBy,
+        status: state.status,
+        ...(runBudgetExhausted ? { cause: "run-budget-exhausted" } : {}),
+      },
     });
     const step = makeStep(
       "harness_signal",
-      `pending tool batch not executed (run ended by ${terminatedBy ?? "the iteration cap"}): ${calls.join(", ")}`,
+      `pending tool batch not executed (run ended by ${terminatedBy ?? "the iteration cap: run budget exhausted"}): ${calls.join(", ")}`,
       {
         intervention: {
           actor: "pending-batch",

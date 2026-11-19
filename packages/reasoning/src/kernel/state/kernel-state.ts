@@ -74,11 +74,11 @@ export interface KernelMeta {
   // ── Iteration control ──
   readonly maxIterations?: number;
   readonly runMaxIterations?: number; // the RUN's budget over every pass (strategy-run.ts); sizes the repetition backstop. Absent: maxIterations
+  readonly runIterationsLeft?: number; // the RUN's budget left when this pass started (withRunBudget); a pass cap below it drains the pending batch (pending-batch.ts)
   readonly requiredTools?: readonly string[];
   /**
-   * Opt-in "long horizon" guard profile (A2). Mirrored from
-   * {@link KernelRunOptions.horizonProfile} at kernel start so state-only
-   * consumers (`arbitrationContextFromState`, `think.ts` oracle context) can
+   * Opt-in "long horizon" guard profile (A2). Mirrored from {@link KernelRunOptions.horizonProfile}
+   * at kernel start so state-only consumers (`arbitrationContextFromState`, `think.ts` oracle context) can
    * resolve the scaled guard constants without threading options through every
    * call site. Absent → today's absolute-count guards (byte-identical).
    */

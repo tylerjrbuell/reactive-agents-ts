@@ -19,6 +19,9 @@
 //   (e) RI early stop handed off by the gate (the pre-fa3e33b7b redirect
 //       shape): same;
 //   (p) a durable pause keeps its batch for the resume (no record);
+//   (b) a PASS cap with run budget left (`meta.runIterationsLeft`) drains any
+//       batch; at the RUN cap it is dropped and recorded run-budget-exhausted
+//       (trace 01M7T84BKRW64TD0HQA6E8GHSP);
 //   (w) the terminal pipeline settles the batch before it reads the fences.
 //
 // RED-ON-CUT (shown during the mission, then restored):
@@ -265,6 +268,28 @@ describe("(p)/(w) boundaries", () => {
     expect(pendingBatchSettlement(pendingWriteState({}))).toBe("drained");
     expect(pendingBatchSettlement({ ...pendingWriteState({}), status: "done" })).toBe("dropped");
     expect(pendingBatchSettlement(makeKernelState({ status: "acting" }))).toBe("none");
+  });
+
+  it("(b) a PASS cap with run budget left drains any batch; at the RUN cap it is dropped as run-budget-exhausted", async () => {
+    // 01M7T84BKRW64TD0HQA6E8GHSP: a reflexion pass of 2 iterations, 8 of the run's 10 left when it started.
+    const searches = { pendingNativeToolCalls: [{ id: "s1", name: "web-search", arguments: { query: "EV trends" } }] };
+    const at = (runIterationsLeft: number | undefined): KernelState => {
+      const base = makeKernelState({ iteration: 2, status: "acting" });
+      return { ...base, llmCalls: 2, meta: { ...base.meta, ...searches, ...(runIterationsLeft !== undefined ? { runIterationsLeft } : {}) } };
+    };
+    expect(pendingBatchSettlement(at(8))).toBe("drained");
+    expect(pendingBatchSettlement(at(3))).toBe("drained");
+    expect(pendingBatchSettlement(at(2))).toBe("dropped"); // the pass used the run's last iterations
+    expect(pendingBatchSettlement(at(undefined))).toBe("dropped"); // single-pass run: its cap is the run's
+    expect(pendingBatchSettlement({ ...at(8), status: "done" })).toBe("dropped"); // an exit already finalized
+
+    const drained = await settle(at(8));
+    expect(drained.kernelCalls).toBe(1);
+    const dropped = await settle(at(2));
+    expect(dropped.kernelCalls).toBe(0);
+    expect(dropped.settled.steps[dropped.settled.steps.length - 1]!.content).toBe(
+      "pending tool batch not executed (run ended by the iteration cap: run budget exhausted): web-search",
+    );
   });
 
   it("(w) the pipeline entry settles the batch before it reads the fences", () => {

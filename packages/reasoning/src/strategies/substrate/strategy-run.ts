@@ -690,7 +690,7 @@ export function runStrategy<E, R>(
             ...(seed !== undefined && input.seedRunLedger === undefined ? { seedRunLedger: seed } : {}),
           };
           toolsVisible = toolsVisible === true || reachesDomainTool(seeded);
-          const result = yield* runPass(kernel, seeded, withRunBudget(options, spec.iterationBudget));
+          const result = yield* runPass(kernel, seeded, withRunBudget(options, spec.iterationBudget, iterationsSpent));
           runContract = runContract ?? result.state.meta.runContract;
           actOrAnswerTallies.push(actOrAnswerTally(result.state));
           steps.push(...(passOptions?.record === "evidence" ? result.steps.filter(isToolEvidence) : result.steps));
