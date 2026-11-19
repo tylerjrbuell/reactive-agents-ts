@@ -64,6 +64,19 @@ describe("contention decision (0.3)", () => {
     ].join("\n")
     expect(countOllamaClients(proc)).toBe(1)
   })
+  it("our own connection (client end inode owned by us) is not a foreign client; a second client still is", () => {
+    // 0100007F:2CAA = 127.0.0.1:11434. Rows 1/2: our pair (client port 0xA000, inode 111). Rows 3/4: a foreign pair.
+    const proc = [
+      "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode",
+      "   1: 0100007F:2CAA 0100007F:A000 01 00000000:00000000 00:00000000 00000000   999  0 5001",
+      "   2: 0100007F:A000 0100007F:2CAA 01 00000000:00000000 00:00000000 00000000  1000  0 111",
+      "   3: 0100007F:2CAA 0100007F:B000 01 00000000:00000000 00:00000000 00000000   999  0 5002",
+      "   4: 0100007F:B000 0100007F:2CAA 01 00000000:00000000 00:00000000 00000000  1000  0 222",
+    ].join("\n")
+    expect(countOllamaClients(proc)).toBe(2)
+    expect(countOllamaClients(proc, 11434, new Set(["111"]))).toBe(1)
+    expect(countOllamaClients(proc, 11434, new Set(["111", "222"]))).toBe(0)
+  })
 })
 
 describe("provenance (0.2)", () => {

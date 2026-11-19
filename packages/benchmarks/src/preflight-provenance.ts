@@ -13,7 +13,7 @@
 // (`evaluateContention`, `countOllamaClients`) is pure so it is testable
 // without a host.
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
 import { cpus, loadavg } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -99,17 +99,60 @@ export function evaluateContention(input: ContentionInput): ContentionReport {
  * `/proc/net/tcp` (or `tcp6`): the server side of every live client of that
  * port. Pure parser; `st` 01 = ESTABLISHED.
  */
-export function countOllamaClients(procNetTcp: string, port: number = OLLAMA_PORT): number {
+export function countOllamaClients(
+  procNetTcp: string,
+  port: number = OLLAMA_PORT,
+  ownSocketInodes: ReadonlySet<string> = new Set(),
+): number {
   const hexPort = port.toString(16).toUpperCase().padStart(4, "0");
-  let n = 0;
-  for (const line of procNetTcp.split("\n").slice(1)) {
-    const cols = line.trim().split(/\s+/);
-    const local = cols[1];
-    const state = cols[3];
-    if (local === undefined || state !== "01") continue;
-    if (local.slice(local.lastIndexOf(":") + 1).toUpperCase() === hexPort) n++;
+  const portOf = (addr: string): string => addr.slice(addr.lastIndexOf(":") + 1).toUpperCase();
+  const rows = procNetTcp
+    .split("\n")
+    .slice(1)
+    .map((line) => line.trim().split(/\s+/))
+    .filter((cols) => cols[3] === "01" && cols[1] !== undefined && cols[2] !== undefined);
+  // The client end of our own connections (remote port = Ollama, inode ours) names the
+  // server-end rows (remote address = that client's local address) that are not foreign.
+  const own = new Set(
+    rows.filter((c) => portOf(c[2]!) === hexPort && ownSocketInodes.has(c[9] ?? "")).map((c) => c[1]!.toUpperCase()),
+  );
+  return rows.filter((c) => portOf(c[1]!) === hexPort && !own.has(c[2]!.toUpperCase())).length;
+}
+
+/** Socket inodes (`socket:[N]` fds) held by `pid`; empty when /proc is unreadable. */
+function socketInodesOf(pid: number): string[] {
+  try {
+    return readdirSync(`/proc/${pid}/fd`).flatMap((fd) => {
+      try {
+        const m = /^socket:\[(\d+)\]$/.exec(readlinkSync(`/proc/${pid}/fd/${fd}`));
+        return m?.[1] !== undefined ? [m[1]] : [];
+      } catch {
+        return [];
+      }
+    });
+  } catch {
+    return [];
   }
-  return n;
+}
+
+/** Parent pid from `/proc/<pid>/stat` (field 4, after the parenthesised comm); 0 when unreadable. */
+function parentPidOf(pid: number): number {
+  const stat = readProc(`/proc/${pid}/stat`);
+  const rest = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+  return Number(rest[1]) || 0;
+}
+
+/**
+ * Socket inodes of this process and its ancestors. The driver supervisor spawns the
+ * runner and keeps its own keep-alive connection to Ollama; that connection is ours,
+ * not a foreign client (2026-11-18: the supervisor paused forever on it).
+ */
+export function ownSocketInodes(): Set<string> {
+  const inodes = new Set<string>();
+  for (let pid = process.pid, hops = 0; pid > 1 && hops < 8; pid = parentPidOf(pid), hops++) {
+    for (const i of socketInodesOf(pid)) inodes.add(i);
+  }
+  return inodes;
 }
 
 // ── host observation (fail-soft) ──────────────────────────────────────────────
@@ -184,7 +227,7 @@ export async function checkContention(
     loaded,
     loadAvg1: loadavg()[0] ?? 0,
     cpus: cpus().length,
-    clients: procText === null || procText === "" ? null : countOllamaClients(procText),
+    clients: procText === null || procText === "" ? null : countOllamaClients(procText, OLLAMA_PORT, ownSocketInodes()),
     ...(opts.maxLoadPerCpu !== undefined ? { maxLoadPerCpu: opts.maxLoadPerCpu } : {}),
   });
 }
