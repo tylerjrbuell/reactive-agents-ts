@@ -8,6 +8,7 @@
  */
 import { Effect, Ref } from "effect";
 import { LLMService, selectAdapter } from "@reactive-agents/llm-provider";
+import { adapterCalibrationArg } from "../../utils/calibration-trace.js";
 import { ObservableLogger } from "@reactive-agents/observability";
 import type { LogEvent } from "@reactive-agents/observability";
 import {
@@ -158,9 +159,8 @@ export function handleActing(
 ): Effect.Effect<KernelState, never, LLMService> {
   return Effect.gen(function* () {
     const { input, profile, compression, toolService, hooks } = context;
-    // profileOverrides were already merged into `profile` by kernel-runner;
-    // here we only need the adapter.
-    const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
+    // profileOverrides already merged into `profile` by kernel-runner; only the adapter is needed (calibration mode honored).
+    const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId, adapterCalibrationArg(input));
     // Compose pipeline — used by the dead-tag emit sites below
     // (`nudge.healing-failure`, `observation.tool-result`, `lifecycle.failure`)
     // and by the later message-rewrite chokepoint. Declared once up here so

@@ -35,6 +35,8 @@ import { RunEnvelope } from "../kernel/envelope/run-envelope.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { withEnvContext } from "../context/context-engine.js";
+import { resolveStrategyIterationCap } from "./budget/iteration-cap.js";
+import { totNodeData, publishTotSelection } from "./structured-steps.js";
 import { classifyTaskComplexity } from "../kernel/capabilities/comprehend/task-complexity.js";
 import type { TaskClassification } from "../kernel/capabilities/comprehend/task-classification.js";
 
@@ -274,7 +276,6 @@ export const executeTreeOfThought = (
         ),
       );
 
-      const tierLimitsForSkip = TOT_TIER_LIMITS[input.tier ?? "mid"];
       const skipPass = yield* run.pass(reactKernel, {
         ...buildKernelInput(crossCutting, {
           task: input.taskDescription,
@@ -286,7 +287,7 @@ export const executeTreeOfThought = (
         }),
         ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
       }, {
-        maxIterations: tierLimitsForSkip.maxPhase2Iterations,
+        maxIterations: resolveStrategyIterationCap(input.config, { strategyDefault: TOT_TIER_LIMITS[input.tier ?? "mid"].maxPhase2Iterations }),
         strategy: "tree-of-thought",
         kernelType: "react",
         taskId: input.taskId,
@@ -519,7 +520,7 @@ export const executeTreeOfThought = (
             step: run.steps().length,
             totalSteps: depth * breadth,
             thought: `[TOT d=${d}] score=${score.toFixed(2)}: ${candidate.substring(0, 100)}...`,
-            kernelPass: "tree-of-thought:explore",
+            kernelPass: "tree-of-thought:explore", structured: totNodeData(node, { pruned: score < pruningThreshold, selected: false }),
           });
 
           // Prune: only keep nodes above threshold
@@ -566,7 +567,6 @@ export const executeTreeOfThought = (
         run.record(makeStep("observation", `[TOT] Adaptive pruning at depth ${d}: threshold ${pruningThreshold} → ${adaptiveThreshold}, no paths above adaptive threshold. Selecting best from all explored nodes.`, { frameworkInstrumentation: "tot-marker" }));
         break;
       }
-
 
       // Sort by score and keep top `breadth` nodes for next depth
       frontier = nextFrontier
@@ -681,7 +681,7 @@ export const executeTreeOfThought = (
     const bestPath = getAncestorPath(allNodes, bestLeaf);
 
     run.record(makeStep("observation", `[TOT] Best path (score=${bestLeaf.score.toFixed(2)}): ${bestPath.join(" -> ")}`, { frameworkInstrumentation: "tot-marker" }));
-
+    yield* publishTotSelection(eventBus, { taskId: input.taskId ?? "tree-of-thought", step: run.steps().length, totalSteps: depth * breadth, prunedBelow: pruningThreshold, rootContent: `Root: ${input.taskDescription}` }, allNodes, bestLeaf);
     yield* emitPhaseEnd({ emitLog, phase: "tree-of-thought:explore", startedAt: start, totalTokens: run.spend().tokens });
 
     yield* emitLog({ _tag: "phase_started", phase: "tree-of-thought:execute", timestamp: new Date() });
@@ -702,7 +702,7 @@ export const executeTreeOfThought = (
       }),
       ...(input.checklistGuidance ? { checklistGuidance: input.checklistGuidance } : {}),
     }, {
-      maxIterations: tierLimits.maxPhase2Iterations,
+      maxIterations: resolveStrategyIterationCap(input.config, { strategyDefault: tierLimits.maxPhase2Iterations }), // user cap wins; tier table is the default
       strategy: "tree-of-thought",
       kernelType: "react",
       taskId: input.taskId,

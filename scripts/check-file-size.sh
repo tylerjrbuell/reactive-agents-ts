@@ -170,6 +170,7 @@ GIANT_BAR=1000
 # 2026-11-06 RI controller census cleanup: runner.ts 859->848 (profileMaxTokens seed deleted with the write-only verbosity detector), kernel-state.ts 1445->1378 (dead dispatchedTemperature / pendingCompressionRecommendation / profileMaxTokens / lastIterationTokens fields), tree-of-thought.ts 906->904 (dead contextPressure / currentTemperature controller inputs).
 # 2026-11-06 unavailable-tool hint (surface-hiding fix A): dispatch-think-response.ts 649->577 (standard thinking handler moved verbatim to reason/continue-thinking.ts).
 # 2026-11-06 discover-tools task appendix: reflexion.ts 988->987 (task threaded to the capability resolver; seedCritiques ternary fits one line).
+# 2026-11-19 kernel-state.ts 1292->1287: KernelInput.calibration JSDoc condensed to pay for calibrationMode ("auto"|"skip" -> selectAdapter 4th arg).
 # 2026-11-19 runner.ts 848->839: calibration profile-override merge moved to kernel/loop/runner-profile-overrides.ts (now traced as profile-overrides-applied).
 # 2026-11-06 toolChoice "required": llm-provider types.ts 1035->987 (ToolDefinition/ToolCall moved verbatim to tool-protocol.ts with the new ToolChoice), local.ts 1182->1150 (Ollama tool wire moved verbatim to providers/ollama-tools.ts, forced-call mapping added there).
 # 2026-11-06 one parameter projection: act.ts 1134->1127 (heal map passes tool schemas whole; the hand-written parameter field picks are gone).
@@ -233,7 +234,7 @@ SIZE_BASELINE=(
   "core/src/services/event-bus.ts:188"
   "runtime/src/runtime.ts:1105"
   "benchmarks/src/tasks/real-world.ts:1481"
-  "reasoning/src/kernel/state/kernel-state.ts:1292"
+  "reasoning/src/kernel/state/kernel-state.ts:1287"
   "llm-provider/src/providers/local.ts:1139"
   "runtime/src/builder/types.ts:1061"
   "llm-provider/src/types.ts:978"

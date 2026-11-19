@@ -63,6 +63,8 @@ import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { resolveExecutableToolCapabilities } from "../kernel/capabilities/act/tool-capabilities.js";
 import { emitKernelStateSnapshot } from "../kernel/utils/diagnostics.js";
 import { withEnvContext } from "../context/context-engine.js";
+import { resolveStrategyIterationCap } from "./budget/iteration-cap.js";
+import { reflexionData } from "./structured-steps.js";
 
 interface ReflexionInput {
   readonly taskDescription: string;
@@ -206,11 +208,10 @@ export const executeReflexion = (
         taskId: input.taskId ?? "reflexion",
         requiredTools: input.requiredTools ?? [],
         logSite: "reasoning/src/strategies/reflexion.ts:emitLog",
-        iterationBudget: { run: input.config.strategies.reactive.maxIterations, perPass: input.config.strategies.reflexion?.kernelMaxIterations },
+        iterationBudget: { run: resolveStrategyIterationCap(input.config, { strategyDefault: input.config.strategies.reactive.maxIterations }), perPass: input.config.strategies.reflexion?.kernelMaxIterations },
       },
       (run) => Effect.gen(function* () {
     const { emitLog, start } = run;
-
     yield* emitLog({ _tag: "phase_started", phase: "reflexion:generate", timestamp: new Date() });
 
     // ── STEP 1: Initial generation (tool-aware via ReAct kernel) ──
@@ -436,7 +437,7 @@ export const executeReflexion = (
             step: run.steps().length,
             totalSteps: maxRetries + 1,
             observation: `[CRITIQUE ${attempt}] ${critique}`,
-            kernelPass: `reflexion:critique-${attempt}`,
+            kernelPass: `reflexion:critique-${attempt}`, structured: reflexionData(critique, isSatisfied(critique)),
           });
 
           // ── Stagnation check: exit early if critique isn't changing ──
@@ -512,7 +513,6 @@ export const executeReflexion = (
           }
 
           const updatedCritiques = [...s.previousCritiques, critique];
-
           yield* emitLog({ _tag: "phase_started", phase: "reflexion:improve", timestamp: new Date() });
 
           // ── Improve: generate a refined response (tool-aware via ReAct kernel) ──

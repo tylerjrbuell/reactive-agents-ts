@@ -11,7 +11,32 @@
  *    parallel-tool-hint signal records).
  */
 import { Effect } from "effect";
+import { describeCapabilityResolution, resolveCapability } from "@reactive-agents/llm-provider";
 import { emitGuardFired } from "./diagnostics.js";
+
+/** Guard name of the once-per-run capability resolution event. */
+export const CAPABILITY_RESOLVED_GUARD = "capability-resolved";
+
+/** `selectAdapter`'s 4th argument for a kernel input: "auto" unless the run asked "skip". */
+export const adapterCalibrationArg = (input: { readonly calibrationMode?: "auto" | "skip" }): "auto" | "skip" =>
+  input.calibrationMode ?? "auto";
+
+/** Emit one `capability-resolved` event: how the model's capability was resolved. */
+export const emitCapabilityResolved = (
+  taskId: string,
+  provider: string,
+  model: string,
+): Effect.Effect<void, never> => {
+  const r = describeCapabilityResolution(resolveCapability(provider, model));
+  return emitGuardFired({
+    taskId,
+    iteration: 0,
+    guard: CAPABILITY_RESOLVED_GUARD,
+    outcome: "pass",
+    reason: `${r.provider}/${r.model}: source=${r.source} tier=${r.tier}`,
+    metadata: { ...r },
+  });
+};
 
 /** Guard name of the per-field profile override event. */
 export const PROFILE_OVERRIDES_APPLIED_GUARD = "profile-overrides-applied";

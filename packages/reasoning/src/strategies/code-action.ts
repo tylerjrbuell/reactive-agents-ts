@@ -42,6 +42,9 @@ import { emitPhaseEnd, publishReasoningStep, resolveStrategyServices } from "../
 import { openStrategyContract } from "../kernel/contract/strategy-contract.js";
 import { extractGoalText } from "./planning/plan-text.js";
 import { runStrategy } from "./substrate/strategy-run.js";
+import { resolveStrategyIterationCap } from "./budget/iteration-cap.js";
+import { codeActionData } from "./structured-steps.js";
+import type { ReasoningStepData } from "@reactive-agents/core";
 import { emitBudgetRefusal } from "../kernel/capabilities/decide/tool-call-budget.js";
 
 /**
@@ -169,10 +172,12 @@ export const executeCodeAction = (
     const runContract = yield* openStrategyContract({ task: extractGoalText(input.taskDescription), taskId: input.taskId ?? "code-action",
       requiredTools: input.requiredTools ?? [], toolSchemas: input.availableToolSchemas, toolService: (yield* resolveStrategyServices).toolService });
 
-    const maxIterations = input.config.strategies.reactive.maxIterations ?? 3;
+    const maxIterations = resolveStrategyIterationCap(input.config, {
+      strategyDefault: input.config.strategies.reactive.maxIterations ?? 3,
+    });
     const verifier = input.verifier ?? noopVerifier;
     const emitLog = run.emitLog;
-    const appendStep = (step: ReasoningStep, kernelPass: string): Effect.Effect<void, never> => {
+    const appendStep = (step: ReasoningStep, kernelPass: string, structured?: ReasoningStepData): Effect.Effect<void, never> => {
       run.record(step);
       return publishReasoningStep(ebOpt, {
         _tag: "ReasoningStepCompleted",
@@ -184,6 +189,7 @@ export const executeCodeAction = (
         ...(step.type === "action" ? { action: step.content } : {}),
         ...(step.type === "observation" ? { observation: step.content } : {}),
         kernelPass,
+        ...(structured ? { structured } : {}),
       });
     };
 
@@ -337,6 +343,7 @@ export const executeCodeAction = (
             },
           ),
           `code-action:execute:${iteration}`,
+          codeActionData({ code: generatedCode, stderr: lastSandboxError }),
         );
         yield* emitPhaseEnd({
           emitLog,
@@ -544,6 +551,7 @@ export const executeCodeAction = (
         yield* appendStep(
           makeStep("thought", `[CODE-ACTION] Terminating: verdict=${verdict}, iteration=${iteration}`),
           `code-action:verify:${iteration}`,
+          codeActionData({ code: generatedCode, stdout: observationText, verify: { verdict, summary: verifyResult.summary } }),
         );
         break;
       }
@@ -559,6 +567,7 @@ export const executeCodeAction = (
       yield* appendStep(
         makeStep("thought", `[CODE-ACTION] Retrying (iteration ${iteration}): ${verifyResult.summary}`),
         `code-action:verify:${iteration}`,
+        codeActionData({ code: generatedCode, stdout: observationText, verify: { verdict, summary: verifyResult.summary } }),
       );
       yield* emitLog({
         _tag: "warning",

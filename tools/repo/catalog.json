@@ -632,6 +632,13 @@
       "invoke": "bun scripts/lift/bench.ts"
     },
     {
+      "id": ".agents/skills/harness-improvement-loop/scripts/probe-code-action-approval-scope.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/probe-code-action-approval-scope.ts",
+      "kind": "research",
+      "summary": "Zero-token probe: code-action approval-scope refusal (conformance audit G6)",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/probe-code-action-approval-scope.ts"
+    },
+    {
       "id": "scripts/lift/probe-2-thinking-loss.ts",
       "path": "scripts/lift/probe-2-thinking-loss.ts",
       "kind": "research",

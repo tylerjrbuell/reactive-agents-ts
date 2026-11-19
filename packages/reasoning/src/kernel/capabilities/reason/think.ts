@@ -51,7 +51,7 @@ import { shouldInjectDriverInstructions } from "../decide/tool-gating.js";
 import { emitToolSurfaceResolved, emitProjectionRendered, emitSignalRendered, emitSignalEffect } from "../../utils/diagnostics.js";
 import { emitCuratorDecisions } from "./curator-decisions.js";
 import { degradedParts, toLLMMessages } from "../../../assembly/to-llm-messages.js";
-import { emitCalibrationEffect } from "../../utils/calibration-trace.js";
+import { adapterCalibrationArg, emitCalibrationEffect } from "../../utils/calibration-trace.js";
 import { emitContentPartsDegraded } from "../../utils/content-part-degraded.js";
 import { recordCompactionMarker, recordCompactionNoShrink, recordResultTruncation } from "../../ledger/emit.js";
 import { filterRecallByOverflow, recallGateEnabled } from "./think-guards.js";
@@ -145,7 +145,7 @@ export function handleThinking(
     // pruned) and the effective system prompt body (harness-skill-wrapped
     // when active). profileOverrides were already merged into `profile` by
     // kernel-runner; here we only need the adapter.
-    const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId);
+    const { adapter } = selectAdapter({ supportsToolCalling: true }, profile.tier, input.modelId, adapterCalibrationArg(input));
 
     // Read pending guidance signals, clear from state before LLM call.
     const pending = state.pendingGuidance;

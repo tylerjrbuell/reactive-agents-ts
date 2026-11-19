@@ -16,6 +16,7 @@
 // `adaptive` strategies. `direct` is intentionally minimal.
 import { Effect } from "effect";
 import type { ReasoningResult } from "../types/index.js";
+import { resolveStrategyIterationCap } from "./budget/iteration-cap.js";
 import { ExecutionError, IterationLimitError } from "../errors/errors.js";
 import { fenceRecalledMemory } from "./memory-fence.js";
 import type { ReasoningConfig } from "../types/config.js";
@@ -69,6 +70,9 @@ export interface DirectInput {
   readonly budgetLimits?: import("../kernel/capabilities/decide/arbitrator.js").BudgetLimits;
 }
 
+/** Direct's default budget when tools are registered: call, observe, answer. */
+const DIRECT_TOOL_ITERATIONS = 3;
+
 // ── executeDirect ─────────────────────────────────────────────────────────────
 
 /**
@@ -114,9 +118,18 @@ export const executeDirect = (
 
     yield* emitLog({ _tag: "phase_started", phase: "direct:kernel", timestamp: new Date() });
 
-    // Cap iterations at 1 by default. The maximum allowed is 3; anything
+    // Cap via the ONE resolver. Direct is single-shot (default 1), but with
+    // tools registered a tool-calling first turn needs a second turn to answer;
+    // at 1 it ended as a failed max_iterations run with the batch unexecuted.
+    // So tools-enabled default = `DIRECT_TOOL_ITERATIONS`. An explicit user cap
+    // (or caller maxIterations) wins, clamped to Direct's 1..3 ceiling; anything
     // larger should use a multi-iteration strategy.
-    const requestedMax = input.maxIterations ?? 1;
+    const hasTools = input.availableTools.length > 0 || (input.availableToolSchemas?.length ?? 0) > 0;
+    const requestedMax =
+      input.maxIterations ??
+      resolveStrategyIterationCap(input.config, {
+        strategyDefault: hasTools ? DIRECT_TOOL_ITERATIONS : 1,
+      });
     const maxIter = Math.min(Math.max(requestedMax, 1), 3);
 
     // Map memoryContext into priorContext for the kernel, fenced as untrusted

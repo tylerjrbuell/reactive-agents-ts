@@ -200,7 +200,7 @@ export function runKernel(
       : CONTEXT_PROFILES[defaultTier];
 
     // Calibration-aware profile overrides, applied once (and traced) so every phase sees them.
-    const mergedProfile: ContextProfile = yield* applyCalibrationProfileOverrides(baseProfile, effectiveInput.modelId, options.taskId ?? "default");
+    const mergedProfile: ContextProfile = yield* applyCalibrationProfileOverrides(baseProfile, effectiveInput.modelId, options.taskId ?? "default", effectiveInput);
     // S1.4 — derive the effective context window from the model Capability
     // unless the caller explicitly set contextProfile.maxTokens (their value
     // wins). Without this, local tier stays at the 32K placeholder while
