@@ -76,6 +76,7 @@ export type AttributionReason =
   | "harness:plan-posture-veto"
   | "harness:stall-after-work"
   | "harness:loop-after-work"
+  | "harness:strategy-error"
   | "model:never-engaged"
   | "model:tool-protocol"
   | "model:wrong-tool-arg"
@@ -102,10 +103,11 @@ export const CAUSE_ATTRIBUTION: Readonly<Record<FailureCause, AttributionReason>
   // No run-completed and no run-aborted: a killed process and a harness crash look the same.
   "incomplete-trace": "unattributed",
   "provider-error": "environment:provider-error",
-  // A strategy body error is a refused configuration or a harness fault, and the
-  // trace cannot always tell which; no owner until a harness reason is ratified
-  // with its docs row (conformance audit 2026-11-18, I1).
-  "strategy-error": "unattributed",
+  // A strategy body that throws or refuses the run's configuration is the
+  // framework's fault (owner decision 2026-11-19; conformance audit 2026-11-18, I1).
+  // A body that failed on a model call is classified provider-error by cause.ts
+  // before it reaches this entry.
+  "strategy-error": "harness:strategy-error",
   "satisfiability-abstain": "unattributed",
   "terminal-mislabel": "harness:terminal-mislabel",
   "plan-posture-veto": "harness:plan-posture-veto",

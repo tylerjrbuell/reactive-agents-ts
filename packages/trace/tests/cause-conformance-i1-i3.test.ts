@@ -47,6 +47,27 @@ describe("I1: a strategy-body error is a decisive strategy-error cause", () => {
     expect(c.confidence).toBe("decisive");
   });
 
+  it("a strategy-error is attributed to the harness (probable, from the cause), for both fixtures", async () => {
+    for (const [name, sub] of [
+      ["conformance-i1-strategy-config-refused.jsonl", "config-refused"],
+      ["conformance-i1-strategy-synthesis-failed.jsonl", "synthesis-failed"],
+    ] as const) {
+      const a = attributeFailure(await load(name));
+      expect(a.verdict).toBe("harness");
+      expect(a.reason).toBe("harness:strategy-error");
+      expect(a.confidence).toBe("probable");
+      expect(a.cause).toBe(`strategy-error/${sub}`);
+    }
+  });
+
+  it("a strategy body that failed on a model call still attributes to the provider, not the harness", () => {
+    const a = attributeFailure(synthetic([
+      { kind: "run-completed", status: "failure", terminatedBy: "end_turn", error: "Strategy execution failed (blueprint): Plan generation failed: LLM call failed: ollama request failed: Unable to connect", totalTokens: 0, totalCostUsd: 0, durationMs: 1 },
+    ]));
+    expect(a.reason).toBe("environment:provider-error");
+    expect(a.verdict).toBe("environment");
+  });
+
   it("after G2: a strategy-error terminal authority alone is enough", () => {
     const c = analyzeCause(synthetic([
       { kind: "guard-fired", iter: 2, guard: "terminal_decision", outcome: "terminate", reason: "strategy_error", metadata: { terminatedBy: "strategy_error", status: "failed", authority: "strategy-error" } },
