@@ -24,7 +24,7 @@ import { analyzeCause, parseTrace } from "@reactive-agents/trace"
 import { runSession } from "../runner.js"
 import { applySearchKeysFromEnvFiles, searchBackendConfigured } from "../search-env.js"
 import { isSolved } from "../report-format.js"
-import type { BenchmarkTask, HarnessVariant, ModelVariant } from "../types.js"
+import type { BenchmarkTask, HarnessVariant, InternalVariant, ModelVariant } from "../types.js"
 import { H3_TASKS } from "./tasks.js"
 import { H3_SELECTABLE_TASKS } from "./tasks-v2.js"
 import { LH_TASKS } from "./long-horizon-tasks.js"
@@ -44,7 +44,7 @@ import {
 export const H3_VERSION = "1.0.0"
 
 /** The default-path arm: tools + reasoning, nothing opt-in (no memory / long-horizon). */
-export const H3_VARIANT: HarnessVariant = {
+export const H3_VARIANT: InternalVariant = {
   type: "internal",
   id: "ra-default",
   label: "RA default path (tools+reasoning)",
@@ -60,6 +60,25 @@ export const H3_VARIANT: HarnessVariant = {
  * cannot express `withMetaTools({ todo: true })`. So H3 cannot yet exercise the
  * K2 surface (todo-iteration stall accrual); that needs a bench-seam widening.
  */
+/**
+ * Calibration-arm seam for the adaptive-lift test: `RA_BENCH_CALIBRATION=skip|auto|swap:<modelId>`
+ * (an `RA_*` flag, so it lands in provenance.raEnv). Same variant id as the default arm so
+ * cell ids pair across arms; each arm writes its own --out. Unset → the default variant.
+ */
+export function calibrationArmVariant(tier: string, env: Readonly<Record<string, string | undefined>> = process.env): InternalVariant | null {
+  const v = env.RA_BENCH_CALIBRATION
+  if (!v) return null
+  // `swap` = the partner tier's shipped calibration (cogito:8b <-> qwen3:4b).
+  const partner = tier === "cogito:8b" ? "qwen3:4b" : tier === "qwen3:4b" ? "cogito:8b" : null
+  const calibration =
+    v === "skip" || v === "auto" ? v
+    : v === "swap" && partner ? { swapFrom: partner }
+    : v.startsWith("swap:") && v.length > 5 ? { swapFrom: v.slice(5) }
+    : null
+  if (!calibration) throw new Error(`RA_BENCH_CALIBRATION: expected skip | auto | swap | swap:<modelId> (swap needs tier cogito:8b or qwen3:4b), got ${v} for ${tier}`)
+  return { ...H3_VARIANT, config: { ...H3_VARIANT.config, calibration } }
+}
+
 export const H3_META_VARIANT: HarnessVariant = {
   type: "internal",
   id: "ra-default+meta",
@@ -277,7 +296,7 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
   for (let run = 0; run < opts.k; run++)
     for (const tier of opts.tiers)
       for (const task of tasks) {
-        const variant = longHorizon ? LH_A0_VARIANT : opts.noSwitch ? H3_NO_SWITCH_VARIANT : H3_VARIANT
+        const variant = longHorizon ? LH_A0_VARIANT : opts.noSwitch ? H3_NO_SWITCH_VARIANT : calibrationArmVariant(tier) ?? H3_VARIANT
         plan.push({ tier, task, variant, run })
         if (opts.metaArm && H3_META_TASKS.includes(task.id)) plan.push({ tier, task, variant: H3_META_VARIANT, run })
       }

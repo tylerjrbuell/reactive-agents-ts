@@ -526,6 +526,13 @@ export interface HarnessConfig {
    * resolve inside it. Unset → no `workspace` key is passed (existing arms unchanged).
    */
   readonly workspace?: boolean;
+  /**
+   * Calibration arm. `"skip"` / `"auto"` call `.withCalibration(mode)`;
+   * `{ swapFrom }` passes the SHIPPED `ModelCalibration` of ANOTHER model id as an
+   * explicit object (the SWAP control: a wrong prior). Unset → the wither is never
+   * called (framework default). `run-started.config.calibration` proves what resolved.
+   */
+  readonly calibration?: "skip" | "auto" | { readonly swapFrom: string };
 }
 
 export interface InternalVariant {

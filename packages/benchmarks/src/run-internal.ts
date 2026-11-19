@@ -11,6 +11,7 @@ import { ReactiveAgents } from "@reactive-agents/runtime";
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { serve } from "@reactive-agents/runtime-shim"
+import { loadCalibration } from "@reactive-agents/llm-provider"
 import type {
   HarnessVariant, ModelVariant, HarnessConfig, TaskRunResult,
 } from "./types.js"
@@ -261,6 +262,16 @@ async function runInternal(
 
     // Cross-tier thinking ablation: explicit enable/disable when set in config.
     if (config.thinking !== undefined) builder.withThinking(config.thinking)
+
+    // Calibration lift arm (adaptive-lift test): skip / auto / SWAP (another model's shipped object).
+    if (config.calibration !== undefined) {
+      if (typeof config.calibration === "string") builder.withCalibration(config.calibration)
+      else {
+        const swapped = loadCalibration(config.calibration.swapFrom)
+        if (!swapped) throw new Error(`calibration swapFrom: no shipped calibration for ${config.calibration.swapFrom}`)
+        builder.withCalibration(swapped)
+      }
+    }
 
     if (traceDir) builder.withTracing({ dir: traceDir })
 
