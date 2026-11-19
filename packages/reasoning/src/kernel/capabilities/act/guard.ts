@@ -354,6 +354,9 @@ function mutatedSince(state: KernelState, afterIdx: number): boolean {
   });
 }
 
+/** Opens the note a duplicate refusal appends; the refusal-refund seam reads it back. */
+export const DUPLICATE_REFUSAL_TAG = "Already done — do NOT repeat.";
+
 /** Blocks the exact same tool+arguments pair if it already succeeded. */
 export const duplicateGuard: Guard = (tc, state, input) => {
   const currentActionJson = JSON.stringify({ tool: tc.name, args: tc.arguments });
@@ -432,7 +435,7 @@ export const duplicateGuard: Guard = (tc, state, input) => {
       : unreadInput !== undefined
         ? `Not done yet.${unreadNote}`
         : "Give FINAL ANSWER if all steps are complete.";
-  const dupContent = `${priorObsContent} [Already done — do NOT repeat. ${nextHint}]`;
+  const dupContent = `${priorObsContent} [${DUPLICATE_REFUSAL_TAG} ${nextHint}]`;
 
   return {
     pass: false,

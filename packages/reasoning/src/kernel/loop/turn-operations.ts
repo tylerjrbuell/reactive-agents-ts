@@ -72,6 +72,7 @@ import { applyInputOrderGuidance } from "./iterate-input-order-seam.js";
 import { applyComputeOffloadGuidance } from "./iterate-compute-offload-seam.js";
 import { applyFollowPlanGuidance } from "./iterate-follow-plan-seam.js";
 import { bookkeepingRefundsIssued, emitBookkeepingRefund, proposeBookkeepingRefund } from "./iterate-bookkeeping-refund-seam.js";
+import { emitRefusalRefund, proposeRefusalRefund } from "./iterate-refusal-refund-seam.js";
 import { emitPlanBudgetExtended, proposePlanBudgetExtension } from "./plan-budget.js";
 
 /** Values one operation hands a later one within a single pass (reset per pass). */
@@ -497,7 +498,19 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
       if (t.state.iteration > t.pass.iterationAtPassStart) {
         yield* cfg.hooks.onIterationProgress(t.state, toolsThisStep);
       }
+      const roundSteps = t.state.steps.slice(t.prevActionCount);
       t.prevActionCount = t.state.steps.length;
+      // A round of only refused duplicate calls does not spend the budget (bounded, 3 in a row).
+      const refusalRefund = proposeRefusalRefund({
+        state: t.state, input: t.currentInput, options: t.currentOptions,
+        roundSteps, iterationAtPassStart: t.pass.iterationAtPassStart,
+      });
+      if (refusalRefund !== undefined) {
+        t.state = refusalRefund.state;
+        t.currentOptions = refusalRefund.options;
+        t.prevActionCount = t.state.steps.length;
+        yield* emitRefusalRefund(t.state, t.currentOptions);
+      }
       // A todo-only round on a seeded plan run does not spend the budget (bounded).
       const refund = proposeBookkeepingRefund({
         state: t.state, input: t.currentInput, options: t.currentOptions,
