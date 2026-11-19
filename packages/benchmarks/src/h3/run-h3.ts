@@ -19,6 +19,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { dirname, isAbsolute, join } from "node:path"
 import { execSync } from "node:child_process"
+import { Data } from "effect"
 import { errorMessage } from "@reactive-agents/core"
 import { analyzeCause, parseTrace } from "@reactive-agents/trace"
 import { runSession } from "../runner.js"
@@ -125,6 +126,32 @@ export const H3_TIERS: Record<string, ModelVariant> = {
   "qwen3:4b": { id: "qwen3:4b", provider: "ollama", model: "qwen3:4b", contextTier: "local" },
   "cogito:8b": { id: "cogito:8b", provider: "ollama", model: "cogito:8b", contextTier: "local" },
   "bonsai-2:27b": { id: "bonsai-2:27b", provider: "ollama", model: "bonsai-2:27b", contextTier: "local" },
+  // Frontier tier (owner-approved 2026-11-19, was only in scratch wrappers like
+  // spikes/h3-extra-tiers.ts). Spends API money only when a run names this tier;
+  // needs GOOGLE_API_KEY (checked up front by `tierKeyError`).
+  "gemini-2.5-flash": { id: "gemini-2.5-flash", provider: "gemini", model: "gemini-2.5-flash", contextTier: "frontier" },
+}
+
+/** A tier's provider needs an API key that is not in the environment. */
+export class H3TierKeyError extends Data.TaggedError("H3TierKeyError")<{
+  readonly tier: string
+  readonly envVar: string
+  readonly message: string
+}> {}
+
+/** Env var holding the key for each keyed provider (ollama needs none). */
+const PROVIDER_KEY_ENV: Readonly<Record<string, string>> = { gemini: "GOOGLE_API_KEY" }
+
+/** Null when every tier is runnable; otherwise the first tier whose provider key is missing or blank. */
+export function tierKeyError(tiers: readonly string[], env: Readonly<Record<string, string | undefined>> = process.env): H3TierKeyError | null {
+  for (const tier of tiers) {
+    const model = H3_TIERS[tier]
+    const envVar = model ? PROVIDER_KEY_ENV[model.provider] : undefined
+    if (envVar && !env[envVar]?.trim()) {
+      return new H3TierKeyError({ tier, envVar, message: `H3: tier ${tier} (provider ${model!.provider}) needs ${envVar} in the environment or .env; none found. No cell was started.` })
+    }
+  }
+  return null
 }
 
 export interface H3Cell {
@@ -267,6 +294,8 @@ export async function runH3(opts: RunH3Opts): Promise<{ ran: number; remaining: 
   if (!isAbsolute(opts.out) || !isAbsolute(opts.traceRoot)) return { ran: 0, remaining: 0, error: "H3: --out and --trace-root must be ABSOLUTE paths" }
   const unknownTier = opts.tiers.find((t) => !H3_TIERS[t])
   if (unknownTier) return { ran: 0, remaining: 0, error: `H3: unknown tier ${unknownTier}. Known: ${Object.keys(H3_TIERS).join(", ")}` }
+  const keyErr = tierKeyError(opts.tiers)
+  if (keyErr) return { ran: 0, remaining: 0, error: keyErr.message }
   const longHorizon = opts.suite === "long-horizon"
   if (longHorizon && (opts.noSwitch || opts.metaArm)) return { ran: 0, remaining: 0, error: "H3: --meta-arm / --no-switch do not apply to --suite long-horizon" }
   const suite: H3Suite = longHorizon ? "h3-lh" : "h3"
