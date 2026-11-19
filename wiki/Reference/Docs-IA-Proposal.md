@@ -316,7 +316,7 @@ Actions: `keep`, `move` (file path changes, redirect needed), `merge-into` (cont
 | `/guides/whats-new/v0-15-to-v0-16/` | new | self | Help and releases > What's New | archive: v0.16.0, v0.15.0 |
 | `/guides/whats-new/v0-17/` | new | self | Help and releases > What's New | archive: v0.17.0 |
 | `/guides/whats-new/v0-18/` | new | self | Help and releases > What's New | archive: v0.18.0 |
-| `/guides/whats-new/v0-19-details/` | new | self | Help and releases > What's New | v0.19.0 detail: security hardening and Cortex (moved from the hub 2026-11-17 to stay under page-too-long) |
+| `/guides/whats-new/v0-19-details/` | new | self | Help and releases > What's New ("v0.19 release details") | v0.19.0 detail: harness, costs and models, CLI, channels, security and Cortex (moved from the hub 2026-11-17/19 to stay under page-too-long) |
 | `/guides/whats-new/v0-5-to-v0-10/` | new | self | Help and releases > What's New | archive: v0.10.x down to v0.5.0 |
 | `/guides/your-first-agent/` | keep | self | Start here |  |
 | `/reference/builder-api/` | split (DONE 2026-11-17) | self (hub) | Reference > Builder API | hub 2.5k words: factory, generated method-to-config table, build methods, full example |
