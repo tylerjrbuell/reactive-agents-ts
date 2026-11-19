@@ -12,8 +12,8 @@ import {
   resolveCapability,
   _resetProbedRegistryForTesting,
   registerProbedCapability,
+  registerUserSuppliedCapability,
 } from "./capability-resolver.js";
-import { registerUserSuppliedCapability } from "./user-capability.js";
 import { registerReportedModelMetadata, _resetReportedMetadataForTesting } from "./capability-reported.js";
 
 const MODEL = "ghost-model:1b";
@@ -100,5 +100,39 @@ describe("registerUserSuppliedCapability", () => {
   it("ignores a non-positive window rather than registering nonsense", () => {
     registerUserSuppliedCapability("ollama", MODEL, 0);
     expect(resolveCapability("ollama", MODEL).source).toBe("fallback");
+  });
+});
+
+// Agent-scoped user tier (2026-11-19). The v0.19.0 gate failed because one
+// test's `.withModel("test-model", { numCtx: 8000 })` wrote a process-global
+// row, and a later agent on "test-model" without numCtx ran at an 8000-token
+// window (extra ContextPressure chunks). The declared window must apply to the
+// caller that declared it and to no one else.
+describe("resolveCapability({ userNumCtx }) — per-agent declared window", () => {
+  it("agent A's numCtx does not change agent B's window on the same model id", () => {
+    const agentA = resolveCapability("test", "test-model", { userNumCtx: 8000 });
+    expect(agentA.source).toBe("user");
+    expect(agentA.recommendedNumCtx).toBe(8000);
+    expect(agentA.maxContextTokens).toBe(8000);
+
+    const agentB = resolveCapability("test", "test-model");
+    expect(agentB.source).toBe("fallback");
+    expect(agentB.maxContextTokens).not.toBe(8000);
+  });
+
+  it("two agents declaring different windows each get their own", () => {
+    expect(resolveCapability("ollama", MODEL, { userNumCtx: 8000 }).recommendedNumCtx).toBe(8000);
+    expect(resolveCapability("ollama", MODEL, { userNumCtx: 16_384 }).recommendedNumCtx).toBe(16_384);
+  });
+
+  it("keeps the trust ordering: probe and static rows win, tool dialect is not claimed", () => {
+    expect(resolveCapability("ollama", MODEL, { userNumCtx: 8000 }).toolCallDialect).toBe("none");
+    const haiku = resolveCapability("anthropic", "claude-haiku-4-5", { userNumCtx: 8000 });
+    expect(haiku.source).toBe("static-table");
+    expect(haiku.recommendedNumCtx).toBe(200_000);
+  });
+
+  it("ignores a non-positive window", () => {
+    expect(resolveCapability("ollama", MODEL, { userNumCtx: 0 }).source).toBe("fallback");
   });
 });

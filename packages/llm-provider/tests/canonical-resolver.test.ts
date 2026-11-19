@@ -83,4 +83,11 @@ describe("resolveCanonical — single source-tagged Capability resolver", () => 
     const cap = resolveCanonical("ollama", "qwen3.5:latest");
     expect(cap.nominal).toBeUndefined();
   });
+
+  it("userNumCtx lifts this call off the fallback and leaves the next call alone", () => {
+    const declared = resolveCanonical("ollama", "unknown-numctx-x", { userNumCtx: 8000 });
+    expect(declared.source).toBe("user");
+    expect(declared.recommendedNumCtx).toBe(8000);
+    expect(resolveCanonical("ollama", "unknown-numctx-x").source).toBe("fallback");
+  });
 });

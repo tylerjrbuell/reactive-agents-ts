@@ -102,8 +102,10 @@ export { primeCapability } from "./capability-prime.js";
 
 // Caller-declared capability — `.withModel({ numCtx })` fills the hole a failed
 // probe leaves, instead of the build dying on a `source: "fallback"` window the
-// user had already told us.
-export { registerUserSuppliedCapability } from "./user-capability.js";
+// user had already told us. Scoped form: `resolveCapability(p, m, { userNumCtx })`
+// or `applyUserNumCtx`; the process-global register is deprecated.
+export { registerUserSuppliedCapability } from "./capability-resolver.js";
+export { applyUserNumCtx } from "./user-capability.js";
 export type { PrimeCapabilityOptions } from "./capability-prime.js";
 
 // ─── Types ───

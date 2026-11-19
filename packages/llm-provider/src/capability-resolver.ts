@@ -45,6 +45,7 @@ import { chatToolsRequireNoReasoning, chatToolsRequireResponses } from "./capabi
 import { capabilityFromReported, reportedModelMetadataFor } from "./capability-reported.js";
 import { geminiFamilyCapability, isGemmaId } from "./capability-gemini-family.js";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
+import { applyUserNumCtx } from "./user-capability.js";
 
 /**
  * One-shot tracker so the fallback warning fires at most once per
@@ -76,6 +77,25 @@ const probedRegistry = new Map<string, Capability>();
  */
 export function registerProbedCapability(cap: Capability): void {
   probedRegistry.set(`${cap.provider}/${cap.model}`, cap);
+}
+
+/**
+ * Register the context window the caller declared, process-wide, unless
+ * something better is already known (see {@link applyUserNumCtx}).
+ *
+ * @deprecated Process-global: the row is shared by every agent and run in the
+ * process that uses the same (provider, model), so one agent's `numCtx`
+ * changes another agent's window, and the first declared value wins for good.
+ * Pass the window per call instead:
+ * `resolveCapability(provider, model, { userNumCtx })`.
+ */
+export function registerUserSuppliedCapability(
+  provider: string,
+  model: string,
+  numCtx: number,
+): void {
+  const cap = resolveCapability(provider, model, { userNumCtx: numCtx });
+  if (cap.source === "user") registerProbedCapability(cap);
 }
 
 /** Test seam — clears the probed-capability registry between tests. */
@@ -151,6 +171,15 @@ export interface ResolveCapabilityOptions {
    * has no dependency on EventBus to keep the package surface minimal.
    */
   readonly onProbeFailed?: (args: { provider: string; model: string }) => void;
+
+  /**
+   * Context window the caller declared for THIS agent or run, e.g.
+   * `.withModel({ numCtx })`. Lifts a `fallback` or `inferred` row to a
+   * `source: "user"` row with this window; a probe, cache, static-table or
+   * registered user row wins. Applies to this call only, so another agent on
+   * the same model id without a window still resolves the default.
+   */
+  readonly userNumCtx?: number;
 }
 
 /**
@@ -171,7 +200,8 @@ export function resolveCapability(
   model: string,
   opts: ResolveCapabilityOptions = {},
 ): Capability {
-  const cap = resolveCapabilityTiers(provider, model, opts);
+  // Caller-declared window (per call, never stored) after the tiers.
+  const cap = applyUserNumCtx(resolveCapabilityTiers(provider, model, opts), opts.userNumCtx);
   // Family rules applied across every tier (cache/probe/table/fallback).
   const withMaxCompletion =
     provider === "openai" &&

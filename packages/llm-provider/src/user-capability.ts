@@ -18,45 +18,42 @@
 // a context window is the one fact the caller can state better than a family
 // default, and the inferred row keeps the dialect/thinking facts inference
 // derived. The row is re-based on the inferred capability, not the fallback.
+//
+// Scope (2026-11-19): the declared window belongs to the agent/run that
+// declared it. It is applied per call through
+// `resolveCapability(provider, model, { userNumCtx })`, never stored in the
+// process-wide registry, so another agent on the same model id without a
+// numCtx still resolves the default. The process-global writer
+// `registerUserSuppliedCapability` (capability-resolver.ts) is deprecated.
 
 import { fallbackCapability, type Capability } from "./capability.js";
-import { registerProbedCapability, resolveCapability } from "./capability-resolver.js";
 
 /**
- * Register the context window the caller declared, unless something better is
- * already known.
+ * Apply a caller-declared context window to an already-resolved capability.
  *
- * No-op when the model already resolves from a probe / cache / static table /
- * another user-supplied row, or when `numCtx` is not a positive number. When
- * the current row is `inferred`, it is kept as the base (so `toolCallDialect`
- * and `supportsThinkingMode` survive); otherwise every conservative default
- * from `fallbackCapability` is kept except the window itself, in particular
- * `toolCallDialect` stays `"none"`, since a context size says nothing about
- * how the model wants tools passed.
+ * Pure: reads nothing global and writes nothing. Returns `current` unchanged
+ * when `numCtx` is absent or not a positive finite number, or when `current`
+ * came from a probe / cache / static table / an earlier user row (measured or
+ * declared facts outrank a single caller-supplied number). When `current` is
+ * `inferred`, it is kept as the base (so `toolCallDialect` and
+ * `supportsThinkingMode` survive); otherwise every conservative default from
+ * `fallbackCapability` is kept except the window itself. In particular
+ * `toolCallDialect` stays `"none"`, since a context size says nothing about how
+ * the model wants tools passed.
+ *
+ * @param current - the capability the tiers resolved for (provider, model)
+ * @param numCtx - the window the caller declared, e.g. `.withModel({ numCtx })`
+ * @returns a `source: "user"` row, or `current` when the window does not apply
  */
-export function registerUserSuppliedCapability(
-  provider: string,
-  model: string,
-  numCtx: number,
-): void {
-  if (!Number.isFinite(numCtx) || numCtx <= 0) return;
-
-  const current = resolveCapability(provider, model);
-  // Measured or declared facts outrank a single caller-supplied number.
-  if (
-    current.source === "probe" ||
-    current.source === "static-table" ||
-    current.source === "user"
-  ) {
-    return;
-  }
-
-  const base = current.source === "inferred" ? current : fallbackCapability(provider, model);
-  const cap: Capability = {
+export function applyUserNumCtx(current: Capability, numCtx: number | undefined): Capability {
+  if (numCtx === undefined || !Number.isFinite(numCtx) || numCtx <= 0) return current;
+  if (current.source !== "fallback" && current.source !== "inferred") return current;
+  const base =
+    current.source === "inferred" ? current : fallbackCapability(current.provider, current.model);
+  return {
     ...base,
     maxContextTokens: numCtx,
     recommendedNumCtx: numCtx,
     source: "user",
   };
-  registerProbedCapability(cap);
 }

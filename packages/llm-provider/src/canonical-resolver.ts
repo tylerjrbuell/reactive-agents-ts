@@ -110,13 +110,17 @@ function adaptCache(cache: CapabilityCache | undefined) {
  *
  * When `source === "fallback"`, `opts.onFallback` fires for telemetry —
  * Sprint-2 PreFlight gates measurement on this signal.
+ *
+ * `opts.userNumCtx` is the caller's own declared window (`.withModel({ numCtx })`),
+ * applied to this call only: it lifts a fallback/inferred row to `source: "user"`.
  */
 export function resolveCanonical(
   provider: string,
   model: string,
-  opts: CapabilityResolveOptions = {},
+  opts: CapabilityResolveOptions & { readonly userNumCtx?: number } = {},
 ): ContractCapability {
   const providerCap = resolveProviderCapability(provider, model, {
+    userNumCtx: opts.userNumCtx,
     cache: adaptCache(opts.cache),
     onProbeFailed: opts.onFallback
       ? (args) => opts.onFallback?.(args.provider, args.model)
