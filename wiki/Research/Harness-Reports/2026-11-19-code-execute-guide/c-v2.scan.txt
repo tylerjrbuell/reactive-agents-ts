@@ -1,0 +1,20 @@
+cogito:8b|rw-2-calc run0 solved=false acc=0.67 tok=8794 it=5 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|rw-3-calc run0 solved=false acc=0.67 tok=7092 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|h3-plan-only-calc run0 solved=false acc=0.67 tok=6051 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|rw-2-calc run1 solved=false acc=0.33 tok=7936 it=4 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|rw-3-calc run1 solved=false acc=0.67 tok=7487 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|h3-plan-only-calc run1 solved=false acc=0.00 tok=178400 it=0 engaged=true calls=45 valued=2 never=43 repeatGuard=0 classes=[never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,valued,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,never-executed,valued] cause=aborted
+cogito:8b|rw-2-calc run2 solved=false acc=0.33 tok=7637 it=4 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=verifier-reject
+cogito:8b|rw-3-calc run2 solved=false acc=0.67 tok=7002 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|h3-plan-only-calc run2 solved=false acc=0.67 tok=10211 it=0 engaged=true calls=2 valued=1 never=0 repeatGuard=0 classes=[ran-failed,valued] cause=wrong-answer
+cogito:8b|rw-2-calc run3 solved=false acc=0.33 tok=11300 it=6 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|rw-3-calc run3 solved=false acc=0.67 tok=7269 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|h3-plan-only-calc run3 solved=false acc=0.67 tok=5997 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|rw-2-calc run4 solved=false acc=0.33 tok=8718 it=5 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=verifier-reject
+cogito:8b|rw-3-calc run4 solved=false acc=0.67 tok=7087 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+cogito:8b|h3-plan-only-calc run4 solved=false acc=0.67 tok=6602 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+--- wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/c-v2/default.json
+cogito:8b|rw-2-calc: n=5 solved=0 engaged=0 valuedRuns=0 calls=0 failed=0 neverExec=0 tok/run=8877
+cogito:8b|rw-3-calc: n=5 solved=0 engaged=0 valuedRuns=0 calls=0 failed=0 neverExec=0 tok/run=7187
+cogito:8b|h3-plan-only-calc: n=5 solved=0 engaged=2 valuedRuns=2 calls=47 failed=44 neverExec=43 tok/run=41452
+TOTAL runs=15 solved=0 engaged=2 valuedRuns=2 calls=47 failed=44 neverExec=43 (98% of failed) repeatGuard=0 tok/run=19172

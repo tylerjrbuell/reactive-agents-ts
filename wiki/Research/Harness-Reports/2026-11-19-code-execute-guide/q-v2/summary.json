@@ -1,0 +1,10 @@
+{
+  "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/q-v2",
+  "status": "completed",
+  "finishedAt": "2026-11-19T04:41:43.304Z",
+  "results": {
+    "default": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/q-v2/default.json"
+  },
+  "state": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/q-v2/state.json",
+  "failedUnits": 0
+}

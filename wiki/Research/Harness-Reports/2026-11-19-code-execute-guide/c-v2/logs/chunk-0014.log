@@ -1,0 +1,5 @@
+H3: results file was started at 8815b8a22e15544440311ef4e5cf74628c97975b, HEAD is 96d4b5750ea9c85c7abeeae38b15448353f13605 (baseline must stay on one SHA)
+PREFLIGHT WARNING: host contention detected; continuing because --allow-contention was given. Cells below may be stalled, not failed.
+  - 1 established client connection(s) on :11434 (another Ollama client is active)
+[h3] cogito:8b|rw-3-calc|4 solved=false acc=0.67 pass cause=wrong-answer it=0 7087tok 15s elapsed=17s
+[h3] ran=1 remaining=0

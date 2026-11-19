@@ -1,0 +1,8 @@
+gemma4:e4b|rw-7 run0 solved=true acc=1.00 tok=39739 it=11 engaged=true calls=2 valued=0 never=0 repeatGuard=0 classes=[ran-failed,ran-failed] cause=none
+gemma4:e4b|rw-7 run1 solved=true acc=1.00 tok=35635 it=12 engaged=true calls=1 valued=0 never=1 repeatGuard=0 classes=[never-executed] cause=none
+gemma4:e4b|rw-7 run2 solved=true acc=1.00 tok=31119 it=10 engaged=true calls=2 valued=0 never=1 repeatGuard=0 classes=[ran-failed,never-executed] cause=none
+gemma4:e4b|rw-7 run3 solved=true acc=1.00 tok=36283 it=12 engaged=true calls=1 valued=0 never=1 repeatGuard=0 classes=[never-executed] cause=none
+gemma4:e4b|rw-7 run4 solved=false acc=0.67 tok=16914 it=8 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=stall-after-work
+--- wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/g-rw7/default.json
+gemma4:e4b|rw-7: n=5 solved=4 engaged=4 valuedRuns=0 calls=6 failed=6 neverExec=3 tok/run=31938
+TOTAL runs=5 solved=4 engaged=4 valuedRuns=0 calls=6 failed=6 neverExec=3 (50% of failed) repeatGuard=0 tok/run=31938

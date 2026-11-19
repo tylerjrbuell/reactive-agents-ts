@@ -1,0 +1,10 @@
+{
+  "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/g-rw7",
+  "status": "completed",
+  "finishedAt": "2026-11-19T04:45:03.512Z",
+  "results": {
+    "default": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/g-rw7/default.json"
+  },
+  "state": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/g-rw7/state.json",
+  "failedUnits": 0
+}

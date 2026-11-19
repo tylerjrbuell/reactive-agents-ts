@@ -1,0 +1,6 @@
+H3: results file was started at 96d4b5750ea9c85c7abeeae38b15448353f13605, HEAD is fcd71f6e17898f1bd87ea35dcf8e04b7d1753a58 (baseline must stay on one SHA)
+PREFLIGHT WARNING: host contention detected; continuing because --allow-contention was given. Cells below may be stalled, not failed.
+  - host load 6.54 on 6 CPUs (1.09/CPU > 0.75)
+H3: provenance drift since this file started: reasoning dist hash changed (rebuild between chunks)
+[h3] qwen3:4b|rw-3-calc|2 solved=true acc=1.00 pass cause=none it=0 15984tok 67s elapsed=69s
+[h3] ran=1 remaining=0

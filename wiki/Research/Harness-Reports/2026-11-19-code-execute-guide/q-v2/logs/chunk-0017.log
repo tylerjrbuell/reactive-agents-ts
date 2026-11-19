@@ -1,0 +1,7 @@
+H3: results file was started at 96d4b5750ea9c85c7abeeae38b15448353f13605, HEAD is 02b802193ef2d5456d1db34d22fab61fb59e40b3 (baseline must stay on one SHA)
+PREFLIGHT WARNING: host contention detected; continuing because --allow-contention was given. Cells below may be stalled, not failed.
+  - 1 established client connection(s) on :11434 (another Ollama client is active)
+  - host load 7.70 on 6 CPUs (1.28/CPU > 0.75)
+H3: provenance drift since this file started: reasoning dist hash changed (rebuild between chunks)
+[h3] qwen3:4b|rw-2-calc|4 solved=false acc=0.50 pass cause=wrong-answer it=3 17099tok 77s elapsed=80s
+[h3] ran=1 remaining=0

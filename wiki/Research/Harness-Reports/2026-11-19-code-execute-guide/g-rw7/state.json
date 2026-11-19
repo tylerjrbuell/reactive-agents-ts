@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/g-rw7",
+    "tiers": [
+      "gemma4:e4b"
+    ],
+    "arms": [
+      {
+        "id": "default"
+      }
+    ],
+    "k": 5,
+    "tasks": [
+      "rw-7"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 300,
+    "env": {
+      "RA_ACT_OR_ANSWER": "0",
+      "RA_LEAN_FINAL_TURN": "0",
+      "RA_PARALLEL_TOOL_HINT": "0"
+    },
+    "allowContention": true,
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|gemma4:e4b|rw-7|default",
+    "1|gemma4:e4b|rw-7|default",
+    "2|gemma4:e4b|rw-7|default",
+    "3|gemma4:e4b|rw-7|default",
+    "4|gemma4:e4b|rw-7|default"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-19T04:41:52.832Z",
+  "updatedAt": "2026-11-19T04:45:03.512Z",
+  "units": {
+    "0|gemma4:e4b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 55
+    },
+    "1|gemma4:e4b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 39
+    },
+    "2|gemma4:e4b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 34
+    },
+    "3|gemma4:e4b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 38
+    },
+    "4|gemma4:e4b|rw-7|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 25
+    }
+  },
+  "current": null,
+  "chunks": 5,
+  "pauses": [],
+  "pausedSec": 0,
+  "lastError": null,
+  "driftWarnings": []
+}

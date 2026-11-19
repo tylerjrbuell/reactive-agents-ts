@@ -1516,6 +1516,19 @@
       "liftPp": 0,
       "tokenOverheadPct": null,
       "rationale": "Lever pilot gate NOT met: code-execute before the figure write in 1 of 30 calc runs (cogito h3-plan-only-calc run 0, 30 calls, 1 ok, timeout 300 s, 82k tokens: a harm). rw-2-calc: tool visible in 100% of exchanges, called in 0 of 10 runs. Approval did not block (the one ok call executed). rw-2 control vs rw-2-calc: 0/10 vs 0/10 solved. Tasks kept, labelled floor for the lever. qwen3:4b plan-only-calc 4/5 not attributable to the lever (0 calls). Evidence: README addendum 7, a7-P1/P2"
+    },
+    {
+      "createdAt": "2026-11-19T04:10:00.000Z",
+      "baselineVariantId": "code-execute failure text before 3402eb775 (census 2026-11-19)",
+      "candidateVariantId": "3402eb775 CODE_RETRY_GUIDE (JS/TS runnable example, inline data, cwd /tmp)",
+      "decision": "underpowered",
+      "status": "inconclusive",
+      "id": "5d1e7b82-4c93-4f0a-a6d5-2b9c8e1f3a47",
+      "weakness": "code-execute call success (73% of failed calls never executed)",
+      "hypothesis": "a runnable-JS retry guide on code-execute failures raises value-returned rate among engaged runs to >=25% or cuts the never-executed share of failed calls from 73% to <=50%. cogito:8b h3-required-tools k=10 + v2 calc tasks k=5; qwen3:4b v2 tasks + h3-required-tools k=5; gemma4:e4b rw-7 k=5 no-regression",
+      "liftPp": 0,
+      "tokenOverheadPct": null,
+      "rationale": "Pre-registered rule: branch 1 (value-returned >=25%) met on the loose definition, 4 of 8 engaged runs (50%), but only 2 of 8 (25%) are real computations from the data (qwen3:4b only); cogito:8b 0 of 3 on h3-required-tools (each made one failed python call and stopped); 8 engaged runs is below the pre-registered 10 so UNDERPOWERED. Branch 2 (never-executed share <=50%) NOT met: 48 of 50 failed calls (96%), 5 of 7 (71%, about the 73% baseline) excluding one 43-failure cogito plan-only-calc loop (178k tokens, unchanged harm, repeat guard still absent). Engagement unchanged (cogito required-tools 3 of 10). Solved: cogito 0/25, qwen3:4b 11/20, gemma4:e4b rw-7 4/5 (no baseline). HEAD moved during run (reasoning src commits 747b05e5f, ee18ee5b2, 02b802193): cells straddle SHAs. Evidence: 2026-11-19-code-execute-guide README, PREDICTIONS-8"
     }
   ]
 }

@@ -1,0 +1,4 @@
+H3: results file was started at 96d4b5750ea9c85c7abeeae38b15448353f13605, HEAD is ee18ee5b2e192f291c45aea93f7c0949c4482cdb (baseline must stay on one SHA)
+H3: provenance drift since this file started: reasoning dist hash changed (rebuild between chunks)
+[h3] qwen3:4b|rw-2-calc|3 solved=false acc=0.50 pass cause=wrong-answer it=3 16466tok 75s elapsed=78s
+[h3] ran=1 remaining=0

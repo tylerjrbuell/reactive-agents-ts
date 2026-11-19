@@ -1,0 +1,26 @@
+qwen3:4b|rw-2-calc run0 solved=false acc=0.50 tok=13604 it=3 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+qwen3:4b|rw-3-calc run0 solved=false acc=0.83 tok=16996 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+qwen3:4b|h3-plan-only-calc run0 solved=true acc=1.00 tok=24814 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=none
+qwen3:4b|h3-required-tools run0 solved=true acc=1.00 tok=19999 it=5 engaged=true calls=2 valued=1 never=1 repeatGuard=0 classes=[never-executed,valued] cause=none
+qwen3:4b|rw-2-calc run1 solved=false acc=0.50 tok=13185 it=3 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+qwen3:4b|rw-3-calc run1 solved=false acc=0.83 tok=19754 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+qwen3:4b|h3-plan-only-calc run1 solved=true acc=1.00 tok=24905 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=none
+qwen3:4b|h3-required-tools run1 solved=true acc=1.00 tok=33133 it=5 engaged=true calls=2 valued=0 never=1 repeatGuard=0 classes=[never-executed,ran-failed] cause=none
+qwen3:4b|rw-2-calc run2 solved=false acc=0.33 tok=14404 it=3 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+qwen3:4b|rw-3-calc run2 solved=true acc=1.00 tok=15984 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=none
+qwen3:4b|h3-plan-only-calc run2 solved=true acc=1.00 tok=28117 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=none
+qwen3:4b|h3-required-tools run2 solved=true acc=1.00 tok=13121 it=3 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=none
+qwen3:4b|rw-2-calc run3 solved=false acc=0.50 tok=16466 it=3 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+qwen3:4b|rw-3-calc run3 solved=false acc=0.83 tok=19576 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+qwen3:4b|h3-plan-only-calc run3 solved=false acc=0.50 tok=22619 it=0 engaged=true calls=1 valued=1 never=0 repeatGuard=0 classes=[valued] cause=wrong-tool-arg
+qwen3:4b|h3-required-tools run3 solved=true acc=1.00 tok=12573 it=3 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=none
+qwen3:4b|rw-2-calc run4 solved=false acc=0.50 tok=17099 it=3 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=wrong-answer
+qwen3:4b|rw-3-calc run4 solved=true acc=1.00 tok=20375 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=none
+qwen3:4b|h3-plan-only-calc run4 solved=true acc=1.00 tok=20549 it=0 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=none
+qwen3:4b|h3-required-tools run4 solved=true acc=1.00 tok=7954 it=3 engaged=false calls=0 valued=0 never=0 repeatGuard=0 classes=[] cause=none
+--- wiki/Research/Harness-Reports/2026-11-19-code-execute-guide/q-v2/default.json
+qwen3:4b|rw-2-calc: n=5 solved=0 engaged=0 valuedRuns=0 calls=0 failed=0 neverExec=0 tok/run=14952
+qwen3:4b|rw-3-calc: n=5 solved=2 engaged=0 valuedRuns=0 calls=0 failed=0 neverExec=0 tok/run=18537
+qwen3:4b|h3-plan-only-calc: n=5 solved=4 engaged=1 valuedRuns=1 calls=1 failed=0 neverExec=0 tok/run=24201
+qwen3:4b|h3-required-tools: n=5 solved=5 engaged=2 valuedRuns=1 calls=4 failed=3 neverExec=2 tok/run=17356
+TOTAL runs=20 solved=11 engaged=3 valuedRuns=2 calls=5 failed=3 neverExec=2 (67% of failed) repeatGuard=0 tok/run=18761
