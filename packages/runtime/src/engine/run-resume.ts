@@ -25,6 +25,12 @@ import {
 import { DEFAULT_RESUME_ITERATIONS, prepareLoopStopResume, withResumedCap, type LoopStopResume } from "./loop-stop-resume.js";
 import { stopKindOf, type RunStopKind, type RunStopSummary } from "../loop-stop-summary.js";
 
+/**
+ * The id of a `resumeRun(id, { newRun: true })` continuation: `${runId}-cont-<8 hex>`,
+ * distinct from the parent by construction (same entropy width as fork ids).
+ */
+export const mintContinuationRunId = (runId: string): string => `${runId}-cont-${crypto.randomUUID().slice(0, 8)}`;
+
 /** What a continued run starts from; `maxIterations` only when the caller bounded it (`extraIterations`) or a loop resume needs a fresh budget. */
 export interface RunResume {
   /** Codec-serialized state: the `resumeState` of the continued run. */

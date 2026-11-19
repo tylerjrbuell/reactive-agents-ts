@@ -45,6 +45,15 @@ export interface ResumeRunOptions {
   readonly note?: string;
   /** How many more iterations the resumed run may take (default {@link DEFAULT_RESUME_ITERATIONS}). */
   readonly extraIterations?: number;
+  /**
+   * Continue as a NEW run: mint a fresh run id (`${runId}-cont-<8hex>`), keep the
+   * parent run's record untouched, and stamp `continuedFrom: <runId>` on the new
+   * run's row, its `AgentResult` and `run-started.config`. Everything else a
+   * resume does is kept (corrective guidance, `note`, `extraIterations`, the
+   * config-hash guard, completed tool calls served from the journal). Default
+   * `false`: the run continues under its own id.
+   */
+  readonly newRun?: boolean;
 }
 
 /** What a loop-stop resume runs with. */
@@ -138,11 +147,20 @@ export const loopStopOfResult = (result: Pick<AgentResult, "metadata">): LoopSto
  */
 export const surfaceLoopStop = (
   result: AgentResult,
-  params: { readonly runId?: string; readonly dbPath?: string; readonly record: LoopStopRecord | undefined },
+  params: {
+    readonly runId?: string;
+    readonly dbPath?: string;
+    readonly record: LoopStopRecord | undefined;
+    /** The run this one continues (`resumeRun` with `newRun`), stamped on the result. */
+    readonly continuedFrom?: string;
+  },
 ): Effect.Effect<AgentResult> => {
   const { runId, dbPath } = params;
   const record = params.record ?? loopStopOfResult(result);
-  const withRunId = runId !== undefined ? { ...result, runId } : result;
+  const withRunId =
+    runId !== undefined
+      ? { ...result, runId, ...(params.continuedFrom !== undefined ? { continuedFrom: params.continuedFrom } : {}) }
+      : result;
   if (record === undefined) return Effect.succeed(withRunId);
   const loopStop = summarizeLoopStop(record);
   const durable = runId !== undefined && dbPath !== undefined;

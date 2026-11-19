@@ -108,9 +108,9 @@ interface AgentSession {
 }
 ```
 
-## `resumeRun(runId: string, opts?: { note?, extraIterations? }): Promise<AgentResult>`
+## `resumeRun(runId: string, opts?: { note?, extraIterations?, newRun? }): Promise<AgentResult>`
 
-Resume any durable run that did not complete from its last checkpoint: stopped or paused by the user, ended by an error, a spent budget or a timeout, a loop stop, or a crash (`result.resumable`, or a `listRuns()` row with `resumable: true` and a typed `stop` record). Requires `.withDurableRuns()`. Completed tool calls are served from the effect journal, never run again. A loop stop continues with corrective guidance and a fresh iteration budget (default 10); `note` is passed to the run as guidance, `extraIterations` bounds the continued run. Passing `opts` for a run that already completed fails `RunNotResumableError`. See [Durable Execution](/guides/durable-execution/).
+Resume any durable run that did not complete from its last checkpoint: stopped or paused by the user, ended by an error, a spent budget or a timeout, a loop stop, or a crash (`result.resumable`, or a `listRuns()` row with `resumable: true` and a typed `stop` record). Requires `.withDurableRuns()`. Completed tool calls are served from the effect journal, never run again. A loop stop continues with corrective guidance and a fresh iteration budget (default 10); `note` is passed to the run as guidance, `extraIterations` bounds the continued run. Passing `opts` for a run that already completed fails `RunNotResumableError`. `newRun: true` continues as a NEW run: a fresh run id (`<runId>-cont-<8 hex>`, in `result.runId`) with `result.continuedFrom` naming the parent; the parent's record is unchanged. See [Durable Execution](/guides/durable-execution/).
 
 ## `pauseRun(runId: string): Promise<boolean>` / `stopRun(runId: string): Promise<boolean>`
 

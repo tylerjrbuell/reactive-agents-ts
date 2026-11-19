@@ -248,6 +248,8 @@ export const createDurableRun = (params: {
   /** Fork lineage (Arc 1 Task 6) — see {@link RunRecord.forkedFrom}. */
   readonly forkedFrom?: string;
   readonly forkedAtIteration?: number;
+  /** Continuation provenance (`resumeRun` with `newRun`) — see {@link RunRecord.continuedFrom}. */
+  readonly continuedFrom?: string;
   /** The run's own working directory — see {@link RunRecord.workspace}. */
   readonly workspace?: string;
   /** The run's owner, kept when a resume recreates the row. */
@@ -265,6 +267,7 @@ export const createDurableRun = (params: {
       ...(params.orgId !== undefined ? { orgId: params.orgId } : {}),
       ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
       ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}),
+      ...(params.continuedFrom !== undefined ? { continuedFrom: params.continuedFrom } : {}),
       // Absolute, so a resume from another process/cwd lands in the same directory.
       ...(params.workspace !== undefined ? { workspace: resolvePath(params.workspace) } : {}),
     });
@@ -366,4 +369,40 @@ export const getPendingInteractionAt = (params: {
   Effect.gen(function* () {
     const store = yield* RunStoreService;
     return yield* store.getPendingInteraction(params.runId);
+  }).pipe(Effect.provide(RunStoreLive(params.dbPath)));
+
+/**
+ * Copy a parent run's tool-effect journal rows under a continuation's new run
+ * id (`resumeRun` with `newRun`). The journal is keyed by run id, so without
+ * this a second resume of the continuation (after a crash before its first
+ * checkpoint) would no longer see the parent's completed calls and run them
+ * again. Rows are copied verbatim (status, result, error); the parent's own
+ * rows are not touched.
+ */
+export const carryToolEffects = (params: {
+  readonly dbPath: string;
+  readonly toRunId: string;
+  readonly rows: readonly ToolEffectRow[];
+}): Effect.Effect<void, never> =>
+  Effect.gen(function* () {
+    const store = yield* RunStoreService;
+    for (const row of params.rows) {
+      yield* store.putToolEffect({
+        runId: params.toRunId,
+        effectId: row.effectId,
+        toolName: row.toolName,
+        toolCallId: row.toolCallId,
+        iteration: row.iteration,
+        argsJson: row.argsJson,
+      });
+      if (row.status !== "executing") {
+        yield* store.updateToolEffectOutcome({
+          runId: params.toRunId,
+          effectId: row.effectId,
+          status: row.status,
+          ...(row.resultContent !== undefined ? { resultContent: row.resultContent } : {}),
+          ...(row.errorText !== undefined ? { errorText: row.errorText } : {}),
+        });
+      }
+    }
   }).pipe(Effect.provide(RunStoreLive(params.dbPath)));

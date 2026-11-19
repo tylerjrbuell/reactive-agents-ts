@@ -127,6 +127,13 @@ export interface RunRecord {
   readonly forkedFrom?: string;
   readonly forkedAtIteration?: number;
   /**
+   * Continuation provenance (`resumeRun(id, { newRun: true })`): the run this
+   * one continues. The parent's own record is untouched. Distinct from
+   * {@link forkedFrom}: a fork is a counterfactual restart; a continuation is
+   * the same logical run, resumed under a new id. Absent otherwise.
+   */
+  readonly continuedFrom?: string;
+  /**
    * The run's own working directory (`run(task, { workspace })` /
    * `runStream(task, { workspace })`), absolute. Resume, approve/deny,
    * respond and fork run in it again. Absent when the run used the
@@ -219,6 +226,8 @@ export interface RunStore {
     /** Fork lineage (Task 6) — see {@link RunRecord.forkedFrom}. */
     forkedFrom?: string;
     forkedAtIteration?: number;
+    /** Continuation provenance — see {@link RunRecord.continuedFrom}. */
+    continuedFrom?: string;
     /** The run's own working directory — see {@link RunRecord.workspace}. */
     workspace?: string;
   }) => Effect.Effect<void, never>;
@@ -384,6 +393,7 @@ interface RunRow {
   org_id: string | null;
   forked_from: string | null;
   forked_at_iteration: number | null;
+  continued_from: string | null;
   workspace: string | null;
   loop_stop_json: string | null;
   has_checkpoint: number;
@@ -408,6 +418,7 @@ const runRecordOf = (row: RunRow): RunRecord => {
   orgId: row.org_id ?? undefined,
   forkedFrom: row.forked_from ?? undefined,
   forkedAtIteration: row.forked_at_iteration ?? undefined,
+  ...(row.continued_from !== null ? { continuedFrom: row.continued_from } : {}),
   workspace: row.workspace ?? undefined,
   ...(loopStop !== undefined ? { loopStop } : {}),
   ...(stop !== undefined ? { stop } : {}),
@@ -417,7 +428,7 @@ const runRecordOf = (row: RunRow): RunRecord => {
 
 /** Columns selected for a {@link RunRow}. */
 const RUN_COLUMNS =
-  "run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id, forked_from, forked_at_iteration, workspace, loop_stop_json, EXISTS(SELECT 1 FROM run_checkpoints c WHERE c.run_id = runs.run_id) AS has_checkpoint";
+  "run_id, agent_id, task, status, config_hash, updated_at, user_id, org_id, forked_from, forked_at_iteration, continued_from, workspace, loop_stop_json, EXISTS(SELECT 1 FROM run_checkpoints c WHERE c.run_id = runs.run_id) AS has_checkpoint";
 
 interface ApprovalRow {
   run_id: string;
@@ -528,6 +539,9 @@ function openRunStoreDb(dbPath: string): DatabaseLike {
     if (!runsCols.includes("forked_at_iteration")) {
       db.exec("ALTER TABLE runs ADD COLUMN forked_at_iteration INTEGER");
     }
+    if (!runsCols.includes("continued_from")) {
+      db.exec("ALTER TABLE runs ADD COLUMN continued_from TEXT");
+    }
     // Per-run working directory — guarded ALTER, same reason as above.
     if (!runsCols.includes("workspace")) {
       db.exec("ALTER TABLE runs ADD COLUMN workspace TEXT");
@@ -620,13 +634,13 @@ function makeRunStore(db: DatabaseLike): RunStore {
           }
         }),
 
-      createRun: ({ runId, agentId, task, configHash, userId, orgId, forkedFrom, forkedAtIteration, workspace }) =>
+      createRun: ({ runId, agentId, task, configHash, userId, orgId, forkedFrom, forkedAtIteration, continuedFrom, workspace }) =>
         Effect.sync(() => {
           const ts = now();
           db.query(
             `INSERT OR REPLACE INTO runs
-               (run_id, agent_id, task, status, config_hash, created_at, updated_at, user_id, org_id, forked_from, forked_at_iteration, workspace)
-             VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)`,
+               (run_id, agent_id, task, status, config_hash, created_at, updated_at, user_id, org_id, forked_from, forked_at_iteration, continued_from, workspace)
+             VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           ).run(
             runId,
             agentId,
@@ -638,6 +652,7 @@ function makeRunStore(db: DatabaseLike): RunStore {
             orgId ?? null,
             forkedFrom ?? null,
             forkedAtIteration ?? null,
+            continuedFrom ?? null,
             workspace ?? null,
           );
         }),

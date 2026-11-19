@@ -70,7 +70,8 @@ export const runDurableRun = async (deps: RunDurableDeps, params: RunDurablePara
             task: params.task,
             configHash,
             ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
-            ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}), ...workspaceCarry(params.workspace),
+            ...(params.forkedAtIteration !== undefined ? { forkedAtIteration: params.forkedAtIteration } : {}),
+            ...(params.continuedFrom !== undefined ? { continuedFrom: params.continuedFrom } : {}), ...workspaceCarry(params.workspace),
             ...(params.userId !== undefined ? { userId: params.userId } : {}),
             ...(params.orgId !== undefined ? { orgId: params.orgId } : {}),
         }),
@@ -103,6 +104,7 @@ export const runDurableRun = async (deps: RunDurableDeps, params: RunDurablePara
         ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
         durableRunId: params.runId,
         ...(params.forkedFrom !== undefined ? { forkedFrom: params.forkedFrom } : {}),
+        ...(params.continuedFrom !== undefined ? { continuedFrom: params.continuedFrom } : {}),
         ...(params.fileRoot !== undefined ? { fileRoot: params.fileRoot } : {}), ...workspaceCarry(params.workspace), ...seedCarry(params), ...planPosture(params.posture), ...maxIterationsCarry(params),
         ...(recovered !== undefined && recovered.receiptEffects.length > 0 ? { recoveredToolEffects: recovered.receiptEffects } : {}),
         runState: {

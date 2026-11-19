@@ -181,7 +181,9 @@ if (result.resumable) {
 
 Any resume of a run whose iteration cap is spent (a `max_iterations` stop, including a cap a plan raised at run start) gets that many more iterations past where it stopped: `extraIterations` if given, else 10. A resume does not re-stop at the cap it already spent. A run that stopped with iterations left (a pause, an error) keeps its own cap unless you pass `extraIterations`.
 
-`resumeRun(runId, { note?, extraIterations? })` fails `RunNotResumableError` when the run already completed. Plain `resumeRun(runId)` still resumes a crashed run.
+`resumeRun(runId, { note?, extraIterations?, newRun? })` fails `RunNotResumableError` when the run already completed. Plain `resumeRun(runId)` still resumes a crashed run.
+
+By default a resume continues under the run's own id, so one trace file can hold both the original run and its continuation. Pass `newRun: true` to continue as a separate run: it gets a new id (`<runId>-cont-<8 hex>`, read it from `result.runId`) and its own trace file, and `result.continuedFrom`, the run's `listRuns()` row and `run-started.config.continuedFrom` name the parent run. The guidance, `note`, `extraIterations`, completed-tool-call recovery and the config-hash guard work the same, and the parent run's record is not changed. Unlike `fork()`, a continuation is the same logical run resumed, not a counterfactual restart.
 
 ### Stop, pause and continue any run
 

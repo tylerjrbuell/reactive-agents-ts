@@ -102,15 +102,21 @@ export const publishAgentStarted = (
       // Measurement-only: who started the run + the resolved harness config
       // (`{ mechanisms, builder, env }`), forwarded to `run-started`.
       origin: resolveRunOrigin(task),
-      config: buildRunConfigSnapshot({
-        config,
-        provider: String(ctx.provider ?? "unknown"),
-        model: String(ctx.selectedModel ?? "unknown"),
-        lean: isLeanHarness(config),
-        ...(skills !== undefined ? { skills } : {}),
-        ...(calibration !== undefined ? { calibration } : {}),
-        ...(calibrationResolution !== undefined ? { calibrationResolution } : {}),
-      }),
+      config: {
+        ...buildRunConfigSnapshot({
+          config,
+          provider: String(ctx.provider ?? "unknown"),
+          model: String(ctx.selectedModel ?? "unknown"),
+          lean: isLeanHarness(config),
+          ...(skills !== undefined ? { skills } : {}),
+          ...(calibration !== undefined ? { calibration } : {}),
+          ...(calibrationResolution !== undefined ? { calibrationResolution } : {}),
+        }),
+        // Continuation lineage (`resumeRun` with `newRun`): the run this one continues.
+        ...(typeof task.metadata?.context?.["continuedFrom"] === "string"
+          ? { continuedFrom: task.metadata.context["continuedFrom"] }
+          : {}),
+      },
       ...(rc?.runId ? { runId: rc.runId } : {}),
       ...(rc?.rootRunId ? { rootRunId: rc.rootRunId } : {}),
       ...(rc?.parentRunId ? { parentRunId: rc.parentRunId } : {}),

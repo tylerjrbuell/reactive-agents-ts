@@ -65,8 +65,9 @@ import type { EffectReceiptRecord, InteractionQuestion, PlanFinding, ToolEffectR
 import { join } from 'node:path'
 import type { ToolEffectRow } from '../services/run-store.js'
 import type { DurableResumeConfig } from './run-durable.js'
-import { prepareResume } from '../engine/run-resume.js'
+import { mintContinuationRunId, prepareResume } from '../engine/run-resume.js'
 import {
+    carryToolEffects,
     loadResumePayload,
     loadForkPayload,
     listDurableRuns,
@@ -230,6 +231,8 @@ export interface RunDurableParams {
     /** Fork lineage (Arc 1 Task 6) — stamped onto the created run row. */
     readonly forkedFrom?: string
     readonly forkedAtIteration?: number
+    /** Continuation lineage (`resumeRun` with `newRun`) — stamped onto the run row, the result and `run-started.config`. */
+    readonly continuedFrom?: string
     /** Caller's file root, captured when the facade was built (see {@link makeDurableFacade}). */
     readonly fileRoot?: string | null
     /** The caller's per-run `workspace` (`run(task, { workspace })` on a durable agent). */
@@ -270,6 +273,7 @@ export interface DurableFacadeDeps {
         readonly taskId?: string
         readonly durableRunId?: string
         readonly forkedFrom?: string
+        readonly continuedFrom?: string
         /** Durable tool-effect ledger (GH #262) — threaded from `resumeRun`. */
         readonly recoveredToolEffects?: readonly EffectReceiptRecord[]
         readonly fileRoot?: string | null
@@ -319,6 +323,10 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
          * one re-runs. `opts.note` is passed to the run as guidance;
          * `opts.extraIterations` bounds the continued run. The continued run is
          * a durable run again (checkpointed, live-registered, pausable).
+         * `opts.newRun` continues it as a NEW run (`${runId}-cont-<8hex>`): the
+         * parent's record is untouched, the new run's row, `AgentResult.continuedFrom`
+         * and `run-started.config.continuedFrom` name the parent, and the result's
+         * `runId` is the new id (one run per trace file).
          * Passing `opts` for a run that already completed fails `RunNotResumableError`.
          *
          * @param runId - The run id reported when the original run was created.
@@ -402,15 +410,27 @@ export const makeDurableFacade = (deps: DurableFacadeDeps) => {
                     ...(opts?.note !== undefined ? { note: opts.note } : {}),
                     ...(opts?.extraIterations !== undefined ? { extraIterations: opts.extraIterations } : {}),
                 })
+                // 3b. `newRun`: the continuation is its own run (own id, own trace
+                //     file), linked to the parent by `continuedFrom`. The parent's
+                //     record stays as it is; its journal rows are copied under the
+                //     new id so a later resume of the continuation still sees them.
+                const continuation = opts?.newRun === true ? mintContinuationRunId(runId) : undefined
+                if (continuation !== undefined) {
+                    yield* Effect.promise(() =>
+                        Effect.runPromise(carryToolEffects({ dbPath, toRunId: continuation, rows: payload.toolEffects })),
+                    )
+                }
                 return yield* Effect.promise(() =>
                     deps.runDurable({
                         fileRoot,
                         ...workspaceCarry(payload.run.workspace),
                         input: payload.run.task,
                         // One run, one task id: continue under the id the checkpoint
-                        // was captured under, so lifecycle and kernel events agree.
-                        taskId: payload.taskId ?? runId,
-                        runId,
+                        // was captured under, so lifecycle and kernel events agree
+                        // (a `newRun` continuation uses its own new id for both).
+                        taskId: continuation ?? payload.taskId ?? runId,
+                        runId: continuation ?? runId,
+                        ...(continuation !== undefined ? { continuedFrom: runId } : {}),
                         task: payload.run.task,
                         ...(next.maxIterations !== undefined ? { maxIterations: next.maxIterations } : {}),
                         ...(payload.run.userId !== undefined ? { userId: payload.run.userId } : {}),

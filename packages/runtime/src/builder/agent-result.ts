@@ -357,6 +357,8 @@ export interface AgentResult {
     readonly status?: "completed" | "awaiting-approval" | "awaiting-interaction" | "failed";
     /** The durable run id (`.withDurableRuns()` agents): the handle for `resumeRun` / `approveRun` / `listRuns`. Absent on non-durable runs. */
     readonly runId?: string;
+    /** Set on a run started by `resumeRun(runId, { newRun: true })`: the run it continues (this result's `runId` is the new one). */
+    readonly continuedFrom?: string;
     /** Set when a loop guard stopped the run: why, the tool it repeated, what was already done, what is unfinished. */
     readonly loopStop?: LoopStopSummary;
     /**

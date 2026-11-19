@@ -121,6 +121,8 @@ export interface RunTaskEffectOptions {
     readonly durableRunId?: string
     /** Fork lineage (Arc 1 Task 6) — threaded from `runDurable`/`fork()` so the trust receipt (Task 8) can surface it. */
     readonly forkedFrom?: string
+    /** Continuation lineage (`resumeRun` with `newRun`); rides `task.metadata.context.continuedFrom` to `run-started.config` and onto the result. */
+    readonly continuedFrom?: string
     /**
      * Durable tool-effect reconciliation ledger (GH #262) — threaded by the
      * resume path (`resumeRun`) from the crashed run's `run_effects` rows so
@@ -239,7 +241,7 @@ export const buildRunTaskEffect = (
         metadata: {
             tags: [],
             ...(options?.currentTurn ? { currentTurn: options.currentTurn } : {}),
-            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.skillsActivate?.length || options?.initialTodo?.length || options?.planFindings?.length || options?.planExec || options?.planOnly
+            ...(options?.maxIterations !== undefined || options?.environmentUpdate || options?.posture === 'plan' || options?.origin !== undefined || options?.continuedFrom !== undefined || options?.skillsActivate?.length || options?.initialTodo?.length || options?.planFindings?.length || options?.planExec || options?.planOnly
                 ? {
                       context: {
                           ...todoSeedMetadata(options.initialTodo, options.planFindings).context,
@@ -248,6 +250,7 @@ export const buildRunTaskEffect = (
                           ...(options.environmentUpdate ? { environmentUpdate: options.environmentUpdate } : {}),
                           ...(options.posture === 'plan' ? { posture: options.posture } : {}),
                           ...(options.origin !== undefined ? { origin: options.origin } : {}),
+                          ...(options.continuedFrom !== undefined ? { continuedFrom: options.continuedFrom } : {}),
                           ...(options.skillsActivate?.length ? { [SKILLS_ACTIVATE_CONTEXT_KEY]: [...options.skillsActivate] } : {}),
                       },
                   }
@@ -609,6 +612,7 @@ export const buildRunTaskEffect = (
         Effect.flatMap((result: AgentResult) =>
             surfaceLoopStop(result, {
                 ...(options?.durableRunId !== undefined ? { runId: options.durableRunId } : {}),
+                ...(options?.continuedFrom !== undefined ? { continuedFrom: options.continuedFrom } : {}),
                 ...(deps.durableResume !== undefined ? { dbPath: join(deps.durableResume.dir, 'runs.db') } : {}),
                 record: readLoopStop(),
             })),
