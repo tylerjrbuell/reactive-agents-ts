@@ -11,20 +11,25 @@
 //   - a full read that fits the remaining context returns the content in full;
 //   - one that does not says so (total size, how much fits), shows the first
 //     section and names the next-section call (`full: true, start: N`);
-//   - `start` from the model's call reads that section (the kernel reads it;
-//     the tool's advertised schema has no offset parameter);
+//   - `start` from the model's call reads that section; since b670bf0ca the
+//     tool advertises `start`, so it also reaches the handler, and the
+//     kernel's window-bounded section still replaces the handler's 200 chars;
+//   - with no scratchpad entry, a handler `mode` section record is never
+//     re-sliced (it would misreport "past the end"); it stands as is;
 //   - a repeated identical read is replayed with the duplicate note, never
 //     re-compressed or re-stored.
 //
 // RED-ON-CUT (measured 2026-11-19): drop the `recallRead` branch in
 // `executeNativeToolCall` (tool-execution.ts): the 2048-window run cases go red
-// (the read comes back as a compressed preview with a stored key).
+// (the read comes back as a compressed preview with a stored key), and so does
+// the `start`-reaches-the-handler case (3 red). Drop the `mode` check in
+// `readSource` (recall-read.ts): the sectioned-record pure case goes red.
 import { describe, expect, it } from "bun:test";
 import { Effect, Layer } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { EventBusLive, rootContext } from "@reactive-agents/core";
 import { withRunScope } from "@reactive-agents/core/internal/run-scope";
-import { makeRecallHandler } from "@reactive-agents/tools";
+import { makeRecallHandler, recallTool } from "@reactive-agents/tools";
 import { mockToolServiceLayer } from "../../src/testing/tool-service-mock.js";
 import { reactKernel } from "../../src/kernel/loop/react-kernel.js";
 import { runPass } from "../../src/kernel/loop/run-pass.js";
@@ -97,25 +102,37 @@ describe("shapeRecallRead (pure)", () => {
     expect(shapeRecallRead({ toolArgs: { key: "other", full: true }, toolResult })).toBe(`[recall "other": full content, 11 chars]\nstored note`);
     expect(shapeRecallRead({ toolArgs: { key: "gone", full: true }, toolResult: JSON.stringify({ found: false, key: "gone" }) })).toBeUndefined();
   });
+
+  it("no scratchpad entry, sectioned call: the handler's section record is not the whole value; the tool result stands", () => {
+    // Since b670bf0ca `start` reaches the handler, which answers with a
+    // previewLength (200-char) `mode: "chars"` section. Slicing that section
+    // again at `start` would report "past the end" for content that exists.
+    const section = JSON.stringify({ found: true, key: "other", mode: "chars", content: "x".repeat(200), totalChars: 30_000, start: 5000 });
+    expect(shapeRecallRead({ toolArgs: { key: "other", full: true, start: 5000 }, toolResult: section })).toBeUndefined();
+    const lines = JSON.stringify({ found: true, key: "other", mode: "lines", content: "a\nb", totalLines: 900, lineStart: 4 });
+    expect(shapeRecallRead({ toolArgs: { key: "other", full: true }, toolResult: lines })).toBeUndefined();
+  });
 });
 
 const SCHEMAS = [
   { name: "get_doc", description: "fetch a long report", parameters: [{ name: "id", type: "string", required: true }] },
-  {
-    name: "recall",
-    description: "read a stored key",
-    parameters: [
-      { name: "key", type: "string", required: true },
-      { name: "full", type: "boolean", required: false },
-    ],
-  },
+  // The real advertised schema: carries `start`/`maxChars`/line/array params since b670bf0ca.
+  { name: "recall", description: recallTool.description, parameters: recallTool.parameters },
 ];
+
+/** Arguments each recall call reached the handler with, and the handler's raw result. */
+const recallCalls: { args: Record<string, unknown>; result: unknown }[] = [];
 
 const toolLayer = mockToolServiceLayer({
   execute: (req) => {
     const r = req as { toolName: string; arguments?: Record<string, unknown> };
     if (r.toolName === "recall") {
-      return makeRecallHandler()(r.arguments ?? {}).pipe(Effect.map((result) => ({ success: true, result })), Effect.orDie);
+      const args = r.arguments ?? {};
+      return makeRecallHandler()(args).pipe(
+        Effect.tap((result) => Effect.sync(() => recallCalls.push({ args, result }))),
+        Effect.map((result) => ({ success: true, result })),
+        Effect.orDie,
+      );
     }
     return Effect.succeed({ success: true, result: DOC });
   },
@@ -192,5 +209,26 @@ describe("a 2048-token window run: recall(full: true) never comes back as a comp
     expect(section).toContain("(the rest of it)");
     expect(section).toContain("L00999: agents-report-filler-x");
     expect(section.endsWith(DOC.slice(30_100))).toBe(true);
+  }, 20000);
+
+  it("`start` reaches the handler (advertised since b670bf0ca), and the kernel's sectioned read still wins over its 200-char section", async () => {
+    recallCalls.length = 0;
+    const recalls = recallObservations(
+      await runScript([{ toolCall: { name: "recall", args: { key: "_tool_result_1", full: true, start: 20_010 } } }]),
+    );
+    // The handler saw `start` and answered with its own previewLength section.
+    expect(recallCalls.length).toBe(1);
+    expect(recallCalls[0]!.args.start).toBe(20_010);
+    const raw = recallCalls[0]!.result as { mode?: string; content?: string };
+    expect(raw.mode).toBe("chars");
+    expect(raw.content?.length).toBe(200);
+    // The model sees the kernel's window-bounded section from that offset, not the handler's 200 chars.
+    expect(recalls.length).toBe(1);
+    const section = recalls[0]!.content ?? "";
+    expect(section).not.toContain("compressed preview");
+    expect(section).toContain(`so this is chars 20010-`);
+    expect(section).toContain(DOC.slice(20_010, 20_010 + MIN_RECALL_SECTION_CHARS));
+    expect(section).toContain(`recall("_tool_result_1", full: true, start: `);
+    expect(recalls[0]!.metadata?.storedKey).toBeUndefined();
   }, 20000);
 });

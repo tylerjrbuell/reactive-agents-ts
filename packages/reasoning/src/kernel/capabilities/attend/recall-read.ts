@@ -13,12 +13,14 @@
  * - it does not fit: the header says so (total size, how much fits) and shows
  *   the first section, then names the call that reads the next section
  *   (`recall(key, full: true, start: N)`). The kernel reads `start` from the
- *   model's own call, so a section read works even though the tool's
- *   advertised schema carries only `key`/`content`/`query`/`full`.
+ *   model's own call. The tool advertises `start` (and its other section
+ *   params) since 2026-11-19, so the handler also sees it and answers with its
+ *   own previewLength `mode: "chars"` section; this shaped read replaces that.
  *
  * The content comes from the run's scratchpad (the stored value is complete,
  * past the tool's own `fullReturnCapChars`), else from the tool result's
- * `content` field. Pure: no I/O beyond `resolveScratchpadValue` (spill reads).
+ * `content` field when the result is a whole-value read (a `mode` section
+ * record is left as is). Pure: no I/O beyond `resolveScratchpadValue`.
  */
 import { resolveScratchpadValue } from "@reactive-agents/tools";
 
@@ -90,8 +92,11 @@ function readSource(key: string, toolResult: string, scratchpad?: ReadonlyMap<st
   try {
     const parsed: unknown = JSON.parse(toolResult);
     if (typeof parsed === "object" && parsed !== null) {
-      const content = (parsed as Record<string, unknown>).content;
-      if (typeof content === "string") return content;
+      const record = parsed as Record<string, unknown>;
+      // A `mode` record (chars/lines/array) holds one section, not the value:
+      // slicing it again at `start` would misreport the size. It stands as is.
+      if (record.mode !== undefined) return undefined;
+      if (typeof record.content === "string") return record.content;
     }
   } catch {
     // Not JSON: the tool result is no recall read record.
