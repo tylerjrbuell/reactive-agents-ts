@@ -775,7 +775,6 @@
 
   <div class="relative flex min-h-0 flex-1" bind:clientWidth={rowW}>
   <div class="flex min-h-0 min-w-0 md:min-w-[420px] flex-1 flex-col">
-  <div class="chat-busy-bar h-px flex-shrink-0 {busyAction ? 'opacity-100' : 'opacity-0'}" aria-hidden="true"></div>
 
   <ChatThread
     bind:this={thread}

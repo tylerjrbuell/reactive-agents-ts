@@ -4,7 +4,7 @@
    * neural mark and "Cortex", nav Beacon · Chat · Runs · Lab (the current page
    * marked by an accent underline, a live count on Runs), then a running-agents
    * pill, the command button with its shortcut, the theme switch and Settings.
-   * While any agent runs, a 1px signal hairline sits under the bar (static).
+   * While any agent runs, or a chat reply runs, a signal hairline under the bar sweeps (TopBarEdge).
    * Icons come from the kit (`Icon`), never a ligature font, so names stay clean.
    */
   import Icon from "$lib/components/kit/Icon.svelte";
@@ -13,6 +13,10 @@
   import NeuralMark from "$lib/components/kit/NeuralMark.svelte";
   import Status from "$lib/components/kit/Status.svelte";
   import type { IconName } from "$lib/icons.js";
+  import TopBarEdge from "$lib/components/TopBarEdge.svelte";
+  import { busyBarState } from "$lib/chat-busy-bar.js";
+  import { chatStore } from "$lib/stores/chat-store.js";
+  import { interruptPhase } from "$lib/stores/chat-interrupt.js";
 
   interface Props {
     /** Current path (`$page.url.pathname`). */
@@ -36,11 +40,15 @@
     { label: "Lab", href: "/lab", icon: "lab" },
   ];
 
+  // The one run indicator: any agent running or a chat reply in flight (Stop / Pause pending reads calm).
+  const edgeState = $derived(busyBarState({ sending: running > 0 || $chatStore.sending, busy: false, phase: $interruptPhase }));
+
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 </script>
 
-<header class="topbar" data-live={running > 0 || undefined}>
+<header class="topbar">
+  <TopBarEdge state={edgeState} />
   {#if pathname.startsWith("/chat") && onToggleChatSidebar}
     <IconButton
       class="sidebar-toggle"
@@ -93,17 +101,6 @@
     padding: 0 20px;
     border-bottom: 1px solid var(--cortex-line);
     background: var(--cortex-canvas);
-  }
-  .topbar[data-live]::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -1px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent 4%, #8b5cf6 30%, #22d3ee 70%, transparent 96%);
-    opacity: 0.7;
-    pointer-events: none;
   }
   .topbar :global(.sidebar-toggle) { margin-left: -8px; }
   /* The chat rail is a drawer below 1024px only (routes/chat); above it the rail is always shown. */

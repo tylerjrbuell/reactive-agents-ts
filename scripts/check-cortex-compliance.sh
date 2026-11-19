@@ -71,7 +71,7 @@ SIZE_LEDGER=(
   "server/services/chat-session-service.ts:1448"
   "server/services/runner-service.ts:801"
   "server/api/chat.ts:834"
-  "ui/src/lib/components/ChatPanel.svelte:899"
+  "ui/src/lib/components/ChatPanel.svelte:898"
 )
 
 FAIL=0
