@@ -77,6 +77,16 @@ describe("contention decision (0.3)", () => {
     expect(countOllamaClients(proc, 11434, new Set(["111"]))).toBe(1)
     expect(countOllamaClients(proc, 11434, new Set(["111", "222"]))).toBe(0)
   })
+  it("our own IPv4 client of a dual-stack server (tcp client row, tcp6 v4-mapped server row) is not foreign", () => {
+    // Real /proc shape 2026-11-18: client 0100007F:93C0 in tcp, server row in tcp6 with the mapped address.
+    const proc = [
+      "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode",
+      "   1: 0100007F:93C0 0100007F:2CAA 01 00000000:00000000 00:00000000 00000000  1000  0 111",
+      "   2: 0000000000000000FFFF00000100007F:2CAA 0000000000000000FFFF00000100007F:93C0 01 00000000:00000000 02:0000005D 00000000   973  0 5001",
+    ].join("\n")
+    expect(countOllamaClients(proc)).toBe(1)
+    expect(countOllamaClients(proc, 11434, new Set(["111"]))).toBe(0)
+  })
 })
 
 describe("provenance (0.2)", () => {

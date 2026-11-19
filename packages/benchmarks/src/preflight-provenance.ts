@@ -106,6 +106,9 @@ export function countOllamaClients(
 ): number {
   const hexPort = port.toString(16).toUpperCase().padStart(4, "0");
   const portOf = (addr: string): string => addr.slice(addr.lastIndexOf(":") + 1).toUpperCase();
+  // An IPv4 client of a dual-stack server shows as `0100007F:port` in /proc/net/tcp but as the
+  // v4-mapped `0000000000000000FFFF00000100007F:port` in tcp6; compare both in the short form.
+  const norm = (addr: string): string => addr.toUpperCase().replace(/^0{16}FFFF0{4}([0-9A-F]{8}:)/, "$1");
   const rows = procNetTcp
     .split("\n")
     .slice(1)
@@ -114,9 +117,9 @@ export function countOllamaClients(
   // The client end of our own connections (remote port = Ollama, inode ours) names the
   // server-end rows (remote address = that client's local address) that are not foreign.
   const own = new Set(
-    rows.filter((c) => portOf(c[2]!) === hexPort && ownSocketInodes.has(c[9] ?? "")).map((c) => c[1]!.toUpperCase()),
+    rows.filter((c) => portOf(c[2]!) === hexPort && ownSocketInodes.has(c[9] ?? "")).map((c) => norm(c[1]!)),
   );
-  return rows.filter((c) => portOf(c[1]!) === hexPort && !own.has(c[2]!.toUpperCase())).length;
+  return rows.filter((c) => portOf(c[1]!) === hexPort && !own.has(norm(c[2]!))).length;
 }
 
 /** Socket inodes (`socket:[N]` fds) held by `pid`; empty when /proc is unreadable. */
