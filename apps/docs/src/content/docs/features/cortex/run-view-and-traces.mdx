@@ -67,7 +67,7 @@ Cortex supports **replay**: close the run, reopen it later, and the trace and si
 
 The run view's **Context** tab and the chat inspector's Context tab open with the run's knowledge sources: the skills it had active and why (pinned, matched the task, loaded by the agent; a link to Lab Skills) the memories it *recalled* into its context (from the run's `MemoryRecalled` events: tier, summary, relevance, importance and the query that surfaced each one, linking to that entry in the Memory studio; a run that reported none says so instead of showing an empty list) and the memories it wrote (facts, workflows and log entries from the agent's memory, filtered to that run, with a link to the Memory studio). Below them, the context-window gauge as before.
 
-A run seeded with a plan can need more loops than its configured maximum. The framework raises the bound for the plan and records it; the feed shows "iteration budget raised to N for the plan" as a control row, and the loop readouts (the run header, Beacon, the agent card) use the raised bound.
+A run seeded with a plan can need more loops than its configured maximum. With the **Plan budget** switch on (it is off by default), the framework raises the bound for the plan and records it; the feed shows "iteration budget raised to N for the plan" as a control row, and the loop readouts (the run header, Beacon, the agent card) use the raised bound.
 
 ## Compare runs
 
