@@ -70,12 +70,13 @@ describe("proposeBookkeepingRefund", () => {
     expect(r!.state.steps.at(-1)?.type).toBe("harness_signal");
   });
 
-  it("nothing changes: a real call in the round, no call, a think pass (no iteration spent), no seed, plan posture, a finished run", () => {
+  it("nothing changes: a real call in the round, no call, a think pass (no iteration spent), plan posture, a finished run, the kill switch", () => {
     expect(proposeBookkeepingRefund(base({ toolsThisStep: ["todo", "list_sites"] }))).toBeUndefined();
     expect(proposeBookkeepingRefund(base({ toolsThisStep: ["list_sites"] }))).toBeUndefined();
     expect(proposeBookkeepingRefund(base({ toolsThisStep: [] }))).toBeUndefined();
     expect(proposeBookkeepingRefund(base({ iterationAtPassStart: 1 }))).toBeUndefined();
-    expect(proposeBookkeepingRefund(base({ input: makeKernelInput({ task: "t" }) }))).toBeUndefined();
+    expect(proposeBookkeepingRefund(base({ input: makeKernelInput({ task: "t", posture: "plan" }) }))).toBeUndefined();
+    expect(proposeBookkeepingRefund(base({ input: makeKernelInput({ task: "t", harness: { bookkeepingRefund: false } } as never) }))).toBeUndefined();
     expect(proposeBookkeepingRefund(base({ input: seededInput({ posture: "plan" }) }))).toBeUndefined();
     expect(proposeBookkeepingRefund(base({ state: seededState({ iteration: 1, status: "done" }) }))).toBeUndefined();
   });
@@ -93,6 +94,36 @@ describe("proposeBookkeepingRefund", () => {
     }
     expect(granted).toBe(5);
     expect(opts.maxIterations).toBe(15);
+  });
+
+  // Trace 01M7T84BKRW64TD0HQA6E8GHSP: a model-authored list (no seed) burned
+  // 3 of 5 generate and 1 of 2 improve iterations on todo-only turns.
+  const grantAll = (state: KernelState, max: number): { granted: number; state: KernelState } => {
+    let s = state;
+    let opts = options(max);
+    let granted = 0;
+    for (let i = 0; i < 20; i++) {
+      const r = proposeBookkeepingRefund({ state: s, input: makeKernelInput({ task: "t" }), options: opts, toolsThisStep: ["todo"], iterationAtPassStart: 0 });
+      if (r === undefined) break;
+      s = r.state;
+      opts = r.options;
+      granted++;
+    }
+    return { granted, state: s };
+  };
+
+  it("a model-authored list (no seed): todo-only rounds are refunded, at most 2 per pass (1 on a 2-iteration pass)", () => {
+    expect(grantAll(makeKernelState({ status: "thinking", iteration: 1 } as never), 10).granted).toBe(2);
+    expect(grantAll(makeKernelState({ status: "thinking", iteration: 1 } as never), 5).granted).toBe(2);
+    expect(grantAll(makeKernelState({ status: "thinking", iteration: 1 } as never), 2).granted).toBe(1);
+  });
+
+  it("a model-authored list: at most 4 refunds per run, counted on the run ledger every later pass carries", () => {
+    const first = grantAll(makeKernelState({ status: "thinking", iteration: 1 } as never), 10);
+    const second = grantAll(makeKernelState({ status: "thinking", iteration: 1, ledger: first.state.ledger } as never), 10);
+    expect([first.granted, second.granted]).toEqual([2, 2]);
+    const third = grantAll(makeKernelState({ status: "thinking", iteration: 1, ledger: second.state.ledger } as never), 10);
+    expect(third.granted).toBe(0);
   });
 });
 
@@ -207,8 +238,14 @@ describe("umami-shaped run: todo-only turns, one real call per turn, maxIteratio
     expect(items.filter((i) => ["1", "2", "3"].includes(i.id)).map((i) => i.status)).toEqual(["completed", "completed", "completed"]);
   });
 
-  it("not seeded: the same script spends the budget on its todo turns (no answer inside 10), no refund recorded", async () => {
+  it("not seeded: the model's own todo turns are refunded (2, the per-pass cap), so the same script reaches its answer", async () => {
     const pass = await run(base());
+    expect(pass.state.output ?? "").toContain("The spike came from site-a on Tuesday.");
+    expect(bookkeepingRefundsIssued(pass.state)).toBe(2);
+  });
+
+  it("not seeded, refund off: the script spends the budget on its todo turns (no answer inside 10), no refund recorded", async () => {
+    const pass = await run(base({ harness: { bookkeepingRefund: false } } as Partial<KernelInput>));
     expect(pass.state.output ?? "").not.toContain("The spike came from site-a on Tuesday.");
     expect(bookkeepingRefundsIssued(pass.state)).toBe(0);
   });

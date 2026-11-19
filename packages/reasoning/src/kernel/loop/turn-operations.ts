@@ -511,7 +511,7 @@ export const SEAM_TURN_OPERATIONS: Pick<TurnOperationImpls, SeamOperationName> =
         t.prevActionCount = t.state.steps.length;
         yield* emitRefusalRefund(t.state, t.currentOptions);
       }
-      // A todo-only round on a seeded plan run does not spend the budget (bounded).
+      // A todo-only round does not spend the budget (bounded; tighter on a model-authored list).
       const refund = proposeBookkeepingRefund({
         state: t.state, input: t.currentInput, options: t.currentOptions,
         toolsThisStep, iterationAtPassStart: t.pass.iterationAtPassStart,

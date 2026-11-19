@@ -245,17 +245,20 @@ export interface HarnessConfig {
    */
   readonly planBudget?: boolean;
   /**
-   * Seeded-plan auto-tick. A plan step whose tool hint names a tool that just
+   * Todo auto-tick. A seeded plan step whose tool hint names a tool that just
    * succeeded (and that no other unchecked step names) is marked done by the
-   * harness, so the model spends no turn on the bookkeeping. Default ON;
-   * `false` or `RA_AUTO_TICK=0` turns it off.
+   * harness; on a list the model wrote itself, each successful call ticks the
+   * earliest open row whose hint names that tool; at the end of the run, rows
+   * the ledger evidences (and answer rows, when the answer was accepted) are
+   * closed with provenance. Default ON; `false` or `RA_AUTO_TICK=0` turns it off.
    */
   readonly autoTick?: boolean;
   /**
-   * Bookkeeping refund. On a seeded plan run a round that only called `todo`
-   * (or, with `planRecon`, only recon tools) does not count against
-   * `maxIterations`; at most half the budget is refunded. Default ON; `false`
-   * or `RA_BOOKKEEPING_REFUND=0` turns it off.
+   * Bookkeeping refund. A round that only called `todo` (or, in plan posture
+   * with `planRecon`, only recon tools) does not count against
+   * `maxIterations`. Seeded plan runs: at most half the budget is refunded; a
+   * list the model wrote itself: at most 2 per pass and 4 per run. Default ON;
+   * `false` or `RA_BOOKKEEPING_REFUND=0` turns it off.
    */
   readonly bookkeepingRefund?: boolean;
   /**

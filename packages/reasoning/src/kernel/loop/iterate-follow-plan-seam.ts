@@ -11,8 +11,10 @@
 // its seeded tool hint names a tool that succeeded this pass.
 //
 // Advisory only: appended to the pending guidance, never a veto, no exit-gate
-// or terminal logic. No seed, an empty seed, an all-done list, plan posture:
-// returns the same state (byte-identical to a run without the mechanism).
+// or terminal logic. An all-done list, plan posture: returns the same state
+// (byte-identical to a run without the mechanism). No seed: the model's own
+// list is ticked from tool evidence with no guidance text
+// (tickModelListFromEvidence, verify/checklist-evidence.ts).
 //
 // Pure, deterministic, NO LLM, NO fs.
 
@@ -23,6 +25,7 @@ import { transitionState, type KernelInput, type KernelState } from "../state/ke
 import { startRound, viewItems } from "../capabilities/act/checklist-round.js";
 import { FOLLOW_PLAN_GUIDANCE } from "../policy/plan-steps.js";
 import { isPlanPosture } from "../policy/run-posture.js";
+import { evidenceTicks, tickFacts, toolHintMatches } from "../capabilities/verify/checklist-evidence.js";
 
 /** The follow-the-plan line, or undefined when the run has no seeded unchecked step. */
 export function followPlanLine(state: KernelState, input: KernelInput): string | undefined {
@@ -46,9 +49,10 @@ function hintedHits(state: KernelState, input: KernelInput, fromStep: number): r
   if (isPlanPosture(input) || (input.initialAdvisory?.length ?? 0) === 0) return [];
   const succeeded = succeededSince(state, fromStep);
   if (succeeded.size === 0) return [];
-  return viewItems(startRound(), state.ledger).filter(
-    (item) => item.status !== "completed" && item.tool !== undefined && succeeded.has(item.tool),
-  );
+  return viewItems(startRound(), state.ledger).filter((item) => {
+    const hint = item.tool;
+    return item.status !== "completed" && hint !== undefined && [...succeeded].some((tool) => toolHintMatches(hint, tool));
+  });
 }
 
 /**
@@ -96,11 +100,28 @@ export function autoTickSteps(
 }
 
 /**
+ * A list the model built itself (no seed): the harness ticks every row whose
+ * tool hint names a tool that succeeded since the row was added
+ * ({@link evidenceTicks}, provenance `harness:evidence` + the call id). Silent:
+ * no guidance text, so the prompt is unchanged; the model sees the ticks the
+ * next time it reads the list. Same kill switch as {@link autoTickSteps};
+ * inert in plan posture. Idempotent; state identity when nothing ticks.
+ */
+export function tickModelListFromEvidence(state: KernelState, input: KernelInput): KernelState {
+  if (input.harness?.autoTick === false || isPlanPosture(input)) return state;
+  const ticks = evidenceTicks(state.ledger);
+  if (ticks.length === 0) return state;
+  return transitionState(state, { ledger: recordChecklistItems(state.ledger, tickFacts(ticks, state.iteration)) });
+}
+
+/**
  * Settle the unambiguous hinted steps ({@link autoTickSteps}), then append the
  * follow-the-plan line, the auto-tick note and the propose-done line to the
- * pending guidance when each applies (each at most once per turn).
+ * pending guidance when each applies (each at most once per turn). Without a
+ * seed: {@link tickModelListFromEvidence} only.
  */
 export function applyFollowPlanGuidance(state: KernelState, input: KernelInput, fromStep: number = state.steps.length): KernelState {
+  if ((input.initialAdvisory?.length ?? 0) === 0) return tickModelListFromEvidence(state, input);
   const auto = autoTickSteps(state, input, fromStep);
   const tickedLine =
     auto.ticked.length === 0

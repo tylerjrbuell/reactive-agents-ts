@@ -21,8 +21,14 @@
 // is refunded the same bounded way ({@link isReconRound}); recon gathers facts
 // for the plan and is itself capped (policy/plan-recon.ts).
 //
-// Without a seed, in plan posture without recon, or in a round that made any
-// other call: returns undefined and nothing changes (byte-identical).
+// A list the model wrote itself (no seed, execute posture; trace
+// 01M7T84BKRW64TD0HQA6E8GHSP: reflexion spent 3 of 5 generate iterations and 1
+// of 2 improve iterations on todo-only turns) is refunded the same way under
+// tighter caps: at most MODEL_LIST_PASS_REFUND_CAP per pass and
+// MODEL_LIST_RUN_REFUND_CAP per run (counted on the run ledger).
+//
+// In plan posture without recon, or in a round that made any other call:
+// returns undefined and nothing changes (byte-identical).
 // Pure decision, deterministic, NO LLM, NO fs.
 
 import { Effect } from "effect";
@@ -57,6 +63,20 @@ export const bookkeepingRefundsIssued = (state: KernelState): number =>
 export const bookkeepingRefundCap = (currentMax: number, issued: number, configured?: number): number =>
   Math.floor((configured ?? currentMax - issued) / 2);
 
+/** Most refunds one pass may earn on a model-authored list: 2, and never more than the half-budget cap (min 1). */
+export const MODEL_LIST_PASS_REFUND_CAP = 2;
+/** Most refunds a whole run may earn on a model-authored list (counted on the run ledger, every pass it carries). */
+export const MODEL_LIST_RUN_REFUND_CAP = 4;
+/** The refund step's content prefix; its `harness-signal` ledger projection is what the run cap counts. */
+const REFUND_SIGNAL_PREFIX = "bookkeeping round refunded";
+
+/** The per-pass cap on a model-authored list: {@link MODEL_LIST_PASS_REFUND_CAP}, at least 1, within `halfCap` when that is larger than 0. */
+export const modelListRefundCap = (halfCap: number): number => Math.min(MODEL_LIST_PASS_REFUND_CAP, Math.max(1, halfCap));
+
+/** Refunds the run ledger records (this pass plus every pass the ledger carries). */
+export const runBookkeepingRefunds = (state: KernelState): number =>
+  (state.ledger ?? []).filter((e) => e.kind === "harness-signal" && e.signal.startsWith(REFUND_SIGNAL_PREFIX)).length;
+
 /** True when the round's calls (at least one) were all bookkeeping. */
 export const isBookkeepingRound = (toolsThisStep: readonly string[]): boolean =>
   toolsThisStep.length > 0 && toolsThisStep.every((t) => BOOKKEEPING_TOOLS.has(t));
@@ -85,17 +105,21 @@ export function proposeBookkeepingRefund(args: {
   const { state, input, options } = args;
   if (input.harness?.bookkeepingRefund === false) return undefined;
   const planRecon = planReconOn(input);
-  if (isPlanPosture(input) ? !planRecon : (input.initialAdvisory?.length ?? 0) === 0) return undefined;
+  if (isPlanPosture(input) && !planRecon) return undefined;
+  // No seed, execute posture: the model keeps its own todo list (tighter caps below).
+  const modelList = !isPlanPosture(input) && (input.initialAdvisory?.length ?? 0) === 0;
   if (state.status === "done" || state.status === "failed") return undefined;
   const reconTools = new Set(reconEligibleSchemas(input).map((t) => t.name));
   const refundable = planRecon ? isReconRound(args.toolsThisStep, reconTools) : isBookkeepingRound(args.toolsThisStep);
   if (state.iteration <= args.iterationAtPassStart || !refundable) return undefined;
   const issued = bookkeepingRefundsIssued(state);
-  const cap = bookkeepingRefundCap(options.maxIterations, issued, options.configuredMaxIterations);
+  const halfCap = bookkeepingRefundCap(options.maxIterations, issued, options.configuredMaxIterations);
+  const cap = modelList ? modelListRefundCap(halfCap) : halfCap;
   if (issued >= cap) return undefined;
+  if (modelList && runBookkeepingRefunds(state) >= MODEL_LIST_RUN_REFUND_CAP) return undefined;
   // A plan-raised bound plus refunds never passes the plan budget's hard cap (plan-budget.ts).
   if (options.planBudgetHardCap !== undefined && options.maxIterations + 1 > options.planBudgetHardCap) return undefined;
-  const step = makeStep("harness_signal", `bookkeeping round refunded: ${args.toolsThisStep.join(", ")} only (${issued + 1}/${cap})`, {
+  const step = makeStep("harness_signal", `${REFUND_SIGNAL_PREFIX}: ${args.toolsThisStep.join(", ")} only (${issued + 1}/${cap})`, {
     intervention: {
       actor: BOOKKEEPING_REFUND_ACTOR,
       authorityClass: authorityOf(BOOKKEEPING_REFUND_ACTOR),

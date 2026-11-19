@@ -74,6 +74,7 @@ import { usageSpend } from "../../kernel/run-budget.js";
 import { passIterationShare, passIterationsUsed, withRunBudget, type IterationBudget, type PassShareOptions } from "../budget/iteration-budget.js";
 import { defaultReasoningConfig } from "../../types/config.js";
 import { envelopeWithAcceptedAnswer, ledgerWithAcceptedAnswer } from "./answer-acceptance.js";
+import { settleChecklist, withChecklistReconciliation } from "./checklist-terminal.js";
 import { answerPassErrorClaim, applyAnswerPassError } from "./answer-pass-error.js";
 import { PLAN_INCOMPLETE_GUARD, planIncompleteReason, settlePlan, type PlanStepLike } from "../../kernel/policy/plan-completion.js";
 import { emitGuardFired } from "../../kernel/utils/diagnostics.js";
@@ -925,19 +926,23 @@ export function runStrategy<E, R>(
     });
 
     // The terminal's ledger: the strategy's accepted answer (`answerAccepted`),
-    // announced like every other growth, then the settled ledger.
+    // announced like every other growth, then the settled ledger, then the todo
+    // rows its evidence closes (checklist-terminal.ts; not on a pause).
     const terminalLedger = (end: StrategyEnd) =>
       Effect.gen(function* () {
+        const { eventBus } = yield* resolveStrategyServices;
+        const target = ledgerSinkTarget(eventBus, taskId, spec.agentId, `${spec.logSite}:announce-ledger`);
         if (end._tag === "Result" && end.answerAccepted === true) {
-          const { eventBus } = yield* resolveStrategyServices;
-          yield* appendAnnounced(ledgerRef, (l) => ledgerWithAcceptedAnswer(l, spec.strategy, kernelIterations ?? 0),
-            ledgerSinkTarget(eventBus, taskId, spec.agentId, `${spec.logSite}:announce-ledger`));
+          yield* appendAnnounced(ledgerRef, (l) => ledgerWithAcceptedAnswer(l, spec.strategy, kernelIterations ?? 0), target);
         }
-        return yield* settledLedger;
+        const settled = yield* settledLedger;
+        return pendingPause !== undefined ? settled : yield* settleChecklist(settled, kernelIterations ?? 0, target);
       });
 
     return yield* body(run).pipe(
-      Effect.flatMap((end) => terminalLedger(end).pipe(Effect.flatMap((ledger) => terminal(end, ledger)))),
+      Effect.flatMap((end) => terminalLedger(end).pipe(Effect.flatMap((ledger) => terminal(end, ledger).pipe(
+        Effect.flatMap((result) => (pendingPause !== undefined ? Effect.succeed(result) : withChecklistReconciliation(result, ledger, taskId))),
+      )))),
       Effect.catchIf(isPaused, (p) => paused(p.pause)),
       Effect.catchIf(isBodyError, bodyFailed),
       Effect.map((result) => withKernelIterations(result, kernelIterations)),

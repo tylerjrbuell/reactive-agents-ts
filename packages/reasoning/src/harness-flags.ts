@@ -289,8 +289,9 @@ export function planBudgetEnabled(): boolean {
 }
 
 /**
- * Seeded-plan auto-tick: a step whose tool hint names a tool that just
- * succeeded is marked done by the harness (`kernel/loop/iterate-follow-plan-seam.ts`).
+ * Todo auto-tick: a row whose tool hint names a tool that just succeeded is
+ * marked done by the harness (`kernel/loop/iterate-follow-plan-seam.ts`), and
+ * evidenced rows are closed at the terminal (`verify/checklist-evidence.ts`).
  * Default ON; `RA_AUTO_TICK=0` disables it (a kill switch for ablation).
  */
 export function autoTickEnabled(): boolean {

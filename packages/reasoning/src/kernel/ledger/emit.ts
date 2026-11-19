@@ -17,7 +17,14 @@ import {
   buildEvidenceCorpusFromSteps,
   classifyMeasurementClaims,
 } from "../capabilities/verify/evidence-grounding.js";
-import { appendEntries, appendEntry, entriesOfKind, type LedgerEntryInput, type RunLedger } from "./run-ledger.js";
+import {
+  appendEntries,
+  appendEntry,
+  entriesOfKind,
+  type ChecklistProvenance,
+  type LedgerEntryInput,
+  type RunLedger,
+} from "./run-ledger.js";
 import { stepToEntries } from "./step-projection.js";
 
 /** One direct tool dispatch, distilled to the facts the canonical ledger pair needs. */
@@ -383,6 +390,8 @@ export interface ChecklistItemFact {
   readonly toolCallId?: string;
   /** `"plan"` for strategy plan rows, `"harness-derived"` for rows derived from a plan reply; omit for model `todo` facts. */
   readonly origin?: ChecklistItemOrigin;
+  /** Set only on a harness-written status change (see `ChecklistItemEntry.provenance`). */
+  readonly provenance?: ChecklistProvenance;
 }
 
 /**
@@ -403,6 +412,7 @@ export function recordChecklistItems(
       change: f.change,
       ...(f.toolCallId !== undefined ? { toolCallId: f.toolCallId } : {}),
       ...(f.origin !== undefined ? { origin: f.origin } : {}),
+      ...(f.provenance !== undefined ? { provenance: f.provenance } : {}),
     })),
   );
 }

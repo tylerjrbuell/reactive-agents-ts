@@ -129,7 +129,18 @@ export interface ChecklistItemEntry extends LedgerEntryBase {
    * facts — the model is the default author.
    */
   readonly origin?: ChecklistItemOrigin;
+  /**
+   * Set only on a status change the HARNESS wrote from recorded evidence
+   * (kernel/capabilities/verify/checklist-evidence.ts): `"harness:evidence"` =
+   * a successful tool call (its id in `toolCallId`) or the ledger evidence the
+   * checklist inference anchors; `"harness:answer"` = the accepted final
+   * answer delivered the row. Absent on every model `todo` fact.
+   */
+  readonly provenance?: ChecklistProvenance;
 }
+
+/** Who closed an advisory row when the model did not (see {@link ChecklistItemEntry.provenance}). */
+export type ChecklistProvenance = "harness:evidence" | "harness:answer";
 
 /**
  * An empirical claim the model asserted (extracted by evidence-grounding).
