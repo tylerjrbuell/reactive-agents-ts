@@ -141,6 +141,35 @@ describe("run-started config + origin", () => {
     expect(offMech?.actOrAnswerSource).toBe("default-off");
   });
 
+  test("bench-style run (RA_ACT_OR_ANSWER env, no withHarness) stamps config.mechanisms.actOrAnswerSource", async () => {
+    const prior = process.env.RA_ACT_OR_ANSWER;
+    const read = async (): Promise<Record<string, unknown> | undefined> => {
+      const agent = await ReactiveAgents.create()
+        .withName("bench-aoa-source")
+        .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+        .withReasoning({ defaultStrategy: "reactive" })
+        .build();
+      const result = await agent.run("act-or-answer env pin");
+      await agent.dispose();
+      const started = (await eventsOf(result.metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    try {
+      process.env.RA_ACT_OR_ANSWER = "1";
+      const on = await read();
+      expect(on?.actOrAnswer).toBe(true);
+      expect(on?.actOrAnswerSource).toBe("explicit");
+      delete process.env.RA_ACT_OR_ANSWER;
+      const off = await read();
+      expect(off?.actOrAnswer).toBe(false);
+      expect(off?.actOrAnswerSource).toBe("default-off");
+    } finally {
+      if (prior === undefined) delete process.env.RA_ACT_OR_ANSWER;
+      else process.env.RA_ACT_OR_ANSWER = prior;
+    }
+  });
+
   test('actOrAnswer "auto" records the mode the resolved calibration picks, with its source', async () => {
     const agent = await ReactiveAgents.create()
       .withTestScenario([{ text: "FINAL ANSWER: ok" }])
