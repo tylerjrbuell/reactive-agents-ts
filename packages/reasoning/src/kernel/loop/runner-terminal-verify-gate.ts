@@ -214,7 +214,7 @@ export function runTerminalVerifierGate(args: {
         // Grounding-corrected re-synthesis IS the deliverable when it succeeds
         // (shared terminal synthesis call; terse 2048 used to truncate it).
         const { content: correctedContent } = yield* runTerminalSynthesis(llmOpt.value, {
-          prompt: `${buildSynthesisPrompt(state.output ?? "", taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${outcome.guidance}`,
+          prompt: `${buildSynthesisPrompt(state.output ?? "", taskIntent.format, effectiveInput.task, taskIntent)}\n\n${outcome.guidance}`,
         });
         if (!correctedContent || correctedContent.trim().length === 0) {
           // Synthesis produced nothing usable — keep the original answer and
@@ -283,7 +283,7 @@ export function runTerminalVerifierGate(args: {
           const repairGuidance =
             "Your previous answer was rejected because it described the structure of the tool result instead of synthesizing the actual values. Use the concrete fields (titles, scores, names, numbers) from the tool observations above and produce the answer the user requested. Do not describe the data, present it.";
           const repairPrompt =
-            `${buildSynthesisPrompt(rawForSynthesis, taskIntent.format ?? "prose", effectiveInput.task, taskIntent)}\n\n${repairGuidance}`;
+            `${buildSynthesisPrompt(rawForSynthesis, taskIntent.format, effectiveInput.task, taskIntent)}\n\n${repairGuidance}`;
           // This pass renders the deliverable: the shared terminal synthesis call.
           const { content: repairedContent } = yield* runTerminalSynthesis(llmOpt.value, {
             prompt: repairPrompt,

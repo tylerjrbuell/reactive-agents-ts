@@ -41,6 +41,20 @@ describe("extractOutputFormat", () => {
     expect(result.format).toBe("markdown");
   });
 
+  // Live run 01M7S270TSHQ3PHV9CF8Y8VXV9 (H3 2026-11-19, F1): "render it in a
+  // markdown report" read as no format, and synthesis then asked for prose.
+  it.each([
+    "Fetch the top crypto movers and render it in a markdown report",
+    "Write a markdown report on the state of local LLM tooling",
+    "Show the quarterly totals as a markdown table",
+  ])("detects markdown in %p", (task) => {
+    expect(extractOutputFormat(task).format).toBe("markdown");
+  });
+
+  it("does not read 'mark down the price' as a markdown request", () => {
+    expect(extractOutputFormat("mark down the price of every item by 10%").format).toBeNull();
+  });
+
   // ── JSON detection ──
 
   it("detects 'output as JSON' request", () => {

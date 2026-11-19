@@ -54,8 +54,8 @@ const FORMAT_RULES: readonly FormatRule[] = [
       /markdown\s+table/i,
       /(?:generate|create|build|make|produce|output)\s+(?:a\s+)?table/i,
       /(?:as|in)\s+(?:a\s+)?table(?:\s+format)?/i,
-      /(?:as|in|using)\s+markdown/i,
-      /markdown\s+(?:format|output)/i,
+      /(?:as|in|using)\s+(?:an?\s+)?markdown/i,
+      /markdown\s+(?:format|output|report|document|summary)/i,
     ],
   },
   {

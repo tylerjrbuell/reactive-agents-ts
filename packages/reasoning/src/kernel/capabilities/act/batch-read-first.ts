@@ -64,6 +64,6 @@ export function withRoundReadFirst(
 ): (tc: ToolCallSpec, state: KernelState, input: KernelInput) => GuardOutcome {
   return (tc, state, input) => {
     const observation = writeBeforeReadRefusal(tc, round, entry, input);
-    return observation === undefined ? check(tc, state, input) : { pass: false, observation };
+    return observation === undefined ? check(tc, state, input) : { pass: false, observation, guard: "write_before_read_guard" };
   };
 }

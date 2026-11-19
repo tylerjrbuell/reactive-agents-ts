@@ -213,10 +213,17 @@ export function buildFinalAnswerCandidate(
 
 // ── Synthesis Prompt ─────────────────────────────────────────────────────────
 
-/** Build a constrained synthesis prompt for format repair. */
+/**
+ * Build a constrained synthesis prompt for format repair.
+ *
+ * `format: null` means no format was detected: the prompt carries no format
+ * directive and asks for whatever form the request itself names. It never
+ * defaults to prose (H3 2026-11-19, F1: a "markdown report" task the detector
+ * missed was rendered as prose paragraphs).
+ */
 export function buildSynthesisPrompt(
   rawOutput: string,
-  format: OutputFormat,
+  format: OutputFormat | null,
   task: string,
   intent?: TaskIntent,
 ): string {
@@ -230,12 +237,14 @@ export function buildSynthesisPrompt(
     prose: "Write as flowing prose paragraphs.",
   };
 
-  const lines = [
-    `The user asked: "${task}"`,
-    "",
-    `They requested the output as: ${format}`,
-    `Instruction: ${formatInstructions[format]}`,
-  ];
+  const lines = format === null
+    ? [`The user asked: "${task}"`, "", "Instruction: Use the format and structure the request asks for."]
+    : [
+        `The user asked: "${task}"`,
+        "",
+        `They requested the output as: ${format}`,
+        `Instruction: ${formatInstructions[format]}`,
+      ];
 
   if (intent?.expectedEntities && intent.expectedEntities.length > 0) {
     lines.push(

@@ -6,6 +6,7 @@ import {
   buildFinalAnswerCandidate,
   finalizeOutput,
   deScaffoldRawDeliverable,
+  buildSynthesisPrompt,
   type FinalAnswerCandidate,
 } from "../../../../src/kernel/loop/output-synthesis.js";
 import type { TaskIntent } from "../../../../src/kernel/capabilities/comprehend/task-intent.js";
@@ -251,6 +252,26 @@ describe("finalizeOutput", () => {
     );
     expect(result.formatValidated).toBe(true);
     expect(result.source).toBe("model");
+  });
+});
+
+// ── buildSynthesisPrompt ─────────────────────────────────────────────────────
+// H3 2026-11-19 F1: an unknown format used to become "Write as flowing prose
+// paragraphs", so a markdown-report task the detector missed shipped as prose.
+
+describe("buildSynthesisPrompt", () => {
+  it("names no format and never asks for prose when the format is unknown", () => {
+    const prompt = buildSynthesisPrompt("[web-search] trends...", null, "Summarize the AI trends");
+    expect(prompt.toLowerCase()).not.toContain("prose");
+    expect(prompt).not.toContain("They requested the output as:");
+    expect(prompt).toContain("Use the format and structure the request asks for.");
+    expect(prompt).toContain("[web-search] trends...");
+  });
+
+  it("states the format and its instruction when the format is known", () => {
+    const prompt = buildSynthesisPrompt("[crypto] BTC=77000", "markdown", "Write a markdown report on BTC");
+    expect(prompt).toContain("They requested the output as: markdown");
+    expect(prompt).toContain("Format the data using Markdown formatting");
   });
 });
 

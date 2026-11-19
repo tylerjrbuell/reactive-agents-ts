@@ -127,7 +127,8 @@ const runGate = (input: {
   taskDescription: string;
   output: string;
   toolData?: string;
-  llmTurns: { text: string }[];
+  llmTurns: { text: string; match?: string }[];
+  force?: boolean;
 }) => {
   const layer = TestLLMServiceLayer(input.llmTurns);
   const program = Effect.gen(function* () {
@@ -137,6 +138,7 @@ const runGate = (input: {
       taskDescription: input.taskDescription,
       output: input.output,
       toolData: input.toolData,
+      ...(input.force ? { force: true } : {}),
     });
   }).pipe(Effect.provide(layer));
   return Effect.runPromise(program);
@@ -173,6 +175,19 @@ describe("enforceQualityGate", () => {
       llmTurns: [{ text: "" }],
     });
     expect(r.output).toBe(draft);
+  });
+
+  // H3 2026-11-19 F1 (live run 01M7S270TSHQ3PHV9CF8Y8VXV9): reflexion's forced
+  // synthesis on a task with no detected format asked the model for prose.
+  it("forced synthesis with no detected format sends no prose directive", async () => {
+    const r = await runGate({
+      taskDescription: "Look into the latest AI agent trends and summarize them.",
+      output: "",
+      toolData: "[web-search] trend A; trend B",
+      force: true,
+      llmTurns: [{ match: "flowing prose", text: "PROSE-DIRECTED" }, { text: "ANSWER" }],
+    });
+    expect(r.output).toBe("ANSWER");
   });
 });
 

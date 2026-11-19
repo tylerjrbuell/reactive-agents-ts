@@ -75,7 +75,7 @@ export function forceTerminalSynthesis(
     const rawForSynthesis = toolData.length > 0 ? toolData : draft;
 
     const intent = extractOutputFormat(task);
-    const format = intent.format ?? "prose";
+    const format = intent.format;
 
     let synthOutput = draft;
     let synthesized = false;

@@ -123,7 +123,7 @@ export function runOutputQualityGate(args: {
       if (needsSynthesis) {
         const llmOpt = yield* Effect.serviceOption(LLMService);
         if (llmOpt._tag === "Some") {
-          const synthesisFormat = formatAppliesToReply ? taskIntent.format! : "prose";
+          const synthesisFormat = formatAppliesToReply ? taskIntent.format : null;
           // Format/quality re-synthesis replaces state.output wholesale — the
           // deliverable render (shared terminal synthesis call, thinking-safe).
           const safeSynth = yield* runTerminalSynthesis(llmOpt.value, {
@@ -160,8 +160,8 @@ export function runOutputQualityGate(args: {
               );
               yield* emitLog({
                 _tag: "warning",
-                message: `Rewrote the answer to match the requested ${synthesisFormat} format.`,
-                context: `[output-gate] synthesized output to match requested format: ${synthesisFormat}`,
+                message: `Rewrote the answer to match the requested ${synthesisFormat ?? "task"} format.`,
+                context: `[output-gate] synthesized output to match requested format: ${synthesisFormat ?? "task"}`,
                 timestamp: new Date(),
               });
             } else if (terminationSource === "harness" || terminationSource === "oracle") {

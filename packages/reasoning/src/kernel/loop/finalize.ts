@@ -144,9 +144,10 @@ export function enforceQualityGate(input: {
     return Effect.succeed({ output: input.output, ...NO_TOKEN_SPEND });
   }
   const intent = extractOutputFormat(input.taskDescription);
-  // Default to "prose" when no explicit format detected — covers compression-echo
-  // synthesis for free-form tasks (MCP probe M4: "summarize in one sentence").
-  const synthesisFormat = intent.format ?? "prose";
+  // No detected format stays null: the prompt then names no format and asks for
+  // the one the request states (compression-echo synthesis for free-form tasks,
+  // MCP probe M4). A "prose" default rewrote missed markdown reports as prose (H3 F1).
+  const synthesisFormat = intent.format;
   const synthesisPrompt = buildSynthesisPrompt(
     decision.rawForSynthesis,
     synthesisFormat,

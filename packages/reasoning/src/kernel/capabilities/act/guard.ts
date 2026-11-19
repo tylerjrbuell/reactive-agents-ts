@@ -25,7 +25,12 @@ import type { ReasoningStep } from "../../../types/index.js";
 
 export type GuardOutcome =
   | { readonly pass: true }
-  | { readonly pass: false; readonly observation: string };
+  | {
+      readonly pass: false;
+      readonly observation: string;
+      /** The `guard-fired` name of the refusing guard (e.g. `repetition_guard`); act emits one event per refusal. */
+      readonly guard?: string;
+    };
 
 export type Guard = (
   tc: ToolCallSpec,
@@ -359,6 +364,7 @@ export const unconsumedEvidenceGuard: Guard = (tc, state) => {
 
   return {
     pass: false,
+    guard: "unconsumed_evidence_guard",
     observation:
       `Before finalizing: earlier tool results were shown to you only as short previews. ` +
       `Here is the COMPLETE content, expanded automatically — ground your answer in it (do not ` +
@@ -377,6 +383,7 @@ export const blockedGuard: Guard = (tc, _state, input) => {
   if (isBlocked) {
     return {
       pass: false,
+      guard: "blocked_guard",
       observation: `⚠️ BLOCKED: ${tc.name} already executed successfully in a prior pass.`,
     };
   }
@@ -400,6 +407,7 @@ export const availableToolGuard: Guard = (tc, _state, input) => {
 
   return {
     pass: false,
+    guard: "available_tool_guard",
     observation: `Tool "${tc.name}" is not available in this run. ${suggestion} Use EXACT tool names from the tool list.`,
   };
 };
@@ -507,6 +515,7 @@ export const duplicateGuard: Guard = (tc, state, input) => {
 
   return {
     pass: false,
+    guard: "duplicate_guard",
     observation: dupContent,
   };
 };
@@ -533,6 +542,7 @@ export const sideEffectGuard: Guard = (tc, state, _input) => {
 
   return {
     pass: false,
+    guard: "side_effect_guard",
     observation: `⚠️ ${tc.name} already executed successfully with different parameters. Side-effect tools must NOT be called twice. Move on to the next step or give FINAL ANSWER.`,
   };
 };
@@ -672,6 +682,7 @@ export const repetitionGuard: Guard = (tc, state, input) => {
 
   return {
     pass: false,
+    guard: "repetition_guard",
     observation: nudge,
   };
 };
@@ -704,6 +715,7 @@ export const metaToolDedupGuard: Guard = (tc, state) => {
   if (isConsecutiveMetaToolSpam({ toolName: tc.name, lastMetaToolCall: lastMeta, consecutiveCount: count })) {
     return {
       pass: false,
+      guard: "meta_tool_dedup_guard",
       observation: `You just called ${tc.name} ${count} times in a row. Nothing has changed. Stop calling ${tc.name} and either use a task tool or call final-answer.`,
     };
   }

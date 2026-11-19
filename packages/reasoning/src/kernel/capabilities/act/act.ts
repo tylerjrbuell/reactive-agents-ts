@@ -67,7 +67,7 @@ import { effectiveMissingRequired } from "../verify/requirement-state.js";
 import { evidenceOfSteps } from "../../ledger/step-projection.js";
 import { assembleConversation } from "./conversation-assembly.js";
 import { syncRoundScratchpad } from "./scratchpad-sync.js";
-import { checkToolCall, defaultGuards } from "./guard.js"; import { withRoundReadFirst } from "./batch-read-first.js";
+import { checkToolCall, defaultGuards } from "./guard.js"; import { withRoundReadFirst } from "./batch-read-first.js"; import { refuseGuardedCall } from "./guard-refusal.js";
 import { META_TOOLS, INTROSPECTION_META_TOOLS } from "../../../kernel/state/kernel-constants.js";
 import { emitErrorSwallowed, errorTag, type KernelMessageLike } from "@reactive-agents/core";
 
@@ -105,10 +105,6 @@ export const mintToolEffectId = (
   iteration: number,
   index: number,
 ): string => `fx-${taskId}-${iteration}-${index}`;
-
-function isGuardHardFailure(observation: string): boolean {
-  return observation.includes("is not available in this run");
-}
 
 function normalizeToolCallArguments(toolCall: ToolCallSpec): ToolCallSpec {
   const args = typeof toolCall.arguments === "object" && toolCall.arguments !== null
@@ -574,15 +570,7 @@ export function handleActing(
             );
 
             if (!guardOutcome.pass) {
-              const guardFailed = isGuardHardFailure(guardOutcome.observation);
-              const [blockedActionStep, blockedObsStep] = blockedCallSteps(batchCall, guardOutcome.observation, !guardFailed, { guard: true, toolUsed: true });
-              yield* hooks.onAction(state, batchCall.name, JSON.stringify(batchCall.arguments), { callId: batchCall.id, rationale: batchCall.rationale });
-              yield* hooks.onObservation(
-                transitionState(state, { steps: [...allSteps, blockedActionStep] }),
-                guardOutcome.observation,
-                false, // harness reply, the call never ran: not an ok:true receipt
-              );
-              allSteps = [...allSteps, blockedActionStep, blockedObsStep];
+              allSteps = [...allSteps, ...(yield* refuseGuardedCall(state, allSteps, batchCall, guardOutcome, hooks))];
               continue;
             }
 
@@ -766,15 +754,7 @@ export function handleActing(
           consecutiveMetaToolCount,
         }), input);
         if (!guardOutcome.pass) {
-          const guardFailed = isGuardHardFailure(guardOutcome.observation);
-          const [actionStep, guardObsStep] = blockedCallSteps(tc, guardOutcome.observation, !guardFailed, { guard: true, toolUsed: true });
-          yield* hooks.onAction(state, tc.name, JSON.stringify(tc.arguments), { callId: tc.id, rationale: tc.rationale });
-          yield* hooks.onObservation(
-            transitionState(state, { steps: [...allSteps, actionStep] }),
-            guardOutcome.observation,
-            false, // harness reply, the call never ran: not an ok:true receipt
-          );
-          allSteps = [...allSteps, actionStep, guardObsStep];
+          allSteps = [...allSteps, ...(yield* refuseGuardedCall(state, allSteps, tc, guardOutcome, hooks))];
           // Update meta-tool dedup tracking even for blocked calls (the call still happened)
           if (INTROSPECTION_META_TOOLS.has(tc.name)) {
             consecutiveMetaToolCount = tc.name === lastMetaToolCall ? consecutiveMetaToolCount + 1 : 1;
