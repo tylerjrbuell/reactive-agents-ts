@@ -12,7 +12,7 @@ import type { TelemetryAggregator } from "./local-aggregator.js";
 import { TelemetryAggregatorTag, TelemetryAggregatorLive } from "./local-aggregator.js";
 import { preservePrivacy, type PrivacyConfig } from "./privacy-preserver.js";
 import type { RawRunData } from "./privacy-preserver.js";
-import { EventBus } from "@reactive-agents/core";
+import { EventBus, addCost, EMPTY_COST_SUM, type CostSum } from "@reactive-agents/core";
 
 // ─── Per-Task Accumulator ───
 
@@ -21,7 +21,8 @@ interface TaskAccumulator {
   provider: string;
   tokensIn: number;
   tokensOut: number;
-  totalCost: number;
+  /** Known-cost total; `complete: false` once any call had an unknown price. */
+  cost: CostSum;
   toolNames: Set<string>;
   strategy: string;
   cacheHits: number;
@@ -82,7 +83,7 @@ export const TelemetryCollectorLive = (config: TelemetryConfig = {}) =>
             provider: "unknown",
             tokensIn: 0,
             tokensOut: 0,
-            totalCost: 0,
+            cost: EMPTY_COST_SUM,
             toolNames: new Set(),
             strategy: "unknown",
             cacheHits: 0,
@@ -114,7 +115,7 @@ export const TelemetryCollectorLive = (config: TelemetryConfig = {}) =>
           } else {
             acc.tokensOut += Math.round(event.tokensUsed * 0.3);
           }
-          acc.totalCost += event.estimatedCost;
+          acc.cost = addCost(acc.cost, event.estimatedCost);
           acc.totalRequests += 1;
           if (event.cached === true) {
             acc.cacheHits += 1;
@@ -177,7 +178,10 @@ export const TelemetryCollectorLive = (config: TelemetryConfig = {}) =>
             success: event.success,
             toolNames: acc ? [...acc.toolNames] : [],
             iterationCount: event.totalIterations,
-            costUsd: acc?.totalCost ?? 0,
+            costUsd: acc?.cost.usd ?? 0,
+            // No accumulator = no LLMRequestCompleted seen: $0 is only the
+            // true cost when the run also used no tokens.
+            costComplete: acc?.cost.complete ?? event.totalTokens === 0,
             cacheHitRate: acc && acc.totalRequests > 0 ? acc.cacheHits / acc.totalRequests : 0,
             timestamp: new Date(),
           };

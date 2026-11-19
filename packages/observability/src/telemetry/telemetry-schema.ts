@@ -99,6 +99,11 @@ export const TelemetryRecordSchema = Schema.Struct({
   iterationCount: Schema.Number,
   /** Estimated cost in USD (noised). */
   costUsd: Schema.Number,
+  /**
+   * `false` when `costUsd` is partial (an LLM call had an unknown price, so it
+   * added nothing). Absent when the producer did not track completeness.
+   */
+  costComplete: Schema.optional(Schema.Boolean),
   /** Semantic cache hit rate 0..1 (noised). */
   cacheHitRate: Schema.Number,
   /** Timestamp bucketed to the hour (privacy: no sub-hour precision). */
@@ -125,8 +130,14 @@ export const TelemetryAggregateSchema = Schema.Struct({
   p95LatencyMs: Schema.Number,
   /** Mean cost in USD. */
   meanCostUsd: Schema.Number,
-  /** Total cost in USD. */
+  /** Total cost in USD. A lower bound when `partialCostRuns > 0`. */
   totalCostUsd: Schema.Number,
+  /**
+   * Runs whose `costUsd` is partial (`costComplete === false`). When > 0,
+   * `totalCostUsd` and `meanCostUsd` understate real spend. Absent on
+   * aggregates computed before this field existed.
+   */
+  partialCostRuns: Schema.optional(Schema.Number),
   /** Mean iteration count. */
   meanIterations: Schema.Number,
   /** Mean cache hit rate. */

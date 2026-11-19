@@ -80,3 +80,39 @@ describe("observe tracer — LLM span bookends", () => {
     expect(spans.ended()).toBe(0);
   });
 });
+
+describe("observe tracer — LLM cost attributes", () => {
+  const started: AgentEvent = {
+    _tag: "LLMRequestStarted",
+    taskId: "t1", requestId: "t1:0:complete",
+    model: "m", provider: "p", contextSize: 100,
+  };
+
+  it("records a known cost with its price source", async () => {
+    const { handle } = await makeTestTracer();
+    handle(started);
+    handle({
+      _tag: "LLMRequestCompleted",
+      taskId: "t1", requestId: "t1:0:complete",
+      model: "m", provider: "p",
+      tokensUsed: 10, durationMs: 5, estimatedCost: 0.002, priceSource: "price-book",
+    });
+    const attrs = exporter.getFinishedSpans()[0]!.attributes;
+    expect(attrs["llm.estimated_cost_usd"]).toBe(0.002);
+    expect(attrs["llm.price_source"]).toBe("price-book");
+  });
+
+  it("omits the cost attribute when the price is unknown (never emits 0)", async () => {
+    const { handle } = await makeTestTracer();
+    handle(started);
+    handle({
+      _tag: "LLMRequestCompleted",
+      taskId: "t1", requestId: "t1:0:complete",
+      model: "m", provider: "p",
+      tokensUsed: 10, durationMs: 5, priceSource: "unknown",
+    });
+    const attrs = exporter.getFinishedSpans()[0]!.attributes;
+    expect("llm.estimated_cost_usd" in attrs).toBe(false);
+    expect(attrs["llm.price_source"]).toBe("unknown");
+  });
+});

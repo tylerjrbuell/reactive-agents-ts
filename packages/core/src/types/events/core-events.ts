@@ -3,6 +3,16 @@ import type { RunOrigin, RunAbortCause, RunAbortReason } from "../origin.js";
 import type { DeliverableReceipt } from "../receipt.js";
 import type { ReasoningStepData } from "../reasoning-step-data.js";
 
+/**
+ * Provenance of an LLM call's USD cost (`LLMRequestCompleted.priceSource`).
+ * - `"provider-reported"`: the provider or proxy returned the cost itself
+ *   (e.g. LiteLLM's `x-litellm-response-cost` header).
+ * - `"price-book"`: computed from the framework's price table for the model.
+ * - `"user"`: computed from user-supplied pricing (`withModelPricing`).
+ * - `"unknown"`: no price is known for the model; `estimatedCost` is absent.
+ */
+export type PriceSource = "provider-reported" | "price-book" | "user" | "unknown";
+
 /** Task/agent lifecycle, execution, memory, LLM, tool, reasoning, guardrail and safety events. */
 export type CoreAgentEvent =
   // ─── Core task/agent events ───
@@ -220,8 +230,18 @@ export type CoreAgentEvent =
        * `outputTokensPerSecond` rather than computing it inline.
        */
       readonly firstTokenMs?: number;
-      /** Estimated cost in USD */
-      readonly estimatedCost: number;
+      /**
+       * Cost of this call in USD. Absent means the price is unknown (the model
+       * has no price entry and the provider reported no cost), NOT "free".
+       * Never sum an absent value as 0 without marking the total as partial;
+       * `priceSource` says where a present value came from.
+       */
+      readonly estimatedCost?: number;
+      /**
+       * Where `estimatedCost` came from. Absent on publishers that predate
+       * this field (treat as unknown provenance). See `PriceSource`.
+       */
+      readonly priceSource?: PriceSource;
     }
   // ─── Tool execution events (from @reactive-agents/runtime) ───
   | {

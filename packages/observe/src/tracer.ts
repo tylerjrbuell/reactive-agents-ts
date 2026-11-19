@@ -138,8 +138,14 @@ export function handleTracerEvent(
               [OI.LLM_TOKEN_COUNT_COMPLETION]: tokensOut,
               [OI.LLM_TOKEN_COUNT_TOTAL]: event.tokensUsed,
               "llm.duration_ms": event.durationMs,
-              "llm.estimated_cost_usd": event.estimatedCost,
             });
+            // Absent cost = unknown price: omit the attribute rather than emit 0.
+            if (event.estimatedCost !== undefined) {
+              span.setAttribute("llm.estimated_cost_usd", event.estimatedCost);
+            }
+            if (event.priceSource !== undefined) {
+              span.setAttribute("llm.price_source", event.priceSource);
+            }
             if (event.cached) {
               span.setAttribute("llm.cached", true);
             }

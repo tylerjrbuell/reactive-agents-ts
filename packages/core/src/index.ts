@@ -237,6 +237,8 @@ export type {
   PromptAssembledToolDescription,
   StructuredOutputReportedEvent,
 } from "./services/event-bus.js";
+// Provenance of LLMRequestCompleted.estimatedCost (absent cost = price unknown).
+export type { PriceSource } from "./types/events/core-events.js";
 // Plan primitive: plan IS the advisory checklist (plan/execute posture).
 export {
   PlanSchema,
@@ -271,6 +273,9 @@ export type { PlanParseError, PlanParseReason, PlanFromMarkdownDefaults } from "
 // LLM throughput: output tokens/sec from LLMRequestCompleted (firstTokenMs-aware).
 export { outputTokensPerSecond } from "./utils/llm-throughput.js";
 export type { LLMThroughputFields } from "./utils/llm-throughput.js";
+// Cost totals that stay honest when a call's price is unknown.
+export { sumCosts, addCost, EMPTY_COST_SUM } from "./utils/cost-sum.js";
+export type { CostSum } from "./utils/cost-sum.js";
 // Prompt-fragment contract (2026-11-10 prompt audit §7): ids, overrides, resolution.
 export {
   resolvePromptFragment,

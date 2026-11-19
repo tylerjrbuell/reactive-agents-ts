@@ -124,6 +124,11 @@ export interface RawRunData {
   readonly toolNames: readonly string[];
   readonly iterationCount: number;
   readonly costUsd: number;
+  /**
+   * `false` when `costUsd` is partial: at least one LLM call had an unknown
+   * price. Absent on callers that predate this field (completeness unknown).
+   */
+  readonly costComplete?: boolean;
   readonly cacheHitRate: number;
   readonly timestamp: Date;
 }
@@ -156,6 +161,7 @@ export function preservePrivacy(
     toolNames: sanitizeToolNames(raw.toolNames),
     iterationCount: Math.max(1, Math.round(noiseAndClamp(raw.iterationCount, epsilon, sensitivity * 5, 1))),
     costUsd: Math.max(0, noiseAndClamp(raw.costUsd, epsilon, sensitivity * 0.01, 0)),
+    ...(raw.costComplete !== undefined ? { costComplete: raw.costComplete } : {}),
     cacheHitRate: Math.max(0, Math.min(1, noiseAndClamp(raw.cacheHitRate, epsilon, sensitivity * 0.1, 0))),
     timestampBucket: bucketToHour(raw.timestamp),
   };

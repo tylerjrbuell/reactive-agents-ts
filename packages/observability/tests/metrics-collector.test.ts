@@ -180,6 +180,40 @@ describe("MetricsCollector - EventBus Integration", () => {
 
 // ─── ToolCallCompleted EventBus filtering ─────────────────────────────────────
 
+describe("MetricsCollector — LLM cost honesty via EventBus", () => {
+  const completed = (estimatedCost: number | undefined) => ({
+    _tag: "LLMRequestCompleted",
+    taskId: "t1",
+    requestId: "r1",
+    model: "m",
+    provider: "p",
+    tokensUsed: 10,
+    durationMs: 5,
+    ...(estimatedCost !== undefined ? { estimatedCost } : {}),
+  });
+
+  const sum = (metrics: readonly { name: string; value: number }[], name: string) =>
+    metrics.filter((m) => m.name === name).reduce((s, m) => s + m.value, 0);
+
+  it("an unpriced call adds $0 to llm.cost_usd and counts as unpriced", async () => {
+    const { layer: busLayer, publish } = makeSyncMockBusLayer();
+    const metricsLayer = MetricsCollectorLive.pipe(Layer.provide(busLayer));
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const mc = yield* MetricsCollectorTag;
+        yield* publish(completed(0.25));
+        yield* publish(completed(undefined));
+        const metrics = yield* mc.getMetrics();
+        // Red if the unknown price falls through to incrementCounter's default of 1.
+        expect(sum(metrics, "llm.cost_usd")).toBeCloseTo(0.25, 10);
+        expect(sum(metrics, "llm.cost_unpriced_calls")).toBe(1);
+        expect(sum(metrics, "llm.requests")).toBe(2);
+      }).pipe(Effect.provide(metricsLayer)),
+    );
+  });
+});
+
 describe("MetricsCollector — unknown tool name filtering via EventBus", () => {
   function makeTestLayer() {
     const { layer: busLayer, publish } = makeSyncMockBusLayer();

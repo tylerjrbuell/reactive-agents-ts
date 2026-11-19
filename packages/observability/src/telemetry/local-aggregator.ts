@@ -61,6 +61,7 @@ function computeAggregate(records: readonly TelemetryRecord[]): TelemetryAggrega
       p95LatencyMs: 0,
       meanCostUsd: 0,
       totalCostUsd: 0,
+      partialCostRuns: 0,
       meanIterations: 0,
       meanCacheHitRate: 0,
       strategyDistribution: {},
@@ -80,12 +81,14 @@ function computeAggregate(records: readonly TelemetryRecord[]): TelemetryAggrega
   const toolUsage: Record<string, number> = {};
 
   let totalCost = 0;
+  let partialCostRuns = 0;
   let totalIterations = 0;
   let totalCacheHitRate = 0;
   let totalLatency = 0;
 
   for (const r of records) {
     totalCost += r.costUsd;
+    if (r.costComplete === false) partialCostRuns += 1;
     totalIterations += r.iterationCount;
     totalCacheHitRate += r.cacheHitRate;
     totalLatency += r.latencyMs;
@@ -109,6 +112,7 @@ function computeAggregate(records: readonly TelemetryRecord[]): TelemetryAggrega
     p95LatencyMs: latencies[p95Index] ?? 0,
     meanCostUsd: totalCost / n,
     totalCostUsd: totalCost,
+    partialCostRuns,
     meanIterations: totalIterations / n,
     meanCacheHitRate: totalCacheHitRate / n,
     strategyDistribution: strategyDist,

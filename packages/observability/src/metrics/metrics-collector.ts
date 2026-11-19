@@ -160,10 +160,17 @@ export const MetricsCollectorLive: Layer.Layer<MetricsCollectorTag, never> = Lay
             provider: event.provider,
             taskId: event.taskId,
           }),
-          collector.incrementCounter("llm.cost_usd", event.estimatedCost, {
-            model: event.model,
-            provider: event.provider,
-          }),
+          // Unknown price: never pass undefined (incrementCounter defaults it
+          // to 1, i.e. $1); count the unpriced call so the USD total reads as partial.
+          event.estimatedCost !== undefined && Number.isFinite(event.estimatedCost)
+            ? collector.incrementCounter("llm.cost_usd", event.estimatedCost, {
+                model: event.model,
+                provider: event.provider,
+              })
+            : collector.incrementCounter("llm.cost_unpriced_calls", 1, {
+                model: event.model,
+                provider: event.provider,
+              }),
           collector.incrementCounter("llm.requests", 1, {
             model: event.model,
             provider: event.provider,
