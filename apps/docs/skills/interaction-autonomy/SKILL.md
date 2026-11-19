@@ -65,7 +65,7 @@ Name the tool calls that must pause. When the agent tries to call one, the run p
 })
 ```
 
-Note: tools whose definition declares `requiresApproval: true` (built-ins like `code-execute` / `file-write`, and the `shell-execute` terminal tool) are folded in automatically once any approval policy is configured — you do not have to list them by hand.
+Note: tools whose definition declares `requiresApproval: true` (built-ins like `code-execute` / `file-write`, and the `shell-execute` terminal tool) are folded in automatically once any approval policy is configured — you do not have to list them by hand. So are tools registered after `build()`: MCP tools annotated `destructiveHint: true` or `readOnlyHint: false`, `.withAgentTool()` sub-agent tools (`requiresApproval` defaults to `true`) and `agent.registerTool()` tools with `requiresApproval: true`. An unannotated MCP tool is not gated by default; name it (`"server/tool"`) or use `requireFor`. The `code-action` strategy refuses a policy that gates a tool its sandbox can call, sets `commands` while `shell-execute` is callable, or sets `requireFor`; `codeActionApprovalConflict({ callableTools, policy })` from `reactive-agents` checks this before a run.
 
 Gate shell calls by command with `commands`. A rule is a word prefix of a command segment (`"git push"` matches `git push origin main`; a bare `"*"` matches nothing). With the read-only `git` preset, a matched write asks for approval instead of being refused:
 

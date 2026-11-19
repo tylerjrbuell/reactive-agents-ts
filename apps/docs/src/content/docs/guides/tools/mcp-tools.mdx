@@ -409,6 +409,12 @@ Every tool resolves to one declared effect, exported as `toolEffect(definition)`
 
 For MCP tools the mapping is: a trusted `readOnlyHint: true` (or an operator `readOnly` listing) gives `read`; `destructiveHint: true` or `readOnlyHint: false` gives `write`, honored even from an untrusted server because those hints only narrow; anything else, including `openWorldHint: true` alone, stays `unknown`. To let a server's `list_*` tools count as `read`, set `trustAnnotations: true` or list them under `readOnly`.
 
+### Approval gating
+
+The effect also decides whether an approval policy gates the tool. With any `.withApprovalPolicy()` set, an MCP tool whose effect is `write` (`destructiveHint: true` or `readOnlyHint: false`) is gated automatically, even from an untrusted server. A `read` tool is not gated. An `unknown` tool is not gated by default, the same rule as a custom tool without `requiresApproval`. To gate one, name it in the policy's `tools` by its prefixed name (`"github/create_issue"`, that is `server/tool`), or match it with a `requireFor` predicate on `toolName`.
+
+MCP tools connect after `build()`, so the gate reads the live tool registry on each reasoning pass. Before 0.19, MCP tools were never gated automatically. The full list of what a policy gates is in [Human-in-the-Loop Approval](/guides/durable-hitl/#what-a-policy-gates).
+
 ## Cleanup
 
 MCP stdio servers run as subprocesses — the process will hang if they aren't shut down. Always dispose the agent when done. See [Resource Management](/reference/builder-api/agent-runtime/#resource-management) for full patterns.

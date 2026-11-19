@@ -163,6 +163,79 @@ You can also gate by predicate instead of (or in addition to) a name list:
 })
 ```
 
+### What a policy gates
+
+Once an agent has any approval policy, these calls wait for approval:
+
+- tools named in `tools`, and any call `requireFor` returns `true` for;
+- every registered tool whose definition sets `requiresApproval: true`:
+  built-ins such as `code-execute` and `file-write`, the `shell-execute`
+  terminal tool and your own tools. You do not list them by hand;
+- MCP tools the server annotates as writing (`destructiveHint: true` or
+  `readOnlyHint: false`). These hints can only narrow, so they count without
+  `trustAnnotations`;
+- `.withAgentTool()` sub-agent tools. Their `requiresApproval` defaults to
+  `true`; set it to `false` for unattended delegation;
+- tools added after build with `agent.registerTool()` that set
+  `requiresApproval: true`.
+
+MCP tools, sub-agent tools and `registerTool()` tools are registered after
+`build()`, so each reasoning pass reads the live tool registry and adds them to
+the gated set. This holds under every strategy and in both `block` and `detach`
+mode. An agent with no approval policy gates nothing.
+
+Not gated by default: an MCP tool with no annotation and no operator `readOnly`
+listing (effect `unknown`, see
+[Tool effect](/guides/tools/mcp-tools/#tool-effect-read-write-or-unknown)),
+and a custom tool that sets `mutatesExternalState: true` but not
+`requiresApproval`. Gate one by name (MCP tools are named `server/tool`) or
+with `requireFor`:
+
+<!-- docs-skip-typecheck -->
+```ts
+.withApprovalPolicy({ tools: ["github/create_issue"], mode: "detach" })
+```
+
+> **Changed in 0.19.** Before 0.19 the gated set held only the tools the
+> builder could see at `build()`. MCP tools that write, `.withAgentTool()`
+> sub-agent tools and `registerTool()` tools with `requiresApproval: true` ran
+> without approval under every strategy, even with a policy set.
+
+### Code-action and approval
+
+The `code-action` strategy runs model-written code in a sandbox worker. That
+code calls tools one after another with no point where a person can step in,
+so code-action cannot honor a gate on a tool its sandbox can call. It refuses
+the run before any model call when any of these holds:
+
+- a tool the sandbox can call is in the gated set (above);
+- `commands` rules are set and the sandbox can call `shell-execute` (command
+  rules gate by arguments the script picks at run time);
+- `requireFor` is set (a predicate cannot be checked ahead of the script).
+
+Otherwise it runs: no policy, or a policy that gates only tools the sandbox
+cannot call. The mode (`block` or `detach`) does not change the answer. The
+refusal starts with `code-action cannot honor .withApprovalPolicy(` and names
+the gated tools it can call. For gated tools use the `reactive`, `reflexion`,
+`plan-execute-reflect` or `tree-of-thought` strategy.
+
+To warn before a run, `codeActionApprovalConflict` (exported from
+`reactive-agents` and `@reactive-agents/runtime`) applies the same rule:
+
+```ts
+import { codeActionApprovalConflict } from "reactive-agents";
+
+const verdict = codeActionApprovalConflict({
+  callableTools: ["file-write", "web-search"],
+  policy: { tools: new Set(["file-write"]) },
+});
+// verdict.refuse === true, verdict.gatedCallable === ["file-write"]
+```
+
+It checks only the tools and policy you pass. Tools registered after build (MCP
+tools that write, sub-agent tools) are not in a config-only check; the
+strategy's own check at run start sees them.
+
 ### Shell command rules
 
 `commands` gates shell calls by what they run, not by tool name:
@@ -328,14 +401,15 @@ run() / runStream() ──▶ gated call ──▶ status: awaiting-approval ─
                   resume from checkpoint ──▶ status: completed
 ```
 
-## Scope notes (v0.12)
+## Scope notes
 
 - Durable pauses work on **both `run()` and `runStream()`**. `approveRun`/`denyRun`
   resume from the exact paused checkpoint; a re-pause on resume is persisted too
   (multi-gate). The `onApproval` callback is sugar over this loop for same-process use.
-- Gate triggers are the explicit `tools` list and the `requireFor` predicate. The
-  per-tool `requiresApproval` flag does not auto-feed the durable gate yet — list
-  the tool names explicitly.
+- Gate triggers are the `tools` list, the `requireFor` predicate and every
+  registered tool that needs approval (`requiresApproval: true`, MCP tools
+  annotated as writing, `.withAgentTool()` sub-agents). The live and durable
+  gates use the same set; see [What a policy gates](#what-a-policy-gates).
 - One pending gate at a time: if a single step proposes several gated calls, the
   first pauses; the rest re-surface after the resume.
 
