@@ -17,6 +17,8 @@ import { META_TOOLS as META_TOOL_NAMES, INTROSPECTION_META_TOOLS, isDelegationTo
 import { observationForAction } from "../sense/step-utils.js";
 import { notRunCallIds } from "../../utils/observation-helpers.js";
 import { contractOutstanding } from "../../loop/exit-gate.js";
+import { deriveListedInputs } from "../verify/derive-inputs.js";
+import { isInputRead } from "../verify/post-conditions.js";
 import type { ReasoningStep } from "../../../types/index.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -405,11 +407,19 @@ export const duplicateGuard: Guard = (tc, state, input) => {
   // mid-task (targeted H3 at 94f0c9ea5: "Give FINAL ANSWER" with 5 of 6 files
   // unwritten). The list is the exit gate's own contract part, so the two agree.
   const outstanding = missingReq.length > 0 ? [] : contractOutstanding(state, input, state.output ?? "");
+  // A listed input never read is the next item: writing an output before its
+  // source was read produced wrong values (cogito h3-todo-heavy, 2026-11-19).
+  const unreadInput = missingReq.length > 0
+    ? undefined
+    : deriveListedInputs(input.task).find(({ entity }) => !isInputRead(entity, state.steps, state.ledger));
+  const unreadNote = unreadInput === undefined ? "" : ` Read ${unreadInput.entity} first: it is a listed input you have not read yet.`;
   const nextHint = missingReq.length > 0
     ? `You still need to call: ${missingReq.join(", ")}. Do that now.`
     : outstanding.length > 0
-      ? `Still outstanding: ${outstanding.join("; ")}. Do the next item now.`
-      : "Give FINAL ANSWER if all steps are complete.";
+      ? `Still outstanding: ${outstanding.join("; ")}. Do the next item now.${unreadNote}`
+      : unreadInput !== undefined
+        ? `Not done yet.${unreadNote}`
+        : "Give FINAL ANSWER if all steps are complete.";
   const dupContent = `${priorObsContent} [Already done — do NOT repeat. ${nextHint}]`;
 
   return {
