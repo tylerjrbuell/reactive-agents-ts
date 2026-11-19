@@ -33,8 +33,10 @@ describe("Dynamic Pricing Providers", () => {
     expect(registry["mock-model-2"]).toBeDefined();
     expect(registry["mock-model-2"].input).toBe(1.5);
     expect(registry["mock-model-2"].output).toBe(3.0);
+    // Remote rows name their price list, so the PriceBook labels them "remote", not "user".
+    expect(registry["mock-model-1"].origin).toBe(url);
 
-    server.stop();
+    server.stop(true);
   });
 
   it("should handle fetch failures gracefully", async () => {

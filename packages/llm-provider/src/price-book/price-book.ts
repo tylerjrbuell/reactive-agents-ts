@@ -4,7 +4,9 @@
 // runtime and UIs (Cortex shows $/1M per model through `priceFor`).
 //
 // Resolution order for (provider, model):
-//   1. user pricing (`withModelPricing` / pricing registry) - always wins
+//   1. pricing registry                                    - always wins
+//      user rows (`withModelPricing`) -> source "user"; remote rows a
+//      PricingProvider stamped with `origin` (`withDynamicPricing`) -> "remote"
 //   2. ollama (local inference)                            - always $0
 //   3. rates a LiteLLM proxy stated in /model/info          - the operator's prices
 //   4. official override (overrides.ts)
@@ -16,11 +18,11 @@
 // prefix is stripped (`openai/gpt-4o`, `gemini/...`, `google/...`, `x-ai/...`)
 // and Anthropic's dotted OpenRouter versions are dashed (`claude-sonnet-4.6` ->
 // `claude-sonnet-4-6`). Date suffixes are NOT stripped: a dated snapshot can be
-// priced differently from its alias (gpt-4o-2024-05-13 is $5/$15, gpt-4o $2.50/$10).
+// priced differently from its alias (gpt-4o-2024-05-13 vs gpt-4o), so it never inherits the alias row.
 
 import { Context, Layer, Option } from "effect";
 import { PRICE_OVERRIDES } from "./overrides.js";
-import type { ModelPricing, PriceEntry, PriceRates, PricingRegistry } from "./schema.js";
+import type { PriceEntry, PriceRates, PricingRegistry, PricingRow } from "./schema.js";
 import { PRICE_SNAPSHOT } from "./snapshot.generated.js";
 
 /** Provider prefixes stripped before matching a price row. */
@@ -93,7 +95,9 @@ export const _resetReportedPricesForTesting = (): void => reported.clear();
 
 // ─── Lookup ───
 
-const userEntry = (pricing: ModelPricing): PriceEntry => ({ ...pricing, source: "user" });
+/** A registry row's entry: `"remote"` when a PricingProvider stamped `origin`, else `"user"`. */
+const registryEntry = ({ origin, ...rates }: PricingRow): PriceEntry =>
+  origin === undefined ? { ...rates, source: "user" } : { ...rates, source: "remote", origin };
 
 const bookLookup = (provider: string, model: string): Option.Option<PriceEntry> => {
   if (provider === "ollama") return Option.some(LOCAL_ENTRY);
@@ -126,7 +130,9 @@ const liteLLMLookup = (model: string): Option.Option<PriceEntry> => {
  * @param provider - RA provider id (`anthropic`, `openai`, `gemini`, `groq`,
  *   `xai`, `litellm`, `ollama`, ...)
  * @param model - model id as sent to the provider
- * @param registry - user pricing keyed by model id; wins over every other source
+ * @param registry - pricing keyed by model id; wins over every other source.
+ *   Rows with `origin` (remote, `withDynamicPricing`) report source `"remote"`;
+ *   rows without it report `"user"`.
  */
 export const priceFor = (
   provider: string,
@@ -135,8 +141,8 @@ export const priceFor = (
 ): Option.Option<PriceEntry> => {
   if (registry !== undefined) {
     for (const id of modelIdCandidates(provider, model)) {
-      const user = registry[id];
-      if (user !== undefined) return Option.some(userEntry(user));
+      const row = registry[id];
+      if (row !== undefined) return Option.some(registryEntry(row));
     }
   }
   const proxy = reported.get(`${provider}:${model}`);

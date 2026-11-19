@@ -796,9 +796,12 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
   // ── xAI Grok (OpenAI-compatible) ───────────────────────────────────────────
   // Windows per xAI model docs (2026-07). Unlisted grok-* models resolve via
   // the provider-aware fallback below.
-  "xai/grok-4": {
+  // grok-4.7 (the xAI default since 2026-11-19; grok-4 left xAI's price list)
+  // keeps grok-4's 256k window: not re-read from xAI's docs, but at least the
+  // 200k long-context price tier boundary.
+  "xai/grok-4.7": {
     provider: "xai",
-    model: "grok-4",
+    model: "grok-4.7",
     tier: "frontier",
     maxContextTokens: 256_000,
     recommendedNumCtx: 256_000,
@@ -806,8 +809,9 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
     tokenizerFamily: "tiktoken-cl100k",
     supportsPromptCaching: true,
     supportsVision: true,
-    // grok-4 always reasons and rejects a configurable `reasoning_effort`;
-    // exposing thinking would emit a param it 400s on. grok-3-mini keeps it.
+    // grok-4 always reasoned and rejected a configurable `reasoning_effort`;
+    // unverified for grok-4.7, so thinking stays off (no param it may 400 on).
+    // grok-3-mini keeps it.
     supportsThinkingMode: false,
     supportsStreamingToolCalls: true,
     toolCallDialect: "native-fc",

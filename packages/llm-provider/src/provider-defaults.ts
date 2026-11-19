@@ -11,7 +11,8 @@ export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
     gemini: 'gemini-2.5-flash',
     litellm: 'gpt-4o',
     groq: 'openai/gpt-oss-120b',
-    xai: 'grok-4',
+    // grok-4 is off xAI's price list (2026-11-19 audit); grok-4.7 is priced in the PriceBook snapshot.
+    xai: 'grok-4.7',
     test: 'test-model',
 }
 

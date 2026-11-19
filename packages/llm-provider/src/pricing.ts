@@ -1,7 +1,10 @@
 import { Effect } from "effect";
-import type { ModelPricing } from "./price-book/schema.js";
+import type { ModelPricing, PricingRow } from "./price-book/schema.js";
 
-export type { ModelPricing } from "./price-book/schema.js";
+export type { ModelPricing, PricingRow } from "./price-book/schema.js";
+
+/** OpenRouter's model list, the `origin` of {@link openRouterPricingProvider} rows. */
+const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
 
 /** Per-token decimal string -> $/1M tokens, or undefined when absent/invalid. */
 const perMillion = (perToken: string | undefined): number | undefined => {
@@ -18,8 +21,10 @@ export interface PricingProvider {
   /**
    * Fetch and return a pricing registry for all available models.
    * Maps model identifiers (e.g. "gpt-4o", "anthropic/claude-3-opus") to their USD cost per 1M tokens.
+   * Set each row's `origin` to the price list's URL or name so the PriceBook
+   * labels it `"remote"`, not `"user"` (see `markRemotePricing`).
    */
-  fetchPricing(): Effect.Effect<Record<string, ModelPricing>, Error, never>;
+  fetchPricing(): Effect.Effect<Record<string, PricingRow>, Error, never>;
 }
 
 /**
@@ -31,7 +36,7 @@ export const openRouterPricingProvider: PricingProvider = {
   fetchPricing: () =>
     Effect.gen(function* () {
       const res = yield* Effect.tryPromise({
-        try: () => fetch("https://openrouter.ai/api/v1/models"),
+        try: () => fetch(OPENROUTER_MODELS_URL),
         catch: (e) => new Error(`Fetch failed: ${e}`),
       });
 
@@ -55,7 +60,7 @@ export const openRouterPricingProvider: PricingProvider = {
         }>;
       };
 
-      const registry: Record<string, ModelPricing> = {};
+      const registry: Record<string, PricingRow> = {};
       for (const model of json.data) {
         // OpenRouter pricing is per token; the registry is $/1M tokens.
         const input = perMillion(model.pricing.prompt);
@@ -64,12 +69,13 @@ export const openRouterPricingProvider: PricingProvider = {
         const cacheRead = perMillion(model.pricing.input_cache_read);
         const cacheWrite5m = perMillion(model.pricing.input_cache_write);
         const cacheWrite1h = perMillion(model.pricing.input_cache_write_1h);
-        const row: ModelPricing = {
+        const row: PricingRow = {
           input,
           output,
           ...(cacheRead !== undefined ? { cacheRead } : {}),
           ...(cacheWrite5m !== undefined ? { cacheWrite5m } : {}),
           ...(cacheWrite1h !== undefined ? { cacheWrite1h } : {}),
+          origin: OPENROUTER_MODELS_URL,
         };
         registry[model.id] = row;
         // Short and native aliases: "gpt-4o" for "openai/gpt-4o"; Anthropic API
@@ -117,7 +123,7 @@ export const urlPricingProvider = (url: string): PricingProvider => ({
         catch: (e) => new Error(`JSON parse failed: ${e}`),
       })) as Record<string, ModelPricing>;
 
-      const registry: Record<string, ModelPricing> = {};
+      const registry: Record<string, PricingRow> = {};
       for (const [key, value] of Object.entries(json)) {
         // Optional cache rates ($/1M) pass through when numeric.
         const extra: Record<string, number> = {};
@@ -128,6 +134,7 @@ export const urlPricingProvider = (url: string): PricingProvider => ({
           input: Number(value.input),
           output: Number(value.output),
           ...extra,
+          origin: url,
         };
       }
 

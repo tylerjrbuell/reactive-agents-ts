@@ -125,8 +125,8 @@ describe("OpenAI-compatible client construction", () => {
   it("xAI → base URL api.x.ai + XAI key", async () => {
     await runComplete(
       XAIProviderLive,
-      makeConfig({ xaiApiKey: "xai-secret", defaultModel: "grok-4" }),
-      "grok-4",
+      makeConfig({ xaiApiKey: "xai-secret", defaultModel: "grok-4.7" }),
+      "grok-4.7",
     );
     expect(capturedCtor?.baseURL).toBe("https://api.x.ai/v1");
     expect(capturedCtor?.apiKey).toBe("xai-secret");
@@ -279,9 +279,10 @@ describe("Groq/xAI capability resolution", () => {
   });
 
   it("seeded xAI model resolves native-fc", () => {
-    const cap = resolveCapability("xai", "grok-4");
+    const cap = resolveCapability("xai", "grok-4.7");
     expect(cap.toolCallDialect).toBe("native-fc");
     expect(cap.supportsVision).toBe(true);
+    expect(cap.source).toBe("static-table");
   });
 
   it("unknown non-hosted provider still gets the conservative none fallback", () => {

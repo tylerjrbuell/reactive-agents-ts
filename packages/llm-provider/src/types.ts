@@ -140,7 +140,7 @@ export type ModelConfig = Schema.Schema.Type<typeof ModelConfigSchema>;
  * @example
  * ```typescript
  * const preset = ModelPresets["claude-opus"];
- * // { provider: "anthropic", model: "claude-opus-4-8", costPer1MInput: 15.0, ... }
+ * // { provider: "anthropic", model, costPer1MInput, costPer1MOutput, maxContext, quality }
  * ```
  */
 export const ModelPresets = {

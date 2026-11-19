@@ -804,7 +804,7 @@ export const XAIProviderLive = makeOpenAICompatProvider({
   resolveApiKey: (c) => c.xaiApiKey,
   apiKeyEnvVar: "XAI_API_KEY",
   resolveBaseUrl: (c) => c.xaiBaseUrl ?? "https://api.x.ai/v1",
-  fallbackModel: "grok-4",
+  fallbackModel: "grok-4.7",
   supportsEmbeddings: false,
   supportsLogprobs: false,
 });

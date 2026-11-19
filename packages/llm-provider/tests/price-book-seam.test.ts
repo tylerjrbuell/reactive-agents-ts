@@ -29,6 +29,7 @@ import {
 } from "../src/price-book/price-book.js";
 import { buildPriceSnapshot, renderPriceSnapshotModule } from "../src/price-book/snapshot-generator.js";
 import { PRICE_SNAPSHOT } from "../src/price-book/snapshot.generated.js";
+import { markRemotePricing } from "../src/price-book/schema.js";
 import { calculateCost } from "../src/token-counter.js";
 import { PROVIDER_DEFAULT_MODELS } from "../src/provider-defaults.js";
 
@@ -139,12 +140,13 @@ describe("honest unknowns (no heuristic, no default price)", () => {
     expect(priceUsage(usage, undefined)).toEqual({ priceSource: "unknown" });
   });
 
-  it("the xai default model grok-4 is not in the price list (reported, not guessed)", () => {
-    expect(Option.isNone(priceFor("xai", PROVIDER_DEFAULT_MODELS.xai!))).toBe(true);
+  it("grok-4 (the old xai default) is not in the price list (reported, not guessed)", () => {
+    expect(Option.isNone(priceFor("xai", "grok-4"))).toBe(true);
   });
 
-  it("every other cloud provider default model is priced", () => {
-    for (const provider of ["anthropic", "openai", "gemini", "groq", "litellm"]) {
+  it("every cloud provider default model is priced, xai's included", () => {
+    expect(PROVIDER_DEFAULT_MODELS.xai).toBe("grok-4.7");
+    for (const provider of ["anthropic", "openai", "gemini", "groq", "xai", "litellm"]) {
       expect(Option.isSome(priceFor(provider, PROVIDER_DEFAULT_MODELS[provider]!))).toBe(true);
     }
   });
@@ -164,6 +166,25 @@ describe("resolution order and aliases", () => {
     const c = costFields("openai", "gpt-4o", usage, { "gpt-4o": { input: 1, output: 2 } });
     expectUsd(c.estimatedCost, 3);
     expect(c.priceSource).toBe("user");
+  });
+
+  it("remote rows (origin set) are labeled 'remote' and bill as 'price-book'; user rows stay 'user' and win", () => {
+    const remote = markRemotePricing({ "gpt-4o": { input: 1, output: 2 }, "gpt-4.1": { input: 3, output: 4 } }, "https://prices.example/x.json");
+    const entry = Option.getOrThrow(priceFor("openai", "gpt-4.1", remote));
+    expect(entry.source).toBe("remote");
+    expect(entry.origin).toBe("https://prices.example/x.json");
+    expect("origin" in Option.getOrThrow(priceFor("openai", "gpt-4o", { "gpt-4o": { input: 1, output: 2 } }))).toBe(false);
+    expect(costFields("openai", "gpt-4.1", usage, remote)).toEqual({ estimatedCost: 7, priceSource: "price-book" });
+    // The runtime merge: user rows spread last, so they replace remote rows.
+    const merged = { ...remote, "gpt-4o": { input: 5, output: 6 } };
+    expect(Option.getOrThrow(priceFor("openai", "gpt-4o", merged)).source).toBe("user");
+    expect(costFields("openai", "gpt-4o", usage, merged)).toEqual({ estimatedCost: 11, priceSource: "user" });
+  });
+
+  it("markRemotePricing keeps an origin a provider already stamped", () => {
+    const rows = markRemotePricing({ a: { input: 1, output: 1, origin: "first" }, b: { input: 1, output: 1 } }, "second");
+    expect(rows.a!.origin).toBe("first");
+    expect(rows.b!.origin).toBe("second");
   });
 
   it("user pricing wins over a provider-reported bill; the bill wins over the snapshot", () => {

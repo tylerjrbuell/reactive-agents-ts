@@ -13,7 +13,8 @@ import type { PriceSource as CorePriceSource } from "@reactive-agents/core";
  * `@reactive-agents/core` (`LLMRequestCompleted.priceSource`) member for member.
  * - `"provider-reported"`: the provider or proxy returned the cost itself
  *   (LiteLLM's `x-litellm-response-cost` header).
- * - `"price-book"`: computed from the bundled snapshot or a proxy's stated rates.
+ * - `"price-book"`: computed from the bundled snapshot, a proxy's stated rates
+ *   or a remote price list (`withDynamicPricing` rows).
  * - `"user"`: computed from user pricing (`withModelPricing` / a pricing registry).
  * - `"unknown"`: no price is known for the model; the cost is absent, not 0.
  */
@@ -72,9 +73,11 @@ export type PriceRates = Schema.Schema.Type<typeof PriceRatesSchema>;
  * - `"official"`: an override read from the provider's official price page.
  * - `"proxy"`: rates a LiteLLM proxy stated in `/model/info`.
  * - `"local"`: local inference (Ollama), always $0.
+ * - `"remote"`: a remote price list fetched by a `PricingProvider`
+ *   (`withDynamicPricing`); `origin` names it.
  * - `"user"`: user-supplied pricing.
  */
-export const PriceEntrySourceSchema = Schema.Literal("litellm", "official", "proxy", "local", "user");
+export const PriceEntrySourceSchema = Schema.Literal("litellm", "official", "proxy", "local", "remote", "user");
 /** Origin of a {@link PriceEntry}. */
 export type PriceEntrySource = Schema.Schema.Type<typeof PriceEntrySourceSchema>;
 
@@ -85,6 +88,8 @@ export const PriceEntrySchema = Schema.extend(
     source: PriceEntrySourceSchema,
     /** Date the rates were read (`YYYY-MM-DD`); absent for user pricing. */
     asOf: Schema.optional(Schema.String),
+    /** The remote price list a `"remote"` entry came from (URL or provider name). */
+    origin: Schema.optional(Schema.String),
   }),
 );
 /** One model's price with provenance. */
@@ -105,8 +110,38 @@ export const ModelPricingSchema = Schema.Struct({
 /** User pricing for one model, $/1M tokens. */
 export type ModelPricing = Schema.Schema.Type<typeof ModelPricingSchema>;
 
-/** User pricing keyed by model id. */
-export type PricingRegistry = Readonly<Record<string, ModelPricing>>;
+/**
+ * One pricing registry row: user pricing, or a remote row when `origin` is set.
+ * A `PricingProvider` stamps `origin` on the rows it fetches, so `priceFor`
+ * labels them `"remote"` (billed as `"price-book"`) instead of `"user"`.
+ */
+export const PricingRowSchema = Schema.extend(
+  ModelPricingSchema,
+  Schema.Struct({
+    /** The remote price list the row came from (URL or provider name); absent = user pricing. */
+    origin: Schema.optional(Schema.String),
+  }),
+);
+/** A pricing registry row: user pricing, or remote pricing when `origin` is set. */
+export type PricingRow = Schema.Schema.Type<typeof PricingRowSchema>;
+
+/** Pricing keyed by model id: user rows plus any remote rows (`origin` set). */
+export type PricingRegistry = Readonly<Record<string, PricingRow>>;
+
+/**
+ * Stamp `origin` on remote pricing rows that lack one, so they are labelled
+ * `"remote"`, never `"user"`. Rows that already name an origin keep it.
+ *
+ * @param rows - rows a `PricingProvider` fetched
+ * @param origin - the price list they came from (URL or provider name)
+ */
+export const markRemotePricing = (
+  rows: Readonly<Record<string, PricingRow>>,
+  origin: string,
+): Record<string, PricingRow> =>
+  Object.fromEntries(
+    Object.entries(rows).map(([id, row]) => [id, row.origin === undefined ? { ...row, origin } : row]),
+  );
 
 /** The generated snapshot: rows keyed `"<provider>:<bare model id>"`. */
 export const PriceSnapshotSchema = Schema.Struct({
