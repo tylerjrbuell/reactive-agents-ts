@@ -1,6 +1,7 @@
 import type { CheckEntry } from "./manifest.ts"
 import { loadCatalog, staleEntries, uncatalogued } from "./catalog.ts"
 import { loadChecks } from "./manifest.ts"
+import { distTagDeps, workspaceManifests, type DistTagDep } from "./dist-tag-deps.ts"
 import { docCommandDrift } from "./doc-drift.ts"
 import { loadRules, ruleProblems } from "./hook-rules.ts"
 import { manifestHealth } from "./manifest-expiry.ts"
@@ -133,6 +134,22 @@ export const builtins: Readonly<Record<string, Builtin>> = {
       return { ok: false, output: problems.map((p) => p.message).join("\n"), next: (problems[0] as { next: string }).next }
     } catch (e) {
       return { ok: false, output: e instanceof Error ? e.message : String(e), next: "fix tools/repo/rules.json" }
+    }
+  },
+
+  /** Fails when the root or a workspace package.json pins a dependency to a dist-tag (`latest`, `next`, ...). */
+  "no-dist-tag-deps": (root) => {
+    try {
+      const hits = distTagDeps(root)
+      if (hits.length === 0) return { ok: true, output: `no dist-tag dependency specifiers in ${workspaceManifests(root).length} workspace manifests` }
+      const first = hits[0] as DistTagDep
+      return {
+        ok: false,
+        output: hits.map((h) => `${h.file}: ${h.field}.${h.name} = "${h.spec}" (dist-tag; a new publish breaks bun install --frozen-lockfile)`).join("\n"),
+        next: `replace "${first.spec}" with a semver range in ${first.file} (e.g. "^<current version>"), then bun install and commit bun.lock`,
+      }
+    } catch (e) {
+      return { ok: false, output: e instanceof Error ? e.message : String(e), next: "fix the named package.json" }
     }
   },
 

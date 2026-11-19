@@ -585,6 +585,24 @@
       "reviewBy": "2027-02-03"
     },
     {
+      "id": "no-dist-tag-deps",
+      "script": "builtin:no-dist-tag-deps",
+      "scope": [
+        "package.json",
+        "packages/*/package.json",
+        "apps/*/package.json",
+        "apps/cortex/ui/package.json",
+        "tools/repo/package.json",
+        "tools/repo/src/lib/dist-tag-deps.ts"
+      ],
+      "stages": [
+        "pre-commit",
+        "ci"
+      ],
+      "owner": "tooling-warden",
+      "reviewBy": "2027-02-19"
+    },
+    {
       "id": "manifest-expiry",
       "script": "builtin:manifest-expiry",
       "scope": [
