@@ -5,11 +5,28 @@
  * redeclare them (the examples redeclared `ProviderName` before 2026-11-17).
  */
 import type {
+  BillableUsage,
   CodeActionApprovalConflict,
   CodeActionApprovalConflictInput,
+  CostSum,
   JudgmentShadowOptions,
+  PriceEntry,
+  PricedUsage,
+  PriceSource,
   ProviderName,
 } from "../../src/index.js";
+import { addCost, EMPTY_COST_SUM, priceFor, priceUsage, sumCosts } from "../../src/index.js";
+
+// 0.19 cost migration works from the facade alone (no core / llm-provider import).
+export const total: CostSum = addCost(sumCosts([0.01, undefined]), 0.02);
+export const start: CostSum = EMPTY_COST_SUM;
+export const source: PriceSource = "price-book";
+const found = priceFor("anthropic", "claude-sonnet-4-5");
+export const entry: PriceEntry | undefined = found._tag === "Some" ? found.value : undefined;
+export const price = (usage: BillableUsage): PricedUsage => priceUsage(usage, entry);
+
+// @ts-expect-error `PriceSource` is the closed union, not string
+export const notASource: PriceSource = "guess";
 
 // Code-action approval rule (audit G6): apps check it without importing reasoning.
 export const conflictInput: CodeActionApprovalConflictInput = {

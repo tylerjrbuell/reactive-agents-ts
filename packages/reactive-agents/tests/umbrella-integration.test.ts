@@ -49,6 +49,20 @@ describe("Umbrella re-exports", () => {
     expect(unreachable.refuse).toBe(false);
   });
 
+  test("cost helpers are on the main entry and are the source packages' values", async () => {
+    const mod = await import("../src/index.js");
+    const core = await import("@reactive-agents/core");
+    const llm = await import("@reactive-agents/llm-provider");
+    expect(mod.addCost).toBe(core.addCost);
+    expect(mod.sumCosts).toBe(core.sumCosts);
+    expect(mod.EMPTY_COST_SUM).toBe(core.EMPTY_COST_SUM);
+    expect(mod.priceFor).toBe(llm.priceFor);
+    expect(mod.priceUsage).toBe(llm.priceUsage);
+    // An unknown price is never counted as free.
+    expect(mod.sumCosts([0.5, undefined])).toEqual({ usd: 0.5, complete: false });
+    expect(mod.priceUsage({ inputUncached: 1, cacheRead: 0, cacheWrite5m: 0, cacheWrite1h: 0, inputAudio: 0, output: 1, outputAudio: 0, promptTokensForTier: 1, webSearchRequests: 0 }, undefined)).toEqual({ priceSource: "unknown" });
+  });
+
   test("layer-factory and tool re-exports are functions", async () => {
     const mod = await import("../src/index.js");
 

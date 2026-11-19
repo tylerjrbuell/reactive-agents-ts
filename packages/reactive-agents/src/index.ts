@@ -277,6 +277,16 @@ export type {
   LLMMessage,
 } from "@reactive-agents/llm-provider";
 
+// ─── Cost (per-call prices and totals) ───
+// `estimatedCost` is absent when a model's price is unknown; sum it with
+// `sumCosts`/`addCost` (a `CostSum` carries `complete: false` then), and price
+// usage yourself with `priceFor` + `priceUsage`.
+
+export { sumCosts, addCost, EMPTY_COST_SUM } from "@reactive-agents/core";
+export type { CostSum, PriceSource } from "@reactive-agents/core";
+export { priceFor, priceUsage } from "@reactive-agents/llm-provider";
+export type { PriceEntry, BillableUsage, PricedUsage } from "@reactive-agents/llm-provider";
+
 // ─── Tool Factories ───
 
 export { defineTool, tool } from "@reactive-agents/tools";

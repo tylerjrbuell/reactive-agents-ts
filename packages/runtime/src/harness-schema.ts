@@ -95,17 +95,22 @@ export const HarnessConfigSchema = Schema.Struct({
    */
   planBudget: Schema.optional(Schema.Boolean),
   /**
-   * Auto-tick: on a seeded-plan run, a step whose tool hint names a tool that
-   * just succeeded (and that no other unchecked step names) is marked done by
-   * the harness, so the model spends no turn on the bookkeeping. Default ON;
-   * `false` or `RA_AUTO_TICK=0` turns it off.
+   * Auto-tick: the harness marks todo rows done from tool evidence, so the
+   * model spends no turn on the bookkeeping. On a seeded-plan run, a step whose
+   * tool hint names a tool that just succeeded (and that no other unchecked
+   * step names) is marked done. On a list the model wrote itself, each
+   * successful call ticks one open row whose hint names that tool (the
+   * in-progress row first, else the earliest). At the end of the run, rows the
+   * ledger evidences are closed with provenance. Default ON; `false` or
+   * `RA_AUTO_TICK=0` turns it off.
    */
   autoTick: Schema.optional(Schema.Boolean),
   /**
-   * Bookkeeping refund: on a seeded-plan run a round that only called `todo`
-   * (or, with `planRecon`, only recon tools) does not count against
-   * `maxIterations`; at most half the budget is refunded. Default ON; `false`
-   * or `RA_BOOKKEEPING_REFUND=0` turns it off.
+   * Bookkeeping refund: a round that only called `todo` (or, in plan posture
+   * with `planRecon`, only recon tools) does not count against
+   * `maxIterations`. Seeded-plan runs: at most half the budget is refunded. A
+   * list the model wrote itself: at most 2 refunds per pass and 4 per run.
+   * Default ON; `false` or `RA_BOOKKEEPING_REFUND=0` turns it off.
    */
   bookkeepingRefund: Schema.optional(Schema.Boolean),
   /**
@@ -120,15 +125,20 @@ export const HarnessConfigSchema = Schema.Struct({
    * Parallel tool hint: a short prompt line telling the model it may make
    * independent tool calls together in one reply. `true` shows it only when
    * the model's calibration rates parallel calls `reliable`; `"always"` shows
-   * it whatever the calibration says. Opt-in: default OFF until an ablation
-   * measures it. Env: `RA_PARALLEL_TOOL_HINT=1` or `=always`.
+   * it whatever the calibration says; `false` turns it off. Default ON
+   * (calibration-gated, as `true`) since v0.19.0: owner decision on efficiency
+   * evidence (equal pass rate, about 37% fewer turns, 33-39% fewer billed
+   * tokens on the 2026-11-18 speedups ablation). Env:
+   * `RA_PARALLEL_TOOL_HINT=0` (or `off`) turns it off, `=always` forces it.
    */
   parallelToolHint: Schema.optional(Schema.Union(Schema.Boolean, Schema.Literal("always"))),
   /**
    * Lean final turn: once the run's declared tool work is done and only the
    * answer is left, the next think call ships with no tools and no thinking
-   * allowance. Opt-in: default OFF until an ablation measures it. Env:
-   * `RA_LEAN_FINAL_TURN=1`.
+   * allowance. Opt-in, default OFF: the 2026-11-18 ablation rejected it
+   * (significant accuracy loss on a small local model, where the turn fired
+   * before all named inputs were read). It stays off until a re-ablation
+   * clears it. Env: `RA_LEAN_FINAL_TURN=1`.
    */
   leanFinalTurn: Schema.optional(Schema.Boolean),
   /**

@@ -29,7 +29,7 @@ function compileFixture(): readonly string[] {
 }
 
 describe("reactive-agents facade type re-exports", () => {
-  it("ProviderName (provider union) and JudgmentShadowOptions (opt-in shadow) are exported", () => {
+  it("ProviderName, JudgmentShadowOptions and the cost helpers/types (CostSum, PriceSource, PriceEntry, BillableUsage, PricedUsage) are exported", () => {
     expect(compileFixture()).toEqual([]);
   }, 120_000);
 });
