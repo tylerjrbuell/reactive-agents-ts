@@ -635,8 +635,20 @@ export type CoreAgentEvent =
        * closed `TerminatedBy` schema (5 values).
        */
       readonly terminationReason?: string;
-      /** Run cost in USD (result.metadata.cost) — optional so older publishers stay valid. */
+      /**
+       * Run cost in USD (`result.metadata.cost`): the spend known when the
+       * result was built. It excludes the background debrief LLM call, which
+       * runs after this event; the billed run total (debrief included) is on
+       * the run's `RunCostFinalized` event. A lower bound when `costComplete`
+       * is `false`. Absent from older publishers and when no cost was metered.
+       */
       readonly totalCostUsd?: number;
+      /**
+       * `false` when at least one LLM call in `totalCostUsd` had an unknown
+       * price, so `totalCostUsd` understates the spend. Absent means complete
+       * (every call was priced) or a publisher that predates this field.
+       */
+      readonly costComplete?: boolean;
       /** Signal-consumption tally (2026-10-25). Optional so older publishers stay valid. */
       readonly signals?: {
         readonly opened: number
@@ -658,6 +670,39 @@ export type CoreAgentEvent =
       readonly parentRunId?: string;
       /** B8-T3b: delegation depth (RunContext.depth). */
       readonly depth?: number;
+    }
+  | {
+      /**
+       * The run's final billed cost, published exactly once per run, with or
+       * without a debrief. Read the run's total from this event, not from
+       * `AgentCompleted.totalCostUsd` (which excludes the background debrief
+       * call). On a run with a debrief LLM call it fires after that call
+       * settles, so it can arrive after `AgentCompleted` and
+       * `DebriefCompleted`; on a run without one it may fire right after
+       * `AgentCompleted`.
+       */
+      readonly _tag: "RunCostFinalized";
+      /** Task identifier matching the run's `AgentStarted` / `AgentCompleted`. */
+      readonly taskId: string;
+      /** Agent identifier. */
+      readonly agentId: string;
+      /**
+       * This run's own `RunContext.runId` when it differs from `taskId` (a
+       * delegated child). Absent at the root, where `runId === taskId`.
+       */
+      readonly runId?: string;
+      /**
+       * Total billed USD for the run: the answer's spend plus the debrief
+       * synthesis call when one ran. A lower bound when `costComplete` is
+       * `false`; never read it as the full spend without checking that flag.
+       */
+      readonly totalCostUsd: number;
+      /**
+       * `true` when every LLM call in the run (debrief included) had a known
+       * price. `false` when any call's price was unknown, so `totalCostUsd`
+       * counts that call as nothing and understates the spend.
+       */
+      readonly costComplete: boolean;
     }
   // ─── LLM request lifecycle ───
   | {

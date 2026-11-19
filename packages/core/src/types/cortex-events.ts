@@ -26,8 +26,20 @@ export type DebriefPayload = {
       readonly input?: number;
       /** Completion tokens; absent when the provider did not report a split. */
       readonly output?: number;
+      /** Total tokens of the synthesis call(s). */
       readonly total: number;
+      /**
+       * Known USD spend of the synthesis call(s). A lower bound when
+       * `costComplete` is `false` (0 when the debrief model has no price).
+       */
       readonly cost: number;
+      /**
+       * `false` when the debrief model's price is unknown, so `cost` is not its
+       * spend. Absent means priced. Same `{ usd, complete }` shape as
+       * `CostSum` and `AgentCompleted.totalCostUsd` / `costComplete`.
+       */
+      readonly costComplete?: boolean;
+      /** LLM calls the debrief made. */
       readonly calls: number;
     };
   };
@@ -92,6 +104,11 @@ export type ProviderFallbackActivated = {
   readonly attemptNumber: number;
 };
 
+/**
+ * The run's debrief is ready. Fires only on runs that produce a debrief (not
+ * every run), so it is not the run's cost record: read the billed total,
+ * debrief call included, from `RunCostFinalized`.
+ */
 export type DebriefCompleted = {
   readonly _tag: "DebriefCompleted";
   readonly taskId: string;
