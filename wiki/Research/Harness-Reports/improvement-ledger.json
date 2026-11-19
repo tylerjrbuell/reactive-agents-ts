@@ -1529,6 +1529,19 @@
       "liftPp": 0,
       "tokenOverheadPct": null,
       "rationale": "Pre-registered rule: branch 1 (value-returned >=25%) met on the loose definition, 4 of 8 engaged runs (50%), but only 2 of 8 (25%) are real computations from the data (qwen3:4b only); cogito:8b 0 of 3 on h3-required-tools (each made one failed python call and stopped); 8 engaged runs is below the pre-registered 10 so UNDERPOWERED. Branch 2 (never-executed share <=50%) NOT met: 48 of 50 failed calls (96%), 5 of 7 (71%, about the 73% baseline) excluding one 43-failure cogito plan-only-calc loop (178k tokens, unchanged harm, repeat guard still absent). Engagement unchanged (cogito required-tools 3 of 10). Solved: cogito 0/25, qwen3:4b 11/20, gemma4:e4b rw-7 4/5 (no baseline). HEAD moved during run (reasoning src commits 747b05e5f, ee18ee5b2, 02b802193): cells straddle SHAs. Evidence: 2026-11-19-code-execute-guide README, PREDICTIONS-8"
+    },
+    {
+      "createdAt": "2026-11-19T13:31:08.939Z",
+      "baselineVariantId": "calibration off + act-or-answer off (cogito:8b)",
+      "candidateVariantId": "calibration auto (shipped) + act-or-answer auto",
+      "decision": "underpowered",
+      "status": "inconclusive",
+      "id": "bf26c167-8de5-4709-bec8-8f1d4dc2e96e",
+      "weakness": "adaptive calibration: does shipped calibration lift cogito:8b",
+      "hypothesis": "ON vs OFF, SWAP vs ON on cogito:8b only, 12 frozen H3 tasks, balanced 43 cells per arm (stopped at 131/180 by owner)",
+      "liftPp": 10.7,
+      "tokenOverheadPct": 7.6,
+      "rationale": "Single tier (gate needs >=2), partial run: ON-OFF +10.7pp band +/-9.7 McNemar +3/-0 p=0.25, within noise; overhead +7.6%, tok per solved -8.6%. SWAP vs ON -1.9pp (flat). Void table 0 of 131 void. Cannot support default-on. Evidence: 2026-11-19-adaptive-lift README, PREDICTIONS Amendments 1-2"
     }
   ]
 }

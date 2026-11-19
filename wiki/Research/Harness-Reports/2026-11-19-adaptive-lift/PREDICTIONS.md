@@ -51,3 +51,12 @@ Also void: no trace; actOrAnswer source not as designed (OFF default-off; ON/SWA
 ## Provenance (start)
 
 HEAD at pre-registration: `76b094960b09f36e9efdd187098af7ea761ee5d9`; last commit touching `packages/reasoning/src`: `02b802193`; reasoning src dirty: no. Each chunk logs HEAD, reasoning-src SHA, dirty flag and `ollama ps` to `chunks.log`.
+
+## Amendment 1: scope cut to cogito:8b only (2026-11-19, before any new measured cell)
+
+- Reason: the two-tier run was too slow. 48 of 360 cells took about 1 h (qwen3:4b cells plus tier model swaps cost about 2 min per cell, about 10 h remaining), and it blocked another session's kernel work on the shared checkout. The owner chose to cut to cogito:8b only.
+- New run: cogito:8b only, same 12 frozen H3 tasks, k=5, arms OFF/ON/SWAP, 180 cells, new state dir `/home/tylerbuell/h3-traces-adaptive-lift-cogito`. Arms, void rule, scorer and suite unchanged.
+- The 48 earlier cells (36 cogito run-0 + 12 qwen3:4b, dir `/home/tylerbuell/h3-traces-adaptive-lift`) are kept as a pilot and are NOT pooled into any verdict.
+- Consequence: the gate's >= 2 tiers rule cannot be met. No default-on or KEEP claim is possible from this run. Verdict language is limited to single-tier: lift / regression / flat-underpowered.
+- (Amendment 2, 2026-11-19, before analysis) The cogito run was stopped early at 131/180 cells (off=44, on=44, swap=43) at owner request, to release the shared checkout. Verdicts use only balanced (task, run) triples present in all three arms: 43 per arm (1 off and 1 on cell dropped). Power is reduced (SE about 7pp per arm), single tier, tasks unevenly weighted (7 tasks have 4 runs, 5 have 3). No KEEP, adopt or default-on language is permitted; allowed outcomes: lift / regression / flat-underpowered on cogito:8b only. The supervisor was not resumed after the stop.
+- Predictions P1-P5 stand for cogito:8b only; the qwen3:4b halves of P1-P3 are untested. P5 (both tiers) is unmeasurable.
