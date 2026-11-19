@@ -189,6 +189,29 @@ export {
   type TotLevel,
 } from "./state/strategy-phases.js";
 export {
+  adaptiveChoiceOf,
+  adaptiveChoiceLine,
+  planProgressOf,
+  planSummaryOf,
+  quietRunLine,
+  DIRECT_SETTLED,
+  type AdaptiveChoice,
+  type AdaptiveHow,
+  type PlanProgress,
+} from "./state/strategy-summary.js";
+export {
+  planStepsOf,
+  planStepBadgesOf,
+  planStepEventLine,
+  planStepPayloadOf,
+  strategyChoicePayloadOf,
+  type PlanStepEvent,
+  type PlanStepEventKind,
+  type PlanStepPayload,
+  type PlanStepView,
+  type StrategyChoicePayload,
+} from "./state/strategy-plan-history.js";
+export {
   DEFAULT_STRATEGY_RUN_CAPS,
   strategyRunForStorage,
   strategyRunFromStorage,

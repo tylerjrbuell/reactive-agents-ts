@@ -12,6 +12,7 @@ import {
   type StrategyRowStatus,
   type StrategyRunState,
 } from "./strategy-phases.js";
+import { planStepPayloadOf, strategyChoicePayloadOf, type PlanStepEvent, type StrategyChoicePayload } from "./strategy-plan-history.js";
 
 /** Size bounds for a stored strategy run. */
 export interface StrategyRunCaps {
@@ -25,6 +26,10 @@ export interface StrategyRunCaps {
   readonly maxRows: number;
   /** Tree-of-thought nodes kept (the first scored). */
   readonly maxNodes: number;
+  /** History events kept per plan step (the newest). */
+  readonly maxHistory: number;
+  /** Chars kept of one history note or adaptive reason. */
+  readonly historyChars: number;
 }
 
 /** Default bounds: a turn's strategy payload stays near 40 KB at most. */
@@ -34,10 +39,22 @@ export const DEFAULT_STRATEGY_RUN_CAPS: StrategyRunCaps = {
   nodeChars: 400,
   maxRows: 60,
   maxNodes: 120,
+  maxHistory: 12,
+  historyChars: 300,
 };
 
 const clip = (s: string | undefined, max: number): string | undefined =>
   s === undefined ? undefined : s.length > max ? `${s.slice(0, max)}…` : s;
+
+function clipEvent(e: PlanStepEvent, max: number): PlanStepEvent {
+  const note = clip(e.note, max);
+  return { kind: e.kind, ...(e.attempt !== undefined ? { attempt: e.attempt } : {}), ...(note !== undefined ? { note } : {}) };
+}
+
+function clipChoice(c: StrategyChoicePayload, max: number): StrategyChoicePayload {
+  const note = clip(c.note, max);
+  return { selected: c.selected, reason: clip(c.reason, max) ?? "", ...(note !== undefined ? { note } : {}) };
+}
 
 /**
  * The run reduced for storage: settled (`ended`), long text clipped, rows and nodes bounded, and
@@ -55,6 +72,7 @@ export function strategyRunForStorage(
     const stdout = clip(r.stdout, caps.textChars);
     const stderr = clip(r.stderr, caps.textChars);
     const critique = clip(r.critique, caps.noteChars);
+    const note = clip(r.note, caps.noteChars);
     return {
       key: r.key,
       phase: r.phase,
@@ -68,6 +86,9 @@ export function strategyRunForStorage(
       ...(r.verify ? { verify: { verdict: r.verify.verdict, summary: clip(r.verify.summary, caps.noteChars) ?? "" } } : {}),
       ...(critique !== undefined ? { critique } : {}),
       ...(r.accepted !== undefined ? { accepted: r.accepted } : {}),
+      ...(note !== undefined ? { note } : {}),
+      ...(r.choice ? { choice: clipChoice(r.choice, caps.historyChars) } : {}),
+      ...(r.history && r.history.length > 0 ? { history: r.history.slice(-caps.maxHistory).map((e) => clipEvent(e, caps.historyChars)) } : {}),
     };
   });
   const nodes = settled.nodes.slice(0, caps.maxNodes).map((n) => {
@@ -106,6 +127,17 @@ function rowOfStored(raw: unknown): StrategyRow | undefined {
   const stdout = text(r.stdout);
   const stderr = text(r.stderr);
   const critique = text(r.critique);
+  const note = text(r.note);
+  const choice = strategyChoicePayloadOf(r.choice);
+  const history = Array.isArray(r.history)
+    ? r.history.flatMap((x): PlanStepEvent[] => {
+        const e = record(x);
+        const kind = e ? planStepPayloadOf({ stepIndex: 0, status: e.kind })?.status : undefined;
+        if (!e || kind === undefined) return [];
+        const note = text(e.note);
+        return [{ kind, ...(typeof e.attempt === "number" && Number.isFinite(e.attempt) ? { attempt: e.attempt } : {}), ...(note !== undefined ? { note } : {}) }];
+      })
+    : [];
   return {
     key,
     phase,
@@ -120,6 +152,9 @@ function rowOfStored(raw: unknown): StrategyRow | undefined {
     ...(verdict !== undefined ? { verify: { verdict, summary: typeof v?.summary === "string" ? v.summary : "" } } : {}),
     ...(critique !== undefined ? { critique } : {}),
     ...(typeof r.accepted === "boolean" ? { accepted: r.accepted } : {}),
+    ...(note !== undefined ? { note } : {}),
+    ...(choice ? { choice } : {}),
+    ...(history.length > 0 ? { history } : {}),
   };
 }
 

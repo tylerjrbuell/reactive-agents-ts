@@ -10,6 +10,15 @@
  * Registry names and label prefixes differ for plan-execute (`plan-execute-reflect`
  * registers, `plan-execute` labels), so each entry names its own prefix.
  */
+import {
+  historyTargetOf,
+  planStepPayloadOf,
+  pushHistory,
+  strategyChoicePayloadOf,
+  type PlanStepEvent,
+  type PlanStepPayload,
+  type StrategyChoicePayload,
+} from "./strategy-plan-history.js";
 
 /** One phase a strategy moves through. */
 export interface StrategyPhaseDef {
@@ -104,6 +113,7 @@ export const STRATEGY_PHASES: Readonly<Record<string, StrategySpec>> = {
       { id: "plan", label: "Planning" },
       { id: "execute", label: "Running code" },
       { id: "verify", label: "Checking the result" },
+      { id: "answer", label: "Writing the answer" },
     ],
   },
   blueprint: BLUEPRINT,
@@ -159,6 +169,12 @@ export interface StrategyStepDetail {
   readonly critique?: string;
   /** The critique accepted the attempt (reflexion). */
   readonly accepted?: boolean;
+  /** The step's own one-line narration, kept for strategies that report a decision only as text (adaptive's choice). */
+  readonly note?: string;
+  /** Structured pick adaptive reported (`strategy-choice` payload); preferred over reading the narration. */
+  readonly choice?: StrategyChoicePayload;
+  /** Structured plan-step event (`plan-step` payload); preferred over the label's sub-part. */
+  readonly planStep?: PlanStepPayload;
 }
 
 /** One strategy step: a parsed `kernelPass` label plus optional detail. */
@@ -269,6 +285,9 @@ export function strategyStepFromWire(raw: unknown): StrategyStep | undefined {
   const stdout = text(r.stdout);
   const stderr = text(r.stderr);
   const critique = text(r.critique);
+  const note = text(r.note);
+  const choice = strategyChoicePayloadOf(r.choice);
+  const planStep = planStepPayloadOf(r.planStep);
   const path = Array.isArray(r.path) && r.path.every((p) => typeof p === "string") && r.path.length > 0 ? (r.path as string[]) : undefined;
   const v = record(r.verify);
   const verify = v && text(v.verdict) !== undefined ? { verdict: text(v.verdict)!, summary: typeof v.summary === "string" ? v.summary : "" } : undefined;
@@ -281,6 +300,9 @@ export function strategyStepFromWire(raw: unknown): StrategyStep | undefined {
     ...(verify ? { verify } : {}),
     ...(critique !== undefined ? { critique } : {}),
     ...(typeof r.accepted === "boolean" ? { accepted: r.accepted } : {}),
+    ...(note !== undefined ? { note } : {}),
+    ...(choice ? { choice } : {}),
+    ...(planStep ? { planStep } : {}),
   });
 }
 
@@ -303,6 +325,11 @@ export interface StrategyRow {
   readonly verify?: CodeVerify;
   readonly critique?: string;
   readonly accepted?: boolean;
+  readonly note?: string;
+  /** Adaptive's structured pick, when the framework reported one. */
+  readonly choice?: StrategyChoicePayload;
+  /** Plan steps: what happened to the step, in order (retries, patches, failures survive the latest sub-label). */
+  readonly history?: readonly PlanStepEvent[];
 }
 
 /** Folded state of one run's strategy activity; start from {@link initialStrategyRun}. */
@@ -353,12 +380,21 @@ export function foldStrategyRun(state: StrategyRunState, step: StrategyStep): St
     ...(step.verify !== undefined ? { verify: step.verify } : {}),
     ...(step.critique !== undefined ? { critique: step.critique } : {}),
     ...(step.accepted !== undefined ? { accepted: step.accepted } : {}),
+    ...(step.note !== undefined ? { note: step.note } : {}),
+    ...(step.choice !== undefined ? { choice: step.choice } : {}),
   };
+  // A patch follows the failure it repairs: the step still failed, the history says it was patched.
+  const kept: StrategyRowStatus = existing?.status === "failed" && step.sub === "patch" ? "failed" : status;
   if (existing) {
     const i = rows.findIndex((r) => r.key === key);
-    rows[i] = { ...existing, ...detail, status, ...(step.sub !== undefined ? { sub: step.sub } : {}) };
+    rows[i] = { ...existing, ...detail, status: kept, ...(step.sub !== undefined ? { sub: step.sub } : {}) };
   } else {
-    rows.push({ key, phase: step.phase, ...(step.n !== undefined ? { n: step.n } : {}), label: rowLabel(step.strategy, step), status, ...(step.sub !== undefined ? { sub: step.sub } : {}), ...detail });
+    rows.push({ key, phase: step.phase, ...(step.n !== undefined ? { n: step.n } : {}), label: rowLabel(step.strategy, step), status: kept, ...(step.sub !== undefined ? { sub: step.sub } : {}), ...detail });
+  }
+  const target = historyTargetOf(step);
+  if (target) {
+    const at = rows.findIndex((r) => r.key === target.key);
+    if (at >= 0) rows[at] = { ...rows[at]!, history: pushHistory(rows[at]!.history, target.event) };
   }
   const incoming = step.node;
   const nodes = !incoming
