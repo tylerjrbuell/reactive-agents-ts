@@ -96,9 +96,12 @@ function generateFunctionSignature(tool: ToolSpec, fnName: string): string {
   // visible to the model (and to anyone reading the prompt).
   const doc = fnName === name ? description : `${description} (tool: ${name})`;
   const returnDoc = returnType ? `\n * Returns: ${returnType}` : "";
+  // No required parameter: the whole object is optional, so `fn()` and `fn({})`
+  // both match the declaration the model sees (the sandbox handler maps both to `{}`).
+  const paramsDecl = required.size === 0 ? "params?" : "params";
   return [
     `/** ${doc}${returnDoc} */`,
-    `declare async function ${fnName}(params: { ${params} }): Promise<unknown>;`,
+    `declare async function ${fnName}(${paramsDecl}: { ${params} }): Promise<unknown>;`,
   ].join("\n");
 }
 

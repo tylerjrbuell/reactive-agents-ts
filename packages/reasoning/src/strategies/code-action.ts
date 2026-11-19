@@ -26,14 +26,15 @@ import { makeObservationResult } from "../kernel/utils/observation-helpers.js";
 import { emitToCompose } from "@reactive-agents/core";
 import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
-import { generateToolBindings } from "./code-action/tool-binding.js";
+import { buildToolParamNames, generateToolBindings } from "./code-action/tool-binding.js";
+import { shapeSandboxToolArgs } from "./code-action/tool-args.js";
 import type { ToolParamPropertySchema, ToolSpec } from "./code-action/tool-binding.js";
 import { buildPlanPrompt, extractCodeBlock } from "./code-action/code-action-plan.js";
 import { runInSandbox } from "./code-action/sandbox.js";
 import { codeActionApprovalConflict, codeActionApprovalRefusal } from "./code-action/approval-scope.js";
 import type { ToolCallRecord } from "./code-action/code-action-observe.js";
 import { formatObservationMessage } from "./code-action/code-action-observe.js";
-import { shouldTerminate } from "./code-action/code-action-reflect.js";
+import { isRepeatedSandboxFailure, shouldTerminate } from "./code-action/code-action-reflect.js";
 import type { VerifierVerdict } from "./code-action/code-action-reflect.js";
 import { withEnvContext } from "../context/context-engine.js";
 import { evaluateToolPolicy, forbiddenToolsFromContract } from "../kernel/capabilities/act/tool-observe.js";
@@ -239,8 +240,11 @@ export const executeCodeAction = (
     const budgetRefusals: { toolName: string; reason: string }[] = [];
     if (Option.isSome(toolServiceOpt)) {
       const toolSvc = toolServiceOpt.value;
-      for (const schema of callableSchemas) {
+      // The identifiers the model calls tools by (index-aligned, same derivation the sandbox binds).
+      const fnNames = buildToolParamNames(callableSchemas.map((s) => s.name));
+      callableSchemas.forEach((schema, i) => {
         const toolName = schema.name;
+        const fnName = fnNames[i] ?? toolName;
         toolHandlers.set(toolName, async (args: unknown) => {
           // P0-4 safety gate — code-action executes tools inside the sandbox
           // Worker (not the kernel act phase), so this closure is its ONLY
@@ -248,24 +252,27 @@ export const executeCodeAction = (
           // as a thrown error carrying the same policy message the kernel path
           // emits, and is recorded as a failed tool call — never executed.
           const decision = evaluateToolPolicy(toolName, toolPolicy);
+          // `fn()` / `fn(null)` dispatch as `{}`; a non-object argument throws
+          // a message naming the call shape and spends no budget.
+          const shaped = shapeSandboxToolArgs(args, fnName, schema.parameters[0]?.name);
           // maxCallsPerTool: reserved after the policy gate, so a blocked call spends
           // no budget. A refused call throws into the generated code like a block.
-          const refusal = decision.blocked ? decision.message : run.toolCallBudget.reserve(toolName);
+          const refusal = decision.blocked ? decision.message : shaped.error ?? run.toolCallBudget.reserve(toolName);
           if (refusal !== undefined) {
-            if (!decision.blocked) budgetRefusals.push({ toolName, reason: refusal });
+            if (!decision.blocked && shaped.error === undefined) budgetRefusals.push({ toolName, reason: refusal });
             throw new Error(refusal);
           }
           const output = await Effect.runPromise(
             toolSvc.execute({
               toolName,
-              arguments: args as Record<string, unknown>,
+              arguments: shaped.args,
               agentId: input.agentId ?? "code-action-agent",
               sessionId: input.sessionId ?? "code-action-session",
             }),
           );
           return output.result;
         });
-      }
+      });
     }
 
     yield* emitLog({ _tag: "phase_started", phase: "code-action:plan", timestamp: new Date() });
@@ -312,6 +319,7 @@ export const executeCodeAction = (
     let lastVerifySummary = "";
 
     let lastSandboxError: string | null = null;
+    let repeatedSandboxFailure = false;
 
     while (!done) {
       iteration++;
@@ -337,7 +345,9 @@ export const executeCodeAction = (
       );
 
       if (sandboxExit._tag === "Left") {
+        const previousSandboxError = lastSandboxError;
         lastSandboxError = sandboxExit.left.message;
+        repeatedSandboxFailure = isRepeatedSandboxFailure(previousSandboxError, lastSandboxError);
         yield* appendStep(
           makeStep(
             "observation",
@@ -371,6 +381,16 @@ export const executeCodeAction = (
           done = true;
           yield* appendStep(
             makeStep("thought", `[CODE-ACTION] Terminating: sandbox failed on final iteration ${iteration}`),
+            `code-action:execute:${iteration}`,
+          );
+          break;
+        }
+        // The same error twice in a row: the repair call did not move the run,
+        // so stop with an honest failure instead of spending every iteration.
+        if (repeatedSandboxFailure) {
+          done = true;
+          yield* appendStep(
+            makeStep("thought", `[CODE-ACTION] Terminating: sandbox error repeated on iterations ${iteration - 1} and ${iteration}`),
             `code-action:execute:${iteration}`,
           );
           break;
@@ -644,7 +664,11 @@ export const executeCodeAction = (
       // the mint's M7 invariant will force `failed` on the empty
       // output, and this is the message the user sees instead of nothing.
       ...(lastSandboxError !== null
-        ? { error: `code-action sandbox execution failed: ${lastSandboxError}` }
+        ? {
+            error: repeatedSandboxFailure
+              ? `code-action sandbox execution failed (same error repeated on iterations ${iteration - 1} and ${iteration}, stopped early): ${lastSandboxError}`
+              : `code-action sandbox execution failed: ${lastSandboxError}`,
+          }
         : {}),
       // H5/#40: name what stayed unmet — the substrate caps at partial and
       // appends this to the run's verification warning (no budget, harness or

@@ -18,6 +18,9 @@ code block with no explanation:
 })()
 \`\`\`
 
+Each function takes one object argument, e.g. \`fn({ key: value })\`. A function with no
+required parameters may be called as \`tool()\` or \`tool({})\`.
+
 Write plain JavaScript — NO TypeScript type annotations (no \`: string\`, \`: number\`,
 interfaces, generics, or \`as\` casts): the code is executed directly as JavaScript.
 Do NOT include import statements, require() calls, or any code outside the IIFE.

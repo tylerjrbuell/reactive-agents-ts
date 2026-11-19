@@ -56,7 +56,11 @@ const CEILINGS: Readonly<Record<string, { readonly llmCalls: number; readonly to
   // 2026-11-05 tokens 1105 -> 1102 (and tree-of-thought 1571 -> 1569, reflexion
   // 1830 -> 1829): shrink already present at HEAD 6a6a7f4d5 before the 2b
   // follow-ups; lowered by the follow-up mission, cause not attributed.
-  "code-action": { llmCalls: 4, tokensUsed: 1102 },
+  // 2026-11-19 4/1102 -> 2/606: the scripted reply is not code, so every iteration
+  // failed with the same sandbox error; a repeated identical failure now stops
+  // the run after plan + one repair (code-action-reflect.ts isRepeatedSandboxFailure).
+  // The tokens also carry the new zero-argument line in the code-action prompt.
+  "code-action": { llmCalls: 2, tokensUsed: 606 },
   // 2026-11-05 S4b 4/1601 -> 2/1260: reflect skipped when every step completed
   // and the deterministic delivery judgment verified the contract (the
   // scripted reflect said UNSATISFIED, so the old run also paid an augment).
