@@ -199,9 +199,15 @@ export default defineConfig({
                 PageSidebar: './src/components/PageSidebar.astro',
             },
             // Curated, progressive information architecture. The onboarding path
-            // ("Start Here") is ordered, not alphabetical, so a new reader is never
-            // dropped into a flat A–Z dump. Badges are never written here: stability
-            // and New/Updated come from page frontmatter via route-middleware.ts.
+            // ("Get Started") is ordered, not alphabetical, so a new reader is never
+            // dropped into a flat A–Z dump. After it come the capability domains a
+            // reader scans for (Build, Reasoning & Harness, Observe & Verify,
+            // Safety & Control, Connect & Extend, Ship to Production), then
+            // concepts, recipes, help, and Reference last. Every page has exactly
+            // one entry; the domain groups start collapsed so the whole map fits
+            // on one screen (Starlight expands the group holding the current page).
+            // Badges are never written here: stability and New/Updated come from
+            // page frontmatter via route-middleware.ts.
             sidebar: [
                 {
                     label: 'Get Started',
@@ -225,27 +231,50 @@ export default defineConfig({
                             label: 'Build AI Agents in TypeScript',
                             link: 'guides/build-ai-agents-typescript/',
                         },
+                        {
+                            label: 'Compare',
+                            collapsed: true,
+                            items: [
+                                { label: 'Benchmarks', link: 'features/benchmarks/' },
+                                {
+                                    label: 'Migrating from LangChain',
+                                    link: 'guides/migrating-from-langchain/',
+                                },
+                                {
+                                    label: 'vs. LangGraph',
+                                    link: 'guides/reactive-agents-vs-langgraph/',
+                                },
+                                {
+                                    label: 'vs. Mastra',
+                                    link: 'guides/reactive-agents-vs-mastra/',
+                                },
+                                {
+                                    label: 'vs. Vercel AI SDK',
+                                    link: 'guides/reactive-agents-vs-vercel-ai-sdk/',
+                                },
+                                {
+                                    label: 'vs. Agent SDKs (OpenAI/Claude)',
+                                    link: 'guides/reactive-agents-vs-agent-sdks/',
+                                },
+                            ],
+                        },
                     ],
                 },
                 {
+                    // The building blocks every agent is made of.
                     label: 'Build',
+                    collapsed: true,
                     items: [
                         {
                             label: 'LLM Providers',
                             link: 'features/llm-providers/',
                         },
+                        { label: 'Local Models', link: 'guides/local-models/' },
                         {
-                            label: 'Reasoning Strategies',
-                            link: 'guides/reasoning/',
+                            label: 'Local Model Performance',
+                            link: 'features/local-model-performance/',
                         },
-                        {
-                            label: 'Choosing a Strategy',
-                            link: 'guides/choosing-strategies/',
-                        },
-                        {
-                            label: 'Plan Review',
-                            link: 'guides/plan-then-execute/',
-                        },
+                        { label: 'Prompts', link: 'features/prompts/' },
                         {
                             label: 'Tools',
                             collapsed: true,
@@ -258,8 +287,6 @@ export default defineConfig({
                                 { label: 'Execution and Results', link: 'guides/tools/execution-and-results/' },
                             ],
                         },
-                        { label: 'Code Action', link: 'features/code-action/' },
-                        { label: 'Prompts', link: 'features/prompts/' },
                         { label: 'Memory', link: 'guides/memory/' },
                         {
                             label: 'Typed Structured Output',
@@ -274,139 +301,36 @@ export default defineConfig({
                             link: 'features/streaming/',
                         },
                         {
-                            label: 'The Process Model',
-                            link: 'features/process-model/',
-                        },
-                        {
                             label: 'Chat & Sessions',
                             link: 'cookbook/chat-and-sessions/',
                         },
-                        { label: 'Lifecycle Hooks', link: 'guides/hooks/' },
+                    ],
+                },
+                {
+                    // How the agent thinks, and the typed knobs on the harness around it.
+                    label: 'Reasoning & Harness',
+                    collapsed: true,
+                    items: [
+                        {
+                            label: 'Reasoning Strategies',
+                            link: 'guides/reasoning/',
+                        },
+                        {
+                            label: 'Choosing a Strategy',
+                            link: 'guides/choosing-strategies/',
+                        },
+                        {
+                            label: 'Plan Review',
+                            link: 'guides/plan-then-execute/',
+                        },
+                        { label: 'Code Action', link: 'features/code-action/' },
                         {
                             label: 'Context Engineering',
                             link: 'guides/context-engineering/',
                         },
-                        { label: 'Sub-Agents', link: 'guides/sub-agents/' },
-                        { label: 'Agent Skills', link: 'guides/agent-skills/' },
-                        { label: 'Local Models', link: 'guides/local-models/' },
                         {
-                            label: 'Local Model Performance',
-                            link: 'features/local-model-performance/',
-                        },
-                        {
-                            label: 'Messaging Channels',
-                            collapsed: true,
-                            items: [
-                                { label: 'Overview', link: 'guides/messaging-channels/' },
-                                { label: 'Telegram (bot)', link: 'guides/messaging-channels/telegram/' },
-                                { label: 'Signal (native)', link: 'guides/messaging-channels/signal/' },
-                                { label: 'Webhook Channel', link: 'guides/messaging-channels/webhook/' },
-                                { label: 'Routes', link: 'guides/messaging-channels/routes/' },
-                                { label: 'Reliability and Conversations', link: 'guides/messaging-channels/reliability/' },
-                                { label: 'Security and Troubleshooting', link: 'guides/messaging-channels/security-and-troubleshooting/' },
-                                { label: 'Legacy MCP Setups', link: 'guides/messaging-channels/legacy-mcp-setups/' },
-                            ],
-                        },
-                        {
-                            label: 'Channel Adapters',
-                            link: 'guides/channel-adapters/',
-                        },
-                        { label: 'Gateway', link: 'features/gateway/' },
-                        {
-                            label: 'A2A Protocol',
-                            link: 'features/a2a-protocol/',
-                        },
-                        {
-                            label: 'Web Integration',
-                            link: 'guides/web-integration/',
-                        },
-                        {
-                            label: 'Agentic UI Core',
-                            link: 'features/agentic-ui-core/',
-                        },
-                    ],
-                },
-                {
-                    label: 'Ship to Production',
-                    items: [
-                        {
-                            label: 'Production Checklist',
-                            link: 'guides/production-checklist/',
-                        },
-                        {
-                            label: 'Deploying Agents',
-                            link: 'guides/deploying-agents/',
-                        },
-                        {
-                            label: 'Durable Execution',
-                            link: 'guides/durable-execution/',
-                        },
-                        {
-                            label: 'Durable Human-in-the-Loop',
-                            link: 'guides/durable-hitl/',
-                        },
-                        {
-                            label: 'Interaction Modes',
-                            link: 'features/interaction/',
-                        },
-                        {
-                            label: 'Cost Optimization',
-                            link: 'guides/cost-optimization/',
-                        },
-                        {
-                            label: 'Cost Tracking',
-                            link: 'features/cost-tracking/',
-                        },
-                        { label: 'Evaluation', link: 'features/eval/' },
-                        { label: 'Guardrails', link: 'guides/guardrails/' },
-                        {
-                            label: 'Judgment Layer',
-                            link: 'features/judgment-layer/',
-                        },
-                        {
-                            label: 'Security Hardening',
-                            link: 'guides/security-hardening/',
-                        },
-                        {
-                            label: 'Observability',
-                            link: 'features/observability/',
-                        },
-                        { label: 'Telemetry', link: 'telemetry/' },
-                        { label: 'Observe (OTel)', link: 'features/observe/' },
-                        {
-                            label: 'Snapshot & Replay',
-                            link: 'features/snapshot-replay/',
-                        },
-                    ],
-                },
-                {
-                    label: 'How It Works',
-                    collapsed: true,
-                    items: [
-                        {
-                            label: 'Architecture',
-                            link: 'concepts/architecture/',
-                        },
-                        {
-                            label: 'Agent Lifecycle',
-                            link: 'concepts/agent-lifecycle/',
-                        },
-                        {
-                            label: 'Composable Kernel',
-                            link: 'concepts/composable-kernel/',
-                        },
-                        {
-                            label: 'Layer System',
-                            link: 'concepts/layer-system/',
-                        },
-                        {
-                            label: 'Decision Tracing',
-                            link: 'concepts/decision-tracing/',
-                        },
-                        { label: 'Effect-TS', link: 'concepts/effect-ts/' },
-                        {
-                            label: 'Reactive Intelligence',
-                            link: 'features/reactive-intelligence/',
+                            label: 'Context Synthesis',
+                            link: 'features/intelligent-context-synthesis/',
                         },
                         {
                             label: 'Harness Control Surface',
@@ -417,14 +341,50 @@ export default defineConfig({
                             link: 'features/harness-control-flow/',
                         },
                         {
-                            label: 'Context Synthesis',
-                            link: 'features/intelligent-context-synthesis/',
+                            label: 'Reactive Intelligence',
+                            link: 'features/reactive-intelligence/',
                         },
-                        { label: 'Resilience', link: 'features/resilience/' },
+                        {
+                            label: 'Judgment Layer',
+                            link: 'features/judgment-layer/',
+                        },
+                    ],
+                },
+                {
+                    // See what a run did and why, check the answer, replay and diagnose it.
+                    label: 'Observe & Verify',
+                    collapsed: true,
+                    items: [
+                        {
+                            label: 'Observability',
+                            link: 'features/observability/',
+                        },
+                        {
+                            label: 'OpenTelemetry Tracing',
+                            link: 'features/observe/',
+                        },
+                        {
+                            label: 'Decision Tracing',
+                            link: 'concepts/decision-tracing/',
+                        },
+                        {
+                            label: 'The Process Model',
+                            link: 'features/process-model/',
+                        },
+                        {
+                            label: 'Snapshot & Replay',
+                            link: 'features/snapshot-replay/',
+                        },
+                        { label: 'rax diagnose', link: 'reference/cli/diagnose/' },
+                        {
+                            label: 'Debrief & Chat',
+                            link: 'features/debrief-chat/',
+                        },
                         {
                             label: 'Verification',
                             link: 'features/verification/',
                         },
+                        { label: 'Evaluation', link: 'features/eval/' },
                         {
                             label: 'Cortex Studio',
                             collapsed: true,
@@ -455,37 +415,120 @@ export default defineConfig({
                                 { label: 'Connect your app', link: 'features/cortex/connect-your-app/' },
                             ],
                         },
+                    ],
+                },
+                {
+                    // Who may do what, at what cost, with a person in the loop when it matters.
+                    label: 'Safety & Control',
+                    collapsed: true,
+                    items: [
+                        { label: 'Guardrails', link: 'guides/guardrails/' },
                         {
-                            label: 'Debrief Chat',
-                            link: 'features/debrief-chat/',
+                            label: 'Human-in-the-Loop Approval',
+                            link: 'guides/durable-hitl/',
+                        },
+                        {
+                            label: 'Interaction Modes',
+                            link: 'features/interaction/',
+                        },
+                        {
+                            label: 'Security Hardening',
+                            link: 'guides/security-hardening/',
+                        },
+                        {
+                            label: 'Cost Tracking',
+                            link: 'features/cost-tracking/',
+                        },
+                        {
+                            label: 'Cost Optimization',
+                            link: 'guides/cost-optimization/',
                         },
                     ],
                 },
                 {
-                    label: 'vs. Alternatives',
+                    // Extend an agent and wire it to other agents, apps and chat platforms.
+                    label: 'Connect & Extend',
                     collapsed: true,
                     items: [
-                        { label: 'Benchmarks', link: 'features/benchmarks/' },
+                        { label: 'Agent Skills', link: 'guides/agent-skills/' },
+                        { label: 'Sub-Agents', link: 'guides/sub-agents/' },
+                        { label: 'Lifecycle Hooks', link: 'guides/hooks/' },
                         {
-                            label: 'Migrating from LangChain',
-                            link: 'guides/migrating-from-langchain/',
+                            label: 'A2A Protocol',
+                            link: 'features/a2a-protocol/',
+                        },
+                        { label: 'Gateway', link: 'features/gateway/' },
+                        {
+                            label: 'Messaging Channels',
+                            collapsed: true,
+                            items: [
+                                { label: 'Overview', link: 'guides/messaging-channels/' },
+                                { label: 'Telegram (bot)', link: 'guides/messaging-channels/telegram/' },
+                                { label: 'Signal (native)', link: 'guides/messaging-channels/signal/' },
+                                { label: 'Webhook Channel', link: 'guides/messaging-channels/webhook/' },
+                                { label: 'Routes', link: 'guides/messaging-channels/routes/' },
+                                { label: 'Reliability and Conversations', link: 'guides/messaging-channels/reliability/' },
+                                { label: 'Security and Troubleshooting', link: 'guides/messaging-channels/security-and-troubleshooting/' },
+                                { label: 'Legacy MCP Setups', link: 'guides/messaging-channels/legacy-mcp-setups/' },
+                            ],
                         },
                         {
-                            label: 'vs. LangGraph',
-                            link: 'guides/reactive-agents-vs-langgraph/',
+                            label: 'Channel Adapters',
+                            link: 'guides/channel-adapters/',
                         },
                         {
-                            label: 'vs. Mastra',
-                            link: 'guides/reactive-agents-vs-mastra/',
+                            label: 'Web Integration',
+                            link: 'guides/web-integration/',
                         },
                         {
-                            label: 'vs. Vercel AI SDK',
-                            link: 'guides/reactive-agents-vs-vercel-ai-sdk/',
+                            label: 'Agentic UI Core',
+                            link: 'features/agentic-ui-core/',
+                        },
+                    ],
+                },
+                {
+                    label: 'Ship to Production',
+                    collapsed: true,
+                    items: [
+                        {
+                            label: 'Production Checklist',
+                            link: 'guides/production-checklist/',
                         },
                         {
-                            label: 'vs. Agent SDKs (OpenAI/Claude)',
-                            link: 'guides/reactive-agents-vs-agent-sdks/',
+                            label: 'Deploying Agents',
+                            link: 'guides/deploying-agents/',
                         },
+                        {
+                            label: 'Durable Execution',
+                            link: 'guides/durable-execution/',
+                        },
+                        {
+                            label: 'Resilience & Caching',
+                            link: 'features/resilience/',
+                        },
+                    ],
+                },
+                {
+                    label: 'How It Works',
+                    collapsed: true,
+                    items: [
+                        {
+                            label: 'Architecture',
+                            link: 'concepts/architecture/',
+                        },
+                        {
+                            label: 'Agent Lifecycle',
+                            link: 'concepts/agent-lifecycle/',
+                        },
+                        {
+                            label: 'Composable Kernel',
+                            link: 'concepts/composable-kernel/',
+                        },
+                        {
+                            label: 'Layer System',
+                            link: 'concepts/layer-system/',
+                        },
+                        { label: 'Effect-TS', link: 'concepts/effect-ts/' },
                     ],
                 },
                 {
@@ -494,7 +537,39 @@ export default defineConfig({
                     items: [{ autogenerate: { directory: 'cookbook' } }],
                 },
                 {
-                    label: 'API Reference',
+                    label: 'Help & More',
+                    collapsed: true,
+                    items: [
+                        { label: 'FAQ', link: 'guides/faq/' },
+                        {
+                            label: 'Troubleshooting',
+                            link: 'guides/troubleshooting/',
+                        },
+                        { label: 'Examples Catalog', link: 'guides/examples/' },
+                        {
+                            label: 'Interactive Playground',
+                            link: 'guides/playground/',
+                        },
+                        { label: 'Telemetry', link: 'telemetry/' },
+                        {
+                            label: "What's New",
+                            collapsed: true,
+                            items: [
+                                { label: 'Latest', link: 'guides/whats-new/' },
+                                { label: 'v0.19 security and Cortex', link: 'guides/whats-new/v0-19-details/' },
+                                { label: 'v0.18', link: 'guides/whats-new/v0-18/' },
+                                { label: 'v0.17', link: 'guides/whats-new/v0-17/' },
+                                { label: 'v0.15 and v0.16', link: 'guides/whats-new/v0-15-to-v0-16/' },
+                                { label: 'v0.13 and v0.14', link: 'guides/whats-new/v0-13-to-v0-14/' },
+                                { label: 'v0.11 and v0.12', link: 'guides/whats-new/v0-11-to-v0-12/' },
+                                { label: 'v0.5 to v0.10', link: 'guides/whats-new/v0-5-to-v0-10/' },
+                            ],
+                        },
+                        { label: 'Contributing', link: 'guides/contributing/' },
+                    ],
+                },
+                {
+                    label: 'Reference',
                     collapsed: true,
                     items: [
                         { label: 'Cheatsheet', link: 'reference/cheatsheet/' },
@@ -519,44 +594,14 @@ export default defineConfig({
                         { label: 'Compose API', link: 'reference/compose-api/' },
                         { label: 'Harness Tag Reference', link: 'reference/harness-tags/' },
                         { label: 'API Stability & Versioning', link: 'reference/stability/' },
-                    ],
-                },
-                {
-                    label: 'Rax CLI',
-                    items: [
-                        { label: 'Meet Rax CLI', link: 'guides/cli-artisan/' },
-                        { label: 'Command Reference', link: 'reference/cli/' },
-                        { label: 'rax diagnose', link: 'reference/cli/diagnose/' },
-                    ],
-                },
-                {
-                    label: 'Help & More',
-                    items: [
-                        { label: 'FAQ', link: 'guides/faq/' },
                         {
-                            label: 'Troubleshooting',
-                            link: 'guides/troubleshooting/',
-                        },
-                        { label: 'Examples Catalog', link: 'guides/examples/' },
-                        {
-                            label: 'Interactive Playground',
-                            link: 'guides/playground/',
-                        },
-                        {
-                            label: "What's New",
+                            label: 'Rax CLI',
                             collapsed: true,
                             items: [
-                                { label: 'Latest', link: 'guides/whats-new/' },
-                                { label: 'v0.19 security and Cortex', link: 'guides/whats-new/v0-19-details/' },
-                                { label: 'v0.18', link: 'guides/whats-new/v0-18/' },
-                                { label: 'v0.17', link: 'guides/whats-new/v0-17/' },
-                                { label: 'v0.15 and v0.16', link: 'guides/whats-new/v0-15-to-v0-16/' },
-                                { label: 'v0.13 and v0.14', link: 'guides/whats-new/v0-13-to-v0-14/' },
-                                { label: 'v0.11 and v0.12', link: 'guides/whats-new/v0-11-to-v0-12/' },
-                                { label: 'v0.5 to v0.10', link: 'guides/whats-new/v0-5-to-v0-10/' },
+                                { label: 'Meet Rax CLI', link: 'guides/cli-artisan/' },
+                                { label: 'Command Reference', link: 'reference/cli/' },
                             ],
                         },
-                        { label: 'Contributing', link: 'guides/contributing/' },
                     ],
                 },
             ],
